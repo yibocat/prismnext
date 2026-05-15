@@ -11,13 +11,24 @@ function createWindow() {
     minHeight: 600,
     title: "Prism Next",
     show: false,
+    // Critical: Set background color to prevent white flash on resize
+    backgroundColor: "#0a0a0a", // matches dark theme background
+    // macOS specific: improve resize performance
+    vibrancy: "under-window",
+    visualEffectState: "active",
+    titleBarStyle: "hiddenInset",
+    // Improve rendering performance
+    hasShadow: true,
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      // Enable hardware acceleration
+      enableBlinkFeatures: "AcceleratedSmallCanvases",
     },
   });
 
+  // Show window when ready to avoid white flash
   mainWindow.on("ready-to-show", () => {
     mainWindow?.show();
   });

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import {
   FileTextIcon,
   FolderIcon,
@@ -80,7 +80,8 @@ function parseTableOfContents(content: string): TocItem[] {
     subsection: 3,
     subsubsection: 4,
   };
-  lines.forEach((line, index) => {
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
     const match = line.match(sectionRegex);
     if (match) {
       const [, type, title] = match;
@@ -90,7 +91,7 @@ function parseTableOfContents(content: string): TocItem[] {
         line: index + 1,
       });
     }
-  });
+  }
   return toc;
 }
 
@@ -128,7 +129,6 @@ function buildFileTree(files: ProjectFile[], folders: string[]): TreeNode[] {
     return folder.children;
   }
 
-  // Ensure all known folders exist as nodes (including empty ones)
   for (const folderPath of folders) {
     getOrCreateFolder(folderPath);
   }
@@ -148,7 +148,6 @@ function buildFileTree(files: ProjectFile[], folders: string[]): TreeNode[] {
     });
   }
 
-  // Sort: folders first, then alphabetical
   function sortNodes(nodes: TreeNode[]) {
     nodes.sort((a, b) => {
       if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
@@ -173,6 +172,7 @@ interface FileTreeNodeProps {
   onToggleFolder: (path: string) => void;
   onSelectFile: (id: string) => void;
   fileCount: number;
+  dirtyFiles: Set<string>;
   onNewFile: (folder?: string) => void;
   onNewFolder: (parent?: string) => void;
   onRename: (id: string, name: string) => void;
@@ -180,7 +180,7 @@ interface FileTreeNodeProps {
   onDeleteFolder: (folderPath: string) => void;
 }
 
-function FileTreeNode({
+const FileTreeNode = ({
   node,
   depth,
   activeFileId,
@@ -188,12 +188,13 @@ function FileTreeNode({
   onToggleFolder,
   onSelectFile,
   fileCount,
+  dirtyFiles,
   onNewFile,
   onNewFolder,
   onRename,
   onDelete,
   onDeleteFolder,
-}: FileTreeNodeProps) {
+}: FileTreeNodeProps) => {
   if (node.type === "folder") {
     const isExpanded = expandedFolders.has(node.relativePath);
 
@@ -252,6 +253,7 @@ function FileTreeNode({
               onToggleFolder={onToggleFolder}
               onSelectFile={onSelectFile}
               fileCount={fileCount}
+              dirtyFiles={dirtyFiles}
               onNewFile={onNewFile}
               onNewFolder={onNewFolder}
               onRename={onRename}
@@ -263,9 +265,9 @@ function FileTreeNode({
     );
   }
 
-  // File node
   const file = node.file!;
   const isActive = file.id === activeFileId;
+  const isDirty = dirtyFiles.has(file.id);
 
   return (
     <ContextMenu>
@@ -283,7 +285,7 @@ function FileTreeNode({
         >
           {getFileIcon(file)}
           <span className="min-w-0 flex-1 truncate">{node.name}</span>
-          {file.isDirty && (
+          {isDirty && (
             <span
               className="ml-auto size-2 shrink-0 rounded-full bg-blue-500"
               title="Modified"
@@ -307,28 +309,24 @@ function FileTreeNode({
       </ContextMenuContent>
     </ContextMenu>
   );
-}
+};
 
 // ─── Sidebar ───
 
 export function Sidebar() {
+  // Only subscribe to metadata, not content
   const files = useDocumentStore((s) => s.files);
   const folders = useDocumentStore((s) => s.folders);
   const activeFileId = useDocumentStore((s) => s.activeFileId);
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
   const setActiveFile = useDocumentStore((s) => s.setActiveFile);
   const deleteFile = useDocumentStore((s) => s.deleteFile);
   const deleteFolder = useDocumentStore((s) => s.deleteFolder);
   const renameFile = useDocumentStore((s) => s.renameFile);
   const createNewFile = useDocumentStore((s) => s.createNewFile);
   const createFolder = useDocumentStore((s) => s.createFolder);
-  const activeFileContent = useDocumentStore((s) => {
-    const active = s.files.find((f) => f.id === s.activeFileId);
-    return active?.content ?? "";
-  });
-  const requestJumpToPosition = useDocumentStore(
-    (s) => s.requestJumpToPosition,
-  );
-  const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const requestJumpToPosition = useDocumentStore((s) => s.requestJumpToPosition);
+  const fileContents = useDocumentStore((s) => s.fileContents);
 
   const { theme, setTheme } = useTheme();
 
@@ -336,8 +334,44 @@ export function Sidebar() {
     new Set(),
   );
 
-  // Build file tree
+  // Build file tree - only depends on files/folders metadata
   const tree = useMemo(() => buildFileTree(files, folders), [files, folders]);
+
+  // Build dirty files set from fileContents
+  const dirtyFiles = useMemo(() => {
+    const dirty = new Set<string>();
+    fileContents.forEach((value, key) => {
+      if (value.isDirty) dirty.add(key);
+    });
+    return dirty;
+  }, [fileContents]);
+
+  // Get active file content for TOC - use ref to avoid subscription
+  const activeFileContentRef = useRef("");
+  useEffect(() => {
+    if (activeFileId) {
+      activeFileContentRef.current = useDocumentStore.getState().getContent(activeFileId);
+    }
+  }, [activeFileId]);
+
+  // TOC parsing with debounce
+  const [toc, setToc] = useState<TocItem[]>([]);
+  const tocTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (tocTimeoutRef.current) {
+      clearTimeout(tocTimeoutRef.current);
+    }
+    tocTimeoutRef.current = window.setTimeout(() => {
+      const content = activeFileId ? useDocumentStore.getState().getContent(activeFileId) : "";
+      setToc(parseTableOfContents(content));
+    }, 300);
+    return () => {
+      if (tocTimeoutRef.current) {
+        clearTimeout(tocTimeoutRef.current);
+      }
+    };
+  }, [activeFileId, fileContents]);
 
   // Auto-expand parent folders of active file
   useEffect(() => {
@@ -367,22 +401,17 @@ export function Sidebar() {
     });
   }, []);
 
-  // Parse outline
-  const toc = useMemo(
-    () => parseTableOfContents(activeFileContent),
-    [activeFileContent],
-  );
-
   const handleTocClick = useCallback(
     (line: number) => {
-      const lines = activeFileContent.split("\n");
+      const content = activeFileId ? useDocumentStore.getState().getContent(activeFileId) : "";
+      const lines = content.split("\n");
       let position = 0;
       for (let i = 0; i < line - 1 && i < lines.length; i++) {
         position += lines[i].length + 1;
       }
       requestJumpToPosition(position);
     },
-    [activeFileContent, requestJumpToPosition],
+    [activeFileId, requestJumpToPosition],
   );
 
   // Dialog state
@@ -494,8 +523,8 @@ export function Sidebar() {
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
-      {/* Header — padded top for macOS overlay titlebar */}
-      <div className="relative flex h-[calc(48px+var(--titlebar-height))] items-center justify-center border-sidebar-border border-b px-3 pt-[var(--titlebar-height)]">
+      {/* Header - macOS drag region */}
+      <div className="drag-region relative flex h-[calc(48px+var(--titlebar-height))] items-center justify-center border-sidebar-border border-b px-3 pt-[var(--titlebar-height)]">
         <div className="flex flex-col items-center">
           <span className="font-semibold text-sm">Prism</span>
           <span className="text-muted-foreground text-xs">
@@ -559,6 +588,7 @@ export function Sidebar() {
                         onToggleFolder={toggleFolder}
                         onSelectFile={(id) => setActiveFile(id)}
                         fileCount={files.length}
+                        dirtyFiles={dirtyFiles}
                         onNewFile={openNewFileDialog}
                         onNewFolder={openNewFolderDialog}
                         onRename={openRenameDialog}
@@ -762,4 +792,4 @@ export function Sidebar() {
       </Dialog>
     </div>
   );
-}
+};

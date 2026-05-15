@@ -5,8 +5,12 @@ export interface ProjectFile {
   name: string;
   relativePath: string;
   type: "tex" | "image" | "pdf" | "style" | "other";
-  content?: string;
-  isDirty?: boolean;
+}
+
+// Content stored separately to prevent re-renders on typing
+interface FileContent {
+  content: string;
+  isDirty: boolean;
 }
 
 interface DocumentState {
@@ -15,15 +19,21 @@ interface DocumentState {
   activeFileId: string | null;
   initialized: boolean;
   projectRoot: string | null;
+  // Separate content storage - changes on typing don't affect files array
+  fileContents: Map<string, FileContent>;
+  jumpTarget: number | null;
+
+  // Actions
   setActiveFile: (id: string) => void;
-  setContent: (content: string) => void;
+  getContent: (id: string) => string;
+  setContent: (id: string, content: string) => void;
+  isDirty: (id: string) => boolean;
   createNewFile: (name: string, type: "tex" | "image", folder?: string) => void;
   createFolder: (name: string, parent?: string) => void;
   deleteFile: (id: string) => void;
   deleteFolder: (folderPath: string) => void;
   renameFile: (id: string, newName: string) => void;
   requestJumpToPosition: (position: number) => void;
-  jumpTarget: number | null;
 }
 
 const defaultContent = String.raw`\documentclass{article}
@@ -46,31 +56,37 @@ Hello, Prism!
 \end{document}
 `;
 
-export const useDocumentStore = create<DocumentState>((set) => ({
+export const useDocumentStore = create<DocumentState>((set, get) => ({
   files: [
     {
       id: "main",
       name: "main.tex",
       relativePath: "main.tex",
       type: "tex",
-      content: defaultContent,
-      isDirty: false,
     },
   ],
   folders: [],
   activeFileId: "main",
   initialized: true,
   projectRoot: null,
+  fileContents: new Map([["main", { content: defaultContent, isDirty: false }]]),
   jumpTarget: null,
 
   setActiveFile: (id) => set({ activeFileId: id }),
 
-  setContent: (content) =>
-    set((s) => ({
-      files: s.files.map((f) =>
-        f.id === s.activeFileId ? { ...f, content, isDirty: true } : f
-      ),
-    })),
+  getContent: (id) => get().fileContents.get(id)?.content ?? "",
+
+  setContent: (id, content) => {
+    const fileContents = get().fileContents;
+    const existing = fileContents.get(id);
+    // Only update if content actually changed
+    if (existing?.content === content) return;
+    const newMap = new Map(fileContents);
+    newMap.set(id, { content, isDirty: true });
+    set({ fileContents: newMap });
+  },
+
+  isDirty: (id) => get().fileContents.get(id)?.isDirty ?? false,
 
   createNewFile: (name, type, folder) => {
     const relativePath = folder ? `${folder}/${name}` : name;
@@ -84,8 +100,9 @@ export const useDocumentStore = create<DocumentState>((set) => ({
 `
       : "";
     set((s) => ({
-      files: [...s.files, { id, name, relativePath, type, content, isDirty: false }],
+      files: [...s.files, { id, name, relativePath, type }],
       activeFileId: id,
+      fileContents: new Map(s.fileContents).set(id, { content, isDirty: false }),
     }));
   },
 
@@ -105,27 +122,32 @@ export const useDocumentStore = create<DocumentState>((set) => ({
             ? files[0].id
             : null
           : s.activeFileId;
-      return { files, activeFileId };
+      const fileContents = new Map(s.fileContents);
+      fileContents.delete(id);
+      return { files, activeFileId, fileContents };
     }),
 
   deleteFolder: (folderPath) =>
     set((s) => {
-      // Remove all files in this folder
       const files = s.files.filter(
         (f) => !f.relativePath.startsWith(`${folderPath}/`)
       );
-      // Remove the folder and all sub-folders
       const folders = s.folders.filter(
         (f) => f !== folderPath && !f.startsWith(`${folderPath}/`)
       );
-      // Fix active file if it was in deleted folder
       const activeFileId =
         s.activeFileId && files.find((f) => f.id === s.activeFileId)
           ? s.activeFileId
           : files.length > 0
             ? files[0].id
             : null;
-      return { files, folders, activeFileId };
+      const fileContents = new Map(s.fileContents);
+      s.files.forEach((f) => {
+        if (f.relativePath.startsWith(`${folderPath}/`)) {
+          fileContents.delete(f.id);
+        }
+      });
+      return { files, folders, activeFileId, fileContents };
     }),
 
   renameFile: (id, newName) =>
@@ -139,6 +161,12 @@ export const useDocumentStore = create<DocumentState>((set) => ({
         ? `${parentPath}/${newName}`
         : newName;
       const newId = newRelativePath;
+      const fileContents = new Map(s.fileContents);
+      const existingContent = fileContents.get(id);
+      if (existingContent) {
+        fileContents.delete(id);
+        fileContents.set(newId, existingContent);
+      }
       return {
         files: s.files.map((f) =>
           f.id === id
@@ -147,6 +175,7 @@ export const useDocumentStore = create<DocumentState>((set) => ({
         ),
         activeFileId:
           s.activeFileId === id ? newId : s.activeFileId,
+        fileContents,
       };
     }),
 

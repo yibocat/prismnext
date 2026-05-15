@@ -121,15 +121,35 @@
   }
   html {
     @apply h-full overscroll-y-none;
-    --titlebar-height: 0px;
-    --traffic-light-width: 0px;
+    /* macOS titlebar drag region height - matches traffic lights */
+    --titlebar-height: 28px;
+    --traffic-light-width: 70px;
   }
   body {
     @apply h-full bg-background text-foreground;
+    /* Prevent white flash during resize */
+    background-color: oklch(0.145 0 0);
   }
   #root {
     @apply h-full overflow-hidden;
   }
+}
+
+/* Light mode body background */
+html:not(.dark) body {
+  background-color: oklch(1 0 0);
+}
+
+/* macOS window drag region */
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+/* Elements inside drag region should be clickable */
+.drag-region button,
+.drag-region input,
+.drag-region [role="button"] {
+  -webkit-app-region: no-drag;
 }
 
 /* Sidebar scrollbar styling */

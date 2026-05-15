@@ -33,12 +33,6 @@ import { useDocumentStore } from "@/stores/document-store";
 import { EditorToolbar } from "./editor-toolbar";
 import { SearchPanel } from "./search-panel";
 
-function getActiveFileContent(): string {
-  const state = useDocumentStore.getState();
-  const activeFile = state.files.find((f) => f.id === state.activeFileId);
-  return activeFile?.content ?? "";
-}
-
 const editorStateCache = new Map<string, { cursor: number; scrollTop: number }>();
 
 export function clearEditorStateCache(): void {
@@ -100,11 +94,11 @@ export function LatexEditor() {
   const viewRef = useRef<EditorView | null>(null);
   const themeCompartmentRef = useRef(new Compartment());
   const isSearchOpenRef = useRef(false);
-  const isLocalChangeRef = useRef(false);
+  const currentFileIdRef = useRef<string | null>(null);
 
+  // Only subscribe to file IDs, not content
   const files = useDocumentStore((s) => s.files);
   const activeFileId = useDocumentStore((s) => s.activeFileId);
-  const setContent = useDocumentStore((s) => s.setContent);
   const jumpTarget = useDocumentStore((s) => s.jumpTarget);
 
   const { resolvedTheme } = useTheme();
@@ -120,17 +114,19 @@ export function LatexEditor() {
     activeFile?.type === "style" ||
     activeFile?.type === "other";
 
-  // Keep ref in sync
+  // Keep refs in sync
   useEffect(() => {
     isSearchOpenRef.current = isSearchOpen;
-  }, [isSearchOpen]);
+    currentFileIdRef.current = activeFileId;
+  }, [isSearchOpen, activeFileId]);
 
   // ─── Create/destroy EditorView on file switch ───
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !isTextFile) return;
+    if (!container || !isTextFile || !activeFileId) return;
 
-    const currentContent = getActiveFileContent();
+    // Get content from store directly (not via subscription)
+    const currentContent = useDocumentStore.getState().getContent(activeFileId);
 
     const compileKeymap = Prec.highest(
       keymap.of([
@@ -199,8 +195,10 @@ export function LatexEditor() {
         cmBaseTheme,
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
-            isLocalChangeRef.current = true;
-            setContent(update.state.doc.toString());
+            const id = currentFileIdRef.current;
+            if (id) {
+              useDocumentStore.getState().setContent(id, update.state.doc.toString());
+            }
           }
         }),
       ],
@@ -208,6 +206,8 @@ export function LatexEditor() {
 
     const view = new EditorView({ state, parent: container });
     viewRef.current = view;
+    // Expose editor view globally for toolbar
+    (window as any).__cmEditorView = view;
 
     // Restore per-file cursor + scroll from cache
     const cached = editorStateCache.get(activeFileId);
@@ -227,24 +227,7 @@ export function LatexEditor() {
       view.destroy();
       viewRef.current = null;
     };
-  }, [activeFileId, isTextFile]);
-
-  // ─── Handle jump-to-position from outline ───
-  useEffect(() => {
-    if (jumpTarget === null) return;
-    const view = viewRef.current;
-    if (!view) return;
-    const pos = Math.min(jumpTarget, view.state.doc.length);
-    view.dispatch({
-      selection: { anchor: pos },
-      effects: [
-        EditorView.scrollIntoView(pos, { y: "center" }),
-      ],
-    });
-    view.focus();
-    // Clear the jump target
-    useDocumentStore.setState({ jumpTarget: null });
-  }, [jumpTarget]);
+  }, [activeFileId, isTextFile]); // Don't include resolvedTheme here
 
   // ─── Theme switching ───
   useEffect(() => {
@@ -285,22 +268,40 @@ export function LatexEditor() {
     setCurrentMatch(matches && matches.length > 0 ? 1 : 0);
   }, [searchQuery]);
 
-  // ─── Sync content when it changes externally ───
+  // ─── Handle jump-to-position from outline ───
+  useEffect(() => {
+    if (jumpTarget === null) return;
+    const view = viewRef.current;
+    if (!view) return;
+    const pos = Math.min(jumpTarget, view.state.doc.length);
+    view.dispatch({
+      selection: { anchor: pos },
+      effects: [
+        EditorView.scrollIntoView(pos, { y: "center" }),
+      ],
+    });
+    view.focus();
+    // Clear the jump target
+    useDocumentStore.setState({ jumpTarget: null });
+  }, [jumpTarget]);
+
+  // ─── Sync content when file content changes externally (file switch) ───
   useEffect(() => {
     const view = viewRef.current;
-    if (!view || !isTextFile) return;
-    if (isLocalChangeRef.current) {
-      isLocalChangeRef.current = false;
-      return;
-    }
-    const content = activeFile?.content ?? "";
+    if (!view || !activeFileId) return;
+
+    const content = useDocumentStore.getState().getContent(activeFileId);
     const currentContent = view.state.doc.toString();
-    if (currentContent !== content) {
+
+    // Only update if content is different (file switch or external change)
+    if (currentContent !== content && currentFileIdRef.current === activeFileId) {
+      const cursorPos = Math.min(view.state.selection.main.head, content.length);
       view.dispatch({
         changes: { from: 0, to: currentContent.length, insert: content },
+        selection: { anchor: cursorPos },
       });
     }
-  }, [activeFile?.content, isTextFile]);
+  }, [activeFileId]); // Don't subscribe to content changes
 
   const handleFindNext = useCallback(() => {
     const view = viewRef.current;
@@ -328,7 +329,7 @@ export function LatexEditor() {
 
   return (
     <div className="flex h-full flex-col bg-background">
-      <EditorToolbar editorView={viewRef} />
+      <EditorToolbar />
       {isSearchOpen && (
         <SearchPanel
           searchQuery={searchQuery}
