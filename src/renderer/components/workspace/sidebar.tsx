@@ -18,6 +18,7 @@ import {
   UploadIcon,
   PencilIcon,
   Trash2Icon,
+  HomeIcon,
 } from "lucide-react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { useTheme } from "next-themes";
@@ -301,7 +302,6 @@ const FileTreeNode = ({
         <ContextMenuItem
           variant="destructive"
           onClick={() => onDelete(file.id)}
-          disabled={fileCount <= 1}
         >
           <Trash2Icon className="mr-2 size-4" />
           Delete
@@ -444,7 +444,7 @@ export function Sidebar() {
     [files, folders, isCaseInsensitiveFs],
   );
 
-  const handleAddFile = () => {
+  const handleAddFile = async () => {
     const name = newFileName.trim();
     if (!name) return;
     if (nameExistsIn(name, addDialogFolder)) {
@@ -458,25 +458,33 @@ export function Sidebar() {
     )
       ? "image"
       : "tex";
-    createNewFile(finalName, type, addDialogFolder);
-    setNewFileName("");
-    setNameError("");
-    setAddDialogOpen(false);
-    setAddDialogFolder(undefined);
+    try {
+      await createNewFile(finalName, type, addDialogFolder);
+      setNewFileName("");
+      setNameError("");
+      setAddDialogOpen(false);
+      setAddDialogFolder(undefined);
+    } catch {
+      // Error already handled in store
+    }
   };
 
-  const handleCreateFolder = () => {
+  const handleCreateFolder = async () => {
     const name = newFolderName.trim();
     if (!name) return;
     if (nameExistsIn(name, folderDialogParent)) {
       setNameError("A file or folder with this name already exists");
       return;
     }
-    createFolder(name, folderDialogParent);
-    setNewFolderName("");
-    setNameError("");
-    setFolderDialogOpen(false);
-    setFolderDialogParent(undefined);
+    try {
+      await createFolder(name, folderDialogParent);
+      setNewFolderName("");
+      setNameError("");
+      setFolderDialogOpen(false);
+      setFolderDialogParent(undefined);
+    } catch {
+      // Error already handled in store
+    }
   };
 
   const openRenameDialog = (id: string, name: string) => {
@@ -500,7 +508,7 @@ export function Sidebar() {
     setFolderDialogOpen(true);
   };
 
-  const handleRename = () => {
+  const handleRename = async () => {
     const name = renameValue.trim();
     if (!renameFileId || !name) return;
     const file = files.find((f) => f.id === renameFileId);
@@ -514,12 +522,18 @@ export function Sidebar() {
       setNameError("A file or folder with this name already exists");
       return;
     }
-    renameFile(renameFileId, name);
-    setRenameDialogOpen(false);
-    setRenameFileId(null);
-    setRenameValue("");
-    setNameError("");
+    try {
+      await renameFile(renameFileId, name);
+      setRenameDialogOpen(false);
+      setRenameFileId(null);
+      setRenameValue("");
+      setNameError("");
+    } catch {
+      // Error already handled in store
+    }
   };
+
+  const closeProject = useDocumentStore((s) => s.closeProject);
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
@@ -530,6 +544,17 @@ export function Sidebar() {
           <span className="text-muted-foreground text-xs">
             {projectRoot?.split(/[/\\]/).pop() || "Desktop"}
           </span>
+        </div>
+        <div className="absolute right-3 flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6"
+            onClick={closeProject}
+            title="Close Project"
+          >
+            <HomeIcon className="size-3.5" />
+          </Button>
         </div>
       </div>
 

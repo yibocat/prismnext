@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
+import { registerIpcHandlers } from "./ipc";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -9,7 +10,7 @@ function createWindow() {
     height: 900,
     minWidth: 800,
     minHeight: 600,
-    title: "Prism Next",
+    title: "Prism",
     show: false,
     // Critical: Set background color to prevent white flash on resize
     backgroundColor: "#0a0a0a", // matches dark theme background
@@ -40,7 +41,8 @@ function createWindow() {
   }
 }
 
-ipcMain.handle("ping", () => "pong");
+// Register IPC handlers before app is ready
+registerIpcHandlers();
 
 app.whenReady().then(createWindow);
 

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { Sidebar } from "./sidebar";
 import { LatexEditor } from "./editor/latex-editor";
@@ -23,15 +24,15 @@ function PdfPreviewPlaceholder() {
 }
 
 export function WorkspaceLayout() {
-  const initialized = useDocumentStore((s) => s.initialized);
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
 
-  if (!initialized) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-muted-foreground">Loading project...</div>
-      </div>
-    );
-  }
+  // Update window title when project changes
+  useEffect(() => {
+    if (projectRoot) {
+      const projectName = projectRoot.split(/[/\\]/).pop() || "Project";
+      window.electronAPI.windowSetTitle(`Prism - ${projectName}`);
+    }
+  }, [projectRoot]);
 
   return (
     <Group id="workspace" orientation="horizontal" className="h-full">

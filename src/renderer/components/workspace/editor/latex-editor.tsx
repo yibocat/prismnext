@@ -321,8 +321,15 @@ export function LatexEditor() {
 
   if (!isTextFile) {
     return (
-      <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-        Preview not available
+      <div className="flex h-full flex-col bg-background">
+        <div className="drag-region flex h-[calc(36px+var(--titlebar-height))] shrink-0 items-center justify-center border-border border-b bg-muted/30 pt-[var(--titlebar-height)]">
+          <span className="font-medium text-muted-foreground text-xs">Editor</span>
+        </div>
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-muted-foreground text-sm">
+            {activeFileId ? "Preview not available" : "No file selected"}
+          </p>
+        </div>
       </div>
     );
   }
