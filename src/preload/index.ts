@@ -24,4 +24,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Window operations
   windowSetTitle: (title: string) =>
     ipcRenderer.invoke("window:setTitle", { title }),
+
+  // Compile operations
+  compileExecute: (projectDir: string, mainFile: string, useTexlive?: boolean) =>
+    ipcRenderer.invoke("compile:execute", { projectDir, mainFile, useTexlive }),
+  compileSynctex: (projectDir: string, page: number, x: number, y: number) =>
+    ipcRenderer.invoke("compile:synctex", { projectDir, page, x, y }),
+  compileDetectTexlive: () => ipcRenderer.invoke("compile:detectTexlive"),
 });

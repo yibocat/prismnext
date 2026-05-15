@@ -30,6 +30,7 @@ import {
 } from "@codemirror/search";
 import { latex } from "codemirror-lang-latex";
 import { useDocumentStore } from "@/stores/document-store";
+import { useCompileStore, compileCurrentDocument, compileOnSave } from "@/stores/compile-store";
 import { EditorToolbar } from "./editor-toolbar";
 import { SearchPanel } from "./search-panel";
 
@@ -133,7 +134,21 @@ export function LatexEditor() {
         {
           key: "Mod-Enter",
           run: () => {
-            // Compile will be wired in Step 4
+            // Trigger compilation
+            compileCurrentDocument();
+            return true;
+          },
+        },
+        {
+          key: "Mod-s",
+          run: () => {
+            // Save current file then compile
+            const id = currentFileIdRef.current;
+            if (id) {
+              useDocumentStore.getState().saveFile(id).then(() => {
+                compileOnSave();
+              });
+            }
             return true;
           },
         },
@@ -198,6 +213,8 @@ export function LatexEditor() {
             const id = currentFileIdRef.current;
             if (id) {
               useDocumentStore.getState().setContent(id, update.state.doc.toString());
+              // Auto-compile: schedule after 2s of no typing
+              useCompileStore.getState().scheduleAutoCompile();
             }
           }
         }),

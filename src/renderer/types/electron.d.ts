@@ -1,3 +1,20 @@
+export interface TexliveStatus {
+  available: boolean;
+  engines: string[];
+  version: string | null;
+}
+
+export interface CompilerStatus {
+  texlive: TexliveStatus;
+  tectonic: boolean;
+}
+
+export interface SynctexResult {
+  file: string;
+  line: number;
+  column: number;
+}
+
 export interface ElectronAPI {
   // Filesystem operations
   fsScan: (rootPath: string) => Promise<{
@@ -30,6 +47,20 @@ export interface ElectronAPI {
 
   // Window operations
   windowSetTitle: (title: string) => Promise<void>;
+
+  // Compile operations
+  compileExecute: (
+    projectDir: string,
+    mainFile: string,
+    useTexlive?: boolean,
+  ) => Promise<{ pdfBytes: ArrayBuffer } | { error: string }>;
+  compileSynctex: (
+    projectDir: string,
+    page: number,
+    x: number,
+    y: number,
+  ) => Promise<SynctexResult | null>;
+  compileDetectTexlive: () => Promise<CompilerStatus>;
 }
 
 declare global {

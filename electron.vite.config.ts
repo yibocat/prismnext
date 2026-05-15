@@ -12,5 +12,22 @@ export default defineConfig({
         "@": resolve("src/renderer"),
       },
     },
+    worker: {
+      format: "es",
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          format: "es",
+        },
+      },
+      target: "esnext",
+    },
+    optimizeDeps: {
+      exclude: ["mupdf"],
+      esbuildOptions: {
+        target: "esnext",
+      },
+    },
   },
 });
