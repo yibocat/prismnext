@@ -16,7 +16,10 @@ import {
   PlusIcon,
   FolderPlusIcon,
   UploadIcon,
+  PencilIcon,
+  Trash2Icon,
 } from "lucide-react";
+import { Panel, Group, Separator } from "react-resizable-panels";
 import { useTheme } from "next-themes";
 import { useDocumentStore, type ProjectFile } from "@/stores/document-store";
 import { cn } from "@/lib/utils";
@@ -29,6 +32,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 // ─── File Icon ───
 
@@ -86,17 +104,19 @@ interface TreeNode {
   children: TreeNode[];
 }
 
-function buildFileTree(files: ProjectFile[]): TreeNode[] {
+function buildFileTree(files: ProjectFile[], folders: string[]): TreeNode[] {
   const root: TreeNode[] = [];
   const folderMap = new Map<string, TreeNode>();
 
   function getOrCreateFolder(path: string): TreeNode[] {
     if (!path) return root;
     if (folderMap.has(path)) return folderMap.get(path)!.children;
+
     const parts = path.split("/");
     const name = parts[parts.length - 1];
     const parentPath = parts.slice(0, -1).join("/");
     const parentChildren = getOrCreateFolder(parentPath);
+
     const folder: TreeNode = {
       name,
       relativePath: path,
@@ -108,11 +128,17 @@ function buildFileTree(files: ProjectFile[]): TreeNode[] {
     return folder.children;
   }
 
+  // Ensure all known folders exist as nodes (including empty ones)
+  for (const folderPath of folders) {
+    getOrCreateFolder(folderPath);
+  }
+
   for (const file of files) {
     const parts = file.relativePath.split("/");
     const fileName = parts[parts.length - 1];
     const folderPath = parts.slice(0, -1).join("/");
     const parentChildren = getOrCreateFolder(folderPath);
+
     parentChildren.push({
       name: fileName,
       relativePath: file.relativePath,
@@ -122,6 +148,7 @@ function buildFileTree(files: ProjectFile[]): TreeNode[] {
     });
   }
 
+  // Sort: folders first, then alphabetical
   function sortNodes(nodes: TreeNode[]) {
     nodes.sort((a, b) => {
       if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
@@ -132,6 +159,7 @@ function buildFileTree(files: ProjectFile[]): TreeNode[] {
     }
   }
   sortNodes(root);
+
   return root;
 }
 
@@ -144,6 +172,12 @@ interface FileTreeNodeProps {
   expandedFolders: Set<string>;
   onToggleFolder: (path: string) => void;
   onSelectFile: (id: string) => void;
+  fileCount: number;
+  onNewFile: (folder?: string) => void;
+  onNewFolder: (parent?: string) => void;
+  onRename: (id: string, name: string) => void;
+  onDelete: (id: string) => void;
+  onDeleteFolder: (folderPath: string) => void;
 }
 
 function FileTreeNode({
@@ -153,26 +187,60 @@ function FileTreeNode({
   expandedFolders,
   onToggleFolder,
   onSelectFile,
+  fileCount,
+  onNewFile,
+  onNewFolder,
+  onRename,
+  onDelete,
+  onDeleteFolder,
 }: FileTreeNodeProps) {
   if (node.type === "folder") {
     const isExpanded = expandedFolders.has(node.relativePath);
 
     return (
       <div>
-        <button
-          type="button"
-          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-sidebar-accent/50"
-          style={{ paddingLeft: `${depth * 16 + 4}px` }}
-          onClick={() => onToggleFolder(node.relativePath)}
-        >
-          {isExpanded ? (
-            <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
-          ) : (
-            <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
-          )}
-          <FolderIcon className="size-4 shrink-0" />
-          <span className="truncate">{node.name}</span>
-        </button>
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-sidebar-accent/50"
+              style={{ paddingLeft: `${depth * 16 + 4}px` }}
+              onClick={() => onToggleFolder(node.relativePath)}
+            >
+              {isExpanded ? (
+                <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
+              ) : (
+                <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
+              )}
+              <FolderIcon className="size-4 shrink-0" />
+              <span className="truncate">{node.name}</span>
+            </button>
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            <ContextMenuItem onClick={() => onNewFile(node.relativePath)}>
+              <FileTextIcon className="mr-2 size-4" />
+              New File Here
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => onNewFolder(node.relativePath)}>
+              <FolderPlusIcon className="mr-2 size-4" />
+              New Folder
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              onClick={() => onRename(node.relativePath, node.name)}
+            >
+              <PencilIcon className="mr-2 size-4" />
+              Rename
+            </ContextMenuItem>
+            <ContextMenuItem
+              variant="destructive"
+              onClick={() => onDeleteFolder(node.relativePath)}
+            >
+              <Trash2Icon className="mr-2 size-4" />
+              Delete
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
         {isExpanded &&
           node.children.map((child) => (
             <FileTreeNode
@@ -183,30 +251,61 @@ function FileTreeNode({
               expandedFolders={expandedFolders}
               onToggleFolder={onToggleFolder}
               onSelectFile={onSelectFile}
+              fileCount={fileCount}
+              onNewFile={onNewFile}
+              onNewFolder={onNewFolder}
+              onRename={onRename}
+              onDelete={onDelete}
+              onDeleteFolder={onDeleteFolder}
             />
           ))}
       </div>
     );
   }
 
+  // File node
   const file = node.file!;
   const isActive = file.id === activeFileId;
 
   return (
-    <button
-      type="button"
-      className={cn(
-        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
-        isActive
-          ? "bg-sidebar-accent text-sidebar-accent-foreground"
-          : "hover:bg-sidebar-accent/50",
-      )}
-      style={{ paddingLeft: `${depth * 16 + 8}px` }}
-      onClick={() => onSelectFile(file.id)}
-    >
-      {getFileIcon(file)}
-      <span className="min-w-0 flex-1 truncate">{node.name}</span>
-    </button>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+            isActive
+              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+              : "hover:bg-sidebar-accent/50",
+          )}
+          style={{ paddingLeft: `${depth * 16 + 8}px` }}
+          onClick={() => onSelectFile(file.id)}
+        >
+          {getFileIcon(file)}
+          <span className="min-w-0 flex-1 truncate">{node.name}</span>
+          {file.isDirty && (
+            <span
+              className="ml-auto size-2 shrink-0 rounded-full bg-blue-500"
+              title="Modified"
+            />
+          )}
+        </button>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onClick={() => onRename(file.id, file.name)}>
+          <PencilIcon className="mr-2 size-4" />
+          Rename
+        </ContextMenuItem>
+        <ContextMenuItem
+          variant="destructive"
+          onClick={() => onDelete(file.id)}
+          disabled={fileCount <= 1}
+        >
+          <Trash2Icon className="mr-2 size-4" />
+          Delete
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 
@@ -214,12 +313,22 @@ function FileTreeNode({
 
 export function Sidebar() {
   const files = useDocumentStore((s) => s.files);
+  const folders = useDocumentStore((s) => s.folders);
   const activeFileId = useDocumentStore((s) => s.activeFileId);
   const setActiveFile = useDocumentStore((s) => s.setActiveFile);
+  const deleteFile = useDocumentStore((s) => s.deleteFile);
+  const deleteFolder = useDocumentStore((s) => s.deleteFolder);
+  const renameFile = useDocumentStore((s) => s.renameFile);
+  const createNewFile = useDocumentStore((s) => s.createNewFile);
+  const createFolder = useDocumentStore((s) => s.createFolder);
   const activeFileContent = useDocumentStore((s) => {
     const active = s.files.find((f) => f.id === s.activeFileId);
     return active?.content ?? "";
   });
+  const requestJumpToPosition = useDocumentStore(
+    (s) => s.requestJumpToPosition,
+  );
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
 
   const { theme, setTheme } = useTheme();
 
@@ -228,7 +337,7 @@ export function Sidebar() {
   );
 
   // Build file tree
-  const tree = useMemo(() => buildFileTree(files), [files]);
+  const tree = useMemo(() => buildFileTree(files, folders), [files, folders]);
 
   // Auto-expand parent folders of active file
   useEffect(() => {
@@ -266,99 +375,252 @@ export function Sidebar() {
 
   const handleTocClick = useCallback(
     (line: number) => {
-      // Since we don't have jumpToPosition yet, dispatch a custom event
       const lines = activeFileContent.split("\n");
       let position = 0;
       for (let i = 0; i < line - 1 && i < lines.length; i++) {
         position += lines[i].length + 1;
       }
-      // TODO: wire jumpToPosition through document store
-      window.dispatchEvent(
-        new CustomEvent("prism:jump-to-position", { detail: { position } }),
-      );
+      requestJumpToPosition(position);
     },
-    [activeFileContent],
+    [activeFileContent, requestJumpToPosition],
   );
+
+  // Dialog state
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [addDialogFolder, setAddDialogFolder] = useState<string | undefined>();
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false);
+  const [folderDialogParent, setFolderDialogParent] = useState<
+    string | undefined
+  >();
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [renameFileId, setRenameFileId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [newFileName, setNewFileName] = useState("");
+  const [newFolderName, setNewFolderName] = useState("");
+  const [nameError, setNameError] = useState("");
+
+  const isCaseInsensitiveFs =
+    navigator.platform.startsWith("Mac") ||
+    navigator.platform.startsWith("Win");
+
+  const nameExistsIn = useCallback(
+    (name: string, folder?: string) => {
+      const targetPath = folder ? `${folder}/${name}` : name;
+      const cmp = (a: string, b: string) =>
+        isCaseInsensitiveFs ? a.toLowerCase() === b.toLowerCase() : a === b;
+      const existsAsFile = files.some((f) => cmp(f.relativePath, targetPath));
+      const existsAsFolder = folders.some((f) => cmp(f, targetPath));
+      return existsAsFile || existsAsFolder;
+    },
+    [files, folders, isCaseInsensitiveFs],
+  );
+
+  const handleAddFile = () => {
+    const name = newFileName.trim();
+    if (!name) return;
+    if (nameExistsIn(name, addDialogFolder)) {
+      setNameError("A file or folder with this name already exists");
+      return;
+    }
+    const finalName = /\.\w+$/.test(name) ? name : `${name}.tex`;
+    const lower = finalName.toLowerCase();
+    const type: "tex" | "image" = /\.(png|jpg|jpeg|gif|svg|bmp|webp)$/.test(
+      lower,
+    )
+      ? "image"
+      : "tex";
+    createNewFile(finalName, type, addDialogFolder);
+    setNewFileName("");
+    setNameError("");
+    setAddDialogOpen(false);
+    setAddDialogFolder(undefined);
+  };
+
+  const handleCreateFolder = () => {
+    const name = newFolderName.trim();
+    if (!name) return;
+    if (nameExistsIn(name, folderDialogParent)) {
+      setNameError("A file or folder with this name already exists");
+      return;
+    }
+    createFolder(name, folderDialogParent);
+    setNewFolderName("");
+    setNameError("");
+    setFolderDialogOpen(false);
+    setFolderDialogParent(undefined);
+  };
+
+  const openRenameDialog = (id: string, name: string) => {
+    setRenameFileId(id);
+    setRenameValue(name);
+    setNameError("");
+    setRenameDialogOpen(true);
+  };
+
+  const openNewFileDialog = (folder?: string) => {
+    setAddDialogFolder(folder);
+    setNewFileName("");
+    setNameError("");
+    setAddDialogOpen(true);
+  };
+
+  const openNewFolderDialog = (parent?: string) => {
+    setFolderDialogParent(parent);
+    setNewFolderName("");
+    setNameError("");
+    setFolderDialogOpen(true);
+  };
+
+  const handleRename = () => {
+    const name = renameValue.trim();
+    if (!renameFileId || !name) return;
+    const file = files.find((f) => f.id === renameFileId);
+    const parentFolder = file?.relativePath.includes("/")
+      ? file.relativePath.substring(0, file.relativePath.lastIndexOf("/"))
+      : undefined;
+    const isSameName = isCaseInsensitiveFs
+      ? name.toLowerCase() === file?.name.toLowerCase()
+      : name === file?.name;
+    if (nameExistsIn(name, parentFolder) && !isSameName) {
+      setNameError("A file or folder with this name already exists");
+      return;
+    }
+    renameFile(renameFileId, name);
+    setRenameDialogOpen(false);
+    setRenameFileId(null);
+    setRenameValue("");
+    setNameError("");
+  };
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
-      {/* Header */}
-      <div className="relative flex h-12 items-center justify-center border-sidebar-border border-b px-3 pt-[var(--titlebar-height)]">
+      {/* Header — padded top for macOS overlay titlebar */}
+      <div className="relative flex h-[calc(48px+var(--titlebar-height))] items-center justify-center border-sidebar-border border-b px-3 pt-[var(--titlebar-height)]">
         <div className="flex flex-col items-center">
-          <span className="font-semibold text-sm">Prism Next</span>
-          <span className="text-muted-foreground text-xs">Desktop</span>
+          <span className="font-semibold text-sm">Prism</span>
+          <span className="text-muted-foreground text-xs">
+            {projectRoot?.split(/[/\\]/).pop() || "Desktop"}
+          </span>
         </div>
       </div>
 
-      {/* Files section */}
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex h-8 shrink-0 items-center justify-between border-sidebar-border border-b px-3">
-          <div className="flex items-center gap-2">
-            <FolderIcon className="size-3.5 text-muted-foreground" />
-            <span className="font-medium text-xs">Files</span>
-          </div>
-          <div className="flex items-center gap-0.5">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-5"
-              title="New File"
-            >
-              <PlusIcon className="size-3" />
-            </Button>
-          </div>
-        </div>
-
-        <ScrollArea className="flex-1">
-          <div className="p-1">
-            {tree.map((node) => (
-              <FileTreeNode
-                key={node.relativePath}
-                node={node}
-                depth={0}
-                activeFileId={activeFileId}
-                expandedFolders={expandedFolders}
-                onToggleFolder={toggleFolder}
-                onSelectFile={(id) => setActiveFile(id)}
-              />
-            ))}
-          </div>
-        </ScrollArea>
-      </div>
-
-      {/* Outline section */}
-      <div className="flex min-h-0 flex-1 flex-col border-sidebar-border border-t">
-        <div className="flex h-8 shrink-0 items-center gap-2 px-3">
-          <ListIcon className="size-3.5 text-muted-foreground" />
-          <span className="font-medium text-xs">Outline</span>
-        </div>
-        <ScrollArea className="flex-1">
-          <div className="p-1">
-            {toc.length > 0 ? (
-              toc.map((item, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-sidebar-accent/50"
-                  style={{ paddingLeft: `${(item.level - 1) * 12 + 8}px` }}
-                  onClick={() => handleTocClick(item.line)}
-                >
-                  <HashIcon className="size-3 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{item.title}</span>
-                </button>
-              ))
-            ) : (
-              <div className="px-2 py-1 text-muted-foreground text-xs">
-                No sections found
+      {/* Resizable sections */}
+      <Group id="sidebar-panels" orientation="vertical" className="min-h-0 flex-1 overflow-hidden">
+        {/* Files */}
+        <Panel id="files" defaultSize="60%" minSize="15%">
+          <div className="flex min-h-0 h-full flex-col">
+            <div className="relative flex h-8 shrink-0 items-center justify-center border-sidebar-border border-b px-3">
+              <div className="flex items-center gap-2">
+                <FolderIcon className="size-3.5 text-muted-foreground" />
+                <span className="font-medium text-xs">Files</span>
               </div>
-            )}
+              <div className="absolute right-3 flex items-center gap-0.5">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-5"
+                      title="Add"
+                    >
+                      <PlusIcon className="size-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => openNewFileDialog()}>
+                      <FileTextIcon className="mr-2 size-4" />
+                      New LaTeX File
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => openNewFolderDialog()}>
+                      <FolderPlusIcon className="mr-2 size-4" />
+                      New Folder
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => { /* TODO: Import file in Step 3 */ }}>
+                      <UploadIcon className="mr-2 size-4" />
+                      Import File
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
+            <ContextMenu>
+              <ContextMenuTrigger asChild>
+                <ScrollArea className="min-h-0 flex-1">
+                  <div className="p-1">
+                    {tree.map((node) => (
+                      <FileTreeNode
+                        key={node.relativePath}
+                        node={node}
+                        depth={0}
+                        activeFileId={activeFileId}
+                        expandedFolders={expandedFolders}
+                        onToggleFolder={toggleFolder}
+                        onSelectFile={(id) => setActiveFile(id)}
+                        fileCount={files.length}
+                        onNewFile={openNewFileDialog}
+                        onNewFolder={openNewFolderDialog}
+                        onRename={openRenameDialog}
+                        onDelete={deleteFile}
+                        onDeleteFolder={deleteFolder}
+                      />
+                    ))}
+                  </div>
+                </ScrollArea>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem onClick={() => openNewFileDialog()}>
+                  <FileTextIcon className="mr-2 size-4" />
+                  New File
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => openNewFolderDialog()}>
+                  <FolderPlusIcon className="mr-2 size-4" />
+                  New Folder
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           </div>
-        </ScrollArea>
-      </div>
+        </Panel>
+
+        <Separator id="files-outline-sep" className="bg-sidebar-border hover:bg-ring" />
+
+        {/* Outline */}
+        <Panel id="outline" defaultSize="40%" minSize="10%">
+          <div className="flex min-h-0 h-full flex-col">
+            <div className="flex h-8 shrink-0 items-center justify-center gap-2 px-3">
+              <ListIcon className="size-3.5 text-muted-foreground" />
+              <span className="font-medium text-xs">Outline</span>
+            </div>
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="p-1">
+                {toc.length > 0 ? (
+                  toc.map((item, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-sidebar-accent/50"
+                      style={{ paddingLeft: `${(item.level - 1) * 12 + 8}px` }}
+                      onClick={() => handleTocClick(item.line)}
+                    >
+                      <HashIcon className="size-3 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{item.title}</span>
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-2 py-1 text-muted-foreground text-xs">
+                    No sections found
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        </Panel>
+      </Group>
 
       {/* Footer */}
       <div className="flex items-center justify-between border-sidebar-border border-t px-3 py-2 text-muted-foreground text-xs">
-        <span className="truncate">Prism Next v0.1.0</span>
+        <span className="truncate">Prism v0.1.0</span>
         <Button
           variant="ghost"
           size="icon"
@@ -385,6 +647,119 @@ export function Sidebar() {
           )}
         </Button>
       </div>
+
+      {/* New File Dialog */}
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              New File{addDialogFolder ? ` in ${addDialogFolder}` : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-4">
+            <Input
+              placeholder="filename.tex"
+              value={newFileName}
+              onChange={(e) => {
+                setNewFileName(e.target.value);
+                setNameError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAddFile();
+              }}
+              autoFocus
+            />
+            {nameError && (
+              <p className="text-destructive text-xs">{nameError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddFile} disabled={!newFileName.trim()}>
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* New Folder Dialog */}
+      <Dialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              New Folder
+              {folderDialogParent ? ` in ${folderDialogParent}` : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-4">
+            <Input
+              placeholder="folder name"
+              value={newFolderName}
+              onChange={(e) => {
+                setNewFolderName(e.target.value);
+                setNameError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleCreateFolder();
+              }}
+              autoFocus
+            />
+            {nameError && (
+              <p className="text-destructive text-xs">{nameError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setFolderDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateFolder}
+              disabled={!newFolderName.trim()}
+            >
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Dialog */}
+      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-4">
+            <Input
+              value={renameValue}
+              onChange={(e) => {
+                setRenameValue(e.target.value);
+                setNameError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleRename();
+              }}
+              autoFocus
+            />
+            {nameError && (
+              <p className="text-destructive text-xs">{nameError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRenameDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleRename}>Rename</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

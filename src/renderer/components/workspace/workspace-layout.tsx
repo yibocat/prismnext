@@ -28,20 +28,20 @@ export function WorkspaceLayout() {
   }
 
   return (
-    <Group orientation="horizontal" className="h-full">
-      <Panel defaultSize={18} minSize={12} maxSize={30}>
+    <Group id="workspace" orientation="horizontal" className="h-full">
+      <Panel id="sidebar" defaultSize="18%" minSize="12%" maxSize="30%">
         <Sidebar />
       </Panel>
 
-      <Separator className="w-[3px] cursor-col-resize rounded bg-border transition-colors hover:bg-ring" />
+      <Separator id="sidebar-sep" className="bg-border hover:bg-ring" />
 
-      <Panel defaultSize={41} minSize={25}>
+      <Panel id="editor" defaultSize="41%" minSize="25%">
         <LatexEditor />
       </Panel>
 
-      <Separator className="w-[3px] cursor-col-resize rounded bg-border transition-colors hover:bg-ring" />
+      <Separator id="preview-sep" className="bg-border hover:bg-ring" />
 
-      <Panel defaultSize={41} minSize={25}>
+      <Panel id="preview" defaultSize="41%" minSize="25%">
         <PdfPreviewPlaceholder />
       </Panel>
     </Group>

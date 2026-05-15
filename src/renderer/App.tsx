@@ -5,7 +5,7 @@ import { WorkspaceLayout } from "@/components/workspace/workspace-layout";
 
 export function App() {
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
       <TooltipProvider>
         <WorkspaceLayout />
         <Toaster />

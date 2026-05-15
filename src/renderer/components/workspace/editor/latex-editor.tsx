@@ -100,10 +100,12 @@ export function LatexEditor() {
   const viewRef = useRef<EditorView | null>(null);
   const themeCompartmentRef = useRef(new Compartment());
   const isSearchOpenRef = useRef(false);
+  const isLocalChangeRef = useRef(false);
 
   const files = useDocumentStore((s) => s.files);
   const activeFileId = useDocumentStore((s) => s.activeFileId);
   const setContent = useDocumentStore((s) => s.setContent);
+  const jumpTarget = useDocumentStore((s) => s.jumpTarget);
 
   const { resolvedTheme } = useTheme();
 
@@ -196,7 +198,10 @@ export function LatexEditor() {
         scrollPastEnd(),
         cmBaseTheme,
         EditorView.updateListener.of((update) => {
-          if (update.docChanged) setContent(update.state.doc.toString());
+          if (update.docChanged) {
+            isLocalChangeRef.current = true;
+            setContent(update.state.doc.toString());
+          }
         }),
       ],
     });
@@ -223,6 +228,23 @@ export function LatexEditor() {
       viewRef.current = null;
     };
   }, [activeFileId, isTextFile]);
+
+  // ─── Handle jump-to-position from outline ───
+  useEffect(() => {
+    if (jumpTarget === null) return;
+    const view = viewRef.current;
+    if (!view) return;
+    const pos = Math.min(jumpTarget, view.state.doc.length);
+    view.dispatch({
+      selection: { anchor: pos },
+      effects: [
+        EditorView.scrollIntoView(pos, { y: "center" }),
+      ],
+    });
+    view.focus();
+    // Clear the jump target
+    useDocumentStore.setState({ jumpTarget: null });
+  }, [jumpTarget]);
 
   // ─── Theme switching ───
   useEffect(() => {
@@ -267,6 +289,10 @@ export function LatexEditor() {
   useEffect(() => {
     const view = viewRef.current;
     if (!view || !isTextFile) return;
+    if (isLocalChangeRef.current) {
+      isLocalChangeRef.current = false;
+      return;
+    }
     const content = activeFile?.content ?? "";
     const currentContent = view.state.doc.toString();
     if (currentContent !== content) {
