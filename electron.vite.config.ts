@@ -23,6 +23,7 @@ export default defineConfig({
       alias: {
         "@": resolve("src/renderer"),
       },
+      dedupe: ["@codemirror/state", "@codemirror/view", "@codemirror/merge"],
     },
     server: {
       fs: {

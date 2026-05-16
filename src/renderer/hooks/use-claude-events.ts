@@ -1,13 +1,15 @@
 import { useEffect, useRef } from "react";
 import { useClaudeChatStore, type ClaudeStreamMessage } from "@/stores/claude-chat-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { useChangesStore } from "@/stores/changes-store";
 import { compileCurrentDocument, pauseAutoCompileForAi, resumeAutoCompileAfterAi } from "@/stores/compile-store";
 
 export function useClaudeEvents() {
   // Per-tab tracking
-  const pendingToolUsesRef = useRef(new Map<string, Map<string, { name: string; input: any }>>());
+  const pendingToolUsesRef = useRef(new Map<string, Map<string, { name: string; input: any; oldContent?: string }>>());
   const hasTexChangesRef = useRef(new Map<string, boolean>());
   const aiSessionActiveRef = useRef(new Map<string, boolean>());
+  const fileContentTrackerRef = useRef(new Map<string, string>()); // Bug 5: stacked edit baseline
 
   function getTabMap<T>(ref: Map<string, T>, tabId: string, init: () => T): T {
     if (!ref.has(tabId)) ref.set(tabId, init());
@@ -18,6 +20,93 @@ export function useClaudeEvents() {
     pendingToolUsesRef.current.delete(tabId);
     hasTexChangesRef.current.delete(tabId);
     aiSessionActiveRef.current.delete(tabId);
+    fileContentTrackerRef.current.clear();
+  }
+
+  function registerProposedChange(
+    filePath: string,
+    toolUseId: string,
+    toolName: string,
+    toolInput: any,
+    capturedOldContent: string,
+  ) {
+    const docState = useDocumentStore.getState();
+    const projectRoot = docState.projectRoot;
+
+    let relativePath = filePath;
+    if (projectRoot && filePath.startsWith(projectRoot)) {
+      relativePath = filePath.slice(projectRoot.length).replace(/^\//, "");
+    }
+
+    const file = docState.files.find(
+      (f) => f.relativePath === relativePath || f.absolutePath === filePath,
+    );
+    if (!file) {
+      console.log("[changes] file not found:", filePath);
+      return;
+    }
+
+    // Bug 5: use tracked content if available (stacked edits), else snapshot
+    const trackedContent = fileContentTrackerRef.current.get(file.relativePath);
+    const fallback = capturedOldContent || docState.getContent(file.id) || "";
+    const oldContent = trackedContent ?? fallback;
+
+    const name = toolName.toLowerCase();
+
+    // Compute newContent — handle Write, Edit, and MultiEdit
+    let newContent: string;
+
+    if (name === "write") {
+      newContent = toolInput?.content ?? "";
+    } else if (name === "multiedit" && Array.isArray(toolInput?.edits)) {
+      // Bug 7: MultiEdit has an edits array, apply each sequentially
+      newContent = oldContent;
+      for (const edit of toolInput.edits) {
+        const oldStr: string = edit.old_string ?? "";
+        const newStr: string = edit.new_string ?? "";
+        if (oldStr === "" && newStr === "") continue;
+        const escaped = oldStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        newContent = newContent.replace(new RegExp(escaped, "g"), newStr);
+      }
+    } else if (name === "edit") {
+      // Bug 4: always use global regex replace
+      const oldStr: string = toolInput?.old_string ?? "";
+      const newStr: string = toolInput?.new_string ?? "";
+      if (oldStr === "" && newStr === "") {
+        console.log("[changes] empty edit — skipping");
+        return;
+      }
+      const escaped = oldStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      newContent = oldContent.replace(new RegExp(escaped, "g"), newStr);
+    } else {
+      console.log("[changes] unknown tool:", toolName);
+      return;
+    }
+
+    console.log("[changes] detected", {
+      tool: toolName,
+      file: file.relativePath,
+      oldLen: oldContent.length,
+      newLen: newContent.length,
+      changed: oldContent !== newContent,
+    });
+
+    if (oldContent !== newContent) {
+      // Bug 5: update tracked content so subsequent edits stack on this result
+      fileContentTrackerRef.current.set(file.relativePath, newContent);
+
+      useChangesStore.getState().addChange({
+        id: toolUseId,
+        filePath: file.relativePath,
+        absolutePath: file.absolutePath,
+        oldContent: capturedOldContent || docState.getContent(file.id) || "",
+        newContent,
+        toolName,
+      });
+      console.log("[changes] registered for", file.relativePath);
+    } else {
+      console.log("[changes] no difference — skipped");
+    }
   }
 
   useEffect(() => {
@@ -47,7 +136,28 @@ export function useClaudeEvents() {
       if (msg.type === "assistant" && msg.message?.content) {
         for (const block of msg.message.content) {
           if (block.type === "tool_use" && block.id && block.name) {
-            pendingTools.set(block.id, { name: block.name, input: block.input });
+            // Capture a snapshot of the current file content BEFORE Claude edits it
+            let oldContent: string | undefined;
+            const name = block.name.toLowerCase();
+            if (name === "write" || name === "edit" || name === "multiedit") {
+              const fp = block.input?.file_path || block.input?.path;
+              if (fp && /\.(tex|bib|sty|cls)$/i.test(fp)) {
+                const docState = useDocumentStore.getState();
+                const projectRoot = docState.projectRoot;
+                let relativePath = fp;
+                if (projectRoot && fp.startsWith(projectRoot)) {
+                  relativePath = fp.slice(projectRoot.length).replace(/^\//, "");
+                }
+                const file = docState.files.find(
+                  (f) => f.relativePath === relativePath || f.absolutePath === fp,
+                );
+                if (file) {
+                  oldContent = docState.getContent(file.id) ?? "";
+                }
+              }
+            }
+
+            pendingTools.set(block.id, { name: block.name, input: block.input, oldContent });
 
             // AskUserQuestion: keep the process alive — answers are sent via stdin
           }
@@ -66,6 +176,7 @@ export function useClaudeEvents() {
             ) {
               const fp = toolUse.input?.file_path || toolUse.input?.path;
               if (fp && /\.(tex|bib|sty|cls)$/i.test(fp)) {
+                registerProposedChange(fp, block.tool_use_id!, toolUse.name, toolUse.input, toolUse.oldContent ?? "");
                 hasTexChangesRef.current.set(tabId, true);
               }
             }

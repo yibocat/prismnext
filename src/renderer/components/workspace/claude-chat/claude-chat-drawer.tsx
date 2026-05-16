@@ -41,7 +41,7 @@ export function ClaudeChatDrawer() {
     if (anyStreaming && !isOpen) {
       setDrawerState("open");
       const parent = containerRef.current?.parentElement;
-      const maxHeight = parent ? parent.clientHeight * 0.5 : 400;
+      const maxHeight = parent ? parent.clientHeight - 40 : 400;
       setHeight(maxHeight);
       heightRef.current = maxHeight;
       if (panelRef.current) {
@@ -63,7 +63,7 @@ export function ClaudeChatDrawer() {
       const handleMouseMove = (e: MouseEvent) => {
         hasDraggedRef.current = true;
         const parent = containerRef.current?.parentElement;
-        const maxHeight = parent ? parent.clientHeight * 0.5 : 400;
+        const maxHeight = parent ? parent.clientHeight - 40 : 400;
         const delta = startY - e.clientY;
         const newHeight = Math.min(Math.max(startHeight + delta, MIN_HEIGHT), maxHeight);
         heightRef.current = newHeight;

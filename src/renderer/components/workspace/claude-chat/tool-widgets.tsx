@@ -185,7 +185,7 @@ export function ThinkingWidget({ thinking }: { thinking: string }) {
         />
       </button>
       {expanded && (
-        <div className="mt-1 rounded-md bg-muted/30 p-2 text-muted-foreground italic">
+        <div className="mt-1 whitespace-pre-wrap rounded-md bg-muted/30 p-2 text-muted-foreground italic">
           {thinking}
         </div>
       )}
