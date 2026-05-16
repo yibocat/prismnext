@@ -16,6 +16,8 @@ export interface ClaudeStatus {
 // ─── Process Management ───
 
 const activeProcesses = new Map<string, ChildProcess>();
+const processStdins = new Map<string, NodeJS.WritableStream>();
+const completedTabs = new Set<string>();
 
 // ─── System Prompt ───
 
@@ -277,6 +279,8 @@ function spawnClaudeProcess(
   if (existing) {
     existing.kill("SIGTERM");
     activeProcesses.delete(tabId);
+    processStdins.delete(tabId);
+    completedTabs.delete(tabId);
   }
 
   const args = buildClaudeArgs(prompt, sessionId, model);
@@ -285,10 +289,12 @@ function spawnClaudeProcess(
   const child = spawn(binaryPath, args, {
     cwd: projectPath,
     env,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["pipe", "pipe", "pipe"],
   });
 
   activeProcesses.set(tabId, child);
+  processStdins.set(tabId, child.stdin!);
+  completedTabs.delete(tabId);
 
   // stdout → JSONL streaming
   const rl = createInterface({ input: child.stdout! });
@@ -306,12 +312,18 @@ function spawnClaudeProcess(
   // Process exit
   child.on("close", (code) => {
     activeProcesses.delete(tabId);
+    processStdins.delete(tabId);
+    if (completedTabs.has(tabId)) return;
+    completedTabs.add(tabId);
     win.webContents.send("claude:complete", { tabId, success: code === 0 });
   });
 
   child.on("error", (err) => {
     console.error("[claude] Process error:", err);
     activeProcesses.delete(tabId);
+    processStdins.delete(tabId);
+    if (completedTabs.has(tabId)) return;
+    completedTabs.add(tabId);
     win.webContents.send("claude:complete", { tabId, success: false });
   });
 }
@@ -348,6 +360,8 @@ export async function cancelClaudeExecution(
   const child = activeProcesses.get(tabId);
   if (!child) return;
 
+  completedTabs.add(tabId);
+
   child.kill("SIGTERM");
 
   // Force kill after 1s
@@ -355,17 +369,44 @@ export async function cancelClaudeExecution(
     if (activeProcesses.has(tabId)) {
       child.kill("SIGKILL");
       activeProcesses.delete(tabId);
+      processStdins.delete(tabId);
     }
   }, 1000);
 
   win.webContents.send("claude:complete", { tabId, success: false });
 }
 
+export function answerClaudeQuestion(
+  win: BrowserWindow,
+  tabId: string,
+  answer: string,
+): void {
+  const stdin = processStdins.get(tabId);
+  if (!stdin || stdin.destroyed) {
+    win.webContents.send("claude:complete", { tabId, success: false });
+    return;
+  }
+
+  // Claude CLI reads JSON from stdin in stream-json mode.
+  // Send a user message with the selected answer.
+  const response = JSON.stringify({
+    type: "user",
+    message: {
+      role: "user",
+      content: answer,
+    },
+  }) + "\n";
+
+  stdin.write(response);
+}
+
 export function killAllClaudeProcesses(): void {
   for (const [tabId, child] of activeProcesses) {
     child.kill("SIGTERM");
     activeProcesses.delete(tabId);
+    processStdins.delete(tabId);
   }
+  completedTabs.clear();
 }
 
 // ─── Session Management ───

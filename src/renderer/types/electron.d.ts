@@ -77,6 +77,7 @@ export interface ElectronAPI {
     effortLevel?: string,
   ) => Promise<void>;
   claudeCancel: (tabId?: string) => Promise<void>;
+  claudeAnswer: (tabId: string, answer: string) => Promise<void>;
   claudeListSessions: (projectPath: string) => Promise<Array<{ id: string; title: string; lastModified: number }>>;
   claudeLoadSession: (projectPath: string, sessionId: string) => Promise<any[]>;
 

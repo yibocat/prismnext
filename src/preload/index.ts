@@ -38,6 +38,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("claude:send", { projectPath, prompt, sessionId, tabId, model, effortLevel }),
   claudeCancel: (tabId?: string) =>
     ipcRenderer.invoke("claude:cancel", { tabId }),
+  claudeAnswer: (tabId: string, answer: string) =>
+    ipcRenderer.invoke("claude:answer", { tabId, answer }),
   claudeListSessions: (projectPath: string) =>
     ipcRenderer.invoke("claude:listSessions", { projectPath }),
   claudeLoadSession: (projectPath: string, sessionId: string) =>

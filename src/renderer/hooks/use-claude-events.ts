@@ -7,7 +7,6 @@ export function useClaudeEvents() {
   // Per-tab tracking
   const pendingToolUsesRef = useRef(new Map<string, Map<string, { name: string; input: any }>>());
   const hasTexChangesRef = useRef(new Map<string, boolean>());
-  const cancelledForAskRef = useRef(new Map<string, boolean>());
   const aiSessionActiveRef = useRef(new Map<string, boolean>());
 
   function getTabMap<T>(ref: Map<string, T>, tabId: string, init: () => T): T {
@@ -18,7 +17,6 @@ export function useClaudeEvents() {
   function clearTabMaps(tabId: string) {
     pendingToolUsesRef.current.delete(tabId);
     hasTexChangesRef.current.delete(tabId);
-    cancelledForAskRef.current.delete(tabId);
     aiSessionActiveRef.current.delete(tabId);
   }
 
@@ -51,11 +49,7 @@ export function useClaudeEvents() {
           if (block.type === "tool_use" && block.id && block.name) {
             pendingTools.set(block.id, { name: block.name, input: block.input });
 
-            // AskUserQuestion: cancel the process
-            if (block.name === "AskUserQuestion") {
-              cancelledForAskRef.current.set(tabId, true);
-              window.electronAPI.claudeCancel(tabId).catch(() => {});
-            }
+            // AskUserQuestion: keep the process alive — answers are sent via stdin
           }
         }
       }
@@ -96,7 +90,7 @@ export function useClaudeEvents() {
       const chatStore = useClaudeChatStore.getState();
       const tab = chatStore.tabs.find((t) => t.id === tabId);
 
-      if (!success && !tab?.error && !cancelledForAskRef.current.get(tabId)) {
+      if (!success && !tab?.error) {
         chatStore._setError(
           tabId,
           "Claude process exited unexpectedly. Check that Claude Code CLI is installed and authenticated.",

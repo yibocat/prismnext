@@ -8,6 +8,7 @@ import {
   executeClaudeCode,
   resumeClaudeCode,
   cancelClaudeExecution,
+  answerClaudeQuestion,
   listClaudeSessions,
   loadSessionHistory,
 } from "./services/claude";
@@ -179,6 +180,12 @@ export function registerIpcHandlers(): void {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return;
     return cancelClaudeExecution(win, args.tabId || "default");
+  });
+
+  ipcMain.handle("claude:answer", async (event, args: { tabId: string; answer: string }) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return;
+    return answerClaudeQuestion(win, args.tabId, args.answer);
   });
 
   ipcMain.handle(

@@ -150,7 +150,7 @@ function TodoWriteWidget({ toolUse }: { toolUse: ContentBlock }) {
         <span className="font-medium">Todo</span>
       </div>
       {todos.map((todo, i) => (
-        <div key={i} className="flex items-center gap-1.5 pl-4 py-0.5">
+        <div key={todo.content} className="flex items-center gap-1.5 pl-4 py-0.5">
           {todo.status === "completed" ? (
             <CheckIcon className="size-3 text-green-500" />
           ) : todo.status === "in_progress" ? (
@@ -203,7 +203,6 @@ function AskUserQuestionWidget({
   toolResult?: ContentBlock;
 }) {
   const [answered, setAnswered] = useState(false);
-  const sendPrompt = useClaudeChatStore((s) => s.sendPrompt);
   const isStreaming = useClaudeChatStore((s) => s.isStreaming);
   const isLoading = !toolResult;
   const isError = toolResult?.is_error;
@@ -215,7 +214,8 @@ function AskUserQuestionWidget({
   const handleSelectOption = (label: string) => {
     if (!needsUserAnswer) return;
     setAnswered(true);
-    sendPrompt(label);
+    const tabId = useClaudeChatStore.getState().activeTabId;
+    window.electronAPI.claudeAnswer(tabId, label);
   };
 
   if (!question && !options.length) {

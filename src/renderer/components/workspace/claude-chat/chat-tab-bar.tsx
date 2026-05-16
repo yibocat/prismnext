@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 export function ChatTabBar() {
   const tabs = useClaudeChatStore((s) => s.tabs);
   const activeTabId = useClaudeChatStore((s) => s.activeTabId);
+  const drawerState = useClaudeChatStore((s) => s.drawerState);
   const setActiveTab = useClaudeChatStore((s) => s.setActiveTab);
   const createTab = useClaudeChatStore((s) => s.createTab);
   const closeTab = useClaudeChatStore((s) => s.closeTab);
@@ -13,6 +14,9 @@ export function ChatTabBar() {
   // Keyboard shortcuts
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      // Only fire when drawer is visible
+      if (drawerState === "closed") return;
+
       // Cmd+T / Ctrl+T: new tab
       if ((e.metaKey || e.ctrlKey) && e.key === "t" && !e.shiftKey) {
         e.preventDefault();
@@ -45,7 +49,7 @@ export function ChatTabBar() {
         return;
       }
     },
-    [tabs, activeTabId, setActiveTab, createTab, closeTab],
+    [tabs, activeTabId, drawerState, setActiveTab, createTab, closeTab],
   );
 
   useEffect(() => {

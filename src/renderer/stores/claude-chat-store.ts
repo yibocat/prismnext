@@ -169,12 +169,6 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
   setActiveTab: (id: string) => {
     const { tabs, activeTabId } = get();
     if (id === activeTabId) return;
-    // Save draft of current tab
-    const currentInput = (document.querySelector(".chat-composer-textarea") as HTMLTextAreaElement)?.value || "";
-    const currentTab = tabs.find((t) => t.id === activeTabId);
-    if (currentTab) {
-      currentTab.draft = { input: currentInput };
-    }
     set({
       activeTabId: id,
       ...projectActiveTab(tabs, id),
@@ -312,24 +306,26 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
     const projectPath = useDocumentStore.getState().projectRoot;
     if (!projectPath) return;
 
+    const tabId = get().activeTabId;
+
     try {
       const messages = await window.electronAPI.claudeLoadSession(projectPath, sessionId);
       set((s) => {
         const tabs = s.tabs.map((t) =>
-          t.id === s.activeTabId
+          t.id === tabId
             ? { ...t, messages, sessionId, error: null }
             : t,
         );
-        return { tabs, drawerState: "open", ...projectActiveTab(tabs, s.activeTabId) };
+        return { tabs, drawerState: "open", ...projectActiveTab(tabs, tabId) };
       });
     } catch (err: any) {
       set((s) => {
         const tabs = s.tabs.map((t) =>
-          t.id === s.activeTabId
+          t.id === tabId
             ? { ...t, error: `Failed to load session: ${err?.message || String(err)}` }
             : t,
         );
-        return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+        return { tabs, ...projectActiveTab(tabs, tabId) };
       });
     }
   },

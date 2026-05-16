@@ -191,15 +191,18 @@ export function ChatMessages() {
 
   return (
     <div ref={scrollRef} className="absolute inset-0 overflow-y-auto scroll-smooth py-2">
-      {displayMessages.map((msg, i) => {
+      {displayMessages.map((msg) => {
+        // Use the original index in the full messages array as a stable key.
+        // Messages are only ever appended, never removed or reordered.
+        const idx = messages.indexOf(msg);
         if (msg.type === "user") {
-          return <UserMessage key={i} msg={msg} />;
+          return <UserMessage key={`user-${idx}`} msg={msg} />;
         }
         if (msg.type === "assistant") {
-          return <AssistantMessage key={i} msg={msg} toolResultMap={toolResultMap} />;
+          return <AssistantMessage key={`asst-${idx}`} msg={msg} toolResultMap={toolResultMap} />;
         }
         if (msg.type === "result") {
-          return <ResultMessage key={i} msg={msg} />;
+          return <ResultMessage key={`result-${idx}`} msg={msg} />;
         }
         return null;
       })}
