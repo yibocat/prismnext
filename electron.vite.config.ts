@@ -3,13 +3,31 @@ import { defineConfig } from "electron-vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  main: {},
-  preload: {},
+  main: {
+    build: {
+      rollupOptions: {
+        external: ["electron"],
+      },
+    },
+  },
+  preload: {
+    build: {
+      rollupOptions: {
+        external: ["electron"],
+      },
+    },
+  },
   renderer: {
     plugins: [react()],
     resolve: {
       alias: {
         "@": resolve("src/renderer"),
+      },
+    },
+    server: {
+      fs: {
+        // Allow all files for local dev (KaTeX fonts in pnpm store)
+        strict: false,
       },
     },
     worker: {

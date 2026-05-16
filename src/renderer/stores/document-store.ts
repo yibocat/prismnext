@@ -31,6 +31,7 @@ interface DocumentState {
   isSaving: boolean;
   fileContents: Map<string, FileContent>;
   jumpTarget: number | null;
+  selectionRange: { start: number; end: number } | null;
 
   // Async actions
   openProject: (rootPath: string) => Promise<void>;
@@ -38,6 +39,7 @@ interface DocumentState {
   saveFile: (id: string) => Promise<void>;
   saveAllFiles: () => Promise<void>;
   refreshFiles: () => Promise<void>;
+  refreshFileContent: (id: string) => Promise<void>;
 
   // Modified actions (now async)
   createNewFile: (name: string, type: "tex" | "image", folder?: string) => Promise<void>;
@@ -52,6 +54,7 @@ interface DocumentState {
   setContent: (id: string, content: string) => void;
   isFileDirty: (id: string) => boolean;
   requestJumpToPosition: (position: number) => void;
+  setSelectionRange: (range: { start: number; end: number } | null) => void;
 }
 
 // Auto-save implementation
@@ -89,6 +92,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   isSaving: false,
   fileContents: new Map(),
   jumpTarget: null,
+  selectionRange: null,
 
   // ─── Project Management ───
 
@@ -254,6 +258,17 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     } catch (error) {
       toast.error(`Failed to refresh files: ${error}`);
     }
+  },
+
+  refreshFileContent: async (id: string) => {
+    const file = get().files.find((f) => f.id === id);
+    if (!file) return;
+    try {
+      const { content } = await window.electronAPI.fsRead(file.absolutePath);
+      const newMap = new Map(get().fileContents);
+      newMap.set(id, { content, isDirty: false });
+      set({ fileContents: newMap });
+    } catch {}
   },
 
   createNewFile: async (name: string, type: "tex" | "image", folder?: string) => {
@@ -450,6 +465,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   isFileDirty: (id: string) => get().fileContents.get(id)?.isDirty ?? false,
 
   requestJumpToPosition: (position: number) => set({ jumpTarget: position }),
+
+  setSelectionRange: (range) => set({ selectionRange: range }),
 }));
 
 // Add bib to the ProjectFile type

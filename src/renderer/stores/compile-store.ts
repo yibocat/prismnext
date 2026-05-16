@@ -216,30 +216,21 @@ export const useCompileStore = create<CompileState>()(
       scheduleAutoCompile: () => {
         clearAutoCompileTimer();
 
-        // [AI Agent placeholder] When AI is editing, autoCompile should be
-        // set to false so this timer never fires during AI output.
-        // Instead, compile will be triggered on save after AI finishes.
         if (!get().autoCompile) {
-          console.log("[auto-compile] skipped (autoCompile is OFF)");
           return;
         }
 
-        console.log("[auto-compile] scheduled (2s debounce)");
         _autoCompileTimer = setTimeout(async () => {
           const docState = useDocumentStore.getState();
           const { projectRoot, files, activeFileId } = docState;
           if (!projectRoot || !activeFileId || files.length === 0) {
-            console.log("[auto-compile] skipped (no document)");
             return;
           }
 
           const resolved = resolveCompileTarget(activeFileId, files, docState.getContent);
           if (resolved) {
-            console.log("[auto-compile] firing compile for", resolved.targetPath);
             // compile() already calls saveAllFiles() internally
             get().compile(projectRoot, resolved.targetPath);
-          } else {
-            console.log("[auto-compile] skipped (no compile target resolved)");
           }
         }, 2000);
       },
@@ -286,14 +277,28 @@ export async function compileCurrentDocument(): Promise<void> {
 }
 
 /**
- * Compile on save: only triggers when autoCompile is OFF.
- * When autoCompile is ON, the debounce timer handles compilation.
- */
-/**
  * Compile on save: always triggers, regardless of autoCompile setting.
  * Cmd+S → save → compile.
  */
 export async function compileOnSave(): Promise<void> {
-  console.log("[compile-on-save] firing");
   await compileCurrentDocument();
+}
+
+// ─── AI auto-compile control ───
+
+let _autoCompileBeforeAi: boolean | null = null;
+
+export function pauseAutoCompileForAi(): void {
+  if (_autoCompileBeforeAi === null) {
+    _autoCompileBeforeAi = useCompileStore.getState().autoCompile;
+  }
+  useCompileStore.setState({ autoCompile: false });
+  clearAutoCompileTimer();
+}
+
+export function resumeAutoCompileAfterAi(): void {
+  if (_autoCompileBeforeAi !== null) {
+    useCompileStore.setState({ autoCompile: _autoCompileBeforeAi });
+    _autoCompileBeforeAi = null;
+  }
 }

@@ -31,4 +31,37 @@ contextBridge.exposeInMainWorld("electronAPI", {
   compileSynctex: (projectDir: string, page: number, x: number, y: number) =>
     ipcRenderer.invoke("compile:synctex", { projectDir, page, x, y }),
   compileDetectTexlive: () => ipcRenderer.invoke("compile:detectTexlive"),
+
+  // Claude operations
+  claudeStatus: () => ipcRenderer.invoke("claude:status"),
+  claudeSend: (projectPath: string, prompt: string, sessionId?: string, tabId?: string, model?: string, effortLevel?: string) =>
+    ipcRenderer.invoke("claude:send", { projectPath, prompt, sessionId, tabId, model, effortLevel }),
+  claudeCancel: (tabId?: string) =>
+    ipcRenderer.invoke("claude:cancel", { tabId }),
+  claudeListSessions: (projectPath: string) =>
+    ipcRenderer.invoke("claude:listSessions", { projectPath }),
+  claudeLoadSession: (projectPath: string, sessionId: string) =>
+    ipcRenderer.invoke("claude:loadSession", { projectPath, sessionId }),
+
+  // Claude events (Main → Renderer)
+  onClaudeStream: (callback: (data: { tabId: string; data: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; data: string }) => callback(data);
+    ipcRenderer.on("claude:stream", handler);
+    return () => ipcRenderer.removeListener("claude:stream", handler);
+  },
+  onClaudeComplete: (callback: (data: { tabId: string; success: boolean }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; success: boolean }) => callback(data);
+    ipcRenderer.on("claude:complete", handler);
+    return () => ipcRenderer.removeListener("claude:complete", handler);
+  },
+  onClaudeStderr: (callback: (data: { tabId: string; data: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; data: string }) => callback(data);
+    ipcRenderer.on("claude:stderr", handler);
+    return () => ipcRenderer.removeListener("claude:stderr", handler);
+  },
+  removeClaudeListeners: () => {
+    ipcRenderer.removeAllListeners("claude:stream");
+    ipcRenderer.removeAllListeners("claude:complete");
+    ipcRenderer.removeAllListeners("claude:stderr");
+  },
 });

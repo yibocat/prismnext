@@ -31,6 +31,8 @@ import {
 import { latex } from "codemirror-lang-latex";
 import { useDocumentStore } from "@/stores/document-store";
 import { useCompileStore, compileCurrentDocument, compileOnSave } from "@/stores/compile-store";
+import { ClaudeChatDrawer } from "../claude-chat/claude-chat-drawer";
+import { ChatErrorBoundary } from "../claude-chat/error-boundary";
 import { EditorToolbar } from "./editor-toolbar";
 import { SearchPanel } from "./search-panel";
 
@@ -213,8 +215,16 @@ export function LatexEditor() {
             const id = currentFileIdRef.current;
             if (id) {
               useDocumentStore.getState().setContent(id, update.state.doc.toString());
-              // Auto-compile: schedule after 2s of no typing
               useCompileStore.getState().scheduleAutoCompile();
+            }
+          }
+          // Emit selection changes for chat context
+          if (update.selectionSet && update.state.selection.main) {
+            const { from, to } = update.state.selection.main;
+            if (from !== to) {
+              useDocumentStore.getState().setSelectionRange({ start: from, end: to });
+            } else {
+              useDocumentStore.getState().setSelectionRange(null);
             }
           }
         }),
@@ -371,6 +381,9 @@ export function LatexEditor() {
       )}
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         <div ref={containerRef} className="absolute inset-0" />
+        <ChatErrorBoundary>
+          <ClaudeChatDrawer />
+        </ChatErrorBoundary>
       </div>
     </div>
   );

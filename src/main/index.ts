@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
 import { registerIpcHandlers } from "./ipc";
+import { killAllClaudeProcesses } from "./services/claude";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -32,6 +33,11 @@ function createWindow() {
   // Show window when ready to avoid white flash
   mainWindow.on("ready-to-show", () => {
     mainWindow?.show();
+  });
+
+  mainWindow.on("closed", () => {
+    killAllClaudeProcesses();
+    mainWindow = null;
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {

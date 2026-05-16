@@ -61,6 +61,30 @@ export interface ElectronAPI {
     y: number,
   ) => Promise<SynctexResult | null>;
   compileDetectTexlive: () => Promise<CompilerStatus>;
+
+  // Claude operations
+  claudeStatus: () => Promise<{
+    installed: boolean;
+    authenticated: boolean;
+    binaryPath: string | null;
+  }>;
+  claudeSend: (
+    projectPath: string,
+    prompt: string,
+    sessionId?: string,
+    tabId?: string,
+    model?: string,
+    effortLevel?: string,
+  ) => Promise<void>;
+  claudeCancel: (tabId?: string) => Promise<void>;
+  claudeListSessions: (projectPath: string) => Promise<Array<{ id: string; title: string; lastModified: number }>>;
+  claudeLoadSession: (projectPath: string, sessionId: string) => Promise<any[]>;
+
+  // Claude events (Main → Renderer)
+  onClaudeStream: (callback: (data: { tabId: string; data: string }) => void) => () => void;
+  onClaudeComplete: (callback: (data: { tabId: string; success: boolean }) => void) => () => void;
+  onClaudeStderr: (callback: (data: { tabId: string; data: string }) => void) => () => void;
+  removeClaudeListeners: () => void;
 }
 
 declare global {
