@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
-import { registerIpcHandlers } from "./ipc";
+import { registerIpcHandlers } from "./ipc/index";
 import { killAllClaudeProcesses } from "./services/claude";
 
 let mainWindow: BrowserWindow | null = null;

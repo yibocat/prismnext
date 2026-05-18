@@ -45,6 +45,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   claudeLoadSession: (projectPath: string, sessionId: string) =>
     ipcRenderer.invoke("claude:loadSession", { projectPath, sessionId }),
 
+  // Settings operations
+  settingsGet: () => ipcRenderer.invoke("settings:get"),
+  settingsSet: (patch: Record<string, unknown>) =>
+    ipcRenderer.invoke("settings:set", patch),
+
   // Claude events (Main → Renderer)
   onClaudeStream: (callback: (data: { tabId: string; data: string }) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; data: string }) => callback(data);

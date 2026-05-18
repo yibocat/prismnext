@@ -86,6 +86,18 @@ export interface ElectronAPI {
   onClaudeComplete: (callback: (data: { tabId: string; success: boolean }) => void) => () => void;
   onClaudeStderr: (callback: (data: { tabId: string; data: string }) => void) => () => void;
   removeClaudeListeners: () => void;
+
+  // Settings operations
+  settingsGet: () => Promise<{
+    aiModel: string;
+    effortLevel: string;
+    theme: string;
+    sidebarCollapsed: boolean;
+    rightPanelCollapsed: boolean;
+    zoteroApiKey?: string;
+    zoteroUserId?: string;
+  }>;
+  settingsSet: (patch: Record<string, unknown>) => Promise<void>;
 }
 
 declare global {
