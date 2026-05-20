@@ -1,36 +1,48 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
 import { registerIpcHandlers } from "./ipc/index";
+import { setMainWindow, registerWindowHandlers } from "./ipc/ipc-window";
 import { killAllClaudeProcesses } from "./services/claude";
+
+const isMac = process.platform === "darwin";
 
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow() {
-  mainWindow = new BrowserWindow({
+  const windowConfig: Electron.BrowserWindowConstructorOptions = {
     width: 1400,
     height: 900,
     minWidth: 800,
     minHeight: 600,
     title: "Prism",
     show: false,
-    // Critical: Set background color to prevent white flash on resize
-    backgroundColor: "#0a0a0a", // matches dark theme background
-    // macOS specific: improve resize performance
+    backgroundColor: "#0a0a0a",
     vibrancy: "under-window",
     visualEffectState: "active",
-    titleBarStyle: "hiddenInset",
-    // Improve rendering performance
     hasShadow: true,
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      // Enable hardware acceleration
       enableBlinkFeatures: "AcceleratedSmallCanvases",
     },
-  });
+  };
 
-  // Show window when ready to avoid white flash
+  if (isMac) {
+    // macOS: hiddenInset gives native traffic lights, no titlebar
+    windowConfig.titleBarStyle = "hiddenInset";
+  } else {
+    // Windows/Linux: frameless so our custom titlebar is the only one
+    windowConfig.frame = false;
+    windowConfig.autoHideMenuBar = true;
+  }
+
+  mainWindow = new BrowserWindow(windowConfig);
+
+  // Make window available to IPC handlers and register window events
+  setMainWindow(mainWindow);
+  registerWindowHandlers();
+
   mainWindow.on("ready-to-show", () => {
     mainWindow?.show();
   });
@@ -47,13 +59,13 @@ function createWindow() {
   }
 }
 
-// Register IPC handlers before app is ready
+// Register IPC handlers that don't need the window reference
 registerIpcHandlers();
 
 app.whenReady().then(createWindow);
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
+  if (!isMac) {
     app.quit();
   }
 });

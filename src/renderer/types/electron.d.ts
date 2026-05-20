@@ -45,8 +45,24 @@ export interface ElectronAPI {
     path: string | null;
   }>;
 
+  // Platform
+  platform: "darwin" | "win32" | "linux";
+
   // Window operations
   windowSetTitle: (title: string) => Promise<void>;
+  windowIsMaximized: () => Promise<boolean>;
+  windowIsFullscreen: () => Promise<boolean>;
+  windowMinimize: () => Promise<void>;
+  windowMaximize: () => Promise<void>;
+  windowClose: () => Promise<void>;
+
+  // Window state events
+  onWindowStateChange: (
+    callback: (state: {
+      isMaximized: boolean;
+      isFullscreen: boolean;
+    }) => void,
+  ) => () => void;
 
   // Compile operations
   compileExecute: (

@@ -122,23 +122,26 @@
   }
   html {
     @apply h-full overscroll-y-none;
-    /* macOS titlebar drag region height - matches traffic lights */
-    --titlebar-height: 28px;
-    --traffic-light-width: 70px;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  html:not(.dark) {
+    color-scheme: light;
   }
   body {
     @apply h-full bg-background text-foreground;
-    /* Prevent white flash during resize */
+  }
+  /* Prevent white flash during resize — hard-code backgrounds */
+  html.dark body {
     background-color: oklch(0.145 0 0);
+  }
+  html:not(.dark) body {
+    background-color: oklch(1 0 0);
   }
   #root {
     @apply h-full overflow-hidden;
   }
-}
-
-/* Light mode body background */
-html:not(.dark) body {
-  background-color: oklch(1 0 0);
 }
 
 /* macOS window drag region */

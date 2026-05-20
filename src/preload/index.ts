@@ -2,6 +2,9 @@ import { contextBridge, ipcRenderer } from "electron";
 
 // Expose filesystem and dialog APIs to renderer
 contextBridge.exposeInMainWorld("electronAPI", {
+  // Platform info
+  platform: process.platform as "darwin" | "win32" | "linux",
+
   // Filesystem operations
   fsScan: (rootPath: string) => ipcRenderer.invoke("fs:scan", { rootPath }),
   fsRead: (absPath: string) => ipcRenderer.invoke("fs:read", { absPath }),
@@ -24,6 +27,26 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Window operations
   windowSetTitle: (title: string) =>
     ipcRenderer.invoke("window:setTitle", { title }),
+  windowIsMaximized: () => ipcRenderer.invoke("window:isMaximized"),
+  windowIsFullscreen: () => ipcRenderer.invoke("window:isFullscreen"),
+  windowMinimize: () => ipcRenderer.invoke("window:minimize"),
+  windowMaximize: () => ipcRenderer.invoke("window:maximize"),
+  windowClose: () => ipcRenderer.invoke("window:close"),
+
+  // Window state events (Main → Renderer)
+  onWindowStateChange: (
+    callback: (state: {
+      isMaximized: boolean;
+      isFullscreen: boolean;
+    }) => void,
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      state: { isMaximized: boolean; isFullscreen: boolean },
+    ) => callback(state);
+    ipcRenderer.on("window:stateChange", handler);
+    return () => ipcRenderer.removeListener("window:stateChange", handler);
+  },
 
   // Compile operations
   compileExecute: (projectDir: string, mainFile: string, useTexlive?: boolean) =>
