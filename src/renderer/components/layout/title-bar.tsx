@@ -2,9 +2,8 @@ import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import {
   PanelLeftIcon,
-  SearchIcon,
   PanelRightIcon,
-  ZapIcon,
+  SearchIcon,
   GitBranchIcon,
   SunIcon,
   MoonIcon,
@@ -138,15 +137,6 @@ export function TitleBar() {
         </button>
 
         <div className="mx-1 h-5 w-px bg-border/60" />
-
-        {/* Compile — green=success, yellow=compiling, red=error, gray=idle */}
-        <button
-          type="button"
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title="Compile"
-        >
-          <ZapIcon className="size-4" />
-        </button>
 
         <button
           type="button"
