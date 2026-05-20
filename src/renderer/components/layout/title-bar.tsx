@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
+import { useLayoutStore } from "@/stores/layout-store";
 import {
   PanelLeftIcon,
   PanelRightIcon,
@@ -36,6 +37,7 @@ function useWindowState() {
 
 export function TitleBar() {
   const { platform, isMaximized, isFullscreen } = useWindowState();
+  const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
   const { theme, resolvedTheme, setTheme } = useTheme();
 
   const cycleTheme = () => {
@@ -45,14 +47,12 @@ export function TitleBar() {
   };
 
   const isMac = platform === "darwin";
-  // On macOS, hide traffic-light spacer when fullscreen or maximized
   const showMacSpacer = isMac && !isFullscreen && !isMaximized;
 
   return (
     <div className="drag-region relative flex h-[38px] shrink-0 items-center border-b border-border bg-card px-2.5 select-none">
-      {/* ── Left: Traffic lights spacer (macOS) + Project + Sidebar toggle ── */}
+      {/* ── Left: Traffic lights spacer + Project + Sidebar toggle ── */}
       <div className="z-10 flex items-center gap-1">
-        {/* macOS traffic lights spacer — hidden when fullscreen */}
         {showMacSpacer && <div className="w-[60px]" />}
 
         {/* Project name button */}
@@ -72,12 +72,13 @@ export function TitleBar() {
           type="button"
           className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           title="Toggle Sidebar"
+          onClick={toggleSidebar}
         >
           <PanelLeftIcon className="size-4" />
         </button>
       </div>
 
-      {/* ── Center: ⌘K command entry (absolutely centered) ── */}
+      {/* ── Center: ⌘K command entry ── */}
       <div className="pointer-events-none absolute inset-x-0 flex justify-center">
         <button
           type="button"
@@ -91,12 +92,11 @@ export function TitleBar() {
         </button>
       </div>
 
-      {/* Spacer pushes right group to the end */}
+      {/* Spacer */}
       <div className="flex-1" />
 
-      {/* ── Right: Window controls spacer (Win/Linux) + Actions ── */}
+      {/* ── Right: Window controls (Win/Linux) + Actions ── */}
       <div className="z-10 flex items-center gap-1">
-        {/* Windows/Linux: window control buttons */}
         {!isMac && (
           <>
             <button
@@ -146,7 +146,6 @@ export function TitleBar() {
           <span>main</span>
         </button>
 
-        {/* Theme toggle — cycles: light → dark → system */}
         <button
           type="button"
           className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"

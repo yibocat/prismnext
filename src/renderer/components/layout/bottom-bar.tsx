@@ -6,7 +6,7 @@ export function BottomBar() {
       {/* Compile trigger + status — gray=idle, green=success, yellow=compiling, red=error */}
       <button
         type="button"
-        className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-muted hover:text-foreground transition-colors"
+        className="flex items-center gap-1 rounded-md px-1.5 py-0.5 hover:bg-muted hover:text-foreground transition-colors"
         title="Compile"
       >
         <ZapIcon className="size-3" />
@@ -18,7 +18,7 @@ export function BottomBar() {
       {/* Engine */}
       <button
         type="button"
-        className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-muted hover:text-foreground transition-colors"
+        className="flex items-center gap-1 rounded-md px-1.5 py-0.5 hover:bg-muted hover:text-foreground transition-colors"
       >
         <CogIcon className="size-3" />
         LuaLaTeX
@@ -29,7 +29,7 @@ export function BottomBar() {
       {/* Cursor position */}
       <button
         type="button"
-        className="rounded px-1 py-0.5 hover:bg-muted hover:text-foreground transition-colors"
+        className="rounded-md px-1.5 py-0.5 hover:bg-muted hover:text-foreground transition-colors"
       >
         Ln 42, Col 8
       </button>
@@ -39,7 +39,7 @@ export function BottomBar() {
       {/* Encoding */}
       <button
         type="button"
-        className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-muted hover:text-foreground transition-colors"
+        className="flex items-center gap-1 rounded-md px-1.5 py-0.5 hover:bg-muted hover:text-foreground transition-colors"
       >
         <GlobeIcon className="size-3" />
         UTF-8
@@ -50,7 +50,7 @@ export function BottomBar() {
       {/* Language mode */}
       <button
         type="button"
-        className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-muted hover:text-foreground transition-colors"
+        className="flex items-center gap-1 rounded-md px-1.5 py-0.5 hover:bg-muted hover:text-foreground transition-colors"
       >
         <FileTextIcon className="size-3" />
         LaTeX
