@@ -38,6 +38,9 @@ function useWindowState() {
 export function TitleBar() {
   const { platform, isMaximized, isFullscreen } = useWindowState();
   const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
+  const toggleRightArea = useLayoutStore((s) => s.toggleRightArea);
+  const editorMaximized = useLayoutStore((s) => s.editorMaximized);
+  const toggleEditorMaximized = useLayoutStore((s) => s.toggleEditorMaximized);
   const { theme, resolvedTheme, setTheme } = useTheme();
 
   const cycleTheme = () => {
@@ -131,7 +134,15 @@ export function TitleBar() {
         <button
           type="button"
           className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title="Toggle Right Split"
+          title="Toggle Right Area"
+          onClick={() => {
+            if (editorMaximized) {
+              toggleEditorMaximized();
+              toggleRightArea();
+            } else {
+              toggleRightArea();
+            }
+          }}
         >
           <PanelRightIcon className="size-4" />
         </button>
