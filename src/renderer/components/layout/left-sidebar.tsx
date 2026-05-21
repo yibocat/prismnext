@@ -35,7 +35,7 @@ export function LeftSidebar() {
       </div>
 
       <div
-        className="absolute right-0 top-0 h-full w-[3px] cursor-col-resize hover:bg-primary/30 transition-colors"
+        className="absolute right-0 top-0 h-full w-[5px] cursor-col-resize hover:bg-primary/30 z-10 transition-colors"
         onMouseDown={(e) => {
           e.preventDefault();
           const startX = e.clientX;

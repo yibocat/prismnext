@@ -12,12 +12,21 @@ import {
   MoonIcon,
   MonitorIcon,
   FolderOpenIcon,
+  FolderIcon,
   ChevronDownIcon,
   EllipsisIcon,
   Minimize2Icon,
   Maximize2Icon,
   XIcon,
+  PlusIcon,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function useWindowState() {
   const platform = window.electronAPI?.platform ?? "darwin";
@@ -45,6 +54,7 @@ export function TitleBar() {
   const toggleEditorMaximized = useLayoutStore((s) => s.toggleEditorMaximized);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const openProject = useDocumentStore((s) => s.openProject);
+  const recentProjects = useProjectStore((s) => s.recentProjects);
   const addRecentProject = useProjectStore((s) => s.addRecentProject);
   const { theme, resolvedTheme, setTheme } = useTheme();
 
@@ -57,6 +67,12 @@ export function TitleBar() {
     if (result.canceled || !result.path) return;
     addRecentProject(result.path);
     await openProject(result.path);
+  };
+
+  const handleSwitchProject = async (path: string) => {
+    if (path === projectRoot) return;
+    addRecentProject(path);
+    await openProject(path);
   };
 
   const cycleTheme = () => {
@@ -85,17 +101,46 @@ export function TitleBar() {
 
         <div className="mx-1 h-5 w-px bg-border/60" />
 
-        {/* Project name button */}
-        <button
-          type="button"
-          className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium text-foreground hover:bg-muted transition-colors"
-          title="Open or switch project"
-          onClick={handleOpenProject}
-        >
-          <FolderOpenIcon className="size-3.5 text-muted-foreground" />
-          <span className="max-w-[140px] truncate">{projectName}</span>
-          <ChevronDownIcon className="size-3 text-muted-foreground" />
-        </button>
+        {/* Project switcher dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium text-foreground hover:bg-muted transition-colors"
+            >
+              <FolderOpenIcon className="size-3.5 text-muted-foreground" />
+              <span className="max-w-[140px] truncate">{projectName}</span>
+              <ChevronDownIcon className="size-3 text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-64">
+            {recentProjects.length > 0 ? (
+              recentProjects.map((p) => (
+                <DropdownMenuItem
+                  key={p.path}
+                  className="flex items-center gap-2 text-[13px]"
+                  onClick={() => handleSwitchProject(p.path)}
+                >
+                  <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="flex-1 truncate">{p.name}</span>
+                  <span className="shrink-0 text-[10px] text-muted-foreground/60 truncate max-w-[120px]">{p.path}</span>
+                </DropdownMenuItem>
+              ))
+            ) : (
+              <div className="px-2 py-3 text-[12px] text-muted-foreground text-center">
+                No recent projects
+              </div>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="flex items-center gap-2 text-[13px]"
+              onClick={handleOpenProject}
+            >
+              <PlusIcon className="size-3.5 shrink-0" />
+              Open Project...
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* ── Center: ⌘K command entry ── */}
