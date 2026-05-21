@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useLayoutStore, type AppMode } from "@/stores/layout-store";
-import { useDocumentStore } from "@/stores/document-store";
+import { useDocumentStore, type ProjectFile } from "@/stores/document-store";
 import {
   FileTextIcon,
   FolderIcon,
@@ -119,16 +119,36 @@ function FileTreeNodeRow({
   );
 }
 
+const MODE_EXTENSIONS: Record<string, string[]> = {
+  manuscript: [".tex", ".bib", ".cls", ".sty", ".bst"],
+  vault: [".md", ".mdx"],
+  code: [".py", ".js", ".ts", ".jsx", ".tsx", ".json", ".yaml", ".yml"],
+  assets: [".png", ".jpg", ".jpeg", ".svg", ".gif", ".pdf", ".csv"],
+  zotero: [".bib"],
+  other: [],
+};
+
+function filterFilesByMode(files: ProjectFile[], mode: string): ProjectFile[] {
+  const extensions = MODE_EXTENSIONS[mode];
+  if (!extensions || extensions.length === 0) return files;
+  return files.filter((f) => extensions.some((ext) => f.name.endsWith(ext)));
+}
+
 function RealFileTree() {
-  const files = useDocumentStore((s) => s.files);
-  const folders = useDocumentStore((s) => s.folders);
+  const activeMode = useLayoutStore((s) => s.activeMode);
+  const allFiles = useDocumentStore((s) => s.files);
+  const allFolders = useDocumentStore((s) => s.folders);
   const activeFileId = useDocumentStore((s) => s.activeFileId);
   const setActiveFile = useDocumentStore((s) => s.setActiveFile);
   const openEditorTab = useLayoutStore((s) => s.openEditorTab);
 
-  const tree = useMemo(() => buildFileTree(files, folders), [files, folders]);
+  const files = useMemo(
+    () => filterFilesByMode(allFiles, activeMode),
+    [allFiles, activeMode],
+  );
+  const tree = useMemo(() => buildFileTree(files, allFolders), [files, allFolders]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
-    () => new Set(folders),
+    () => new Set(allFolders),
   );
 
   if (tree.length === 0) {
@@ -160,7 +180,7 @@ function RealFileTree() {
           }}
           onSelectFile={(id, name) => {
             setActiveFile(id);
-            openEditorTab({ id, name });
+            openEditorTab({ id, name, type: "file" });
           }}
         />
       ))}

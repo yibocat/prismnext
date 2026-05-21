@@ -1,26 +1,51 @@
+import { useCallback } from "react";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useDocumentStore } from "@/stores/document-store";
+import { useCompileStore } from "@/stores/compile-store";
+import { resolveCompileTarget } from "@/lib/resolve-tex-root";
 import {
   XIcon,
   FileTextIcon,
   BookmarkIcon,
+  FileIcon,
   MaximizeIcon,
   MinimizeIcon,
+  PlayIcon,
+  Loader2Icon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function TabBar() {
-  const editorTabs = useLayoutStore((s) => s.modeEditorTabs[s.activeMode]);
-  const activeEditorTab = useLayoutStore((s) => s.modeActiveEditorTab[s.activeMode]);
+  const activeMode = useLayoutStore((s) => s.activeMode);
+  const editorTabs = useLayoutStore((s) => s.modeEditorTabs[activeMode]);
+  const activeEditorTab = useLayoutStore((s) => s.modeActiveEditorTab[activeMode]);
   const setActiveEditorTab = useLayoutStore((s) => s.setActiveEditorTab);
   const closeEditorTab = useLayoutStore((s) => s.closeEditorTab);
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
   const toggleEditorMaximized = useLayoutStore((s) => s.toggleEditorMaximized);
 
+  const activeTab = editorTabs.find((t) => t.id === activeEditorTab);
+  const isTexFile = activeTab?.type === "file" && activeTab.name.endsWith(".tex");
+
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const activeFileId = useDocumentStore((s) => s.activeFileId);
+  const files = useDocumentStore((s) => s.files);
+  const getContent = useDocumentStore((s) => s.getContent);
+  const isCompiling = useCompileStore((s) => s.isCompiling);
+  const compile = useCompileStore((s) => s.compile);
+
+  const handleCompile = useCallback(async () => {
+    if (!projectRoot || !activeFileId) return;
+    const resolved = resolveCompileTarget(activeFileId, files, getContent);
+    if (resolved) {
+      await compile(projectRoot, resolved.targetPath);
+    }
+  }, [projectRoot, activeFileId, files, compile, getContent]);
+
   if (editorTabs.length === 0) return null;
 
   return (
     <div className="flex h-9 shrink-0 items-center border-b border-border bg-card select-none">
-      {/* Tabs */}
       <div className="flex flex-1 items-center gap-0.5 px-1.5 min-w-0 overflow-hidden">
         {editorTabs.map((tab) => (
           <div
@@ -33,7 +58,9 @@ export function TabBar() {
             )}
             onClick={() => setActiveEditorTab(tab.id)}
           >
-            {tab.name.endsWith(".bib") ? (
+            {tab.type === "pdf" ? (
+              <FileIcon className="size-3 shrink-0 opacity-50" />
+            ) : tab.name.endsWith(".bib") ? (
               <BookmarkIcon className="size-3 shrink-0 opacity-50" />
             ) : (
               <FileTextIcon className="size-3 shrink-0 opacity-50" />
@@ -53,8 +80,22 @@ export function TabBar() {
         ))}
       </div>
 
-      {/* Actions */}
       <div className="flex h-full shrink-0 items-center gap-0.5 border-l border-border bg-card px-1.5">
+        {isTexFile && (
+          <button
+            type="button"
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            onClick={handleCompile}
+            disabled={isCompiling}
+          >
+            {isCompiling ? (
+              <Loader2Icon className="size-3.5 animate-spin" />
+            ) : (
+              <PlayIcon className="size-3.5" />
+            )}
+            Compile
+          </button>
+        )}
         <button
           type="button"
           className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"

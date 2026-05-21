@@ -15,8 +15,6 @@ import { latex } from "codemirror-lang-latex";
 import { useTheme } from "next-themes";
 import { useDocumentStore } from "@/stores/document-store";
 
-const placeholder = "% Open a file to start editing\n";
-
 export function LatexEditor() {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -24,8 +22,8 @@ export function LatexEditor() {
   const isDark = resolvedTheme === "dark";
 
   const activeFileId = useDocumentStore((s) => s.activeFileId);
-  const fileContents = useDocumentStore((s) => s.fileContents);
   const refreshFileContent = useDocumentStore((s) => s.refreshFileContent);
+  const jumpTarget = useDocumentStore((s) => s.jumpTarget);
 
   // Load file content when active file changes
   useEffect(() => {
@@ -34,20 +32,26 @@ export function LatexEditor() {
     }
   }, [activeFileId, refreshFileContent]);
 
-  // Get current document text
-  const docText = activeFileId
-    ? (fileContents.get(activeFileId)?.content ?? placeholder)
-    : placeholder;
-
+  // Create/destroy editor on file switch
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Destroy old editor
     if (viewRef.current) {
       viewRef.current.destroy();
+      viewRef.current = null;
     }
 
+    // Get initial content
+    const content = activeFileId
+      ? (useDocumentStore.getState().fileContents.get(activeFileId)?.content ?? "")
+      : "";
+
+    const setContent = useDocumentStore.getState().setContent;
+    const currentFileId = activeFileId;
+
     const state = EditorState.create({
-      doc: docText,
+      doc: content || "% Open a file to start editing\n",
       extensions: [
         lineNumbers(),
         highlightSpecialChars(),
@@ -60,6 +64,12 @@ export function LatexEditor() {
         isDark ? oneDark : [],
         EditorView.lineWrapping,
         EditorState.tabSize.of(2),
+        // Sync content back to document store on changes
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged && currentFileId) {
+            setContent(currentFileId, update.state.doc.toString());
+          }
+        }),
       ],
     });
 
@@ -70,7 +80,19 @@ export function LatexEditor() {
       view.destroy();
       viewRef.current = null;
     };
-  }, [isDark, docText]);
+  }, [activeFileId, isDark]);
+
+  // SyncTeX jump-to-position
+  useEffect(() => {
+    if (jumpTarget === null || !viewRef.current) return;
+    const view = viewRef.current;
+    const pos = Math.min(jumpTarget, view.state.doc.length);
+    view.dispatch({
+      selection: { anchor: pos },
+      effects: [EditorView.scrollIntoView(pos, { y: "center" })],
+    });
+    useDocumentStore.setState({ jumpTarget: null });
+  }, [jumpTarget]);
 
   return (
     <div ref={containerRef} className="h-full overflow-auto [&_.cm-editor]:h-full" />

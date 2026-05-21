@@ -2,9 +2,12 @@ import { create } from "zustand";
 
 export type AppMode = "manuscript" | "vault" | "zotero" | "code" | "assets" | "other" | "chat";
 
+export type TabType = "file" | "pdf";
+
 export interface EditorTab {
   id: string;
   name: string;
+  type: TabType;
 }
 
 interface LayoutState {
@@ -26,17 +29,25 @@ interface LayoutState {
   setRightSidebarWidth: (width: number) => void;
   toggleEditorMaximized: () => void;
 
-  /** Per-mode editor tabs */
+  /** Per-mode tabs (flat list) */
   modeEditorTabs: Record<AppMode, EditorTab[]>;
   modeActiveEditorTab: Record<AppMode, string | null>;
   openEditorTab: (tab: EditorTab) => void;
   closeEditorTab: (id: string) => void;
   setActiveEditorTab: (id: string) => void;
+  createPdfTab: (name: string) => void;
 }
 
 export const useLayoutStore = create<LayoutState>((set) => ({
   activeMode: "chat",
-  setActiveMode: (mode) => set({ activeMode: mode }),
+  setActiveMode: (mode) =>
+    set((s) => ({
+      activeMode: mode,
+      editorMaximized:
+        s.editorMaximized && (s.modeEditorTabs[mode]?.length ?? 0) === 0
+          ? false
+          : s.editorMaximized,
+    })),
 
   sidebarExpanded: true,
   sidebarWidth: 240,
@@ -78,9 +89,7 @@ export const useLayoutStore = create<LayoutState>((set) => ({
       const tabs = s.modeEditorTabs[mode];
       const exists = tabs.find((t) => t.id === tab.id);
       if (exists) {
-        return {
-          modeActiveEditorTab: { ...s.modeActiveEditorTab, [mode]: tab.id },
-        };
+        return { modeActiveEditorTab: { ...s.modeActiveEditorTab, [mode]: tab.id } };
       }
       return {
         modeEditorTabs: { ...s.modeEditorTabs, [mode]: [...tabs, tab] },
@@ -109,4 +118,15 @@ export const useLayoutStore = create<LayoutState>((set) => ({
     set((s) => ({
       modeActiveEditorTab: { ...s.modeActiveEditorTab, [s.activeMode]: id },
     })),
+
+  createPdfTab: (name) =>
+    set((s) => {
+      const mode = s.activeMode;
+      const tabs = s.modeEditorTabs[mode];
+      const pdfTab: EditorTab = { id: `pdf:${Date.now()}`, name, type: "pdf" };
+      return {
+        modeEditorTabs: { ...s.modeEditorTabs, [mode]: [...tabs, pdfTab] },
+        modeActiveEditorTab: { ...s.modeActiveEditorTab, [mode]: pdfTab.id },
+      };
+    }),
 }));
