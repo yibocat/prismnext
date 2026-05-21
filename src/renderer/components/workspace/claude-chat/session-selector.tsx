@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useClaudeChatStore } from "@/stores/claude-chat-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { HistoryIcon, CheckIcon, Loader2Icon } from "lucide-react";
+import { HistoryIcon, CheckIcon, Loader2Icon, Trash2Icon } from "lucide-react";
 
 interface SessionInfo {
   id: string;
@@ -39,7 +39,7 @@ export function SessionSelector() {
     setLoading(true);
     setError(null);
     try {
-      const result = await window.electronAPI.claudeListSessions(projectRoot);
+      const result = await window.electronAPI.agentListSessions(projectRoot);
       setSessions(result);
     } catch (err: any) {
       setError(err?.message || "Failed to load sessions");
@@ -86,6 +86,37 @@ export function SessionSelector() {
     }
   }, [loadSession]);
 
+  const doDelete = useCallback(async (sid: string) => {
+    console.log("[session-selector] Delete clicked:", sid);
+    if (!projectRoot) { console.log("[session-selector] No projectRoot"); return; }
+    const result = await window.electronAPI.agentDeleteSession(projectRoot, sid);
+    console.log("[session-selector] Delete result:", result);
+    if (result.success) {
+      setSessions((prev) => prev.filter((s) => s.id !== sid));
+    } else {
+      setError(result.error || "Failed to delete session");
+    }
+  }, [projectRoot]);
+
+  // Diagnostic: log every click inside the dropdown to verify event delivery
+  useEffect(() => {
+    const dropdown = dropdownRef.current;
+    if (!open || !dropdown) return;
+    const logClick = (e: Event) => {
+      console.log("[session-selector] RAW CLICK target:", (e.target as Element)?.tagName, (e.target as Element)?.className, (e.target as Element)?.closest?.(".delete-session-btn") ? "IS DELETE BTN" : "not delete");
+      const btn = (e.target as Element)?.closest?.(".delete-session-btn") as HTMLElement | null;
+      if (btn) {
+        e.stopPropagation();
+        e.preventDefault();
+        const sid = btn.dataset.sid;
+        console.log("[session-selector] DELETE sid:", sid);
+        if (sid) doDelete(sid);
+      }
+    };
+    dropdown.addEventListener("click", logClick);
+    return () => dropdown.removeEventListener("click", logClick);
+  }, [open, doDelete]);
+
   return (
     <>
       <button
@@ -112,6 +143,13 @@ export function SessionSelector() {
           >
             <div className="flex items-center justify-between px-3 py-1.5 border-border border-b">
               <span className="font-medium text-muted-foreground text-xs">Sessions</span>
+              <button
+                type="button"
+                className="bg-red-500 text-white px-2 py-0.5 rounded text-xs"
+                onClick={() => { console.log("[session-selector] TEST BTN CLICKED"); alert("TEST"); }}
+              >
+                TEST
+              </button>
               {error && <span className="text-destructive text-xs">{error}</span>}
             </div>
 
@@ -126,10 +164,13 @@ export function SessionSelector() {
             ) : (
               <div className="max-h-64 overflow-y-auto">
                 {sessions.map((s) => (
-                  <button
+                  <div
                     key={s.id}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-muted"
+                    className="group flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-muted"
                     onClick={() => handleLoadSession(s.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleLoadSession(s.id); }}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-xs">{s.title}</div>
@@ -140,7 +181,15 @@ export function SessionSelector() {
                     {s.id === sessionId && (
                       <CheckIcon className="size-3 shrink-0 text-green-500" />
                     )}
-                  </button>
+                    <button
+                      type="button"
+                      className="delete-session-btn shrink-0 rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all cursor-pointer"
+                      data-sid={s.id}
+                      title="Delete session"
+                    >
+                      <Trash2Icon className="size-3 pointer-events-none" />
+                    </button>
+                  </div>
                 ))}
               </div>
             )}

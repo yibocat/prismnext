@@ -103,6 +103,22 @@ export interface ElectronAPI {
   onClaudeStderr: (callback: (data: { tabId: string; data: string }) => void) => () => void;
   removeClaudeListeners: () => void;
 
+  // Agent operations (ACP-based)
+  agentStatus: () => Promise<{ available: boolean; agentId?: string; agentName?: string; error?: string }>;
+  agentSend: (projectPath: string, prompt: string, tabId?: string, agentId?: string) => Promise<void>;
+  agentCancel: (tabId?: string) => Promise<void>;
+  agentAnswer: (tabId: string, answer: string) => Promise<void>;
+  agentListSessions: (projectPath: string) => Promise<Array<{ id: string; title: string; lastModified: number }>>;
+  agentLoadSession: (projectPath: string, sessionId: string) => Promise<any[]>;
+  agentDeleteSession: (projectPath: string, sessionId: string) => Promise<{ success: boolean; error?: string }>;
+
+  // Agent events (Main → Renderer)
+  onAgentStream: (callback: (data: { tabId: string; data: string }) => void) => () => void;
+  onAgentComplete: (callback: (data: { tabId: string; success: boolean; stopReason?: string; error?: string }) => void) => () => void;
+  onAgentStderr: (callback: (data: { tabId: string; data: string }) => void) => () => void;
+  onAgentSessionCreated: (callback: (data: { tabId: string; sessionId: string; agentId: string }) => void) => () => void;
+  removeAgentListeners: () => void;
+
   // Settings operations
   settingsGet: () => Promise<{
     aiModel: string;

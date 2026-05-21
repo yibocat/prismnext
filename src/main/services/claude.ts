@@ -382,7 +382,7 @@ export function answerClaudeQuestion(
   answer: string,
 ): void {
   const stdin = processStdins.get(tabId);
-  if (!stdin || stdin.destroyed) {
+  if (!stdin || (stdin as any).destroyed) {
     win.webContents.send("claude:complete", { tabId, success: false });
     return;
   }
@@ -450,24 +450,34 @@ export async function listClaudeSessions(projectPath: string): Promise<ClaudeSes
           try {
             const msg = JSON.parse(line);
             if (msg.type === "user" && msg.message?.content) {
+              // Skip local-command messages (internal Claude CLI commands)
+              const blocks = Array.isArray(msg.message.content) ? msg.message.content : [];
+              if (blocks.some((b: any) =>
+                b.type === "text" && typeof b.text === "string" &&
+                /<\/?(?:local-command-caveat|command-name|command-message|command-args|local-command-stdout)>/.test(b.text)
+              )) continue;
               let text = "";
               if (typeof msg.message.content === "string") {
                 text = msg.message.content;
               } else if (Array.isArray(msg.message.content)) {
-                text = msg.message.content
+                text = blocks
                   .filter((b: any) => b.type === "text")
                   .map((b: any) => b.text)
                   .join(" ");
               }
-              // Clean context prefixes
+              // Clean context prefixes and XML tags
               text = text.replace(/^\[Currently open file:.*?\]\n?\n?/, "");
+              text = text.replace(/<[^>]+>/g, "").trim();
               title = text.slice(0, 80).trim() || "Untitled";
               break;
             }
           } catch {}
         }
 
-        sessions.push({ id: sessionId, title, lastModified: stat.mtimeMs });
+        // Skip sessions with no meaningful title (only local-commands or empty)
+        if (title !== "Untitled") {
+          sessions.push({ id: sessionId, title, lastModified: stat.mtimeMs });
+        }
       } catch {}
     }
 
@@ -506,6 +516,14 @@ export async function loadSessionHistory(
                 return block;
               });
             }
+          }
+          // Skip Claude CLI local-command messages (internal, should never be shown)
+          const blocks = msg.message?.content;
+          if (Array.isArray(blocks) && blocks.some((b: any) =>
+            b.type === "text" && typeof b.text === "string" &&
+            /<\/?(?:local-command-caveat|command-name|command-message|command-args|local-command-stdout)>/.test(b.text)
+          )) {
+            continue;
           }
           messages.push(msg);
         }

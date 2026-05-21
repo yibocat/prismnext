@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { registerIpcHandlers } from "./ipc/index";
 import { setMainWindow, registerWindowHandlers } from "./ipc/ipc-window";
 import { killAllClaudeProcesses } from "./services/claude";
+import { disposeAgentManager } from "./ipc/ipc-agent";
 
 const isMac = process.platform === "darwin";
 
@@ -49,6 +50,7 @@ function createWindow() {
 
   mainWindow.on("closed", () => {
     killAllClaudeProcesses();
+    disposeAgentManager();
     mainWindow = null;
   });
 

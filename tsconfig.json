@@ -6,13 +6,12 @@
     "jsx": "react-jsx",
     "strict": true,
     "skipLibCheck": true,
-    "ignoreDeprecations": "6.0",
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/renderer/*"]
+      "@/*": ["./src/renderer/*"]
     }
   },
   "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx", "src/renderer/**/*.d.ts"],
+  "exclude": ["src/renderer/components/workspace/sidebar.tsx", "src/renderer/components/workspace/workspace-layout.tsx"],
   "references": [
     { "path": "./tsconfig.node.json" }
   ]

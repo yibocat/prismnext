@@ -1,8 +1,13 @@
 import { useRef, useCallback, useEffect, useState, useMemo } from "react";
+import {
+  AuiIf,
+  ComposerPrimitive,
+  ThreadPrimitive,
+} from "@assistant-ui/react";
 import { useClaudeChatStore } from "@/stores/claude-chat-store";
-import { useClaudeEvents } from "@/hooks/use-claude-events";
-import { ChatMessages } from "./chat-messages";
-import { ChatComposer } from "./chat-composer";
+import { ClaudeRuntimeProvider } from "./runtime-provider";
+import { AssistantMessage } from "./assistant-message";
+import { UserMessage } from "./user-message";
 import { ChatTabBar } from "./chat-tab-bar";
 import { SessionSelector } from "./session-selector";
 import {
@@ -10,6 +15,9 @@ import {
   MessageCircleIcon,
   Maximize2Icon,
   Minimize2Icon,
+  ArrowUpIcon,
+  SquareIcon,
+  ArrowDownIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,8 +25,6 @@ const DEFAULT_HEIGHT = 360;
 const MIN_HEIGHT = 150;
 
 export function ClaudeChatDrawer() {
-  useClaudeEvents();
-
   const drawerState = useClaudeChatStore((s) => s.drawerState);
   const setDrawerState = useClaudeChatStore((s) => s.setDrawerState);
   const anyStreaming = useClaudeChatStore((s) => s.tabs.some((t) => t.isStreaming));
@@ -68,7 +74,6 @@ export function ClaudeChatDrawer() {
         const newHeight = Math.min(Math.max(startHeight + delta, MIN_HEIGHT), maxHeight);
         heightRef.current = newHeight;
 
-        // Use rAF to align with vsync — avoids layout thrashing
         if (rafRef.current) cancelAnimationFrame(rafRef.current);
         rafRef.current = requestAnimationFrame(() => {
           if (panelRef.current) {
@@ -91,8 +96,7 @@ export function ClaudeChatDrawer() {
     [isExpanded],
   );
 
-  // Memoize panel style — avoids new object refs on every render
-  // GPU layer promotion for smooth resize (no layout containment — it clips KaTeX)
+  // Memoize panel style
   const panelStyle = useMemo((): React.CSSProperties => {
     const base: React.CSSProperties = {
       willChange: isDragging ? "height" : "transform, opacity",
@@ -127,12 +131,11 @@ export function ClaudeChatDrawer() {
         <MessageCircleIcon className="size-5 text-foreground" />
       </button>
 
-      {/* Chat panel — height set instantly, slide+opacity animated */}
+      {/* Chat panel */}
       <div
         ref={panelRef}
         className={cn(
           "pointer-events-auto flex w-full flex-col overflow-hidden border bg-background",
-          // Animate GPU-friendly properties only (no height)
           "transition-[max-width,border-radius,border-color,box-shadow,opacity,transform] duration-300 ease-out",
           isExpanded ? "border-transparent shadow-none" : "border-border shadow-2xl",
           isOpen
@@ -142,7 +145,7 @@ export function ClaudeChatDrawer() {
         )}
         style={panelStyle}
       >
-        {/* Header with drag handle */}
+        {/* Header */}
         {isExpanded ? (
           <div className="flex items-center justify-between border-border border-b px-2 py-1">
             <button
@@ -195,13 +198,70 @@ export function ClaudeChatDrawer() {
           </div>
         )}
 
-        {/* Messages area */}
-        <div className="relative min-h-0 flex-1 overflow-hidden">
-          <ChatMessages />
-        </div>
+        {/* Thread + Composer (wrapped in RuntimeProvider) */}
+        <ClaudeRuntimeProvider>
+          <ThreadPrimitive.Root className="flex min-h-0 flex-1 flex-col">
+            <ThreadPrimitive.Viewport
+              turnAnchor="top"
+              className="flex flex-1 flex-col overflow-y-auto scroll-smooth"
+            >
+              <AuiIf condition={(s) => s.thread.isEmpty}>
+                <div className="flex flex-1 items-center justify-center p-8">
+                  <div className="flex flex-col items-center gap-4 text-center max-w-sm">
+                    <div className="flex size-14 items-center justify-center rounded-2xl bg-muted">
+                      <MessageCircleIcon className="size-7 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-foreground">Start a conversation</h3>
+                      <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                        Ask your AI assistant to help with your LaTeX document.
+                        Try things like "Add a theorem environment" or "Fix the citations in section 3".
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </AuiIf>
 
-        {/* Composer */}
-        <ChatComposer />
+              <ThreadPrimitive.Messages>
+                {({ message }) => {
+                  if (message.role === "user") return <UserMessage />;
+                  return <AssistantMessage />;
+                }}
+              </ThreadPrimitive.Messages>
+
+              <ThreadPrimitive.ViewportFooter className="sticky bottom-0 pt-2">
+                <div className="max-w-3xl mx-auto w-full px-3 pb-3">
+                  <ComposerPrimitive.Root className="flex w-full flex-col rounded-2xl border border-input bg-muted/30 transition-colors focus-within:border-ring focus-within:bg-background">
+                    <ComposerPrimitive.Input
+                      placeholder="Ask me anything..."
+                      className="max-h-40 min-h-10 w-full resize-none bg-transparent px-4 py-2 text-sm outline-none placeholder:text-muted-foreground"
+                      rows={1}
+                    />
+                    <div className="flex items-center justify-end px-2 pb-2 gap-1.5">
+                      <AuiIf condition={(s) => !s.thread.isRunning}>
+                        <ComposerPrimitive.Send
+                          className="flex size-8 items-center justify-center rounded-full bg-foreground text-background hover:bg-foreground/90 disabled:opacity-30"
+                          disabled={false}
+                        >
+                          <ArrowUpIcon className="size-4" />
+                        </ComposerPrimitive.Send>
+                      </AuiIf>
+                      <AuiIf condition={(s) => s.thread.isRunning}>
+                        <ComposerPrimitive.Cancel className="flex size-8 items-center justify-center rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                          <SquareIcon className="size-3 fill-current" />
+                        </ComposerPrimitive.Cancel>
+                      </AuiIf>
+                    </div>
+                  </ComposerPrimitive.Root>
+                </div>
+              </ThreadPrimitive.ViewportFooter>
+            </ThreadPrimitive.Viewport>
+
+            <ThreadPrimitive.ScrollToBottom className="absolute bottom-24 right-6 flex size-8 items-center justify-center rounded-full border border-border bg-background shadow-md text-muted-foreground hover:text-foreground transition-all hover:shadow-lg z-10">
+              <ArrowDownIcon className="size-4" />
+            </ThreadPrimitive.ScrollToBottom>
+          </ThreadPrimitive.Root>
+        </ClaudeRuntimeProvider>
       </div>
     </div>
   );

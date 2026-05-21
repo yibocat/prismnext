@@ -68,6 +68,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   claudeLoadSession: (projectPath: string, sessionId: string) =>
     ipcRenderer.invoke("claude:loadSession", { projectPath, sessionId }),
 
+  // Agent operations (ACP-based)
+  agentStatus: () => ipcRenderer.invoke("agent:status"),
+  agentSend: (projectPath: string, prompt: string, tabId?: string, agentId?: string) =>
+    ipcRenderer.invoke("agent:send", { projectPath, prompt, tabId, agentId }),
+  agentCancel: (tabId?: string) =>
+    ipcRenderer.invoke("agent:cancel", { tabId }),
+  agentAnswer: (tabId: string, answer: string) =>
+    ipcRenderer.invoke("agent:answer", { tabId, answer }),
+  agentListSessions: (projectPath: string) =>
+    ipcRenderer.invoke("agent:listSessions", { projectPath }),
+  agentLoadSession: (projectPath: string, sessionId: string) =>
+    ipcRenderer.invoke("agent:loadSession", { projectPath, sessionId }),
+  agentDeleteSession: (projectPath: string, sessionId: string) =>
+    ipcRenderer.invoke("agent:deleteSession", { projectPath, sessionId }),
+
   // Settings operations
   settingsGet: () => ipcRenderer.invoke("settings:get"),
   settingsSet: (patch: Record<string, unknown>) =>
@@ -93,5 +108,32 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.removeAllListeners("claude:stream");
     ipcRenderer.removeAllListeners("claude:complete");
     ipcRenderer.removeAllListeners("claude:stderr");
+  },
+
+  // Agent events (Main → Renderer)
+  onAgentStream: (callback: (data: { tabId: string; data: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; data: string }) => callback(data);
+    ipcRenderer.on("agent:stream", handler);
+    return () => ipcRenderer.removeListener("agent:stream", handler);
+  },
+  onAgentComplete: (callback: (data: { tabId: string; success: boolean; stopReason?: string; error?: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; success: boolean; stopReason?: string; error?: string }) => callback(data);
+    ipcRenderer.on("agent:complete", handler);
+    return () => ipcRenderer.removeListener("agent:complete", handler);
+  },
+  onAgentStderr: (callback: (data: { tabId: string; data: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; data: string }) => callback(data);
+    ipcRenderer.on("agent:stderr", handler);
+    return () => ipcRenderer.removeListener("agent:stderr", handler);
+  },
+  onAgentSessionCreated: (callback: (data: { tabId: string; sessionId: string; agentId: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; sessionId: string; agentId: string }) => callback(data);
+    ipcRenderer.on("agent:sessionCreated", handler);
+    return () => ipcRenderer.removeListener("agent:sessionCreated", handler);
+  },
+  removeAgentListeners: () => {
+    ipcRenderer.removeAllListeners("agent:stream");
+    ipcRenderer.removeAllListeners("agent:complete");
+    ipcRenderer.removeAllListeners("agent:stderr");
   },
 });

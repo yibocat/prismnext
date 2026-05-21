@@ -67,7 +67,9 @@ interface ClaudeChatState {
   // Shared settings
   selectedModel: "sonnet" | "opus" | "haiku" | null;
   effortLevel: "low" | "medium" | "high";
+  agentMode: "edit-before-ask" | "auto-edit" | "plan";
   drawerState: "closed" | "open" | "expanded";
+  selectedAgent: string;
 
   // Multi-tab state
   tabs: TabState[];
@@ -89,15 +91,19 @@ interface ClaudeChatState {
   sendPrompt: (userPrompt: string) => Promise<void>;
   cancelExecution: () => Promise<void>;
   newSession: () => void;
+  clearCurrentTab: () => void;
   loadSession: (sessionId: string) => Promise<void>;
 
   // Settings
   setDrawerState: (state: "closed" | "open" | "expanded") => void;
   setSelectedModel: (model: "sonnet" | "opus" | "haiku" | null) => void;
   setEffortLevel: (level: "low" | "medium" | "high") => void;
+  setAgentMode: (mode: "edit-before-ask" | "auto-edit" | "plan") => void;
+  setSelectedAgent: (agentId: string) => void;
 
   // Internal (called by use-claude-events)
   _appendMessage: (tabId: string, msg: ClaudeStreamMessage) => void;
+  _upsertLastMessage: (tabId: string, msg: ClaudeStreamMessage) => void;
   _setSessionId: (tabId: string, id: string) => void;
   _setStreaming: (tabId: string, streaming: boolean) => void;
   _setError: (tabId: string, error: string | null) => void;
@@ -123,7 +129,9 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
   // Shared settings
   selectedModel: null,
   effortLevel: "low",
+  agentMode: "edit-before-ask",
   drawerState: "closed",
+  selectedAgent: "claude",
 
   // Multi-tab
   tabs: [initialTab],
@@ -154,7 +162,6 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
     const newTabs = tabs.filter((t) => t.id !== id);
     let newActiveId = activeTabId;
     if (activeTabId === id) {
-      // Switch to adjacent tab
       const idx = tabs.findIndex((t) => t.id === id);
       const newIdx = Math.min(idx, newTabs.length - 1);
       newActiveId = newTabs[newIdx].id;
@@ -164,6 +171,9 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
       activeTabId: newActiveId,
       ...projectActiveTab(newTabs, newActiveId),
     });
+
+    // Clean up agent session for this tab
+    window.electronAPI.agentCancel(id).catch(() => {});
   },
 
   setActiveTab: (id: string) => {
@@ -196,22 +206,13 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
       return;
     }
 
-    // Check if Claude CLI is available first
+    // Check if agent is available
     try {
-      const status = await window.electronAPI.claudeStatus();
-      if (!status.installed) {
+      const status = await window.electronAPI.agentStatus();
+      if (!status.available) {
         set((s) => {
           const tabs = s.tabs.map((t) =>
-            t.id === s.activeTabId ? { ...t, error: "Claude Code CLI is not installed." } : t,
-          );
-          return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
-        });
-        return;
-      }
-      if (!status.authenticated) {
-        set((s) => {
-          const tabs = s.tabs.map((t) =>
-            t.id === s.activeTabId ? { ...t, error: "Claude Code CLI is not authenticated. Run 'claude' in your terminal." } : t,
+            t.id === s.activeTabId ? { ...t, error: status.error || "Agent not available." } : t,
           );
           return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
         });
@@ -229,18 +230,13 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
 
     await docState.saveAllFiles();
 
-    const activeFile = docState.files.find((f) => f.id === docState.activeFileId);
-    let prompt = userPrompt;
-    if (activeFile) {
-      prompt = `[Currently open file: ${activeFile.relativePath}]\n\n${userPrompt}`;
-    }
-
     const userMessage: ClaudeStreamMessage = {
       type: "user",
       message: { content: [{ type: "text", text: userPrompt }] },
     };
 
     const tabId = get().activeTabId;
+    const agentId = get().selectedAgent;
     // Set title from first prompt
     set((s) => {
       const tabs = s.tabs.map((t) => {
@@ -261,17 +257,7 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
     });
 
     try {
-      const state = get();
-      const activeTab = state.tabs.find((t) => t.id === tabId);
-      const model = state.selectedModel ?? undefined;
-      await window.electronAPI.claudeSend(
-        projectPath,
-        prompt,
-        activeTab?.sessionId || undefined,
-        tabId,
-        model,
-        state.effortLevel,
-      );
+      await window.electronAPI.agentSend(projectPath, userPrompt, tabId, agentId);
     } catch (err: any) {
       set((s) => {
         const tabs = s.tabs.map((t) =>
@@ -285,7 +271,7 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
   cancelExecution: async () => {
     const tabId = get().activeTabId;
     try {
-      await window.electronAPI.claudeCancel(tabId);
+      await window.electronAPI.agentCancel(tabId);
       set((s) => {
         const tabs = s.tabs.map((t) =>
           t.id === tabId ? { ...t, isStreaming: false } : t,
@@ -302,6 +288,16 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
     get().setActiveTab(id);
   },
 
+  clearCurrentTab: () => {
+    const tabId = get().activeTabId;
+    set((s) => {
+      const tabs = s.tabs.map((t) =>
+        t.id === tabId ? { ...t, messages: [], sessionId: null, title: "New Chat", error: null } : t,
+      );
+      return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+    });
+  },
+
   loadSession: async (sessionId: string) => {
     const projectPath = useDocumentStore.getState().projectRoot;
     if (!projectPath) return;
@@ -309,7 +305,13 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
     const tabId = get().activeTabId;
 
     try {
-      const messages = await window.electronAPI.claudeLoadSession(projectPath, sessionId);
+      const raw = await window.electronAPI.agentLoadSession(projectPath, sessionId);
+      const messages = raw.filter((msg: ClaudeStreamMessage) => {
+        if (msg.type === "system") return false;
+        if (!msg.message?.content || msg.message.content.length === 0) return false;
+        // Don't filter tool_result messages — convertMessages() needs them
+        return true;
+      });
       set((s) => {
         const tabs = s.tabs.map((t) =>
           t.id === tabId
@@ -338,6 +340,10 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
 
   setEffortLevel: (effortLevel) => set({ effortLevel }),
 
+  setAgentMode: (agentMode) => set({ agentMode }),
+
+  setSelectedAgent: (selectedAgent) => set({ selectedAgent }),
+
   // ─── Internal ───
 
   _appendMessage: (tabId: string, msg: ClaudeStreamMessage) => {
@@ -346,6 +352,43 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
       if (!tabExists) return {};
       const tabs = s.tabs.map((t) =>
         t.id === tabId ? { ...t, messages: [...t.messages, msg] } : t,
+      );
+      return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+    });
+  },
+
+  _upsertLastMessage: (tabId: string, msg: ClaudeStreamMessage) => {
+    set((s) => {
+      const tab = s.tabs.find((t) => t.id === tabId);
+      if (!tab) return {};
+
+      const msgs = [...tab.messages];
+      const last = msgs[msgs.length - 1];
+
+      // Merge content blocks for assistant messages (preserve thinking/tool_use)
+      if (last?.type === msg.type && last.type === "assistant") {
+        const oldBlocks = last.message?.content || [];
+        const newBlocks = msg.message?.content || [];
+
+        // Remove old blocks that are being replaced by new ones of same category
+        const preserved = oldBlocks.filter((b) => {
+          if (b.type === "text" && newBlocks.some((nb) => nb.type === "text")) return false;
+          if (b.type === "thinking" && newBlocks.some((nb) => nb.type === "thinking")) return false;
+          return true;
+        });
+
+        msgs[msgs.length - 1] = {
+          ...msg,
+          message: { ...msg.message, content: [...preserved, ...newBlocks] },
+        };
+      } else if (last?.type === "result" && msg.type === "result") {
+        msgs[msgs.length - 1] = msg;
+      } else {
+        msgs.push(msg);
+      }
+
+      const tabs = s.tabs.map((t) =>
+        t.id === tabId ? { ...t, messages: msgs } : t,
       );
       return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
     });

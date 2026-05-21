@@ -55,7 +55,7 @@ export const useLayoutStore = create<LayoutState>((set) => ({
   setSidebarExpanded: (expanded) => set({ sidebarExpanded: expanded }),
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
 
-  rightAreaExpanded: true,
+  rightAreaExpanded: false,
   rightAreaWidth: 650,
   rightSidebarWidth: 220,
   editorMaximized: false,

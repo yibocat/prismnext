@@ -320,7 +320,7 @@ export function ChatComposer() {
     : "Default";
 
   return (
-    <div className="relative shrink-0 p-3">
+    <div className="relative shrink-0 p-3 max-w-3xl mx-auto w-full">
       {/* Model picker popup */}
       {modelPickerOpen &&
         createPortal(

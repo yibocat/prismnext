@@ -1,15 +1,24 @@
 import { useEffect, useCallback } from "react";
 import { useClaudeChatStore } from "@/stores/claude-chat-store";
-import { PlusIcon, XIcon } from "lucide-react";
+import { PlusIcon, XIcon, BotIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const AGENT_OPTIONS = [
+  { id: "claude", name: "Claude Code", disabled: false },
+  { id: "opencode", name: "OpenCode", disabled: true },
+  { id: "gemini", name: "Gemini CLI", disabled: true },
+  { id: "qoder", name: "Qoder CLI", disabled: true },
+];
 
 export function ChatTabBar() {
   const tabs = useClaudeChatStore((s) => s.tabs);
   const activeTabId = useClaudeChatStore((s) => s.activeTabId);
   const drawerState = useClaudeChatStore((s) => s.drawerState);
+  const selectedAgent = useClaudeChatStore((s) => s.selectedAgent);
   const setActiveTab = useClaudeChatStore((s) => s.setActiveTab);
   const createTab = useClaudeChatStore((s) => s.createTab);
   const closeTab = useClaudeChatStore((s) => s.closeTab);
+  const setSelectedAgent = useClaudeChatStore((s) => s.setSelectedAgent);
 
   // Keyboard shortcuts
   const handleKeyDown = useCallback(
@@ -95,6 +104,22 @@ export function ChatTabBar() {
             )}
           </div>
         ))}
+      </div>
+
+      {/* Agent selector */}
+      <div className="flex shrink-0 items-center gap-1 border-l border-border px-1.5">
+        <BotIcon className="size-3 text-muted-foreground" />
+        <select
+          className="h-6 rounded-md border border-border bg-card px-1 text-[11px] text-muted-foreground focus:outline-none"
+          value={selectedAgent}
+          onChange={(e) => setSelectedAgent(e.target.value)}
+        >
+          {AGENT_OPTIONS.map((a) => (
+            <option key={a.id} value={a.id} disabled={a.disabled}>
+              {a.name}{a.disabled ? " (soon)" : ""}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* New tab button */}

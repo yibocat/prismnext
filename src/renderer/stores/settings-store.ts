@@ -37,7 +37,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     try {
       const remote = await window.electronAPI.settingsGet();
       set({
-        settings: { ...defaults, ...remote },
+        settings: {
+          ...defaults,
+          ...remote,
+          aiModel: (remote.aiModel as AppSettings["aiModel"]) || defaults.aiModel,
+          effortLevel: (remote.effortLevel as AppSettings["effortLevel"]) || defaults.effortLevel,
+          theme: (remote.theme as AppSettings["theme"]) || defaults.theme,
+        },
         loaded: true,
       });
       log.info("Settings loaded");
