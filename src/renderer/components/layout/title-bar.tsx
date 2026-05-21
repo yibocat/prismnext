@@ -58,6 +58,17 @@ export function TitleBar() {
       <div className="z-10 flex items-center gap-1">
         {showMacSpacer && <div className="w-[60px]" />}
 
+        <button
+          type="button"
+          className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          title="Toggle Sidebar"
+          onClick={toggleSidebar}
+        >
+          <PanelLeftIcon className="size-4" />
+        </button>
+
+        <div className="mx-1 h-5 w-px bg-border/60" />
+
         {/* Project name button */}
         <button
           type="button"
@@ -67,17 +78,6 @@ export function TitleBar() {
           <FolderOpenIcon className="size-3.5 text-muted-foreground" />
           <span className="max-w-[140px] truncate">No Project Open</span>
           <ChevronDownIcon className="size-3 text-muted-foreground" />
-        </button>
-
-        <div className="mx-1 h-5 w-px bg-border/60" />
-
-        <button
-          type="button"
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title="Toggle Sidebar"
-          onClick={toggleSidebar}
-        >
-          <PanelLeftIcon className="size-4" />
         </button>
       </div>
 

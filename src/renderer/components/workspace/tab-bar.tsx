@@ -3,8 +3,8 @@ import {
   XIcon,
   FileTextIcon,
   BookmarkIcon,
-  ExpandIcon,
-  ShrinkIcon,
+  MaximizeIcon,
+  MinimizeIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -62,9 +62,9 @@ export function TabBar() {
           onClick={toggleEditorMaximized}
         >
           {editorMaximized ? (
-            <ShrinkIcon className="size-3.5" />
+            <MinimizeIcon className="size-3.5" />
           ) : (
-            <ExpandIcon className="size-3.5" />
+            <MaximizeIcon className="size-3.5" />
           )}
         </button>
       </div>
