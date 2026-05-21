@@ -13,42 +13,9 @@ import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language"
 import { oneDark } from "@codemirror/theme-one-dark";
 import { latex } from "codemirror-lang-latex";
 import { useTheme } from "next-themes";
+import { useDocumentStore } from "@/stores/document-store";
 
-const placeholder = String.raw`% Prism — LaTeX Editor
-\documentclass{article}
-
-\usepackage{graphicx}
-\usepackage{amsmath}
-
-\title{My Paper}
-\author{Author Name}
-
-\begin{document}
-
-\maketitle
-
-\begin{abstract}
-This is the abstract of the paper.
-\end{abstract}
-
-\section{Introduction}
-\label{sec:intro}
-
-This is the introduction. We cite~\cite{ref:example}.
-
-Our main equation:
-\begin{equation}
-  E = mc^2
-  \label{eq:einstein}
-\end{equation}
-
-\section{Methods}
-\label{sec:methods}
-
-Our methods are described here.
-
-\end{document}
-`;
+const placeholder = "% Open a file to start editing\n";
 
 export function LatexEditor() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -56,16 +23,31 @@ export function LatexEditor() {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
+  const activeFileId = useDocumentStore((s) => s.activeFileId);
+  const fileContents = useDocumentStore((s) => s.fileContents);
+  const refreshFileContent = useDocumentStore((s) => s.refreshFileContent);
+
+  // Load file content when active file changes
+  useEffect(() => {
+    if (activeFileId) {
+      refreshFileContent(activeFileId);
+    }
+  }, [activeFileId, refreshFileContent]);
+
+  // Get current document text
+  const docText = activeFileId
+    ? (fileContents.get(activeFileId)?.content ?? placeholder)
+    : placeholder;
+
   useEffect(() => {
     if (!containerRef.current) return;
 
     if (viewRef.current) {
       viewRef.current.destroy();
-      viewRef.current = null;
     }
 
     const state = EditorState.create({
-      doc: placeholder,
+      doc: docText,
       extensions: [
         lineNumbers(),
         highlightSpecialChars(),
@@ -88,7 +70,7 @@ export function LatexEditor() {
       view.destroy();
       viewRef.current = null;
     };
-  }, [isDark]);
+  }, [isDark, docText]);
 
   return (
     <div ref={containerRef} className="h-full overflow-auto [&_.cm-editor]:h-full" />

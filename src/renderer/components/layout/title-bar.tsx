@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useDocumentStore } from "@/stores/document-store";
+import { useProjectStore } from "@/stores/project-store";
 import {
   PanelLeftIcon,
   PanelRightIcon,
@@ -41,7 +43,21 @@ export function TitleBar() {
   const toggleRightArea = useLayoutStore((s) => s.toggleRightArea);
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
   const toggleEditorMaximized = useLayoutStore((s) => s.toggleEditorMaximized);
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const openProject = useDocumentStore((s) => s.openProject);
+  const addRecentProject = useProjectStore((s) => s.addRecentProject);
   const { theme, resolvedTheme, setTheme } = useTheme();
+
+  const projectName = projectRoot
+    ? projectRoot.split(/[/\\]/).pop() || projectRoot
+    : "No Project Open";
+
+  const handleOpenProject = async () => {
+    const result = await window.electronAPI.dialogOpenFolder();
+    if (result.canceled || !result.path) return;
+    addRecentProject(result.path);
+    await openProject(result.path);
+  };
 
   const cycleTheme = () => {
     if (theme === "light") setTheme("dark");
@@ -74,9 +90,10 @@ export function TitleBar() {
           type="button"
           className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium text-foreground hover:bg-muted transition-colors"
           title="Open or switch project"
+          onClick={handleOpenProject}
         >
           <FolderOpenIcon className="size-3.5 text-muted-foreground" />
-          <span className="max-w-[140px] truncate">No Project Open</span>
+          <span className="max-w-[140px] truncate">{projectName}</span>
           <ChevronDownIcon className="size-3 text-muted-foreground" />
         </button>
       </div>

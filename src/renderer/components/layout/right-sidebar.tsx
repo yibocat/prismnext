@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useLayoutStore, type AppMode } from "@/stores/layout-store";
+import { useDocumentStore } from "@/stores/document-store";
 import {
   FileTextIcon,
   FolderIcon,
   FolderOpenIcon,
   ChevronRightIcon,
-  BookmarkIcon,
   NotepadTextIcon,
   BookOpenIcon,
   Code2Icon,
@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { buildFileTree, getFileIcon, type TreeNode } from "@/lib/file-tree";
 
 type SidebarMode = Exclude<AppMode, "chat">;
 type RightSidebarTab = "files" | "git";
@@ -48,82 +49,121 @@ const TABS: { id: RightSidebarTab; icon: React.ReactNode; label: string }[] = [
   { id: "git", icon: <GitBranchIcon className="size-3.5" />, label: "Git" },
 ];
 
-function FileTree() {
-  const [expanded, setExpanded] = useState(true);
-  const activeFile = "main.tex";
+function FileTreeNodeRow({
+  node,
+  depth,
+  activeFileId,
+  expandedFolders,
+  onToggleFolder,
+  onSelectFile,
+}: {
+  node: TreeNode;
+  depth: number;
+  activeFileId: string | null;
+  expandedFolders: Set<string>;
+  onToggleFolder: (path: string) => void;
+  onSelectFile: (id: string, name: string) => void;
+}) {
+  const isExpanded = expandedFolders.has(node.relativePath);
+  const isActive = node.type === "file" && node.relativePath === activeFileId;
+
+  if (node.type === "folder") {
+    return (
+      <>
+        <button
+          type="button"
+          className="flex w-full items-center gap-1.5 px-3 py-1 text-[13px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          style={{ paddingLeft: 12 + depth * 14 }}
+          onClick={() => onToggleFolder(node.relativePath)}
+        >
+          <ChevronRightIcon
+            className={cn("size-3.5 shrink-0 transition-transform", isExpanded && "rotate-90")}
+          />
+          {isExpanded ? (
+            <FolderOpenIcon className="size-3.5 shrink-0" />
+          ) : (
+            <FolderIcon className="size-3.5 shrink-0" />
+          )}
+          <span className="truncate">{node.name}</span>
+        </button>
+        {isExpanded &&
+          node.children.map((child) => (
+            <FileTreeNodeRow
+              key={child.relativePath}
+              node={child}
+              depth={depth + 1}
+              activeFileId={activeFileId}
+              expandedFolders={expandedFolders}
+              onToggleFolder={onToggleFolder}
+              onSelectFile={onSelectFile}
+            />
+          ))}
+      </>
+    );
+  }
 
   return (
-    <div className="py-1">
-      <button
-        type="button"
-        className="flex w-full items-center gap-1.5 px-3 py-1 text-[13px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <ChevronRightIcon
-          className={cn("size-3.5 shrink-0 transition-transform", expanded && "rotate-90")}
-        />
-        {expanded ? (
-          <FolderOpenIcon className="size-3.5 shrink-0" />
-        ) : (
-          <FolderIcon className="size-3.5 shrink-0" />
-        )}
-        <span className="truncate font-medium">sections</span>
-      </button>
-
-      {expanded && (
-        <div className="ml-3.5 border-l border-border/60 pl-1.5">
-          {["intro.tex", "methods.tex", "results.tex"].map((name) => (
-            <div
-              key={name}
-              className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1 pl-3 text-[13px] transition-colors cursor-default",
-                activeFile === name
-                  ? "text-foreground border-l-[3px] -ml-px border-primary bg-primary/5"
-                  : "text-muted-foreground border-l-[3px] -ml-px border-transparent hover:bg-muted hover:text-foreground",
-              )}
-            >
-              <FileTextIcon className="size-3.5 shrink-0 opacity-70" />
-              <span className="truncate">{name}</span>
-            </div>
-          ))}
-        </div>
+    <div
+      className={cn(
+        "flex items-center gap-1.5 px-3 py-1 text-[13px] transition-colors cursor-default",
+        isActive
+          ? "text-foreground bg-primary/5"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
-
-      <div className="mt-0.5" />
-
-      {["main.tex", "refs.bib"].map((name) => (
-        <div
-          key={name}
-          className={cn(
-            "flex items-center gap-1.5 px-3 py-1 text-[13px] transition-colors cursor-default",
-            activeFile === name
-              ? "text-foreground border-l-[3px] border-primary bg-primary/5"
-              : "text-muted-foreground border-l-[3px] border-transparent hover:bg-muted hover:text-foreground",
-          )}
-        >
-          {name === "refs.bib" ? (
-            <BookmarkIcon className="size-3.5 shrink-0 opacity-70" />
-          ) : (
-            <FileTextIcon className="size-3.5 shrink-0 opacity-70" />
-          )}
-          <span className="truncate">{name}</span>
-        </div>
-      ))}
+      style={{ paddingLeft: 12 + depth * 14 }}
+      onClick={() => onSelectFile(node.relativePath, node.name)}
+    >
+      {node.file && getFileIcon(node.file)}
+      <span className="truncate">{node.name}</span>
     </div>
   );
 }
 
-function EmptyState({ mode }: { mode: SidebarMode }) {
+function RealFileTree() {
+  const files = useDocumentStore((s) => s.files);
+  const folders = useDocumentStore((s) => s.folders);
+  const activeFileId = useDocumentStore((s) => s.activeFileId);
+  const setActiveFile = useDocumentStore((s) => s.setActiveFile);
+  const openEditorTab = useLayoutStore((s) => s.openEditorTab);
+
+  const tree = useMemo(() => buildFileTree(files, folders), [files, folders]);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
+    () => new Set(folders),
+  );
+
+  if (tree.length === 0) {
+    return (
+      <div className="flex flex-1 items-center justify-center px-4 py-8">
+        <p className="text-center text-[13px] leading-relaxed text-muted-foreground">
+          No files yet
+          <span className="mt-1 block text-[11px] opacity-60">Open a project to get started</span>
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-1 items-center justify-center px-4">
-      <p className="text-center text-[13px] leading-relaxed text-muted-foreground">
-        {mode === "vault" && "Markdown notes"}
-        {mode === "zotero" && "Literature library"}
-        {mode === "code" && "Code browser"}
-        {mode === "assets" && "Project assets"}
-        {mode === "other" && "Other files"}
-        <span className="mt-1 block text-[11px] opacity-60">coming soon</span>
-      </p>
+    <div className="py-1">
+      {tree.map((node) => (
+        <FileTreeNodeRow
+          key={node.relativePath}
+          node={node}
+          depth={0}
+          activeFileId={activeFileId}
+          expandedFolders={expandedFolders}
+          onToggleFolder={(path) => {
+            setExpandedFolders((prev) => {
+              const next = new Set(prev);
+              next.has(path) ? next.delete(path) : next.add(path);
+              return next;
+            });
+          }}
+          onSelectFile={(id, name) => {
+            setActiveFile(id);
+            openEditorTab({ id, name });
+          }}
+        />
+      ))}
     </div>
   );
 }
@@ -220,8 +260,7 @@ export function RightSidebar() {
 
       {/* Content */}
       <div className="flex flex-1 flex-col overflow-y-auto">
-        {activeTab === "files" &&
-          (currentMode === "manuscript" ? <FileTree /> : <EmptyState mode={currentMode} />)}
+        {activeTab === "files" && <RealFileTree />}
         {activeTab === "git" && <GitTab />}
       </div>
     </aside>

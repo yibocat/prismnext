@@ -54,28 +54,22 @@ export const useLayoutStore = create<LayoutState>((set) => ({
   toggleEditorMaximized: () => set((s) => ({ editorMaximized: !s.editorMaximized })),
 
   modeEditorTabs: {
-    manuscript: [
-      { id: "main.tex", name: "main.tex" },
-      { id: "intro.tex", name: "intro.tex" },
-      { id: "refs.bib", name: "refs.bib" },
-    ],
+    manuscript: [],
     vault: [],
     zotero: [],
     chat: [],
     assets: [],
     other: [],
-    code: [
-      { id: "script.py", name: "script.py" },
-    ],
+    code: [],
   },
   modeActiveEditorTab: {
-    manuscript: "main.tex",
+    manuscript: null,
     vault: null,
     zotero: null,
     chat: null,
     assets: null,
     other: null,
-    code: "script.py",
+    code: null,
   },
 
   openEditorTab: (tab) =>
