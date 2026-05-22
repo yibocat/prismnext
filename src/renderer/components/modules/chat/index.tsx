@@ -1,3 +1,7 @@
+export { ChatMessages } from "./chat-messages";
+export { ChatComposer } from "./chat-composer";
+export { ChatErrorBoundary } from "./error-boundary";
+
 import { useRef, useCallback, useEffect, useState, useMemo } from "react";
 import {
   AuiIf,

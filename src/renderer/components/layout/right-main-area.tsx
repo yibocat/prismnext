@@ -2,9 +2,9 @@ import { useEffect, useRef } from "react";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useCompileStore } from "@/stores/compile-store";
-import { LatexEditor } from "@/components/workspace/latex-editor";
-import { PdfPreview } from "@/components/workspace/pdf-preview";
-import { AiFab } from "@/components/workspace/ai-fab";
+import { LatexEditor } from "@/components/modules/editor";
+import { PdfPreview } from "@/components/modules/preview";
+import { AiFab } from "@/components/modules/shared";
 import { GitBranchIcon, GlobeIcon, FilePlusIcon } from "lucide-react";
 
 // ─── Viewer registry: extension → component ───

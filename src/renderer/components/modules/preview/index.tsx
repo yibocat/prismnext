@@ -8,7 +8,7 @@ import {
   AlertCircleIcon,
   DownloadIcon,
 } from "lucide-react";
-import { PdfViewer } from "@/components/workspace/preview/pdf-viewer";
+import { PdfViewer } from "./viewer";
 import { useCompileStore, getPdfBytes } from "@/stores/compile-store";
 import { useDocumentStore } from "@/stores/document-store";
 

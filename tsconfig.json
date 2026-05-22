@@ -11,7 +11,7 @@
     }
   },
   "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx", "src/renderer/**/*.d.ts"],
-  "exclude": ["src/renderer/components/workspace/sidebar.tsx", "src/renderer/components/workspace/workspace-layout.tsx"],
+  "exclude": ["src/renderer/components/__archive"],
   "references": [
     { "path": "./tsconfig.node.json" }
   ]

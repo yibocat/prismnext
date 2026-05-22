@@ -3,9 +3,7 @@ import { useClaudeEvents } from "@/hooks/use-claude-events";
 import { useClaudeChatStore } from "@/stores/claude-chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useProjectStore } from "@/stores/project-store";
-import { ChatMessages } from "@/components/workspace/claude-chat/chat-messages";
-import { ChatComposer } from "@/components/workspace/claude-chat/chat-composer";
-import { ChatErrorBoundary } from "@/components/workspace/claude-chat/error-boundary";
+import { ChatMessages, ChatComposer, ChatErrorBoundary } from "@/components/modules/chat";
 import {
   DropdownMenu,
   DropdownMenuContent,

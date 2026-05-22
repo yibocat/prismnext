@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.3
+
+### Component Restructuring
+- Reorganize components into four-layer architecture: ui (atoms) → modules → layout → app
+- Move all feature modules under `components/modules/`: editor, preview, chat, project, shared
+- Add barrel exports (`index.ts`) per module — external code imports from module boundary only
+- Isolate dead code into `components/__archive/` (excluded from tsconfig):
+  - Full CodeMirror editor with merge view (879 lines)
+  - Workspace sidebar with file tree + TOC (821 lines)
+  - Editor toolbar, search panel, tab bar, AI change panel
+
+### Dead Code Removal
+- Remove `workspace-layout.tsx` (zero imports)
+- Remove `welcome/welcome-screen.tsx` (106 lines, duplicate, zero imports)
+- Remove `workspace/preview/pdf-preview.tsx` (407 lines, duplicate, zero imports)
+- Delete empty directories: `workspace/`, `welcome/`, `assistant-ui/`
+
 ## 0.2.2
 
 ### IPC Cleanup
