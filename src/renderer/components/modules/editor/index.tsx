@@ -14,6 +14,7 @@ import { oneDark } from "@codemirror/theme-one-dark";
 import { latex } from "codemirror-lang-latex";
 import { useTheme } from "next-themes";
 import { useDocumentStore } from "@/stores/document-store";
+import { useRightPanelStore } from "@/stores/right-panel-store";
 
 export function LatexEditor() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -21,16 +22,20 @@ export function LatexEditor() {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
-  const activeFileId = useDocumentStore((s) => s.activeFileId);
+  const tabs = useRightPanelStore((s) => s.tabs);
+  const activeTabId = useRightPanelStore((s) => s.activeTabId);
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const fileId = activeTab?.kind === "file" ? activeTab.fileId : null;
+
   const refreshFileContent = useDocumentStore((s) => s.refreshFileContent);
   const jumpTarget = useDocumentStore((s) => s.jumpTarget);
 
-  // Load file content when active file changes
+  // Load file content when tab changes
   useEffect(() => {
-    if (activeFileId) {
-      refreshFileContent(activeFileId);
+    if (fileId) {
+      refreshFileContent(fileId);
     }
-  }, [activeFileId, refreshFileContent]);
+  }, [fileId, refreshFileContent]);
 
   // Create/destroy editor on file switch
   useEffect(() => {
@@ -42,13 +47,13 @@ export function LatexEditor() {
       viewRef.current = null;
     }
 
-    // Get initial content
-    const content = activeFileId
-      ? (useDocumentStore.getState().fileContents.get(activeFileId)?.content ?? "")
+    // Get content from the tab's file
+    const content = fileId
+      ? (useDocumentStore.getState().fileContents.get(fileId)?.content ?? "")
       : "";
 
     const setContent = useDocumentStore.getState().setContent;
-    const currentFileId = activeFileId;
+    const currentFileId = fileId;
 
     const state = EditorState.create({
       doc: content || "% Open a file to start editing\n",
@@ -80,7 +85,7 @@ export function LatexEditor() {
       view.destroy();
       viewRef.current = null;
     };
-  }, [activeFileId, isDark]);
+  }, [fileId, isDark]);
 
   // SyncTeX jump-to-position
   useEffect(() => {

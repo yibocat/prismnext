@@ -9,8 +9,17 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { SIDEBAR_LEFT_MIN, SIDEBAR_LEFT_MAX } from "@/styles/constants";
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarHeader,
+  SidebarContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarMenuAction,
+} from "@/components/ui/sidebar";
 
 interface SessionInfo {
   id: string;
@@ -61,7 +70,6 @@ export function LeftSidebar() {
     fetchSessions();
   }, [fetchSessions]);
 
-  // Refresh after streaming stops
   const prevStreaming = useRef(isStreaming);
   useEffect(() => {
     if (prevStreaming.current && !isStreaming) {
@@ -70,7 +78,6 @@ export function LeftSidebar() {
     prevStreaming.current = isStreaming;
   }, [isStreaming, fetchSessions]);
 
-  // Refresh when a new session is created by the agent
   useEffect(() => {
     return window.electronAPI.onAgentSessionCreated(() => {
       fetchSessions();
@@ -82,7 +89,6 @@ export function LeftSidebar() {
     try {
       const result = await window.electronAPI.agentListSessions(projectRoot);
       setSessions(result);
-      // If there are remaining sessions, load the most recent one
       if (result.length > 0) {
         useClaudeChatStore.getState().loadSession(result[0].id);
       } else {
@@ -101,10 +107,8 @@ export function LeftSidebar() {
         const result = await window.electronAPI.agentDeleteSession(projectRoot, sid);
         if (result.success) {
           if (sid === sessionId) {
-            // Deleting current session → refresh list and navigate
             await refreshAndNavigate();
           } else {
-            // Deleting non-current session → just remove from list
             setSessions((prev) => prev.filter((s) => s.id !== sid));
           }
         }
@@ -117,102 +121,99 @@ export function LeftSidebar() {
 
   if (!sidebarExpanded) return null;
 
-  return (
-    <aside
-      className="relative flex shrink-0 flex-col border-r border-border bg-card"
-      style={{ width: sidebarWidth }}
-    >
-      {/* Header */}
-      <div className="flex h-[var(--height-sessions-header)] shrink-0 items-center justify-between border-b border-border px-3">
-        <span className="text-[length:var(--font-sidebar-section)] font-semibold uppercase tracking-wider text-muted-foreground">
-          Sessions
-        </span>
-        <button
-          type="button"
-          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title="New Chat"
-          onClick={() => newSession()}
-        >
-          <PlusIcon className="size-3" />
-        </button>
-      </div>
+  const empty = !loading && sessions.length === 0;
 
-      {/* Session list */}
-      <div className="flex flex-1 flex-col overflow-y-auto px-2 py-1 gap-1">
-        {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
-          </div>
-        ) : sessions.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center px-4">
-            <p className="text-center text-[length:var(--font-session-item)] leading-relaxed text-muted-foreground">
-              <MessageSquareIcon className="size-5 mx-auto mb-2 opacity-30" />
-              No sessions yet
-              <span className="mt-1 block text-[length:var(--font-hint)] opacity-50">Open a project to start</span>
-            </p>
-          </div>
-        ) : (
-          sessions.map((s) => {
-            const isActive = s.id === sessionId;
-            return (
-              <Button
-                key={s.id}
-                variant="ghost"
-                size="sm"
-                asChild
-                className={cn(
-                  "group",
-                  "w-full justify-start h-auto py-1.5 my-px",
-                  isActive && "bg-accent text-accent-foreground hover:bg-accent/90",
-                )}
-              >
-                <div
-                  className="flex items-center gap-1.5 cursor-pointer"
-                  onClick={() => loadSession(s.id)}
-                >
-                  <div className="min-w-0 flex-1 text-left">
-                    <div className="flex items-center gap-1.5">
+  return (
+    <SidebarProvider defaultOpen className="contents">
+      <Sidebar
+        className="relative shrink-0 border-r border-border bg-card"
+        style={{ width: sidebarWidth, "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
+      >
+        <SidebarHeader className="flex h-[var(--height-sessions-header)] shrink-0 flex-row items-center justify-between border-b border-border px-3">
+          <span className="text-[length:var(--font-sidebar-section)] font-semibold uppercase tracking-wider text-muted-foreground">
+            Sessions
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-5"
+            title="New Chat"
+            onClick={() => newSession()}
+          >
+            <PlusIcon className="size-3" />
+          </Button>
+        </SidebarHeader>
+
+        <SidebarContent className="px-2 py-1">
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
+            </div>
+          ) : empty ? (
+            <div className="flex flex-1 items-center justify-center px-4">
+              <p className="text-center text-[length:var(--font-session-item)] leading-relaxed text-muted-foreground">
+                <MessageSquareIcon className="size-5 mx-auto mb-2 opacity-30" />
+                No sessions yet
+                <span className="mt-1 block text-[length:var(--font-hint)] opacity-50">
+                  Open a project to start
+                </span>
+              </p>
+            </div>
+          ) : (
+            <SidebarMenu>
+              {sessions.map((s) => {
+                const isActive = s.id === sessionId;
+                return (
+                  <SidebarMenuItem key={s.id}>
+                    <SidebarMenuButton
+                      onClick={() => loadSession(s.id)}
+                      isActive={isActive}
+                      size="sm"
+                    >
                       <span className="truncate text-[length:var(--font-session-item)]">{s.title}</span>
+                      <span className="shrink-0 text-[length:var(--font-timestamp)] opacity-50">
+                        {relativeTime(s.lastModified)}
+                      </span>
                       {isActive && isStreaming && (
                         <Loader2Icon className="size-3 shrink-0 animate-spin text-blue-500" />
                       )}
-                    </div>
-                    <span className="text-[length:var(--font-timestamp)] opacity-50">{relativeTime(s.lastModified)}</span>
-                  </div>
+                    </SidebarMenuButton>
+                    <SidebarMenuAction
+                      onClick={(e) => handleDelete(e, s.id)}
+                      showOnHover
+                      className="[&>svg]:!size-2.5"
+                      title="Delete session"
+                    >
+                      <Trash2Icon />
+                    </SidebarMenuAction>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          )}
+        </SidebarContent>
 
-                  <span
-                    className="flex size-4 shrink-0 items-center justify-center rounded-sm opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted-foreground/20"
-                    onClick={(e) => { e.stopPropagation(); handleDelete(e, s.id); }}
-                    title="Delete session"
-                    role="button"
-                  >
-                    <Trash2Icon className="size-2.5" />
-                  </span>
-                </div>
-              </Button>
-            );
-          })
-        )}
-      </div>
-
-      {/* Resize handle */}
-      <div
-        className="absolute right-0 top-0 h-full w-[var(--layout-resize-handle)] cursor-col-resize hover:bg-primary/30 z-[var(--z-base)] transition-colors"
-        onMouseDown={(e) => {
-          e.preventDefault();
-          const startX = e.clientX;
-          const startWidth = sidebarWidth;
-          const onMove = (ev: MouseEvent) => {
-            setSidebarWidth(Math.min(SIDEBAR_LEFT_MAX, Math.max(SIDEBAR_LEFT_MIN, startWidth + ev.clientX - startX)));
-          };
-          const onUp = () => {
-            document.removeEventListener("mousemove", onMove);
-            document.removeEventListener("mouseup", onUp);
-          };
-          document.addEventListener("mousemove", onMove);
-          document.addEventListener("mouseup", onUp);
-        }}
-      />
-    </aside>
+        {/* Resize handle */}
+        <div
+          className="absolute right-0 top-0 h-full w-[var(--layout-resize-handle)] cursor-col-resize hover:bg-primary/30 z-[var(--z-base)] transition-colors"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            const startX = e.clientX;
+            const startWidth = sidebarWidth;
+            const onMove = (ev: MouseEvent) => {
+              setSidebarWidth(
+                Math.min(SIDEBAR_LEFT_MAX, Math.max(SIDEBAR_LEFT_MIN, startWidth + ev.clientX - startX)),
+              );
+            };
+            const onUp = () => {
+              document.removeEventListener("mousemove", onMove);
+              document.removeEventListener("mouseup", onUp);
+            };
+            document.addEventListener("mousemove", onMove);
+            document.addEventListener("mouseup", onUp);
+          }}
+        />
+      </Sidebar>
+    </SidebarProvider>
   );
 }

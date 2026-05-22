@@ -5,7 +5,7 @@ import {
   SIDEBAR_RIGHT_DEFAULT,
 } from "@/styles/constants";
 
-export type AppMode = "manuscript" | "vault" | "zotero" | "code" | "assets" | "other" | "chat";
+export type AppMode = "all" | "manuscript" | "vault" | "zotero" | "code" | "assets" | "other" | "chat";
 export type RightToolbarTab = "files" | "git" | "browser";
 
 export type TabType = "file" | "pdf";

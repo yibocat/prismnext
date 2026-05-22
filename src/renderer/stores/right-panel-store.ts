@@ -80,9 +80,9 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
 
   openFile: (fileId: string, filePath: string, name: string) => {
     const { tabs, activeTabId } = get();
-    const active = tabs.find((t) => t.id === activeTabId);
 
     // If current tab is an empty initial file tab, reuse it
+    const active = tabs.find((t) => t.id === activeTabId);
     if (active?.kind === "file" && active.isInitial) {
       set((s) => ({
         tabs: s.tabs.map((t) =>
@@ -91,6 +91,13 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
             : t,
         ),
       }));
+      return;
+    }
+
+    // If file is already open in another tab, switch to it
+    const existing = tabs.find((t) => t.kind === "file" && t.fileId === fileId);
+    if (existing) {
+      set({ activeTabId: existing.id });
       return;
     }
 
