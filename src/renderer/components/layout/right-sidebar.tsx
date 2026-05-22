@@ -3,30 +3,68 @@ import { useLayoutStore, type AppMode } from "@/stores/layout-store";
 import { useDocumentStore, type ProjectFile } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import {
-  FileTextIcon,
   FolderIcon,
   FolderOpenIcon,
   ChevronRightIcon,
   GitBranchIcon,
+  PlusIcon,
+  FilePlusIcon,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { sidebarItem } from "@/styles/design-tokens";
 import { buildFileTree, getFileIcon, type TreeNode } from "@/lib/file-tree";
 
 type SidebarMode = Exclude<AppMode, "chat">;
 
-const MODE_EXTENSIONS: Record<string, string[]> = {
-  manuscript: [".tex", ".bib", ".cls", ".sty", ".bst"],
-  vault: [".md", ".mdx"],
-  code: [".py", ".js", ".ts", ".jsx", ".tsx", ".json", ".yaml", ".yml"],
-  assets: [".png", ".jpg", ".jpeg", ".svg", ".gif", ".pdf", ".csv"],
-  zotero: [".bib"],
-  other: [],
+const MODE_OPTIONS: { id: SidebarMode; label: string }[] = [
+  { id: "manuscript", label: "Manuscript" },
+  { id: "vault", label: "Vault" },
+  { id: "zotero", label: "Zotero" },
+  { id: "code", label: "Code" },
+  { id: "assets", label: "Assets" },
+  { id: "other", label: "Other" },
+];
+
+// Mode → project directory mapping
+const MODE_DIR: Record<SidebarMode, string> = {
+  manuscript: "manuscript",
+  vault: "vault",
+  zotero: "zotero",
+  code: "code",
+  assets: "assets",
+  other: "other",
 };
 
-function filterFilesByMode(files: ProjectFile[], mode: string): ProjectFile[] {
-  const extensions = MODE_EXTENSIONS[mode];
-  if (!extensions || extensions.length === 0) return files;
-  return files.filter((f) => extensions.some((ext) => f.name.endsWith(ext)));
+function filterFilesByMode(files: ProjectFile[], mode: SidebarMode): ProjectFile[] {
+  const dir = MODE_DIR[mode];
+  const prefix = `${dir}/`;
+  return files
+    .filter((f) => f.relativePath === dir || f.relativePath.startsWith(prefix))
+    .map((f) => {
+      // Strip mode directory prefix so the tree shows contents directly
+      if (f.relativePath === dir) return { ...f, relativePath: f.relativePath.slice(dir.length + 1) };
+      return f;
+    });
+}
+
+function filterFoldersByMode(folders: string[], mode: SidebarMode): string[] {
+  const dir = MODE_DIR[mode];
+  const prefix = `${dir}/`;
+  return folders
+    .filter((f) => f === dir || f.startsWith(prefix))
+    .map((f) => {
+      // Strip mode directory prefix for tree root
+      if (f === dir) return "";
+      return f.slice(dir.length + 1);
+    })
+    .filter((f) => f !== ""); // Remove empty string (mode dir itself)
 }
 
 function FileTreeNodeRow({
@@ -50,10 +88,11 @@ function FileTreeNodeRow({
   if (node.type === "folder") {
     return (
       <>
-        <button
-          type="button"
-          className="flex w-full items-center gap-1.5 px-3 py-1 text-[13px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          style={{ paddingLeft: 12 + depth * 14 }}
+        <Button
+          variant="ghost"
+          size="sm"
+          className={sidebarItem.item}
+          style={{ paddingLeft: 8 + depth * 14 }}
           onClick={() => onToggleFolder(node.relativePath)}
         >
           <ChevronRightIcon
@@ -65,7 +104,7 @@ function FileTreeNodeRow({
             <FolderIcon className="size-3.5 shrink-0" />
           )}
           <span className="truncate">{node.name}</span>
-        </button>
+        </Button>
         {isExpanded &&
           node.children.map((child) => (
             <FileTreeNodeRow
@@ -83,19 +122,19 @@ function FileTreeNodeRow({
   }
 
   return (
-    <div
+    <Button
+      variant="ghost"
+      size="sm"
       className={cn(
-        "flex items-center gap-1.5 px-3 py-1 text-[13px] transition-colors cursor-default",
-        isActive
-          ? "text-foreground bg-primary/5"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        sidebarItem.item,
+        isActive && sidebarItem.itemActive,
       )}
-      style={{ paddingLeft: 12 + depth * 14 }}
+      style={{ paddingLeft: 8 + depth * 14 }}
       onClick={() => onSelectFile(node.relativePath, node.name)}
     >
       {node.file && getFileIcon(node.file)}
       <span className="truncate">{node.name}</span>
-    </div>
+    </Button>
   );
 }
 
@@ -111,8 +150,9 @@ function FileTree() {
 
   const currentMode: SidebarMode = activeMode === "chat" ? "manuscript" : activeMode;
   const files = useMemo(() => filterFilesByMode(allFiles, currentMode), [allFiles, currentMode]);
-  const tree = useMemo(() => buildFileTree(files, allFolders), [files, allFolders]);
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set(allFolders));
+  const folders = useMemo(() => filterFoldersByMode(allFolders, currentMode), [allFolders, currentMode]);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set(folders));
+  const tree = useMemo(() => buildFileTree(files, folders), [files, folders]);
 
   if (tree.length === 0) {
     return (
@@ -169,8 +209,12 @@ function GitTab() {
 
 export function RightSidebar() {
   const rightToolbarTab = useLayoutStore((s) => s.rightToolbarTab);
+  const activeMode = useLayoutStore((s) => s.activeMode);
+  const setActiveMode = useLayoutStore((s) => s.setActiveMode);
   const rightSidebarWidth = useLayoutStore((s) => s.rightSidebarWidth);
   const setRightSidebarWidth = useLayoutStore((s) => s.setRightSidebarWidth);
+
+  const currentMode = MODE_OPTIONS.find((m) => m.id === activeMode) || MODE_OPTIONS[0];
 
   return (
     <aside
@@ -196,8 +240,67 @@ export function RightSidebar() {
         }}
       />
 
+      {/* Mode selector — only for Files */}
+      {rightToolbarTab === "files" && (
+        <>
+          <div className="flex shrink-0 items-center justify-between px-3 py-1.5">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-1 rounded-[4px] px-2.5 py-[7px] text-[13px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                >
+                  <span className="font-medium">{currentMode.label}</span>
+                  <ChevronRightIcon className="size-3 rotate-90 text-muted-foreground/60" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-36">
+                {MODE_OPTIONS.map((m) => (
+                  <DropdownMenuItem
+                    key={m.id}
+                    className="text-[12px]"
+                    onClick={() => setActiveMode(m.id)}
+                  >
+                    <span>{m.label}</span>
+                    {activeMode === m.id && (
+                      <span className="ml-auto text-[10px] text-muted-foreground">active</span>
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* New file button */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  title="New file"
+                >
+                  <PlusIcon className="size-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                {MODE_OPTIONS.map((m) => (
+                  <DropdownMenuItem
+                    key={m.id}
+                    className="text-[12px]"
+                    disabled
+                  >
+                    <FilePlusIcon className="size-3.5" />
+                    <span>{m.label} file</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <div className="mx-3 h-px bg-border/60" />
+        </>
+      )}
+
       {/* Content */}
-      <div className="flex flex-1 flex-col overflow-y-auto">
+      <div className={sidebarItem.container}>
         {rightToolbarTab === "files" && <FileTree />}
         {rightToolbarTab === "git" && <GitTab />}
       </div>

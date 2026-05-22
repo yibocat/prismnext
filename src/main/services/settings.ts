@@ -86,5 +86,5 @@ export function updateSettings(patch: Partial<AppSettings>): void {
     }
   }
 
-  store.set(encrypted as Partial<AppSettings>);
+  store.set(encrypted as any);
 }

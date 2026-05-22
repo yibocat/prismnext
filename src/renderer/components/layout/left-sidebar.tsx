@@ -8,7 +8,9 @@ import {
   Loader2Icon,
   Trash2Icon,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { sidebarItem, sidebarHeader } from "@/styles/design-tokens";
 
 interface SessionInfo {
   id: string;
@@ -136,7 +138,7 @@ export function LeftSidebar() {
       </div>
 
       {/* Session list */}
-      <div className="flex flex-1 flex-col overflow-y-auto">
+      <div className={sidebarItem.container}>
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
@@ -153,38 +155,41 @@ export function LeftSidebar() {
           sessions.map((s) => {
             const isActive = s.id === sessionId;
             return (
-              <div
+              <Button
                 key={s.id}
-                role="button"
-                tabIndex={0}
+                variant="ghost"
+                size="sm"
+                asChild
                 className={cn(
-                  "group flex w-full items-center gap-1.5 px-3 py-1.5 text-left transition-colors hover:bg-muted cursor-pointer",
-                  isActive
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground",
+                  "group",
+                  sidebarItem.item,
+                  isActive && sidebarItem.itemActive,
                 )}
-                onClick={() => loadSession(s.id)}
-                onKeyDown={(e) => { if (e.key === "Enter") loadSession(s.id); }}
               >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="truncate text-[12px]">{s.title}</span>
-                    {isActive && isStreaming && (
-                      <Loader2Icon className="size-3 shrink-0 animate-spin text-blue-500" />
-                    )}
-                  </div>
-                  <span className="text-[10px] opacity-50">{relativeTime(s.lastModified)}</span>
-                </div>
-
-                <button
-                  type="button"
-                  className="flex size-4 shrink-0 items-center justify-center rounded-sm opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted-foreground/20"
-                  onClick={(e) => handleDelete(e, s.id)}
-                  title="Delete session"
+                <div
+                  className="flex items-center gap-1.5 cursor-pointer"
+                  onClick={() => loadSession(s.id)}
                 >
-                  <Trash2Icon className="size-2.5" />
-                </button>
-              </div>
+                  <div className="min-w-0 flex-1 text-left">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate text-[12px]">{s.title}</span>
+                      {isActive && isStreaming && (
+                        <Loader2Icon className="size-3 shrink-0 animate-spin text-blue-500" />
+                      )}
+                    </div>
+                    <span className="text-[10px] opacity-50">{relativeTime(s.lastModified)}</span>
+                  </div>
+
+                  <span
+                    className="flex size-4 shrink-0 items-center justify-center rounded-sm opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted-foreground/20"
+                    onClick={(e) => { e.stopPropagation(); handleDelete(e, s.id); }}
+                    title="Delete session"
+                    role="button"
+                  >
+                    <Trash2Icon className="size-2.5" />
+                  </span>
+                </div>
+              </Button>
             );
           })
         )}
