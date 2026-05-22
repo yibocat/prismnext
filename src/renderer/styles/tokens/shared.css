@@ -1,0 +1,11 @@
+/* ──── Shared Tokens ──── */
+/* Cross-cutting: used by multiple modules */
+
+:root {
+  --font-timestamp:  var(--font-size-10);  /* relative time: "2m ago" */
+  --font-kbd:        var(--font-size-10);  /* keyboard shortcuts: ⌘K */
+  --font-path:       var(--font-size-10);  /* file paths, breadcrumbs */
+  --font-error:      var(--font-size-12);  /* error / validation messages */
+  --font-empty-state: var(--font-size-13);  /* empty / placeholder states */
+  --font-placeholder: var(--font-size-14);  /* "No files", "Coming soon", "Loading..." */
+}

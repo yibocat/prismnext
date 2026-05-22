@@ -1,0 +1,40 @@
+// ──── Prism Behavioral Constants ────
+// App-wide configuration: timing, limits, sizes.
+// Import from '@/styles/constants' where needed.
+
+/** Auto-save delay after last edit (ms) */
+export const AUTO_SAVE_DELAY = 2000;
+
+/** Auto-compile debounce after last save (ms) */
+export const AUTO_COMPILE_DEBOUNCE = 2000;
+
+/** Table-of-contents parse debounce (ms) */
+export const TOC_PARSE_DEBOUNCE = 300;
+
+/** Copy-to-clipboard feedback duration (ms) */
+export const COPY_FEEDBACK_DURATION = 2000;
+
+/** Maximum number of recent projects to keep */
+export const MAX_RECENT_PROJECTS = 10;
+
+/** Maximum number of concurrently open PDF documents (LRU) */
+export const MUPDF_MAX_OPEN_DOCS = 5;
+
+/** MuPDF worker request timeout (ms) */
+export const MUPDF_WORKER_TIMEOUT = 30000;
+
+// ─── Layout ───
+
+export const SIDEBAR_LEFT_DEFAULT = 240;
+export const SIDEBAR_LEFT_MIN = 160;
+export const SIDEBAR_LEFT_MAX = 420;
+
+export const SIDEBAR_RIGHT_DEFAULT = 220;
+export const SIDEBAR_RIGHT_MIN = 180;
+export const SIDEBAR_RIGHT_MAX = 380;
+
+export const RIGHT_AREA_DEFAULT = 650;
+export const RIGHT_AREA_MIN = 350;
+export const RIGHT_AREA_MAX = 1100;
+
+export const RESIZE_HANDLE_WIDTH = 5;

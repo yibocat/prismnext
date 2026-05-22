@@ -41,7 +41,7 @@ export function UserMessage() {
             }}
           </MessagePrimitive.Parts>
         </div>
-        <div className="rounded-2xl bg-muted px-4 py-2 text-foreground text-sm leading-relaxed">
+        <div className="rounded-2xl bg-muted px-4 py-2 text-foreground text-[length:var(--font-chat-message)] leading-relaxed">
           <MessagePrimitive.Parts />
         </div>
       </div>

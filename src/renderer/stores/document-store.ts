@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { toast } from "sonner";
+import { AUTO_SAVE_DELAY } from "@/styles/constants";
 import { useProjectStore } from "./project-store";
 
 export type ProjectFileType = "tex" | "image" | "pdf" | "bib" | "style" | "other";
@@ -65,7 +66,7 @@ function scheduleAutoSave() {
   autoSaveTimer = setTimeout(async () => {
     const state = useDocumentStore.getState();
     await state.saveAllFiles();
-  }, 2000);
+  }, AUTO_SAVE_DELAY);
 }
 
 function clearAutoSaveTimer() {

@@ -193,7 +193,7 @@ export function ClaudeChatDrawer() {
 
         {/* Error banner */}
         {error && (
-          <div className="mx-3 mb-1 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-1.5 text-destructive text-xs">
+          <div className="mx-3 mb-1 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-1.5 text-destructive text-[length:var(--font-chat-meta)]">
             {error}
           </div>
         )}
@@ -212,8 +212,8 @@ export function ClaudeChatDrawer() {
                       <MessageCircleIcon className="size-7 text-muted-foreground" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-foreground">Start a conversation</h3>
-                      <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                      <h3 className="text-[length:var(--font-composer)] font-medium text-foreground">Start a conversation</h3>
+                      <p className="mt-1 text-[length:var(--font-chat-meta)] text-muted-foreground leading-relaxed">
                         Ask your AI assistant to help with your LaTeX document.
                         Try things like "Add a theorem environment" or "Fix the citations in section 3".
                       </p>
@@ -234,7 +234,7 @@ export function ClaudeChatDrawer() {
                   <ComposerPrimitive.Root className="flex w-full flex-col rounded-2xl border border-input bg-muted/30 transition-colors focus-within:border-ring focus-within:bg-background">
                     <ComposerPrimitive.Input
                       placeholder="Ask me anything..."
-                      className="max-h-40 min-h-10 w-full resize-none bg-transparent px-4 py-2 text-sm outline-none placeholder:text-muted-foreground"
+                      className="max-h-40 min-h-10 w-full resize-none bg-transparent px-4 py-2 text-[length:var(--font-composer)] outline-none placeholder:text-muted-foreground"
                       rows={1}
                     />
                     <div className="flex items-center justify-end px-2 pb-2 gap-1.5">

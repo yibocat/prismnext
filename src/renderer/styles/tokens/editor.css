@@ -1,0 +1,18 @@
+/* ──── Editor Tokens ──── */
+/* CodeMirror editor, tabs, file tree (right sidebar), TOC */
+
+:root {
+  /* ── Heights ── */
+  --height-editor-toolbar:     var(--size-h-32);  /* main editor toolbar */
+  --height-editor-placeholder: var(--size-h-32);  /* editor placeholder bar */
+  --height-tab-bar:            var(--size-h-32);  /* editor tab bar */
+  --height-search-panel:       var(--size-h-36);  /* search panel bar */
+
+  /* ── Font tokens ── */
+  --font-editor:        var(--font-size-14);  /* CodeMirror body text */
+  --font-tab-label:     var(--font-size-12);  /* editor tab labels */
+  --font-file-tree:     var(--font-size-12);  /* right-sidebar file tree items */
+  --font-file-tree-node: var(--font-size-14); /* workspace sidebar file tree nodes */
+  --font-toc-item:      var(--font-size-12);  /* table-of-contents entries */
+  --font-search-input:  var(--font-size-14);  /* editor search panel input */
+}

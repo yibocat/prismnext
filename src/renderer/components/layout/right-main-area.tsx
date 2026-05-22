@@ -26,8 +26,8 @@ function GitPlaceholder() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
       <GitBranchIcon className="size-10 opacity-30" />
-      <p className="text-sm">Git changes will appear here</p>
-      <p className="text-xs opacity-50">Coming soon</p>
+      <p className="text-[length:var(--font-placeholder)]">Git changes will appear here</p>
+      <p className="text-[length:var(--font-placeholder)] opacity-50">Coming soon</p>
     </div>
   );
 }
@@ -36,8 +36,8 @@ function BrowserPlaceholder() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
       <GlobeIcon className="size-10 opacity-30" />
-      <p className="text-sm">Browser will appear here</p>
-      <p className="text-xs opacity-50">Coming soon</p>
+      <p className="text-[length:var(--font-placeholder)]">Browser will appear here</p>
+      <p className="text-[length:var(--font-placeholder)] opacity-50">Coming soon</p>
     </div>
   );
 }
@@ -49,7 +49,7 @@ function NoFileOpen() {
         <div className="flex size-14 items-center justify-center rounded-2xl bg-muted mx-auto">
           <FilePlusIcon className="size-7 text-muted-foreground" />
         </div>
-        <p className="mt-3 text-[13px] text-muted-foreground">No open files</p>
+        <p className="mt-3 text-[length:var(--font-empty-state)] text-muted-foreground">No open files</p>
       </div>
     </div>
   );

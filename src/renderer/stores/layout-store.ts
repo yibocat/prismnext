@@ -1,4 +1,9 @@
 import { create } from "zustand";
+import {
+  SIDEBAR_LEFT_DEFAULT,
+  RIGHT_AREA_DEFAULT,
+  SIDEBAR_RIGHT_DEFAULT,
+} from "@/styles/constants";
 
 export type AppMode = "manuscript" | "vault" | "zotero" | "code" | "assets" | "other" | "chat";
 export type RightToolbarTab = "files" | "git" | "browser";
@@ -65,14 +70,14 @@ export const useLayoutStore = create<LayoutState>((set) => ({
   setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
 
   sidebarExpanded: true,
-  sidebarWidth: 240,
+  sidebarWidth: SIDEBAR_LEFT_DEFAULT,
   toggleSidebar: () => set((s) => ({ sidebarExpanded: !s.sidebarExpanded })),
   setSidebarExpanded: (expanded) => set({ sidebarExpanded: expanded }),
   setSidebarWidth: (width) => set({ sidebarWidth: width }),
 
   rightAreaExpanded: false,
-  rightAreaWidth: 650,
-  rightSidebarWidth: 220,
+  rightAreaWidth: RIGHT_AREA_DEFAULT,
+  rightSidebarWidth: SIDEBAR_RIGHT_DEFAULT,
   editorMaximized: false,
   toggleRightArea: () => set((s) => ({ rightAreaExpanded: !s.rightAreaExpanded })),
   setRightAreaWidth: (width) => set({ rightAreaWidth: width }),

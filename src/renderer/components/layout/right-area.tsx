@@ -17,6 +17,7 @@ import {
   PlayIcon,
   Loader2Icon,
 } from "lucide-react";
+import { RIGHT_AREA_MIN, RIGHT_AREA_MAX } from "@/styles/constants";
 import { cn } from "@/lib/utils";
 
 const TOOLBAR_TABS: { id: RightToolbarTab; label: string; icon: React.ReactNode }[] = [
@@ -41,7 +42,7 @@ function TabBar() {
         <div
           key={tab.id}
           className={cn(
-            "group flex shrink-0 items-center gap-1 rounded px-1.5 py-1 text-[12px] cursor-default transition-colors max-w-[140px]",
+            "group flex shrink-0 items-center gap-1 rounded px-1.5 py-1 text-[length:var(--font-toolbar-tab)] cursor-default transition-colors max-w-[140px]",
             tab.id === activeTabId
               ? "bg-muted text-foreground"
               : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -125,7 +126,7 @@ export function RightArea({ maximized }: { maximized?: boolean }) {
       const startWidth = widthRef.current;
       const onMove = (ev: MouseEvent) => {
         const nextWidth = startWidth + startX - ev.clientX;
-        setRightAreaWidth(Math.min(1100, Math.max(350, nextWidth)));
+        setRightAreaWidth(Math.min(RIGHT_AREA_MAX, Math.max(RIGHT_AREA_MIN, nextWidth)));
       };
       const onUp = () => {
         document.removeEventListener("mousemove", onMove);
@@ -150,14 +151,14 @@ export function RightArea({ maximized }: { maximized?: boolean }) {
     >
       {!maximized && (
         <div
-          className="shrink-0 w-[5px] cursor-col-resize hover:bg-primary/30 transition-colors"
+          className="shrink-0 w-[var(--layout-resize-handle)] cursor-col-resize hover:bg-primary/30 transition-colors"
           onMouseDown={handleMouseDown}
         />
       )}
 
       <div className="flex flex-1 flex-col min-w-0 border-l border-border bg-background">
         {/* ── Toolbar ── */}
-        <div className="flex h-[38px] shrink-0 items-center border-b border-border px-2 gap-0.5">
+        <div className="flex h-[var(--height-right-area-toolbar)] shrink-0 items-center border-b border-border px-2 gap-0.5">
           {/* Left: icon-only toolbar tabs */}
           {TOOLBAR_TABS.map((tab) =>
             tab.id === "files" ? (

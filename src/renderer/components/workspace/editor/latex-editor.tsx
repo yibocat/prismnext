@@ -767,11 +767,11 @@ export function LatexEditor() {
   if (!isTextFile) {
     return (
       <div className="flex h-full flex-col bg-background">
-        <div className="drag-region flex h-[calc(36px+var(--titlebar-height))] shrink-0 items-center justify-center border-border border-b bg-muted/30 pt-[var(--titlebar-height)]">
-          <span className="font-medium text-muted-foreground text-xs">Editor</span>
+        <div className="drag-region flex h-[var(--height-editor-placeholder)] shrink-0 items-center justify-center border-border border-b bg-muted/30">
+          <span className="font-medium text-muted-foreground text-[length:var(--font-toolbar-label)]">Editor</span>
         </div>
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground text-[length:var(--font-placeholder)]">
             {activeFileId ? "Preview not available" : "No file selected"}
           </p>
         </div>
@@ -826,7 +826,7 @@ export function LatexEditor() {
         {/* Chunk navigator (shown during merge) */}
         {activeFileChange && mergeChunkInfo.total > 0 && hasNavigatedRef.current && (
           <div className="absolute top-3 right-3 z-20 flex items-center gap-1 rounded-lg border border-border bg-background/95 px-2 py-1 shadow-lg backdrop-blur-sm">
-            <span className="px-1 font-mono text-muted-foreground text-xs">
+            <span className="px-1 font-mono text-muted-foreground text-[length:var(--font-toolbar-label)]">
               {mergeChunkInfo.current}/{mergeChunkInfo.total}
             </span>
             <div className="mx-0.5 h-4 w-px bg-border" />

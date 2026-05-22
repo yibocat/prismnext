@@ -47,6 +47,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { TOC_PARSE_DEBOUNCE } from "@/styles/constants";
 import { Input } from "@/components/ui/input";
 
 // ─── File Icon ───
@@ -205,7 +206,7 @@ const FileTreeNode = ({
           <ContextMenuTrigger asChild>
             <button
               type="button"
-              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-sidebar-accent/50"
+              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[length:var(--font-file-tree-node)] transition-colors hover:bg-sidebar-accent/50"
               style={{ paddingLeft: `${depth * 16 + 4}px` }}
               onClick={() => onToggleFolder(node.relativePath)}
             >
@@ -276,7 +277,7 @@ const FileTreeNode = ({
         <button
           type="button"
           className={cn(
-            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[length:var(--font-file-tree-node)] transition-colors",
             isActive
               ? "bg-sidebar-accent text-sidebar-accent-foreground"
               : "hover:bg-sidebar-accent/50",
@@ -365,7 +366,7 @@ export function Sidebar() {
     tocTimeoutRef.current = window.setTimeout(() => {
       const content = activeFileId ? useDocumentStore.getState().getContent(activeFileId) : "";
       setToc(parseTableOfContents(content));
-    }, 300);
+    }, TOC_PARSE_DEBOUNCE);
     return () => {
       if (tocTimeoutRef.current) {
         clearTimeout(tocTimeoutRef.current);
@@ -538,10 +539,10 @@ export function Sidebar() {
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       {/* Header - macOS drag region */}
-      <div className="drag-region relative flex h-[calc(48px+var(--titlebar-height))] items-center justify-center border-sidebar-border border-b px-3 pt-[var(--titlebar-height)]">
+      <div className="drag-region relative flex h-[var(--height-sidebar-brand)] items-center justify-center border-sidebar-border border-b px-3">
         <div className="flex flex-col items-center">
-          <span className="font-semibold text-sm">Prism</span>
-          <span className="text-muted-foreground text-xs">
+          <span className="font-semibold text-[length:var(--font-file-tree-node)]">Prism</span>
+          <span className="text-muted-foreground text-[length:var(--font-sidebar-footer)]">
             {projectRoot?.split(/[/\\]/).pop() || "Desktop"}
           </span>
         </div>
@@ -563,10 +564,10 @@ export function Sidebar() {
         {/* Files */}
         <Panel id="files" defaultSize="60%" minSize="15%">
           <div className="flex min-h-0 h-full flex-col">
-            <div className="relative flex h-8 shrink-0 items-center justify-center border-sidebar-border border-b px-3">
+            <div className="relative flex h-[var(--height-files-header)] shrink-0 items-center justify-center border-sidebar-border border-b px-3">
               <div className="flex items-center gap-2">
                 <FolderIcon className="size-3.5 text-muted-foreground" />
-                <span className="font-medium text-xs">Files</span>
+                <span className="font-medium text-[length:var(--font-sidebar-section)]">Files</span>
               </div>
               <div className="absolute right-3 flex items-center gap-0.5">
                 <DropdownMenu>
@@ -643,9 +644,9 @@ export function Sidebar() {
         {/* Outline */}
         <Panel id="outline" defaultSize="40%" minSize="10%">
           <div className="flex min-h-0 h-full flex-col">
-            <div className="flex h-8 shrink-0 items-center justify-center gap-2 px-3">
+            <div className="flex h-[var(--height-files-header)] shrink-0 items-center justify-center gap-2 px-3">
               <ListIcon className="size-3.5 text-muted-foreground" />
-              <span className="font-medium text-xs">Outline</span>
+              <span className="font-medium text-[length:var(--font-sidebar-section)]">Outline</span>
             </div>
             <ScrollArea className="min-h-0 flex-1">
               <div className="p-1">
@@ -654,7 +655,7 @@ export function Sidebar() {
                     <button
                       key={index}
                       type="button"
-                      className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-sidebar-accent/50"
+                      className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-[length:var(--font-toc-item)] transition-colors hover:bg-sidebar-accent/50"
                       style={{ paddingLeft: `${(item.level - 1) * 12 + 8}px` }}
                       onClick={() => handleTocClick(item.line)}
                     >
@@ -663,7 +664,7 @@ export function Sidebar() {
                     </button>
                   ))
                 ) : (
-                  <div className="px-2 py-1 text-muted-foreground text-xs">
+                  <div className="px-2 py-1 text-muted-foreground text-[length:var(--font-empty-state)]">
                     No sections found
                   </div>
                 )}
@@ -674,7 +675,7 @@ export function Sidebar() {
       </Group>
 
       {/* Footer */}
-      <div className="flex items-center justify-between border-sidebar-border border-t px-3 py-2 text-muted-foreground text-xs">
+      <div className="flex items-center justify-between border-sidebar-border border-t px-3 py-2 text-muted-foreground text-[length:var(--font-sidebar-footer)]">
         <span className="truncate">Prism v0.1.0</span>
         <Button
           variant="ghost"
@@ -725,7 +726,7 @@ export function Sidebar() {
               autoFocus
             />
             {nameError && (
-              <p className="text-destructive text-xs">{nameError}</p>
+              <p className="text-destructive text-[length:var(--font-error)]">{nameError}</p>
             )}
           </div>
           <DialogFooter>
@@ -762,7 +763,7 @@ export function Sidebar() {
               autoFocus
             />
             {nameError && (
-              <p className="text-destructive text-xs">{nameError}</p>
+              <p className="text-destructive text-[length:var(--font-error)]">{nameError}</p>
             )}
           </div>
           <DialogFooter>
@@ -801,7 +802,7 @@ export function Sidebar() {
               autoFocus
             />
             {nameError && (
-              <p className="text-destructive text-xs">{nameError}</p>
+              <p className="text-destructive text-[length:var(--font-error)]">{nameError}</p>
             )}
           </div>
           <DialogFooter>

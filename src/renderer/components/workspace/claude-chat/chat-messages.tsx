@@ -54,9 +54,9 @@ const StreamingIndicator = memo(() => {
         <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:150ms]" />
         <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:300ms]" />
       </div>
-      <span className="text-muted-foreground text-xs">Thinking...</span>
+      <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">Thinking...</span>
       {elapsed > 3 && (
-        <span className="text-muted-foreground/60 text-xs">{elapsed}s</span>
+        <span className="text-muted-foreground/60 text-[length:var(--font-chat-meta)]">{elapsed}s</span>
       )}
     </div>
   );
@@ -75,7 +75,7 @@ const UserMessage = memo(function UserMessage({ msg }: { msg: ClaudeStreamMessag
         <div className="opacity-0 transition-opacity group-hover:opacity-100">
           <CopyButton text={text} />
         </div>
-        <div className="rounded-2xl bg-muted px-4 py-2 text-foreground text-sm leading-relaxed">
+        <div className="rounded-2xl bg-muted px-4 py-2 text-foreground text-[length:var(--font-chat-message)] leading-relaxed">
           {text}
         </div>
       </div>
@@ -105,7 +105,7 @@ const AssistantMessage = memo(function AssistantMessage({
             }
             if (block.type === "text" && block.text) {
               return (
-                <div key={i} className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed">
+                <div key={i} className="prose prose-sm dark:prose-invert max-w-none text-[length:var(--font-chat-message)] leading-relaxed">
                   <MarkdownRenderer content={block.text} />
                 </div>
               );
@@ -133,7 +133,7 @@ const AssistantMessage = memo(function AssistantMessage({
 function ResultMessage({ msg }: { msg: ClaudeStreamMessage }) {
   if (msg.is_error) {
     return (
-      <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive mx-4 my-1 animate-in fade-in slide-in-from-bottom-1 duration-200">
+      <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-[length:var(--font-chat-message)] text-destructive mx-4 my-1 animate-in fade-in slide-in-from-bottom-1 duration-200">
         <AlertCircleIcon className="size-4 shrink-0" />
         <span>{msg.result || "An error occurred"}</span>
       </div>
@@ -142,7 +142,7 @@ function ResultMessage({ msg }: { msg: ClaudeStreamMessage }) {
 
   if (msg.result) {
     return (
-      <div className="px-4 py-1.5 text-xs text-muted-foreground">
+      <div className="px-4 py-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
         <MarkdownRenderer content={msg.result} />
       </div>
     );
@@ -260,8 +260,8 @@ export function ChatMessages() {
             <MessageSquareIcon className="size-7 text-muted-foreground" />
           </div>
           <div>
-            <h3 className="text-sm font-medium text-foreground">Start a conversation</h3>
-            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+            <h3 className="text-[length:var(--font-chat-message)] font-medium text-foreground">Start a conversation</h3>
+            <p className="mt-1 text-[length:var(--font-chat-meta)] text-muted-foreground leading-relaxed">
               Ask your AI assistant to help with your LaTeX document.
               Try things like "Add a theorem environment" or "Fix the citations in section 3".
             </p>

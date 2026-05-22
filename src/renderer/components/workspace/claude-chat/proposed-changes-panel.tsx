@@ -23,10 +23,10 @@ export function ProposedChangesPanel({
 
   return (
     <div className="flex items-center justify-between border-border border-t bg-muted/50 px-3 py-1.5">
-      <div className="flex items-center gap-2 text-xs min-w-0">
+      <div className="flex items-center gap-2 text-[length:var(--font-chat-meta)] min-w-0">
         <span className="font-medium text-foreground shrink-0">Changes</span>
         {totalChanges > 1 && (
-          <span className="shrink-0 rounded bg-violet-500/15 px-1.5 py-0.5 font-medium text-violet-600 text-xs dark:text-violet-400">
+          <span className="shrink-0 rounded bg-violet-500/15 px-1.5 py-0.5 font-medium text-violet-600 text-[length:var(--font-chat-meta)] dark:text-violet-400">
             {changeIndex + 1}/{totalChanges} files
           </span>
         )}
@@ -38,21 +38,21 @@ export function ProposedChangesPanel({
       <div className="flex items-center gap-1.5 shrink-0">
         <button
           onClick={onAccept}
-          className="flex items-center gap-1 rounded-md bg-green-600/20 px-2.5 py-1 text-green-400 text-xs transition-colors hover:bg-green-600/30"
+          className="flex items-center gap-1 rounded-md bg-green-600/20 px-2.5 py-1 text-green-400 text-[length:var(--font-chat-meta)] transition-colors hover:bg-green-600/30"
         >
           <Check className="size-3.5" />
           Accept All
-          <kbd className="ml-1 rounded bg-green-600/20 px-1 py-0.5 font-mono text-[10px]">
+          <kbd className="ml-1 rounded bg-green-600/20 px-1 py-0.5 font-mono text-[length:var(--font-kbd)]">
             ⌘Y
           </kbd>
         </button>
         <button
           onClick={onReject}
-          className="flex items-center gap-1 rounded-md bg-red-600/20 px-2.5 py-1 text-red-400 text-xs transition-colors hover:bg-red-600/30"
+          className="flex items-center gap-1 rounded-md bg-red-600/20 px-2.5 py-1 text-red-400 text-[length:var(--font-chat-meta)] transition-colors hover:bg-red-600/30"
         >
           <X className="size-3.5" />
           Reject All
-          <kbd className="ml-1 rounded bg-red-600/20 px-1 py-0.5 font-mono text-[10px]">
+          <kbd className="ml-1 rounded bg-red-600/20 px-1 py-0.5 font-mono text-[length:var(--font-kbd)]">
             ⌘N
           </kbd>
         </button>

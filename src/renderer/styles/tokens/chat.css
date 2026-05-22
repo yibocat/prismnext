@@ -1,0 +1,10 @@
+/* ──── Chat Tokens ──── */
+/* Claude chat: messages, composer, sessions, tool widgets */
+
+:root {
+  --font-session-item: var(--font-size-12);  /* session list items */
+  --font-chat-meta:    var(--font-size-12);  /* "Thinking...", elapsed, labels */
+  --font-chat-message: var(--font-size-14);  /* chat message body text */
+  --font-composer:     var(--font-size-14);  /* composer textarea, @mention items */
+  --font-code:         var(--font-size-12);  /* code blocks, <pre>, tool output */
+}

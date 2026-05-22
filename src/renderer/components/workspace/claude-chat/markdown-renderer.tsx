@@ -21,17 +21,17 @@ const CodeBlock = memo(function CodeBlock({ language, code }: { language: string
   return (
     <div className="group relative my-3 overflow-hidden rounded-lg border border-border/50 bg-zinc-950">
       <div className="flex items-center justify-between border-b border-border/20 px-4 py-1.5">
-        <span className="font-mono text-muted-foreground text-xs">{language || "code"}</span>
+        <span className="font-mono text-muted-foreground text-[length:var(--font-code)]">{language || "code"}</span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-muted-foreground text-xs transition-colors hover:bg-muted hover:text-foreground"
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-muted-foreground text-[length:var(--font-code)] transition-colors hover:bg-muted hover:text-foreground"
         >
           {copied ? <CheckIcon className="size-3 text-green-500" /> : <CopyIcon className="size-3" />}
           <span>{copied ? "Copied" : "Copy"}</span>
         </button>
       </div>
       <pre className="overflow-x-auto p-4">
-        <code className="text-sm text-zinc-200 leading-relaxed">{code}</code>
+        <code className="text-[length:var(--font-code)] text-zinc-200 leading-relaxed">{code}</code>
       </pre>
     </div>
   );
@@ -129,7 +129,7 @@ export function MarkdownRenderer({ content }: { content: string }) {
             }
             return (
               <code
-                className={cn("rounded bg-muted px-1 py-0.5 font-mono text-sm", className)}
+                className={cn("rounded bg-muted px-1 py-0.5 font-mono text-[length:var(--font-code)]", className)}
                 {...props}
               >
                 {children}

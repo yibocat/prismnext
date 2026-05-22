@@ -194,7 +194,7 @@ export function PdfViewer({
   if (!docInfo) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="text-muted-foreground text-sm">Loading PDF...</div>
+        <div className="text-muted-foreground text-[length:var(--font-placeholder)]">Loading PDF...</div>
       </div>
     );
   }

@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { sidebarItem } from "@/styles/design-tokens";
+import { SIDEBAR_RIGHT_MIN, SIDEBAR_RIGHT_MAX } from "@/styles/constants";
 import { buildFileTree, getFileIcon, type TreeNode } from "@/lib/file-tree";
 
 type SidebarMode = Exclude<AppMode, "chat">;
@@ -91,7 +91,7 @@ function FileTreeNodeRow({
         <Button
           variant="ghost"
           size="sm"
-          className={sidebarItem.item}
+          className="w-full justify-start h-auto py-1.5 my-px text-[length:var(--font-file-tree)]"
           style={{ paddingLeft: 8 + depth * 14 }}
           onClick={() => onToggleFolder(node.relativePath)}
         >
@@ -126,8 +126,8 @@ function FileTreeNodeRow({
       variant="ghost"
       size="sm"
       className={cn(
-        sidebarItem.item,
-        isActive && sidebarItem.itemActive,
+        "w-full justify-start h-auto py-1.5 my-px text-[length:var(--font-file-tree)]",
+        isActive && "bg-accent text-accent-foreground hover:bg-accent/90",
       )}
       style={{ paddingLeft: 8 + depth * 14 }}
       onClick={() => onSelectFile(node.relativePath, node.name)}
@@ -157,9 +157,9 @@ function FileTree() {
   if (tree.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center px-4 py-8">
-        <p className="text-center text-[13px] leading-relaxed text-muted-foreground">
+        <p className="text-center text-[length:var(--font-empty-state)] leading-relaxed text-muted-foreground">
           No files yet
-          <span className="mt-1 block text-[11px] opacity-60">Open a project to get started</span>
+          <span className="mt-1 block text-[length:var(--font-hint)] opacity-60">Open a project to get started</span>
         </p>
       </div>
     );
@@ -196,10 +196,10 @@ function FileTree() {
 function GitTab() {
   return (
     <div className="flex flex-1 items-center justify-center px-4">
-      <p className="text-center text-[13px] leading-relaxed text-muted-foreground">
+      <p className="text-center text-[length:var(--font-empty-state)] leading-relaxed text-muted-foreground">
         <GitBranchIcon className="size-6 mx-auto mb-2 opacity-40" />
         Git changes
-        <span className="mt-1 block text-[11px] opacity-60">coming soon</span>
+        <span className="mt-1 block text-[length:var(--font-hint)] opacity-60">coming soon</span>
       </p>
     </div>
   );
@@ -223,13 +223,13 @@ export function RightSidebar() {
     >
       {/* Resize handle — left edge */}
       <div
-        className="absolute left-0 top-0 h-full w-[5px] cursor-col-resize hover:bg-primary/30 z-10 transition-colors"
+        className="absolute left-0 top-0 h-full w-[var(--layout-resize-handle)] cursor-col-resize hover:bg-primary/30 z-10 transition-colors"
         onMouseDown={(e) => {
           e.preventDefault();
           const startX = e.clientX;
           const startWidth = rightSidebarWidth;
           const onMove = (ev: MouseEvent) => {
-            setRightSidebarWidth(Math.min(380, Math.max(180, startWidth + startX - ev.clientX)));
+            setRightSidebarWidth(Math.min(SIDEBAR_RIGHT_MAX, Math.max(SIDEBAR_RIGHT_MIN, startWidth + startX - ev.clientX)));
           };
           const onUp = () => {
             document.removeEventListener("mousemove", onMove);
@@ -242,65 +242,61 @@ export function RightSidebar() {
 
       {/* Mode selector — only for Files */}
       {rightToolbarTab === "files" && (
-        <>
-          <div className="flex shrink-0 items-center justify-between px-3 py-1.5">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex items-center gap-1 rounded-[4px] px-2.5 py-[7px] text-[13px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        <div className="flex h-[var(--height-mode-selector)] shrink-0 items-center justify-between border-b border-border px-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[length:var(--font-toolbar-tab)] font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                {currentMode.label}
+                <ChevronRightIcon className="size-3 rotate-90 text-muted-foreground/60" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-36">
+              {MODE_OPTIONS.map((m) => (
+                <DropdownMenuItem
+                  key={m.id}
+                  className="text-[length:var(--font-toolbar-tab)]"
+                  onClick={() => setActiveMode(m.id)}
                 >
-                  <span className="font-medium">{currentMode.label}</span>
-                  <ChevronRightIcon className="size-3 rotate-90 text-muted-foreground/60" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-36">
-                {MODE_OPTIONS.map((m) => (
-                  <DropdownMenuItem
-                    key={m.id}
-                    className="text-[12px]"
-                    onClick={() => setActiveMode(m.id)}
-                  >
-                    <span>{m.label}</span>
-                    {activeMode === m.id && (
-                      <span className="ml-auto text-[10px] text-muted-foreground">active</span>
-                    )}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <span>{m.label}</span>
+                  {activeMode === m.id && (
+                    <span className="ml-auto text-[length:var(--font-badge)] text-muted-foreground">active</span>
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-            {/* New file button */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                  title="New file"
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                title="New file"
+              >
+                <PlusIcon className="size-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              {MODE_OPTIONS.map((m) => (
+                <DropdownMenuItem
+                  key={m.id}
+                  className="text-[length:var(--font-toolbar-tab)]"
+                  disabled
                 >
-                  <PlusIcon className="size-3.5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40">
-                {MODE_OPTIONS.map((m) => (
-                  <DropdownMenuItem
-                    key={m.id}
-                    className="text-[12px]"
-                    disabled
-                  >
-                    <FilePlusIcon className="size-3.5" />
-                    <span>{m.label} file</span>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          <div className="mx-3 h-px bg-border/60" />
-        </>
+                  <FilePlusIcon className="size-3.5" />
+                  <span>{m.label} file</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       )}
 
       {/* Content */}
-      <div className={sidebarItem.container}>
+      <div className="flex flex-1 flex-col overflow-y-auto px-2 py-1 gap-1">
         {rightToolbarTab === "files" && <FileTree />}
         {rightToolbarTab === "git" && <GitTab />}
       </div>

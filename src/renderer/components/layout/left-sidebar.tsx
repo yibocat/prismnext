@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { sidebarItem, sidebarHeader } from "@/styles/design-tokens";
+import { SIDEBAR_LEFT_MIN, SIDEBAR_LEFT_MAX } from "@/styles/constants";
 
 interface SessionInfo {
   id: string;
@@ -123,8 +123,8 @@ export function LeftSidebar() {
       style={{ width: sidebarWidth }}
     >
       {/* Header */}
-      <div className="flex h-8 shrink-0 items-center justify-between border-b border-border px-3">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="flex h-[var(--height-sessions-header)] shrink-0 items-center justify-between border-b border-border px-3">
+        <span className="text-[length:var(--font-sidebar-section)] font-semibold uppercase tracking-wider text-muted-foreground">
           Sessions
         </span>
         <button
@@ -138,17 +138,17 @@ export function LeftSidebar() {
       </div>
 
       {/* Session list */}
-      <div className={sidebarItem.container}>
+      <div className="flex flex-1 flex-col overflow-y-auto px-2 py-1 gap-1">
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
           </div>
         ) : sessions.length === 0 ? (
           <div className="flex flex-1 items-center justify-center px-4">
-            <p className="text-center text-[12px] leading-relaxed text-muted-foreground">
+            <p className="text-center text-[length:var(--font-session-item)] leading-relaxed text-muted-foreground">
               <MessageSquareIcon className="size-5 mx-auto mb-2 opacity-30" />
               No sessions yet
-              <span className="mt-1 block text-[10px] opacity-50">Open a project to start</span>
+              <span className="mt-1 block text-[length:var(--font-hint)] opacity-50">Open a project to start</span>
             </p>
           </div>
         ) : (
@@ -162,8 +162,8 @@ export function LeftSidebar() {
                 asChild
                 className={cn(
                   "group",
-                  sidebarItem.item,
-                  isActive && sidebarItem.itemActive,
+                  "w-full justify-start h-auto py-1.5 my-px",
+                  isActive && "bg-accent text-accent-foreground hover:bg-accent/90",
                 )}
               >
                 <div
@@ -172,12 +172,12 @@ export function LeftSidebar() {
                 >
                   <div className="min-w-0 flex-1 text-left">
                     <div className="flex items-center gap-1.5">
-                      <span className="truncate text-[12px]">{s.title}</span>
+                      <span className="truncate text-[length:var(--font-session-item)]">{s.title}</span>
                       {isActive && isStreaming && (
                         <Loader2Icon className="size-3 shrink-0 animate-spin text-blue-500" />
                       )}
                     </div>
-                    <span className="text-[10px] opacity-50">{relativeTime(s.lastModified)}</span>
+                    <span className="text-[length:var(--font-timestamp)] opacity-50">{relativeTime(s.lastModified)}</span>
                   </div>
 
                   <span
@@ -197,13 +197,13 @@ export function LeftSidebar() {
 
       {/* Resize handle */}
       <div
-        className="absolute right-0 top-0 h-full w-[5px] cursor-col-resize hover:bg-primary/30 z-10 transition-colors"
+        className="absolute right-0 top-0 h-full w-[var(--layout-resize-handle)] cursor-col-resize hover:bg-primary/30 z-10 transition-colors"
         onMouseDown={(e) => {
           e.preventDefault();
           const startX = e.clientX;
           const startWidth = sidebarWidth;
           const onMove = (ev: MouseEvent) => {
-            setSidebarWidth(Math.min(420, Math.max(160, startWidth + ev.clientX - startX)));
+            setSidebarWidth(Math.min(SIDEBAR_LEFT_MAX, Math.max(SIDEBAR_LEFT_MIN, startWidth + ev.clientX - startX)));
           };
           const onUp = () => {
             document.removeEventListener("mousemove", onMove);

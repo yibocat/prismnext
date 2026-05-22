@@ -44,9 +44,9 @@ export function EditorToolbar() {
   };
 
   return (
-    <div className="drag-region flex h-[calc(36px+var(--titlebar-height))] items-center gap-1 border-border border-b bg-muted/30 px-2 pt-[var(--titlebar-height)]">
+    <div className="drag-region flex h-[var(--height-editor-toolbar)] items-center gap-1 border-border border-b bg-muted/30 px-2">
       <FileTextIcon className="size-4 text-muted-foreground" />
-      <span className="mr-2 font-medium text-muted-foreground text-sm">
+      <span className="mr-2 font-medium text-muted-foreground text-[length:var(--font-toolbar-label)]">
         {fileName}
       </span>
       {/* Spacer for drag region */}
@@ -100,7 +100,7 @@ export function EditorToolbar() {
           tooltip="Display math (\\[...\\])"
           onClick={() => insertText("\\[\n  ", "\n\\]")}
         >
-          <span className="font-mono text-xs">{"∫"}</span>
+          <span className="font-mono text-[length:var(--font-toolbar-label)]">{"∫"}</span>
         </TooltipIconButton>
         <div className="mx-2 h-4 w-px bg-border" />
         <TooltipIconButton

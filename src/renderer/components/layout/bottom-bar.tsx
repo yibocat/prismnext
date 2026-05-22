@@ -41,7 +41,7 @@ export function BottomBar() {
   }, [pdfRevision, createPdfTab]);
 
   return (
-    <div className="flex h-6 shrink-0 items-center border-t border-border bg-card px-3 text-[11px] text-muted-foreground select-none">
+    <div className="flex h-[var(--height-status-bar)] shrink-0 items-center border-t border-border bg-card px-3 text-[length:var(--font-status-bar)] text-muted-foreground select-none">
       {/* Compile status (display only) */}
       <span className="flex items-center gap-1 rounded-md px-1.5 py-0.5">
         {isCompiling ? (
@@ -87,7 +87,7 @@ export function BottomBar() {
 
       {/* Compiler selector */}
       <select
-        className="h-5 rounded-md border border-border bg-card px-1 text-[11px] text-muted-foreground focus:outline-none"
+        className="h-5 rounded-md border border-border bg-card px-1 text-[length:var(--font-status-bar)] text-muted-foreground focus:outline-none"
         value={compilerBackend}
         onChange={(e) => setCompilerBackend(e.target.value as "tectonic" | "texlive")}
       >
@@ -98,7 +98,7 @@ export function BottomBar() {
       <span className="flex-1" />
 
       {/* Git branch */}
-      <span className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground">
+      <span className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[length:var(--font-status-bar)] text-muted-foreground">
         <GitBranchIcon className="size-3" />
         main
       </span>

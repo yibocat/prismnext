@@ -31,7 +31,7 @@ export function WelcomeScreen() {
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Drag region for macOS titlebar */}
-      <div className="drag-region h-[var(--titlebar-height)] shrink-0" />
+      <div className="drag-region h-[var(--height-welcome-titlebar)] shrink-0" />
 
       {/* Main content */}
       <div className="flex flex-1 flex-col items-center justify-center p-8">
@@ -54,7 +54,7 @@ export function WelcomeScreen() {
           <div className="w-full max-w-md">
             <div className="mb-3 flex items-center gap-2 px-1">
               <ClockIcon className="size-4 text-muted-foreground" />
-              <span className="font-medium text-muted-foreground text-sm">
+              <span className="font-medium text-muted-foreground text-[length:var(--font-session-item)]">
                 Recent Projects
               </span>
             </div>
@@ -72,10 +72,10 @@ export function WelcomeScreen() {
                     >
                       <FolderOpenIcon className="size-4 shrink-0 text-muted-foreground" />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium text-sm">
+                        <div className="truncate font-medium text-[length:var(--font-session-item)]">
                           {project.name}
                         </div>
-                        <div className="truncate text-muted-foreground text-xs">
+                        <div className="truncate text-muted-foreground text-[length:var(--font-session-item)]">
                           {project.path}
                         </div>
                       </div>
@@ -99,7 +99,7 @@ export function WelcomeScreen() {
         )}
 
         {/* Footer */}
-        <div className="mt-8 text-muted-foreground text-sm">v0.1.0</div>
+        <div className="mt-8 text-muted-foreground text-[length:var(--font-session-item)]">v0.1.0</div>
       </div>
     </div>
   );

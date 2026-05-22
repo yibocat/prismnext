@@ -35,12 +35,12 @@ export class ChatErrorBoundary extends Component<Props, State> {
       if (this.props.fallback) return this.props.fallback;
       return (
         <div className="flex size-full flex-col items-center justify-center gap-3 p-4">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-[length:var(--font-chat-message)] text-muted-foreground">
             Chat unavailable due to a rendering error.
           </p>
           <button
             onClick={this.handleReset}
-            className="rounded-md bg-muted px-3 py-1 text-sm text-foreground transition-colors hover:bg-muted/80"
+            className="rounded-md bg-muted px-3 py-1 text-[length:var(--font-chat-message)] text-foreground transition-colors hover:bg-muted/80"
           >
             Retry
           </button>

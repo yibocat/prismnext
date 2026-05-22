@@ -133,14 +133,14 @@ export function PdfPreview() {
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Toolbar */}
-      <div className="flex h-8 shrink-0 items-center gap-1 border-b border-border bg-card px-2">
+      <div className="flex h-[var(--height-preview-thin-toolbar)] shrink-0 items-center gap-1 border-b border-border bg-card px-2">
         {isCompiling && (
-          <span className="flex items-center gap-1 text-[11px] text-yellow-500">
+          <span className="flex items-center gap-1 text-[length:var(--font-toolbar-label)] text-yellow-500">
             <LoaderIcon className="size-3 animate-spin" />
           </span>
         )}
         {compileError && (
-          <span className="flex items-center gap-1 text-[11px] text-red-500">
+          <span className="flex items-center gap-1 text-[length:var(--font-toolbar-label)] text-red-500">
             <AlertCircleIcon className="size-3" />
           </span>
         )}
@@ -152,7 +152,7 @@ export function PdfPreview() {
             <button type="button" className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" onClick={handlePrevPage} disabled={currentPage <= 1}>
               <ChevronLeftIcon className="size-3.5" />
             </button>
-            <span className="min-w-[54px] text-center text-[11px]">{currentPage}/{totalPages}</span>
+            <span className="min-w-[54px] text-center text-[length:var(--font-page-number)]">{currentPage}/{totalPages}</span>
             <button type="button" className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" onClick={handleNextPage} disabled={currentPage >= totalPages}>
               <ChevronRightIcon className="size-3.5" />
             </button>
@@ -165,7 +165,7 @@ export function PdfPreview() {
 
             {/* Zoom preset dropdown */}
             <select
-              className="h-6 rounded-md border border-border bg-card px-1 text-[11px] text-muted-foreground focus:outline-none"
+              className="h-6 rounded-md border border-border bg-card px-1 text-[length:var(--font-select)] text-muted-foreground focus:outline-none"
               value={fitMode || `${Math.round(scale * 100)}%`}
               onChange={(e) => handleZoomPreset(e.target.value)}
             >
@@ -191,15 +191,15 @@ export function PdfPreview() {
       {/* Content */}
       <div ref={containerRef} className="flex-1 overflow-hidden">
         {!hasPdf && !compileError && !isCompiling && (
-          <div className="flex h-full items-center justify-center text-[13px] text-muted-foreground">
+          <div className="flex h-full items-center justify-center text-[length:var(--font-empty-state)] text-muted-foreground">
             Compile to preview PDF
           </div>
         )}
         {compileError && !hasPdf && (
           <div className="flex h-full flex-col items-center justify-center gap-2 p-4">
             <AlertCircleIcon className="size-6 text-red-500" />
-            <p className="text-sm text-red-500">Compilation Failed</p>
-            <pre className="max-h-32 max-w-md overflow-auto rounded-md bg-muted p-2 text-xs">
+            <p className="text-[length:var(--font-error)] text-red-500">Compilation Failed</p>
+            <pre className="max-h-32 max-w-md overflow-auto rounded-md bg-muted p-2 text-[length:var(--font-select)]">
               {compileError}
             </pre>
           </div>

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { MAX_RECENT_PROJECTS } from "@/styles/constants";
 
 interface RecentProject {
   path: string;
@@ -12,8 +13,6 @@ interface ProjectState {
   addRecentProject: (path: string) => void;
   removeRecentProject: (path: string) => void;
 }
-
-const MAX_RECENT_PROJECTS = 10;
 
 export const useProjectStore = create<ProjectState>()(
   persist(

@@ -39,7 +39,7 @@ function toolResultToContentBlock(part: any): ContentBlock | undefined {
 
 const TextPart = memo(function TextPart({ text }: { text: string }) {
   return (
-    <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed">
+    <div className="prose prose-sm dark:prose-invert max-w-none text-[length:var(--font-chat-message)] leading-relaxed">
       <MarkdownRenderer content={text} />
     </div>
   );

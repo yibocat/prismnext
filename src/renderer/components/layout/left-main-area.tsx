@@ -85,7 +85,7 @@ export function LeftMainArea() {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
+                    className="flex items-center gap-1.5 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
                   >
                     <FolderOpenIcon className="size-3" />
                     <span className="truncate max-w-[120px]">{projectLabel}</span>
@@ -99,11 +99,11 @@ export function LeftMainArea() {
                         <DropdownMenuItem
                           key={p.path}
                           onClick={() => handleSwitchProject(p.path)}
-                          className="text-xs"
+                          className="text-[length:var(--font-chat-meta)]"
                         >
                           <FolderOpenIcon className="size-3.5 shrink-0" />
                           <span className="truncate">{p.name}</span>
-                          <span className="ml-auto text-[10px] text-muted-foreground/50 truncate max-w-[120px]">
+                          <span className="ml-auto text-[length:var(--font-path)] text-muted-foreground/50 truncate max-w-[120px]">
                             {p.path}
                           </span>
                         </DropdownMenuItem>
@@ -111,7 +111,7 @@ export function LeftMainArea() {
                       <DropdownMenuSeparator />
                     </>
                   )}
-                  <DropdownMenuItem onClick={handleOpenProject} className="text-xs">
+                  <DropdownMenuItem onClick={handleOpenProject} className="text-[length:var(--font-chat-meta)]">
                     <FolderPlusIcon className="size-3.5" />
                     <span>Open new folder…</span>
                   </DropdownMenuItem>
@@ -122,7 +122,7 @@ export function LeftMainArea() {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
+                    className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
                   >
                     <span>{currentAgent?.name || "CLI"}</span>
                     <ChevronDownIcon className="size-3" />
@@ -137,7 +137,7 @@ export function LeftMainArea() {
                     >
                       <span>{a.name}</span>
                       {selectedAgent === a.id && (
-                        <span className="ml-auto text-[10px] text-muted-foreground">active</span>
+                        <span className="ml-auto text-[length:var(--font-badge)] text-muted-foreground">active</span>
                       )}
                     </DropdownMenuItem>
                   ))}
@@ -156,7 +156,7 @@ export function LeftMainArea() {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
+                    className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
                   >
                     <span>{currentMode?.name || "Mode"}</span>
                     <ChevronDownIcon className="size-3" />
@@ -170,7 +170,7 @@ export function LeftMainArea() {
                     >
                       <span>{m.name}</span>
                       {agentMode === m.id && (
-                        <span className="ml-auto text-[10px] text-muted-foreground">active</span>
+                        <span className="ml-auto text-[length:var(--font-badge)] text-muted-foreground">active</span>
                       )}
                     </DropdownMenuItem>
                   ))}
@@ -191,7 +191,7 @@ export function LeftMainArea() {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
+                    className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
                   >
                     <span>{currentMode?.name || "Mode"}</span>
                     <ChevronDownIcon className="size-3" />
@@ -205,7 +205,7 @@ export function LeftMainArea() {
                     >
                       <span>{m.name}</span>
                       {agentMode === m.id && (
-                        <span className="ml-auto text-[10px] text-muted-foreground">active</span>
+                        <span className="ml-auto text-[length:var(--font-badge)] text-muted-foreground">active</span>
                       )}
                     </DropdownMenuItem>
                   ))}

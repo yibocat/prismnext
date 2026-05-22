@@ -41,7 +41,7 @@ function EditWidget({
   const isLoading = !toolResult;
 
   return (
-    <div className="my-2 rounded-lg border border-border bg-card text-xs overflow-hidden">
+    <div className="my-2 rounded-lg border border-border bg-card text-[length:var(--font-code)] overflow-hidden">
       <button
         type="button"
         className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/50 transition-colors"
@@ -58,7 +58,7 @@ function EditWidget({
         />
       </button>
       {expanded && (
-        <div className="border-t border-border bg-muted/30 px-3 py-2 font-mono text-xs space-y-1">
+        <div className="border-t border-border bg-muted/30 px-3 py-2 font-mono text-[length:var(--font-code)] space-y-1">
           {toolUse.input?.old_string && (
             <div>
               <span className="text-red-500 select-none">- </span>
@@ -98,7 +98,7 @@ function WriteWidget({
   const isLoading = !toolResult;
 
   return (
-    <div className="my-2 flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs">
+    <div className="my-2 flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-[length:var(--font-code)]">
       <StatusIcon isLoading={isLoading} isError={!!isError} />
       <FileIcon className="size-3.5 text-blue-500" />
       <span className="font-medium truncate">{fileName}</span>
@@ -124,7 +124,7 @@ function BashWidget({
   const isLoading = !toolResult;
 
   return (
-    <div className="my-2 rounded-lg border border-border bg-card text-xs overflow-hidden">
+    <div className="my-2 rounded-lg border border-border bg-card text-[length:var(--font-code)] overflow-hidden">
       <button
         type="button"
         className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/50 transition-colors"
@@ -138,7 +138,7 @@ function BashWidget({
         />
       </button>
       {expanded && toolResult?.content && (
-        <div className="border-t border-border bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-300 whitespace-pre-wrap">
+        <div className="border-t border-border bg-zinc-950 px-3 py-2 font-mono text-[length:var(--font-code)] text-zinc-300 whitespace-pre-wrap">
           {typeof toolResult.content === "string"
             ? toolResult.content.slice(0, 500)
             : JSON.stringify(toolResult.content, null, 2).slice(0, 500)}
@@ -156,7 +156,7 @@ function TodoWriteWidget({ toolUse }: { toolUse: ContentBlock }) {
   if (todos.length === 0) return null;
 
   return (
-    <div className="my-2 rounded-lg border border-border bg-card text-xs overflow-hidden">
+    <div className="my-2 rounded-lg border border-border bg-card text-[length:var(--font-code)] overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60">
         <ListTodoIcon className="size-3.5 text-purple-500" />
         <span className="font-medium">Task Plan</span>
@@ -208,11 +208,11 @@ export function ThinkingWidget({ thinking }: { thinking: string }) {
         onClick={() => setExpanded(!expanded)}
       >
         <BrainIcon className="size-3.5" />
-        <span className="text-xs">
+        <span className="text-[length:var(--font-code)]">
           {isStreaming ? "Thinking..." : `Thought for ${elapsed}s`}
         </span>
         {!expanded && summary && (
-          <span className="text-xs text-muted-foreground/60 truncate max-w-[200px]">
+          <span className="text-[length:var(--font-code)] text-muted-foreground/60 truncate max-w-[200px]">
             {summary}
           </span>
         )}
@@ -221,7 +221,7 @@ export function ThinkingWidget({ thinking }: { thinking: string }) {
         />
       </button>
       {expanded && (
-        <div className="mt-1.5 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed animate-in fade-in slide-in-from-top-1 duration-150">
+        <div className="mt-1.5 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-[length:var(--font-code)] text-muted-foreground whitespace-pre-wrap leading-relaxed animate-in fade-in slide-in-from-top-1 duration-150">
           {thinking}
         </div>
       )}
@@ -256,7 +256,7 @@ function AskUserQuestionWidget({
 
   if (!question && !options.length) {
     return (
-      <div className="my-2 flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs">
+      <div className="my-2 flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-[length:var(--font-code)]">
         <StatusIcon isLoading={isLoading} isError={!!isError} />
         <MessageCircleQuestionIcon className="size-3.5 text-blue-500" />
         <span className="font-medium">{isLoading ? "Asking question..." : "Asked question"}</span>
@@ -266,7 +266,7 @@ function AskUserQuestionWidget({
 
   return (
     <div className={cn(
-      "my-2 rounded-lg border px-4 py-3 text-xs transition-colors",
+      "my-2 rounded-lg border px-4 py-3 text-[length:var(--font-code)] transition-colors",
       needsUserAnswer ? "border-blue-500/40 bg-blue-500/5" : "border-blue-500/20 bg-blue-500/[0.02]",
     )}>
       <div className="flex items-center gap-2 mb-2">
@@ -283,7 +283,7 @@ function AskUserQuestionWidget({
             type="button"
             disabled={!needsUserAnswer}
             className={cn(
-              "flex items-center gap-2 rounded-md px-3 py-2 text-left text-xs transition-colors",
+              "flex items-center gap-2 rounded-md px-3 py-2 text-left text-[length:var(--font-code)] transition-colors",
               needsUserAnswer && "hover:bg-blue-500/10 cursor-pointer",
               !needsUserAnswer && "cursor-default opacity-60",
             )}
@@ -311,7 +311,7 @@ function GenericWidget({
   const isError = toolResult?.is_error;
 
   return (
-    <div className="my-2 flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs">
+    <div className="my-2 flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-[length:var(--font-code)]">
       <StatusIcon isLoading={isLoading} isError={!!isError} />
       <WrenchIcon className="size-3.5 text-muted-foreground" />
       <span className="font-medium">{toolUse.name}</span>

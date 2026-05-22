@@ -113,7 +113,7 @@ export function TitleBar() {
   const showMacSpacer = isMac && !isFullscreen && !isMaximized;
 
   return (
-    <div className="drag-region relative flex h-[38px] shrink-0 items-center border-b border-border bg-card px-2.5 select-none">
+    <div className="drag-region relative flex h-[var(--height-titlebar)] shrink-0 items-center border-b border-border bg-card px-2.5 select-none">
       {/* ── Left: Traffic lights spacer + Project + Sidebar toggle ── */}
       <div className="z-10 flex items-center gap-1">
         {showMacSpacer && <div className="w-[60px]" />}
@@ -134,7 +134,7 @@ export function TitleBar() {
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium text-foreground hover:bg-muted transition-colors"
+              className="flex items-center gap-1 rounded px-1.5 py-1 text-[length:var(--font-toolbar-label)] font-medium text-foreground hover:bg-muted transition-colors"
             >
               <FolderOpenIcon className="size-3.5 text-muted-foreground" />
               <span className="max-w-[140px] truncate">{projectName}</span>
@@ -146,29 +146,29 @@ export function TitleBar() {
               recentProjects.map((p) => (
                 <DropdownMenuItem
                   key={p.path}
-                  className="flex items-center gap-2 text-[13px]"
+                  className="flex items-center gap-2 text-[length:var(--font-menu-item)]"
                   onClick={() => handleSwitchProject(p.path)}
                 >
                   <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="flex-1 truncate">{p.name}</span>
-                  <span className="shrink-0 text-[10px] text-muted-foreground/60 truncate max-w-[120px]">{p.path}</span>
+                  <span className="shrink-0 text-[length:var(--font-path)] text-muted-foreground/60 truncate max-w-[120px]">{p.path}</span>
                 </DropdownMenuItem>
               ))
             ) : (
-              <div className="px-2 py-3 text-[12px] text-muted-foreground text-center">
+              <div className="px-2 py-3 text-[length:var(--font-empty-state)] text-muted-foreground text-center">
                 No recent projects
               </div>
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              className="flex items-center gap-2 text-[13px]"
+              className="flex items-center gap-2 text-[length:var(--font-menu-item)]"
               onClick={handleNewProject}
             >
               <FolderPlusIcon className="size-3.5 shrink-0" />
               New Project...
             </DropdownMenuItem>
             <DropdownMenuItem
-              className="flex items-center gap-2 text-[13px]"
+              className="flex items-center gap-2 text-[length:var(--font-menu-item)]"
               onClick={handleOpenProject}
             >
               <FolderOpenIcon className="size-3.5 shrink-0" />
@@ -225,11 +225,11 @@ export function TitleBar() {
 
         <button
           type="button"
-          className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[length:var(--font-toolbar-label)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           title="Command palette"
         >
           <SearchIcon className="size-3" />
-          <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[10px] text-muted-foreground">
+          <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[length:var(--font-kbd)] text-muted-foreground">
             ⌘K
           </kbd>
         </button>

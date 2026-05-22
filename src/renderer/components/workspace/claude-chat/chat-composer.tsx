@@ -330,7 +330,7 @@ export function ChatComposer() {
             style={{ left: pickerPos.left, bottom: pickerPos.bottom, zIndex: 9999 }}
           >
             <div className="p-1">
-              <div className="px-2 py-1 font-medium text-muted-foreground text-xs">Model</div>
+              <div className="px-2 py-1 font-medium text-muted-foreground text-[length:var(--font-chat-meta)]">Model</div>
               {[
                 { id: null as null, name: "Default", desc: "Use system Claude Code setting", icon: <SparklesIcon className="size-3.5" /> },
                 { id: "sonnet" as const, name: "Sonnet", desc: "Fast, efficient for most tasks", icon: <ZapIcon className="size-3.5" /> },
@@ -340,15 +340,15 @@ export function ChatComposer() {
                 <button
                   key={m.id ?? "default"}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm transition-colors",
+                    "flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-[length:var(--font-composer)] transition-colors",
                     selectedModel === m.id ? "bg-accent text-accent-foreground" : "hover:bg-muted",
                   )}
                   onClick={() => setSelectedModel(m.id)}
                 >
                   {m.icon}
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium text-xs">{m.name}</div>
-                    <div className="truncate text-muted-foreground text-xs">{m.desc}</div>
+                    <div className="font-medium text-[length:var(--font-chat-meta)]">{m.name}</div>
+                    <div className="truncate text-muted-foreground text-[length:var(--font-chat-meta)]">{m.desc}</div>
                   </div>
                   {selectedModel === m.id && <CheckIcon className="size-3 shrink-0" />}
                 </button>
@@ -357,8 +357,8 @@ export function ChatComposer() {
             <div className="border-border border-t" />
             <div className="p-2">
               <div className="mb-1.5 flex items-center justify-between px-1">
-                <span className="font-medium text-muted-foreground text-xs">Effort</span>
-                <span className="text-muted-foreground text-xs">
+                <span className="font-medium text-muted-foreground text-[length:var(--font-chat-meta)]">Effort</span>
+                <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">
                   {effortLevel === "low" ? "Low" : effortLevel === "medium" ? "Medium" : "High"}
                 </span>
               </div>
@@ -367,7 +367,7 @@ export function ChatComposer() {
                   <button
                     key={level}
                     className={cn(
-                      "flex-1 rounded-md py-1 text-center font-medium text-xs transition-colors",
+                      "flex-1 rounded-md py-1 text-center font-medium text-[length:var(--font-chat-meta)] transition-colors",
                       effortLevel === level ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80",
                     )}
                     onClick={() => setEffortLevel(level)}
@@ -388,18 +388,18 @@ export function ChatComposer() {
             slashCommands.map((cmd) => (
               <button
                 key={cmd.name}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-muted"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[length:var(--font-composer)] transition-colors hover:bg-muted"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   cmd.action();
                 }}
               >
-                <span className="font-mono font-medium text-xs text-primary">/{cmd.name}</span>
-                <span className="text-muted-foreground text-xs">{cmd.desc}</span>
+                <span className="font-mono font-medium text-[length:var(--font-chat-meta)] text-primary">/{cmd.name}</span>
+                <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">{cmd.desc}</span>
               </button>
             ))
           ) : (
-            <div className="px-3 py-2 text-muted-foreground text-xs text-center">
+            <div className="px-3 py-2 text-muted-foreground text-[length:var(--font-chat-meta)] text-center">
               No commands found
             </div>
           )}
@@ -431,9 +431,9 @@ export function ChatComposer() {
                 onMouseEnter={() => setMentionIndex(i)}
               >
                 {getFileIcon(file)}
-                <span className="truncate font-mono text-sm">{fileName}</span>
+                <span className="truncate font-mono text-[length:var(--font-composer)]">{fileName}</span>
                 {dirPath && (
-                  <span className="ml-auto shrink-0 font-mono text-muted-foreground text-xs">{dirPath}</span>
+                  <span className="ml-auto shrink-0 font-mono text-muted-foreground text-[length:var(--font-chat-meta)]">{dirPath}</span>
                 )}
               </button>
             );
@@ -448,7 +448,7 @@ export function ChatComposer() {
             {pinnedContexts.map((ctx, i) => (
               <span
                 key={`${ctx.label}-${i}`}
-                className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 font-mono text-muted-foreground text-xs"
+                className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 font-mono text-muted-foreground text-[length:var(--font-chat-meta)]"
               >
                 {ctx.label}
                 <button
@@ -469,7 +469,7 @@ export function ChatComposer() {
           onChange={handleInput}
           onKeyDown={handleKeyDown}
           placeholder="Ask me anything... (@ to mention files, / for commands)"
-          className="max-h-40 min-h-10 w-full resize-none bg-transparent px-4 py-2 text-sm outline-none placeholder:text-muted-foreground"
+          className="max-h-40 min-h-10 w-full resize-none bg-transparent px-4 py-2 text-[length:var(--font-composer)] outline-none placeholder:text-muted-foreground"
           rows={1}
         />
 
@@ -478,7 +478,7 @@ export function ChatComposer() {
             ref={modelButtonRef}
             type="button"
             onClick={() => setModelPickerOpen((v) => !v)}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground text-xs transition-colors hover:bg-muted hover:text-foreground"
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground text-[length:var(--font-chat-meta)] transition-colors hover:bg-muted hover:text-foreground"
           >
             <span>{modelLabel}</span>
             <span className="text-muted-foreground/60">

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { AUTO_COMPILE_DEBOUNCE } from "@/styles/constants";
 import { useDocumentStore } from "./document-store";
 import { resolveCompileTarget } from "@/lib/resolve-tex-root";
 
@@ -232,7 +233,7 @@ export const useCompileStore = create<CompileState>()(
             // compile() already calls saveAllFiles() internally
             get().compile(projectRoot, resolved.targetPath);
           }
-        }, 2000);
+        }, AUTO_COMPILE_DEBOUNCE);
       },
 
       clearCompileState: () => {

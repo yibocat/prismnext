@@ -1,0 +1,46 @@
+/* ──── Layout Tokens ──── */
+/* App shell: TitleBar, Sidebar, BottomBar, RightArea */
+
+:root {
+  /* ── Heights ── */
+  --height-titlebar:           var(--size-h-38);  /* main title bar */
+  --height-welcome-titlebar:   var(--size-h-38);  /* welcome page title bar */
+  --height-right-area-toolbar: var(--size-h-32);  /* right area Files/Git/Browser toolbar */
+  --height-sessions-header:    var(--size-h-32);  /* left sidebar Sessions header */
+  --height-files-header:       var(--size-h-32);  /* workspace sidebar Files header */
+  --height-outline-header:     var(--size-h-32);  /* workspace sidebar Outline header */
+  --height-mode-selector:      var(--size-h-32);  /* right sidebar mode selector */
+  --height-sidebar-brand:      var(--size-h-48);  /* workspace sidebar Prism header */
+  --height-status-bar:         var(--size-h-24);  /* bottom status bar */
+
+  /* ── Sidebar widths ── */
+  --layout-sidebar-left-default: 240px;
+  --layout-sidebar-left-min: 160px;
+  --layout-sidebar-left-max: 420px;
+  --layout-sidebar-right-default: 220px;
+  --layout-sidebar-right-min: 180px;
+  --layout-sidebar-right-max: 380px;
+
+  /* ── Right area ── */
+  --layout-right-area-default: 650px;
+  --layout-right-area-min: 350px;
+  --layout-right-area-max: 1100px;
+
+  /* ── Resize handle ── */
+  --layout-resize-handle: 5px;
+
+  /* ── Breakpoints ── */
+  --layout-breakpoint-mobile: 768px;
+
+  /* ── Font tokens ── */
+  --font-sidebar-section: var(--font-size-11);  /* Sessions, Files, Outline headers */
+  --font-status-bar:      var(--font-size-11);  /* bottom bar text, compiler select */
+  --font-toolbar-tab:     var(--font-size-12);  /* right-area toolbar tabs */
+  --font-toolbar-label:   var(--font-size-11);  /* toolbar file name, compile status */
+  --font-sidebar-footer:  var(--font-size-12);  /* sidebar footer version text */
+  --font-page-number:     var(--font-size-11);  /* PDF page indicator */
+  --font-select:          var(--font-size-11);  /* <select> dropdowns */
+  --font-menu-item:       var(--font-size-13);  /* dropdown / context menu */
+  --font-badge:           var(--font-size-10);  /* status badges */
+  --font-hint:            var(--font-size-10);  /* inline hints */
+}

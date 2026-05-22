@@ -41,13 +41,13 @@ export function TabBar() {
   if (editorTabs.length === 0) return null;
 
   return (
-    <div className="flex h-9 shrink-0 items-center border-b border-border bg-card select-none">
+    <div className="flex h-[var(--height-tab-bar)] shrink-0 items-center border-b border-border bg-card select-none">
       <div className="flex flex-1 items-center gap-0.5 px-1.5 min-w-0 overflow-hidden">
         {editorTabs.map((tab) => (
           <div
             key={tab.id}
             className={cn(
-              "group flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-[12px] cursor-default transition-colors max-w-[180px]",
+              "group flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-[length:var(--font-tab-label)] cursor-default transition-colors max-w-[180px]",
               tab.id === activeEditorTab
                 ? "bg-muted text-foreground"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -80,7 +80,7 @@ export function TabBar() {
         {isTexFile && (
           <button
             type="button"
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-[length:var(--font-tab-label)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             onClick={handleCompile}
             disabled={isCompiling}
           >

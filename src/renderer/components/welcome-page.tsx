@@ -53,7 +53,7 @@ function RecentProjects({ projectOpen }: { projectOpen: (path: string) => Promis
 
   return (
     <div className="w-full max-w-xs">
-      <p className="mb-2 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+      <p className="mb-2 text-[length:var(--font-sidebar-section)] font-medium text-muted-foreground/60 uppercase tracking-wider">
         Recent
       </p>
       {statuses.map((p) => (
@@ -61,7 +61,7 @@ function RecentProjects({ projectOpen }: { projectOpen: (path: string) => Promis
           {p.exists ? (
             <button
               type="button"
-              className="flex flex-1 items-center gap-2 min-w-0 text-[13px] text-muted-foreground hover:text-foreground transition-colors text-left"
+              className="flex flex-1 items-center gap-2 min-w-0 text-[length:var(--font-button)] text-muted-foreground hover:text-foreground transition-colors text-left"
               onClick={async () => {
                 const ok = await projectOpen(p.path);
                 if (!ok) return;
@@ -73,7 +73,7 @@ function RecentProjects({ projectOpen }: { projectOpen: (path: string) => Promis
               <span className="truncate">{p.name}</span>
             </button>
           ) : (
-            <div className="flex flex-1 items-center gap-2 min-w-0 text-[13px] text-muted-foreground/30">
+            <div className="flex flex-1 items-center gap-2 min-w-0 text-[length:var(--font-button)] text-muted-foreground/30">
               <AlertCircleIcon className="size-3.5 shrink-0" />
               <span className="truncate">{p.name}</span>
             </div>
@@ -142,7 +142,7 @@ export function WelcomePage() {
   return (
     <div className="flex h-full w-full flex-col bg-background">
       {/* Minimal titlebar */}
-      <div className="drag-region flex h-[38px] shrink-0 items-center justify-end px-3 gap-1">
+      <div className="drag-region flex h-[var(--height-welcome-titlebar)] shrink-0 items-center justify-end px-3 gap-1">
         <button
           type="button"
           className="no-drag flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
@@ -178,12 +178,12 @@ export function WelcomePage() {
 
         {/* New project */}
         <div className="w-full max-w-xs space-y-2 mb-6">
-          <p className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+          <p className="text-[length:var(--font-sidebar-section)] font-medium text-muted-foreground/60 uppercase tracking-wider">
             New Project
           </p>
           <button
             type="button"
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[length:var(--font-button)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
             onClick={handleSelectParent}
           >
             <FolderOpenIcon className="size-4 shrink-0 opacity-60" />
@@ -191,7 +191,7 @@ export function WelcomePage() {
               {parentPath ? parentPath.split("/").pop() || parentPath : "Select location"}
             </span>
             {parentPath && (
-              <span className="ml-auto text-[10px] text-muted-foreground/40 truncate max-w-[120px]">
+              <span className="ml-auto text-[length:var(--font-path)] text-muted-foreground/40 truncate max-w-[120px]">
                 {parentPath}
               </span>
             )}
@@ -203,7 +203,7 @@ export function WelcomePage() {
                 <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground/30" />
                 <input
                   type="text"
-                  className="flex-1 bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+                  className="flex-1 bg-transparent text-[length:var(--font-input)] text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
                   placeholder="Project name"
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value)}
@@ -213,14 +213,14 @@ export function WelcomePage() {
               </div>
 
               {projectName.trim() && (
-                <p className="px-3 text-[10px] text-muted-foreground/40 truncate font-mono">
+                <p className="px-3 text-[length:var(--font-path)] text-muted-foreground/40 truncate font-mono">
                   {fullPath}
                 </p>
               )}
 
               <button
                 type="button"
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-[13px] font-medium text-background hover:bg-foreground/90 transition-colors disabled:opacity-30"
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-[length:var(--font-button)] font-medium text-background hover:bg-foreground/90 transition-colors disabled:opacity-30"
                 disabled={!projectName.trim() || creating}
                 onClick={handleCreate}
               >
@@ -236,12 +236,12 @@ export function WelcomePage() {
 
         {/* Open existing */}
         <div className="w-full max-w-xs mb-6">
-          <p className="mb-2 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+          <p className="mb-2 text-[length:var(--font-sidebar-section)] font-medium text-muted-foreground/60 uppercase tracking-wider">
             Open
           </p>
           <button
             type="button"
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[length:var(--font-button)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
             onClick={handleOpen}
           >
             <FolderOpenIcon className="size-4 shrink-0 opacity-60" />

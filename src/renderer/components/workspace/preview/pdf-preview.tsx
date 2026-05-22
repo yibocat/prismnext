@@ -221,13 +221,13 @@ export function PdfPreview() {
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Toolbar header */}
-      <div className="drag-region flex h-[calc(36px+var(--titlebar-height))] shrink-0 items-center gap-2 border-border border-b bg-muted/30 px-3 pt-[var(--titlebar-height)]">
+      <div className="drag-region flex h-[var(--height-preview-toolbar)] shrink-0 items-center gap-2 border-border border-b bg-muted/30 px-3">
         {/* Compiler selector */}
         <Select
           value={compilerBackend}
           onValueChange={(v) => setCompilerBackend(v as "tectonic" | "texlive")}
         >
-          <SelectTrigger className="h-7 w-28 text-xs">
+          <SelectTrigger className="h-7 w-28 text-[length:var(--font-select)]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -243,7 +243,7 @@ export function PdfPreview() {
         {/* Compile button */}
         <Button
           size="sm"
-          className="h-7 gap-1 text-xs"
+          className="h-7 gap-1 text-[length:var(--font-select)]"
           onClick={handleCompile}
           disabled={isCompiling || !activeFileId}
         >
@@ -274,7 +274,7 @@ export function PdfPreview() {
 
         {/* Error indicator */}
         {compileError && (
-          <div className="flex items-center gap-1 text-destructive text-xs">
+          <div className="flex items-center gap-1 text-destructive text-[length:var(--font-select)]">
             <AlertCircleIcon className="size-3" />
             <span>Error</span>
           </div>
@@ -294,7 +294,7 @@ export function PdfPreview() {
             >
               <ChevronLeftIcon className="size-3" />
             </Button>
-            <span className="text-xs">
+            <span className="text-[length:var(--font-select)]">
               {currentPage} / {totalPages}
             </span>
             <Button
@@ -324,7 +324,7 @@ export function PdfPreview() {
               value={fitMode || `${Math.round(scale * 100)}%`}
               onValueChange={handleZoomPreset}
             >
-              <SelectTrigger className="h-7 w-20 text-xs">
+              <SelectTrigger className="h-7 w-20 text-[length:var(--font-select)]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -359,8 +359,8 @@ export function PdfPreview() {
         {!hasPdf && !compileError && (
           <div className="flex h-full flex-col items-center justify-center gap-4">
             <div className="text-center">
-              <p className="font-medium text-muted-foreground text-sm">PDF Preview</p>
-              <p className="text-muted-foreground/60 text-xs">
+              <p className="font-medium text-muted-foreground text-[length:var(--font-placeholder)]">PDF Preview</p>
+              <p className="text-muted-foreground/60 text-[length:var(--font-select)]">
                 Press Cmd+Enter to compile
               </p>
             </div>
@@ -379,8 +379,8 @@ export function PdfPreview() {
           <div className="flex h-full flex-col items-center justify-center gap-4 p-4">
             <div className="max-w-md text-center">
               <AlertCircleIcon className="mx-auto mb-2 size-8 text-destructive" />
-              <p className="font-medium text-sm">Compilation Failed</p>
-              <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-muted p-3 text-left text-xs">
+              <p className="font-medium text-[length:var(--font-placeholder)]">Compilation Failed</p>
+              <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-muted p-3 text-left text-[length:var(--font-select)]">
                 {compileError}
               </pre>
             </div>

@@ -73,7 +73,7 @@ export function ChatTabBar() {
           <div
             key={tab.id}
             className={cn(
-              "group relative flex min-w-0 max-w-[160px] items-center gap-1 border-b-2 px-2.5 py-1.5 text-xs transition-colors",
+              "group relative flex min-w-0 max-w-[160px] items-center gap-1 border-b-2 px-2.5 py-1.5 text-[length:var(--font-tab-label)] transition-colors",
               tab.id === activeTabId
                 ? "border-primary bg-muted/50 text-foreground"
                 : "border-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground",
@@ -110,7 +110,7 @@ export function ChatTabBar() {
       <div className="flex shrink-0 items-center gap-1 border-l border-border px-1.5">
         <BotIcon className="size-3 text-muted-foreground" />
         <select
-          className="h-6 rounded-md border border-border bg-card px-1 text-[11px] text-muted-foreground focus:outline-none"
+          className="h-6 rounded-md border border-border bg-card px-1 text-[length:var(--font-select)] text-muted-foreground focus:outline-none"
           value={selectedAgent}
           onChange={(e) => setSelectedAgent(e.target.value)}
         >

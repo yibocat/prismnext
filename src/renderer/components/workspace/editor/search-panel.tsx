@@ -44,7 +44,7 @@ export function SearchPanel({
   };
 
   return (
-    <div className="flex h-9 items-center gap-2 border-border border-b bg-muted/50 px-2">
+    <div className="flex h-[var(--height-search-panel)] items-center gap-2 border-border border-b bg-muted/50 px-2">
       <Input
         ref={inputRef}
         type="text"
@@ -52,7 +52,7 @@ export function SearchPanel({
         onChange={(e) => onSearchQueryChange(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Search..."
-        className="h-6 w-48 bg-background text-sm"
+        className="h-6 w-48 bg-background text-[length:var(--font-search-input)]"
       />
       <div className="flex items-center gap-0.5">
         <Button
@@ -75,7 +75,7 @@ export function SearchPanel({
         </Button>
       </div>
       {searchQuery && (
-        <span className="text-muted-foreground text-xs">
+        <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">
           {matchCount === 0 ? "No results" : `${currentMatch} of ${matchCount}`}
         </span>
       )}

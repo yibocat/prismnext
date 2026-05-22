@@ -142,15 +142,15 @@ export function SessionSelector() {
             }}
           >
             <div className="flex items-center justify-between px-3 py-1.5 border-border border-b">
-              <span className="font-medium text-muted-foreground text-xs">Sessions</span>
+              <span className="font-medium text-muted-foreground text-[length:var(--font-session-item)]">Sessions</span>
               <button
                 type="button"
-                className="bg-red-500 text-white px-2 py-0.5 rounded text-xs"
+                className="bg-red-500 text-white px-2 py-0.5 rounded text-[length:var(--font-session-item)]"
                 onClick={() => { console.log("[session-selector] TEST BTN CLICKED"); alert("TEST"); }}
               >
                 TEST
               </button>
-              {error && <span className="text-destructive text-xs">{error}</span>}
+              {error && <span className="text-destructive text-[length:var(--font-session-item)]">{error}</span>}
             </div>
 
             {loading ? (
@@ -158,7 +158,7 @@ export function SessionSelector() {
                 <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
               </div>
             ) : sessions.length === 0 ? (
-              <div className="px-3 py-3 text-muted-foreground text-xs text-center">
+              <div className="px-3 py-3 text-muted-foreground text-[length:var(--font-session-item)] text-center">
                 No previous sessions
               </div>
             ) : (
@@ -166,15 +166,15 @@ export function SessionSelector() {
                 {sessions.map((s) => (
                   <div
                     key={s.id}
-                    className="group flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-muted"
+                    className="group flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-[length:var(--font-file-tree-node)] transition-colors hover:bg-muted"
                     onClick={() => handleLoadSession(s.id)}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => { if (e.key === "Enter") handleLoadSession(s.id); }}
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs">{s.title}</div>
-                      <div className="text-muted-foreground text-xs">
+                      <div className="truncate text-[length:var(--font-session-item)]">{s.title}</div>
+                      <div className="text-muted-foreground text-[length:var(--font-session-item)]">
                         {relativeTime(s.lastModified)}
                       </div>
                     </div>
@@ -196,7 +196,7 @@ export function SessionSelector() {
 
             <div className="border-border border-t">
               <button
-                className="flex w-full items-center gap-1.5 rounded-b-lg px-3 py-1.5 text-left text-xs transition-colors hover:bg-muted"
+                className="flex w-full items-center gap-1.5 rounded-b-lg px-3 py-1.5 text-left text-[length:var(--font-session-item)] transition-colors hover:bg-muted"
                 onClick={() => {
                   newSession();
                   setOpen(false);

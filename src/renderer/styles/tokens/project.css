@@ -1,0 +1,9 @@
+/* ──── Project Tokens ──── */
+/* Welcome page, project setup dialogs, file management */
+
+:root {
+  --font-button:       var(--font-size-13);  /* action buttons */
+  --font-input:        var(--font-size-13);  /* text inputs */
+  --font-dialog-title: var(--font-size-14);  /* dialog title */
+  --font-dialog-label: var(--font-size-11);  /* dialog description text */
+}
