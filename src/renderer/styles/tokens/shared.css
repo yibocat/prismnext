@@ -1,11 +1,22 @@
 /* ──── Shared Tokens ──── */
 /* Cross-cutting: used by multiple modules */
 
+/* ============================================================
+   Z-Index Layers used by shared/overlay components
+   ============================================================
+   z-overlay (50): All shadcn/ui floating components
+     - Dialog, Sheet (full-screen overlays)
+     - DropdownMenu, ContextMenu (right-click menus)
+     - Select, Popover, HoverCard (anchored popups)
+     - Tooltip (hover hints)
+   ============================================================ */
+
 :root {
-  --font-timestamp:  var(--font-size-10);  /* relative time: "2m ago" */
-  --font-kbd:        var(--font-size-10);  /* keyboard shortcuts: ⌘K */
-  --font-path:       var(--font-size-10);  /* file paths, breadcrumbs */
-  --font-error:      var(--font-size-12);  /* error / validation messages */
+  /* ── Font tokens ── */
+  --font-timestamp:   var(--font-size-10);  /* relative time: "2m ago" */
+  --font-kbd:         var(--font-size-10);  /* keyboard shortcuts: ⌘K */
+  --font-path:        var(--font-size-10);  /* file paths, breadcrumbs */
+  --font-error:       var(--font-size-12);  /* error / validation messages */
   --font-empty-state: var(--font-size-13);  /* empty / placeholder states */
   --font-placeholder: var(--font-size-14);  /* "No files", "Coming soon", "Loading..." */
 }

@@ -115,7 +115,7 @@ export function TitleBar() {
   return (
     <div className="drag-region relative flex h-[var(--height-titlebar)] shrink-0 items-center border-b border-border bg-card px-2.5 select-none">
       {/* ── Left: Traffic lights spacer + Project + Sidebar toggle ── */}
-      <div className="z-10 flex items-center gap-1">
+      <div className="z-[var(--z-base)] flex items-center gap-1">
         {showMacSpacer && <div className="w-[60px]" />}
 
         <button
@@ -191,7 +191,7 @@ export function TitleBar() {
       <div className="flex-1" />
 
       {/* ── Right: Window controls (Win/Linux) + Actions ── */}
-      <div className="z-10 flex items-center gap-1">
+      <div className="z-[var(--z-base)] flex items-center gap-1">
         {!isMac && (
           <>
             <button

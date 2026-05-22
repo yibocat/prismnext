@@ -1,6 +1,13 @@
 /* ──── Editor Tokens ──── */
 /* CodeMirror editor, tabs, file tree (right sidebar), TOC */
 
+/* ============================================================
+   Z-Index Layers used by editor components
+   ============================================================
+   z-base (10):  CodeMirror overview ruler
+   z-above (20): CodeMirror chunk navigator (merge view)
+   ============================================================ */
+
 :root {
   /* ── Heights ── */
   --height-editor-toolbar:     var(--size-h-32);  /* main editor toolbar */

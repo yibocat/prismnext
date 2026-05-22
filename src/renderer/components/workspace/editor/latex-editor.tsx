@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Z_BASE } from "@/styles/constants";
 import { Compartment, EditorState, Prec, Transaction } from "@codemirror/state";
 import {
   EditorView,
@@ -119,7 +120,7 @@ const cmBaseTheme = EditorView.theme({
     position: "absolute",
     insetInlineEnd: "5px",
     top: "2px",
-    zIndex: "10",
+    zIndex: Z_BASE,
   },
   ".cm-chunkButtons button": {
     border: "none",
@@ -813,7 +814,7 @@ export function LatexEditor() {
         <div ref={containerRef} className="absolute inset-0" />
         {/* Diff overview ruler (VSCode-style right-edge markers) */}
         {activeFileChange && overviewMarkers.length > 0 && (
-          <div className="absolute top-0 right-0 z-10 h-full w-[6px] pointer-events-none">
+          <div className="absolute top-0 right-0 z-[var(--z-base)] h-full w-[6px] pointer-events-none">
             {overviewMarkers.map((m, i) => (
               <div
                 key={i}
@@ -825,7 +826,7 @@ export function LatexEditor() {
         )}
         {/* Chunk navigator (shown during merge) */}
         {activeFileChange && mergeChunkInfo.total > 0 && hasNavigatedRef.current && (
-          <div className="absolute top-3 right-3 z-20 flex items-center gap-1 rounded-lg border border-border bg-background/95 px-2 py-1 shadow-lg backdrop-blur-sm">
+          <div className="absolute top-3 right-3 z-[var(--z-above)] flex items-center gap-1 rounded-lg border border-border bg-background/95 px-2 py-1 shadow-lg backdrop-blur-sm">
             <span className="px-1 font-mono text-muted-foreground text-[length:var(--font-toolbar-label)]">
               {mergeChunkInfo.current}/{mergeChunkInfo.total}
             </span>

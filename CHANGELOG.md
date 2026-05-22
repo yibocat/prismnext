@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.2.1
+
+### Design Token System
+- Centralized three-tier token architecture: Base Scale → Module Token → Component
+- `styles/tokens.css`: base scale for heights, fonts, spacing, icons, radius, shadow, z-index, animation
+- `styles/tokens/layout.css`: TitleBar, Sidebars, BottomBar, RightArea tokens
+- `styles/tokens/editor.css`: CodeMirror, tabs, file tree, search panel tokens
+- `styles/tokens/preview.css`: PDF viewer, preview controls tokens
+- `styles/tokens/chat.css`: messages, composer, sessions, tool widgets tokens
+- `styles/tokens/project.css`: welcome page, dialogs tokens
+- `styles/tokens/shared.css`: cross-module tokens (timestamp, kbd, path, error)
+- `styles/constants.ts`: centralized behavioral parameters
+
+### Heights
+- 5 raw values replaced with 15 per-component tokens
+- Each toolbar, header, and bar independently controllable from a single source
+
+### Typography
+- All hardcoded `text-[Npx]`/`text-xs`/`text-sm` replaced with 30 component-level font tokens
+- 11 shadcn/ui components connected to font base scale
+- Each UI element mapped to a specific token under `tokens/*.css`
+
+### Layout
+- Sidebar/panel default widths, resize handle centralized in `constants.ts`
+- Moved `sidebarItem` preset inline, removed `design-tokens.ts` and `sidebar-presets.ts`
+
+### Z-Index
+- 29 scattered z-index values replaced with 4-layer stack: `z-base` | `z-above` | `z-overlay` | `z-top`
+- Module-level documentation in each `tokens/*.css` showing which components use which layer
+
 ## 0.2.0
 
 ### Welcome Page

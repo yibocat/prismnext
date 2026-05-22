@@ -1,6 +1,13 @@
 /* ──── Layout Tokens ──── */
 /* App shell: TitleBar, Sidebar, BottomBar, RightArea */
 
+/* ============================================================
+   Z-Index Layers used by layout components
+   ============================================================
+   z-base (10):  TitleBar buttons, Resize handles (×3), AI FAB
+   z-above (20): (none)
+   ============================================================ */
+
 :root {
   /* ── Heights ── */
   --height-titlebar:           var(--size-h-38);  /* main title bar */

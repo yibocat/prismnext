@@ -138,7 +138,7 @@ export function SessionSelector() {
             style={{
               top: dropdownPos.top,
               right: dropdownPos.right,
-              zIndex: 9999,
+              zIndex: Z_TOP,
             }}
           >
             <div className="flex items-center justify-between px-3 py-1.5 border-border border-b">

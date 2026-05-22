@@ -38,3 +38,10 @@ export const RIGHT_AREA_MIN = 350;
 export const RIGHT_AREA_MAX = 1100;
 
 export const RESIZE_HANDLE_WIDTH = 5;
+
+// ─── Z-Index ───
+
+export const Z_BASE = 10;
+export const Z_ABOVE = 20;
+export const Z_OVERLAY = 50;
+export const Z_TOP = 9999;

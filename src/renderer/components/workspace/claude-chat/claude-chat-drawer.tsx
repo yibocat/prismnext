@@ -114,7 +114,7 @@ export function ClaudeChatDrawer() {
     <div
       ref={containerRef}
       className={cn(
-        "pointer-events-none absolute inset-0 z-10 flex items-end justify-center transition-[padding] duration-300 ease-out",
+        "pointer-events-none absolute inset-0 z-[var(--z-base)] flex items-end justify-center transition-[padding] duration-300 ease-out",
         isExpanded ? "p-0" : "px-4 pt-4 pb-6",
       )}
     >
@@ -257,7 +257,7 @@ export function ClaudeChatDrawer() {
               </ThreadPrimitive.ViewportFooter>
             </ThreadPrimitive.Viewport>
 
-            <ThreadPrimitive.ScrollToBottom className="absolute bottom-24 right-6 flex size-8 items-center justify-center rounded-full border border-border bg-background shadow-md text-muted-foreground hover:text-foreground transition-all hover:shadow-lg z-10">
+            <ThreadPrimitive.ScrollToBottom className="absolute bottom-24 right-6 flex size-8 items-center justify-center rounded-full border border-border bg-background shadow-md text-muted-foreground hover:text-foreground transition-all hover:shadow-lg z-[var(--z-base)]">
               <ArrowDownIcon className="size-4" />
             </ThreadPrimitive.ScrollToBottom>
           </ThreadPrimitive.Root>

@@ -15,6 +15,7 @@ import {
   ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Z_TOP } from "@/styles/constants";
 import { useClaudeChatStore } from "@/stores/claude-chat-store";
 import { useDocumentStore, type ProjectFile } from "@/stores/document-store";
 import { compileCurrentDocument } from "@/stores/compile-store";
@@ -327,7 +328,7 @@ export function ChatComposer() {
           <div
             ref={modelPickerRef}
             className="fixed w-64 rounded-lg border border-border bg-background shadow-lg"
-            style={{ left: pickerPos.left, bottom: pickerPos.bottom, zIndex: 9999 }}
+            style={{ left: pickerPos.left, bottom: pickerPos.bottom, zIndex: Z_TOP }}
           >
             <div className="p-1">
               <div className="px-2 py-1 font-medium text-muted-foreground text-[length:var(--font-chat-meta)]">Model</div>
@@ -383,7 +384,7 @@ export function ChatComposer() {
 
       {/* / slash command dropdown */}
       {slashQuery !== null && (
-        <div className="absolute right-3 bottom-full left-3 z-20 mb-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-background shadow-lg">
+        <div className="absolute right-3 bottom-full left-3 z-[var(--z-above)] mb-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-background shadow-lg">
           {slashCommands.length > 0 ? (
             slashCommands.map((cmd) => (
               <button
@@ -410,7 +411,7 @@ export function ChatComposer() {
       {slashQuery === null && mentionQuery !== null && mentionFiles.length > 0 && (
         <div
           ref={mentionRef}
-          className="absolute right-3 bottom-full left-3 z-20 mb-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-background shadow-lg"
+          className="absolute right-3 bottom-full left-3 z-[var(--z-above)] mb-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-background shadow-lg"
         >
           {mentionFiles.map((file, i) => {
             const parts = file.relativePath.split("/");

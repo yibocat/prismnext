@@ -1,7 +1,16 @@
 /* ──── Chat Tokens ──── */
 /* Claude chat: messages, composer, sessions, tool widgets */
 
+/* ============================================================
+   Z-Index Layers used by chat components
+   ============================================================
+   z-base (10):  Chat drawer container, scroll-to-bottom button
+   z-above (20): Composer dropdowns (@mention suggestions, /command picker)
+   z-top (9999): Model picker portal, Session selector portal
+   ============================================================ */
+
 :root {
+  /* ── Font tokens ── */
   --font-session-item: var(--font-size-12);  /* session list items */
   --font-chat-meta:    var(--font-size-12);  /* "Thinking...", elapsed, labels */
   --font-chat-message: var(--font-size-14);  /* chat message body text */
