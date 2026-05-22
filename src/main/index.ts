@@ -1,9 +1,9 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
 import { registerIpcHandlers } from "./ipc/index";
-import { setMainWindow, registerWindowHandlers } from "./ipc/ipc-window";
+import { setMainWindow, registerWindowHandlers } from "./ipc/window";
 import { killAllClaudeProcesses } from "./services/claude";
-import { disposeAgentManager } from "./ipc/ipc-agent";
+import { disposeAgentManager } from "./ipc/agent";
 
 const isMac = process.platform === "darwin";
 

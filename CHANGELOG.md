@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2
+
+### IPC Cleanup
+- Remove legacy `ipc-claude.ts` — replaced by ACP-based `agent.ts`
+- Strip `ipc-` prefix from IPC filenames: `ipc-agent.ts` → `agent.ts`, etc.
+- Remove legacy Claude API from preload (`claude:status/send/cancel` etc.) and type declarations
+- Remove legacy Claude events (`onClaudeStream/Complete/Stderr`, `removeClaudeListeners`)
+
 ## 0.2.1
 
 ### Design Token System
