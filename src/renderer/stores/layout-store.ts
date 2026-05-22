@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 export type AppMode = "manuscript" | "vault" | "zotero" | "code" | "assets" | "other" | "chat";
+export type RightToolbarTab = "files" | "git" | "browser";
 
 export type TabType = "file" | "pdf";
 
@@ -13,6 +14,13 @@ export interface EditorTab {
 interface LayoutState {
   activeMode: AppMode;
   setActiveMode: (mode: AppMode) => void;
+
+  rightToolbarTab: RightToolbarTab;
+  setRightToolbarTab: (tab: RightToolbarTab) => void;
+
+  rightSidebarOpen: boolean;
+  toggleRightSidebar: () => void;
+  setRightSidebarOpen: (open: boolean) => void;
 
   sidebarExpanded: boolean;
   sidebarWidth: number;
@@ -48,6 +56,13 @@ export const useLayoutStore = create<LayoutState>((set) => ({
           ? false
           : s.editorMaximized,
     })),
+
+  rightToolbarTab: "files",
+  setRightToolbarTab: (tab) => set({ rightToolbarTab: tab }),
+
+  rightSidebarOpen: false,
+  toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
+  setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
 
   sidebarExpanded: true,
   sidebarWidth: 240,

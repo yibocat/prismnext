@@ -7,6 +7,7 @@ export interface AppSettings {
   theme: "dark" | "light" | "system";
   sidebarCollapsed: boolean;
   rightPanelCollapsed: boolean;
+  lastProjectPath?: string;
   zoteroApiKey?: string;
   zoteroUserId?: string;
 }
@@ -55,6 +56,7 @@ export function getSettings(): AppSettings {
       (store.get("sidebarCollapsed") as boolean) ?? defaults.sidebarCollapsed,
     rightPanelCollapsed:
       (store.get("rightPanelCollapsed") as boolean) ?? defaults.rightPanelCollapsed,
+    lastProjectPath: store.get("lastProjectPath") as string | undefined,
   };
 
   // Decrypt sensitive fields

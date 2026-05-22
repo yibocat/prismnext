@@ -85,7 +85,7 @@ export function LeftMainArea() {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
+                    className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
                   >
                     <FolderOpenIcon className="size-3" />
                     <span className="truncate max-w-[120px]">{projectLabel}</span>
@@ -122,7 +122,7 @@ export function LeftMainArea() {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
+                    className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
                   >
                     <span>{currentAgent?.name || "CLI"}</span>
                     <ChevronDownIcon className="size-3" />
@@ -156,7 +156,7 @@ export function LeftMainArea() {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
+                    className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
                   >
                     <span>{currentMode?.name || "Mode"}</span>
                     <ChevronDownIcon className="size-3" />
@@ -191,7 +191,7 @@ export function LeftMainArea() {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
+                    className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
                   >
                     <span>{currentMode?.name || "Mode"}</span>
                     <ChevronDownIcon className="size-3" />

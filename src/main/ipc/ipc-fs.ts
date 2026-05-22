@@ -80,6 +80,71 @@ export function registerFsHandlers(): void {
     return { canceled: false, path: result.filePaths[0] };
   });
 
+  // ─── Path check ───
+
+  ipcMain.handle("fs:exists", async (_event, args: { absPath: string }) => {
+    const { existsSync } = require("node:fs");
+    return existsSync(args.absPath);
+  });
+
+  // ─── Project creation ───
+
+  const PROJECT_DIRS = ["manuscript", "vault", "code", "assets", "zotero", "other"];
+
+  ipcMain.handle("project:create", async (_event, args: { rootPath: string }) => {
+    const { join } = require("node:path");
+    const { writeFileSync } = require("node:fs");
+
+    // Visible mode directories
+    for (const dir of PROJECT_DIRS) {
+      await fs.createDirectory(join(args.rootPath, dir));
+    }
+
+    // Hidden .prismnext/ structure
+    const prismDir = join(args.rootPath, ".prismnext");
+    await fs.createDirectory(prismDir);
+    await fs.createDirectory(join(prismDir, "sessions"));
+    await fs.createDirectory(join(prismDir, "compile"));
+
+    // Initial files
+    writeFileSync(join(prismDir, "settings.json"), JSON.stringify({ version: 1, compiler: "tectonic" }, null, 2));
+    writeFileSync(join(prismDir, "state.json"), JSON.stringify({}, null, 2));
+    writeFileSync(join(prismDir, ".gitignore"), "compile/\nstate.json\n");
+  });
+
+  ipcMain.handle("project:check", async (_event, args: { rootPath: string }) => {
+    const { join } = require("node:path");
+    const { existsSync } = require("node:fs");
+
+    const PRISM_DIR = ".prismnext";
+    const PRISM_FILES = ["settings.json", "state.json", ".gitignore"];
+    const PRISM_SUBDIRS = ["sessions", "compile"];
+
+    const missing: string[] = [];
+
+    // Check visible mode directories
+    for (const dir of PROJECT_DIRS) {
+      if (!existsSync(join(args.rootPath, dir))) missing.push(dir);
+    }
+
+    // Check .prismnext/ directory
+    const prismPath = join(args.rootPath, PRISM_DIR);
+    if (!existsSync(prismPath)) {
+      missing.push(`${PRISM_DIR}/`);
+    } else {
+      // Check internal files
+      for (const f of PRISM_FILES) {
+        if (!existsSync(join(prismPath, f))) missing.push(`${PRISM_DIR}/${f}`);
+      }
+      // Check internal subdirectories
+      for (const d of PRISM_SUBDIRS) {
+        if (!existsSync(join(prismPath, d))) missing.push(`${PRISM_DIR}/${d}/`);
+      }
+    }
+
+    return { missing };
+  });
+
   // ─── Window ───
 
   ipcMain.handle(

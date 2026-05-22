@@ -3,15 +3,16 @@ import { useTheme } from "next-themes";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useProjectStore } from "@/stores/project-store";
+import { useProjectOpen } from "@/hooks/use-project-open";
 import {
   PanelLeftIcon,
   PanelRightIcon,
   SearchIcon,
-  GitBranchIcon,
   SunIcon,
   MoonIcon,
   MonitorIcon,
   FolderOpenIcon,
+  FolderPlusIcon,
   FolderIcon,
   ChevronDownIcon,
   EllipsisIcon,
@@ -19,6 +20,7 @@ import {
   Maximize2Icon,
   XIcon,
   PlusIcon,
+  LogOutIcon,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -62,17 +64,43 @@ export function TitleBar() {
     ? projectRoot.split(/[/\\]/).pop() || projectRoot
     : "No Project Open";
 
+  const projectOpen = useProjectOpen();
+
+  const saveLastProject = (path: string) => {
+    window.electronAPI.settingsSet({ lastProjectPath: path } as any);
+  };
+
+  const openProjectPath = async (path: string) => {
+    const ok = await projectOpen(path);
+    if (!ok) return;
+    addRecentProject(path);
+    saveLastProject(path);
+    await openProject(path);
+  };
+
   const handleOpenProject = async () => {
     const result = await window.electronAPI.dialogOpenFolder();
     if (result.canceled || !result.path) return;
-    addRecentProject(result.path);
-    await openProject(result.path);
+    await openProjectPath(result.path);
   };
 
   const handleSwitchProject = async (path: string) => {
     if (path === projectRoot) return;
-    addRecentProject(path);
-    await openProject(path);
+    await openProjectPath(path);
+  };
+
+  const handleNewProject = async () => {
+    const result = await window.electronAPI.dialogOpenFolder();
+    if (result.canceled || !result.path) return;
+    try { await window.electronAPI.projectCreate(result.path); } catch {}
+    await openProjectPath(result.path);
+  };
+
+  const handleCloseProject = async () => {
+    await window.electronAPI.settingsSet({ lastProjectPath: null } as any);
+    // Reload app to show welcome page
+    const docState = useDocumentStore.getState();
+    docState.closeProject();
   };
 
   const cycleTheme = () => {
@@ -92,7 +120,7 @@ export function TitleBar() {
 
         <button
           type="button"
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           title="Toggle Sidebar"
           onClick={toggleSidebar}
         >
@@ -106,7 +134,7 @@ export function TitleBar() {
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium text-foreground hover:bg-muted transition-colors"
+              className="flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium text-foreground hover:bg-muted transition-colors"
             >
               <FolderOpenIcon className="size-3.5 text-muted-foreground" />
               <span className="max-w-[140px] truncate">{projectName}</span>
@@ -134,26 +162,28 @@ export function TitleBar() {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="flex items-center gap-2 text-[13px]"
+              onClick={handleNewProject}
+            >
+              <FolderPlusIcon className="size-3.5 shrink-0" />
+              New Project...
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="flex items-center gap-2 text-[13px]"
               onClick={handleOpenProject}
             >
-              <PlusIcon className="size-3.5 shrink-0" />
+              <FolderOpenIcon className="size-3.5 shrink-0" />
               Open Project...
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
 
-      {/* ── Center: ⌘K command entry ── */}
-      <div className="pointer-events-none absolute inset-x-0 flex justify-center">
         <button
           type="button"
-          className="pointer-events-auto flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground hover:border-ring hover:text-foreground transition-colors"
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          title="Close project"
+          onClick={handleCloseProject}
         >
-          <SearchIcon className="size-3" />
-          <span className="hidden sm:inline">Search or type command...</span>
-          <kbd className="ml-auto hidden rounded border border-border px-1 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline">
-            ⌘K
-          </kbd>
+          <LogOutIcon className="size-3" />
         </button>
       </div>
 
@@ -166,7 +196,7 @@ export function TitleBar() {
           <>
             <button
               type="button"
-              className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               title="Minimize"
               onClick={() => window.electronAPI?.windowMinimize()}
             >
@@ -174,7 +204,7 @@ export function TitleBar() {
             </button>
             <button
               type="button"
-              className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
               title={isMaximized ? "Restore" : "Maximize"}
               onClick={() => window.electronAPI?.windowMaximize()}
             >
@@ -182,7 +212,7 @@ export function TitleBar() {
             </button>
             <button
               type="button"
-              className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-red-500 hover:text-white transition-colors"
+              className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-red-500 hover:text-white transition-colors"
               title="Close"
               onClick={() => window.electronAPI?.windowClose()}
             >
@@ -195,33 +225,18 @@ export function TitleBar() {
 
         <button
           type="button"
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title="Toggle Right Area"
-          onClick={() => {
-            if (editorMaximized) {
-              toggleEditorMaximized();
-              toggleRightArea();
-            } else {
-              toggleRightArea();
-            }
-          }}
+          className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          title="Command palette"
         >
-          <PanelRightIcon className="size-4" />
-        </button>
-
-        <div className="mx-1 h-5 w-px bg-border/60" />
-
-        <button
-          type="button"
-          className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-        >
-          <GitBranchIcon className="size-3.5" />
-          <span>main</span>
+          <SearchIcon className="size-3" />
+          <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[10px] text-muted-foreground">
+            ⌘K
+          </kbd>
         </button>
 
         <button
           type="button"
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           title={`Theme: ${theme}`}
           onClick={cycleTheme}
         >
@@ -234,12 +249,30 @@ export function TitleBar() {
           )}
         </button>
 
+        <div className="mx-1 h-5 w-px bg-border/60" />
+
         <button
           type="button"
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           title="More"
         >
           <EllipsisIcon className="size-4" />
+        </button>
+
+        <button
+          type="button"
+          className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          title="Toggle Right Area"
+          onClick={() => {
+            if (editorMaximized) {
+              toggleEditorMaximized();
+              toggleRightArea();
+            } else {
+              toggleRightArea();
+            }
+          }}
+        >
+          <PanelRightIcon className="size-4" />
         </button>
       </div>
     </div>

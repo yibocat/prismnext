@@ -8,8 +8,6 @@ import {
   FileTextIcon,
   BookmarkIcon,
   FileIcon,
-  MaximizeIcon,
-  MinimizeIcon,
   PlayIcon,
   Loader2Icon,
 } from "lucide-react";
@@ -21,8 +19,6 @@ export function TabBar() {
   const activeEditorTab = useLayoutStore((s) => s.modeActiveEditorTab[activeMode]);
   const setActiveEditorTab = useLayoutStore((s) => s.setActiveEditorTab);
   const closeEditorTab = useLayoutStore((s) => s.closeEditorTab);
-  const editorMaximized = useLayoutStore((s) => s.editorMaximized);
-  const toggleEditorMaximized = useLayoutStore((s) => s.toggleEditorMaximized);
 
   const activeTab = editorTabs.find((t) => t.id === activeEditorTab);
   const isTexFile = activeTab?.type === "file" && activeTab.name.endsWith(".tex");
@@ -96,18 +92,6 @@ export function TabBar() {
             Compile
           </button>
         )}
-        <button
-          type="button"
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title={editorMaximized ? "Restore" : "Expand editor"}
-          onClick={toggleEditorMaximized}
-        >
-          {editorMaximized ? (
-            <MinimizeIcon className="size-3.5" />
-          ) : (
-            <MaximizeIcon className="size-3.5" />
-          )}
-        </button>
       </div>
     </div>
   );

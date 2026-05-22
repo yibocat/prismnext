@@ -1,13 +1,143 @@
-import { useCallback, useRef } from "react";
-import { useLayoutStore } from "@/stores/layout-store";
+import { useRef, useCallback, useEffect } from "react";
+import { useLayoutStore, type RightToolbarTab } from "@/stores/layout-store";
+import { useDocumentStore } from "@/stores/document-store";
+import { useCompileStore } from "@/stores/compile-store";
+import { useRightPanelStore, type RightTabKind } from "@/stores/right-panel-store";
+import { resolveCompileTarget } from "@/lib/resolve-tex-root";
 import { RightMainArea } from "@/components/layout/right-main-area";
 import { RightSidebar } from "@/components/layout/right-sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
+import {
+  FolderOpenIcon as FilesIcon,
+  GitBranchIcon,
+  GlobeIcon,
+  ListTreeIcon,
+  MaximizeIcon,
+  MinimizeIcon,
+  ChevronDownIcon,
+  FolderOpenIcon,
+  XIcon,
+  PlayIcon,
+  Loader2Icon,
+  PlusIcon,
+  FilePlusIcon,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const TOOLBAR_TABS: { id: RightToolbarTab; label: string; icon: React.ReactNode }[] = [
+  { id: "files", label: "Files", icon: <FilesIcon className="size-3.5" /> },
+  { id: "git", label: "Git", icon: <GitBranchIcon className="size-3.5" /> },
+  { id: "browser", label: "Browser", icon: <GlobeIcon className="size-3.5" /> },
+];
+
+// ─── Tab bar (inline in toolbar) ───
+
+function TabBar() {
+  const tabs = useRightPanelStore((s) => s.tabs);
+  const activeTabId = useRightPanelStore((s) => s.activeTabId);
+  const setActiveTab = useRightPanelStore((s) => s.setActiveTab);
+  const closeTab = useRightPanelStore((s) => s.closeTab);
+
+  if (tabs.length === 0) return null;
+
+  return (
+    <>
+      {tabs.map((tab) => (
+        <div
+          key={tab.id}
+          className={cn(
+            "group flex shrink-0 items-center gap-1 rounded px-1.5 py-1 text-[12px] cursor-default transition-colors max-w-[140px]",
+            tab.id === activeTabId
+              ? "bg-muted text-foreground"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          )}
+          onClick={() => setActiveTab(tab.id)}
+        >
+          <span className="truncate">{tab.title}</span>
+          <button
+            type="button"
+            className="ml-0.5 flex size-3.5 items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/20 transition-opacity"
+            onClick={(e) => {
+              e.stopPropagation();
+              closeTab(tab.id);
+            }}
+          >
+            <XIcon className="size-2.5" />
+          </button>
+        </div>
+      ))}
+    </>
+  );
+}
+
+const MODE_OPTIONS = [
+  { id: "manuscript" as const, label: "Manuscript" },
+  { id: "vault" as const, label: "Vault" },
+  { id: "zotero" as const, label: "Zotero" },
+  { id: "code" as const, label: "Code" },
+  { id: "assets" as const, label: "Assets" },
+  { id: "other" as const, label: "Other" },
+];
 
 export function RightArea({ maximized }: { maximized?: boolean }) {
-  const editorTabs = useLayoutStore((s) => s.modeEditorTabs[s.activeMode]);
   const rightAreaWidth = useLayoutStore((s) => s.rightAreaWidth);
   const setRightAreaWidth = useLayoutStore((s) => s.setRightAreaWidth);
-  const hasOpenFiles = editorTabs.length > 0;
+  const rightToolbarTab = useLayoutStore((s) => s.rightToolbarTab);
+  const setRightToolbarTab = useLayoutStore((s) => s.setRightToolbarTab);
+  const activeMode = useLayoutStore((s) => s.activeMode);
+  const setActiveMode = useLayoutStore((s) => s.setActiveMode);
+  const rightSidebarOpen = useLayoutStore((s) => s.rightSidebarOpen);
+  const toggleRightSidebar = useLayoutStore((s) => s.toggleRightSidebar);
+  const setRightSidebarOpen = useLayoutStore((s) => s.setRightSidebarOpen);
+  const editorMaximized = useLayoutStore((s) => s.editorMaximized);
+  const ensureTab = useRightPanelStore((s) => s.ensureTab);
+  const openFile = useRightPanelStore((s) => s.openFile);
+  const activeTabId = useRightPanelStore((s) => s.activeTabId);
+  const tabs = useRightPanelStore((s) => s.tabs);
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+
+  // Sync toolbar mode when active tab changes
+  useEffect(() => {
+    if (!activeTab) return;
+    switch (activeTab.kind) {
+      case "file":
+        setRightToolbarTab("files");
+        break;
+      case "git-overview":
+      case "git-diff":
+        setRightToolbarTab("git");
+        break;
+      case "browser":
+        setRightToolbarTab("browser");
+        break;
+    }
+  }, [activeTab?.kind]);
+  const toggleEditorMaximized = useLayoutStore((s) => s.toggleEditorMaximized);
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const activeFileId = useDocumentStore((s) => s.activeFileId);
+  const files = useDocumentStore((s) => s.files);
+  const getContent = useDocumentStore((s) => s.getContent);
+  const isCompiling = useCompileStore((s) => s.isCompiling);
+  const compile = useCompileStore((s) => s.compile);
+
+  const showSidebar = rightToolbarTab !== "browser" && rightSidebarOpen;
+
+  const isTexFile = activeFileId?.endsWith(".tex");
+
+  const handleCompile = useCallback(async () => {
+    if (!projectRoot || !activeFileId) return;
+    const resolved = resolveCompileTarget(activeFileId, files, getContent);
+    if (resolved) {
+      await compile(projectRoot, resolved.targetPath);
+    }
+  }, [projectRoot, activeFileId, files, compile, getContent]);
 
   const widthRef = useRef(rightAreaWidth);
   widthRef.current = rightAreaWidth;
@@ -31,21 +161,203 @@ export function RightArea({ maximized }: { maximized?: boolean }) {
     [setRightAreaWidth],
   );
 
+  const handleOpenProjectFolder = () => {
+    if (projectRoot) {
+      window.electronAPI.fsScan(projectRoot);
+    }
+  };
+
   return (
     <div
       className="flex min-w-0"
-      style={maximized ? { flex: 1 } : { width: hasOpenFiles ? rightAreaWidth : undefined }}
+      style={maximized ? { flex: 1 } : { width: rightAreaWidth }}
     >
-      {/* Resize handle — standalone flex child at the left edge of RightArea */}
-      {hasOpenFiles && !maximized && (
+      {!maximized && (
         <div
           className="shrink-0 w-[5px] cursor-col-resize hover:bg-primary/30 transition-colors"
           onMouseDown={handleMouseDown}
         />
       )}
 
-      {hasOpenFiles && <RightMainArea />}
-      <RightSidebar />
+      <div className="flex flex-1 flex-col min-w-0 border-l border-border bg-background">
+        {/* ── Toolbar ── */}
+        <div className="flex h-[38px] shrink-0 items-center border-b border-border px-2 gap-0.5">
+          {/* Left: icon-only toolbar tabs */}
+          {TOOLBAR_TABS.map((tab) =>
+            tab.id === "files" ? (
+              <div key={tab.id} className="flex items-center">
+                <button
+                  type="button"
+                  className={cn(
+                    "flex size-6 items-center justify-center rounded transition-colors",
+                    rightToolbarTab === "files"
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                  title={`${tab.label} — open project folder`}
+                  onClick={() => {
+                    setRightToolbarTab("files");
+                    ensureTab("file");
+                    handleOpenProjectFolder();
+                  }}
+                >
+                  {tab.icon}
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex size-4 items-center justify-center rounded text-muted-foreground/60 hover:text-foreground transition-colors"
+                      title="Switch mode"
+                    >
+                      <ChevronDownIcon className="size-2.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-36">
+                    {MODE_OPTIONS.map((m) => (
+                      <DropdownMenuItem
+                        key={m.id}
+                        className="text-[12px]"
+                        onClick={() => {
+                          setRightToolbarTab("files");
+                          setActiveMode(m.id);
+                          setRightSidebarOpen(true);
+                        }}
+                      >
+                        <span>{m.label}</span>
+                        {activeMode === m.id && rightToolbarTab === "files" && (
+                          <span className="ml-auto text-[10px] text-muted-foreground">active</span>
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ) : (
+              <button
+                key={tab.id}
+                type="button"
+                className={cn(
+                  "flex size-6 items-center justify-center rounded transition-colors",
+                  rightToolbarTab === tab.id
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+                title={tab.label}
+                onClick={() => {
+                  setRightToolbarTab(tab.id);
+                  const kind: RightTabKind = tab.id === "git" ? "git-overview" : "browser";
+                  ensureTab(kind);
+                }}
+              >
+                {tab.icon}
+              </button>
+            ),
+          )}
+
+          {/* Separator + file tabs */}
+          <div className="mx-1 h-4 w-px bg-border/60" />
+          <div className="flex flex-1 items-center gap-0.5 min-w-0 overflow-hidden">
+            <TabBar />
+          </div>
+
+          {/* Variable: compile (if tex) + sidebar toggle (if Files/Git) */}
+          {isTexFile && (
+            <button
+              type="button"
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+              title="Compile"
+              onClick={handleCompile}
+              disabled={isCompiling}
+            >
+              {isCompiling ? (
+                <Loader2Icon className="size-3.5 animate-spin" />
+              ) : (
+                <PlayIcon className="size-3.5" />
+              )}
+            </button>
+          )}
+
+          {rightToolbarTab !== "browser" && (
+            <button
+              type="button"
+              className={cn(
+                "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0",
+                rightSidebarOpen && "bg-muted text-foreground",
+              )}
+              title="Toggle file list"
+              onClick={toggleRightSidebar}
+            >
+              <ListTreeIcon className="size-3.5" />
+            </button>
+          )}
+
+          {/* Separator: variable | fixed */}
+          <div className="mx-1 h-4 w-px bg-border/60" />
+
+          {/* Fixed: + new tab + maximize */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+                title="New tab"
+              >
+                <PlusIcon className="size-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuLabel className="text-[10px] text-muted-foreground font-normal">
+                New File
+              </DropdownMenuLabel>
+              <div className="max-h-32 overflow-y-auto">
+                {[".tex", ".md", ".py", ".bib", ".sty", ".cls", ".json", ".yaml", ".csv"].map((ext) => (
+                  <DropdownMenuItem
+                    key={ext}
+                    className="text-[12px]"
+                    disabled
+                  >
+                    <FilePlusIcon className="size-3.5" />
+                    <span>TeX Document{ext !== ".tex" ? ` (${ext})` : ""}</span>
+                  </DropdownMenuItem>
+                ))}
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-[10px] text-muted-foreground font-normal">
+                New Tab
+              </DropdownMenuLabel>
+              <DropdownMenuItem className="text-[12px]" onClick={() => ensureTab("file")}>
+                <FilesIcon className="size-3.5" />
+                <span>Files</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-[12px]" onClick={() => ensureTab("git-overview")}>
+                <GitBranchIcon className="size-3.5" />
+                <span>Git</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-[12px]" onClick={() => ensureTab("browser")}>
+                <GlobeIcon className="size-3.5" />
+                <span>Browser</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <button
+            type="button"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+            title={editorMaximized ? "Restore" : "Maximize editor"}
+            onClick={toggleEditorMaximized}
+          >
+            {editorMaximized ? <MinimizeIcon className="size-3.5" /> : <MaximizeIcon className="size-3.5" />}
+          </button>
+        </div>
+
+        {/* ── Main Content ── */}
+        <div className="flex flex-1 min-h-0">
+          <RightMainArea />
+          {showSidebar && <RightSidebar />}
+        </div>
+
+      </div>
     </div>
   );
 }

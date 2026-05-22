@@ -44,6 +44,9 @@ export interface ElectronAPI {
     canceled: boolean;
     path: string | null;
   }>;
+  fsExists: (absPath: string) => Promise<boolean>;
+  projectCreate: (rootPath: string) => Promise<void>;
+  projectCheck: (rootPath: string) => Promise<{ missing: string[] }>;
 
   // Platform
   platform: "darwin" | "win32" | "linux";
@@ -126,6 +129,7 @@ export interface ElectronAPI {
     theme: string;
     sidebarCollapsed: boolean;
     rightPanelCollapsed: boolean;
+    lastProjectPath?: string;
     zoteroApiKey?: string;
     zoteroUserId?: string;
   }>;

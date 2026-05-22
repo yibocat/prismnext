@@ -15,7 +15,7 @@ const ARTIFACT_EXTENSIONS = new Set([
 ]);
 
 // Directories to skip during sync
-const SKIP_DIRS = new Set(["node_modules", "target", "dist", ".git", ".prism"]);
+const SKIP_DIRS = new Set(["node_modules", "target", "dist", ".git", ".prism", ".prismnext"]);
 
 interface BuildInfo {
   workDir: string;
@@ -47,7 +47,7 @@ const lastBuilds = new Map<string, BuildInfo>();
  * Persistent build directory inside the project.
  */
 function persistentBuildDir(projectDir: string): string {
-  return join(projectDir, ".prism", "build");
+  return join(projectDir, ".prismnext", "compile");
 }
 
 /**

@@ -6,6 +6,7 @@ import {
   ZapOffIcon,
   Loader2Icon,
   XCircleIcon,
+  GitBranchIcon,
 } from "lucide-react";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useCompileStore } from "@/stores/compile-store";
@@ -95,6 +96,14 @@ export function BottomBar() {
       </select>
 
       <span className="flex-1" />
+
+      {/* Git branch */}
+      <span className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground">
+        <GitBranchIcon className="size-3" />
+        main
+      </span>
+
+      <div className="mx-1 h-3 w-px bg-border/60" />
 
       {/* Cursor position */}
       <button

@@ -23,6 +23,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Dialog operations
   dialogOpenFolder: () => ipcRenderer.invoke("dialog:openFolder"),
+  fsExists: (absPath: string) => ipcRenderer.invoke("fs:exists", { absPath }),
+  projectCreate: (rootPath: string) => ipcRenderer.invoke("project:create", { rootPath }),
+  projectCheck: (rootPath: string) => ipcRenderer.invoke("project:check", { rootPath }),
 
   // Window operations
   windowSetTitle: (title: string) =>
