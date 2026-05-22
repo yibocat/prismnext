@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.2.4
+
+### Sidebar Rewrite
+- Rewrite left sidebar (Sessions) with shadcn Sidebar components: SidebarMenu, SidebarMenuButton, SidebarMenuAction
+- Rewrite right sidebar (Files/Git/Browser) with shadcn SidebarMenu + SidebarMenuSub for file tree nesting
+- Separate right sidebar into scenario components: FilesSidebar, GitSidebar, BrowserSidebar
+- Add "All" mode to file tree mode selector with separator
+- Apply design token font sizes and heights throughout
+
+### Bug Fixes
+- Fix duplicate tab creation when clicking already-open files — now switches to existing tab
+- Decouple editor content from file tree active state — clicking blank tree area no longer clears editor
+- Fix file tree filter logic — mode directories no longer appear as empty tree nodes
+- Fix other mode directories (vault, code, assets, etc.) after filter refactor
+
+### UI Improvements
+- Compact file tree items: smaller icons (12px), reduced padding (py-0.5, h-6), tighter gap (0.5)
+- Remove vertical indent border on nested folders — full-width hover/active backgrounds
+- Left sidebar delete button uses shadcn showOnHover pattern
+
+### Architecture
+- Four-layer component structure: ui/ (atoms) → modules/ → layout/ → app
+- Add barrel exports (index.ts) per module for clean imports
+- Move dead code to components/__archive/ (tsconfig excluded)
+
 ## 0.2.3
 
 ### Component Restructuring
