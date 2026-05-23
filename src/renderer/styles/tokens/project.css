@@ -1,5 +1,7 @@
 /* ──── Project Tokens ──── */
-/* Welcome page, project setup dialogs, file management */
+/* Welcome page, project setup dialogs */
+
+/* Heights: none needed — welcome uses full-viewport flex, dialogs use shadcn Dialog defaults */
 
 :root {
   --font-button:       var(--font-size-13);  /* action buttons */

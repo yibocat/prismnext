@@ -1,43 +1,27 @@
 /* ──── Layout Tokens ──── */
 /* App shell: TitleBar, Sidebar, BottomBar, RightArea */
 
-/* ============================================================
-   Z-Index Layers used by layout components
-   ============================================================
-   z-base (10):  TitleBar buttons, Resize handles (×3), AI FAB
-   z-above (20): (none)
-   ============================================================ */
+/* Height base scale: --height-base-* in globals.css @theme
+   Z-Index layers used by layout:
+     z-10: TitleBar buttons, resize handles (×3), AI FAB
+     z-20: (none in layout)
+     z-50: (none in layout — all shadcn overlays) */
 
 :root {
-  /* ── Heights ── */
-  --height-titlebar:           var(--size-h-38);  /* main title bar */
-  --height-welcome-titlebar:   var(--size-h-38);  /* welcome page title bar */
-  --height-right-area-toolbar: var(--size-h-32);  /* right area Files/Git/Browser toolbar */
-  --height-sessions-header:    var(--size-h-32);  /* left sidebar Sessions header */
-  --height-files-header:       var(--size-h-32);  /* workspace sidebar Files header */
-  --height-outline-header:     var(--size-h-32);  /* workspace sidebar Outline header */
-  --height-mode-selector:      var(--size-h-32);  /* right sidebar mode selector */
-  --height-sidebar-brand:      var(--size-h-48);  /* workspace sidebar Prism header */
-  --height-status-bar:         var(--size-h-24);  /* bottom status bar */
+  /* ── Heights — derive from base scale, individually overridable ── */
+  --height-titlebar:            var(--height-base-38);
+  --height-welcome-titlebar:    var(--height-base-38);
+  --height-right-area-toolbar:  var(--height-base-32);
+  --height-sessions-header:     var(--height-base-32);
+  --height-files-header:        var(--height-base-32);
+  --height-outline-header:      var(--height-base-32);
+  --height-mode-selector:       var(--height-base-32);
+  --height-sidebar-brand:       var(--height-base-48);
+  --height-status-bar:          var(--height-base-24);
 
-  /* ── Sidebar widths ── */
-  --layout-sidebar-left-default: 240px;
-  --layout-sidebar-left-min: 160px;
-  --layout-sidebar-left-max: 420px;
-  --layout-sidebar-right-default: 220px;
-  --layout-sidebar-right-min: 180px;
-  --layout-sidebar-right-max: 380px;
+  /* Sidebar/panel widths: use JS constants in styles/constants.ts */
 
-  /* ── Right area ── */
-  --layout-right-area-default: 650px;
-  --layout-right-area-min: 350px;
-  --layout-right-area-max: 1100px;
-
-  /* ── Resize handle ── */
   --layout-resize-handle: 5px;
-
-  /* ── Breakpoints ── */
-  --layout-breakpoint-mobile: 768px;
 
   /* ── Font tokens ── */
   --font-sidebar-section: var(--font-size-11);  /* Sessions, Files, Outline headers */

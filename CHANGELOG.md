@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.5
+
+### Theme System — Clean & Connect
+- Clean dead scale variables from tokens.css: spacing, icon, radius, shadow scales (unused parallel system)
+- Move height base scale to globals.css @theme with two-tier chain (base → component token → component)
+- Replace z-index CSS variables with Tailwind z-10/z-20/z-50 directly
+- Document design system architecture in globals.css: which scale lives where
+- Add spacing base unit control point (--spacing: 0.25rem) and animation durations in @theme
+- Remove duplicate --layout-resize-handle, remove unused CSS layout variables
+- Add Z-Index layer documentation to all module token files
+
+### Phase 4 Completion
+- Heights: 15 component tokens derive from 5 base values, each independently overridable
+- Typography: 30 font tokens across 6 module files, Tailwind text-xs/text-sm connected to base scale
+- Layout: resize handle width centralized, sidebar/panel widths in constants.ts
+- Z-Index: 4 documented layers (z-10/z-20/z-50/z-9999) with per-module component mapping
+
 ## 0.2.4
 
 ### Sidebar Rewrite

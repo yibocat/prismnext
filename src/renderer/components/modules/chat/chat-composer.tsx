@@ -384,7 +384,7 @@ export function ChatComposer() {
 
       {/* / slash command dropdown */}
       {slashQuery !== null && (
-        <div className="absolute right-3 bottom-full left-3 z-[var(--z-above)] mb-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-background shadow-lg">
+        <div className="absolute right-3 bottom-full left-3 z-20 mb-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-background shadow-lg">
           {slashCommands.length > 0 ? (
             slashCommands.map((cmd) => (
               <button
@@ -411,7 +411,7 @@ export function ChatComposer() {
       {slashQuery === null && mentionQuery !== null && mentionFiles.length > 0 && (
         <div
           ref={mentionRef}
-          className="absolute right-3 bottom-full left-3 z-[var(--z-above)] mb-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-background shadow-lg"
+          className="absolute right-3 bottom-full left-3 z-20 mb-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-background shadow-lg"
         >
           {mentionFiles.map((file, i) => {
             const parts = file.relativePath.split("/");

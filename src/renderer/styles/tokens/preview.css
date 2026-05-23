@@ -1,14 +1,10 @@
 /* ──── Preview Tokens ──── */
 /* PDF viewer, preview controls, SyncTeX */
 
+/* Fonts: uses --font-placeholder (shared.css), --font-page-number, --font-toolbar-label (layout.css) */
+
 :root {
   /* ── Heights ── */
-  --height-preview-toolbar:      var(--size-h-32);  /* main preview toolbar */
-  --height-preview-thin-toolbar: var(--size-h-32);  /* thin preview wrapper toolbar */
-
-  /* ── Font tokens ── */
-  /* Uses --font-placeholder from shared.css for empty states */
-  /* Uses --font-page-number from layout.css for page indicator */
-  /* Uses --font-toolbar-label from layout.css for compile status */
-  /* Uses --font-select from layout.css for compiler/zoom dropdowns */
+  --height-preview-toolbar:      var(--height-base-32);
+  --height-preview-thin-toolbar: var(--height-base-32);
 }

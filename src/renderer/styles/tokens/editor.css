@@ -1,25 +1,22 @@
 /* ──── Editor Tokens ──── */
-/* CodeMirror editor, tabs, file tree (right sidebar), TOC */
+/* CodeMirror, tabs, file tree, search panel */
 
-/* ============================================================
-   Z-Index Layers used by editor components
-   ============================================================
-   z-base (10):  CodeMirror overview ruler
-   z-above (20): CodeMirror chunk navigator (merge view)
-   ============================================================ */
+/* Z-Index layers used by editor:
+     z-10: CodeMirror overview ruler
+     z-20: CodeMirror chunk navigator (merge view) */
 
 :root {
   /* ── Heights ── */
-  --height-editor-toolbar:     var(--size-h-32);  /* main editor toolbar */
-  --height-editor-placeholder: var(--size-h-32);  /* editor placeholder bar */
-  --height-tab-bar:            var(--size-h-32);  /* editor tab bar */
-  --height-search-panel:       var(--size-h-36);  /* search panel bar */
+  --height-editor-toolbar:     var(--height-base-32);
+  --height-editor-placeholder: var(--height-base-32);
+  --height-tab-bar:            var(--height-base-32);
+  --height-search-panel:       var(--height-base-36);
 
   /* ── Font tokens ── */
   --font-editor:        var(--font-size-14);  /* CodeMirror body text */
   --font-tab-label:     var(--font-size-12);  /* editor tab labels */
-  --font-file-tree:     var(--font-size-12);  /* right-sidebar file tree items */
+  --font-file-tree:     var(--font-size-12);  /* file tree nodes */
   --font-file-tree-node: var(--font-size-14); /* workspace sidebar file tree nodes */
   --font-toc-item:      var(--font-size-12);  /* table-of-contents entries */
-  --font-search-input:  var(--font-size-14);  /* editor search panel input */
+  --font-search-input:  var(--font-size-14);  /* search panel input */
 }

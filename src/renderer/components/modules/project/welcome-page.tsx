@@ -142,7 +142,7 @@ export function WelcomePage() {
   return (
     <div className="flex h-full w-full flex-col bg-background">
       {/* Minimal titlebar */}
-      <div className="drag-region flex h-[var(--height-welcome-titlebar)] shrink-0 items-center justify-end px-3 gap-1">
+      <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center justify-end px-3 gap-1">
         <button
           type="button"
           className="no-drag flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"

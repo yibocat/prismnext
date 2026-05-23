@@ -195,7 +195,7 @@ export function LeftSidebar() {
 
         {/* Resize handle */}
         <div
-          className="absolute right-0 top-0 h-full w-[var(--layout-resize-handle)] cursor-col-resize hover:bg-primary/30 z-[var(--z-base)] transition-colors"
+          className="absolute right-0 top-0 h-full w-[var(--layout-resize-handle)] cursor-col-resize hover:bg-primary/30 z-10 transition-colors"
           onMouseDown={(e) => {
             e.preventDefault();
             const startX = e.clientX;

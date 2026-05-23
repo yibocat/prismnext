@@ -4,6 +4,24 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Design System Architecture
+ *
+ * ┌─ globals.css (this file)
+ * │   @theme: colors, radius, fonts — maps shadcn CSS vars to Tailwind utilities
+ * │   :root / .dark: shadcn color tokens (oklch)
+ * │   All spacing (p-*, gap-*, m-*): Tailwind's built-in --spacing-* scale
+ * │   All icon sizing (size-*): driven by Tailwind's --spacing-* scale
+ * │   All shadows (shadow-*): Tailwind's built-in --shadow-* scale
+ * │   All durations (duration-*): Tailwind's built-in utilities
+ * │
+ * ├─ tokens.css
+ * │   Custom scales Tailwind doesn't provide: heights, font sizes, z-index layers
+ * │
+ * └─ tokens/
+ *     Component-level tokens per module, referencing base scales above
+ */
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -45,6 +63,21 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+
+  /* Spacing base unit: all Tailwind gap/p/m utilities derive from this */
+  --spacing: 0.25rem;
+
+  /* Height base scale — used by component tokens in tokens/layout.css etc. */
+  --height-base-24: 24px;
+  --height-base-32: 32px;
+  --height-base-36: 36px;
+  --height-base-38: 38px;
+  --height-base-48: 48px;
+
+  /* Animation durations */
+  --duration-150: 150ms;
+  --duration-200: 200ms;
+  --duration-300: 300ms;
 }
 
 :root {

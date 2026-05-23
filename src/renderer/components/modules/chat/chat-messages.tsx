@@ -299,7 +299,7 @@ export function ChatMessages() {
         <button
           type="button"
           onClick={scrollToBottom}
-          className="absolute bottom-4 right-4 flex size-8 items-center justify-center rounded-full border border-border bg-background shadow-md text-muted-foreground hover:text-foreground transition-all hover:shadow-lg z-[var(--z-base)]"
+          className="absolute bottom-4 right-4 flex size-8 items-center justify-center rounded-full border border-border bg-background shadow-md text-muted-foreground hover:text-foreground transition-all hover:shadow-lg z-10"
         >
           <ArrowDownIcon className="size-4" />
         </button>
