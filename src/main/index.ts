@@ -13,7 +13,7 @@ function createWindow() {
   const windowConfig: Electron.BrowserWindowConstructorOptions = {
     width: 1400,
     height: 900,
-    minWidth: 800,
+    minWidth: 393,
     minHeight: 600,
     title: "Prism",
     show: false,

@@ -72,11 +72,11 @@ export function LeftMainArea() {
   const currentMode = AGENT_MODES.find((m) => m.id === agentMode);
 
   return (
-    <div className="flex h-full flex-col min-w-[200px] bg-background">
+    <div className="flex h-full flex-col min-w-[300px] bg-background @container">
       <ChatErrorBoundary>
         {isEmpty ? (
           /* ── Homepage ── */
-          <div className="flex flex-1 flex-col items-center justify-center gap-1">
+          <div className="flex flex-1 flex-col items-center justify-end gap-1 @xl:justify-center">
             {/* Top toolbar */}
             <div className="w-full max-w-3xl flex items-center gap-1.5 px-[12px] pb-1">
               <DropdownMenu>

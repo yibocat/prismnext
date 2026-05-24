@@ -1,5 +1,6 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { Group, Panel, Separator, usePanelRef, type PanelImperativeHandle } from "react-resizable-panels";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useLayoutStore, type RightToolbarTab } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useCompileStore } from "@/stores/compile-store";
@@ -71,6 +72,7 @@ interface RightAreaProps {
 }
 
 export function RightArea({ centerRef, rightAreaRef }: RightAreaProps) {
+  const isMobile = useIsMobile();
   const rightToolbarTab = useLayoutStore((s) => s.rightToolbarTab);
   const setRightToolbarTab = useLayoutStore((s) => s.setRightToolbarTab);
   const rightSidebarOpen = useLayoutStore((s) => s.rightSidebarOpen);
@@ -228,8 +230,13 @@ export function RightArea({ centerRef, rightAreaRef }: RightAreaProps) {
             const r = rightAreaRef.current;
             if (!c || !r) return;
             if (c.isCollapsed()) {
-              c.expand();
-              r.resize(prevRightWidth.current);
+              if (isMobile) {
+                r.collapse();
+                c.resize(9999);
+              } else {
+                c.expand();
+                r.resize(prevRightWidth.current);
+              }
             } else {
               prevRightWidth.current = r.getSize().inPixels;
               c.collapse();
@@ -258,7 +265,9 @@ export function RightArea({ centerRef, rightAreaRef }: RightAreaProps) {
           groupResizeBehavior="preserve-pixel-size"
           onResize={(s) => {
             setRightSidebarWidth(s.inPixels);
-            if (s.inPixels > 0 && s.inPixels < SIDEBAR_RIGHT_MIN) rightSidebarRef.current?.collapse();
+            const st = useLayoutStore.getState();
+            if (s.inPixels === 0 && st.rightSidebarOpen) st.setRightSidebarOpen(false);
+            if (s.inPixels > 0 && !st.rightSidebarOpen) st.setRightSidebarOpen(true);
           }}
         >
           <RightSidebar />

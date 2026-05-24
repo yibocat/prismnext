@@ -1,6 +1,7 @@
 import { useState, useEffect, type RefObject } from "react";
 import { useTheme } from "next-themes";
 import type { PanelImperativeHandle } from "react-resizable-panels";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useDocumentStore } from "@/stores/document-store";
 import { useProjectStore } from "@/stores/project-store";
 import { useProjectOpen } from "@/hooks/use-project-open";
@@ -56,6 +57,7 @@ interface TitleBarProps {
 
 export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarProps) {
   const { platform, isMaximized, isFullscreen } = useWindowState();
+  const isMobile = useIsMobile();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const openProject = useDocumentStore((s) => s.openProject);
   const recentProjects = useProjectStore((s) => s.recentProjects);
@@ -274,11 +276,16 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
             const c = centerRef.current;
             if (!r || !c) return;
             if (r.isCollapsed()) {
-              if (c.isCollapsed()) c.expand();
-              r.expand();
+              if (isMobile) {
+                r.expand();
+                c.collapse();
+              } else {
+                if (c.isCollapsed()) c.expand();
+                r.expand();
+              }
             } else {
-              if (c.isCollapsed()) c.expand();
               r.collapse();
+              c.resize(9999);
             }
           }}
         >

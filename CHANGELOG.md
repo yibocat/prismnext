@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.2.7 — 2026-05-25
+
+### Mobile Responsive Layout
+- Window narrows to <768px: sidebars auto-collapse, center fills screen
+- Mobile RightArea open: auto-maximize (RightArea fills window)
+- Mobile minimize/close: return to Center-only view
+- shadcn Sidebar Sheet overlay replaces persistent sidebar on mobile
+- Min window width 393px (iPhone 16)
+
+### Pane System (Split View)
+- Rewrite `right-panel-store`: flat tabs → `panes[].tabs[]` hierarchy
+- Multi-pane rendering via `react-resizable-panels` Group with separators
+- `splitPane(direction, tabId)` — creates new pane, moves tab
+- `closePane(id)` — merges tabs into remaining pane
+- `moveTab(paneId, fromIndex, toIndex)` — reorder within pane
+- `RightPane` component: TabBar + Content per pane
+
+### Tab Bar
+- Extract TabBar to standalone component with horizontal scroll (`overflow-x-auto`)
+- Remove toolbar-level TabBar — tabs live in each Pane
+
+### Code Organization
+- Extract placeholder components to module files:
+  - `modules/editor/no-file-open.tsx`
+  - `modules/git/git-placeholder.tsx`
+  - `modules/browser/browser-placeholder.tsx`
+
+### Fixes
+- LeftSidebar collapse while maximized: RightArea fills freed space (avoids Center reappearing)
+- RightSidebar drag-close then click: single click to reopen (onResize syncs `rightSidebarOpen`)
+- Narrow-window close RightArea/Minimize: use `resize(9999)` instead of `expand()` (avoids stale memory)
+- Center Panel `minSize` 200→300 (more comfortable minimum)
+- Chat empty state moves to bottom on narrow Center panel (container query `@xl`)
+
 ## 0.2.6 — 2026-05-24
 
 ### Resizable Panel Architecture

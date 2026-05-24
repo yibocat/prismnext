@@ -3,9 +3,11 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useCompileStore } from "@/stores/compile-store";
 import { LatexEditor } from "@/components/modules/editor";
+import { NoFileOpen } from "@/components/modules/editor/no-file-open";
 import { PdfPreview } from "@/components/modules/preview";
+import { GitPlaceholder } from "@/components/modules/git/git-placeholder";
+import { BrowserPlaceholder } from "@/components/modules/browser/browser-placeholder";
 import { AiFab } from "@/components/modules/shared";
-import { GitBranchIcon, GlobeIcon, FilePlusIcon } from "lucide-react";
 
 // ─── Viewer registry: extension → component ───
 
@@ -17,41 +19,6 @@ const VIEWER_BY_EXT: Record<string, React.ComponentType> = {
 function resolveViewer(filePath: string): React.ComponentType {
   const ext = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
   return VIEWER_BY_EXT[ext] ?? LatexEditor;
-}
-
-// ─── Placeholders ───
-
-function GitPlaceholder() {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
-      <GitBranchIcon className="size-10 opacity-30" />
-      <p className="text-[length:var(--font-placeholder)]">Git changes will appear here</p>
-      <p className="text-[length:var(--font-placeholder)] opacity-50">Coming soon</p>
-    </div>
-  );
-}
-
-function BrowserPlaceholder() {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
-      <GlobeIcon className="size-10 opacity-30" />
-      <p className="text-[length:var(--font-placeholder)]">Browser will appear here</p>
-      <p className="text-[length:var(--font-placeholder)] opacity-50">Coming soon</p>
-    </div>
-  );
-}
-
-function NoFileOpen() {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center">
-      <div className="text-center">
-        <div className="flex size-14 items-center justify-center rounded-2xl bg-muted mx-auto">
-          <FilePlusIcon className="size-7 text-muted-foreground" />
-        </div>
-        <p className="mt-3 text-[length:var(--font-empty-state)] text-muted-foreground">No open files</p>
-      </div>
-    </div>
-  );
 }
 
 // ─── Right Main Area ───
