@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type RefObject } from "react";
 import { useTheme } from "next-themes";
-import { useLayoutStore } from "@/stores/layout-store";
+import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useDocumentStore } from "@/stores/document-store";
 import { useProjectStore } from "@/stores/project-store";
 import { useProjectOpen } from "@/hooks/use-project-open";
@@ -48,12 +48,14 @@ function useWindowState() {
   return { platform, isMaximized, isFullscreen } as const;
 }
 
-export function TitleBar() {
+interface TitleBarProps {
+  leftSidebarRef: RefObject<PanelImperativeHandle | null>;
+  centerRef: RefObject<PanelImperativeHandle | null>;
+  rightAreaRef: RefObject<PanelImperativeHandle | null>;
+}
+
+export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarProps) {
   const { platform, isMaximized, isFullscreen } = useWindowState();
-  const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
-  const toggleRightArea = useLayoutStore((s) => s.toggleRightArea);
-  const editorMaximized = useLayoutStore((s) => s.editorMaximized);
-  const toggleEditorMaximized = useLayoutStore((s) => s.toggleEditorMaximized);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const openProject = useDocumentStore((s) => s.openProject);
   const recentProjects = useProjectStore((s) => s.recentProjects);
@@ -122,7 +124,11 @@ export function TitleBar() {
           type="button"
           className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           title="Toggle Sidebar"
-          onClick={toggleSidebar}
+          onClick={() => {
+            const p = leftSidebarRef.current;
+            if (!p) return;
+            p.isCollapsed() ? p.expand() : p.collapse();
+          }}
         >
           <PanelLeftIcon className="size-4" />
         </button>
@@ -264,11 +270,15 @@ export function TitleBar() {
           className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           title="Toggle Right Area"
           onClick={() => {
-            if (editorMaximized) {
-              toggleEditorMaximized();
-              toggleRightArea();
+            const r = rightAreaRef.current;
+            const c = centerRef.current;
+            if (!r || !c) return;
+            if (r.isCollapsed()) {
+              if (c.isCollapsed()) c.expand();
+              r.expand();
             } else {
-              toggleRightArea();
+              if (c.isCollapsed()) c.expand();
+              r.collapse();
             }
           }}
         >

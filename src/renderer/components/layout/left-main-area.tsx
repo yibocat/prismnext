@@ -72,7 +72,7 @@ export function LeftMainArea() {
   const currentMode = AGENT_MODES.find((m) => m.id === agentMode);
 
   return (
-    <div className="flex flex-1 flex-col min-w-[200px] border-r border-border bg-background">
+    <div className="flex h-full flex-col min-w-[200px] bg-background">
       <ChatErrorBoundary>
         {isEmpty ? (
           /* ── Homepage ── */

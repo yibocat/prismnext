@@ -2,6 +2,9 @@ import { create } from "zustand";
 import { toast } from "sonner";
 import { AUTO_SAVE_DELAY } from "@/styles/constants";
 import { useProjectStore } from "./project-store";
+import { useRightPanelStore } from "./right-panel-store";
+import { useClaudeChatStore } from "./claude-chat-store";
+import { clearPdfCache } from "./compile-store";
 
 export type ProjectFileType = "tex" | "image" | "pdf" | "bib" | "style" | "other";
 
@@ -99,6 +102,15 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
   openProject: async (rootPath: string) => {
     try {
+      // Clean up previous project state — dispose agent FIRST to prevent
+      // late-arriving events from writing back into the cleared store
+      await window.electronAPI.agentDispose();
+      useRightPanelStore.getState().closeAllTabs();
+      useClaudeChatStore.getState().clearAllSessions();
+      clearPdfCache();
+      // Lazy import to avoid circular dependency
+      (await import("./changes-store")).useChangesStore.getState().clearAll();
+
       const result = await window.electronAPI.fsScan(rootPath);
       const files: ProjectFile[] = result.files.map((f) => ({
         id: f.relativePath,
@@ -130,18 +142,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         }
       }
 
-      // Find main .tex file
-      let activeFileId: string | null = null;
-      const mainTex = files.find((f) => f.name === "main.tex");
-      const documentTex = files.find((f) => f.name === "document.tex");
-      const firstTex = files.find((f) => f.type === "tex");
-      activeFileId = mainTex?.id || documentTex?.id || firstTex?.id || null;
-
       set({
         projectRoot: rootPath,
         files,
         folders: result.folders,
-        activeFileId,
+        activeFileId: null,
         fileContents,
         initialized: true,
       });

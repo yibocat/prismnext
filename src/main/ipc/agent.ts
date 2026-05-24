@@ -18,8 +18,13 @@ function getAgentManager(win: BrowserWindow): AgentManager {
 }
 
 export function registerAgentHandlers(): void {
-  // ─── Status ───
+  // ─── Dispose on project switch ───
+  ipcMain.handle("agent:dispose", async () => {
+    disposeAgentManager();
+    return { success: true };
+  });
 
+  // ─── Status ───
   ipcMain.handle("agent:status", async () => {
     try {
       const manager = agentManager;

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useDocumentStore } from "./document-store";
 
 // ─── Types ───
 
@@ -51,6 +52,7 @@ interface RightPanelState {
   markUsed: (tabId: string) => void;
 
   closeTab: (id: string) => void;
+  closeAllTabs: () => void;
   setActiveTab: (id: string) => void;
 }
 
@@ -167,9 +169,23 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       if (s.activeTabId === id) {
         nextActive = next.length > 0 ? next[next.length - 1].id : null;
       }
+      // Sync file tree highlight after close
+      const nextActiveTab = next.find((t) => t.id === nextActive);
+      const nextFileId = (nextActiveTab?.kind === "file" && nextActiveTab.fileId) ? nextActiveTab.fileId : "";
+      useDocumentStore.getState().setActiveFile(nextFileId);
       return { tabs: next, activeTabId: nextActive };
     });
   },
 
-  setActiveTab: (id: string) => set({ activeTabId: id }),
+  setActiveTab: (id: string) => {
+    const tab = get().tabs.find((t) => t.id === id);
+    set({ activeTabId: id });
+    const fileId = tab?.kind === "file" && tab.fileId ? tab.fileId : "";
+    useDocumentStore.getState().setActiveFile(fileId);
+  },
+
+  closeAllTabs: () => {
+    set({ tabs: [], activeTabId: null });
+    useDocumentStore.getState().setActiveFile("");
+  },
 }));

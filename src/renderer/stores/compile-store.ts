@@ -13,6 +13,22 @@ export function getPdfBytes(rootFileId: string): Uint8Array | undefined {
   return _pdfBytesCache.get(rootFileId);
 }
 
+export function clearPdfCache() {
+  // Clear auto-compile timer
+  if (_autoCompileTimer !== null) {
+    clearTimeout(_autoCompileTimer);
+    _autoCompileTimer = null;
+  }
+  _pdfBytesCache.clear();
+  _currentPdfRootId = "";
+  useCompileStore.setState({
+    pdfRevision: 0,
+    lastCompiledRootId: "",
+    isCompiling: false,
+    compileError: null,
+  });
+}
+
 export function getCurrentPdfBytes(): Uint8Array | null {
   if (!_currentPdfRootId) return null;
   return _pdfBytesCache.get(_currentPdfRootId) || null;

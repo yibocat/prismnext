@@ -38,9 +38,11 @@ interface LayoutState {
   rightSidebarWidth: number;
   editorMaximized: boolean;
   toggleRightArea: () => void;
+  setRightAreaExpanded: (expanded: boolean) => void;
   setRightAreaWidth: (width: number) => void;
   setRightSidebarWidth: (width: number) => void;
   toggleEditorMaximized: () => void;
+  setEditorMaximized: (maximized: boolean) => void;
 
   /** Per-mode tabs (flat list) */
   modeEditorTabs: Record<AppMode, EditorTab[]>;
@@ -53,14 +55,7 @@ interface LayoutState {
 
 export const useLayoutStore = create<LayoutState>((set) => ({
   activeMode: "chat",
-  setActiveMode: (mode) =>
-    set((s) => ({
-      activeMode: mode,
-      editorMaximized:
-        s.editorMaximized && (s.modeEditorTabs[mode]?.length ?? 0) === 0
-          ? false
-          : s.editorMaximized,
-    })),
+  setActiveMode: (mode) => set({ activeMode: mode }),
 
   rightToolbarTab: "files",
   setRightToolbarTab: (tab) => set({ rightToolbarTab: tab }),
@@ -80,11 +75,14 @@ export const useLayoutStore = create<LayoutState>((set) => ({
   rightSidebarWidth: SIDEBAR_RIGHT_DEFAULT,
   editorMaximized: false,
   toggleRightArea: () => set((s) => ({ rightAreaExpanded: !s.rightAreaExpanded })),
+  setRightAreaExpanded: (expanded) => set({ rightAreaExpanded: expanded }),
   setRightAreaWidth: (width) => set({ rightAreaWidth: width }),
   setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
   toggleEditorMaximized: () => set((s) => ({ editorMaximized: !s.editorMaximized })),
+  setEditorMaximized: (maximized) => set({ editorMaximized: maximized }),
 
   modeEditorTabs: {
+    all: [],
     manuscript: [],
     vault: [],
     zotero: [],
@@ -94,6 +92,7 @@ export const useLayoutStore = create<LayoutState>((set) => ({
     code: [],
   },
   modeActiveEditorTab: {
+    all: null,
     manuscript: null,
     vault: null,
     zotero: null,
@@ -130,7 +129,6 @@ export const useLayoutStore = create<LayoutState>((set) => ({
               ? (next[next.length - 1]?.id ?? null)
               : s.modeActiveEditorTab[mode],
         },
-        editorMaximized: next.length === 0 ? false : s.editorMaximized,
       };
     }),
 

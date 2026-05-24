@@ -35,3 +35,10 @@
   --font-badge:           var(--font-size-10);  /* status badges */
   --font-hint:            var(--font-size-10);  /* inline hints */
 }
+
+/* ──── Panel Performance Optimizations ──── */
+
+/* Contain layout within each panel to prevent cascade reflow */
+[data-panel] {
+  contain: layout style;
+}

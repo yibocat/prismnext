@@ -9,7 +9,6 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SIDEBAR_LEFT_MIN, SIDEBAR_LEFT_MAX } from "@/styles/constants";
 import {
   SidebarProvider,
   Sidebar,
@@ -37,9 +36,7 @@ function relativeTime(ms: number): string {
 }
 
 export function LeftSidebar() {
-  const sidebarExpanded = useLayoutStore((s) => s.sidebarExpanded);
   const sidebarWidth = useLayoutStore((s) => s.sidebarWidth);
-  const setSidebarWidth = useLayoutStore((s) => s.setSidebarWidth);
 
   const sessionId = useClaudeChatStore((s) => s.sessionId);
   const isStreaming = useClaudeChatStore((s) => s.isStreaming);
@@ -119,15 +116,14 @@ export function LeftSidebar() {
     [projectRoot, sessionId, refreshAndNavigate],
   );
 
-  if (!sidebarExpanded) return null;
-
   const empty = !loading && sessions.length === 0;
 
   return (
     <SidebarProvider defaultOpen className="contents">
       <Sidebar
-        className="relative shrink-0 border-r border-border bg-card"
-        style={{ width: sidebarWidth, "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
+        collapsible="none"
+        className="relative shrink-0 bg-card"
+        style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
       >
         <SidebarHeader className="flex h-[var(--height-sessions-header)] shrink-0 flex-row items-center justify-between border-b border-border px-3">
           <span className="text-[length:var(--font-sidebar-section)] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -192,27 +188,6 @@ export function LeftSidebar() {
             </SidebarMenu>
           )}
         </SidebarContent>
-
-        {/* Resize handle */}
-        <div
-          className="absolute right-0 top-0 h-full w-[var(--layout-resize-handle)] cursor-col-resize hover:bg-primary/30 z-10 transition-colors"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            const startX = e.clientX;
-            const startWidth = sidebarWidth;
-            const onMove = (ev: MouseEvent) => {
-              setSidebarWidth(
-                Math.min(SIDEBAR_LEFT_MAX, Math.max(SIDEBAR_LEFT_MIN, startWidth + ev.clientX - startX)),
-              );
-            };
-            const onUp = () => {
-              document.removeEventListener("mousemove", onMove);
-              document.removeEventListener("mouseup", onUp);
-            };
-            document.addEventListener("mousemove", onMove);
-            document.addEventListener("mouseup", onUp);
-          }}
-        />
       </Sidebar>
     </SidebarProvider>
   );

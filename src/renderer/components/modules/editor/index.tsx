@@ -81,7 +81,22 @@ export function LatexEditor() {
     const view = new EditorView({ state, parent: containerRef.current });
     viewRef.current = view;
 
+    // Focus editor when file opens → sync tree highlight
+    view.focus();
+    if (currentFileId) useDocumentStore.getState().setActiveFile(currentFileId);
+
+    const handleFocus = () => {
+      if (currentFileId) useDocumentStore.getState().setActiveFile(currentFileId);
+    };
+    const handleBlur = () => {
+      useDocumentStore.getState().setActiveFile("");
+    };
+    view.contentDOM.addEventListener("focus", handleFocus);
+    view.contentDOM.addEventListener("blur", handleBlur);
+
     return () => {
+      view.contentDOM.removeEventListener("focus", handleFocus);
+      view.contentDOM.removeEventListener("blur", handleBlur);
       view.destroy();
       viewRef.current = null;
     };

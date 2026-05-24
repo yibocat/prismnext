@@ -1,4 +1,5 @@
-import { useRef, useCallback, useEffect } from "react";
+import { useEffect, useRef, type RefObject } from "react";
+import { Group, Panel, Separator, usePanelRef, type PanelImperativeHandle } from "react-resizable-panels";
 import { useLayoutStore, type RightToolbarTab } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useCompileStore } from "@/stores/compile-store";
@@ -17,7 +18,7 @@ import {
   PlayIcon,
   Loader2Icon,
 } from "lucide-react";
-import { RIGHT_AREA_MIN, RIGHT_AREA_MAX } from "@/styles/constants";
+import { SIDEBAR_RIGHT_MIN, SIDEBAR_RIGHT_DEFAULT, RIGHT_AREA_DEFAULT } from "@/styles/constants";
 import { cn } from "@/lib/utils";
 
 const TOOLBAR_TABS: { id: RightToolbarTab; label: string; icon: React.ReactNode }[] = [
@@ -25,8 +26,6 @@ const TOOLBAR_TABS: { id: RightToolbarTab; label: string; icon: React.ReactNode 
   { id: "git", label: "Git", icon: <GitBranchIcon className="size-3.5" /> },
   { id: "browser", label: "Browser", icon: <GlobeIcon className="size-3.5" /> },
 ];
-
-// ─── Tab bar (inline in toolbar) ───
 
 function TabBar() {
   const tabs = useRightPanelStore((s) => s.tabs);
@@ -42,7 +41,7 @@ function TabBar() {
         <div
           key={tab.id}
           className={cn(
-            "group flex shrink-0 items-center gap-1 rounded px-1.5 py-1 text-[length:var(--font-toolbar-tab)] cursor-default transition-colors max-w-[140px]",
+            "group flex w-[120px] shrink-0 items-center rounded px-1.5 py-1 text-[length:var(--font-toolbar-tab)] cursor-default transition-colors",
             tab.id === activeTabId
               ? "bg-muted text-foreground"
               : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -52,7 +51,7 @@ function TabBar() {
           <span className="truncate">{tab.title}</span>
           <button
             type="button"
-            className="ml-0.5 flex size-3.5 items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/20 transition-opacity"
+            className="ml-auto flex size-3.5 shrink-0 items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/20 transition-opacity"
             onClick={(e) => {
               e.stopPropagation();
               closeTab(tab.id);
@@ -66,21 +65,24 @@ function TabBar() {
   );
 }
 
-export function RightArea({ maximized }: { maximized?: boolean }) {
-  const rightAreaWidth = useLayoutStore((s) => s.rightAreaWidth);
-  const setRightAreaWidth = useLayoutStore((s) => s.setRightAreaWidth);
+interface RightAreaProps {
+  centerRef: RefObject<PanelImperativeHandle | null>;
+  rightAreaRef: RefObject<PanelImperativeHandle | null>;
+}
+
+export function RightArea({ centerRef, rightAreaRef }: RightAreaProps) {
   const rightToolbarTab = useLayoutStore((s) => s.rightToolbarTab);
   const setRightToolbarTab = useLayoutStore((s) => s.setRightToolbarTab);
   const rightSidebarOpen = useLayoutStore((s) => s.rightSidebarOpen);
   const toggleRightSidebar = useLayoutStore((s) => s.toggleRightSidebar);
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
+  const setRightSidebarWidth = useLayoutStore((s) => s.setRightSidebarWidth);
+  const prevRightWidth = useRef(RIGHT_AREA_DEFAULT);
   const ensureTab = useRightPanelStore((s) => s.ensureTab);
-  const openFile = useRightPanelStore((s) => s.openFile);
   const activeTabId = useRightPanelStore((s) => s.activeTabId);
   const tabs = useRightPanelStore((s) => s.tabs);
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
-  // Sync toolbar mode when active tab changes
   useEffect(() => {
     if (!activeTab) return;
     switch (activeTab.kind) {
@@ -96,47 +98,36 @@ export function RightArea({ maximized }: { maximized?: boolean }) {
         break;
     }
   }, [activeTab?.kind]);
-  const toggleEditorMaximized = useLayoutStore((s) => s.toggleEditorMaximized);
+
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const activeFileId = useDocumentStore((s) => s.activeFileId);
   const files = useDocumentStore((s) => s.files);
   const getContent = useDocumentStore((s) => s.getContent);
   const isCompiling = useCompileStore((s) => s.isCompiling);
   const compile = useCompileStore((s) => s.compile);
 
   const showSidebar = rightToolbarTab !== "browser" && rightSidebarOpen;
+  const rightSidebarRef = usePanelRef();
 
-  const isTexFile = activeFileId?.endsWith(".tex");
+  useEffect(() => {
+    const panel = rightSidebarRef.current;
+    if (!panel) return;
+    if (showSidebar) {
+      if (panel.isCollapsed()) panel.expand();
+    } else {
+      if (!panel.isCollapsed()) panel.collapse();
+    }
+  }, [showSidebar]);
 
-  const handleCompile = useCallback(async () => {
-    if (!projectRoot || !activeFileId) return;
-    const resolved = resolveCompileTarget(activeFileId, files, getContent);
+  const compileFile = activeTab?.kind === "file" ? activeTab.fileId : null;
+  const isTexFile = compileFile?.endsWith(".tex");
+
+  const handleCompile = async () => {
+    if (!projectRoot || !compileFile) return;
+    const resolved = resolveCompileTarget(compileFile, files, getContent);
     if (resolved) {
       await compile(projectRoot, resolved.targetPath);
     }
-  }, [projectRoot, activeFileId, files, compile, getContent]);
-
-  const widthRef = useRef(rightAreaWidth);
-  widthRef.current = rightAreaWidth;
-
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      const startX = e.clientX;
-      const startWidth = widthRef.current;
-      const onMove = (ev: MouseEvent) => {
-        const nextWidth = startWidth + startX - ev.clientX;
-        setRightAreaWidth(Math.min(RIGHT_AREA_MAX, Math.max(RIGHT_AREA_MIN, nextWidth)));
-      };
-      const onUp = () => {
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
-      };
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
-    },
-    [setRightAreaWidth],
-  );
+  };
 
   const handleOpenProjectFolder = () => {
     if (projectRoot) {
@@ -145,122 +136,134 @@ export function RightArea({ maximized }: { maximized?: boolean }) {
   };
 
   return (
-    <div
-      className="flex min-w-0"
-      style={maximized ? { flex: 1 } : { width: rightAreaWidth }}
-    >
-      {!maximized && (
-        <div
-          className="shrink-0 w-[var(--layout-resize-handle)] cursor-col-resize hover:bg-primary/30 transition-colors"
-          onMouseDown={handleMouseDown}
-        />
-      )}
-
-      <div className="flex flex-1 flex-col min-w-0 border-l border-border bg-background">
-        {/* ── Toolbar ── */}
-        <div className="flex h-[var(--height-right-area-toolbar)] shrink-0 items-center border-b border-border px-2 gap-0.5">
-          {/* Left: icon-only toolbar tabs */}
-          {TOOLBAR_TABS.map((tab) =>
-            tab.id === "files" ? (
-              <div key={tab.id} className="flex items-center">
-                <button
-                  type="button"
-                  className={cn(
-                    "flex size-6 items-center justify-center rounded transition-colors",
-                    rightToolbarTab === "files"
-                      ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                  )}
-                  title={`${tab.label} — open project folder`}
-                  onClick={() => {
-                    setRightToolbarTab("files");
-                    ensureTab("file");
-                    handleOpenProjectFolder();
-                  }}
-                >
-                  {tab.icon}
-                </button>
-              </div>
-            ) : (
+    <div className="flex h-full flex-col min-w-0 bg-background">
+      {/* ── Toolbar ── */}
+      <div className="flex h-[var(--height-right-area-toolbar)] shrink-0 items-center border-b border-border px-2 gap-0.5">
+        {TOOLBAR_TABS.map((tab) =>
+          tab.id === "files" ? (
+            <div key={tab.id} className="flex items-center">
               <button
-                key={tab.id}
                 type="button"
                 className={cn(
                   "flex size-6 items-center justify-center rounded transition-colors",
-                  rightToolbarTab === tab.id
+                  rightToolbarTab === "files"
                     ? "bg-muted text-foreground"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
-                title={tab.label}
+                title={`${tab.label} — open project folder`}
                 onClick={() => {
-                  setRightToolbarTab(tab.id);
-                  const kind: RightTabKind = tab.id === "git" ? "git-overview" : "browser";
-                  ensureTab(kind);
+                  setRightToolbarTab("files");
+                  ensureTab("file");
+                  handleOpenProjectFolder();
                 }}
               >
                 {tab.icon}
               </button>
-            ),
-          )}
-
-          {/* Separator + file tabs */}
-          <div className="mx-1 h-4 w-px bg-border/60" />
-          <div className="flex flex-1 items-center gap-0.5 min-w-0 overflow-hidden">
-            <TabBar />
-          </div>
-
-          {/* Variable: compile (if tex) + sidebar toggle (if Files/Git) */}
-          {isTexFile && (
+            </div>
+          ) : (
             <button
-              type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
-              title="Compile"
-              onClick={handleCompile}
-              disabled={isCompiling}
-            >
-              {isCompiling ? (
-                <Loader2Icon className="size-3.5 animate-spin" />
-              ) : (
-                <PlayIcon className="size-3.5" />
-              )}
-            </button>
-          )}
-
-          {rightToolbarTab !== "browser" && (
-            <button
+              key={tab.id}
               type="button"
               className={cn(
-                "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0",
-                rightSidebarOpen && "bg-muted text-foreground",
+                "flex size-6 items-center justify-center rounded transition-colors",
+                rightToolbarTab === tab.id
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
-              title="Toggle file list"
-              onClick={toggleRightSidebar}
+              title={tab.label}
+              onClick={() => {
+                setRightToolbarTab(tab.id);
+                const kind: RightTabKind = tab.id === "git" ? "git-overview" : "browser";
+                ensureTab(kind);
+              }}
             >
-              <ListTreeIcon className="size-3.5" />
+              {tab.icon}
             </button>
-          )}
+          ),
+        )}
 
-          {/* Separator: variable | fixed */}
-          <div className="mx-1 h-4 w-px bg-border/60" />
+        <div className="mx-1 h-4 w-px bg-border/60" />
+        <div className="flex flex-1 items-center gap-0.5 min-w-0 overflow-hidden">
+          <TabBar />
+        </div>
 
-          {/* Fixed: + new tab + maximize */}
+        {isTexFile && (
           <button
             type="button"
             className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
-            title={editorMaximized ? "Restore" : "Maximize editor"}
-            onClick={toggleEditorMaximized}
+            title="Compile"
+            onClick={handleCompile}
+            disabled={isCompiling}
           >
-            {editorMaximized ? <MinimizeIcon className="size-3.5" /> : <MaximizeIcon className="size-3.5" />}
+            {isCompiling ? (
+              <Loader2Icon className="size-3.5 animate-spin" />
+            ) : (
+              <PlayIcon className="size-3.5" />
+            )}
           </button>
-        </div>
+        )}
 
-        {/* ── Main Content ── */}
-        <div className="flex flex-1 min-h-0">
-          <RightMainArea />
-          {showSidebar && <RightSidebar />}
-        </div>
+        {rightToolbarTab !== "browser" && (
+          <button
+            type="button"
+            className={cn(
+              "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0",
+              rightSidebarOpen && "bg-muted text-foreground",
+            )}
+            title="Toggle file list"
+            onClick={toggleRightSidebar}
+          >
+            <ListTreeIcon className="size-3.5" />
+          </button>
+        )}
 
+        <div className="mx-1 h-4 w-px bg-border/60" />
+
+        <button
+          type="button"
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+          title={editorMaximized ? "Restore" : "Maximize editor"}
+          onClick={() => {
+            const c = centerRef.current;
+            const r = rightAreaRef.current;
+            if (!c || !r) return;
+            if (c.isCollapsed()) {
+              c.expand();
+              r.resize(prevRightWidth.current);
+            } else {
+              prevRightWidth.current = r.getSize().inPixels;
+              c.collapse();
+              r.resize(9999);
+            }
+          }}
+        >
+          {editorMaximized ? <MinimizeIcon className="size-3.5" /> : <MaximizeIcon className="size-3.5" />}
+        </button>
       </div>
+
+      {/* ── Main Content ── */}
+      <Group id="right-inner" orientation="horizontal" className="flex-1 min-h-0" resizeTargetMinimumSize={{ fine: 5, coarse: 5 }}>
+        <Panel id="right-main" minSize={150}>
+          <RightMainArea />
+        </Panel>
+        <Separator id="handle-right-sidebar" className="w-px bg-border hover:bg-primary/40 transition-colors outline-none" />
+        <Panel
+          id="right-sidebar-inner"
+          panelRef={rightSidebarRef}
+          collapsible
+          collapsedSize={0}
+          minSize={SIDEBAR_RIGHT_MIN}
+          maxSize="30%"
+          defaultSize={SIDEBAR_RIGHT_DEFAULT}
+          groupResizeBehavior="preserve-pixel-size"
+          onResize={(s) => {
+            setRightSidebarWidth(s.inPixels);
+            if (s.inPixels > 0 && s.inPixels < SIDEBAR_RIGHT_MIN) rightSidebarRef.current?.collapse();
+          }}
+        >
+          <RightSidebar />
+        </Panel>
+      </Group>
     </div>
   );
 }

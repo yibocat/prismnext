@@ -91,6 +91,7 @@ interface ClaudeChatState {
   sendPrompt: (userPrompt: string) => Promise<void>;
   cancelExecution: () => Promise<void>;
   newSession: () => void;
+  clearAllSessions: () => void;
   clearCurrentTab: () => void;
   loadSession: (sessionId: string) => Promise<void>;
 
@@ -286,6 +287,18 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
   newSession: () => {
     const id = get().createTab();
     get().setActiveTab(id);
+  },
+
+  clearAllSessions: () => {
+    // Full reset to initial state — new project = clean slate
+    const id = nextTabId();
+    const tab = makeDefaultTab(id);
+    set({
+      tabs: [tab],
+      activeTabId: id,
+      drawerState: "closed",
+      ...projectActiveTab([tab], id),
+    });
   },
 
   clearCurrentTab: () => {

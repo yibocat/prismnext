@@ -82,6 +82,7 @@ export interface ElectronAPI {
   compileDetectTexlive: () => Promise<CompilerStatus>;
 
   // Agent operations (ACP-based)
+  agentDispose: () => Promise<{ success: boolean }>;
   agentStatus: () => Promise<{ available: boolean; agentId?: string; agentName?: string; error?: string }>;
   agentSend: (projectPath: string, prompt: string, tabId?: string, agentId?: string) => Promise<void>;
   agentCancel: (tabId?: string) => Promise<void>;

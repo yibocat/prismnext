@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   compileDetectTexlive: () => ipcRenderer.invoke("compile:detectTexlive"),
 
   // Agent operations (ACP-based)
+  agentDispose: () => ipcRenderer.invoke("agent:dispose"),
   agentStatus: () => ipcRenderer.invoke("agent:status"),
   agentSend: (projectPath: string, prompt: string, tabId?: string, agentId?: string) =>
     ipcRenderer.invoke("agent:send", { projectPath, prompt, tabId, agentId }),

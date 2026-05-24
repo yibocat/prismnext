@@ -37,8 +37,6 @@ export const RIGHT_AREA_DEFAULT = 650;
 export const RIGHT_AREA_MIN = 350;
 export const RIGHT_AREA_MAX = 1100;
 
-export const RESIZE_HANDLE_WIDTH = 5;
-
 // ─── Z-Index ───
 
 export const Z_BASE = 10;

@@ -169,87 +169,96 @@ export function WelcomePage() {
       {/* Content */}
       <div className="flex flex-1 flex-col items-center justify-center px-8">
         {/* Wordmark */}
-        <div className="flex items-center gap-3 mb-12">
+        <div className="flex items-center gap-3 mb-10">
           <div className="flex size-8 items-center justify-center rounded-lg bg-foreground">
             <SparklesIcon className="size-4 text-background" />
           </div>
           <span className="text-lg font-medium text-foreground tracking-tight">Prism</span>
         </div>
 
-        {/* New project */}
-        <div className="w-full max-w-xs space-y-2 mb-6">
-          <p className="text-[length:var(--font-sidebar-section)] font-medium text-muted-foreground/60 uppercase tracking-wider">
-            New Project
-          </p>
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[length:var(--font-button)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
-            onClick={handleSelectParent}
-          >
-            <FolderOpenIcon className="size-4 shrink-0 opacity-60" />
-            <span className={parentPath ? "text-foreground" : ""}>
-              {parentPath ? parentPath.split("/").pop() || parentPath : "Select location"}
-            </span>
-            {parentPath && (
-              <span className="ml-auto text-[length:var(--font-path)] text-muted-foreground/40 truncate max-w-[120px]">
-                {parentPath}
-              </span>
-            )}
-          </button>
-
-          {parentPath && (
-            <>
-              <div className="flex items-center gap-2 rounded-lg px-3 py-2">
-                <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground/30" />
-                <input
-                  type="text"
-                  className="flex-1 bg-transparent text-[length:var(--font-input)] text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
-                  placeholder="Project name"
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
-                  disabled={creating}
-                  autoFocus
-                />
-              </div>
-
-              {projectName.trim() && (
-                <p className="px-3 text-[length:var(--font-path)] text-muted-foreground/40 truncate font-mono">
-                  {fullPath}
-                </p>
-              )}
-
+        {/* Two-column layout */}
+        <div className="flex items-start gap-8">
+          {/* Left column: New Project + Open */}
+          <div className="w-64 space-y-5">
+            {/* New project */}
+            <div className="space-y-2">
+              <p className="text-[length:var(--font-sidebar-section)] font-medium text-muted-foreground/60 uppercase tracking-wider">
+                New Project
+              </p>
               <button
                 type="button"
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-[length:var(--font-button)] font-medium text-background hover:bg-foreground/90 transition-colors disabled:opacity-30"
-                disabled={!projectName.trim() || creating}
-                onClick={handleCreate}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[length:var(--font-button)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
+                onClick={handleSelectParent}
               >
-                {creating ? (
-                  <><Loader2Icon className="size-3.5 animate-spin" /> Creating...</>
-                ) : (
-                  "Create Project"
-                )}
+                <FolderOpenIcon className="size-4 shrink-0 opacity-60" />
+                <span className={parentPath ? "text-foreground" : ""}>
+                  {parentPath ? parentPath.split("/").pop() || parentPath : "Select location"}
+                </span>
               </button>
-            </>
-          )}
-        </div>
 
-        {/* Open existing */}
-        <div className="w-full max-w-xs mb-6">
-          <p className="mb-2 text-[length:var(--font-sidebar-section)] font-medium text-muted-foreground/60 uppercase tracking-wider">
-            Open
-          </p>
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[length:var(--font-button)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
-            onClick={handleOpen}
-          >
-            <FolderOpenIcon className="size-4 shrink-0 opacity-60" />
-            Open project folder
-          </button>
-        </div>
+              {parentPath && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 rounded-lg px-3 py-2">
+                    <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground/30" />
+                    <input
+                      type="text"
+                      className="flex-1 bg-transparent text-[length:var(--font-input)] text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+                      placeholder="Project name"
+                      value={projectName}
+                      onChange={(e) => setProjectName(e.target.value)}
+                      disabled={creating}
+                      autoFocus
+                    />
+                  </div>
 
-        <RecentProjects projectOpen={projectOpen} />
+                  {projectName.trim() && (
+                    <p className="px-3 text-[length:var(--font-path)] text-muted-foreground/40 truncate font-mono">
+                      {fullPath}
+                    </p>
+                  )}
+
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-[length:var(--font-button)] font-medium text-background hover:bg-foreground/90 transition-colors disabled:opacity-30"
+                    disabled={!projectName.trim() || creating}
+                    onClick={handleCreate}
+                  >
+                    {creating ? (
+                      <><Loader2Icon className="size-3.5 animate-spin" /> Creating...</>
+                    ) : (
+                      "Create Project"
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Open existing */}
+            <div className="space-y-2">
+              <p className="text-[length:var(--font-sidebar-section)] font-medium text-muted-foreground/60 uppercase tracking-wider">
+                Open
+              </p>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[length:var(--font-button)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
+                onClick={handleOpen}
+              >
+                <FolderOpenIcon className="size-4 shrink-0 opacity-60" />
+                Open project folder
+              </button>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center self-stretch">
+            <div className="w-px h-48 bg-border/60" />
+          </div>
+
+          {/* Right column: Recent projects */}
+          <div className="w-64">
+            <RecentProjects projectOpen={projectOpen} />
+          </div>
+        </div>
       </div>
     </div>
   );

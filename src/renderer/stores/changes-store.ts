@@ -19,6 +19,7 @@ interface ChangesState {
   rejectChange: (id: string) => Promise<void>;
   acceptAll: () => Promise<void>;
   rejectAll: () => Promise<void>;
+  clearAll: () => void;
   getChangeForFile: (relativePath: string) => ProposedChange | undefined;
 }
 
@@ -158,4 +159,6 @@ export const useChangesStore = create<ChangesState>()((set, get) => ({
   getChangeForFile: (relativePath) => {
     return get().changes.find((c) => c.filePath === relativePath);
   },
+
+  clearAll: () => set({ changes: [] }),
 }));

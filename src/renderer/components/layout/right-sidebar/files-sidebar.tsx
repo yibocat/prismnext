@@ -176,7 +176,7 @@ export function FilesSidebar() {
   const setActiveFile = useDocumentStore((s) => s.setActiveFile);
   const openFile = useRightPanelStore((s) => s.openFile);
 
-  const currentMode: SidebarMode = activeMode === "chat" ? "manuscript" : activeMode;
+  const currentMode: SidebarMode = activeMode === "chat" ? "all" : activeMode;
   const files = useMemo(() => filterFilesByMode(allFiles, currentMode), [allFiles, currentMode]);
   const folders = useMemo(() => filterFoldersByMode(allFolders, currentMode), [allFolders, currentMode]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set(folders));
@@ -185,7 +185,7 @@ export function FilesSidebar() {
   return (
     <>
       <FilesHeader />
-      <SidebarContent className="px-1.5 py-1" onClick={(e) => { if (e.target === e.currentTarget) setActiveFile(""); }}>
+      <SidebarContent className="px-1.5 py-1">
         {tree.length === 0 ? (
           <div className="flex flex-1 items-center justify-center px-4 py-8">
             <p className="text-center text-[length:var(--font-empty-state)] leading-relaxed text-muted-foreground">

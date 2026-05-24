@@ -12,7 +12,6 @@ import { GitBranchIcon, GlobeIcon, FilePlusIcon } from "lucide-react";
 const VIEWER_BY_EXT: Record<string, React.ComponentType> = {
   ".tex": LatexEditor,
   ".pdf": PdfPreview,
-  // Future: ".png": ImageViewer, ".md": MarkdownEditor, etc.
 };
 
 function resolveViewer(filePath: string): React.ComponentType {
@@ -64,7 +63,6 @@ export function RightMainArea() {
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
   const pdfRevision = useCompileStore((s) => s.pdfRevision);
 
-  // Auto-create tab on PDF compile success
   const lastRevision = useRef(pdfRevision);
   useEffect(() => {
     if (pdfRevision > 0 && pdfRevision !== lastRevision.current) {
@@ -75,51 +73,38 @@ export function RightMainArea() {
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
-  // No tabs at all
-  if (!activeTab) {
-    return (
-      <div className="flex flex-1 flex-col min-w-[150px]" />
-    );
-  }
+  const renderContent = () => {
+    if (!activeTab) return null;
 
-  // Render based on tab kind
-  switch (activeTab.kind) {
-    case "file": {
-      if (activeTab.isInitial || !activeTab.filePath) {
+    switch (activeTab.kind) {
+      case "file": {
+        if (activeTab.isInitial || !activeTab.filePath) return <NoFileOpen />;
+        const Viewer = resolveViewer(activeTab.filePath);
         return (
-          <div className="flex flex-1 flex-col min-w-[150px]">
-            <NoFileOpen />
+          <div className="flex-1 min-h-0">
+            <Viewer />
           </div>
         );
       }
-      const Viewer = resolveViewer(activeTab.filePath);
-      return (
-        <div className="flex flex-1 flex-col min-w-[150px]">
-          <div className="relative flex-1 min-h-0">
-            <Viewer />
-            {editorMaximized && <AiFab />}
-          </div>
-        </div>
-      );
-    }
-
-    case "git-overview":
-      return <GitPlaceholder />;
-
-    case "git-diff":
-      return (
-        <div className="flex flex-1 flex-col min-w-[150px]">
-          <div className="relative flex-1 min-h-0">
+      case "git-overview":
+        return <GitPlaceholder />;
+      case "git-diff":
+        return (
+          <div className="flex-1 min-h-0">
             <LatexEditor />
-            {editorMaximized && <AiFab />}
           </div>
-        </div>
-      );
+        );
+      case "browser":
+        return <BrowserPlaceholder />;
+      default:
+        return null;
+    }
+  };
 
-    case "browser":
-      return <BrowserPlaceholder />;
-
-    default:
-      return null;
-  }
+  return (
+    <div className="relative flex h-full flex-col min-w-[150px]">
+      {renderContent()}
+      {editorMaximized && <AiFab />}
+    </div>
+  );
 }

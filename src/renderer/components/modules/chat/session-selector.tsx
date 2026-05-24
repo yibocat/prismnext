@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useClaudeChatStore } from "@/stores/claude-chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { HistoryIcon, CheckIcon, Loader2Icon, Trash2Icon } from "lucide-react";
+import { Z_TOP } from "@/styles/constants";
 
 interface SessionInfo {
   id: string;

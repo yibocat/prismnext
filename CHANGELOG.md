@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.2.6 — 2026-05-24
+
+### Resizable Panel Architecture
+- Migrate from custom resize handlers to `react-resizable-panels` v4 for smooth, native-feel panel resizing
+- Nested Group layout: LeftSidebar in outer Group, Center + RightArea in inner Group within MainArea wrapper
+- Panel API is the single source of truth; Zustand is a read-only mirror synced via `onResize` callbacks
+- Buttons call only Panel API (`collapse`/`expand`/`resize`), never write to Zustand directly
+- Remove `closeEditorTab` interfering with `editorMaximized` state
+
+### Panel Configuration
+- LeftSidebar: `preserve-pixel-size`, collapsible, 160–35% (default 240px)
+- RightArea: `preserve-pixel-size`, collapsible, 350px min (default 650px), auto-collapses on mount
+- Center: flexible (no preserve-pixel-size), collapsible, 200px min
+- RightSidebar: `preserve-pixel-size`, collapsible, 180px–40% (default 220px)
+
+### Maximize / Minimize
+- Maximize: collapses Center, RightArea fills remaining space (respects LeftSidebar boundary)
+- Minimize: restores Center and RightArea to previous side-by-side widths
+- Collapsing LeftSidebar while maximized: RightArea auto-expands to fill freed space
+
+### Separator Design
+- 1px visible separator line (`bg-border`), hover changes to `primary/40`
+- 5px hit area via `resizeTargetMinimumSize` for easy grabbing
+- Removed shadcn Sidebar panel border lines that caused double-border artifacts
+
+### Self-Protection
+- Each panel auto-collapses when squeezed below its minimum width (prevents constraint violations on narrow windows)
+
+### AI Fab
+- Moved from individual tab renderers to RightMainArea outer level; appears on all tabs when maximized
+
 ## 0.2.5
 
 ### Theme System — Clean & Connect
