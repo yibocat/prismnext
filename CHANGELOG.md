@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.2.8 — 2026-05-25
+
+### Preview Mode — Overleaf-Style Writing Workspace
+- New Preview tab kind: dedicated LaTeX writing mode with left editor + right PDF split
+- Three-view toggle: split / TeX only / PDF only (Shadcn ToggleGroup)
+- Right file tree locked to Manuscript in Preview mode; header mode selector locked
+- File selection in Preview mode updates Preview tab directly — no tab switching
+- Compile completion auto-switches to Preview tab with the compiled file
+- PreviewToolbar module: compile, auto-compile, compile log (Sheet), view toggle
+
+### Tab-Driven Architecture
+- Preview mode driven by `activeTab.kind === "preview"`, not global toolbar state
+- Closing Preview tab exits Preview mode cleanly — no layout residual
+- Tab kind syncs toolbar mode button highlighting
+- Add `openPreviewFile` and `switchToPreview` store methods
+
+### TabBar Component
+- Extract TabBar to standalone component with drag-to-reorder and horizontal scroll
+- Right-click context menu: Close / Close Others
+- Drop zone indicators for drag insertion points
+
+### Right Pane System
+- Extract `RightPane` and `PaneContent` — tab kind → content resolution
+- Viewer registry: `.tex` → LaTeX editor, `.pdf` → PDF viewer
+
+### Improvements
+- PDF viewer: single-page PDF vertically centered in viewport
+- Toolbar: mode buttons and tools protected from shrinking; `overflow-x-auto` fallback
+- Auto-compile icon matches bottom bar (ZapIcon / ZapOffIcon)
+
+### Removed
+- `pdfPreviewOpen` boolean — replaced by tab-driven Preview mode
+- Dead `markUsed` code in right-panel-store
+
+### Fixed
+- TabBar tab hover cursor now shows default (was text I-beam)
+- `compileFile` and document store `activeFile` sync cover both file and preview tab kinds
+
 ## 0.2.7 — 2026-05-25
 
 ### Mobile Responsive Layout

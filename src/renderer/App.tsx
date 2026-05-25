@@ -142,7 +142,7 @@ export function App() {
                     defaultSize={RIGHT_AREA_DEFAULT}
                     groupResizeBehavior="preserve-pixel-size"
                     onResize={(s) => {
-                      setRightAreaWidth(s.inPixels);
+                      if (s.inPixels > 0) setRightAreaWidth(s.inPixels);
                       const st = useLayoutStore.getState();
                       if (s.inPixels === 0 && st.rightAreaExpanded) st.setRightAreaExpanded(false);
                       if (s.inPixels > 0 && !st.rightAreaExpanded) st.setRightAreaExpanded(true);

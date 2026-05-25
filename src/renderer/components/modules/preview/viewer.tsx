@@ -206,7 +206,7 @@ export function PdfViewer({
       ref={containerRef}
       className="h-full overflow-auto bg-muted/30 p-4"
     >
-      <div className="mx-auto flex w-fit flex-col items-center gap-4">
+      <div className="mx-auto flex w-fit min-h-full flex-col items-center justify-center gap-4">
         {pageSizes.map((size, pageIndex) => (
           <div
             key={pageIndex}

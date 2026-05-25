@@ -111,37 +111,43 @@ function FileTreeNode({
 
 // ─── Files Header ───
 
-function FilesHeader() {
+function FilesHeader({ lockedMode }: { lockedMode?: SidebarMode }) {
   const activeMode = useLayoutStore((s) => s.activeMode);
   const setActiveMode = useLayoutStore((s) => s.setActiveMode);
   const currentMode = MODE_OPTIONS.find((m) => m.id === activeMode) || MODE_OPTIONS[0];
 
   return (
     <SidebarHeader className="flex h-[var(--height-mode-selector)] shrink-0 flex-row items-center justify-between border-b border-border px-3">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[length:var(--font-toolbar-tab)] font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            {currentMode.label}
-            <ChevronRightIcon className="size-3 rotate-90 text-muted-foreground/60" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-36">
-          {MODE_OPTIONS.map((m, i) => (
-            <div key={m.id}>
-              <DropdownMenuItem className="text-xs" onClick={() => setActiveMode(m.id)}>
-                <span>{m.label}</span>
-                {activeMode === m.id && (
-                  <span className="ml-auto text-[length:var(--font-badge)] text-muted-foreground">active</span>
-                )}
-              </DropdownMenuItem>
-              {i === 0 && <DropdownMenuSeparator />}
-            </div>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {lockedMode ? (
+        <span className="rounded-md px-1.5 py-1 text-[length:var(--font-toolbar-tab)] font-medium text-muted-foreground">
+          {MODE_OPTIONS.find((m) => m.id === lockedMode)?.label ?? lockedMode}
+        </span>
+      ) : (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[length:var(--font-toolbar-tab)] font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              {currentMode.label}
+              <ChevronRightIcon className="size-3 rotate-90 text-muted-foreground/60" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-36">
+            {MODE_OPTIONS.map((m, i) => (
+              <div key={m.id}>
+                <DropdownMenuItem className="text-xs" onClick={() => setActiveMode(m.id)}>
+                  <span>{m.label}</span>
+                  {activeMode === m.id && (
+                    <span className="ml-auto text-[length:var(--font-badge)] text-muted-foreground">active</span>
+                  )}
+                </DropdownMenuItem>
+                {i === 0 && <DropdownMenuSeparator />}
+              </div>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -170,13 +176,17 @@ function FilesHeader() {
 
 export function FilesSidebar() {
   const activeMode = useLayoutStore((s) => s.activeMode);
+  const tabs = useRightPanelStore((s) => s.tabs);
+  const activeTabId = useRightPanelStore((s) => s.activeTabId);
   const allFiles = useDocumentStore((s) => s.files);
   const allFolders = useDocumentStore((s) => s.folders);
   const activeFileId = useDocumentStore((s) => s.activeFileId);
   const setActiveFile = useDocumentStore((s) => s.setActiveFile);
   const openFile = useRightPanelStore((s) => s.openFile);
+  const openPreviewFile = useRightPanelStore((s) => s.openPreviewFile);
 
-  const currentMode: SidebarMode = activeMode === "chat" ? "all" : activeMode;
+  const isPreviewActive = tabs.find((t) => t.id === activeTabId)?.kind === "preview";
+  const currentMode: SidebarMode = isPreviewActive ? "manuscript" : activeMode === "chat" ? "all" : activeMode;
   const files = useMemo(() => filterFilesByMode(allFiles, currentMode), [allFiles, currentMode]);
   const folders = useMemo(() => filterFoldersByMode(allFolders, currentMode), [allFolders, currentMode]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set(folders));
@@ -184,7 +194,7 @@ export function FilesSidebar() {
 
   return (
     <>
-      <FilesHeader />
+      <FilesHeader lockedMode={isPreviewActive ? "manuscript" : undefined} />
       <SidebarContent className="px-1.5 py-1">
         {tree.length === 0 ? (
           <div className="flex flex-1 items-center justify-center px-4 py-8">
@@ -212,8 +222,12 @@ export function FilesSidebar() {
                   })
                 }
                 onSelectFile={(id, name) => {
-                  setActiveFile(id);
-                  openFile(id, id, name);
+                  if (isPreviewActive) {
+                    openPreviewFile(id, id, name);
+                  } else {
+                    setActiveFile(id);
+                    openFile(id, id, name);
+                  }
                 }}
               />
             ))}

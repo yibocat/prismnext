@@ -33,7 +33,7 @@ export const SIDEBAR_RIGHT_DEFAULT = 220;
 export const SIDEBAR_RIGHT_MIN = 180;
 export const SIDEBAR_RIGHT_MAX = 380;
 
-export const RIGHT_AREA_DEFAULT = 650;
+export const RIGHT_AREA_DEFAULT = 600;
 export const RIGHT_AREA_MIN = 350;
 export const RIGHT_AREA_MAX = 1100;
 

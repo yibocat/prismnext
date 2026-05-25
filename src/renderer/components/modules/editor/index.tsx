@@ -25,7 +25,7 @@ export function LatexEditor() {
   const tabs = useRightPanelStore((s) => s.tabs);
   const activeTabId = useRightPanelStore((s) => s.activeTabId);
   const activeTab = tabs.find((t) => t.id === activeTabId);
-  const fileId = activeTab?.kind === "file" ? activeTab.fileId : null;
+  const fileId = activeTab?.kind === "file" || activeTab?.kind === "preview" ? activeTab.fileId : null;
 
   const refreshFileContent = useDocumentStore((s) => s.refreshFileContent);
   const jumpTarget = useDocumentStore((s) => s.jumpTarget);

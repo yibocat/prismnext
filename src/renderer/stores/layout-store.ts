@@ -6,7 +6,8 @@ import {
 } from "@/styles/constants";
 
 export type AppMode = "all" | "manuscript" | "vault" | "zotero" | "code" | "assets" | "other" | "chat";
-export type RightToolbarTab = "files" | "git" | "browser";
+export type RightToolbarTab = "files" | "git" | "browser" | "preview";
+export type PreviewViewMode = "split" | "tex" | "pdf";
 
 export type TabType = "file" | "pdf";
 
@@ -22,6 +23,9 @@ interface LayoutState {
 
   rightToolbarTab: RightToolbarTab;
   setRightToolbarTab: (tab: RightToolbarTab) => void;
+
+  previewViewMode: PreviewViewMode;
+  setPreviewViewMode: (mode: PreviewViewMode) => void;
 
   rightSidebarOpen: boolean;
   toggleRightSidebar: () => void;
@@ -59,6 +63,9 @@ export const useLayoutStore = create<LayoutState>((set) => ({
 
   rightToolbarTab: "files",
   setRightToolbarTab: (tab) => set({ rightToolbarTab: tab }),
+
+  previewViewMode: "split",
+  setPreviewViewMode: (mode) => set({ previewViewMode: mode }),
 
   rightSidebarOpen: false,
   toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
