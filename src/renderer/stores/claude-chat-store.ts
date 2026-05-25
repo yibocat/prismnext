@@ -196,16 +196,7 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
 
   sendPrompt: async (userPrompt: string) => {
     const docState = useDocumentStore.getState();
-    const projectPath = docState.projectRoot;
-    if (!projectPath) {
-      set((s) => {
-        const tabs = s.tabs.map((t) =>
-          t.id === s.activeTabId ? { ...t, error: "No project open" } : t,
-        );
-        return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
-      });
-      return;
-    }
+    const projectPath = docState.projectRoot || "";
 
     // Check if agent is available
     try {
@@ -312,8 +303,7 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
   },
 
   loadSession: async (sessionId: string) => {
-    const projectPath = useDocumentStore.getState().projectRoot;
-    if (!projectPath) return;
+    const projectPath = useDocumentStore.getState().projectRoot || "";
 
     const tabId = get().activeTabId;
 

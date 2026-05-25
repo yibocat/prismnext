@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import {
   SIDEBAR_LEFT_DEFAULT,
   RIGHT_AREA_DEFAULT,
@@ -26,6 +27,13 @@ interface LayoutState {
 
   previewViewMode: PreviewViewMode;
   setPreviewViewMode: (mode: PreviewViewMode) => void;
+
+  leftSidebarOverlay: boolean;
+  setLeftSidebarOverlay: (show: boolean) => void;
+  leftSidebarView: "sessions" | "settings";
+  setLeftSidebarView: (view: "sessions" | "settings") => void;
+  settingsCategory: string;
+  setSettingsCategory: (category: string) => void;
 
   rightSidebarOpen: boolean;
   toggleRightSidebar: () => void;
@@ -57,101 +65,120 @@ interface LayoutState {
   createPdfTab: (name: string) => void;
 }
 
-export const useLayoutStore = create<LayoutState>((set) => ({
-  activeMode: "chat",
-  setActiveMode: (mode) => set({ activeMode: mode }),
+export const useLayoutStore = create<LayoutState>()(
+  persist(
+    (set) => ({
+      activeMode: "chat",
+      setActiveMode: (mode) => set({ activeMode: mode }),
 
-  rightToolbarTab: "files",
-  setRightToolbarTab: (tab) => set({ rightToolbarTab: tab }),
+      rightToolbarTab: "files",
+      setRightToolbarTab: (tab) => set({ rightToolbarTab: tab }),
 
-  previewViewMode: "split",
-  setPreviewViewMode: (mode) => set({ previewViewMode: mode }),
+      previewViewMode: "split",
+      setPreviewViewMode: (mode) => set({ previewViewMode: mode }),
 
-  rightSidebarOpen: false,
-  toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
-  setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
+      leftSidebarOverlay: false,
+      setLeftSidebarOverlay: (show) => set({ leftSidebarOverlay: show }),
+      leftSidebarView: "sessions",
+      setLeftSidebarView: (view) => set({ leftSidebarView: view }),
+      settingsCategory: "general",
+      setSettingsCategory: (category) => set({ settingsCategory: category }),
 
-  sidebarExpanded: true,
-  sidebarWidth: SIDEBAR_LEFT_DEFAULT,
-  toggleSidebar: () => set((s) => ({ sidebarExpanded: !s.sidebarExpanded })),
-  setSidebarExpanded: (expanded) => set({ sidebarExpanded: expanded }),
-  setSidebarWidth: (width) => set({ sidebarWidth: width }),
+      rightSidebarOpen: false,
+      toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
+      setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
 
-  rightAreaExpanded: false,
-  rightAreaWidth: RIGHT_AREA_DEFAULT,
-  rightSidebarWidth: SIDEBAR_RIGHT_DEFAULT,
-  editorMaximized: false,
-  toggleRightArea: () => set((s) => ({ rightAreaExpanded: !s.rightAreaExpanded })),
-  setRightAreaExpanded: (expanded) => set({ rightAreaExpanded: expanded }),
-  setRightAreaWidth: (width) => set({ rightAreaWidth: width }),
-  setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
-  toggleEditorMaximized: () => set((s) => ({ editorMaximized: !s.editorMaximized })),
-  setEditorMaximized: (maximized) => set({ editorMaximized: maximized }),
+      sidebarExpanded: true,
+      sidebarWidth: SIDEBAR_LEFT_DEFAULT,
+      toggleSidebar: () => set((s) => ({ sidebarExpanded: !s.sidebarExpanded })),
+      setSidebarExpanded: (expanded) => set({ sidebarExpanded: expanded }),
+      setSidebarWidth: (width) => set({ sidebarWidth: width }),
 
-  modeEditorTabs: {
-    all: [],
-    manuscript: [],
-    vault: [],
-    zotero: [],
-    chat: [],
-    assets: [],
-    other: [],
-    code: [],
-  },
-  modeActiveEditorTab: {
-    all: null,
-    manuscript: null,
-    vault: null,
-    zotero: null,
-    chat: null,
-    assets: null,
-    other: null,
-    code: null,
-  },
+      rightAreaExpanded: false,
+      rightAreaWidth: RIGHT_AREA_DEFAULT,
+      rightSidebarWidth: SIDEBAR_RIGHT_DEFAULT,
+      editorMaximized: false,
+      toggleRightArea: () => set((s) => ({ rightAreaExpanded: !s.rightAreaExpanded })),
+      setRightAreaExpanded: (expanded) => set({ rightAreaExpanded: expanded }),
+      setRightAreaWidth: (width) => set({ rightAreaWidth: width }),
+      setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
+      toggleEditorMaximized: () => set((s) => ({ editorMaximized: !s.editorMaximized })),
+      setEditorMaximized: (maximized) => set({ editorMaximized: maximized }),
 
-  openEditorTab: (tab) =>
-    set((s) => {
-      const mode = s.activeMode;
-      const tabs = s.modeEditorTabs[mode];
-      const exists = tabs.find((t) => t.id === tab.id);
-      if (exists) {
-        return { modeActiveEditorTab: { ...s.modeActiveEditorTab, [mode]: tab.id } };
-      }
-      return {
-        modeEditorTabs: { ...s.modeEditorTabs, [mode]: [...tabs, tab] },
-        modeActiveEditorTab: { ...s.modeActiveEditorTab, [mode]: tab.id },
-      };
+      modeEditorTabs: {
+        all: [],
+        manuscript: [],
+        vault: [],
+        zotero: [],
+        chat: [],
+        assets: [],
+        other: [],
+        code: [],
+      },
+      modeActiveEditorTab: {
+        all: null,
+        manuscript: null,
+        vault: null,
+        zotero: null,
+        chat: null,
+        assets: null,
+        other: null,
+        code: null,
+      },
+
+      openEditorTab: (tab) =>
+        set((s) => {
+          const mode = s.activeMode;
+          const tabs = s.modeEditorTabs[mode];
+          const exists = tabs.find((t) => t.id === tab.id);
+          if (exists) {
+            return { modeActiveEditorTab: { ...s.modeActiveEditorTab, [mode]: tab.id } };
+          }
+          return {
+            modeEditorTabs: { ...s.modeEditorTabs, [mode]: [...tabs, tab] },
+            modeActiveEditorTab: { ...s.modeActiveEditorTab, [mode]: tab.id },
+          };
+        }),
+
+      closeEditorTab: (id) =>
+        set((s) => {
+          const mode = s.activeMode;
+          const next = s.modeEditorTabs[mode].filter((t) => t.id !== id);
+          return {
+            modeEditorTabs: { ...s.modeEditorTabs, [mode]: next },
+            modeActiveEditorTab: {
+              ...s.modeActiveEditorTab,
+              [mode]:
+                s.modeActiveEditorTab[mode] === id
+                  ? (next[next.length - 1]?.id ?? null)
+                  : s.modeActiveEditorTab[mode],
+            },
+          };
+        }),
+
+      setActiveEditorTab: (id) =>
+        set((s) => ({
+          modeActiveEditorTab: { ...s.modeActiveEditorTab, [s.activeMode]: id },
+        })),
+
+      createPdfTab: (name) =>
+        set((s) => {
+          const mode = s.activeMode;
+          const tabs = s.modeEditorTabs[mode];
+          const pdfTab: EditorTab = { id: `pdf:${Date.now()}`, name, type: "pdf" };
+          return {
+            modeEditorTabs: { ...s.modeEditorTabs, [mode]: [...tabs, pdfTab] },
+            modeActiveEditorTab: { ...s.modeActiveEditorTab, [mode]: pdfTab.id },
+          };
+        }),
     }),
-
-  closeEditorTab: (id) =>
-    set((s) => {
-      const mode = s.activeMode;
-      const next = s.modeEditorTabs[mode].filter((t) => t.id !== id);
-      return {
-        modeEditorTabs: { ...s.modeEditorTabs, [mode]: next },
-        modeActiveEditorTab: {
-          ...s.modeActiveEditorTab,
-          [mode]:
-            s.modeActiveEditorTab[mode] === id
-              ? (next[next.length - 1]?.id ?? null)
-              : s.modeActiveEditorTab[mode],
-        },
-      };
-    }),
-
-  setActiveEditorTab: (id) =>
-    set((s) => ({
-      modeActiveEditorTab: { ...s.modeActiveEditorTab, [s.activeMode]: id },
-    })),
-
-  createPdfTab: (name) =>
-    set((s) => {
-      const mode = s.activeMode;
-      const tabs = s.modeEditorTabs[mode];
-      const pdfTab: EditorTab = { id: `pdf:${Date.now()}`, name, type: "pdf" };
-      return {
-        modeEditorTabs: { ...s.modeEditorTabs, [mode]: [...tabs, pdfTab] },
-        modeActiveEditorTab: { ...s.modeActiveEditorTab, [mode]: pdfTab.id },
-      };
-    }),
-}));
+    {
+      name: "prism-next-layout",
+      partialize: (state) => ({
+        sidebarWidth: state.sidebarWidth,
+        rightSidebarWidth: state.rightSidebarWidth,
+        rightAreaWidth: state.rightAreaWidth,
+      }),
+    },
+  ),
+);

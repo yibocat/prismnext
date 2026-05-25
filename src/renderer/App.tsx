@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import { ThemeProvider } from "next-themes";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -14,9 +14,8 @@ import { RightArea } from "@/components/layout/right-area";
 import { BottomBar } from "@/components/layout/bottom-bar";
 import {
   SIDEBAR_LEFT_MIN,
-  SIDEBAR_LEFT_DEFAULT,
   RIGHT_AREA_MIN,
-  RIGHT_AREA_DEFAULT,
+  SIDEBAR_OVERLAY_THRESHOLD,
 } from "@/styles/constants";
 
 const SEP = "w-px bg-border hover:bg-primary/40 transition-colors outline-none";
@@ -24,11 +23,12 @@ const SEP = "w-px bg-border hover:bg-primary/40 transition-colors outline-none";
 export function App() {
   const isMobile = useIsMobile();
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
-  const sidebarExpanded = useLayoutStore((s) => s.sidebarExpanded);
   const setSidebarWidth = useLayoutStore((s) => s.setSidebarWidth);
   const setRightAreaWidth = useLayoutStore((s) => s.setRightAreaWidth);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const showWelcome = useDocumentStore((s) => s.showWelcome);
+  const setShowWelcome = useDocumentStore((s) => s.setShowWelcome);
 
   const leftSidebarRef = usePanelRef();
   const centerRef = usePanelRef();
@@ -37,19 +37,37 @@ export function App() {
   // RightArea starts collapsed
   useLayoutEffect(() => { if (projectRoot) rightAreaRef.current?.collapse(); }, [projectRoot]);
 
-  // Mobile (<768px): collapse sidebars, go to single-panel mode
-  useLayoutEffect(() => {
-    const left = leftSidebarRef.current;
-    const right = rightAreaRef.current;
-    if (!left || !right) return;
+  // Sidebar overlay threshold: below 500px, sidebar opens as fullscreen overlay
+  const belowOverlayThreshold = useRef(false);
+  useEffect(() => {
+    const check = () => {
+      const narrow = window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD;
+      const st = useLayoutStore.getState();
+      const left = leftSidebarRef.current;
 
-    if (isMobile) {
-      left.collapse();
-      if (!right.isCollapsed() && !useLayoutStore.getState().editorMaximized) {
-        right.collapse();
+      if (narrow && !belowOverlayThreshold.current) {
+        // Crossed below threshold: collapse panel, close any overlay
+        if (st.leftSidebarOverlay) st.setLeftSidebarOverlay(false);
+        left?.collapse();
+        belowOverlayThreshold.current = true;
+      } else if (!narrow && belowOverlayThreshold.current) {
+        // Crossed above threshold: close overlay, restore panel
+        if (st.leftSidebarOverlay) st.setLeftSidebarOverlay(false);
+        left?.expand();
+        belowOverlayThreshold.current = false;
       }
-    } else {
-      if (sidebarExpanded && left.isCollapsed()) left.expand();
+    };
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  // Mobile (<768px): collapse right area
+  useLayoutEffect(() => {
+    if (!isMobile) return;
+    const right = rightAreaRef.current;
+    if (right && !right.isCollapsed() && !useLayoutStore.getState().editorMaximized) {
+      right.collapse();
     }
   }, [isMobile]);
 
@@ -58,7 +76,7 @@ export function App() {
   }, [loadSettings]);
 
   useEffect(() => {
-    if (projectRoot) return;
+    if (projectRoot || !showWelcome) return;
     window.electronAPI.settingsGet().then(async (settings) => {
       if (settings.lastProjectPath) {
         try {
@@ -76,9 +94,9 @@ export function App() {
     <GlobalErrorBoundary>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <ProjectSetupDialog />
-        {!projectRoot ? (
-          <WelcomePage />
-        ) : (
+        {showWelcome ? (
+          <WelcomePage onSkip={() => setShowWelcome(false)} />
+        ) : projectRoot ? (
           <div className="flex h-full flex-col" key={projectRoot}>
             <TitleBar
               leftSidebarRef={leftSidebarRef}
@@ -97,11 +115,10 @@ export function App() {
                 collapsible
                 collapsedSize={0}
                 minSize={SIDEBAR_LEFT_MIN}
-                maxSize="35%"
-                defaultSize={SIDEBAR_LEFT_DEFAULT}
+                defaultSize={useLayoutStore.getState().sidebarWidth}
                 groupResizeBehavior="preserve-pixel-size"
                 onResize={(s) => {
-                  setSidebarWidth(s.inPixels);
+                  if (s.inPixels > 0) setSidebarWidth(s.inPixels);
                   const st = useLayoutStore.getState();
                   if (s.inPixels === 0 && st.sidebarExpanded) st.setSidebarExpanded(false);
                   if (s.inPixels > 0 && !st.sidebarExpanded) st.setSidebarExpanded(true);
@@ -139,7 +156,7 @@ export function App() {
                     collapsible
                     collapsedSize={0}
                     minSize={RIGHT_AREA_MIN}
-                    defaultSize={RIGHT_AREA_DEFAULT}
+                    defaultSize={useLayoutStore.getState().rightAreaWidth}
                     groupResizeBehavior="preserve-pixel-size"
                     onResize={(s) => {
                       if (s.inPixels > 0) setRightAreaWidth(s.inPixels);
@@ -151,6 +168,45 @@ export function App() {
                     <RightArea centerRef={centerRef} rightAreaRef={rightAreaRef} />
                   </Panel>
                 </Group>
+              </Panel>
+            </Group>
+            <BottomBar />
+          </div>
+        ) : (
+          <div className="flex h-full flex-col">
+            <TitleBar
+              leftSidebarRef={leftSidebarRef}
+              centerRef={centerRef}
+              rightAreaRef={rightAreaRef}
+            />
+            <Group
+              id="main-layout"
+              orientation="horizontal"
+              className="flex-1 min-h-0"
+              resizeTargetMinimumSize={{ fine: 5, coarse: 5 }}
+            >
+              <Panel
+                id="left-sidebar"
+                panelRef={leftSidebarRef}
+                collapsible
+                collapsedSize={0}
+                minSize={SIDEBAR_LEFT_MIN}
+                defaultSize={useLayoutStore.getState().sidebarWidth}
+                groupResizeBehavior="preserve-pixel-size"
+                onResize={(s) => {
+                  if (s.inPixels > 0) setSidebarWidth(s.inPixels);
+                  const st = useLayoutStore.getState();
+                  if (s.inPixels === 0 && st.sidebarExpanded) st.setSidebarExpanded(false);
+                  if (s.inPixels > 0 && !st.sidebarExpanded) st.setSidebarExpanded(true);
+                }}
+              >
+                <LeftSidebar />
+              </Panel>
+
+              <Separator id="sep-sidebar" className={SEP} />
+
+              <Panel id="main-area" minSize={300}>
+                <LeftMainArea />
               </Panel>
             </Group>
             <BottomBar />

@@ -1,10 +1,13 @@
-import { useState, useEffect, type RefObject } from "react";
+import { useState, useEffect, useRef, type RefObject } from "react";
 import { useTheme } from "next-themes";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useLayoutStore } from "@/stores/layout-store";
+import { SIDEBAR_LEFT_DEFAULT, SIDEBAR_OVERLAY_THRESHOLD } from "@/styles/constants";
 import { useDocumentStore } from "@/stores/document-store";
 import { useProjectStore } from "@/stores/project-store";
 import { useProjectOpen } from "@/hooks/use-project-open";
+import { NewProjectDialog } from "@/components/modules/project/new-project-dialog";
 import {
   PanelLeftIcon,
   PanelRightIcon,
@@ -68,6 +71,8 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
     ? projectRoot.split(/[/\\]/).pop() || projectRoot
     : "No Project Open";
 
+  const newProjectTriggerRef = useRef<HTMLButtonElement>(null);
+
   const projectOpen = useProjectOpen();
 
   const saveLastProject = (path: string) => {
@@ -91,13 +96,6 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
   const handleSwitchProject = async (path: string) => {
     if (path === projectRoot) return;
     await openProjectPath(path);
-  };
-
-  const handleNewProject = async () => {
-    const result = await window.electronAPI.dialogOpenFolder();
-    if (result.canceled || !result.path) return;
-    try { await window.electronAPI.projectCreate(result.path); } catch {}
-    await openProjectPath(result.path);
   };
 
   const handleCloseProject = async () => {
@@ -127,9 +125,23 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
           className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           title="Toggle Sidebar"
           onClick={() => {
+            const st = useLayoutStore.getState();
+            if (st.leftSidebarOverlay) {
+              st.setLeftSidebarOverlay(false);
+              return;
+            }
             const p = leftSidebarRef.current;
             if (!p) return;
-            p.isCollapsed() ? p.expand() : p.collapse();
+            if (p.isCollapsed()) {
+              if (window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD) {
+                st.setLeftSidebarOverlay(true);
+              } else {
+                p.resize(st.sidebarWidth || SIDEBAR_LEFT_DEFAULT);
+                if (p.isCollapsed()) st.setLeftSidebarOverlay(true);
+              }
+            } else {
+              p.collapse();
+            }
           }}
         >
           <PanelLeftIcon className="size-4" />
@@ -170,7 +182,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="flex items-center gap-2 text-[length:var(--font-menu-item)]"
-              onClick={handleNewProject}
+              onClick={() => newProjectTriggerRef.current?.click()}
             >
               <FolderPlusIcon className="size-3.5 shrink-0" />
               New Project...
@@ -184,6 +196,11 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Hidden trigger for NewProjectDialog — dropdown item clicks this via ref */}
+        <NewProjectDialog>
+          <button ref={newProjectTriggerRef} className="hidden" />
+        </NewProjectDialog>
 
         <button
           type="button"
@@ -262,7 +279,17 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
         <button
           type="button"
           className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title="More"
+          title="Settings"
+          onClick={() => {
+            const st = useLayoutStore.getState();
+            const doc = useDocumentStore.getState();
+            if (st.leftSidebarView === "settings" && !doc.projectRoot) {
+              doc.setShowWelcome(true);
+              st.setLeftSidebarView("sessions");
+            } else {
+              st.setLeftSidebarView(st.leftSidebarView === "settings" ? "sessions" : "settings");
+            }
+          }}
         >
           <EllipsisIcon className="size-4" />
         </button>
@@ -277,11 +304,11 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
             if (!r || !c) return;
             if (r.isCollapsed()) {
               if (isMobile) {
-                r.expand();
+                r.resize(9999);
                 c.collapse();
               } else {
                 if (c.isCollapsed()) c.expand();
-                r.expand();
+                r.resize(useLayoutStore.getState().rightAreaWidth);
               }
             } else {
               r.collapse();

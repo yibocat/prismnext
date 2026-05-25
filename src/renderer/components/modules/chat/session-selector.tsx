@@ -36,11 +36,11 @@ export function SessionSelector() {
   const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
 
   const fetchSessions = useCallback(async () => {
-    if (!projectRoot) return;
+    const cwd = projectRoot || "";
     setLoading(true);
     setError(null);
     try {
-      const result = await window.electronAPI.agentListSessions(projectRoot);
+      const result = await window.electronAPI.agentListSessions(cwd);
       setSessions(result);
     } catch (err: any) {
       setError(err?.message || "Failed to load sessions");
@@ -89,8 +89,8 @@ export function SessionSelector() {
 
   const doDelete = useCallback(async (sid: string) => {
     console.log("[session-selector] Delete clicked:", sid);
-    if (!projectRoot) { console.log("[session-selector] No projectRoot"); return; }
-    const result = await window.electronAPI.agentDeleteSession(projectRoot, sid);
+    const cwd = projectRoot || "";
+    const result = await window.electronAPI.agentDeleteSession(cwd, sid);
     console.log("[session-selector] Delete result:", result);
     if (result.success) {
       setSessions((prev) => prev.filter((s) => s.id !== sid));

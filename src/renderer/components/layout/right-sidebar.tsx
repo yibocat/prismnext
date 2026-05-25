@@ -21,13 +21,12 @@ export function RightSidebar() {
   const Content = SIDEBAR_BY_MODE[rightToolbarTab] ?? FilesSidebar;
 
   return (
-    <SidebarProvider defaultOpen className="contents">
-      <Sidebar
-        collapsible="none"
-        className="relative shrink-0 bg-card"
-        style={{ "--sidebar-width": `${rightSidebarWidth}px` } as React.CSSProperties}
-        side="right"
-      >
+    <SidebarProvider
+      defaultOpen
+      className="contents"
+      style={{ "--sidebar-width": `${rightSidebarWidth}px` } as React.CSSProperties}
+    >
+      <Sidebar collapsible="none" className="relative shrink-0 bg-card" side="right">
         <Content />
       </Sidebar>
     </SidebarProvider>

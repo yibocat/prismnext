@@ -1,8 +1,16 @@
 import { useEffect } from "react";
 import { useClaudeEvents } from "@/hooks/use-claude-events";
 import { useClaudeChatStore } from "@/stores/claude-chat-store";
+import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useProjectStore } from "@/stores/project-store";
+import {
+  GeneralSettings,
+  AppearanceSettings,
+  CompilerSettings,
+  ExternalSettings,
+  ShortcutsSettings,
+} from "@/components/modules/settings";
 import { ChatMessages, ChatComposer, ChatErrorBoundary } from "@/components/modules/chat";
 import {
   DropdownMenu,
@@ -70,6 +78,20 @@ export function LeftMainArea() {
 
   const currentAgent = AGENTS.find((a) => a.id === selectedAgent);
   const currentMode = AGENT_MODES.find((m) => m.id === agentMode);
+
+  const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
+  const settingsCategory = useLayoutStore((s) => s.settingsCategory);
+
+  if (leftSidebarView === "settings") {
+    const SettingsContent = {
+      general: GeneralSettings,
+      appearance: AppearanceSettings,
+      compiler: CompilerSettings,
+      external: ExternalSettings,
+      shortcuts: ShortcutsSettings,
+    }[settingsCategory] || GeneralSettings;
+    return <div className="flex h-full flex-col min-w-[300px] bg-background"><SettingsContent /></div>;
+  }
 
   return (
     <div className="flex h-full flex-col min-w-[300px] bg-background @container">

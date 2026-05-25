@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useClaudeChatStore } from "@/stores/claude-chat-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -7,7 +8,9 @@ import {
   MessageSquareIcon,
   Loader2Icon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react";
+import { SettingsSidebar, type SettingsCategory } from "@/components/modules/settings";
 import { Button } from "@/components/ui/button";
 import {
   SidebarProvider,
@@ -37,6 +40,9 @@ function relativeTime(ms: number): string {
 
 export function LeftSidebar() {
   const sidebarWidth = useLayoutStore((s) => s.sidebarWidth);
+  const leftSidebarOverlay = useLayoutStore((s) => s.leftSidebarOverlay);
+  const setLeftSidebarOverlay = useLayoutStore((s) => s.setLeftSidebarOverlay);
+  const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
 
   const sessionId = useClaudeChatStore((s) => s.sessionId);
   const isStreaming = useClaudeChatStore((s) => s.isStreaming);
@@ -116,15 +122,27 @@ export function LeftSidebar() {
     [projectRoot, sessionId, refreshAndNavigate],
   );
 
+  const settingsCategory = useLayoutStore((s) => s.settingsCategory);
+  const setSettingsCategory = useLayoutStore((s) => s.setSettingsCategory);
+
   const empty = !loading && sessions.length === 0;
 
-  return (
-    <SidebarProvider defaultOpen className="contents">
-      <Sidebar
-        collapsible="none"
-        className="relative shrink-0 bg-card"
-        style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
-      >
+  if (leftSidebarView === "settings") {
+    return (
+      <SettingsSidebar
+        activeCategory={settingsCategory as SettingsCategory}
+        onSelectCategory={(id) => { setSettingsCategory(id); setLeftSidebarOverlay(false); }}
+      />
+    );
+  }
+
+  const sidebarContent = (
+    <SidebarProvider
+      defaultOpen
+      className="contents"
+      style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
+    >
+      <Sidebar collapsible="none" className="relative shrink-0 bg-card">
         <SidebarHeader className="flex h-[var(--height-sessions-header)] shrink-0 flex-row items-center justify-between border-b border-border px-3">
           <span className="text-[length:var(--font-sidebar-section)] font-semibold uppercase tracking-wider text-muted-foreground">
             Sessions
@@ -134,7 +152,7 @@ export function LeftSidebar() {
             size="icon"
             className="size-5"
             title="New Chat"
-            onClick={() => newSession()}
+            onClick={() => { newSession(); setLeftSidebarOverlay(false); }}
           >
             <PlusIcon className="size-3" />
           </Button>
@@ -162,7 +180,7 @@ export function LeftSidebar() {
                 return (
                   <SidebarMenuItem key={s.id}>
                     <SidebarMenuButton
-                      onClick={() => loadSession(s.id)}
+                      onClick={() => { loadSession(s.id); setLeftSidebarOverlay(false); }}
                       isActive={isActive}
                       size="sm"
                     >
@@ -190,5 +208,30 @@ export function LeftSidebar() {
         </SidebarContent>
       </Sidebar>
     </SidebarProvider>
+  );
+
+  return (
+    <>
+      {leftSidebarOverlay &&
+        createPortal(
+          <div className="fixed top-[var(--height-titlebar)] right-0 bottom-0 left-0 z-50 flex flex-col bg-background">
+            <div className="flex h-[var(--height-sessions-header)] shrink-0 items-center justify-between border-b border-border px-3">
+              <span className="text-[length:var(--font-sidebar-section)] font-semibold uppercase tracking-wider text-muted-foreground">
+                Sessions
+              </span>
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                onClick={() => setLeftSidebarOverlay(false)}
+              >
+                <XIcon className="size-3.5" />
+              </button>
+            </div>
+            <div className="flex-1 min-h-0">{sidebarContent}</div>
+          </div>,
+          document.body,
+        )}
+      {sidebarContent}
+    </>
   );
 }

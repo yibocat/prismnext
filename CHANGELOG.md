@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.2.9 — 2026-05-26
+
+### Settings Page
+- Unified Settings page accessible from titlebar gear button and Welcome Page
+- Left sidebar switches between Sessions and Settings navigation
+- App-level settings: General (placeholder), Appearance, Shortcuts (placeholder)
+- Project-level settings: Compiler, AI & APIs (visible only when project is open)
+- Theme setting now syncs to both next-themes and electron-store
+- Zotero API Key / User ID with encrypted persistence
+- Compiler engine and auto-compile controls
+
+### New Project Dialog
+- Replace inline welcome-page form with Shadcn Dialog
+- Project name input + location picker in single dialog
+- Shared between Welcome Page and titlebar project dropdown
+
+### Welcome Page
+- Skip option to enter app without opening a project ("Skip for now")
+- Independent AI Chat works without a project (cwd falls back to home dir)
+- Welcome Page settings access hides Project section
+- Responsive two-column layout (stacks vertically on narrow)
+- Layout tightened: balanced column widths, compact buttons
+
+### Left Sidebar
+- Narrow-window overlay mode: below 500px sidebar opens as fullscreen overlay via Portal
+- Overlay auto-closes on item selection (session / settings category)
+- Width auto-persists across restarts via Zustand persist middleware
+- Width restores on window widen (crossing threshold)
+
+### Right Sidebar
+- Width auto-persists across restarts
+
+### Right Area
+- Width auto-persists across restarts
+- Left sidebar toggle simplified: no more Panel collapse/expand race conditions
+
+### AI Chat
+- Independent chat mode: sessions stored in home directory when no project
+- Session list and deletion work without project
+- Fixed: closeProject now cleans up all sub-stores (agent, tabs, sessions, PDF cache)
+
+### UI
+- Remove focus rings from Button, Input, Toggle, Select, Textarea
+- Welcome Page settings gear button
+- Titlebar settings gear toggles settings/sessions
+
+### Fixes
+- Sidebar width persisted and restored correctly on restart
+- `closeProject` clears agent sessions and right panel tabs
+- `leftSidebarRef` mobile collapse fixed for no-project layout
+- Focus rings removed globally from interactive elements
+
 ## 0.2.8 — 2026-05-25
 
 ### Preview Mode — Overleaf-Style Writing Workspace

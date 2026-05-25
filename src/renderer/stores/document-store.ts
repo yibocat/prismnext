@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { AUTO_SAVE_DELAY } from "@/styles/constants";
 import { useProjectStore } from "./project-store";
 import { useRightPanelStore } from "./right-panel-store";
+import { useLayoutStore } from "./layout-store";
 import { useClaudeChatStore } from "./claude-chat-store";
 import { clearPdfCache } from "./compile-store";
 
@@ -28,6 +29,8 @@ interface FileContent {
 
 interface DocumentState {
   projectRoot: string | null;
+  showWelcome: boolean;
+  setShowWelcome: (show: boolean) => void;
   files: ProjectFile[];
   folders: string[];
   activeFileId: string | null;
@@ -89,6 +92,8 @@ const defaultTexContent = String.raw`\documentclass{article}
 
 export const useDocumentStore = create<DocumentState>((set, get) => ({
   projectRoot: null,
+  showWelcome: true,
+  setShowWelcome: (show) => set({ showWelcome: show }),
   files: [],
   folders: [],
   activeFileId: null,
@@ -107,6 +112,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       await window.electronAPI.agentDispose();
       useRightPanelStore.getState().closeAllTabs();
       useClaudeChatStore.getState().clearAllSessions();
+      useLayoutStore.getState().setLeftSidebarView("sessions");
       clearPdfCache();
       // Lazy import to avoid circular dependency
       (await import("./changes-store")).useChangesStore.getState().clearAll();
@@ -144,6 +150,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
       set({
         projectRoot: rootPath,
+        showWelcome: false,
         files,
         folders: result.folders,
         activeFileId: null,
@@ -161,8 +168,15 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
   closeProject: () => {
     clearAutoSaveTimer();
+    // Clean up sub-stores to prevent session/tab pollution
+    window.electronAPI.agentDispose();
+    useRightPanelStore.getState().closeAllTabs();
+    useClaudeChatStore.getState().clearAllSessions();
+    clearPdfCache();
+    import("./changes-store").then((m) => m.useChangesStore.getState().clearAll());
     set({
       projectRoot: null,
+      showWelcome: true,
       files: [],
       folders: [],
       activeFileId: null,

@@ -1,20 +1,21 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
+import { useLayoutStore } from "@/stores/layout-store";
 import { useProjectStore } from "@/stores/project-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useProjectOpen } from "@/hooks/use-project-open";
+import { NewProjectDialog } from "./new-project-dialog";
 import {
   FolderOpenIcon,
   FolderIcon,
   SparklesIcon,
-  Loader2Icon,
   XIcon,
   AlertCircleIcon,
-  ChevronRightIcon,
   SunIcon,
   MoonIcon,
   MonitorIcon,
   EllipsisIcon,
+  PlusIcon,
 } from "lucide-react";
 
 // ─── Recent Projects ───
@@ -52,7 +53,7 @@ function RecentProjects({ projectOpen }: { projectOpen: (path: string) => Promis
   if (recentProjects.length === 0) return null;
 
   return (
-    <div className="w-full max-w-xs">
+    <div className="w-full">
       <p className="mb-2 text-[length:var(--font-sidebar-section)] font-medium text-muted-foreground/60 uppercase tracking-wider">
         Recent
       </p>
@@ -93,19 +94,11 @@ function RecentProjects({ projectOpen }: { projectOpen: (path: string) => Promis
 
 // ─── Welcome Page ───
 
-export function WelcomePage() {
+export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
   const addRecentProject = useProjectStore((s) => s.addRecentProject);
   const openProject = useDocumentStore((s) => s.openProject);
   const projectOpen = useProjectOpen();
   const { theme, resolvedTheme, setTheme } = useTheme();
-
-  const [parentPath, setParentPath] = useState("");
-  const [projectName, setProjectName] = useState("");
-  const [creating, setCreating] = useState(false);
-
-  const fullPath = parentPath && projectName.trim()
-    ? `${parentPath}/${projectName.trim()}`
-    : "";
 
   const cycleTheme = () => {
     if (theme === "light") setTheme("dark");
@@ -120,23 +113,6 @@ export function WelcomePage() {
     if (!ok) return;
     addRecentProject(result.path);
     await openProject(result.path);
-  };
-
-  const handleSelectParent = async () => {
-    const result = await window.electronAPI.dialogOpenFolder();
-    if (!result.canceled && result.path) setParentPath(result.path);
-  };
-
-  const handleCreate = async () => {
-    if (!fullPath) return;
-    setCreating(true);
-    try {
-      await window.electronAPI.projectCreate(fullPath);
-      addRecentProject(fullPath);
-      await openProject(fullPath);
-    } catch {
-      setCreating(false);
-    }
   };
 
   return (
@@ -160,7 +136,11 @@ export function WelcomePage() {
         <button
           type="button"
           className="no-drag flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title="More"
+          title="Settings"
+          onClick={() => {
+            useDocumentStore.getState().setShowWelcome(false);
+            useLayoutStore.getState().setLeftSidebarView("settings");
+          }}
         >
           <EllipsisIcon className="size-4" />
         </button>
@@ -176,61 +156,24 @@ export function WelcomePage() {
           <span className="text-lg font-medium text-foreground tracking-tight">Prism</span>
         </div>
 
-        {/* Two-column layout */}
-        <div className="flex items-start gap-8">
+        {/* Two-column layout — stacks vertically on narrow windows */}
+        <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
           {/* Left column: New Project + Open */}
-          <div className="w-64 space-y-5">
+          <div className="w-full md:w-56 space-y-5">
             {/* New project */}
             <div className="space-y-2">
               <p className="text-[length:var(--font-sidebar-section)] font-medium text-muted-foreground/60 uppercase tracking-wider">
                 New Project
               </p>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[length:var(--font-button)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
-                onClick={handleSelectParent}
-              >
-                <FolderOpenIcon className="size-4 shrink-0 opacity-60" />
-                <span className={parentPath ? "text-foreground" : ""}>
-                  {parentPath ? parentPath.split("/").pop() || parentPath : "Select location"}
-                </span>
-              </button>
-
-              {parentPath && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 rounded-lg px-3 py-2">
-                    <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground/30" />
-                    <input
-                      type="text"
-                      className="flex-1 bg-transparent text-[length:var(--font-input)] text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
-                      placeholder="Project name"
-                      value={projectName}
-                      onChange={(e) => setProjectName(e.target.value)}
-                      disabled={creating}
-                      autoFocus
-                    />
-                  </div>
-
-                  {projectName.trim() && (
-                    <p className="px-3 text-[length:var(--font-path)] text-muted-foreground/40 truncate font-mono">
-                      {fullPath}
-                    </p>
-                  )}
-
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-[length:var(--font-button)] font-medium text-background hover:bg-foreground/90 transition-colors disabled:opacity-30"
-                    disabled={!projectName.trim() || creating}
-                    onClick={handleCreate}
-                  >
-                    {creating ? (
-                      <><Loader2Icon className="size-3.5 animate-spin" /> Creating...</>
-                    ) : (
-                      "Create Project"
-                    )}
-                  </button>
-                </div>
-              )}
+              <NewProjectDialog>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[length:var(--font-button)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
+                >
+                  <PlusIcon className="size-4 shrink-0 opacity-60" />
+                  Create new project...
+                </button>
+              </NewProjectDialog>
             </div>
 
             {/* Open existing */}
@@ -249,16 +192,25 @@ export function WelcomePage() {
             </div>
           </div>
 
-          {/* Divider */}
-          <div className="flex items-center self-stretch">
-            <div className="w-px h-48 bg-border/60" />
-          </div>
+          {/* Divider — horizontal on narrow, vertical on wide */}
+          <div className="h-px w-56 md:w-px md:h-48 bg-border/60 shrink-0" />
 
           {/* Right column: Recent projects */}
-          <div className="w-64">
+          <div className="w-full md:w-56">
             <RecentProjects projectOpen={projectOpen} />
           </div>
         </div>
+
+        {/* Skip */}
+        {onSkip && (
+          <button
+            type="button"
+            className="mt-10 text-[length:var(--font-button)] text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+            onClick={onSkip}
+          >
+            Skip for now
+          </button>
+        )}
       </div>
     </div>
   );

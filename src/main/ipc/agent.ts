@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from "electron";
+import { ipcMain, BrowserWindow, app } from "electron";
 import { AgentManager } from "../agents/agent-manager";
 import { getAgentConfig, DEFAULT_AGENT_ID } from "../agents/configs";
 import {
@@ -66,8 +66,9 @@ export function registerAgentHandlers(): void {
 
       const manager = getAgentManager(win);
 
-      // Ensure session exists for this tab
-      await manager.ensureSession(tabId, args.projectPath, args.agentId);
+      // Ensure session exists for this tab — fall back to home dir when no project
+      const cwd = args.projectPath || app.getPath("home");
+      await manager.ensureSession(tabId, cwd, args.agentId);
 
       // Send prompt (fire-and-forget, streaming via agent:stream events)
       manager.sendPrompt(tabId, args.prompt);
@@ -109,7 +110,8 @@ export function registerAgentHandlers(): void {
     "agent:listSessions",
     async (_event, args: { projectPath: string }) => {
       try {
-        return await listClaudeSessions(args.projectPath);
+        const cwd = args.projectPath || app.getPath("home");
+        return await listClaudeSessions(cwd);
       } catch {
         return [] as ClaudeSession[];
       }
@@ -120,7 +122,8 @@ export function registerAgentHandlers(): void {
     "agent:loadSession",
     async (_event, args: { projectPath: string; sessionId: string }) => {
       try {
-        return await loadSessionHistory(args.projectPath, args.sessionId);
+        const cwd = args.projectPath || app.getPath("home");
+        return await loadSessionHistory(cwd, args.sessionId);
       } catch {
         return [];
       }

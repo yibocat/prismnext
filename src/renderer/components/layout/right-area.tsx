@@ -20,7 +20,7 @@ import {
   Loader2Icon,
   Columns2Icon,
 } from "lucide-react";
-import { SIDEBAR_RIGHT_MIN, SIDEBAR_RIGHT_DEFAULT, RIGHT_AREA_DEFAULT } from "@/styles/constants";
+import { SIDEBAR_RIGHT_MIN, RIGHT_AREA_DEFAULT } from "@/styles/constants";
 import { cn } from "@/lib/utils";
 import { PreviewToolbar } from "@/components/modules/preview-mode";
 
@@ -209,7 +209,7 @@ export function RightArea({ centerRef, rightAreaRef }: RightAreaProps) {
           collapsedSize={0}
           minSize={SIDEBAR_RIGHT_MIN}
           maxSize="40%"
-          defaultSize={SIDEBAR_RIGHT_DEFAULT}
+          defaultSize={useLayoutStore.getState().rightSidebarWidth}
           groupResizeBehavior="preserve-pixel-size"
           onResize={(s) => {
             setRightSidebarWidth(s.inPixels);
