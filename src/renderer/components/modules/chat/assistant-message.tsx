@@ -56,7 +56,7 @@ function AssistantMessageParts() {
         }
 
         if (part.type === "data" && (part as any).name === "thinking") {
-          return <ThinkingWidget thinking={(part as any).data?.thinking || ""} />;
+          return <ThinkingWidget thinking={(part as any).data?.thinking || ""} duration={(part as any).data?.duration} />;
         }
 
         if (part.type === "tool-call") {

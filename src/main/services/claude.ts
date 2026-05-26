@@ -435,6 +435,12 @@ export async function listClaudeSessions(projectPath: string): Promise<ClaudeSes
     const { readdirSync, statSync, readFileSync } = require("fs");
     if (!existsSync(sessionsDir)) return [];
 
+    // Patterns that indicate system/local-command text (not real user prompts)
+    const SYSTEM_PATTERNS = [
+      /<\/?(?:local-command-caveat|command-name|command-message|command-args|local-command-stdout)>/i,
+      /^(Caveat|The messages below)/i,
+    ];
+
     const files = readdirSync(sessionsDir).filter((f: string) => f.endsWith(".jsonl"));
     for (const file of files) {
       try {
@@ -442,39 +448,40 @@ export async function listClaudeSessions(projectPath: string): Promise<ClaudeSes
         const stat = statSync(filePath);
         const sessionId = file.replace(".jsonl", "");
 
-        // Extract title from first user message
+        // Extract title from first meaningful user message
         const content = readFileSync(filePath, "utf-8");
         const lines = content.trim().split("\n");
         let title = "Untitled";
         for (const line of lines) {
           try {
             const msg = JSON.parse(line);
-            if (msg.type === "user" && msg.message?.content) {
-              // Skip local-command messages (internal Claude CLI commands)
-              const blocks = Array.isArray(msg.message.content) ? msg.message.content : [];
-              if (blocks.some((b: any) =>
-                b.type === "text" && typeof b.text === "string" &&
-                /<\/?(?:local-command-caveat|command-name|command-message|command-args|local-command-stdout)>/.test(b.text)
-              )) continue;
-              let text = "";
-              if (typeof msg.message.content === "string") {
-                text = msg.message.content;
-              } else if (Array.isArray(msg.message.content)) {
-                text = blocks
-                  .filter((b: any) => b.type === "text")
-                  .map((b: any) => b.text)
-                  .join(" ");
-              }
-              // Clean context prefixes and XML tags
-              text = text.replace(/^\[Currently open file:.*?\]\n?\n?/, "");
-              text = text.replace(/<[^>]+>/g, "").trim();
-              title = text.slice(0, 80).trim() || "Untitled";
-              break;
+            if (msg.type !== "user" || !msg.message?.content) continue;
+
+            const blocks = Array.isArray(msg.message.content) ? msg.message.content : [];
+            let text = "";
+            if (typeof msg.message.content === "string") {
+              text = msg.message.content;
+            } else {
+              text = blocks
+                .filter((b: any) => b.type === "text")
+                .map((b: any) => b.text)
+                .join(" ");
             }
+
+            // Strip XML tags (local-command blocks, system reminders, etc.)
+            text = text
+              .replace(/<[^>]+>/g, "")
+              .replace(/^\[Currently open file:.*?\]\n?\n?/, "")
+              .trim();
+
+            // Skip if the result looks like system/local-command text
+            if (!text || SYSTEM_PATTERNS.some((p) => p.test(text))) continue;
+
+            title = text.slice(0, 80).trim() || "Untitled";
+            break;
           } catch {}
         }
 
-        // Skip sessions with no meaningful title (only local-commands or empty)
         if (title !== "Untitled") {
           sessions.push({ id: sessionId, title, lastModified: stat.mtimeMs });
         }

@@ -24,6 +24,17 @@ export function registerAgentHandlers(): void {
     return { success: true };
   });
 
+  // ─── Pre-warm: start agent process eagerly to avoid delay on first prompt ───
+  ipcMain.handle("agent:prewarm", async (event, args: { projectPath: string; tabId?: string }) => {
+    const tabId = args.tabId || "default";
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) throw new Error("No window");
+    const manager = getAgentManager(win);
+    const cwd = args.projectPath || app.getPath("home");
+    await manager.ensureSession(tabId, cwd);
+    return { success: true };
+  });
+
   // ─── Status ───
   ipcMain.handle("agent:status", async () => {
     try {
@@ -58,6 +69,8 @@ export function registerAgentHandlers(): void {
         prompt: string;
         tabId?: string;
         agentId?: string;
+        sessionId?: string;
+        model?: string | null;
       },
     ) => {
       const tabId = args.tabId || "default";
@@ -68,10 +81,10 @@ export function registerAgentHandlers(): void {
 
       // Ensure session exists for this tab — fall back to home dir when no project
       const cwd = args.projectPath || app.getPath("home");
-      await manager.ensureSession(tabId, cwd, args.agentId);
+      await manager.ensureSession(tabId, cwd, args.agentId, args.sessionId);
 
       // Send prompt (fire-and-forget, streaming via agent:stream events)
-      manager.sendPrompt(tabId, args.prompt);
+      manager.sendPrompt(tabId, args.prompt, args.model);
     },
   );
 
@@ -84,6 +97,18 @@ export function registerAgentHandlers(): void {
       const manager = agentManager;
       if (!manager) return;
       await manager.cancel(tabId);
+    },
+  );
+
+  // ─── Close Session (kills agent process for a tab) ───
+
+  ipcMain.handle(
+    "agent:closeSession",
+    async (_event, args: { tabId?: string }) => {
+      const tabId = args.tabId || "default";
+      const manager = agentManager;
+      if (!manager) return;
+      await manager.closeSession(tabId);
     },
   );
 

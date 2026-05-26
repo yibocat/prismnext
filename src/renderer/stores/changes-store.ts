@@ -53,15 +53,15 @@ export const useChangesStore = create<ChangesState>()((set, get) => ({
     if (!change) return;
 
     const docState = useDocumentStore.getState();
-    const file = docState.files.find((f) => f.relativePath === change.filePath);
-    if (!file) {
-      set((state) => ({ changes: state.changes.filter((c) => c.id !== id) }));
-      return;
-    }
-
     try {
       await window.electronAPI.fsWrite(change.absolutePath, change.newContent);
-      await docState.refreshFileContent(file.id);
+      const file = docState.files.find((f) => f.relativePath === change.filePath);
+      if (file) {
+        await docState.refreshFileContent(file.id);
+      } else {
+        // File may have been created by the agent — refresh project file list
+        await docState.refreshFiles();
+      }
     } catch (err) {
       console.error("[changes] acceptChange write failed:", err);
       return; // don't remove from store on failure

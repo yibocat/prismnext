@@ -2,7 +2,11 @@ import { useEffect, useRef } from "react";
 import { useClaudeChatStore, type ClaudeStreamMessage } from "@/stores/claude-chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useChangesStore } from "@/stores/changes-store";
+import { useRightPanelStore } from "@/stores/right-panel-store";
 import { compileCurrentDocument, pauseAutoCompileForAi, resumeAutoCompileAfterAi } from "@/stores/compile-store";
+import { createLogger } from "@/services/logger";
+
+const log = createLogger("claude-events");
 
 // ─── ACP SessionNotification → batched text ───
 
@@ -23,63 +27,7 @@ interface AcpNotification {
   update: AcpUpdate;
 }
 
-// ─── System prompt removal ───
-// ACP delivers Claude's system prompt wrapped in XML tags.
-// Strategy: strip known system blocks by tag FIRST, then remove
-// any remaining preamble text that starts like a system directive.
-
-const SYSTEM_TAG_RE = /<[^>]+>/g;
-
-function stripSystemBlocks(text: string): string {
-  // Remove known system/internal XML blocks and their content.
-  let result = text;
-  // System prompt blocks
-  result = result.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "");
-  result = result.replace(/<EXTREMELY_IMPORTANT>[\s\S]*?<\/EXTREMELY_IMPORTANT>/g, "");
-  result = result.replace(/<instructions>[\s\S]*?<\/instructions>/g, "");
-  result = result.replace(/<function>[\s\S]*?<\/function>/g, "");
-  result = result.replace(/<role>[\s\S]*?<\/role>/g, "");
-  // Claude CLI local command blocks (saved in JSONL, should never be shown)
-  result = result.replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g, "");
-  result = result.replace(/<command-name>[\s\S]*?<\/command-name>/g, "");
-  result = result.replace(/<command-message>[\s\S]*?<\/command-message>/g, "");
-  result = result.replace(/<command-args>[\s\S]*?<\/command-args>/g, "");
-  result = result.replace(/<local-command-stdout>[\s\S]*?<\/local-command-stdout>/g, "");
-  return result;
-}
-
-function stripSystemPreamble(text: string): string {
-  // After XML blocks are removed, strip leading lines that are clearly
-  // part of the system prompt (role description, rules, etc.)
-  const lines = text.split("\n");
-  let start = 0;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) { start = i + 1; continue; }
-    // Stop stripping when we hit something that looks like a real response
-    if (/^(Hey|Hi|Hello|Sure|OK|Let me|I'll|I will|Here|The|This|That|Alright|Great|Thanks|Based on|Looking at|First|Let's|I can|I see|I found|I notice|I've)/i.test(line)) {
-      start = i;
-      break;
-    }
-    // Keep stripping system-like lines
-    if (/^(You are|IMPORTANT|System|Rules|Instructions|Tools|Environment|Working|Current|Available|When|Always|Never|Your|The user|\[|#|```)/i.test(line)) {
-      start = i + 1;
-      continue;
-    }
-    // Unknown line → might be real content, stop here
-    start = i;
-    break;
-  }
-  return lines.slice(start).join("\n").trim();
-}
-
-function cleanTextForDisplay(raw: string): string {
-  let text = stripSystemBlocks(raw);
-  text = stripSystemPreamble(text);
-  // Remove remaining XML tags for display
-  text = text.replace(SYSTEM_TAG_RE, "").trim();
-  return text;
-}
+import { cleanTextForDisplay } from "@/lib/system-prompt-cleaner";
 
 // ─── Hook ───
 
@@ -90,9 +38,23 @@ export function useClaudeEvents() {
   const aiSessionActiveRef = useRef(new Map<string, boolean>());
   const fileContentTrackerRef = useRef(new Map<string, string>());
 
+  // Clear file content tracker on project switch to prevent cross-project corruption
+  useEffect(() => {
+    const docState = useDocumentStore.getState();
+    let prevRoot = docState.projectRoot;
+    const unsub = useDocumentStore.subscribe((state) => {
+      if (state.projectRoot !== prevRoot) {
+        prevRoot = state.projectRoot;
+        fileContentTrackerRef.current.clear();
+      }
+    });
+    return unsub;
+  }, []);
+
   // Per-tab text/thinking accumulation (running total for entire turn)
   const textTotalRef = useRef(new Map<string, string>());
   const thinkTotalRef = useRef(new Map<string, string>());
+  const thinkStartRef = useRef(new Map<string, number>()); // timestamp when thinking phase started
   const flushTimerRef = useRef(new Map<string, number>());
 
   function getTabMap<T>(ref: Map<string, T>, tabId: string, init: () => T): T {
@@ -104,9 +66,11 @@ export function useClaudeEvents() {
     pendingToolUsesRef.current.delete(tabId);
     hasTexChangesRef.current.delete(tabId);
     aiSessionActiveRef.current.delete(tabId);
-    fileContentTrackerRef.current.clear();
+    // Keep fileContentTrackerRef — it tracks cumulative edits across tabs
+    // and is only cleared on project open/close
     textTotalRef.current.delete(tabId);
     thinkTotalRef.current.delete(tabId);
+    thinkStartRef.current.delete(tabId);
   }
 
   function registerProposedChange(
@@ -128,7 +92,7 @@ export function useClaudeEvents() {
       (f) => f.relativePath === relativePath || f.absolutePath === filePath,
     );
     if (!file) {
-      console.log("[changes] file not found:", filePath);
+      log.debug("file not found in project", { filePath, relativePath, projectFiles: docState.files.length });
       return;
     }
 
@@ -140,38 +104,30 @@ export function useClaudeEvents() {
 
     let newContent: string;
 
-    if (name === "write") {
+    if (name.startsWith("write")) {
       newContent = toolInput?.content ?? "";
-    } else if (name === "multiedit" && Array.isArray(toolInput?.edits)) {
+    } else if (name.startsWith("multiedit") && Array.isArray(toolInput?.edits)) {
       newContent = oldContent;
       for (const edit of toolInput.edits) {
         const oldStr: string = edit.old_string ?? "";
         const newStr: string = edit.new_string ?? "";
         if (oldStr === "" && newStr === "") continue;
         const escaped = oldStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        newContent = newContent.replace(new RegExp(escaped, "g"), newStr);
+        newContent = newContent.replace(new RegExp(escaped), newStr);
       }
-    } else if (name === "edit") {
+    } else if (name.startsWith("edit")) {
       const oldStr: string = toolInput?.old_string ?? "";
       const newStr: string = toolInput?.new_string ?? "";
       if (oldStr === "" && newStr === "") {
-        console.log("[changes] empty edit — skipping");
+        log.debug("empty edit — skipping", { toolName, filePath });
         return;
       }
       const escaped = oldStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      newContent = oldContent.replace(new RegExp(escaped, "g"), newStr);
+      newContent = oldContent.replace(new RegExp(escaped), newStr);
     } else {
-      console.log("[changes] unknown tool:", toolName);
+      log.debug("unknown tool — skipping", { toolName, filePath });
       return;
     }
-
-    console.log("[changes] detected", {
-      tool: toolName,
-      file: file.relativePath,
-      oldLen: oldContent.length,
-      newLen: newContent.length,
-      changed: oldContent !== newContent,
-    });
 
     if (oldContent !== newContent) {
       fileContentTrackerRef.current.set(file.relativePath, newContent);
@@ -180,13 +136,19 @@ export function useClaudeEvents() {
         id: toolUseId,
         filePath: file.relativePath,
         absolutePath: file.absolutePath,
-        oldContent: capturedOldContent || docState.getContent(file.id) || "",
+        oldContent, // Use the actual base content used for the edit computation
         newContent,
         toolName,
       });
-      console.log("[changes] registered for", file.relativePath);
-    } else {
-      console.log("[changes] no difference — skipped");
+      log.info("change registered", { tool: toolName, file: file.relativePath, delta: newContent.length - oldContent.length });
+
+      // Auto-open the file in the right panel so the diff is immediately visible
+      const rpState = useRightPanelStore.getState();
+      const existingTab = rpState.tabs.find((t) => t.filePath === file.relativePath);
+      if (!existingTab) {
+        const fileName = file.relativePath.split("/").pop() || file.relativePath;
+        rpState.openFile(file.relativePath, file.relativePath, fileName);
+      }
     }
   }
 
@@ -205,9 +167,11 @@ export function useClaudeEvents() {
     const think = hasLocalCommand.test(rawThink) ? "" : cleanTextForDisplay(rawThink);
 
     if (think) {
+      const thinkStart = thinkStartRef.current.get(tabId);
+      const duration = thinkStart ? Math.round((Date.now() - thinkStart) / 1000) : undefined;
       chatStore._upsertLastMessage(tabId, {
         type: "assistant",
-        message: { content: [{ type: "thinking", thinking: think }] },
+        message: { content: [{ type: "thinking", thinking: think, duration }] },
       });
     }
 
@@ -265,6 +229,11 @@ export function useClaudeEvents() {
           const raw = update.content?.text;
           if (!raw) break;
 
+          // Track thinking start time
+          if (!thinkStartRef.current.has(tabId)) {
+            thinkStartRef.current.set(tabId, Date.now());
+          }
+
           // Accumulate raw thinking (keep XML tags for system block detection)
           const total = thinkTotalRef.current.get(tabId) || "";
           thinkTotalRef.current.set(tabId, total + raw);
@@ -278,8 +247,28 @@ export function useClaudeEvents() {
           flushTextBuffer(tabId);
           textTotalRef.current.set(tabId, "");
           thinkTotalRef.current.set(tabId, "");
+          thinkStartRef.current.delete(tabId); // reset timer for next thinking segment
 
           if (!update.toolCallId) break;
+
+          // Build synthetic input from locations and content for chat display
+          // (rawInput is not available in tool_call, only in tool_call_update)
+          const locations = (update as any).locations as Array<{ path: string }> | undefined;
+          const contentArr = (update as any).content as Array<any> | undefined;
+          const syntheticInput: any = {};
+          if (locations?.[0]?.path) {
+            syntheticInput.file_path = locations[0].path;
+          }
+          // For Edit tools, extract old/new from content diff
+          if (contentArr) {
+            for (const item of contentArr) {
+              if (item.type === "diff" && item.path) {
+                syntheticInput.file_path = item.path;
+                if (item.oldText !== undefined) syntheticInput.old_string = item.oldText;
+                if (item.newText !== undefined) syntheticInput.new_string = item.newText;
+              }
+            }
+          }
 
           const msg: ClaudeStreamMessage = {
             type: "assistant",
@@ -288,17 +277,18 @@ export function useClaudeEvents() {
                 type: "tool_use",
                 id: update.toolCallId,
                 name: update.title || "",
-                input: update.rawInput,
+                input: Object.keys(syntheticInput).length > 0 ? syntheticInput : update.rawInput,
               }],
             },
           };
 
           // Track tool_use for change detection
+          // ACP Claude agent puts file paths in locations or content, NOT in rawInput
           const name = (update.title || "").toLowerCase();
-          if (name === "write" || name === "edit" || name === "multiedit") {
+          if (name.startsWith("write") || name.startsWith("edit") || name.startsWith("multiedit")) {
             let oldContent: string | undefined;
-            const rawInput = update.rawInput as any;
-            const fp = rawInput?.file_path || rawInput?.path;
+            const locations = (update as any).locations as Array<{ path: string }> | undefined;
+            const fp = locations?.[0]?.path;
             if (fp && /\.(tex|bib|sty|cls)$/i.test(fp)) {
               const docState = useDocumentStore.getState();
               const projectRoot = docState.projectRoot;
@@ -313,7 +303,12 @@ export function useClaudeEvents() {
                 oldContent = docState.getContent(file.id) ?? "";
               }
             }
-            pendingTools.set(update.toolCallId, { name: update.title || "", input: rawInput, oldContent });
+            pendingTools.set(update.toolCallId, {
+              name: update.title || "",
+              input: update.rawInput as any,
+              oldContent,
+              _fp: fp,
+            });
           }
 
           chatStore._appendMessage(tabId, msg);
@@ -344,11 +339,16 @@ export function useClaudeEvents() {
           if (
             toolUse &&
             update.status !== "failed" &&
-            /^(Write|write|Edit|edit|MultiEdit|multiedit)$/.test(toolUse.name)
+            /^(Write|write|Edit|edit|MultiEdit|multiedit)(\s|$)/.test(toolUse.name)
           ) {
-            const fp = toolUse.input?.file_path || toolUse.input?.path;
+            const updateRawInput = (update as any).rawInput as any;
+            // File path: try stored _fp first (from locations in tool_call), then rawInput from update
+            const fp = (toolUse as any)._fp
+              || updateRawInput?.file_path
+              || updateRawInput?.path;
+            const input = updateRawInput || toolUse.input;
             if (fp && /\.(tex|bib|sty|cls)$/i.test(fp)) {
-              registerProposedChange(fp, update.toolCallId!, toolUse.name, toolUse.input, toolUse.oldContent ?? "");
+              registerProposedChange(fp, update.toolCallId!, toolUse.name, input, toolUse.oldContent ?? "");
               hasTexChangesRef.current.set(tabId, true);
             }
           }
@@ -391,7 +391,9 @@ export function useClaudeEvents() {
         chatStore._setError(tabId, error);
       }
 
-      chatStore._setStreaming(tabId, false);
+      // Delay isStreaming=false to allow any pending stream events to arrive first
+      // (IPC events from main process may be delivered after agent:complete)
+      setTimeout(() => chatStore._setStreaming(tabId, false), 50);
 
       // Auto-recompile if tex files changed
       if (hasTexChangesRef.current.get(tabId)) {
@@ -411,7 +413,7 @@ export function useClaudeEvents() {
 
     // ─── Agent Stderr Handler ───
     const unsubStderr = window.electronAPI.onAgentStderr(({ tabId, data }) => {
-      console.warn("[agent stderr]", tabId, data);
+      log.warn("agent stderr", { tabId, data });
     });
 
     return () => {

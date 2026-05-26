@@ -14,6 +14,7 @@ import { RightArea } from "@/components/layout/right-area";
 import { BottomBar } from "@/components/layout/bottom-bar";
 import {
   SIDEBAR_LEFT_MIN,
+  SIDEBAR_LEFT_DEFAULT,
   RIGHT_AREA_MIN,
   SIDEBAR_OVERLAY_THRESHOLD,
 } from "@/styles/constants";
@@ -22,7 +23,6 @@ const SEP = "w-px bg-border hover:bg-primary/40 transition-colors outline-none";
 
 export function App() {
   const isMobile = useIsMobile();
-  const editorMaximized = useLayoutStore((s) => s.editorMaximized);
   const setSidebarWidth = useLayoutStore((s) => s.setSidebarWidth);
   const setRightAreaWidth = useLayoutStore((s) => s.setRightAreaWidth);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
@@ -39,7 +39,7 @@ export function App() {
 
   // Sidebar overlay threshold: below 500px, sidebar opens as fullscreen overlay
   const belowOverlayThreshold = useRef(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const check = () => {
       const narrow = window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD;
       const st = useLayoutStore.getState();
@@ -53,7 +53,7 @@ export function App() {
       } else if (!narrow && belowOverlayThreshold.current) {
         // Crossed above threshold: close overlay, restore panel
         if (st.leftSidebarOverlay) st.setLeftSidebarOverlay(false);
-        left?.expand();
+        left?.resize(st.sidebarWidth || SIDEBAR_LEFT_DEFAULT);
         belowOverlayThreshold.current = false;
       }
     };
@@ -115,7 +115,7 @@ export function App() {
                 collapsible
                 collapsedSize={0}
                 minSize={SIDEBAR_LEFT_MIN}
-                defaultSize={useLayoutStore.getState().sidebarWidth}
+                defaultSize={window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD ? 0 : useLayoutStore.getState().sidebarWidth}
                 groupResizeBehavior="preserve-pixel-size"
                 onResize={(s) => {
                   if (s.inPixels > 0) setSidebarWidth(s.inPixels);
@@ -148,7 +148,7 @@ export function App() {
                     <LeftMainArea />
                   </Panel>
 
-                  <Separator id="sep-center-right" className={SEP} disabled={editorMaximized} />
+                  <Separator id="sep-center-right" className={SEP} />
 
                   <Panel
                     id="right-area"
@@ -156,11 +156,10 @@ export function App() {
                     collapsible
                     collapsedSize={0}
                     minSize={RIGHT_AREA_MIN}
-                    defaultSize={useLayoutStore.getState().rightAreaWidth}
-                    groupResizeBehavior="preserve-pixel-size"
+                    defaultSize={0}
                     onResize={(s) => {
-                      if (s.inPixels > 0) setRightAreaWidth(s.inPixels);
                       const st = useLayoutStore.getState();
+                      if (s.inPixels > 0 && !st.editorMaximized) setRightAreaWidth(s.inPixels);
                       if (s.inPixels === 0 && st.rightAreaExpanded) st.setRightAreaExpanded(false);
                       if (s.inPixels > 0 && !st.rightAreaExpanded) st.setRightAreaExpanded(true);
                     }}
@@ -191,7 +190,7 @@ export function App() {
                 collapsible
                 collapsedSize={0}
                 minSize={SIDEBAR_LEFT_MIN}
-                defaultSize={useLayoutStore.getState().sidebarWidth}
+                defaultSize={window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD ? 0 : useLayoutStore.getState().sidebarWidth}
                 groupResizeBehavior="preserve-pixel-size"
                 onResize={(s) => {
                   if (s.inPixels > 0) setSidebarWidth(s.inPixels);

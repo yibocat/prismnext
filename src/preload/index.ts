@@ -60,11 +60,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Agent operations (ACP-based)
   agentDispose: () => ipcRenderer.invoke("agent:dispose"),
+  agentPrewarm: (projectPath: string, tabId?: string) =>
+    ipcRenderer.invoke("agent:prewarm", { projectPath, tabId }),
   agentStatus: () => ipcRenderer.invoke("agent:status"),
-  agentSend: (projectPath: string, prompt: string, tabId?: string, agentId?: string) =>
-    ipcRenderer.invoke("agent:send", { projectPath, prompt, tabId, agentId }),
+  agentSend: (projectPath: string, prompt: string, tabId?: string, agentId?: string, sessionId?: string, model?: string | null) =>
+    ipcRenderer.invoke("agent:send", { projectPath, prompt, tabId, agentId, sessionId, model }),
   agentCancel: (tabId?: string) =>
     ipcRenderer.invoke("agent:cancel", { tabId }),
+  agentCloseSession: (tabId?: string) =>
+    ipcRenderer.invoke("agent:closeSession", { tabId }),
   agentAnswer: (tabId: string, answer: string) =>
     ipcRenderer.invoke("agent:answer", { tabId, answer }),
   agentListSessions: (projectPath: string) =>

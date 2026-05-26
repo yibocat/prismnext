@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.2.10 — 2026-05-26
+
+### Layout System — Critical Bug Fixes
+- **RightArea overlap fix**: removed `groupResizeBehavior="preserve-pixel-size"` from rightArea Panel that caused rightArea to resist shrinking and visually overlap the center AI Chat panel when dragging LeftSidebar wider
+- **Minimize/Restore fix**: save rightArea width in maximize button onClick *before* calling `c.collapse()`, preventing the stored width from being polluted by the post-collapse redistributed full-width value; restore button uses `c.expand()` + `r.resize(store.rightAreaWidth)` for deterministic recovery
+- **Separator unlocked**: removed `disabled={editorMaximized}` from center-rightArea separator, allowing users to drag back from maximized state instead of being trapped
+- **RightArea initial state fix**: `defaultSize` changed from persisted width to `0`, preventing constraint violations on layout remount in narrow windows that caused rightArea to show instead of AI Chat after project switch
+- **LeftSidebar narrow-window fix**: `useEffect` → `useLayoutEffect` for overlay threshold check so collapse runs before paint; `expand()` replaced with `resize(persistedWidth)` for reliable restore; conditional `defaultSize` returns `0` below 500px window width to prevent sidebar rendering inline on project switch in narrow windows
+
+### ACP Agent
+- Session resume support: agent manager accepts optional `sessionIdToResume` parameter for restoring previous sessions
+- Path traversal security: `readTextFile` validates that resolved paths stay within project directory
+- Throttled stderr forwarding to renderer (max 1 event per second)
+- Close tab now cancels running prompt and kills agent session process
+
+### AI Chat
+- Expanded tool widgets with structured outputs (Write, Edit, MultiEdit, Bash, TodoWrite, NotebookEdit, etc.)
+- Thinking duration cached and displayed for loaded sessions
+- Tab bar drag-and-drop reorder, improved close-tab index calculation
+- System prompt cleaner utility strips metadata blocks before display
+- Runtime provider simplified with ref-based streaming guard
+
+### Editor
+- New changes-bar component showing proposed diffs (accept/reject per file or all)
+- Editor toolbar enhanced with compile, PDF toggle, and changes controls
+- Changes store tracks last-active and auto-clears on project switch
+
+### Chat Tab Bar
+- Drag-and-drop tab reorder with `onReorder` callback
+- Improved overflow scrolling and active-tab auto-scroll-into-view
+- Empty-state hidden when no tabs exist
+
 ## 0.2.9 — 2026-05-26
 
 ### Settings Page

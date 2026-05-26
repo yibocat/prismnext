@@ -34,14 +34,33 @@ const AGENT_MODES = [
   { id: "plan" as const, name: "Plan mode" },
 ];
 
+// Module-level flag prevents double-prewarm when React StrictMode re-runs effects
+let didPrewarm = false;
+
 export function LeftMainArea() {
   useClaudeEvents();
 
-  // Sync sessionId to store when agent creates a new session
+  // Pre-warm agent on mount to avoid delay on first prompt (only for new sessions without loaded context)
   useEffect(() => {
-    return window.electronAPI.onAgentSessionCreated(({ sessionId }) => {
+    if (didPrewarm) return;
+    const projectPath = useDocumentStore.getState().projectRoot;
+    if (!projectPath || !window.electronAPI.agentPrewarm) return;
+    const store = useClaudeChatStore.getState();
+    // Only prewarm if the active tab doesn't have a loaded session (which needs resume, not new)
+    const tab = store.tabs.find((t) => t.id === store.activeTabId);
+    if (tab?.sessionId) return; // Session already loaded, will be resumed on first prompt
+    didPrewarm = true;
+    window.electronAPI.agentPrewarm(projectPath, store.activeTabId).catch(() => {});
+  }, []);
+
+  // Sync sessionId to store when agent creates a new session (only if not already set)
+  useEffect(() => {
+    return window.electronAPI.onAgentSessionCreated(({ tabId: eventTabId, sessionId }) => {
       const store = useClaudeChatStore.getState();
-      store._setSessionId(store.activeTabId, sessionId);
+      const targetTabId = eventTabId || store.activeTabId;
+      // Always update — the latest session for this tab is the correct one.
+      // (StrictMode double-prewarm or session resumption can produce newer IDs.)
+      store._setSessionId(targetTabId, sessionId);
     });
   }, []);
 

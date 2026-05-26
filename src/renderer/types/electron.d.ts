@@ -83,9 +83,11 @@ export interface ElectronAPI {
 
   // Agent operations (ACP-based)
   agentDispose: () => Promise<{ success: boolean }>;
+  agentPrewarm: (projectPath: string, tabId?: string) => Promise<{ success: boolean }>;
   agentStatus: () => Promise<{ available: boolean; agentId?: string; agentName?: string; error?: string }>;
-  agentSend: (projectPath: string, prompt: string, tabId?: string, agentId?: string) => Promise<void>;
+  agentSend: (projectPath: string, prompt: string, tabId?: string, agentId?: string, sessionId?: string, model?: string | null) => Promise<void>;
   agentCancel: (tabId?: string) => Promise<void>;
+  agentCloseSession: (tabId?: string) => Promise<void>;
   agentAnswer: (tabId: string, answer: string) => Promise<void>;
   agentListSessions: (projectPath: string) => Promise<Array<{ id: string; title: string; lastModified: number }>>;
   agentLoadSession: (projectPath: string, sessionId: string) => Promise<any[]>;

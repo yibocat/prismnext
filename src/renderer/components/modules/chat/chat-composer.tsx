@@ -103,6 +103,11 @@ export function ChatComposer() {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
+
+    return () => {
+      // Save draft on unmount or before switching away
+      useClaudeChatStore.getState().saveDraft(activeTabId, { input: inputRef.current });
+    };
   }, [activeTabId]);
 
   // ─── Model picker position ───
@@ -222,6 +227,12 @@ export function ChatComposer() {
 
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
+        // If a slash command prefix matches, execute it (ignore extra text)
+        const cmd = builtinCommands.find((c) => input.trim().startsWith(`/${c.name}`));
+        if (cmd && slashCommands.length > 0) {
+          cmd.action();
+          return;
+        }
         handleSend();
       }
       if (e.key === "Backspace" && pinnedContexts.length > 0 && input === "") {
@@ -257,10 +268,10 @@ export function ChatComposer() {
       const value = e.target.value;
       setInput(value);
 
-      // Detect / slash command (only at start of input)
-      if (value.match(/^\/(\w*)$/)) {
-        const match = value.match(/^\/(\w*)$/)!;
-        setSlashQuery(match[1] || "");
+      // Detect / slash command (prefix match at start of input)
+      const slashMatch = value.match(/^\/(\w+)/);
+      if (slashMatch) {
+        setSlashQuery(slashMatch[1]);
         setMentionQuery(null);
       } else {
         setSlashQuery(null);

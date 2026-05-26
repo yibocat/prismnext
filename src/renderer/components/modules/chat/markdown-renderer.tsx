@@ -1,6 +1,7 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
+import rehypeSanitize from "rehype-sanitize";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { useState, useCallback, memo, useMemo } from "react";
@@ -113,7 +114,16 @@ export function MarkdownRenderer({ content }: { content: string }) {
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeRaw]}
+        rehypePlugins={[
+          rehypeRaw,
+          rehypeSanitize({
+            // Allow style + aria-hidden on span/div — needed by KaTeX math rendering
+            attributes: {
+              span: ["style", "className", "ariaHidden", "aria-hidden"],
+              div: ["style", "className", "ariaHidden", "aria-hidden"],
+            },
+          }) as any,
+        ]}
         components={{
           pre({ children }) {
             return <>{children}</>;

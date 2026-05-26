@@ -44,7 +44,6 @@ export function RightArea({ centerRef, rightAreaRef }: RightAreaProps) {
   const toggleRightSidebar = useLayoutStore((s) => s.toggleRightSidebar);
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
   const setRightSidebarWidth = useLayoutStore((s) => s.setRightSidebarWidth);
-  const prevRightWidth = useRef(RIGHT_AREA_DEFAULT);
 
   const tabs = useRightPanelStore((s) => s.tabs);
   const activeTabId = useRightPanelStore((s) => s.activeTabId);
@@ -184,9 +183,12 @@ export function RightArea({ centerRef, rightAreaRef }: RightAreaProps) {
             if (!c || !r) return;
             if (c.isCollapsed()) {
               if (isMobile) { r.collapse(); c.resize(9999); }
-              else { c.expand(); r.resize(prevRightWidth.current); }
+              else {
+                c.expand();
+                r.resize(useLayoutStore.getState().rightAreaWidth || RIGHT_AREA_DEFAULT);
+              }
             } else {
-              prevRightWidth.current = r.getSize().inPixels;
+              useLayoutStore.getState().setRightAreaWidth(r.getSize().inPixels);
               c.collapse();
               r.resize(9999);
             }

@@ -36,16 +36,16 @@ CopyButton.displayName = "CopyButton";
 
 // ─── Streaming Indicator ───
 
-const StreamingIndicator = memo(() => {
+const StreamingIndicator = memo(({ startTime }: { startTime: number }) => {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    const start = Date.now();
+    const start = startTime;
     const timer = setInterval(() => {
       setElapsed(Math.floor((Date.now() - start) / 1000));
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [startTime]);
 
   return (
     <div className="flex items-center gap-2 px-4 py-2">
@@ -101,7 +101,7 @@ const AssistantMessage = memo(function AssistantMessage({
       <div className="min-w-0 flex-1">
           {blocks.map((block, i) => {
             if (block.type === "thinking" && block.thinking) {
-              return <ThinkingWidget key={i} thinking={block.thinking} />;
+              return <ThinkingWidget key={i} thinking={block.thinking} duration={(block as any).duration} />;
             }
             if (block.type === "text" && block.text) {
               return (
@@ -161,10 +161,14 @@ export function ChatMessages() {
   const agentStartedRef = useRef(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
+  // Track when streaming started (for accurate elapsed time display)
+  const streamingStartRef = useRef(Date.now());
+
   // Reset agent tracking when streaming starts
   useEffect(() => {
     if (isStreaming) {
       agentStartedRef.current = false;
+      streamingStartRef.current = Date.now();
     }
   }, [isStreaming]);
 
@@ -185,24 +189,23 @@ export function ChatMessages() {
 
   // Deduplicate and filter messages (memoized), with index map for O(1) key lookup
   const { displayMessages, msgIndexMap } = useMemo(() => {
-    const textSet = new Set<string>();
+    // Track result messages by usage data to dedup (not by text content)
+    const seenResultKeys = new Set<string>();
     const idxMap = new Map<ClaudeStreamMessage, number>();
-    for (const msg of messages) {
-      if (msg.type === "assistant" && msg.message?.content) {
-        for (const block of msg.message.content) {
-          if (block.type === "text" && block.text) {
-            textSet.add(block.text.trim());
-          }
-        }
-      }
-    }
     const filtered = messages.filter((msg, i) => {
       if (msg.type === "system") return false;
       if (msg.type === "user" && msg.message?.content?.every((b) => b.type === "tool_result")) {
         return false;
       }
-      if (msg.type === "result" && msg.result && textSet.has(msg.result.trim())) {
-        return false;
+      // Dedup result messages by usage info (not by text which can collide)
+      if (msg.type === "result") {
+        if (msg.usage) {
+          const key = `${msg.usage.input_tokens}-${msg.usage.output_tokens}`;
+          if (seenResultKeys.has(key)) return false;
+          seenResultKeys.add(key);
+        }
+        if (msg.result && seenResultKeys.has(msg.result)) return false;
+        if (msg.result) seenResultKeys.add(msg.result);
       }
       idxMap.set(msg, i);
       return true;
@@ -289,7 +292,7 @@ export function ChatMessages() {
             return null;
           })}
           {isStreaming && !agentStartedRef.current && (
-            <StreamingIndicator />
+            <StreamingIndicator startTime={streamingStartRef.current} />
           )}
         </div>
       </div>

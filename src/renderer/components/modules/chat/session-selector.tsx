@@ -22,6 +22,7 @@ function relativeTime(ms: number): string {
 
 export function SessionSelector() {
   const sessionId = useClaudeChatStore((s) => s.sessionId);
+  const tabs = useClaudeChatStore((s) => s.tabs);
   const loadSession = useClaudeChatStore((s) => s.loadSession);
   const newSession = useClaudeChatStore((s) => s.newSession);
   const isStreaming = useClaudeChatStore((s) => s.isStreaming);
@@ -31,13 +32,14 @@ export function SessionSelector() {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const prevSessionId = useRef<string | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
 
-  const fetchSessions = useCallback(async () => {
+  const fetchSessions = useCallback(async (showLoading = true) => {
     const cwd = projectRoot || "";
-    setLoading(true);
+    if (showLoading) setLoading(true);
     setError(null);
     try {
       const result = await window.electronAPI.agentListSessions(cwd);
@@ -51,8 +53,29 @@ export function SessionSelector() {
 
   useEffect(() => {
     if (!open) return;
-    fetchSessions();
+    fetchSessions(true);
   }, [open, fetchSessions]);
+
+  // Optimistic: when a new session ID appears, add it immediately to the list
+  useEffect(() => {
+    if (!sessionId || sessionId === prevSessionId.current) return;
+    prevSessionId.current = sessionId;
+
+    // Don't add if already in the list
+    if (sessions.some((s) => s.id === sessionId)) return;
+
+    // Find the tab with this session to get a title
+    const tab = tabs.find((t) => t.sessionId === sessionId);
+    const title = tab?.title || "New Chat";
+
+    setSessions((prev) => [
+      { id: sessionId, title, lastModified: Date.now() },
+      ...prev,
+    ]);
+
+    // Also do a silent refresh from JSONL to get accurate data
+    fetchSessions(false);
+  }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Position dropdown relative to button using fixed positioning (avoids clipping)
   useEffect(() => {
@@ -87,36 +110,17 @@ export function SessionSelector() {
     }
   }, [loadSession]);
 
-  const doDelete = useCallback(async (sid: string) => {
-    console.log("[session-selector] Delete clicked:", sid);
+  const handleDelete = useCallback(async (e: React.MouseEvent, sid: string) => {
+    e.stopPropagation();
+    e.preventDefault();
     const cwd = projectRoot || "";
     const result = await window.electronAPI.agentDeleteSession(cwd, sid);
-    console.log("[session-selector] Delete result:", result);
     if (result.success) {
       setSessions((prev) => prev.filter((s) => s.id !== sid));
     } else {
       setError(result.error || "Failed to delete session");
     }
   }, [projectRoot]);
-
-  // Diagnostic: log every click inside the dropdown to verify event delivery
-  useEffect(() => {
-    const dropdown = dropdownRef.current;
-    if (!open || !dropdown) return;
-    const logClick = (e: Event) => {
-      console.log("[session-selector] RAW CLICK target:", (e.target as Element)?.tagName, (e.target as Element)?.className, (e.target as Element)?.closest?.(".delete-session-btn") ? "IS DELETE BTN" : "not delete");
-      const btn = (e.target as Element)?.closest?.(".delete-session-btn") as HTMLElement | null;
-      if (btn) {
-        e.stopPropagation();
-        e.preventDefault();
-        const sid = btn.dataset.sid;
-        console.log("[session-selector] DELETE sid:", sid);
-        if (sid) doDelete(sid);
-      }
-    };
-    dropdown.addEventListener("click", logClick);
-    return () => dropdown.removeEventListener("click", logClick);
-  }, [open, doDelete]);
 
   return (
     <>
@@ -144,13 +148,6 @@ export function SessionSelector() {
           >
             <div className="flex items-center justify-between px-3 py-1.5 border-border border-b">
               <span className="font-medium text-muted-foreground text-[length:var(--font-session-item)]">Sessions</span>
-              <button
-                type="button"
-                className="bg-red-500 text-white px-2 py-0.5 rounded text-[length:var(--font-session-item)]"
-                onClick={() => { console.log("[session-selector] TEST BTN CLICKED"); alert("TEST"); }}
-              >
-                TEST
-              </button>
               {error && <span className="text-destructive text-[length:var(--font-session-item)]">{error}</span>}
             </div>
 
@@ -184,8 +181,8 @@ export function SessionSelector() {
                     )}
                     <button
                       type="button"
-                      className="delete-session-btn shrink-0 rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all cursor-pointer"
-                      data-sid={s.id}
+                      className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all cursor-pointer"
+                      onClick={(e) => handleDelete(e, s.id)}
                       title="Delete session"
                     >
                       <Trash2Icon className="size-3 pointer-events-none" />

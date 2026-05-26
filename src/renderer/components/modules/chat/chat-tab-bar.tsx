@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { useClaudeChatStore } from "@/stores/claude-chat-store";
 import { PlusIcon, XIcon, BotIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -20,51 +20,70 @@ export function ChatTabBar() {
   const closeTab = useClaudeChatStore((s) => s.closeTab);
   const setSelectedAgent = useClaudeChatStore((s) => s.setSelectedAgent);
 
-  // Keyboard shortcuts
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      // Only fire when drawer is visible
-      if (drawerState === "closed") return;
+  // Keep latest values in refs to avoid rebuilding keyboard listener
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+  const activeTabIdRef = useRef(activeTabId);
+  activeTabIdRef.current = activeTabId;
+  const drawerStateRef = useRef(drawerState);
+  drawerStateRef.current = drawerState;
 
-      // Cmd+T / Ctrl+T: new tab
-      if ((e.metaKey || e.ctrlKey) && e.key === "t" && !e.shiftKey) {
-        e.preventDefault();
-        const id = createTab();
-        setActiveTab(id);
-        return;
+  // Keyboard shortcuts — stable listener, reads latest values from refs
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Only fire when drawer is visible
+    if (drawerStateRef.current === "closed") return;
+
+    // Don't intercept when user is typing in an input, textarea, or CodeMirror editor
+    const activeTag = (document.activeElement?.tagName || "").toLowerCase();
+    const isInput = activeTag === "input" || activeTag === "textarea" || activeTag === "select";
+    if (isInput) return;
+    if (document.activeElement?.closest(".cm-content")) return;
+    if ((document.activeElement as HTMLElement)?.isContentEditable) return;
+
+    const tabs = tabsRef.current;
+    const activeTabId = activeTabIdRef.current;
+
+    // Cmd+T / Ctrl+T: new tab
+    if ((e.metaKey || e.ctrlKey) && e.key === "t" && !e.shiftKey) {
+      e.preventDefault();
+      const id = useClaudeChatStore.getState().createTab();
+      useClaudeChatStore.getState().setActiveTab(id);
+      return;
+    }
+    // Cmd+W / Ctrl+W: close tab
+    if ((e.metaKey || e.ctrlKey) && e.key === "w" && !e.shiftKey) {
+      e.preventDefault();
+      if (tabs.length > 1) {
+        useClaudeChatStore.getState().closeTab(activeTabId);
       }
-      // Cmd+W / Ctrl+W: close tab
-      if ((e.metaKey || e.ctrlKey) && e.key === "w" && !e.shiftKey) {
-        e.preventDefault();
-        if (tabs.length > 1) {
-          closeTab(activeTabId);
-        }
-        return;
-      }
-      // Ctrl+Tab: next tab
-      if (e.ctrlKey && e.key === "Tab" && !e.shiftKey) {
-        e.preventDefault();
-        const idx = tabs.findIndex((t) => t.id === activeTabId);
+      return;
+    }
+    // Ctrl+Tab: next tab
+    if (e.ctrlKey && e.key === "Tab" && !e.shiftKey) {
+      e.preventDefault();
+      const idx = tabs.findIndex((t) => t.id === activeTabId);
+      if (idx >= 0) {
         const next = (idx + 1) % tabs.length;
-        setActiveTab(tabs[next].id);
-        return;
+        useClaudeChatStore.getState().setActiveTab(tabs[next].id);
       }
-      // Ctrl+Shift+Tab: prev tab
-      if (e.ctrlKey && e.key === "Tab" && e.shiftKey) {
-        e.preventDefault();
-        const idx = tabs.findIndex((t) => t.id === activeTabId);
+      return;
+    }
+    // Ctrl+Shift+Tab: prev tab
+    if (e.ctrlKey && e.key === "Tab" && e.shiftKey) {
+      e.preventDefault();
+      const idx = tabs.findIndex((t) => t.id === activeTabId);
+      if (idx >= 0) {
         const prev = (idx - 1 + tabs.length) % tabs.length;
-        setActiveTab(tabs[prev].id);
-        return;
+        useClaudeChatStore.getState().setActiveTab(tabs[prev].id);
       }
-    },
-    [tabs, activeTabId, drawerState, setActiveTab, createTab, closeTab],
-  );
+      return;
+    }
+  }, []); // Stable — never rebuilds
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+  }, []); // Stable listener, no dependencies
 
   return (
     <div className="flex items-center border-border border-b">

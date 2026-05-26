@@ -10,6 +10,7 @@
   --height-editor-toolbar:     var(--height-base-32);
   --height-editor-placeholder: var(--height-base-32);
   --height-tab-bar:            var(--height-base-32);
+  --height-changes-bar:        28px;
   --height-search-panel:       var(--height-base-36);
 
   /* ── Font tokens ── */

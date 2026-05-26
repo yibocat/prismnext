@@ -303,18 +303,22 @@ export async function compileOnSave(): Promise<void> {
 
 // ─── AI auto-compile control ───
 
+let _aiSessionCount = 0;
 let _autoCompileBeforeAi: boolean | null = null;
 
 export function pauseAutoCompileForAi(): void {
-  if (_autoCompileBeforeAi === null) {
+  if (_aiSessionCount === 0) {
     _autoCompileBeforeAi = useCompileStore.getState().autoCompile;
   }
+  _aiSessionCount++;
   useCompileStore.setState({ autoCompile: false });
   clearAutoCompileTimer();
 }
 
 export function resumeAutoCompileAfterAi(): void {
-  if (_autoCompileBeforeAi !== null) {
+  if (_aiSessionCount <= 0) return;
+  _aiSessionCount--;
+  if (_aiSessionCount === 0 && _autoCompileBeforeAi !== null) {
     useCompileStore.setState({ autoCompile: _autoCompileBeforeAi });
     _autoCompileBeforeAi = null;
   }

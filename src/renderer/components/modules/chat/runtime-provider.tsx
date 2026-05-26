@@ -7,58 +7,11 @@ import {
 } from "@assistant-ui/react";
 import { useClaudeChatStore, type ClaudeStreamMessage, type ContentBlock } from "@/stores/claude-chat-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { cleanTextForDisplay } from "@/lib/system-prompt-cleaner";
 
-// ─── Message ID generation (stable: derived from tabId + index) ───
-function genMsgId(tabId: string, idx: number): string {
-  return `${tabId}-msg-${idx}`;
-}
-
-// ─── System prompt filter patterns ───
-// Strip content that looks like Claude CLI system prompts / context injections
-// System prompt cleaning (same approach as use-claude-events.ts):
-// 1. Remove known system XML blocks with their content
-// 2. Strip remaining preamble lines that look like system directives
-// 3. Remove leftover XML tags
-
-function stripSystemBlocks(text: string): string {
-  let result = text;
-  // System prompt blocks
-  result = result.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "");
-  result = result.replace(/<EXTREMELY_IMPORTANT>[\s\S]*?<\/EXTREMELY_IMPORTANT>/g, "");
-  result = result.replace(/<instructions>[\s\S]*?<\/instructions>/g, "");
-  result = result.replace(/<function>[\s\S]*?<\/function>/g, "");
-  result = result.replace(/<role>[\s\S]*?<\/role>/g, "");
-  // Claude CLI local command blocks (saved in JSONL, should never be shown)
-  result = result.replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g, "");
-  result = result.replace(/<command-name>[\s\S]*?<\/command-name>/g, "");
-  result = result.replace(/<command-message>[\s\S]*?<\/command-message>/g, "");
-  result = result.replace(/<command-args>[\s\S]*?<\/command-args>/g, "");
-  result = result.replace(/<local-command-stdout>[\s\S]*?<\/local-command-stdout>/g, "");
-  return result;
-}
-
-function stripSystemPreamble(text: string): string {
-  const lines = text.split("\n");
-  let start = 0;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) { start = i + 1; continue; }
-    if (/^(Hey|Hi|Hello|Sure|OK|Let me|I'll|I will|Here|The|This|That|Alright|Great|Thanks|Based on|Looking at|First|Let's|I can|I see|I found|I notice|I've)/i.test(line)) {
-      start = i; break;
-    }
-    if (/^(You are|IMPORTANT|System|Rules|Instructions|Tools|Environment|Working|Current|Available|When|Always|Never|Your|The user|\[|#|```)/i.test(line)) {
-      start = i + 1; continue;
-    }
-    start = i; break;
-  }
-  return lines.slice(start).join("\n").trim();
-}
-
-function cleanTextForDisplay(text: string): string {
-  let result = stripSystemBlocks(text);
-  result = stripSystemPreamble(result);
-  result = result.replace(/<[^>]+>/g, "").trim();
-  return result;
+// ─── Message ID generation (stable: derived from tabId + raw index) ───
+function genMsgId(tabId: string, rawIdx: number): string {
+  return `${tabId}-msg-${rawIdx}`;
 }
 
 // ─── Conversion: ClaudeStreamMessage[] → ThreadMessageLike[] ───
@@ -143,7 +96,7 @@ function convertMessages(
     }
 
     result.push({
-      id: genMsgId(tabId, result.length),
+      id: genMsgId(tabId, i),
       role: msg.type === "assistant" ? ("assistant" as const) : ("user" as const),
       content: parts,
       status,
@@ -165,7 +118,7 @@ function convertBlock(
       return {
         type: "data" as const,
         name: "thinking",
-        data: { thinking: block.thinking || "" },
+        data: { thinking: block.thinking || "", duration: (block as any).duration },
       };
 
     case "tool_use": {

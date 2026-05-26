@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { Writable, Readable } from "node:stream";
 import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import type { BrowserWindow } from "electron";
 import * as acp from "@agentclientprotocol/sdk";
 import { getAgentConfig, type AgentConfig, DEFAULT_AGENT_ID } from "./configs";
@@ -82,7 +82,7 @@ export class AgentManager {
 
   // ─── Session Lifecycle ───
 
-  async startSession(tabId: string, cwd: string, agentId?: string): Promise<string> {
+  async startSession(tabId: string, cwd: string, agentId?: string, sessionIdToResume?: string): Promise<string> {
     // Kill existing session for this tab
     await this.closeSession(tabId);
 
@@ -96,7 +96,8 @@ export class AgentManager {
 
     // Resolve binary (handle npx → local node_modules)
     const { binary, args } = resolveAgentBinary(config);
-    console.log(`[agent-manager] Spawning: ${binary} ${args.join(" ")} (cwd: ${cwd})`);
+    console.log(`[agent-manager] Spawning: ${binary} ${args.join(" ")} (cwd: ${cwd})` +
+      (sessionIdToResume ? ` resume=${sessionIdToResume}` : ""));
 
     // Spawn agent subprocess
     const child = spawn(binary, args, {
@@ -105,8 +106,12 @@ export class AgentManager {
       stdio: ["pipe", "pipe", "pipe"],
     });
 
-    // Forward stderr to renderer
+    // Forward stderr to renderer — throttle to at most 1 event per second per tab
+    let lastStderrTime = 0;
     child.stderr?.on("data", (data: Buffer) => {
+      const now = Date.now();
+      if (now - lastStderrTime < 1000) return;
+      lastStderrTime = now;
       this.win.webContents.send("agent:stderr", { tabId, data: data.toString() });
     });
 
@@ -147,7 +152,11 @@ export class AgentManager {
 
       readTextFile: async (params) => {
         try {
-          const content = await readFile(params.path, "utf-8");
+          const resolved = resolve(cwd, params.path);
+          if (!resolved.startsWith(cwd + sep)) {
+            throw new Error(`Access denied: path is outside project directory`);
+          }
+          const content = await readFile(resolved, "utf-8");
           return { content };
         } catch (err: any) {
           throw new Error(`Failed to read file: ${err.message}`);
@@ -156,7 +165,11 @@ export class AgentManager {
 
       writeTextFile: async (params) => {
         try {
-          await writeFile(params.path, params.content, "utf-8");
+          const resolved = resolve(cwd, params.path);
+          if (!resolved.startsWith(cwd + sep)) {
+            throw new Error(`Access denied: path is outside project directory`);
+          }
+          await writeFile(resolved, params.content, "utf-8");
           return {};
         } catch (err: any) {
           throw new Error(`Failed to write file: ${err.message}`);
@@ -180,11 +193,23 @@ export class AgentManager {
         clientInfo: { name: "Prism", version: "0.1.0" },
       });
 
-      // Create session
-      const { sessionId } = await connection.newSession({
-        cwd,
-        mcpServers: [],
-      });
+      // Create or resume session
+      let sessionId: string;
+      if (sessionIdToResume) {
+        try {
+          console.log(`[agent-manager] Attempting to resume session: ${sessionIdToResume}`);
+          await connection.resumeSession({ sessionId: sessionIdToResume, cwd });
+          sessionId = sessionIdToResume;
+          console.log(`[agent-manager] Session resumed: ${sessionId}`);
+        } catch (resumeErr: any) {
+          console.warn(`[agent-manager] Resume failed (${resumeErr?.message}), creating new session`);
+          const result = await connection.newSession({ cwd, mcpServers: [] });
+          sessionId = result.sessionId;
+        }
+      } else {
+        const result = await connection.newSession({ cwd, mcpServers: [] });
+        sessionId = result.sessionId;
+      }
 
       this.sessions.set(tabId, {
         child,
@@ -196,7 +221,7 @@ export class AgentManager {
 
       this.win.webContents.send("agent:sessionCreated", { tabId, sessionId, agentId: id });
 
-      console.log(`[agent-manager] Session created: ${sessionId} for tab ${tabId} (${id})`);
+      console.log(`[agent-manager] Session active: ${sessionId} for tab ${tabId} (${id})`);
       return sessionId;
     } catch (err: any) {
       console.error(`[agent-manager] Failed to start session for tab ${tabId}:`, err);
@@ -212,17 +237,23 @@ export class AgentManager {
 
   // ─── Ensure Session ───
 
-  async ensureSession(tabId: string, cwd: string, agentId?: string): Promise<string> {
+  async ensureSession(tabId: string, cwd: string, agentId?: string, sessionIdToResume?: string): Promise<string> {
     const existing = this.sessions.get(tabId);
-    if (existing && existing.cwd === cwd) {
+    // If existing session matches, reuse it
+    if (existing && existing.cwd === cwd && (!sessionIdToResume || existing.sessionId === sessionIdToResume)) {
       return existing.sessionId;
     }
-    return this.startSession(tabId, cwd, agentId);
+    // Close mismatched session only when a specific session is requested but doesn't match
+    if (existing && sessionIdToResume && existing.sessionId !== sessionIdToResume) {
+      console.log(`[agent-manager] Closing mismatched session ${existing.sessionId} to resume ${sessionIdToResume}`);
+      await this.closeSession(tabId);
+    }
+    return this.startSession(tabId, cwd, agentId, sessionIdToResume);
   }
 
   // ─── Prompt ───
 
-  sendPrompt(tabId: string, prompt: string): void {
+  async sendPrompt(tabId: string, prompt: string, modelId?: string | null): Promise<void> {
     const session = this.sessions.get(tabId);
     if (!session) {
       this.win.webContents.send("agent:complete", {
@@ -231,6 +262,18 @@ export class AgentManager {
         error: "No active session for this tab",
       });
       return;
+    }
+
+    // Apply model selection before sending prompt (only if user picked a specific model)
+    if (modelId) {
+      try {
+        await session.connection.unstable_setSessionModel({
+          sessionId: session.sessionId,
+          modelId,
+        });
+      } catch (err: any) {
+        console.warn(`[agent-manager] setSessionModel failed: ${err?.message}`);
+      }
     }
 
     // Fire and forget — streaming goes through sessionUpdate callback,
@@ -268,6 +311,20 @@ export class AgentManager {
     } catch (err) {
       console.error(`[agent-manager] Cancel error for tab ${tabId}:`, err);
     }
+
+    // Force-kill the child process if it doesn't exit within 5 seconds after cancel
+    const child = session.child;
+    setTimeout(() => {
+      try {
+        if (child.exitCode === null && this.sessions.has(tabId)) {
+          console.warn(`[agent-manager] Force-killing stuck process for tab ${tabId}`);
+          child.kill("SIGKILL");
+          this.sessions.delete(tabId);
+        }
+      } catch {
+        // Ignore
+      }
+    }, 5000);
   }
 
   // ─── Close Session ───

@@ -13,6 +13,7 @@ export interface ContentBlock {
   content?: any;
   is_error?: boolean;
   thinking?: string;
+  duration?: number; // thinking duration in seconds (cached for old sessions)
   signature?: string;
 }
 
@@ -158,13 +159,13 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
     const { tabs, activeTabId } = get();
     if (tabs.length <= 1) return;
     const closingTab = tabs.find((t) => t.id === id);
-    if (closingTab?.isStreaming) return;
+    if (!closingTab || closingTab.isStreaming) return;
 
     const newTabs = tabs.filter((t) => t.id !== id);
     let newActiveId = activeTabId;
     if (activeTabId === id) {
       const idx = tabs.findIndex((t) => t.id === id);
-      const newIdx = Math.min(idx, newTabs.length - 1);
+      const newIdx = Math.max(0, Math.min(idx, newTabs.length - 1));
       newActiveId = newTabs[newIdx].id;
     }
     set({
@@ -173,8 +174,9 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
       ...projectActiveTab(newTabs, newActiveId),
     });
 
-    // Clean up agent session for this tab
-    window.electronAPI.agentCancel(id).catch(() => {});
+      // Clean up agent session for this tab — cancel any running prompt then kill process
+      window.electronAPI.agentCancel(id).catch(() => {});
+      window.electronAPI.agentCloseSession(id).catch(() => {});
   },
 
   setActiveTab: (id: string) => {
@@ -249,12 +251,16 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
     });
 
     try {
-      await window.electronAPI.agentSend(projectPath, userPrompt, tabId, agentId);
+      const sessionId = get().tabs.find((t) => t.id === tabId)?.sessionId;
+      await window.electronAPI.agentSend(projectPath, userPrompt, tabId, agentId, sessionId ?? undefined, get().selectedModel);
     } catch (err: any) {
       set((s) => {
-        const tabs = s.tabs.map((t) =>
-          t.id === tabId ? { ...t, isStreaming: false, error: err?.message || String(err) } : t,
-        );
+        const tabs = s.tabs.map((t) => {
+          if (t.id !== tabId) return t;
+          // Remove the user message that was just added — don't leave orphaned messages
+          const msgs = t.messages.filter((m, i) => !(m.type === "user" && i === t.messages.length - 1));
+          return { ...t, messages: msgs, isStreaming: false, error: err?.message || String(err) };
+        });
         return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
       });
     }
@@ -282,6 +288,7 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
 
   clearAllSessions: () => {
     // Full reset to initial state — new project = clean slate
+    _nextTabId = 1;
     const id = nextTabId();
     const tab = makeDefaultTab(id);
     set({
@@ -368,22 +375,30 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
       const msgs = [...tab.messages];
       const last = msgs[msgs.length - 1];
 
-      // Merge content blocks for assistant messages (preserve thinking/tool_use)
+      // Merge content blocks for assistant messages (preserve thinking/tool_use).
+      // But: if the last message has tool_use blocks and the new blocks are text/thinking,
+      // append as a new message to keep tool_use visually separate from follow-up text.
       if (last?.type === msg.type && last.type === "assistant") {
         const oldBlocks = last.message?.content || [];
         const newBlocks = msg.message?.content || [];
+        const lastHasToolUse = oldBlocks.some((b) => b.type === "tool_use");
+        const newIsTextOrThink = newBlocks.every((b) => b.type === "text" || b.type === "thinking");
 
-        // Remove old blocks that are being replaced by new ones of same category
-        const preserved = oldBlocks.filter((b) => {
-          if (b.type === "text" && newBlocks.some((nb) => nb.type === "text")) return false;
-          if (b.type === "thinking" && newBlocks.some((nb) => nb.type === "thinking")) return false;
-          return true;
-        });
+        if (lastHasToolUse && newIsTextOrThink) {
+          msgs.push(msg);
+        } else {
+          // Remove old blocks that are being replaced by new ones of same category
+          const preserved = oldBlocks.filter((b) => {
+            if (b.type === "text" && newBlocks.some((nb) => nb.type === "text")) return false;
+            if (b.type === "thinking" && newBlocks.some((nb) => nb.type === "thinking")) return false;
+            return true;
+          });
 
-        msgs[msgs.length - 1] = {
-          ...msg,
-          message: { ...msg.message, content: [...preserved, ...newBlocks] },
-        };
+          msgs[msgs.length - 1] = {
+            ...msg,
+            message: { ...msg.message, content: [...preserved, ...newBlocks] },
+          };
+        }
       } else if (last?.type === "result" && msg.type === "result") {
         msgs[msgs.length - 1] = msg;
       } else {
