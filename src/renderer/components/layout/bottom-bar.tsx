@@ -41,7 +41,7 @@ export function BottomBar() {
   }, [pdfRevision, createPdfTab]);
 
   return (
-    <div className="flex h-[var(--height-status-bar)] shrink-0 items-center border-t border-border bg-card px-3 text-[length:var(--font-status-bar)] text-muted-foreground select-none">
+    <div className="hidden">
       {/* Compile status (display only) */}
       <span className="flex items-center gap-1 rounded-md px-1.5 py-0.5">
         {isCompiling ? (

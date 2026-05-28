@@ -101,6 +101,7 @@ export function TabBar({ tabs, activeTabId, onSelect, onClose, onReorder }: TabB
               )}
               <div
                 draggable
+                role="button"
                 className={cn(
                   "group flex w-[120px] shrink-0 items-center rounded px-2 py-1",
                   "text-[length:var(--font-toolbar-tab)] cursor-default select-none transition-colors",
@@ -110,7 +111,7 @@ export function TabBar({ tabs, activeTabId, onSelect, onClose, onReorder }: TabB
                     : "bg-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground",
                   dragIndex === i && "opacity-40",
                 )}
-                onClick={() => onSelect(tab.id)}
+                onMouseDown={(e) => { if (e.button === 0) onSelect(tab.id); }}
                 onDragStart={(e) => handleDragStart(e, i)}
                 onDragOver={(e) => handleDragOver(e, i)}
                 onDrop={(e) => handleDrop(e, i)}
@@ -118,7 +119,7 @@ export function TabBar({ tabs, activeTabId, onSelect, onClose, onReorder }: TabB
                 <span className="truncate">{tab.title}</span>
                 <button
                   type="button"
-                  className="ml-auto flex size-4 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/20 transition-opacity"
+                  className="ml-auto flex size-4 shrink-0 items-center justify-center rounded invisible group-hover:visible hover:bg-muted-foreground/10"
                   onClick={(e) => { e.stopPropagation(); onClose(tab.id); }}
                 >
                   <XIcon className="size-2.5" />

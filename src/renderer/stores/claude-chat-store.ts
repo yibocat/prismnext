@@ -301,9 +301,11 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
 
   clearCurrentTab: () => {
     const tabId = get().activeTabId;
+    const tab = get().tabs.find((t) => t.id === tabId);
+    if (tab?.isStreaming) return; // Never clear a tab with an active agent
     set((s) => {
       const tabs = s.tabs.map((t) =>
-        t.id === tabId ? { ...t, messages: [], sessionId: null, title: "New Chat", error: null } : t,
+        t.id === tabId ? { ...t, messages: [], sessionId: null, title: "New Chat", error: null, isStreaming: false } : t,
       );
       return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
     });
@@ -312,23 +314,47 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
   loadSession: async (sessionId: string) => {
     const projectPath = useDocumentStore.getState().projectRoot || "";
 
-    const tabId = get().activeTabId;
+    // If this session is already loaded in an existing tab, just switch to it
+    const existingTab = get().tabs.find((t) => t.sessionId === sessionId);
+    if (existingTab) {
+      set({
+        activeTabId: existingTab.id,
+        ...projectActiveTab(get().tabs, existingTab.id),
+      });
+      return;
+    }
+
+    // Find a suitable tab to load this session into:
+    // 1. Prefer the current tab if it's not streaming
+    // 2. Otherwise find any non-streaming tab
+    // 3. If all tabs are streaming, create a new tab
+    // NEVER cancel a running agent — they must run independently.
+    const tabs = get().tabs;
+    const activeId = get().activeTabId;
+    const activeTab = tabs.find((t) => t.id === activeId);
+    let targetTab = activeTab && !activeTab.isStreaming ? activeTab : tabs.find((t) => !t.isStreaming);
+    if (!targetTab) {
+      const newId = nextTabId();
+      const newTab = makeDefaultTab(newId);
+      targetTab = { ...newTab, id: newId };
+      set((s) => ({ tabs: [...s.tabs, targetTab!] }));
+    }
+    const tabId = targetTab.id;
 
     try {
       const raw = await window.electronAPI.agentLoadSession(projectPath, sessionId);
       const messages = raw.filter((msg: ClaudeStreamMessage) => {
         if (msg.type === "system") return false;
         if (!msg.message?.content || msg.message.content.length === 0) return false;
-        // Don't filter tool_result messages — convertMessages() needs them
         return true;
       });
       set((s) => {
         const tabs = s.tabs.map((t) =>
           t.id === tabId
-            ? { ...t, messages, sessionId, error: null }
+            ? { ...t, messages, sessionId, error: null, isStreaming: false }
             : t,
         );
-        return { tabs, drawerState: "open", ...projectActiveTab(tabs, tabId) };
+        return { tabs, activeTabId: tabId, drawerState: "open", ...projectActiveTab(tabs, tabId) };
       });
     } catch (err: any) {
       set((s) => {
@@ -337,7 +363,7 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
             ? { ...t, error: `Failed to load session: ${err?.message || String(err)}` }
             : t,
         );
-        return { tabs, ...projectActiveTab(tabs, tabId) };
+        return { tabs, activeTabId: tabId, ...projectActiveTab(tabs, tabId) };
       });
     }
   },

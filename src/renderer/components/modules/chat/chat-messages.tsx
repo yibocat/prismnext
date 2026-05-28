@@ -156,6 +156,7 @@ function ResultMessage({ msg }: { msg: ClaudeStreamMessage }) {
 export function ChatMessages() {
   const messages = useClaudeChatStore((s) => s.messages);
   const isStreaming = useClaudeChatStore((s) => s.isStreaming);
+  const activeTabId = useClaudeChatStore((s) => s.activeTabId);
   const scrollRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const agentStartedRef = useRef(false);
@@ -247,6 +248,16 @@ export function ChatMessages() {
     }
   }, [messages, isStreaming]);
 
+  // When switching to a tab that is already streaming, force auto-scroll
+  useEffect(() => {
+    if (isStreaming) {
+      shouldAutoScrollRef.current = true;
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+    }
+  }, [activeTabId]);
+
   const scrollToBottom = () => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -257,7 +268,7 @@ export function ChatMessages() {
   // Empty state
   if (displayMessages.length === 0 && !isStreaming) {
     return (
-      <div className="flex flex-1 items-center justify-center p-8">
+      <div className="flex flex-1 items-center justify-center p-8 pb-[calc(2rem+var(--height-status-bar))]">
         <div className="flex flex-col items-center gap-4 text-center max-w-sm">
           <div className="flex size-14 items-center justify-center rounded-2xl bg-muted">
             <MessageSquareIcon className="size-7 text-muted-foreground" />

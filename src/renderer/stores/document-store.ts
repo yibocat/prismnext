@@ -113,6 +113,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       useRightPanelStore.getState().closeAllTabs();
       useClaudeChatStore.getState().clearAllSessions();
       useLayoutStore.getState().setLeftSidebarView("sessions");
+      useLayoutStore.getState().setLeftSidebarOverlay(false);
+      useLayoutStore.getState().setRightSidebarOpen(false);
+      useLayoutStore.setState({ showArchived: false });
       clearPdfCache();
       // Lazy import to avoid circular dependency
       (await import("./changes-store")).useChangesStore.getState().clearAll();

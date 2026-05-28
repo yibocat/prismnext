@@ -425,6 +425,7 @@ export interface ClaudeSession {
   id: string;
   title: string;
   lastModified: number;
+  createdAt: number;
 }
 
 export async function listClaudeSessions(projectPath: string): Promise<ClaudeSession[]> {
@@ -483,7 +484,7 @@ export async function listClaudeSessions(projectPath: string): Promise<ClaudeSes
         }
 
         if (title !== "Untitled") {
-          sessions.push({ id: sessionId, title, lastModified: stat.mtimeMs });
+          sessions.push({ id: sessionId, title, lastModified: stat.mtimeMs, createdAt: stat.birthtimeMs || stat.mtimeMs });
         }
       } catch {}
     }

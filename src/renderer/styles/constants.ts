@@ -26,18 +26,18 @@ export const MUPDF_WORKER_TIMEOUT = 30000;
 // ─── Layout ───
 
 export const SIDEBAR_LEFT_DEFAULT = 220;
-export const SIDEBAR_LEFT_MIN = 160;
+export const SIDEBAR_LEFT_MIN = 190;
 export const SIDEBAR_LEFT_MAX = 420;
 
 /** Window width below which left sidebar uses overlay instead of inline panel */
 export const SIDEBAR_OVERLAY_THRESHOLD = 500;
 
 export const SIDEBAR_RIGHT_DEFAULT = 220;
-export const SIDEBAR_RIGHT_MIN = 180;
+export const SIDEBAR_RIGHT_MIN = 100;
 export const SIDEBAR_RIGHT_MAX = 380;
 
 export const RIGHT_AREA_DEFAULT = 500;
-export const RIGHT_AREA_MIN = 350;
+export const RIGHT_AREA_MIN = 250;
 export const RIGHT_AREA_MAX = 1100;
 
 // ─── Z-Index ───

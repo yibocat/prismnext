@@ -1,32 +1,54 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useLayoutStore } from "@/stores/layout-store";
+import { SIDEBAR_LEFT_MAX } from "@/styles/constants";
 import { useClaudeChatStore } from "@/stores/claude-chat-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { useWindowState } from "@/hooks/use-window-state";
 import {
-  PlusIcon,
+  Bot,
+  FileType,
+  PinIcon,
+  PinOff,
+  Dot,
+  CircleDotDashed,
   MessageSquareIcon,
   Loader2Icon,
+  Archive,
+  ArchiveRestore,
   Trash2Icon,
-  XIcon,
+  SettingsIcon,
+  ListFilter,
+  ArrowUpDown,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { SettingsSidebar, type SettingsCategory } from "@/components/modules/settings";
-import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
+import { ProjectSwitcher } from "@/components/modules/shared";
+import { SidebarControls } from "@/components/layout/sidebar-controls";
+import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   SidebarProvider,
   Sidebar,
-  SidebarHeader,
   SidebarContent,
+  SidebarFooter,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarMenuAction,
 } from "@/components/ui/sidebar";
-
 interface SessionInfo {
   id: string;
   title: string;
   lastModified: number;
+  createdAt: number;
 }
 
 function relativeTime(ms: number): string {
@@ -38,16 +60,37 @@ function relativeTime(ms: number): string {
   return `${Math.floor(sec / 86400)}d ago`;
 }
 
-export function LeftSidebar() {
+interface LeftSidebarProps {
+  leftSidebarRef?: RefObject<PanelImperativeHandle | null>;
+}
+
+export function LeftSidebar({ leftSidebarRef }: LeftSidebarProps) {
+  const { platform, isFullscreen } = useWindowState();
+  const isMac = platform === "darwin";
+  const showMacSpacer = isMac && !isFullscreen;
+
   const sidebarWidth = useLayoutStore((s) => s.sidebarWidth);
+  const sidebarFullyCollapsed = useLayoutStore((s) => s.sidebarFullyCollapsed);
   const leftSidebarOverlay = useLayoutStore((s) => s.leftSidebarOverlay);
   const setLeftSidebarOverlay = useLayoutStore((s) => s.setLeftSidebarOverlay);
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
+  const pinnedSessionIds = useLayoutStore((s) => s.pinnedSessionIds);
+  const pinnedExpanded = useLayoutStore((s) => s.pinnedExpanded);
+  const togglePinSession = useLayoutStore((s) => s.togglePinSession);
+  const togglePinnedExpanded = useLayoutStore((s) => s.togglePinnedExpanded);
+  const archivedSessionIds = useLayoutStore((s) => s.archivedSessionIds);
+  const showArchived = useLayoutStore((s) => s.showArchived);
+  const toggleArchiveSession = useLayoutStore((s) => s.toggleArchiveSession);
+  const toggleShowArchived = useLayoutStore((s) => s.toggleShowArchived);
+  const sessionSort = useLayoutStore((s) => s.sessionSort);
+  const setSessionSort = useLayoutStore((s) => s.setSessionSort);
 
   const sessionId = useClaudeChatStore((s) => s.sessionId);
   const isStreaming = useClaudeChatStore((s) => s.isStreaming);
+  const tabs = useClaudeChatStore((s) => s.tabs);
   const loadSession = useClaudeChatStore((s) => s.loadSession);
   const newSession = useClaudeChatStore((s) => s.newSession);
+  const clearCurrentTab = useClaudeChatStore((s) => s.clearCurrentTab);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
@@ -87,51 +130,105 @@ export function LeftSidebar() {
     });
   }, [fetchSessions]);
 
-  const refreshAndNavigate = useCallback(async () => {
-    if (!projectRoot) return;
-    try {
-      const result = await window.electronAPI.agentListSessions(projectRoot);
-      setSessions(result);
-      if (result.length > 0) {
-        useClaudeChatStore.getState().loadSession(result[0].id);
-      } else {
-        useClaudeChatStore.getState().clearCurrentTab();
-      }
-    } catch {
-      useClaudeChatStore.getState().clearCurrentTab();
-    }
-  }, [projectRoot]);
-
-  const handleDelete = useCallback(
-    async (e: React.MouseEvent, sid: string) => {
-      e.stopPropagation();
-      try {
-        if (!projectRoot) return;
-        const result = await window.electronAPI.agentDeleteSession(projectRoot, sid);
-        if (result.success) {
-          if (sid === sessionId) {
-            await refreshAndNavigate();
-          } else {
-            setSessions((prev) => prev.filter((s) => s.id !== sid));
-          }
-        }
-      } catch (err) {
-        console.error("[left-sidebar] Delete error:", err);
-      }
-    },
-    [projectRoot, sessionId, refreshAndNavigate],
-  );
-
   const settingsCategory = useLayoutStore((s) => s.settingsCategory);
   const setSettingsCategory = useLayoutStore((s) => s.setSettingsCategory);
 
-  const empty = !loading && sessions.length === 0;
+  const sortedSessions = [...sessions].sort((a, b) => {
+    if (sessionSort === "created") return b.createdAt - a.createdAt;
+    return b.lastModified - a.lastModified;
+  });
+
+  const empty = !loading && sortedSessions.length === 0;
+
+  const renderSessionItem = (s: SessionInfo) => {
+    const isActive = s.id === sessionId;
+    const isSessionStreaming = tabs.some((t) => t.sessionId === s.id && t.isStreaming);
+    return (
+      <SidebarMenuItem key={s.id}>
+        <SidebarMenuButton
+          onClick={() => { loadSession(s.id); setLeftSidebarOverlay(false); }}
+          isActive={isActive}
+          size="sm"
+        >
+          <span className="relative size-3.5 shrink-0 flex items-center justify-center">
+            {isSessionStreaming ? (
+              <CircleDotDashed className="absolute size-3.5 text-blue-500 transition-opacity group-hover/menu-item:opacity-0" strokeWidth={2.5} />
+            ) : (
+              <Dot className="absolute size-3.5 text-muted-foreground/30 transition-opacity group-hover/menu-item:opacity-0" strokeWidth={5.5} />
+            )}
+            <span
+              role="button"
+              tabIndex={0}
+              className="absolute opacity-0 group-hover/menu-item:opacity-100 transition-opacity text-muted-foreground hover:text-foreground cursor-pointer"
+              onClick={(e) => { e.stopPropagation(); togglePinSession(s.id); }}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); togglePinSession(s.id); } }}
+              title={pinnedSessionIds.includes(s.id) ? "Unpin session" : "Pin session"}
+            >
+              {pinnedSessionIds.includes(s.id) ? (
+                <PinOff className="size-3.5" strokeWidth={1.5} />
+              ) : (
+                <PinIcon className="size-3.5" strokeWidth={1.5} />
+              )}
+            </span>
+          </span>
+          <span className="truncate text-[length:var(--font-session-item)] flex-1">{s.title}</span>
+          <span className="hidden group-hover/menu-item:inline text-[11px] text-muted-foreground/70 shrink-0">
+            {relativeTime(s.lastModified)}
+          </span>
+          {showArchived ? (
+            <>
+              <button
+                type="button"
+                className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-foreground"
+                onClick={(e) => { e.stopPropagation(); toggleArchiveSession(s.id); }}
+                title="Restore from archive"
+              >
+                <ArchiveRestore className="size-3" />
+              </button>
+              <button
+                type="button"
+                className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-red-500"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (!projectRoot) return;
+                  const result = await window.electronAPI.agentDeleteSession(projectRoot, s.id);
+                  if (result.success) {
+                    if (archivedSessionIds.includes(s.id)) toggleArchiveSession(s.id);
+                    if (pinnedSessionIds.includes(s.id)) togglePinSession(s.id);
+                    setSessions((prev) => prev.filter((x) => x.id !== s.id));
+                    if (s.id === sessionId) clearCurrentTab();
+                  }
+                }}
+                title="Delete permanently"
+              >
+                <Trash2Icon className="size-3" />
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleArchiveSession(s.id);
+                if (s.id === sessionId) clearCurrentTab();
+              }}
+              title="Archive session"
+            >
+              <Archive className="size-3" />
+            </button>
+          )}
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  };
 
   if (leftSidebarView === "settings") {
     return (
       <SettingsSidebar
         activeCategory={settingsCategory as SettingsCategory}
         onSelectCategory={(id) => { setSettingsCategory(id); setLeftSidebarOverlay(false); }}
+        leftSidebarRef={leftSidebarRef}
       />
     );
   }
@@ -140,25 +237,104 @@ export function LeftSidebar() {
     <SidebarProvider
       defaultOpen
       className="contents"
-      style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
+      style={{ "--sidebar-width": `${Math.min(sidebarWidth, SIDEBAR_LEFT_MAX)}px` } as React.CSSProperties}
     >
-      <Sidebar collapsible="none" className="relative shrink-0 bg-card">
-        <SidebarHeader className="flex h-[var(--height-sessions-header)] shrink-0 flex-row items-center justify-between border-b border-border px-3">
-          <span className="text-[length:var(--font-sidebar-section)] font-semibold uppercase tracking-wider text-muted-foreground">
-            Sessions
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-5"
-            title="New Chat"
+      <Sidebar collapsible="none" className="relative shrink-0 bg-card border-r-0">
+        {/* SidebarTopBar — pseudo-titlebar. Always preserves height to avoid layout jump,
+            but only renders controls when sidebar is expanded (ContentTopBar handles collapsed state). */}
+        <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center px-2 select-none">
+          {!sidebarFullyCollapsed && (
+            <SidebarControls leftSidebarRef={leftSidebarRef!} showMacSpacer={showMacSpacer} />
+          )}
+        </div>
+        <SidebarContent className="px-2 pb-1 gap-1">
+          <div className="pt-1.5">
+            <ProjectSwitcher className="flex w-full items-center gap-2 rounded-md border border-border px-2 py-1.5 text-[length:var(--font-session-item)] font-medium hover:bg-muted transition-colors" />
+          </div>
+
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] hover:bg-muted transition-colors"
             onClick={() => { newSession(); setLeftSidebarOverlay(false); }}
           >
-            <PlusIcon className="size-3" />
-          </Button>
-        </SidebarHeader>
+            <Bot className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="flex-1 text-left">New Agent</span>
+            <Kbd className="text-[10px] h-4 min-w-4 px-0.5 bg-transparent">⌘N</Kbd>
+          </button>
 
-        <SidebarContent className="px-2 py-1">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] hover:bg-muted transition-colors"
+          >
+            <FileType className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="flex-1 text-left">TeX Workspace</span>
+          </button>
+
+          {/* ── Pinned Sessions ── */}
+          {sortedSessions.filter((s) => pinnedSessionIds.includes(s.id)).length > 0 && (
+            <div>
+              <button
+                type="button"
+                className="w-full px-2 py-1.5 flex items-center justify-between"
+                onClick={togglePinnedExpanded}
+              >
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                  Pinned
+                </span>
+                {pinnedExpanded ? <ChevronDown className="size-3 text-muted-foreground/50" /> : <ChevronRight className="size-3 text-muted-foreground/50" />}
+              </button>
+              {pinnedExpanded && (
+                <SidebarMenu>
+                  {sortedSessions
+                    .filter((s) => !archivedSessionIds.includes(s.id) && pinnedSessionIds.includes(s.id))
+                    .map(renderSessionItem)}
+                </SidebarMenu>
+              )}
+            </div>
+          )}
+
+          <div className="px-2 py-1.5 flex items-center justify-between">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
+              {showArchived ? "Archived" : "Sessions"}
+            </span>
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                className={cn(
+                  "flex size-4 items-center justify-center rounded transition-colors",
+                  showArchived ? "text-muted-foreground" : "text-muted-foreground/50 hover:text-muted-foreground",
+                )}
+                onClick={toggleShowArchived}
+                title={showArchived ? "Show active sessions" : "Show archived"}
+              >
+                <Archive className="size-3" />
+              </button>
+              <button type="button" className="flex size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors" title="Filter">
+                <ListFilter className="size-3" />
+              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" className="flex size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors" title="Sort">
+                    <ArrowUpDown className="size-3" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-36">
+                  <DropdownMenuItem
+                    className="flex items-center gap-2 text-[length:var(--font-menu-item)]"
+                    onClick={() => setSessionSort("updated")}
+                  >
+                    <span className={cn(sessionSort === "updated" && "text-foreground font-medium")}>Last updated</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="flex items-center gap-2 text-[length:var(--font-menu-item)]"
+                    onClick={() => setSessionSort("created")}
+                  >
+                    <span className={cn(sessionSort === "created" && "text-foreground font-medium")}>Date created</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
@@ -175,37 +351,35 @@ export function LeftSidebar() {
             </div>
           ) : (
             <SidebarMenu>
-              {sessions.map((s) => {
-                const isActive = s.id === sessionId;
-                return (
-                  <SidebarMenuItem key={s.id}>
-                    <SidebarMenuButton
-                      onClick={() => { loadSession(s.id); setLeftSidebarOverlay(false); }}
-                      isActive={isActive}
-                      size="sm"
-                    >
-                      <span className="truncate text-[length:var(--font-session-item)]">{s.title}</span>
-                      <span className="shrink-0 text-[length:var(--font-timestamp)] opacity-50">
-                        {relativeTime(s.lastModified)}
-                      </span>
-                      {isActive && isStreaming && (
-                        <Loader2Icon className="size-3 shrink-0 animate-spin text-blue-500" />
-                      )}
-                    </SidebarMenuButton>
-                    <SidebarMenuAction
-                      onClick={(e) => handleDelete(e, s.id)}
-                      showOnHover
-                      className="[&>svg]:!size-2.5"
-                      title="Delete session"
-                    >
-                      <Trash2Icon />
-                    </SidebarMenuAction>
-                  </SidebarMenuItem>
-                );
-              })}
+              {sortedSessions
+                .filter((s) => {
+                  if (showArchived) return archivedSessionIds.includes(s.id);
+                  return !archivedSessionIds.includes(s.id) && !pinnedSessionIds.includes(s.id);
+                })
+                .map(renderSessionItem)}
             </SidebarMenu>
           )}
         </SidebarContent>
+        <SidebarFooter className="px-2 pb-2">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            onClick={() => {
+              const st = useLayoutStore.getState();
+              const doc = useDocumentStore.getState();
+              if (st.leftSidebarView === "settings" && !doc.projectRoot) {
+                doc.setShowWelcome(true);
+                st.setLeftSidebarView("sessions");
+              } else {
+                st.setLeftSidebarView(st.leftSidebarView === "settings" ? "sessions" : "settings");
+              }
+              setLeftSidebarOverlay(false);
+            }}
+          >
+            <SettingsIcon className="size-3.5 shrink-0" />
+            <span>Settings</span>
+          </button>
+        </SidebarFooter>
       </Sidebar>
     </SidebarProvider>
   );
@@ -215,18 +389,6 @@ export function LeftSidebar() {
       {leftSidebarOverlay &&
         createPortal(
           <div className="fixed top-[var(--height-titlebar)] right-0 bottom-0 left-0 z-50 flex flex-col bg-background">
-            <div className="flex h-[var(--height-sessions-header)] shrink-0 items-center justify-between border-b border-border px-3">
-              <span className="text-[length:var(--font-sidebar-section)] font-semibold uppercase tracking-wider text-muted-foreground">
-                Sessions
-              </span>
-              <button
-                type="button"
-                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
-                onClick={() => setLeftSidebarOverlay(false)}
-              >
-                <XIcon className="size-3.5" />
-              </button>
-            </div>
             <div className="flex-1 min-h-0">{sidebarContent}</div>
           </div>,
           document.body,

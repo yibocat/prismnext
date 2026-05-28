@@ -38,7 +38,10 @@
 
 /* ──── Panel Performance Optimizations ──── */
 
-/* Contain layout within each panel to prevent cascade reflow */
-[data-panel] {
-  contain: layout style;
-}
+/*
+ * NOTE: Do NOT use contain:layout on panels.
+ * react-resizable-panels sets panel widths in pixels via inline styles,
+ * which already bounds reflow. contain:layout forces each panel into
+ * its own formatting context, which can cause sub-pixel positioning at
+ * panel boundaries — producing 1px button jitter when panels resize.
+ */

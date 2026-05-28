@@ -1,38 +1,23 @@
-import { useState, useEffect, useRef, type RefObject } from "react";
+import { useState, useEffect, type RefObject } from "react";
 import { useTheme } from "next-themes";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLayoutStore } from "@/stores/layout-store";
 import { SIDEBAR_LEFT_DEFAULT, SIDEBAR_OVERLAY_THRESHOLD } from "@/styles/constants";
-import { useDocumentStore } from "@/stores/document-store";
-import { useProjectStore } from "@/stores/project-store";
-import { useProjectOpen } from "@/hooks/use-project-open";
-import { NewProjectDialog } from "@/components/modules/project/new-project-dialog";
+import { cn } from "@/lib/utils";
+import { Kbd } from "@/components/ui/kbd";
+import { CommandPalette } from "@/components/modules/shared";
 import {
-  PanelLeftIcon,
-  PanelRightIcon,
+  PanelLeft,
+  PanelRight,
   SearchIcon,
   SunIcon,
   MoonIcon,
   MonitorIcon,
-  FolderOpenIcon,
-  FolderPlusIcon,
-  FolderIcon,
-  ChevronDownIcon,
-  EllipsisIcon,
   Minimize2Icon,
   Maximize2Icon,
   XIcon,
-  PlusIcon,
-  LogOutIcon,
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 function useWindowState() {
   const platform = window.electronAPI?.platform ?? "darwin";
@@ -61,49 +46,10 @@ interface TitleBarProps {
 export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarProps) {
   const { platform, isMaximized, isFullscreen } = useWindowState();
   const isMobile = useIsMobile();
-  const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const openProject = useDocumentStore((s) => s.openProject);
-  const recentProjects = useProjectStore((s) => s.recentProjects);
-  const addRecentProject = useProjectStore((s) => s.addRecentProject);
+  const sidebarExpanded = useLayoutStore((s) => s.sidebarExpanded);
+  const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
+  const [commandOpen, setCommandOpen] = useState(false);
   const { theme, resolvedTheme, setTheme } = useTheme();
-
-  const projectName = projectRoot
-    ? projectRoot.split(/[/\\]/).pop() || projectRoot
-    : "No Project Open";
-
-  const newProjectTriggerRef = useRef<HTMLButtonElement>(null);
-
-  const projectOpen = useProjectOpen();
-
-  const saveLastProject = (path: string) => {
-    window.electronAPI.settingsSet({ lastProjectPath: path } as any);
-  };
-
-  const openProjectPath = async (path: string) => {
-    const ok = await projectOpen(path);
-    if (!ok) return;
-    addRecentProject(path);
-    saveLastProject(path);
-    await openProject(path);
-  };
-
-  const handleOpenProject = async () => {
-    const result = await window.electronAPI.dialogOpenFolder();
-    if (result.canceled || !result.path) return;
-    await openProjectPath(result.path);
-  };
-
-  const handleSwitchProject = async (path: string) => {
-    if (path === projectRoot) return;
-    await openProjectPath(path);
-  };
-
-  const handleCloseProject = async () => {
-    await window.electronAPI.settingsSet({ lastProjectPath: null } as any);
-    // Reload app to show welcome page
-    const docState = useDocumentStore.getState();
-    docState.closeProject();
-  };
 
   const cycleTheme = () => {
     if (theme === "light") setTheme("dark");
@@ -115,15 +61,19 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
   const showMacSpacer = isMac && !isFullscreen && !isMaximized;
 
   return (
-    <div className="drag-region relative flex h-[var(--height-titlebar)] shrink-0 items-center border-b border-border bg-card px-2.5 select-none">
+    <>
+    <div className="drag-region relative flex h-[var(--height-titlebar)] shrink-0 items-center px-2.5 select-none">
       {/* ── Left: Traffic lights spacer + Project + Sidebar toggle ── */}
       <div className="z-10 flex items-center gap-1">
         {showMacSpacer && <div className="w-[60px]" />}
 
         <button
           type="button"
-          className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title="Toggle Sidebar"
+          className={cn(
+            "flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors",
+            sidebarExpanded && "bg-muted text-foreground",
+          )}
+          title={sidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
           onClick={() => {
             const st = useLayoutStore.getState();
             if (st.leftSidebarOverlay) {
@@ -144,72 +94,19 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
             }
           }}
         >
-          <PanelLeftIcon className="size-4" />
+          <PanelLeft className="size-3.5" />
         </button>
-
-        <div className="mx-1 h-5 w-px bg-border/60" />
-
-        {/* Project switcher dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="flex items-center gap-1 rounded px-1.5 py-1 text-[length:var(--font-toolbar-label)] font-medium text-foreground hover:bg-muted transition-colors"
-            >
-              <FolderOpenIcon className="size-3.5 text-muted-foreground" />
-              <span className="max-w-[140px] truncate">{projectName}</span>
-              <ChevronDownIcon className="size-3 text-muted-foreground" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-64">
-            {recentProjects.length > 0 ? (
-              recentProjects.map((p) => (
-                <DropdownMenuItem
-                  key={p.path}
-                  className="flex items-center gap-2 text-[length:var(--font-menu-item)]"
-                  onClick={() => handleSwitchProject(p.path)}
-                >
-                  <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                  <span className="flex-1 truncate">{p.name}</span>
-                  <span className="shrink-0 text-[length:var(--font-path)] text-muted-foreground/60 truncate max-w-[120px]">{p.path}</span>
-                </DropdownMenuItem>
-              ))
-            ) : (
-              <div className="px-2 py-3 text-[length:var(--font-empty-state)] text-muted-foreground text-center">
-                No recent projects
-              </div>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="flex items-center gap-2 text-[length:var(--font-menu-item)]"
-              onClick={() => newProjectTriggerRef.current?.click()}
-            >
-              <FolderPlusIcon className="size-3.5 shrink-0" />
-              New Project...
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="flex items-center gap-2 text-[length:var(--font-menu-item)]"
-              onClick={handleOpenProject}
-            >
-              <FolderOpenIcon className="size-3.5 shrink-0" />
-              Open Project...
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        {/* Hidden trigger for NewProjectDialog — dropdown item clicks this via ref */}
-        <NewProjectDialog>
-          <button ref={newProjectTriggerRef} className="hidden" />
-        </NewProjectDialog>
 
         <button
           type="button"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title="Close project"
-          onClick={handleCloseProject}
+          className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[length:var(--font-toolbar-label)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          title="Command palette"
+          onClick={() => setCommandOpen(true)}
         >
-          <LogOutIcon className="size-3" />
+          <SearchIcon className="size-3.5" />
+          <Kbd className="text-[10px] h-4 min-w-4 px-0.5 bg-transparent">⌘K</Kbd>
         </button>
+
       </div>
 
       {/* Spacer */}
@@ -250,54 +147,26 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
 
         <button
           type="button"
-          className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[length:var(--font-toolbar-label)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title="Command palette"
-        >
-          <SearchIcon className="size-3" />
-          <kbd className="rounded border border-border px-1 py-0.5 font-mono text-[length:var(--font-kbd)] text-muted-foreground">
-            ⌘K
-          </kbd>
-        </button>
-
-        <button
-          type="button"
           className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           title={`Theme: ${theme}`}
           onClick={cycleTheme}
         >
           {theme === "system" ? (
-            <MonitorIcon className="size-4" />
+            <MonitorIcon className="size-3.5" />
           ) : resolvedTheme === "dark" ? (
-            <SunIcon className="size-4" />
+            <SunIcon className="size-3.5" />
           ) : (
-            <MoonIcon className="size-4" />
+            <MoonIcon className="size-3.5" />
           )}
         </button>
 
-        <div className="mx-1 h-5 w-px bg-border/60" />
-
         <button
           type="button"
-          className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title="Settings"
-          onClick={() => {
-            const st = useLayoutStore.getState();
-            const doc = useDocumentStore.getState();
-            if (st.leftSidebarView === "settings" && !doc.projectRoot) {
-              doc.setShowWelcome(true);
-              st.setLeftSidebarView("sessions");
-            } else {
-              st.setLeftSidebarView(st.leftSidebarView === "settings" ? "sessions" : "settings");
-            }
-          }}
-        >
-          <EllipsisIcon className="size-4" />
-        </button>
-
-        <button
-          type="button"
-          className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title="Toggle Right Area"
+          className={cn(
+            "flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors",
+            rightAreaExpanded && "bg-muted text-foreground",
+          )}
+          title={rightAreaExpanded ? "Collapse Right Area" : "Expand Right Area"}
           onClick={() => {
             const r = rightAreaRef.current;
             const c = centerRef.current;
@@ -316,9 +185,11 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
             }
           }}
         >
-          <PanelRightIcon className="size-4" />
+          <PanelRight className="size-3.5" />
         </button>
       </div>
     </div>
+    <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
+  </>
   );
 }

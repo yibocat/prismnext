@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.3.0 — 2026-05-28
+
+### Architecture: TitleBar Removal, Per-Panel Toolbars
+- **TitleBar removed** from top-level layout; replaced by `ContentTopBar` inside the center panel and `SidebarControls` inside LeftSidebar / RightArea toolbars
+- Each panel now owns its own drag-region toolbar, eliminating the shared-titlebar architectural constraint
+- `SidebarControls` extracted as reusable component (sidebar toggle + command palette trigger), rendered in LeftSidebar when expanded, in ContentTopBar or RightArea toolbar when collapsed
+- **`-ml-[1px]` position compensation**: SidebarControls button shifts left by 1px when rendered in ContentTopBar or RightArea to cancel the separator width crossed during container transition, ensuring identical absolute position in all states
+- New components: `ContentTopBar`, `SidebarControls`, `CommandPalette` (Cmd+K), `ProjectSwitcher`, `SidebarToolbar`, `MainToolbar`, `TabToolbar`, `Kbd`
+
+### Layout: 1px Jitter Elimination
+- **`sidebarFullyCollapsed` state** (flips at 0px, not 30px) decouples toolbar layout-switch timing from the `sidebarExpanded` 30px threshold — toolbar button position only changes when the panel is genuinely at zero, not mid-animation
+- **Separator `w-0` removed**: left sidebar separator is always `w-px` and always visible, eliminating the drag handle that disappeared during collapse (preventing drag-back) and the 1px layout shift during collapse/expand
+- **`contain:layout` removed** from `[data-panel]` CSS — forces panels into independent formatting contexts, causing sub-pixel misalignment at panel boundaries (documented in `layout.css` comment)
+- **`translateZ(0)` GPU hacks removed** from ContentTopBar and RightArea toolbar — same sub-pixel jitter mechanism as `contain:layout`
+- **`sidebarWidth` clamped to `SIDEBAR_LEFT_MAX`** on save and restore, preventing oversized panel restoration after project switch
+- **`overflow-hidden` on sidebar panel** prevents clipped SidebarControls from flickering during collapse animation
+- Sidebar `minSize` increased 160→190 for better minimum usability
+
+### Layout: Sidebar Overlay Fix
+- **Safety net added**: on wide windows (>500px), `leftSidebarOverlay` is always cleared — prevents fullscreen portal overlay from persisting after project switch or window resize
+- **Explicit `setLeftSidebarOverlay(false)` on expand** — overlay was never cleared in the expand code path, causing the sidebar to render as a full-screen portal even after expanding
+
+### Right Sidebar: Constraint Fix
+- Right sidebar inner panel `maxSize` 40%→80% — at narrow RightArea widths (250px), 40% = 100px < minSize (180px), creating an impossible constraint that froze the panel
+- `SIDEBAR_RIGHT_MIN` 180→100 — combined minimum (right-main 150 + separator 1 + sidebar 100 = 251) fits within `RIGHT_AREA_MIN` (250)
+- `RIGHT_AREA_MIN` 350→250 for better narrow-window behavior
+
+### UI/UX: Centering & Spacing
+- **BottomBar hidden** (`display: none`) — preserved in codebase for future re-enablement
+- Homepage vertical centering compensated: `@xl:pb-[var(--height-titlebar)]` adds phantom bottom space equal to ContentTopBar height, re-centering the welcome dialog
+- Chat Messages empty state compensated: `pb-[calc(2rem+var(--height-status-bar))]` offsets missing BottomBar height
+- Homepage and chat view bottom spacing unified — `gap-1` removed from homepage, `pb-2` added to mode selector — composer now sits at identical position regardless of empty/active state
+
+### Session Management
+- **Session pinning**: pin/unpin sessions to top of list with dedicated Pinned section
+- **Session archiving**: archive/restore/delete sessions with toggle between active and archived views
+- **Session sorting**: sort by last updated or date created
+- Session list fetches on project open, stream completion, and new session creation events
+
+### Chat Composer
+- Composer layout refined: toolbar bar moved above textarea, send button relocated to bottom-right
+- Agent selector and mode selector extracted from TitleBar into homepage/chat-view inline dropdowns
+
 ## 0.2.10 — 2026-05-26
 
 ### Layout System — Critical Bug Fixes

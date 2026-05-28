@@ -117,7 +117,7 @@ export function LeftMainArea() {
       <ChatErrorBoundary>
         {isEmpty ? (
           /* ── Homepage ── */
-          <div className="flex flex-1 flex-col items-center justify-end gap-1 @xl:justify-center">
+          <div className="flex flex-1 flex-col items-center justify-end @xl:justify-center @xl:pb-[var(--height-titlebar)]">
             {/* Top toolbar */}
             <div className="w-full max-w-3xl flex items-center gap-1.5 px-[12px] pb-1">
               <DropdownMenu>
@@ -190,7 +190,7 @@ export function LeftMainArea() {
             </div>
 
             {/* Bottom bar */}
-            <div className="w-full max-w-3xl flex items-center px-[12px] pt-1">
+            <div className="w-full max-w-3xl flex items-center px-[12px] pt-1 pb-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button

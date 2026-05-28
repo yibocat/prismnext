@@ -89,7 +89,7 @@ export interface ElectronAPI {
   agentCancel: (tabId?: string) => Promise<void>;
   agentCloseSession: (tabId?: string) => Promise<void>;
   agentAnswer: (tabId: string, answer: string) => Promise<void>;
-  agentListSessions: (projectPath: string) => Promise<Array<{ id: string; title: string; lastModified: number }>>;
+  agentListSessions: (projectPath: string) => Promise<Array<{ id: string; title: string; lastModified: number; createdAt: number }>>;
   agentLoadSession: (projectPath: string, sessionId: string) => Promise<any[]>;
   agentDeleteSession: (projectPath: string, sessionId: string) => Promise<{ success: boolean; error?: string }>;
 

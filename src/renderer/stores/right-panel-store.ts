@@ -26,7 +26,7 @@ const INITIAL_TITLES: Record<RightTabKind, string> = {
   browser: "New Tab",
   "git-overview": "Git",
   "git-diff": "Diff",
-  preview: "Preview",
+  preview: "Texwork",
 };
 
 // ─── Store ───

@@ -34,43 +34,51 @@ export function RightMainArea() {
 
   if (!isPreviewActive) {
     return (
-      <div className="relative flex h-full flex-col min-w-[150px]">
-        <RightPane />
-        {editorMaximized && <AiFab />}
+      <div className="flex flex-col h-full min-w-0">
+        <div className="relative flex-1 min-h-0">
+          <RightPane />
+          {editorMaximized && <AiFab />}
+        </div>
       </div>
     );
   }
 
   if (previewViewMode === "tex") {
     return (
-      <div className="relative flex h-full flex-col min-w-[150px]">
-        <RightPane />
-        {editorMaximized && <AiFab />}
+      <div className="flex flex-col h-full min-w-0">
+        <div className="relative flex-1 min-h-0">
+          <RightPane />
+          {editorMaximized && <AiFab />}
+        </div>
       </div>
     );
   }
 
   if (previewViewMode === "pdf") {
     return (
-      <div className="relative flex h-full flex-col min-w-[150px]">
-        <PdfPreview />
-        {editorMaximized && <AiFab />}
+      <div className="flex flex-col h-full min-w-0">
+        <div className="relative flex-1 min-h-0">
+          <PdfPreview />
+          {editorMaximized && <AiFab />}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="relative flex h-full flex-col min-w-[150px]">
-      <Group orientation="horizontal" className="flex-1 min-h-0" resizeTargetMinimumSize={{ fine: 5, coarse: 5 }}>
-        <Panel id="editor" minSize={150} defaultSize={60}>
-          <RightPane />
-        </Panel>
-        <Separator id="sep-pdf" className={SEP} />
-        <Panel id="pdf" minSize={150} defaultSize={40}>
-          <PdfPreview />
-        </Panel>
-      </Group>
-      {editorMaximized && <AiFab />}
+    <div className="flex flex-col h-full min-w-0">
+      <div className="relative flex-1 min-h-0">
+        <Group orientation="horizontal" className="flex-1 min-h-0" resizeTargetMinimumSize={{ fine: 5, coarse: 5 }}>
+          <Panel id="editor" minSize={150} defaultSize={60}>
+            <RightPane />
+          </Panel>
+          <Separator id="sep-pdf" className={SEP} />
+          <Panel id="pdf" minSize={150} defaultSize={40}>
+            <PdfPreview />
+          </Panel>
+        </Group>
+        {editorMaximized && <AiFab />}
+      </div>
     </div>
   );
 }

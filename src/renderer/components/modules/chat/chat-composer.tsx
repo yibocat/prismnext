@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Z_TOP } from "@/styles/constants";
 import { useClaudeChatStore } from "@/stores/claude-chat-store";
+import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore, type ProjectFile } from "@/stores/document-store";
 import { compileCurrentDocument } from "@/stores/compile-store";
 
@@ -60,6 +61,9 @@ export function ChatComposer() {
   const sendPrompt = useClaudeChatStore((s) => s.sendPrompt);
   const cancelExecution = useClaudeChatStore((s) => s.cancelExecution);
   const isStreaming = useClaudeChatStore((s) => s.isStreaming);
+  const claudeSessionId = useClaudeChatStore((s) => s.sessionId);
+  const archivedSessionIds = useLayoutStore((s) => s.archivedSessionIds);
+  const isArchived = claudeSessionId ? archivedSessionIds.includes(claudeSessionId) : false;
   const selectedModel = useClaudeChatStore((s) => s.selectedModel);
   const setSelectedModel = useClaudeChatStore((s) => s.setSelectedModel);
   const effortLevel = useClaudeChatStore((s) => s.effortLevel);
@@ -475,47 +479,55 @@ export function ChatComposer() {
           </div>
         )}
 
-        <textarea
-          ref={textareaRef}
-          value={input}
-          onChange={handleInput}
-          onKeyDown={handleKeyDown}
-          placeholder="Ask me anything... (@ to mention files, / for commands)"
-          className="max-h-40 min-h-10 w-full resize-none bg-transparent px-4 py-2 text-[length:var(--font-composer)] outline-none placeholder:text-muted-foreground"
-          rows={1}
-        />
+        {isArchived ? (
+          <div className="px-4 py-3 text-[length:var(--font-chat-meta)] text-muted-foreground text-center">
+            This session is archived — read only. Restore it to continue the conversation.
+          </div>
+        ) : (
+          <>
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={handleInput}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask me anything... (@ to mention files, / for commands)"
+              className="max-h-40 min-h-10 w-full resize-none bg-transparent px-4 py-2 text-[length:var(--font-composer)] outline-none placeholder:text-muted-foreground"
+              rows={1}
+            />
 
-        <div className="flex items-center justify-between px-2 pb-2">
-          <button
-            ref={modelButtonRef}
-            type="button"
-            onClick={() => setModelPickerOpen((v) => !v)}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground text-[length:var(--font-chat-meta)] transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <span>{modelLabel}</span>
-            <span className="text-muted-foreground/60">
-              {effortLevel === "low" ? "L" : effortLevel === "medium" ? "M" : "H"}
-            </span>
-            <ChevronDownIcon className="size-3" />
-          </button>
+            <div className="flex items-center justify-between px-2 pb-2">
+              <button
+                ref={modelButtonRef}
+                type="button"
+                onClick={() => setModelPickerOpen((v) => !v)}
+                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground text-[length:var(--font-chat-meta)] transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <span>{modelLabel}</span>
+                <span className="text-muted-foreground/60">
+                  {effortLevel === "low" ? "L" : effortLevel === "medium" ? "M" : "H"}
+                </span>
+                <ChevronDownIcon className="size-3" />
+              </button>
 
-          {isStreaming ? (
-            <button
-              onClick={cancelExecution}
-              className="flex size-8 items-center justify-center rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              <SquareIcon className="size-3 fill-current" />
-            </button>
-          ) : (
-            <button
-              onClick={handleSend}
-              disabled={!input.trim()}
-              className="flex size-8 items-center justify-center rounded-full bg-foreground text-background hover:bg-foreground/90 disabled:opacity-30"
-            >
-              <ArrowUpIcon className="size-4" />
-            </button>
-          )}
-        </div>
+              {isStreaming ? (
+                <button
+                  onClick={cancelExecution}
+                  className="flex size-8 items-center justify-center rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  <SquareIcon className="size-3 fill-current" />
+                </button>
+              ) : (
+                <button
+                  onClick={handleSend}
+                  disabled={!input.trim()}
+                  className="flex size-8 items-center justify-center rounded-full bg-foreground text-background hover:bg-foreground/90 disabled:opacity-30"
+                >
+                  <ArrowUpIcon className="size-4" />
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
