@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useClaudeChatStore, type ClaudeStreamMessage } from "@/stores/claude-chat-store";
+import { useChatStore, type ChatStreamMessage } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useChangesStore } from "@/stores/changes-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
@@ -31,7 +31,7 @@ import { cleanTextForDisplay } from "@/lib/system-prompt-cleaner";
 
 // ─── Hook ───
 
-export function useClaudeEvents() {
+export function useAgentEvents() {
   // Per-tab tracking
   const pendingToolUsesRef = useRef(new Map<string, Map<string, { name: string; input: any; oldContent?: string }>>());
   const hasTexChangesRef = useRef(new Map<string, boolean>());
@@ -155,7 +155,7 @@ export function useClaudeEvents() {
   // ─── Buffered message emission ───
 
   function flushTextBuffer(tabId: string) {
-    const chatStore = useClaudeChatStore.getState();
+    const chatStore = useChatStore.getState();
     const rawText = textTotalRef.current.get(tabId) || "";
     const rawThink = thinkTotalRef.current.get(tabId) || "";
 
@@ -196,7 +196,7 @@ export function useClaudeEvents() {
   useEffect(() => {
     // ─── Agent Stream Handler (ACP format) ───
     const unsubStream = window.electronAPI.onAgentStream(({ tabId, data }) => {
-      const chatStore = useClaudeChatStore.getState();
+      const chatStore = useChatStore.getState();
       const tab = chatStore.tabs.find((t) => t.id === tabId);
       if (!tab?.isStreaming) return;
 
@@ -270,7 +270,7 @@ export function useClaudeEvents() {
             }
           }
 
-          const msg: ClaudeStreamMessage = {
+          const msg: ChatStreamMessage = {
             type: "assistant",
             message: {
               content: [{
@@ -322,7 +322,7 @@ export function useClaudeEvents() {
 
           if (!update.toolCallId) break;
 
-          const msg: ClaudeStreamMessage = {
+          const msg: ChatStreamMessage = {
             type: "user",
             message: {
               content: [{
@@ -384,7 +384,7 @@ export function useClaudeEvents() {
       // Flush any remaining buffered text
       flushTextBuffer(tabId);
 
-      const chatStore = useClaudeChatStore.getState();
+      const chatStore = useChatStore.getState();
       const tab = chatStore.tabs.find((t) => t.id === tabId);
 
       if (!success && !tab?.error && error) {

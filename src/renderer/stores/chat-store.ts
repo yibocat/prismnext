@@ -18,7 +18,7 @@ export interface ContentBlock {
   signature?: string;
 }
 
-export interface ClaudeStreamMessage {
+export interface ChatStreamMessage {
   type: "system" | "assistant" | "user" | "result";
   subtype?: string;
   session_id?: string;
@@ -42,7 +42,7 @@ interface TabState {
   id: string;
   title: string;
   sessionId: string | null;
-  messages: ClaudeStreamMessage[];
+  messages: ChatStreamMessage[];
   isStreaming: boolean;
   error: string | null;
   draft: TabDraft;
@@ -65,7 +65,7 @@ function makeDefaultTab(id: string): TabState {
   };
 }
 
-interface ClaudeChatState {
+interface ChatState {
   selectedAgent: string;
 
   // Multi-tab state
@@ -73,7 +73,7 @@ interface ClaudeChatState {
   activeTabId: string;
 
   // Projected fields (from active tab) — for backward compat
-  messages: ClaudeStreamMessage[];
+  messages: ChatStreamMessage[];
   sessionId: string | null;
   isStreaming: boolean;
   error: string | null;
@@ -95,9 +95,9 @@ interface ClaudeChatState {
   // Settings
   setSelectedAgent: (agentId: string) => void;
 
-  // Internal (called by use-claude-events)
-  _appendMessage: (tabId: string, msg: ClaudeStreamMessage) => void;
-  _upsertLastMessage: (tabId: string, msg: ClaudeStreamMessage) => void;
+  // Internal (called by use-agent-events)
+  _appendMessage: (tabId: string, msg: ChatStreamMessage) => void;
+  _upsertLastMessage: (tabId: string, msg: ChatStreamMessage) => void;
   _setSessionId: (tabId: string, id: string) => void;
   _setStreaming: (tabId: string, streaming: boolean) => void;
   _setError: (tabId: string, error: string | null) => void;
@@ -119,7 +119,7 @@ function projectActiveTab(tabs: TabState[], activeTabId: string) {
 const initialTabId = nextTabId();
 const initialTab = makeDefaultTab(initialTabId);
 
-export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
+export const useChatStore = create<ChatState>()((set, get) => ({
   selectedAgent: "claude",
 
   // Multi-tab
@@ -211,7 +211,7 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
 
     await docState.saveAllFiles();
 
-    const userMessage: ClaudeStreamMessage = {
+    const userMessage: ChatStreamMessage = {
       type: "user",
       message: { content: [{ type: "text", text: userPrompt }] },
     };
@@ -241,7 +241,7 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
       const agentSettings = useAgentSettingsStore.getState();
       await window.electronAPI.agentSend(
         projectPath, userPrompt, tabId, agentId, sessionId ?? undefined,
-        agentSettings.getSetting("model"), agentSettings.getSetting("agentMode"), agentSettings.getSetting("effort")
+        agentSettings.getSetting("model") ?? undefined, agentSettings.getSetting("agentMode") ?? undefined, agentSettings.getSetting("effort") ?? undefined
       );
     } catch (err: any) {
       set((s) => {
@@ -332,8 +332,9 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
 
     try {
       const raw = await window.electronAPI.agentLoadSession(projectPath, sessionId);
-      const messages = raw.filter((msg: ClaudeStreamMessage) => {
-        if (msg.type === "system") return false;
+      const messages = raw.filter((msg: ChatStreamMessage) => {
+        // Filter out system messages and any non-standard types — the API only accepts user/assistant
+        if (msg.type === "system" || msg.type === "result") return false;
         if (!msg.message?.content || msg.message.content.length === 0) return false;
         return true;
       });
@@ -363,7 +364,7 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
 
   // ─── Internal ───
 
-  _appendMessage: (tabId: string, msg: ClaudeStreamMessage) => {
+  _appendMessage: (tabId: string, msg: ChatStreamMessage) => {
     set((s) => {
       const tabExists = s.tabs.some((t) => t.id === tabId);
       if (!tabExists) return {};
@@ -374,7 +375,7 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
     });
   },
 
-  _upsertLastMessage: (tabId: string, msg: ClaudeStreamMessage) => {
+  _upsertLastMessage: (tabId: string, msg: ChatStreamMessage) => {
     set((s) => {
       const tab = s.tabs.find((t) => t.id === tabId);
       if (!tab) return {};

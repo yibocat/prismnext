@@ -4,7 +4,7 @@ import { AUTO_SAVE_DELAY } from "@/styles/constants";
 import { useProjectStore } from "./project-store";
 import { useRightPanelStore } from "./right-panel-store";
 import { useLayoutStore } from "./layout-store";
-import { useClaudeChatStore } from "./claude-chat-store";
+import { useChatStore } from "./chat-store";
 import { clearPdfCache } from "./compile-store";
 
 export type ProjectFileType = "tex" | "image" | "pdf" | "bib" | "style" | "other";
@@ -111,7 +111,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       // late-arriving events from writing back into the cleared store
       await window.electronAPI.agentDispose();
       useRightPanelStore.getState().closeAllTabs();
-      useClaudeChatStore.getState().clearAllSessions();
+      useChatStore.getState().clearAllSessions();
       useLayoutStore.getState().setLeftSidebarView("sessions");
       useLayoutStore.getState().setLeftSidebarOverlay(false);
       useLayoutStore.getState().setRightSidebarOpen(false);
@@ -174,7 +174,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // Clean up sub-stores to prevent session/tab pollution
     window.electronAPI.agentDispose();
     useRightPanelStore.getState().closeAllTabs();
-    useClaudeChatStore.getState().clearAllSessions();
+    useChatStore.getState().clearAllSessions();
     clearPdfCache();
     import("./changes-store").then((m) => m.useChangesStore.getState().clearAll());
     set({

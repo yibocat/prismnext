@@ -86,6 +86,7 @@ export interface ElectronAPI {
   agentPrewarm: (projectPath: string, tabId?: string) => Promise<{ success: boolean }>;
   agentStatus: () => Promise<{ available: boolean; agentId?: string; agentName?: string; error?: string }>;
   agentSend: (projectPath: string, prompt: string, tabId?: string, agentId?: string, sessionId?: string, model?: string | null, agentMode?: string, effortLevel?: string) => Promise<void>;
+  agentSetGateway: (baseUrl?: string, apiKey?: string) => Promise<void>;
   agentCancel: (tabId?: string) => Promise<void>;
   agentCloseSession: (tabId?: string) => Promise<void>;
   agentAnswer: (tabId: string, answer: string) => Promise<void>;

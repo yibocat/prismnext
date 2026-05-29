@@ -51,9 +51,16 @@ export class AgentManager {
   private win: BrowserWindow;
   private sessions = new Map<string, TabSession>();
   private currentAgentId: string = DEFAULT_AGENT_ID;
+  private gatewayConfig: { baseUrl?: string; apiKey?: string } = {};
 
   constructor(win: BrowserWindow) {
     this.win = win;
+  }
+
+  /** Configure a custom API gateway for future sessions (third-party model proxy) */
+  setGateway(baseUrl?: string, apiKey?: string) {
+    this.gatewayConfig = { baseUrl, apiKey };
+    console.log(`[agent-manager] Gateway updated: ${baseUrl || "default"}`);
   }
 
   get agentId(): string {
@@ -197,19 +204,32 @@ export class AgentManager {
 
       // Create or resume session
       let sessionId: string;
+
+      // Build session extras from gateway config (third-party API proxy)
+      const sessionExtras: Record<string, unknown> = {};
+      if (this.gatewayConfig.baseUrl) {
+        sessionExtras._meta = {
+          gateway: {
+            baseUrl: this.gatewayConfig.baseUrl,
+            apiKey: this.gatewayConfig.apiKey || undefined,
+          },
+        };
+        console.log(`[agent-manager] Using custom gateway: ${this.gatewayConfig.baseUrl}`);
+      }
+
       if (sessionIdToResume) {
         try {
           console.log(`[agent-manager] Attempting to resume session: ${sessionIdToResume}`);
-          await connection.resumeSession({ sessionId: sessionIdToResume, cwd });
+          await connection.resumeSession({ sessionId: sessionIdToResume, cwd, ...sessionExtras });
           sessionId = sessionIdToResume;
           console.log(`[agent-manager] Session resumed: ${sessionId}`);
         } catch (resumeErr: any) {
           console.warn(`[agent-manager] Resume failed (${resumeErr?.message}), creating new session`);
-          const result = await connection.newSession({ cwd, mcpServers: [] });
+          const result = await connection.newSession({ cwd, mcpServers: [], ...sessionExtras });
           sessionId = result.sessionId;
         }
       } else {
-        const result = await connection.newSession({ cwd, mcpServers: [] });
+        const result = await connection.newSession({ cwd, mcpServers: [], ...sessionExtras });
         sessionId = result.sessionId;
       }
 

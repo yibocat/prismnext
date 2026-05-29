@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useLayoutStore } from "@/stores/layout-store";
 import { SIDEBAR_LEFT_MAX } from "@/styles/constants";
-import { useClaudeChatStore } from "@/stores/claude-chat-store";
+import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWindowState } from "@/hooks/use-window-state";
 import {
@@ -85,12 +85,12 @@ export function LeftSidebar({ leftSidebarRef }: LeftSidebarProps) {
   const sessionSort = useLayoutStore((s) => s.sessionSort);
   const setSessionSort = useLayoutStore((s) => s.setSessionSort);
 
-  const sessionId = useClaudeChatStore((s) => s.sessionId);
-  const isStreaming = useClaudeChatStore((s) => s.isStreaming);
-  const tabs = useClaudeChatStore((s) => s.tabs);
-  const loadSession = useClaudeChatStore((s) => s.loadSession);
-  const newSession = useClaudeChatStore((s) => s.newSession);
-  const clearCurrentTab = useClaudeChatStore((s) => s.clearCurrentTab);
+  const sessionId = useChatStore((s) => s.sessionId);
+  const isStreaming = useChatStore((s) => s.isStreaming);
+  const tabs = useChatStore((s) => s.tabs);
+  const loadSession = useChatStore((s) => s.loadSession);
+  const newSession = useChatStore((s) => s.newSession);
+  const clearCurrentTab = useChatStore((s) => s.clearCurrentTab);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
   const [sessions, setSessions] = useState<SessionInfo[]>([]);

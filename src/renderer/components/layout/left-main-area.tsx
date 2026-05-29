@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { useClaudeEvents } from "@/hooks/use-claude-events";
-import { useClaudeChatStore } from "@/stores/claude-chat-store";
+import { useAgentEvents } from "@/hooks/use-agent-events";
+import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useProjectStore } from "@/stores/project-store";
@@ -32,14 +32,14 @@ const AGENTS = [
 let didPrewarm = false;
 
 export function LeftMainArea() {
-  useClaudeEvents();
+  useAgentEvents();
 
   // Pre-warm agent on mount to avoid delay on first prompt (only for new sessions without loaded context)
   useEffect(() => {
     if (didPrewarm) return;
     const projectPath = useDocumentStore.getState().projectRoot;
     if (!projectPath || !window.electronAPI.agentPrewarm) return;
-    const store = useClaudeChatStore.getState();
+    const store = useChatStore.getState();
     // Only prewarm if the active tab doesn't have a loaded session (which needs resume, not new)
     const tab = store.tabs.find((t) => t.id === store.activeTabId);
     if (tab?.sessionId) return; // Session already loaded, will be resumed on first prompt
@@ -50,7 +50,7 @@ export function LeftMainArea() {
   // Sync sessionId to store when agent creates a new session (only if not already set)
   useEffect(() => {
     return window.electronAPI.onAgentSessionCreated(({ tabId: eventTabId, sessionId }) => {
-      const store = useClaudeChatStore.getState();
+      const store = useChatStore.getState();
       const targetTabId = eventTabId || store.activeTabId;
       // Always update — the latest session for this tab is the correct one.
       // (StrictMode double-prewarm or session resumption can produce newer IDs.)
@@ -58,10 +58,10 @@ export function LeftMainArea() {
     });
   }, []);
 
-  const messages = useClaudeChatStore((s) => s.messages);
-  const isStreaming = useClaudeChatStore((s) => s.isStreaming);
-  const selectedAgent = useClaudeChatStore((s) => s.selectedAgent);
-  const setSelectedAgent = useClaudeChatStore((s) => s.setSelectedAgent);
+  const messages = useChatStore((s) => s.messages);
+  const isStreaming = useChatStore((s) => s.isStreaming);
+  const selectedAgent = useChatStore((s) => s.selectedAgent);
+  const setSelectedAgent = useChatStore((s) => s.setSelectedAgent);
 
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const openProject = useDocumentStore((s) => s.openProject);

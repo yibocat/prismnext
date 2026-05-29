@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, memo, useCallback, useMemo } from "react";
-import { useClaudeChatStore, type ClaudeStreamMessage, type ContentBlock } from "@/stores/claude-chat-store";
+import { useChatStore, type ChatStreamMessage, type ContentBlock } from "@/stores/chat-store";
 import { MarkdownRenderer } from "./markdown-renderer";
 import { ToolWidget, ThinkingWidget } from "./tool-widgets";
 import {
@@ -65,7 +65,7 @@ StreamingIndicator.displayName = "StreamingIndicator";
 
 // ─── User Message ───
 
-const UserMessage = memo(function UserMessage({ msg }: { msg: ClaudeStreamMessage }) {
+const UserMessage = memo(function UserMessage({ msg }: { msg: ChatStreamMessage }) {
   const textBlock = msg.message?.content?.find((b) => b.type === "text");
   const text = textBlock?.text || "";
 
@@ -89,7 +89,7 @@ const AssistantMessage = memo(function AssistantMessage({
   msg,
   toolResultMap,
 }: {
-  msg: ClaudeStreamMessage;
+  msg: ChatStreamMessage;
   toolResultMap: Map<string, ContentBlock>;
 }) {
   const blocks = msg.message?.content || [];
@@ -130,7 +130,7 @@ const AssistantMessage = memo(function AssistantMessage({
 
 // ─── Result Message ───
 
-function ResultMessage({ msg }: { msg: ClaudeStreamMessage }) {
+function ResultMessage({ msg }: { msg: ChatStreamMessage }) {
   if (msg.is_error) {
     return (
       <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-[length:var(--font-chat-message)] text-destructive mx-4 my-1 animate-in fade-in slide-in-from-bottom-1 duration-200">
@@ -154,9 +154,9 @@ function ResultMessage({ msg }: { msg: ClaudeStreamMessage }) {
 // ─── Chat Messages ───
 
 export function ChatMessages() {
-  const messages = useClaudeChatStore((s) => s.messages);
-  const isStreaming = useClaudeChatStore((s) => s.isStreaming);
-  const activeTabId = useClaudeChatStore((s) => s.activeTabId);
+  const messages = useChatStore((s) => s.messages);
+  const isStreaming = useChatStore((s) => s.isStreaming);
+  const activeTabId = useChatStore((s) => s.activeTabId);
   const scrollRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const agentStartedRef = useRef(false);
@@ -192,7 +192,7 @@ export function ChatMessages() {
   const { displayMessages, msgIndexMap } = useMemo(() => {
     // Track result messages by usage data to dedup (not by text content)
     const seenResultKeys = new Set<string>();
-    const idxMap = new Map<ClaudeStreamMessage, number>();
+    const idxMap = new Map<ChatStreamMessage, number>();
     const filtered = messages.filter((msg, i) => {
       if (msg.type === "system") return false;
       if (msg.type === "user" && msg.message?.content?.every((b) => b.type === "tool_result")) {

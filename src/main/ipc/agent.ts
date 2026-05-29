@@ -90,6 +90,17 @@ export function registerAgentHandlers(): void {
     },
   );
 
+  // ─── Gateway (third-party API proxy) ───
+
+  ipcMain.handle(
+    "agent:setGateway",
+    async (_event, args: { baseUrl?: string; apiKey?: string }) => {
+      const manager = agentManager;
+      if (!manager) return;
+      manager.setGateway(args.baseUrl, args.apiKey);
+    },
+  );
+
   // ─── Cancel ───
 
   ipcMain.handle(

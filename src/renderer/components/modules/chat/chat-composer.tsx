@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { useClaudeChatStore } from "@/stores/claude-chat-store";
+import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore, type ProjectFile } from "@/stores/document-store";
 import { AgentSettingsBar } from "./agent-settings/agent-settings-bar";
@@ -62,13 +62,13 @@ export function ChatComposer() {
   inputRef.current = input;
 
   // Store subscriptions
-  const sendPrompt = useClaudeChatStore((s) => s.sendPrompt);
-  const cancelExecution = useClaudeChatStore((s) => s.cancelExecution);
-  const isStreaming = useClaudeChatStore((s) => s.isStreaming);
-  const claudeSessionId = useClaudeChatStore((s) => s.sessionId);
+  const sendPrompt = useChatStore((s) => s.sendPrompt);
+  const cancelExecution = useChatStore((s) => s.cancelExecution);
+  const isStreaming = useChatStore((s) => s.isStreaming);
+  const activeSessionId = useChatStore((s) => s.sessionId);
   const archivedSessionIds = useLayoutStore((s) => s.archivedSessionIds);
-  const isArchived = claudeSessionId ? archivedSessionIds.includes(claudeSessionId) : false;
-  const activeTabId = useClaudeChatStore((s) => s.activeTabId);
+  const isArchived = activeSessionId ? archivedSessionIds.includes(activeSessionId) : false;
+  const activeTabId = useChatStore((s) => s.activeTabId);
 
   // Document store (for @ mentions and selection)
   const files = useDocumentStore((s) => s.files);
@@ -90,11 +90,11 @@ export function ChatComposer() {
   useEffect(() => {
     const prevTabId = prevTabIdRef.current;
     if (prevTabId !== activeTabId) {
-      useClaudeChatStore.getState().saveDraft(prevTabId, { input: inputRef.current });
+      useChatStore.getState().saveDraft(prevTabId, { input: inputRef.current });
     }
     prevTabIdRef.current = activeTabId;
 
-    const tab = useClaudeChatStore.getState().tabs.find((t) => t.id === activeTabId);
+    const tab = useChatStore.getState().tabs.find((t) => t.id === activeTabId);
     setInput(tab?.draft?.input ?? "");
     setPinnedContexts([]);
     setMentionQuery(null);
@@ -104,7 +104,7 @@ export function ChatComposer() {
 
     return () => {
       // Save draft on unmount or before switching away
-      useClaudeChatStore.getState().saveDraft(activeTabId, { input: inputRef.current });
+      useChatStore.getState().saveDraft(activeTabId, { input: inputRef.current });
     };
   }, [activeTabId]);
 
@@ -221,7 +221,7 @@ export function ChatComposer() {
   // ─── Slash commands ───
   const builtinCommands: Array<{ name: string; desc: string; action: () => void }> = [
     { name: "clear", desc: "Clear current conversation", action: () => {
-      useClaudeChatStore.getState().newSession();
+      useChatStore.getState().newSession();
       setInput("");
     }},
     { name: "compile", desc: "Compile the current LaTeX document", action: () => {

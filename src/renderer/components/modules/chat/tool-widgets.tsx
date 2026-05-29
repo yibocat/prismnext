@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, memo } from "react";
-import type { ContentBlock } from "@/stores/claude-chat-store";
-import { useClaudeChatStore } from "@/stores/claude-chat-store";
+import type { ContentBlock } from "@/stores/chat-store";
+import { useChatStore } from "@/stores/chat-store";
 import { useChangesStore } from "@/stores/changes-store";
 import { diffLines } from "diff";
 import {
@@ -308,7 +308,7 @@ function TodoWriteWidget({ toolUse }: { toolUse: ContentBlock }) {
 export function ThinkingWidget({ thinking, duration }: { thinking: string; duration?: number }) {
   const [expanded, setExpanded] = useState(true);
   const [elapsed, setElapsed] = useState(0);
-  const isStreaming = useClaudeChatStore((s) => s.isStreaming);
+  const isStreaming = useChatStore((s) => s.isStreaming);
 
   useEffect(() => {
     if (!isStreaming) return;
@@ -363,7 +363,7 @@ function AskUserQuestionWidget({
   toolResult?: ContentBlock;
 }) {
   const [answered, setAnswered] = useState(false);
-  const isStreaming = useClaudeChatStore((s) => s.isStreaming);
+  const isStreaming = useChatStore((s) => s.isStreaming);
   const isLoading = !toolResult;
   const isError = toolResult?.is_error;
 
@@ -378,7 +378,7 @@ function AskUserQuestionWidget({
   const handleSelectOption = (label: string) => {
     if (!needsUserAnswer) return;
     setAnswered(true);
-    const tabId = useClaudeChatStore.getState().activeTabId;
+    const tabId = useChatStore.getState().activeTabId;
     window.electronAPI.agentAnswer(tabId, label).catch(() => {
       setAnswered(false); // revert on failure so user can retry
     });

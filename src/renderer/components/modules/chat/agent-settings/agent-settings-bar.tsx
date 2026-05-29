@@ -3,7 +3,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useClaudeChatStore } from "@/stores/claude-chat-store";
+import { useChatStore } from "@/stores/chat-store";
 import { ChevronDownIcon } from "lucide-react";
 import { ClaudeSettingsContent, ClaudeSettingsLabel } from "./claude-settings";
 import { GeminiSettingsContent, GeminiSettingsLabel } from "./gemini-settings";
@@ -23,7 +23,7 @@ const REGISTRY: Record<string, AgentSettingsComponent> = {
 };
 
 export function AgentSettingsBar() {
-  const selectedAgent = useClaudeChatStore((s) => s.selectedAgent);
+  const selectedAgent = useChatStore((s) => s.selectedAgent);
   const entry = REGISTRY[selectedAgent] || REGISTRY.claude;
   const { Content, Label } = entry;
 

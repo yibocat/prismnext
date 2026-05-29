@@ -65,6 +65,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   agentStatus: () => ipcRenderer.invoke("agent:status"),
   agentSend: (projectPath: string, prompt: string, tabId?: string, agentId?: string, sessionId?: string, model?: string | null, agentMode?: string, effortLevel?: string) =>
     ipcRenderer.invoke("agent:send", { projectPath, prompt, tabId, agentId, sessionId, model, agentMode, effortLevel }),
+  agentSetGateway: (baseUrl?: string, apiKey?: string) =>
+    ipcRenderer.invoke("agent:setGateway", { baseUrl, apiKey }),
   agentCancel: (tabId?: string) =>
     ipcRenderer.invoke("agent:cancel", { tabId }),
   agentCloseSession: (tabId?: string) =>
