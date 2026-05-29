@@ -5,10 +5,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useClaudeChatStore } from "@/stores/claude-chat-store";
 import { ChevronDownIcon } from "lucide-react";
-import { ClaudeSettingsContent, ClaudeSettingsLabel } from "./agent-settings/claude-settings";
-import { GeminiSettingsContent, GeminiSettingsLabel } from "./agent-settings/gemini-settings";
-import { OpenCodeSettingsContent, OpenCodeSettingsLabel } from "./agent-settings/opencode-settings";
-import { QoderSettingsContent, QoderSettingsLabel } from "./agent-settings/qoder-settings";
+import { ClaudeSettingsContent, ClaudeSettingsLabel } from "./claude-settings";
+import { GeminiSettingsContent, GeminiSettingsLabel } from "./gemini-settings";
+import { OpenCodeSettingsContent, OpenCodeSettingsLabel } from "./opencode-settings";
+import { QoderSettingsContent, QoderSettingsLabel } from "./qoder-settings";
 
 interface AgentSettingsComponent {
   Content: React.ComponentType;

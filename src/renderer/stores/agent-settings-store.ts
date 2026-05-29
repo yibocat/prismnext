@@ -6,8 +6,14 @@ interface AgentSettingsState {
   getSetting: (key: string) => string | null;
 }
 
+const DEFAULTS: Record<string, string | null> = {
+  model: null,
+  agentMode: "edit-before-ask",
+  effort: "medium",
+};
+
 export const useAgentSettingsStore = create<AgentSettingsState>()((set, get) => ({
-  settings: {},
+  settings: { ...DEFAULTS },
 
   setSetting: (key, value) =>
     set((s) => ({ settings: { ...s.settings, [key]: value } })),

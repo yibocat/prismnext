@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { useClaudeChatStore } from "@/stores/claude-chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore, type ProjectFile } from "@/stores/document-store";
-import { AgentSettingsBar } from "./agent-settings-bar";
+import { AgentSettingsBar } from "./agent-settings/agent-settings-bar";
 import { compileCurrentDocument } from "@/stores/compile-store";
 
 // ─── Helpers ───
