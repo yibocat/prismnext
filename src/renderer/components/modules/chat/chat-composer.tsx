@@ -1,24 +1,28 @@
-import { useState, useRef, useCallback, useLayoutEffect, useEffect, useMemo } from "react";
-import { createPortal } from "react-dom";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   ArrowUpIcon,
   SquareIcon,
-  ZapIcon,
-  SparklesIcon,
-  RabbitIcon,
-  CheckIcon,
-  ChevronDownIcon,
   XIcon,
   FileTextIcon,
   FileCodeIcon,
   FileIcon,
   ImageIcon,
+  PlusIcon,
+  LinkIcon,
+  Code2Icon,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { Z_TOP } from "@/styles/constants";
 import { useClaudeChatStore } from "@/stores/claude-chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore, type ProjectFile } from "@/stores/document-store";
+import { AgentSettingsBar } from "./agent-settings-bar";
 import { compileCurrentDocument } from "@/stores/compile-store";
 
 // ─── Helpers ───
@@ -64,10 +68,6 @@ export function ChatComposer() {
   const claudeSessionId = useClaudeChatStore((s) => s.sessionId);
   const archivedSessionIds = useLayoutStore((s) => s.archivedSessionIds);
   const isArchived = claudeSessionId ? archivedSessionIds.includes(claudeSessionId) : false;
-  const selectedModel = useClaudeChatStore((s) => s.selectedModel);
-  const setSelectedModel = useClaudeChatStore((s) => s.setSelectedModel);
-  const effortLevel = useClaudeChatStore((s) => s.effortLevel);
-  const setEffortLevel = useClaudeChatStore((s) => s.setEffortLevel);
   const activeTabId = useClaudeChatStore((s) => s.activeTabId);
 
   // Document store (for @ mentions and selection)
@@ -84,12 +84,6 @@ export function ChatComposer() {
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const mentionRef = useRef<HTMLDivElement>(null);
-
-  // Model picker state
-  const [modelPickerOpen, setModelPickerOpen] = useState(false);
-  const modelPickerRef = useRef<HTMLDivElement>(null);
-  const modelButtonRef = useRef<HTMLButtonElement>(null);
-  const [pickerPos, setPickerPos] = useState<{ left: number; bottom: number }>({ left: 0, bottom: 0 });
 
   // ─── Tab switch: save/restore draft ───
   const prevTabIdRef = useRef(activeTabId);
@@ -113,28 +107,6 @@ export function ChatComposer() {
       useClaudeChatStore.getState().saveDraft(activeTabId, { input: inputRef.current });
     };
   }, [activeTabId]);
-
-  // ─── Model picker position ───
-  useLayoutEffect(() => {
-    if (!modelPickerOpen || !modelButtonRef.current) return;
-    const rect = modelButtonRef.current.getBoundingClientRect();
-    setPickerPos({ left: rect.left, bottom: window.innerHeight - rect.top + 4 });
-  }, [modelPickerOpen]);
-
-  useEffect(() => {
-    if (!modelPickerOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        modelPickerRef.current && !modelPickerRef.current.contains(target) &&
-        modelButtonRef.current && !modelButtonRef.current.contains(target)
-      ) {
-        setModelPickerOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [modelPickerOpen]);
 
   // ─── Selection context auto-pin ───
   const currentContextLabel = useMemo(() => {
@@ -231,10 +203,9 @@ export function ChatComposer() {
 
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        // If a slash command prefix matches, execute it (ignore extra text)
-        const cmd = builtinCommands.find((c) => input.trim().startsWith(`/${c.name}`));
-        if (cmd && slashCommands.length > 0) {
-          cmd.action();
+        // Execute first matching slash command
+        if (input.startsWith("/") && slashCommands.length > 0) {
+          slashCommands[0].action();
           return;
         }
         handleSend();
@@ -329,74 +300,8 @@ export function ChatComposer() {
   );
 
   // ─── Render ───
-  const modelLabel =
-    selectedModel === "sonnet" ? "Sonnet"
-    : selectedModel === "opus" ? "Opus"
-    : selectedModel === "haiku" ? "Haiku"
-    : "Default";
-
   return (
     <div className="relative shrink-0 p-3 max-w-3xl mx-auto w-full">
-      {/* Model picker popup */}
-      {modelPickerOpen &&
-        createPortal(
-          <div
-            ref={modelPickerRef}
-            className="fixed w-64 rounded-lg border border-border bg-background shadow-lg"
-            style={{ left: pickerPos.left, bottom: pickerPos.bottom, zIndex: Z_TOP }}
-          >
-            <div className="p-1">
-              <div className="px-2 py-1 font-medium text-muted-foreground text-[length:var(--font-chat-meta)]">Model</div>
-              {[
-                { id: null as null, name: "Default", desc: "Use system Claude Code setting", icon: <SparklesIcon className="size-3.5" /> },
-                { id: "sonnet" as const, name: "Sonnet", desc: "Fast, efficient for most tasks", icon: <ZapIcon className="size-3.5" /> },
-                { id: "opus" as const, name: "Opus", desc: "Most capable, complex reasoning", icon: <SparklesIcon className="size-3.5" /> },
-                { id: "haiku" as const, name: "Haiku", desc: "Fastest, simple tasks", icon: <RabbitIcon className="size-3.5" /> },
-              ].map((m) => (
-                <button
-                  key={m.id ?? "default"}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-[length:var(--font-composer)] transition-colors",
-                    selectedModel === m.id ? "bg-accent text-accent-foreground" : "hover:bg-muted",
-                  )}
-                  onClick={() => setSelectedModel(m.id)}
-                >
-                  {m.icon}
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-[length:var(--font-chat-meta)]">{m.name}</div>
-                    <div className="truncate text-muted-foreground text-[length:var(--font-chat-meta)]">{m.desc}</div>
-                  </div>
-                  {selectedModel === m.id && <CheckIcon className="size-3 shrink-0" />}
-                </button>
-              ))}
-            </div>
-            <div className="border-border border-t" />
-            <div className="p-2">
-              <div className="mb-1.5 flex items-center justify-between px-1">
-                <span className="font-medium text-muted-foreground text-[length:var(--font-chat-meta)]">Effort</span>
-                <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">
-                  {effortLevel === "low" ? "Low" : effortLevel === "medium" ? "Medium" : "High"}
-                </span>
-              </div>
-              <div className="flex gap-1">
-                {(["low", "medium", "high"] as const).map((level) => (
-                  <button
-                    key={level}
-                    className={cn(
-                      "flex-1 rounded-md py-1 text-center font-medium text-[length:var(--font-chat-meta)] transition-colors",
-                      effortLevel === level ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80",
-                    )}
-                    onClick={() => setEffortLevel(level)}
-                  >
-                    {level === "low" ? "L" : level === "medium" ? "M" : "H"}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
-
       {/* / slash command dropdown */}
       {slashQuery !== null && (
         <div className="absolute right-3 bottom-full left-3 z-20 mb-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-background shadow-lg">
@@ -496,18 +401,39 @@ export function ChatComposer() {
             />
 
             <div className="flex items-center justify-between px-2 pb-2">
-              <button
-                ref={modelButtonRef}
-                type="button"
-                onClick={() => setModelPickerOpen((v) => !v)}
-                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-muted-foreground text-[length:var(--font-chat-meta)] transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <span>{modelLabel}</span>
-                <span className="text-muted-foreground/60">
-                  {effortLevel === "low" ? "L" : effortLevel === "medium" ? "M" : "H"}
-                </span>
-                <ChevronDownIcon className="size-3" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      title="Add context"
+                    >
+                      <PlusIcon className="size-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-48">
+                    <DropdownMenuItem className="text-[length:var(--font-chat-meta)]">
+                      <FileTextIcon className="size-3.5" />
+                      <span>Select file</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="text-[length:var(--font-chat-meta)]">
+                      <ImageIcon className="size-3.5" />
+                      <span>Upload image</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-[length:var(--font-chat-meta)]" disabled>
+                      <LinkIcon className="size-3.5" />
+                      <span>Add link</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="text-[length:var(--font-chat-meta)]" disabled>
+                      <Code2Icon className="size-3.5" />
+                      <span>Add code snippet</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <AgentSettingsBar />
+              </div>
 
               {isStreaming ? (
                 <button

@@ -1,6 +1,6 @@
 {
   "name": "prism-next",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "AI-powered LaTeX writing workspace",
   "main": "./out/main/index.js",
   "scripts": {
@@ -11,7 +11,7 @@
   "dependencies": {
     "@agentclientprotocol/claude-agent-acp": "^0.36.1",
     "@agentclientprotocol/sdk": "^0.22.1",
-    "@assistant-ui/react": "^0.14.5",
+
     "@codemirror/commands": "^6.10.3",
     "@codemirror/language": "^6.12.3",
     "@codemirror/lint": "^6.9.6",

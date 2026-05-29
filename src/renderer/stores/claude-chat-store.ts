@@ -69,7 +69,6 @@ interface ClaudeChatState {
   selectedModel: "sonnet" | "opus" | "haiku" | null;
   effortLevel: "low" | "medium" | "high";
   agentMode: "edit-before-ask" | "auto-edit" | "plan";
-  drawerState: "closed" | "open" | "expanded";
   selectedAgent: string;
 
   // Multi-tab state
@@ -97,7 +96,6 @@ interface ClaudeChatState {
   loadSession: (sessionId: string) => Promise<void>;
 
   // Settings
-  setDrawerState: (state: "closed" | "open" | "expanded") => void;
   setSelectedModel: (model: "sonnet" | "opus" | "haiku" | null) => void;
   setEffortLevel: (level: "low" | "medium" | "high") => void;
   setAgentMode: (mode: "edit-before-ask" | "auto-edit" | "plan") => void;
@@ -132,7 +130,6 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
   selectedModel: null,
   effortLevel: "low",
   agentMode: "edit-before-ask",
-  drawerState: "closed",
   selectedAgent: "claude",
 
   // Multi-tab
@@ -245,14 +242,13 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
       });
       return {
         tabs,
-        drawerState: s.drawerState === "closed" ? "open" : s.drawerState,
         ...projectActiveTab(tabs, s.activeTabId),
       };
     });
 
     try {
       const sessionId = get().tabs.find((t) => t.id === tabId)?.sessionId;
-      await window.electronAPI.agentSend(projectPath, userPrompt, tabId, agentId, sessionId ?? undefined, get().selectedModel);
+      await window.electronAPI.agentSend(projectPath, userPrompt, tabId, agentId, sessionId ?? undefined, get().selectedModel, get().agentMode, get().effortLevel);
     } catch (err: any) {
       set((s) => {
         const tabs = s.tabs.map((t) => {
@@ -294,7 +290,6 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
     set({
       tabs: [tab],
       activeTabId: id,
-      drawerState: "closed",
       ...projectActiveTab([tab], id),
     });
   },
@@ -354,7 +349,7 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
             ? { ...t, messages, sessionId, error: null, isStreaming: false }
             : t,
         );
-        return { tabs, activeTabId: tabId, drawerState: "open", ...projectActiveTab(tabs, tabId) };
+        return { tabs, activeTabId: tabId, ...projectActiveTab(tabs, tabId) };
       });
     } catch (err: any) {
       set((s) => {
@@ -369,8 +364,6 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
   },
 
   // ─── Settings ───
-
-  setDrawerState: (drawerState) => set({ drawerState }),
 
   setSelectedModel: (selectedModel) => set({ selectedModel }),
 

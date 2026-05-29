@@ -177,17 +177,20 @@ export function LeftSidebar({ leftSidebarRef }: LeftSidebarProps) {
           </span>
           {showArchived ? (
             <>
-              <button
-                type="button"
-                className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-foreground"
+              <span
+                role="button"
+                tabIndex={0}
+                className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
                 onClick={(e) => { e.stopPropagation(); toggleArchiveSession(s.id); }}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); toggleArchiveSession(s.id); } }}
                 title="Restore from archive"
               >
                 <ArchiveRestore className="size-3" />
-              </button>
-              <button
-                type="button"
-                className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-red-500"
+              </span>
+              <span
+                role="button"
+                tabIndex={0}
+                className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-red-500 cursor-pointer"
                 onClick={async (e) => {
                   e.stopPropagation();
                   if (!projectRoot) return;
@@ -199,24 +202,45 @@ export function LeftSidebar({ leftSidebarRef }: LeftSidebarProps) {
                     if (s.id === sessionId) clearCurrentTab();
                   }
                 }}
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    if (!projectRoot) return;
+                    const result = await window.electronAPI.agentDeleteSession(projectRoot, s.id);
+                    if (result.success) {
+                      if (archivedSessionIds.includes(s.id)) toggleArchiveSession(s.id);
+                      if (pinnedSessionIds.includes(s.id)) togglePinSession(s.id);
+                      setSessions((prev) => prev.filter((x) => x.id !== s.id));
+                      if (s.id === sessionId) clearCurrentTab();
+                    }
+                  }
+                }}
                 title="Delete permanently"
               >
                 <Trash2Icon className="size-3" />
-              </button>
+              </span>
             </>
           ) : (
-            <button
-              type="button"
-              className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-foreground"
+            <span
+              role="button"
+              tabIndex={0}
+              className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation();
                 toggleArchiveSession(s.id);
                 if (s.id === sessionId) clearCurrentTab();
               }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  toggleArchiveSession(s.id);
+                  if (s.id === sessionId) clearCurrentTab();
+                }
+              }}
               title="Archive session"
             >
               <Archive className="size-3" />
-            </button>
+            </span>
           )}
         </SidebarMenuButton>
       </SidebarMenuItem>

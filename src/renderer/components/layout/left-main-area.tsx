@@ -28,12 +28,6 @@ const AGENTS = [
   { id: "qoder", name: "Qoder CLI", disabled: true },
 ];
 
-const AGENT_MODES = [
-  { id: "edit-before-ask" as const, name: "Edit before ask" },
-  { id: "auto-edit" as const, name: "Auto edit" },
-  { id: "plan" as const, name: "Plan mode" },
-];
-
 // Module-level flag prevents double-prewarm when React StrictMode re-runs effects
 let didPrewarm = false;
 
@@ -68,8 +62,7 @@ export function LeftMainArea() {
   const isStreaming = useClaudeChatStore((s) => s.isStreaming);
   const selectedAgent = useClaudeChatStore((s) => s.selectedAgent);
   const setSelectedAgent = useClaudeChatStore((s) => s.setSelectedAgent);
-  const agentMode = useClaudeChatStore((s) => s.agentMode);
-  const setAgentMode = useClaudeChatStore((s) => s.setAgentMode);
+
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const openProject = useDocumentStore((s) => s.openProject);
   const recentProjects = useProjectStore((s) => s.recentProjects);
@@ -96,7 +89,6 @@ export function LeftMainArea() {
     : "Open Project";
 
   const currentAgent = AGENTS.find((a) => a.id === selectedAgent);
-  const currentMode = AGENT_MODES.find((m) => m.id === agentMode);
 
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   const settingsCategory = useLayoutStore((s) => s.settingsCategory);
@@ -188,34 +180,6 @@ export function LeftMainArea() {
             <div className="w-full max-w-3xl [&_textarea]:min-h-14 -my-2">
               <ChatComposer />
             </div>
-
-            {/* Bottom bar */}
-            <div className="w-full max-w-3xl flex items-center px-[12px] pt-1 pb-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
-                  >
-                    <span>{currentMode?.name || "Mode"}</span>
-                    <ChevronDownIcon className="size-3" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-40">
-                  {AGENT_MODES.map((m) => (
-                    <DropdownMenuItem
-                      key={m.id}
-                      onClick={() => setAgentMode(m.id)}
-                    >
-                      <span>{m.name}</span>
-                      {agentMode === m.id && (
-                        <span className="ml-auto text-[length:var(--font-badge)] text-muted-foreground">active</span>
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
           </div>
         ) : (
           /* ── Chat view ── */
@@ -223,35 +187,7 @@ export function LeftMainArea() {
             <ChatMessages />
             <div className="w-full max-w-3xl mx-auto -my-2 [&_textarea]:min-h-14">
               <ChatComposer />
-            </div>
-            {/* Bottom bar — agent mode */}
-            <div className="w-full max-w-3xl mx-auto flex items-center px-[12px] pt-1 pb-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
-                  >
-                    <span>{currentMode?.name || "Mode"}</span>
-                    <ChevronDownIcon className="size-3" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-40">
-                  {AGENT_MODES.map((m) => (
-                    <DropdownMenuItem
-                      key={m.id}
-                      onClick={() => setAgentMode(m.id)}
-                    >
-                      <span>{m.name}</span>
-                      {agentMode === m.id && (
-                        <span className="ml-auto text-[length:var(--font-badge)] text-muted-foreground">active</span>
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
+            </div>          </div>
         )}
       </ChatErrorBoundary>
     </div>

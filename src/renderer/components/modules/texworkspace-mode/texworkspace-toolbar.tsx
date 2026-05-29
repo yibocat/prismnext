@@ -22,18 +22,18 @@ import {
   ScrollTextIcon,
 } from "lucide-react";
 
-interface PreviewToolbarProps {
+interface TexworkspaceToolbarProps {
   compileFile: string | null | undefined;
 }
 
-export function PreviewToolbar({ compileFile }: PreviewToolbarProps) {
+export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
   const isCompiling = useCompileStore((s) => s.isCompiling);
   const compile = useCompileStore((s) => s.compile);
   const autoCompile = useCompileStore((s) => s.autoCompile);
   const toggleAutoCompile = useCompileStore((s) => s.toggleAutoCompile);
   const compileError = useCompileStore((s) => s.compileError);
-  const previewViewMode = useLayoutStore((s) => s.previewViewMode);
-  const setPreviewViewMode = useLayoutStore((s) => s.setPreviewViewMode);
+  const texworkspaceViewMode = useLayoutStore((s) => s.texworkspaceViewMode);
+  const setTexworkspaceViewMode = useLayoutStore((s) => s.setTexworkspaceViewMode);
 
   const handleCompile = async () => {
     const { projectRoot, files, getContent } = useDocumentStore.getState();
@@ -98,8 +98,8 @@ export function PreviewToolbar({ compileFile }: PreviewToolbarProps) {
       {/* View mode toggle group */}
       <Toggle
         size="sm"
-        pressed={previewViewMode === "split"}
-        onPressedChange={() => setPreviewViewMode("split")}
+        pressed={texworkspaceViewMode === "split"}
+        onPressedChange={() => setTexworkspaceViewMode("split")}
         title="Split view"
         className="size-6 rounded-r-none p-0 data-[state=on]:bg-primary/20 data-[state=on]:text-primary"
       >
@@ -107,8 +107,8 @@ export function PreviewToolbar({ compileFile }: PreviewToolbarProps) {
       </Toggle>
       <Toggle
         size="sm"
-        pressed={previewViewMode === "tex"}
-        onPressedChange={() => setPreviewViewMode("tex")}
+        pressed={texworkspaceViewMode === "tex"}
+        onPressedChange={() => setTexworkspaceViewMode("tex")}
         title="TeX only"
         className="size-6 rounded-none p-0 data-[state=on]:bg-primary/20 data-[state=on]:text-primary"
       >
@@ -116,8 +116,8 @@ export function PreviewToolbar({ compileFile }: PreviewToolbarProps) {
       </Toggle>
       <Toggle
         size="sm"
-        pressed={previewViewMode === "pdf"}
-        onPressedChange={() => setPreviewViewMode("pdf")}
+        pressed={texworkspaceViewMode === "pdf"}
+        onPressedChange={() => setTexworkspaceViewMode("pdf")}
         title="PDF only"
         className="size-6 rounded-l-none p-0 data-[state=on]:bg-primary/20 data-[state=on]:text-primary"
       >

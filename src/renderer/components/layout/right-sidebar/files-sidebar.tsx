@@ -183,10 +183,10 @@ export function FilesSidebar() {
   const activeFileId = useDocumentStore((s) => s.activeFileId);
   const setActiveFile = useDocumentStore((s) => s.setActiveFile);
   const openFile = useRightPanelStore((s) => s.openFile);
-  const openPreviewFile = useRightPanelStore((s) => s.openPreviewFile);
+  const openTexworkspaceFile = useRightPanelStore((s) => s.openTexworkspaceFile);
 
-  const isPreviewActive = tabs.find((t) => t.id === activeTabId)?.kind === "preview";
-  const currentMode: SidebarMode = isPreviewActive ? "manuscript" : activeMode === "chat" ? "all" : activeMode;
+  const isTexworkspaceActive = tabs.find((t) => t.id === activeTabId)?.kind === "texworkspace";
+  const currentMode: SidebarMode = isTexworkspaceActive ? "manuscript" : activeMode === "chat" ? "all" : activeMode;
   const files = useMemo(() => filterFilesByMode(allFiles, currentMode), [allFiles, currentMode]);
   const folders = useMemo(() => filterFoldersByMode(allFolders, currentMode), [allFolders, currentMode]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set(folders));
@@ -194,7 +194,7 @@ export function FilesSidebar() {
 
   return (
     <>
-      <FilesHeader lockedMode={isPreviewActive ? "manuscript" : undefined} />
+      <FilesHeader lockedMode={isTexworkspaceActive ? "manuscript" : undefined} />
       <SidebarContent className="px-1.5 py-1">
         {tree.length === 0 ? (
           <div className="flex flex-1 items-center justify-center px-4 py-8">
@@ -222,8 +222,8 @@ export function FilesSidebar() {
                   })
                 }
                 onSelectFile={(id, name) => {
-                  if (isPreviewActive) {
-                    openPreviewFile(id, id, name);
+                  if (isTexworkspaceActive) {
+                    openTexworkspaceFile(id, id, name);
                   } else {
                     setActiveFile(id);
                     openFile(id, id, name);

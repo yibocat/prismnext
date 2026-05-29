@@ -28,7 +28,7 @@ export function PaneContent({ activeTab }: { activeTab: RightTab | undefined }) 
       return <GitPlaceholder />;
     case "git-diff":
       return <div className="flex-1 min-h-0"><LatexEditor /></div>;
-    case "preview": {
+    case "texworkspace": {
       if (activeTab.isInitial || !activeTab.filePath) return <NoFileOpen />;
       const Viewer = resolveViewer(activeTab.filePath);
       return <div className="flex-1 min-h-0"><Viewer /></div>;

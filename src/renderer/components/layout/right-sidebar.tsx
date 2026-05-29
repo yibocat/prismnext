@@ -8,7 +8,7 @@ const SIDEBAR_BY_MODE: Record<string, React.ComponentType> = {
   files: FilesSidebar,
   git: GitSidebar,
   browser: BrowserSidebar,
-  preview: FilesSidebar,
+  texworkspace: FilesSidebar,
 };
 
 export { FilesSidebar } from "./right-sidebar/files-sidebar";

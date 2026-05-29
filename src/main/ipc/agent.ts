@@ -71,6 +71,8 @@ export function registerAgentHandlers(): void {
         agentId?: string;
         sessionId?: string;
         model?: string | null;
+        agentMode?: string;
+        effortLevel?: string;
       },
     ) => {
       const tabId = args.tabId || "default";
@@ -84,7 +86,7 @@ export function registerAgentHandlers(): void {
       await manager.ensureSession(tabId, cwd, args.agentId, args.sessionId);
 
       // Send prompt (fire-and-forget, streaming via agent:stream events)
-      manager.sendPrompt(tabId, args.prompt, args.model);
+      manager.sendPrompt(tabId, args.prompt, args.model, args.agentMode, args.effortLevel);
     },
   );
 

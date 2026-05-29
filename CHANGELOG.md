@@ -1,5 +1,85 @@
 # Changelog
 
+## 0.3.1 — 2026-05-29
+
+### Architecture: Remove assistant-ui, Inline Chat System
+
+- **`@assistant-ui/react` dependency removed** — eliminates the entire assistant-ui runtime layer (v0.14.5), reducing bundle size and removing a third-party abstraction between the app and ACP streaming
+- **Chat drawer system deleted**: `ClaudeChatDrawer`, `ClaudeRuntimeProvider`, `AssistantMessage`, `UserMessage`, `SessionSelector`, `ChatTabBar` — all assistant-ui-coupled components removed (~800 lines)
+- Chat is now fully inline in LeftMainArea: homepage view (composer centered) and conversation view (messages + composer at bottom) — no more overlay/drawer/expanded state machine
+- **`drawerState` removed** from `claude-chat-store` (the `closed | open | expanded` tri-state) — chat visibility is now implicit based on active tab and message history
+- **`convertMessages` + `convertBlock` deleted** — the ~200-line message conversion pipeline (ClaudeStreamMessage → ThreadMessageLike via assistant-ui types) is no longer needed
+- `AgentSettingsBar` replaces assistant-ui Primitive-based message parts rendering for agent config display
+
+### Agent Settings System — Per-Agent Configuration Schema
+
+- **New `AgentSetting` type system** in `configs.ts` (main process): `AgentSettingOption`, `AgentSettingType` (`"model" | "select" | "effort"`), and `AgentSetting` interfaces
+- **Each agent now declares its own settings schema** via `AgentConfig.settings[]`:
+  - Claude Code: Model (sonnet/opus/haiku), Mode (edit-before-ask/auto-edit/plan), Effort (low/medium/high)
+  - OpenCode: Model (gpt-4o/gpt-4-turbo), Reasoning (low/medium/high)
+  - Gemini CLI: Model (gemini-2.5-pro/gemini-2.5-flash), Style (precise/balanced/creative)
+  - Qoder CLI: Model (llama-4/mixtral)
+- **Settings flow through ACP pipeline**: `agentMode` and `effortLevel` are now passed from renderer → IPC (`agent:send`) → agent manager (`sendPrompt`) → stored in tab session settings for future ACP session configuration
+- **New `agent-config.ts`** (renderer lib, 135 lines): mirrors main-process agent configs for renderer use (`AGENT_UI_CONFIGS`), decoupling UI from main-process imports
+
+### AgentSettingsBar — Unified Settings Dropdown
+
+- **New `AgentSettingsBar` component**: replaces the old Portal-based inline model picker in `ChatComposer`
+- Single dropdown showing all active settings: e.g., "Sonnet · Edit before ask · L"
+- **Three setting types supported**: `model` (dropdown with name + description), `select` (simple dropdown), `effort` (L/M/H segmented button)
+- Model picker, agent mode selector, and effort level controls extracted from `ChatComposer` and consolidated into this reusable component
+- Rendered inside `ChatComposer` bottom bar alongside the new "+" context menu
+
+### AiBar — Floating AI Input Bar
+
+- **New `AiBar` component** (158 lines): macOS Spotlight-style floating pill at the bottom of the editor area
+- **Three-phase state machine**: `idle` (thin 1.5px-high pill, expands on hover), `input` (single-line input field with send button), `expanded` (full `ChatComposer` for multi-line input)
+- **Seamless text handoff**: text typed in the input phase is injected into the expanded ChatComposer's textarea via native DOM setter + input event dispatch, preserving cursor position
+- **Auto-expand on overflow**: single-line input automatically expands to full composer when text overflows the input width
+- **Keyboard shortcut hint**: idle pill shows "Manage AI Assistants ⌘I" on hover
+- Appears in RightMainArea when editor is maximized — replaces the old `AiFab` floating button placement
+- `AiFab` retained in codebase but removed from `RightMainArea` render paths
+
+### Preview → Texworkspace Rename
+
+- **Systematic rename across 20+ files**: `preview` → `texworkspace` for tab kind, store state, components, and directory
+- `preview-mode/` directory → `texworkspace-mode/`; `PreviewToolbar` → `TexworkspaceToolbar`; `previewViewMode` → `texworkspaceViewMode`
+- `RightTabKind`: `"preview"` → `"texworkspace"`; `RightToolbarTab`: `"preview"` → `"texworkspace"`; `PreviewViewMode` → `TexworkspaceViewMode`
+- Store methods renamed: `openPreviewFile` → `openTexworkspaceFile`, `switchToPreview` → `switchToTexworkspace`
+- All layout, sidebar, right-panel, editor, and toolbar references updated consistently
+
+### Right Sidebar — Architecture Rewrite
+
+- **Removed `react-resizable-panels` Group/Panel/Separator** from right sidebar inner layout — replaced with custom flex layout (`flex-1` main + `shrink-0` sidebar) plus custom `SidebarDragHandle`
+- **New `SidebarDragHandle` component**: custom mouse-drag handler (mousedown/mousemove/mouseup on document), reverse-direction drag (dragging right shrinks sidebar), wider hit area (`-left-1 -right-1`) for easier grabbing
+- **`ResizeObserver` on sidebar DOM element**: syncs actual rendered width back to store, handles squeeze-by-container scenarios where the user isn't actively dragging
+- **Collapse threshold 30px**: width saved only above 30px (preserves last real width); sidebar auto-closes when width drops below 30px — same pattern as App.tsx Panel onResize
+- **`sidebarFullMode`**: when toggled open in narrow space (container width < sidebarWidth + 150), sidebar fills the entire RightArea (overlay-style), decided at toggle time
+- **`toggleRightSidebar` → `setRightSidebarOpen` + custom `handleToggleSidebar`**: narrow check at open-time determines full mode; closing always clears full mode
+- **Width constraints updated**: `SIDEBAR_RIGHT_MIN` 100 → 190, `SIDEBAR_RIGHT_MAX` 380 → 420; RightArea dynamic minimum = 150 + 190 = 340 when sidebar is open
+
+### Accessibility — Nested Button Fix
+
+- **`<button>` → `<span role="button" tabIndex={0}>`** in LeftSidebar session action items (archive, restore, delete) — these were nested inside shadcn `SidebarMenuButton` (which renders as `<button>`), creating invalid HTML
+- **Keyboard handlers added**: `onKeyDown` listeners for Enter/Space on all session action spans, matching the click behavior (archive, restore, delete, pin)
+
+### Chat Composer Refinements
+
+- **"+" context menu added**: new dropdown (Select file, Upload image, Add link placeholder, Add code snippet placeholder) in composer bottom-left
+- **Slash command handling simplified**: any `/`-prefixed input triggers the first matching slash command on Enter
+- Model label display, effort toggle buttons, and Portal-based model picker removed from composer — all consolidated into `AgentSettingsBar`
+
+### Store Cleanup
+
+- **`aiModel` and `effortLevel` removed** from global `AppSettings` in `settings-store` — these are now per-agent settings managed in `claude-chat-store`
+- **`drawerState` removed** from `claude-chat-store` — chat drawer state machine eliminated
+- `claude-chat-store` `sendPrompt` now passes `agentMode` and `effortLevel` to the `agent:send` IPC call
+
+### Constants Update
+
+- `SIDEBAR_RIGHT_MIN` 100 → 190, `SIDEBAR_RIGHT_MAX` 380 → 420 for better right sidebar usability
+- New `SIDEBAR_RIGHT_MIN` import in `App.tsx` for dynamic RightArea minimum calculation
+
 ## 0.3.0 — 2026-05-28
 
 ### Architecture: TitleBar Removal, Per-Panel Toolbars

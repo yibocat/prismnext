@@ -1,6 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { useEffect, useRef, useState, useCallback, type RefObject } from "react";
 import { useTheme } from "next-themes";
-import { Group, Panel, Separator, usePanelRef, type PanelImperativeHandle } from "react-resizable-panels";
 import { useLayoutStore, type RightToolbarTab } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useCompileStore } from "@/stores/compile-store";
@@ -12,7 +11,9 @@ import { RightSidebar } from "@/components/layout/right-sidebar";
 import { TabBar } from "@/components/layout/tab-bar";
 import { SidebarControls } from "@/components/layout/sidebar-controls";
 import { TabToolbar } from "@/components/layout/tab-toolbar";
-import { PreviewToolbar } from "@/components/modules/preview-mode";
+import { TexworkspaceToolbar } from "@/components/modules/texworkspace-mode";
+import { AiBar } from "@/components/modules/shared";
+import { type PanelImperativeHandle } from "react-resizable-panels";
 import {
   FolderOpenIcon as FilesIcon,
   GitBranchIcon,
@@ -30,20 +31,54 @@ import {
   Maximize2Icon,
   XIcon,
 } from "lucide-react";
-import { SIDEBAR_RIGHT_MIN } from "@/styles/constants";
+import { SIDEBAR_RIGHT_MIN, SIDEBAR_RIGHT_MAX } from "@/styles/constants";
 import { cn } from "@/lib/utils";
 
 const TOOLBAR_TABS: { id: RightToolbarTab; label: string; icon: React.ReactNode }[] = [
   { id: "files", label: "Files", icon: <FilesIcon className="size-3.5" /> },
   { id: "git", label: "Git", icon: <GitBranchIcon className="size-3.5" /> },
   { id: "browser", label: "Browser", icon: <GlobeIcon className="size-3.5" /> },
-  { id: "preview", label: "Texwork", icon: <FileType className="size-3.5" /> },
+  { id: "texworkspace", label: "Texworkspace", icon: <FileType className="size-3.5" /> },
 ];
 
 interface RightAreaProps {
   leftSidebarRef: RefObject<PanelImperativeHandle | null>;
   centerRef: RefObject<PanelImperativeHandle | null>;
   rightAreaRef: RefObject<PanelImperativeHandle | null>;
+}
+
+function SidebarDragHandle({ onResize }: { onResize: (width: number) => void }) {
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startWidth = useLayoutStore.getState().rightSidebarWidth;
+
+      const onMouseMove = (ev: MouseEvent) => {
+        // Mouse moving right (clientX increases) → sidebar gets narrower
+        onResize(startWidth - (ev.clientX - startX));
+      };
+
+      const onMouseUp = () => {
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+      };
+
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    },
+    [onResize],
+  );
+
+  return (
+    <div
+      className="w-px bg-border hover:bg-primary/40 transition-colors cursor-col-resize shrink-0 relative group"
+      onMouseDown={handleMouseDown}
+    >
+      {/* Wider hit area for easier grabbing */}
+      <div className="absolute inset-y-0 -left-1 -right-1" />
+    </div>
+  );
 }
 
 export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightAreaProps) {
@@ -63,14 +98,15 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   const setRightToolbarTab = useLayoutStore((s) => s.setRightToolbarTab);
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
   const rightSidebarOpen = useLayoutStore((s) => s.rightSidebarOpen);
-  const toggleRightSidebar = useLayoutStore((s) => s.toggleRightSidebar);
+  const setRightSidebarOpen = useLayoutStore((s) => s.setRightSidebarOpen);
+  const rightSidebarWidth = useLayoutStore((s) => s.rightSidebarWidth);
   const setRightSidebarWidth = useLayoutStore((s) => s.setRightSidebarWidth);
 
   const tabs = useRightPanelStore((s) => s.tabs);
   const activeTabId = useRightPanelStore((s) => s.activeTabId);
   const ensureTab = useRightPanelStore((s) => s.ensureTab);
   const activeTab = tabs.find((t) => t.id === activeTabId);
-  const isPreviewActive = activeTab?.kind === "preview";
+  const isTexworkspaceActive = activeTab?.kind === "texworkspace";
 
   useEffect(() => {
     if (!activeTab) return;
@@ -78,15 +114,15 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
       case "file": setRightToolbarTab("files"); break;
       case "git-overview": case "git-diff": setRightToolbarTab("git"); break;
       case "browser": setRightToolbarTab("browser"); break;
-      case "preview": setRightToolbarTab("preview"); break;
+      case "texworkspace": setRightToolbarTab("texworkspace"); break;
     }
   }, [activeTab?.kind]);
 
-  // Auto-open right sidebar when Preview tab is opened
+  // Auto-open right sidebar when Texworkspace tab is opened
   const prevActiveTabKind = useRef(activeTab?.kind);
   useEffect(() => {
-    if (activeTab?.kind === "preview" && prevActiveTabKind.current !== "preview") {
-      if (!rightSidebarOpen) toggleRightSidebar();
+    if (activeTab?.kind === "texworkspace" && prevActiveTabKind.current !== "texworkspace") {
+      if (!rightSidebarOpen) setRightSidebarOpen(true);
     }
     prevActiveTabKind.current = activeTab?.kind;
   }, [activeTab?.kind]);
@@ -97,35 +133,69 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   const isCompiling = useCompileStore((s) => s.isCompiling);
   const compile = useCompileStore((s) => s.compile);
 
-  const showSidebar = rightSidebarOpen;
-  const rightSidebarRef = usePanelRef();
+  // ─── Sidebar drag-to-resize ───
+  // Same pattern as App.tsx Panel onResize:
+  //   - Only save width when >= 30px (preserve last real width on collapse)
+  //   - Close sidebar when width drops below 30px
+  const COLLAPSE_THRESHOLD = 30;
 
-  // Sync inner sidebar panel with store.
-  // Only operate when outer RightArea panel is expanded — if it's collapsed,
-  // the inner panel is constrained to 0px and calling collapse() would save
-  // 0 as the pre-collapse size, breaking drag-to-expand.
-  //
-  // When closing: only collapse programmatically if the panel is at a
-  // visible size (>= min). This avoids interfering with user drags, where
-  // onResize already sets rightSidebarOpen=false while the panel is mid-drag
-  // and near 0px.
-  useLayoutEffect(() => {
-    const panel = rightSidebarRef.current;
-    if (!panel || !rightAreaExpanded) return;
-    if (showSidebar) {
-      if (panel.isCollapsed()) {
-        panel.expand();
-      } else if (panel.getSize().inPixels < SIDEBAR_RIGHT_MIN) {
-        panel.resize(useLayoutStore.getState().rightSidebarWidth);
+  const handleSidebarResize = useCallback(
+    (width: number) => {
+      const st = useLayoutStore.getState();
+      if (width >= COLLAPSE_THRESHOLD) {
+        const clamped = Math.max(SIDEBAR_RIGHT_MIN, Math.min(SIDEBAR_RIGHT_MAX, width));
+        st.setRightSidebarWidth(clamped);
+        if (!st.rightSidebarOpen) st.setRightSidebarOpen(true);
+      } else {
+        if (st.rightSidebarOpen) st.setRightSidebarOpen(false);
       }
+    },
+    [],
+  );
+
+  // ─── ResizeObserver: sync sidebar width when squeezed by container ───
+  const sidebarElRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const sidebarEl = sidebarElRef.current;
+    if (!sidebarEl) return;
+
+    const observer = new ResizeObserver((entries) => {
+      const actualWidth = Math.round(entries[0].contentRect.width);
+      if (actualWidth <= 0) return;
+      const st = useLayoutStore.getState();
+      if (actualWidth >= COLLAPSE_THRESHOLD) {
+        st.setRightSidebarWidth(actualWidth);
+        if (!st.rightSidebarOpen) st.setRightSidebarOpen(true);
+      } else {
+        if (st.rightSidebarOpen) st.setRightSidebarOpen(false);
+      }
+    });
+    observer.observe(sidebarEl);
+    return () => observer.disconnect();
+  }, []);
+
+  // ─── Sidebar full-mode: when toggled open in narrow space, sidebar fills RightArea ───
+  // Same idea as LeftSidebar overlay: mode is decided at toggle time.
+  const containerElRef = useRef<HTMLDivElement>(null);
+  const [sidebarFullMode, setSidebarFullMode] = useState(false);
+
+  const handleToggleSidebar = useCallback(() => {
+    const st = useLayoutStore.getState();
+    if (st.rightSidebarOpen) {
+      // Closing: clear full mode
+      setSidebarFullMode(false);
+      st.setRightSidebarOpen(false);
     } else {
-      if (!panel.isCollapsed() && panel.getSize().inPixels >= SIDEBAR_RIGHT_MIN) {
-        panel.collapse();
-      }
+      // Opening: check if space is narrow → full mode
+      const containerWidth = containerElRef.current?.clientWidth ?? Infinity;
+      const narrow = containerWidth < st.rightSidebarWidth + 150;
+      if (narrow) setSidebarFullMode(true);
+      st.setRightSidebarOpen(true);
     }
-  }, [showSidebar, rightAreaExpanded]);
+  }, []);
 
-  const compileFile = activeTab?.kind === "file" || activeTab?.kind === "preview" ? activeTab.fileId : null;
+  const compileFile = activeTab?.kind === "file" || activeTab?.kind === "texworkspace" ? activeTab.fileId : null;
   const isTexFile = compileFile?.endsWith(".tex");
 
   const handleCompile = async () => {
@@ -133,6 +203,8 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
     const resolved = resolveCompileTarget(compileFile, files, getContent);
     if (resolved) await compile(projectRoot, resolved.targetPath);
   };
+
+  const sidebarFull = rightSidebarOpen && sidebarFullMode;
 
   return (
     <div className="flex h-full flex-col min-w-0 bg-background">
@@ -178,7 +250,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
                 setRightToolbarTab(tab.id);
                 if (tab.id === "git") ensureTab("git-overview");
                 else if (tab.id === "browser") ensureTab("browser");
-                else if (tab.id === "preview") ensureTab("preview");
+                else if (tab.id === "texworkspace") ensureTab("texworkspace");
               }}
             >
               {tab.icon}
@@ -199,14 +271,14 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
         </div>
 
         <div className="flex items-center gap-0.5 shrink-0">
-        {/* Compile button for non-preview .tex files (preview has its own in tab toolbar) */}
-        {activeTab?.kind !== "preview" && isTexFile && (
+        {/* Compile button for non-texworkspace .tex files (texworkspace has its own in tab toolbar) */}
+        {activeTab?.kind !== "texworkspace" && isTexFile && (
           <button type="button" className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" title="Compile" onClick={handleCompile} disabled={isCompiling}>
             {isCompiling ? <Loader2Icon className="size-3.5 animate-spin" /> : <PlayIcon className="size-3.5" />}
           </button>
         )}
 
-        {((activeTab?.kind !== "preview" && isTexFile)) && (
+        {((activeTab?.kind !== "texworkspace" && isTexFile)) && (
           <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
         )}
 
@@ -304,37 +376,33 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
       </div>
 
       {/* Tab Toolbar */}
-      <TabToolbar>
-        {isPreviewActive && <PreviewToolbar compileFile={compileFile} />}
+      <TabToolbar onToggleSidebar={handleToggleSidebar}>
+        {isTexworkspaceActive && <TexworkspaceToolbar compileFile={compileFile} />}
       </TabToolbar>
 
-      {/* Main Content */}
-      <Group id="right-inner" orientation="horizontal" className="flex-1 min-h-0" resizeTargetMinimumSize={{ fine: 5, coarse: 5 }}>
-        <Panel id="right-main" minSize={150}>
-          <RightMainArea />
-        </Panel>
-        <Separator id="handle-right-sidebar" className="w-px bg-border hover:bg-primary/40 transition-colors outline-none" />
-        <Panel
-          id="right-sidebar-inner"
-          panelRef={rightSidebarRef}
-          collapsible
-          collapsedSize={0}
-          minSize={SIDEBAR_RIGHT_MIN}
-          maxSize="80%"
-          defaultSize={0}
-          groupResizeBehavior="preserve-pixel-size"
-          onResize={(s) => {
-            const st = useLayoutStore.getState();
-            // Only save width when above collapse threshold to prevent
-            // the collapse animation from polluting rightSidebarWidth
-            if (s.inPixels > 30) setRightSidebarWidth(s.inPixels);
-            if (s.inPixels === 0 && st.rightSidebarOpen) st.setRightSidebarOpen(false);
-            if (s.inPixels > 0 && !st.rightSidebarOpen) st.setRightSidebarOpen(true);
-          }}
-        >
-          <RightSidebar />
-        </Panel>
-      </Group>
+      {/* Main Content: flex layout — main expands, sidebar stays fixed width */}
+      <div ref={containerElRef} className="flex flex-1 min-h-0 relative">
+        {!sidebarFull && (
+          <div className="flex-1 min-w-[150px]">
+            <RightMainArea />
+          </div>
+        )}
+
+        {rightSidebarOpen && (
+          <>
+            <SidebarDragHandle onResize={handleSidebarResize} />
+            <div
+              ref={sidebarElRef}
+              className="shrink-0 overflow-hidden"
+              style={{ width: sidebarFull ? "100%" : rightSidebarWidth }}
+            >
+              <RightSidebar />
+            </div>
+          </>
+        )}
+
+        {editorMaximized && <AiBar />}
+      </div>
     </div>
   );
 }

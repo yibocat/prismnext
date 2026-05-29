@@ -5,11 +5,13 @@ import { ListTreeIcon } from "lucide-react";
 
 interface TabToolbarProps {
   children?: ReactNode;
+  onToggleSidebar?: () => void;
 }
 
-export function TabToolbar({ children }: TabToolbarProps) {
+export function TabToolbar({ children, onToggleSidebar }: TabToolbarProps) {
   const rightSidebarOpen = useLayoutStore((s) => s.rightSidebarOpen);
   const toggleRightSidebar = useLayoutStore((s) => s.toggleRightSidebar);
+  const toggle = onToggleSidebar ?? toggleRightSidebar;
 
   return (
     <div className="flex h-8 shrink-0 items-center px-2 gap-0.5 border-y border-border select-none">
@@ -23,7 +25,7 @@ export function TabToolbar({ children }: TabToolbarProps) {
           rightSidebarOpen && "bg-muted text-foreground",
         )}
         title="Toggle Right Sidebar"
-        onClick={() => toggleRightSidebar()}
+        onClick={() => toggle()}
       >
         <ListTreeIcon className="size-3.5" />
       </button>

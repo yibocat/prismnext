@@ -4,8 +4,6 @@ import { createLogger } from "@/services/logger";
 const log = createLogger("settings-store");
 
 export interface AppSettings {
-  aiModel: "default" | "sonnet" | "opus" | "haiku";
-  effortLevel: "low" | "medium" | "high";
   theme: "dark" | "light" | "system";
   sidebarCollapsed: boolean;
   rightPanelCollapsed: boolean;
@@ -14,8 +12,6 @@ export interface AppSettings {
 }
 
 const defaults: AppSettings = {
-  aiModel: "default",
-  effortLevel: "low",
   theme: "dark",
   sidebarCollapsed: false,
   rightPanelCollapsed: false,
@@ -40,8 +36,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         settings: {
           ...defaults,
           ...remote,
-          aiModel: (remote.aiModel as AppSettings["aiModel"]) || defaults.aiModel,
-          effortLevel: (remote.effortLevel as AppSettings["effortLevel"]) || defaults.effortLevel,
           theme: (remote.theme as AppSettings["theme"]) || defaults.theme,
         },
         loaded: true,

@@ -8,8 +8,8 @@ import {
 } from "@/styles/constants";
 
 export type AppMode = "all" | "manuscript" | "vault" | "zotero" | "code" | "assets" | "other" | "chat";
-export type RightToolbarTab = "files" | "git" | "browser" | "preview";
-export type PreviewViewMode = "split" | "tex" | "pdf";
+export type RightToolbarTab = "files" | "git" | "browser" | "texworkspace";
+export type TexworkspaceViewMode = "split" | "tex" | "pdf";
 
 export type TabType = "file" | "pdf";
 
@@ -26,8 +26,8 @@ interface LayoutState {
   rightToolbarTab: RightToolbarTab;
   setRightToolbarTab: (tab: RightToolbarTab) => void;
 
-  previewViewMode: PreviewViewMode;
-  setPreviewViewMode: (mode: PreviewViewMode) => void;
+  texworkspaceViewMode: TexworkspaceViewMode;
+  setTexworkspaceViewMode: (mode: TexworkspaceViewMode) => void;
 
   leftSidebarOverlay: boolean;
   setLeftSidebarOverlay: (show: boolean) => void;
@@ -90,8 +90,8 @@ export const useLayoutStore = create<LayoutState>()(
       rightToolbarTab: "files",
       setRightToolbarTab: (tab) => set({ rightToolbarTab: tab }),
 
-      previewViewMode: "split",
-      setPreviewViewMode: (mode) => set({ previewViewMode: mode }),
+      texworkspaceViewMode: "split",
+      setTexworkspaceViewMode: (mode) => set({ texworkspaceViewMode: mode }),
 
       leftSidebarOverlay: false,
       setLeftSidebarOverlay: (show) => set({ leftSidebarOverlay: show }),

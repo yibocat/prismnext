@@ -33,8 +33,8 @@ export const SIDEBAR_LEFT_MAX = 420;
 export const SIDEBAR_OVERLAY_THRESHOLD = 500;
 
 export const SIDEBAR_RIGHT_DEFAULT = 220;
-export const SIDEBAR_RIGHT_MIN = 100;
-export const SIDEBAR_RIGHT_MAX = 380;
+export const SIDEBAR_RIGHT_MIN = 190;
+export const SIDEBAR_RIGHT_MAX = 420;
 
 export const RIGHT_AREA_DEFAULT = 500;
 export const RIGHT_AREA_MIN = 250;

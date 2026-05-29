@@ -41,6 +41,8 @@ interface TabSession {
   sessionId: string;
   agentId: string;
   cwd: string;
+  /** Agent-specific settings (model, mode, effort, etc.) — stored for future ACP session config */
+  settings: Record<string, string | null>;
 }
 
 // ─── Agent Manager ───
@@ -217,6 +219,7 @@ export class AgentManager {
         sessionId,
         agentId: id,
         cwd,
+        settings: {},
       });
 
       this.win.webContents.send("agent:sessionCreated", { tabId, sessionId, agentId: id });
@@ -253,7 +256,7 @@ export class AgentManager {
 
   // ─── Prompt ───
 
-  async sendPrompt(tabId: string, prompt: string, modelId?: string | null): Promise<void> {
+  async sendPrompt(tabId: string, prompt: string, modelId?: string | null, agentMode?: string, effortLevel?: string): Promise<void> {
     const session = this.sessions.get(tabId);
     if (!session) {
       this.win.webContents.send("agent:complete", {
@@ -263,6 +266,11 @@ export class AgentManager {
       });
       return;
     }
+
+    // Store agent settings for future ACP session configuration
+    if (agentMode) session.settings.agentMode = agentMode;
+    if (effortLevel) session.settings.effortLevel = effortLevel;
+    // TODO: apply settings when spawning/resuming ACP session (e.g. env vars, CLI args)
 
     // Apply model selection before sending prompt (only if user picked a specific model)
     if (modelId) {
