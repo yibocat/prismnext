@@ -1,4 +1,7 @@
-// Mirrors main/agents/configs.ts — renderer-side agent settings schema
+// Mirrors main/agents/configs.ts — renderer-side agent settings schema.
+// When adding a new agent, mirror its settings definition here so the
+// agent-settings UI can render the correct controls.
+// See main/agents/configs.ts for the full integration checklist.
 
 export interface AgentSettingOption {
   id: string | null;

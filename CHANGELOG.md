@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.3.2 — 2026-05-30
+
+### Streaming — Per-Token Real-Time Output
+
+- **Added `--include-partial-messages` to Claude CLI args** — enables Anthropic API delta events wrapped in `stream_event` NDJSON envelopes, enabling true token-by-token streaming
+- **Rewrote `ClaudeParser`** — unwraps `stream_event` envelopes, accumulates `content_block_delta` events, and emits progressive `assistant` messages after each delta; also handles direct `assistant`/`user`/`result` messages and top-level delta events defensively
+- **Persistent process architecture** — switched from one-shot `-p` mode (each prompt spawned a new process, paying ~2s startup cost every time) to stdin/stdout long-lived process using `--input-format stream-json`; subsequent messages now skip the entire startup overhead
+- **Prewarm support** — `cli-manager.ts` eagerly starts the Claude process on app launch via `ensureProcess()`; `cli:prewarm` IPC handler wires it through; first message latency significantly reduced
+- Added `--dangerously-skip-permissions` to skip permission checks and `CLAUDE_CODE_EFFORT_LEVEL=low` env var for faster responses
+- Parser emits empty-block guard: blocks with no text/thinking/input are suppressed, preventing the StreamingIndicator from being hidden before real content arrives
+
+### Chat UX — Meta Display, Streaming Indicator, Composer
+
+- **Completion time + token display**: completion time now formatted in seconds (`4.6s` instead of `4604ms`), displayed left of copy button; token usage (`↑23.6k ↓64`) pushed to the right via `ml-auto` with `·` separator; all computed from `displayMessages` at render time via `metaMap` — survives tab switches, view switches, and session reloads
+- **`loadSession` no longer discards result messages** — `msg.type === "result"` was filtered out, dropping `duration_ms` and `usage` needed for meta display; now only `system` messages are filtered
+- **`loadSession` always creates a new tab** — previously overwrote the current tab's messages (and sessionId), destroying in-memory meta for the original session; now each loaded session gets its own tab
+- **StreamingIndicator timing fix**: indicator now stays visible until `hasThinkingContent` is true (thinking text > 0 characters), eliminating the "flash → blank ~1s → content" gap caused by empty initial deltas; reset moved from `useEffect` to render-phase via `prevStreamingRef` pattern to avoid React 18 batching race
+- **Textarea height restored**: `rows={1}` → `rows={2}`, `min-h-10` → `min-h-12` (40→48px); toolbar spacing tightened (`gap-1.5`→`gap-1`, `pb-2`→`pb-1.5`)
+- **Homepage toolbar spacing**: removed `pb-1` from toolbar, reduced composer top padding from `p-3` to `pt-2`
+- **Removed `-my-2` and `[&_textarea]:min-h-14`** from composer wrapper (left-main-area.tsx) — negative margins caused page-level scroll overflow
+- **Removed `shrink-0`** from ChatComposer root div — allows natural flex shrinking
+
+### Sidebar — Performance Fix
+
+- **Stopped subscribing to entire `tabs` array** in `LeftSidebar` — every stream delta triggered a store update, recreating the tabs array and re-rendering the entire sidebar hundreds of times per second; now only uses `sessionId + isStreaming` for the active-session streaming spinner
+- **Wrapped `LeftSidebar` in `React.memo`** — prevents re-renders from parent component updates
+- **Fixed `cli:sessionCreated` flooding**: removed the `!this.tabSessionIds.has(tabId)` guard during persistent-process rewrite, causing the event (and subsequent `fetchSessions()` call) to fire on every stream message; guard restored
+
+### Architecture — CLI Coordination Layer
+
+- **Deleted old ACP layer**: `agent-manager.ts` (394 lines), `agent.ts` (IPC, 200 lines), `use-agent-events.ts` (425 lines)
+- **Added CLI coordination layer**: `cli-manager.ts` (persistent process lifecycle, stdin/stdout management, 235 lines), `cli.ts` (IPC handlers, 165 lines), `use-cli-events.ts` (stream → store bridge, 267 lines), `claude-parser.ts` (NDJSON parser with delta accumulation, 210 lines)
+- **IPC channels renamed**: `agent:*` → `cli:*` across preload, IPC handlers, and type declarations; added `cli:answer` handler (was missing, caused silent failures for AskUserQuestion widget)
+- **`ChatStreamMessage` type** remains the universal message format — any agent parser emits this shape; store, components, and IPC are agent-agnostic
+- **`configs.ts`**: removed ACP references from OpenCode (`opencode acp --stdio`), Gemini (`--acp --stdio`), and Qoder (`acp --stdio`) — replaced with minimal placeholder args; added comprehensive integration guide (6 files to touch, CliParser interface requirements, CLI compatibility criteria)
+- **`agent-config.ts`**: added cross-reference to main configs.ts integration guide
+- **`chat-store.ts`**: added `messageMeta` per-tab map for completion/token metadata; `_upsertLastMessage` merges progressive assistant updates; `_appendMessage` atomically attaches meta when appending result messages; `messageMeta` survives message object replacement
+- **`chat-messages.tsx`**: extracted `metaMap` computed from `displayMessages` consecutive `assistant → result` pairs; `inlinedResults` set for deduplication; `hasThinkingContent` for StreamingIndicator timing
+- Store initialized with `messageMeta: {}` on `makeDefaultTab` and projected via `projectActiveTab`
+
+### Fixes
+
+- `cli-manager.ts` missing `tabSessionIds` field initialization → crash on first stream message (`Cannot read properties of undefined (reading 'has')`)
+- `cli:answer` IPC handler was entirely missing — AskUserQuestion widget answers were silently dropped
+- `LeftSidebar` `React.memo` wrapper requires `import { memo }` and closing `});`
+
 ## 0.3.1 — 2026-05-29
 
 ### Architecture: Remove assistant-ui, Inline Chat System

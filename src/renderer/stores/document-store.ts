@@ -109,7 +109,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     try {
       // Clean up previous project state — dispose agent FIRST to prevent
       // late-arriving events from writing back into the cleared store
-      await window.electronAPI.agentDispose();
+      await window.electronAPI.cliDispose();
       useRightPanelStore.getState().closeAllTabs();
       useChatStore.getState().clearAllSessions();
       useLayoutStore.getState().setLeftSidebarView("sessions");
@@ -172,7 +172,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   closeProject: () => {
     clearAutoSaveTimer();
     // Clean up sub-stores to prevent session/tab pollution
-    window.electronAPI.agentDispose();
+    window.electronAPI.cliDispose();
     useRightPanelStore.getState().closeAllTabs();
     useChatStore.getState().clearAllSessions();
     clearPdfCache();

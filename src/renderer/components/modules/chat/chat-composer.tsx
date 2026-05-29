@@ -301,7 +301,7 @@ export function ChatComposer() {
 
   // ─── Render ───
   return (
-    <div className="relative shrink-0 p-3 max-w-3xl mx-auto w-full">
+    <div className="relative pt-2 px-3 pb-3 max-w-3xl mx-auto w-full">
       {/* / slash command dropdown */}
       {slashQuery !== null && (
         <div className="absolute right-3 bottom-full left-3 z-20 mb-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-background shadow-lg">
@@ -396,12 +396,12 @@ export function ChatComposer() {
               onChange={handleInput}
               onKeyDown={handleKeyDown}
               placeholder="Ask me anything... (@ to mention files, / for commands)"
-              className="max-h-40 min-h-10 w-full resize-none bg-transparent px-4 py-2 text-[length:var(--font-composer)] outline-none placeholder:text-muted-foreground"
-              rows={1}
+              className="max-h-40 min-h-12 w-full resize-none bg-transparent px-4 py-2 text-[length:var(--font-composer)] outline-none placeholder:text-muted-foreground"
+              rows={2}
             />
 
-            <div className="flex items-center justify-between px-2 pb-2">
-              <div className="flex items-center gap-1.5">
+            <div className="flex items-center justify-between px-2 pb-1.5">
+              <div className="flex items-center gap-1">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button

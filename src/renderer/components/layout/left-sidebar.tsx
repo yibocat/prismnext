@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, type RefObject } from "react";
+import { useState, useEffect, useCallback, useRef, memo, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -64,7 +64,7 @@ interface LeftSidebarProps {
   leftSidebarRef?: RefObject<PanelImperativeHandle | null>;
 }
 
-export function LeftSidebar({ leftSidebarRef }: LeftSidebarProps) {
+export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSidebarProps) {
   const { platform, isFullscreen } = useWindowState();
   const isMac = platform === "darwin";
   const showMacSpacer = isMac && !isFullscreen;
@@ -87,7 +87,6 @@ export function LeftSidebar({ leftSidebarRef }: LeftSidebarProps) {
 
   const sessionId = useChatStore((s) => s.sessionId);
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const tabs = useChatStore((s) => s.tabs);
   const loadSession = useChatStore((s) => s.loadSession);
   const newSession = useChatStore((s) => s.newSession);
   const clearCurrentTab = useChatStore((s) => s.clearCurrentTab);
@@ -103,7 +102,7 @@ export function LeftSidebar({ leftSidebarRef }: LeftSidebarProps) {
     }
     setLoading(true);
     try {
-      const result = await window.electronAPI.agentListSessions(projectRoot);
+      const result = await window.electronAPI.cliListSessions(projectRoot);
       setSessions(result);
     } catch {
       setSessions([]);
@@ -125,7 +124,7 @@ export function LeftSidebar({ leftSidebarRef }: LeftSidebarProps) {
   }, [isStreaming, fetchSessions]);
 
   useEffect(() => {
-    return window.electronAPI.onAgentSessionCreated(() => {
+    return window.electronAPI.onCliSessionCreated(() => {
       fetchSessions();
     });
   }, [fetchSessions]);
@@ -142,7 +141,7 @@ export function LeftSidebar({ leftSidebarRef }: LeftSidebarProps) {
 
   const renderSessionItem = (s: SessionInfo) => {
     const isActive = s.id === sessionId;
-    const isSessionStreaming = tabs.some((t) => t.sessionId === s.id && t.isStreaming);
+    const isSessionStreaming = isActive && isStreaming;
     return (
       <SidebarMenuItem key={s.id}>
         <SidebarMenuButton
@@ -194,7 +193,7 @@ export function LeftSidebar({ leftSidebarRef }: LeftSidebarProps) {
                 onClick={async (e) => {
                   e.stopPropagation();
                   if (!projectRoot) return;
-                  const result = await window.electronAPI.agentDeleteSession(projectRoot, s.id);
+                  const result = await window.electronAPI.cliDeleteSession(projectRoot, s.id);
                   if (result.success) {
                     if (archivedSessionIds.includes(s.id)) toggleArchiveSession(s.id);
                     if (pinnedSessionIds.includes(s.id)) togglePinSession(s.id);
@@ -206,7 +205,7 @@ export function LeftSidebar({ leftSidebarRef }: LeftSidebarProps) {
                   if (e.key === "Enter" || e.key === " ") {
                     e.stopPropagation();
                     if (!projectRoot) return;
-                    const result = await window.electronAPI.agentDeleteSession(projectRoot, s.id);
+                    const result = await window.electronAPI.cliDeleteSession(projectRoot, s.id);
                     if (result.success) {
                       if (archivedSessionIds.includes(s.id)) toggleArchiveSession(s.id);
                       if (pinnedSessionIds.includes(s.id)) togglePinSession(s.id);
@@ -420,4 +419,4 @@ export function LeftSidebar({ leftSidebarRef }: LeftSidebarProps) {
       {sidebarContent}
     </>
   );
-}
+});

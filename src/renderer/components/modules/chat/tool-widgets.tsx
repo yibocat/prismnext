@@ -379,7 +379,7 @@ function AskUserQuestionWidget({
     if (!needsUserAnswer) return;
     setAnswered(true);
     const tabId = useChatStore.getState().activeTabId;
-    window.electronAPI.agentAnswer(tabId, label).catch(() => {
+    window.electronAPI.cliAnswer(tabId, label).catch(() => {
       setAnswered(false); // revert on failure so user can retry
     });
   };

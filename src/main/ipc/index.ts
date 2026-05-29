@@ -1,11 +1,11 @@
 import { registerFsHandlers } from "./fs";
 import { registerCompileHandlers } from "./compile";
-import { registerAgentHandlers } from "./agent";
+import { registerCliHandlers } from "./cli";
 import { registerSettingsHandlers } from "./settings";
 
 export function registerIpcHandlers(): void {
   registerFsHandlers();
   registerCompileHandlers();
-  registerAgentHandlers();
+  registerCliHandlers();
   registerSettingsHandlers();
 }

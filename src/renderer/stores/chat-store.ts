@@ -46,6 +46,10 @@ interface TabState {
   isStreaming: boolean;
   error: string | null;
   draft: TabDraft;
+  /** Message index → meta text (completion time + tokens). Key is the
+   *  index of the assistant message in this.messages. Indices are stable
+   *  because messages are only ever appended, never removed/reordered. */
+  messageMeta: Record<number, string>;
 }
 
 let _nextTabId = 1;
@@ -62,6 +66,7 @@ function makeDefaultTab(id: string): TabState {
     isStreaming: false,
     error: null,
     draft: { input: "" },
+    messageMeta: {},
   };
 }
 
@@ -74,6 +79,7 @@ interface ChatState {
 
   // Projected fields (from active tab) — for backward compat
   messages: ChatStreamMessage[];
+  messageMeta: Record<number, string>;
   sessionId: string | null;
   isStreaming: boolean;
   error: string | null;
@@ -95,7 +101,7 @@ interface ChatState {
   // Settings
   setSelectedAgent: (agentId: string) => void;
 
-  // Internal (called by use-agent-events)
+  // Internal (called by use-cli-events)
   _appendMessage: (tabId: string, msg: ChatStreamMessage) => void;
   _upsertLastMessage: (tabId: string, msg: ChatStreamMessage) => void;
   _setSessionId: (tabId: string, id: string) => void;
@@ -105,9 +111,10 @@ interface ChatState {
 
 function projectActiveTab(tabs: TabState[], activeTabId: string) {
   const tab = tabs.find((t) => t.id === activeTabId);
-  if (!tab) return { messages: [], sessionId: null, isStreaming: false, error: null };
+  if (!tab) return { messages: [], messageMeta: {}, sessionId: null, isStreaming: false, error: null };
   return {
     messages: tab.messages,
+    messageMeta: tab.messageMeta,
     sessionId: tab.sessionId,
     isStreaming: tab.isStreaming,
     error: tab.error,
@@ -128,6 +135,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   // Projected
   ...projectActiveTab([initialTab], initialTabId),
+  messageMeta: {} as Record<number, string>,
 
   // ─── Tab Management ───
 
@@ -162,8 +170,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
 
       // Clean up agent session for this tab — cancel any running prompt then kill process
-      window.electronAPI.agentCancel(id).catch(() => {});
-      window.electronAPI.agentCloseSession(id).catch(() => {});
+      window.electronAPI.cliCancel(id).catch(() => {});
+      window.electronAPI.cliCloseSession(id).catch(() => {});
   },
 
   setActiveTab: (id: string) => {
@@ -189,7 +197,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     // Check if agent is available
     try {
-      const status = await window.electronAPI.agentStatus();
+      const status = await window.electronAPI.cliStatus();
       if (!status.available) {
         set((s) => {
           const tabs = s.tabs.map((t) =>
@@ -237,12 +245,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
 
     try {
-      const sessionId = get().tabs.find((t) => t.id === tabId)?.sessionId;
       const agentSettings = useAgentSettingsStore.getState();
-      await window.electronAPI.agentSend(
-        projectPath, userPrompt, tabId, agentId, sessionId ?? undefined,
-        agentSettings.getSetting("model") ?? undefined, agentSettings.getSetting("agentMode") ?? undefined, agentSettings.getSetting("effort") ?? undefined
-      );
+      await window.electronAPI.cliSend({
+        projectPath,
+        prompt: userPrompt,
+        tabId,
+        agent: agentId,
+        model: agentSettings.getSetting("model"),
+      });
     } catch (err: any) {
       set((s) => {
         const tabs = s.tabs.map((t) => {
@@ -259,7 +269,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   cancelExecution: async () => {
     const tabId = get().activeTabId;
     try {
-      await window.electronAPI.agentCancel(tabId);
+      await window.electronAPI.cliCancel(tabId);
       set((s) => {
         const tabs = s.tabs.map((t) =>
           t.id === tabId ? { ...t, isStreaming: false } : t,
@@ -313,35 +323,53 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return;
     }
 
-    // Find a suitable tab to load this session into:
-    // 1. Prefer the current tab if it's not streaming
-    // 2. Otherwise find any non-streaming tab
-    // 3. If all tabs are streaming, create a new tab
-    // NEVER cancel a running agent — they must run independently.
-    const tabs = get().tabs;
-    const activeId = get().activeTabId;
-    const activeTab = tabs.find((t) => t.id === activeId);
-    let targetTab = activeTab && !activeTab.isStreaming ? activeTab : tabs.find((t) => !t.isStreaming);
-    if (!targetTab) {
-      const newId = nextTabId();
-      const newTab = makeDefaultTab(newId);
-      targetTab = { ...newTab, id: newId };
-      set((s) => ({ tabs: [...s.tabs, targetTab!] }));
-    }
-    const tabId = targetTab.id;
+    // Always create a new tab — never overwrite an existing one.
+    // This preserves in-memory data (result messages, meta) on the current tab.
+    const newId = nextTabId();
+    const newTab = makeDefaultTab(newId);
+    const targetTab = { ...newTab, id: newId };
+    const tabId = newId;
+    set((s) => ({ tabs: [...s.tabs, targetTab] }));
 
     try {
-      const raw = await window.electronAPI.agentLoadSession(projectPath, sessionId);
+      const raw = await window.electronAPI.cliLoadSession(projectPath, sessionId);
       const messages = raw.filter((msg: ChatStreamMessage) => {
-        // Filter out system messages and any non-standard types — the API only accepts user/assistant
-        if (msg.type === "system" || msg.type === "result") return false;
+        // Filter out system messages only. Keep result messages —
+        // they carry duration_ms and usage needed for completion display.
+        if (msg.type === "system") return false;
         if (!msg.message?.content || msg.message.content.length === 0) return false;
         return true;
       });
+      // Build messageMeta from loaded messages (result → preceding assistant)
+      const meta: Record<number, string> = {};
+      for (let i = 0; i < messages.length - 1; i++) {
+        const msg = messages[i];
+        const next = messages[i + 1];
+        if (msg.type === "assistant" && next.type === "result" && !next.is_error) {
+          const parts: string[] = [];
+          const ms = next.duration_ms;
+          if (ms != null) {
+            parts.push(`Completed in ${(ms / 1000).toFixed(1)}s`);
+          }
+          const usage = next.usage;
+          if (usage?.input_tokens || usage?.output_tokens) {
+            const input = usage.input_tokens >= 1000
+              ? `${(usage.input_tokens / 1000).toFixed(1)}k`
+              : `${usage.input_tokens}`;
+            const output = usage.output_tokens >= 1000
+              ? `${(usage.output_tokens / 1000).toFixed(1)}k`
+              : `${usage.output_tokens}`;
+            parts.push(`↑${input} ↓${output}`);
+          }
+          if (parts.length > 0) {
+            meta[i] = parts.join(" · ");
+          }
+        }
+      }
       set((s) => {
         const tabs = s.tabs.map((t) =>
           t.id === tabId
-            ? { ...t, messages, sessionId, error: null, isStreaming: false }
+            ? { ...t, messages, sessionId, error: null, isStreaming: false, messageMeta: meta }
             : t,
         );
         return { tabs, activeTabId: tabId, ...projectActiveTab(tabs, tabId) };
@@ -368,9 +396,38 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set((s) => {
       const tabExists = s.tabs.some((t) => t.id === tabId);
       if (!tabExists) return {};
-      const tabs = s.tabs.map((t) =>
-        t.id === tabId ? { ...t, messages: [...t.messages, msg] } : t,
-      );
+      const shouldAttachMeta =
+        msg.type === "result" && !msg.is_error && (msg.duration_ms != null || msg.usage);
+      const tabs = s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const msgs = [...t.messages, msg];
+        let meta = t.messageMeta;
+        if (shouldAttachMeta) {
+          const parts: string[] = [];
+          if (msg.duration_ms != null) {
+            parts.push(`Completed in ${(msg.duration_ms / 1000).toFixed(1)}s`);
+          }
+          const usage = msg.usage;
+          if (usage?.input_tokens || usage?.output_tokens) {
+            const input = usage.input_tokens >= 1000
+              ? `${(usage.input_tokens / 1000).toFixed(1)}k`
+              : `${usage.input_tokens}`;
+            const output = usage.output_tokens >= 1000
+              ? `${(usage.output_tokens / 1000).toFixed(1)}k`
+              : `${usage.output_tokens}`;
+            parts.push(`↑${input} ↓${output}`);
+          }
+          if (parts.length > 0) {
+            for (let i = msgs.length - 2; i >= 0; i--) {
+              if (msgs[i].type === "assistant") {
+                meta = { ...t.messageMeta, [i]: parts.join(" · ") };
+                break;
+              }
+            }
+          }
+        }
+        return { ...t, messages: msgs, messageMeta: meta };
+      });
       return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
     });
   },

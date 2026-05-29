@@ -14,4 +14,6 @@ export interface CliSession {
 export interface CliParser {
   /** Parse one line of CLI output (NDJSON). Returns parsed message or null to skip. */
   parse(line: string): Record<string, unknown> | null;
+  /** Reset internal state (call before new prompt / after cancel). */
+  reset(): void;
 }

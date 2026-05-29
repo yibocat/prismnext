@@ -58,57 +58,57 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("compile:synctex", { projectDir, page, x, y }),
   compileDetectTexlive: () => ipcRenderer.invoke("compile:detectTexlive"),
 
-  // Agent operations (ACP-based)
-  agentDispose: () => ipcRenderer.invoke("agent:dispose"),
-  agentPrewarm: (projectPath: string, tabId?: string) =>
-    ipcRenderer.invoke("agent:prewarm", { projectPath, tabId }),
-  agentStatus: () => ipcRenderer.invoke("agent:status"),
-  agentSend: (projectPath: string, prompt: string, tabId?: string, agentId?: string, sessionId?: string, model?: string | null, agentMode?: string, effortLevel?: string) =>
-    ipcRenderer.invoke("agent:send", { projectPath, prompt, tabId, agentId, sessionId, model, agentMode, effortLevel }),
-  agentSetGateway: (baseUrl?: string, apiKey?: string) =>
-    ipcRenderer.invoke("agent:setGateway", { baseUrl, apiKey }),
-  agentCancel: (tabId?: string) =>
-    ipcRenderer.invoke("agent:cancel", { tabId }),
-  agentCloseSession: (tabId?: string) =>
-    ipcRenderer.invoke("agent:closeSession", { tabId }),
-  agentAnswer: (tabId: string, answer: string) =>
-    ipcRenderer.invoke("agent:answer", { tabId, answer }),
-  agentListSessions: (projectPath: string) =>
-    ipcRenderer.invoke("agent:listSessions", { projectPath }),
-  agentLoadSession: (projectPath: string, sessionId: string) =>
-    ipcRenderer.invoke("agent:loadSession", { projectPath, sessionId }),
-  agentDeleteSession: (projectPath: string, sessionId: string) =>
-    ipcRenderer.invoke("agent:deleteSession", { projectPath, sessionId }),
+  // CLI agent operations
+  cliDispose: () => ipcRenderer.invoke("cli:dispose"),
+  cliPrewarm: (projectPath: string, tabId?: string) =>
+    ipcRenderer.invoke("cli:prewarm", { projectPath, tabId }),
+  cliStatus: () => ipcRenderer.invoke("cli:status"),
+  cliSend: (args: { projectPath: string; prompt: string; tabId?: string; agent?: string; model?: string | null }) =>
+    ipcRenderer.invoke("cli:send", args),
+  cliSetGateway: (baseUrl?: string, apiKey?: string) =>
+    ipcRenderer.invoke("cli:setGateway", { baseUrl, apiKey }),
+  cliCancel: (tabId?: string) =>
+    ipcRenderer.invoke("cli:cancel", { tabId }),
+  cliCloseSession: (tabId?: string) =>
+    ipcRenderer.invoke("cli:closeSession", { tabId }),
+  cliAnswer: (tabId: string, answer: string) =>
+    ipcRenderer.invoke("cli:answer", { tabId, answer }),
+  cliListSessions: (projectPath: string) =>
+    ipcRenderer.invoke("cli:listSessions", { projectPath }),
+  cliLoadSession: (projectPath: string, sessionId: string) =>
+    ipcRenderer.invoke("cli:loadSession", { projectPath, sessionId }),
+  cliDeleteSession: (projectPath: string, sessionId: string) =>
+    ipcRenderer.invoke("cli:deleteSession", { projectPath, sessionId }),
 
   // Settings operations
   settingsGet: () => ipcRenderer.invoke("settings:get"),
   settingsSet: (patch: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:set", patch),
 
-  // Agent events (Main → Renderer)
-  onAgentStream: (callback: (data: { tabId: string; data: string }) => void) => {
+  // CLI agent events (Main → Renderer)
+  onCliStream: (callback: (data: { tabId: string; data: string }) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; data: string }) => callback(data);
-    ipcRenderer.on("agent:stream", handler);
-    return () => ipcRenderer.removeListener("agent:stream", handler);
+    ipcRenderer.on("cli:stream", handler);
+    return () => ipcRenderer.removeListener("cli:stream", handler);
   },
-  onAgentComplete: (callback: (data: { tabId: string; success: boolean; stopReason?: string; error?: string }) => void) => {
+  onCliComplete: (callback: (data: { tabId: string; success: boolean; stopReason?: string; error?: string }) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; success: boolean; stopReason?: string; error?: string }) => callback(data);
-    ipcRenderer.on("agent:complete", handler);
-    return () => ipcRenderer.removeListener("agent:complete", handler);
+    ipcRenderer.on("cli:complete", handler);
+    return () => ipcRenderer.removeListener("cli:complete", handler);
   },
-  onAgentStderr: (callback: (data: { tabId: string; data: string }) => void) => {
+  onCliStderr: (callback: (data: { tabId: string; data: string }) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; data: string }) => callback(data);
-    ipcRenderer.on("agent:stderr", handler);
-    return () => ipcRenderer.removeListener("agent:stderr", handler);
+    ipcRenderer.on("cli:stderr", handler);
+    return () => ipcRenderer.removeListener("cli:stderr", handler);
   },
-  onAgentSessionCreated: (callback: (data: { tabId: string; sessionId: string; agentId: string }) => void) => {
+  onCliSessionCreated: (callback: (data: { tabId: string; sessionId: string; agentId: string }) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; sessionId: string; agentId: string }) => callback(data);
-    ipcRenderer.on("agent:sessionCreated", handler);
-    return () => ipcRenderer.removeListener("agent:sessionCreated", handler);
+    ipcRenderer.on("cli:sessionCreated", handler);
+    return () => ipcRenderer.removeListener("cli:sessionCreated", handler);
   },
-  removeAgentListeners: () => {
-    ipcRenderer.removeAllListeners("agent:stream");
-    ipcRenderer.removeAllListeners("agent:complete");
-    ipcRenderer.removeAllListeners("agent:stderr");
+  removeCliListeners: () => {
+    ipcRenderer.removeAllListeners("cli:stream");
+    ipcRenderer.removeAllListeners("cli:complete");
+    ipcRenderer.removeAllListeners("cli:stderr");
   },
 });

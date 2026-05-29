@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useAgentEvents } from "@/hooks/use-agent-events";
+import { useCliEvents } from "@/hooks/use-cli-events";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -32,24 +32,24 @@ const AGENTS = [
 let didPrewarm = false;
 
 export function LeftMainArea() {
-  useAgentEvents();
+  useCliEvents();
 
   // Pre-warm agent on mount to avoid delay on first prompt (only for new sessions without loaded context)
   useEffect(() => {
     if (didPrewarm) return;
     const projectPath = useDocumentStore.getState().projectRoot;
-    if (!projectPath || !window.electronAPI.agentPrewarm) return;
+    if (!projectPath || !window.electronAPI.cliPrewarm) return;
     const store = useChatStore.getState();
     // Only prewarm if the active tab doesn't have a loaded session (which needs resume, not new)
     const tab = store.tabs.find((t) => t.id === store.activeTabId);
     if (tab?.sessionId) return; // Session already loaded, will be resumed on first prompt
     didPrewarm = true;
-    window.electronAPI.agentPrewarm(projectPath, store.activeTabId).catch(() => {});
+    window.electronAPI.cliPrewarm(projectPath, store.activeTabId).catch(() => {});
   }, []);
 
   // Sync sessionId to store when agent creates a new session (only if not already set)
   useEffect(() => {
-    return window.electronAPI.onAgentSessionCreated(({ tabId: eventTabId, sessionId }) => {
+    return window.electronAPI.onCliSessionCreated(({ tabId: eventTabId, sessionId }) => {
       const store = useChatStore.getState();
       const targetTabId = eventTabId || store.activeTabId;
       // Always update — the latest session for this tab is the correct one.
@@ -111,7 +111,7 @@ export function LeftMainArea() {
           /* ── Homepage ── */
           <div className="flex flex-1 flex-col items-center justify-end @xl:justify-center @xl:pb-[var(--height-titlebar)]">
             {/* Top toolbar */}
-            <div className="w-full max-w-3xl flex items-center gap-1.5 px-[12px] pb-1">
+            <div className="w-full max-w-3xl flex items-center gap-1.5 px-[12px]">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -177,8 +177,8 @@ export function LeftMainArea() {
               </DropdownMenu>
             </div>
 
-            {/* Composer — negative margin counteracts ChatComposer internal p-3 */}
-            <div className="w-full max-w-3xl [&_textarea]:min-h-14 -my-2">
+            {/* Composer */}
+            <div className="w-full max-w-3xl">
               <ChatComposer />
             </div>
           </div>
@@ -186,9 +186,10 @@ export function LeftMainArea() {
           /* ── Chat view ── */
           <div className="flex flex-1 flex-col">
             <ChatMessages />
-            <div className="w-full max-w-3xl mx-auto -my-2 [&_textarea]:min-h-14">
+            <div className="w-full max-w-3xl mx-auto">
               <ChatComposer />
-            </div>          </div>
+            </div>
+          </div>
         )}
       </ChatErrorBoundary>
     </div>

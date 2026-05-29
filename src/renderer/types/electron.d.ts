@@ -81,25 +81,25 @@ export interface ElectronAPI {
   ) => Promise<SynctexResult | null>;
   compileDetectTexlive: () => Promise<CompilerStatus>;
 
-  // Agent operations (ACP-based)
-  agentDispose: () => Promise<{ success: boolean }>;
-  agentPrewarm: (projectPath: string, tabId?: string) => Promise<{ success: boolean }>;
-  agentStatus: () => Promise<{ available: boolean; agentId?: string; agentName?: string; error?: string }>;
-  agentSend: (projectPath: string, prompt: string, tabId?: string, agentId?: string, sessionId?: string, model?: string | null, agentMode?: string, effortLevel?: string) => Promise<void>;
-  agentSetGateway: (baseUrl?: string, apiKey?: string) => Promise<void>;
-  agentCancel: (tabId?: string) => Promise<void>;
-  agentCloseSession: (tabId?: string) => Promise<void>;
-  agentAnswer: (tabId: string, answer: string) => Promise<void>;
-  agentListSessions: (projectPath: string) => Promise<Array<{ id: string; title: string; lastModified: number; createdAt: number }>>;
-  agentLoadSession: (projectPath: string, sessionId: string) => Promise<any[]>;
-  agentDeleteSession: (projectPath: string, sessionId: string) => Promise<{ success: boolean; error?: string }>;
+  // CLI agent operations
+  cliDispose: () => Promise<{ success: boolean }>;
+  cliPrewarm: (projectPath: string, tabId?: string) => Promise<{ success: boolean }>;
+  cliStatus: () => Promise<{ available: boolean; agentId?: string; agentName?: string; error?: string }>;
+  cliSend: (args: { projectPath: string; prompt: string; tabId?: string; agent?: string; model?: string | null }) => Promise<void>;
+  cliSetGateway: (baseUrl?: string, apiKey?: string) => Promise<void>;
+  cliCancel: (tabId?: string) => Promise<void>;
+  cliCloseSession: (tabId?: string) => Promise<void>;
+  cliAnswer: (tabId: string, answer: string) => Promise<void>;
+  cliListSessions: (projectPath: string) => Promise<Array<{ id: string; title: string; lastModified: number; createdAt: number }>>;
+  cliLoadSession: (projectPath: string, sessionId: string) => Promise<any[]>;
+  cliDeleteSession: (projectPath: string, sessionId: string) => Promise<{ success: boolean; error?: string }>;
 
-  // Agent events (Main → Renderer)
-  onAgentStream: (callback: (data: { tabId: string; data: string }) => void) => () => void;
-  onAgentComplete: (callback: (data: { tabId: string; success: boolean; stopReason?: string; error?: string }) => void) => () => void;
-  onAgentStderr: (callback: (data: { tabId: string; data: string }) => void) => () => void;
-  onAgentSessionCreated: (callback: (data: { tabId: string; sessionId: string; agentId: string }) => void) => () => void;
-  removeAgentListeners: () => void;
+  // CLI agent events (Main → Renderer)
+  onCliStream: (callback: (data: { tabId: string; data: string }) => void) => () => void;
+  onCliComplete: (callback: (data: { tabId: string; success: boolean; stopReason?: string; error?: string }) => void) => () => void;
+  onCliStderr: (callback: (data: { tabId: string; data: string }) => void) => () => void;
+  onCliSessionCreated: (callback: (data: { tabId: string; sessionId: string; agentId: string }) => void) => () => void;
+  removeCliListeners: () => void;
 
   // Settings operations
   settingsGet: () => Promise<{

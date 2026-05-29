@@ -88,9 +88,11 @@ const UserMessage = memo(function UserMessage({ msg }: { msg: ChatStreamMessage 
 const AssistantMessage = memo(function AssistantMessage({
   msg,
   toolResultMap,
+  metaText,
 }: {
   msg: ChatStreamMessage;
   toolResultMap: Map<string, ContentBlock>;
+  metaText?: string;
 }) {
   const blocks = msg.message?.content || [];
   const textBlock = blocks.find((b) => b.type === "text");
@@ -118,10 +120,15 @@ const AssistantMessage = memo(function AssistantMessage({
           })}
       </div>
 
-      {/* Action bar on hover */}
+      {/* Action bar: copy button left, meta text (time · tokens) right */}
       {fullText && (
-        <div className="flex items-center gap-0.5 mt-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="flex items-center gap-2 mt-1 opacity-0 transition-opacity group-hover:opacity-100">
           <CopyButton text={fullText} />
+          {metaText && (
+            <span className="ml-auto text-[length:var(--font-chat-meta)] text-muted-foreground/50 tabular-nums">
+              {metaText}
+            </span>
+          )}
         </div>
       )}
     </div>
@@ -157,6 +164,7 @@ export function ChatMessages() {
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const activeTabId = useChatStore((s) => s.activeTabId);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const agentStartedRef = useRef(false);
@@ -165,13 +173,14 @@ export function ChatMessages() {
   // Track when streaming started (for accurate elapsed time display)
   const streamingStartRef = useRef(Date.now());
 
-  // Reset agent tracking when streaming starts
-  useEffect(() => {
-    if (isStreaming) {
-      agentStartedRef.current = false;
-      streamingStartRef.current = Date.now();
-    }
-  }, [isStreaming]);
+  // Track previous isStreaming to detect stream-start in render phase
+  // (useEffect runs too late — first assistant message may arrive before it fires)
+  const prevStreamingRef = useRef(isStreaming);
+  if (isStreaming && !prevStreamingRef.current) {
+    agentStartedRef.current = false;
+    streamingStartRef.current = Date.now();
+  }
+  prevStreamingRef.current = isStreaming;
 
   // Build tool result map (memoized)
   const toolResultMap = useMemo(() => {
@@ -214,9 +223,52 @@ export function ChatMessages() {
     return { displayMessages: filtered, msgIndexMap: idxMap };
   }, [messages]);
 
-  // Track when agent produces output
-  const hasAgentOutput = displayMessages.some((m) => m.type === "assistant" && m.message?.content && m.message.content.length > 0);
-  if (hasAgentOutput) {
+  // Build meta map: display index → "Completed in Xs · ↑in ↓out"
+  // Computed from consecutive assistant→result pairs. Works regardless of
+  // tab switches or store persistence — recomputes whenever messages change.
+  const metaMap = useMemo(() => {
+    const map = new Map<number, string>();
+    for (let i = 0; i < displayMessages.length - 1; i++) {
+      const msg = displayMessages[i];
+      const next = displayMessages[i + 1];
+      if (msg.type === "assistant" && next.type === "result" && !next.is_error) {
+        const parts: string[] = [];
+        if (next.duration_ms != null) {
+          parts.push(`Completed in ${(next.duration_ms / 1000).toFixed(1)}s`);
+        }
+        const u = next.usage;
+        if (u?.input_tokens || u?.output_tokens) {
+          const input = u.input_tokens >= 1000 ? `${(u.input_tokens / 1000).toFixed(1)}k` : `${u.input_tokens}`;
+          const output = u.output_tokens >= 1000 ? `${(u.output_tokens / 1000).toFixed(1)}k` : `${u.output_tokens}`;
+          parts.push(`↑${input} ↓${output}`);
+        }
+        if (parts.length > 0) map.set(i, parts.join(" · "));
+      }
+    }
+    return map;
+  }, [displayMessages]);
+
+  // Set of result display indices that have been inlined into preceding assistant
+  const inlinedResults = useMemo(() => {
+    const set = new Set<number>();
+    for (let i = 0; i < displayMessages.length - 1; i++) {
+      const msg = displayMessages[i];
+      const next = displayMessages[i + 1];
+      if (msg.type === "assistant" && next.type === "result" && !next.is_error && next.result) {
+        set.add(i + 1);
+      }
+    }
+    return set;
+  }, [displayMessages]);
+
+  // Hide StreamingIndicator once there's meaningful thinking content.
+  // Require ≥10 chars to avoid flicker from the first 1-2 character delta.
+  const hasThinkingContent = displayMessages.some(
+    (m) => m.type === "assistant" && m.message?.content?.some(
+      (b) => b.type === "thinking" && b.thinking && b.thinking.length > 0,
+    ),
+  );
+  if (hasThinkingContent) {
     agentStartedRef.current = true;
   }
 
@@ -289,15 +341,23 @@ export function ChatMessages() {
     <div className="relative flex-1 min-h-0">
       <div ref={scrollRef} className="absolute inset-0 overflow-y-auto scroll-smooth">
         <div className="min-h-full pb-4 max-w-3xl mx-auto">
-          {displayMessages.map((msg) => {
+          {displayMessages.map((msg, displayIdx) => {
             const idx = msgIndexMap.get(msg)!;
             if (msg.type === "user") {
               return <UserMessage key={`user-${idx}`} msg={msg} />;
             }
             if (msg.type === "assistant") {
-              return <AssistantMessage key={`asst-${idx}`} msg={msg} toolResultMap={toolResultMap} />;
+              return (
+                <AssistantMessage
+                  key={`asst-${idx}`}
+                  msg={msg}
+                  toolResultMap={toolResultMap}
+                  metaText={metaMap.get(displayIdx)}
+                />
+              );
             }
             if (msg.type === "result") {
+              if (inlinedResults.has(displayIdx)) return null;
               return <ResultMessage key={`result-${idx}`} msg={msg} />;
             }
             return null;
