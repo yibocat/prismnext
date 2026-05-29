@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { useDocumentStore } from "./document-store";
+import { useAgentSettingsStore } from "./agent-settings-store";
 
 // ─── Types ───
 
@@ -65,10 +66,6 @@ function makeDefaultTab(id: string): TabState {
 }
 
 interface ClaudeChatState {
-  // Shared settings
-  selectedModel: "sonnet" | "opus" | "haiku" | null;
-  effortLevel: "low" | "medium" | "high";
-  agentMode: "edit-before-ask" | "auto-edit" | "plan";
   selectedAgent: string;
 
   // Multi-tab state
@@ -96,9 +93,6 @@ interface ClaudeChatState {
   loadSession: (sessionId: string) => Promise<void>;
 
   // Settings
-  setSelectedModel: (model: "sonnet" | "opus" | "haiku" | null) => void;
-  setEffortLevel: (level: "low" | "medium" | "high") => void;
-  setAgentMode: (mode: "edit-before-ask" | "auto-edit" | "plan") => void;
   setSelectedAgent: (agentId: string) => void;
 
   // Internal (called by use-claude-events)
@@ -126,10 +120,6 @@ const initialTabId = nextTabId();
 const initialTab = makeDefaultTab(initialTabId);
 
 export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
-  // Shared settings
-  selectedModel: null,
-  effortLevel: "low",
-  agentMode: "edit-before-ask",
   selectedAgent: "claude",
 
   // Multi-tab
@@ -248,7 +238,11 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
 
     try {
       const sessionId = get().tabs.find((t) => t.id === tabId)?.sessionId;
-      await window.electronAPI.agentSend(projectPath, userPrompt, tabId, agentId, sessionId ?? undefined, get().selectedModel, get().agentMode, get().effortLevel);
+      const agentSettings = useAgentSettingsStore.getState();
+      await window.electronAPI.agentSend(
+        projectPath, userPrompt, tabId, agentId, sessionId ?? undefined,
+        agentSettings.getSetting("model"), agentSettings.getSetting("agentMode"), agentSettings.getSetting("effort")
+      );
     } catch (err: any) {
       set((s) => {
         const tabs = s.tabs.map((t) => {
@@ -364,12 +358,6 @@ export const useClaudeChatStore = create<ClaudeChatState>()((set, get) => ({
   },
 
   // ─── Settings ───
-
-  setSelectedModel: (selectedModel) => set({ selectedModel }),
-
-  setEffortLevel: (effortLevel) => set({ effortLevel }),
-
-  setAgentMode: (agentMode) => set({ agentMode }),
 
   setSelectedAgent: (selectedAgent) => set({ selectedAgent }),
 
