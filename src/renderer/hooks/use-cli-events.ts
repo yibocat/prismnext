@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useChatStore, type ChatStreamMessage } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useChangesStore } from "@/stores/changes-store";
@@ -12,9 +12,6 @@ const log = createLogger("claude-events");
 // ─── Hook ───
 
 export function useCliEvents() {
-  // Force React re-render on each stream event
-  const [, tick] = useState(0);
-
   // Per-tab tracking
   const pendingToolUsesRef = useRef(new Map<string, Map<string, { name: string; input: any; oldContent?: string }>>());
   const hasTexChangesRef = useRef(new Map<string, boolean>());
@@ -221,8 +218,8 @@ export function useCliEvents() {
         }
       }
 
-      // Force React re-render
-      tick((c) => c + 1);
+      // Store updates (_appendMessage / _upsertLastMessage) trigger
+      // React re-renders via Zustand selectors — no manual tick needed.
     });
 
     // ─── Agent Complete Handler ───

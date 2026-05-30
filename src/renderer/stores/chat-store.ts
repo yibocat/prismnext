@@ -42,7 +42,11 @@ interface TabState {
   id: string;
   title: string;
   sessionId: string | null;
+  /** Committed messages — immutable once added. Never modified in-place. */
   messages: ChatStreamMessage[];
+  /** In-progress streaming assistant message. Merged/updated on each delta.
+   *  Committed to `messages` when a non-assistant event arrives or streaming ends. */
+  streamingMessage: ChatStreamMessage | null;
   isStreaming: boolean;
   error: string | null;
   draft: TabDraft;
@@ -63,11 +67,36 @@ function makeDefaultTab(id: string): TabState {
     title: "New Chat",
     sessionId: null,
     messages: [],
+    streamingMessage: null,
     isStreaming: false,
     error: null,
     draft: { input: "" },
     messageMeta: {},
   };
+}
+
+/** Extract session title from the first user message (same logic as listClaudeSessions). */
+function extractSessionTitle(messages: ChatStreamMessage[]): string | null {
+  for (const msg of messages) {
+    if (msg.type !== "user") continue;
+    const blocks = msg.message?.content;
+    if (!blocks || blocks.length === 0) continue;
+
+    const text = blocks
+      .filter((b) => b.type === "text" && b.text)
+      .map((b) => b.text!)
+      .join(" ");
+
+    if (!text) continue;
+
+    const cleaned = text
+      .replace(/<[^>]+>/g, "")
+      .replace(/^\[Currently open file:.*?\]\n?\n?/, "")
+      .trim();
+
+    if (cleaned) return cleaned.slice(0, 40);
+  }
+  return null;
 }
 
 interface ChatState {
@@ -79,6 +108,7 @@ interface ChatState {
 
   // Projected fields (from active tab) — for backward compat
   messages: ChatStreamMessage[];
+  streamingMessage: ChatStreamMessage | null;
   messageMeta: Record<number, string>;
   sessionId: string | null;
   isStreaming: boolean;
@@ -111,9 +141,10 @@ interface ChatState {
 
 function projectActiveTab(tabs: TabState[], activeTabId: string) {
   const tab = tabs.find((t) => t.id === activeTabId);
-  if (!tab) return { messages: [], messageMeta: {}, sessionId: null, isStreaming: false, error: null };
+  if (!tab) return { messages: [], streamingMessage: null, messageMeta: {}, sessionId: null, isStreaming: false, error: null };
   return {
     messages: tab.messages,
+    streamingMessage: tab.streamingMessage,
     messageMeta: tab.messageMeta,
     sessionId: tab.sessionId,
     isStreaming: tab.isStreaming,
@@ -230,10 +261,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set((s) => {
       const tabs = s.tabs.map((t) => {
         if (t.id !== tabId) return t;
+        // Commit any leftover streaming message before starting a new turn
+        const base = t.streamingMessage
+          ? { ...t, messages: [...t.messages, t.streamingMessage], streamingMessage: null as ChatStreamMessage | null }
+          : t;
         return {
-          ...t,
-          title: t.messages.length === 0 ? userPrompt.slice(0, 40) : t.title,
-          messages: [...t.messages, userMessage],
+          ...base,
+          title: base.messages.length === 0 ? userPrompt.slice(0, 40) : t.title,
+          messages: [...base.messages, userMessage],
           isStreaming: true,
           error: null,
         };
@@ -304,7 +339,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (tab?.isStreaming) return; // Never clear a tab with an active agent
     set((s) => {
       const tabs = s.tabs.map((t) =>
-        t.id === tabId ? { ...t, messages: [], sessionId: null, title: "New Chat", error: null, isStreaming: false } : t,
+        t.id === tabId ? { ...t, messages: [], streamingMessage: null, sessionId: null, title: "New Chat", error: null, isStreaming: false } : t,
       );
       return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
     });
@@ -327,9 +362,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     // This preserves in-memory data (result messages, meta) on the current tab.
     const newId = nextTabId();
     const newTab = makeDefaultTab(newId);
-    const targetTab = { ...newTab, id: newId };
     const tabId = newId;
-    set((s) => ({ tabs: [...s.tabs, targetTab] }));
+    set((s) => ({ tabs: [...s.tabs, newTab] }));
 
     try {
       const raw = await window.electronAPI.cliLoadSession(projectPath, sessionId);
@@ -366,10 +400,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           }
         }
       }
+      const title = extractSessionTitle(messages) || "New Chat";
       set((s) => {
         const tabs = s.tabs.map((t) =>
           t.id === tabId
-            ? { ...t, messages, sessionId, error: null, isStreaming: false, messageMeta: meta }
+            ? { ...t, messages, streamingMessage: null, title, sessionId, error: null, isStreaming: false, messageMeta: meta }
             : t,
         );
         return { tabs, activeTabId: tabId, ...projectActiveTab(tabs, tabId) };
@@ -394,86 +429,104 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   _appendMessage: (tabId: string, msg: ChatStreamMessage) => {
     set((s) => {
-      const tabExists = s.tabs.some((t) => t.id === tabId);
-      if (!tabExists) return {};
-      const shouldAttachMeta =
-        msg.type === "result" && !msg.is_error && (msg.duration_ms != null || msg.usage);
-      const tabs = s.tabs.map((t) => {
-        if (t.id !== tabId) return t;
-        const msgs = [...t.messages, msg];
-        let meta = t.messageMeta;
-        if (shouldAttachMeta) {
-          const parts: string[] = [];
-          if (msg.duration_ms != null) {
-            parts.push(`Completed in ${(msg.duration_ms / 1000).toFixed(1)}s`);
-          }
-          const usage = msg.usage;
-          if (usage?.input_tokens || usage?.output_tokens) {
-            const input = usage.input_tokens >= 1000
-              ? `${(usage.input_tokens / 1000).toFixed(1)}k`
-              : `${usage.input_tokens}`;
-            const output = usage.output_tokens >= 1000
-              ? `${(usage.output_tokens / 1000).toFixed(1)}k`
-              : `${usage.output_tokens}`;
-            parts.push(`↑${input} ↓${output}`);
-          }
-          if (parts.length > 0) {
-            for (let i = msgs.length - 2; i >= 0; i--) {
-              if (msgs[i].type === "assistant") {
-                meta = { ...t.messageMeta, [i]: parts.join(" · ") };
-                break;
-              }
+      const tabIdx = s.tabs.findIndex((t) => t.id === tabId);
+      if (tabIdx === -1) return {};
+
+      const tab = s.tabs[tabIdx];
+      let msgs = tab.messages;
+      let meta = tab.messageMeta;
+
+      // Commit streaming message before appending non-assistant event
+      if (tab.streamingMessage) {
+        msgs = [...msgs, tab.streamingMessage];
+      }
+
+      // Attach completion/token meta when a result arrives right after assistant
+      if (msg.type === "result" && !msg.is_error && (msg.duration_ms != null || msg.usage)) {
+        const parts: string[] = [];
+        if (msg.duration_ms != null) {
+          parts.push(`Completed in ${(msg.duration_ms / 1000).toFixed(1)}s`);
+        }
+        const usage = msg.usage;
+        if (usage?.input_tokens || usage?.output_tokens) {
+          const input = usage.input_tokens >= 1000
+            ? `${(usage.input_tokens / 1000).toFixed(1)}k`
+            : `${usage.input_tokens}`;
+          const output = usage.output_tokens >= 1000
+            ? `${(usage.output_tokens / 1000).toFixed(1)}k`
+            : `${usage.output_tokens}`;
+          parts.push(`↑${input} ↓${output}`);
+        }
+        if (parts.length > 0) {
+          for (let i = msgs.length - 1; i >= 0; i--) {
+            if (msgs[i].type === "assistant") {
+              meta = { ...meta, [i]: parts.join(" · ") };
+              break;
             }
           }
         }
-        return { ...t, messages: msgs, messageMeta: meta };
-      });
-      return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+      }
+
+      msgs = [...msgs, msg];
+
+      const newTabs = [...s.tabs];
+      newTabs[tabIdx] = { ...tab, messages: msgs, messageMeta: meta, streamingMessage: null };
+      return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
     });
   },
 
   _upsertLastMessage: (tabId: string, msg: ChatStreamMessage) => {
     set((s) => {
-      const tab = s.tabs.find((t) => t.id === tabId);
-      if (!tab) return {};
+      const tabIdx = s.tabs.findIndex((t) => t.id === tabId);
+      if (tabIdx === -1) return {};
 
-      const msgs = [...tab.messages];
-      const last = msgs[msgs.length - 1];
+      const tab = s.tabs[tabIdx];
+      const prev = tab.streamingMessage;
 
-      // Merge content blocks for assistant messages (preserve thinking/tool_use).
-      // But: if the last message has tool_use blocks and the new blocks are text/thinking,
-      // append as a new message to keep tool_use visually separate from follow-up text.
-      if (last?.type === msg.type && last.type === "assistant") {
-        const oldBlocks = last.message?.content || [];
-        const newBlocks = msg.message?.content || [];
-        const lastHasToolUse = oldBlocks.some((b) => b.type === "tool_use");
-        const newIsTextOrThink = newBlocks.every((b) => b.type === "text" || b.type === "thinking");
-
-        if (lastHasToolUse && newIsTextOrThink) {
-          msgs.push(msg);
-        } else {
-          // Remove old blocks that are being replaced by new ones of same category
-          const preserved = oldBlocks.filter((b) => {
-            if (b.type === "text" && newBlocks.some((nb) => nb.type === "text")) return false;
-            if (b.type === "thinking" && newBlocks.some((nb) => nb.type === "thinking")) return false;
-            return true;
-          });
-
-          msgs[msgs.length - 1] = {
-            ...msg,
-            message: { ...msg.message, content: [...preserved, ...newBlocks] },
-          };
-        }
-      } else if (last?.type === "result" && msg.type === "result") {
-        msgs[msgs.length - 1] = msg;
-      } else {
-        msgs.push(msg);
+      // No existing streaming message — set as first
+      if (!prev) {
+        const newTabs = [...s.tabs];
+        newTabs[tabIdx] = { ...tab, streamingMessage: msg };
+        return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
       }
 
-      const tabs = s.tabs.map((t) =>
-        t.id === tabId ? { ...t, messages: msgs } : t,
-      );
-      return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+      // Merge content blocks: the parser emits full accumulated state on each
+      // delta, so new blocks replace old blocks of the same category.
+      // Exception: tool_use → text/thinking transition means a new turn started —
+      // commit the previous streaming message (preserving tool_use blocks) and
+      // start a fresh one.
+      const oldBlocks = prev.message?.content || [];
+      const newBlocks = msg.message?.content || [];
+      const lastHasToolUse = oldBlocks.some((b) => b.type === "tool_use");
+      const newIsTextOrThink = newBlocks.every((b) => b.type === "text" || b.type === "thinking");
+
+      if (lastHasToolUse && newIsTextOrThink) {
+        // Cross-turn boundary: commit old (with tool_use), start new
+        const newTabs = [...s.tabs];
+        newTabs[tabIdx] = {
+          ...tab,
+          messages: [...tab.messages, prev],
+          streamingMessage: msg,
+        };
+        return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
+      }
+
+      // Same turn: dedup blocks by type/id — keep latest version of each
+      const preserved = oldBlocks.filter((b) => {
+        if (b.type === "text" && newBlocks.some((nb) => nb.type === "text")) return false;
+        if (b.type === "thinking" && newBlocks.some((nb) => nb.type === "thinking")) return false;
+        if (b.type === "tool_use" && b.id && newBlocks.some((nb) => nb.type === "tool_use" && nb.id === b.id)) return false;
+        return true;
+      });
+
+      const merged: ChatStreamMessage = {
+        ...msg,
+        message: { ...msg.message, content: [...preserved, ...newBlocks] },
+      };
+
+      const newTabs = [...s.tabs];
+      newTabs[tabIdx] = { ...tab, streamingMessage: merged };
+      return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
     });
   },
 
@@ -482,16 +535,37 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const tabs = s.tabs.map((t) =>
         t.id === tabId ? { ...t, sessionId } : t,
       );
-      return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+      // Only update the sessionId projected field — don't touch messages etc.
+      const activeTab = tabs.find((t) => t.id === s.activeTabId);
+      return { tabs, sessionId: activeTab?.sessionId ?? null };
     });
   },
 
   _setStreaming: (tabId: string, isStreaming: boolean) => {
     set((s) => {
-      const tabs = s.tabs.map((t) =>
-        t.id === tabId ? { ...t, isStreaming } : t,
-      );
-      return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+      const tabs = s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        if (!isStreaming && t.streamingMessage) {
+          return {
+            ...t,
+            isStreaming: false,
+            messages: [...t.messages, t.streamingMessage],
+            streamingMessage: null,
+          };
+        }
+        return { ...t, isStreaming };
+      });
+      // Project only affected fields: messages/streamingMessage may have changed
+      // (when streaming stops), isStreaming always changes for the target tab.
+      const activeTab = tabs.find((t) => t.id === s.activeTabId);
+      return {
+        tabs,
+        isStreaming: activeTab?.isStreaming ?? false,
+        ...(activeTab ? {
+          messages: activeTab.messages,
+          streamingMessage: activeTab.streamingMessage,
+        } : {}),
+      };
     });
   },
 
@@ -500,7 +574,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const tabs = s.tabs.map((t) =>
         t.id === tabId ? { ...t, error } : t,
       );
-      return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+      const activeTab = tabs.find((t) => t.id === s.activeTabId);
+      return { tabs, error: activeTab?.error ?? null };
     });
   },
 }));

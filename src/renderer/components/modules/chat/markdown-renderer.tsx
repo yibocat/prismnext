@@ -108,8 +108,10 @@ export function MarkdownRenderer({ content }: { content: string }) {
     <div
       className={cn(
         "prose prose-sm dark:prose-invert max-w-none",
-        "[&_.katex-display]:my-4 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden",
-        "[&_.katex]:text-base",
+        "prose-headings:font-semibold prose-h1:text-lg prose-h2:text-base prose-h3:text-sm prose-h4:text-sm",
+        "prose-p:leading-normal prose-li:leading-normal",
+        "[&_.katex-display]:my-3 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden",
+        "[&_.katex]:text-[length:var(--font-chat-message)]",
       )}
     >
       <ReactMarkdown

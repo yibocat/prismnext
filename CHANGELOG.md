@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.3.3 — 2026-05-30
+
+### Performance — Streaming Render Architecture Overhaul
+
+- **Eliminated double-render**: removed `tick()` forced re-render in `use-cli-events.ts` — Zustand selectors already trigger reactivity; extra `useState` tick caused every stream delta to render the entire component tree twice
+- **Split streaming message from committed messages**: `TabState` now has `streamingMessage` (mutable, per-delta) separate from `messages` (immutable, append-only); during streaming, `_upsertLastMessage` operates on `streamingMessage` in O(1) instead of copying the full messages array (O(n)); committed message references stay stable, preventing memo'd historical components from re-rendering
+- **Incremental useMemo computations**: `toolResultMap`, `metaMap`, `inlinedResults`, and committed display filtering now depend only on `messages` (committed), not on the streaming-dependent `allMessages`; O(n) scans only run on message commit, not on every character delta
+- **Granular projected field updates**: `_setStreaming`, `_setSessionId`, `_setError` only update their specific projected field instead of calling `projectActiveTab` to rebuild all fields — eliminates spurious selector re-renders on unrelated state changes
+
+### Tool Widgets — Decoupled Architecture
+
+- **Extracted `tools/` directory**: `tool-widgets.tsx` (528 lines, 9 components) split into 8 focused files — `edit-widget.tsx`, `bash-widget.tsx`, `todo-widget.tsx`, `thinking-widget.tsx`, `ask-question-widget.tsx`, `generic-widget.tsx`, `shared.tsx` (StatusIcon + DiffLines), `index.tsx` (ToolWidget router); each file 30–140 lines, single responsibility
+- **All widgets memo'd**: each extracted widget wrapped in `React.memo` for render stability
+
+### Thinking Widget — Correct Timer Isolation
+
+- **Message-level streaming detection**: `ThinkingWidget` now accepts `isStreamingMsg` prop (passed from `ChatMessages` → `AssistantMessage`) instead of subscribing to global `useChatStore(s => s.isStreaming)`; fixes bug where all completed thinking blocks restarted their timers when a new interaction began
+- **Thinking timer stops when thinking completes**: `AssistantMessage` detects `thinkingComplete` (text/tool_use blocks present) and sets `isStreamingMsg` to false; thinking elapsed time freezes at actual thinking duration, not total response time
+- **Elapsed display with 1 decimal place**: timer updates every 100ms; `displayDuration` uses frozen `elapsed` (not text-length estimate) when timer stops; formatted as `"Thought for 12.3s"`
+
+### Streaming Indicator — Simplified
+
+- **Removed timer**: `StreamingIndicator` no longer shows elapsed seconds — just three bouncing dots + "Thinking..." text; represents CLI startup / waiting-for-first-token, not AI thinking time
+- **10-character thinking threshold**: `showStreamingIndicator` requires ≥10 chars of thinking content before hiding, preventing 1–2 char delta flicker during the transition to `ThinkingWidget`
+
 ## 0.3.2 — 2026-05-30
 
 ### Streaming — Per-Token Real-Time Output

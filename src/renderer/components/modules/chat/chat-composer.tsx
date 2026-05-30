@@ -301,7 +301,7 @@ export function ChatComposer() {
 
   // ─── Render ───
   return (
-    <div className="relative pt-2 px-3 pb-3 max-w-3xl mx-auto w-full">
+    <div className="relative pt-2 pb-1 px-3 max-w-3xl mx-auto w-full">
       {/* / slash command dropdown */}
       {slashQuery !== null && (
         <div className="absolute right-3 bottom-full left-3 z-20 mb-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-background shadow-lg">
@@ -438,7 +438,7 @@ export function ChatComposer() {
               {isStreaming ? (
                 <button
                   onClick={cancelExecution}
-                  className="flex size-8 items-center justify-center rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  className="flex size-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
                   <SquareIcon className="size-3 fill-current" />
                 </button>
@@ -446,15 +446,16 @@ export function ChatComposer() {
                 <button
                   onClick={handleSend}
                   disabled={!input.trim()}
-                  className="flex size-8 items-center justify-center rounded-full bg-foreground text-background hover:bg-foreground/90 disabled:opacity-30"
+                  className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30 shrink-0"
                 >
-                  <ArrowUpIcon className="size-4" />
+                  <ArrowUpIcon className="size-3.5" />
                 </button>
               )}
             </div>
           </>
         )}
       </div>
+
     </div>
   );
 }

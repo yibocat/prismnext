@@ -163,7 +163,17 @@
     color-scheme: light;
   }
   body {
-    @apply h-full bg-background text-foreground;
+    @apply h-full bg-background text-foreground select-none;
+  }
+  /* Re-enable text selection where it's intentional */
+  input, textarea, [contenteditable] {
+    @apply select-text;
+  }
+  .cm-editor {
+    @apply select-text;
+  }
+  .prose {
+    @apply select-text;
   }
   /* Prevent white flash during resize — hard-code backgrounds */
   html.dark body {

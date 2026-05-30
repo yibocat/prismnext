@@ -11,7 +11,7 @@ import {
   ExternalSettings,
   ShortcutsSettings,
 } from "@/components/modules/settings";
-import { ChatMessages, ChatComposer, ChatErrorBoundary } from "@/components/modules/chat";
+import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator } from "@/components/modules/chat";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,14 +19,10 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDownIcon, FolderOpenIcon, FolderPlusIcon } from "lucide-react";
+import { ChevronDownIcon, FolderOpenIcon, FolderPlusIcon, GitBranchIcon } from "lucide-react";
+import { AGENT_UI_CONFIGS } from "@/lib/agent-config";
 
-const AGENTS = [
-  { id: "claude", name: "Claude Code" },
-  { id: "opencode", name: "OpenCode", disabled: true },
-  { id: "gemini", name: "Gemini CLI", disabled: true },
-  { id: "qoder", name: "Qoder CLI", disabled: true },
-];
+const AGENTS = Object.values(AGENT_UI_CONFIGS);
 
 // Module-level flag prevents double-prewarm when React StrictMode re-runs effects
 let didPrewarm = false;
@@ -111,7 +107,7 @@ export function LeftMainArea() {
           /* ── Homepage ── */
           <div className="flex flex-1 flex-col items-center justify-end @xl:justify-center @xl:pb-[var(--height-titlebar)]">
             {/* Top toolbar */}
-            <div className="w-full max-w-3xl flex items-center gap-1.5 px-[12px]">
+            <div className="w-full max-w-3xl flex items-center gap-1.5 h-7 px-[12px]">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -175,11 +171,43 @@ export function LeftMainArea() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              {/* TODO: Worktree selector — populate with actual git worktrees */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={!isEmpty}
+                    className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <GitBranchIcon className="size-3" />
+                    <span>Worktree</span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  {/* TODO: List actual git worktrees from the project */}
+                  <div className="px-2 py-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
+                    No worktrees available
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             {/* Composer */}
-            <div className="w-full max-w-3xl">
+            <div className="w-full max-w-3xl mx-auto">
               <ChatComposer />
+            </div>
+            {/* Context bar — matches toolbar height, bottom padding for breathing room */}
+            <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-7 px-[12px] mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
+              {/* Placeholder — future: suggested follow-up prompts */}
+              <button
+                type="button"
+                className="rounded px-1.5 py-0.5 text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
+              >
+                Suggestions
+              </button>
+              <span className="flex-1" />
+              <ContextWindowIndicator />
             </div>
           </div>
         ) : (
@@ -188,6 +216,11 @@ export function LeftMainArea() {
             <ChatMessages />
             <div className="w-full max-w-3xl mx-auto">
               <ChatComposer />
+            </div>
+            {/* Context bar — matches toolbar height, bottom padding for breathing room */}
+            <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-7 px-[12px] mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
+              <span className="flex-1" />
+              <ContextWindowIndicator />
             </div>
           </div>
         )}

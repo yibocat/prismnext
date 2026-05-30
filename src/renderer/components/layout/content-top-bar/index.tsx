@@ -4,7 +4,12 @@ import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useWindowState } from "@/hooks/use-window-state";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useChatStore } from "@/stores/chat-store";
+import { useDocumentStore } from "@/stores/document-store";
+import { useSessionTitle } from "@/hooks/use-session-title";
+import { AGENT_UI_CONFIGS } from "@/lib/agent-config";
 import { SidebarControls } from "@/components/layout/sidebar-controls";
+import { SessionTitle } from "./session-title";
 import {
   PanelRight,
   SunIcon,
@@ -28,6 +33,11 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
   const { theme, resolvedTheme, setTheme } = useTheme();
+
+  const sessionTitle = useSessionTitle();
+  const selectedAgentId = useChatStore((s) => s.selectedAgent);
+  const agentName = AGENT_UI_CONFIGS[selectedAgentId]?.name ?? selectedAgentId;
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
 
   const cycleTheme = () => {
     if (theme === "light") setTheme("dark");
@@ -53,10 +63,20 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
         )}
       </div>
 
-      {/* Spacer — same strategy as RightArea toolbar's TabBar (flex-1) */}
+      {/* Session title — only when there are messages */}
+      {sessionTitle && (
+        <SessionTitle
+          title={sessionTitle}
+          projectRoot={projectRoot}
+          agentName={agentName}
+          showSeparator={sidebarFullyCollapsed}
+        />
+      )}
+
+      {/* Spacer */}
       <div className="flex-1 min-w-0" />
 
-      {/* ── Right: theme + PanelRight (only when RightArea closed; when open they move to RightArea toolbar) ── */}
+      {/* ── Right: theme + PanelRight (only when RightArea closed) ── */}
       <div className="flex items-center gap-0.5 shrink-0">
         {!isMac && (
           <>

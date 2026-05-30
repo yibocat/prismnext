@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, memo, useCallback, useMemo } from "react";
 import { useChatStore, type ChatStreamMessage, type ContentBlock } from "@/stores/chat-store";
 import { MarkdownRenderer } from "./markdown-renderer";
-import { ToolWidget, ThinkingWidget } from "./tool-widgets";
+import { ToolWidget, ThinkingWidget } from "./tools";
 import {
   AlertCircleIcon,
   CopyIcon,
@@ -9,7 +9,6 @@ import {
   ArrowDownIcon,
   MessageSquareIcon,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 // ─── Copy Button ───
 
@@ -36,31 +35,18 @@ CopyButton.displayName = "CopyButton";
 
 // ─── Streaming Indicator ───
 
-const StreamingIndicator = memo(({ startTime }: { startTime: number }) => {
-  const [elapsed, setElapsed] = useState(0);
-
-  useEffect(() => {
-    const start = startTime;
-    const timer = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - start) / 1000));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [startTime]);
-
-  return (
-    <div className="flex items-center gap-2 px-4 py-2">
-      <div className="flex items-center gap-1">
-        <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:0ms]" />
-        <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:150ms]" />
-        <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:300ms]" />
-      </div>
-      <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">Thinking...</span>
-      {elapsed > 3 && (
-        <span className="text-muted-foreground/60 text-[length:var(--font-chat-meta)]">{elapsed}s</span>
-      )}
+// Static loading indicator — dots + "Thinking..." only, no timer.
+// Represents CLI startup / waiting-for-first-token, not actual AI thinking time.
+const StreamingIndicator = memo(() => (
+  <div className="flex items-center gap-2 px-4 py-2">
+    <div className="flex items-center gap-1">
+      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:0ms]" />
+      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:150ms]" />
+      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:300ms]" />
     </div>
-  );
-});
+    <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">Thinking...</span>
+  </div>
+));
 StreamingIndicator.displayName = "StreamingIndicator";
 
 // ─── User Message ───
@@ -89,25 +75,45 @@ const AssistantMessage = memo(function AssistantMessage({
   msg,
   toolResultMap,
   metaText,
+  msgIndex,
+  isStreamingMsg,
 }: {
   msg: ChatStreamMessage;
   toolResultMap: Map<string, ContentBlock>;
   metaText?: string;
+  msgIndex: number;
+  isStreamingMsg?: boolean;
 }) {
   const blocks = msg.message?.content || [];
   const textBlock = blocks.find((b) => b.type === "text");
   const fullText = textBlock?.text || "";
+  const sessionId = msg.session_id || "";
+
+  // Thinking is complete once the assistant emits text or tool_use blocks.
+  // The thinking timer should stop — it measures thinking time, not the
+  // total response time (which is shown separately as "Completed in Xs").
+  const thinkingComplete = blocks.some(
+    (b) => b.type === "text" || b.type === "tool_use",
+  );
 
   return (
     <div className="group w-full py-2 px-4 animate-in fade-in slide-in-from-bottom-1 duration-200">
       <div className="min-w-0 flex-1">
           {blocks.map((block, i) => {
             if (block.type === "thinking" && block.thinking) {
-              return <ThinkingWidget key={i} thinking={block.thinking} duration={(block as any).duration} />;
+              return (
+                <ThinkingWidget
+                  key={i}
+                  thinking={block.thinking}
+                  duration={(block as any).duration}
+                  persistKey={sessionId ? `${sessionId}:${msgIndex}:${i}` : undefined}
+                  isStreamingMsg={isStreamingMsg && !thinkingComplete}
+                />
+              );
             }
             if (block.type === "text" && block.text) {
               return (
-                <div key={i} className="prose prose-sm dark:prose-invert max-w-none text-[length:var(--font-chat-message)] leading-relaxed">
+                <div key={i} className="text-[length:var(--font-chat-message)]">
                   <MarkdownRenderer content={block.text} />
                 </div>
               );
@@ -120,7 +126,6 @@ const AssistantMessage = memo(function AssistantMessage({
           })}
       </div>
 
-      {/* Action bar: copy button left, meta text (time · tokens) right */}
       {fullText && (
         <div className="flex items-center gap-2 mt-1 opacity-0 transition-opacity group-hover:opacity-100">
           <CopyButton text={fullText} />
@@ -162,27 +167,18 @@ function ResultMessage({ msg }: { msg: ChatStreamMessage }) {
 
 export function ChatMessages() {
   const messages = useChatStore((s) => s.messages);
+  const streamingMessage = useChatStore((s) => s.streamingMessage);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const activeTabId = useChatStore((s) => s.activeTabId);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
-  const agentStartedRef = useRef(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
-  // Track when streaming started (for accurate elapsed time display)
-  const streamingStartRef = useRef(Date.now());
+  // ── Stable computations (committed messages only) ──
+  // These O(n) scans only re-run when committed messages change,
+  // NOT on every stream delta.
 
-  // Track previous isStreaming to detect stream-start in render phase
-  // (useEffect runs too late — first assistant message may arrive before it fires)
-  const prevStreamingRef = useRef(isStreaming);
-  if (isStreaming && !prevStreamingRef.current) {
-    agentStartedRef.current = false;
-    streamingStartRef.current = Date.now();
-  }
-  prevStreamingRef.current = isStreaming;
-
-  // Build tool result map (memoized)
   const toolResultMap = useMemo(() => {
     const map = new Map<string, ContentBlock>();
     for (const msg of messages) {
@@ -197,9 +193,7 @@ export function ChatMessages() {
     return map;
   }, [messages]);
 
-  // Deduplicate and filter messages (memoized), with index map for O(1) key lookup
-  const { displayMessages, msgIndexMap } = useMemo(() => {
-    // Track result messages by usage data to dedup (not by text content)
+  const committed = useMemo(() => {
     const seenResultKeys = new Set<string>();
     const idxMap = new Map<ChatStreamMessage, number>();
     const filtered = messages.filter((msg, i) => {
@@ -207,7 +201,6 @@ export function ChatMessages() {
       if (msg.type === "user" && msg.message?.content?.every((b) => b.type === "tool_result")) {
         return false;
       }
-      // Dedup result messages by usage info (not by text which can collide)
       if (msg.type === "result") {
         if (msg.usage) {
           const key = `${msg.usage.input_tokens}-${msg.usage.output_tokens}`;
@@ -220,17 +213,15 @@ export function ChatMessages() {
       idxMap.set(msg, i);
       return true;
     });
-    return { displayMessages: filtered, msgIndexMap: idxMap };
+    return { display: filtered, idxMap };
   }, [messages]);
 
-  // Build meta map: display index → "Completed in Xs · ↑in ↓out"
-  // Computed from consecutive assistant→result pairs. Works regardless of
-  // tab switches or store persistence — recomputes whenever messages change.
   const metaMap = useMemo(() => {
     const map = new Map<number, string>();
-    for (let i = 0; i < displayMessages.length - 1; i++) {
-      const msg = displayMessages[i];
-      const next = displayMessages[i + 1];
+    const disp = committed.display;
+    for (let i = 0; i < disp.length - 1; i++) {
+      const msg = disp[i];
+      const next = disp[i + 1];
       if (msg.type === "assistant" && next.type === "result" && !next.is_error) {
         const parts: string[] = [];
         if (next.duration_ms != null) {
@@ -246,41 +237,46 @@ export function ChatMessages() {
       }
     }
     return map;
-  }, [displayMessages]);
+  }, [committed.display]);
 
-  // Set of result display indices that have been inlined into preceding assistant
   const inlinedResults = useMemo(() => {
     const set = new Set<number>();
-    for (let i = 0; i < displayMessages.length - 1; i++) {
-      const msg = displayMessages[i];
-      const next = displayMessages[i + 1];
+    const disp = committed.display;
+    for (let i = 0; i < disp.length - 1; i++) {
+      const msg = disp[i];
+      const next = disp[i + 1];
       if (msg.type === "assistant" && next.type === "result" && !next.is_error && next.result) {
         set.add(i + 1);
       }
     }
     return set;
-  }, [displayMessages]);
+  }, [committed.display]);
 
-  // Hide StreamingIndicator once there's meaningful thinking content.
-  // Require ≥10 chars to avoid flicker from the first 1-2 character delta.
-  const hasThinkingContent = displayMessages.some(
+  // ── Streaming-dependent: append streaming message to display ──
+  const displayMessages = useMemo(() => {
+    if (!streamingMessage) return committed.display;
+    return [...committed.display, streamingMessage];
+  }, [committed.display, streamingMessage]);
+
+  // Show the streaming "Thinking..." indicator until the AI emits
+  // ≥10 chars of thinking content. This avoids flicker when the first
+  // 1-2 character delta arrives and the ThinkingWidget isn't ready yet.
+  const showStreamingIndicator = isStreaming && !displayMessages.some(
     (m) => m.type === "assistant" && m.message?.content?.some(
-      (b) => b.type === "thinking" && b.thinking && b.thinking.length > 0,
+      (b) => b.type === "thinking" && b.thinking && b.thinking.length >= 10,
     ),
   );
-  if (hasThinkingContent) {
-    agentStartedRef.current = true;
-  }
 
-  // Reset auto-scroll when streaming starts
-  useEffect(() => {
-    if (isStreaming) {
-      shouldAutoScrollRef.current = true;
-      setShowScrollButton(false);
-    }
-  }, [isStreaming]);
+  // ── Auto-scroll ──
 
-  // Track scroll position
+  const scrollToBottom = useCallback((smooth = false) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "instant" });
+    setShowScrollButton(false);
+  }, []);
+
+  // Track whether user is at bottom
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -293,31 +289,23 @@ export function ChatMessages() {
     return () => el.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Auto-scroll to bottom
+  // Auto-scroll when streaming content changes and user is at bottom
   useEffect(() => {
-    if (shouldAutoScrollRef.current && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (shouldAutoScrollRef.current) {
+      scrollToBottom(false);
     }
-  }, [messages, isStreaming]);
+  }, [displayMessages, showStreamingIndicator]);
 
-  // When switching to a tab that is already streaming, force auto-scroll
+  // Reset auto-scroll when streaming starts or tab switches
   useEffect(() => {
     if (isStreaming) {
       shouldAutoScrollRef.current = true;
-      if (scrollRef.current) {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      }
+      scrollToBottom(false);
     }
-  }, [activeTabId]);
+  }, [isStreaming, activeTabId]);
 
-  const scrollToBottom = () => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-      setShowScrollButton(false);
-    }
-  };
+  // ── Empty state ──
 
-  // Empty state
   if (displayMessages.length === 0 && !isStreaming) {
     return (
       <div className="flex flex-1 items-center justify-center p-8 pb-[calc(2rem+var(--height-status-bar))]">
@@ -337,12 +325,15 @@ export function ChatMessages() {
     );
   }
 
+  // ── Render ──
+
   return (
     <div className="relative flex-1 min-h-0">
       <div ref={scrollRef} className="absolute inset-0 overflow-y-auto scroll-smooth">
         <div className="min-h-full pb-4 max-w-3xl mx-auto">
           {displayMessages.map((msg, displayIdx) => {
-            const idx = msgIndexMap.get(msg)!;
+            const idx = committed.idxMap.get(msg) ?? messages.length;
+            const isStreamingMsg = msg === streamingMessage;
             if (msg.type === "user") {
               return <UserMessage key={`user-${idx}`} msg={msg} />;
             }
@@ -353,6 +344,8 @@ export function ChatMessages() {
                   msg={msg}
                   toolResultMap={toolResultMap}
                   metaText={metaMap.get(displayIdx)}
+                  msgIndex={idx}
+                  isStreamingMsg={isStreamingMsg}
                 />
               );
             }
@@ -362,22 +355,26 @@ export function ChatMessages() {
             }
             return null;
           })}
-          {isStreaming && !agentStartedRef.current && (
-            <StreamingIndicator startTime={streamingStartRef.current} />
+          {showStreamingIndicator && (
+            <StreamingIndicator />
           )}
         </div>
       </div>
 
       {/* Scroll to bottom FAB */}
-      {showScrollButton && (
-        <button
-          type="button"
-          onClick={scrollToBottom}
-          className="absolute bottom-4 right-4 flex size-8 items-center justify-center rounded-full border border-border bg-background shadow-md text-muted-foreground hover:text-foreground transition-all hover:shadow-lg z-10"
-        >
-          <ArrowDownIcon className="size-4" />
-        </button>
-      )}
+      <div className="absolute inset-x-0 bottom-4 pointer-events-none z-10">
+        <div className="max-w-3xl mx-auto flex justify-end px-4">
+          {showScrollButton && (
+            <button
+              type="button"
+              onClick={() => scrollToBottom(true)}
+              className="pointer-events-auto flex size-8 items-center justify-center rounded-full border border-border bg-background shadow-md text-muted-foreground hover:text-foreground transition-all hover:shadow-lg"
+            >
+              <ArrowDownIcon className="size-4" />
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
