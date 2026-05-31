@@ -85,7 +85,7 @@ export interface ElectronAPI {
   cliDispose: () => Promise<{ success: boolean }>;
   cliPrewarm: (projectPath: string, tabId?: string) => Promise<{ success: boolean }>;
   cliStatus: () => Promise<{ available: boolean; agentId?: string; agentName?: string; error?: string }>;
-  cliSend: (args: { projectPath: string; prompt: string; tabId?: string; agent?: string; model?: string | null }) => Promise<void>;
+  cliSend: (args: { projectPath: string; prompt: string; tabId?: string; agent?: string; model?: string | null; sessionId?: string | null }) => Promise<void>;
   cliSetGateway: (baseUrl?: string, apiKey?: string) => Promise<void>;
   cliCancel: (tabId?: string) => Promise<void>;
   cliCloseSession: (tabId?: string) => Promise<void>;

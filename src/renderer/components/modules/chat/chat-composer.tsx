@@ -362,7 +362,7 @@ export function ChatComposer() {
         </div>
       )}
 
-      <div className="flex w-full flex-col rounded-2xl border border-input bg-muted/30 transition-colors focus-within:border-ring focus-within:bg-background">
+      <div className="flex w-full flex-col rounded-2xl border border-input bg-card transition-colors focus-within:border-ring">
         {/* Pinned context chips */}
         {pinnedContexts.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3 pb-0">

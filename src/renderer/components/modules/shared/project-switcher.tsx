@@ -36,15 +36,10 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
 
   const newProjectTriggerRef = useRef<HTMLButtonElement>(null);
 
-  const saveLastProject = (path: string) => {
-    window.electronAPI.settingsSet({ lastProjectPath: path } as any);
-  };
-
   const handleOpenProjectPath = async (path: string) => {
     const ok = await projectOpen(path);
     if (!ok) return;
     addRecentProject(path);
-    saveLastProject(path);
     await openProject(path);
     setLeftSidebarOverlay(false);
   };
@@ -55,8 +50,7 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
     await handleOpenProjectPath(result.path);
   };
 
-  const handleCloseProject = async () => {
-    await window.electronAPI.settingsSet({ lastProjectPath: null } as any);
+  const handleCloseProject = () => {
     useDocumentStore.getState().closeProject();
   };
 

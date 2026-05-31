@@ -12,7 +12,7 @@ import { TabBar } from "@/components/layout/tab-bar";
 import { SidebarControls } from "@/components/layout/sidebar-controls";
 import { TabToolbar } from "@/components/layout/tab-toolbar";
 import { TexworkspaceToolbar } from "@/components/modules/texworkspace-mode";
-import { AiBar } from "@/components/modules/shared";
+import { AiBar } from "@/components/modules/chat";
 import { type PanelImperativeHandle } from "react-resizable-panels";
 import {
   FolderOpenIcon as FilesIcon,
@@ -47,19 +47,42 @@ interface RightAreaProps {
   rightAreaRef: RefObject<PanelImperativeHandle | null>;
 }
 
-function SidebarDragHandle({ onResize }: { onResize: (width: number) => void }) {
+function SidebarDragHandle({
+  onResize,
+  isDraggingRef,
+}: {
+  onResize: (width: number) => void;
+  /** Set to true while the user is actively dragging — used to suppress
+   *  ResizeObserver feedback during drag (prevents state-update loop). */
+  isDraggingRef?: React.MutableRefObject<boolean>;
+}) {
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       const startX = e.clientX;
       const startWidth = useLayoutStore.getState().rightSidebarWidth;
 
+      if (isDraggingRef) isDraggingRef.current = true;
+
+      let rafId: number | null = null;
+      const latestEventRef = { current: null as MouseEvent | null };
+
       const onMouseMove = (ev: MouseEvent) => {
-        // Mouse moving right (clientX increases) → sidebar gets narrower
-        onResize(startWidth - (ev.clientX - startX));
+        // Store the latest event so the RAF callback always uses current mouse position
+        latestEventRef.current = ev;
+        if (rafId !== null) return; // Already scheduled for this frame
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          const latest = latestEventRef.current;
+          if (latest) {
+            onResize(startWidth - (latest.clientX - startX));
+          }
+        });
       };
 
       const onMouseUp = () => {
+        if (isDraggingRef) isDraggingRef.current = false;
+        if (rafId !== null) cancelAnimationFrame(rafId);
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
       };
@@ -67,7 +90,7 @@ function SidebarDragHandle({ onResize }: { onResize: (width: number) => void }) 
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [onResize],
+    [onResize, isDraggingRef],
   );
 
   return (
@@ -139,6 +162,12 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   //   - Close sidebar when width drops below 30px
   const COLLAPSE_THRESHOLD = 30;
 
+  // Flag to suppress ResizeObserver while the user is actively dragging the
+  // sidebar handle. Without this, each drag-induced state update triggers a
+  // DOM change, which the ResizeObserver picks up and turns back into another
+  // state update — a feedback loop that doubles the per-frame work.
+  const isDraggingSidebar = useRef(false);
+
   const handleSidebarResize = useCallback(
     (width: number) => {
       const st = useLayoutStore.getState();
@@ -161,6 +190,11 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
     if (!sidebarEl) return;
 
     const observer = new ResizeObserver((entries) => {
+      // Skip while the user is actively dragging — the drag handler is already
+      // setting the width, and the ResizeObserver would only create a feedback
+      // loop (drag → setState → DOM update → ResizeObserver → setState again).
+      if (isDraggingSidebar.current) return;
+
       const actualWidth = Math.round(entries[0].contentRect.width);
       if (actualWidth <= 0) return;
       const st = useLayoutStore.getState();
@@ -313,6 +347,24 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
           </>
         )}
 
+        {/* Theme toggle */}
+        <button
+          type="button"
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          title={`Theme: ${theme}`}
+          onClick={cycleTheme}
+        >
+          {theme === "system" ? (
+            <MonitorIcon className="size-3.5" />
+          ) : resolvedTheme === "dark" ? (
+            <SunIcon className="size-3.5" />
+          ) : (
+            <MoonIcon className="size-3.5" />
+          )}
+        </button>
+
+        <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
+
         {/* Editor maximize / restore */}
         <button
           type="button"
@@ -333,24 +385,6 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
           }}
         >
           {editorMaximized ? <MinimizeIcon className="size-3.5" /> : <MaximizeIcon className="size-3.5" />}
-        </button>
-
-        <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
-
-        {/* Theme toggle */}
-        <button
-          type="button"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title={`Theme: ${theme}`}
-          onClick={cycleTheme}
-        >
-          {theme === "system" ? (
-            <MonitorIcon className="size-3.5" />
-          ) : resolvedTheme === "dark" ? (
-            <SunIcon className="size-3.5" />
-          ) : (
-            <MoonIcon className="size-3.5" />
-          )}
         </button>
 
         {/* Close right area panel */}
@@ -390,7 +424,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
 
         {rightSidebarOpen && (
           <>
-            <SidebarDragHandle onResize={handleSidebarResize} />
+            <SidebarDragHandle onResize={handleSidebarResize} isDraggingRef={isDraggingSidebar} />
             <div
               ref={sidebarElRef}
               className="shrink-0 overflow-hidden"

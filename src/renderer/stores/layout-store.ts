@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { createDebouncedStorage } from "@/lib/debounced-storage";
 import {
   SIDEBAR_LEFT_DEFAULT,
   SIDEBAR_LEFT_MAX,
@@ -220,6 +221,7 @@ export const useLayoutStore = create<LayoutState>()(
     }),
     {
       name: "prism-next-layout",
+      storage: createJSONStorage(() => createDebouncedStorage()),
       partialize: (state) => ({
         sidebarWidth: state.sidebarWidth,
         rightSidebarWidth: state.rightSidebarWidth,

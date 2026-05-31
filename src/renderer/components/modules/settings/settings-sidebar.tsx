@@ -56,7 +56,6 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
   const isMac = platform === "darwin";
   const showMacSpacer = isMac && !isFullscreen;
 
-  const sidebarWidth = useLayoutStore((s) => s.sidebarWidth);
   const sidebarFullyCollapsed = useLayoutStore((s) => s.sidebarFullyCollapsed);
   const leftSidebarOverlay = useLayoutStore((s) => s.leftSidebarOverlay);
   const setLeftSidebarOverlay = useLayoutStore((s) => s.setLeftSidebarOverlay);
@@ -66,9 +65,8 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
     <SidebarProvider
       defaultOpen
       className="contents"
-      style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
     >
-      <Sidebar collapsible="none" className="relative shrink-0 bg-card border-r-0">
+      <Sidebar collapsible="none" className="relative shrink-0 bg-card border-r-0 !w-full">
         <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center px-2 select-none">
           {!sidebarFullyCollapsed && (
             <SidebarControls leftSidebarRef={leftSidebarRef!} showMacSpacer={showMacSpacer} />

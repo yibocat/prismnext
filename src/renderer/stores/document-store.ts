@@ -163,6 +163,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
       // Add to recent projects
       useProjectStore.getState().addRecentProject(rootPath);
+
+      // Persist last project path so it auto-restores on next launch
+      window.electronAPI.settingsSet({ lastProjectPath: rootPath } as any);
     } catch (error) {
       toast.error(`Failed to open project: ${error}`);
       throw error;
@@ -171,6 +174,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
   closeProject: () => {
     clearAutoSaveTimer();
+    // Clear last project path so next launch shows welcome page
+    window.electronAPI.settingsSet({ lastProjectPath: null } as any);
     // Clean up sub-stores to prevent session/tab pollution
     window.electronAPI.cliDispose();
     useRightPanelStore.getState().closeAllTabs();

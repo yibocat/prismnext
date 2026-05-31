@@ -281,12 +281,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     try {
       const agentSettings = useAgentSettingsStore.getState();
+      const sessionId = get().tabs.find((t) => t.id === tabId)?.sessionId;
       await window.electronAPI.cliSend({
         projectPath,
         prompt: userPrompt,
         tabId,
         agent: agentId,
         model: agentSettings.getSetting("model"),
+        sessionId,
       });
     } catch (err: any) {
       set((s) => {
@@ -363,14 +365,21 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const newId = nextTabId();
     const newTab = makeDefaultTab(newId);
     const tabId = newId;
-    set((s) => ({ tabs: [...s.tabs, newTab] }));
+    // Switch to the new tab IMMEDIATELY so the UI responds instantly.
+    // Messages load async below and populate when ready.
+    set((s) => ({
+      tabs: [...s.tabs, newTab],
+      activeTabId: tabId,
+      ...projectActiveTab([...s.tabs, newTab], tabId),
+    }));
 
     try {
       const raw = await window.electronAPI.cliLoadSession(projectPath, sessionId);
       const messages = raw.filter((msg: ChatStreamMessage) => {
-        // Filter out system messages only. Keep result messages —
-        // they carry duration_ms and usage needed for completion display.
         if (msg.type === "system") return false;
+        // Keep result messages even without content — they carry
+        // duration_ms and usage needed for completion display.
+        if (msg.type === "result") return true;
         if (!msg.message?.content || msg.message.content.length === 0) return false;
         return true;
       });
@@ -385,7 +394,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           if (ms != null) {
             parts.push(`Completed in ${(ms / 1000).toFixed(1)}s`);
           }
-          const usage = next.usage;
+          // usage may be at top level (live) or inside message (JSONL)
+          const usage = next.usage || next.message?.usage;
           if (usage?.input_tokens || usage?.output_tokens) {
             const input = usage.input_tokens >= 1000
               ? `${(usage.input_tokens / 1000).toFixed(1)}k`

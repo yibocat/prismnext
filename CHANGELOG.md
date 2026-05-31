@@ -1,5 +1,64 @@
 # Changelog
 
+## 0.3.4 — 2026-05-31
+
+### AiBar — Floating Chat Bar Rewrite
+
+- **Relocated**: `AiBar` moved from `modules/shared/` to `modules/chat/` — it's now a core chat component rendered in RightArea when editor is maximized
+- **Three-phase state machine** (`idle` → `input` → `expanded`): idle shows a thin 1.5px pill that expands on hover ("Manage AI Assistants ⌘I"); clicking opens a capsule input bar (single-line with + menu, text input, and send button); multi-line content auto-expands to full `ChatComposer` with seamless text handoff via native DOM setter
+- **Chat panel overlay**: clicking "Done" / "Running" opens a conversation panel (`min(60vh, 600px)`) above the input area showing `ChatMessages` — panel opens with `animate-in fade-in slide-in-from-bottom-2` and closes with `animate-out fade-out slide-out-to-bottom-2` (150ms)
+- **Click-outside to close**: panel auto-closes when clicking anywhere outside the panel, capsule, expanded composer, or Radix dropdowns
+- **Context-aware toolbar**: Done/Running button only appears when there's a conversation (`messages.length > 0 || isStreaming`); Running state shows a pulsing dot indicator; Worktree selector always visible (Git functionality, not conversation-scoped)
+- **Width alignment**: container hierarchy restructured to `max-w-3xl` outer → `px-3` inner, ensuring the capsule border, chat panel, and expanded ChatComposer all share identical visual width (`min(container, 48rem) - 24px`)
+
+### Markdown Rendering — react-markdown → streamdown
+
+- **Replaced `react-markdown`** with `streamdown` v2.5.0 — unified streaming-aware markdown renderer with built-in plugin system
+- **New plugins**: `@streamdown/cjk` (CJK-friendly text handling), `@streamdown/code` (syntax-highlighted code blocks via Shiki), `@streamdown/math` (LaTeX math rendering with KaTeX), `@streamdown/mermaid` (Mermaid diagram support)
+- **Removed dependencies**: `react-markdown`, `rehype-raw`, `rehype-sanitize`, `remark-gfm` — all functionality now handled by streamdown ecosystem
+
+### Performance — Resize Smoothness
+
+- **CSS transitions narrowed**: capsule, toolbar, and idle label in AiBar changed from `transition-all` (which animated `width` during window resize, causing ghosting) to targeted property transitions — `transition-[height,max-width,padding,background-color,border-color]` for capsule, `transition-[height,opacity,transform,margin]` for toolbar
+- **CSS containment**: `[contain:layout_style]` added to LeftMainArea, RightArea, and both center panel wrappers in App.tsx — tells the browser these subtrees' layouts are independent, preventing cascading layout recalculations during window resize
+- **`React.memo` on RightArea**: RightArea receives only 3 refs as props (never change); wrapping with `memo` prevents cascading re-renders from App.tsx Zustand subscriptions during resize
+- **`React.memo` on ChatMessages**: prevents unnecessary re-renders from parent (AiBar phase transitions, panel open/close)
+
+### Session Loading — Async I/O
+
+- **`loadSessionHistory`**: `readFileSync` → `await readFile` from `fs/promises` — no longer blocks the Electron main process during session load
+- **`listClaudeSessions`**: `readdirSync` + `statSync` + per-file `readFileSync` → `await readdir` + `await stat` + `await readFile` — eliminated the per-session synchronous file reads that blocked the UI when listing sessions with large histories
+- **Immediate tab switch**: `loadSession` now sets `activeTabId` in the first `set()` call (before the IPC round-trip), giving users instant visual feedback when clicking a session — the new tab appears immediately, messages populate asynchronously
+
+### ChatComposer — Background & Focus
+
+- **Background fix**: `bg-muted/30` (30% transparent) → `bg-card` (solid) — fixes transparent background showing through in AiBar's floating expanded view
+- **Focus state cleaned**: removed `focus-within:bg-background` — the card-to-background color shift on focus looked awkward; border ring color change alone sufficiently indicates focus
+
+### ChatMessages — Empty State
+
+- Simplified from large icon + "Start a conversation" heading + descriptive paragraph to a single muted line: "No messages yet — start a conversation below"
+- Removed unused `MessageSquareIcon` import
+
+### LeftSidebar — Padding Cleanup
+
+- Removed `pt-1.5` (6px) from the fixed function buttons container — buttons now sit flush below the titlebar
+- Removed `pt-1.5` (6px) from the ProjectSwitcher wrapper — eliminates doubled top padding
+- Spacing between Done/Running button and Worktree selector moved from Worktree's `ml-1` to Done button's `mr-1` — spacing naturally disappears when Done button is hidden (New Agent state)
+
+### Spacing Consistency
+
+- Toolbar-to-input gap unified with panel-to-input gap: both now use `mb-2` (8px), previously toolbar used `mb-1` (4px)
+
+### Dependencies
+
+- Added: `streamdown@^2.5.0`, `@streamdown/cjk@^1.0.3`, `@streamdown/code@^1.1.1`, `@streamdown/math@^1.0.2`, `@streamdown/mermaid@^1.0.2`
+- Removed: `react-markdown@^10.1.0`, `rehype-raw@^7.0.0`, `rehype-sanitize@^6.0.0`, `remark-gfm@^4.0.1`
+
+### New Utilities
+
+- **`debounced-storage.ts`**: debounced storage writes for frequently-updated state
+
 ## 0.3.3 — 2026-05-30
 
 ### Performance — Streaming Render Architecture Overhaul

@@ -45,3 +45,16 @@
  * its own formatting context, which can cause sub-pixel positioning at
  * panel boundaries — producing 1px button jitter when panels resize.
  */
+
+/*
+ * Disable layout transitions on sidebar menu buttons.
+ * The shadcn SidebarMenuButton has transition-[width,height,padding] which
+ * fights with JS-driven panel resizing — each pixel change triggers a 150ms
+ * CSS animation, creating visible lag and jitter at the panel boundary.
+ * Since we use collapsible="none" (no sidebar collapse animation), these
+ * layout transitions serve no purpose.
+ */
+[data-sidebar="menu-button"] {
+  transition-property: color, background-color, border-color, text-decoration-color,
+    fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter !important;
+}

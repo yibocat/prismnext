@@ -1,8 +1,7 @@
-import { useState, useEffect, useCallback, useRef, memo, type RefObject } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, memo, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useLayoutStore } from "@/stores/layout-store";
-import { SIDEBAR_LEFT_MAX } from "@/styles/constants";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWindowState } from "@/hooks/use-window-state";
@@ -38,7 +37,6 @@ import {
 import {
   SidebarProvider,
   Sidebar,
-  SidebarContent,
   SidebarFooter,
   SidebarMenu,
   SidebarMenuItem,
@@ -69,7 +67,6 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSid
   const isMac = platform === "darwin";
   const showMacSpacer = isMac && !isFullscreen;
 
-  const sidebarWidth = useLayoutStore((s) => s.sidebarWidth);
   const sidebarFullyCollapsed = useLayoutStore((s) => s.sidebarFullyCollapsed);
   const leftSidebarOverlay = useLayoutStore((s) => s.leftSidebarOverlay);
   const setLeftSidebarOverlay = useLayoutStore((s) => s.setLeftSidebarOverlay);
@@ -86,7 +83,15 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSid
   const setSessionSort = useLayoutStore((s) => s.setSessionSort);
 
   const sessionId = useChatStore((s) => s.sessionId);
-  const isStreaming = useChatStore((s) => s.isStreaming);
+  // Track which sessions are currently streaming across ALL tabs, not just the active one.
+  // This ensures the running indicator (CircleDotDashed) remains visible when the user
+  // switches away from a tab that is still executing.
+  const tabs = useChatStore((s) => s.tabs);
+  const streamingSessionIds = useMemo(
+    () => new Set(tabs.filter((t) => t.isStreaming && t.sessionId).map((t) => t.sessionId as string)),
+    [tabs],
+  );
+  const hasAnyStreaming = streamingSessionIds.size > 0;
   const loadSession = useChatStore((s) => s.loadSession);
   const newSession = useChatStore((s) => s.newSession);
   const clearCurrentTab = useChatStore((s) => s.clearCurrentTab);
@@ -115,13 +120,13 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSid
     fetchSessions();
   }, [fetchSessions]);
 
-  const prevStreaming = useRef(isStreaming);
+  const prevAnyStreaming = useRef(hasAnyStreaming);
   useEffect(() => {
-    if (prevStreaming.current && !isStreaming) {
+    if (prevAnyStreaming.current && !hasAnyStreaming) {
       fetchSessions();
     }
-    prevStreaming.current = isStreaming;
-  }, [isStreaming, fetchSessions]);
+    prevAnyStreaming.current = hasAnyStreaming;
+  }, [hasAnyStreaming, fetchSessions]);
 
   useEffect(() => {
     return window.electronAPI.onCliSessionCreated(() => {
@@ -141,7 +146,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSid
 
   const renderSessionItem = (s: SessionInfo) => {
     const isActive = s.id === sessionId;
-    const isSessionStreaming = isActive && isStreaming;
+    const isSessionStreaming = streamingSessionIds.has(s.id);
     return (
       <SidebarMenuItem key={s.id}>
         <SidebarMenuButton
@@ -260,9 +265,8 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSid
     <SidebarProvider
       defaultOpen
       className="contents"
-      style={{ "--sidebar-width": `${Math.min(sidebarWidth, SIDEBAR_LEFT_MAX)}px` } as React.CSSProperties}
     >
-      <Sidebar collapsible="none" className="relative shrink-0 bg-card border-r-0">
+      <Sidebar collapsible="none" className="relative shrink-0 bg-card border-r-0 !w-full">
         {/* SidebarTopBar — pseudo-titlebar. Always preserves height to avoid layout jump,
             but only renders controls when sidebar is expanded (ContentTopBar handles collapsed state). */}
         <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center px-2 select-none">
@@ -270,8 +274,9 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSid
             <SidebarControls leftSidebarRef={leftSidebarRef!} showMacSpacer={showMacSpacer} />
           )}
         </div>
-        <SidebarContent className="px-2 pb-1 gap-1">
-          <div className="pt-1.5">
+        {/* ── Fixed function buttons (do not scroll) ── */}
+        <div className="shrink-0 px-2 flex flex-col gap-1">
+          <div>
             <ProjectSwitcher className="flex w-full items-center gap-2 rounded-md border border-border px-2 py-1.5 text-[length:var(--font-session-item)] font-medium hover:bg-muted transition-colors" />
           </div>
 
@@ -292,8 +297,10 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSid
             <FileType className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="flex-1 text-left">TeX Workspace</span>
           </button>
+        </div>
 
-          {/* ── Pinned Sessions ── */}
+        {/* ── Scrollable session list ── */}
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto px-2 pb-1">
           {sortedSessions.filter((s) => pinnedSessionIds.includes(s.id)).length > 0 && (
             <div>
               <button
@@ -382,7 +389,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSid
                 .map(renderSessionItem)}
             </SidebarMenu>
           )}
-        </SidebarContent>
+        </div>
         <SidebarFooter className="px-2 pb-2">
           <button
             type="button"

@@ -56,6 +56,7 @@ export function registerCliHandlers(): void {
         tabId?: string;
         agent?: string;
         model?: string | null;
+        sessionId?: string | null;
       },
     ) => {
       const tabId = args.tabId || "default";
@@ -64,7 +65,7 @@ export function registerCliHandlers(): void {
 
       const manager = getCliManager(win);
       const cwd = args.projectPath || app.getPath("home");
-      manager.sendPrompt(tabId, args.prompt, cwd, args.agent, args.model);
+      manager.sendPrompt(tabId, args.prompt, cwd, args.agent, args.model, args.sessionId ?? undefined);
     },
   );
 

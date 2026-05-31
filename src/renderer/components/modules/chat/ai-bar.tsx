@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { Kbd } from "@/components/ui/kbd";
-import { ChatComposer } from "@/components/modules/chat/chat-composer";
+import { ChatComposer } from "./chat-composer";
+import { ChatMessages } from "./chat-messages";
 import { useChatStore } from "@/stores/chat-store";
 import {
   ArrowUpIcon,
@@ -10,6 +11,8 @@ import {
   ImageIcon,
   LinkIcon,
   Code2Icon,
+  XIcon,
+  Maximize2Icon,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -25,6 +28,20 @@ type Phase = "idle" | "input" | "expanded";
 export function AiBar() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [value, setValue] = useState("");
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [panelClosing, setPanelClosing] = useState(false);
+  const panelClosingRef = useRef(false);
+  panelClosingRef.current = panelClosing;
+
+  const openPanel = useCallback(() => setIsPanelOpen(true), []);
+  const closePanel = useCallback(() => {
+    if (panelClosingRef.current) return;
+    setPanelClosing(true);
+    setTimeout(() => {
+      setIsPanelOpen(false);
+      setPanelClosing(false);
+    }, 150);
+  }, []);
   const inputRef = useRef<HTMLInputElement>(null);
   const expandedRef = useRef<HTMLDivElement>(null);
   const capsuleRef = useRef<HTMLDivElement>(null);
@@ -36,7 +53,15 @@ export function AiBar() {
   valueRef.current = value;
 
   const sendPrompt = useChatStore((s) => s.sendPrompt);
+  const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
+  const activeTabTitle = useChatStore((s) => {
+    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    return tab?.title ?? "Chat";
+  });
+
+  // Toolbar visible when there's a conversation (messages or streaming)
+  const hasConversation = messages.length > 0 || isStreaming;
 
   const isInputting = phase === "input";
 
@@ -55,9 +80,9 @@ export function AiBar() {
     setPhase("expanded");
   }, []);
 
-  // ─── Collapse on click-outside (only when input is empty) ───
+  // ─── Collapse on click-outside (only when input is empty, not when panel is open) ───
   useEffect(() => {
-    if (!isInputting) return;
+    if (!isInputting || isPanelOpen) return;
 
     const handleMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -77,7 +102,32 @@ export function AiBar() {
 
     document.addEventListener("mousedown", handleMouseDown, true);
     return () => document.removeEventListener("mousedown", handleMouseDown, true);
-  }, [isInputting, collapseToIdle]);
+  }, [isInputting, isPanelOpen, collapseToIdle]);
+
+  // ─── Close panel on click-outside ───
+  useEffect(() => {
+    if (!isPanelOpen) return;
+
+    const handleMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+
+      // Click inside the panel → stay
+      if (target.closest("[data-ai-bar-panel]")) return;
+
+      // Click inside the capsule or expanded composer → stay (user is typing)
+      if (capsuleRef.current?.contains(target)) return;
+      if (expandedRef.current?.contains(target)) return;
+
+      // Click inside a Radix dropdown/portal → stay
+      if (target.closest("[data-radix-menu-content]") || target.closest("[data-radix-popper-content-wrapper]")) return;
+
+      // Click anywhere else → close panel
+      closePanel();
+    };
+
+    document.addEventListener("mousedown", handleMouseDown, true);
+    return () => document.removeEventListener("mousedown", handleMouseDown, true);
+  }, [isPanelOpen, closePanel]);
 
   // ─── After ChatComposer mounts, inject the pending text and resume typing ───
   useEffect(() => {
@@ -138,51 +188,109 @@ export function AiBar() {
   );
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-5 pointer-events-none z-10">
+    <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center pb-5 pointer-events-none z-10">
+      {/* ── Chat Panel — conversation messages only ── */}
+      {(isPanelOpen || panelClosing) && (
+        <div className={cn(
+          "w-full max-w-3xl mx-auto pointer-events-none mb-2",
+          panelClosing ? "animate-out fade-out slide-out-to-bottom-2 duration-150" : "animate-in fade-in slide-in-from-bottom-2 duration-200",
+        )}>
+          <div className="px-3 w-full">
+          <div
+            data-ai-bar-panel
+            className="w-full pointer-events-auto rounded-2xl border border-border bg-background shadow-lg overflow-hidden flex flex-col"
+            style={{ height: "min(60vh, 600px)" }}
+          >
+            {/* Panel header — session title + actions */}
+            <div className="flex items-center justify-between shrink-0 px-3 py-1.5">
+              <span className="text-[length:var(--font-chat-meta)] text-muted-foreground truncate">
+                {activeTabTitle}
+              </span>
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button
+                  type="button"
+                  className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  title="Maximize"
+                >
+                  <Maximize2Icon className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  onClick={closePanel}
+                  title="Close chat panel"
+                >
+                  <XIcon className="size-3.5" />
+                </button>
+              </div>
+            </div>
+            {/* Messages — needs flex-col parent so ChatMessages' flex-1 resolves to a height */}
+            <div className="flex-1 min-h-0 flex flex-col">
+              <ChatMessages />
+            </div>
+          </div>
+          </div>
+        </div>
+      )}
+
       {/* ── idle + input: shared capsule element for smooth transitions ── */}
       {phase !== "expanded" && (
-        <div className="px-3 w-full flex justify-center pointer-events-none">
         <div
           ref={capsuleRef}
           data-ai-bar-capsule
           className="w-full max-w-3xl mx-auto pointer-events-none"
         >
-          {/* Toolbar — slides in/out with capsule transition */}
-          <div
-            className={cn(
-              "flex items-center pointer-events-auto transition-all duration-200 ease-out",
-              isInputting
-                ? "h-7 mb-1 opacity-100 translate-y-0"
-                : "h-0 mb-0 opacity-0 -translate-y-1 overflow-hidden",
-            )}
-          >
-            <button
-              type="button"
-              className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              onMouseDown={(e) => e.preventDefault()}
+        <div className="px-3 w-full">
+          {/* Toolbar — hidden when chat panel is open */}
+          {!isPanelOpen && (
+            <div
+              className={cn(
+                "flex items-center pointer-events-auto transition-all duration-200 ease-out",
+                isInputting
+                  ? "h-7 mb-2 opacity-100 translate-y-0"
+                  : "h-0 mb-0 opacity-0 -translate-y-1 overflow-hidden",
+              )}
             >
-              {isStreaming ? "Running" : "Ready"}
-            </button>
-            {/* TODO: Worktree selector — populate with actual git worktrees */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+              {hasConversation && (
                 <button
                   type="button"
-                  className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors ml-1"
-                  onMouseDown={(e) => e.preventDefault()}
+                  className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors mr-1"
+                  onClick={openPanel}
                 >
-                  <GitBranchIcon className="size-3.5" />
-                  <span>Worktree</span>
+                  {isStreaming ? (
+                    <>
+                      <span className="relative flex size-1.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                        <span className="relative inline-flex size-1.5 rounded-full bg-primary" />
+                      </span>
+                      Running
+                    </>
+                  ) : (
+                    "Done"
+                  )}
                 </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                {/* TODO: List actual git worktrees from the project */}
-                <div className="px-2 py-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
-                  No worktrees available
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+              )}
+              {/* TODO: Worktree selector — populate with actual git worktrees */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    <GitBranchIcon className="size-3.5" />
+                    <span>Worktree</span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  {/* TODO: List actual git worktrees from the project */}
+                  <div className="px-2 py-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
+                    No worktrees available
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
           {/* Capsule — same DOM element, classes transition smoothly */}
           <div
             className={cn(
@@ -190,7 +298,7 @@ export function AiBar() {
               "transition-all duration-200 ease-out",
               "w-full",
               isInputting
-                ? "h-10 max-w-3xl px-3 bg-card border-border cursor-text"
+                ? "h-12 max-w-3xl px-3 bg-card border-border cursor-text"
                 : "group h-1.5 max-w-30 px-0 bg-muted-foreground/75 border-border/40 cursor-pointer hover:h-8 hover:max-w-[220px] hover:bg-muted/80 hover:border-border/100 hover:delay-0 delay-100",
             )}
             onClick={() => { if (!isInputting) openInput(); }}
@@ -292,33 +400,48 @@ export function AiBar() {
             }
           }}
         >
-          <div className="flex items-center h-7 mb-1 pl-3">
-            <button
-              type="button"
-              className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              onMouseDown={(e) => e.preventDefault()}
-            >
-              {isStreaming ? "Running" : "Ready"}
-            </button>
-            {/* TODO: Worktree selector — populate with actual git worktrees */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+          {/* Toolbar — hidden when chat panel is open */}
+          {!isPanelOpen && (
+            <div className="flex items-center h-7 mb-2 pl-3">
+              {hasConversation && (
                 <button
                   type="button"
-                  className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors ml-1"
-                  onMouseDown={(e) => e.preventDefault()}
+                  className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors mr-1"
+                  onClick={openPanel}
                 >
-                  <GitBranchIcon className="size-3.5" />
-                  <span>Worktree</span>
+                  {isStreaming ? (
+                    <>
+                      <span className="relative flex size-1.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                        <span className="relative inline-flex size-1.5 rounded-full bg-primary" />
+                      </span>
+                      Running
+                    </>
+                  ) : (
+                    "Done"
+                  )}
                 </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <div className="px-2 py-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
-                  No worktrees available
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+              )}
+              {/* TODO: Worktree selector — populate with actual git worktrees */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    <GitBranchIcon className="size-3.5" />
+                    <span>Worktree</span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <div className="px-2 py-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
+                    No worktrees available
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
           <ChatComposer />
         </div>
       )}

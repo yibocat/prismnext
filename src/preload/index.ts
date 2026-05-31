@@ -63,7 +63,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cliPrewarm: (projectPath: string, tabId?: string) =>
     ipcRenderer.invoke("cli:prewarm", { projectPath, tabId }),
   cliStatus: () => ipcRenderer.invoke("cli:status"),
-  cliSend: (args: { projectPath: string; prompt: string; tabId?: string; agent?: string; model?: string | null }) =>
+  cliSend: (args: { projectPath: string; prompt: string; tabId?: string; agent?: string; model?: string | null; sessionId?: string | null }) =>
     ipcRenderer.invoke("cli:send", args),
   cliSetGateway: (baseUrl?: string, apiKey?: string) =>
     ipcRenderer.invoke("cli:setGateway", { baseUrl, apiKey }),

@@ -433,8 +433,15 @@ export async function listClaudeSessions(projectPath: string): Promise<ClaudeSes
   const sessions: ClaudeSession[] = [];
 
   try {
-    const { readdirSync, statSync, readFileSync } = require("fs");
-    if (!existsSync(sessionsDir)) return [];
+    const { readdir, stat, readFile } = require("fs/promises");
+
+    let files: string[];
+    try {
+      const allFiles = await readdir(sessionsDir);
+      files = allFiles.filter((f: string) => f.endsWith(".jsonl"));
+    } catch {
+      return []; // Directory does not exist
+    }
 
     // Patterns that indicate system/local-command text (not real user prompts)
     const SYSTEM_PATTERNS = [
@@ -442,15 +449,14 @@ export async function listClaudeSessions(projectPath: string): Promise<ClaudeSes
       /^(Caveat|The messages below)/i,
     ];
 
-    const files = readdirSync(sessionsDir).filter((f: string) => f.endsWith(".jsonl"));
     for (const file of files) {
       try {
         const filePath = join(sessionsDir, file);
-        const stat = statSync(filePath);
+        const fileStat = await stat(filePath);
         const sessionId = file.replace(".jsonl", "");
 
         // Extract title from first meaningful user message
-        const content = readFileSync(filePath, "utf-8");
+        const content = await readFile(filePath, "utf-8");
         const lines = content.trim().split("\n");
         let title = "Untitled";
         for (const line of lines) {
@@ -484,7 +490,7 @@ export async function listClaudeSessions(projectPath: string): Promise<ClaudeSes
         }
 
         if (title !== "Untitled") {
-          sessions.push({ id: sessionId, title, lastModified: stat.mtimeMs, createdAt: stat.birthtimeMs || stat.mtimeMs });
+          sessions.push({ id: sessionId, title, lastModified: fileStat.mtimeMs, createdAt: fileStat.birthtimeMs || fileStat.mtimeMs });
         }
       } catch {}
     }
@@ -503,8 +509,8 @@ export async function loadSessionHistory(
   const messages: any[] = [];
 
   try {
-    const { readFileSync } = require("fs");
-    const content = readFileSync(sessionFile, "utf-8");
+    const { readFile } = require("fs/promises");
+    const content = await readFile(sessionFile, "utf-8");
     const lines = content.trim().split("\n");
     for (const line of lines) {
       try {

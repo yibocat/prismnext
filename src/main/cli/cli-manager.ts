@@ -31,6 +31,7 @@ export class CliManager {
     cwd: string,
     agentId: string,
     model?: string | null,
+    sessionId?: string,
   ): { stdin: Writable; parser: CliParser } {
     // Reuse existing session if process is still alive
     const existing = this.sessions.get(tabId);
@@ -48,6 +49,7 @@ export class CliManager {
     if (!config) throw new Error(`Unknown agent: ${agentId}`);
 
     const args = [...config.args];
+    if (sessionId) args.push("--resume", sessionId);
     if (model) args.push("--model", model);
 
     const env: Record<string, string> = {
@@ -100,8 +102,30 @@ export class CliManager {
           data: JSON.stringify(msg),
         });
 
-        // Result signals turn completion
+        // Result signals turn completion — persist to JSONL so meta
+        // (duration + tokens) survives app restart.
         if (msg.type === "result") {
+          const sessionId = this.tabSessionIds.get(tabId);
+          const cwd = this.sessions.get(tabId)?.cwd;
+          if (sessionId && cwd) {
+            // Defer write so Claude CLI finishes writing assistant messages
+            // to JSONL first. Otherwise the result line ends up before the
+            // assistant it belongs to, breaking meta detection on reload.
+            const data = JSON.stringify(msg) + "\n";
+            setTimeout(() => {
+              try {
+                const { appendFileSync, existsSync, mkdirSync } = require("node:fs");
+                const { join } = require("node:path");
+                const { homedir } = require("node:os");
+                const encoded = cwd.replace(/[^a-zA-Z0-9]/g, "-");
+                const dir = join(homedir(), ".claude", "projects", encoded);
+                if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+                const file = join(dir, `${sessionId}.jsonl`);
+                appendFileSync(file, data);
+              } catch {}
+            }, 500);
+          }
+
           this.win.webContents.send("cli:complete", {
             tabId,
             success: !msg.is_error,
@@ -164,9 +188,10 @@ export class CliManager {
     cwd: string,
     agentId: string = DEFAULT_AGENT_ID,
     model?: string | null,
+    sessionId?: string,
   ): void {
     try {
-      const { stdin, parser } = this.ensureProcess(tabId, cwd, agentId, model);
+      const { stdin, parser } = this.ensureProcess(tabId, cwd, agentId, model, sessionId);
       parser.reset();
 
       const session = this.sessions.get(tabId)!;

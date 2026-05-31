@@ -45,32 +45,43 @@ export function App() {
   // RightArea starts collapsed
   useLayoutEffect(() => { if (projectRoot) rightAreaRef.current?.collapse(); }, [projectRoot]);
 
-  // Sidebar overlay threshold: below 500px, sidebar opens as fullscreen overlay
+  // Sidebar overlay threshold: below 500px, sidebar opens as fullscreen overlay.
+  // Throttled via requestAnimationFrame — the native resize event can fire faster
+  // than 60fps during a window corner drag, causing unnecessary panel API calls
+  // and layout thrashing. Coalescing to one check per frame eliminates this.
   const belowOverlayThreshold = useRef(false);
   useLayoutEffect(() => {
+    let rafId: number | null = null;
     const check = () => {
-      const narrow = window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD;
-      const st = useLayoutStore.getState();
-      const left = leftSidebarRef.current;
+      if (rafId !== null) return; // Already scheduled for this frame
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        const narrow = window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD;
+        const st = useLayoutStore.getState();
+        const left = leftSidebarRef.current;
 
-      if (narrow && !belowOverlayThreshold.current) {
-        // Crossed below threshold: collapse panel, close any overlay
-        if (st.leftSidebarOverlay) st.setLeftSidebarOverlay(false);
-        left?.collapse();
-        belowOverlayThreshold.current = true;
-      } else if (!narrow && belowOverlayThreshold.current) {
-        // Crossed above threshold: close overlay, restore panel
-        if (st.leftSidebarOverlay) st.setLeftSidebarOverlay(false);
-        left?.resize(Math.min(st.sidebarWidth || SIDEBAR_LEFT_DEFAULT, SIDEBAR_LEFT_MAX));
-        belowOverlayThreshold.current = false;
-      } else if (!narrow && st.leftSidebarOverlay) {
-        // Safety net: on wide windows, never allow overlay to persist
-        st.setLeftSidebarOverlay(false);
-      }
+        if (narrow && !belowOverlayThreshold.current) {
+          // Crossed below threshold: collapse panel, close any overlay
+          if (st.leftSidebarOverlay) st.setLeftSidebarOverlay(false);
+          left?.collapse();
+          belowOverlayThreshold.current = true;
+        } else if (!narrow && belowOverlayThreshold.current) {
+          // Crossed above threshold: close overlay, restore panel
+          if (st.leftSidebarOverlay) st.setLeftSidebarOverlay(false);
+          left?.resize(Math.min(st.sidebarWidth || SIDEBAR_LEFT_DEFAULT, SIDEBAR_LEFT_MAX));
+          belowOverlayThreshold.current = false;
+        } else if (!narrow && st.leftSidebarOverlay) {
+          // Safety net: on wide windows, never allow overlay to persist
+          st.setLeftSidebarOverlay(false);
+        }
+      });
     };
     check();
     window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
+    return () => {
+      window.removeEventListener("resize", check);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
   }, []);
 
   // Mobile (<768px): collapse right area
