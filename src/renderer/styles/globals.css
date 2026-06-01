@@ -170,7 +170,7 @@
     color-scheme: light;
   }
   body {
-    @apply h-full bg-background text-foreground select-none;
+    @apply h-full bg-background text-foreground;
   }
   /* Re-enable text selection where it's intentional */
   input, textarea, [contenteditable] {
@@ -259,34 +259,4 @@
   scrollbar-color: var(--border) transparent;
 }
 
-/* MuPDF text selection layer */
-.mupdf-text-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: auto;
-}
-
-.mupdf-text-layer text {
-  fill: transparent;
-  white-space: pre;
-  cursor: text;
-}
-
-.mupdf-text-layer text::selection {
-  fill: hsla(220, 100%, 50%, 0.3);
-}
-
-/* MuPDF link overlay layer */
-.mupdf-link-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.mupdf-link-layer a {
-  position: absolute;
-  pointer-events: auto;
-  cursor: pointer;
-}
+/* PDF.js Text Layer styles are imported from pdfjs-dist/web/pdf_viewer.css */

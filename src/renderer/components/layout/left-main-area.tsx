@@ -101,7 +101,7 @@ export function LeftMainArea() {
   }
 
   return (
-    <div className="flex h-full flex-col min-w-[300px] bg-background @container">
+    <div className="flex h-full flex-col min-w-[300px] bg-background @container select-text">
       <ChatErrorBoundary>
         {isEmpty ? (
           /* ── Homepage ── */

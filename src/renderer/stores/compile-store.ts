@@ -4,7 +4,7 @@ import { AUTO_COMPILE_DEBOUNCE } from "@/styles/constants";
 import { useDocumentStore } from "./document-store";
 import { resolveCompileTarget } from "@/lib/resolve-tex-root";
 
-// ─── PDF Bytes Cache (outside Zustand state) ───
+// ─── PDF Bytes + Path Cache (outside Zustand state) ───
 
 const _pdfBytesCache = new Map<string, Uint8Array>();
 let _currentPdfRootId: string | null = null;
@@ -27,16 +27,6 @@ export function clearPdfCache() {
     isCompiling: false,
     compileError: null,
   });
-}
-
-export function getCurrentPdfBytes(): Uint8Array | null {
-  if (!_currentPdfRootId) return null;
-  return _pdfBytesCache.get(_currentPdfRootId) || null;
-}
-
-export function clearPdfBytesCache(): void {
-  _pdfBytesCache.clear();
-  _currentPdfRootId = null;
 }
 
 // ─── Auto-compile debounce timer ───
@@ -128,9 +118,13 @@ export const useCompileStore = create<CompileState>()(
           }
 
           if ("pdfBytes" in result) {
-            const pdfData = new Uint8Array(result.pdfBytes);
-            // Use projectDir as key (consistent with getPdfBytes in pdf-preview.tsx)
+            // Defensive copy: the Blob constructor used for PDF preview
+            // can transfer/detach the original ArrayBuffer.  Store an
+            // independent copy so the cache survives repeated use.
+            const buf = result.pdfBytes.slice(0) as ArrayBuffer;
+            const pdfData = new Uint8Array(buf);
             _pdfBytesCache.set(projectDir, pdfData);
+
             _currentPdfRootId = projectDir;
             set({
               isCompiling: false,
@@ -185,7 +179,11 @@ export const useCompileStore = create<CompileState>()(
 
       setPdfData: (data, rootFileId) => {
         if (data && rootFileId) {
-          _pdfBytesCache.set(rootFileId, data);
+          // Defensive copy — same reasoning as above.
+          const copy = new Uint8Array(
+            data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
+          );
+          _pdfBytesCache.set(rootFileId, copy);
           _currentPdfRootId = rootFileId;
           set({ pdfRevision: get().pdfRevision + 1, lastCompiledRootId: rootFileId });
         } else if (rootFileId) {
@@ -194,7 +192,8 @@ export const useCompileStore = create<CompileState>()(
             _currentPdfRootId = null;
           }
         } else {
-          clearPdfBytesCache();
+          _pdfBytesCache.clear();
+          _currentPdfRootId = null;
         }
       },
 
@@ -254,7 +253,8 @@ export const useCompileStore = create<CompileState>()(
 
       clearCompileState: () => {
         clearAutoCompileTimer();
-        clearPdfBytesCache();
+        _pdfBytesCache.clear();
+        _currentPdfRootId = null;
         set({
           isCompiling: false,
           compileError: null,
@@ -291,14 +291,6 @@ export async function compileCurrentDocument(): Promise<void> {
   if (resolved) {
     await compileState.compile(projectRoot, resolved.targetPath);
   }
-}
-
-/**
- * Compile on save: always triggers, regardless of autoCompile setting.
- * Cmd+S → save → compile.
- */
-export async function compileOnSave(): Promise<void> {
-  await compileCurrentDocument();
 }
 
 // ─── AI auto-compile control ───

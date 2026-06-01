@@ -11,24 +11,23 @@ import {
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { latex } from "codemirror-lang-latex";
 import { unifiedMergeView, getChunks } from "@codemirror/merge";
 import { Transaction } from "@codemirror/state";
 import { useTheme } from "next-themes";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useChangesStore } from "@/stores/changes-store";
-import { compileCurrentDocument } from "@/stores/compile-store";
 import { createLogger } from "@/services/logger";
+import { getLanguageLoader } from "@/lib/language-mappings";
 import { ChangesBar } from "./changes-bar";
 import { saveViewerPosition, loadViewerPosition } from "@/lib/viewer-position";
 import { useTabContext } from "@/lib/tab-context";
 
-const log = createLogger("editor");
+const log = createLogger("code-editor");
 
 const mergeCompartment = new Compartment();
 
-export function LatexEditor() {
+export function CodeEditor() {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const isMergeActiveRef = useRef(false);
@@ -37,10 +36,9 @@ export function LatexEditor() {
 
   const { tab, isActive } = useTabContext();
   const fileId = tab.kind === "file" || tab.kind === "texworkspace" ? tab.fileId : null;
-  const isTexworkspace = tab.kind === "texworkspace";
+  const filePath = tab.filePath ?? "";
+  const ext = (() => { const dot = filePath.lastIndexOf("."); return dot === -1 ? "" : filePath.slice(dot).toLowerCase(); })();
 
-  const refreshFileContent = useDocumentStore((s) => s.refreshFileContent);
-  const jumpTarget = useDocumentStore((s) => s.jumpTarget);
   const changes = useChangesStore((s) => s.changes);
 
   const activeChange = useMemo(() => {
@@ -56,6 +54,7 @@ export function LatexEditor() {
   }, [changes, activeChange]);
 
   const themeCompartment = useMemo(() => new Compartment(), []);
+  const languageCompartment = useMemo(() => new Compartment(), []);
 
   const deactivateMerge = useCallback(() => {
     const view = viewRef.current;
@@ -68,8 +67,7 @@ export function LatexEditor() {
     if (!activeChange) return;
     await useChangesStore.getState().acceptChange(activeChange.id);
     deactivateMerge();
-    if (isTexworkspace) compileCurrentDocument();
-  }, [activeChange, deactivateMerge, isTexworkspace]);
+  }, [activeChange, deactivateMerge]);
 
   const handleRejectCurrent = useCallback(async () => {
     if (!activeChange) return;
@@ -79,7 +77,6 @@ export function LatexEditor() {
       useDocumentStore.getState().setContent(docId, oldContent);
     }
     await useChangesStore.getState().rejectChange(activeChange.id);
-    // Replace editor doc with oldContent after deactivating merge view
     const view = viewRef.current;
     if (view) {
       isMergeActiveRef.current = false;
@@ -89,17 +86,9 @@ export function LatexEditor() {
         annotations: Transaction.addToHistory.of(false),
       });
     }
-    if (isTexworkspace) compileCurrentDocument();
-  }, [activeChange, fileId, isTexworkspace]);
+  }, [activeChange, fileId]);
 
-  // Load file content when tab changes
-  useEffect(() => {
-    if (fileId) {
-      refreshFileContent(fileId);
-    }
-  }, [fileId, refreshFileContent]);
-
-  // Create/destroy editor on file switch
+  // Create / destroy editor on file switch
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -119,7 +108,7 @@ export function LatexEditor() {
     const hasChange = !!change;
 
     const state = EditorState.create({
-      doc: hasChange ? change!.newContent : (content || "% Open a file to start editing\n"),
+      doc: hasChange ? change!.newContent : (content || ""),
       extensions: [
         lineNumbers(),
         highlightSpecialChars(),
@@ -135,12 +124,7 @@ export function LatexEditor() {
             preventDefault: true,
             run: () => {
               if (currentFileId) {
-                const isTexworkspace = useRightPanelStore.getState().tabs.find(
-                  (t) => t.id === useRightPanelStore.getState().activeTabId,
-                )?.kind === "texworkspace";
-                useDocumentStore.getState().saveFile(currentFileId).then(() => {
-                  if (isTexworkspace) compileCurrentDocument();
-                });
+                useDocumentStore.getState().saveFile(currentFileId);
               }
               return true;
             },
@@ -157,7 +141,6 @@ export function LatexEditor() {
                   isMergeActiveRef.current = false;
                   view.dispatch({ effects: mergeCompartment.reconfigure([]) });
                 }
-                compileCurrentDocument();
               });
               return true;
             },
@@ -168,7 +151,7 @@ export function LatexEditor() {
               if (!isMergeActiveRef.current) return false;
               const ch = useChangesStore.getState().getChangeForFile(currentFileId ?? "");
               if (!ch) return false;
-              const docId = fileId;
+              const docId = currentFileId;
               if (docId && ch) {
                 useDocumentStore.getState().setContent(docId, ch.oldContent);
               }
@@ -178,13 +161,13 @@ export function LatexEditor() {
                   isMergeActiveRef.current = false;
                   view.dispatch({ effects: mergeCompartment.reconfigure([]) });
                 }
-                compileCurrentDocument();
               });
               return true;
             },
           },
         ]),
-        latex(),
+        // Start with empty language — loaded async below
+        languageCompartment.of([]),
         syntaxHighlighting(defaultHighlightStyle),
         themeCompartment.of(isDark ? oneDark : []),
         EditorView.lineWrapping,
@@ -251,6 +234,20 @@ export function LatexEditor() {
       }
     }
 
+    // ─── Async language loading ───
+    const langLoader = getLanguageLoader(ext);
+    if (langLoader) {
+      langLoader()
+        .then((langExtension) => {
+          if (viewRef.current === view && langExtension) {
+            view.dispatch({ effects: languageCompartment.reconfigure(langExtension) });
+          }
+        })
+        .catch((err) => {
+          log.error(`Failed to load language for "${ext}":`, err);
+        });
+    }
+
     const handleFocus = () => {
       if (currentFileId) useDocumentStore.getState().setActiveFile(currentFileId);
     };
@@ -275,6 +272,21 @@ export function LatexEditor() {
     };
   }, [fileId]);
 
+  // ─── Focus management: focus when tab becomes active, blur when inactive ───
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    if (isActive) {
+      view.focus();
+      if (fileId) useDocumentStore.getState().setActiveFile(fileId);
+    } else {
+      if (view.contentDOM.contains(document.activeElement)) {
+        (document.activeElement as HTMLElement).blur();
+      }
+    }
+  }, [isActive]);
+
   // ─── Periodic position save (cross-session persistence) ───
 
   useEffect(() => {
@@ -290,40 +302,24 @@ export function LatexEditor() {
     return () => clearInterval(timer);
   }, [fileId]);
 
-  // ─── Focus management: focus when tab becomes active, blur when inactive ───
+  // ─── Language reload when extension changes ───
+  // (edge case: same fileId but different ext, handled by the full destroy/recreate above)
 
-  useEffect(() => {
-    const view = viewRef.current;
-    if (!view) return;
-    if (isActive) {
-      view.focus();
-      if (fileId) useDocumentStore.getState().setActiveFile(fileId);
-    } else {
-      // Blur only if this editor currently owns focus (prevents hidden editors
-      // from capturing keyboard events while another tab is active)
-      if (view.contentDOM.contains(document.activeElement)) {
-        (document.activeElement as HTMLElement).blur();
-      }
-    }
-  }, [isActive]);
-
-  // ✂── Theme change — reconfigure via compartment (no destroy/recreate) ──
-
+  // ─── Theme change — reconfigure via compartment ───
   useEffect(() => {
     viewRef.current?.dispatch({
       effects: themeCompartment.reconfigure(isDark ? oneDark : []),
     });
   }, [isDark]);
 
-  // Track activeChange identity to detect stacked edits (merged change replaces previous)
+  // Track activeChange identity to detect stacked edits
   const activeChangeIdRef = useRef<string | null>(null);
 
-  // Merge view activation — matches archived latex-editor.tsx pattern
+  // Merge view activation
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
 
-    // Activate on new change OR when change identity changes (stacked edit merged)
     const changeId = activeChange?.id ?? null;
     const isNewChange = changeId !== null && changeId !== activeChangeIdRef.current;
 
@@ -351,18 +347,6 @@ export function LatexEditor() {
       deactivateMerge();
     }
   }, [activeChange, deactivateMerge]);
-
-  // SyncTeX jump-to-position
-  useEffect(() => {
-    if (jumpTarget === null || !viewRef.current) return;
-    const view = viewRef.current;
-    const pos = Math.min(jumpTarget, view.state.doc.length);
-    view.dispatch({
-      selection: { anchor: pos },
-      effects: [EditorView.scrollIntoView(pos, { y: "center" })],
-    });
-    useDocumentStore.setState({ jumpTarget: null });
-  }, [jumpTarget]);
 
   return (
     <div className="flex h-full flex-col min-h-0">

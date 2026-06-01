@@ -8,3 +8,25 @@
   --height-preview-toolbar:      var(--height-base-32);
   --height-preview-thin-toolbar: var(--height-base-32);
 }
+
+/* ── PDF Text Layer Selection Fix ──
+   PDF text spans are positioned with absolute transform:translate() and have
+   varying bounding-box heights due to ascenders/descenders. When selecting
+   text across multiple lines, the browser's native ::selection rectangles
+   overlap at line boundaries, creating dark opaque bands.
+
+   Fix: semi-transparent background so overlapping areas don't stack to full
+   opacity. The ::selection pseudo-element only supports a limited set of
+   CSS properties (color, background, text-decoration, text-shadow). */
+.textLayer span::selection {
+  background: rgba(0, 120, 255, 0.25);
+}
+.textLayer br::selection {
+  background: transparent;
+}
+
+/* Ensure text spans have tight line-height to reduce boundary gaps between
+   lines caused by ascender/descender height variance in PDF font metrics. */
+.textLayer span {
+  line-height: 1;
+}

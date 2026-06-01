@@ -17,12 +17,6 @@ export const COPY_FEEDBACK_DURATION = 2000;
 /** Maximum number of recent projects to keep */
 export const MAX_RECENT_PROJECTS = 10;
 
-/** Maximum number of concurrently open PDF documents (LRU) */
-export const MUPDF_MAX_OPEN_DOCS = 5;
-
-/** MuPDF worker request timeout (ms) */
-export const MUPDF_WORKER_TIMEOUT = 30000;
-
 // ─── Layout ───
 
 export const SIDEBAR_LEFT_DEFAULT = 220;

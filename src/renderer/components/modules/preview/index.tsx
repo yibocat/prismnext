@@ -1,218 +1,485 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, useContext } from "react";
 import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ZoomInIcon,
-  ZoomOutIcon,
+  Root,
+  Pages,
+  Page,
+  CanvasLayer,
+  TextLayer,
+  AnnotationLayer,
+  ColoredHighlightLayer,
+  Outline,
+  OutlineItem,
+  OutlineChildItems,
+  Search,
+  Thumbnails,
+  Thumbnail,
+  ZoomIn,
+  ZoomOut,
+  CurrentZoom,
+  CurrentPage,
+  TotalPages,
+  useSearch,
+  usePdfJump,
+  usePdf,
+} from "@anaralabs/lector";
+import type { SearchResult, ColoredHighlight } from "@anaralabs/lector";
+import "pdfjs-dist/web/pdf_viewer.css";
+// Import GlobalWorkerOptions from the same legacy build that Lector uses
+// internally (pdfjs-dist/legacy/build/pdf.mjs). If we import from the
+// standard "pdfjs-dist" entry, we get a DIFFERENT GlobalWorkerOptions
+// instance — and Lector's getDocument() won't see our workerSrc setting.
+//
+// Likewise, we must use the LEGACY worker — the legacy main library and
+// standard worker have incompatible internal APIs (e.g. toHex differences).
+import { GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
+import pdfjsWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+import {
   LoaderIcon,
   AlertCircleIcon,
-  DownloadIcon,
+  ListIcon,
+  SearchIcon,
+  LayoutPanelLeftIcon,
+  XIcon,
+  FileIcon,
 } from "lucide-react";
-import { PdfViewer } from "./viewer";
 import { useCompileStore, getPdfBytes } from "@/stores/compile-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { useRightPanelStore } from "@/stores/right-panel-store";
+import { useSyncTex } from "@/hooks/use-synctex";
+import { saveViewerPosition, loadViewerPosition } from "@/lib/viewer-position";
+import { TabContext } from "@/lib/tab-context";
 
-const ZOOM_PRESETS = [
-  { label: "Fit Width", value: "fit-width" },
-  { label: "Fit Height", value: "fit-height" },
-  { label: "50%", value: "50%" },
-  { label: "75%", value: "75%" },
-  { label: "100%", value: "100%" },
-  { label: "125%", value: "125%" },
-  { label: "150%", value: "150%" },
-  { label: "200%", value: "200%" },
-];
+GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
-export function PdfPreview() {
-  const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const files = useDocumentStore((s) => s.files);
-  const activeFileId = useDocumentStore((s) => s.activeFileId);
-  const setActiveFile = useDocumentStore((s) => s.setActiveFile);
-  const getContent = useDocumentStore((s) => s.getContent);
-  const requestJumpToPosition = useDocumentStore((s) => s.requestJumpToPosition);
-  const { isCompiling, compileError, pdfRevision } = useCompileStore();
+const PDFJS_DOCUMENT_OPTIONS = {
+  cMapUrl: "./pdfjs-dist/cmaps/",
+  standardFontDataUrl: "./pdfjs-dist/standard_fonts/",
+  wasmUrl: "./pdfjs-dist/wasm/",
+  iccUrl: "./pdfjs-dist/iccs/",
+} as const;
 
-  const [scale, setScale] = useState(1);
-  const [fitMode, setFitMode] = useState<"fit-width" | "fit-height" | null>("fit-width");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
+type SidePanel = "outline" | "search" | "thumbnails" | null;
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const gestureStartScaleRef = useRef(1);
+// ─── Side Panel Sub-Components (rendered inside <Root>) ───
 
-  const pdfBytes = projectRoot ? getPdfBytes(projectRoot) : null;
-  const hasPdf = pdfBytes !== null && pdfBytes !== undefined;
-
-  // ─── Pinch-to-zoom (trackpad) ───
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        const normalized = Math.min(Math.abs(e.deltaY), 300);
-        const direction = e.deltaY > 0 ? -1 : 1;
-        const factor = Math.exp(direction * normalized * 0.008);
-        setScale((s) => Math.max(0.25, Math.min(4, s * factor)));
-        setFitMode(null);
-      }
-    };
-
-    const handleGestureStart = () => {
-      gestureStartScaleRef.current = scale;
-    };
-    const handleGesture = (e: Event) => {
-      const ge = e as any;
-      if (ge.scale !== undefined) {
-        e.preventDefault();
-        const newScale = gestureStartScaleRef.current * ge.scale;
-        setScale(Math.max(0.25, Math.min(4, newScale)));
-        setFitMode(null);
-      }
-    };
-
-    container.addEventListener("wheel", handleWheel, { passive: false });
-    container.addEventListener("gesturestart", handleGestureStart);
-    container.addEventListener("gesturechange", handleGesture);
-
-    return () => {
-      container.removeEventListener("wheel", handleWheel);
-      container.removeEventListener("gesturestart", handleGestureStart);
-      container.removeEventListener("gesturechange", handleGesture);
-    };
-  }, [scale]);
-
-  // ─── SyncTeX click → jump to source ───
-  const handleSynctexClick = useCallback(
-    async (page: number, x: number, y: number) => {
-      if (!projectRoot) return;
-      try {
-        const result = await window.electronAPI.compileSynctex(projectRoot, page, x, y);
-        if (!result) return;
-
-        const targetFile = files.find(
-          (f) => f.relativePath === result.file || f.relativePath.endsWith("/" + result.file),
-        );
-        if (!targetFile) return;
-
-        if (targetFile.id !== activeFileId) {
-          setActiveFile(targetFile.id);
-        }
-
-        const content = getContent(targetFile.id);
-        const lines = content.split("\n");
-        let offset = 0;
-        for (let i = 0; i < Math.min(result.line - 1, lines.length); i++) {
-          offset += lines[i].length + 1;
-        }
-        requestJumpToPosition(offset);
-      } catch (err) {
-        console.error("[pdf-preview] SyncTeX error:", err);
-      }
-    },
-    [projectRoot, files, activeFileId, setActiveFile, getContent, requestJumpToPosition],
+function OutlinePanel({ onJump }: { onJump?: () => void }) {
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex h-[var(--height-preview-thin-toolbar)] shrink-0 items-center border-b border-border px-2">
+        <span className="text-[length:var(--font-toolbar-label)] font-medium text-muted-foreground">Outline</span>
+      </div>
+      <div className="flex-1 overflow-auto">
+        <Outline className="text-[length:var(--font-toolbar-label)]">
+          <OutlineItem
+            className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors [&>[data-level]]:block [&>[data-level]]:truncate [&>[data-level]]:py-0.5 [&>[data-level]]:px-2 [&>[data-level='0']]:pl-2 [&>[data-level='1']]:pl-5 [&>[data-level='2']]:pl-8 [&>[data-level='3']]:pl-11"
+            onClick={onJump}
+          >
+            <OutlineChildItems
+              children={
+                [<OutlineItem
+                  key="nested"
+                  className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors [&>[data-level]]:block [&>[data-level]]:truncate [&>[data-level]]:py-0.5 [&>[data-level]]:px-2"
+                  onClick={onJump}
+                />] as any
+              }
+            />
+          </OutlineItem>
+        </Outline>
+      </div>
+    </div>
   );
+}
 
-  // ─── Handlers ───
-  const handleZoomIn = () => { setFitMode(null); setScale((s) => Math.min(s * 1.25, 4)); };
-  const handleZoomOut = () => { setFitMode(null); setScale((s) => Math.max(s / 1.25, 0.25)); };
-  const handlePrevPage = () => setCurrentPage((p) => Math.max(1, p - 1));
-  const handleNextPage = () => setCurrentPage((p) => Math.min(totalPages, p + 1));
-  const handlePageChange = useCallback((page: number, total: number) => {
-    setCurrentPage(page);
-    setTotalPages(total);
-  }, []);
+function SearchPanel() {
+  const { search } = useSearch();
+  const { jumpToPage } = usePdfJump();
+  const [query, setQuery] = useState("");
 
-  const handleZoomPreset = (value: string) => {
-    if (value === "fit-width") { setFitMode("fit-width"); setScale(1); }
-    else if (value === "fit-height") { setFitMode("fit-height"); setScale(1); }
-    else { setFitMode(null); setScale(parseFloat(value.replace("%", "")) / 100); }
-  };
+  const results = query.trim()
+    ? search(query, { limit: 50 })
+    : { exactMatches: [], fuzzyMatches: [], hasMoreResults: false };
+
+  const allMatches = [
+    ...results.exactMatches.map((m: SearchResult) => ({ ...m, label: "exact" as const })),
+    ...results.fuzzyMatches.map((m: SearchResult) => ({ ...m, label: "fuzzy" as const })),
+  ];
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="flex flex-col h-full">
+      <div className="flex h-[var(--height-preview-thin-toolbar)] shrink-0 items-center gap-1 border-b border-border px-2">
+        <SearchIcon className="size-3 text-muted-foreground shrink-0" />
+        <input
+          type="text" value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search PDF…"
+          className="flex-1 bg-transparent text-[length:var(--font-toolbar-label)] text-foreground placeholder:text-muted-foreground outline-none"
+        />
+        {query && (
+          <button type="button" className="p-0.5 rounded text-muted-foreground hover:text-foreground" onClick={() => setQuery("")}>
+            <XIcon className="size-3" />
+          </button>
+        )}
+      </div>
+      <div className="flex-1 overflow-auto">
+        {query.trim() && allMatches.length === 0 && (
+          <p className="px-2 py-4 text-[length:var(--font-toolbar-label)] text-muted-foreground text-center">No results</p>
+        )}
+        {allMatches.map((m, i) => (
+          <button
+            key={`${m.pageNumber}-${m.matchIndex}-${i}`}
+            type="button"
+            className="w-full text-left px-2 py-1.5 text-[length:var(--font-toolbar-label)] hover:bg-muted transition-colors border-b border-border/50"
+            onClick={() => jumpToPage(m.pageNumber, { align: "start", behavior: "auto" })}
+          >
+            <span className="text-muted-foreground">p.{m.pageNumber}</span>{" "}
+            <span className="text-muted-foreground/70 truncate block">
+              {m.text.slice(Math.max(0, m.matchIndex - 20), m.matchIndex + 80)}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ThumbnailsPanel() {
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex h-[var(--height-preview-thin-toolbar)] shrink-0 items-center border-b border-border px-2">
+        <span className="text-[length:var(--font-toolbar-label)] font-medium text-muted-foreground">Pages</span>
+      </div>
+      <div className="flex-1 overflow-auto p-2">
+        <Thumbnails className="flex flex-col items-center gap-2">
+          <Thumbnail className="max-w-full rounded shadow-sm border border-border cursor-pointer hover:shadow-md transition-shadow" />
+        </Thumbnails>
+      </div>
+    </div>
+  );
+}
+
+// ─── Toolbar toggle config ───
+
+const PANEL_WIDTH = 220;
+
+interface PanelToggle {
+  id: SidePanel;
+  label: string;
+  icon: React.ReactNode;
+}
+
+const PANEL_TOGGLES: PanelToggle[] = [
+  { id: "outline", label: "Outline", icon: <ListIcon className="size-3.5" /> },
+  { id: "search", label: "Search", icon: <SearchIcon className="size-3.5" /> },
+  { id: "thumbnails", label: "Pages", icon: <LayoutPanelLeftIcon className="size-3.5" /> },
+];
+
+// ─── Inner Component (renders inside <Root> — safe to use PDF context hooks) ───
+
+interface PdfViewerInnerProps {
+  isPdfFile: boolean;
+  isCompiling: boolean;
+  compileError: string | null;
+  activeFileName: string | null;
+  /** Key used to persist/restore page position across sessions. */
+  persistKey?: string;
+}
+
+function PdfViewerInner({ isPdfFile, isCompiling, compileError, activeFileName, persistKey }: PdfViewerInnerProps) {
+  const [sidePanel, setSidePanel] = useState<SidePanel>(null);
+
+  // ─── Hooks that require Root context (must be called unconditionally) ───
+  const currentPage = usePdf((s) => s.currentPage);
+  const pdfDocumentProxy = usePdf((s) => s.pdfDocumentProxy);
+  const { jumpToPage } = usePdfJump();
+
+  // ─── Cross-session page position persistence ───
+  const pageRestoredRef = useRef(false);
+  const currentPageRef = useRef(currentPage);
+  currentPageRef.current = currentPage;
+
+  // Restore saved page position once the PDF has loaded
+  useEffect(() => {
+    if (!pdfDocumentProxy || !persistKey || pageRestoredRef.current) return;
+    pageRestoredRef.current = true;
+    const saved = loadViewerPosition(persistKey);
+    if (saved?.pdfPage && saved.pdfPage > 0 && saved.pdfPage <= (pdfDocumentProxy.numPages ?? Infinity)) {
+      jumpToPage(saved.pdfPage, { align: "start", behavior: "auto" });
+    }
+  }, [pdfDocumentProxy, persistKey]);
+
+  // Save current page position periodically, and on unmount
+  useEffect(() => {
+    if (!persistKey) return;
+    const timer = setInterval(() => {
+      if (currentPageRef.current > 0) {
+        saveViewerPosition(persistKey, { pdfPage: currentPageRef.current });
+      }
+    }, 3000);
+    return () => {
+      clearInterval(timer);
+      // Save immediately on unmount (tab close / view switch) so we don't
+      // lose the last position if the interval hasn't fired yet
+      if (currentPageRef.current > 0) {
+        saveViewerPosition(persistKey, { pdfPage: currentPageRef.current });
+      }
+    };
+  }, [persistKey]);
+
+  // ─── SyncTeX (TeX mode only) ───
+  const { forwardSearch, reverseSearch } = useSyncTex();
+  const addColoredHighlight = usePdf((s) => s.addColoredHighlight);
+  const deleteColoredHighlight = usePdf((s) => s.deleteColoredHighlight);
+  const synctexHighlightRef = useRef<string | null>(null);
+
+  const handleForwardSearch = useCallback(
+    async (line: number) => {
+      const pos = await forwardSearch(line);
+      if (!pos) return;
+
+      if (synctexHighlightRef.current) {
+        deleteColoredHighlight(synctexHighlightRef.current);
+      }
+
+      const uuid = `synctex-${Date.now()}`;
+      synctexHighlightRef.current = uuid;
+      addColoredHighlight({
+        color: "rgba(255, 200, 0, 0.4)",
+        rectangles: [{
+          pageNumber: pos.page, top: pos.y, left: pos.x,
+          height: pos.height, width: pos.width, type: "pixels",
+        }],
+        pageNumber: pos.page,
+        text: "",
+        uuid,
+      });
+
+      jumpToPage(pos.page - 1, { align: "start", behavior: "smooth" });
+    },
+    [forwardSearch, addColoredHighlight, deleteColoredHighlight, jumpToPage],
+  );
+
+  const handlePageClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (!e.metaKey && !e.ctrlKey) return;
+      if (isPdfFile) return;
+      e.preventDefault();
+
+      const pageEl = (e.target as HTMLElement).closest("[data-page-number]") as HTMLElement | null;
+      if (!pageEl) return;
+
+      const pageNumber = parseInt(pageEl.dataset.pageNumber || "0", 10);
+      if (!pageNumber) return;
+
+      const pageRect = pageEl.getBoundingClientRect();
+      const zoom = parseFloat(
+        pageEl.style.transform?.match(/scale3?\(([\d.]+)/)?.[1] || "1",
+      );
+      const x = (e.clientX - pageRect.left) / zoom;
+      const y = (e.clientY - pageRect.top) / zoom;
+
+      reverseSearch(pageNumber, x, y);
+    },
+    [isPdfFile, reverseSearch],
+  );
+
+  // Keyboard shortcut: Cmd+Shift+F = forward search
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "f") {
+        e.preventDefault();
+        if (isPdfFile) return;
+        const editorView = (window as any).__cmEditorView;
+        if (editorView) {
+          const line = editorView.state.doc.lineAt(editorView.state.selection.main.head);
+          handleForwardSearch(line.number);
+        }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isPdfFile, handleForwardSearch]);
+
+  const panelOpen = sidePanel !== null;
+
+  return (
+    <>
       {/* Toolbar */}
       <div className="flex h-[var(--height-preview-thin-toolbar)] shrink-0 items-center gap-1 border-b border-border bg-card px-2">
-        {isCompiling && (
-          <span className="flex items-center gap-1 text-[length:var(--font-toolbar-label)] text-yellow-500">
-            <LoaderIcon className="size-3 animate-spin" />
-          </span>
+        {/* Left: mode-specific context */}
+        {!isPdfFile && (
+          <>
+            {isCompiling && (
+              <span className="flex items-center gap-1 text-[length:var(--font-toolbar-label)] text-yellow-500">
+                <LoaderIcon className="size-3 animate-spin" /> Compiling…
+              </span>
+            )}
+            {compileError && (
+              <span className="flex items-center gap-1 text-[length:var(--font-toolbar-label)] text-red-500">
+                <AlertCircleIcon className="size-3" /> Compilation failed
+              </span>
+            )}
+          </>
         )}
-        {compileError && (
-          <span className="flex items-center gap-1 text-[length:var(--font-toolbar-label)] text-red-500">
-            <AlertCircleIcon className="size-3" />
+        {isPdfFile && activeFileName && (
+          <span className="flex items-center gap-1 text-[length:var(--font-toolbar-label)] text-muted-foreground">
+            <FileIcon className="size-3" />
+            <span className="truncate max-w-[200px]">{activeFileName}</span>
           </span>
         )}
 
         <div className="flex-1" />
 
-        {hasPdf && totalPages > 0 && (
-          <>
-            <button type="button" className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" onClick={handlePrevPage} disabled={currentPage <= 1}>
-              <ChevronLeftIcon className="size-3.5" />
-            </button>
-            <span className="min-w-[54px] text-center text-[length:var(--font-page-number)]">{currentPage}/{totalPages}</span>
-            <button type="button" className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" onClick={handleNextPage} disabled={currentPage >= totalPages}>
-              <ChevronRightIcon className="size-3.5" />
-            </button>
-
-            <div className="mx-1 h-4 w-px bg-border/60" />
-
-            <button type="button" className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" onClick={handleZoomOut}>
-              <ZoomOutIcon className="size-3.5" />
-            </button>
-
-            {/* Zoom preset dropdown */}
-            <select
-              className="h-6 rounded-md border border-border bg-card px-1 text-[length:var(--font-select)] text-muted-foreground focus:outline-none"
-              value={fitMode || `${Math.round(scale * 100)}%`}
-              onChange={(e) => handleZoomPreset(e.target.value)}
+        {/* Side panel toggles (common) */}
+        <div className="flex items-center gap-0.5">
+          {PANEL_TOGGLES.map((t) => (
+            <button
+              key={t.id} type="button"
+              className={`flex size-6 items-center justify-center rounded transition-colors ${
+                sidePanel === t.id ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+              title={t.label}
+              onClick={() => setSidePanel(sidePanel === t.id ? null : t.id)}
             >
-              {ZOOM_PRESETS.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
-
-            <button type="button" className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" onClick={handleZoomIn}>
-              <ZoomInIcon className="size-3.5" />
+              {t.icon}
             </button>
+          ))}
+        </div>
 
-            <div className="mx-1 h-4 w-px bg-border/60" />
+        <div className="mx-1 h-4 w-px bg-border" />
 
-            {/* Export PDF */}
-            <button type="button" className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" title="Export PDF">
-              <DownloadIcon className="size-3.5" />
-            </button>
-          </>
-        )}
+        {/* Zoom + page nav (common) */}
+        <div className="flex items-center gap-0.5 text-[length:var(--font-toolbar-label)]">
+          <ZoomOut className="p-0.5 rounded hover:bg-muted cursor-pointer" />
+          <CurrentZoom className="min-w-[3rem] text-center text-muted-foreground" />
+          <ZoomIn className="p-0.5 rounded hover:bg-muted cursor-pointer" />
+          <span className="mx-1 text-border">|</span>
+          <CurrentPage className="min-w-[2rem] text-center text-muted-foreground" />
+          <span className="text-muted-foreground">/</span>
+          <TotalPages className="min-w-[2rem] text-center text-muted-foreground" />
+        </div>
       </div>
 
-      {/* Content */}
-      <div ref={containerRef} className="flex-1 overflow-hidden">
-        {!hasPdf && !compileError && !isCompiling && (
-          <div className="flex h-full items-center justify-center text-[length:var(--font-empty-state)] text-muted-foreground">
+      {/* Body: Side Panel + Pages */}
+      <div className="flex flex-1 min-h-0">
+        {panelOpen && (
+          <div className="shrink-0 border-r border-border bg-card overflow-hidden" style={{ width: PANEL_WIDTH }}>
+            {sidePanel === "outline" && <OutlinePanel onJump={() => setSidePanel(null)} />}
+            {sidePanel === "search" && (
+              <Search loading={<span className="flex justify-center pt-10 text-muted-foreground text-sm">Indexing…</span>}>
+                <SearchPanel />
+              </Search>
+            )}
+            {sidePanel === "thumbnails" && <ThumbnailsPanel />}
+          </div>
+        )}
+
+        {/* PDF Pages — Pages component provides its own virtualized scroll container.
+            We pass scroll + click props directly to Pages rather than wrapping in
+            an extra div, which would interfere with the virtualizer's height calc. */}
+        <Pages
+          className="flex-1 min-w-0 overflow-auto overscroll-contain p-4 select-text"
+          gap={16}
+          onClick={handlePageClick}
+        >
+          <Page className="bg-white shadow-md">
+            <CanvasLayer />
+            <TextLayer />
+            <AnnotationLayer />
+            {!isPdfFile && <ColoredHighlightLayer />}
+          </Page>
+        </Pages>
+      </div>
+    </>
+  );
+}
+
+// ─── Outer Component (handles file loading, source computation) ───
+
+export function PdfPreview() {
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const { isCompiling, compileError, pdfRevision } = useCompileStore();
+  const files = useDocumentStore((s) => s.files);
+  const storeTabs = useRightPanelStore((s) => s.tabs);
+  const storeActiveTabId = useRightPanelStore((s) => s.activeTabId);
+  const tabCtx = useContext(TabContext);
+
+  // Prefer per-tab context (when rendered inside PaneContent); fall back to
+  // global active tab (when rendered directly by RightMainArea for compiled PDFs).
+  const activeTab = tabCtx?.tab ?? storeTabs.find((t) => t.id === storeActiveTabId);
+  const isPdfFile = activeTab?.filePath?.toLowerCase().endsWith(".pdf") ?? false;
+
+  const [fileDataUrl, setFileDataUrl] = useState<string | null>(null);
+
+  const pdfBytes = useMemo(() => {
+    if (isPdfFile) return null;
+    if (projectRoot) return getPdfBytes(projectRoot) ?? null;
+    return null;
+  }, [isPdfFile, projectRoot, pdfRevision]);
+
+  useEffect(() => {
+    if (!isPdfFile || !activeTab?.fileId) {
+      setFileDataUrl(null);
+      return;
+    }
+    const file = files.find((f) => f.id === activeTab.fileId);
+    if (!file?.absolutePath) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { dataUrl } = await window.electronAPI.fsReadImage(file.absolutePath);
+        if (!cancelled) setFileDataUrl(dataUrl);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isPdfFile, activeTab?.fileId, files]);
+
+  const source: string | Uint8Array | null = useMemo(() => {
+    if (fileDataUrl) return fileDataUrl;
+    // CRITICAL: pdfBytes.slice() creates a fresh copy. PDF.js transfers
+    // (not copies) the ArrayBuffer to its web worker via postMessage.
+    // Without this, React Strict Mode double-invocation detaches the buffer.
+    if (pdfBytes) return pdfBytes.slice();
+    return null;
+  }, [fileDataUrl, pdfBytes]);
+
+  const activeFileName = activeTab?.title ?? null;
+
+  // Persistence key: unique identifier for this PDF view.
+  // For compiled PDFs we key on the .tex source file; for standalone .pdf
+  // files we key on the .pdf file itself.
+  const persistKey = useMemo(() => {
+    if (!projectRoot || !activeTab?.fileId) return undefined;
+    return `${projectRoot}::${activeTab.fileId}`;
+  }, [projectRoot, activeTab?.fileId]);
+
+  return (
+    <div className="flex h-full flex-col bg-background">
+      <div className="flex-1 overflow-hidden bg-muted/30">
+        {source ? (
+          <Root
+            source={source}
+            documentOptions={PDFJS_DOCUMENT_OPTIONS}
+            isZoomFitWidth
+            className="h-full flex flex-col"
+            loader={
+              <span className="flex justify-center pt-20 text-muted-foreground text-sm">
+                Loading…
+              </span>
+            }
+          >
+            <PdfViewerInner
+              isPdfFile={isPdfFile}
+              isCompiling={isCompiling}
+              compileError={compileError}
+              activeFileName={activeFileName}
+              persistKey={persistKey}
+            />
+          </Root>
+        ) : !isCompiling && !source ? (
+          <span className="flex justify-center pt-20 text-muted-foreground text-sm">
             Compile to preview PDF
-          </div>
-        )}
-        {compileError && !hasPdf && (
-          <div className="flex h-full flex-col items-center justify-center gap-2 p-4">
-            <AlertCircleIcon className="size-6 text-red-500" />
-            <p className="text-[length:var(--font-error)] text-red-500">Compilation Failed</p>
-            <pre className="max-h-32 max-w-md overflow-auto rounded-md bg-muted p-2 text-[length:var(--font-select)]">
-              {compileError}
-            </pre>
-          </div>
-        )}
-        {hasPdf && pdfBytes && (
-          <PdfViewer
-            key={pdfRevision}
-            data={pdfBytes}
-            scale={scale}
-            onSynctexClick={handleSynctexClick}
-            onPageChange={handlePageChange}
-          />
-        )}
+          </span>
+        ) : null}
       </div>
     </div>
   );

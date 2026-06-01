@@ -35,6 +35,14 @@ interface SynctexResult {
   column: number;
 }
 
+interface SynctexForwardResult {
+  page: number;
+  x: number;
+  y: number;
+  height: number;
+  width: number;
+}
+
 type TexEngine = "pdflatex" | "xelatex" | "lualatex";
 type BibTool = "biber" | "bibtex" | null;
 
@@ -717,6 +725,145 @@ export async function synctexEdit(
     }
 
     return { ...result, file };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Perform SyncTeX forward search: given a source file and line, find
+ * the corresponding position in the PDF for highlighting.
+ */
+export async function synctexForward(
+  projectDir: string,
+  sourceFile: string,
+  sourceLine: number
+): Promise<SynctexForwardResult | null> {
+  const build = lastBuilds.get(projectDir);
+  if (!build) return null;
+
+  const mainStem = basename(build.mainFileName, extname(build.mainFileName));
+  const synctexPath = join(build.workDir, `${mainStem}.synctex.gz`);
+
+  try {
+    let data: string;
+    if (existsSync(synctexPath)) {
+      const compressed = await readFile(synctexPath);
+      const zlib = await import("node:zlib");
+      data = zlib.gunzipSync(compressed).toString("utf-8");
+    } else {
+      const plainPath = join(build.workDir, `${mainStem}.synctex`);
+      if (!existsSync(plainPath)) return null;
+      data = await readFile(plainPath, "utf-8");
+    }
+
+    // Normalize sourceFile to match what synctex stores
+    const normalizedSource = sourceFile.replace(/\\/g, "/");
+
+    // Parse: find Input tags that match our file
+    const inputTags = new Set<number>();
+    const lines = data.split("\n");
+
+    let magnification = 1000;
+    let unit = 1;
+    let xOffset = 0;
+    let yOffset = 0;
+    let inContent = false;
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      if (!inContent) {
+        if (line.startsWith("Input:")) {
+          const rest = line.slice(6);
+          const colonPos = rest.indexOf(":");
+          if (colonPos > 0) {
+            const tag = parseInt(rest.slice(0, colonPos), 10);
+            const filePath = rest.slice(colonPos + 1);
+            if (!isNaN(tag) && filePath.includes(normalizedSource)) {
+              inputTags.add(tag);
+            }
+          }
+        } else if (line.startsWith("Magnification:")) {
+          magnification = parseFloat(line.slice(14).trim()) || 1000;
+        } else if (line.startsWith("Unit:")) {
+          unit = parseFloat(line.slice(5).trim()) || 1;
+        } else if (line.startsWith("X Offset:")) {
+          xOffset = parseFloat(line.slice(9).trim()) || 0;
+        } else if (line.startsWith("Y Offset:")) {
+          yOffset = parseFloat(line.slice(9).trim()) || 0;
+        } else if (line === "Content:") {
+          inContent = true;
+        }
+        continue;
+      }
+
+      if (line.startsWith("Postamble:")) break;
+      if (inputTags.size === 0) break;
+
+      const firstChar = line[0];
+
+      if (firstChar === "{") {
+        // Page start
+        continue;
+      }
+
+      if (firstChar === "[" || firstChar === "(") {
+        // Node: [tag,line,col:h,v:width,height
+        const inner = line.slice(1);
+        const colonPos = inner.indexOf(":");
+        if (colonPos < 0) continue;
+
+        const tlcPart = inner.slice(0, colonPos);
+        const tlc = tlcPart.split(",");
+        const tag = parseInt(tlc[0], 10);
+        const nodeLine = parseInt(tlc[1], 10);
+
+        if (inputTags.has(tag) && nodeLine === sourceLine) {
+          // Found matching node — extract position info
+          const rest = inner.slice(colonPos + 1);
+          const hvColonPos = rest.indexOf(":");
+          const hvPart = hvColonPos > 0 ? rest.slice(0, hvColonPos) : rest;
+
+          const hv = hvPart.split(",");
+          if (hv.length >= 2) {
+            const hRaw = parseInt(hv[0], 10);
+            const vRaw = parseInt(hv[1], 10);
+
+            // Get dimensions from remaining parts
+            let wRaw = 0, hDimRaw = 0;
+            if (hvColonPos > 0) {
+              const dims = rest.slice(hvColonPos + 1).split(",");
+              wRaw = parseInt(dims[0], 10) || 0;
+              hDimRaw = parseInt(dims[1], 10) || 0;
+            }
+
+            const factor = (unit * magnification) / (1000 * 65536) * (72 / 72.27);
+
+            // Find which page this node is on by scanning backwards
+            let currentPage = 1;
+            for (let j = lines.indexOf(rawLine) - 1; j >= 0; j--) {
+              const prevLine = lines[j].trim();
+              if (prevLine.startsWith("{")) {
+                currentPage = parseInt(prevLine.slice(1), 10);
+                break;
+              }
+            }
+
+            return {
+              page: isNaN(currentPage) ? 1 : currentPage,
+              x: hRaw * factor + xOffset,
+              y: vRaw * factor + yOffset,
+              height: Math.max(hDimRaw * factor, 12), // minimum 12pt height
+              width: Math.max(wRaw * factor, 50),     // minimum 50pt width
+            };
+          }
+        }
+      }
+    }
+
+    return null;
   } catch {
     return null;
   }

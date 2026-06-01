@@ -12,6 +12,8 @@ export interface RightTab {
   isInitial: boolean;
   filePath?: string;
   fileId?: string;
+  /** Per-tab view mode. For .md files: "source" | "preview". Defaults to "source". */
+  viewMode?: string;
 }
 
 // ─── Helpers ───
@@ -44,6 +46,8 @@ interface RightPanelState {
   closeTab: (id: string) => void;
   closeAllTabs: () => void;
   setActiveTab: (id: string) => void;
+  setTabViewMode: (id: string, mode: string) => void;
+  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title">>) => void;
   moveTab: (fromIndex: number, toIndex: number) => void;
 }
 
@@ -95,12 +99,14 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   },
 
   openFile: (fileId: string, filePath: string, name: string) => {
+    const ext = name.slice(name.lastIndexOf(".")).toLowerCase();
+    const defaultViewMode = ext === ".md" || ext === ".mdx" ? "preview" : "source";
     const { tabs, activeTabId } = get();
     const active = tabs.find((t) => t.id === activeTabId);
     if (active?.kind === "file" && active.isInitial) {
       set((s) => ({
         tabs: s.tabs.map((t) =>
-          t.id === active.id ? { ...t, title: name, fileId, filePath, isInitial: false } : t,
+          t.id === active.id ? { ...t, title: name, fileId, filePath, isInitial: false, viewMode: defaultViewMode } : t,
         ),
       }));
       return;
@@ -111,7 +117,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       return;
     }
     const id = nextTabId();
-    const tab: RightTab = { id, kind: "file", title: name, fileId, filePath, isInitial: false };
+    const tab: RightTab = { id, kind: "file", title: name, fileId, filePath, isInitial: false, viewMode: defaultViewMode };
     set((s) => ({ tabs: [...s.tabs, tab], activeTabId: id }));
   },
 
@@ -135,6 +141,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
 
   closeTab: (id: string) => {
     set((s) => {
+      const closing = s.tabs.find((t) => t.id === id);
       const next = s.tabs.filter((t) => t.id !== id);
       let nextActive = s.activeTabId;
       if (s.activeTabId === id) {
@@ -143,6 +150,12 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       const nextActiveTab = next.find((t) => t.id === nextActive);
       const nextFileId = (nextActiveTab?.kind === "file" || nextActiveTab?.kind === "texworkspace") && nextActiveTab.fileId ? nextActiveTab.fileId : "";
       useDocumentStore.getState().setActiveFile(nextFileId);
+
+      // Fully release PDF file resources when closing a PDF tab
+      if (closing?.kind === "file" && closing.filePath?.toLowerCase().endsWith(".pdf")) {
+        // TODO: wire up Lector PDF resource cleanup
+      }
+
       return { tabs: next, activeTabId: nextActive };
     });
   },
@@ -152,6 +165,18 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     set({ activeTabId: id });
     const fileId = (tab?.kind === "file" || tab?.kind === "texworkspace") && tab.fileId ? tab.fileId : "";
     useDocumentStore.getState().setActiveFile(fileId);
+  },
+
+  setTabViewMode: (id: string, mode: string) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.id === id ? { ...t, viewMode: mode } : t)),
+    }));
+  },
+
+  updateTab: (id: string, partial) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.id === id ? { ...t, ...partial } : t)),
+    }));
   },
 
   closeAllTabs: () => {

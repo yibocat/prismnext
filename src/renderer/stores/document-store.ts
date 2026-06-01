@@ -42,18 +42,19 @@ interface DocumentState {
 
   // Async actions
   openProject: (rootPath: string) => Promise<void>;
-  closeProject: () => void;
+  closeProject: () => Promise<void>;
   saveFile: (id: string) => Promise<void>;
   saveAllFiles: () => Promise<void>;
   refreshFiles: () => Promise<void>;
   refreshFileContent: (id: string) => Promise<void>;
 
   // Modified actions (now async)
-  createNewFile: (name: string, type: "tex" | "image", folder?: string) => Promise<void>;
+  createNewFile: (name: string, type?: ProjectFileType, folder?: string) => Promise<void>;
   createFolder: (name: string, parent?: string) => Promise<void>;
   deleteFile: (id: string) => Promise<void>;
   deleteFolder: (folderPath: string) => Promise<void>;
   renameFile: (id: string, newName: string) => Promise<void>;
+  renameFolder: (folderPath: string, newName: string) => Promise<void>;
 
   // Sync actions
   setActiveFile: (id: string) => void;
@@ -89,6 +90,30 @@ const defaultTexContent = String.raw`\documentclass{article}
 
 \end{document}
 `;
+
+/** Infer file type and default content from extension */
+function inferFromExtension(
+  name: string,
+): { type: ProjectFileType; content: string } {
+  const ext = name.slice(name.lastIndexOf(".")).toLowerCase();
+
+  if (/\.(png|jpg|jpeg|gif|svg|bmp|webp)$/.test(name.toLowerCase())) {
+    return { type: "image", content: "" };
+  }
+
+  if (/\.(sty|cls|bst|def|cfg|fd|dtx|ins|clo|ldf)$/i.test(ext)) {
+    return { type: "style", content: "" };
+  }
+
+  if (ext === ".bib") return { type: "bib", content: "" };
+  if (ext === ".pdf") return { type: "pdf", content: "" };
+  if (ext === ".tex" || ext === ".ltx") {
+    return { type: "tex", content: defaultTexContent };
+  }
+  if (ext === ".json") return { type: "other", content: "{\n  \n}\n" };
+
+  return { type: "other", content: "" };
+}
 
 export const useDocumentStore = create<DocumentState>((set, get) => ({
   projectRoot: null,
@@ -172,12 +197,12 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     }
   },
 
-  closeProject: () => {
+  closeProject: async () => {
     clearAutoSaveTimer();
     // Clear last project path so next launch shows welcome page
     window.electronAPI.settingsSet({ lastProjectPath: null } as any);
     // Clean up sub-stores to prevent session/tab pollution
-    window.electronAPI.cliDispose();
+    await window.electronAPI.cliDispose();
     useRightPanelStore.getState().closeAllTabs();
     useChatStore.getState().clearAllSessions();
     clearPdfCache();
@@ -299,18 +324,18 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     } catch {}
   },
 
-  createNewFile: async (name: string, type: "tex" | "image", folder?: string) => {
+  createNewFile: async (name: string, type?: ProjectFileType, folder?: string) => {
     const { projectRoot, files } = get();
     if (!projectRoot) return;
 
     const relativePath = folder ? `${folder}/${name}` : name;
-    const content = type === "tex" ? defaultTexContent : "";
+    const inferred = type ? { type, content: type === "tex" ? defaultTexContent : "" } : inferFromExtension(name);
 
     try {
       const { absPath } = await window.electronAPI.fsCreate(
         projectRoot,
         relativePath,
-        content,
+        inferred.content,
       );
 
       const newFile: ProjectFile = {
@@ -318,11 +343,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         name,
         relativePath,
         absolutePath: absPath,
-        type,
+        type: inferred.type,
       };
 
       const newFileContents = new Map(get().fileContents);
-      newFileContents.set(relativePath, { content, isDirty: false });
+      newFileContents.set(relativePath, { content: inferred.content, isDirty: false });
 
       set({
         files: [...files, newFile],
@@ -467,6 +492,79 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       });
     } catch (error) {
       toast.error(`Failed to rename file: ${error}`);
+      throw error;
+    }
+  },
+
+  renameFolder: async (folderPath: string, newName: string) => {
+    const { files, folders, projectRoot, fileContents } = get();
+    if (!projectRoot) return;
+
+    const parentPath = folderPath.includes("/")
+      ? folderPath.substring(0, folderPath.lastIndexOf("/"))
+      : "";
+    const newFolderPath = parentPath ? `${parentPath}/${newName}` : newName;
+    const oldPrefix = `${folderPath}/`;
+    const newPrefix = `${newFolderPath}/`;
+
+    const oldAbs = `${projectRoot}/${folderPath}`.replace(/\\/g, "/");
+    const newAbs = `${projectRoot}/${newFolderPath}`.replace(/\\/g, "/");
+
+    try {
+      await window.electronAPI.fsRename(oldAbs, newAbs);
+
+      // Update affected file paths
+      const affectedFiles = files
+        .filter((f) => f.relativePath.startsWith(oldPrefix))
+        .map((f) => ({
+          ...f,
+          id: newPrefix + f.relativePath.slice(oldPrefix.length),
+          relativePath: newPrefix + f.relativePath.slice(oldPrefix.length),
+          absolutePath: f.absolutePath
+            .replace(/\\/g, "/")
+            .replace(oldAbs, newAbs)
+            .replace(oldPrefix, newPrefix),
+        }));
+
+      const newFiles = files
+        .filter((f) => !f.relativePath.startsWith(oldPrefix))
+        .concat(affectedFiles);
+
+      // Update folder paths
+      const newFolders = folders.map((f) =>
+        f === folderPath
+          ? newFolderPath
+          : f.startsWith(oldPrefix)
+            ? newPrefix + f.slice(oldPrefix.length)
+            : f,
+      );
+
+      // Update content map keys
+      const newFileContents = new Map(fileContents);
+      fileContents.forEach((v, k) => {
+        if (k.startsWith(oldPrefix)) {
+          newFileContents.delete(k);
+          newFileContents.set(newPrefix + k.slice(oldPrefix.length), v);
+        }
+      });
+
+      // Update tab references
+      const rps = useRightPanelStore.getState();
+      for (const t of rps.tabs) {
+        if (t.fileId?.startsWith(oldPrefix)) {
+          const newId = newPrefix + t.fileId.slice(oldPrefix.length);
+          const newPath = newPrefix + (t.filePath ?? "").slice(oldPrefix.length);
+          rps.updateTab(t.id, { fileId: newId, filePath: newPath });
+        }
+      }
+
+      set({
+        files: newFiles,
+        folders: newFolders,
+        fileContents: newFileContents,
+      });
+    } catch (error) {
+      toast.error(`Failed to rename folder: ${error}`);
       throw error;
     }
   },

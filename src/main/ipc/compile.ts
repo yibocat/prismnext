@@ -1,5 +1,5 @@
 import { ipcMain } from "electron";
-import { compileLatex, synctexEdit } from "../services/compiler";
+import { compileLatex, synctexEdit, synctexForward } from "../services/compiler";
 import { detectTexlive, detectTectonic } from "../services/texlive-detect";
 
 export function registerCompileHandlers(): void {
@@ -15,7 +15,7 @@ export function registerCompileHandlers(): void {
         args.useTexlive,
       );
       if (result.success && result.pdfBytes) {
-        return { pdfBytes: result.pdfBytes };
+        return { pdfBytes: result.pdfBytes, buildDir: result.buildDir };
       } else {
         return { error: result.error || "Compilation failed" };
       }
@@ -29,6 +29,16 @@ export function registerCompileHandlers(): void {
       args: { projectDir: string; page: number; x: number; y: number },
     ) => {
       return synctexEdit(args.projectDir, args.page, args.x, args.y);
+    },
+  );
+
+  ipcMain.handle(
+    "compile:synctexForward",
+    async (
+      _event,
+      args: { projectDir: string; file: string; line: number },
+    ) => {
+      return synctexForward(args.projectDir, args.file, args.line);
     },
   );
 

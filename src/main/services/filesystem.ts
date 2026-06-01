@@ -206,6 +206,7 @@ export async function readImageAsDataUrl(absolutePath: string): Promise<string> 
     svg: "image/svg+xml",
     bmp: "image/bmp",
     webp: "image/webp",
+    pdf: "application/pdf",
   };
 
   const mime = mimeMap[ext] || "image/png";

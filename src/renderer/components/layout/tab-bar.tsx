@@ -1,6 +1,8 @@
 import { useState, useCallback } from "react";
 import type { RightTab } from "@/stores/right-panel-store";
-import { XIcon } from "lucide-react";
+import { XIcon, DotIcon, FoldersIcon } from "lucide-react";
+import { Icon } from "@iconify/react";
+import { getFileIconName } from "@/lib/file-icon-class";
 import { cn } from "@/lib/utils";
 import {
   ContextMenu,
@@ -34,9 +36,10 @@ interface TabBarProps {
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
   onReorder?: (fromIndex: number, toIndex: number) => void;
+  dirtyFileIds?: Set<string>;
 }
 
-export function TabBar({ tabs, activeTabId, onSelect, onClose, onReorder }: TabBarProps) {
+export function TabBar({ tabs, activeTabId, onSelect, onClose, onReorder, dirtyFileIds }: TabBarProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [side, setSide] = useState<"left" | "right">("right");
@@ -116,7 +119,19 @@ export function TabBar({ tabs, activeTabId, onSelect, onClose, onReorder }: TabB
                 onDragOver={(e) => handleDragOver(e, i)}
                 onDrop={(e) => handleDrop(e, i)}
               >
-                <span className="truncate">{tab.title}</span>
+                {(() => {
+                  const isDirty = dirtyFileIds?.has(tab.fileId ?? "") || dirtyFileIds?.has(tab.filePath ?? "");
+                  if (isDirty) {
+                    return <span title="Unsaved changes"><DotIcon className="mr-1 size-3.5 shrink-0 text-blue-500" strokeWidth={4} /></span>;
+                  }
+                  if (tab.kind === "file" && tab.isInitial) {
+                    return <FoldersIcon className="mr-1 size-3.5 shrink-0 text-muted-foreground" />;
+                  }
+                  const fileName = tab.filePath ?? tab.title;
+                  const iconName = getFileIconName(fileName);
+                  return <Icon icon={iconName} className="mr-1 size-3.5 shrink-0" />;
+                })()}
+                <span className="truncate">{tab.kind === "file" && tab.isInitial ? "folder" : tab.title}</span>
                 <button
                   type="button"
                   className="ml-auto flex size-4 shrink-0 items-center justify-center rounded invisible group-hover:visible hover:bg-muted-foreground/10"

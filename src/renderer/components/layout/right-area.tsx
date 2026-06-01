@@ -1,25 +1,22 @@
-import { useEffect, useRef, useState, useCallback, type RefObject } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, type RefObject } from "react";
 import { useTheme } from "next-themes";
 import { useLayoutStore, type RightToolbarTab } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { useCompileStore } from "@/stores/compile-store";
-import { useRightPanelStore } from "@/stores/right-panel-store";
+import { useRightPanelStore, type RightTab } from "@/stores/right-panel-store";
 import { useWindowState } from "@/hooks/use-window-state";
-import { resolveCompileTarget } from "@/lib/resolve-tex-root";
 import { RightMainArea } from "@/components/layout/right-main-area";
 import { RightSidebar } from "@/components/layout/right-sidebar";
 import { TabBar } from "@/components/layout/tab-bar";
 import { SidebarControls } from "@/components/layout/sidebar-controls";
 import { TabToolbar } from "@/components/layout/tab-toolbar";
 import { TexworkspaceToolbar } from "@/components/modules/texworkspace-mode";
+import { FileToolbar } from "@/components/modules/editor/toolbars/file-toolbar";
 import { AiBar } from "@/components/modules/chat";
 import { type PanelImperativeHandle } from "react-resizable-panels";
 import {
-  FolderOpenIcon as FilesIcon,
+  Folders as FilesIcon,
   GitBranchIcon,
   GlobeIcon,
-  PlayIcon,
-  Loader2Icon,
   FileType,
   PanelRight,
   MaximizeIcon,
@@ -104,6 +101,30 @@ function SidebarDragHandle({
   );
 }
 
+/**
+ * Resolve the TabToolbar content based on the active tab's kind and file type.
+ *
+ * Mode (system) → file type hierarchy:
+ *   texworkspace → TexworkspaceToolbar (full LaTeX workflow)
+ *   file         → FileToolbar (dispatches by extension)
+ *   others       → null (coming soon)
+ */
+function resolveTabToolbar(
+  tab: RightTab | undefined,
+  compileFile: string | null | undefined,
+): React.ReactNode {
+  if (!tab) return null;
+
+  switch (tab.kind) {
+    case "texworkspace":
+      return <TexworkspaceToolbar compileFile={compileFile} />;
+    case "file":
+      return <FileToolbar filePath={tab.filePath} />;
+    default:
+      return null;
+  }
+}
+
 export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightAreaProps) {
   const { platform, isMaximized, isFullscreen } = useWindowState();
   const isMac = platform === "darwin";
@@ -129,7 +150,6 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   const activeTabId = useRightPanelStore((s) => s.activeTabId);
   const ensureTab = useRightPanelStore((s) => s.ensureTab);
   const activeTab = tabs.find((t) => t.id === activeTabId);
-  const isTexworkspaceActive = activeTab?.kind === "texworkspace";
 
   useEffect(() => {
     if (!activeTab) return;
@@ -151,10 +171,12 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   }, [activeTab?.kind]);
 
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const files = useDocumentStore((s) => s.files);
-  const getContent = useDocumentStore((s) => s.getContent);
-  const isCompiling = useCompileStore((s) => s.isCompiling);
-  const compile = useCompileStore((s) => s.compile);
+  const fileContents = useDocumentStore((s) => s.fileContents);
+  const dirtyFileIds = useMemo(() => {
+    const dirty = new Set<string>();
+    fileContents.forEach((v, k) => { if (v.isDirty) dirty.add(k); });
+    return dirty;
+  }, [fileContents]);
 
   // ─── Sidebar drag-to-resize ───
   // Same pattern as App.tsx Panel onResize:
@@ -230,13 +252,6 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   }, []);
 
   const compileFile = activeTab?.kind === "file" || activeTab?.kind === "texworkspace" ? activeTab.fileId : null;
-  const isTexFile = compileFile?.endsWith(".tex");
-
-  const handleCompile = async () => {
-    if (!projectRoot || !compileFile) return;
-    const resolved = resolveCompileTarget(compileFile, files, getContent);
-    if (resolved) await compile(projectRoot, resolved.targetPath);
-  };
 
   const sidebarFull = rightSidebarOpen && sidebarFullMode;
 
@@ -301,21 +316,11 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
             onSelect={(id) => useRightPanelStore.getState().setActiveTab(id)}
             onClose={(id) => useRightPanelStore.getState().closeTab(id)}
             onReorder={(from, to) => useRightPanelStore.getState().moveTab(from, to)}
+            dirtyFileIds={dirtyFileIds}
           />
         </div>
 
         <div className="flex items-center gap-0.5 shrink-0">
-        {/* Compile button for non-texworkspace .tex files (texworkspace has its own in tab toolbar) */}
-        {activeTab?.kind !== "texworkspace" && isTexFile && (
-          <button type="button" className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" title="Compile" onClick={handleCompile} disabled={isCompiling}>
-            {isCompiling ? <Loader2Icon className="size-3.5 animate-spin" /> : <PlayIcon className="size-3.5" />}
-          </button>
-        )}
-
-        {((activeTab?.kind !== "texworkspace" && isTexFile)) && (
-          <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
-        )}
-
         {/* Window controls when editorMaximized (ContentTopBar is hidden) */}
         {editorMaximized && !isMac && (
           <>
@@ -410,8 +415,12 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
       </div>
 
       {/* Tab Toolbar */}
-      <TabToolbar onToggleSidebar={handleToggleSidebar}>
-        {isTexworkspaceActive && <TexworkspaceToolbar compileFile={compileFile} />}
+      <TabToolbar
+        onToggleSidebar={handleToggleSidebar}
+        filePath={activeTab?.filePath}
+        projectName={projectRoot?.split(/[/\\]/).pop()}
+      >
+        {resolveTabToolbar(activeTab, compileFile)}
       </TabToolbar>
 
       {/* Main Content: flex layout — main expands, sidebar stays fixed width */}

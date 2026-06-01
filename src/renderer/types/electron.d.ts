@@ -15,6 +15,14 @@ export interface SynctexResult {
   column: number;
 }
 
+export interface SynctexForwardResult {
+  page: number;
+  x: number;
+  y: number;
+  height: number;
+  width: number;
+}
+
 export interface ElectronAPI {
   // Filesystem operations
   fsScan: (rootPath: string) => Promise<{
@@ -72,13 +80,18 @@ export interface ElectronAPI {
     projectDir: string,
     mainFile: string,
     useTexlive?: boolean,
-  ) => Promise<{ pdfBytes: ArrayBuffer } | { error: string }>;
+  ) => Promise<{ pdfBytes: ArrayBuffer; buildDir?: string } | { error: string }>;
   compileSynctex: (
     projectDir: string,
     page: number,
     x: number,
     y: number,
   ) => Promise<SynctexResult | null>;
+  compileSynctexForward: (
+    projectDir: string,
+    file: string,
+    line: number,
+  ) => Promise<SynctexForwardResult | null>;
   compileDetectTexlive: () => Promise<CompilerStatus>;
 
   // CLI agent operations

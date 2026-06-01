@@ -23,7 +23,7 @@ export default defineConfig({
       alias: {
         "@": resolve("src/renderer"),
       },
-      dedupe: ["@codemirror/state", "@codemirror/view", "@codemirror/merge"],
+      dedupe: ["@codemirror/state", "@codemirror/view", "@codemirror/merge", "pdfjs-dist"],
     },
     server: {
       fs: {
@@ -43,7 +43,9 @@ export default defineConfig({
       target: "esnext",
     },
     optimizeDeps: {
-      exclude: ["mupdf"],
+      // Legacy build is already a webpack bundle — don't re-bundle.
+      // Paths are explicit to avoid pulling in the modern ESM build.
+      exclude: ["pdfjs-dist"],
       esbuildOptions: {
         target: "esnext",
       },

@@ -119,7 +119,7 @@ export function App() {
         {showWelcome ? (
           <WelcomePage onSkip={() => setShowWelcome(false)} />
         ) : projectRoot ? (
-          <div className="flex flex-col h-full" key={projectRoot}>
+          <div className="flex flex-col h-full select-none" key={projectRoot}>
             <Group
               id="main-layout"
               orientation="horizontal"
@@ -206,7 +206,7 @@ export function App() {
             <BottomBar />
           </div>
         ) : (
-          <div className="flex flex-col h-full">
+          <div className="flex flex-col h-full select-none">
             <Group
               id="main-layout"
               orientation="horizontal"

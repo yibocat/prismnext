@@ -73,6 +73,22 @@ interface LayoutState {
   toggleArchiveSession: (sessionId: string) => void;
   toggleShowArchived: () => void;
 
+  /** Breadcrumb navigation: set to a folder path to expand file tree to that location */
+  fileTreeNavigatePath: string | null;
+  setFileTreeNavigatePath: (path: string | null) => void;
+
+  /** File tree: expand/collapse all folders toggle */
+  fileTreeExpandAll: boolean;
+  toggleFileTreeExpandAll: () => void;
+
+  /** Outline panel visibility */
+  outlineExpanded: boolean;
+  setOutlineExpanded: (expanded: boolean) => void;
+
+  /** Markdown preview width limit */
+  mdWidthLimited: boolean;
+  setMdWidthLimited: (limited: boolean) => void;
+
   /** Per-mode tabs (flat list) */
   modeEditorTabs: Record<AppMode, EditorTab[]>;
   modeActiveEditorTab: Record<AppMode, string | null>;
@@ -148,6 +164,18 @@ export const useLayoutStore = create<LayoutState>()(
         };
       }),
       toggleShowArchived: () => set((s) => ({ showArchived: !s.showArchived })),
+
+      fileTreeNavigatePath: null,
+      setFileTreeNavigatePath: (path) => set({ fileTreeNavigatePath: path }),
+
+      fileTreeExpandAll: true,
+      toggleFileTreeExpandAll: () => set((s) => ({ fileTreeExpandAll: !s.fileTreeExpandAll })),
+
+      outlineExpanded: true,
+      setOutlineExpanded: (expanded) => set({ outlineExpanded: expanded }),
+
+      mdWidthLimited: true,
+      setMdWidthLimited: (limited) => set({ mdWidthLimited: limited }),
 
       sessionSort: "updated",
       setSessionSort: (sessionSort) => set({ sessionSort }),

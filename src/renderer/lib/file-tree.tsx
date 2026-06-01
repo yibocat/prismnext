@@ -1,5 +1,6 @@
 import type { ProjectFile } from "@/stores/document-store";
-import { FileTextIcon, ImageIcon, FileCodeIcon, FileIcon } from "lucide-react";
+import { Icon } from "@iconify/react";
+import { getFileIconName } from "./file-icon-class";
 
 export interface TreeNode {
   name: string;
@@ -10,10 +11,8 @@ export interface TreeNode {
 }
 
 export function getFileIcon(file: ProjectFile) {
-  if (file.type === "image") return <ImageIcon className="size-3.5 shrink-0" />;
-  if (file.type === "style") return <FileCodeIcon className="size-3.5 shrink-0" />;
-  if (file.type === "other") return <FileIcon className="size-3.5 shrink-0" />;
-  return <FileTextIcon className="size-3.5 shrink-0" />;
+  const icon = getFileIconName(file.name);
+  return <Icon icon={icon} className="size-4 shrink-0" />;
 }
 
 export function buildFileTree(files: ProjectFile[], folders: string[]): TreeNode[] {

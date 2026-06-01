@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.3.5 — 2026-06-02
+
+### Right Panel — Tab State Persistence (Keep-Alive)
+
+- **RightPane CSS keep-alive**: all open tabs' viewer components stay mounted in the DOM; inactive tabs are hidden via `position: absolute + visibility: hidden` instead of being unmounted — switching tabs now preserves cursor position, scroll position, undo history, PDF page number, side panel state, and all other internal viewer state without loss
+- **TabContext system** (`lib/tab-context.ts`): new React Context injected by `PaneContent` that provides each viewer with its OWN tab's `fileId`, `filePath`, `kind`, and `isActive` — replacing the previous pattern where every viewer read the global `activeTab` from the Zustand store, which caused all mounted (hidden) editors to fight over the same file
+- **PaneContent refactored**: `resolveViewer` now returns JSX elements directly instead of `React.ComponentType` to avoid `React.createElement` import issues; every viewer is wrapped in `<TabContext.Provider>` for data isolation
+- **Editor focus management**: `LatexEditor` and `CodeEditor` now watch `isActive` from TabContext — active tab's editor auto-focuses, inactive tab's editor auto-blurs, preventing hidden editors from capturing keyboard events
+- **RightMainArea reverted to conditional rendering**: the compiled-PDF panel in texworkspace mode does NOT use CSS keep-alive because Lector's virtualizer breaks when the panel container is resized to 0px; instead, page position is persisted and restored on remount
+- **Fix RightPane overflow**: tab wrapper was missing `flex flex-col`, causing inner `flex-1 min-h-0` content to overflow its container and make the entire RightArea scrollable
+
+### Cross-Session Position Persistence
+
+- **New `lib/viewer-position.ts`**: lightweight localStorage persistence for scroll/page/cursor positions keyed by absolute file path — survives app restart
+- **PDF page persistence**: `PdfPreview` saves current page every 3s via ref-based interval (avoids interval recreation on page change) and immediately on unmount; restores page on PDF load via `jumpToPage` from saved position
+- **Editor position persistence**: `LatexEditor` and `CodeEditor` save cursor position and scroll position every 3s and on editor destruction; restored on mount with `scrollIntoView` after a `requestAnimationFrame` for correct layout
+- **Position save skipped during merge view**: `isMergeActiveRef` check prevents saving spurious cursor/scroll values while the merge diff is active
+
+### Text Selection Policy
+
+- **Global `select-none`** on App root div — all UI chrome (sidebars, toolbars, tabs, buttons) no longer allows text selection, giving the app a more native desktop feel
+- **`select-text` on PDF pages** (`Pages` component) — PDF text selection remains fully functional
+- **`select-text` on chat area** (`LeftMainArea`) — AI responses and thinking blocks remain selectable for copy
+
+### Viewer Data Isolation
+
+- `MarkdownPreview` and `ImageViewer` migrated from reading global `activeTab.fileId` to using `useTabContext()` — each viewer now renders the correct file regardless of which tab is globally active
+
 ## 0.3.4 — 2026-05-31
 
 ### AiBar — Floating Chat Bar Rewrite
