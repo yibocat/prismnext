@@ -23,7 +23,7 @@ export function BrowserView() {
       registerWebview(tabId, el);
       return () => unregisterWebview(tabId);
     }
-  }, [tabId]);
+  }, [tabId, url]);
 
   // Sync page title from webview → tab title + recent visits
   useEffect(() => {

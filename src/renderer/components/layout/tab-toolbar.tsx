@@ -81,7 +81,7 @@ export function TabToolbar({ children, onToggleSidebar, filePath, projectName }:
         </Breadcrumb>
       )}
 
-      <div className="flex-1 min-w-0" />
+      {hasBreadcrumb && <div className="flex-1 min-w-0" />}
 
       {/* ─── File-type toolbar ─── */}
       {children}
