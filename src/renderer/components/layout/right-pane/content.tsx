@@ -8,6 +8,7 @@ import { ImageViewer } from "@/components/modules/editor/image-viewer";
 import { PdfPreview } from "@/components/modules/preview";
 import { GitPlaceholder } from "@/components/modules/git/git-placeholder";
 import { BrowserPlaceholder } from "@/components/modules/browser/browser-placeholder";
+import { BrowserView } from "@/components/modules/browser/browser-view";
 
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".svg"]);
 
@@ -60,7 +61,7 @@ export function PaneContent({ activeTab, isActive }: PaneContentProps) {
       return wrap(ctx, resolveViewer(activeTab.filePath));
     }
     case "browser":
-      return wrap(ctx, <BrowserPlaceholder />);
+      return wrap(ctx, <BrowserView />);
     default:
       return null;
   }

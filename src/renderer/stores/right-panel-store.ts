@@ -12,6 +12,8 @@ export interface RightTab {
   isInitial: boolean;
   filePath?: string;
   fileId?: string;
+  /** Current URL for browser tabs */
+  url?: string;
   /** Per-tab view mode. For .md files: "source" | "preview". Defaults to "source". */
   viewMode?: string;
 }
@@ -44,7 +46,8 @@ interface RightPanelState {
   setTexworkspaceActiveFile: (fileId: string) => void;
   switchToTexworkspace: (fileId: string, filePath: string, name: string) => void;
   openGitDiff: (filePath: string) => void;
-  newBrowserTab: () => void;
+  newBrowserTab: () => string;
+  navigateBrowserTab: (id: string, url: string) => void;
   closeTab: (id: string) => void;
   closeAllTabs: () => void;
   setActiveTab: (id: string) => void;
@@ -150,15 +153,26 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     set((s) => ({ tabs: [...s.tabs, tab], activeTabId: id }));
   },
 
+  navigateBrowserTab: (id: string, url: string) => {
+    let hostname = "";
+    try { hostname = new URL(url).hostname; } catch { /* ignore */ }
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === id ? { ...t, url, title: hostname || "New Tab", isInitial: false } : t,
+      ),
+    }));
+  },
+
   newBrowserTab: () => {
     const { tabs, activeTabId } = get();
     const active = tabs.find((t) => t.id === activeTabId);
-    if (active?.kind === "browser" && active.isInitial) return;
+    if (active?.kind === "browser" && active.isInitial) return active.id;
     const existing = tabs.find((t) => t.kind === "browser" && t.isInitial);
-    if (existing) { set({ activeTabId: existing.id }); return; }
+    if (existing) { set({ activeTabId: existing.id }); return existing.id; }
     const id = nextTabId();
     const tab: RightTab = { id, kind: "browser", title: INITIAL_TITLES.browser, isInitial: true };
     set((s) => ({ tabs: [...s.tabs, tab], activeTabId: id }));
+    return id;
   },
 
   closeTab: (id: string) => {
