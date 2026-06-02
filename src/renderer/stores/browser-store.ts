@@ -43,7 +43,7 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
     set({
       bookmarks: data.bookmarks,
       recentVisits: data.recent,
-      maxRecentItems: data.maxRecentItems,
+      maxRecentItems: data.maxRecentItems ?? 50,
       loaded: true,
     });
   },
