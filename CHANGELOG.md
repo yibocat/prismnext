@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.3.6 — 2026-06-02
+
+### Texworkspace Mode — Structure Sidebar & Centralized Hook
+
+- **TexworkspaceSidebar** (`texworkspace-sidebar.tsx`, 507 lines): new dedicated sidebar replacing the generic FilesSidebar in texworkspace mode, with two sub-tabs (Structure / Compile Log) and four accordion sections: Table of Contents (hierarchical tree with heading icons, expand/collapse per node), Labels (grouped by kind — section/figure/table/equation), Cited References (with author/title/year display), and TeX Files (folder tree navigation); click any entry jumps to source line via `requestJumpToLine`
+- **`useLatexStructure` hook** (`use-latex-structure.ts`, 214 lines): parses all `.tex` files in the project extracting `\section`/`\subsection`/etc. hierarchy, `\label{}` entries with kind inference, `\cite{}` references with resolved author/title/year from `.bib` files, and filtered `.tex` file list; memoized with `useMemo` for performance
+- **`useTexworkspace` centralized hook** (`use-texworkspace.ts`, 84 lines): consolidates all texworkspace-specific logic previously scattered across right-area, right-main-area, right-sidebar, files-sidebar, editor, and content router — exposes `isActive`, `viewMode`, `setActiveFile`, `switchToFile`, `compileFile`, and auto-opens the main `.tex` file on initial texworkspace entry
+- **RightMainArea refactored**: nested ternaries replaced with `wrapper()` helper + early-return pattern; split view panel order swapped (PDF left, editor right); now uses `useTexworkspace` hook instead of direct Zustand selectors
+- **`setTexworkspaceActiveFile` store action**: switches the active file within the texworkspace tab without changing the tab title (unlike `openTexworkspaceFile`)
+- **Texworkspace singleton**: `ensureTab("texworkspace")` now reuses existing texworkspace tab instead of creating duplicates
+- **`requestJumpToLine` in document store**: event-based mechanism for sidebar navigation to trigger editor jump-to-line
+- **TexworkspaceToolbar**: auto-compile Zap icon color changed (yellow when on vs muted when off); view mode toggles use consistent button styling
+- **Word count footer**: SidebarFooter in texworkspace sidebar displays approximate word count (strips LaTeX commands, comments, and brackets before counting)
+
+### Layout System — Dashboard & Tab Sync
+
+- **Dashboard sidebar** (`dashboard-sidebar.tsx`, 33 lines): new empty-state sidebar shown when no tabs are open, replacing the stale "files" default
+- **`RightToolbarTab` expanded**: added `"dashboard"` variant; default changed from `"files"` to `"dashboard"`
+- **Tab-to-toolbar sync improved**: merged two separate `useEffect` hooks into one (toolbar tab + sidebar auto-open), using `useRef` for previous texworkspace state to avoid stale closure issues; added `"dashboard"` fallback when no tab is active
+
+### Compiler — Tectonic V2 Flag
+
+- **Tectonic `-Zallow-deprecated=true` flag**: added to compiler service to suppress deprecation errors with newer Tectonic versions
+- **Compile IPC**: passes the flag through the compile handler chain
+
+### Right Panel Store — Texworkspace Tab Management
+
+- `ensureTab` now returns `string` (tab ID) for all code paths
+- Texworkspace tabs are singletons — second `ensureTab` call switches to existing tab
+- `setTexworkspaceActiveFile` switches file without title change for sidebar navigation
+
+### Type Fix
+
+- `SynctexForwardResult` → `SynctexForwardResult | null` in `electron.d.ts` compile forward handler return type
+
+### Dependencies
+
+- Added: `@iconify/react` for file-type icons in texworkspace sidebar file tree
+
 ## 0.3.5 — 2026-06-02
 
 ### Right Panel — Tab State Persistence (Keep-Alive)

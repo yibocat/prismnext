@@ -7,6 +7,8 @@ export interface AppSettings {
   theme: "dark" | "light" | "system";
   sidebarCollapsed: boolean;
   rightPanelCollapsed: boolean;
+  /** PDF viewer dark mode: off | on | follow (app theme) */
+  pdfDarkMode?: "off" | "on" | "follow";
   zoteroApiKey?: string;
   zoteroUserId?: string;
 }

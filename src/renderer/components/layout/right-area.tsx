@@ -151,24 +151,30 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   const ensureTab = useRightPanelStore((s) => s.ensureTab);
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
-  useEffect(() => {
-    if (!activeTab) return;
-    switch (activeTab.kind) {
-      case "file": setRightToolbarTab("files"); break;
-      case "git-overview": case "git-diff": setRightToolbarTab("git"); break;
-      case "browser": setRightToolbarTab("browser"); break;
-      case "texworkspace": setRightToolbarTab("texworkspace"); break;
-    }
-  }, [activeTab?.kind]);
+  // Sync rightToolbarTab and sidebar visibility with active tab
+  const isTexworkspace = activeTab?.kind === "texworkspace";
+  const prevIsTexworkspace = useRef(isTexworkspace);
 
-  // Auto-open right sidebar when Texworkspace tab is opened
-  const prevActiveTabKind = useRef(activeTab?.kind);
   useEffect(() => {
-    if (activeTab?.kind === "texworkspace" && prevActiveTabKind.current !== "texworkspace") {
-      if (!rightSidebarOpen) setRightSidebarOpen(true);
+    // Update toolbar tab to match active tab
+    if (!activeTab) {
+      setRightToolbarTab("dashboard");
+    } else {
+      switch (activeTab.kind) {
+        case "file": setRightToolbarTab("files"); break;
+        case "git-overview": case "git-diff": setRightToolbarTab("git"); break;
+        case "browser": setRightToolbarTab("browser"); break;
+        case "texworkspace": setRightToolbarTab("texworkspace"); break;
+        default: setRightToolbarTab("files"); break;
+      }
     }
-    prevActiveTabKind.current = activeTab?.kind;
-  }, [activeTab?.kind]);
+
+    // Auto-open sidebar when entering texworkspace
+    if (isTexworkspace && !prevIsTexworkspace.current) {
+      setRightSidebarOpen(true);
+    }
+    prevIsTexworkspace.current = isTexworkspace;
+  }, [activeTab?.kind, isTexworkspace, setRightSidebarOpen]);
 
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const fileContents = useDocumentStore((s) => s.fileContents);

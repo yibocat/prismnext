@@ -3,12 +3,15 @@ import { SidebarProvider, Sidebar } from "@/components/ui/sidebar";
 import { FilesSidebar } from "./right-sidebar/files-sidebar";
 import { GitSidebar } from "./right-sidebar/git-sidebar";
 import { BrowserSidebar } from "./right-sidebar/browser-sidebar";
+import { TexworkspaceSidebar } from "@/components/modules/texworkspace-mode";
+import { DashboardSidebar } from "./right-sidebar/dashboard-sidebar";
 
 const SIDEBAR_BY_MODE: Record<string, React.ComponentType> = {
+  dashboard: DashboardSidebar,
   files: FilesSidebar,
   git: GitSidebar,
   browser: BrowserSidebar,
-  texworkspace: FilesSidebar,
+  texworkspace: TexworkspaceSidebar,
 };
 
 export { FilesSidebar } from "./right-sidebar/files-sidebar";

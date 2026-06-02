@@ -40,6 +40,8 @@ interface RightPanelState {
   ensureTab: (kind: RightTabKind) => string;
   openFile: (fileId: string, filePath: string, name: string) => void;
   openTexworkspaceFile: (fileId: string, filePath: string, name: string) => void;
+  /** Switch the texworkspace tab's active file without changing the tab title */
+  setTexworkspaceActiveFile: (fileId: string) => void;
   switchToTexworkspace: (fileId: string, filePath: string, name: string) => void;
   openGitDiff: (filePath: string) => void;
   newBrowserTab: () => void;
@@ -62,6 +64,14 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       set({ activeTabId: existing.id });
       return existing.id;
     }
+    // texworkspace is a singleton — reuse the existing tab
+    if (kind === "texworkspace") {
+      const texTab = tabs.find((t) => t.kind === "texworkspace");
+      if (texTab) {
+        set({ activeTabId: texTab.id });
+        return texTab.id;
+      }
+    }
     const id = nextTabId();
     const tab: RightTab = { id, kind, title: INITIAL_TITLES[kind], isInitial: true };
     set((s) => ({ tabs: [...s.tabs, tab], activeTabId: id }));
@@ -75,6 +85,18 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     set((s) => ({
       tabs: s.tabs.map((t) =>
         t.id === texworkspaceTab.id ? { ...t, title: name, fileId, filePath, isInitial: false } : t,
+      ),
+    }));
+    useDocumentStore.getState().setActiveFile(fileId);
+  },
+
+  setTexworkspaceActiveFile: (fileId: string) => {
+    const { tabs, activeTabId } = get();
+    const texworkspaceTab = tabs.find((t) => t.kind === "texworkspace" && t.id === activeTabId);
+    if (!texworkspaceTab) return;
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === texworkspaceTab.id ? { ...t, fileId, filePath: fileId, isInitial: false } : t,
       ),
     }));
     useDocumentStore.getState().setActiveFile(fileId);

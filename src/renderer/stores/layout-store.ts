@@ -9,7 +9,7 @@ import {
 } from "@/styles/constants";
 
 export type AppMode = "all" | "manuscript" | "vault" | "zotero" | "code" | "assets" | "other" | "chat";
-export type RightToolbarTab = "files" | "git" | "browser" | "texworkspace";
+export type RightToolbarTab = "dashboard" | "files" | "git" | "browser" | "texworkspace";
 export type TexworkspaceViewMode = "split" | "tex" | "pdf";
 
 export type TabType = "file" | "pdf";
@@ -104,7 +104,7 @@ export const useLayoutStore = create<LayoutState>()(
       activeMode: "chat",
       setActiveMode: (mode) => set({ activeMode: mode }),
 
-      rightToolbarTab: "files",
+      rightToolbarTab: "dashboard",
       setRightToolbarTab: (tab) => set({ rightToolbarTab: tab }),
 
       texworkspaceViewMode: "split",

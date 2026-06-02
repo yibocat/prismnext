@@ -15,9 +15,9 @@ export function registerCompileHandlers(): void {
         args.useTexlive,
       );
       if (result.success && result.pdfBytes) {
-        return { pdfBytes: result.pdfBytes, buildDir: result.buildDir };
+        return { pdfBytes: result.pdfBytes, buildDir: result.buildDir, stdout: result.logContent };
       } else {
-        return { error: result.error || "Compilation failed" };
+        return { error: result.error || "Compilation failed", stdout: result.logContent };
       }
     },
   );

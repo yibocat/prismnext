@@ -41,6 +41,8 @@ export function LatexEditor() {
 
   const refreshFileContent = useDocumentStore((s) => s.refreshFileContent);
   const jumpTarget = useDocumentStore((s) => s.jumpTarget);
+  const jumpToLine = useDocumentStore((s) => s.jumpToLine);
+  const requestJumpToLine = useDocumentStore((s) => s.requestJumpToLine);
   const changes = useChangesStore((s) => s.changes);
 
   const activeChange = useMemo(() => {
@@ -363,6 +365,55 @@ export function LatexEditor() {
     });
     useDocumentStore.setState({ jumpTarget: null });
   }, [jumpTarget]);
+
+  // TOC/Labels/Citations jump-to-line
+  useEffect(() => {
+    if (jumpToLine === null || !viewRef.current) return;
+    const { fileId: targetFileId, line } = jumpToLine;
+    const view = viewRef.current;
+
+    // First switch to the target file if different
+    if (targetFileId !== fileId) {
+      useDocumentStore.getState().setActiveFile(targetFileId);
+      // Wait for the file to load, then jump
+      const checkLoaded = setInterval(() => {
+        const state = useDocumentStore.getState();
+        if (state.activeFileId !== targetFileId) return;
+        const content = state.fileContents.get(targetFileId)?.content;
+        if (content === undefined) return;
+        clearInterval(checkLoaded);
+
+        // Convert line number to document position
+        const targetView = viewRef.current;
+        if (!targetView) return;
+        const docLines = targetView.state.doc.toString().split("\n");
+        let pos = 0;
+        for (let i = 0; i < Math.min(line - 1, docLines.length); i++) {
+          pos += docLines[i].length + 1; // +1 for newline
+        }
+        pos = Math.min(pos, targetView.state.doc.length);
+        targetView.dispatch({
+          selection: { anchor: pos },
+          effects: [EditorView.scrollIntoView(pos, { y: "center" })],
+        });
+        useDocumentStore.setState({ jumpToLine: null });
+      }, 50);
+      return () => clearInterval(checkLoaded);
+    }
+
+    // Same file — jump directly
+    const docLines = view.state.doc.toString().split("\n");
+    let pos = 0;
+    for (let i = 0; i < Math.min(line - 1, docLines.length); i++) {
+      pos += docLines[i].length + 1;
+    }
+    pos = Math.min(pos, view.state.doc.length);
+    view.dispatch({
+      selection: { anchor: pos },
+      effects: [EditorView.scrollIntoView(pos, { y: "center" })],
+    });
+    useDocumentStore.setState({ jumpToLine: null });
+  }, [jumpToLine, fileId]);
 
   return (
     <div className="flex h-full flex-col min-h-0">

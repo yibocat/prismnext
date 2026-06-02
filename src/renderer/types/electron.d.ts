@@ -80,7 +80,7 @@ export interface ElectronAPI {
     projectDir: string,
     mainFile: string,
     useTexlive?: boolean,
-  ) => Promise<{ pdfBytes: ArrayBuffer; buildDir?: string } | { error: string }>;
+  ) => Promise<{ pdfBytes: ArrayBuffer; buildDir?: string; stdout?: string } | { error: string; stdout?: string }>;
   compileSynctex: (
     projectDir: string,
     page: number,

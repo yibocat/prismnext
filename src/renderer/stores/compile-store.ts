@@ -56,6 +56,7 @@ interface CompilerStatus {
 interface CompileState {
   isCompiling: boolean;
   compileError: string | null;
+  compileLog: string | null;
   pdfRevision: number;
   compilerBackend: "tectonic" | "texlive";
   compilerStatus: CompilerStatus | null;
@@ -80,6 +81,7 @@ export const useCompileStore = create<CompileState>()(
     (set, get) => ({
       isCompiling: false,
       compileError: null,
+      compileLog: null,
       pdfRevision: 0,
       compilerBackend: "tectonic",
       compilerStatus: null,
@@ -129,6 +131,7 @@ export const useCompileStore = create<CompileState>()(
             set({
               isCompiling: false,
               compileError: null,
+              compileLog: result.stdout ?? null,
               pdfRevision: get().pdfRevision + 1,
               lastCompiledRootId: projectDir,
               pendingRecompile: false,
@@ -137,6 +140,7 @@ export const useCompileStore = create<CompileState>()(
             set({
               isCompiling: false,
               compileError: result.error,
+              compileLog: result.stdout ?? null,
               pendingRecompile: false,
             });
           }

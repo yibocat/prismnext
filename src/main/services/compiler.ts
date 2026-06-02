@@ -26,6 +26,7 @@ interface CompileResult {
   success: boolean;
   pdfBytes?: Buffer;
   error?: string;
+  logContent?: string;
   buildDir: string;
 }
 
@@ -535,6 +536,7 @@ export async function compileLatex(
       return {
         success: true,
         pdfBytes,
+        logContent: result.logContent,
         buildDir,
       };
     } else {
@@ -542,6 +544,7 @@ export async function compileLatex(
       return {
         success: false,
         error,
+        logContent: result.logContent,
         buildDir,
       };
     }

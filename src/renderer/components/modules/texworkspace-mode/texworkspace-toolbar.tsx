@@ -2,15 +2,6 @@ import { useCompileStore } from "@/stores/compile-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { resolveCompileTarget } from "@/lib/resolve-tex-root";
-import { Toggle } from "@/components/ui/toggle";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import { cn } from "@/lib/utils";
 import {
   PlayIcon,
   Loader2Icon,
@@ -19,7 +10,6 @@ import {
   Columns2Icon,
   FileTextIcon,
   EyeIcon,
-  ScrollTextIcon,
 } from "lucide-react";
 
 interface TexworkspaceToolbarProps {
@@ -31,7 +21,6 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
   const compile = useCompileStore((s) => s.compile);
   const autoCompile = useCompileStore((s) => s.autoCompile);
   const toggleAutoCompile = useCompileStore((s) => s.toggleAutoCompile);
-  const compileError = useCompileStore((s) => s.compileError);
   const texworkspaceViewMode = useLayoutStore((s) => s.texworkspaceViewMode);
   const setTexworkspaceViewMode = useLayoutStore((s) => s.setTexworkspaceViewMode);
 
@@ -69,60 +58,45 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
         )}
       </button>
 
-      {/* Compile log */}
-      <Sheet>
-        <SheetTrigger asChild>
-          <button
-            type="button"
-            className={cn(
-              "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0",
-              compileError && "text-amber-500",
-            )}
-            title="Compile log"
-          >
-            <ScrollTextIcon className="size-3.5" />
-          </button>
-        </SheetTrigger>
-        <SheetContent side="bottom" className="h-1/2">
-          <SheetHeader>
-            <SheetTitle>Compile Log</SheetTitle>
-          </SheetHeader>
-          <pre className="flex-1 overflow-auto rounded bg-muted/50 p-3 font-mono text-[length:var(--font-size-12)] whitespace-pre-wrap break-all">
-            {compileError || "No errors. Last compilation succeeded."}
-          </pre>
-        </SheetContent>
-      </Sheet>
+<div className="mx-1 h-4 w-px bg-border/60" />
 
-      <div className="mx-1 h-4 w-px bg-border/60" />
-
-      {/* View mode toggle group */}
-      <Toggle
-        size="sm"
-        pressed={texworkspaceViewMode === "split"}
-        onPressedChange={() => setTexworkspaceViewMode("split")}
+      {/* View mode toggles */}
+      <button
+        type="button"
+        onClick={() => setTexworkspaceViewMode("split")}
         title="Split view"
-        className="size-6 rounded-r-none p-0 data-[state=on]:bg-primary/20 data-[state=on]:text-primary"
+        className={`flex size-6 items-center justify-center rounded transition-colors ${
+          texworkspaceViewMode === "split"
+            ? "bg-muted text-foreground"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+        }`}
       >
         <Columns2Icon className="size-3.5" />
-      </Toggle>
-      <Toggle
-        size="sm"
-        pressed={texworkspaceViewMode === "tex"}
-        onPressedChange={() => setTexworkspaceViewMode("tex")}
+      </button>
+      <button
+        type="button"
+        onClick={() => setTexworkspaceViewMode("tex")}
         title="TeX only"
-        className="size-6 rounded-none p-0 data-[state=on]:bg-primary/20 data-[state=on]:text-primary"
+        className={`flex size-6 items-center justify-center rounded transition-colors ${
+          texworkspaceViewMode === "tex"
+            ? "bg-muted text-foreground"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+        }`}
       >
         <FileTextIcon className="size-3.5" />
-      </Toggle>
-      <Toggle
-        size="sm"
-        pressed={texworkspaceViewMode === "pdf"}
-        onPressedChange={() => setTexworkspaceViewMode("pdf")}
+      </button>
+      <button
+        type="button"
+        onClick={() => setTexworkspaceViewMode("pdf")}
         title="PDF only"
-        className="size-6 rounded-l-none p-0 data-[state=on]:bg-primary/20 data-[state=on]:text-primary"
+        className={`flex size-6 items-center justify-center rounded transition-colors ${
+          texworkspaceViewMode === "pdf"
+            ? "bg-muted text-foreground"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+        }`}
       >
         <EyeIcon className="size-3.5" />
-      </Toggle>
+      </button>
     </>
   );
 }

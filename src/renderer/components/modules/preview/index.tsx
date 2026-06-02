@@ -13,11 +13,6 @@ import {
   Search,
   Thumbnails,
   Thumbnail,
-  ZoomIn,
-  ZoomOut,
-  CurrentZoom,
-  CurrentPage,
-  TotalPages,
   useSearch,
   usePdfJump,
   usePdf,
@@ -40,11 +35,26 @@ import {
   SearchIcon,
   LayoutPanelLeftIcon,
   XIcon,
-  FileIcon,
+  PlusIcon,
+  MinusIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  SunIcon,
+  MoonIcon,
+  MonitorIcon,
 } from "lucide-react";
+import { useTheme } from "next-themes";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useCompileStore, getPdfBytes } from "@/stores/compile-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
+import { useSettingsStore } from "@/stores/settings-store";
 import { useSyncTex } from "@/hooks/use-synctex";
 import { saveViewerPosition, loadViewerPosition } from "@/lib/viewer-position";
 import { TabContext } from "@/lib/tab-context";
@@ -179,13 +189,29 @@ interface PdfViewerInnerProps {
   isPdfFile: boolean;
   isCompiling: boolean;
   compileError: string | null;
-  activeFileName: string | null;
   /** Key used to persist/restore page position across sessions. */
   persistKey?: string;
 }
 
-function PdfViewerInner({ isPdfFile, isCompiling, compileError, activeFileName, persistKey }: PdfViewerInnerProps) {
+function PdfViewerInner({ isPdfFile, isCompiling, compileError, persistKey }: PdfViewerInnerProps) {
   const [sidePanel, setSidePanel] = useState<SidePanel>(null);
+  const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const pdfDarkFromSettings = useSettingsStore((s) => s.settings.pdfDarkMode);
+  const [pdfDark, setPdfDark] = useState<"off" | "on" | "follow">(pdfDarkFromSettings ?? "off");
+  // Sync local state when settings load asynchronously
+  useEffect(() => {
+    if (pdfDarkFromSettings) setPdfDark(pdfDarkFromSettings);
+  }, [pdfDarkFromSettings]);
+  const { resolvedTheme } = useTheme();
+  const pdfDarkActive = pdfDark === "on" || (pdfDark === "follow" && resolvedTheme === "dark");
+
+  const cyclePdfDark = () => {
+    setPdfDark((prev) => {
+      const next = prev === "off" ? "on" : prev === "on" ? "follow" : "off";
+      updateSettings({ pdfDarkMode: next });
+      return next;
+    });
+  };
 
   // ─── Hooks that require Root context (must be called unconditionally) ───
   const currentPage = usePdf((s) => s.currentPage);
@@ -300,42 +326,33 @@ function PdfViewerInner({ isPdfFile, isCompiling, compileError, activeFileName, 
   }, [isPdfFile, handleForwardSearch]);
 
   const panelOpen = sidePanel !== null;
+  const zoom = usePdf((s) => s.zoom);
+  const updateZoom = usePdf((s) => s.updateZoom);
+  const totalPages = usePdf((s) => s.pdfDocumentProxy?.numPages ?? 0);
+
+  const handleZoomIn = useCallback(() => updateZoom((z: number) => Math.round((z + 0.1) * 10) / 10), [updateZoom]);
+  const handleZoomOut = useCallback(() => updateZoom((z: number) => Math.round((z - 0.1) * 10) / 10), [updateZoom]);
+  const handlePrevPage = useCallback(() => {
+    if (currentPage > 1) jumpToPage(currentPage - 1, { align: "start", behavior: "auto" });
+  }, [currentPage, jumpToPage]);
+  const handleNextPage = useCallback(() => {
+    if (currentPage < totalPages) jumpToPage(currentPage + 1, { align: "start", behavior: "auto" });
+  }, [currentPage, totalPages, jumpToPage]);
 
   return (
     <>
       {/* Toolbar */}
-      <div className="flex h-[var(--height-preview-thin-toolbar)] shrink-0 items-center gap-1 border-b border-border bg-card px-2">
-        {/* Left: mode-specific context */}
-        {!isPdfFile && (
-          <>
-            {isCompiling && (
-              <span className="flex items-center gap-1 text-[length:var(--font-toolbar-label)] text-yellow-500">
-                <LoaderIcon className="size-3 animate-spin" /> Compiling…
-              </span>
-            )}
-            {compileError && (
-              <span className="flex items-center gap-1 text-[length:var(--font-toolbar-label)] text-red-500">
-                <AlertCircleIcon className="size-3" /> Compilation failed
-              </span>
-            )}
-          </>
-        )}
-        {isPdfFile && activeFileName && (
-          <span className="flex items-center gap-1 text-[length:var(--font-toolbar-label)] text-muted-foreground">
-            <FileIcon className="size-3" />
-            <span className="truncate max-w-[200px]">{activeFileName}</span>
-          </span>
-        )}
-
-        <div className="flex-1" />
-
-        {/* Side panel toggles (common) */}
+      <div className="flex h-8 shrink-0 items-center gap-0.5 border-b border-border bg-card px-2 text-[length:var(--font-toolbar-label)]">
+        {/* Left: side panel toggles */}
         <div className="flex items-center gap-0.5">
           {PANEL_TOGGLES.map((t) => (
             <button
-              key={t.id} type="button"
+              key={t.id}
+              type="button"
               className={`flex size-6 items-center justify-center rounded transition-colors ${
-                sidePanel === t.id ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                sidePanel === t.id
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
               title={t.label}
               onClick={() => setSidePanel(sidePanel === t.id ? null : t.id)}
@@ -345,18 +362,94 @@ function PdfViewerInner({ isPdfFile, isCompiling, compileError, activeFileName, 
           ))}
         </div>
 
-        <div className="mx-1 h-4 w-px bg-border" />
-
-        {/* Zoom + page nav (common) */}
-        <div className="flex items-center gap-0.5 text-[length:var(--font-toolbar-label)]">
-          <ZoomOut className="p-0.5 rounded hover:bg-muted cursor-pointer" />
-          <CurrentZoom className="min-w-[3rem] text-center text-muted-foreground" />
-          <ZoomIn className="p-0.5 rounded hover:bg-muted cursor-pointer" />
-          <span className="mx-1 text-border">|</span>
-          <CurrentPage className="min-w-[2rem] text-center text-muted-foreground" />
-          <span className="text-muted-foreground">/</span>
-          <TotalPages className="min-w-[2rem] text-center text-muted-foreground" />
+        {/* Compile status (TeX mode only) */}
+        <div className="flex items-center gap-1.5">
+          {!isPdfFile && isCompiling && (
+            <span className="flex items-center gap-1 text-yellow-600">
+              <LoaderIcon className="size-3 animate-spin" /> Compiling…
+            </span>
+          )}
+          {!isPdfFile && compileError && (
+            <span className="flex items-center gap-1 text-red-500">
+              <AlertCircleIcon className="size-3" /> Error
+            </span>
+          )}
         </div>
+
+        <div className="flex-1" />
+
+        <span className="mx-0.5 h-3 w-px bg-border shrink-0" />
+
+        {/* Zoom controls */}
+        <div className="flex items-center">
+          <Button
+            variant="ghost" size="icon" className="size-6 rounded-r-none"
+            title="Zoom out" onClick={handleZoomOut}
+          >
+            <MinusIcon className="size-3.5" />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="h-6 min-w-[3rem] px-0.5 tabular-nums text-muted-foreground hover:text-foreground rounded transition-colors cursor-pointer select-none"
+                title="Zoom presets"
+              >
+                {Math.round(zoom * 100)}%
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="min-w-[6rem]">
+              <DropdownMenuItem onClick={() => updateZoom(0.5)}>50%</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => updateZoom(0.75)}>75%</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => updateZoom(1)}>100%</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => updateZoom(1.25)}>125%</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => updateZoom(1.5)}>150%</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => updateZoom(2)}>200%</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            variant="ghost" size="icon" className="size-6 rounded-l-none"
+            title="Zoom in" onClick={handleZoomIn}
+          >
+            <PlusIcon className="size-3.5" />
+          </Button>
+        </div>
+
+        <span className="mx-0.5 h-3 w-px bg-border shrink-0" />
+
+        {/* Page navigation */}
+        <div className="flex items-center">
+          <Button
+            variant="ghost" size="icon" className="size-6 rounded-r-none"
+            title="Previous page" disabled={currentPage <= 1}
+            onClick={handlePrevPage}
+          >
+            <ChevronLeftIcon className="size-3.5" />
+          </Button>
+          <span className="inline-flex items-center h-6 px-0.5 tabular-nums text-muted-foreground select-none min-w-[3rem] justify-center">
+            {currentPage}<span className="text-border mx-px">/</span>{totalPages}
+          </span>
+          <Button
+            variant="ghost" size="icon" className="size-6 rounded-l-none"
+            title="Next page" disabled={currentPage >= totalPages}
+            onClick={handleNextPage}
+          >
+            <ChevronRightIcon className="size-3.5" />
+          </Button>
+        </div>
+
+        <span className="mx-0.5 h-3 w-px bg-border shrink-0" />
+
+        {/* PDF dark mode toggle */}
+        <button
+          type="button"
+          className={`flex size-6 items-center justify-center rounded transition-colors ${
+            pdfDark !== "off" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+          }`}
+          title={pdfDark === "on" ? "Light mode" : pdfDark === "follow" ? "Following app theme" : "Dark mode"}
+          onClick={cyclePdfDark}
+        >
+          {pdfDark === "on" ? <MoonIcon className="size-3.5" /> : pdfDark === "follow" ? <MonitorIcon className="size-3.5" /> : <SunIcon className="size-3.5" />}
+        </button>
       </div>
 
       {/* Body: Side Panel + Pages */}
@@ -377,7 +470,7 @@ function PdfViewerInner({ isPdfFile, isCompiling, compileError, activeFileName, 
             We pass scroll + click props directly to Pages rather than wrapping in
             an extra div, which would interfere with the virtualizer's height calc. */}
         <Pages
-          className="flex-1 min-w-0 overflow-auto overscroll-contain p-4 select-text"
+          className={`flex-1 min-w-0 overflow-auto overscroll-contain p-4 select-text${pdfDarkActive ? " [filter:invert(87%)_hue-rotate(180deg)]" : ""}`}
           gap={16}
           onClick={handlePageClick}
         >
@@ -442,8 +535,6 @@ export function PdfPreview() {
     return null;
   }, [fileDataUrl, pdfBytes]);
 
-  const activeFileName = activeTab?.title ?? null;
-
   // Persistence key: unique identifier for this PDF view.
   // For compiled PDFs we key on the .tex source file; for standalone .pdf
   // files we key on the .pdf file itself.
@@ -471,7 +562,6 @@ export function PdfPreview() {
               isPdfFile={isPdfFile}
               isCompiling={isCompiling}
               compileError={compileError}
-              activeFileName={activeFileName}
               persistKey={persistKey}
             />
           </Root>

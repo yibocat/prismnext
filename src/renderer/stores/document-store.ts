@@ -38,6 +38,8 @@ interface DocumentState {
   isSaving: boolean;
   fileContents: Map<string, FileContent>;
   jumpTarget: number | null;
+  /** Jump to a specific line in a specific file (used by TOC/Labels/Citations) */
+  jumpToLine: { fileId: string; line: number } | null;
   selectionRange: { start: number; end: number } | null;
 
   // Async actions
@@ -62,6 +64,7 @@ interface DocumentState {
   setContent: (id: string, content: string) => void;
   isFileDirty: (id: string) => boolean;
   requestJumpToPosition: (position: number) => void;
+  requestJumpToLine: (fileId: string, line: number) => void;
   setSelectionRange: (range: { start: number; end: number } | null) => void;
 }
 
@@ -126,6 +129,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   isSaving: false,
   fileContents: new Map(),
   jumpTarget: null,
+  jumpToLine: null,
   selectionRange: null,
 
   // ─── Project Management ───
@@ -591,6 +595,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   isFileDirty: (id: string) => get().fileContents.get(id)?.isDirty ?? false,
 
   requestJumpToPosition: (position: number) => set({ jumpTarget: position }),
+  requestJumpToLine: (fileId: string, line: number) => set({ jumpToLine: { fileId, line } }),
 
   setSelectionRange: (range) => set({ selectionRange: range }),
 }));

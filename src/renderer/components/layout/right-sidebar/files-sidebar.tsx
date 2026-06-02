@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
+import { useIsTexworkspace } from "@/components/modules/texworkspace-mode";
 import {
   FolderIcon,
   FolderOpenIcon,
@@ -401,7 +402,7 @@ export function FilesSidebar() {
     [deleteFolder],
   );
 
-  const isTexworkspaceActive = tabs.find((t) => t.id === activeTabId)?.kind === "texworkspace";
+  const isTexworkspaceActive = useIsTexworkspace();
   const currentMode: SidebarMode = isTexworkspaceActive ? "manuscript" : activeMode === "chat" ? "all" : activeMode;
   const files = useMemo(() => filterFilesByMode(allFiles, currentMode), [allFiles, currentMode]);
   const folders = useMemo(() => filterFoldersByMode(allFolders, currentMode), [allFolders, currentMode]);
