@@ -48,6 +48,7 @@ interface RightPanelState {
   openGitDiff: (filePath: string) => void;
   newBrowserTab: () => string;
   navigateBrowserTab: (id: string, url: string) => void;
+  updateBrowserTabTitle: (id: string, title: string) => void;
   closeTab: (id: string) => void;
   closeAllTabs: () => void;
   setActiveTab: (id: string) => void;
@@ -159,6 +160,14 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     set((s) => ({
       tabs: s.tabs.map((t) =>
         t.id === id ? { ...t, url, title: hostname || "New Tab", isInitial: false } : t,
+      ),
+    }));
+  },
+
+  updateBrowserTabTitle: (id: string, title: string) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === id ? { ...t, title } : t,
       ),
     }));
   },
