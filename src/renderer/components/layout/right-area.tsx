@@ -11,6 +11,8 @@ import { SidebarControls } from "@/components/layout/sidebar-controls";
 import { TabToolbar } from "@/components/layout/tab-toolbar";
 import { TexworkspaceToolbar } from "@/components/modules/texworkspace-mode";
 import { FileToolbar } from "@/components/modules/editor/toolbars/file-toolbar";
+import { BrowserToolbar } from "@/components/modules/browser/browser-toolbar";
+import { useBrowserStore } from "@/stores/browser-store";
 import { AiBar } from "@/components/modules/chat";
 import { type PanelImperativeHandle } from "react-resizable-panels";
 import {
@@ -120,6 +122,14 @@ function resolveTabToolbar(
       return <TexworkspaceToolbar compileFile={compileFile} />;
     case "file":
       return <FileToolbar filePath={tab.filePath} />;
+    case "browser":
+      return (
+        <BrowserToolbar
+          tabId={tab.id}
+          tabUrl={tab.url ?? ""}
+          tabTitle={tab.title}
+        />
+      );
     default:
       return null;
   }
@@ -177,6 +187,13 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   }, [activeTab?.kind, isTexworkspace, setRightSidebarOpen]);
 
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+
+  // Initialize browser store when project opens
+  useEffect(() => {
+    if (projectRoot) {
+      useBrowserStore.getState().loadFromProject(projectRoot);
+    }
+  }, [projectRoot]);
   const fileContents = useDocumentStore((s) => s.fileContents);
   const dirtyFileIds = useMemo(() => {
     const dirty = new Set<string>();
