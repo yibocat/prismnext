@@ -85,6 +85,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   settingsSet: (patch: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:set", patch),
 
+  // Browser operations
+  browserInit: (projectRoot: string) => ipcRenderer.invoke("browser:init", { projectRoot }),
+  browserSaveBookmarks: (projectRoot: string, bookmarks: unknown[]) =>
+    ipcRenderer.invoke("browser:saveBookmarks", { projectRoot, bookmarks }),
+  browserSaveRecent: (projectRoot: string, recent: unknown[]) =>
+    ipcRenderer.invoke("browser:saveRecent", { projectRoot, recent }),
+
   // CLI agent events (Main → Renderer)
   onCliStream: (callback: (data: { tabId: string; data: string }) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; data: string }) => callback(data);

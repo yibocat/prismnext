@@ -23,6 +23,27 @@ export interface SynctexForwardResult {
   width: number;
 }
 
+export interface BrowserBookmark {
+  id: string;
+  title: string;
+  url: string;
+  favicon?: string;
+  createdAt: number;
+  order: number;
+}
+
+export interface BrowserRecentVisit {
+  url: string;
+  title: string;
+  visitedAt: number;
+}
+
+export interface BrowserStateData {
+  bookmarks: BrowserBookmark[];
+  recent: BrowserRecentVisit[];
+  maxRecentItems: number;
+}
+
 export interface ElectronAPI {
   // Filesystem operations
   fsScan: (rootPath: string) => Promise<{
@@ -126,6 +147,11 @@ export interface ElectronAPI {
     zoteroUserId?: string;
   }>;
   settingsSet: (patch: Record<string, unknown>) => Promise<void>;
+
+  // Browser operations
+  browserInit: (projectRoot: string) => Promise<BrowserStateData>;
+  browserSaveBookmarks: (projectRoot: string, bookmarks: BrowserBookmark[]) => Promise<{ success: boolean; error?: string }>;
+  browserSaveRecent: (projectRoot: string, recent: BrowserRecentVisit[]) => Promise<{ success: boolean; error?: string }>;
 }
 
 declare global {
