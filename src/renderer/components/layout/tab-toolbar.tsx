@@ -15,6 +15,7 @@ interface TabToolbarProps {
   onToggleSidebar?: () => void;
   filePath?: string;
   projectName?: string;
+  hideSpacer?: boolean;
 }
 
 /** Turn "manuscript/chapter/intro.tex" into ["manuscript", "chapter", "intro.tex"] */
@@ -22,7 +23,7 @@ function pathSegments(filePath: string): string[] {
   return filePath.split("/").filter(Boolean);
 }
 
-export function TabToolbar({ children, onToggleSidebar, filePath, projectName }: TabToolbarProps) {
+export function TabToolbar({ children, onToggleSidebar, filePath, projectName, hideSpacer }: TabToolbarProps) {
   const rightSidebarOpen = useLayoutStore((s) => s.rightSidebarOpen);
   const toggleRightSidebar = useLayoutStore((s) => s.toggleRightSidebar);
   const setFileTreeNavigatePath = useLayoutStore((s) => s.setFileTreeNavigatePath);
@@ -81,7 +82,7 @@ export function TabToolbar({ children, onToggleSidebar, filePath, projectName }:
         </Breadcrumb>
       )}
 
-      {hasBreadcrumb && <div className="flex-1 min-w-0" />}
+      {!hideSpacer && <div className="flex-1 min-w-0" />}
 
       {/* ─── File-type toolbar ─── */}
       {children}

@@ -1,4 +1,4 @@
-import { ipcMain } from "electron";
+import { ipcMain, session } from "electron";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -99,6 +99,28 @@ export function registerBrowserHandlers(): void {
       const dir = path.join(projectRoot, BROWSER_DIR);
       ensureDir(dir);
       writeJson(path.join(dir, "recent.json"), recent);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message ?? "Unknown error" };
+    }
+  });
+
+  ipcMain.handle("browser:clearCookies", async () => {
+    try {
+      await session.defaultSession.clearStorageData({ storages: ["cookies"] });
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message ?? "Unknown error" };
+    }
+  });
+
+  ipcMain.handle("browser:clearCache", async () => {
+    try {
+      await session.defaultSession.clearCache();
+      // Also clear localStorage / service worker caches for all origins
+      await session.defaultSession.clearStorageData({
+        storages: ["localstorage", "serviceworkers", "cachestorage", "indexdb", "websql"],
+      });
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err?.message ?? "Unknown error" };

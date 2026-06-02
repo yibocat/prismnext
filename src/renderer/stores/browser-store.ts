@@ -2,6 +2,19 @@ import { create } from "zustand";
 import { useDocumentStore } from "@/stores/document-store";
 import type { BrowserBookmark, BrowserRecentVisit } from "@/types/electron";
 
+/** Normalize URL for comparison: strip trailing slash, fragment, www prefix */
+function normalizeUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    u.hash = "";
+    let path = u.pathname;
+    if (path.endsWith("/") && path !== "/") path = path.slice(0, -1);
+    return `${u.protocol}//${u.hostname.replace(/^www\./, "")}${path}${u.search}`;
+  } catch {
+    return url;
+  }
+}
+
 interface BrowserState {
   bookmarks: BrowserBookmark[];
   recentVisits: BrowserRecentVisit[];
@@ -11,6 +24,8 @@ interface BrowserState {
   loadFromProject: (projectRoot: string) => Promise<void>;
   addBookmark: (title: string, url: string) => Promise<void>;
   removeBookmark: (id: string) => Promise<void>;
+  renameBookmark: (id: string, title: string) => void;
+  changeBookmarkUrl: (id: string, url: string) => void;
   recordVisit: (url: string, title: string) => Promise<void>;
   removeRecentVisit: (url: string) => Promise<void>;
   clearRecentVisits: () => Promise<void>;
@@ -50,7 +65,7 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
 
   addBookmark: async (title: string, url: string) => {
     const { bookmarks } = get();
-    if (bookmarks.some((b) => b.url === url)) return;
+    if (bookmarks.some((b) => normalizeUrl(b.url) === normalizeUrl(url))) return;
     const newBookmark: BrowserBookmark = {
       id: `bm-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       title,
@@ -70,9 +85,25 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
     persistBookmarks(updated);
   },
 
+  renameBookmark: (id: string, title: string) => {
+    const updated = get().bookmarks.map((b) =>
+      b.id === id ? { ...b, title } : b,
+    );
+    set({ bookmarks: updated });
+    persistBookmarks(updated);
+  },
+
+  changeBookmarkUrl: (id: string, url: string) => {
+    const updated = get().bookmarks.map((b) =>
+      b.id === id ? { ...b, url } : b,
+    );
+    set({ bookmarks: updated });
+    persistBookmarks(updated);
+  },
+
   recordVisit: async (url: string, title: string) => {
     const { recentVisits, maxRecentItems } = get();
-    const filtered = recentVisits.filter((v) => v.url !== url);
+    const filtered = recentVisits.filter((v) => normalizeUrl(v.url) !== normalizeUrl(url));
     const entry: BrowserRecentVisit = { url, title, visitedAt: Date.now() };
     const updated = [entry, ...filtered].slice(0, maxRecentItems);
     set({ recentVisits: updated });
@@ -80,7 +111,7 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
   },
 
   removeRecentVisit: async (url: string) => {
-    const updated = get().recentVisits.filter((v) => v.url !== url);
+    const updated = get().recentVisits.filter((v) => normalizeUrl(v.url) !== normalizeUrl(url));
     set({ recentVisits: updated });
     persistRecent(updated);
   },

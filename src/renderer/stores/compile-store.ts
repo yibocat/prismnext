@@ -87,6 +87,10 @@ export const useCompileStore = create<CompileState>()(
       compilerStatus: null,
       pendingRecompile: false,
       lastCompiledRootId: null,
+      // TODO: future settings panel — expose autoCompile as a user-configurable
+      // preference in the Settings dialog (persisted via zustand persist middleware,
+      // already survives app restarts). The toolbar toggle should remain as a
+      // quick-access shortcut synchronized with the settings value.
       autoCompile: true,
 
       compile: async (projectDir: string, mainFile: string) => {

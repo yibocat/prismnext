@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.3.8 — 2026-06-03
+
+### Browser Mode — Complete Features & Polish
+
+- **Multi-tab browser**: each browser tab manages its own `<webview>` with independent URL, title, and loading state; `new-window` events from target="_blank" links and window.open() are intercepted via script injection and redirected to new browser tabs instead of native windows
+- **Navigation toolbar**: Back/Forward/Reload buttons with spinning animation during load; URL bar with auto-https and Enter-to-navigate; Stop button replaced by spinning refresh icon; Star button for bookmarking with filled amber star when current page is bookmarked (URL-normalized comparison ignores trailing slash, www prefix, and fragments)
+- **Three-dot menu**: Clear History (local recent visits), Clear Cookies (session.defaultSession.clearStorageData), Clear Cache (session.clearCache + localStorage/ServiceWorker/IndexedDB/CacheStorage cleanup)
+- **Bookmark system**: user-managed bookmarks persisted to `.prismnext/browser/bookmarks.json` via IPC; seed 6 academic bookmarks (Google Scholar, arXiv, DOI, PubMed, dblp, Semantic Scholar) on first init; add/remove with deduplication (normalized URL comparison)
+- **Recent visits**: auto-recorded on page load (page-title-updated event); capped at maxRecentItems (default 50); deduplication; clear-all and per-item remove; persisted to `.prismnext/browser/recent.json`
+- **BrowserSidebar**: two accordion sections (Bookmarks, Recent) matching texworkspace sidebar pattern; favicon display from domain root (`/favicon.ico` with original URL protocol, no third-party dependency); inline Rename (click-to-edit title) and Change URL (expandable input row) via context menu; refresh button with spin animation syncs from disk and retries favicon loads; right-click context menu with Open / Open in New Tab
+- **Webview link context menu**: right-click on links in any web page shows Open / Open in New Tab via script-injected contextmenu interception
+- **Tab hibernation (LRU eviction)**: max 5 active webviews; when exceeded, least-recently-used tabs are hibernated (webview unloaded → memory freed); switching to a hibernated tab wakes it and reloads; registry-based LRU tracking in webview-registry.ts
+- **Sidebar drag performance fix**: fullscreen transparent overlay during right sidebar resize blocks webview's native surface from intercepting mousemove events, eliminating jank
+- **Page load error display**: did-fail-load handler shows error description with retry button; error auto-clears on new URL navigation
+- **loading-bar animation**: CSS keyframes in globals.css
+- **URL normalization**: consistent across bookmarks, recent visits, and toolbar comparison (strips trailing slash, www prefix, fragment)
+
+### Layout & Shared Improvements
+
+- **TabBar fix**: changed tab selection from onMouseDown to onClick — closing tabs no longer causes a flash of the closing tab being activated first
+- **TabToolbar spacer**: new hideSpacer prop for browser tabs; spacer (flex-1) only renders when breadcrumb is present, preventing BrowserToolbar from being pushed right
+- **Sidebar auto-open**: entering any RightArea mode (Files/Git/Browser/Texworkspace) now auto-opens the right sidebar (was texworkspace-only)
+- **Empty states simplified**: removed icons from all empty states (NoFileOpen, GitPlaceholder, RightPane default, BrowserView empty/hibernated); single centered line of muted text; fixed vertical centering by adding flex flex-col to PaneContent wrap div
+
+### Texworkspace
+
+- **Auto-compile on entry**: opening texworkspace with autoCompile enabled now immediately compiles the main .tex file (100ms delay for editor mount)
+- **Settings TODO**: documented in compile-store that autoCompile should be exposed in future Settings panel
+
+### File Toolbar — HTML Preview
+
+- **HtmlPreviewButton**: new GlobeIcon button in FileToolbar for .html/.htm files; creates a new browser tab and loads the file via file:// protocol
+
+### Changes
+
+```
+21 files changed, 892 insertions(+), 135 deletions(-)
+```
+
 ## 0.3.6 — 2026-06-02
 
 ### Texworkspace Mode — Structure Sidebar & Centralized Hook

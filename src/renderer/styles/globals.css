@@ -260,3 +260,10 @@
 }
 
 /* PDF.js Text Layer styles are imported from pdfjs-dist/web/pdf_viewer.css */
+
+/* ── Browser loading bar animation ── */
+@keyframes loading-bar {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(100%); }
+  100% { transform: translateX(300%); }
+}

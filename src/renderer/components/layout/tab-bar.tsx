@@ -114,7 +114,7 @@ export function TabBar({ tabs, activeTabId, onSelect, onClose, onReorder, dirtyF
                     : "bg-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground",
                   dragIndex === i && "opacity-40",
                 )}
-                onMouseDown={(e) => { if (e.button === 0) onSelect(tab.id); }}
+                onClick={() => onSelect(tab.id)}
                 onDragStart={(e) => handleDragStart(e, i)}
                 onDragOver={(e) => handleDragOver(e, i)}
                 onDrop={(e) => handleDrop(e, i)}

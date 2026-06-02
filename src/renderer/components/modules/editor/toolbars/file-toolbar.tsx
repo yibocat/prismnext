@@ -1,8 +1,36 @@
+import { useDocumentStore } from "@/stores/document-store";
+import { useRightPanelStore } from "@/stores/right-panel-store";
+import { GlobeIcon } from "lucide-react";
 import { MarkdownToolbar } from "./markdown-toolbar";
 import { LanguageLabel } from "./language-label";
 
 interface FileToolbarProps {
   filePath?: string;
+}
+
+function HtmlPreviewButton({ filePath }: { filePath: string }) {
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
+
+  const handlePreview = () => {
+    if (!projectRoot) return;
+    const absPath = `${projectRoot}/${filePath}`;
+    // file:/// for macOS/Linux (empty authority), encodeURI for spaces/special chars
+    const fileUrl = `file://${encodeURI(absPath)}`;
+    const store = useRightPanelStore.getState();
+    const tabId = store.newBrowserTab();
+    store.navigateBrowserTab(tabId, fileUrl);
+  };
+
+  return (
+    <button
+      type="button"
+      className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+      title="Preview in Browser"
+      onClick={handlePreview}
+    >
+      <GlobeIcon className="size-3.5" />
+    </button>
+  );
 }
 
 /**
@@ -17,6 +45,10 @@ export function FileToolbar({ filePath }: FileToolbarProps) {
     case ".md":
     case ".mdx":
       return <MarkdownToolbar />;
+
+    case ".html":
+    case ".htm":
+      return filePath ? <HtmlPreviewButton filePath={filePath} /> : null;
 
     case ".tex":
     case ".ltx":

@@ -91,6 +91,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("browser:saveBookmarks", { projectRoot, bookmarks }),
   browserSaveRecent: (projectRoot: string, recent: unknown[]) =>
     ipcRenderer.invoke("browser:saveRecent", { projectRoot, recent }),
+  browserClearCookies: () => ipcRenderer.invoke("browser:clearCookies"),
+  browserClearCache: () => ipcRenderer.invoke("browser:clearCache"),
 
   // CLI agent events (Main → Renderer)
   onCliStream: (callback: (data: { tabId: string; data: string }) => void) => {

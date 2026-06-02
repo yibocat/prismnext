@@ -1,6 +1,5 @@
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { PaneContent } from "./content";
-import { LayersIcon } from "lucide-react";
 
 /**
  * CSS style applied to inactive tab panels so they stay mounted (preserving all
@@ -25,9 +24,10 @@ export function RightPane() {
   return (
     <div className="flex h-full flex-col min-w-0 relative">
       {tabs.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
-          <LayersIcon className="size-10 opacity-30" />
-          <p className="text-[length:var(--font-placeholder)]">Open a file to get started</p>
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
+            Open a file to get started
+          </p>
         </div>
       ) : (
         tabs.map((tab) => (

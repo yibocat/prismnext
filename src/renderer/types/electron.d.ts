@@ -152,6 +152,8 @@ export interface ElectronAPI {
   browserInit: (projectRoot: string) => Promise<BrowserStateData>;
   browserSaveBookmarks: (projectRoot: string, bookmarks: BrowserBookmark[]) => Promise<{ success: boolean; error?: string }>;
   browserSaveRecent: (projectRoot: string, recent: BrowserRecentVisit[]) => Promise<{ success: boolean; error?: string }>;
+  browserClearCookies: () => Promise<{ success: boolean; error?: string }>;
+  browserClearCache: () => Promise<{ success: boolean; error?: string }>;
 }
 
 declare global {

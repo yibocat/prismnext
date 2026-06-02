@@ -49,11 +49,14 @@ interface RightAreaProps {
 function SidebarDragHandle({
   onResize,
   isDraggingRef,
+  onDragChange,
 }: {
   onResize: (width: number) => void;
   /** Set to true while the user is actively dragging — used to suppress
    *  ResizeObserver feedback during drag (prevents state-update loop). */
   isDraggingRef?: React.MutableRefObject<boolean>;
+  /** Called when drag starts (true) or ends (false) — for overlay/UI state. */
+  onDragChange?: (dragging: boolean) => void;
 }) {
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -62,6 +65,7 @@ function SidebarDragHandle({
       const startWidth = useLayoutStore.getState().rightSidebarWidth;
 
       if (isDraggingRef) isDraggingRef.current = true;
+      if (onDragChange) onDragChange(true);
 
       let rafId: number | null = null;
       const latestEventRef = { current: null as MouseEvent | null };
@@ -81,6 +85,7 @@ function SidebarDragHandle({
 
       const onMouseUp = () => {
         if (isDraggingRef) isDraggingRef.current = false;
+        if (onDragChange) onDragChange(false);
         if (rafId !== null) cancelAnimationFrame(rafId);
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
@@ -89,7 +94,7 @@ function SidebarDragHandle({
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [onResize, isDraggingRef],
+    [onResize, isDraggingRef, onDragChange],
   );
 
   return (
@@ -162,8 +167,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
   // Sync rightToolbarTab and sidebar visibility with active tab
-  const isTexworkspace = activeTab?.kind === "texworkspace";
-  const prevIsTexworkspace = useRef(isTexworkspace);
+  const prevActiveTabKind = useRef(activeTab?.kind);
 
   useEffect(() => {
     // Update toolbar tab to match active tab
@@ -179,12 +183,14 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
       }
     }
 
-    // Auto-open sidebar when entering texworkspace
-    if (isTexworkspace && !prevIsTexworkspace.current) {
+    // Auto-open sidebar when entering any content mode (files/git/browser/texworkspace)
+    const isContentMode = activeTab && activeTab.kind !== undefined;
+    const justEntered = activeTab?.kind !== prevActiveTabKind.current;
+    if (isContentMode && justEntered) {
       setRightSidebarOpen(true);
     }
-    prevIsTexworkspace.current = isTexworkspace;
-  }, [activeTab?.kind, isTexworkspace, setRightSidebarOpen]);
+    prevActiveTabKind.current = activeTab?.kind;
+  }, [activeTab?.kind, setRightSidebarOpen]);
 
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
@@ -211,7 +217,11 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   // sidebar handle. Without this, each drag-induced state update triggers a
   // DOM change, which the ResizeObserver picks up and turns back into another
   // state update — a feedback loop that doubles the per-frame work.
+  // Dual-track: ref (fast, no re-render) for ResizeObserver suppression;
+  // state (triggers re-render) for the drag overlay that captures mouse
+  // events from the webview's native window.
   const isDraggingSidebar = useRef(false);
+  const [sidebarDragActive, setSidebarDragActive] = useState(false);
 
   const handleSidebarResize = useCallback(
     (width: number) => {
@@ -442,6 +452,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
         onToggleSidebar={handleToggleSidebar}
         filePath={activeTab?.filePath}
         projectName={projectRoot?.split(/[/\\]/).pop()}
+        hideSpacer={activeTab?.kind === "browser"}
       >
         {resolveTabToolbar(activeTab, compileFile)}
       </TabToolbar>
@@ -456,7 +467,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
 
         {rightSidebarOpen && (
           <>
-            <SidebarDragHandle onResize={handleSidebarResize} isDraggingRef={isDraggingSidebar} />
+            <SidebarDragHandle onResize={handleSidebarResize} isDraggingRef={isDraggingSidebar} onDragChange={setSidebarDragActive} />
             <div
               ref={sidebarElRef}
               className="shrink-0 overflow-hidden"
@@ -468,6 +479,15 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
         )}
 
         {editorMaximized && <AiBar />}
+
+        {/* Drag overlay: blocks the webview's native surface from intercepting
+            mouse events and prevents frame-by-frame webview resize during
+            sidebar drag — both are expensive per-frame operations that cause jank. */}
+        {sidebarDragActive && (
+          <div
+            className="fixed inset-0 z-50 cursor-col-resize"
+          />
+        )}
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
+import { useCompileStore, compileCurrentDocument } from "@/stores/compile-store";
 import { resolveCompileTarget } from "@/lib/resolve-tex-root";
 
 /**
@@ -47,6 +48,12 @@ export function useTexworkspace() {
     );
     if (resolved?.rootId) {
       setTexworkspaceActiveFile(resolved.rootId);
+      // Auto-compile the main file when entering texworkspace
+      if (useCompileStore.getState().autoCompile) {
+        // Delay to let the store settle (setActiveFile is synchronous but
+        // the editor/viewer mount may need a frame)
+        setTimeout(() => compileCurrentDocument(), 100);
+      }
     }
   }, [activeTab, files, fileContents, setTexworkspaceActiveFile]);
 

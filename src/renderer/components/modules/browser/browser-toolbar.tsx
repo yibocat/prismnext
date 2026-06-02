@@ -2,28 +2,57 @@ import { useState, useCallback, useEffect } from "react";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useBrowserStore } from "@/stores/browser-store";
 import { getWebview } from "@/components/modules/browser/webview-registry";
+import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
   RefreshCwIcon,
   GlobeIcon,
   StarIcon,
+  EllipsisIcon,
+  Trash2Icon,
+  CookieIcon,
+  HardDriveIcon,
 } from "lucide-react";
 
+/** Normalize URL for comparison: strip trailing slash, fragment, and www prefix */
+function normalizeUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    u.hash = "";
+    let path = u.pathname;
+    if (path.endsWith("/") && path !== "/") path = path.slice(0, -1);
+    return `${u.protocol}//${u.hostname.replace(/^www\./, "")}${path}${u.search}`;
+  } catch {
+    return url;
+  }
+}
+
 interface BrowserToolbarProps {
-  /** The browser tab id (from RightTab) */
   tabId: string;
-  /** Current URL from the tab store */
   tabUrl: string;
-  /** Current tab title */
   tabTitle: string;
 }
 
 export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps) {
   const navigateBrowserTab = useRightPanelStore((s) => s.navigateBrowserTab);
   const addBookmark = useBrowserStore((s) => s.addBookmark);
+  const bookmarks = useBrowserStore((s) => s.bookmarks);
+  const clearRecentVisits = useBrowserStore((s) => s.clearRecentVisits);
+  const isLoading = useRightPanelStore(
+    (s) => s.tabs.find((t) => t.id === tabId)?.isLoading ?? false,
+  );
+  const isBookmarked = bookmarks.some((b) => normalizeUrl(b.url) === normalizeUrl(tabUrl));
 
   const [inputValue, setInputValue] = useState(tabUrl);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     setInputValue(tabUrl);
@@ -66,9 +95,29 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
     if (wv) (wv as any).reload();
   };
 
+  const handleStop = () => {
+    const wv = getWebview(tabId);
+    if (wv) (wv as any).stop();
+  };
+
   const handleBookmark = () => {
     const displayTitle = tabTitle && tabTitle !== "New Tab" ? tabTitle : inputValue;
     addBookmark(displayTitle, inputValue);
+  };
+
+  const handleClearHistory = () => {
+    clearRecentVisits();
+    setMenuOpen(false);
+  };
+
+  const handleClearCookies = async () => {
+    await window.electronAPI.browserClearCookies();
+    setMenuOpen(false);
+  };
+
+  const handleClearCache = async () => {
+    await window.electronAPI.browserClearCache();
+    setMenuOpen(false);
   };
 
   return (
@@ -93,10 +142,20 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
       <button
         type="button"
         className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
-        title="Reload"
-        onClick={handleReload}
+        title={isLoading ? "Stop loading" : "Reload"}
+        onClick={isLoading ? handleStop : handleReload}
       >
-        <RefreshCwIcon className="size-3.5" />
+        <RefreshCwIcon className={cn("size-3.5", isLoading && "animate-spin")} />
+      </button>
+
+      {/* Bookmark */}
+      <button
+        type="button"
+        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+        title={isBookmarked ? "Remove bookmark" : "Bookmark this page"}
+        onClick={handleBookmark}
+      >
+        <StarIcon className={cn("size-3.5", isBookmarked && "fill-amber-400 text-amber-400")} />
       </button>
 
       <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
@@ -116,15 +175,33 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
 
       <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
 
-      {/* Bookmark current page */}
-      <button
-        type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
-        title="Bookmark this page"
-        onClick={handleBookmark}
-      >
-        <StarIcon className="size-3.5" />
-      </button>
+      {/* Three-dot menu */}
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+            title="More"
+          >
+            <EllipsisIcon className="size-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem onClick={handleClearHistory}>
+            <Trash2Icon className="size-3.5 mr-2" />
+            <span>Clear History</span>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleClearCookies}>
+            <CookieIcon className="size-3.5 mr-2" />
+            <span>Clear Cookies</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleClearCache}>
+            <HardDriveIcon className="size-3.5 mr-2" />
+            <span>Clear Cache</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </>
   );
 }

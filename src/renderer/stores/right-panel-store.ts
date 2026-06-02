@@ -14,6 +14,10 @@ export interface RightTab {
   fileId?: string;
   /** Current URL for browser tabs */
   url?: string;
+  /** Whether the browser tab is currently loading a page */
+  isLoading?: boolean;
+  /** Whether the tab has been hibernated (webview unloaded to save memory) */
+  hibernated?: boolean;
   /** Per-tab view mode. For .md files: "source" | "preview". Defaults to "source". */
   viewMode?: string;
 }
@@ -49,6 +53,8 @@ interface RightPanelState {
   newBrowserTab: () => string;
   navigateBrowserTab: (id: string, url: string) => void;
   updateBrowserTabTitle: (id: string, title: string) => void;
+  setBrowserTabLoading: (id: string, isLoading: boolean) => void;
+  setTabHibernated: (id: string, hibernated: boolean) => void;
   closeTab: (id: string) => void;
   closeAllTabs: () => void;
   setActiveTab: (id: string) => void;
@@ -168,6 +174,22 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     set((s) => ({
       tabs: s.tabs.map((t) =>
         t.id === id ? { ...t, title } : t,
+      ),
+    }));
+  },
+
+  setBrowserTabLoading: (id: string, isLoading: boolean) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === id ? { ...t, isLoading } : t,
+      ),
+    }));
+  },
+
+  setTabHibernated: (id: string, hibernated: boolean) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === id ? { ...t, hibernated } : t,
       ),
     }));
   },

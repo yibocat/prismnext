@@ -303,6 +303,13 @@ function FilesHeader({ callbacks, projectName, anyExpanded, onToggleAll }: {
   onToggleAll: () => void;
 }) {
   const refreshFiles = useDocumentStore((s) => s.refreshFiles);
+  const [spinning, setSpinning] = useState(false);
+
+  const handleRefresh = () => {
+    setSpinning(true);
+    refreshFiles();
+    setTimeout(() => setSpinning(false), 400);
+  };
   return (
     <SidebarHeader className="flex h-[var(--height-mode-selector)] shrink-0 flex-row items-center justify-between px-3">
       <span className="truncate text-[length:var(--font-size-12)] font-medium text-muted-foreground">
@@ -341,9 +348,9 @@ function FilesHeader({ callbacks, projectName, anyExpanded, onToggleAll }: {
           type="button"
           className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           title="Refresh"
-          onClick={() => refreshFiles()}
+          onClick={handleRefresh}
         >
-          <RefreshCwIcon className="size-3.5" />
+          <RefreshCwIcon className={cn("size-3.5", spinning && "animate-spin")} />
         </button>
       </div>
     </SidebarHeader>
