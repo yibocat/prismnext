@@ -11,7 +11,7 @@ export const TodoWriteWidget = memo(function TodoWriteWidget({ toolUse }: { tool
   return (
     <div className="my-2 rounded-lg border border-border bg-card text-[length:var(--font-code)] overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60">
-        <ListTodoIcon className="size-3.5 text-purple-500" />
+        <ListTodoIcon className="size-3.5 text-plan" />
         <span className="font-medium">Task Plan</span>
         <span className="text-muted-foreground/60">
           {todos.filter((t) => t.status === "completed").length}/{todos.length}
@@ -21,9 +21,9 @@ export const TodoWriteWidget = memo(function TodoWriteWidget({ toolUse }: { tool
         {todos.map((todo, i) => (
           <div key={i} className="flex items-center gap-2 px-3 py-1.5">
             {todo.status === "completed" ? (
-              <CheckIcon className="size-3.5 text-emerald-500 shrink-0" />
+              <CheckIcon className="size-3.5 text-success shrink-0" />
             ) : todo.status === "in_progress" ? (
-              <Loader2Icon className="size-3.5 animate-spin text-blue-500 shrink-0" />
+              <Loader2Icon className="size-3.5 animate-spin text-info shrink-0" />
             ) : (
               <CircleIcon className="size-3.5 text-muted-foreground shrink-0" />
             )}

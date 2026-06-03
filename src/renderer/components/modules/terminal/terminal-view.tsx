@@ -55,7 +55,7 @@ export function TerminalView({ tabId }: TerminalViewProps) {
     const term = new Terminal({
       theme: xtermTheme,
       fontSize: 13,
-      fontFamily: "Menlo, Monaco, 'Courier New', monospace",
+      fontFamily: "'Geist Mono', 'Menlo', 'Monaco', 'Courier New', monospace",
       cursorBlink: true,
       cursorStyle: "bar",
       drawBoldTextInBrightColors: true,
@@ -213,8 +213,7 @@ export function TerminalView({ tabId }: TerminalViewProps) {
 
   return (
     <div
-      className="h-full w-full p-1.5"
-      style={{ backgroundColor: xtermTheme.background }}
+      className="h-full w-full p-1.5 glass-content"
       onMouseDown={handleMouseDown}
     >
       <div ref={containerRef} className="terminal-xterm h-full w-full" />

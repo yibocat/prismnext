@@ -4,6 +4,8 @@ import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { RefObject } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useSettingsStore } from "@/stores/settings-store";
+import { LockIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   PanelRight,
@@ -43,8 +45,10 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
   const isMobile = useIsMobile();
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
   const { theme, resolvedTheme, setTheme } = useTheme();
+  const glassEffect = useSettingsStore((s) => s.settings.glassEffect);
 
   const cycleTheme = () => {
+    if (glassEffect) return;
     if (theme === "light") setTheme("dark");
     else if (theme === "dark") setTheme("system");
     else setTheme("light");
@@ -53,12 +57,12 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
   const isMac = platform === "darwin";
 
   return (
-    <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center justify-end gap-1 px-2">
+    <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center justify-end gap-1 px-2 glass-content">
       {!isMac && (
         <>
           <button
             type="button"
-            className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
             title="Minimize"
             onClick={() => window.electronAPI?.windowMinimize()}
           >
@@ -66,7 +70,7 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
           </button>
           <button
             type="button"
-            className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
             title={isMaximized ? "Restore" : "Maximize"}
             onClick={() => window.electronAPI?.windowMaximize()}
           >
@@ -74,23 +78,27 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
           </button>
           <button
             type="button"
-            className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-red-500 hover:text-white transition-colors"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
             title="Close"
             onClick={() => window.electronAPI?.windowClose()}
           >
             <XIcon className="size-4" />
           </button>
-          <div className="mx-1 h-5 w-px bg-border/60" />
+          <div className="mx-1 h-4 w-px bg-border/60" />
         </>
       )}
 
       <button
         type="button"
-        className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-        title={`Theme: ${theme}`}
+        className={glassEffect
+          ? "flex size-6 items-center justify-center rounded text-muted-foreground/30 transition-colors"
+          : "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"}
+        title={glassEffect ? "Theme locked (Desktop glass is on)" : `Theme: ${theme}`}
         onClick={cycleTheme}
       >
-        {theme === "system" ? (
+        {glassEffect ? (
+          <LockIcon className="size-3.5" />
+        ) : theme === "system" ? (
           <MonitorIcon className="size-3.5" />
         ) : resolvedTheme === "dark" ? (
           <SunIcon className="size-3.5" />
@@ -102,7 +110,7 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
       <button
         type="button"
         className={cn(
-          "flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors",
+          "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
           rightAreaExpanded && "bg-muted text-foreground",
         )}
         title={rightAreaExpanded ? "Collapse Right Area" : "Expand Right Area"}

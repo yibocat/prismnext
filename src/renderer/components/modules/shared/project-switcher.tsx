@@ -66,12 +66,15 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
             <span className="truncate flex-1 text-left">{projectName}</span>
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-56">
+        <DropdownMenuContent
+          align="start"
+          className="w-[var(--radix-dropdown-menu-trigger-width)]"
+        >
           {recentProjects.length > 0 ? (
             recentProjects.map((p) => (
               <DropdownMenuItem
                 key={p.path}
-                className="flex items-center gap-2 text-[length:var(--font-menu-item)]"
+                className="flex items-center gap-2 text-[length:var(--font-menu-item)] focus:bg-sidebar-accent focus:text-sidebar-accent-foreground"
                 onClick={() => handleOpenProjectPath(p.path)}
               >
                 <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
@@ -86,14 +89,14 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
           )}
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            className="flex items-center gap-2 text-[length:var(--font-menu-item)]"
+            className="flex items-center gap-2 text-[length:var(--font-menu-item)] focus:bg-sidebar-accent focus:text-sidebar-accent-foreground"
             onClick={() => newProjectTriggerRef.current?.click()}
           >
             <FolderPlusIcon className="size-3.5 shrink-0" />
             New Project...
           </DropdownMenuItem>
           <DropdownMenuItem
-            className="flex items-center gap-2 text-[length:var(--font-menu-item)]"
+            className="flex items-center gap-2 text-[length:var(--font-menu-item)] focus:bg-sidebar-accent focus:text-sidebar-accent-foreground"
             onClick={handleOpenProjectDialog}
           >
             <FolderOpenIcon className="size-3.5 shrink-0" />
@@ -101,7 +104,7 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            className="flex items-center gap-2 text-[length:var(--font-menu-item)]"
+            className="flex items-center gap-2 text-[length:var(--font-menu-item)] focus:bg-sidebar-accent focus:text-sidebar-accent-foreground"
             onClick={handleCloseProject}
           >
             <LogOutIcon className="size-3.5 shrink-0" />

@@ -24,10 +24,10 @@ const CopyButton = memo(({ text }: { text: string }) => {
     <button
       type="button"
       onClick={handleCopy}
-      className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 opacity-0 transition-all hover:bg-muted hover:text-foreground group-hover:opacity-100"
+      className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 opacity-0 transition-all hover:bg-accent hover:text-accent-foreground group-hover:opacity-100"
       title="Copy"
     >
-      {copied ? <CheckIcon className="size-3 text-green-500" /> : <CopyIcon className="size-3" />}
+      {copied ? <CheckIcon className="size-3 text-success" /> : <CopyIcon className="size-3" />}
     </button>
   );
 });
@@ -59,14 +59,14 @@ const UserHeader = memo(function UserHeader({ msg }: { msg: ChatStreamMessage })
   const long = text.length > 140;
 
   return (
-    <div className="sticky top-0 z-10 bg-background px-[12px] pb-2">
+    <div className="sticky top-0 z-20 bg-transparent px-3 pb-2">
       <div className={cn(
-        "max-w-3xl mx-auto rounded-2xl border border-border bg-muted px-4 py-2",
+        "max-w-3xl mx-auto rounded-lg border border-input bg-muted px-4 py-2",
         long && !expanded && "cursor-pointer hover:bg-muted/50",
       )} onClick={long && !expanded ? () => setExpanded(true) : undefined}>
         <div className="flex items-start gap-2">
           <span className={cn(
-            "flex-1 text-sm text-foreground",
+            "flex-1 text-[length:var(--font-chat-message)] text-foreground",
             long && !expanded ? "line-clamp-2" : "whitespace-pre-wrap break-words",
           )}>
             {text}
@@ -74,12 +74,12 @@ const UserHeader = memo(function UserHeader({ msg }: { msg: ChatStreamMessage })
           <CopyButton text={text} />
         </div>
         {long && !expanded && (
-          <div className="text-xs text-muted-foreground mt-0.5">Click to expand</div>
+          <div className="text-[length:var(--font-chat-meta)] text-muted-foreground mt-0.5">Click to expand</div>
         )}
         {long && expanded && (
           <button
             onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
-            className="text-xs text-muted-foreground hover:text-foreground mt-0.5"
+            className="text-[length:var(--font-chat-meta)] text-muted-foreground hover:text-foreground mt-0.5"
           >
             Collapse
           </button>

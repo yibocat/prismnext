@@ -7,7 +7,7 @@ import { Loader2Icon, CheckIcon, AlertCircleIcon } from "lucide-react";
 export function StatusIcon({ isLoading, isError }: { isLoading: boolean; isError: boolean }) {
   if (isLoading) return <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />;
   if (isError) return <AlertCircleIcon className="size-3.5 text-destructive" />;
-  return <CheckIcon className="size-3.5 text-emerald-500" />;
+  return <CheckIcon className="size-3.5 text-success" />;
 }
 
 // ─── Diff Renderer ───
@@ -42,12 +42,12 @@ export function DiffLines({ oldStr, newStr }: { oldStr: string; newStr: string }
     <>
       {displayRows.map((row, i) => {
         if (row.type === "skip") return <div key={i} className="text-muted-foreground/40 select-none">···</div>;
-        if (row.type === "del") return <div key={i} className="text-red-400 bg-red-500/5">- {row.text}</div>;
-        if (row.type === "add") return <div key={i} className="text-emerald-400 bg-emerald-500/5">+ {row.text}</div>;
+        if (row.type === "del") return <div key={i} className="text-destructive/80 bg-destructive/5">- {row.text}</div>;
+        if (row.type === "add") return <div key={i} className="text-success/80 bg-success/5">+ {row.text}</div>;
         return null;
       })}
       {rows.length > 200 && (
-        <div className="text-muted-foreground/50 text-xs mt-1">··· {rows.length - 200} more lines</div>
+        <div className="text-muted-foreground/50 text-[length:var(--font-chat-meta)] mt-1">··· {rows.length - 200} more lines</div>
       )}
     </>
   );

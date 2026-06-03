@@ -47,12 +47,12 @@ export function ChangesBar({
       </span>
 
       {added > 0 && (
-        <span className="text-[length:var(--font-badge)] text-green-500 shrink-0">
+        <span className="text-[length:var(--font-badge)] text-success shrink-0">
           +{added}
         </span>
       )}
       {removed > 0 && (
-        <span className="text-[length:var(--font-badge)] text-red-500 shrink-0">
+        <span className="text-[length:var(--font-badge)] text-destructive shrink-0">
           -{removed}
         </span>
       )}
@@ -69,7 +69,7 @@ export function ChangesBar({
         <>
           <button
             type="button"
-            className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+            className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
             onClick={onPrevChange}
             title="Previous change"
           >
@@ -77,7 +77,7 @@ export function ChangesBar({
           </button>
           <button
             type="button"
-            className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+            className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
             onClick={onNextChange}
             title="Next change"
           >
@@ -88,7 +88,7 @@ export function ChangesBar({
 
       <button
         type="button"
-        className="flex items-center gap-1 rounded px-2 py-0.5 text-[length:var(--font-toolbar-tab)] text-green-600 hover:bg-green-500/10 transition-colors shrink-0"
+        className="flex items-center gap-1 rounded px-2 py-0.5 text-[length:var(--font-toolbar-tab)] text-success hover:bg-success/10 transition-colors shrink-0"
         onClick={onAcceptAll}
         title="Accept all changes (⌘Y)"
       >
@@ -97,7 +97,7 @@ export function ChangesBar({
       </button>
       <button
         type="button"
-        className="flex items-center gap-1 rounded px-2 py-0.5 text-[length:var(--font-toolbar-tab)] text-red-500 hover:bg-red-500/10 transition-colors shrink-0"
+        className="flex items-center gap-1 rounded px-2 py-0.5 text-[length:var(--font-toolbar-tab)] text-destructive hover:bg-destructive/10 transition-colors shrink-0"
         onClick={onRejectAll}
         title="Reject all changes (⌘N)"
       >

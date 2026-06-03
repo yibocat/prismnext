@@ -61,11 +61,11 @@ export const EditWidget = memo(function EditWidget({
         onClick={() => setExpanded(!expanded)}
       >
         {resolved ? (
-          <CheckIcon className="size-3.5 text-emerald-500" />
+          <CheckIcon className="size-3.5 text-success" />
         ) : (
           <StatusIcon isLoading={isLoading} isError={!!isError} />
         )}
-        <FileEditIcon className="size-3.5 text-blue-500" />
+        <FileEditIcon className="size-3.5 text-info" />
         <span className="truncate font-medium">{fileName}</span>
         {resolved ? (
           <span className="text-muted-foreground/60 shrink-0">{resolved === "accepted" ? "Accepted" : "Rejected"}</span>
@@ -77,7 +77,7 @@ export const EditWidget = memo(function EditWidget({
         {!resolved && change && (
           <span className={cn(
             "text-[length:var(--font-badge)] font-mono shrink-0",
-            activeNewText.length - activeOldText.length >= 0 ? "text-emerald-500" : "text-red-500",
+            activeNewText.length - activeOldText.length >= 0 ? "text-success" : "text-destructive",
           )}>
             {activeNewText.length - activeOldText.length >= 0 ? "+" : ""}{activeNewText.length - activeOldText.length}
           </span>
@@ -95,10 +95,10 @@ export const EditWidget = memo(function EditWidget({
             ) : (
               <>
                 {toolUse.input?.old_string && (
-                  <div className="text-red-400 line-through mb-1">{toolUse.input.old_string.slice(0, 500)}</div>
+                  <div className="text-destructive/80 line-through mb-1">{toolUse.input.old_string.slice(0, 500)}</div>
                 )}
                 {toolUse.input?.new_string && (
-                  <div className="text-emerald-400">{toolUse.input.new_string.slice(0, 500)}</div>
+                  <div className="text-success/80">{toolUse.input.new_string.slice(0, 500)}</div>
                 )}
                 {toolUse.input?.content && (
                   <div className="text-muted-foreground">{toolUse.input.content.slice(0, 500)}</div>
@@ -115,7 +115,7 @@ export const EditWidget = memo(function EditWidget({
               <div className="flex-1" />
               <button
                 type="button"
-                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 transition-colors"
+                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[length:var(--font-badge)] font-medium text-success hover:bg-success/10 dark:hover:bg-success/20 transition-colors"
                 onClick={handleAccept}
               >
                 <CheckIcon className="size-3" />
@@ -123,7 +123,7 @@ export const EditWidget = memo(function EditWidget({
               </button>
               <button
                 type="button"
-                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[length:var(--font-badge)] font-medium text-destructive hover:bg-destructive/10 dark:hover:bg-destructive/10 transition-colors"
                 onClick={handleReject}
               >
                 <XIcon className="size-3" />

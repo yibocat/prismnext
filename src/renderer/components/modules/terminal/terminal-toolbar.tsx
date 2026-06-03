@@ -39,7 +39,7 @@ export function TerminalToolbar({ tabId, tabTitle }: TerminalToolbarProps) {
 
       <button
         type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
         title="Clear Screen"
         onClick={handleClear}
       >
@@ -48,7 +48,7 @@ export function TerminalToolbar({ tabId, tabTitle }: TerminalToolbarProps) {
 
       <button
         type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
         title="Interrupt (Ctrl+C)"
         onClick={handleKill}
       >
@@ -57,7 +57,7 @@ export function TerminalToolbar({ tabId, tabTitle }: TerminalToolbarProps) {
 
       <button
         type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
         title="New Terminal"
         onClick={handleNewTab}
       >

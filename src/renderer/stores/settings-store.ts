@@ -5,18 +5,26 @@ const log = createLogger("settings-store");
 
 export interface AppSettings {
   theme: "dark" | "light" | "system";
+  themeColor?: "teal" | "academic-blue" | "ink-green" | "rose" | "violet" | "amber" | "mono";
   sidebarCollapsed: boolean;
   rightPanelCollapsed: boolean;
   /** PDF viewer dark mode: off | on | follow (app theme) */
   pdfDarkMode?: "off" | "on" | "follow";
   zoteroApiKey?: string;
   zoteroUserId?: string;
+  /** Desktop glass transparency: on/off */
+  glassEffect?: boolean;
+  /** Glass intensity: 1 (most transparent) to 5 (most solid) */
+  glassIntensity?: number;
 }
 
 const defaults: AppSettings = {
   theme: "dark",
+  themeColor: "academic-blue",
   sidebarCollapsed: false,
   rightPanelCollapsed: false,
+  glassEffect: false,
+  glassIntensity: 3,
 };
 
 interface SettingsState {

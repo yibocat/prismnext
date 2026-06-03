@@ -122,7 +122,7 @@ export function TabBar({ tabs, activeTabId, onSelect, onClose, onReorder, dirtyF
                 {(() => {
                   const isDirty = dirtyFileIds?.has(tab.fileId ?? "") || dirtyFileIds?.has(tab.filePath ?? "");
                   if (isDirty) {
-                    return <span title="Unsaved changes"><DotIcon className="mr-1 size-3.5 shrink-0 text-blue-500" strokeWidth={4} /></span>;
+                    return <span title="Unsaved changes"><DotIcon className="mr-1 size-3.5 shrink-0 text-info" strokeWidth={4} /></span>;
                   }
                   if (tab.kind === "terminal") {
                     return <TerminalIcon className="mr-1 size-3.5 shrink-0 text-muted-foreground" />;

@@ -209,14 +209,14 @@ export function AiBar() {
               <div className="flex items-center gap-0.5 shrink-0">
                 <button
                   type="button"
-                  className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                   title="Maximize"
                 >
                   <Maximize2Icon className="size-3.5" />
                 </button>
                 <button
                   type="button"
-                  className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                   onClick={closePanel}
                   title="Close chat panel"
                 >
@@ -254,7 +254,7 @@ export function AiBar() {
               {hasConversation && (
                 <button
                   type="button"
-                  className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors mr-1"
+                  className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors mr-1"
                   onClick={openPanel}
                 >
                   {isStreaming ? (
@@ -275,7 +275,7 @@ export function AiBar() {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                     onMouseDown={(e) => e.preventDefault()}
                   >
                     <GitBranchIcon className="size-3.5" />
@@ -299,7 +299,7 @@ export function AiBar() {
               "w-full",
               isInputting
                 ? "h-12 max-w-3xl px-3 bg-card border-border cursor-text"
-                : "group h-1.5 max-w-30 px-0 bg-muted-foreground/75 border-border/40 cursor-pointer hover:h-8 hover:max-w-[220px] hover:bg-muted/80 hover:border-border/100 hover:delay-0 delay-100",
+                : "group h-1.5 max-w-30 px-0 bg-muted-foreground/75 border-border/40 cursor-pointer hover:h-8 hover:max-w-[220px] hover:bg-muted hover:border-border hover:delay-0 delay-100",
             )}
             onClick={() => { if (!isInputting) openInput(); }}
           >
@@ -310,7 +310,7 @@ export function AiBar() {
                   transition-all duration-200 ease-out delay-100 group-hover:delay-0
                   flex items-center justify-between select-none shrink-0 w-full px-3"
               >
-                <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors duration-200 whitespace-nowrap">
+                <span className="text-[length:var(--font-chat-meta)] text-muted-foreground group-hover:text-foreground transition-colors duration-200 whitespace-nowrap">
                   Manage AI Assistants
                 </span>
                 <Kbd className="bg-transparent transition-colors duration-200">⌘I</Kbd>
@@ -363,7 +363,7 @@ export function AiBar() {
                 </DropdownMenu>
                 <input
                   ref={inputRef}
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                  className="flex-1 bg-transparent text-[length:var(--font-size-14)] outline-none placeholder:text-muted-foreground"
                   placeholder="Ask AI about your research..."
                   value={value}
                   onChange={handleInputChange}
@@ -406,7 +406,7 @@ export function AiBar() {
               {hasConversation && (
                 <button
                   type="button"
-                  className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors mr-1"
+                  className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors mr-1"
                   onClick={openPanel}
                 >
                   {isStreaming ? (
@@ -427,7 +427,7 @@ export function AiBar() {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                     onMouseDown={(e) => e.preventDefault()}
                   >
                     <GitBranchIcon className="size-3.5" />

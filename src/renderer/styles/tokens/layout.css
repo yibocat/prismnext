@@ -9,9 +9,9 @@
 
 :root {
   /* ── Heights — derive from base scale, individually overridable ── */
-  --height-titlebar:            var(--height-base-38);
-  --height-welcome-titlebar:    var(--height-base-38);
-  --height-right-area-toolbar:  var(--height-base-32);
+  --height-titlebar:               var(--height-base-38);
+  --height-welcome-titlebar:       var(--height-base-38);
+  --height-right-area-subtoolbar:  var(--height-base-38);
   --height-sessions-header:     var(--height-base-32);
   --height-files-header:        var(--height-base-32);
   --height-outline-header:      var(--height-base-32);

@@ -21,7 +21,7 @@ export function SidebarToolbar({ leftSidebarRef }: SidebarToolbarProps) {
         <button
           type="button"
           className={cn(
-            "flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors",
+            "flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
             sidebarExpanded && "bg-muted text-foreground",
           )}
           title={sidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
@@ -50,12 +50,12 @@ export function SidebarToolbar({ leftSidebarRef }: SidebarToolbarProps) {
 
         <button
           type="button"
-          className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[length:var(--font-toolbar-label)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[length:var(--font-toolbar-label)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
           title="Command palette"
           onClick={() => setCommandOpen(true)}
         >
           <SearchIcon className="size-3.5" />
-          <Kbd className="text-[10px] h-4 min-w-4 px-0.5 bg-transparent">⌘K</Kbd>
+          <Kbd className="text-[length:var(--font-kbd)] h-4 min-w-4 px-0.5 bg-transparent">⌘K</Kbd>
         </button>
       </div>
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />

@@ -11,7 +11,7 @@ export function DashboardSidebar() {
 
   return (
     <>
-      <SidebarHeader className="flex h-8 shrink-0 items-center px-3 border-b border-border">
+      <SidebarHeader className="flex h-8 shrink-0 items-center px-3">
         <span className="text-[length:var(--font-size-12)] font-medium text-muted-foreground truncate">
           {projectName}
         </span>

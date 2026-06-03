@@ -4,6 +4,7 @@ import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useWindowState } from "@/hooks/use-window-state";
 import {
   Bot,
@@ -60,9 +61,11 @@ function relativeTime(ms: number): string {
 
 interface LeftSidebarProps {
   leftSidebarRef?: RefObject<PanelImperativeHandle | null>;
+  centerRef?: RefObject<PanelImperativeHandle | null>;
+  rightAreaRef?: RefObject<PanelImperativeHandle | null>;
 }
 
-export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSidebarProps) {
+export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef, rightAreaRef }: LeftSidebarProps) {
   const { platform, isFullscreen } = useWindowState();
   const isMac = platform === "darwin";
   const showMacSpacer = isMac && !isFullscreen;
@@ -156,7 +159,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSid
         >
           <span className="relative size-3.5 shrink-0 flex items-center justify-center">
             {isSessionStreaming ? (
-              <CircleDotDashed className="absolute size-3.5 text-blue-500 transition-opacity group-hover/menu-item:opacity-0" strokeWidth={2.5} />
+              <CircleDotDashed className="absolute size-3.5 text-primary transition-opacity group-hover/menu-item:opacity-0" strokeWidth={2.5} />
             ) : (
               <Dot className="absolute size-3.5 text-muted-foreground/30 transition-opacity group-hover/menu-item:opacity-0" strokeWidth={5.5} />
             )}
@@ -176,7 +179,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSid
             </span>
           </span>
           <span className="truncate text-[length:var(--font-session-item)] flex-1">{s.title}</span>
-          <span className="hidden group-hover/menu-item:inline text-[11px] text-muted-foreground/70 shrink-0">
+          <span className="hidden group-hover/menu-item:inline text-[length:var(--font-timestamp)] text-muted-foreground/70 shrink-0">
             {relativeTime(s.lastModified)}
           </span>
           {showArchived ? (
@@ -194,7 +197,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSid
               <span
                 role="button"
                 tabIndex={0}
-                className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-red-500 cursor-pointer"
+                className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-destructive cursor-pointer"
                 onClick={async (e) => {
                   e.stopPropagation();
                   if (!projectRoot) return;
@@ -266,33 +269,45 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSid
       defaultOpen
       className="contents"
     >
-      <Sidebar collapsible="none" className="relative shrink-0 bg-card border-r-0 !w-full">
+      <Sidebar collapsible="none" className="relative shrink-0 border-r-0 !w-full">
         {/* SidebarTopBar — pseudo-titlebar. Always preserves height to avoid layout jump,
             but only renders controls when sidebar is expanded (ContentTopBar handles collapsed state). */}
         <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center px-2 select-none">
           {!sidebarFullyCollapsed && (
-            <SidebarControls leftSidebarRef={leftSidebarRef!} showMacSpacer={showMacSpacer} />
+            <SidebarControls leftSidebarRef={leftSidebarRef!} showMacSpacer={showMacSpacer} showNewAgent={false} />
           )}
         </div>
         {/* ── Fixed function buttons (do not scroll) ── */}
         <div className="shrink-0 px-2 flex flex-col gap-1">
           <div>
-            <ProjectSwitcher className="flex w-full items-center gap-2 rounded-md border border-border px-2 py-1.5 text-[length:var(--font-session-item)] font-medium hover:bg-muted transition-colors" />
+            <ProjectSwitcher className="flex w-full items-center gap-2 rounded-md border border-border px-2 py-1.5 text-[length:var(--font-session-item)] font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors" />
           </div>
 
           <button
             type="button"
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] hover:bg-muted transition-colors"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
             onClick={() => { newSession(); setLeftSidebarOverlay(false); }}
           >
             <Bot className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="flex-1 text-left">New Agent</span>
-            <Kbd className="text-[10px] h-4 min-w-4 px-0.5 bg-transparent">⌘N</Kbd>
+            <Kbd className="text-[length:var(--font-kbd)] h-4 min-w-4 px-0.5 bg-transparent">⌘N</Kbd>
           </button>
 
           <button
             type="button"
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] hover:bg-muted transition-colors"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+            onClick={() => {
+              useRightPanelStore.getState().ensureTab("texworkspace");
+              const st = useLayoutStore.getState();
+              st.setRightToolbarTab("texworkspace");
+              const r = rightAreaRef?.current;
+              const c = centerRef?.current;
+              if (!r || !c) return;
+              if (r.isCollapsed()) r.expand();
+              c.collapse();
+              r.resize(9999);
+              setLeftSidebarOverlay(false);
+            }}
           >
             <FileType className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="flex-1 text-left">TeX Workspace</span>
@@ -308,7 +323,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSid
                 className="w-full px-2 py-1.5 flex items-center justify-between"
                 onClick={togglePinnedExpanded}
               >
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                <span className="text-[length:var(--font-sidebar-section)] font-medium uppercase tracking-wider text-muted-foreground/70">
                   Pinned
                 </span>
                 {pinnedExpanded ? <ChevronDown className="size-3 text-muted-foreground/50" /> : <ChevronRight className="size-3 text-muted-foreground/50" />}
@@ -324,7 +339,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSid
           )}
 
           <div className="px-2 py-1.5 flex items-center justify-between">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
+            <span className="text-[length:var(--font-sidebar-section)] font-medium uppercase tracking-wider text-muted-foreground/70">
               {showArchived ? "Archived" : "Sessions"}
             </span>
             <div className="flex items-center gap-0.5">
@@ -393,7 +408,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSid
         <SidebarFooter className="px-2 pb-2">
           <button
             type="button"
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
             onClick={() => {
               const st = useLayoutStore.getState();
               const doc = useDocumentStore.getState();
@@ -418,7 +433,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef }: LeftSid
     <>
       {leftSidebarOverlay &&
         createPortal(
-          <div className="fixed top-[var(--height-titlebar)] right-0 bottom-0 left-0 z-50 flex flex-col bg-background">
+          <div className="fixed top-[var(--height-titlebar)] right-0 bottom-0 left-0 z-50 flex flex-col glass-content">
             <div className="flex-1 min-h-0">{sidebarContent}</div>
           </div>,
           document.body,

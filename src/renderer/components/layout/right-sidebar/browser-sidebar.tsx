@@ -243,7 +243,7 @@ export function BrowserSidebar() {
         <div className="flex-1" />
         <button
           type="button"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0 disabled:opacity-50"
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0 disabled:opacity-50"
           title="Refresh bookmarks and recent"
           onClick={handleRefresh}
           disabled={refreshing}

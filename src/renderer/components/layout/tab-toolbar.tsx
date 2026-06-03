@@ -33,7 +33,7 @@ export function TabToolbar({ children, onToggleSidebar, filePath, projectName, h
   const hasBreadcrumb = segments.length > 0;
 
   return (
-    <div className="flex h-8 shrink-0 items-center px-2 gap-0.5 border-y border-border select-none">
+    <div className="flex h-[var(--height-right-area-subtoolbar)] shrink-0 items-center px-2 gap-0.5 border-y border-border select-none">
       {/* ─── Breadcrumb ─── */}
       {hasBreadcrumb && (
         <Breadcrumb className="shrink-0">
@@ -93,7 +93,7 @@ export function TabToolbar({ children, onToggleSidebar, filePath, projectName, h
       <button
         type="button"
         className={cn(
-          "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0",
+          "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0",
           rightSidebarOpen && "bg-muted text-foreground",
         )}
         title="Toggle Right Sidebar"

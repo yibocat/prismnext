@@ -5,7 +5,7 @@ export function TerminalPlaceholder() {
     <div className="flex h-full items-center justify-center text-muted-foreground">
       <div className="flex flex-col items-center gap-3">
         <TerminalIcon className="size-10 opacity-40" />
-        <p className="text-sm">Open a terminal to get started</p>
+        <p className="text-[length:var(--font-placeholder)]">Open a terminal to get started</p>
       </div>
     </div>
   );

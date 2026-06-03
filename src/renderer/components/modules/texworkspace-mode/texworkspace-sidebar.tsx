@@ -272,7 +272,7 @@ export function TexworkspaceSidebar() {
             className={`flex size-6 items-center justify-center rounded transition-colors ${
               sidebarTab === "structure"
                 ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             }`}
             title="Structure"
             onClick={() => setSidebarTab("structure")}
@@ -284,7 +284,7 @@ export function TexworkspaceSidebar() {
             className={`flex size-6 items-center justify-center rounded transition-colors ${
               sidebarTab === "log"
                 ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             }`}
             title="Compile Log"
             onClick={() => setSidebarTab("log")}
@@ -294,7 +294,7 @@ export function TexworkspaceSidebar() {
           <span className="mx-0.5 h-3 w-px bg-border shrink-0" />
           <button
             type="button"
-            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
             title={anyExpanded ? "Collapse All" : "Expand All"}
             onClick={anyExpanded ? collapseAll : expandAll}
           >
@@ -314,7 +314,7 @@ export function TexworkspaceSidebar() {
                 Compiling…
               </p>
             ) : compileLog ? (
-              <pre className={`text-[length:var(--font-size-12)] whitespace-pre-wrap break-words font-mono ${compileError ? "text-red-500" : "text-muted-foreground"}`}>
+              <pre className={`text-[length:var(--font-size-12)] whitespace-pre-wrap break-words font-mono ${compileError ? "text-destructive" : "text-muted-foreground"}`}>
                 {compileLog}
               </pre>
             ) : (

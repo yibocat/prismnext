@@ -36,7 +36,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
       {/* Compile */}
       <button
         type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
         title="Compile"
         onClick={handleCompile}
         disabled={isCompiling || !compileFile}
@@ -47,12 +47,12 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
       {/* Auto-compile toggle */}
       <button
         type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
         onClick={toggleAutoCompile}
         title={autoCompile ? "Auto-compile: ON" : "Auto-compile: OFF"}
       >
         {autoCompile ? (
-          <ZapIcon className="size-3.5 text-yellow-500" />
+          <ZapIcon className="size-3.5 text-warning" />
         ) : (
           <ZapOffIcon className="size-3.5" />
         )}
@@ -68,7 +68,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
         className={`flex size-6 items-center justify-center rounded transition-colors ${
           texworkspaceViewMode === "split"
             ? "bg-muted text-foreground"
-            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
         }`}
       >
         <Columns2Icon className="size-3.5" />
@@ -80,7 +80,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
         className={`flex size-6 items-center justify-center rounded transition-colors ${
           texworkspaceViewMode === "tex"
             ? "bg-muted text-foreground"
-            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
         }`}
       >
         <FileTextIcon className="size-3.5" />
@@ -92,7 +92,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
         className={`flex size-6 items-center justify-center rounded transition-colors ${
           texworkspaceViewMode === "pdf"
             ? "bg-muted text-foreground"
-            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
         }`}
       >
         <EyeIcon className="size-3.5" />

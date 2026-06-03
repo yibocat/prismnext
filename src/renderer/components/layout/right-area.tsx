@@ -15,6 +15,8 @@ import { BrowserToolbar } from "@/components/modules/browser/browser-toolbar";
 import { TerminalToolbar } from "@/components/modules/terminal";
 import { useBrowserStore } from "@/stores/browser-store";
 import { useTerminalStore } from "@/stores/terminal-store";
+import { useSettingsStore } from "@/stores/settings-store";
+import { LockIcon } from "lucide-react";
 import { AiBar } from "@/components/modules/chat";
 import { type PanelImperativeHandle } from "react-resizable-panels";
 import {
@@ -103,7 +105,7 @@ function SidebarDragHandle({
 
   return (
     <div
-      className="w-px bg-border hover:bg-primary/40 transition-colors cursor-col-resize shrink-0 relative group"
+      className="w-px bg-border hover:bg-foreground/30 transition-colors cursor-col-resize shrink-0 relative group"
       onMouseDown={handleMouseDown}
     >
       {/* Wider hit area for easier grabbing */}
@@ -155,8 +157,10 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   const { platform, isMaximized, isFullscreen } = useWindowState();
   const isMac = platform === "darwin";
   const { theme, resolvedTheme, setTheme } = useTheme();
+  const glassEffect = useSettingsStore((s) => s.settings.glassEffect);
 
   const cycleTheme = () => {
+    if (glassEffect) return;
     if (theme === "light") setTheme("dark");
     else if (theme === "dark") setTheme("system");
     else setTheme("light");
@@ -309,7 +313,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   const sidebarFull = rightSidebarOpen && sidebarFullMode;
 
   return (
-    <div className="flex h-full flex-col min-w-0 bg-background">
+    <div className="flex h-full flex-col min-w-0 glass-content">
       {/* Toolbar */}
       <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center px-2 gap-0.5 overflow-x-auto scrollbar-none select-none">
         <div className="flex items-center gap-0.5 shrink-0">
@@ -327,7 +331,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
                 type="button"
                 className={cn(
                   "flex size-6 items-center justify-center rounded transition-colors",
-                  rightToolbarTab === "files" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  rightToolbarTab === "files" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                 )}
                 title={`${tab.label} — open project folder`}
                 onClick={() => {
@@ -345,7 +349,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
               type="button"
               className={cn(
                 "flex size-6 items-center justify-center rounded transition-colors",
-                rightToolbarTab === tab.id ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                rightToolbarTab === tab.id ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
               )}
               title={tab.label}
               onClick={() => {
@@ -380,7 +384,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
           <>
             <button
               type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
               title="Minimize"
               onClick={() => window.electronAPI?.windowMinimize()}
             >
@@ -388,7 +392,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
             </button>
             <button
               type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
               title={isMaximized ? "Restore" : "Maximize"}
               onClick={() => window.electronAPI?.windowMaximize()}
             >
@@ -396,7 +400,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
             </button>
             <button
               type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-red-500 hover:text-white transition-colors"
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
               title="Close"
               onClick={() => window.electronAPI?.windowClose()}
             >
@@ -406,14 +410,18 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
           </>
         )}
 
-        {/* Theme toggle */}
+        {/* Theme toggle — locked when glass is on */}
         <button
           type="button"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title={`Theme: ${theme}`}
+          className={glassEffect
+            ? "flex size-6 items-center justify-center rounded text-muted-foreground/30 transition-colors"
+            : "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"}
+          title={glassEffect ? "Theme locked (Desktop glass is on)" : `Theme: ${theme}`}
           onClick={cycleTheme}
         >
-          {theme === "system" ? (
+          {glassEffect ? (
+            <LockIcon className="size-3.5" />
+          ) : theme === "system" ? (
             <MonitorIcon className="size-3.5" />
           ) : resolvedTheme === "dark" ? (
             <SunIcon className="size-3.5" />
@@ -427,7 +435,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
         {/* Editor maximize / restore */}
         <button
           type="button"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
           title={editorMaximized ? "Restore Editor" : "Maximize Editor"}
           onClick={() => {
             const c = centerRef.current;
@@ -450,7 +458,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
         <button
           type="button"
           className={cn(
-            "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors",
+            "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
             rightAreaExpanded && "bg-muted text-foreground",
           )}
           title="Close Panel"
@@ -458,7 +466,10 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
             const r = rightAreaRef.current;
             const c = centerRef.current;
             if (!r || !c) return;
-            useLayoutStore.getState().setRightAreaWidth(r.getSize().inPixels);
+            // Only save the width if not maximized — otherwise keep the last normal width
+            if (!useLayoutStore.getState().editorMaximized) {
+              useLayoutStore.getState().setRightAreaWidth(r.getSize().inPixels);
+            }
             r.collapse();
             c.resize(9999);
           }}

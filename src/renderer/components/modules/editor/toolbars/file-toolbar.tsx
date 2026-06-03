@@ -24,7 +24,7 @@ function HtmlPreviewButton({ filePath }: { filePath: string }) {
   return (
     <button
       type="button"
-      className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+      className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
       title="Preview in Browser"
       onClick={handlePreview}
     >

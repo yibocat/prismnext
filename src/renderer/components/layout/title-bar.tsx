@@ -3,6 +3,8 @@ import { useTheme } from "next-themes";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useSettingsStore } from "@/stores/settings-store";
+import { LockIcon } from "lucide-react";
 import { SIDEBAR_LEFT_DEFAULT, SIDEBAR_OVERLAY_THRESHOLD } from "@/styles/constants";
 import { cn } from "@/lib/utils";
 import { Kbd } from "@/components/ui/kbd";
@@ -48,10 +50,14 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
   const isMobile = useIsMobile();
   const sidebarExpanded = useLayoutStore((s) => s.sidebarExpanded);
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
+  const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
+  const inSettings = leftSidebarView === "settings";
   const [commandOpen, setCommandOpen] = useState(false);
   const { theme, resolvedTheme, setTheme } = useTheme();
+  const glassEffect = useSettingsStore((s) => s.settings.glassEffect);
 
   const cycleTheme = () => {
+    if (glassEffect) return;
     if (theme === "light") setTheme("dark");
     else if (theme === "dark") setTheme("system");
     else setTheme("light");
@@ -62,7 +68,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
 
   return (
     <>
-    <div className="drag-region relative flex h-[var(--height-titlebar)] shrink-0 items-center px-2.5 select-none">
+    <div className="drag-region relative flex h-[var(--height-titlebar)] shrink-0 items-center px-2.5 select-none glass-content">
       {/* ── Left: Traffic lights spacer + Project + Sidebar toggle ── */}
       <div className="z-10 flex items-center gap-1">
         {showMacSpacer && <div className="w-[60px]" />}
@@ -70,7 +76,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
         <button
           type="button"
           className={cn(
-            "flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors",
+            "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
             sidebarExpanded && "bg-muted text-foreground",
           )}
           title={sidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
@@ -99,12 +105,12 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
 
         <button
           type="button"
-          className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[length:var(--font-toolbar-label)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[length:var(--font-toolbar-label)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
           title="Command palette"
           onClick={() => setCommandOpen(true)}
         >
           <SearchIcon className="size-3.5" />
-          <Kbd className="text-[10px] h-4 min-w-4 px-0.5 bg-transparent">⌘K</Kbd>
+          <Kbd className="text-[length:var(--font-kbd)] h-4 min-w-4 px-0.5 bg-transparent">⌘K</Kbd>
         </button>
 
       </div>
@@ -118,7 +124,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
           <>
             <button
               type="button"
-              className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
               title="Minimize"
               onClick={() => window.electronAPI?.windowMinimize()}
             >
@@ -126,7 +132,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
             </button>
             <button
               type="button"
-              className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
               title={isMaximized ? "Restore" : "Maximize"}
               onClick={() => window.electronAPI?.windowMaximize()}
             >
@@ -134,24 +140,28 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
             </button>
             <button
               type="button"
-              className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-red-500 hover:text-white transition-colors"
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
               title="Close"
               onClick={() => window.electronAPI?.windowClose()}
             >
               <XIcon className="size-4" />
             </button>
 
-            <div className="mx-1 h-5 w-px bg-border/60" />
+            <div className="mx-1 h-4 w-px bg-border/60" />
           </>
         )}
 
         <button
           type="button"
-          className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          title={`Theme: ${theme}`}
+          className={glassEffect
+            ? "flex size-6 items-center justify-center rounded text-muted-foreground/30 transition-colors"
+            : "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"}
+          title={glassEffect ? "Theme locked (Desktop glass is on)" : `Theme: ${theme}`}
           onClick={cycleTheme}
         >
-          {theme === "system" ? (
+          {glassEffect ? (
+            <LockIcon className="size-3.5" />
+          ) : theme === "system" ? (
             <MonitorIcon className="size-3.5" />
           ) : resolvedTheme === "dark" ? (
             <SunIcon className="size-3.5" />
@@ -160,10 +170,11 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
           )}
         </button>
 
+        {!inSettings && (
         <button
           type="button"
           className={cn(
-            "flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors",
+            "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
             rightAreaExpanded && "bg-muted text-foreground",
           )}
           title={rightAreaExpanded ? "Collapse Right Area" : "Expand Right Area"}
@@ -187,6 +198,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
         >
           <PanelRight className="size-3.5" />
         </button>
+        )}
       </div>
     </div>
     <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />

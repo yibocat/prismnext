@@ -1,12 +1,13 @@
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { useTheme } from "next-themes";
+import { useSettingsStore } from "@/stores/settings-store";
 import type { ITheme } from "@xterm/xterm";
 
 // ─── VS Code Light+ inspired ───
 
 const LIGHT_THEME: ITheme = {
   foreground: "#1a1a1a",
-  background: "#ffffff",
+  background: "#f8f8f8", // fallback — overridden by theme CSS variable below
   cursor: "#1a1a1a",
   cursorAccent: "#ffffff",
   selectionBackground: "#0066cc40",
@@ -33,9 +34,9 @@ const LIGHT_THEME: ITheme = {
 
 const DARK_THEME: ITheme = {
   foreground: "#d4d4d4",
-  background: "#1e1e1e",
+  background: "#1e1e2a", // fallback — overridden by theme CSS variable below
   cursor: "#d4d4d4",
-  cursorAccent: "#1e1e1e",
+  cursorAccent: "#1e1e2a",
   selectionBackground: "#264f7840",
   selectionForeground: "#d4d4d4",
   black: "#000000",
@@ -56,12 +57,52 @@ const DARK_THEME: ITheme = {
   brightWhite: "#e5e5e5",
 };
 
+// ─── Helpers ───
+
+/** Read a CSS variable from <html> and return its value */
+function getCSSVar(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/** Convert an oklch CSS color string to an rgba hex via canvas pixel sampling */
+function oklchToHex(oklch: string): string {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1;
+  canvas.height = 1;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = oklch;
+  ctx.fillRect(0, 0, 1, 1);
+  const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+  // Return as hex (no alpha — xterm doesn't need it for background)
+  return "#" + [r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("");
+}
+
 // ─── Hook ───
 
 export function useTerminalTheme(): ITheme {
   const { resolvedTheme } = useTheme();
-  return useMemo(
-    () => (resolvedTheme === "light" ? LIGHT_THEME : DARK_THEME),
-    [resolvedTheme],
-  );
+  const themeColor = useSettingsStore((s) => s.settings.themeColor);
+  const [backgroundHex, setBackgroundHex] = useState("#1e1e2a");
+
+  useEffect(() => {
+    // Delay one frame so the theme CSS variables are applied before we read them.
+    // next-themes may apply the .dark class asynchronously, so reading immediately
+    // could give the stale value from the previous mode.
+    const raf = requestAnimationFrame(() => {
+      const bg = getCSSVar("--background");
+      if (bg) {
+        try {
+          setBackgroundHex(oklchToHex(bg));
+        } catch {
+          // keep fallback
+        }
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [resolvedTheme, themeColor]);
+
+  return useMemo(() => {
+    const base = resolvedTheme === "light" ? LIGHT_THEME : DARK_THEME;
+    return { ...base, background: backgroundHex };
+  }, [resolvedTheme, backgroundHex]);
 }

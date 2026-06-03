@@ -125,7 +125,7 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
       {/* Nav buttons */}
       <button
         type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
         title="Back"
         onClick={handleBack}
       >
@@ -133,7 +133,7 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
       </button>
       <button
         type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
         title="Forward"
         onClick={handleForward}
       >
@@ -141,7 +141,7 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
       </button>
       <button
         type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
         title={isLoading ? "Stop loading" : "Reload"}
         onClick={isLoading ? handleStop : handleReload}
       >
@@ -151,11 +151,11 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
       {/* Bookmark */}
       <button
         type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
         title={isBookmarked ? "Remove bookmark" : "Bookmark this page"}
         onClick={handleBookmark}
       >
-        <StarIcon className={cn("size-3.5", isBookmarked && "fill-amber-400 text-amber-400")} />
+        <StarIcon className={cn("size-3.5", isBookmarked && "fill-warning text-warning")} />
       </button>
 
       <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
@@ -180,7 +180,7 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
             title="More"
           >
             <EllipsisIcon className="size-3.5" />

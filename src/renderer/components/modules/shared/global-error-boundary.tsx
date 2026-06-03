@@ -42,7 +42,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
       return (
         <div className="flex h-screen w-screen items-center justify-center bg-background">
           <div className="mx-4 max-w-md text-center">
-            <h1 className="mb-2 font-semibold text-foreground text-lg">
+            <h1 className="mb-2 font-semibold text-foreground text-[length:var(--font-size-16)]">
               Something went wrong
             </h1>
             <p className="mb-4 text-muted-foreground text-[length:var(--font-chat-message)]">

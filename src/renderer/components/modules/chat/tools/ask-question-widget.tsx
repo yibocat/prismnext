@@ -37,7 +37,7 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
     return (
       <div className="my-2 flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-[length:var(--font-code)]">
         <StatusIcon isLoading={isLoading} isError={!!isError} />
-        <MessageCircleQuestionIcon className="size-3.5 text-blue-500" />
+        <MessageCircleQuestionIcon className="size-3.5 text-info" />
         <span className="font-medium">{isLoading ? "Asking question..." : "Asked question"}</span>
       </div>
     );
@@ -46,11 +46,11 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
   return (
     <div className={cn(
       "my-2 rounded-lg border px-4 py-3 text-[length:var(--font-code)] transition-colors",
-      needsUserAnswer ? "border-blue-500/40 bg-blue-500/5" : "border-blue-500/20 bg-blue-500/[0.02]",
+      needsUserAnswer ? "border-info/40 bg-info/5" : "border-info/20 bg-info/[0.02]",
     )}>
       <div className="flex items-center gap-2 mb-2">
-        <MessageCircleQuestionIcon className="size-3.5 text-blue-500" />
-        <span className="font-medium text-blue-600 dark:text-blue-400">
+        <MessageCircleQuestionIcon className="size-3.5 text-info" />
+        <span className="font-medium text-info dark:text-info/80">
           {needsUserAnswer ? "Choose an option:" : answered ? "Answer sent" : "Question answered"}
         </span>
       </div>
@@ -63,7 +63,7 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
             disabled={!needsUserAnswer}
             className={cn(
               "flex items-center gap-2 rounded-md px-3 py-2 text-left text-[length:var(--font-code)] transition-colors",
-              needsUserAnswer && "hover:bg-blue-500/10 cursor-pointer",
+              needsUserAnswer && "hover:bg-info/10 cursor-pointer",
               !needsUserAnswer && "cursor-default opacity-60",
             )}
             onClick={() => handleSelectOption(opt)}

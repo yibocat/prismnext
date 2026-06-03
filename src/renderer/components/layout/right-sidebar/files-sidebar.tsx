@@ -269,7 +269,7 @@ function FileTreeNode({
               {getFileIcon(file)}
               <span className="truncate">{node.name}</span>
               {isDirty && (
-                <span className="ml-auto size-2 shrink-0 rounded-full bg-blue-500" title="Unsaved changes" />
+                <span className="ml-auto size-2 shrink-0 rounded-full bg-info" title="Unsaved changes" />
               )}
             </SidebarMenuSubButton>
           </div>
@@ -318,7 +318,7 @@ function FilesHeader({ callbacks, projectName, anyExpanded, onToggleAll }: {
       <div className="flex items-center gap-0.5 shrink-0">
         <button
           type="button"
-          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
           title="New File"
           onClick={() => callbacks.onNewFile()}
         >
@@ -326,7 +326,7 @@ function FilesHeader({ callbacks, projectName, anyExpanded, onToggleAll }: {
         </button>
         <button
           type="button"
-          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
           title="New Folder"
           onClick={() => callbacks.onNewFolder()}
         >
@@ -334,7 +334,7 @@ function FilesHeader({ callbacks, projectName, anyExpanded, onToggleAll }: {
         </button>
         <button
           type="button"
-          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
           title={anyExpanded ? "Collapse All" : "Expand All"}
           onClick={onToggleAll}
         >
@@ -346,7 +346,7 @@ function FilesHeader({ callbacks, projectName, anyExpanded, onToggleAll }: {
         </button>
         <button
           type="button"
-          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
           title="Refresh"
           onClick={handleRefresh}
         >
@@ -688,7 +688,7 @@ export function FilesSidebar() {
               autoFocus
             />
             {nameError && (
-              <p className="text-destructive text-xs">{nameError}</p>
+              <p className="text-destructive text-[length:var(--font-error)]">{nameError}</p>
             )}
           </div>
           <DialogFooter>

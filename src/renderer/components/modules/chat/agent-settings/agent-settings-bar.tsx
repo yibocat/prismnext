@@ -32,7 +32,7 @@ export function AgentSettingsBar() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex items-center gap-1 rounded px-2 py-1 text-muted-foreground text-[length:var(--font-chat-meta)] transition-colors hover:bg-muted hover:text-foreground"
+          className="flex items-center gap-1 rounded px-2 py-1 text-muted-foreground text-[length:var(--font-chat-meta)] transition-colors hover:bg-accent hover:text-accent-foreground"
         >
           <Label />
           <ChevronDownIcon className="size-3" />

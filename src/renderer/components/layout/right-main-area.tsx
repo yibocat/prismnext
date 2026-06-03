@@ -6,7 +6,7 @@ import { Group, Panel, Separator } from "react-resizable-panels";
 import { RightPane } from "@/components/layout/right-pane";
 import { PdfPreview } from "@/components/modules/preview";
 
-const SEP = "w-px bg-border hover:bg-primary/40 transition-colors outline-none";
+const SEP = "w-px bg-border hover:bg-foreground/30 transition-colors outline-none relative after:absolute after:inset-y-0 after:-left-1 after:-right-1";
 
 export function RightMainArea() {
   const { isActive, viewMode, switchToFile } = useTexworkspace();

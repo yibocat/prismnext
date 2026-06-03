@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.3.10 — 2026-06-04
+
+### Desktop Glass — Frosted Transparency
+
+macOS native Vibrancy / Windows Acrylic desktop-through frosted glass effect. Enable in Settings → Appearance → Desktop glass, with 5-level intensity slider. Glass-on forces System theme to keep native vibrancy tint in sync with CSS colors.
+
+- Electron `transparent: true` + `vibrancy: "under-window"` (macOS) / `backgroundMaterial: "acrylic"` (Windows)
+- Body, Sidebar, Content, Toolbar — four independent opacity layers via CSS `color-mix()`, respecting theme hue
+- Per-mode border overrides so separator/card borders stay visible on glass in both light and dark
+- New Switch and Slider UI components
+
+### Theme System Overhaul
+
+- **Warm → Teal**: Replaced Warm theme with Teal (cyan-green, hue 185–195), filling the gap between blue and green. Default theme is now Academic Blue
+- **Theme Color Picker**: Visual palette picker in Settings → Appearance with 5-step gradient bars per theme
+- **`--accent` chroma boost**: 2–3× chroma increase across all 7 themes so `--accent` is visibly distinct from `--muted`; all hover effects now show real theme color
+- **Solid border colors**: Dark-mode `--border` changed from transparent-white to solid dark gray; light-mode adjusted for visibility on glass. All 7 themes updated
+- **Terminal theme-aware**: Terminal background reads `--background` via oklch→hex conversion, adapts to theme color and light/dark mode in real time
+
+### Layout & Interaction
+
+- **Global hover unification**: All toolbar, sidebar, editor, browser, and terminal buttons use `hover:bg-accent hover:text-accent-foreground`
+- **RightArea maximize fix**: Closing RightArea while maximized no longer saves the maximized width; reopen restores last normal width
+- **Window size persistence**: Window bounds saved on close, restored on next launch
+- **TeX Workspace shortcut**: LeftSidebar "TeX Workspace" button now creates the texworkspace tab, opens RightArea maximized
+- **New Agent + button**: ContentTopBar gains a `+` button (visible when sidebar collapsed), duplicates the "New Agent" action
+- **ProjectSwitcher**: Dropdown matches trigger width; items use theme-colored hover
+- **Session title separator removed**: The vertical bar between sidebar controls and session title in ContentTopBar is gone
+
+### Chat & Messages
+
+- Fixed Mermaid diagram action buttons overlaying sent-message header (z-index)
+- Sent-message header: reduced border radius, added border separator, matched input border color
+
+### Settings
+
+- **Shortcuts reference page**: Lists all 19 keyboard shortcuts with Active / Placed / Planned status labels
+- Theme selector locked to System when Desktop glass is active
+
+### Fixes
+
+- Settings Sidebar glass effect now matches main LeftSidebar
+- Border line visibility in light mode on glass backgrounds
+- Multiple light/dark mode border color inconsistencies resolved
+
 ## 0.3.9 — 2026-06-03
 
 ### Terminal Mode — Real Shell in Right Panel
@@ -718,3 +763,4 @@
 - Session titles no longer show system content
 - `process.env` → `import.meta.env` for Vite renderer compatibility
 - TypeScript compilation errors resolved
+

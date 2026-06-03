@@ -121,7 +121,7 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
       <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center justify-end px-2 gap-0.5 select-none" style={{ transform: "translateZ(0)" }}>
         <button
           type="button"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
           title={`Theme: ${theme}`}
           onClick={cycleTheme}
         >
@@ -135,7 +135,7 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
         </button>
         <button
           type="button"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
           title="Settings"
           onClick={() => {
             useDocumentStore.getState().setShowWelcome(false);
@@ -153,7 +153,7 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
           <div className="flex size-8 items-center justify-center rounded-lg bg-foreground">
             <SparklesIcon className="size-4 text-background" />
           </div>
-          <span className="text-lg font-medium text-foreground tracking-tight">Prism</span>
+          <span className="text-[length:var(--font-size-16)] font-medium text-foreground tracking-tight">Prism</span>
         </div>
 
         {/* Two-column layout — stacks vertically on narrow windows */}
@@ -168,7 +168,7 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
               <NewProjectDialog>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[length:var(--font-button)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[length:var(--font-button)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors text-left"
                 >
                   <PlusIcon className="size-4 shrink-0 opacity-60" />
                   Create new project...
@@ -183,7 +183,7 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
               </p>
               <button
                 type="button"
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[length:var(--font-button)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors text-left"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[length:var(--font-button)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors text-left"
                 onClick={handleOpen}
               >
                 <FolderOpenIcon className="size-4 shrink-0 opacity-60" />

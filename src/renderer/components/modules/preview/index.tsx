@@ -269,7 +269,7 @@ function PdfViewerInner({ isPdfFile, isCompiling, compileError, persistKey }: Pd
       const uuid = `synctex-${Date.now()}`;
       synctexHighlightRef.current = uuid;
       addColoredHighlight({
-        color: "rgba(255, 200, 0, 0.4)",
+        color: "color-mix(in srgb, var(--warning) 40%, transparent)",
         rectangles: [{
           pageNumber: pos.page, top: pos.y, left: pos.x,
           height: pos.height, width: pos.width, type: "pixels",
@@ -352,7 +352,7 @@ function PdfViewerInner({ isPdfFile, isCompiling, compileError, persistKey }: Pd
               className={`flex size-6 items-center justify-center rounded transition-colors ${
                 sidePanel === t.id
                   ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               }`}
               title={t.label}
               onClick={() => setSidePanel(sidePanel === t.id ? null : t.id)}
@@ -365,12 +365,12 @@ function PdfViewerInner({ isPdfFile, isCompiling, compileError, persistKey }: Pd
         {/* Compile status (TeX mode only) */}
         <div className="flex items-center gap-1.5">
           {!isPdfFile && isCompiling && (
-            <span className="flex items-center gap-1 text-yellow-600">
+            <span className="flex items-center gap-1 text-warning">
               <LoaderIcon className="size-3 animate-spin" /> Compiling…
             </span>
           )}
           {!isPdfFile && compileError && (
-            <span className="flex items-center gap-1 text-red-500">
+            <span className="flex items-center gap-1 text-destructive">
               <AlertCircleIcon className="size-3" /> Error
             </span>
           )}
@@ -458,7 +458,7 @@ function PdfViewerInner({ isPdfFile, isCompiling, compileError, persistKey }: Pd
           <div className="shrink-0 border-r border-border bg-card overflow-hidden" style={{ width: PANEL_WIDTH }}>
             {sidePanel === "outline" && <OutlinePanel onJump={() => setSidePanel(null)} />}
             {sidePanel === "search" && (
-              <Search loading={<span className="flex justify-center pt-10 text-muted-foreground text-sm">Indexing…</span>}>
+              <Search loading={<span className="flex justify-center pt-10 text-muted-foreground text-[length:var(--font-placeholder)]">Indexing…</span>}>
                 <SearchPanel />
               </Search>
             )}
@@ -553,7 +553,7 @@ export function PdfPreview() {
             isZoomFitWidth
             className="h-full flex flex-col"
             loader={
-              <span className="flex justify-center pt-20 text-muted-foreground text-sm">
+              <span className="flex justify-center pt-20 text-muted-foreground text-[length:var(--font-placeholder)]">
                 Loading…
               </span>
             }
@@ -566,7 +566,7 @@ export function PdfPreview() {
             />
           </Root>
         ) : !isCompiling && !source ? (
-          <span className="flex justify-center pt-20 text-muted-foreground text-sm">
+          <span className="flex justify-center pt-20 text-muted-foreground text-[length:var(--font-placeholder)]">
             Compile to preview PDF
           </span>
         ) : null}

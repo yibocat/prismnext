@@ -32,7 +32,7 @@ export function RightSidebar() {
       className="contents"
       style={{ "--sidebar-width": `${rightSidebarWidth}px` } as React.CSSProperties}
     >
-      <Sidebar collapsible="none" className="relative shrink-0 bg-card" side="right">
+      <Sidebar collapsible="none" className="relative shrink-0" side="right">
         <Content />
       </Sidebar>
     </SidebarProvider>

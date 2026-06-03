@@ -20,7 +20,7 @@ export function MarkdownToolbar() {
       <button
         type="button"
         className={cn(
-          "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0",
+          "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0",
           mdWidthLimited && "text-foreground",
         )}
         title={mdWidthLimited ? "Full width" : "Limit width"}
@@ -30,7 +30,7 @@ export function MarkdownToolbar() {
       </button>
       <button
         type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
         title={isPreview ? "Source" : "Preview"}
         onClick={() => {
           if (activeTabId) setTabViewMode(activeTabId, isPreview ? "source" : "preview");

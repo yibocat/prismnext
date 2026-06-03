@@ -1,5 +1,5 @@
 import { useTheme } from "next-themes";
-import { useSettingsStore } from "@/stores/settings-store";
+import { useSettingsStore, type AppSettings } from "@/stores/settings-store";
 import {
   Select,
   SelectContent,
@@ -7,10 +7,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import { cn } from "@/lib/utils";
+import { ThemeColorPicker } from "./theme-color-picker";
+
+const INTENSITY_LABELS: Record<number, string> = {
+  1: "Minimal",
+  2: "Subtle",
+  3: "Medium",
+  4: "Strong",
+  5: "Strongest",
+};
 
 export function AppearanceSettings() {
   const { theme, setTheme } = useTheme();
+  const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
+
+  const glassEffect = settings.glassEffect ?? true;
+  const glassIntensity = settings.glassIntensity ?? 3;
 
   return (
     <div className="flex-1 overflow-auto">
@@ -22,16 +38,19 @@ export function AppearanceSettings() {
           </p>
         </div>
 
-        {/* Theme */}
+        {/* Theme — locked to System when glass is on to match native vibrancy tint */}
         <div className="flex items-center justify-between">
           <div>
             <p className="text-[length:var(--font-button)] font-medium">Theme</p>
             <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-              Color scheme for the editor and interface.
+              {glassEffect
+                ? "Locked to System while Desktop glass is active."
+                : "Color scheme for the editor and interface."}
             </p>
           </div>
           <Select
-            value={theme}
+            value={glassEffect ? "system" : theme}
+            disabled={glassEffect}
             onValueChange={(v) => {
               setTheme(v);
               updateSettings({ theme: v as "dark" | "light" | "system" });
@@ -46,6 +65,66 @@ export function AppearanceSettings() {
               <SelectItem value="system">System</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        {/* Theme Color */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[length:var(--font-button)] font-medium">Theme color</p>
+            <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
+              Accent color for buttons, links, and interactive elements.
+            </p>
+          </div>
+          <ThemeColorPicker
+            value={settings.themeColor ?? "academic-blue"}
+            onChange={(v) => updateSettings({ themeColor: v })}
+          />
+        </div>
+
+        {/* Desktop glass */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[length:var(--font-button)] font-medium">Desktop glass</p>
+              <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
+                Show the desktop through a frosted-glass blur effect.
+              </p>
+            </div>
+            <Switch
+              checked={glassEffect}
+              onCheckedChange={(v) => updateSettings({ glassEffect: v })}
+            />
+          </div>
+
+          <div
+            className={cn(
+              "space-y-2 pl-0.5 transition-opacity duration-200",
+              !glassEffect && "opacity-40 pointer-events-none",
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[length:var(--font-dialog-label)] text-muted-foreground">
+                Intensity
+              </span>
+              <span className="text-[length:var(--font-size-12)] font-medium text-muted-foreground tabular-nums">
+                {INTENSITY_LABELS[glassIntensity]}
+              </span>
+            </div>
+            <Slider
+              value={[glassIntensity]}
+              min={1}
+              max={5}
+              step={1}
+              onValueChange={([v]: number[]) => {
+                if (v !== undefined) updateSettings({ glassIntensity: v });
+              }}
+              disabled={!glassEffect}
+            />
+            <div className="flex justify-between text-[length:var(--font-size-10)] text-muted-foreground/50">
+              <span>More solid</span>
+              <span>More glass</span>
+            </div>
+          </div>
         </div>
 
         {/* Font size — placeholder */}

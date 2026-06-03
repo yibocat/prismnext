@@ -406,7 +406,7 @@ export function ChatComposer() {
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                       title="Add context"
                     >
                       <PlusIcon className="size-4" />

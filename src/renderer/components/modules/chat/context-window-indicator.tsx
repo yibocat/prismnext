@@ -52,7 +52,7 @@ export function ContextWindowIndicator({
           <button
             type="button"
             disabled
-            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border bg-muted/50 px-2.5 py-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border bg-muted/50 px-2.5 py-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Shrink className="size-3" />
             Compress context

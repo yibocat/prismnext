@@ -97,22 +97,22 @@ export function LeftMainArea() {
       external: ExternalSettings,
       shortcuts: ShortcutsSettings,
     }[settingsCategory] || GeneralSettings;
-    return <div className="flex h-full flex-col min-w-[300px] bg-background"><SettingsContent /></div>;
+    return <div className="flex h-full flex-col min-w-[300px] glass-content"><SettingsContent /></div>;
   }
 
   return (
-    <div className="flex h-full flex-col min-w-[300px] bg-background @container select-text">
+    <div className="flex h-full flex-col min-w-[300px] glass-content @container select-text">
       <ChatErrorBoundary>
         {isEmpty ? (
           /* ── Homepage ── */
           <div className="flex flex-1 flex-col items-center justify-end @xl:justify-center @xl:pb-[var(--height-titlebar)]">
             {/* Top toolbar */}
-            <div className="w-full max-w-3xl flex items-center gap-1.5 h-7 px-[12px]">
+            <div className="w-full max-w-3xl flex items-center gap-1.5 h-7 px-3">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-1.5 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
+                    className="flex items-center gap-1.5 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground/70 hover:bg-accent hover:text-accent-foreground transition-colors"
                   >
                     <FolderOpenIcon className="size-3" />
                     <span className="truncate max-w-[120px]">{projectLabel}</span>
@@ -150,7 +150,7 @@ export function LeftMainArea() {
                   <button
                     type="button"
                     disabled={!isEmpty}
-                    className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground/70 hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <span>{currentAgent?.name || "CLI"}</span>
                     <ChevronDownIcon className="size-3" />
@@ -178,7 +178,7 @@ export function LeftMainArea() {
                   <button
                     type="button"
                     disabled={!isEmpty}
-                    className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground/70 hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <GitBranchIcon className="size-3" />
                     <span>Worktree</span>
@@ -198,11 +198,11 @@ export function LeftMainArea() {
               <ChatComposer />
             </div>
             {/* Context bar — matches toolbar height, bottom padding for breathing room */}
-            <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-7 px-[12px] mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
+            <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-7 px-3 mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
               {/* Placeholder — future: suggested follow-up prompts */}
               <button
                 type="button"
-                className="rounded px-1.5 py-0.5 text-muted-foreground/70 hover:bg-muted hover:text-foreground transition-colors"
+                className="rounded px-1.5 py-0.5 text-muted-foreground/70 hover:bg-accent hover:text-accent-foreground transition-colors"
               >
                 Suggestions
               </button>
@@ -218,7 +218,7 @@ export function LeftMainArea() {
               <ChatComposer />
             </div>
             {/* Context bar — matches toolbar height, bottom padding for breathing room */}
-            <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-7 px-[12px] mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
+            <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-7 px-3 mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
               <span className="flex-1" />
               <ContextWindowIndicator />
             </div>

@@ -66,7 +66,7 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
       defaultOpen
       className="contents"
     >
-      <Sidebar collapsible="none" className="relative shrink-0 bg-card border-r-0 !w-full">
+      <Sidebar collapsible="none" className="relative shrink-0 border-r-0 !w-full">
         <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center px-2 select-none">
           {!sidebarFullyCollapsed && (
             <SidebarControls leftSidebarRef={leftSidebarRef!} showMacSpacer={showMacSpacer} />
@@ -74,7 +74,7 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
         </div>
         <SidebarContent className="px-2 pb-1 gap-0">
           <div className="pt-1.5 mb-1.5">
-            <ProjectSwitcher className="flex w-full items-center gap-2 rounded-md border border-border px-2 py-1.5 text-[length:var(--font-session-item)] font-medium hover:bg-muted transition-colors" />
+            <ProjectSwitcher className="flex w-full items-center gap-2 rounded-md border border-border px-2 py-1.5 text-[length:var(--font-session-item)] font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors" />
           </div>
 
           <SidebarMenu>
@@ -105,7 +105,7 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
         <SidebarFooter className="px-2 pb-2">
           <button
             type="button"
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
             onClick={() => {
               if (!projectRoot) {
                 useDocumentStore.getState().setShowWelcome(true);
@@ -126,11 +126,11 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
     <>
       {leftSidebarOverlay &&
         createPortal(
-          <div className="fixed top-[var(--height-titlebar)] right-0 bottom-0 left-0 z-50 flex flex-col bg-background">
+          <div className="fixed top-[var(--height-titlebar)] right-0 bottom-0 left-0 z-50 flex flex-col glass-content">
             <div className="flex-1 min-h-0">{sidebarContent}</div>
             <button
               type="button"
-              className="absolute top-2 right-2 flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="absolute top-2 right-2 flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               onClick={() => setLeftSidebarOverlay(false)}
             >
               <XIcon className="size-3.5" />

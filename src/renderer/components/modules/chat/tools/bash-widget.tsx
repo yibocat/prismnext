@@ -24,7 +24,7 @@ export const BashWidget = memo(function BashWidget({
         onClick={() => setExpanded(!expanded)}
       >
         <StatusIcon isLoading={isLoading} isError={!!isError} />
-        <TerminalIcon className="size-3.5 text-amber-500" />
+        <TerminalIcon className="size-3.5 text-warning" />
         <span className="truncate font-mono">{command.slice(0, 80)}</span>
         <ChevronDownIcon
           className={cn("ml-auto size-3.5 text-muted-foreground transition-transform", expanded && "rotate-180")}

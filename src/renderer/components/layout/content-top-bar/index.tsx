@@ -18,7 +18,9 @@ import {
   Minimize2Icon,
   Maximize2Icon,
   XIcon,
+  LockIcon,
 } from "lucide-react";
+import { useSettingsStore } from "@/stores/settings-store";
 
 interface ContentTopBarProps {
   leftSidebarRef: RefObject<PanelImperativeHandle | null>;
@@ -31,8 +33,11 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
   const isMobile = useIsMobile();
   const sidebarFullyCollapsed = useLayoutStore((s) => s.sidebarFullyCollapsed);
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
+  const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
+  const inSettings = leftSidebarView === "settings";
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
   const { theme, resolvedTheme, setTheme } = useTheme();
+  const glassEffect = useSettingsStore((s) => s.settings.glassEffect);
 
   const sessionTitle = useSessionTitle();
   const selectedAgentId = useChatStore((s) => s.selectedAgent);
@@ -40,6 +45,7 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
   const cycleTheme = () => {
+    if (glassEffect) return;
     if (theme === "light") setTheme("dark");
     else if (theme === "dark") setTheme("system");
     else setTheme("light");
@@ -53,7 +59,7 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
   if (editorMaximized) return null;
 
   return (
-    <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center px-2 gap-0.5 select-none">
+    <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center px-2 gap-0.5 select-none glass-content">
       {/* ── Left: traffic lights spacer + sidebar controls ── */}
       <div className="flex items-center gap-0.5 shrink-0">
         {showSidebarControls ? (
@@ -69,7 +75,6 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
           title={sessionTitle}
           projectRoot={projectRoot}
           agentName={agentName}
-          showSeparator={sidebarFullyCollapsed}
         />
       )}
 
@@ -82,7 +87,7 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
           <>
             <button
               type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
               title="Minimize"
               onClick={() => window.electronAPI?.windowMinimize()}
             >
@@ -90,7 +95,7 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
             </button>
             <button
               type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
               title={isMaximized ? "Restore" : "Maximize"}
               onClick={() => window.electronAPI?.windowMaximize()}
             >
@@ -98,7 +103,7 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
             </button>
             <button
               type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-red-500 hover:text-white transition-colors"
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
               title="Close"
               onClick={() => window.electronAPI?.windowClose()}
             >
@@ -112,11 +117,15 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
           <>
             <button
               type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              title={`Theme: ${theme}`}
+              className={glassEffect
+                ? "flex size-6 items-center justify-center rounded text-muted-foreground/30 transition-colors"
+                : "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"}
+              title={glassEffect ? "Theme locked (Desktop glass is on)" : `Theme: ${theme}`}
               onClick={cycleTheme}
             >
-              {theme === "system" ? (
+              {glassEffect ? (
+                <LockIcon className="size-3.5" />
+              ) : theme === "system" ? (
                 <MonitorIcon className="size-3.5" />
               ) : resolvedTheme === "dark" ? (
                 <SunIcon className="size-3.5" />
@@ -125,10 +134,10 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
               )}
             </button>
 
-            {rightAreaRef && (
+            {rightAreaRef && !inSettings && (
               <button
                 type="button"
-                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                 title="Expand Right Area"
                 onClick={() => {
                   const r = rightAreaRef.current;
