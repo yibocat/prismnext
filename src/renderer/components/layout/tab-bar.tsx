@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import type { RightTab } from "@/stores/right-panel-store";
-import { XIcon, DotIcon, FoldersIcon } from "lucide-react";
+import { XIcon, DotIcon, FoldersIcon, Terminal as TerminalIcon } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { getFileIconName } from "@/lib/file-icon-class";
 import { cn } from "@/lib/utils";
@@ -123,6 +123,9 @@ export function TabBar({ tabs, activeTabId, onSelect, onClose, onReorder, dirtyF
                   const isDirty = dirtyFileIds?.has(tab.fileId ?? "") || dirtyFileIds?.has(tab.filePath ?? "");
                   if (isDirty) {
                     return <span title="Unsaved changes"><DotIcon className="mr-1 size-3.5 shrink-0 text-blue-500" strokeWidth={4} /></span>;
+                  }
+                  if (tab.kind === "terminal") {
+                    return <TerminalIcon className="mr-1 size-3.5 shrink-0 text-muted-foreground" />;
                   }
                   if (tab.kind === "file" && tab.isInitial) {
                     return <FoldersIcon className="mr-1 size-3.5 shrink-0 text-muted-foreground" />;

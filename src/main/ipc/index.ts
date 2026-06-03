@@ -3,6 +3,7 @@ import { registerCompileHandlers } from "./compile";
 import { registerCliHandlers } from "./cli";
 import { registerSettingsHandlers } from "./settings";
 import { registerBrowserHandlers } from "./browser";
+import { registerTerminalHandlers } from "./terminal";
 
 export function registerIpcHandlers(): void {
   registerFsHandlers();
@@ -10,4 +11,5 @@ export function registerIpcHandlers(): void {
   registerCliHandlers();
   registerSettingsHandlers();
   registerBrowserHandlers();
+  registerTerminalHandlers();
 }

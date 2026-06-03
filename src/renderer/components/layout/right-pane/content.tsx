@@ -9,6 +9,7 @@ import { PdfPreview } from "@/components/modules/preview";
 import { GitPlaceholder } from "@/components/modules/git/git-placeholder";
 import { BrowserPlaceholder } from "@/components/modules/browser/browser-placeholder";
 import { BrowserView } from "@/components/modules/browser/browser-view";
+import { TerminalView } from "@/components/modules/terminal";
 
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".svg"]);
 
@@ -62,6 +63,8 @@ export function PaneContent({ activeTab, isActive }: PaneContentProps) {
     }
     case "browser":
       return wrap(ctx, <BrowserView />);
+    case "terminal":
+      return wrap(ctx, <TerminalView tabId={activeTab.id} />);
     default:
       return null;
   }

@@ -4,6 +4,7 @@ import { registerIpcHandlers } from "./ipc/index";
 import { setMainWindow, registerWindowHandlers } from "./ipc/window";
 import { killAllClaudeProcesses } from "./services/claude";
 import { disposeCliManager } from "./ipc/cli";
+import { destroyAllTerminalSessions } from "./ipc/terminal";
 
 const isMac = process.platform === "darwin";
 
@@ -52,6 +53,7 @@ function createWindow() {
   mainWindow.on("closed", () => {
     killAllClaudeProcesses();
     disposeCliManager();
+    destroyAllTerminalSessions();
     mainWindow = null;
   });
 

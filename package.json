@@ -1,13 +1,14 @@
 {
   "name": "prism-next",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "AI-powered LaTeX writing workspace",
   "main": "./out/main/index.js",
   "scripts": {
     "copy-pdfjs-assets": "node scripts/copy-pdfjs-assets.mjs",
     "dev": "bash -c 'unset ELECTRON_RUN_AS_NODE && node scripts/copy-pdfjs-assets.mjs && exec electron-vite dev'",
     "build": "node scripts/copy-pdfjs-assets.mjs && electron-vite build",
-    "preview": "electron-vite preview"
+    "preview": "electron-vite preview",
+    "postinstall": "electron-rebuild -f -w node-pty"
   },
   "dependencies": {
     "@agentclientprotocol/claude-agent-acp": "^0.36.1",
@@ -40,6 +41,8 @@
     "@streamdown/math": "^1.0.2",
     "@streamdown/mermaid": "^1.0.2",
     "@tailwindcss/typography": "^0.5.19",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -49,6 +52,7 @@
     "katex": "^0.16.28",
     "lucide-react": "^1.16.0",
     "next-themes": "^0.4.6",
+    "node-pty": "^1.1.0",
     "pdfjs-dist": "^5.7.284",
     "radix-ui": "^1.4.3",
     "react": "^19.1.0",
@@ -62,6 +66,7 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
     "@tailwindcss/postcss": "^4.1.0",
     "@types/katex": "^0.16.8",
     "@types/react": "^19.1.0",
@@ -77,7 +82,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "electron",
-      "esbuild"
+      "esbuild",
+      "node-pty"
     ]
   }
 }

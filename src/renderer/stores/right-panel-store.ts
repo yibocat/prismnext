@@ -1,9 +1,10 @@
 import { create } from "zustand";
 import { useDocumentStore } from "./document-store";
+import { useTerminalStore } from "./terminal-store";
 
 // ─── Types ───
 
-export type RightTabKind = "file" | "browser" | "git-overview" | "git-diff" | "texworkspace";
+export type RightTabKind = "file" | "browser" | "git-overview" | "git-diff" | "texworkspace" | "terminal";
 
 export interface RightTab {
   id: string;
@@ -35,6 +36,7 @@ const INITIAL_TITLES: Record<RightTabKind, string> = {
   "git-overview": "Git",
   "git-diff": "Diff",
   texworkspace: "Texworkspace",
+  terminal: "Terminal",
 };
 
 // ─── Store ───
@@ -51,6 +53,8 @@ interface RightPanelState {
   switchToTexworkspace: (fileId: string, filePath: string, name: string) => void;
   openGitDiff: (filePath: string) => void;
   newBrowserTab: () => string;
+  newTerminalTab: () => string;
+  updateTerminalTabTitle: (id: string, title: string) => void;
   navigateBrowserTab: (id: string, url: string) => void;
   updateBrowserTabTitle: (id: string, title: string) => void;
   setBrowserTabLoading: (id: string, isLoading: boolean) => void;
@@ -206,7 +210,33 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     return id;
   },
 
+  newTerminalTab: () => {
+    // Always create a fresh terminal — each tab is an independent shell session.
+    const id = nextTabId();
+    const tab: RightTab = { id, kind: "terminal", title: INITIAL_TITLES.terminal, isInitial: false };
+    set((s) => ({ tabs: [...s.tabs, tab], activeTabId: id }));
+    return id;
+  },
+
+  updateTerminalTabTitle: (id: string, title: string) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === id ? { ...t, title } : t,
+      ),
+    }));
+  },
+
   closeTab: (id: string) => {
+    // Confirm before closing a busy terminal tab (process still running)
+    const closingTab = get().tabs.find((t) => t.id === id);
+    if (closingTab?.kind === "terminal") {
+      const busy = useTerminalStore.getState().sessions[closingTab.id]?.busy;
+      if (busy) {
+        if (!window.confirm("A process is still running. Close anyway?")) {
+          return;
+        }
+      }
+    }
     set((s) => {
       const closing = s.tabs.find((t) => t.id === id);
       const next = s.tabs.filter((t) => t.id !== id);
@@ -221,6 +251,11 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       // Fully release PDF file resources when closing a PDF tab
       if (closing?.kind === "file" && closing.filePath?.toLowerCase().endsWith(".pdf")) {
         // TODO: wire up Lector PDF resource cleanup
+      }
+
+      // Destroy PTY sessions when closing a terminal tab
+      if (closing?.kind === "terminal") {
+        window.electronAPI.terminalDestroyTab({ tabId: closing.id });
       }
 
       return { tabs: next, activeTabId: nextActive };

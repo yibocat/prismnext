@@ -44,6 +44,27 @@ export interface BrowserStateData {
   maxRecentItems: number;
 }
 
+export interface TerminalQuickCommand {
+  id: string;
+  label: string;
+  command: string;
+  description?: string;
+  order: number;
+  createdAt: number;
+}
+
+export interface TerminalConfig {
+  quickCommands: TerminalQuickCommand[];
+}
+
+export interface TerminalEnvInfo {
+  shell: string;
+  cwd: string;
+  platform: string;
+  nodeVersion: string;
+  home: string;
+}
+
 export interface ElectronAPI {
   // Filesystem operations
   fsScan: (rootPath: string) => Promise<{
@@ -154,6 +175,20 @@ export interface ElectronAPI {
   browserSaveRecent: (projectRoot: string, recent: BrowserRecentVisit[]) => Promise<{ success: boolean; error?: string }>;
   browserClearCookies: () => Promise<{ success: boolean; error?: string }>;
   browserClearCache: () => Promise<{ success: boolean; error?: string }>;
+
+  // Terminal operations
+  terminalCreate: (args: { sessionId: string; projectRoot: string }) => Promise<{ shell: string; cwd: string; pid: number }>;
+  terminalDestroy: (args: { sessionId: string }) => Promise<void>;
+  terminalDestroyTab: (args: { tabId: string }) => Promise<void>;
+  terminalWrite: (args: { sessionId: string; data: string }) => Promise<void>;
+  terminalResize: (args: { sessionId: string; cols: number; rows: number }) => Promise<void>;
+  terminalEnvInfo: () => Promise<TerminalEnvInfo>;
+  terminalLoadConfig: (projectRoot: string) => Promise<TerminalConfig>;
+  terminalSaveConfig: (projectRoot: string, config: TerminalConfig) => Promise<void>;
+
+  // Terminal events (Main → Renderer)
+  onTerminalData: (callback: (data: { sessionId: string; data: string }) => void) => () => void;
+  onTerminalExit: (callback: (data: { sessionId: string; exitCode: number }) => void) => () => void;
 }
 
 declare global {

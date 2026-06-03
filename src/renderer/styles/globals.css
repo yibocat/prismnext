@@ -267,3 +267,61 @@
   50% { transform: translateX(100%); }
   100% { transform: translateX(300%); }
 }
+
+/* ── Terminal (xterm.js) overrides ── */
+
+/* Override xterm's hardcoded black viewport background.
+   We let the terminal's ITheme background color show through. */
+.terminal-xterm .xterm-viewport {
+  background-color: transparent !important;
+}
+
+/* Terminal container — no padding; xterm's fit addon depends on
+   accurate container dimensions. */
+.terminal-xterm {
+  padding: 0;
+  background-color: transparent;
+}
+
+/* Override xterm scrollbar to match the app's global thin scrollbar */
+.terminal-xterm .xterm-viewport::-webkit-scrollbar {
+  width: 6px;
+}
+.terminal-xterm .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+.terminal-xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+.terminal-xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
+/* Firefox thin scrollbar for terminal */
+.terminal-xterm .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* Selection color — use the app's accent */
+.terminal-xterm .xterm-selection-layer {
+  /* The selection layer is a canvas; the color is controlled via theme */
+}
+
+/* Make the xterm cursor area fill the container */
+.terminal-xterm .xterm {
+  height: 100%;
+  padding: 0;
+}
+
+/* Ensure the accessibility tree (used for screen readers and copy)
+   matches our font stack */
+.terminal-xterm .xterm-accessibility-tree {
+  font-family: "Geist Mono", "Menlo", "Monaco", "Courier New", monospace;
+}
+
+/* Hide the default xterm overview ruler (scrollbar decoration) */
+.terminal-xterm .xterm-decoration-overview-ruler {
+  display: none;
+}

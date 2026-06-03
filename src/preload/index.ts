@@ -94,6 +94,35 @@ contextBridge.exposeInMainWorld("electronAPI", {
   browserClearCookies: () => ipcRenderer.invoke("browser:clearCookies"),
   browserClearCache: () => ipcRenderer.invoke("browser:clearCache"),
 
+  // Terminal operations
+  terminalCreate: (args: { sessionId: string; projectRoot: string }) =>
+    ipcRenderer.invoke("terminal:create", args),
+  terminalDestroy: (args: { sessionId: string }) =>
+    ipcRenderer.invoke("terminal:destroy", args),
+  terminalDestroyTab: (args: { tabId: string }) =>
+    ipcRenderer.invoke("terminal:destroyTab", args),
+  terminalWrite: (args: { sessionId: string; data: string }) =>
+    ipcRenderer.invoke("terminal:write", args),
+  terminalResize: (args: { sessionId: string; cols: number; rows: number }) =>
+    ipcRenderer.invoke("terminal:resize", args),
+  terminalEnvInfo: () => ipcRenderer.invoke("terminal:envInfo"),
+  terminalLoadConfig: (projectRoot: string) =>
+    ipcRenderer.invoke("terminal:loadConfig", { projectRoot }),
+  terminalSaveConfig: (projectRoot: string, config: unknown) =>
+    ipcRenderer.invoke("terminal:saveConfig", { projectRoot, config }),
+
+  // Terminal events (Main → Renderer)
+  onTerminalData: (callback: (data: { sessionId: string; data: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { sessionId: string; data: string }) => callback(data);
+    ipcRenderer.on("terminal:data", handler);
+    return () => ipcRenderer.removeListener("terminal:data", handler);
+  },
+  onTerminalExit: (callback: (data: { sessionId: string; exitCode: number }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { sessionId: string; exitCode: number }) => callback(data);
+    ipcRenderer.on("terminal:exit", handler);
+    return () => ipcRenderer.removeListener("terminal:exit", handler);
+  },
+
   // CLI agent events (Main → Renderer)
   onCliStream: (callback: (data: { tabId: string; data: string }) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; data: string }) => callback(data);

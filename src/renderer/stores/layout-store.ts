@@ -9,7 +9,7 @@ import {
 } from "@/styles/constants";
 
 export type AppMode = "all" | "manuscript" | "vault" | "zotero" | "code" | "assets" | "other" | "chat";
-export type RightToolbarTab = "dashboard" | "files" | "git" | "browser" | "texworkspace";
+export type RightToolbarTab = "dashboard" | "files" | "git" | "browser" | "texworkspace" | "terminal";
 export type TexworkspaceViewMode = "split" | "tex" | "pdf";
 
 export type TabType = "file" | "pdf";

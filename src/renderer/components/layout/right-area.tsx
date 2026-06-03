@@ -12,7 +12,9 @@ import { TabToolbar } from "@/components/layout/tab-toolbar";
 import { TexworkspaceToolbar } from "@/components/modules/texworkspace-mode";
 import { FileToolbar } from "@/components/modules/editor/toolbars/file-toolbar";
 import { BrowserToolbar } from "@/components/modules/browser/browser-toolbar";
+import { TerminalToolbar } from "@/components/modules/terminal";
 import { useBrowserStore } from "@/stores/browser-store";
+import { useTerminalStore } from "@/stores/terminal-store";
 import { AiBar } from "@/components/modules/chat";
 import { type PanelImperativeHandle } from "react-resizable-panels";
 import {
@@ -29,6 +31,7 @@ import {
   Minimize2Icon,
   Maximize2Icon,
   XIcon,
+  Terminal as TerminalIcon,
 } from "lucide-react";
 import { SIDEBAR_RIGHT_MIN, SIDEBAR_RIGHT_MAX } from "@/styles/constants";
 import { cn } from "@/lib/utils";
@@ -37,6 +40,7 @@ const TOOLBAR_TABS: { id: RightToolbarTab; label: string; icon: React.ReactNode 
   { id: "files", label: "Files", icon: <FilesIcon className="size-3.5" /> },
   { id: "git", label: "Git", icon: <GitBranchIcon className="size-3.5" /> },
   { id: "browser", label: "Browser", icon: <GlobeIcon className="size-3.5" /> },
+  { id: "terminal", label: "Terminal", icon: <TerminalIcon className="size-3.5" /> },
   { id: "texworkspace", label: "Texworkspace", icon: <FileType className="size-3.5" /> },
 ];
 
@@ -135,6 +139,13 @@ function resolveTabToolbar(
           tabTitle={tab.title}
         />
       );
+    case "terminal":
+      return (
+        <TerminalToolbar
+          tabId={tab.id}
+          tabTitle={tab.title}
+        />
+      );
     default:
       return null;
   }
@@ -178,6 +189,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
         case "file": setRightToolbarTab("files"); break;
         case "git-overview": case "git-diff": setRightToolbarTab("git"); break;
         case "browser": setRightToolbarTab("browser"); break;
+        case "terminal": setRightToolbarTab("terminal"); break;
         case "texworkspace": setRightToolbarTab("texworkspace"); break;
         default: setRightToolbarTab("files"); break;
       }
@@ -198,6 +210,14 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   useEffect(() => {
     if (projectRoot) {
       useBrowserStore.getState().loadFromProject(projectRoot);
+    }
+  }, [projectRoot]);
+
+  // Initialize terminal store when project opens
+  useEffect(() => {
+    if (projectRoot) {
+      useTerminalStore.getState().loadFromProject(projectRoot);
+      useTerminalStore.getState().fetchEnvInfo();
     }
   }, [projectRoot]);
   const fileContents = useDocumentStore((s) => s.fileContents);
@@ -332,6 +352,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
                 setRightToolbarTab(tab.id);
                 if (tab.id === "git") ensureTab("git-overview");
                 else if (tab.id === "browser") ensureTab("browser");
+                else if (tab.id === "terminal") ensureTab("terminal");
                 else if (tab.id === "texworkspace") ensureTab("texworkspace");
               }}
             >
@@ -452,7 +473,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
         onToggleSidebar={handleToggleSidebar}
         filePath={activeTab?.filePath}
         projectName={projectRoot?.split(/[/\\]/).pop()}
-        hideSpacer={activeTab?.kind === "browser"}
+        hideSpacer={activeTab?.kind === "browser" || activeTab?.kind === "terminal"}
       >
         {resolveTabToolbar(activeTab, compileFile)}
       </TabToolbar>

@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.3.9 — 2026-06-03
+
+### Terminal Mode — Real Shell in Right Panel
+
+- **Integrated terminal**: xterm.js (renderer) + node-pty (main process) provides genuine system shell sessions via PTY; spawns user's default shell ($SHELL, typically zsh on macOS, cmd/PowerShell on Windows) at project root directory
+- **Multi-tab terminal**: each tab is an independent PTY session; tabs can be created via toolbar `+` button or the Terminal toolbar icon; session lifetime is bound to tab (close = kill PTY)
+- **TerminalToolbar**: shows session name (directory basename), Clear Screen button, Interrupt button (sends Ctrl+C via IPC), and New Terminal `+` button
+- **TerminalSidebar** (3 accordion sections):
+  - *Quick Commands*: user-configurable command shortcuts (add/edit/delete) persisted to `.prismnext/terminal/config.json`; click to execute in active terminal; context menu with Run/Edit; inline delete button
+  - *Environment*: per-session info (shell path, CWD, PID) from active PTY + global system info (node version, platform, home directory)
+  - *History*: command history tracked per-session (deduplicated, max 100); click to re-run; clear-all button
+- **IPC architecture**: `terminal:create/destroy/write/resize/data/exit` channels; write/resize use `ipcRenderer.invoke` (reliable async round-trip); data/exit are push events (main → renderer via `webContents.send`); session lookup with generation-based IDs prevents React Strict Mode double-mount race conditions
+- **Focus management**: aggressive multi-stage auto-focus (rAF + 60ms + 200ms delays) ensures keyboard input reaches xterm's hidden textarea; click-to-focus via mousedown handler
+- **Theme integration**: xterm.js terminal colors match app light/dark mode (VS Code Dark+ / Light+ inspired ANSI 16-color palettes) via `useTerminalTheme` hook; outer padding area background color matched to terminal theme
+- **Exit/restart behavior**: when shell exits, terminal displays exit code and "Press Enter to restart" prompt; Enter respawns a new PTY session on the same tab; close confirmation only appears when a process is actively running (input/output timing heuristic with 400ms debounce)
+- **Close confirmation**: closing a terminal tab with a running process prompts "A process is still running. Close anyway?"; idle terminals close without confirmation
+- **Tab bar integration**: terminal tabs display Terminal icon (from lucide-react) and directory name as title; tab drag-to-reorder, context-menu close/close-others fully supported
+- **Native module**: node-pty compiled against Electron 35 via @electron/rebuild; externalized in electron-vite config; postinstall script auto-rebuilds on pnpm install
+- **Cross-platform**: shell detection via `$SHELL` (Unix) / `%COMSPEC%` (Windows); xterm.js font stack degrades gracefully across platforms
+
+### Dependencies Added
+- `@xterm/xterm` 6.0, `@xterm/addon-fit` 0.11, `node-pty` 1.1, `@electron/rebuild` 4.0 (dev)
+
 ## 0.3.8 — 2026-06-03
 
 ### Browser Mode — Complete Features & Polish

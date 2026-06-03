@@ -3,6 +3,7 @@ import { SidebarProvider, Sidebar } from "@/components/ui/sidebar";
 import { FilesSidebar } from "./right-sidebar/files-sidebar";
 import { GitSidebar } from "./right-sidebar/git-sidebar";
 import { BrowserSidebar } from "./right-sidebar/browser-sidebar";
+import { TerminalSidebar } from "./right-sidebar/terminal-sidebar";
 import { TexworkspaceSidebar } from "@/components/modules/texworkspace-mode";
 import { DashboardSidebar } from "./right-sidebar/dashboard-sidebar";
 
@@ -11,6 +12,7 @@ const SIDEBAR_BY_MODE: Record<string, React.ComponentType> = {
   files: FilesSidebar,
   git: GitSidebar,
   browser: BrowserSidebar,
+  terminal: TerminalSidebar,
   texworkspace: TexworkspaceSidebar,
 };
 
