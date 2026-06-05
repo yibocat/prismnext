@@ -21,6 +21,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("fs:rename", { oldPath, newPath }),
   fsMkdir: (absPath: string) => ipcRenderer.invoke("fs:mkdir", { absPath }),
 
+  // File watcher
+  fsWatchStart: (rootPath: string) =>
+    ipcRenderer.invoke("fs:watch-start", { rootPath }),
+  fsWatchStop: () => ipcRenderer.invoke("fs:watch-stop"),
+
   // Dialog operations
   dialogOpenFolder: () => ipcRenderer.invoke("dialog:openFolder"),
   fsExists: (absPath: string) => ipcRenderer.invoke("fs:exists", { absPath }),
@@ -123,6 +128,46 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("terminal:exit", handler);
   },
 
+  // Git operations
+  gitIsRepo: (projectRoot: string) =>
+    ipcRenderer.invoke("git:isRepo", { projectRoot }),
+  gitStatus: (projectRoot: string) =>
+    ipcRenderer.invoke("git:status", { projectRoot }),
+  gitBranches: (projectRoot: string) =>
+    ipcRenderer.invoke("git:branches", { projectRoot }),
+  gitCheckout: (projectRoot: string, branch: string) =>
+    ipcRenderer.invoke("git:checkout", { projectRoot, branch }),
+  gitCreateBranch: (projectRoot: string, branchName: string) =>
+    ipcRenderer.invoke("git:createBranch", { projectRoot, branchName }),
+  gitDiff: (projectRoot: string, filePath: string, indexStatus: string, worktreeStatus: string, staged: boolean, unstaged: boolean, untracked: boolean, view?: "staged" | "unstaged" | "all") =>
+    ipcRenderer.invoke("git:diff", { projectRoot, filePath, indexStatus, worktreeStatus, staged, unstaged, untracked, view }),
+  gitStage: (projectRoot: string, filePath: string) =>
+    ipcRenderer.invoke("git:stage", { projectRoot, filePath }),
+  gitUnstage: (projectRoot: string, filePath: string) =>
+    ipcRenderer.invoke("git:unstage", { projectRoot, filePath }),
+  gitInit: (projectRoot: string) =>
+    ipcRenderer.invoke("git:init", { projectRoot }),
+  gitDiscard: (projectRoot: string, filePath: string, staged: boolean, untracked: boolean, worktreeStatus: string) =>
+    ipcRenderer.invoke("git:discard", { projectRoot, filePath, staged, untracked, worktreeStatus }),
+  gitCommit: (projectRoot: string, message: string) =>
+    ipcRenderer.invoke("git:commit", { projectRoot, message }),
+  gitRevert: (projectRoot: string, hash: string) =>
+    ipcRenderer.invoke("git:revert", { projectRoot, hash }),
+  gitReset: (projectRoot: string, hash: string, mode: "soft" | "mixed" | "hard") =>
+    ipcRenderer.invoke("git:reset", { projectRoot, hash, mode }),
+  gitDiffStats: (projectRoot: string) =>
+    ipcRenderer.invoke("git:diffStats", { projectRoot }),
+  gitLog: (projectRoot: string, maxCount?: number) =>
+    ipcRenderer.invoke("git:log", { projectRoot, maxCount }),
+  gitMerge: (projectRoot: string, sourceBranch: string) =>
+    ipcRenderer.invoke("git:merge", { projectRoot, sourceBranch }),
+  gitAbortMerge: (projectRoot: string) =>
+    ipcRenderer.invoke("git:abortMerge", { projectRoot }),
+  gitCommitDiff: (projectRoot: string, hash: string) =>
+    ipcRenderer.invoke("git:commitDiff", { projectRoot, hash }),
+  gitCommitFileDiff: (projectRoot: string, hash: string, filePath: string) =>
+    ipcRenderer.invoke("git:commitFileDiff", { projectRoot, hash, filePath }),
+
   // CLI agent events (Main → Renderer)
   onCliStream: (callback: (data: { tabId: string; data: string }) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; data: string }) => callback(data);
@@ -148,5 +193,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.removeAllListeners("cli:stream");
     ipcRenderer.removeAllListeners("cli:complete");
     ipcRenderer.removeAllListeners("cli:stderr");
+  },
+
+  // File watcher events (Main → Renderer)
+  onFileChanged: (callback: (data: { projectRoot: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { projectRoot: string }) => callback(data);
+    ipcRenderer.on("fs:fileChanged", handler);
+    return () => ipcRenderer.removeListener("fs:fileChanged", handler);
   },
 });

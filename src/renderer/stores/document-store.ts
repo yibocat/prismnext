@@ -41,6 +41,8 @@ interface DocumentState {
   /** Jump to a specific line in a specific file (used by TOC/Labels/Citations) */
   jumpToLine: { fileId: string; line: number } | null;
   selectionRange: { start: number; end: number } | null;
+  /** Bumped after reloadAllFromDisk updates file contents — editors watch this. */
+  contentVersion: number;
 
   // Async actions
   openProject: (rootPath: string) => Promise<void>;
@@ -48,6 +50,7 @@ interface DocumentState {
   saveFile: (id: string) => Promise<void>;
   saveAllFiles: () => Promise<void>;
   refreshFiles: () => Promise<void>;
+  reloadAllFromDisk: () => Promise<void>;
   refreshFileContent: (id: string) => Promise<void>;
 
   // Modified actions (now async)
@@ -118,6 +121,9 @@ function inferFromExtension(
   return { type: "other", content: "" };
 }
 
+/** Prevents overlapping reloadAllFromDisk calls from racing on store state. */
+let _reloadInProgress = false;
+
 export const useDocumentStore = create<DocumentState>((set, get) => ({
   projectRoot: null,
   showWelcome: true,
@@ -131,6 +137,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   jumpTarget: null,
   jumpToLine: null,
   selectionRange: null,
+  contentVersion: 0,
 
   // ─── Project Management ───
 
@@ -281,6 +288,14 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         }
       });
       set({ fileContents: newMap, isSaving: false });
+
+      // Trigger git auto-refresh after editor save
+      import("./git-store").then(({ useGitStore }) => {
+        const gs = useGitStore.getState();
+        if (gs.isGitRepo && gs.unitRoot) {
+          gs.scheduleAutoRefresh(gs.unitRoot);
+        }
+      });
     } else {
       set({ isSaving: false });
     }
@@ -289,10 +304,20 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   refreshFiles: async () => {
     const { projectRoot } = get();
     if (!projectRoot) return;
+    await get().reloadAllFromDisk();
+  },
+
+  reloadAllFromDisk: async () => {
+    const { projectRoot } = get();
+    if (!projectRoot) return;
+
+    // Prevent concurrent reloads from racing on store state
+    if (_reloadInProgress) return;
+    _reloadInProgress = true;
 
     try {
       const result = await window.electronAPI.fsScan(projectRoot);
-      const files: ProjectFile[] = result.files.map((f) => ({
+      const newFiles: ProjectFile[] = result.files.map((f) => ({
         id: f.relativePath,
         name: f.relativePath.split("/").pop() || f.relativePath,
         relativePath: f.relativePath,
@@ -301,19 +326,62 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         fileSize: f.fileSize,
       }));
 
-      // Preserve content for files that still exist
-      const { fileContents } = get();
+      const { fileContents: oldContents } = get();
       const newFileContents = new Map<string, FileContent>();
-      for (const file of files) {
-        const existing = fileContents.get(file.id);
-        if (existing) {
+
+      for (const file of newFiles) {
+        // Re-check dirty state from current store (not stale snapshot)
+        const currentEntry = get().fileContents.get(file.id);
+        if (currentEntry?.isDirty && currentEntry.content !== undefined) {
+          newFileContents.set(file.id, currentEntry);
+          continue;
+        }
+
+        const existing = oldContents.get(file.id);
+
+        // Reload text files from disk
+        if (file.type === "tex" || file.type === "bib" || file.type === "style" || file.type === "other") {
+          try {
+            const { content } = await window.electronAPI.fsRead(file.absolutePath);
+            newFileContents.set(file.id, { content, isDirty: false });
+          } catch {
+            // File unreadable — preserve old content if available
+            if (existing) {
+              newFileContents.set(file.id, existing);
+            }
+          }
+        } else if (file.type === "image" && (file.fileSize || 0) <= LARGE_FILE_THRESHOLD) {
+          try {
+            const { dataUrl } = await window.electronAPI.fsReadImage(file.absolutePath);
+            newFileContents.set(file.id, { dataUrl, isDirty: false });
+          } catch {
+            if (existing) {
+              newFileContents.set(file.id, existing);
+            }
+          }
+        } else if (existing) {
+          // PDF or large image — preserve existing data
           newFileContents.set(file.id, existing);
         }
       }
 
-      set({ files, folders: result.folders, fileContents: newFileContents });
+      // Re-read activeFileId at apply-time to avoid TOCTOU race
+      const { activeFileId: currentActiveId } = get();
+      const activeStillExists = currentActiveId
+        ? newFiles.some((f) => f.id === currentActiveId)
+        : false;
+
+      set({
+        files: newFiles,
+        folders: result.folders,
+        fileContents: newFileContents,
+        activeFileId: activeStillExists ? currentActiveId : (newFiles.length > 0 ? newFiles[0].id : null),
+        contentVersion: get().contentVersion + 1,
+      });
     } catch (error) {
-      toast.error(`Failed to refresh files: ${error}`);
+      toast.error(`Failed to reload files: ${error}`);
+    } finally {
+      _reloadInProgress = false;
     }
   },
 
@@ -357,6 +425,14 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         files: [...files, newFile],
         activeFileId: relativePath,
         fileContents: newFileContents,
+      });
+
+      // Trigger git refresh — new file may show as untracked
+      import("./git-store").then(({ useGitStore }) => {
+        const gs = useGitStore.getState();
+        if (gs.isGitRepo && gs.unitRoot) {
+          gs.refreshStatus(gs.unitRoot);
+        }
       });
     } catch (error) {
       toast.error(`Failed to create file: ${error}`);
@@ -403,6 +479,14 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
               : null
             : activeFileId,
         fileContents: newFileContents,
+      });
+
+      // Trigger git refresh — deleted file changes git status
+      import("./git-store").then(({ useGitStore }) => {
+        const gs = useGitStore.getState();
+        if (gs.isGitRepo && gs.unitRoot) {
+          gs.refreshStatus(gs.unitRoot);
+        }
       });
     } catch (error) {
       toast.error(`Failed to delete file: ${error}`);
@@ -451,6 +535,14 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
               : null,
         fileContents: newFileContents,
       });
+
+      // Trigger git refresh — deleted files change git status
+      import("./git-store").then(({ useGitStore }) => {
+        const gs = useGitStore.getState();
+        if (gs.isGitRepo && gs.unitRoot) {
+          gs.refreshStatus(gs.unitRoot);
+        }
+      });
     } catch (error) {
       toast.error(`Failed to delete folder: ${error}`);
       throw error;
@@ -493,6 +585,14 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         ),
         activeFileId: activeFileId === id ? newRelativePath : activeFileId,
         fileContents: newFileContents,
+      });
+
+      // Trigger git refresh — renamed file may show as renamed/moved
+      import("./git-store").then(({ useGitStore }) => {
+        const gs = useGitStore.getState();
+        if (gs.isGitRepo && gs.unitRoot) {
+          gs.refreshStatus(gs.unitRoot);
+        }
       });
     } catch (error) {
       toast.error(`Failed to rename file: ${error}`);
@@ -566,6 +666,14 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         files: newFiles,
         folders: newFolders,
         fileContents: newFileContents,
+      });
+
+      // Trigger git refresh — renamed files change git status
+      import("./git-store").then(({ useGitStore }) => {
+        const gs = useGitStore.getState();
+        if (gs.isGitRepo && gs.unitRoot) {
+          gs.refreshStatus(gs.unitRoot);
+        }
       });
     } catch (error) {
       toast.error(`Failed to rename folder: ${error}`);

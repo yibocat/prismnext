@@ -65,6 +65,50 @@ export interface TerminalEnvInfo {
   home: string;
 }
 
+// ── Git types ──
+
+export interface GitFileStatusData {
+  path: string;
+  oldPath: string | null;
+  indexStatus: string;
+  worktreeStatus: string;
+  staged: boolean;
+  unstaged: boolean;
+  untracked: boolean;
+}
+
+export interface GitStatusData {
+  branch: string;
+  files: GitFileStatusData[];
+}
+
+export interface GitBranchesData {
+  current: string;
+  branches: string[];
+}
+
+export interface GitFileDiffData {
+  path: string;
+  oldContent: string;
+  newContent: string;
+  indexStatus: string;
+  worktreeStatus: string;
+  staged: boolean;
+  unstaged: boolean;
+  untracked: boolean;
+}
+
+export interface GitResultData {
+  success: boolean;
+  error?: string;
+}
+
+export interface GitMergeResultData {
+  success: boolean;
+  error?: string;
+  output?: string;
+}
+
 export interface ElectronAPI {
   // Filesystem operations
   fsScan: (rootPath: string) => Promise<{
@@ -88,6 +132,10 @@ export interface ElectronAPI {
   fsDeleteFolder: (absPath: string) => Promise<void>;
   fsRename: (oldPath: string, newPath: string) => Promise<void>;
   fsMkdir: (absPath: string) => Promise<void>;
+
+  // File watcher operations
+  fsWatchStart: (rootPath: string) => Promise<void>;
+  fsWatchStop: () => Promise<void>;
 
   // Dialog operations
   dialogOpenFolder: () => Promise<{
@@ -156,6 +204,9 @@ export interface ElectronAPI {
   onCliSessionCreated: (callback: (data: { tabId: string; sessionId: string; agentId: string }) => void) => () => void;
   removeCliListeners: () => void;
 
+  // File watcher events (Main → Renderer)
+  onFileChanged: (callback: (data: { projectRoot: string }) => void) => () => void;
+
   // Settings operations
   settingsGet: () => Promise<{
     aiModel: string;
@@ -189,6 +240,30 @@ export interface ElectronAPI {
   // Terminal events (Main → Renderer)
   onTerminalData: (callback: (data: { sessionId: string; data: string }) => void) => () => void;
   onTerminalExit: (callback: (data: { sessionId: string; exitCode: number }) => void) => () => void;
+
+  // Git operations
+  gitIsRepo: (projectRoot: string) => Promise<boolean>;
+  gitStatus: (projectRoot: string) => Promise<GitStatusData>;
+  gitBranches: (projectRoot: string) => Promise<GitBranchesData>;
+  gitCheckout: (projectRoot: string, branch: string) => Promise<GitResultData>;
+  gitCreateBranch: (projectRoot: string, branchName: string) => Promise<GitResultData>;
+  gitDiff: (projectRoot: string, filePath: string, indexStatus: string, worktreeStatus: string, staged: boolean, unstaged: boolean, untracked: boolean, view?: "staged" | "unstaged" | "all") => Promise<GitFileDiffData>;
+  gitStage: (projectRoot: string, filePath: string) => Promise<GitResultData>;
+  gitUnstage: (projectRoot: string, filePath: string) => Promise<GitResultData>;
+  gitInit: (projectRoot: string) => Promise<GitResultData>;
+  gitCommit: (projectRoot: string, message: string) => Promise<GitResultData>;
+  gitRevert: (projectRoot: string, hash: string) => Promise<GitResultData>;
+  gitReset: (projectRoot: string, hash: string, mode: "soft" | "mixed" | "hard") => Promise<GitResultData>;
+  gitDiffStats: (projectRoot: string) => Promise<{
+    unstaged: Record<string, { added: number; deleted: number }>;
+    staged: Record<string, { added: number; deleted: number }>;
+  }>;
+  gitLog: (projectRoot: string, maxCount?: number) => Promise<Array<{ hash: string; message: string; author: string; date: string; graph: string; refs: string; insertions: number; deletions: number }>>;
+  gitDiscard: (projectRoot: string, filePath: string, staged: boolean, untracked: boolean, worktreeStatus: string) => Promise<GitResultData>;
+  gitMerge: (projectRoot: string, sourceBranch: string) => Promise<GitMergeResultData>;
+  gitAbortMerge: (projectRoot: string) => Promise<GitResultData>;
+  gitCommitDiff: (projectRoot: string, hash: string) => Promise<string>;
+  gitCommitFileDiff: (projectRoot: string, hash: string, filePath: string) => Promise<{ path: string; oldContent: string; newContent: string }>;
 }
 
 declare global {

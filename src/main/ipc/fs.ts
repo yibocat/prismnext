@@ -1,5 +1,6 @@
 import { ipcMain, dialog, BrowserWindow } from "electron";
 import * as fs from "../services/filesystem";
+import { startWatching, stopWatching } from "../services/filesystem";
 
 export function registerFsHandlers(): void {
   ipcMain.handle("fs:scan", async (_event, args: { rootPath: string }) => {
@@ -58,6 +59,16 @@ export function registerFsHandlers(): void {
 
   ipcMain.handle("fs:mkdir", async (_event, args: { absPath: string }) => {
     await fs.createDirectory(args.absPath);
+  });
+
+  // ─── File watcher ───
+
+  ipcMain.handle("fs:watch-start", async (_event, args: { rootPath: string }) => {
+    await startWatching(args.rootPath);
+  });
+
+  ipcMain.handle("fs:watch-stop", async () => {
+    await stopWatching();
   });
 
   // ─── Dialog ───

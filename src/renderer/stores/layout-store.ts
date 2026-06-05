@@ -81,6 +81,10 @@ interface LayoutState {
   fileTreeExpandAll: boolean;
   toggleFileTreeExpandAll: () => void;
 
+  /** Persisted set of expanded folder paths in the file tree sidebar */
+  expandedFileTreeFolders: string[];
+  setExpandedFileTreeFolders: (folders: string[]) => void;
+
   /** Outline panel visibility */
   outlineExpanded: boolean;
   setOutlineExpanded: (expanded: boolean) => void;
@@ -171,6 +175,9 @@ export const useLayoutStore = create<LayoutState>()(
       fileTreeExpandAll: true,
       toggleFileTreeExpandAll: () => set((s) => ({ fileTreeExpandAll: !s.fileTreeExpandAll })),
 
+      expandedFileTreeFolders: [],
+      setExpandedFileTreeFolders: (folders) => set({ expandedFileTreeFolders: folders }),
+
       outlineExpanded: true,
       setOutlineExpanded: (expanded) => set({ outlineExpanded: expanded }),
 
@@ -257,6 +264,7 @@ export const useLayoutStore = create<LayoutState>()(
         pinnedSessionIds: state.pinnedSessionIds,
         archivedSessionIds: state.archivedSessionIds,
         sessionSort: state.sessionSort,
+        expandedFileTreeFolders: state.expandedFileTreeFolders,
       }),
     },
   ),

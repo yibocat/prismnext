@@ -33,7 +33,7 @@ export function TabToolbar({ children, onToggleSidebar, filePath, projectName, h
   const hasBreadcrumb = segments.length > 0;
 
   return (
-    <div className="flex h-[var(--height-right-area-subtoolbar)] shrink-0 items-center px-2 gap-0.5 border-y border-border select-none">
+    <div className="flex h-[var(--height-right-area-subtoolbar)] shrink-0 items-center px-2 gap-0.5 border-y border-border select-none text-[length:var(--font-size-12)] text-muted-foreground">
       {/* ─── Breadcrumb ─── */}
       {hasBreadcrumb && (
         <Breadcrumb className="shrink-0">

@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.3.11 — 2026-06-05
+
+### Git System
+
+Comprehensive Git integration with filesystem-aware status tracking.
+
+- **Git status panel**: View staged, unstaged, and untracked changes with inline diffs via CodeMirror merge view. Stage/unstage individual files or all at once, discard changes, and commit with a message dialog
+- **Branch management**: Switch between branches, create new branches, and merge branches with a two-step confirmation flow. Merge results display via toast notifications
+- **Commit history**: Browse commit log grouped by date with expandable file diffs. Revert and reset (soft/mixed/hard) actions on individual commits
+- **Multi-unit Git support**: Independent git repositories in subfolders are detected and managed separately via the Git sidebar
+- **Files tree Git colors**: File names in the Files sidebar now reflect git status — green for staged, amber for modified/untracked, red with strikethrough for deleted. Status is fetched independently per git unit and updates in real time
+
+### Git ↔ Files Integration
+
+- File watcher now triggers git status refresh alongside filesystem reload, keeping both views in sync
+- File create, delete, and rename operations automatically refresh git status
+- Eliminated double-refresh by adding a time-guard in `scheduleAutoRefresh` and centralizing `reloadAllFromDisk` through the chokidar watcher
+
+### Toast Notifications
+
+- Sonner `<Toaster>` component added to the app root (bottom-right, 5 visible, close button). Previously the component was defined but never rendered, so all `toast.success()` / `toast.error()` calls were silently invisible
+
+### UI Fixes
+
+- **Branch label**: Fixed branch name not appearing when first opening the Git tab — replaced the `hasLoadedRef` gate with a direct `checkingRepo` check
+- **Date header background**: Git history date group headers now use `bg-transparent` instead of `bg-background/95`, matching the app's glass-effect aesthetic
+- **File tree expand persistence**: Folder expand/collapse state is now persisted to `layout-store` (localStorage), surviving tab switches and restarts
+- **Git tree expand persistence**: Git-overview file tree expand state is held in a parent-level `Set`, surviving git status refreshes
+
+### Internal
+
+- `git-store.ts`: New Zustand store managing branch, status files, diffs, commits, and all git actions with IPC-backed operations
+- Git service layer (`main/services/git.ts`): CLI-based git operations via `spawn()` with 30s timeout, including status, diff, stage, commit, branch management, merge, and log
+- IPC handlers (`main/ipc/git.ts`): 18 `git:*` channels registered
+- Preload bridge exposes full git API surface with typed parameters
+
 ## 0.3.10 — 2026-06-04
 
 ### Desktop Glass — Frosted Transparency

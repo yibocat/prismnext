@@ -7,9 +7,11 @@ import { NoFileOpen } from "@/components/modules/editor/no-file-open";
 import { ImageViewer } from "@/components/modules/editor/image-viewer";
 import { PdfPreview } from "@/components/modules/preview";
 import { GitPlaceholder } from "@/components/modules/git/git-placeholder";
+import { GitOverview } from "@/components/modules/git/git-overview";
 import { BrowserPlaceholder } from "@/components/modules/browser/browser-placeholder";
 import { BrowserView } from "@/components/modules/browser/browser-view";
 import { TerminalView } from "@/components/modules/terminal";
+import { useDocumentStore } from "@/stores/document-store";
 
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".svg"]);
 
@@ -39,6 +41,8 @@ function wrap(ctx: TabContextValue, children: React.ReactNode) {
 export function PaneContent({ activeTab, isActive }: PaneContentProps) {
   if (!activeTab) return null;
 
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
+
   const ctx: TabContextValue = { tab: activeTab, isActive };
 
   switch (activeTab.kind) {
@@ -51,7 +55,7 @@ export function PaneContent({ activeTab, isActive }: PaneContentProps) {
       return wrap(ctx, resolveViewer(activeTab.filePath));
     }
     case "git-overview":
-      return wrap(ctx, <GitPlaceholder />);
+      return wrap(ctx, <GitOverview projectRoot={projectRoot ?? ""} />);
     case "git-diff": {
       const viewer = activeTab.filePath ? resolveViewer(activeTab.filePath) : <CodeEditor />;
       return wrap(ctx, viewer);

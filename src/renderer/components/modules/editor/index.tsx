@@ -44,6 +44,7 @@ export function LatexEditor() {
   const jumpToLine = useDocumentStore((s) => s.jumpToLine);
   const requestJumpToLine = useDocumentStore((s) => s.requestJumpToLine);
   const changes = useChangesStore((s) => s.changes);
+  const contentVersion = useDocumentStore((s) => s.contentVersion);
 
   const activeChange = useMemo(() => {
     if (!fileId) return null;
@@ -353,6 +354,20 @@ export function LatexEditor() {
       deactivateMerge();
     }
   }, [activeChange, deactivateMerge]);
+
+  // ── Reload editor content when external changes update the active file ──
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !fileId || isMergeActiveRef.current) return;
+    const storeContent = useDocumentStore.getState().fileContents.get(fileId)?.content;
+    if (storeContent === undefined) return;
+    // Only update if content actually differs — skip dirty files (editor owns truth)
+    if (view.state.doc.toString() === storeContent) return;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: storeContent },
+      annotations: Transaction.addToHistory.of(false),
+    });
+  }, [contentVersion]);
 
   // SyncTeX jump-to-position
   useEffect(() => {

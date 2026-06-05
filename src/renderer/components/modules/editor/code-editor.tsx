@@ -40,6 +40,7 @@ export function CodeEditor() {
   const ext = (() => { const dot = filePath.lastIndexOf("."); return dot === -1 ? "" : filePath.slice(dot).toLowerCase(); })();
 
   const changes = useChangesStore((s) => s.changes);
+  const contentVersion = useDocumentStore((s) => s.contentVersion);
 
   const activeChange = useMemo(() => {
     if (!fileId) return null;
@@ -347,6 +348,19 @@ export function CodeEditor() {
       deactivateMerge();
     }
   }, [activeChange, deactivateMerge]);
+
+  // ── Reload editor content when external changes update the active file ──
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !fileId || isMergeActiveRef.current) return;
+    const storeContent = useDocumentStore.getState().fileContents.get(fileId)?.content;
+    if (storeContent === undefined) return;
+    if (view.state.doc.toString() === storeContent) return;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: storeContent },
+      annotations: Transaction.addToHistory.of(false),
+    });
+  }, [contentVersion]);
 
   return (
     <div className="flex h-full flex-col min-h-0">

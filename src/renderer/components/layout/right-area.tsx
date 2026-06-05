@@ -13,8 +13,10 @@ import { TexworkspaceToolbar } from "@/components/modules/texworkspace-mode";
 import { FileToolbar } from "@/components/modules/editor/toolbars/file-toolbar";
 import { BrowserToolbar } from "@/components/modules/browser/browser-toolbar";
 import { TerminalToolbar } from "@/components/modules/terminal";
+import { GitToolbar } from "@/components/modules/git/git-toolbar";
 import { useBrowserStore } from "@/stores/browser-store";
 import { useTerminalStore } from "@/stores/terminal-store";
+import { useGitStore } from "@/stores/git-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { LockIcon } from "lucide-react";
 import { AiBar } from "@/components/modules/chat";
@@ -125,6 +127,7 @@ function SidebarDragHandle({
 function resolveTabToolbar(
   tab: RightTab | undefined,
   compileFile: string | null | undefined,
+  projectRoot: string | null | undefined,
 ): React.ReactNode {
   if (!tab) return null;
 
@@ -148,6 +151,9 @@ function resolveTabToolbar(
           tabTitle={tab.title}
         />
       );
+    case "git-overview":
+    case "git-diff":
+      return <GitToolbar projectRoot={projectRoot ?? ""} />;
     default:
       return null;
   }
@@ -224,6 +230,43 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
       useTerminalStore.getState().fetchEnvInfo();
     }
   }, [projectRoot]);
+
+  // Initialize git store when project opens
+  useEffect(() => {
+    if (projectRoot) {
+      useGitStore.getState().selectUnit(projectRoot);
+    } else {
+      useGitStore.getState().clearAll();
+    }
+  }, [projectRoot]);
+
+  // ── File watcher: start when project opens, stop when it closes ──
+  useEffect(() => {
+    if (projectRoot) {
+      window.electronAPI.fsWatchStart(projectRoot).catch((err) => {
+        console.error("[watcher] Failed to start file watcher:", err);
+      });
+    }
+    return () => {
+      window.electronAPI.fsWatchStop().catch((err) => {
+        console.error("[watcher] Failed to stop file watcher:", err);
+      });
+    };
+  }, [projectRoot]);
+
+  // ── File watcher: reload files AND refresh git when external changes detected ──
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onFileChanged(() => {
+      useDocumentStore.getState().reloadAllFromDisk();
+      // Also trigger git status refresh so the Git panel stays in sync
+      const gs = useGitStore.getState();
+      if (gs.isGitRepo && gs.unitRoot) {
+        gs.scheduleAutoRefresh(gs.unitRoot);
+      }
+    });
+    return unsubscribe;
+  }, []);
+
   const fileContents = useDocumentStore((s) => s.fileContents);
   const dirtyFileIds = useMemo(() => {
     const dirty = new Set<string>();
@@ -484,9 +527,9 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
         onToggleSidebar={handleToggleSidebar}
         filePath={activeTab?.filePath}
         projectName={projectRoot?.split(/[/\\]/).pop()}
-        hideSpacer={activeTab?.kind === "browser" || activeTab?.kind === "terminal"}
+        hideSpacer={activeTab?.kind === "browser" || activeTab?.kind === "terminal" || activeTab?.kind === "git-overview" || activeTab?.kind === "git-diff"}
       >
-        {resolveTabToolbar(activeTab, compileFile)}
+        {resolveTabToolbar(activeTab, compileFile, projectRoot)}
       </TabToolbar>
 
       {/* Main Content: flex layout — main expands, sidebar stays fixed width */}

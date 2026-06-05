@@ -8,6 +8,7 @@ import { useDocumentStore } from "@/stores/document-store";
 import { cn } from "@/lib/utils";
 import { GlobalErrorBoundary } from "@/components/modules/shared";
 import { ProjectSetupDialog, WelcomePage } from "@/components/modules/project";
+import { Toaster } from "@/components/ui/sonner";
 import { LeftSidebar } from "@/components/layout/left-sidebar";
 import { LeftMainArea } from "@/components/layout/left-main-area";
 import { RightArea } from "@/components/layout/right-area";
@@ -200,6 +201,13 @@ export function App() {
     <GlobalErrorBoundary>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <ProjectSetupDialog />
+        <Toaster
+          position="bottom-right"
+          duration={5000}
+          visibleToasts={5}
+          closeButton
+          richColors
+        />
         {showWelcome ? (
           <WelcomePage onSkip={() => setShowWelcome(false)} />
         ) : projectRoot ? (

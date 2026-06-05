@@ -1,5 +1,7 @@
 import { readdir, readFile, writeFile, unlink, rm, rename, mkdir, stat } from "node:fs/promises";
 import { join, extname, dirname, basename } from "node:path";
+import { FSWatcher, watch } from "chokidar";
+import { BrowserWindow } from "electron";
 
 export type ProjectFileType = "tex" | "image" | "pdf" | "bib" | "style" | "other";
 
@@ -113,6 +115,37 @@ const IGNORED_EXTENSIONS = new Set([
   ".db",
 ]);
 
+// ─── File watcher ───
+
+/** Patterns excluded from the chokidar watcher. */
+const WATCH_IGNORED = [
+  /(^|[\/\\])\.[^\/\\]/,
+  "**/node_modules/**",
+  "**/__pycache__/**",
+  "**/.prismnext/compile/**",
+  "**/*.aux",
+  "**/*.log",
+  "**/*.out",
+  "**/*.toc",
+  "**/*.lof",
+  "**/*.lot",
+  "**/*.fls",
+  "**/*.fdb_latexmk",
+  "**/*.synctex.gz",
+  "**/*.synctex",
+  "**/*.blg",
+  "**/*.bbl",
+  "**/*.nav",
+  "**/*.snm",
+  "**/*.vrb",
+  "**/*.run.xml",
+  "**/*.bcf",
+];
+
+let activeWatcher: FSWatcher | null = null;
+let watcherDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const WATCHER_DEBOUNCE_MS = 500;
+
 export function shouldSkipProjectDirectory(name: string): boolean {
   return name.startsWith(".") || IGNORED_DIRECTORY_NAMES.has(name.toLowerCase());
 }
@@ -120,8 +153,9 @@ export function shouldSkipProjectDirectory(name: string): boolean {
 export function getProjectFileType(name: string): ProjectFileType | null {
   const lower = name.toLowerCase();
 
-  // Skip hidden files (starting with .) like .DS_Store, .gitignore, etc.
-  if (name.startsWith(".")) return null;
+  // Skip hidden files (starting with .) like .DS_Store, etc.
+  // Exception: .gitignore is a user-facing file that should be visible.
+  if (name.startsWith(".") && name !== ".gitignore") return null;
 
   // Skip ignored file extensions (build artifacts, binary/non-text files)
   for (const ext of IGNORED_EXTENSIONS) {
@@ -253,4 +287,70 @@ export async function renameFileOnDisk(
 
 export async function createDirectory(absolutePath: string): Promise<void> {
   await mkdir(absolutePath, { recursive: true });
+}
+
+/**
+ * Start watching a project directory for file changes.
+ * Debounces changes by 500ms, then sends `fs:fileChanged` to all renderer windows.
+ * Returns immediately if a watcher is already active for the same root.
+ */
+export async function startWatching(rootPath: string): Promise<void> {
+  // If already watching the exact same path or a parent, skip
+  if (activeWatcher) {
+    const watched = activeWatcher.getWatched();
+    const watchedRoots = Object.keys(watched);
+    // rootPath is already covered if it IS a watched root or is a CHILD of one
+    if (watchedRoots.some((r) => rootPath === r || rootPath.startsWith(r + "/"))) {
+      return;
+    }
+    // Different path or broader scope — stop old watcher first
+    await stopWatching();
+  }
+
+  activeWatcher = watch(rootPath, {
+    ignored: WATCH_IGNORED,
+    ignoreInitial: true,
+    depth: 50,
+    awaitWriteFinish: {
+      stabilityThreshold: 200,
+      pollInterval: 50,
+    },
+  });
+
+  const notifyRenderer = () => {
+    if (watcherDebounceTimer) clearTimeout(watcherDebounceTimer);
+    watcherDebounceTimer = setTimeout(() => {
+      const wins = BrowserWindow.getAllWindows();
+      for (const win of wins) {
+        if (!win.isDestroyed()) {
+          win.webContents.send("fs:fileChanged", { projectRoot: rootPath });
+        }
+      }
+    }, WATCHER_DEBOUNCE_MS);
+  };
+
+  activeWatcher.on("add", notifyRenderer);
+  activeWatcher.on("change", notifyRenderer);
+  activeWatcher.on("unlink", notifyRenderer);
+  activeWatcher.on("addDir", notifyRenderer);
+  activeWatcher.on("unlinkDir", notifyRenderer);
+
+  activeWatcher.on("error", (err) => {
+    console.error("[fs-watch] chokidar error:", err);
+  });
+}
+
+/**
+ * Stop the active file watcher and clean up state.
+ * Safe to call when no watcher is active (no-op).
+ */
+export async function stopWatching(): Promise<void> {
+  if (watcherDebounceTimer) {
+    clearTimeout(watcherDebounceTimer);
+    watcherDebounceTimer = null;
+  }
+  if (activeWatcher) {
+    await activeWatcher.close();
+    activeWatcher = null;
+  }
 }

@@ -142,6 +142,7 @@ function FileTreeNode({
   onSelectFile,
   callbacks,
   dirtyFiles,
+  gitStatusMap,
   selectedFolder,
   onSelectFolder,
   editing,
@@ -155,6 +156,12 @@ function FileTreeNode({
   onSelectFile: (id: string, name: string) => void;
   callbacks: FileTreeNodeCallbacks;
   dirtyFiles: Set<string>;
+  gitStatusMap: Map<string, {
+    isDeleted: boolean;
+    isStagedOnly: boolean;
+    isUnstaged: boolean;
+    isUntracked: boolean;
+  }>;
   selectedFolder: string | null;
   onSelectFolder: (path: string) => void;
   editing: { type: "file" | "folder"; parentPath?: string } | null;
@@ -238,6 +245,7 @@ function FileTreeNode({
                 onSelectFile={onSelectFile}
                 callbacks={callbacks}
                 dirtyFiles={dirtyFiles}
+                gitStatusMap={gitStatusMap}
                 selectedFolder={selectedFolder}
                 onSelectFolder={onSelectFolder}
                 editing={editing}
@@ -254,6 +262,34 @@ function FileTreeNode({
   const isActive = file.id === activeFileId;
   const isDirty = dirtyFiles.has(file.id);
 
+  // Git status coloring — multi-level fallback lookup:
+  //   1. file.id (full project-relative path)
+  //   2. file.relativePath (mode-stripped path)
+  //   3. Filename suffix match (last resort)
+  const gitStatusDirect = gitStatusMap.get(file.id);
+  const gitStatusByRelPath = gitStatusDirect !== undefined
+    ? gitStatusDirect
+    : gitStatusMap.get(file.relativePath);
+  const gitStatus = gitStatusByRelPath !== undefined
+    ? gitStatusByRelPath
+    : (() => {
+        // Last resort: match by filename (last path segment)
+        for (const [key, val] of gitStatusMap) {
+          if (key === file.name || key.endsWith("/" + file.name)) {
+            return val;
+          }
+        }
+        return undefined;
+      })();
+
+  const gitFileNameStyle: React.CSSProperties | undefined = gitStatus?.isDeleted
+    ? { color: "var(--destructive)", textDecoration: "line-through" }
+    : gitStatus?.isStagedOnly
+      ? { color: "var(--success)" }
+      : gitStatus?.isUnstaged || gitStatus?.isUntracked
+        ? { color: "var(--warning)" }
+        : undefined;
+
   return (
     <SidebarMenuSubItem>
       <ContextMenu>
@@ -267,7 +303,25 @@ function FileTreeNode({
               style={{ paddingLeft: 8 + depth * 16 }}
             >
               {getFileIcon(file)}
-              <span className="truncate">{node.name}</span>
+              <span
+                className="truncate"
+                style={gitFileNameStyle}
+                title={
+                  gitStatus
+                    ? gitStatus.isStagedOnly
+                      ? "Staged"
+                      : gitStatus.isUnstaged
+                        ? "Modified"
+                        : gitStatus.isUntracked
+                          ? "Untracked"
+                          : gitStatus.isDeleted
+                            ? "Deleted"
+                            : ""
+                    : undefined
+                }
+              >
+                {node.name}
+              </span>
               {isDirty && (
                 <span className="ml-auto size-2 shrink-0 rounded-full bg-info" title="Unsaved changes" />
               )}
@@ -413,7 +467,6 @@ export function FilesSidebar() {
   const currentMode: SidebarMode = isTexworkspaceActive ? "manuscript" : activeMode === "chat" ? "all" : activeMode;
   const files = useMemo(() => filterFilesByMode(allFiles, currentMode), [allFiles, currentMode]);
   const folders = useMemo(() => filterFoldersByMode(allFolders, currentMode), [allFolders, currentMode]);
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const tree = useMemo(() => buildFileTree(files, folders), [files, folders]);
   const dirtyFiles = useMemo(() => {
@@ -422,16 +475,115 @@ export function FilesSidebar() {
     return dirty;
   }, [fileContents]);
 
-  // ─── Expand / collapse all ───
+  // ─── Multi-unit Git status — independent from Zustand useGitStore ───
+  // Scans ALL top-level folders for .git repos and fetches status for each,
+  // building a unified map keyed by project-relative file path.
+  // This works regardless of which unit the Git panel has selected.
+
+  const topFolders = useMemo(
+    () => allFolders.filter((f) => !f.includes("/")).sort(),
+    [allFolders],
+  );
+
+  const [gitStatusMap, setGitStatusMap] = useState<
+    Map<string, { isDeleted: boolean; isStagedOnly: boolean; isUnstaged: boolean; isUntracked: boolean }>
+  >(new Map());
+
+  const doFetchGitStatus = useCallback(async () => {
+    if (!projectRoot) return;
+    const combined = new Map<string, { isDeleted: boolean; isStagedOnly: boolean; isUnstaged: boolean; isUntracked: boolean }>();
+
+    const addGitFiles = (
+      files: Array<{ path: string; staged: boolean; unstaged: boolean; untracked: boolean; worktreeStatus: string; indexStatus: string }>,
+      pathPrefix: string,
+    ) => {
+      for (const f of files) {
+        const isDeleted = f.worktreeStatus === "D" || f.indexStatus === "D";
+        const isStagedOnly = f.staged && !f.unstaged;
+        const isUnstaged = f.unstaged;
+        const isUntracked = f.untracked;
+        const key = pathPrefix ? `${pathPrefix}/${f.path}` : f.path;
+        const existing = combined.get(key);
+        if (existing) {
+          if (isUnstaged) existing.isStagedOnly = false;
+          existing.isUnstaged = existing.isUnstaged || isUnstaged;
+          existing.isUntracked = existing.isUntracked || isUntracked;
+          existing.isDeleted = existing.isDeleted || isDeleted;
+        } else {
+          combined.set(key, { isStagedOnly, isUnstaged, isUntracked, isDeleted });
+        }
+      }
+    };
+
+    // 1) Check if projectRoot itself is a git repo
+    try {
+      const rootIsRepo = await window.electronAPI.gitIsRepo(projectRoot);
+      if (rootIsRepo) {
+        const status = await window.electronAPI.gitStatus(projectRoot);
+        addGitFiles(status.files, "");
+      }
+    } catch { /* not a repo or error */ }
+
+    // 2) Scan top-level subfolders for independent git repos
+    for (const folder of topFolders) {
+      const unitPath = `${projectRoot}/${folder}`;
+      try {
+        const dotGitExists = await window.electronAPI.fsExists(`${unitPath}/.git`);
+        if (!dotGitExists) continue;
+        const status = await window.electronAPI.gitStatus(unitPath);
+        // Git paths are relative to the unit; prefix with folder name
+        addGitFiles(status.files, folder);
+      } catch { /* skip unreadable units */ }
+    }
+
+    setGitStatusMap(combined);
+  }, [projectRoot, topFolders]);
+
+  // Initial fetch + refetch when topFolders or projectRoot change
+  useEffect(() => {
+    doFetchGitStatus();
+  }, [doFetchGitStatus]);
+
+  // Auto-refresh after files change on disk (debounced 1.5 s)
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!projectRoot) return;
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => {
+      doFetchGitStatus();
+    }, 1500);
+    return () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    };
+  }, [allFiles, projectRoot, doFetchGitStatus]);
+
+  // ─── Expand / collapse (persisted to layout-store) ───
+  const persistedExpanded = useLayoutStore((s) => s.expandedFileTreeFolders);
+  const setPersistedExpanded = useLayoutStore((s) => s.setExpandedFileTreeFolders);
+  const expandedFolders = useMemo(() => new Set(persistedExpanded), [persistedExpanded]);
+
   const anyExpanded = expandedFolders.size > 0;
 
   const handleToggleAll = useCallback(() => {
     if (anyExpanded) {
-      setExpandedFolders(new Set());
+      setPersistedExpanded([]);
     } else {
-      setExpandedFolders(new Set(folders));
+      setPersistedExpanded([...folders]);
     }
-  }, [anyExpanded, folders]);
+  }, [anyExpanded, folders, setPersistedExpanded]);
+
+  const handleToggleFolder = useCallback(
+    (path: string) => {
+      const next = new Set(persistedExpanded);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      setPersistedExpanded([...next]);
+    },
+    [persistedExpanded, setPersistedExpanded],
+  );
 
 
   // ─── Breadcrumb navigation ───
@@ -454,17 +606,15 @@ export function FilesSidebar() {
 
     if (targetPath !== "") {
       const parts = targetPath.split("/");
-      setExpandedFolders((prev) => {
-        const next = new Set(prev);
-        for (let i = 1; i <= parts.length; i++) {
-          next.add(parts.slice(0, i).join("/"));
-        }
-        return next;
-      });
+      const next = new Set(persistedExpanded);
+      for (let i = 1; i <= parts.length; i++) {
+        next.add(parts.slice(0, i).join("/"));
+      }
+      setPersistedExpanded([...next]);
     }
 
     setFileTreeNavigatePath(null);
-  }, [fileTreeNavigatePath, currentMode]);
+  }, [fileTreeNavigatePath, currentMode, persistedExpanded, setPersistedExpanded, setFileTreeNavigatePath]);
 
   // ─── Name validation ───
 
@@ -629,13 +779,7 @@ export function FilesSidebar() {
                           depth={0}
                           activeFileId={activeFileId}
                           expandedFolders={expandedFolders}
-                          onToggleFolder={(path) =>
-                            setExpandedFolders((prev) => {
-                              const next = new Set(prev);
-                              next.has(path) ? next.delete(path) : next.add(path);
-                              return next;
-                            })
-                          }
+                          onToggleFolder={handleToggleFolder}
                           onSelectFile={(id, name) => {
                             setSelectedFolder(null);
                             if (isTexworkspaceActive) {
@@ -647,6 +791,7 @@ export function FilesSidebar() {
                           }}
                           callbacks={treeCallbacks}
                           dirtyFiles={dirtyFiles}
+                          gitStatusMap={gitStatusMap}
                           selectedFolder={selectedFolder}
                           onSelectFolder={(path) => setSelectedFolder(path)}
                           editing={editing}
