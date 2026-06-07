@@ -1,5 +1,72 @@
 # Changelog
 
+## 0.3.12 — 2026-06-07
+
+### Unified Git Worktree System — AI Experiment Isolation
+
+Standard `git worktree` integration providing isolated working directories for AI-assisted editing. Replaces the previous federated multi-unit worktree orchestration (~2600 lines) with a single, standard git-based system (~400 lines). One project = one git repo = one `git worktree add`.
+
+- **Worktree service** (`main/services/worktree.ts`): `createWorktree`, `removeWorktree`, `listWorktrees`, `getMergeStatus`, `getBranchesWithLocks`, `moveSessionsToProject` — all via CLI git spawn with 30s timeout. Auto-initializes git repo + initial commit if needed; generates random adjective-noun worktree names (e.g., `calm-owl`); stores base branch in `.prism-worktree-meta` metadata file
+- **Worktree Zustand store** (`worktree-store.ts`): lazy initialization — worktree is only created on first chat message, not when selected; `checkoutRoot` abstraction in document store seamlessly switches file tree and editor between project root and worktree path
+- **Worktree IPC**: `worktree:list/create/remove/mergeStatus/branches/moveSessions` channels registered
+- **Worktree UI components**:
+  - `WorktreeSelector`: dropdown in chat area showing Local / Existing worktrees / New Worktree options; shows ahead/behind counts; locked (non-interactive badge) when conversation has messages
+  - `WorktreeActions`: "Close Worktree" + "Push" buttons, visible when a worktree is active
+  - `WorktreePushPanel`: push worktree changes to base branch via stash → checkout → merge → commit → stash pop flow
+  - `MergeWorktreeDialog`: one-click finalize (checkout base → merge → delete branch → remove worktree); auto-opens Git panel on conflict
+  - `BranchSelector`: branch dropdown in chat header with lock indicator when worktree is active; filters internal `wt-*` branches
+
+### Push Flow — Data Safety (3 Critical Fixes)
+
+- **Stash-based pre-push**: replaced dangerous `git commitAll(projectRoot, ["."], ...)` (unconditionally committed all files on whatever branch was active) with `git stash push -u` → checkout → merge → `git stash pop`. No more unwanted auto-commits on wrong branches
+- **Post-merge commit**: after `git merge --no-commit --no-ff`, immediately runs `git commit` to lock the merge result to the target branch. Fixes the "staged changes drift to master" bug where uncommitted staged merge results followed the user when switching branches
+- **Close Worktree safety check**: confirmation dialog when worktree has unpushed commits (`aheadCount > 0`); warns of permanent deletion via `git branch -D`; renamed from "Move to Local" to "Close Worktree"
+
+### Staleness Detection — `behindCount`
+
+- `WorktreeInfo` and `MergeStatus` types now include `behindCount: number` — commits in base branch not in worktree
+- Calculated via `git rev-list --count <branch>..<mainBranch>` in `listWorktrees()` and `getMergeStatus()`
+- Displayed as amber `{N}↓` badge in worktree list with tooltip: "N commits behind base — consider merging main into this worktree first"
+
+### File Tree — Explicit Reload After Git Operations
+
+- All branch-changing operations in `git-store` now call `reloadAllFromDisk()` immediately instead of relying solely on chokidar file watcher: `switchBranch`, `createBranch`, `mergeBranch`, `abortMerge`, `revertCommit`, `resetToCommit`, `discardFile`
+- Chokidar watcher is now a safety net, not the primary trigger — eliminates stale file display after rapid branch switches
+
+### Git Service Enhancements
+
+- **Merge operations**: `mergeBranch`, `mergeNoCommit` (`--no-commit --no-ff`), `abortMerge`
+- **Stash operations**: `stashPush` (with `-u` for untracked) and `stashPop`
+- **CommitAll**: stage specified files + commit in one operation (`git add <files> && git commit`)
+- **Revert/Reset**: `revertCommit` (`--no-edit`) and `resetToCommit` (soft/mixed/hard modes)
+- **Branch management**: `deleteBranch` (`git branch -D`), `getBranchesWithLocks` (marks Prism worktree branches as locked)
+- **Status parsing**: handles C-quoted paths, renames (`R old -> new`), untracked directory expansion, detached HEAD state
+
+### Session Migration
+
+- `moveSessionsToProject`: copies Claude session files from worktree (`~/.claude/projects/<encoded-worktree-path>/`) to project root (`~/.claude/projects/<encoded-project-root>/`) on worktree close
+- Toast notifications: success shows migrated session count; failure shows warning
+
+### UI Improvements
+
+- **Worktree selector**: always visible when git repo exists; shows locked non-interactive badge with lock icon when conversation has messages
+- **Close Worktree**: renamed from "Move to Local" with tooltip "Discard worktree and return to main project"
+- **Merge conflict guidance**: auto-opens Git panel on merge failure; actionable error message with resolution steps
+- **Git toolbar**: filters internal `wt-*` branches from branch list
+
+### Design Documentation
+
+- Unified worktree design spec: architecture, data flows, edge cases
+- Branch-worktree dual model design spec
+- Worktree multi-unit support design spec
+- Three implementation plans
+
+### Internal
+
+- 35 files changed, 5685 insertions, 283 deletions
+- New files: `worktree.ts` (service), `worktree-store.ts`, `worktree-selector.tsx`, `worktree-actions.tsx`, `worktree-push-panel.tsx`, `merge-worktree-dialog.tsx`, `branch-selector.tsx`, `worktree.ts` (IPC)
+- Safety improvements: stash-based push, post-merge commit, close confirmation, explicit file tree reload, session migration toasts, behindCount staleness detection
+
 ## 0.3.11 — 2026-06-05
 
 ### Git System

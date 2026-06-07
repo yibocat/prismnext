@@ -52,19 +52,18 @@ export const useChangesStore = create<ChangesState>()((set, get) => ({
     const change = get().changes.find((c) => c.id === id);
     if (!change) return;
 
-    const docState = useDocumentStore.getState();
     try {
       await window.electronAPI.fsWrite(change.absolutePath, change.newContent);
+      const docState = useDocumentStore.getState();
       const file = docState.files.find((f) => f.relativePath === change.filePath);
       if (file) {
         await docState.refreshFileContent(file.id);
       } else {
-        // File may have been created by the agent — refresh project file list
         await docState.refreshFiles();
       }
     } catch (err) {
       console.error("[changes] acceptChange write failed:", err);
-      return; // don't remove from store on failure
+      return;
     }
 
     set((state) => ({
@@ -100,24 +99,22 @@ export const useChangesStore = create<ChangesState>()((set, get) => ({
 
     const docState = useDocumentStore.getState();
     const succeeded: string[] = [];
-    const failed: string[] = [];
 
     for (const change of changes) {
       try {
+        await window.electronAPI.fsWrite(change.absolutePath, change.newContent);
         const file = docState.files.find((f) => f.relativePath === change.filePath);
         if (file) {
-          await window.electronAPI.fsWrite(change.absolutePath, change.newContent);
           await docState.refreshFileContent(file.id);
         }
         succeeded.push(change.id);
       } catch (err) {
         console.error("[changes] acceptAll failed for", change.filePath, err);
-        failed.push(change.id);
       }
     }
 
-    if (failed.length > 0) {
-      console.warn("[changes] acceptAll: some writes failed", { succeeded, failed });
+    if (succeeded.length < changes.length) {
+      await docState.refreshFiles();
     }
 
     set((state) => ({

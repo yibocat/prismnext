@@ -176,11 +176,35 @@ export function registerGitHandlers(): void {
     },
   );
 
+  // ── git:mergeNoCommit ──
+  ipcMain.handle(
+    "git:mergeNoCommit",
+    async (_event, args: { projectRoot: string; sourceBranch: string }) => {
+      return gitService.mergeNoCommit(args.projectRoot, args.sourceBranch);
+    },
+  );
+
   // ── git:abortMerge ──
   ipcMain.handle(
     "git:abortMerge",
     async (_event, args: { projectRoot: string }) => {
       return gitService.abortMerge(args.projectRoot);
+    },
+  );
+
+  // ── git:stash ──
+  ipcMain.handle(
+    "git:stash",
+    async (_event, args: { projectRoot: string; message?: string }) => {
+      return gitService.stashPush(args.projectRoot, args.message);
+    },
+  );
+
+  // ── git:stashPop ──
+  ipcMain.handle(
+    "git:stashPop",
+    async (_event, args: { projectRoot: string }) => {
+      return gitService.stashPop(args.projectRoot);
     },
   );
 
@@ -191,4 +215,17 @@ export function registerGitHandlers(): void {
       return gitService.commit(args.projectRoot, args.message);
     },
   );
+
+  // ── git:commitAll ──
+  ipcMain.handle(
+    "git:commitAll",
+    async (_event, args: { projectRoot: string; filePaths: string[]; message: string }) => {
+      return gitService.commitAll(args.projectRoot, args.filePaths, args.message);
+    },
+  );
+
+  // ── git:deleteBranch ──
+  ipcMain.handle("git:deleteBranch", async (_e, args: {
+    projectRoot: string; branch: string;
+  }) => gitService.deleteBranch(args.projectRoot, args.branch));
 }

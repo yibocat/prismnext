@@ -65,8 +65,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // CLI agent operations
   cliDispose: () => ipcRenderer.invoke("cli:dispose"),
-  cliPrewarm: (projectPath: string, tabId?: string) =>
-    ipcRenderer.invoke("cli:prewarm", { projectPath, tabId }),
+  cliPrewarm: (projectPath: string, tabId?: string, worktreePath?: string) =>
+    ipcRenderer.invoke("cli:prewarm", { projectPath, tabId, worktreePath }),
   cliStatus: () => ipcRenderer.invoke("cli:status"),
   cliSend: (args: { projectPath: string; prompt: string; tabId?: string; agent?: string; model?: string | null; sessionId?: string | null }) =>
     ipcRenderer.invoke("cli:send", args),
@@ -78,10 +78,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("cli:closeSession", { tabId }),
   cliAnswer: (tabId: string, answer: string) =>
     ipcRenderer.invoke("cli:answer", { tabId, answer }),
-  cliListSessions: (projectPath: string) =>
-    ipcRenderer.invoke("cli:listSessions", { projectPath }),
-  cliLoadSession: (projectPath: string, sessionId: string) =>
-    ipcRenderer.invoke("cli:loadSession", { projectPath, sessionId }),
+  cliListSessions: (projectPath: string, worktreePath?: string) =>
+    ipcRenderer.invoke("cli:listSessions", { projectPath, worktreePath }),
+  cliLoadSession: (projectPath: string, sessionId: string, worktreePath?: string) =>
+    ipcRenderer.invoke("cli:loadSession", { projectPath, sessionId, worktreePath }),
   cliDeleteSession: (projectPath: string, sessionId: string) =>
     ipcRenderer.invoke("cli:deleteSession", { projectPath, sessionId }),
 
@@ -151,6 +151,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("git:discard", { projectRoot, filePath, staged, untracked, worktreeStatus }),
   gitCommit: (projectRoot: string, message: string) =>
     ipcRenderer.invoke("git:commit", { projectRoot, message }),
+  gitCommitAll: (projectRoot: string, filePaths: string[], message: string) =>
+    ipcRenderer.invoke("git:commitAll", { projectRoot, filePaths, message }),
+  gitDeleteBranch:(projectRoot: string, branch: string) =>
+    ipcRenderer.invoke("git:deleteBranch", { projectRoot, branch }),
   gitRevert: (projectRoot: string, hash: string) =>
     ipcRenderer.invoke("git:revert", { projectRoot, hash }),
   gitReset: (projectRoot: string, hash: string, mode: "soft" | "mixed" | "hard") =>
@@ -161,12 +165,32 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("git:log", { projectRoot, maxCount }),
   gitMerge: (projectRoot: string, sourceBranch: string) =>
     ipcRenderer.invoke("git:merge", { projectRoot, sourceBranch }),
+  gitMergeNoCommit: (projectRoot: string, sourceBranch: string) =>
+    ipcRenderer.invoke("git:mergeNoCommit", { projectRoot, sourceBranch }),
   gitAbortMerge: (projectRoot: string) =>
     ipcRenderer.invoke("git:abortMerge", { projectRoot }),
+  gitStash: (projectRoot: string, message?: string) =>
+    ipcRenderer.invoke("git:stash", { projectRoot, message }),
+  gitStashPop: (projectRoot: string) =>
+    ipcRenderer.invoke("git:stashPop", { projectRoot }),
   gitCommitDiff: (projectRoot: string, hash: string) =>
     ipcRenderer.invoke("git:commitDiff", { projectRoot, hash }),
   gitCommitFileDiff: (projectRoot: string, hash: string, filePath: string) =>
     ipcRenderer.invoke("git:commitFileDiff", { projectRoot, hash, filePath }),
+
+  // Worktree operations
+  worktreeList: (projectRoot: string) =>
+    ipcRenderer.invoke("worktree:list", { projectRoot }),
+  worktreeCreate: (projectRoot: string, name?: string, baseBranch?: string) =>
+    ipcRenderer.invoke("worktree:create", { projectRoot, name, baseBranch }),
+  worktreeBranches: (projectRoot: string) =>
+    ipcRenderer.invoke("worktree:branches", { projectRoot }),
+  worktreeRemove: (projectRoot: string, name: string) =>
+    ipcRenderer.invoke("worktree:remove", { projectRoot, name }),
+  worktreeMergeStatus: (projectRoot: string, name: string) =>
+    ipcRenderer.invoke("worktree:mergeStatus", { projectRoot, name }),
+  worktreeMoveSessions: (projectRoot: string, worktreeName: string) =>
+    ipcRenderer.invoke("worktree:moveSessions", { projectRoot, worktreeName }),
 
   // CLI agent events (Main → Renderer)
   onCliStream: (callback: (data: { tabId: string; data: string }) => void) => {

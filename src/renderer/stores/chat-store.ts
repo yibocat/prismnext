@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { useDocumentStore } from "./document-store";
+import { useWorktreeStore } from "./worktree-store";
 import { useAgentSettingsStore } from "./agent-settings-store";
 
 // ─── Types ───
@@ -226,6 +227,39 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const docState = useDocumentStore.getState();
     const projectPath = docState.projectRoot || "";
 
+    // Resolve worktree: lazy-init if in "worktree" mode but not yet initialized
+    const worktreeStore = useWorktreeStore.getState();
+    let worktreePath: string | null = null;
+
+    if (worktreeStore.mode === "worktree") {
+      try {
+        // If already active, use it; otherwise initialize (first message triggers creation)
+        let wt = worktreeStore.activeWorktree;
+        if (!wt && projectPath) {
+          wt = await worktreeStore.initializeWorktree(projectPath);
+        }
+        // Ensure checkoutRoot is switched to worktree path (belt-and-suspenders:
+        // subscription in left-main-area also handles this, but we ensure it here
+        // in case sendPrompt runs before the subscription fires)
+        if (wt) {
+          await docState.switchCheckoutRoot(wt.path);
+        }
+        worktreePath = wt?.path ?? null;
+      } catch (err: any) {
+        set((s) => {
+          const tabs = s.tabs.map((t) =>
+            t.id === s.activeTabId
+              ? { ...t, error: `Worktree init failed: ${err?.message}` }
+              : t,
+          );
+          return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+        });
+        return;
+      }
+    } else {
+      worktreePath = null;
+    }
+
     // Check if agent is available
     try {
       const status = await window.electronAPI.cliStatus();
@@ -284,6 +318,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const sessionId = get().tabs.find((t) => t.id === tabId)?.sessionId;
       await window.electronAPI.cliSend({
         projectPath,
+        worktreePath: worktreePath || undefined,
         prompt: userPrompt,
         tabId,
         agent: agentId,
@@ -349,6 +384,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   loadSession: async (sessionId: string) => {
     const projectPath = useDocumentStore.getState().projectRoot || "";
+    const worktreePath = useWorktreeStore.getState().activeWorktree?.path;
 
     // If this session is already loaded in an existing tab, just switch to it
     const existingTab = get().tabs.find((t) => t.sessionId === sessionId);
@@ -374,7 +410,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }));
 
     try {
-      const raw = await window.electronAPI.cliLoadSession(projectPath, sessionId);
+      const raw = await window.electronAPI.cliLoadSession(projectPath, sessionId, worktreePath);
       const messages = raw.filter((msg: ChatStreamMessage) => {
         if (msg.type === "system") return false;
         // Keep result messages even without content — they carry

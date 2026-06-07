@@ -109,6 +109,33 @@ export interface GitMergeResultData {
   output?: string;
 }
 
+// ── Worktree types ──
+
+export interface WorktreeInfo {
+  name: string;
+  path: string;
+  branch: string;
+  baseBranch: string;
+  head: string;
+  aheadCount: number;
+  behindCount: number;
+}
+
+export interface MergeStatus {
+  branch: string;
+  mainBranch: string;
+  aheadCount: number;
+  behindCount: number;
+  commits: { hash: string; message: string }[];
+}
+
+export interface BranchInfo {
+  name: string;
+  isLocked: boolean;
+  lockedBy: string | null;
+}
+
+
 export interface ElectronAPI {
   // Filesystem operations
   fsScan: (rootPath: string) => Promise<{
@@ -186,15 +213,15 @@ export interface ElectronAPI {
 
   // CLI agent operations
   cliDispose: () => Promise<{ success: boolean }>;
-  cliPrewarm: (projectPath: string, tabId?: string) => Promise<{ success: boolean }>;
+  cliPrewarm: (projectPath: string, tabId?: string, worktreePath?: string) => Promise<{ success: boolean }>;
   cliStatus: () => Promise<{ available: boolean; agentId?: string; agentName?: string; error?: string }>;
-  cliSend: (args: { projectPath: string; prompt: string; tabId?: string; agent?: string; model?: string | null; sessionId?: string | null }) => Promise<void>;
+  cliSend: (args: { projectPath: string; worktreePath?: string; prompt: string; tabId?: string; agent?: string; model?: string | null; sessionId?: string | null }) => Promise<void>;
   cliSetGateway: (baseUrl?: string, apiKey?: string) => Promise<void>;
   cliCancel: (tabId?: string) => Promise<void>;
   cliCloseSession: (tabId?: string) => Promise<void>;
   cliAnswer: (tabId: string, answer: string) => Promise<void>;
-  cliListSessions: (projectPath: string) => Promise<Array<{ id: string; title: string; lastModified: number; createdAt: number }>>;
-  cliLoadSession: (projectPath: string, sessionId: string) => Promise<any[]>;
+  cliListSessions: (projectPath: string, worktreePath?: string) => Promise<Array<{ id: string; title: string; lastModified: number; createdAt: number }>>;
+  cliLoadSession: (projectPath: string, sessionId: string, worktreePath?: string) => Promise<any[]>;
   cliDeleteSession: (projectPath: string, sessionId: string) => Promise<{ success: boolean; error?: string }>;
 
   // CLI agent events (Main → Renderer)
@@ -252,6 +279,8 @@ export interface ElectronAPI {
   gitUnstage: (projectRoot: string, filePath: string) => Promise<GitResultData>;
   gitInit: (projectRoot: string) => Promise<GitResultData>;
   gitCommit: (projectRoot: string, message: string) => Promise<GitResultData>;
+  gitCommitAll: (projectRoot: string, filePaths: string[], message: string) => Promise<GitResultData>;
+  gitDeleteBranch: (projectRoot: string, branch: string) => Promise<GitResultData>;
   gitRevert: (projectRoot: string, hash: string) => Promise<GitResultData>;
   gitReset: (projectRoot: string, hash: string, mode: "soft" | "mixed" | "hard") => Promise<GitResultData>;
   gitDiffStats: (projectRoot: string) => Promise<{
@@ -261,9 +290,20 @@ export interface ElectronAPI {
   gitLog: (projectRoot: string, maxCount?: number) => Promise<Array<{ hash: string; message: string; author: string; date: string; graph: string; refs: string; insertions: number; deletions: number }>>;
   gitDiscard: (projectRoot: string, filePath: string, staged: boolean, untracked: boolean, worktreeStatus: string) => Promise<GitResultData>;
   gitMerge: (projectRoot: string, sourceBranch: string) => Promise<GitMergeResultData>;
+  gitMergeNoCommit: (projectRoot: string, sourceBranch: string) => Promise<GitMergeResultData>;
   gitAbortMerge: (projectRoot: string) => Promise<GitResultData>;
+  gitStash: (projectRoot: string, message?: string) => Promise<GitResultData>;
+  gitStashPop: (projectRoot: string) => Promise<GitResultData>;
   gitCommitDiff: (projectRoot: string, hash: string) => Promise<string>;
   gitCommitFileDiff: (projectRoot: string, hash: string, filePath: string) => Promise<{ path: string; oldContent: string; newContent: string }>;
+
+  // Worktree operations
+  worktreeList: (projectRoot: string) => Promise<WorktreeInfo[]>;
+  worktreeCreate: (projectRoot: string, name?: string, baseBranch?: string) => Promise<WorktreeInfo>;
+  worktreeRemove: (projectRoot: string, name: string) => Promise<void>;
+  worktreeMergeStatus: (projectRoot: string, name: string) => Promise<MergeStatus>;
+  worktreeMoveSessions: (projectRoot: string, worktreeName: string) => Promise<number>;
+  worktreeBranches: (projectRoot: string) => Promise<BranchInfo[]>;
 }
 
 declare global {

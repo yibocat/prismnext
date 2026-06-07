@@ -29,6 +29,8 @@ interface FileContent {
 
 interface DocumentState {
   projectRoot: string | null;
+  /** Current working root — projectRoot on main, worktree path when active */
+  checkoutRoot: string | null;
   showWelcome: boolean;
   setShowWelcome: (show: boolean) => void;
   files: ProjectFile[];
@@ -52,6 +54,8 @@ interface DocumentState {
   refreshFiles: () => Promise<void>;
   reloadAllFromDisk: () => Promise<void>;
   refreshFileContent: (id: string) => Promise<void>;
+  /** Switch to a new checkout root (e.g. worktree), saving dirty files first */
+  switchCheckoutRoot: (newRoot: string) => Promise<void>;
 
   // Modified actions (now async)
   createNewFile: (name: string, type?: ProjectFileType, folder?: string) => Promise<void>;
@@ -126,6 +130,7 @@ let _reloadInProgress = false;
 
 export const useDocumentStore = create<DocumentState>((set, get) => ({
   projectRoot: null,
+  checkoutRoot: null,
   showWelcome: true,
   setShowWelcome: (show) => set({ showWelcome: show }),
   files: [],
@@ -155,6 +160,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       clearPdfCache();
       // Lazy import to avoid circular dependency
       (await import("./changes-store")).useChangesStore.getState().clearAll();
+      (await import("./worktree-store")).useWorktreeStore.getState().clearAll();
 
       const result = await window.electronAPI.fsScan(rootPath);
       const files: ProjectFile[] = result.files.map((f) => ({
@@ -189,6 +195,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
       set({
         projectRoot: rootPath,
+        checkoutRoot: rootPath,
         showWelcome: false,
         files,
         folders: result.folders,
@@ -218,8 +225,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     useChatStore.getState().clearAllSessions();
     clearPdfCache();
     import("./changes-store").then((m) => m.useChangesStore.getState().clearAll());
+    import("./worktree-store").then((m) => m.useWorktreeStore.getState().clearAll());
     set({
       projectRoot: null,
+      checkoutRoot: null,
       showWelcome: true,
       files: [],
       folders: [],
@@ -301,6 +310,20 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     }
   },
 
+  switchCheckoutRoot: async (newRoot: string) => {
+    const { checkoutRoot } = get();
+    if (newRoot === checkoutRoot) return;
+
+    // Save all dirty files in the current checkout before switching
+    await get().saveAllFiles();
+
+    // Switch to new root
+    set({ checkoutRoot: newRoot });
+
+    // Rebuild file list and contents from new root
+    await get().reloadAllFromDisk();
+  },
+
   refreshFiles: async () => {
     const { projectRoot } = get();
     if (!projectRoot) return;
@@ -308,15 +331,15 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   },
 
   reloadAllFromDisk: async () => {
-    const { projectRoot } = get();
-    if (!projectRoot) return;
+    const { checkoutRoot } = get();
+    if (!checkoutRoot) return;
 
     // Prevent concurrent reloads from racing on store state
     if (_reloadInProgress) return;
     _reloadInProgress = true;
 
     try {
-      const result = await window.electronAPI.fsScan(projectRoot);
+      const result = await window.electronAPI.fsScan(checkoutRoot);
       const newFiles: ProjectFile[] = result.files.map((f) => ({
         id: f.relativePath,
         name: f.relativePath.split("/").pop() || f.relativePath,
@@ -397,15 +420,15 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   },
 
   createNewFile: async (name: string, type?: ProjectFileType, folder?: string) => {
-    const { projectRoot, files } = get();
-    if (!projectRoot) return;
+    const { checkoutRoot, files } = get();
+    if (!checkoutRoot) return;
 
     const relativePath = folder ? `${folder}/${name}` : name;
     const inferred = type ? { type, content: type === "tex" ? defaultTexContent : "" } : inferFromExtension(name);
 
     try {
       const { absPath } = await window.electronAPI.fsCreate(
-        projectRoot,
+        checkoutRoot,
         relativePath,
         inferred.content,
       );
@@ -441,11 +464,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   },
 
   createFolder: async (name: string, parent?: string) => {
-    const { projectRoot } = get();
-    if (!projectRoot) return;
+    const { checkoutRoot } = get();
+    if (!checkoutRoot) return;
 
     const folderPath = parent ? `${parent}/${name}` : name;
-    const absolutePath = `${projectRoot}/${folderPath}`.replace(/\\/g, "/");
+    const absolutePath = `${checkoutRoot}/${folderPath}`.replace(/\\/g, "/");
 
     try {
       await window.electronAPI.fsMkdir(absolutePath);
@@ -495,8 +518,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   },
 
   deleteFolder: async (folderPath: string) => {
-    const { projectRoot, files } = get();
-    if (!projectRoot) return;
+    const { checkoutRoot, files } = get();
+    if (!checkoutRoot) return;
 
     // Check if this would delete all files
     const remainingFiles = files.filter(
@@ -507,7 +530,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       return;
     }
 
-    const absolutePath = `${projectRoot}/${folderPath}`.replace(/\\/g, "/");
+    const absolutePath = `${checkoutRoot}/${folderPath}`.replace(/\\/g, "/");
 
     try {
       await window.electronAPI.fsDeleteFolder(absolutePath);
@@ -550,15 +573,15 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   },
 
   renameFile: async (id: string, newName: string) => {
-    const { files, projectRoot } = get();
+    const { files, checkoutRoot } = get();
     const file = files.find((f) => f.id === id);
-    if (!file || !projectRoot) return;
+    if (!file || !checkoutRoot) return;
 
     const parentPath = file.relativePath.includes("/")
       ? file.relativePath.substring(0, file.relativePath.lastIndexOf("/"))
       : "";
     const newRelativePath = parentPath ? `${parentPath}/${newName}` : newName;
-    const newAbsolutePath = `${projectRoot}/${newRelativePath}`.replace(/\\/g, "/");
+    const newAbsolutePath = `${checkoutRoot}/${newRelativePath}`.replace(/\\/g, "/");
 
     try {
       await window.electronAPI.fsRename(file.absolutePath, newAbsolutePath);
@@ -601,8 +624,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   },
 
   renameFolder: async (folderPath: string, newName: string) => {
-    const { files, folders, projectRoot, fileContents } = get();
-    if (!projectRoot) return;
+    const { files, folders, checkoutRoot, fileContents } = get();
+    if (!checkoutRoot) return;
 
     const parentPath = folderPath.includes("/")
       ? folderPath.substring(0, folderPath.lastIndexOf("/"))
@@ -611,8 +634,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const oldPrefix = `${folderPath}/`;
     const newPrefix = `${newFolderPath}/`;
 
-    const oldAbs = `${projectRoot}/${folderPath}`.replace(/\\/g, "/");
-    const newAbs = `${projectRoot}/${newFolderPath}`.replace(/\\/g, "/");
+    const oldAbs = `${checkoutRoot}/${folderPath}`.replace(/\\/g, "/");
+    const newAbs = `${checkoutRoot}/${newFolderPath}`.replace(/\\/g, "/");
 
     try {
       await window.electronAPI.fsRename(oldAbs, newAbs);

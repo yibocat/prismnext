@@ -43,14 +43,14 @@ const STYLE_EXTENSIONS = new Set([
   ".ldf",
 ]);
 
-const IGNORED_DIRECTORY_NAMES = new Set([
+export const IGNORED_DIRECTORY_NAMES = new Set([
   "node_modules",
   "__pycache__",
   "venv",
   "env",
 ]);
 
-const IGNORED_EXTENSIONS = new Set([
+export const IGNORED_EXTENSIONS = new Set([
   // LaTeX build artifacts
   ".aux",
   ".log",

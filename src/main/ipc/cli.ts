@@ -25,12 +25,12 @@ export function registerCliHandlers(): void {
   // ─── Pre-warm: start persistent CLI process eagerly ───
   ipcMain.handle(
     "cli:prewarm",
-    async (event, args: { projectPath: string; tabId?: string }) => {
+    async (event, args: { projectPath: string; worktreePath?: string; tabId?: string }) => {
       const tabId = args.tabId || "default";
       const win = BrowserWindow.fromWebContents(event.sender);
       if (!win) throw new Error("No window");
       const manager = getCliManager(win);
-      const cwd = args.projectPath || app.getPath("home");
+      const cwd = args.worktreePath || args.projectPath || app.getPath("home");
       manager.prewarm(tabId, cwd);
       return { success: true };
     },
@@ -52,6 +52,7 @@ export function registerCliHandlers(): void {
       event,
       args: {
         projectPath: string;
+        worktreePath?: string;
         prompt: string;
         tabId?: string;
         agent?: string;
@@ -64,7 +65,7 @@ export function registerCliHandlers(): void {
       if (!win) throw new Error("No window");
 
       const manager = getCliManager(win);
-      const cwd = args.projectPath || app.getPath("home");
+      const cwd = args.worktreePath || args.projectPath || app.getPath("home");
       manager.sendPrompt(tabId, args.prompt, cwd, args.agent, args.model, args.sessionId ?? undefined);
     },
   );
@@ -112,10 +113,23 @@ export function registerCliHandlers(): void {
   // ─── Session Management (Claude JSONL for now) ───
   ipcMain.handle(
     "cli:listSessions",
-    async (_event, args: { projectPath: string }) => {
+    async (_event, args: { projectPath: string; worktreePath?: string }) => {
       try {
-        const cwd = args.projectPath || app.getPath("home");
-        return await listClaudeSessions(cwd);
+        const sessions = await listClaudeSessions(args.projectPath);
+        // If a worktree is active, also include its sessions
+        if (args.worktreePath) {
+          try {
+            const wtSessions = await listClaudeSessions(args.worktreePath);
+            // Merge — deduplicate by session id
+            const seen = new Set(sessions.map((s) => s.id));
+            for (const s of wtSessions) {
+              if (!seen.has(s.id)) {
+                sessions.push({ ...s, title: `[wt] ${s.title}` });
+              }
+            }
+          } catch { /* worktree sessions not critical */ }
+        }
+        return sessions;
       } catch {
         return [] as ClaudeSession[];
       }
@@ -124,13 +138,15 @@ export function registerCliHandlers(): void {
 
   ipcMain.handle(
     "cli:loadSession",
-    async (_event, args: { projectPath: string; sessionId: string }) => {
-      try {
-        const cwd = args.projectPath || app.getPath("home");
-        return await loadSessionHistory(cwd, args.sessionId);
-      } catch {
-        return [];
+    async (_event, args: { projectPath: string; sessionId: string; worktreePath?: string }) => {
+      // Try projectPath first; if not found there, try worktreePath.
+      // loadSessionHistory returns [] on missing file — it does not throw.
+      const messages = await loadSessionHistory(args.projectPath, args.sessionId);
+      if (messages.length > 0) return messages;
+      if (args.worktreePath) {
+        return await loadSessionHistory(args.worktreePath, args.sessionId);
       }
+      return [];
     },
   );
 

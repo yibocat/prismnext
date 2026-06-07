@@ -49,7 +49,7 @@ import {
 import { MODE_DIR, type SidebarMode, filterFilesByMode, filterFoldersByMode } from "./shared";
 import { Icon } from "@iconify/react";
 import { getFileIconName } from "@/lib/file-icon-class";
-import { FolderPenIcon } from "lucide-react";
+
 
 // ─── Inline New Node ───
 
@@ -475,10 +475,7 @@ export function FilesSidebar() {
     return dirty;
   }, [fileContents]);
 
-  // ─── Multi-unit Git status — independent from Zustand useGitStore ───
-  // Scans ALL top-level folders for .git repos and fetches status for each,
-  // building a unified map keyed by project-relative file path.
-  // This works regardless of which unit the Git panel has selected.
+  // ─── Git status — query project-level or worktree git repo ───
 
   const topFolders = useMemo(
     () => allFolders.filter((f) => !f.includes("/")).sort(),
@@ -493,51 +490,31 @@ export function FilesSidebar() {
     if (!projectRoot) return;
     const combined = new Map<string, { isDeleted: boolean; isStagedOnly: boolean; isUnstaged: boolean; isUntracked: boolean }>();
 
-    const addGitFiles = (
-      files: Array<{ path: string; staged: boolean; unstaged: boolean; untracked: boolean; worktreeStatus: string; indexStatus: string }>,
-      pathPrefix: string,
-    ) => {
-      for (const f of files) {
+    try {
+      // Use worktree path if active, otherwise project root
+      const { useWorktreeStore } = await import("@/stores/worktree-store");
+      const wt = useWorktreeStore.getState().activeWorktree;
+      const gitRoot = wt?.path ?? projectRoot;
+
+      // Check for .git (directory or worktree metadata file)
+      const dotGitExists = await window.electronAPI.fsExists(`${gitRoot}/.git`);
+      if (!dotGitExists) {
+        setGitStatusMap(combined);
+        return;
+      }
+
+      const status = await window.electronAPI.gitStatus(gitRoot);
+      for (const f of status.files) {
         const isDeleted = f.worktreeStatus === "D" || f.indexStatus === "D";
         const isStagedOnly = f.staged && !f.unstaged;
         const isUnstaged = f.unstaged;
         const isUntracked = f.untracked;
-        const key = pathPrefix ? `${pathPrefix}/${f.path}` : f.path;
-        const existing = combined.get(key);
-        if (existing) {
-          if (isUnstaged) existing.isStagedOnly = false;
-          existing.isUnstaged = existing.isUnstaged || isUnstaged;
-          existing.isUntracked = existing.isUntracked || isUntracked;
-          existing.isDeleted = existing.isDeleted || isDeleted;
-        } else {
-          combined.set(key, { isStagedOnly, isUnstaged, isUntracked, isDeleted });
-        }
+        combined.set(f.path, { isStagedOnly, isUnstaged, isUntracked, isDeleted });
       }
-    };
-
-    // 1) Check if projectRoot itself is a git repo
-    try {
-      const rootIsRepo = await window.electronAPI.gitIsRepo(projectRoot);
-      if (rootIsRepo) {
-        const status = await window.electronAPI.gitStatus(projectRoot);
-        addGitFiles(status.files, "");
-      }
-    } catch { /* not a repo or error */ }
-
-    // 2) Scan top-level subfolders for independent git repos
-    for (const folder of topFolders) {
-      const unitPath = `${projectRoot}/${folder}`;
-      try {
-        const dotGitExists = await window.electronAPI.fsExists(`${unitPath}/.git`);
-        if (!dotGitExists) continue;
-        const status = await window.electronAPI.gitStatus(unitPath);
-        // Git paths are relative to the unit; prefix with folder name
-        addGitFiles(status.files, folder);
-      } catch { /* skip unreadable units */ }
-    }
+    } catch { /* repo not readable */ }
 
     setGitStatusMap(combined);
-  }, [projectRoot, topFolders]);
+  }, [projectRoot]);
 
   // Initial fetch + refetch when topFolders or projectRoot change
   useEffect(() => {

@@ -3,6 +3,7 @@ import {
   HoverCardTrigger,
   HoverCardContent,
 } from "@/components/ui/hover-card";
+import { useWorktreeStore } from "@/stores/worktree-store";
 import {
   FolderOpenIcon,
   BotIcon,
@@ -23,6 +24,14 @@ export function SessionTitle({
   const projectName = projectRoot
     ? projectRoot.split("/").pop() || projectRoot
     : "—";
+
+  const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
+  const mode = useWorktreeStore((s) => s.mode);
+  const worktreeLabel = activeWorktree?.name
+    ? `📂 ${activeWorktree.name}`
+    : mode === "worktree"
+      ? "Pending worktree"
+      : "Local";
 
   return (
     <div className="flex items-center min-w-0 max-w-[240px]">
@@ -59,9 +68,8 @@ export function SessionTitle({
             {/* Worktree */}
             <div className="flex items-center gap-2">
               <GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" />
-              {/* TODO: Show actual worktree name when available */}
               <span className="text-[length:var(--font-chat-meta)] text-muted-foreground">
-                —
+                {worktreeLabel}
               </span>
             </div>
           </div>

@@ -7,6 +7,7 @@ import type {
   GitFileDiffData,
 } from "@/types/electron";
 import { useDocumentStore } from "./document-store";
+import { useWorktreeStore } from "./worktree-store";
 
 // ─── Types ───
 
@@ -63,7 +64,7 @@ interface GitState {
   commits: GitCommitData[];
   commitsLoading: boolean;
 
-  // ── Current unit (sub-folder acting as independent git root) ──
+  // ── Current unit (sub-folder working directory) ──
   unitRoot: string | null;
   /** Bumped after init / checkout — sidebar watches this to re-scan .git folders */
   gitFolderVersion: number;
@@ -428,7 +429,8 @@ export const useGitStore = create<GitState>()((set, get) => ({
       return;
     }
     await get().refreshStatus(projectRoot);
-    // reloadAllFromDisk is handled by the chokidar file watcher
+    // Reload the discarded file from disk
+    await useDocumentStore.getState().reloadAllFromDisk();
   },
 
   // ── commitChanges ──
@@ -441,7 +443,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
       return;
     }
     await get().refreshStatus(projectRoot);
-    // reloadAllFromDisk is handled by the chokidar file watcher
+    // Commit does not modify files on disk — no reload needed
     set({ error: null });
   },
 
@@ -455,7 +457,9 @@ export const useGitStore = create<GitState>()((set, get) => ({
     }
     await get().refreshStatus(projectRoot);
     await get().refreshBranches(projectRoot);
-    // reloadAllFromDisk is handled by the chokidar file watcher
+    // Explicitly reload files — branch switch may change the working tree.
+    // The chokidar watcher is a fallback, not the primary trigger.
+    await useDocumentStore.getState().reloadAllFromDisk();
   },
 
   // ── createBranch ──
@@ -468,7 +472,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     }
     await get().refreshStatus(projectRoot);
     await get().refreshBranches(projectRoot);
-    // reloadAllFromDisk is handled by the chokidar file watcher
+    await useDocumentStore.getState().reloadAllFromDisk();
   },
 
   // ── mergeBranch ──
@@ -498,7 +502,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     );
     await get().refreshStatus(projectRoot);
     await get().refreshBranches(projectRoot);
-    // reloadAllFromDisk is handled by the chokidar file watcher
+    await useDocumentStore.getState().reloadAllFromDisk();
   },
 
   // ── abortMerge ──
@@ -512,7 +516,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     toast.success("Merge aborted");
     await get().refreshStatus(projectRoot);
     await get().refreshBranches(projectRoot);
-    // reloadAllFromDisk is handled by the chokidar file watcher
+    await useDocumentStore.getState().reloadAllFromDisk();
   },
 
   // ── revertCommit ──
@@ -526,7 +530,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     await get().refreshStatus(projectRoot);
     await get().refreshBranches(projectRoot);
     await get().loadHistory(projectRoot);
-    // reloadAllFromDisk is handled by the chokidar file watcher
+    await useDocumentStore.getState().reloadAllFromDisk();
   },
 
   // ── resetToCommit ──
@@ -540,7 +544,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     await get().refreshStatus(projectRoot);
     await get().refreshBranches(projectRoot);
     await get().loadHistory(projectRoot);
-    // reloadAllFromDisk is handled by the chokidar file watcher
+    await useDocumentStore.getState().reloadAllFromDisk();
   },
 
   // ── initRepo ──

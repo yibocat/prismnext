@@ -50,9 +50,14 @@ const FILTER_OPTIONS: { mode: GitFilterMode; label: string }[] = [
 
 // ─── Component ───
 
+/** Internal worktree branches are managed by Prism — hide them from the git UI. */
+const WT_PREFIX = "wt-";
+
 export function GitToolbar({ projectRoot }: GitToolbarProps) {
   const branch = useGitStore((s) => s.branch);
-  const branches = useGitStore((s) => s.branches);
+  const allBranches = useGitStore((s) => s.branches);
+  // Filter out internal wt-* worktree branches — they belong to Prism, not the user
+  const branches = useMemo(() => allBranches.filter((b) => !b.startsWith(WT_PREFIX)), [allBranches]);
   const filterMode = useGitStore((s) => s.filterMode);
   const isGitRepo = useGitStore((s) => s.isGitRepo);
   const checkingRepo = useGitStore((s) => s.checkingRepo);

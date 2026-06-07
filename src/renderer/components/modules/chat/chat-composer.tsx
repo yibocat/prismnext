@@ -24,6 +24,9 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore, type ProjectFile } from "@/stores/document-store";
 import { AgentSettingsBar } from "./agent-settings/agent-settings-bar";
 import { compileCurrentDocument } from "@/stores/compile-store";
+import { useWorktreeStore } from "@/stores/worktree-store";
+import { useGitStore } from "@/stores/git-store";
+import { GitBranchIcon } from "lucide-react";
 
 // ─── Helpers ───
 
@@ -69,6 +72,12 @@ export function ChatComposer() {
   const archivedSessionIds = useLayoutStore((s) => s.archivedSessionIds);
   const isArchived = activeSessionId ? archivedSessionIds.includes(activeSessionId) : false;
   const activeTabId = useChatStore((s) => s.activeTabId);
+
+  // Worktree state for bottom bar labels
+  const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
+  const currentGitBranch = useGitStore((s) => s.branch);
+  const messages = useChatStore((s) => s.messages);
+  const hasMessages = messages.length > 0;
 
   // Document store (for @ mentions and selection)
   const files = useDocumentStore((s) => s.files);
@@ -455,6 +464,35 @@ export function ChatComposer() {
           </>
         )}
       </div>
+
+        {/* Bottom bar: branch + worktree labels (only when messages exist) */}
+        {hasMessages && (
+          <div className="flex items-center gap-2 pt-1.5 text-[length:var(--font-hint)] text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <GitBranchIcon className="size-3" />
+              <span className="font-medium text-foreground/80">
+                {activeWorktree?.baseBranch ?? currentGitBranch}
+              </span>
+            </span>
+            {activeWorktree && (
+              <>
+                <span className="opacity-40">·</span>
+                <span className="flex items-center gap-1 text-primary/70">
+                  <span>📂</span>
+                  <span className="font-medium">{activeWorktree.name}</span>
+                </span>
+                <span className="ml-auto text-[length:var(--font-hint)] opacity-50">
+                  worktree
+                </span>
+              </>
+            )}
+            {!activeWorktree && (
+              <span className="ml-auto text-[length:var(--font-hint)] opacity-50">
+                local
+              </span>
+            )}
+          </div>
+        )}
 
     </div>
   );

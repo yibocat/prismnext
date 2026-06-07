@@ -5,7 +5,6 @@ import { ChatMessages } from "./chat-messages";
 import { useChatStore } from "@/stores/chat-store";
 import {
   ArrowUpIcon,
-  GitBranchIcon,
   PlusIcon,
   FileTextIcon,
   ImageIcon,
@@ -21,6 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { WorktreeSelector } from "./worktree-selector";
 import { cn } from "@/lib/utils";
 
 type Phase = "idle" | "input" | "expanded";
@@ -270,25 +270,7 @@ export function AiBar() {
                   )}
                 </button>
               )}
-              {/* TODO: Worktree selector — populate with actual git worktrees */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                    onMouseDown={(e) => e.preventDefault()}
-                  >
-                    <GitBranchIcon className="size-3.5" />
-                    <span>Worktree</span>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  {/* TODO: List actual git worktrees from the project */}
-                  <div className="px-2 py-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
-                    No worktrees available
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <WorktreeSelector />
             </div>
           )}
           {/* Capsule — same DOM element, classes transition smoothly */}
@@ -422,24 +404,7 @@ export function AiBar() {
                   )}
                 </button>
               )}
-              {/* TODO: Worktree selector — populate with actual git worktrees */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                    onMouseDown={(e) => e.preventDefault()}
-                  >
-                    <GitBranchIcon className="size-3.5" />
-                    <span>Worktree</span>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  <div className="px-2 py-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
-                    No worktrees available
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <WorktreeSelector />
             </div>
           )}
           <ChatComposer />

@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useChatStore, type ChatStreamMessage } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useChangesStore } from "@/stores/changes-store";
+import { useWorktreeStore } from "@/stores/worktree-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { compileCurrentDocument, pauseAutoCompileForAi, resumeAutoCompileAfterAi } from "@/stores/compile-store";
 import { cleanTextForDisplay } from "@/lib/system-prompt-cleaner";
@@ -47,22 +48,38 @@ export function useCliEvents() {
     const docState = useDocumentStore.getState();
     const projectRoot = docState.projectRoot;
 
-    let relativePath = filePath;
-    if (projectRoot && filePath.startsWith(projectRoot)) {
-      relativePath = filePath.slice(projectRoot.length).replace(/^\//, "");
+    const worktreeStore = useWorktreeStore.getState();
+    const activeWorktree = worktreeStore.activeWorktree;
+
+    let resolvedPath = filePath;
+
+    // If in a worktree and the file is inside it, keep the absolute worktree path
+    if (activeWorktree && filePath.startsWith(activeWorktree.path)) {
+      resolvedPath = filePath;
+    }
+
+    let relativePath = resolvedPath;
+    if (activeWorktree && resolvedPath.startsWith(activeWorktree.path)) {
+      relativePath = resolvedPath.slice(activeWorktree.path.length).replace(/^\//, "");
+    } else if (projectRoot && resolvedPath.startsWith(projectRoot)) {
+      relativePath = resolvedPath.slice(projectRoot.length).replace(/^\//, "");
     }
 
     const file = docState.files.find(
       (f) => f.relativePath === relativePath || f.absolutePath === filePath,
     );
-    if (!file) {
+
+    // New file (Write tool creates a file that doesn't exist in the project yet)
+    const isNewFile = !file && toolName.toLowerCase().startsWith("write");
+
+    if (!file && !isNewFile) {
       log.debug("file not found in project", { filePath, relativePath, projectFiles: docState.files.length });
       return;
     }
 
-    const trackedContent = fileContentTrackerRef.current.get(file.relativePath);
-    const fallback = capturedOldContent || docState.getContent(file.id) || "";
-    const oldContent = trackedContent ?? fallback;
+    const trackedContent = file ? fileContentTrackerRef.current.get(file.relativePath) : undefined;
+    const fallback = capturedOldContent || (file ? docState.getContent(file.id) : "") || "";
+    const oldContent = trackedContent ?? (isNewFile ? "" : fallback);
 
     const name = toolName.toLowerCase();
     let newContent: string;
@@ -76,7 +93,7 @@ export function useCliEvents() {
         const newStr: string = edit.new_string ?? "";
         if (oldStr === "" && newStr === "") continue;
         const escaped = oldStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        newContent = newContent.replace(new RegExp(escaped), newStr);
+        newContent = newContent.replace(new RegExp(escaped, "g"), newStr);
       }
     } else if (name.startsWith("edit")) {
       const oldStr: string = toolInput?.old_string ?? "";
@@ -86,29 +103,31 @@ export function useCliEvents() {
         return;
       }
       const escaped = oldStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      newContent = oldContent.replace(new RegExp(escaped), newStr);
+      newContent = oldContent.replace(new RegExp(escaped, "g"), newStr);
     } else {
       log.debug("unknown tool — skipping", { toolName, filePath });
       return;
     }
 
     if (oldContent !== newContent) {
-      fileContentTrackerRef.current.set(file.relativePath, newContent);
+      if (file) {
+        fileContentTrackerRef.current.set(file.relativePath, newContent);
+      }
 
       useChangesStore.getState().addChange({
         id: toolUseId,
-        filePath: file.relativePath,
-        absolutePath: file.absolutePath,
+        filePath: relativePath,
+        absolutePath: resolvedPath,
         oldContent,
         newContent,
         toolName,
       });
 
       const rpState = useRightPanelStore.getState();
-      const existingTab = rpState.tabs.find((t) => t.filePath === file.relativePath);
+      const existingTab = rpState.tabs.find((t) => t.filePath === relativePath);
       if (!existingTab) {
-        const fileName = file.relativePath.split("/").pop() || file.relativePath;
-        rpState.openFile(file.relativePath, file.relativePath, fileName);
+        const fileName = relativePath.split("/").pop() || relativePath;
+        rpState.openFile(relativePath, relativePath, fileName);
       }
     }
   }

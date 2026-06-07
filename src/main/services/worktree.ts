@@ -1,0 +1,399 @@
+import { spawn } from "node:child_process";
+import { existsSync, writeFileSync, readFileSync } from "node:fs";
+import { cp, readdir, rm } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+// ─── Types ───
+
+export interface WorktreeInfo {
+  name: string;
+  path: string;        // absolute path to worktree root
+  branch: string;      // "wt-calm-owl"
+  baseBranch: string;  // the branch this worktree was created from
+  head: string;        // latest commit SHA (short)
+  aheadCount: number;  // commits ahead of main
+  behindCount: number; // commits behind main (stale worktree)
+}
+
+export interface MergeStatus {
+  branch: string;
+  mainBranch: string;
+  aheadCount: number;
+  behindCount: number;
+  commits: { hash: string; message: string }[];
+}
+
+export interface BranchInfo {
+  name: string;
+  isLocked: boolean;
+  lockedBy: string | null;  // worktree name or "main"
+}
+
+// ─── Constants ───
+
+const GIT_TIMEOUT_MS = 30_000;
+const WORKTREES_DIR = ".prismnext/worktrees";
+const BRANCH_PREFIX = "wt-";
+
+const ADJECTIVES = ["bright","calm","quick","sharp","cool","warm","bold","swift","keen","deep","fresh","clear","smart","eager","brave","quiet"];
+const NOUNS = ["fox","owl","bear","hawk","wolf","deer","dove","lynx","puma","wren","crab","koi","newt","ray","seal","swan"];
+
+function generateWorktreeName(): string {
+  return `${ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)]}-${NOUNS[Math.floor(Math.random() * NOUNS.length)]}`;
+}
+
+// ─── Git execution ───
+
+function execGit(cwd: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn("git", ["-c", "core.quotepath=false", ...args], {
+      cwd, stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
+    });
+    let stdout = "", stderr = "";
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; proc.kill(); }, GIT_TIMEOUT_MS);
+    proc.stdout?.on("data", (d: Buffer) => { stdout += d.toString(); });
+    proc.stderr?.on("data", (d: Buffer) => { stderr += d.toString(); });
+    proc.on("close", (code) => {
+      clearTimeout(timer);
+      if (timedOut) reject(new Error(`Git worktree timed out: git ${args.join(" ")}`));
+      else if (code !== 0) reject(new Error(stderr.trim() || `git ${args[0]} exited with code ${code}`));
+      else resolve(stdout);
+    });
+    proc.on("error", (err) => { clearTimeout(timer); reject(new Error(`Failed to spawn git: ${err.message}`)); });
+  });
+}
+
+async function detectMainBranch(repoPath: string): Promise<string> {
+  for (const name of ["main", "master"]) {
+    try { await execGit(repoPath, ["rev-parse", "--verify", name]); return name; } catch {}
+  }
+  try {
+    const ref = await execGit(repoPath, ["symbolic-ref", "--short", "HEAD"]);
+    return ref.trim();
+  } catch { return "main"; }
+}
+
+// ─── Public API ───
+
+export async function createWorktree(
+  projectRoot: string,
+  name?: string,
+  baseBranch?: string,
+): Promise<WorktreeInfo> {
+  const resolvedName = name || generateWorktreeName();
+  const branchName = `${BRANCH_PREFIX}${resolvedName}`;
+  const worktreePath = join(projectRoot, WORKTREES_DIR, resolvedName);
+
+  if (existsSync(worktreePath)) {
+    throw new Error(`Worktree "${resolvedName}" already exists`);
+  }
+
+  // Ensure git is initialized
+  if (!existsSync(join(projectRoot, ".git"))) {
+    await execGit(projectRoot, ["init"]);
+    // Write default .gitignore so .prismnext/ is not tracked
+    const gitignorePath = join(projectRoot, ".gitignore");
+    if (!existsSync(gitignorePath)) {
+      const { writeFile } = await import("node:fs/promises");
+      const defaultGitignore = [
+        "# LaTeX build artifacts",
+        "*.aux", "*.log", "*.out", "*.toc", "*.bbl", "*.blg", "*.synctex.gz",
+        "*.fdb_latexmk", "*.fls", "*.xdv", "*.nav", "*.snm", "*.vrb",
+        "",
+        "# Prism internal data",
+        ".prismnext/",
+        "",
+        "# System",
+        ".DS_Store", "Thumbs.db",
+        "*.swp", "*.swo", "*~",
+        "",
+      ].join("\n") + "\n";
+      try { await writeFile(gitignorePath, defaultGitignore); } catch {}
+    }
+  }
+
+  // Ensure at least one commit exists (git worktree add requires it)
+  try { await execGit(projectRoot, ["rev-parse", "HEAD"]); } catch {
+    // No commits yet — create initial commit with all existing files
+    try {
+      await execGit(projectRoot, ["add", "-A"]);
+      await execGit(projectRoot, ["commit", "-m", "Initial project setup"]);
+    } catch {
+      // Fallback: empty commit if add fails (e.g. empty directory)
+      await execGit(projectRoot, ["commit", "--allow-empty", "-m", "Initial project setup"]);
+    }
+  }
+
+  // Resolve base branch — default to current branch
+  const resolvedBase = baseBranch || (await detectMainBranch(projectRoot));
+
+  // Clean up zombie branch if it exists
+  try { await execGit(projectRoot, ["branch", "-D", branchName]); } catch {}
+
+  const relPath = join(WORKTREES_DIR, resolvedName);
+  await execGit(projectRoot, ["worktree", "add", "-b", branchName, relPath, resolvedBase]);
+
+  let head = "";
+  try { head = (await execGit(worktreePath, ["rev-parse", "--short", "HEAD"])).trim(); } catch {}
+
+  // Store the base branch as metadata so listWorktrees can read it back.
+  // git worktree list --porcelain doesn't track which branch a worktree was created from.
+  try {
+    writeFileSync(join(worktreePath, ".prism-worktree-meta"), resolvedBase, "utf-8");
+  } catch {}
+
+  return {
+    name: resolvedName,
+    path: worktreePath,
+    branch: branchName,
+    baseBranch: resolvedBase,
+    head,
+    aheadCount: 0,
+    behindCount: 0,
+  };
+}
+
+export async function removeWorktree(
+  projectRoot: string,
+  name: string,
+): Promise<void> {
+  const worktreePath = join(projectRoot, WORKTREES_DIR, name);
+  const branchName = `${BRANCH_PREFIX}${name}`;
+
+  const errors: string[] = [];
+
+  // Remove worktree checkout
+  if (existsSync(worktreePath)) {
+    try {
+      await execGit(projectRoot, ["worktree", "remove", "--force", worktreePath]);
+    } catch {
+      // If remove fails (e.g. corrupted metadata), try prune to clean up
+      try { await execGit(projectRoot, ["worktree", "prune"]); } catch {}
+      // Then try to manually delete the directory
+      try { await rm(worktreePath, { recursive: true, force: true }); } catch {}
+      // Check if it's actually gone
+      if (existsSync(worktreePath)) {
+        errors.push(`Failed to remove worktree directory: ${worktreePath}`);
+      }
+    }
+  }
+
+  // Delete branch (only if worktree was successfully removed)
+  try {
+    await execGit(projectRoot, ["branch", "-D", branchName]);
+  } catch {
+    // Branch may not exist — that's OK if the worktree is gone
+    if (!existsSync(worktreePath)) {
+      // Worktree removed, branch cleanup is non-critical
+    } else {
+      errors.push(`Failed to delete branch: ${branchName}`);
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(errors.join("; "));
+  }
+}
+
+export async function listWorktrees(projectRoot: string): Promise<WorktreeInfo[]> {
+  const worktreesDir = join(projectRoot, WORKTREES_DIR);
+  if (!existsSync(worktreesDir)) return [];
+
+  let output: string;
+  try {
+    output = await execGit(projectRoot, ["worktree", "list", "--porcelain"]);
+  } catch {
+    return [];
+  }
+
+  const result: WorktreeInfo[] = [];
+  const mainBranch = await detectMainBranch(projectRoot);
+
+  // Parse git worktree list --porcelain output
+  const entries = output.split("\n\n").filter((s) => s.trim());
+  for (const entry of entries) {
+    const lines = entry.split("\n");
+    let worktreePath = "";
+    let head = "";
+    let branch = "";
+
+    for (const line of lines) {
+      if (line.startsWith("worktree ")) worktreePath = line.slice(9);
+      if (line.startsWith("HEAD ")) head = line.slice(5);
+      if (line.startsWith("branch ")) {
+        branch = line.slice(18);
+      }
+    }
+
+    // Only include worktrees under .prismnext/worktrees/
+    if (!worktreePath.includes(WORKTREES_DIR)) continue;
+
+    const wtName = worktreePath.split("/").pop() || "";
+    if (!wtName) continue;
+
+    // Skip main worktree (the bare repo itself)
+    if (branch === mainBranch) continue;
+
+    // Validate: worktree checkout must exist and have a .git file
+    if (!existsSync(worktreePath) || !existsSync(join(worktreePath, ".git"))) continue;
+
+    let aheadCount = 0;
+    try {
+      const count = await execGit(projectRoot, ["rev-list", "--count", `${mainBranch}..${branch}`]);
+      aheadCount = parseInt(count.trim(), 10) || 0;
+    } catch {}
+
+    let behindCount = 0;
+    try {
+      const count = await execGit(projectRoot, ["rev-list", "--count", `${branch}..${mainBranch}`]);
+      behindCount = parseInt(count.trim(), 10) || 0;
+    } catch {}
+
+    // Read the base branch from metadata file written at create time.
+    // Falls back to main branch for worktrees created before this file was introduced.
+    let baseBranch: string = mainBranch;
+    try {
+      const meta = readFileSync(join(worktreePath, ".prism-worktree-meta"), "utf-8").trim();
+      if (meta) baseBranch = meta;
+    } catch {}
+
+    result.push({ name: wtName, path: worktreePath, branch, baseBranch, head, aheadCount, behindCount });
+  }
+
+  // Also scan the filesystem for directories in .prismnext/worktrees/ that
+  // git worktree list might miss
+  let dirEntries;
+  try { dirEntries = await readdir(worktreesDir, { withFileTypes: true }); } catch { dirEntries = []; }
+  for (const entry of dirEntries) {
+    if (!entry.isDirectory()) continue;
+    if (result.some((r) => r.name === entry.name)) continue;
+    // Validate: must have a .git file (worktree metadata link)
+    if (!existsSync(join(worktreesDir, entry.name, ".git"))) continue;
+    let baseBranch: string = mainBranch;
+    try {
+      const meta = readFileSync(join(worktreesDir, entry.name, ".prism-worktree-meta"), "utf-8").trim();
+      if (meta) baseBranch = meta;
+    } catch {}
+    result.push({
+      name: entry.name,
+      path: join(worktreesDir, entry.name),
+      branch: `${BRANCH_PREFIX}${entry.name}`,
+      baseBranch,
+      head: "",
+      aheadCount: 0,
+      behindCount: 0,
+    });
+  }
+
+  return result;
+}
+
+export async function getMergeStatus(
+  projectRoot: string,
+  worktreeName: string,
+): Promise<MergeStatus> {
+  const branchName = `${BRANCH_PREFIX}${worktreeName}`;
+
+  // Get base branch from the worktree
+  let baseBranch: string;
+  try {
+    const wts = await listWorktrees(projectRoot);
+    const wt = wts.find(w => w.name === worktreeName);
+    baseBranch = wt?.baseBranch || await detectMainBranch(projectRoot);
+  } catch {
+    baseBranch = await detectMainBranch(projectRoot);
+  }
+
+  let aheadCount = 0;
+  let behindCount = 0;
+  let commits: { hash: string; message: string }[] = [];
+
+  try {
+    const count = await execGit(projectRoot, ["rev-list", "--count", `${baseBranch}..${branchName}`]);
+    aheadCount = parseInt(count.trim(), 10) || 0;
+  } catch {}
+
+  try {
+    const count = await execGit(projectRoot, ["rev-list", "--count", `${branchName}..${baseBranch}`]);
+    behindCount = parseInt(count.trim(), 10) || 0;
+  } catch {}
+
+  if (aheadCount > 0) {
+    try {
+      const log = await execGit(projectRoot, ["log", `${baseBranch}..${branchName}`, "--oneline"]);
+      commits = log.split("\n").filter((l) => l.trim()).map((line) => {
+        const space = line.indexOf(" ");
+        return { hash: line.slice(0, space), message: line.slice(space + 1) };
+      });
+    } catch {}
+  }
+
+  return { branch: branchName, mainBranch: baseBranch, aheadCount, behindCount, commits };
+}
+
+export async function getBranchesWithLocks(projectRoot: string): Promise<BranchInfo[]> {
+  const worktrees = await listWorktrees(projectRoot);
+  const mainBranch = await detectMainBranch(projectRoot);
+
+  // Get all branches
+  let allBranches: string[] = [];
+  try {
+    const output = await execGit(projectRoot, ["branch", "--format=%(refname:short)"]);
+    allBranches = output.split("\n").filter(l => l.trim());
+  } catch { return []; }
+
+  // Build lock map — only Prism worktree branches are locked
+  // (main branch is the primary checkout, not "locked")
+  const lockMap = new Map<string, string>();
+  for (const wt of worktrees) {
+    lockMap.set(wt.branch, wt.name);
+  }
+
+  return allBranches.map(name => ({
+    name,
+    isLocked: lockMap.has(name),
+    lockedBy: lockMap.get(name) || null,
+  }));
+}
+
+/**
+ * Move Claude session files from a worktree to the project root.
+ * Sessions are stored under ~/.claude/projects/<encoded-path>/<id>.jsonl
+ * where <encoded-path> is the path with non-alphanumeric chars replaced by "-".
+ */
+export async function moveSessionsToProject(
+  projectRoot: string,
+  worktreeName: string,
+): Promise<number> {
+  const WORKTREES_DIR = ".prismnext/worktrees";
+  const worktreePath = join(projectRoot, WORKTREES_DIR, worktreeName);
+  const encode = (p: string) => p.replace(/[^a-zA-Z0-9]/g, "-");
+  const base = join(homedir(), ".claude", "projects");
+  const srcDir = join(base, encode(worktreePath));
+  const dstDir = join(base, encode(projectRoot));
+
+  let count = 0;
+  try {
+    // Ensure destination exists
+    const { mkdir } = require("node:fs/promises");
+    await mkdir(dstDir, { recursive: true });
+
+    const files = await readdir(srcDir);
+    for (const file of files) {
+      if (!file.endsWith(".jsonl")) continue;
+      await cp(join(srcDir, file), join(dstDir, file), { force: true });
+      count++;
+    }
+
+    // Remove the source directory after successful copy
+    if (count > 0) {
+      try { await rm(srcDir, { recursive: true, force: true }); } catch {}
+    }
+  } catch {
+    // If source doesn't exist or is empty, that's OK — no sessions to move
+  }
+
+  return count;
+}

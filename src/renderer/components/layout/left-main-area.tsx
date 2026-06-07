@@ -4,6 +4,7 @@ import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useProjectStore } from "@/stores/project-store";
+import { useWorktreeStore } from "@/stores/worktree-store";
 import {
   GeneralSettings,
   AppearanceSettings,
@@ -12,6 +13,9 @@ import {
   ShortcutsSettings,
 } from "@/components/modules/settings";
 import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator } from "@/components/modules/chat";
+import { WorktreeSelector } from "@/components/modules/chat/worktree-selector";
+import { BranchSelector } from "@/components/modules/chat/branch-selector";
+import { WorktreeActions } from "@/components/modules/chat/worktree-actions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,7 +23,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDownIcon, FolderOpenIcon, FolderPlusIcon, GitBranchIcon } from "lucide-react";
+import { ChevronDownIcon, FolderOpenIcon, FolderPlusIcon } from "lucide-react";
 import { AGENT_UI_CONFIGS } from "@/lib/agent-config";
 
 const AGENTS = Object.values(AGENT_UI_CONFIGS);
@@ -54,6 +58,22 @@ export function LeftMainArea() {
     });
   }, []);
 
+  // When activeWorktree changes (select existing, lazy-init, or move-to-local),
+  // automatically switch the document checkout root so that file operations
+  // and AI edits happen in the correct directory.
+  useEffect(() => {
+    const unsub = useWorktreeStore.subscribe((state, prev) => {
+      if (state.activeWorktree === prev.activeWorktree) return;
+      const docStore = useDocumentStore.getState();
+      const newRoot = state.activeWorktree?.path ?? docStore.projectRoot;
+      if (newRoot && newRoot !== docStore.checkoutRoot) {
+        docStore.switchCheckoutRoot(newRoot);
+      }
+    });
+    return unsub;
+  }, []);
+
+  const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const selectedAgent = useChatStore((s) => s.selectedAgent);
@@ -172,25 +192,10 @@ export function LeftMainArea() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* TODO: Worktree selector — populate with actual git worktrees */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    disabled={!isEmpty}
-                    className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground/70 hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <GitBranchIcon className="size-3" />
-                    <span>Worktree</span>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  {/* TODO: List actual git worktrees from the project */}
-                  <div className="px-2 py-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
-                    No worktrees available
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <BranchSelector />
+
+              <WorktreeSelector />
+
             </div>
 
             {/* Composer */}
@@ -214,10 +219,15 @@ export function LeftMainArea() {
           /* ── Chat view ── */
           <div className="flex flex-1 flex-col">
             <ChatMessages />
+            {/* Worktree actions above composer — only when worktree is active */}
+            {activeWorktree && (
+              <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 px-3">
+                <WorktreeActions />
+              </div>
+            )}
             <div className="w-full max-w-3xl mx-auto">
               <ChatComposer />
             </div>
-            {/* Context bar — matches toolbar height, bottom padding for breathing room */}
             <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-7 px-3 mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
               <span className="flex-1" />
               <ContextWindowIndicator />

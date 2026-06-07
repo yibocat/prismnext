@@ -33,23 +33,32 @@ export class CliManager {
     model?: string | null,
     sessionId?: string,
   ): { stdin: Writable; parser: CliParser } {
-    // Reuse existing session if process is still alive
+    // Reuse existing session if process is still alive AND cwd matches
     const existing = this.sessions.get(tabId);
+    let cwdChanged = false;
     if (existing && existing.child.exitCode === null && existing.child.signalCode === null) {
-      return { stdin: existing.stdin, parser: this.parsers.get(tabId)! };
+      if (existing.cwd === cwd) {
+        return { stdin: existing.stdin, parser: this.parsers.get(tabId)! };
+      }
+      // cwd changed — kill old process, start fresh without resuming old session
+      console.log(`[cli-manager] cwd changed for tab ${tabId}, restarting process: ${existing.cwd} → ${cwd}`);
+      try { existing.child.kill("SIGTERM"); } catch {}
+      cwdChanged = true;
     }
 
-    // Clean up dead session
+    // Clean up dead or mismatched session
     if (existing) {
       this.sessions.delete(tabId);
       this.parsers.delete(tabId);
+      this.tabSessionIds.delete(tabId);
     }
 
     const config = getAgentConfig(agentId);
     if (!config) throw new Error(`Unknown agent: ${agentId}`);
 
     const args = [...config.args];
-    if (sessionId) args.push("--resume", sessionId);
+    // Skip --resume when cwd changed; old session was created under a different directory
+    if (sessionId && !cwdChanged) args.push("--resume", sessionId);
     if (model) args.push("--model", model);
 
     const env: Record<string, string> = {
@@ -63,7 +72,7 @@ export class CliManager {
       }
     }
 
-    console.log(`[cli-manager] Spawning persistent process: ${config.binary} ${args.join(" ")}`);
+    console.log(`[cli-manager] Spawning persistent process (cwd=${cwd}): ${config.binary} ${args.join(" ")}`);
 
     const child = spawn(config.binary, args, {
       cwd,

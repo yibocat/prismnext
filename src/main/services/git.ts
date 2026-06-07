@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { readFile, unlink, readdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { readFile, unlink, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 // ─── Types ───
@@ -418,9 +419,14 @@ export async function getBranches(projectRoot: string): Promise<GitBranchesResul
   const branches: string[] = [];
 
   for (const line of lines) {
+    // `git branch --list` inside a linked worktree prefixes branches
+    // checked out in other worktrees with "+ " (e.g. "+ main").
+    // Strip both "* " (current) and "+ " (other-worktree) prefixes.
     if (line.startsWith("* ")) {
       current = line.slice(2).trim();
       branches.push(current);
+    } else if (line.startsWith("+ ")) {
+      branches.push(line.slice(2).trim());
     } else {
       branches.push(line.trim());
     }
@@ -747,12 +753,10 @@ export async function discardChanges(
  * Check if a directory is inside a git repository.
  */
 export async function isGitRepo(projectRoot: string): Promise<boolean> {
-  try {
-    await execGit(projectRoot, ["rev-parse", "--git-dir"]);
-    return true;
-  } catch {
-    return false;
-  }
+  // Check for physical .git directory at the given path.
+  // Do NOT use `git rev-parse --git-dir` because it walks up the
+  // directory tree.
+  return existsSync(join(projectRoot, ".git"));
 }
 
 /**
@@ -774,8 +778,8 @@ const DEFAULT_GITIGNORE = [
   "*.snm",
   "*.vrb",
   "",
-  "# Build & cache",
-  ".prismnext/compile/",
+  "# Build & cache (Prism internal — not tracked)",
+  ".prismnext/",
   "*.pyc",
   "__pycache__/",
   "",
@@ -789,8 +793,6 @@ const DEFAULT_GITIGNORE = [
   "*~",
 ].join("\n") + "\n";
 
-import { writeFile } from "node:fs/promises";
-
 export async function initRepo(projectRoot: string): Promise<GitResult> {
   try {
     await execGit(projectRoot, ["init"]);
@@ -798,6 +800,14 @@ export async function initRepo(projectRoot: string): Promise<GitResult> {
     try {
       await writeFile(join(projectRoot, ".gitignore"), DEFAULT_GITIGNORE);
     } catch { /* non-critical */ }
+    // Stage everything and create initial commit
+    try {
+      await execGit(projectRoot, ["add", "-A"]);
+      await execGit(projectRoot, ["commit", "-m", "Initial project setup"]);
+    } catch {
+      // Fallback: empty repo (no files yet)
+      await execGit(projectRoot, ["commit", "--allow-empty", "-m", "Initial project setup"]);
+    }
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: (err as Error).message };
@@ -824,11 +834,58 @@ export async function mergeBranch(
 }
 
 /**
+ * Merge a branch without auto-committing: `git merge --no-commit --no-ff <branch>`
+ * This applies all changes from sourceBranch into the current branch as staged
+ * changes, leaving the user free to review and commit (or abort) manually.
+ *
+ * --no-ff ensures a merge commit is always created (when the user commits),
+ * preserving the worktree branch history.
+ */
+export async function mergeNoCommit(
+  projectRoot: string,
+  sourceBranch: string,
+): Promise<GitResult & { output?: string }> {
+  try {
+    const output = await execGit(projectRoot, ["merge", "--no-commit", "--no-ff", sourceBranch]);
+    return { success: true, output: output.trim() || "Changes staged — review and commit to finalize." };
+  } catch (err: unknown) {
+    const msg = (err as Error).message || "Merge failed";
+    return { success: false, error: msg, output: msg };
+  }
+}
+
+/**
  * Abort an in-progress merge: `git merge --abort`
  */
 export async function abortMerge(projectRoot: string): Promise<GitResult> {
   try {
     await execGit(projectRoot, ["merge", "--abort"]);
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+/**
+ * Stash local changes (including untracked): `git stash push -u -m <message>`
+ */
+export async function stashPush(projectRoot: string, message?: string): Promise<GitResult> {
+  try {
+    const args = ["stash", "push", "-u"];
+    if (message) args.push("-m", message);
+    await execGit(projectRoot, args);
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+/**
+ * Pop the most recent stash: `git stash pop`
+ */
+export async function stashPop(projectRoot: string): Promise<GitResult> {
+  try {
+    await execGit(projectRoot, ["stash", "pop"]);
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: (err as Error).message };
@@ -842,6 +899,49 @@ export async function abortMerge(projectRoot: string): Promise<GitResult> {
 export async function commit(projectRoot: string, message: string): Promise<GitResult> {
   try {
     await execGit(projectRoot, ["commit", "-m", message]);
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+/**
+ * Stage specified files and commit with a message.
+ * Used by worktree unified commit to stage+commit in one operation.
+ *
+ * Equivalent to: git add <files...> && git commit -m <message>
+ *
+ * @param projectRoot - The git repo root (projectRoot or worktree path)
+ * @param filePaths   - Relative file paths within the repo to stage+commit
+ * @param message     - Commit message
+ */
+export async function commitAll(
+  projectRoot: string,
+  filePaths: string[],
+  message: string,
+): Promise<GitResult> {
+  if (filePaths.length === 0) {
+    return { success: false, error: "No files to commit" };
+  }
+  try {
+    // Stage specified files
+    for (const fp of filePaths) {
+      await execGit(projectRoot, ["add", "--", fp]);
+    }
+    // Commit
+    await execGit(projectRoot, ["commit", "-m", message]);
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+export async function deleteBranch(
+  projectRoot: string,
+  branch: string,
+): Promise<GitResult> {
+  try {
+    await execGit(projectRoot, ["branch", "-D", branch]);
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: (err as Error).message };

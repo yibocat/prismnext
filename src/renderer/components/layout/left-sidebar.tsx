@@ -4,6 +4,7 @@ import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { useWorktreeStore } from "@/stores/worktree-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useWindowState } from "@/hooks/use-window-state";
 import {
@@ -103,6 +104,8 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
+
   const fetchSessions = useCallback(async () => {
     if (!projectRoot) {
       setSessions([]);
@@ -110,14 +113,15 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     }
     setLoading(true);
     try {
-      const result = await window.electronAPI.cliListSessions(projectRoot);
+      const worktreePath = activeWorktree?.path;
+      const result = await window.electronAPI.cliListSessions(projectRoot, worktreePath);
       setSessions(result);
     } catch {
       setSessions([]);
     } finally {
       setLoading(false);
     }
-  }, [projectRoot]);
+  }, [projectRoot, activeWorktree]);
 
   useEffect(() => {
     fetchSessions();
