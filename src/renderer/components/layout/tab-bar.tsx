@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, memo } from "react";
 import type { RightTab } from "@/stores/right-panel-store";
 import { XIcon, DotIcon, FoldersIcon, Terminal as TerminalIcon } from "lucide-react";
 import { Icon } from "@iconify/react";
@@ -39,7 +39,7 @@ interface TabBarProps {
   dirtyFileIds?: Set<string>;
 }
 
-export function TabBar({ tabs, activeTabId, onSelect, onClose, onReorder, dirtyFileIds }: TabBarProps) {
+export const TabBar = memo(function TabBar({ tabs, activeTabId, onSelect, onClose, onReorder, dirtyFileIds }: TabBarProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [side, setSide] = useState<"left" | "right">("right");
@@ -166,4 +166,4 @@ export function TabBar({ tabs, activeTabId, onSelect, onClose, onReorder, dirtyF
       />
     </div>
   );
-}
+});

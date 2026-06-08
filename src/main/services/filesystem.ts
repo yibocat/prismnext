@@ -17,8 +17,7 @@ export interface ScanResult {
   folders: string[];
 }
 
-/** Files larger than this (5 MB) are not auto-loaded into memory during project open. */
-export const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024;
+export { LARGE_FILE_THRESHOLD, TEXT_FILE_SIZE_LIMIT } from "@shared/constants";
 
 const IMAGE_EXTENSIONS = new Set([
   ".png",
@@ -144,6 +143,9 @@ const WATCH_IGNORED = [
 
 let activeWatcher: FSWatcher | null = null;
 let watcherDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+/** Accumulates changed paths during a debounce window so the renderer can
+ *  do incremental updates instead of a full project reload. */
+let changedPaths: Set<string> = new Set();
 const WATCHER_DEBOUNCE_MS = 500;
 
 export function shouldSkipProjectDirectory(name: string): boolean {
@@ -199,21 +201,64 @@ export async function scanProjectFolder(rootPath: string): Promise<ScanResult> {
       } else {
         const type = getProjectFileType(entry.name);
         if (type) {
-          // Only stat files that may be skipped by the large-file threshold
+          // Always stat every file so the renderer can apply size-based
+          // loading decisions (text-file limit, image-file limit, etc.).
           let fileSize = 0;
-          if (type === "image" || type === "other") {
-            try {
-              const info = await stat(entryPath);
-              fileSize = info.size;
-            } catch {
-              // stat failed — treat as 0
-            }
+          try {
+            const info = await stat(entryPath);
+            fileSize = info.size;
+          } catch {
+            // stat failed — treat as 0
           }
           files.push({
             relativePath,
             absolutePath: entryPath,
             type,
             fileSize,
+          });
+        }
+      }
+    }
+  }
+
+  await walk(rootPath, "");
+  return { files, folders };
+}
+
+/** Lightweight version of scanProjectFolder — returns file metadata only
+ *  (relativePath, absolutePath, type) without reading any file contents
+ *  and WITHOUT calling stat() on every file. fileSize is always 0 here;
+ *  size-based decisions happen during lazy load (openFile).
+ *  Used for initial file tree display, worktree pre-scanning, and
+ *  metadata reloads after git operations. */
+export async function scanMetadata(rootPath: string): Promise<ScanResult> {
+  const files: FsProjectFile[] = [];
+  const folders: string[] = [];
+
+  async function walk(dir: string, prefix: string) {
+    const entries = await readdir(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const entryPath = join(dir, entry.name);
+      const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+
+      if (entry.isDirectory()) {
+        if (shouldSkipProjectDirectory(entry.name)) {
+          continue;
+        }
+        folders.push(relativePath);
+        await walk(entryPath, relativePath);
+      } else {
+        const type = getProjectFileType(entry.name);
+        if (type) {
+          // Intentionally skip stat() — fileSize is only needed for
+          // size-threshold decisions in openFile(), which uses
+          // readFile() directly and handles errors there.
+          files.push({
+            relativePath,
+            absolutePath: entryPath,
+            type,
+            fileSize: 0,
           });
         }
       }
@@ -317,23 +362,32 @@ export async function startWatching(rootPath: string): Promise<void> {
     },
   });
 
-  const notifyRenderer = () => {
+  // Reset changed paths on each new watcher start
+  changedPaths = new Set();
+
+  const trackAndNotify = (filePath: string) => {
+    changedPaths.add(filePath);
     if (watcherDebounceTimer) clearTimeout(watcherDebounceTimer);
     watcherDebounceTimer = setTimeout(() => {
+      const paths = changedPaths.size > 0 ? Array.from(changedPaths) : undefined;
+      changedPaths = new Set();
       const wins = BrowserWindow.getAllWindows();
       for (const win of wins) {
         if (!win.isDestroyed()) {
-          win.webContents.send("fs:fileChanged", { projectRoot: rootPath });
+          win.webContents.send("fs:fileChanged", {
+            projectRoot: rootPath,
+            changedPaths: paths,
+          });
         }
       }
     }, WATCHER_DEBOUNCE_MS);
   };
 
-  activeWatcher.on("add", notifyRenderer);
-  activeWatcher.on("change", notifyRenderer);
-  activeWatcher.on("unlink", notifyRenderer);
-  activeWatcher.on("addDir", notifyRenderer);
-  activeWatcher.on("unlinkDir", notifyRenderer);
+  activeWatcher.on("add", trackAndNotify);
+  activeWatcher.on("change", trackAndNotify);
+  activeWatcher.on("unlink", trackAndNotify);
+  activeWatcher.on("addDir", trackAndNotify);
+  activeWatcher.on("unlinkDir", trackAndNotify);
 
   activeWatcher.on("error", (err) => {
     console.error("[fs-watch] chokidar error:", err);

@@ -28,7 +28,7 @@ export function useTexworkspace() {
   const setTexworkspaceViewMode = useLayoutStore((s) => s.setTexworkspaceViewMode);
 
   const files = useDocumentStore((s) => s.files);
-  const fileContents = useDocumentStore((s) => s.fileContents);
+  const openedContents = useDocumentStore((s) => s.openedContents);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const isActive = activeTab?.kind === "texworkspace";
@@ -44,7 +44,7 @@ export function useTexworkspace() {
     const resolved = resolveCompileTarget(
       firstTex?.id ?? "",
       files,
-      (id) => fileContents.get(id)?.content ?? "",
+      (id) => openedContents.get(id)?.content ?? "",
     );
     if (resolved?.rootId) {
       setTexworkspaceActiveFile(resolved.rootId);
@@ -55,7 +55,7 @@ export function useTexworkspace() {
         setTimeout(() => compileCurrentDocument(), 100);
       }
     }
-  }, [activeTab, files, fileContents, setTexworkspaceActiveFile]);
+  }, [activeTab, files, openedContents, setTexworkspaceActiveFile]);
 
   // ─── Compile completion → switch to texworkspace tab ───
   // This was previously in right-main-area.tsx

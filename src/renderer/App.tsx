@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import { ThemeProvider, useTheme } from "next-themes";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -38,6 +38,7 @@ export function App() {
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const showWelcome = useDocumentStore((s) => s.showWelcome);
+  const isOpeningProject = useDocumentStore((s) => s.isOpeningProject);
   const setShowWelcome = useDocumentStore((s) => s.setShowWelcome);
 
   const leftSidebarRef = usePanelRef();
@@ -184,18 +185,54 @@ export function App() {
 
   useEffect(() => {
     if (projectRoot || !showWelcome) return;
-    window.electronAPI.settingsGet().then(async (settings) => {
-      if (settings.lastProjectPath) {
-        try {
-          const exists = await window.electronAPI.fsExists(settings.lastProjectPath);
-          if (exists) {
-            const docState = useDocumentStore.getState();
-            await docState.openProject(settings.lastProjectPath);
-          }
-        } catch {}
+    const st = useSettingsStore.getState();
+    if (!st.loaded) {
+      const unsub = useSettingsStore.subscribe((s) => {
+        if (s.loaded) {
+          unsub();
+          autoOpen(s.settings.lastProjectPath);
+        }
+      });
+      return;
+    }
+    autoOpen(st.settings.lastProjectPath);
+
+    async function autoOpen(path?: string | null) {
+      if (!path) {
+        setAutoOpenChecked(true); // no project → show welcome
+        return;
       }
-    });
+      try {
+        const exists = await window.electronAPI.fsExists(path);
+        if (exists) {
+          await useDocumentStore.getState().openProject(path);
+        } else {
+          setAutoOpenChecked(true); // path doesn't exist → show welcome
+        }
+      } catch {
+        setAutoOpenChecked(true);
+      }
+    }
   }, []);
+
+  // ── Startup loading screen lifecycle ──
+  // The loading screen stays visible until ONE of these is true:
+  //   a) Welcome page is shown AND auto-open has confirmed no project
+  //   b) A project has finished loading (projectRoot set, isOpeningProject false)
+  const settingsLoaded = useSettingsStore((s) => s.loaded);
+  const [autoOpenChecked, setAutoOpenChecked] = useState(false);
+  const appReady =
+    settingsLoaded &&
+    ((showWelcome && autoOpenChecked) || !showWelcome || (projectRoot && !isOpeningProject));
+
+  useEffect(() => {
+    if (!appReady) return;
+    // ?freeze-splash keeps the loading screen on for design iteration
+    if ((window as any).__FREEZE_SPLASH__) return;
+    const el = document.getElementById("L");
+    if (!el) return;
+    el.remove();
+  }, [appReady]);
 
   return (
     <GlobalErrorBoundary>
@@ -212,6 +249,13 @@ export function App() {
           <WelcomePage onSkip={() => setShowWelcome(false)} />
         ) : projectRoot ? (
           <div className="flex flex-col h-full select-none" key={projectRoot}>
+            {/* Subtle loading bar during project open / switch */}
+            {isOpeningProject && (
+              <div className="h-0.5 w-full bg-muted overflow-hidden shrink-0">
+                <div className="h-full w-1/3 bg-primary rounded-r-full"
+                  style={{ animation: "loading-bar 1.2s ease-in-out infinite" }} />
+              </div>
+            )}
             <Group
               id="main-layout"
               orientation="horizontal"

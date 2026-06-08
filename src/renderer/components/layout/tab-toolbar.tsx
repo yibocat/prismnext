@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { useLayoutStore } from "@/stores/layout-store";
 import { cn } from "@/lib/utils";
 import { ListTreeIcon, FolderIcon } from "lucide-react";
@@ -23,7 +23,7 @@ function pathSegments(filePath: string): string[] {
   return filePath.split("/").filter(Boolean);
 }
 
-export function TabToolbar({ children, onToggleSidebar, filePath, projectName, hideSpacer }: TabToolbarProps) {
+export const TabToolbar = memo(function TabToolbar({ children, onToggleSidebar, filePath, projectName, hideSpacer }: TabToolbarProps) {
   const rightSidebarOpen = useLayoutStore((s) => s.rightSidebarOpen);
   const toggleRightSidebar = useLayoutStore((s) => s.toggleRightSidebar);
   const setFileTreeNavigatePath = useLayoutStore((s) => s.setFileTreeNavigatePath);
@@ -103,4 +103,4 @@ export function TabToolbar({ children, onToggleSidebar, filePath, projectName, h
       </button>
     </div>
   );
-}
+});

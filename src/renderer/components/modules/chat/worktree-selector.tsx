@@ -1,4 +1,5 @@
 import { useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import {
   GitBranchIcon,
   PlusIcon,
@@ -47,10 +48,22 @@ export function WorktreeSelector() {
     setMode("local");
   }, [setMode]);
 
-  const handleSetNewWorktree = useCallback(() => {
+  const handleSetNewWorktree = useCallback(async () => {
+    const gs = useGitStore.getState();
+    // Ensure git state is loaded before reading the current branch.
+    if (!gs.branch && projectRoot && gs.isGitRepo) {
+      await gs.refreshStatus(projectRoot);
+      await gs.refreshBranches(projectRoot);
+    }
     const currentBranch = useGitStore.getState().branch;
+    if (!currentBranch) {
+      toast.error("Cannot determine current branch — is Git initialized?");
+      return;
+    }
+    // Lazy: worktree is created when the first message is sent.
+    // Progress is shown in-chat while the worktree initialises.
     setMode("worktree", currentBranch);
-  }, [setMode]);
+  }, [setMode, projectRoot]);
 
   const handleSelectExisting = useCallback(
     (wtName: string) => {

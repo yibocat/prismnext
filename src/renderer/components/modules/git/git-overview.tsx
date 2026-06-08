@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useCallback, useState, useRef } from "react";
+import { useMemo, useEffect, useCallback, useState, useRef, memo } from "react";
 import {
   GitBranchIcon,
   Loader2Icon,
@@ -34,7 +34,7 @@ interface FileTreeNode {
   children: FileTreeNode[];
 }
 
-function FileTreeNodeView({
+const FileTreeNodeView = memo(function FileTreeNodeView({
   node,
   gitRoot,
   depth,
@@ -89,7 +89,7 @@ function FileTreeNodeView({
       ))}
     </div>
   );
-}
+});
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 

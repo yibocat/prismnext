@@ -1,0 +1,116 @@
+/* ── Code Highlight Theme ──
+ *
+ * All colors are derived from each theme's --chart-* variables — the same
+ * palette used for data visualization.  This means every theme
+ * (academic-blue, rose, violet, amber, teal, mono, ink-green × light/dark)
+ * automatically gets a cohesive set of code-token colors with zero
+ * per-theme override needed.
+ *
+ * Mapping:
+ *   chart-1  →  keywords       (primary accent hue)
+ *   chart-2  →  strings        (secondary hue)
+ *   chart-3  →  functions      (tertiary hue)
+ *   chart-4  →  numbers        (quaternary hue)
+ *   chart-5  →  types / classes (quinary hue)
+ *
+ * Used by: rehype-highlight (react-markdown file preview)   */
+
+/* ─── Semantic token → chart mapping ─── */
+
+:root {
+  --hljs-comment:   var(--muted-foreground);
+  --hljs-keyword:   var(--chart-1);
+  --hljs-string:    var(--chart-2);
+  --hljs-function:  var(--chart-3);
+  --hljs-number:    var(--chart-4);
+  --hljs-type:      var(--chart-5);
+  --hljs-literal:   var(--chart-4);           /* booleans, null → same as numbers */
+  --hljs-tag:       var(--chart-2);           /* HTML tags → same as strings */
+  --hljs-builtin:   var(--chart-3);           /* built-ins → same as functions */
+  --hljs-variable:  var(--foreground);        /* fall back to body text */
+  --hljs-link:      var(--primary);           /* accent color */
+}
+
+/* ─── hljs class assignments ─── */
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--hljs-comment);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag {
+  color: var(--hljs-keyword);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: var(--hljs-string);
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-boolean {
+  color: var(--hljs-number);
+}
+
+.hljs-title,
+.hljs-title.class_,
+.hljs-class .hljs-title {
+  color: var(--hljs-type);
+}
+
+.hljs-function {
+  color: var(--hljs-function);
+}
+
+.hljs-attr,
+.hljs-selector-class {
+  color: var(--hljs-type);
+}
+
+.hljs-built_in {
+  color: var(--hljs-builtin);
+}
+
+.hljs-variable,
+.hljs-template-variable,
+.hljs-params {
+  color: var(--hljs-variable);
+}
+
+.hljs-tag {
+  color: var(--hljs-tag);
+}
+
+.hljs-type {
+  color: var(--hljs-type);
+}
+
+.hljs-meta {
+  color: var(--hljs-comment);
+}
+
+.hljs-deletion {
+  color: var(--hljs-keyword);
+}
+
+.hljs-section {
+  color: var(--hljs-keyword);
+  font-weight: 600;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 600;
+}
+
+.hljs-link {
+  color: var(--hljs-link);
+  text-decoration: underline;
+}

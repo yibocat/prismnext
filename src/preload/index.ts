@@ -7,7 +7,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Filesystem operations
   fsScan: (rootPath: string) => ipcRenderer.invoke("fs:scan", { rootPath }),
+  fsScanMetadata: (rootPath: string) => ipcRenderer.invoke("fs:scanMetadata", { rootPath }),
   fsRead: (absPath: string) => ipcRenderer.invoke("fs:read", { absPath }),
+  fsReadBatch: (absPaths: string[]) => ipcRenderer.invoke("fs:readBatch", { absPaths }),
   fsReadImage: (absPath: string) =>
     ipcRenderer.invoke("fs:readImage", { absPath }),
   fsWrite: (absPath: string, content: string) =>
@@ -129,6 +131,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   // Git operations
+  gitWarmup: (projectRoot: string) =>
+    ipcRenderer.invoke("git:warmup", { projectRoot }),
   gitIsRepo: (projectRoot: string) =>
     ipcRenderer.invoke("git:isRepo", { projectRoot }),
   gitStatus: (projectRoot: string) =>
@@ -175,6 +179,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("git:stashPop", { projectRoot }),
   gitCommitDiff: (projectRoot: string, hash: string) =>
     ipcRenderer.invoke("git:commitDiff", { projectRoot, hash }),
+  gitCommitFiles: (projectRoot: string, hash: string) =>
+    ipcRenderer.invoke("git:commitFiles", { projectRoot, hash }),
   gitCommitFileDiff: (projectRoot: string, hash: string, filePath: string) =>
     ipcRenderer.invoke("git:commitFileDiff", { projectRoot, hash, filePath }),
 
@@ -220,9 +226,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   // File watcher events (Main → Renderer)
-  onFileChanged: (callback: (data: { projectRoot: string }) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, data: { projectRoot: string }) => callback(data);
+  onFileChanged: (callback: (data: { projectRoot: string; changedPaths?: string[] }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { projectRoot: string; changedPaths?: string[] }) => callback(data);
     ipcRenderer.on("fs:fileChanged", handler);
     return () => ipcRenderer.removeListener("fs:fileChanged", handler);
   },
+
+  // Log system
+  logFetch: (params: unknown) => ipcRenderer.invoke("log:fetch", params),
 });

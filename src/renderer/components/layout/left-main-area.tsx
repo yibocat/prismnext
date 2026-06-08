@@ -11,6 +11,7 @@ import {
   CompilerSettings,
   ExternalSettings,
   ShortcutsSettings,
+  LogViewer,
 } from "@/components/modules/settings";
 import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator } from "@/components/modules/chat";
 import { WorktreeSelector } from "@/components/modules/chat/worktree-selector";
@@ -44,7 +45,8 @@ export function LeftMainArea() {
     const tab = store.tabs.find((t) => t.id === store.activeTabId);
     if (tab?.sessionId) return; // Session already loaded, will be resumed on first prompt
     didPrewarm = true;
-    window.electronAPI.cliPrewarm(projectPath, store.activeTabId).catch(() => {});
+    const worktreePath = useWorktreeStore.getState().activeWorktree?.path;
+    window.electronAPI.cliPrewarm(projectPath, store.activeTabId, worktreePath).catch(() => {});
   }, []);
 
   // Sync sessionId to store when agent creates a new session (only if not already set)
@@ -68,6 +70,17 @@ export function LeftMainArea() {
       const newRoot = state.activeWorktree?.path ?? docStore.projectRoot;
       if (newRoot && newRoot !== docStore.checkoutRoot) {
         docStore.switchCheckoutRoot(newRoot);
+      }
+      // Pre-warm the agent process in the new worktree directory immediately
+      // so the first prompt doesn't wait 20 s for Claude Code startup.
+      const worktreePath = state.activeWorktree?.path;
+      if (docStore.projectRoot && window.electronAPI.cliPrewarm) {
+        const chatStore = useChatStore.getState();
+        window.electronAPI.cliPrewarm(
+          docStore.projectRoot,
+          chatStore.activeTabId,
+          worktreePath,
+        ).catch(() => {});
       }
     });
     return unsub;
@@ -116,6 +129,7 @@ export function LeftMainArea() {
       compiler: CompilerSettings,
       external: ExternalSettings,
       shortcuts: ShortcutsSettings,
+      logs: LogViewer,
     }[settingsCategory] || GeneralSettings;
     return <div className="flex h-full flex-col min-w-[300px] glass-content"><SettingsContent /></div>;
   }

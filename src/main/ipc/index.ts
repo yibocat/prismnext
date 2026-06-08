@@ -6,6 +6,7 @@ import { registerBrowserHandlers } from "./browser";
 import { registerTerminalHandlers } from "./terminal";
 import { registerGitHandlers } from "./git";
 import { registerWorktreeHandlers } from "./worktree";
+import { registerLogHandlers } from "./log";
 
 export function registerIpcHandlers(): void {
   registerFsHandlers();
@@ -16,4 +17,5 @@ export function registerIpcHandlers(): void {
   registerTerminalHandlers();
   registerGitHandlers();
   registerWorktreeHandlers();
+  registerLogHandlers();
 }

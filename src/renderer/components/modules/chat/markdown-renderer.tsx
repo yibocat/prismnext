@@ -7,7 +7,7 @@ import { cjk } from "@streamdown/cjk";
 import "katex/dist/katex.min.css";
 import "streamdown/styles.css";
 import { cn } from "@/lib/utils";
-import { useRef, useLayoutEffect } from "react";
+import { useRef, useLayoutEffect, useMemo } from "react";
 
 // ─── Math Plugin ───
 
@@ -79,8 +79,18 @@ interface MarkdownRendererProps {
 const MAX_LINES = 30;
 
 export function MarkdownRenderer({ content, isAnimating = false }: MarkdownRendererProps) {
-  const normalized = normalizeMathDelimiters(content);
+  const normalized = useMemo(() => normalizeMathDelimiters(content), [content]);
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // CSS containment: isolate this message's heavy DOM (Streamdown + Shiki
+  // creates thousands of nodes per code block) from the rest of the page.
+  // During streaming we skip content-visibility to keep auto-scroll working;
+  // for completed messages we use the full suite since their content is stable.
+  const containStyle: React.CSSProperties = useMemo(() => ({
+    contain: isAnimating ? "layout style" : "layout style paint",
+    contentVisibility: isAnimating ? undefined : "auto",
+    containIntrinsicSize: isAnimating ? undefined : "auto 600px",
+  } as React.CSSProperties), [isAnimating]);
 
   // Inject fold into code blocks > MAX_LINES lines.
   // MutationObserver — fires when Streamdown adds code blocks to DOM,
@@ -175,6 +185,7 @@ export function MarkdownRenderer({ content, isAnimating = false }: MarkdownRende
   return (
     <div
       ref={wrapperRef}
+      style={containStyle}
       className={cn(
         "text-sm text-foreground leading-normal",
         "[&_h1]:text-lg [&_h1]:font-semibold [&_h1]:mt-6 [&_h1]:mb-2",

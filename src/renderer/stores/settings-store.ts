@@ -16,6 +16,10 @@ export interface AppSettings {
   glassEffect?: boolean;
   /** Glass intensity: 1 (most transparent) to 5 (most solid) */
   glassIntensity?: number;
+  /** Path to auto-reopen on next launch */
+  lastProjectPath?: string | null;
+  /** Last opened file — used for smart expand on project open */
+  lastActiveFileId?: string | null;
 }
 
 const defaults: AppSettings = {
@@ -40,6 +44,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   loaded: false,
 
   loadSettings: async () => {
+    const t0 = performance.now();
     try {
       const remote = await window.electronAPI.settingsGet();
       set({
@@ -50,8 +55,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         },
         loaded: true,
       });
+      console.log(`[settings] loaded: ${Math.round(performance.now() - t0)}ms`);
       log.info("Settings loaded");
     } catch (err) {
+      console.log(`[settings] load failed: ${Math.round(performance.now() - t0)}ms`);
       log.error("Failed to load settings", err);
       set({ loaded: true }); // proceed with defaults
     }

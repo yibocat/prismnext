@@ -1,7 +1,89 @@
-import { spawn } from "node:child_process";
+import { exec } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readFile, unlink, readdir, writeFile } from "node:fs/promises";
+import { readFile, unlink, readdir, writeFile, stat } from "node:fs/promises";
 import { join } from "node:path";
+import { createLogger } from "./logger";
+
+const log = createLogger("git", "git");
+
+// ─── Shell helper with concurrency limiter ───
+// macOS throttles the first burst of concurrent child_process spawns.
+// We queue them sequentially to avoid 20 simultaneous shell+git forks
+// hitting the kernel's posix_spawn bottleneck on cold start.
+
+let _pending: Promise<unknown> = Promise.resolve();
+const _warmedUpRoots = new Set<string>();
+
+/** Queue a warmup as the next task in the serial queue and return a
+ *  promise that resolves when it completes. Callers may fire-and-forget —
+ *  subsequent git operations auto-queue behind it via the serial _pending chain.
+ *
+ *  Idempotent per project root: repeated calls for the same root return
+ *  immediately (the TCC / security check is per-process, not per directory). */
+export function queueWarmup(projectRoot: string): Promise<void> {
+  if (_warmedUpRoots.has(projectRoot)) return Promise.resolve();
+
+  const start = performance.now();
+  // touch+rm warms the read/write TCC path for new files;
+  // echo+checkout warms the "modify tracked file" TCC path that git switch needs;
+  // git status / branch / log / update-index warm the respective git plumbing.
+  const cmd = [
+    `cd ${JSON.stringify(projectRoot)}`,
+    `touch .prism_warmup && rm .prism_warmup`,
+    `echo "warmup" >> .gitignore && git checkout -- .gitignore`,
+    `git status --porcelain -b >/dev/null`,
+    `git branch --list >/dev/null`,
+    `git log --oneline -1 >/dev/null`,
+    `git update-index --refresh`,
+  ].join(" && ");
+
+  const task = _pending.then(() => new Promise<void>((resolve) => {
+    exec(cmd, { timeout: 30000 }, () => {
+      const ms = performance.now() - start;
+      console.log(`[git] warmup: ${Math.round(ms)}ms`);
+      log.info("warmup complete", { durationMs: Math.round(ms) });
+      _warmedUpRoots.add(projectRoot);
+      resolve();
+    });
+  }));
+  _pending = task.catch(() => {}).then(() => {});
+  return task;
+}
+
+// Shell-escape a single argument so it survives /bin/sh -c parsing.
+// Arguments that are pure alphanumeric/symbols pass through as-is;
+// everything else gets single-quoted with inner quotes escaped.
+function shellEscape(arg: string): string {
+  if (/^[a-zA-Z0-9_./\-+=:;,@%^~]+$/.test(arg)) return arg;
+  return `'${arg.replace(/'/g, "'\\''")}'`;
+}
+
+function sh(projectRoot: string, gitArgs: string[]): Promise<string> {
+  const run = () => new Promise<string>((resolve, reject) => {
+    const start = performance.now();
+    const escaped = gitArgs.map(shellEscape).join(" ");
+    const cmd = `cd ${JSON.stringify(projectRoot)} && git -c core.quotepath=false ${escaped}`;
+    exec(cmd, {
+      timeout: GIT_TIMEOUT_MS,
+      maxBuffer: 10 * 1024 * 1024,
+      windowsHide: true,
+    }, (error, stdout, stderr) => {
+      const ms = performance.now() - start;
+      console.log(`[git] ${gitArgs[0]}: ${Math.round(ms)}ms`);
+      log.info(`git ${gitArgs[0]}`, { durationMs: Math.round(ms), args: gitArgs.join(" ") });
+      if (error) {
+        reject(new Error(stderr.trim() || error.message));
+      } else {
+        resolve(stdout);
+      }
+    });
+  });
+  // Chain onto the queue so only one shell+git runs at a time.
+  // This avoids macOS throttling when 20 concurrent processes are spawned.
+  const task = _pending.then(run, run);
+  _pending = task.catch(() => {}).then(() => {});
+  return task;
+}
 
 // ─── Types ───
 
@@ -53,49 +135,11 @@ const BINARY_EXTS = new Set([
 
 // ─── Core: execute git commands ───
 
-function execGit(projectRoot: string, args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn("git", ["-c", "core.quotepath=false", ...args], {
-      cwd: projectRoot,
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    });
-
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-
-    const timer = setTimeout(() => {
-      timedOut = true;
-      proc.kill();
-    }, GIT_TIMEOUT_MS);
-
-    proc.stdout?.on("data", (data: Buffer) => {
-      stdout += data.toString();
-    });
-    proc.stderr?.on("data", (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    proc.on("close", (code) => {
-      clearTimeout(timer);
-      if (timedOut) {
-        reject(new Error(`Git command timed out: git ${args.join(" ")}`));
-      } else if (code !== 0) {
-        reject(new Error(stderr.trim() || `git ${args[0]} exited with code ${code}`));
-      } else {
-        resolve(stdout);
-      }
-    });
-
-    proc.on("error", (err) => {
-      clearTimeout(timer);
-      reject(new Error(`Failed to spawn git: ${err.message}`));
-    });
-  });
+export function execGit(projectRoot: string, args: string[]): Promise<string> {
+  return sh(projectRoot, args);
 }
 
-function execGitOrNull(projectRoot: string, args: string[]): Promise<string | null> {
+export function execGitOrNull(projectRoot: string, args: string[]): Promise<string | null> {
   return execGit(projectRoot, args).catch(() => null);
 }
 
@@ -146,26 +190,23 @@ async function readFileContent(projectRoot: string, filePath: string): Promise<s
  *   appear as "D" (delete) + "??" (new untracked). We handle the common cases.
  */
 export async function getStatus(projectRoot: string): Promise<GitStatusResult> {
-  // Get branch name. `git branch --show-current` works reliably in all
-  // states: normal repos, fresh init with no commits, and detached HEAD
-  // (where it returns empty string). `rev-parse --abbrev-ref HEAD` fails
-  // when there are no commits yet.
-  let branch: string;
-  try {
-    branch = (await execGit(projectRoot, ["branch", "--show-current"])).trim();
-    if (!branch) branch = "(no branch)"; // detached HEAD
-  } catch {
-    branch = "unknown";
-  }
-
-  const output = await execGit(projectRoot, ["status", "--porcelain"]);
+  // Single spawn: `git status --porcelain -b` returns branch info on line 1
+  // (## branch-name) followed by file entries — avoids a second git process.
+  const output = await execGit(projectRoot, ["status", "--porcelain", "-b"]);
 
   const lines = output.split("\n").filter((l) => l.length > 0);
 
-  // Parse file entries (no branch line — we got it from rev-parse above)
+  // Parse branch from line 1: "## branch-name" or "## branch-name...origin/branch [ahead N]"
+  let branch = "unknown";
+  if (lines.length > 0 && lines[0].startsWith("## ")) {
+    const head = lines[0].slice(3).split("...")[0].split(" ")[0].trim();
+    branch = head || "(no branch)";
+  }
+
+  // Parse file entries (skip branch line)
   const files: GitFileEntry[] = [];
 
-  for (let i = 0; i < lines.length; i++) {
+  for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
     if (line.length < 3) continue;
 
@@ -215,7 +256,9 @@ export async function getStatus(projectRoot: string): Promise<GitStatusResult> {
     // Empty path — skip
     if (!path) continue;
 
-    // Untracked directory: expand to individual files inside
+    // Untracked directory: expand to individual files inside.
+    // Use stat() to check if an entry is a file — do NOT use readFile()
+    // which reads the entire file content just to check the type.
     if (path.endsWith("/") && x === "?" && y === "?") {
       try {
         const dirPath = join(projectRoot, path);
@@ -223,9 +266,8 @@ export async function getStatus(projectRoot: string): Promise<GitStatusResult> {
         for (const entry of entries) {
           const fullPath = path + entry;
           try {
-            // Quick check: is it a file? Skip if directory (readFile would fail)
-            const stat = await readFile(join(projectRoot, fullPath), "utf-8");
-            if (stat !== undefined) {
+            const s = await stat(join(projectRoot, fullPath));
+            if (s.isFile()) {
               files.push({
                 path: fullPath.replace(/\\/g, "/"),
                 oldPath: null,
@@ -476,11 +518,9 @@ export async function unstageFile(projectRoot: string, filePath: string): Promis
  */
 export async function checkoutBranch(projectRoot: string, branch: string): Promise<GitResult> {
   try {
-    // `git switch` is branch-only — won't misinterpret branch names as pathspecs
     await execGit(projectRoot, ["switch", branch]);
     return { success: true };
   } catch {
-    // Fallback: try `git checkout` for older git (< 2.23)
     try {
       await execGit(projectRoot, ["checkout", branch]);
       return { success: true };
@@ -548,31 +588,22 @@ export async function getDiffStats(
   const unstaged: Record<string, DiffStat> = {};
   const staged: Record<string, DiffStat> = {};
 
-  try {
-    const unstagedOut = await execGit(projectRoot, ["diff", "--numstat"]);
-    parseNumstat(unstagedOut, unstaged);
-  } catch { /* no unstaged changes or no commits */ }
+  // Three independent git commands — run them in parallel, not sequentially.
+  const [unstagedOut, stagedOut, untrackedOut] = await Promise.allSettled([
+    execGit(projectRoot, ["diff", "--numstat"]),
+    execGit(projectRoot, ["diff", "--cached", "--numstat"]),
+    execGit(projectRoot, ["ls-files", "--others", "--exclude-standard"]),
+  ]);
 
-  try {
-    const stagedOut = await execGit(projectRoot, ["diff", "--cached", "--numstat"]);
-    parseNumstat(stagedOut, staged);
-  } catch { /* no staged changes or no commits */ }
+  if (unstagedOut.status === "fulfilled") parseNumstat(unstagedOut.value, unstaged);
+  if (stagedOut.status === "fulfilled") parseNumstat(stagedOut.value, staged);
 
-  // Untracked files: count lines on disk (not covered by numstat)
-  try {
-    const untrackedOut = await execGit(projectRoot, [
-      "ls-files", "--others", "--exclude-standard",
-    ]);
-    for (const file of untrackedOut.split("\n")) {
-      if (!file.trim()) continue;
-      try {
-        const content = await readFileContent(projectRoot, file);
-        if (content && content !== "[Binary file]") {
-          unstaged[file] = { added: content.split("\n").length, deleted: 0 };
-        }
-      } catch { /* skip unreadable */ }
+  // Untracked files — list but skip reading file contents.
+  if (untrackedOut.status === "fulfilled") {
+    for (const file of untrackedOut.value.split("\n")) {
+      if (file.trim()) unstaged[file] = { added: 0, deleted: 0 };
     }
-  } catch { /* no untracked files */ }
+  }
 
   // Fallback: if there are no commits yet, `diff --cached` fails.
   // Count lines for newly-staged files from the index.
@@ -631,43 +662,31 @@ export async function getLog(
   maxCount: number = 50,
 ): Promise<GitCommit[]> {
   try {
+    // Fast path: plain log without --graph (expensive, unused in UI) or
+    // --shortstat (diffs every commit — lazy-loaded on expand instead).
     const output = await execGit(projectRoot, [
       "log",
-      "--graph",
       `--max-count=${maxCount}`,
       "--format=%H%x00%s%x00%an%x00%ai%x00%D",
-      "--shortstat",
     ]);
 
     const commits: GitCommit[] = [];
-    let current: Partial<GitCommit> | null = null;
 
     for (const line of output.split("\n")) {
-      const graphEnd = line.search(/[0-9a-f]{40}/);
-      if (graphEnd >= 0) {
-        if (current) commits.push(current as GitCommit);
-        const graph = graphEnd > 0 ? line.slice(0, graphEnd) : "";
-        const parts = line.slice(graphEnd).split("\0");
-        if (parts.length >= 5) {
-          current = {
-            hash: parts[0].slice(0, 7),
-            message: parts[1],
-            author: parts[2],
-            date: parts[3],
-            graph,
-            refs: parts[4],
-            insertions: 0,
-            deletions: 0,
-          };
-        }
-      } else if (current) {
-        const ins = line.match(/(\d+)\s+insertions?\(\+\)/);
-        const del = line.match(/(\d+)\s+deletions?\(\-\)/);
-        if (ins) current.insertions = parseInt(ins[1], 10);
-        if (del) current.deletions = parseInt(del[1], 10);
+      const parts = line.split("\0");
+      if (parts.length >= 5) {
+        commits.push({
+          hash: parts[0].slice(0, 7),
+          message: parts[1],
+          author: parts[2],
+          date: parts[3],
+          graph: "",
+          refs: parts[4],
+          insertions: 0,
+          deletions: 0,
+        });
       }
     }
-    if (current) commits.push(current as GitCommit);
 
     return commits;
   } catch {
@@ -689,6 +708,38 @@ export interface CommitFileDiff {
   path: string;
   oldContent: string;
   newContent: string;
+}
+
+/**
+ * Get changed files for a commit (lightweight — no diff content).
+ * Uses `diff-tree --numstat` which returns just file paths + line counts.
+ * For the actual diff of a specific file, use `getCommitFileDiff`.
+ */
+export interface CommitFileStat {
+  path: string;
+  added: number;
+  deleted: number;
+}
+
+export async function getCommitFiles(
+  projectRoot: string,
+  hash: string,
+): Promise<CommitFileStat[]> {
+  const output = await execGit(projectRoot, [
+    "diff-tree", "--no-commit-id", "--numstat", "-r", hash,
+  ]);
+  const files: CommitFileStat[] = [];
+  for (const line of output.split("\n")) {
+    const parts = line.split("\t");
+    if (parts.length >= 3) {
+      files.push({
+        added: parseInt(parts[0], 10) || 0,
+        deleted: parseInt(parts[1], 10) || 0,
+        path: parts[2],
+      });
+    }
+  }
+  return files;
 }
 
 /**
@@ -780,6 +831,7 @@ const DEFAULT_GITIGNORE = [
   "",
   "# Build & cache (Prism internal — not tracked)",
   ".prismnext/",
+  ".prism-worktree-meta",
   "*.pyc",
   "__pycache__/",
   "",
@@ -924,11 +976,8 @@ export async function commitAll(
     return { success: false, error: "No files to commit" };
   }
   try {
-    // Stage specified files
-    for (const fp of filePaths) {
-      await execGit(projectRoot, ["add", "--", fp]);
-    }
-    // Commit
+    // Batch all files into a single git add: `git add -- file1 file2 ...`
+    await execGit(projectRoot, ["add", "--", ...filePaths]);
     await execGit(projectRoot, ["commit", "-m", message]);
     return { success: true };
   } catch (err: unknown) {

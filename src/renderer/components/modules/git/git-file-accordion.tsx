@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, memo } from "react";
 import {
   ChevronRightIcon,
   ArrowRightLeftIcon,
@@ -29,7 +29,7 @@ interface GitFileAccordionProps {
 
 // ─── Component ───
 
-export function GitFileAccordion({ projectRoot, file }: GitFileAccordionProps) {
+export const GitFileAccordion = memo(function GitFileAccordion({ projectRoot, file }: GitFileAccordionProps) {
   const setFileExpanded = useGitStore((s) => s.setFileExpanded);
   const loadDiff = useGitStore((s) => s.loadDiff);
   const stageFile = useGitStore((s) => s.stageFile);
@@ -253,4 +253,4 @@ export function GitFileAccordion({ projectRoot, file }: GitFileAccordionProps) {
       )}
     </div>
   );
-}
+});

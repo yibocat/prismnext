@@ -1,16 +1,18 @@
 import { create } from "zustand";
 import { toast } from "sonner";
 import { AUTO_SAVE_DELAY } from "@/styles/constants";
+import { createLogger } from "@/services/logger";
+
+const log = createLogger("document-store", "startup");
 import { useProjectStore } from "./project-store";
 import { useRightPanelStore } from "./right-panel-store";
 import { useLayoutStore } from "./layout-store";
 import { useChatStore } from "./chat-store";
+import { useSettingsStore } from "./settings-store";
+import { useWorktreeStore } from "./worktree-store";
 import { clearPdfCache } from "./compile-store";
 
 export type ProjectFileType = "tex" | "image" | "pdf" | "bib" | "style" | "other";
-
-/** Files larger than this (5 MB) are not auto-loaded into memory */
-const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024;
 
 export interface ProjectFile {
   id: string; // relativePath
@@ -27,6 +29,14 @@ interface FileContent {
   isDirty: boolean;
 }
 
+interface FileMeta {
+  relativePath: string;
+  absolutePath: string;
+  name: string;
+  type: ProjectFileType;
+  fileSize?: number;
+}
+
 interface DocumentState {
   projectRoot: string | null;
   /** Current working root — projectRoot on main, worktree path when active */
@@ -38,22 +48,44 @@ interface DocumentState {
   activeFileId: string | null;
   initialized: boolean;
   isSaving: boolean;
-  fileContents: Map<string, FileContent>;
+  /** True while openProject is in progress — UI can show a skeleton */
+  isOpeningProject: boolean;
+  /** Per-file metadata for ALL project files (name, type, size).
+   *  Built once on openProject / worktree switch. Updated incrementally by watcher. */
+  fileMetadata: Map<string, FileMeta>;
+  /** Content cache — ONLY files that have been opened by the user or are dirty.
+   *  Replaces the old fileContents which held ALL file contents in memory. */
+  openedContents: Map<string, FileContent>;
   jumpTarget: number | null;
   /** Jump to a specific line in a specific file (used by TOC/Labels/Citations) */
   jumpToLine: { fileId: string; line: number } | null;
   selectionRange: { start: number; end: number } | null;
-  /** Bumped after reloadAllFromDisk updates file contents — editors watch this. */
+  /** Bumped after reloadMetadataFromDisk updates metadata — editors watch this. */
   contentVersion: number;
+  /** Bumped on every setContent/saveFile — lightweight subscription target
+   *  for components that only need to know IF anything is dirty, not WHAT. */
+  dirtyVersion: number;
 
   // Async actions
   openProject: (rootPath: string) => Promise<void>;
   closeProject: () => Promise<void>;
+  /** Open a file for editing — loads content from disk if not already cached */
+  openFile: (id: string) => Promise<void>;
   saveFile: (id: string) => Promise<void>;
   saveAllFiles: () => Promise<void>;
   refreshFiles: () => Promise<void>;
-  reloadAllFromDisk: () => Promise<void>;
+  /** Lightweight reload — rescans metadata only, does not re-read file contents.
+   *  Pass force=true to bypass watcher suppression (used by git ops, manual refresh). */
+  reloadMetadataFromDisk: (force?: boolean) => Promise<void>;
+  /** Incremental update from file watcher — only reloads changed paths */
+  incrementalFileChanged: (absolutePaths: string[]) => Promise<void>;
   refreshFileContent: (id: string) => Promise<void>;
+  /** Re-read all open CLEAN files from disk — used after git branch switch.
+   *  Skips dirty files to preserve unsaved edits. Bumps contentVersion once. */
+  reloadOpenCleanFiles: () => Promise<void>;
+  /** Combined metadata rescan + content reload for all open clean files.
+   *  Single set() call — one render instead of two. Used by switchBranch. */
+  reloadAllFromDisk: () => Promise<void>;
   /** Switch to a new checkout root (e.g. worktree), saving dirty files first */
   switchCheckoutRoot: (newRoot: string) => Promise<void>;
 
@@ -125,8 +157,47 @@ function inferFromExtension(
   return { type: "other", content: "" };
 }
 
-/** Prevents overlapping reloadAllFromDisk calls from racing on store state. */
-let _reloadInProgress = false;
+/** Determine ProjectFileType from a relative path string.
+ *  Used by incrementalFileChanged for newly detected files. */
+function inferTypeFromExtension(relativePath: string): ProjectFileType {
+  const ext = relativePath.split(".").pop()?.toLowerCase() ?? "";
+  if (["tex", "sty", "cls", "ltx"].includes(ext)) return "tex";
+  if (["bib"].includes(ext)) return "bib";
+  if (["png", "jpg", "jpeg", "gif", "svg", "webp"].includes(ext)) return "image";
+  if (["pdf"].includes(ext)) return "pdf";
+  if (["bst"].includes(ext)) return "style";
+  return "other";
+}
+
+/** Derive folder list from file paths — single source of truth.
+ *  "folders" is NEVER independently maintained; it's always computed from "files". */
+function deriveFolders(files: { relativePath: string }[]): string[] {
+  const set = new Set<string>();
+  for (const f of files) {
+    const parts = f.relativePath.split("/");
+    for (let i = 1; i < parts.length; i++) {
+      set.add(parts.slice(0, i).join("/"));
+    }
+  }
+  return Array.from(set).sort();
+}
+
+/** Guard against cascading: save → watcher event → re-read waste.
+ *  When true, watcher-triggered reloadMetadataFromDisk / incrementalFileChanged
+ *  are suppressed — the save itself didn't change meaningful content on disk.
+ *  Reset after a short cooldown. Reduced from 3s to 1.5s since git operations
+ *  no longer trigger full reloads. */
+let _suppressWatcherReload = false;
+let _suppressTimer: ReturnType<typeof setTimeout> | null = null;
+
+function markSuppressWatcherReload() {
+  _suppressWatcherReload = true;
+  if (_suppressTimer) clearTimeout(_suppressTimer);
+  _suppressTimer = setTimeout(() => {
+    _suppressWatcherReload = false;
+    _suppressTimer = null;
+  }, 1500); // 1.5 s cooldown — covers watcher debounce cycle
+}
 
 export const useDocumentStore = create<DocumentState>((set, get) => ({
   projectRoot: null,
@@ -138,18 +209,22 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   activeFileId: null,
   initialized: false,
   isSaving: false,
-  fileContents: new Map(),
+  isOpeningProject: false,
+  fileMetadata: new Map(),
+  openedContents: new Map(),
   jumpTarget: null,
   jumpToLine: null,
   selectionRange: null,
   contentVersion: 0,
+  dirtyVersion: 0,
 
   // ─── Project Management ───
 
   openProject: async (rootPath: string) => {
+    const t0 = performance.now();
+    set({ isOpeningProject: true });
     try {
-      // Clean up previous project state — dispose agent FIRST to prevent
-      // late-arriving events from writing back into the cleared store
+      const t1 = performance.now();
       await window.electronAPI.cliDispose();
       useRightPanelStore.getState().closeAllTabs();
       useChatStore.getState().clearAllSessions();
@@ -158,11 +233,13 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       useLayoutStore.getState().setRightSidebarOpen(false);
       useLayoutStore.setState({ showArchived: false });
       clearPdfCache();
-      // Lazy import to avoid circular dependency
       (await import("./changes-store")).useChangesStore.getState().clearAll();
-      (await import("./worktree-store")).useWorktreeStore.getState().clearAll();
+      useWorktreeStore.getState().clearAll();
+      console.log(`[openProject] cleanup: ${Math.round(performance.now() - t1)}ms`);
 
-      const result = await window.electronAPI.fsScan(rootPath);
+      const t2 = performance.now();
+      const result = await window.electronAPI.fsScanMetadata(rootPath);
+      console.log(`[openProject] fsScanMetadata: ${Math.round(performance.now() - t2)}ms`);
       const files: ProjectFile[] = result.files.map((f) => ({
         id: f.relativePath,
         name: f.relativePath.split("/").pop() || f.relativePath,
@@ -172,46 +249,74 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         fileSize: f.fileSize,
       }));
 
-      const fileContents = new Map<string, FileContent>();
-
-      // Load content for each file
+      // Build fileMetadata map (all files, no content)
+      const fileMetadata = new Map<string, FileMeta>();
       for (const file of files) {
-        if (file.type === "tex" || file.type === "bib" || file.type === "style" || file.type === "other") {
-          try {
-            const { content } = await window.electronAPI.fsRead(file.absolutePath);
-            fileContents.set(file.id, { content, isDirty: false });
-          } catch {
-            // Failed to read file, skip
-          }
-        } else if (file.type === "image" && (file.fileSize || 0) <= LARGE_FILE_THRESHOLD) {
-          try {
-            const { dataUrl } = await window.electronAPI.fsReadImage(file.absolutePath);
-            fileContents.set(file.id, { dataUrl, isDirty: false });
-          } catch {
-            // Failed to read image, skip
-          }
-        }
+        fileMetadata.set(file.id, {
+          relativePath: file.relativePath,
+          absolutePath: file.absolutePath,
+          name: file.name,
+          type: file.type,
+          fileSize: file.fileSize,
+        });
       }
+
+      // ── Fire-and-forget warmup BEFORE set() so it enters the serial
+      // queue ahead of subsequent git calls (selectUnit, etc.). We
+      // intentionally do NOT await — the warmup runs in the background
+      // while the file tree renders immediately. Git operations auto-queue
+      // behind it via the _pending serial chain in git.ts.
+      window.electronAPI.gitWarmup?.(rootPath).catch(() => {});
 
       set({
         projectRoot: rootPath,
         checkoutRoot: rootPath,
         showWelcome: false,
         files,
-        folders: result.folders,
+        folders: deriveFolders(files),
         activeFileId: null,
-        fileContents,
+        fileMetadata,
         initialized: true,
       });
+
+      // ── Smart expand: only expand folders on the path to the last active file ──
+      const { lastActiveFileId } = useSettingsStore.getState().settings;
+      if (lastActiveFileId) {
+        const parts = lastActiveFileId.split("/");
+        const ancestors: string[] = [];
+        for (let i = 1; i < parts.length; i++) {
+          ancestors.push(parts.slice(0, i).join("/"));
+        }
+        const currentFolders = get().folders;
+        const valid = ancestors.filter((f) => currentFolders.includes(f));
+        useLayoutStore.getState().setExpandedFileTreeFolders(valid);
+      } else {
+        useLayoutStore.getState().setExpandedFileTreeFolders([]);
+      }
 
       // Add to recent projects
       useProjectStore.getState().addRecentProject(rootPath);
 
       // Persist last project path so it auto-restores on next launch
       window.electronAPI.settingsSet({ lastProjectPath: rootPath } as any);
+
+      // ── Eagerly preload git status + branches (queues behind warmup) ──
+      import("./git-store").then(({ useGitStore }) => {
+        useGitStore.getState().selectUnit(rootPath);
+      });
+
+      // ── Eagerly prewarm Agent CLI during the loading screen ──
+      if (window.electronAPI.cliPrewarm) {
+        window.electronAPI.cliPrewarm(rootPath, undefined, undefined).catch(() => {});
+      }
     } catch (error) {
       toast.error(`Failed to open project: ${error}`);
       throw error;
+    } finally {
+      const ms = Math.round(performance.now() - t0);
+      console.log(`[openProject] total: ${ms}ms  (${rootPath})`);
+      log.info("openProject complete", { durationMs: ms, path: rootPath });
+      set({ isOpeningProject: false });
     }
   },
 
@@ -225,7 +330,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     useChatStore.getState().clearAllSessions();
     clearPdfCache();
     import("./changes-store").then((m) => m.useChangesStore.getState().clearAll());
-    import("./worktree-store").then((m) => m.useWorktreeStore.getState().clearAll());
+    useWorktreeStore.getState().clearAll();
     set({
       projectRoot: null,
       checkoutRoot: null,
@@ -233,9 +338,45 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       files: [],
       folders: [],
       activeFileId: null,
-      fileContents: new Map(),
+      fileMetadata: new Map(),
+      openedContents: new Map(),
       initialized: false,
     });
+  },
+
+  openFile: async (id: string) => {
+    const { openedContents, fileMetadata, activeFileId } = get();
+
+    // Already open — just switch active file
+    if (id === activeFileId) return;
+
+    // Check cache first
+    const cached = openedContents.get(id);
+    if (cached) {
+      set({ activeFileId: id });
+      return;
+    }
+
+    // Need to load from disk
+    const meta = fileMetadata.get(id);
+    if (!meta) return; // file doesn't exist in project
+
+    try {
+      if (meta.type === "image") {
+        const { dataUrl } = await window.electronAPI.fsReadImage(meta.absolutePath);
+        const newMap = new Map(get().openedContents);
+        newMap.set(id, { dataUrl, isDirty: false });
+        set({ openedContents: newMap, activeFileId: id });
+      } else {
+        const { content } = await window.electronAPI.fsRead(meta.absolutePath);
+        const newMap = new Map(get().openedContents);
+        newMap.set(id, { content, isDirty: false });
+        set({ openedContents: newMap, activeFileId: id });
+      }
+    } catch {
+      // File can't be read — still allow selecting it
+      set({ activeFileId: id });
+    }
   },
 
   // ─── File Operations ───
@@ -243,7 +384,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   saveFile: async (id: string) => {
     const state = get();
     const file = state.files.find((f) => f.id === id);
-    const content = state.fileContents.get(id);
+    const content = state.openedContents.get(id);
 
     if (!file || !content?.content || !content.isDirty) return;
 
@@ -251,9 +392,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
     try {
       await window.electronAPI.fsWrite(file.absolutePath, content.content);
-      const newMap = new Map(state.fileContents);
+      const newMap = new Map(state.openedContents);
       newMap.set(id, { ...content, isDirty: false });
-      set({ fileContents: newMap, isSaving: false });
+      set({ openedContents: newMap, isSaving: false, dirtyVersion: state.dirtyVersion + 1 });
     } catch (error) {
       toast.error(`Failed to save ${file.name}: ${error}`);
       set({ isSaving: false });
@@ -263,7 +404,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   saveAllFiles: async () => {
     const state = get();
     const dirtyEntries: [string, FileContent][] = [];
-    state.fileContents.forEach((val, key) => {
+    state.openedContents.forEach((val, key) => {
       if (val.isDirty && val.content) {
         dirtyEntries.push([key, val]);
       }
@@ -289,16 +430,19 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     });
 
     if (savedIds.size > 0) {
-      const newMap = new Map(state.fileContents);
+      const newMap = new Map(state.openedContents);
       savedIds.forEach((id) => {
         const existing = newMap.get(id);
         if (existing) {
           newMap.set(id, { ...existing, isDirty: false });
         }
       });
-      set({ fileContents: newMap, isSaving: false });
+      set({ openedContents: newMap, isSaving: false, dirtyVersion: state.dirtyVersion + 1 });
 
-      // Trigger git auto-refresh after editor save
+      // Trigger git auto-refresh after editor save.
+      // Suppress watcher reload during the refresh window to prevent
+      // the save→git→watcher→reload cascade.
+      markSuppressWatcherReload();
       import("./git-store").then(({ useGitStore }) => {
         const gs = useGitStore.getState();
         if (gs.isGitRepo && gs.unitRoot) {
@@ -317,29 +461,60 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // Save all dirty files in the current checkout before switching
     await get().saveAllFiles();
 
-    // Switch to new root
-    set({ checkoutRoot: newRoot });
+    // Switch to new root — clear old content cache
+    set({ checkoutRoot: newRoot, openedContents: new Map() });
 
-    // Rebuild file list and contents from new root
-    await get().reloadAllFromDisk();
+    // Try to use worktree pre-scanned cache first
+    try {
+      const wtState = useWorktreeStore.getState();
+      if (wtState.activeWorktree && wtState.activeWorktree.path === newRoot) {
+        const cached = wtState.getCachedTree(wtState.activeWorktree.name);
+        if (cached) {
+          // Use cached metadata — instant file tree
+          const { files, folders } = cached;
+          const newMetadata = new Map<string, FileMeta>();
+          for (const f of files) {
+            newMetadata.set(f.id, {
+              relativePath: f.relativePath,
+              absolutePath: f.absolutePath,
+              name: f.name,
+              type: f.type,
+              fileSize: f.fileSize,
+            });
+          }
+          set({
+            files: files as ProjectFile[],
+            folders,
+            fileMetadata: newMetadata,
+            contentVersion: get().contentVersion + 1,
+          });
+          return;
+        }
+      }
+    } catch {
+      // Cache lookup failed — fall through to live scan
+    }
+
+    // Fallback: live scan metadata from new root
+    await get().reloadMetadataFromDisk(true); // force — worktree switch always works
   },
 
   refreshFiles: async () => {
     const { projectRoot } = get();
     if (!projectRoot) return;
-    await get().reloadAllFromDisk();
+    await get().reloadMetadataFromDisk(true); // force — manual refresh always works
   },
 
-  reloadAllFromDisk: async () => {
+  reloadMetadataFromDisk: async (force = false) => {
     const { checkoutRoot } = get();
     if (!checkoutRoot) return;
 
-    // Prevent concurrent reloads from racing on store state
-    if (_reloadInProgress) return;
-    _reloadInProgress = true;
+    // Skip watcher-triggered reload during save→git cascade,
+    // but allow explicit calls (git ops, manual refresh) to bypass.
+    if (!force && _suppressWatcherReload) return;
 
     try {
-      const result = await window.electronAPI.fsScan(checkoutRoot);
+      const result = await window.electronAPI.fsScanMetadata(checkoutRoot);
       const newFiles: ProjectFile[] = result.files.map((f) => ({
         id: f.relativePath,
         name: f.relativePath.split("/").pop() || f.relativePath,
@@ -349,74 +524,361 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         fileSize: f.fileSize,
       }));
 
-      const { fileContents: oldContents } = get();
-      const newFileContents = new Map<string, FileContent>();
-
+      // Build new metadata map
+      const newMetadata = new Map<string, FileMeta>();
       for (const file of newFiles) {
-        // Re-check dirty state from current store (not stale snapshot)
-        const currentEntry = get().fileContents.get(file.id);
-        if (currentEntry?.isDirty && currentEntry.content !== undefined) {
-          newFileContents.set(file.id, currentEntry);
-          continue;
-        }
+        newMetadata.set(file.id, {
+          relativePath: file.relativePath,
+          absolutePath: file.absolutePath,
+          name: file.name,
+          type: file.type,
+          fileSize: file.fileSize,
+        });
+      }
 
-        const existing = oldContents.get(file.id);
+      // Check which files were deleted
+      const { openedContents, activeFileId: currentActiveId } = get();
+      const newOpenedContents = new Map(openedContents);
+      const deletedCleanIds: string[] = [];
 
-        // Reload text files from disk
-        if (file.type === "tex" || file.type === "bib" || file.type === "style" || file.type === "other") {
-          try {
-            const { content } = await window.electronAPI.fsRead(file.absolutePath);
-            newFileContents.set(file.id, { content, isDirty: false });
-          } catch {
-            // File unreadable — preserve old content if available
-            if (existing) {
-              newFileContents.set(file.id, existing);
-            }
+      for (const [id, entry] of openedContents) {
+        if (!newMetadata.has(id)) {
+          if (entry.isDirty) {
+            // Preserve unsaved work — keep in openedContents even though
+            // the file no longer exists on disk (e.g. after branch switch).
+            toast.warning(
+              `"${id}" was deleted on disk — unsaved changes preserved`,
+            );
+          } else {
+            newOpenedContents.delete(id);
+            deletedCleanIds.push(id);
           }
-        } else if (file.type === "image" && (file.fileSize || 0) <= LARGE_FILE_THRESHOLD) {
-          try {
-            const { dataUrl } = await window.electronAPI.fsReadImage(file.absolutePath);
-            newFileContents.set(file.id, { dataUrl, isDirty: false });
-          } catch {
-            if (existing) {
-              newFileContents.set(file.id, existing);
-            }
-          }
-        } else if (existing) {
-          // PDF or large image — preserve existing data
-          newFileContents.set(file.id, existing);
         }
       }
 
-      // Re-read activeFileId at apply-time to avoid TOCTOU race
-      const { activeFileId: currentActiveId } = get();
+      // Close tabs for clean-deleted files so the editor doesn't show stale content
+      if (deletedCleanIds.length > 0) {
+        const rps = useRightPanelStore.getState();
+        for (const tab of rps.tabs) {
+          if (tab.fileId && deletedCleanIds.includes(tab.fileId)) {
+            rps.closeTab(tab.id);
+          }
+        }
+      }
+
       const activeStillExists = currentActiveId
-        ? newFiles.some((f) => f.id === currentActiveId)
+        ? newOpenedContents.has(currentActiveId) && newFiles.some((f) => f.id === currentActiveId)
         : false;
 
+      // result.folders comes from the disk scan — it is the ground truth.
+      // It includes empty folders (correct) and excludes non-existent ones.
       set({
         files: newFiles,
         folders: result.folders,
-        fileContents: newFileContents,
-        activeFileId: activeStillExists ? currentActiveId : (newFiles.length > 0 ? newFiles[0].id : null),
+        fileMetadata: newMetadata,
+        openedContents: newOpenedContents,
+        activeFileId: activeStillExists ? currentActiveId : null,
         contentVersion: get().contentVersion + 1,
       });
     } catch (error) {
       toast.error(`Failed to reload files: ${error}`);
-    } finally {
-      _reloadInProgress = false;
     }
+  },
+
+  /** Handle file watcher events. Strategy:
+   *   - Any structural change (file added/deleted) → full metadata reload from disk
+   *   - Content-only changes → only update openedContents for opened files
+   *   - Large batches (>20 paths) → always reload from disk (single IPC)
+   *   This method NEVER modifies files/folders/fileMetadata directly —
+   *   those are always sourced from the disk scan. */
+  incrementalFileChanged: async (absolutePaths: string[]) => {
+    const { checkoutRoot, files, openedContents } = get();
+    if (!checkoutRoot) return;
+
+    // Skip watcher-triggered reload during save cascade
+    if (_suppressWatcherReload) return;
+
+    // Large batch or any structural change → full disk rescan (correct & fast)
+    if (absolutePaths.length > 20) {
+      await get().reloadMetadataFromDisk(true);
+      return;
+    }
+
+    const checkoutRootNormalized = checkoutRoot.endsWith("/") ? checkoutRoot : checkoutRoot + "/";
+    const relativePaths = absolutePaths
+      .map((abs) => (abs.startsWith(checkoutRootNormalized) ? abs.slice(checkoutRootNormalized.length) : null))
+      .filter((rel): rel is string => rel !== null);
+
+    if (relativePaths.length === 0) return;
+
+    const filesById = new Map(files.map((f) => [f.id, f]));
+    let hasStructuralChange = false;
+
+    // First pass: detect structural changes (additions or deletions)
+    for (const relPath of relativePaths) {
+      const existing = filesById.get(relPath);
+      if (existing) continue; // known file, might just be content change
+
+      // File is new (not in current file list) or deleted (need fs:exists check)
+      const absPath = `${checkoutRootNormalized}${relPath}`;
+      try {
+        const exists = await window.electronAPI.fsExists(absPath);
+        if (exists && !existing) {
+          // New file added externally → structural change
+          hasStructuralChange = true;
+          break;
+        }
+        if (!exists && existing) {
+          // File deleted externally → structural change
+          hasStructuralChange = true;
+          break;
+        }
+      } catch {
+        // fs:exists failed — fall back to disk rescan
+        hasStructuralChange = true;
+        break;
+      }
+    }
+
+    // Structural changes: do a full disk rescan (single IPC, guaranteed correct)
+    if (hasStructuralChange) {
+      await get().reloadMetadataFromDisk(true);
+      return;
+    }
+
+    // Content-only changes: just re-read opened files
+    const readTasks: Promise<void>[] = [];
+    for (const relPath of relativePaths) {
+      const entry = openedContents.get(relPath);
+      if (!entry || entry.isDirty) continue; // not opened, or has unsaved edits
+
+      const absPath = `${checkoutRootNormalized}${relPath}`;
+      const file = filesById.get(relPath);
+      if (!file) continue;
+
+      if (file.type === "image") {
+        readTasks.push(
+          window.electronAPI.fsReadImage(absPath)
+            .then(({ dataUrl }) => {
+              const current = get().openedContents.get(relPath);
+              if (current && !current.isDirty) {
+                const newMap = new Map(get().openedContents);
+                newMap.set(relPath, { dataUrl, isDirty: false });
+                set({ openedContents: newMap, contentVersion: get().contentVersion + 1 });
+              }
+            })
+            .catch(() => {}),
+        );
+      } else {
+        readTasks.push(
+          window.electronAPI.fsRead(absPath)
+            .then(({ content }) => {
+              const current = get().openedContents.get(relPath);
+              if (current && !current.isDirty) {
+                const newMap = new Map(get().openedContents);
+                newMap.set(relPath, { content, isDirty: false });
+                set({ openedContents: newMap, contentVersion: get().contentVersion + 1 });
+              }
+            })
+            .catch(() => {}),
+        );
+      }
+    }
+
+    await Promise.all(readTasks);
   },
 
   refreshFileContent: async (id: string) => {
     const file = get().files.find((f) => f.id === id);
     if (!file) return;
     try {
-      const { content } = await window.electronAPI.fsRead(file.absolutePath);
-      const newMap = new Map(get().fileContents);
-      newMap.set(id, { content, isDirty: false });
-      set({ fileContents: newMap });
+      if (file.type === "image") {
+        const { dataUrl } = await window.electronAPI.fsReadImage(file.absolutePath);
+        const newMap = new Map(get().openedContents);
+        newMap.set(id, { dataUrl, isDirty: false });
+        set({ openedContents: newMap });
+      } else {
+        const { content } = await window.electronAPI.fsRead(file.absolutePath);
+        const newMap = new Map(get().openedContents);
+        newMap.set(id, { content, isDirty: false });
+        set({ openedContents: newMap });
+      }
     } catch {}
+  },
+
+  /** Re-read all open CLEAN files from disk.
+   *  Used after git branch switch to immediately reflect new branch content,
+   *  rather than waiting for the OS file watcher. Skips dirty files. */
+  reloadOpenCleanFiles: async () => {
+    const { openedContents, files } = get();
+    const textTasks: { id: string; absPath: string }[] = [];
+    const imageTasks: { id: string; absPath: string }[] = [];
+
+    for (const [id, entry] of openedContents) {
+      if (entry.isDirty) continue;
+      const file = files.find((f) => f.id === id);
+      if (!file) continue;
+      if (file.type === "image") {
+        imageTasks.push({ id, absPath: file.absolutePath });
+      } else {
+        textTasks.push({ id, absPath: file.absolutePath });
+      }
+    }
+
+    if (textTasks.length === 0 && imageTasks.length === 0) return;
+
+    // Read all files in parallel
+    const [textResults, imageResults] = await Promise.all([
+      textTasks.length > 0
+        ? Promise.allSettled(textTasks.map((t) => window.electronAPI.fsRead(t.absPath)))
+        : Promise.resolve([] as PromiseSettledResult<{ content: string }>[]),
+      imageTasks.length > 0
+        ? Promise.allSettled(imageTasks.map((t) => window.electronAPI.fsReadImage(t.absPath)))
+        : Promise.resolve([] as PromiseSettledResult<{ dataUrl: string }>[]),
+    ]);
+
+    // Single set() to avoid racing concurrent updates
+    const current = get().openedContents;
+    const newMap = new Map(current);
+    let changed = false;
+
+    for (let i = 0; i < textResults.length; i++) {
+      const r = textResults[i];
+      if (r.status !== "fulfilled") continue;
+      const { id } = textTasks[i];
+      const existing = current.get(id);
+      if (existing && !existing.isDirty) {
+        newMap.set(id, { content: r.value.content, isDirty: false });
+        changed = true;
+      }
+    }
+
+    for (let i = 0; i < imageResults.length; i++) {
+      const r = imageResults[i];
+      if (r.status !== "fulfilled") continue;
+      const { id } = imageTasks[i];
+      const existing = current.get(id);
+      if (existing && !existing.isDirty) {
+        newMap.set(id, { dataUrl: r.value.dataUrl, isDirty: false });
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      set((s) => ({ openedContents: newMap, contentVersion: s.contentVersion + 1 }));
+    }
+  },
+
+  /** Combined metadata rescan + content reload — single render cycle.
+   *  Used by switchBranch to avoid two separate renders. */
+  reloadAllFromDisk: async () => {
+    const { checkoutRoot, openedContents } = get();
+    if (!checkoutRoot) return;
+
+    // Phase 1: scan metadata
+    const result = await window.electronAPI.fsScanMetadata(checkoutRoot);
+    const newFiles: ProjectFile[] = result.files.map((f) => ({
+      id: f.relativePath,
+      name: f.relativePath.split("/").pop() || f.relativePath,
+      relativePath: f.relativePath,
+      absolutePath: f.absolutePath,
+      type: f.type,
+      fileSize: f.fileSize,
+    }));
+
+    const newMetadata = new Map<string, FileMeta>();
+    for (const file of newFiles) {
+      newMetadata.set(file.id, {
+        relativePath: file.relativePath,
+        absolutePath: file.absolutePath,
+        name: file.name,
+        type: file.type,
+        fileSize: file.fileSize,
+      });
+    }
+
+    // Phase 2: collect clean open files to reload
+    const textTasks: { id: string; absPath: string }[] = [];
+    const imageTasks: { id: string; absPath: string }[] = [];
+    const deletedCleanIds: string[] = [];
+
+    const newOpenedContents = new Map(openedContents);
+    for (const [id, entry] of openedContents) {
+      const meta = newMetadata.get(id);
+      if (!meta) {
+        // File deleted from disk
+        if (entry.isDirty) {
+          toast.warning(`"${id}" was deleted on disk — unsaved changes preserved`);
+        } else {
+          newOpenedContents.delete(id);
+          deletedCleanIds.push(id);
+        }
+        continue;
+      }
+      if (entry.isDirty) continue; // preserve dirty content
+      // Queue for reload
+      const file = newFiles.find((f) => f.id === id);
+      if (!file) continue;
+      if (file.type === "image") {
+        imageTasks.push({ id, absPath: file.absolutePath });
+      } else {
+        textTasks.push({ id, absPath: file.absolutePath });
+      }
+    }
+
+    // Phase 3: read all clean file contents in parallel
+    const [textResults, imageResults] = await Promise.all([
+      textTasks.length > 0
+        ? Promise.allSettled(textTasks.map((t) => window.electronAPI.fsRead(t.absPath)))
+        : Promise.resolve([] as PromiseSettledResult<{ content: string }>[]),
+      imageTasks.length > 0
+        ? Promise.allSettled(imageTasks.map((t) => window.electronAPI.fsReadImage(t.absPath)))
+        : Promise.resolve([] as PromiseSettledResult<{ dataUrl: string }>[]),
+    ]);
+
+    for (let i = 0; i < textResults.length; i++) {
+      const r = textResults[i];
+      if (r.status !== "fulfilled") continue;
+      const { id } = textTasks[i];
+      const existing = newOpenedContents.get(id);
+      if (existing && !existing.isDirty) {
+        newOpenedContents.set(id, { content: r.value.content, isDirty: false });
+      }
+    }
+    for (let i = 0; i < imageResults.length; i++) {
+      const r = imageResults[i];
+      if (r.status !== "fulfilled") continue;
+      const { id } = imageTasks[i];
+      const existing = newOpenedContents.get(id);
+      if (existing && !existing.isDirty) {
+        newOpenedContents.set(id, { dataUrl: r.value.dataUrl, isDirty: false });
+      }
+    }
+
+    // Phase 4: close tabs for clean-deleted files
+    if (deletedCleanIds.length > 0) {
+      const rps = useRightPanelStore.getState();
+      for (const tab of rps.tabs) {
+        if (tab.fileId && deletedCleanIds.includes(tab.fileId)) {
+          rps.closeTab(tab.id);
+        }
+      }
+    }
+
+    const { activeFileId: currentActiveId } = get();
+    const activeStillExists = currentActiveId
+      ? newOpenedContents.has(currentActiveId) && newFiles.some((f) => f.id === currentActiveId)
+      : false;
+
+    // Single set() — one React render instead of two
+    set({
+      files: newFiles,
+      folders: result.folders,
+      fileMetadata: newMetadata,
+      openedContents: newOpenedContents,
+      activeFileId: activeStillExists ? currentActiveId : null,
+      contentVersion: get().contentVersion + 1,
+    });
   },
 
   createNewFile: async (name: string, type?: ProjectFileType, folder?: string) => {
@@ -441,19 +903,35 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         type: inferred.type,
       };
 
-      const newFileContents = new Map(get().fileContents);
-      newFileContents.set(relativePath, { content: inferred.content, isDirty: false });
+      const newOpenedContents = new Map(get().openedContents);
+      newOpenedContents.set(relativePath, { content: inferred.content, isDirty: false });
+
+      // Update fileMetadata so openFile can find this new file
+      const newMetadata = new Map(get().fileMetadata);
+      newMetadata.set(relativePath, {
+        relativePath: newFile.relativePath,
+        absolutePath: newFile.absolutePath,
+        name: newFile.name,
+        type: newFile.type,
+        fileSize: 0,
+      });
+
+      // Derive folders from the new file list (single source of truth)
+      const newFilesList = [...files, newFile];
 
       set({
-        files: [...files, newFile],
+        files: newFilesList,
+        folders: deriveFolders(newFilesList),
         activeFileId: relativePath,
-        fileContents: newFileContents,
+        fileMetadata: newMetadata,
+        openedContents: newOpenedContents,
       });
 
       // Trigger git refresh — new file may show as untracked
       import("./git-store").then(({ useGitStore }) => {
         const gs = useGitStore.getState();
         if (gs.isGitRepo && gs.unitRoot) {
+          markSuppressWatcherReload();
           gs.refreshStatus(gs.unitRoot);
         }
       });
@@ -473,7 +951,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     try {
       await window.electronAPI.fsMkdir(absolutePath);
       set((s) => ({
-        folders: [...s.folders, folderPath],
+        folders: s.folders.includes(folderPath) ? s.folders : [...s.folders, folderPath],
       }));
     } catch (error) {
       toast.error(`Failed to create folder: ${error}`);
@@ -490,24 +968,31 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     try {
       await window.electronAPI.fsDelete(file.absolutePath);
       const newFiles = files.filter((f) => f.id !== id);
-      const newFileContents = new Map(get().fileContents);
-      newFileContents.delete(id);
+      const newOpenedContents = new Map(get().openedContents);
+      newOpenedContents.delete(id);
+
+      // Clean up fileMetadata
+      const newMetadata = new Map(get().fileMetadata);
+      newMetadata.delete(id);
 
       set({
         files: newFiles,
+        folders: deriveFolders(newFiles),
         activeFileId:
           activeFileId === id
             ? newFiles.length > 0
               ? newFiles[0].id
               : null
             : activeFileId,
-        fileContents: newFileContents,
+        fileMetadata: newMetadata,
+        openedContents: newOpenedContents,
       });
 
       // Trigger git refresh — deleted file changes git status
       import("./git-store").then(({ useGitStore }) => {
         const gs = useGitStore.getState();
         if (gs.isGitRepo && gs.unitRoot) {
+          markSuppressWatcherReload();
           gs.refreshStatus(gs.unitRoot);
         }
       });
@@ -535,15 +1020,23 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     try {
       await window.electronAPI.fsDeleteFolder(absolutePath);
 
-      const { activeFileId, fileContents } = get();
+      const { activeFileId, openedContents } = get();
       const newFiles = files.filter((f) => !f.relativePath.startsWith(`${folderPath}/`));
       const newFolders = get().folders.filter(
         (f) => f !== folderPath && !f.startsWith(`${folderPath}/`),
       );
-      const newFileContents = new Map(fileContents);
+      const newOpenedContents = new Map(openedContents);
       files.forEach((f) => {
         if (f.relativePath.startsWith(`${folderPath}/`)) {
-          newFileContents.delete(f.id);
+          newOpenedContents.delete(f.id);
+        }
+      });
+
+      // Clean up fileMetadata for all files in the deleted folder
+      const newMetadata = new Map(get().fileMetadata);
+      files.forEach((f) => {
+        if (f.relativePath.startsWith(`${folderPath}/`)) {
+          newMetadata.delete(f.id);
         }
       });
 
@@ -556,13 +1049,15 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
             : newFiles.length > 0
               ? newFiles[0].id
               : null,
-        fileContents: newFileContents,
+        fileMetadata: newMetadata,
+        openedContents: newOpenedContents,
       });
 
       // Trigger git refresh — deleted files change git status
       import("./git-store").then(({ useGitStore }) => {
         const gs = useGitStore.getState();
         if (gs.isGitRepo && gs.unitRoot) {
+          markSuppressWatcherReload();
           gs.refreshStatus(gs.unitRoot);
         }
       });
@@ -586,34 +1081,52 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     try {
       await window.electronAPI.fsRename(file.absolutePath, newAbsolutePath);
 
-      const { activeFileId, fileContents } = get();
-      const existingContent = fileContents.get(id);
-      const newFileContents = new Map(fileContents);
+      const { activeFileId, openedContents } = get();
+      const existingContent = openedContents.get(id);
+      const newOpenedContents = new Map(openedContents);
       if (existingContent) {
-        newFileContents.delete(id);
-        newFileContents.set(newRelativePath, existingContent);
+        newOpenedContents.delete(id);
+        newOpenedContents.set(newRelativePath, existingContent);
       }
 
+      // Update fileMetadata for the renamed file
+      const newMetadata = new Map(get().fileMetadata);
+      const oldMeta = newMetadata.get(id);
+      if (oldMeta) {
+        newMetadata.delete(id);
+        newMetadata.set(newRelativePath, {
+          ...oldMeta,
+          relativePath: newRelativePath,
+          absolutePath: newAbsolutePath,
+          name: newName,
+        });
+      }
+
+      const renamedFiles = files.map((f) =>
+        f.id === id
+          ? {
+              ...f,
+              id: newRelativePath,
+              name: newName,
+              relativePath: newRelativePath,
+              absolutePath: newAbsolutePath,
+            }
+          : f,
+      );
+
       set({
-        files: files.map((f) =>
-          f.id === id
-            ? {
-                ...f,
-                id: newRelativePath,
-                name: newName,
-                relativePath: newRelativePath,
-                absolutePath: newAbsolutePath,
-              }
-            : f,
-        ),
+        files: renamedFiles,
+        folders: deriveFolders(renamedFiles),
         activeFileId: activeFileId === id ? newRelativePath : activeFileId,
-        fileContents: newFileContents,
+        fileMetadata: newMetadata,
+        openedContents: newOpenedContents,
       });
 
       // Trigger git refresh — renamed file may show as renamed/moved
       import("./git-store").then(({ useGitStore }) => {
         const gs = useGitStore.getState();
         if (gs.isGitRepo && gs.unitRoot) {
+          markSuppressWatcherReload();
           gs.refreshStatus(gs.unitRoot);
         }
       });
@@ -624,7 +1137,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   },
 
   renameFolder: async (folderPath: string, newName: string) => {
-    const { files, folders, checkoutRoot, fileContents } = get();
+    const { files, folders, checkoutRoot, openedContents } = get();
     if (!checkoutRoot) return;
 
     const parentPath = folderPath.includes("/")
@@ -667,8 +1180,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       );
 
       // Update content map keys
-      const newFileContents = new Map(fileContents);
-      fileContents.forEach((v, k) => {
+      const newFileContents = new Map(openedContents);
+      openedContents.forEach((v, k) => {
         if (k.startsWith(oldPrefix)) {
           newFileContents.delete(k);
           newFileContents.set(newPrefix + k.slice(oldPrefix.length), v);
@@ -685,16 +1198,34 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         }
       }
 
+      // Update fileMetadata for all affected files
+      const newMetadata = new Map(get().fileMetadata);
+      files.filter((f) => f.relativePath.startsWith(oldPrefix)).forEach((f) => {
+        const newId = newPrefix + f.relativePath.slice(oldPrefix.length);
+        const newRelPath = newPrefix + f.relativePath.slice(oldPrefix.length);
+        const meta = newMetadata.get(f.id);
+        newMetadata.delete(f.id);
+        if (meta) {
+          newMetadata.set(newId, {
+            ...meta,
+            relativePath: newRelPath,
+            absolutePath: meta.absolutePath.replace(oldAbs, newAbs),
+          });
+        }
+      });
+
       set({
         files: newFiles,
         folders: newFolders,
-        fileContents: newFileContents,
+        fileMetadata: newMetadata,
+        openedContents: newFileContents,
       });
 
       // Trigger git refresh — renamed files change git status
       import("./git-store").then(({ useGitStore }) => {
         const gs = useGitStore.getState();
         if (gs.isGitRepo && gs.unitRoot) {
+          markSuppressWatcherReload();
           gs.refreshStatus(gs.unitRoot);
         }
       });
@@ -706,24 +1237,27 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
   // ─── Sync Actions ───
 
-  setActiveFile: (id: string) => set({ activeFileId: id }),
+  setActiveFile: (id: string) => {
+    if (get().activeFileId === id) return;
+    // Trigger lazy load — openFile checks cache first, loads from disk on miss
+    get().openFile(id);
+  },
 
-  getContent: (id: string) => get().fileContents.get(id)?.content ?? "",
+  getContent: (id: string) => get().openedContents.get(id)?.content ?? "",
 
   setContent: (id: string, content: string) => {
-    const { fileContents } = get();
-    const existing = fileContents.get(id);
-    // Only update if content actually changed
+    const state = get();
+    const existing = state.openedContents.get(id);
     if (existing?.content === content) return;
 
-    const newMap = new Map(fileContents);
+    const newMap = new Map(state.openedContents);
     newMap.set(id, { content, isDirty: true });
-    set({ fileContents: newMap });
+    set({ openedContents: newMap, dirtyVersion: state.dirtyVersion + 1 });
 
     scheduleAutoSave();
   },
 
-  isFileDirty: (id: string) => get().fileContents.get(id)?.isDirty ?? false,
+  isFileDirty: (id: string) => get().openedContents.get(id)?.isDirty ?? false,
 
   requestJumpToPosition: (position: number) => set({ jumpTarget: position }),
   requestJumpToLine: (fileId: string, line: number) => set({ jumpToLine: { fileId, line } }),

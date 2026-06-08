@@ -240,10 +240,12 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
     }
   }, [projectRoot]);
 
-  // ── File watcher: start when project opens, stop when it closes ──
+  // ── File watcher: start when checkout root changes (project open OR worktree switch) ──
+  const checkoutRoot = useDocumentStore((s) => s.checkoutRoot);
+
   useEffect(() => {
-    if (projectRoot) {
-      window.electronAPI.fsWatchStart(projectRoot).catch((err) => {
+    if (checkoutRoot) {
+      window.electronAPI.fsWatchStart(checkoutRoot).catch((err) => {
         console.error("[watcher] Failed to start file watcher:", err);
       });
     }
@@ -252,13 +254,19 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
         console.error("[watcher] Failed to stop file watcher:", err);
       });
     };
-  }, [projectRoot]);
+  }, [checkoutRoot]);
 
   // ── File watcher: reload files AND refresh git when external changes detected ──
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onFileChanged(() => {
-      useDocumentStore.getState().reloadAllFromDisk();
-      // Also trigger git status refresh so the Git panel stays in sync
+    const unsubscribe = window.electronAPI.onFileChanged(({ changedPaths }) => {
+      if (changedPaths && changedPaths.length > 0) {
+        // Incremental: only reload the specific files that changed
+        useDocumentStore.getState().incrementalFileChanged(changedPaths);
+      } else {
+        // Fallback: full metadata reload (mass directory changes)
+        useDocumentStore.getState().reloadMetadataFromDisk();
+      }
+
       const gs = useGitStore.getState();
       if (gs.isGitRepo && gs.unitRoot) {
         gs.scheduleAutoRefresh(gs.unitRoot);
@@ -267,12 +275,23 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
     return unsubscribe;
   }, []);
 
-  const fileContents = useDocumentStore((s) => s.fileContents);
+  // Subscribe to a lightweight version counter instead of the full Map —
+  // avoids RightArea re-rendering on every keystroke in any editor.
+  const dirtyVersion = useDocumentStore((s) => s.dirtyVersion);
   const dirtyFileIds = useMemo(() => {
     const dirty = new Set<string>();
-    fileContents.forEach((v, k) => { if (v.isDirty) dirty.add(k); });
+    useDocumentStore.getState().openedContents.forEach((v, k) => { if (v.isDirty) dirty.add(k); });
     return dirty;
-  }, [fileContents]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirtyVersion]);
+
+  // Stable TabBar callbacks — prevents memo break
+  const handleTabSelect = useCallback(
+    (id: string) => useRightPanelStore.getState().setActiveTab(id), []);
+  const handleTabClose = useCallback(
+    (id: string) => useRightPanelStore.getState().closeTab(id), []);
+  const handleTabReorder = useCallback(
+    (from: number, to: number) => useRightPanelStore.getState().moveTab(from, to), []);
 
   // ─── Sidebar drag-to-resize ───
   // Same pattern as App.tsx Panel onResize:
@@ -321,7 +340,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
       if (actualWidth <= 0) return;
       const st = useLayoutStore.getState();
       if (actualWidth >= COLLAPSE_THRESHOLD) {
-        st.setRightSidebarWidth(actualWidth);
+        st.setRightSidebarWidth(Math.max(SIDEBAR_RIGHT_MIN, actualWidth));
         if (!st.rightSidebarOpen) st.setRightSidebarOpen(true);
       } else {
         if (st.rightSidebarOpen) st.setRightSidebarOpen(false);
@@ -367,56 +386,15 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
         {sidebarFullyCollapsed && editorMaximized && (
           <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
         )}
-        {TOOLBAR_TABS.map((tab) =>
-          tab.id === "files" ? (
-            <div key={tab.id} className="flex items-center">
-              <button
-                type="button"
-                className={cn(
-                  "flex size-6 items-center justify-center rounded transition-colors",
-                  rightToolbarTab === "files" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                )}
-                title={`${tab.label} — open project folder`}
-                onClick={() => {
-                  setRightToolbarTab("files");
-                  ensureTab("file");
-                  if (projectRoot) window.electronAPI.fsScan(projectRoot);
-                }}
-              >
-                {tab.icon}
-              </button>
-            </div>
-          ) : (
-            <button
-              key={tab.id}
-              type="button"
-              className={cn(
-                "flex size-6 items-center justify-center rounded transition-colors",
-                rightToolbarTab === tab.id ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-              )}
-              title={tab.label}
-              onClick={() => {
-                setRightToolbarTab(tab.id);
-                if (tab.id === "git") ensureTab("git-overview");
-                else if (tab.id === "browser") ensureTab("browser");
-                else if (tab.id === "terminal") ensureTab("terminal");
-                else if (tab.id === "texworkspace") ensureTab("texworkspace");
-              }}
-            >
-              {tab.icon}
-            </button>
-          ),
-        )}
         </div>
 
-        <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
         <div className="flex-1 min-w-0">
           <TabBar
             tabs={tabs}
             activeTabId={activeTabId}
-            onSelect={(id) => useRightPanelStore.getState().setActiveTab(id)}
-            onClose={(id) => useRightPanelStore.getState().closeTab(id)}
-            onReorder={(from, to) => useRightPanelStore.getState().moveTab(from, to)}
+            onSelect={handleTabSelect}
+            onClose={handleTabClose}
+            onReorder={handleTabReorder}
             dirtyFileIds={dirtyFileIds}
           />
         </div>
@@ -472,6 +450,48 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
             <MoonIcon className="size-3.5" />
           )}
         </button>
+
+        <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
+
+        {/* ── Mode buttons (right-side primary actions) ── */}
+        {TOOLBAR_TABS.map((tab) =>
+          tab.id === "files" ? (
+            <button
+              key={tab.id}
+              type="button"
+              className={cn(
+                "flex size-6 items-center justify-center rounded transition-colors",
+                rightToolbarTab === "files" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+              )}
+              title={`${tab.label} — open project folder`}
+              onClick={() => {
+                setRightToolbarTab("files");
+                ensureTab("file");
+              }}
+            >
+              {tab.icon}
+            </button>
+          ) : (
+            <button
+              key={tab.id}
+              type="button"
+              className={cn(
+                "flex size-6 items-center justify-center rounded transition-colors",
+                rightToolbarTab === tab.id ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+              )}
+              title={tab.label}
+              onClick={() => {
+                setRightToolbarTab(tab.id);
+                if (tab.id === "git") ensureTab("git-overview");
+                else if (tab.id === "browser") ensureTab("browser");
+                else if (tab.id === "terminal") ensureTab("terminal");
+                else if (tab.id === "texworkspace") ensureTab("texworkspace");
+              }}
+            >
+              {tab.icon}
+            </button>
+          ),
+        )}
 
         <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
 
@@ -540,7 +560,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
           </div>
         )}
 
-        {rightSidebarOpen && (
+        {rightSidebarOpen && tabs.length > 0 && (
           <>
             <SidebarDragHandle onResize={handleSidebarResize} isDraggingRef={isDraggingSidebar} onDragChange={setSidebarDragActive} />
             <div

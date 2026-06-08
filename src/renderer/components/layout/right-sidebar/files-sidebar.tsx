@@ -1,20 +1,22 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { Virtuoso } from "react-virtuoso";
+import type { VirtuosoHandle } from "react-virtuoso";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
+import { useGitStore } from "@/stores/git-store";
+import { useWorktreeStore } from "@/stores/worktree-store";
 import { useIsTexworkspace } from "@/components/modules/texworkspace-mode";
 import {
-  FolderIcon,
-  FolderOpenIcon,
-  ChevronRightIcon,
+  CheckIcon,
   FilePlusCorner,
+  FolderOpenIcon,
   FolderPlusIcon,
-  PencilIcon,
-  Trash2Icon,
-  FileTextIcon,
   FoldVerticalIcon,
   UnfoldVerticalIcon,
   RefreshCwIcon,
+  GitBranchIcon,
+  SplitIcon,
 } from "lucide-react";
 
 import {
@@ -25,6 +27,13 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -34,314 +43,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { buildFileTree, getFileIcon, type TreeNode } from "@/lib/file-tree";
+import { buildFileTree, flattenVisibleTree, type TreeNode, type FlatVisibleNode } from "@/lib/file-tree";
 
 import {
   SidebarHeader,
-  SidebarContent,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarMenuSub,
-  SidebarMenuSubItem,
-  SidebarMenuSubButton,
 } from "@/components/ui/sidebar";
 import { MODE_DIR, type SidebarMode, filterFilesByMode, filterFoldersByMode } from "./shared";
-import { Icon } from "@iconify/react";
-import { getFileIconName } from "@/lib/file-icon-class";
+import { FolderVirtRow, FileVirtRow, InlineEditRow, type VirtTreeCallbacks, type GitStatusInfo } from "./virtual-tree-rows";
 
 
-// ─── Inline New Node ───
-
-function InlineNewNode({
-  type,
-  depth,
-  parentPath,
-  onCreated,
-  onCancel,
-}: {
-  type: "file" | "folder";
-  depth: number;
-  parentPath?: string;
-  onCreated: () => void;
-  onCancel: () => void;
-}) {
-  const [name, setName] = useState("");
-
-  const createNewFile = useDocumentStore((s) => s.createNewFile);
-  const createFolder = useDocumentStore((s) => s.createFolder);
-
-  const committingRef = useRef(false);
-
-  const commit = useCallback(async () => {
-    if (committingRef.current) return;
-    const trimmed = name.trim();
-    if (!trimmed) { onCancel(); return; }
-    committingRef.current = true;
-    try {
-      if (type === "file") {
-        await createNewFile(trimmed, undefined, parentPath);
-        const relativePath = parentPath ? `${parentPath}/${trimmed}` : trimmed;
-        useDocumentStore.getState().setActiveFile(relativePath);
-        useRightPanelStore.getState().openFile(relativePath, relativePath, trimmed);
-      } else {
-        await createFolder(trimmed, parentPath);
-      }
-    } catch { /* error handled in store */ }
-    committingRef.current = false;
-    onCreated();
-  }, [name, type, parentPath, createNewFile, createFolder, onCreated, onCancel]);
-
-  const iconName = type === "file" ? getFileIconName(name || "file") : null;
-
-  return (
-    <SidebarMenuSubItem>
-      <div
-        className="flex h-6 items-center gap-2 rounded-sm px-2 text-[length:var(--font-size-12)]"
-        style={{ paddingLeft: 8 + depth * 16 }}
-      >
-        {type === "file" && iconName ? (
-          <Icon icon={iconName} className="size-3.5 shrink-0" />
-        ) : (
-          <FolderIcon className="size-3 shrink-0 text-muted-foreground" />
-        )}
-        <Input
-          autoFocus
-          value={name}
-          placeholder={type === "file" ? "filename.ext" : "folder name"}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commit();
-            if (e.key === "Escape") onCancel();
-          }}
-          onBlur={commit}
-          className="h-5 flex-1 min-w-0 rounded-none border-0 !bg-transparent p-0 text-[length:var(--font-size-12)] text-muted-foreground outline-none placeholder:text-muted-foreground/40 focus-visible:ring-0 focus-visible:ring-offset-0"
-        />
-      </div>
-    </SidebarMenuSubItem>
-  );
-}
-
-// ─── File Tree Node ───
-
-interface FileTreeNodeCallbacks {
-  onNewFile: (folderPath: string) => void;
-  onNewFolder: (parentPath: string) => void;
-  onRenameFile: (fileId: string, name: string) => void;
-  onDeleteFile: (fileId: string) => void;
-  onDeleteFolder: (folderPath: string) => void;
-  onRenameFolder: (folderPath: string, name: string) => void;
-}
-
-function FileTreeNode({
-  node,
-  depth,
-  activeFileId,
-  expandedFolders,
-  onToggleFolder,
-  onSelectFile,
-  callbacks,
-  dirtyFiles,
-  gitStatusMap,
-  selectedFolder,
-  onSelectFolder,
-  editing,
-  onEditingDone,
-}: {
-  node: TreeNode;
-  depth: number;
-  activeFileId: string | null;
-  expandedFolders: Set<string>;
-  onToggleFolder: (path: string) => void;
-  onSelectFile: (id: string, name: string) => void;
-  callbacks: FileTreeNodeCallbacks;
-  dirtyFiles: Set<string>;
-  gitStatusMap: Map<string, {
-    isDeleted: boolean;
-    isStagedOnly: boolean;
-    isUnstaged: boolean;
-    isUntracked: boolean;
-  }>;
-  selectedFolder: string | null;
-  onSelectFolder: (path: string) => void;
-  editing: { type: "file" | "folder"; parentPath?: string } | null;
-  onEditingDone: () => void;
-}) {
-  const isExpanded = expandedFolders.has(node.relativePath);
-
-  if (node.type === "folder") {
-    const isSelected = selectedFolder === node.relativePath;
-    return (
-      <SidebarMenuItem>
-        <ContextMenu>
-          <ContextMenuTrigger asChild>
-            <div>
-              <SidebarMenuButton
-                size="sm"
-                onClick={() => {
-                  onToggleFolder(node.relativePath);
-                  onSelectFolder(node.relativePath);
-                }}
-                className={cn(
-                  "[&>svg]:!size-3 h-6 py-0.5 text-[length:var(--font-size-12)] rounded-sm text-muted-foreground",
-                  isSelected && "bg-sidebar-accent text-sidebar-accent-foreground",
-                )}
-                style={{ paddingLeft: 8 + depth * 16 }}
-              >
-                <ChevronRightIcon
-                  className={cn(
-                    "size-3 shrink-0 text-muted-foreground transition-transform",
-                    isExpanded && "rotate-90",
-                  )}
-                />
-                {isExpanded ? (
-                  <FolderOpenIcon className="size-3 shrink-0" />
-                ) : (
-                  <FolderIcon className="size-3 shrink-0" />
-                )}
-                <span className="truncate">{node.name}</span>
-              </SidebarMenuButton>
-            </div>
-          </ContextMenuTrigger>
-          <ContextMenuContent>
-            <ContextMenuItem onClick={() => callbacks.onNewFile(node.relativePath)}>
-              <FileTextIcon className="mr-2 size-4" />
-              New File Here
-            </ContextMenuItem>
-            <ContextMenuItem onClick={() => callbacks.onNewFolder(node.relativePath)}>
-              <FolderPlusIcon className="mr-2 size-4" />
-              New Folder
-            </ContextMenuItem>
-            <ContextMenuSeparator />
-            <ContextMenuItem onClick={() => callbacks.onRenameFolder(node.relativePath, node.name)}>
-              <PencilIcon className="mr-2 size-4" />
-              Rename
-            </ContextMenuItem>
-            <ContextMenuItem onClick={() => callbacks.onDeleteFolder(node.relativePath)}>
-              <Trash2Icon className="mr-2 size-4" />
-              Delete
-            </ContextMenuItem>
-          </ContextMenuContent>
-        </ContextMenu>
-        {isExpanded && (node.children.length > 0 || editing?.parentPath === node.relativePath) && (
-          <SidebarMenuSub className="border-l-0 mx-0 px-0 pt-0.5 pb-0 gap-0.5">
-            {editing?.parentPath === node.relativePath && (
-              <InlineNewNode
-                type={editing.type}
-                depth={depth + 1}
-                parentPath={node.relativePath}
-                onCreated={onEditingDone}
-                onCancel={onEditingDone}
-              />
-            )}
-            {node.children.map((child) => (
-              <FileTreeNode
-                key={child.relativePath}
-                node={child}
-                depth={depth + 1}
-                activeFileId={activeFileId}
-                expandedFolders={expandedFolders}
-                onToggleFolder={onToggleFolder}
-                onSelectFile={onSelectFile}
-                callbacks={callbacks}
-                dirtyFiles={dirtyFiles}
-                gitStatusMap={gitStatusMap}
-                selectedFolder={selectedFolder}
-                onSelectFolder={onSelectFolder}
-                editing={editing}
-                onEditingDone={onEditingDone}
-              />
-            ))}
-          </SidebarMenuSub>
-        )}
-      </SidebarMenuItem>
-    );
-  }
-
-  const file = node.file!;
-  const isActive = file.id === activeFileId;
-  const isDirty = dirtyFiles.has(file.id);
-
-  // Git status coloring — multi-level fallback lookup:
-  //   1. file.id (full project-relative path)
-  //   2. file.relativePath (mode-stripped path)
-  //   3. Filename suffix match (last resort)
-  const gitStatusDirect = gitStatusMap.get(file.id);
-  const gitStatusByRelPath = gitStatusDirect !== undefined
-    ? gitStatusDirect
-    : gitStatusMap.get(file.relativePath);
-  const gitStatus = gitStatusByRelPath !== undefined
-    ? gitStatusByRelPath
-    : (() => {
-        // Last resort: match by filename (last path segment)
-        for (const [key, val] of gitStatusMap) {
-          if (key === file.name || key.endsWith("/" + file.name)) {
-            return val;
-          }
-        }
-        return undefined;
-      })();
-
-  const gitFileNameStyle: React.CSSProperties | undefined = gitStatus?.isDeleted
-    ? { color: "var(--destructive)", textDecoration: "line-through" }
-    : gitStatus?.isStagedOnly
-      ? { color: "var(--success)" }
-      : gitStatus?.isUnstaged || gitStatus?.isUntracked
-        ? { color: "var(--warning)" }
-        : undefined;
-
-  return (
-    <SidebarMenuSubItem>
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <div>
-            <SidebarMenuSubButton
-              size="sm"
-              onClick={() => onSelectFile(file.id, file.name)}
-              isActive={isActive}
-              className="[&>svg]:!size-3 h-6 py-0.5 translate-x-0 text-[length:var(--font-size-12)] text-muted-foreground rounded-sm"
-              style={{ paddingLeft: 8 + depth * 16 }}
-            >
-              {getFileIcon(file)}
-              <span
-                className="truncate"
-                style={gitFileNameStyle}
-                title={
-                  gitStatus
-                    ? gitStatus.isStagedOnly
-                      ? "Staged"
-                      : gitStatus.isUnstaged
-                        ? "Modified"
-                        : gitStatus.isUntracked
-                          ? "Untracked"
-                          : gitStatus.isDeleted
-                            ? "Deleted"
-                            : ""
-                    : undefined
-                }
-              >
-                {node.name}
-              </span>
-              {isDirty && (
-                <span className="ml-auto size-2 shrink-0 rounded-full bg-info" title="Unsaved changes" />
-              )}
-            </SidebarMenuSubButton>
-          </div>
-        </ContextMenuTrigger>
-        <ContextMenuContent>
-          <ContextMenuItem onClick={() => callbacks.onRenameFile(file.id, file.name)}>
-            <PencilIcon className="mr-2 size-4" />
-            Rename
-          </ContextMenuItem>
-          <ContextMenuItem onClick={() => callbacks.onDeleteFile(file.id)}>
-            <Trash2Icon className="mr-2 size-4" />
-            Delete
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
-    </SidebarMenuSubItem>
-  );
-}
 
 // ─── Files Header ───
 
@@ -420,7 +130,7 @@ export function FilesSidebar() {
   const allFiles = useDocumentStore((s) => s.files);
   const allFolders = useDocumentStore((s) => s.folders);
   const activeFileId = useDocumentStore((s) => s.activeFileId);
-  const fileContents = useDocumentStore((s) => s.fileContents);
+  const dirtyVersion = useDocumentStore((s) => s.dirtyVersion);
   const setActiveFile = useDocumentStore((s) => s.setActiveFile);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const openFile = useRightPanelStore((s) => s.openFile);
@@ -465,15 +175,81 @@ export function FilesSidebar() {
 
   const isTexworkspaceActive = useIsTexworkspace();
   const currentMode: SidebarMode = isTexworkspaceActive ? "manuscript" : activeMode === "chat" ? "all" : activeMode;
+
+  // ─── Context bar: branch + worktree ───
+  const gitBranch = useGitStore((s) => s.branch);
+  const gitSwitching = useGitStore((s) => s.switching);
+  const isGitRepo = useGitStore((s) => s.isGitRepo);
+  const allBranches = useGitStore((s) => s.branches);
+  const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
+  const allWorktrees = useWorktreeStore((s) => s.worktrees);
+
+  // ─── Files view target: which root is the file tree showing?
+  //      "worktree" = worktree files, "project" = original project files.
+  //      Purely a view toggle — never touches worktree lifecycle. ───
+  const [filesView, setFilesView] = useState<"worktree" | "project">("worktree");
+
+  // Reset view to worktree when the active worktree changes
+  useEffect(() => {
+    if (activeWorktree) {
+      setFilesView("worktree");
+    }
+  }, [activeWorktree?.name]);
+
+  const handleViewProject = useCallback(async () => {
+    if (!projectRoot) return;
+    // Switch view to project root first
+    await useDocumentStore.getState().switchCheckoutRoot(projectRoot);
+    setFilesView("project");
+    // Then checkout the worktree's base branch so the file tree
+    // shows the correct branch content, not whatever the project
+    // happened to be on before the worktree was created.
+    if (activeWorktree?.baseBranch) {
+      const gs = useGitStore.getState();
+      if (gs.branch !== activeWorktree.baseBranch) {
+        await gs.switchBranch(projectRoot, activeWorktree.baseBranch).catch(() => {});
+      }
+    }
+  }, [projectRoot, activeWorktree?.baseBranch]);
+
+  const handleViewWorktree = useCallback(() => {
+    if (!activeWorktree) return;
+    useDocumentStore.getState().switchCheckoutRoot(activeWorktree.path);
+    setFilesView("worktree");
+  }, [activeWorktree]);
+
+  // Filter out internal wt-* worktree branches
+  const branches = useMemo(
+    () => allBranches.filter((b) => !b.startsWith("wt-")),
+    [allBranches],
+  );
+
+  // Branch switch handler
+  const handleSwitchBranch = useCallback(
+    async (branchName: string) => {
+      if (!projectRoot || branchName === gitBranch) return;
+      await useGitStore.getState().switchBranch(projectRoot, branchName);
+    },
+    [projectRoot, gitBranch],
+  );
+
+  // Worktree: switch to another existing worktree (real switch, not just view)
+  const handleSwitchWorktree = useCallback(
+    (wt: NonNullable<typeof activeWorktree>) => {
+      useWorktreeStore.getState().selectExistingWorktree(wt);
+    },
+    [],
+  );
   const files = useMemo(() => filterFilesByMode(allFiles, currentMode), [allFiles, currentMode]);
   const folders = useMemo(() => filterFoldersByMode(allFolders, currentMode), [allFolders, currentMode]);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const tree = useMemo(() => buildFileTree(files, folders), [files, folders]);
   const dirtyFiles = useMemo(() => {
     const dirty = new Set<string>();
-    fileContents.forEach((v, k) => { if (v.isDirty) dirty.add(k); });
+    useDocumentStore.getState().openedContents.forEach((v, k) => { if (v.isDirty) dirty.add(k); });
     return dirty;
-  }, [fileContents]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirtyVersion]);
 
   // ─── Git status — query project-level or worktree git repo ───
 
@@ -481,58 +257,29 @@ export function FilesSidebar() {
     () => allFolders.filter((f) => !f.includes("/")).sort(),
     [allFolders],
   );
+  // Derive file git status from the git store (already fetched by refreshStatus).
+  // Avoids a duplicate `git status` IPC call — cuts status fetches in half.
+  const gitFiles = useGitStore((s) => s.files);
+  const gitStatusMap = useMemo(() => {
+    const map = new Map<string, { isDeleted: boolean; isStagedOnly: boolean; isUnstaged: boolean; isUntracked: boolean }>();
+    for (const f of gitFiles) {
+      const isDeleted = f.worktreeStatus === "D" || f.indexStatus === "D";
+      map.set(f.path, { isStagedOnly: f.staged && !f.unstaged, isUnstaged: f.unstaged, isUntracked: f.untracked, isDeleted });
+    }
+    return map;
+  }, [gitFiles]);
 
-  const [gitStatusMap, setGitStatusMap] = useState<
-    Map<string, { isDeleted: boolean; isStagedOnly: boolean; isUnstaged: boolean; isUntracked: boolean }>
-  >(new Map());
-
-  const doFetchGitStatus = useCallback(async () => {
-    if (!projectRoot) return;
-    const combined = new Map<string, { isDeleted: boolean; isStagedOnly: boolean; isUnstaged: boolean; isUntracked: boolean }>();
-
-    try {
-      // Use worktree path if active, otherwise project root
-      const { useWorktreeStore } = await import("@/stores/worktree-store");
-      const wt = useWorktreeStore.getState().activeWorktree;
-      const gitRoot = wt?.path ?? projectRoot;
-
-      // Check for .git (directory or worktree metadata file)
-      const dotGitExists = await window.electronAPI.fsExists(`${gitRoot}/.git`);
-      if (!dotGitExists) {
-        setGitStatusMap(combined);
-        return;
-      }
-
-      const status = await window.electronAPI.gitStatus(gitRoot);
-      for (const f of status.files) {
-        const isDeleted = f.worktreeStatus === "D" || f.indexStatus === "D";
-        const isStagedOnly = f.staged && !f.unstaged;
-        const isUnstaged = f.unstaged;
-        const isUntracked = f.untracked;
-        combined.set(f.path, { isStagedOnly, isUnstaged, isUntracked, isDeleted });
-      }
-    } catch { /* repo not readable */ }
-
-    setGitStatusMap(combined);
-  }, [projectRoot]);
-
-  // Initial fetch + refetch when topFolders or projectRoot change
-  useEffect(() => {
-    doFetchGitStatus();
-  }, [doFetchGitStatus]);
-
-  // Auto-refresh after files change on disk (debounced 1.5 s)
-  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!projectRoot) return;
-    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    refreshTimerRef.current = setTimeout(() => {
-      doFetchGitStatus();
-    }, 1500);
-    return () => {
-      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    };
-  }, [allFiles, projectRoot, doFetchGitStatus]);
+  // ─── Git status summary for context bar ───
+  const gitSummary = useMemo(() => {
+    if (!isGitRepo) return null;
+    let staged = 0;
+    let changed = 0;
+    gitStatusMap.forEach((v) => {
+      if (v.isStagedOnly) staged++;
+      if (v.isUnstaged || v.isUntracked) changed++;
+    });
+    return { staged, changed };
+  }, [isGitRepo, gitStatusMap]);
 
   // ─── Expand / collapse (persisted to layout-store) ───
   const persistedExpanded = useLayoutStore((s) => s.expandedFileTreeFolders);
@@ -562,36 +309,6 @@ export function FilesSidebar() {
     [persistedExpanded, setPersistedExpanded],
   );
 
-
-  // ─── Breadcrumb navigation ───
-  const fileTreeNavigatePath = useLayoutStore((s) => s.fileTreeNavigatePath);
-  const setFileTreeNavigatePath = useLayoutStore((s) => s.setFileTreeNavigatePath);
-
-  useEffect(() => {
-    if (fileTreeNavigatePath === null) return;
-
-    let targetPath = fileTreeNavigatePath;
-
-    if (currentMode !== "all") {
-      const prefix = `${MODE_DIR[currentMode]}/`;
-      if (targetPath.startsWith(prefix)) {
-        targetPath = targetPath.slice(prefix.length);
-      } else if (targetPath === MODE_DIR[currentMode]) {
-        targetPath = "";
-      }
-    }
-
-    if (targetPath !== "") {
-      const parts = targetPath.split("/");
-      const next = new Set(persistedExpanded);
-      for (let i = 1; i <= parts.length; i++) {
-        next.add(parts.slice(0, i).join("/"));
-      }
-      setPersistedExpanded([...next]);
-    }
-
-    setFileTreeNavigatePath(null);
-  }, [fileTreeNavigatePath, currentMode, persistedExpanded, setPersistedExpanded, setFileTreeNavigatePath]);
 
   // ─── Name validation ───
 
@@ -698,21 +415,184 @@ export function FilesSidebar() {
     } catch { /* error handled in store */ }
   }, [renameValue, renameFileId, allFiles, isCaseInsensitiveFs, nameExistsIn, renameFile]);
 
-  // ─── File tree callbacks ───
+  // ─── File tree callbacks (stabilized so FileTreeNode memo works) ───
 
-  const treeCallbacks: FileTreeNodeCallbacks = {
-    onNewFile: (path) => setEditing({ type: "file", parentPath: resolveCreateFolder(path) }),
-    onNewFolder: (path) => setEditing({ type: "folder", parentPath: resolveCreateFolder(path) }),
+  const treeCallbacks: VirtTreeCallbacks = useMemo(() => ({
+    onNewFile: (path: string) => setEditing({ type: "file", parentPath: resolveCreateFolder(path) }),
+    onNewFolder: (path: string) => setEditing({ type: "folder", parentPath: resolveCreateFolder(path) }),
     onRenameFile: openRenameDialog,
     onDeleteFile: handleDeleteFile,
     onDeleteFolder: handleDeleteFolder,
     onRenameFolder: openFolderRenameDialog,
-  };
+  }), [resolveCreateFolder, openRenameDialog, handleDeleteFile, handleDeleteFolder, openFolderRenameDialog]);
 
-  const headerCallbacks: FilesHeaderCallbacks = {
+  const headerCallbacks: FilesHeaderCallbacks = useMemo(() => ({
     onNewFile: () => setEditing({ type: "file", parentPath: resolveCreateFolder(selectedFolder ?? undefined) }),
     onNewFolder: () => setEditing({ type: "folder", parentPath: resolveCreateFolder(selectedFolder ?? undefined) }),
-  };
+  }), [resolveCreateFolder, selectedFolder]);
+
+  const handleSelectFile = useCallback(
+    (id: string, name: string) => {
+      setSelectedFolder(null);
+      // Persist last active file for smart expand on next launch
+      window.electronAPI.settingsSet({ lastActiveFileId: id } as any);
+      if (isTexworkspaceActive) {
+        openTexworkspaceFile(id, id, name);
+      } else {
+        setActiveFile(id);
+        openFile(id, id, name);
+      }
+    },
+    [isTexworkspaceActive, openTexworkspaceFile, setActiveFile, openFile],
+  );
+
+  const handleSelectFolder = useCallback((path: string) => setSelectedFolder(path), []);
+  const handleEditingDone = useCallback(() => setEditing(null), []);
+
+  // ─── Virtual tree: flat visible nodes + Virtuoso ref ───
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+
+  const flatItems = useMemo(() => {
+    const visible = flattenVisibleTree(tree, expandedFolders);
+    if (editing) {
+      const synthetic: FlatVisibleNode = {
+        key: editing.parentPath ? `__editing_${editing.parentPath}__` : "__editing_root__",
+        name: "",
+        type: "file",
+        node: { name: "", relativePath: "", type: "file", children: [] } as TreeNode,
+        depth: 0,
+        editingType: editing.type,
+        editingParentPath: editing.parentPath,
+      };
+      if (!editing.parentPath) {
+        visible.unshift(synthetic);
+      } else {
+        const idx = visible.findIndex((v) => v.type === "folder" && v.key === editing.parentPath);
+        if (idx >= 0) {
+          synthetic.depth = visible[idx].depth + 1;
+          visible.splice(idx + 1, 0, synthetic);
+        }
+      }
+    }
+    return visible;
+  }, [tree, expandedFolders, editing]);
+
+  // ─── Git status lookup helper (same 3-level fallback as before) ───
+  const getGitStatus = useCallback(
+    (fileId: string, fileName: string, relativePath: string): GitStatusInfo | undefined => {
+      const direct = gitStatusMap.get(fileId);
+      if (direct !== undefined) return direct;
+      const byRel = gitStatusMap.get(relativePath);
+      if (byRel !== undefined) return byRel;
+      for (const [key, val] of gitStatusMap) {
+        if (key === fileName || key.endsWith("/" + fileName)) return val;
+      }
+      return undefined;
+    },
+    [gitStatusMap],
+  );
+
+  // ─── Virtuoso item renderer ───
+  const renderVirtuosoItem = useCallback(
+    (_index: number, item: FlatVisibleNode) => {
+      if (item.editingType) {
+        return (
+          <InlineEditRow
+            type={item.editingType}
+            depth={item.depth}
+            parentPath={item.editingParentPath}
+            onCreated={handleEditingDone}
+            onCancel={handleEditingDone}
+          />
+        );
+      }
+      if (item.type === "folder") {
+        const isExpanded = expandedFolders.has(item.key);
+        const isSelected = selectedFolder === item.key;
+        return (
+          <FolderVirtRow
+            item={item}
+            depth={item.depth}
+            isExpanded={isExpanded}
+            isSelected={isSelected}
+            onToggle={() => {
+              handleToggleFolder(item.key);
+              handleSelectFolder(item.key);
+            }}
+            callbacks={treeCallbacks}
+          />
+        );
+      }
+      // File row
+      const file = item.node.file!;
+      return (
+        <FileVirtRow
+          item={item}
+          depth={item.depth}
+          isActive={file.id === activeFileId}
+          isDirty={dirtyFiles.has(file.id)}
+          gitStatus={getGitStatus(file.id, file.name, file.relativePath)}
+          onSelect={() => handleSelectFile(file.id, file.name)}
+          callbacks={treeCallbacks}
+        />
+      );
+    },
+    [
+      expandedFolders,
+      selectedFolder,
+      activeFileId,
+      dirtyFiles,
+      getGitStatus,
+      handleToggleFolder,
+      handleSelectFolder,
+      handleSelectFile,
+      handleEditingDone,
+      treeCallbacks,
+    ],
+  );
+
+  // ─── Breadcrumb navigation (must be after flatItems declaration) ───
+  const fileTreeNavigatePath = useLayoutStore((s) => s.fileTreeNavigatePath);
+  const setFileTreeNavigatePath = useLayoutStore((s) => s.setFileTreeNavigatePath);
+
+  useEffect(() => {
+    if (fileTreeNavigatePath === null) return;
+
+    let targetPath = fileTreeNavigatePath;
+
+    if (currentMode !== "all") {
+      const prefix = `${MODE_DIR[currentMode]}/`;
+      if (targetPath.startsWith(prefix)) {
+        targetPath = targetPath.slice(prefix.length);
+      } else if (targetPath === MODE_DIR[currentMode]) {
+        targetPath = "";
+      }
+    }
+
+    if (targetPath !== "") {
+      const parts = targetPath.split("/");
+      const next = new Set(persistedExpanded);
+      for (let i = 1; i <= parts.length; i++) {
+        next.add(parts.slice(0, i).join("/"));
+      }
+      setPersistedExpanded([...next]);
+    }
+
+    // Scroll Virtuoso to the target item after React commits the expand
+    if (targetPath) {
+      const resolvedPath = targetPath;
+      queueMicrotask(() => {
+        const idx = flatItems.findIndex(
+          (item) => item.key === resolvedPath || item.key.startsWith(resolvedPath + "/"),
+        );
+        if (idx >= 0 && virtuosoRef.current) {
+          virtuosoRef.current.scrollToIndex({ index: idx, align: "start" });
+        }
+      });
+    }
+
+    setFileTreeNavigatePath(null);
+  }, [fileTreeNavigatePath, currentMode, persistedExpanded, setPersistedExpanded, setFileTreeNavigatePath, flatItems]);
 
   return (
     <>
@@ -723,61 +603,37 @@ export function FilesSidebar() {
         onToggleAll={handleToggleAll}
       />
       <div className="flex-1 min-h-0 flex flex-col">
-        {/* ─── File tree ─── */}
+        {/* ─── Virtualized file tree ─── */}
         <div className="flex-1 min-h-0">
           <ContextMenu>
             <ContextMenuTrigger asChild>
-              <div className="h-full" onClick={(e) => { if (e.target === e.currentTarget) setSelectedFolder(null); }}>
-                <SidebarContent className="px-1.5 py-1">
-                  {tree.length === 0 ? (
-                    <div className="flex flex-1 items-center justify-center px-4 py-8">
-                      <p className="text-center text-[length:var(--font-empty-state)] leading-relaxed text-muted-foreground">
-                        No files yet
-                        <span className="mt-1 block text-[length:var(--font-hint)] opacity-60">
-                          Open a project to get started
-                        </span>
-                      </p>
-                    </div>
-                  ) : (
-                    <SidebarMenu className="gap-0.5">
-                      {editing && !editing.parentPath && (
-                        <InlineNewNode
-                          type={editing.type}
-                          depth={0}
-                          parentPath={undefined}
-                          onCreated={() => setEditing(null)}
-                          onCancel={() => setEditing(null)}
-                        />
-                      )}
-                      {tree.map((node) => (
-                        <FileTreeNode
-                          key={node.relativePath}
-                          node={node}
-                          depth={0}
-                          activeFileId={activeFileId}
-                          expandedFolders={expandedFolders}
-                          onToggleFolder={handleToggleFolder}
-                          onSelectFile={(id, name) => {
-                            setSelectedFolder(null);
-                            if (isTexworkspaceActive) {
-                              openTexworkspaceFile(id, id, name);
-                            } else {
-                              setActiveFile(id);
-                              openFile(id, id, name);
-                            }
-                          }}
-                          callbacks={treeCallbacks}
-                          dirtyFiles={dirtyFiles}
-                          gitStatusMap={gitStatusMap}
-                          selectedFolder={selectedFolder}
-                          onSelectFolder={(path) => setSelectedFolder(path)}
-                          editing={editing}
-                          onEditingDone={() => setEditing(null)}
-                        />
-                      ))}
-                    </SidebarMenu>
-                  )}
-                </SidebarContent>
+              <div
+                className="flex-1 h-full min-h-0"
+                data-sidebar="content"
+                onClick={(e) => { if (e.target === e.currentTarget) setSelectedFolder(null); }}
+              >
+                <Virtuoso
+                  ref={virtuosoRef}
+                  data={flatItems}
+                  fixedItemHeight={24}
+                  computeItemKey={(_index: number, item: FlatVisibleNode) => item.key}
+                  itemContent={renderVirtuosoItem}
+                  components={{
+                    EmptyPlaceholder: () => (
+                      <div className="flex flex-1 items-center justify-center px-4 py-8">
+                        <p className="text-center text-[length:var(--font-empty-state)] leading-relaxed text-muted-foreground">
+                          No files yet
+                          <span className="mt-1 block text-[length:var(--font-hint)] opacity-60">
+                            Open a project to get started
+                          </span>
+                        </p>
+                      </div>
+                    ),
+                  }}
+                  style={{ height: "100%" }}
+                  className="px-1.5 py-1"
+                  increaseViewportBy={{ top: 100, bottom: 100 }}
+                />
               </div>
             </ContextMenuTrigger>
             <ContextMenuContent>
@@ -794,6 +650,196 @@ export function FilesSidebar() {
         </div>
 
       </div>
+
+      {/* ── Bottom status bar ── */}
+      {(isGitRepo || activeWorktree) && (
+        <div className="flex items-center gap-2 h-[var(--height-mode-selector)] px-3 shrink-0 text-[length:var(--font-size-12)] text-muted-foreground">
+          {activeWorktree ? (
+            <>
+              {/* ── View switcher: worktree ↔ project ── */}
+              {filesView === "worktree" ? (
+                <>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex items-center gap-1.5 rounded px-1 -ml-1 h-5 hover:bg-accent hover:text-accent-foreground transition-colors"
+                      >
+                        <SplitIcon className="size-3.5 shrink-0" />
+                        <span className="truncate max-w-[100px]">{activeWorktree.name}</span>
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" side="top" className="w-44">
+                      <DropdownMenuItem onClick={handleViewProject} className="cursor-pointer gap-2 text-xs">
+                        <FolderOpenIcon className="size-3.5 shrink-0" />
+                        <span>View Project Files</span>
+                      </DropdownMenuItem>
+                      {allWorktrees.filter((w) => w.name !== activeWorktree.name).length > 0 && (
+                        <>
+                          <DropdownMenuSeparator />
+                          {allWorktrees
+                            .filter((w) => w.name !== activeWorktree.name)
+                            .map((w) => (
+                              <DropdownMenuItem
+                                key={w.name}
+                                onClick={() => handleSwitchWorktree(w)}
+                                className="cursor-pointer gap-2 text-xs"
+                              >
+                                <SplitIcon className="size-3.5 shrink-0" />
+                                <span className="truncate">{w.name}</span>
+                              </DropdownMenuItem>
+                            ))}
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <span className="text-muted-foreground/30 shrink-0">→</span>
+
+                  {/* Base branch the worktree was created from (persisted in metadata) */}
+                  {activeWorktree.baseBranch && (
+                    <span className="flex items-center gap-1.5">
+                      <GitBranchIcon className="size-3.5 shrink-0" />
+                      <span className="truncate">{activeWorktree.baseBranch}</span>
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Viewing project files while worktree exists.
+                      Show interactive branch switcher.
+                      Only show the worktree label when the current branch
+                      matches the worktree's base — otherwise it's irrelevant. */}
+                  {isGitRepo && gitBranch ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex items-center gap-1.5 rounded px-1 -ml-1 h-5 hover:bg-accent hover:text-accent-foreground transition-colors"
+                        >
+                          {gitSwitching ? (
+                            <RefreshCwIcon className="size-3.5 shrink-0 animate-spin" />
+                          ) : (
+                            <GitBranchIcon className="size-3.5 shrink-0" />
+                          )}
+                          <span className="truncate max-w-[100px]">
+                            {gitSwitching ? "Switching…" : gitBranch}
+                          </span>
+                          </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" side="top" className="w-48 max-h-56 overflow-y-auto">
+                        {activeWorktree?.baseBranch === gitBranch && (
+                          <>
+                            <DropdownMenuItem onClick={handleViewWorktree} className="cursor-pointer gap-2 text-xs">
+                              <SplitIcon className="size-3.5 shrink-0" />
+                              <span>View Worktree Files</span>
+                            </DropdownMenuItem>
+                            {branches.length > 0 && <DropdownMenuSeparator />}
+                          </>
+                        )}
+                        {branches.map((b) => {
+                          const isCurrent = b === gitBranch;
+                          return (
+                            <DropdownMenuItem
+                              key={b}
+                              onClick={() => handleSwitchBranch(b)}
+                              disabled={isCurrent}
+                              className="cursor-pointer gap-2 text-xs"
+                            >
+                              <GitBranchIcon
+                                className={`size-3.5 shrink-0 ${isCurrent ? "text-foreground" : "text-muted-foreground"}`}
+                              />
+                              <span className="truncate flex-1">{b}</span>
+                              {isCurrent && <CheckIcon className="size-3.5 shrink-0" />}
+                            </DropdownMenuItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : (
+                    <span className="truncate max-w-[100px]">{projectRoot?.split(/[/\\]/).pop()}</span>
+                  )}
+
+                  {/* Worktree label — only when on the base branch */}
+                  {activeWorktree?.baseBranch === gitBranch && (
+                    <>
+                      <span className="text-muted-foreground/30 shrink-0">←</span>
+                      <span className="flex items-center gap-1.5">
+                        <SplitIcon className="size-3.5 shrink-0" />
+                        <span className="truncate max-w-[100px]">{activeWorktree.name}</span>
+                      </span>
+                    </>
+                  )}
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              {/* ── Branch switcher ── */}
+              {isGitRepo && gitBranch && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex items-center gap-1.5 rounded px-1 -ml-1 h-5 hover:bg-accent hover:text-accent-foreground transition-colors"
+                    >
+                      {gitSwitching ? (
+                        <RefreshCwIcon className="size-3.5 shrink-0 animate-spin" />
+                      ) : (
+                        <GitBranchIcon className="size-3.5 shrink-0" />
+                      )}
+                      <span className="truncate max-w-[120px]">
+                        {gitSwitching ? "Switching…" : gitBranch}
+                      </span>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" side="top" className="w-48 max-h-56 overflow-y-auto">
+                    {branches.length === 0 ? (
+                      <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+                        No branches
+                      </div>
+                    ) : (
+                      branches.map((b) => {
+                        const isCurrent = b === gitBranch;
+                        return (
+                          <DropdownMenuItem
+                            key={b}
+                            onClick={() => handleSwitchBranch(b)}
+                            disabled={isCurrent}
+                            className="cursor-pointer gap-2 text-xs"
+                          >
+                            <GitBranchIcon
+                              className={`size-3.5 shrink-0 ${isCurrent ? "text-foreground" : "text-muted-foreground"}`}
+                            />
+                            <span className="truncate flex-1">{b}</span>
+                            {isCurrent && <CheckIcon className="size-3.5 shrink-0" />}
+                          </DropdownMenuItem>
+                        );
+                      })
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </>
+          )}
+
+          <span className="flex-1" />
+
+          {/* ── Git summary (read-only) ── */}
+          {gitSummary && (gitSummary.staged > 0 || gitSummary.changed > 0) && (
+            <span className="tabular-nums shrink-0">
+              <span className="text-emerald-500">+{gitSummary.staged}</span>
+              {gitSummary.staged > 0 && gitSummary.changed > 0 && (
+                <span className="text-muted-foreground/30 mx-0.5">·</span>
+              )}
+              <span className="text-amber-500">~{gitSummary.changed}</span>
+            </span>
+          )}
+          {isGitRepo && gitSummary && gitSummary.staged === 0 && gitSummary.changed === 0 && (
+            <span className="text-muted-foreground/50 shrink-0">clean</span>
+          )}
+        </div>
+      )}
 
 
       {/* ─── Rename Dialog ─── */}

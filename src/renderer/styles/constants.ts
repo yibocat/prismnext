@@ -20,15 +20,15 @@ export const MAX_RECENT_PROJECTS = 10;
 // ─── Layout ───
 
 export const SIDEBAR_LEFT_DEFAULT = 220;
-export const SIDEBAR_LEFT_MIN = 190;
-export const SIDEBAR_LEFT_MAX = 420;
+export const SIDEBAR_LEFT_MIN = 280;
+export const SIDEBAR_LEFT_MAX = 520;
 
 /** Window width below which left sidebar uses overlay instead of inline panel */
 export const SIDEBAR_OVERLAY_THRESHOLD = 500;
 
 export const SIDEBAR_RIGHT_DEFAULT = 220;
-export const SIDEBAR_RIGHT_MIN = 190;
-export const SIDEBAR_RIGHT_MAX = 420;
+export const SIDEBAR_RIGHT_MIN = 280;
+export const SIDEBAR_RIGHT_MAX = 520;
 
 export const RIGHT_AREA_DEFAULT = 500;
 export const RIGHT_AREA_MIN = 250;

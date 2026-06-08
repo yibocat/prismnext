@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.3.13 — 2026-06-08
+
+### Startup Performance
+
+- Git warmup restructured as non-blocking fire-and-forget — loading screen now dismisses in ~1s instead of blocking 15s on macOS cold start
+- Serial git execution queue prevents concurrent spawn throttling on macOS
+- Shell argument escaping fixes pathspec errors for arguments containing spaces
+- Enhanced warmup covering both read and write TCC paths, with per-project-root dedup
+- Focus re-warm after macOS App Nap restores fast git/agent spawns
+
+### Splash Screen
+
+- Full-window branded splash with centered "Prism" name and indeterminate progress bar
+- Light/dark theme support via CSS custom properties
+- `FREEZE_SPLASH=1` env var for design iteration
+
+### Logging System
+
+- Cross-process structured logging with ring buffer, file persistence with rotation, and IPC bridge
+- Built-in LogViewer in Settings panel with category/level/search filtering and export
+
+### Git
+
+- Expanded IPC surface: 20+ handlers covering status, diff, log, branches, commit, merge, stash, revert, reset
+- Virtual tree rows for efficient large file tree rendering
+- Git UI: overview, history, file accordion with inline diffs, toolbar
+
+### Other
+
+- Remark wikilinks plugin for `[[link]]` syntax
+- Shared constants and log-types for cross-process type safety
+- Worktree IPC channels, editor changes-bar, image-viewer, markdown-preview improvements
+
 ## 0.3.12 — 2026-06-07
 
 ### Unified Git Worktree System — AI Experiment Isolation

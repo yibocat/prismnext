@@ -1,8 +1,8 @@
-import { spawn } from "node:child_process";
 import { existsSync, writeFileSync, readFileSync } from "node:fs";
 import { cp, readdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { execGit } from "./git";
 
 // ─── Types ───
 
@@ -32,7 +32,6 @@ export interface BranchInfo {
 
 // ─── Constants ───
 
-const GIT_TIMEOUT_MS = 30_000;
 const WORKTREES_DIR = ".prismnext/worktrees";
 const BRANCH_PREFIX = "wt-";
 
@@ -43,28 +42,7 @@ function generateWorktreeName(): string {
   return `${ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)]}-${NOUNS[Math.floor(Math.random() * NOUNS.length)]}`;
 }
 
-// ─── Git execution ───
-
-function execGit(cwd: string, args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn("git", ["-c", "core.quotepath=false", ...args], {
-      cwd, stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
-    });
-    let stdout = "", stderr = "";
-    let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; proc.kill(); }, GIT_TIMEOUT_MS);
-    proc.stdout?.on("data", (d: Buffer) => { stdout += d.toString(); });
-    proc.stderr?.on("data", (d: Buffer) => { stderr += d.toString(); });
-    proc.on("close", (code) => {
-      clearTimeout(timer);
-      if (timedOut) reject(new Error(`Git worktree timed out: git ${args.join(" ")}`));
-      else if (code !== 0) reject(new Error(stderr.trim() || `git ${args[0]} exited with code ${code}`));
-      else resolve(stdout);
-    });
-    proc.on("error", (err) => { clearTimeout(timer); reject(new Error(`Failed to spawn git: ${err.message}`)); });
-  });
-}
-
+/** Return the name of the default main branch (main or master, whichever exists). */
 async function detectMainBranch(repoPath: string): Promise<string> {
   for (const name of ["main", "master"]) {
     try { await execGit(repoPath, ["rev-parse", "--verify", name]); return name; } catch {}
@@ -73,6 +51,16 @@ async function detectMainBranch(repoPath: string): Promise<string> {
     const ref = await execGit(repoPath, ["symbolic-ref", "--short", "HEAD"]);
     return ref.trim();
   } catch { return "main"; }
+}
+
+/** Return the currently checked-out branch name (detached HEAD → empty string). */
+async function getCurrentBranch(repoPath: string): Promise<string> {
+  try {
+    const ref = await execGit(repoPath, ["rev-parse", "--abbrev-ref", "HEAD"]);
+    return ref.trim() === "HEAD" ? "" : ref.trim();
+  } catch {
+    return "";
+  }
 }
 
 // ─── Public API ───
@@ -104,6 +92,7 @@ export async function createWorktree(
         "",
         "# Prism internal data",
         ".prismnext/",
+        ".prism-worktree-meta",
         "",
         "# System",
         ".DS_Store", "Thumbs.db",
@@ -126,8 +115,10 @@ export async function createWorktree(
     }
   }
 
-  // Resolve base branch — default to current branch
-  const resolvedBase = baseBranch || (await detectMainBranch(projectRoot));
+  // Resolve base branch — default to the currently checked-out branch.
+  // Never fall back to detectMainBranch(): that always returns "main"/"master"
+  // regardless of which branch the user is actually on.
+  const resolvedBase = baseBranch || (await getCurrentBranch(projectRoot)) || (await detectMainBranch(projectRoot));
 
   // Clean up zombie branch if it exists
   try { await execGit(projectRoot, ["branch", "-D", branchName]); } catch {}
@@ -264,7 +255,7 @@ export async function listWorktrees(projectRoot: string): Promise<WorktreeInfo[]
 
   // Also scan the filesystem for directories in .prismnext/worktrees/ that
   // git worktree list might miss
-  let dirEntries;
+  let dirEntries: any[];
   try { dirEntries = await readdir(worktreesDir, { withFileTypes: true }); } catch { dirEntries = []; }
   for (const entry of dirEntries) {
     if (!entry.isDirectory()) continue;

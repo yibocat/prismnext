@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { toast } from "sonner";
+import { createLogger } from "@/services/logger";
 import type {
   GitFileStatusData,
   GitStatusData,
@@ -8,6 +9,8 @@ import type {
 } from "@/types/electron";
 import { useDocumentStore } from "./document-store";
 import { useWorktreeStore } from "./worktree-store";
+
+const log = createLogger("git-store", "git");
 
 // ─── Types ───
 
@@ -96,14 +99,19 @@ interface GitState {
   revertCommit: (projectRoot: string, hash: string) => Promise<void>;
   resetToCommit: (projectRoot: string, hash: string, mode: "soft" | "mixed" | "hard") => Promise<void>;
   initRepo: (projectRoot: string) => Promise<void>;
+  /** True while switchBranch is in progress — UI shows a spinner. */
+  switching: boolean;
+  /** Branch selected in chat toolbar — not yet switched. Applied lazily on send. */
+  pendingBranch: string | null;
+  setPendingBranch: (branch: string | null) => void;
   clearAll: () => void;
 }
 
 // ─── Helpers ───
 
-let nextItemId = 0;
-function genId(): string {
-  return `git-${++nextItemId}`;
+/** Stable ID based on path + splitView — avoids React unmount/remount on every refreshStatus. */
+function stableId(path: string, splitView?: "staged" | "unstaged"): string {
+  return splitView ? `${path}#${splitView}` : path;
 }
 
 /** Timestamp of the last refreshStatus call. Used by scheduleAutoRefresh
@@ -111,13 +119,30 @@ function genId(): string {
  *  git action like switchBranch / mergeBranch). */
 let lastRefreshTimestamp = 0;
 
+/** Short-lived cache for git status + diff stats to avoid redundant
+ *  git subprocess spawns within the same event cascade.
+ *  TTL is intentionally short (1 s) — only catches back-to-back calls.
+ *  Keyed by projectRoot so switching projects doesn't return stale data. */
+interface CachedStatus {
+  projectRoot: string;
+  data: GitStatusData;
+  stats: { unstaged: Record<string, { added: number; deleted: number }>; staged: Record<string, { added: number; deleted: number }> };
+  timestamp: number;
+}
+let _statusCache: CachedStatus | null = null;
+const STATUS_CACHE_TTL_MS = 1000;
+
+function invalidateStatusCache() {
+  _statusCache = null;
+}
+
 function makeItem(
   f: GitFileStatusData,
   overrides?: Partial<GitFileItem>,
 ): GitFileItem {
   return {
     ...f,
-    id: genId(),
+    id: stableId(f.path, overrides?.splitView),
     diff: null,
     diffLoading: false,
     expanded: false,
@@ -136,6 +161,8 @@ export const useGitStore = create<GitState>()((set, get) => ({
   filterMode: "all",
   loading: false,
   error: null,
+  pendingBranch: null,
+  switching: false,
   isGitRepo: false,
   checkingRepo: true,
   unitRoot: null,
@@ -189,16 +216,35 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── refreshStatus ──
   refreshStatus: async (projectRoot: string) => {
     lastRefreshTimestamp = Date.now();
-    set({ loading: true, error: null });
-    try {
-      const [data, stats]: [GitStatusData, {
-        unstaged: Record<string, { added: number; deleted: number }>;
-        staged: Record<string, { added: number; deleted: number }>;
-      }] = await Promise.all([
-        window.electronAPI.gitStatus(projectRoot),
-        window.electronAPI.gitDiffStats(projectRoot).catch(() => ({ unstaged: {}, staged: {} })),
-      ]);
-      const prevFiles = get().files;
+
+    // Short-lived cache: if status was fetched within the last second
+    // and hasn't been invalidated by a mutation, reuse the raw data.
+    let data: GitStatusData;
+    let stats: { unstaged: Record<string, { added: number; deleted: number }>; staged: Record<string, { added: number; deleted: number }> };
+
+    if (_statusCache && _statusCache.projectRoot === projectRoot && Date.now() - _statusCache.timestamp < STATUS_CACHE_TTL_MS) {
+      data = _statusCache.data;
+      stats = _statusCache.stats;
+    } else {
+      set({ loading: true, error: null });
+      try {
+        [data, stats] = await Promise.all([
+          window.electronAPI.gitStatus(projectRoot),
+          window.electronAPI.gitDiffStats(projectRoot).catch(() => ({ unstaged: {}, staged: {} })),
+        ]);
+        _statusCache = { projectRoot, data, stats, timestamp: Date.now() };
+      } catch (err: unknown) {
+        toast.error((err as Error).message || "Failed to get git status");
+        set({
+          error: (err as Error).message || "Failed to get git status",
+          loading: false,
+        });
+        return;
+      }
+    }
+      // Index previous file state by stable id → O(1) lookup instead of O(n²) Array.find
+      const prevById = new Map<string, GitFileItem>();
+      for (const p of get().files) prevById.set(p.id, p);
       const files: GitFileItem[] = [];
 
       for (const f of data.files) {
@@ -207,12 +253,8 @@ export const useGitStore = create<GitState>()((set, get) => ({
 
         if (f.staged && f.unstaged) {
           // MM file: split into two entries — one staged, one unstaged
-          const prevStaged = prevFiles.find(
-            (p) => p.path === f.path && p.splitView === "staged",
-          );
-          const prevUnstaged = prevFiles.find(
-            (p) => p.path === f.path && p.splitView === "unstaged",
-          );
+          const prevStaged = prevById.get(stableId(f.path, "staged"));
+          const prevUnstaged = prevById.get(stableId(f.path, "unstaged"));
 
           files.push(
             makeItem(f, {
@@ -236,9 +278,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
           );
         } else {
           // Normal file (single state)
-          const prev = prevFiles.find(
-            (p) => p.path === f.path && !p.splitView,
-          );
+          const prev = prevById.get(stableId(f.path));
           const stat = f.staged ? stagedStat : unstagedStat;
           // Fallback: compute counts from cached diff content if stat is 0
           let added = stat.added;
@@ -260,14 +300,16 @@ export const useGitStore = create<GitState>()((set, get) => ({
         }
       }
 
-      set({ branch: data.branch, files, loading: false });
-    } catch (err: unknown) {
-      toast.error((err as Error).message || "Failed to get git status");
       set({
-        error: (err as Error).message || "Failed to get git status",
+        branch: data.branch,
+        files,
         loading: false,
       });
-    }
+
+      // Pre-fetch git history in the background so the history tab is instant
+      if (get().commits.length === 0) {
+        get().loadHistory(projectRoot);
+      }
   },
 
   // ── scheduleAutoRefresh ──
@@ -359,6 +401,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
 
   // ── stageFile ──
   stageFile: async (projectRoot: string, filePath: string) => {
+    invalidateStatusCache();
     const result = await window.electronAPI.gitStage(projectRoot, filePath);
     if (!result.success) {
       console.error(`[git] stage failed: ${filePath}`, result.error);
@@ -371,6 +414,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
 
   // ── unstageFile ──
   unstageFile: async (projectRoot: string, filePath: string) => {
+    invalidateStatusCache();
     const result = await window.electronAPI.gitUnstage(projectRoot, filePath);
     if (!result.success) {
       console.error(`[git] unstage failed: ${filePath}`, result.error);
@@ -383,6 +427,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
 
   // ── stageAll ──
   stageAll: async (projectRoot: string, filePaths: string[]) => {
+    invalidateStatusCache();
     const paths = filePaths.filter(Boolean);
     if (paths.length === 0) return;
     let failed = false;
@@ -402,6 +447,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
 
   // ── unstageAll ──
   unstageAll: async (projectRoot: string, filePaths: string[]) => {
+    invalidateStatusCache();
     const paths = filePaths.filter(Boolean);
     if (paths.length === 0) return;
     let failed = false;
@@ -421,6 +467,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
 
   // ── discardFile ──
   discardFile: async (projectRoot: string, filePath: string, staged: boolean, untracked: boolean, worktreeStatus: string) => {
+    invalidateStatusCache();
     const result = await window.electronAPI.gitDiscard(projectRoot, filePath, staged, untracked, worktreeStatus);
     if (!result.success) {
       console.error(`[git] discard failed: ${filePath}`, result.error);
@@ -428,13 +475,18 @@ export const useGitStore = create<GitState>()((set, get) => ({
       set({ error: result.error || "Failed to discard changes" });
       return;
     }
+    // Refresh git panel
     await get().refreshStatus(projectRoot);
-    // Reload the discarded file from disk
-    await useDocumentStore.getState().reloadAllFromDisk();
+    // Immediately refresh this one file in the editor (don't wait for watcher)
+    const docState = useDocumentStore.getState();
+    if (docState.openedContents.has(filePath) || docState.activeFileId === filePath) {
+      await docState.refreshFileContent(filePath);
+    }
   },
 
   // ── commitChanges ──
   commitChanges: async (projectRoot: string, message: string) => {
+    invalidateStatusCache();
     const result = await window.electronAPI.gitCommit(projectRoot, message);
     if (!result.success) {
       console.error("[git] commit failed:", result.error);
@@ -449,34 +501,60 @@ export const useGitStore = create<GitState>()((set, get) => ({
 
   // ── switchBranch ──
   switchBranch: async (projectRoot: string, branch: string) => {
+    const t0 = performance.now();
+    const prevBranch = get().branch;
+    set({ switching: true, branch, pendingBranch: null });
+    invalidateStatusCache();
+
+    const tWarmup = performance.now();
+    await window.electronAPI.gitWarmup?.(projectRoot).catch(() => {});
+    const wMs = Math.round(performance.now() - tWarmup);
+    console.log(`[switchBranch] warmup: ${wMs}ms  (${branch})`);
+    log.info("switchBranch warmup", { durationMs: wMs, branch });
+
+    const tCheckout = performance.now();
     const result = await window.electronAPI.gitCheckout(projectRoot, branch);
+    const cMs = Math.round(performance.now() - tCheckout);
+    console.log(`[switchBranch] gitCheckout: ${cMs}ms  (${branch})`);
+    log.info("gitCheckout", { durationMs: cMs, branch });
     if (!result.success) {
+      set({
+        branch: prevBranch,
+        error: result.error || "Failed to switch branch",
+        switching: false,
+      });
       toast.error(result.error || "Failed to switch branch");
-      set({ error: result.error || "Failed to switch branch" });
       return;
     }
-    await get().refreshStatus(projectRoot);
-    await get().refreshBranches(projectRoot);
-    // Explicitly reload files — branch switch may change the working tree.
-    // The chokidar watcher is a fallback, not the primary trigger.
+
+    Promise.all([
+      get().refreshStatus(projectRoot),
+      get().refreshBranches(projectRoot),
+    ]);
+
     await useDocumentStore.getState().reloadAllFromDisk();
+    set({ switching: false });
+    console.log(`[switchBranch] total: ${Math.round(performance.now() - t0)}ms  (-> ${branch})`);
   },
 
   // ── createBranch ──
   createBranch: async (projectRoot: string, branchName: string) => {
+    invalidateStatusCache();
     const result = await window.electronAPI.gitCreateBranch(projectRoot, branchName);
     if (!result.success) {
       toast.error(result.error || "Failed to create branch");
       set({ error: result.error || "Failed to create branch" });
       return;
     }
-    await get().refreshStatus(projectRoot);
-    await get().refreshBranches(projectRoot);
-    await useDocumentStore.getState().reloadAllFromDisk();
+    await Promise.all([
+      get().refreshStatus(projectRoot),
+      get().refreshBranches(projectRoot),
+    ]);
   },
 
   // ── mergeBranch ──
   mergeBranch: async (projectRoot: string, sourceBranch: string) => {
+    invalidateStatusCache();
     const branch = get().branch;
     const result = await window.electronAPI.gitMerge(projectRoot, sourceBranch);
     if (!result.success) {
@@ -500,13 +578,17 @@ export const useGitStore = create<GitState>()((set, get) => ({
         duration: 5000,
       },
     );
-    await get().refreshStatus(projectRoot);
-    await get().refreshBranches(projectRoot);
-    await useDocumentStore.getState().reloadAllFromDisk();
+    await Promise.all([
+      get().refreshStatus(projectRoot),
+      get().refreshBranches(projectRoot),
+    ]);
+    // Files changed — force metadata reload
+    await useDocumentStore.getState().reloadMetadataFromDisk(true);
   },
 
   // ── abortMerge ──
   abortMerge: async (projectRoot: string) => {
+    invalidateStatusCache();
     const result = await window.electronAPI.gitAbortMerge(projectRoot);
     if (!result.success) {
       toast.error(result.error || "Failed to abort merge");
@@ -516,35 +598,45 @@ export const useGitStore = create<GitState>()((set, get) => ({
     toast.success("Merge aborted");
     await get().refreshStatus(projectRoot);
     await get().refreshBranches(projectRoot);
-    await useDocumentStore.getState().reloadAllFromDisk();
+    // Files restored — force metadata reload
+    await useDocumentStore.getState().reloadMetadataFromDisk(true);
   },
 
   // ── revertCommit ──
   revertCommit: async (projectRoot: string, hash: string) => {
+    invalidateStatusCache();
     const result = await window.electronAPI.gitRevert(projectRoot, hash);
     if (!result.success) {
       toast.error(result.error || "Failed to revert commit");
       set({ error: result.error || "Failed to revert commit" });
       return;
     }
-    await get().refreshStatus(projectRoot);
-    await get().refreshBranches(projectRoot);
-    await get().loadHistory(projectRoot);
-    await useDocumentStore.getState().reloadAllFromDisk();
+    await Promise.all([
+      get().refreshStatus(projectRoot),
+      get().refreshBranches(projectRoot),
+      get().loadHistory(projectRoot),
+    ]);
+    // Files changed — force metadata reload
+    await useDocumentStore.getState().reloadMetadataFromDisk(true);
   },
 
   // ── resetToCommit ──
   resetToCommit: async (projectRoot: string, hash: string, mode: "soft" | "mixed" | "hard") => {
+    invalidateStatusCache();
     const result = await window.electronAPI.gitReset(projectRoot, hash, mode);
     if (!result.success) {
       toast.error(result.error || "Failed to reset");
       set({ error: result.error || "Failed to reset" });
       return;
     }
-    await get().refreshStatus(projectRoot);
-    await get().refreshBranches(projectRoot);
-    await get().loadHistory(projectRoot);
-    await useDocumentStore.getState().reloadAllFromDisk();
+    await Promise.all([
+      get().refreshStatus(projectRoot),
+      get().refreshBranches(projectRoot),
+      get().loadHistory(projectRoot),
+    ]);
+    // Mixed/hard reset changes working tree files — force metadata reload.
+    // Soft reset only moves HEAD, but a reload is cheap enough to always do.
+    await useDocumentStore.getState().reloadMetadataFromDisk(true);
   },
 
   // ── initRepo ──
@@ -568,6 +660,11 @@ export const useGitStore = create<GitState>()((set, get) => ({
     }
   },
 
+  // ── setPendingBranch ──
+  setPendingBranch: (branch: string | null) => {
+    set({ pendingBranch: branch });
+  },
+
   // ── clearAll ──
   clearAll: () => {
     const timer = get()._autoRefreshTimer;
@@ -588,6 +685,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
       listMode: "list",
       commits: [],
       commitsLoading: false,
+      pendingBranch: null,
     });
   },
 }));

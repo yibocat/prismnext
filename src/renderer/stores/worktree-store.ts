@@ -13,6 +13,27 @@ interface WorktreeState {
   loading: boolean;
   error: string | null;
 
+  /** Cache of pre-scanned file trees for worktrees.
+   *  Key: worktree name. Populated on creation, consumed on switch. */
+  fileTreeCache: Map<string, {
+    files: Array<{
+      id: string;
+      name: string;
+      relativePath: string;
+      absolutePath: string;
+      type: "tex" | "image" | "pdf" | "bib" | "style" | "other";
+      fileSize?: number;
+    }>;
+    folders: string[];
+    scannedAt: number;
+  }>;
+  /** Pre-scan worktree file tree (metadata only) and cache it */
+  preScanWorktree: (name: string, path: string) => Promise<void>;
+  /** Get cached file tree for a worktree, or undefined if not cached */
+  getCachedTree: (name: string) => { files: any[]; folders: string[] } | undefined;
+  /** Invalidate a worktree's cache entry */
+  invalidateCache: (name: string) => void;
+
   refreshWorktrees: (projectRoot: string) => Promise<void>;
   setMode: (mode: WorktreeMode, branch?: string) => void;
   selectExistingWorktree: (worktree: WorktreeInfo) => void;
@@ -31,6 +52,7 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
   branches: [],
   loading: false,
   error: null,
+  fileTreeCache: new Map(),
 
   refreshWorktrees: async (projectRoot: string) => {
     set({ loading: true, error: null });
@@ -57,6 +79,37 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
         loading: false,
       });
     }
+  },
+
+  preScanWorktree: async (name: string, path: string) => {
+    try {
+      const result = await window.electronAPI.fsScanMetadata(path);
+      const files = result.files.map((f) => ({
+        id: f.relativePath,
+        name: f.relativePath.split("/").pop() || f.relativePath,
+        relativePath: f.relativePath,
+        absolutePath: f.absolutePath,
+        type: f.type,
+        fileSize: f.fileSize,
+      }));
+      const newCache = new Map(get().fileTreeCache);
+      newCache.set(name, { files, folders: result.folders, scannedAt: Date.now() });
+      set({ fileTreeCache: newCache });
+    } catch {
+      // Pre-scan is best-effort; switch will fall back to live scan if cache misses
+    }
+  },
+
+  getCachedTree: (name: string) => {
+    const entry = get().fileTreeCache.get(name);
+    if (!entry) return undefined;
+    return { files: entry.files, folders: entry.folders };
+  },
+
+  invalidateCache: (name: string) => {
+    const newCache = new Map(get().fileTreeCache);
+    newCache.delete(name);
+    set({ fileTreeCache: newCache });
   },
 
   setMode: (mode: WorktreeMode, branch?: string) => {
@@ -95,7 +148,11 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
         pendingBranch,
       );
       // Set activeWorktree BEFORE refreshWorktrees so it won't reset mode to "local"
-      set({ activeWorktree: info, pendingBranch: null });
+      set({ activeWorktree: info, pendingBranch: null, loading: false });
+      // Pre-scan worktree file tree while we're here (background, non-blocking)
+      const wtName = info.name;
+      const wtPath = info.path;
+      get().preScanWorktree(wtName, wtPath).catch(() => {});
       await get().refreshWorktrees(projectRoot);
       return info;
     } catch (err: unknown) {
@@ -152,6 +209,7 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
     set({ loading: true, error: null });
     try {
       await window.electronAPI.worktreeRemove(projectRoot, name);
+      get().invalidateCache(name);
       const { activeWorktree, mode } = get();
       if (activeWorktree?.name === name) {
         set({ activeWorktree: null, mode: "local", pendingBranch: null });
@@ -182,5 +240,6 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
       branches: [],
       loading: false,
       error: null,
+      fileTreeCache: new Map(),
     }),
 }));

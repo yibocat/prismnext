@@ -562,8 +562,147 @@ export function getLastBuild(projectDir: string): BuildInfo | undefined {
   return lastBuilds.get(projectDir);
 }
 
+// ─── SyncTeX parse cache ───
+
+interface SynctexCacheEntry {
+  mtimeMs: number;
+  /** Parsed lines of the synctex file, one array element per line */
+  lines: string[];
+  /** Tag → resolved input filename */
+  inputs: Map<number, string>;
+  magnification: number;
+  unit: number;
+  xOffset: number;
+  yOffset: number;
+  /** Pre-built: page → list of nodes on that page (for reverse search) */
+  pageNodes: Map<number, Array<{ tag: number; line: number; h: number; v: number; filename: string }>>;
+  /** Pre-built: (tag,line) key → forward-search results (page, box coords) */
+  forwardIndex: Map<string, Array<{ page: number; h: number; v: number; height: number; width: number }>>;
+}
+
+const synctexCache = new Map<string, SynctexCacheEntry>();
+
+/** Read, decompress, and pre-parse a synctex file. Results are cached by
+ *  (projectDir, mtime) so subsequent forward/reverse searches on the same
+ *  compilation output are O(1) instead of re-parsing the entire file. */
+async function getOrParseSynctex(
+  projectDir: string,
+  build: BuildInfo,
+): Promise<SynctexCacheEntry | null> {
+  const mainStem = basename(build.mainFileName, extname(build.mainFileName));
+  const synctexPath = join(build.workDir, `${mainStem}.synctex.gz`);
+  const plainPath = join(build.workDir, `${mainStem}.synctex`);
+
+  // Check mtime for cache invalidation
+  let mtimeMs = 0;
+  try {
+    const { stat } = await import("node:fs/promises");
+    if (existsSync(synctexPath)) {
+      mtimeMs = (await stat(synctexPath)).mtimeMs;
+    } else if (existsSync(plainPath)) {
+      mtimeMs = (await stat(plainPath)).mtimeMs;
+    } else {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
+  const cacheKey = `${projectDir}:${mainStem}`;
+  const cached = synctexCache.get(cacheKey);
+  if (cached && cached.mtimeMs === mtimeMs) return cached;
+
+  // Read + decompress
+  let data: string;
+  try {
+    if (existsSync(synctexPath)) {
+      const compressed = await readFile(synctexPath);
+      const zlib = await import("node:zlib");
+      data = zlib.gunzipSync(compressed).toString("utf-8");
+    } else if (existsSync(plainPath)) {
+      data = await readFile(plainPath, "utf-8");
+    } else {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
+  // Parse once and pre-build indexes
+  const lines = data.split("\n");
+  const inputs = new Map<number, string>();
+  const pageNodes = new Map<number, Array<{ tag: number; line: number; h: number; v: number; filename: string }>>();
+  const forwardIndex = new Map<string, Array<{ page: number; h: number; v: number; height: number; width: number }>>();
+
+  let magnification = 1000;
+  let unit = 1;
+  let xOffset = 0;
+  let yOffset = 0;
+  let inContent = false;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    if (!inContent) {
+      if (line.startsWith("Input:")) {
+        const parts = line.slice(6).trim().split(":");
+        if (parts.length >= 2) {
+          inputs.set(parseInt(parts[0], 10), parts.slice(1).join(":"));
+        }
+      } else if (line.startsWith("Magnification:")) {
+        magnification = parseInt(line.slice(14).trim(), 10) || 1000;
+      } else if (line.startsWith("Unit:")) {
+        unit = parseInt(line.slice(5).trim(), 10) || 1;
+      } else if (line.startsWith("X Offset:")) {
+        xOffset = parseInt(line.slice(9).trim(), 10) || 0;
+      } else if (line.startsWith("Y Offset:")) {
+        yOffset = parseInt(line.slice(9).trim(), 10) || 0;
+      } else if (line === "Content:") {
+        inContent = true;
+      }
+    } else {
+      // Content node: tag,line,column,page,h,v,height,width[,depth]
+      const parts = line.split(",");
+      if (parts.length < 8) continue;
+
+      if (parts[0].startsWith("{")) {
+        // Page delimiter: "{page}"
+        continue;
+      }
+
+      const tag = parseInt(parts[0], 10);
+      const nodeLine = parseInt(parts[1], 10);
+      const page = parseInt(parts[3], 10);
+      const h = parseFloat(parts[4]);
+      const v = parseFloat(parts[5]);
+      const height = parseFloat(parts[6]);
+      const width = parseFloat(parts[7]);
+      const filename = inputs.get(tag) || "";
+
+      // Reverse-search index: page → nodes
+      if (!pageNodes.has(page)) pageNodes.set(page, []);
+      pageNodes.get(page)!.push({ tag, line: nodeLine, h, v, filename });
+
+      // Forward-search index: (tag,line) → results
+      if (tag > 0 && nodeLine > 0) {
+        const key = `${tag}:${nodeLine}`;
+        if (!forwardIndex.has(key)) forwardIndex.set(key, []);
+        forwardIndex.get(key)!.push({ page, h, v, height, width });
+      }
+    }
+  }
+
+  const entry: SynctexCacheEntry = {
+    mtimeMs, lines, inputs, magnification, unit, xOffset, yOffset,
+    pageNodes, forwardIndex,
+  };
+  synctexCache.set(cacheKey, entry);
+  return entry;
+}
+
 /**
- * Parse SyncTeX data and find closest node.
+ * Parse SyncTeX data and find closest node (legacy — used via cache now).
  */
 function parseSynctexData(
   data: string,
@@ -696,38 +835,50 @@ export async function synctexEdit(
   const build = lastBuilds.get(projectDir);
   if (!build) return null;
 
-  const mainStem = basename(build.mainFileName, extname(build.mainFileName));
-  const synctexPath = join(build.workDir, `${mainStem}.synctex.gz`);
-
   try {
-    let data: string;
-    if (existsSync(synctexPath)) {
-      const compressed = await readFile(synctexPath);
-      const zlib = await import("node:zlib");
-      data = zlib.gunzipSync(compressed).toString("utf-8");
-    } else {
-      const plainPath = join(build.workDir, `${mainStem}.synctex`);
-      if (!existsSync(plainPath)) return null;
-      data = await readFile(plainPath, "utf-8");
+    const entry = await getOrParseSynctex(projectDir, build);
+    if (!entry) return null;
+
+    // Use pre-built page node index for O(1) lookup
+    const nodes = entry.pageNodes.get(page);
+    if (!nodes || nodes.length === 0) return null;
+
+    // Find the closest node to the click position
+    const physX = (x * entry.unit) / entry.magnification - entry.xOffset;
+    const physY = (y * entry.unit) / entry.magnification - entry.yOffset;
+
+    let closestDist = Infinity;
+    let closest: { file: string; line: number; column: number } | null = null;
+
+    for (const node of nodes) {
+      const dx = node.h - physX;
+      const dy = node.v - physY;
+      const dist = dx * dx + dy * dy;
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = {
+          file: node.filename,
+          line: node.line,
+          column: 0,
+        };
+      }
     }
 
-    const result = parseSynctexData(data, page, x, y);
-    if (!result) return null;
+    if (!closest) return null;
 
     // Normalize file path: strip build directory prefix
-    let file = result.file;
+    let file = closest.file;
     if (file.startsWith(build.workDir)) {
       file = file.slice(build.workDir.length);
       if (file.startsWith("/") || file.startsWith("\\")) {
         file = file.slice(1);
       }
     }
-    // Strip ./ prefix
     if (file.startsWith("./") || file.startsWith(".\\")) {
       file = file.slice(2);
     }
 
-    return { ...result, file };
+    return { ...closest, file };
   } catch {
     return null;
   }
@@ -745,123 +896,35 @@ export async function synctexForward(
   const build = lastBuilds.get(projectDir);
   if (!build) return null;
 
-  const mainStem = basename(build.mainFileName, extname(build.mainFileName));
-  const synctexPath = join(build.workDir, `${mainStem}.synctex.gz`);
-
   try {
-    let data: string;
-    if (existsSync(synctexPath)) {
-      const compressed = await readFile(synctexPath);
-      const zlib = await import("node:zlib");
-      data = zlib.gunzipSync(compressed).toString("utf-8");
-    } else {
-      const plainPath = join(build.workDir, `${mainStem}.synctex`);
-      if (!existsSync(plainPath)) return null;
-      data = await readFile(plainPath, "utf-8");
-    }
+    const entry = await getOrParseSynctex(projectDir, build);
+    if (!entry) return null;
 
-    // Normalize sourceFile to match what synctex stores
     const normalizedSource = sourceFile.replace(/\\/g, "/");
 
-    // Parse: find Input tags that match our file
-    const inputTags = new Set<number>();
-    const lines = data.split("\n");
-
-    let magnification = 1000;
-    let unit = 1;
-    let xOffset = 0;
-    let yOffset = 0;
-    let inContent = false;
-
-    for (const rawLine of lines) {
-      const line = rawLine.trim();
-      if (!line) continue;
-
-      if (!inContent) {
-        if (line.startsWith("Input:")) {
-          const rest = line.slice(6);
-          const colonPos = rest.indexOf(":");
-          if (colonPos > 0) {
-            const tag = parseInt(rest.slice(0, colonPos), 10);
-            const filePath = rest.slice(colonPos + 1);
-            if (!isNaN(tag) && filePath.includes(normalizedSource)) {
-              inputTags.add(tag);
-            }
-          }
-        } else if (line.startsWith("Magnification:")) {
-          magnification = parseFloat(line.slice(14).trim()) || 1000;
-        } else if (line.startsWith("Unit:")) {
-          unit = parseFloat(line.slice(5).trim()) || 1;
-        } else if (line.startsWith("X Offset:")) {
-          xOffset = parseFloat(line.slice(9).trim()) || 0;
-        } else if (line.startsWith("Y Offset:")) {
-          yOffset = parseFloat(line.slice(9).trim()) || 0;
-        } else if (line === "Content:") {
-          inContent = true;
-        }
-        continue;
+    // Find matching input tags
+    const matchingTags = new Set<number>();
+    for (const [tag, filePath] of entry.inputs) {
+      if (filePath.includes(normalizedSource)) {
+        matchingTags.add(tag);
       }
+    }
 
-      if (line.startsWith("Postamble:")) break;
-      if (inputTags.size === 0) break;
-
-      const firstChar = line[0];
-
-      if (firstChar === "{") {
-        // Page start
-        continue;
-      }
-
-      if (firstChar === "[" || firstChar === "(") {
-        // Node: [tag,line,col:h,v:width,height
-        const inner = line.slice(1);
-        const colonPos = inner.indexOf(":");
-        if (colonPos < 0) continue;
-
-        const tlcPart = inner.slice(0, colonPos);
-        const tlc = tlcPart.split(",");
-        const tag = parseInt(tlc[0], 10);
-        const nodeLine = parseInt(tlc[1], 10);
-
-        if (inputTags.has(tag) && nodeLine === sourceLine) {
-          // Found matching node — extract position info
-          const rest = inner.slice(colonPos + 1);
-          const hvColonPos = rest.indexOf(":");
-          const hvPart = hvColonPos > 0 ? rest.slice(0, hvColonPos) : rest;
-
-          const hv = hvPart.split(",");
-          if (hv.length >= 2) {
-            const hRaw = parseInt(hv[0], 10);
-            const vRaw = parseInt(hv[1], 10);
-
-            // Get dimensions from remaining parts
-            let wRaw = 0, hDimRaw = 0;
-            if (hvColonPos > 0) {
-              const dims = rest.slice(hvColonPos + 1).split(",");
-              wRaw = parseInt(dims[0], 10) || 0;
-              hDimRaw = parseInt(dims[1], 10) || 0;
-            }
-
-            const factor = (unit * magnification) / (1000 * 65536) * (72 / 72.27);
-
-            // Find which page this node is on by scanning backwards
-            let currentPage = 1;
-            for (let j = lines.indexOf(rawLine) - 1; j >= 0; j--) {
-              const prevLine = lines[j].trim();
-              if (prevLine.startsWith("{")) {
-                currentPage = parseInt(prevLine.slice(1), 10);
-                break;
-              }
-            }
-
-            return {
-              page: isNaN(currentPage) ? 1 : currentPage,
-              x: hRaw * factor + xOffset,
-              y: vRaw * factor + yOffset,
-              height: Math.max(hDimRaw * factor, 12), // minimum 12pt height
-              width: Math.max(wRaw * factor, 50),     // minimum 50pt width
-            };
-          }
+    // Look up results in pre-built forward index
+    for (const [tag, line] of [[...matchingTags].map(t => [t, sourceLine] as const)]) {
+      for (const resultTag of matchingTags) {
+        const key = `${resultTag}:${sourceLine}`;
+        const positions = entry.forwardIndex.get(key);
+        if (positions && positions.length > 0) {
+          const pos = positions[0];
+          const factor = (entry.unit * entry.magnification) / (1000 * 65536) * (72 / 72.27);
+          return {
+            page: pos.page,
+            x: pos.h * factor + entry.xOffset,
+            y: pos.v * factor + entry.yOffset,
+            height: Math.max(pos.height * factor, 12),
+            width: Math.max(pos.width * factor, 50),
+          };
         }
       }
     }

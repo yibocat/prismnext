@@ -18,6 +18,7 @@ export function BranchSelector() {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const isGitRepo = useGitStore((s) => s.isGitRepo);
   const currentBranch = useGitStore((s) => s.branch);
+  const pendingBranch = useGitStore((s) => s.pendingBranch);
   const branches = useGitStore((s) => s.branches);
   const refreshBranches = useGitStore((s) => s.refreshBranches);
   const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
@@ -34,14 +35,21 @@ export function BranchSelector() {
   );
 
   const locked = activeWorktree !== null;
-  const displayBranch = locked ? activeWorktree.baseBranch : currentBranch;
+  const displayBranch = locked
+    ? activeWorktree.baseBranch
+    : (pendingBranch || currentBranch);
 
   const handleSelectBranch = useCallback(
-    async (branchName: string) => {
+    (branchName: string) => {
       if (locked) return;
-      if (branchName === currentBranch) return;
       if (!projectRoot) return;
-      await useGitStore.getState().switchBranch(projectRoot, branchName);
+      // Lazy branch selection — only stores intent.
+      // Actual git checkout happens later in sendPrompt.
+      if (branchName === currentBranch) {
+        useGitStore.getState().setPendingBranch(null);
+      } else {
+        useGitStore.getState().setPendingBranch(branchName);
+      }
     },
     [projectRoot, currentBranch, locked],
   );
@@ -58,7 +66,9 @@ export function BranchSelector() {
 
   if (!projectRoot) return null;
 
-  const buttonLabel = isGitRepo ? (displayBranch || "...") : "Init Git";
+  const buttonLabel = isGitRepo
+    ? (pendingBranch && !locked ? pendingBranch : (displayBranch || "..."))
+    : "Init Git";
 
   return (
     <DropdownMenu>
@@ -90,22 +100,28 @@ export function BranchSelector() {
           </DropdownMenuItem>
         ) : visibleBranches.length > 0 ? (
           visibleBranches.map((b) => {
-            const isSelf = b === displayBranch;
+            const isCurrent = b === currentBranch;
+            const isPending = b === pendingBranch;
             return (
               <DropdownMenuItem
                 key={b}
                 onClick={() => handleSelectBranch(b)}
-                disabled={locked || isSelf}
+                disabled={locked}
                 className={cn(
                   "text-[length:var(--font-chat-meta)]",
-                  (locked || isSelf) && "opacity-50",
+                  (locked || isCurrent) && "opacity-50",
                 )}
               >
                 <GitBranchIcon className="size-3.5 shrink-0" />
                 <span className="truncate flex-1">{b}</span>
-                {isSelf && (
+                {isCurrent && (
                   <span className="text-[length:var(--font-badge)] text-primary shrink-0 ml-1">
                     current
+                  </span>
+                )}
+                {isPending && !isCurrent && (
+                  <span className="text-[length:var(--font-badge)] text-amber-500 shrink-0 ml-1">
+                    next
                   </span>
                 )}
               </DropdownMenuItem>

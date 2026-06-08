@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, memo } from "react";
 import {
   Loader2Icon,
   ClockIcon,
@@ -38,9 +38,29 @@ interface CommitFile {
 
 // ─── Helpers ───
 
-function parseStatFiles(diff: string): CommitFile[] {
+function parseStatFiles(raw: string): CommitFile[] {
+  // Detect format: diff-tree --numstat uses tab-separated "added\tdeleted\tpath".
+  // Old git show --stat uses "path | added+++deleted---".
+  const isNumstat = raw.includes("\t");
+
+  if (isNumstat) {
+    const files: CommitFile[] = [];
+    for (const line of raw.split("\n")) {
+      const parts = line.split("\t");
+      if (parts.length >= 3) {
+        files.push({
+          path: parts[2],
+          added: parseInt(parts[0], 10) || 0,
+          deleted: parseInt(parts[1], 10) || 0,
+        });
+      }
+    }
+    return files;
+  }
+
+  // Legacy format: git show --stat
   const files: CommitFile[] = [];
-  for (const line of diff.split("\n")) {
+  for (const line of raw.split("\n")) {
     if (line.startsWith("diff --git")) break;
     const bar = line.indexOf(" | ");
     if (bar === -1) continue;
@@ -52,7 +72,7 @@ function parseStatFiles(diff: string): CommitFile[] {
       if (ch === "+") added++;
       else if (ch === "-") deleted++;
     }
-    if (added > 0 || deleted > 0) files.push({ path, added, deleted });
+    files.push({ path, added, deleted });
   }
   return files;
 }
@@ -146,7 +166,7 @@ interface GitHistoryProps {
   gitRoot: string;
 }
 
-function CommitFileRow({
+const CommitFileRow = memo(function CommitFileRow({
   gitRoot,
   hash,
   file,
@@ -199,9 +219,9 @@ function CommitFileRow({
       )}
     </div>
   );
-}
+});
 
-export function GitHistory({ gitRoot }: GitHistoryProps) {
+export const GitHistory = memo(function GitHistory({ gitRoot }: GitHistoryProps) {
   const commits = useGitStore((s) => s.commits);
   const commitsLoading = useGitStore((s) => s.commitsLoading);
 
@@ -316,28 +336,12 @@ export function GitHistory({ gitRoot }: GitHistoryProps) {
                       } else {
                         setExpandedHash(c.hash);
                         setStatLoading(true);
-                        window.electronAPI.gitCommitDiff(gitRoot, c.hash).then((diff) => {
-                          setStatContent(diff);
-                          const lines = diff.split("\n");
-                          let msgStart = -1, msgEnd = -1;
-                          for (let i = 0; i < lines.length; i++) {
-                            if (lines[i].startsWith("Date:") && msgStart === -1) { msgStart = i + 2; continue; }
-                            if (msgStart !== -1 && msgEnd === -1 && lines[i].trim() === "" && i > msgStart) { msgEnd = i; break; }
-                          }
-                          // Fallback: stop at stat or diff markers if no blank line found
-                          if (msgStart !== -1 && msgEnd === -1) {
-                            for (let i = msgStart; i < lines.length; i++) {
-                              const ln = lines[i];
-                              if (ln.startsWith("diff ") || ln.includes(" | ") || /^\s+\d+\s+files?\s+changed/.test(ln)) { msgEnd = i; break; }
-                            }
-                          }
-                          if (msgStart !== -1) {
-                            const msgLines = lines.slice(msgStart, msgEnd === -1 ? undefined : msgEnd);
-                            setFullMessage(msgLines.map((l) => l.replace(/^    /, "")).join("\n").trim());
-                          }
+                        // Lightweight: diff-tree --numstat returns just file list + line counts.
+                        // Full file diffs are lazy-loaded on click via getCommitFileDiff.
+                        window.electronAPI.gitCommitFiles(gitRoot, c.hash).then((files) => {
+                          setStatContent(JSON.stringify(files)); // store serialized for parseStatFiles compat
                         }).catch(() => {
-                          setStatContent("");
-                          setFullMessage(null);
+                          setStatContent(null);
                         }).finally(() => setStatLoading(false));
                       }
                     }}
@@ -546,4 +550,4 @@ export function GitHistory({ gitRoot }: GitHistoryProps) {
       </Dialog>
     </div>
   );
-}
+});

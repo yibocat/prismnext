@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { exec } from "node:child_process";
 import { registerIpcHandlers } from "./ipc/index";
 import { setMainWindow, registerWindowHandlers } from "./ipc/window";
 import { killAllClaudeProcesses } from "./services/claude";
@@ -87,6 +88,17 @@ function createWindow() {
   setMainWindow(mainWindow);
   registerWindowHandlers();
 
+  // Re-warm child_process after macOS App Nap / background suspension.
+  // When the app loses focus for a while, macOS may throttle the process,
+  // making the first spawn after resume slow again. A quick dummy exec on
+  // focus restores fast git / agent performance.
+  mainWindow.on("focus", () => {
+    const t0 = performance.now();
+    exec("git --version", { timeout: 15000 }, () => {
+      console.log(`[main] focus warmup: ${Math.round(performance.now() - t0)}ms`);
+    });
+  });
+
   mainWindow.on("ready-to-show", () => {
     mainWindow?.show();
   });
@@ -99,11 +111,16 @@ function createWindow() {
     killAllClaudeProcesses();
     disposeCliManager();
     destroyAllTerminalSessions();
+    import("./ipc/log").then((m) => m.disposeLogger());
     mainWindow = null;
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
+    // FREEZE_SPLASH=1 keeps the loading screen visible for design iteration
+    const url = process.env.FREEZE_SPLASH
+      ? process.env.ELECTRON_RENDERER_URL + "?freeze-splash"
+      : process.env.ELECTRON_RENDERER_URL;
+    mainWindow.loadURL(url);
   } else {
     mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }

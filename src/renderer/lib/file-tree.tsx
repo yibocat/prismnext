@@ -15,6 +15,44 @@ export function getFileIcon(file: ProjectFile) {
   return <Icon icon={icon} className="size-4 shrink-0" />;
 }
 
+/** A single visible row in the virtualized file tree. */
+export interface FlatVisibleNode {
+  /** Unique React key (relativePath, or synthetic for inline editing). */
+  key: string;
+  name: string;
+  type: "folder" | "file";
+  node: TreeNode;
+  /** Visual indentation level (0 = root). */
+  depth: number;
+  /** Set only on synthetic inline-editing nodes. */
+  editingType?: "file" | "folder";
+  editingParentPath?: string;
+}
+
+/**
+ * Flatten a recursive tree into a depth-first list of visible nodes.
+ * Only expanded folders have their children included.
+ * O(N) where N = number of visible nodes.
+ */
+export function flattenVisibleTree(
+  nodes: TreeNode[],
+  expandedFolders: Set<string>,
+  depth = 0,
+): FlatVisibleNode[] {
+  const result: FlatVisibleNode[] = [];
+  for (const node of nodes) {
+    if (node.type === "folder") {
+      result.push({ key: node.relativePath, name: node.name, type: "folder", node, depth });
+      if (expandedFolders.has(node.relativePath)) {
+        result.push(...flattenVisibleTree(node.children, expandedFolders, depth + 1));
+      }
+    } else {
+      result.push({ key: node.relativePath, name: node.name, type: "file", node, depth });
+    }
+  }
+  return result;
+}
+
 export function buildFileTree(files: ProjectFile[], folders: string[]): TreeNode[] {
   const root: TreeNode[] = [];
   const folderMap = new Map<string, TreeNode>();

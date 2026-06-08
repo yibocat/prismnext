@@ -4,6 +4,7 @@ import {
   GitMergeIcon,
   CheckIcon,
   ChevronsUpDownIcon,
+  Loader2Icon,
   SearchIcon,
   GitCommitHorizontalIcon,
   GitCommitVerticalIcon,
@@ -64,6 +65,7 @@ export function GitToolbar({ projectRoot }: GitToolbarProps) {
   const files = useGitStore((s) => s.files);
   const unitRoot = useGitStore((s) => s.unitRoot);
   const viewMode = useGitStore((s) => s.viewMode);
+  const switching = useGitStore((s) => s.switching);
   const gitRoot = unitRoot ?? projectRoot;
 
   const [branchSearch, setBranchSearch] = useState("");
@@ -253,8 +255,12 @@ export function GitToolbar({ projectRoot }: GitToolbarProps) {
             type="button"
             className="flex items-center gap-1.5 h-6 px-2 rounded text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors max-w-[160px]"
           >
-            <GitBranchIcon className="size-3.5 shrink-0" />
-            <span className="truncate">{branchLabel}</span>
+            {switching ? (
+              <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
+            ) : (
+              <GitBranchIcon className="size-3.5 shrink-0" />
+            )}
+            <span className="truncate">{switching ? "Switching…" : branchLabel}</span>
             <ChevronsUpDownIcon className="size-3 shrink-0 opacity-40" />
           </button>
         </DropdownMenuTrigger>
@@ -608,7 +614,7 @@ export function GitToolbar({ projectRoot }: GitToolbarProps) {
             const defaults = [
               "*.aux", "*.log", "*.out", "*.toc", "*.bbl", "*.blg",
               "*.synctex.gz", "*.fdb_latexmk", "*.fls", "*.xdv",
-              ".prismnext/compile/", ".DS_Store",
+              ".prismnext/compile/", ".prism-worktree-meta", ".DS_Store",
             ].join("\n");
             await window.electronAPI.fsWrite(ignorePath, defaults);
             if (projectRoot) {

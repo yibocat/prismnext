@@ -1,6 +1,6 @@
 {
   "name": "prism-next",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "description": "AI-powered LaTeX writing workspace",
   "main": "./out/main/index.js",
   "scripts": {
@@ -61,6 +61,10 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-resizable-panels": "^4.11.2",
+    "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "react-virtuoso": "^4.18.7",
     "sonner": "^2.0.7",
     "streamdown": "^2.5.0",

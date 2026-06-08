@@ -7,12 +7,10 @@
     "strict": true,
     "skipLibCheck": true,
     "paths": {
-      "@/*": ["./src/renderer/*"]
+      "@/*": ["./src/renderer/*"],
+      "@shared/*": ["./src/shared/*"]
     }
   },
-  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx", "src/renderer/**/*.d.ts"],
-  "exclude": ["src/renderer/components/__archive"],
-  "references": [
-    { "path": "./tsconfig.node.json" }
-  ]
+  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx", "src/renderer/**/*.d.ts", "src/shared/**/*.ts"],
+  "exclude": ["src/renderer/components/__archive"]
 }

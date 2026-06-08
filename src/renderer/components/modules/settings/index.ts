@@ -4,3 +4,4 @@ export { AppearanceSettings } from "./appearance-settings";
 export { CompilerSettings } from "./compiler-settings";
 export { ExternalSettings } from "./external-settings";
 export { ShortcutsSettings } from "./shortcuts-settings";
+export { LogViewer } from "./log-viewer";

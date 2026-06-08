@@ -4,7 +4,7 @@ import { useTabContext } from "@/lib/tab-context";
 export function ImageViewer() {
   const { tab } = useTabContext();
   const fileId = tab.fileId;
-  const dataUrl = useDocumentStore((s) => (fileId ? s.fileContents.get(fileId)?.dataUrl : undefined));
+  const dataUrl = useDocumentStore((s) => (fileId ? s.openedContents.get(fileId)?.dataUrl : undefined));
 
   if (!dataUrl) {
     return (

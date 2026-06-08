@@ -2,6 +2,12 @@ import { ipcMain } from "electron";
 import * as gitService from "../services/git";
 
 export function registerGitHandlers(): void {
+  // ── git:warmup — directory-level warmup to absorb TCC / code-signing ──
+  ipcMain.handle("git:warmup", async (_event, args: { projectRoot: string }) => {
+    await gitService.queueWarmup(args.projectRoot);
+    return { ok: true };
+  });
+
   // ── git:isRepo ──
   ipcMain.handle(
     "git:isRepo",
@@ -118,6 +124,14 @@ export function registerGitHandlers(): void {
     "git:commitDiff",
     async (_event, args: { projectRoot: string; hash: string }) => {
       return gitService.getCommitDiff(args.projectRoot, args.hash);
+    },
+  );
+
+  // ── git:commitFiles (lightweight, no diff content) ──
+  ipcMain.handle(
+    "git:commitFiles",
+    async (_event, args: { projectRoot: string; hash: string }) => {
+      return gitService.getCommitFiles(args.projectRoot, args.hash);
     },
   );
 

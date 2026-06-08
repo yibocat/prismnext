@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ProjectFile } from "@/stores/document-store";
+import { TOC_PARSE_DEBOUNCE } from "@/styles/constants";
 
 // ─── Types ───
 
@@ -160,55 +161,74 @@ function parseBibEntries(content: string): Map<string, { entryType: string; auth
 
 // ── Hook ──
 
+function computeStructure(
+  files: ProjectFile[],
+  getContent: (id: string) => string,
+): TeXStructure {
+  const texFiles = files.filter((f) => f.name.endsWith(".tex"));
+
+  const toc: TocEntry[] = [];
+  const labels: LabelEntry[] = [];
+  const citations: CitationEntry[] = [];
+
+  for (const file of texFiles) {
+    const content = getContent(file.id);
+    if (!content) continue;
+    const lines = content.split("\n");
+
+    toc.push(...parseSections(lines, file.id));
+    labels.push(...parseLabels(lines, file.id));
+    citations.push(...parseCitations(lines, file.id));
+  }
+
+  // Parse .bib files and match with citation keys
+  const bibFiles = files.filter((f) => f.name.endsWith(".bib"));
+  const bibMap = new Map<string, { entryType: string; author?: string; title?: string; year?: string }>();
+  for (const bibFile of bibFiles) {
+    const content = getContent(bibFile.id);
+    if (!content) continue;
+    const entries = parseBibEntries(content);
+    for (const [key, entry] of entries) {
+      bibMap.set(key, entry);
+    }
+  }
+
+  // Enrich citations with bib data
+  const enrichedCitations = citations.map((c) => {
+    const bib = bibMap.get(c.key);
+    if (!bib) return c;
+    return { ...c, author: bib.author, title: bib.title, year: bib.year, entryType: bib.entryType };
+  });
+
+  const seen = new Set<string>();
+  const deduped = enrichedCitations.filter((c) => {
+    if (seen.has(c.key)) return false;
+    seen.add(c.key);
+    return true;
+  });
+
+  return { toc, labels, citations: deduped, texFiles };
+}
+
 export function useLatexStructure(
   files: ProjectFile[],
   getContent: (id: string) => string,
 ): TeXStructure {
-  return useMemo(() => {
-    const texFiles = files.filter((f) => f.name.endsWith(".tex"));
+  const [structure, setStructure] = useState<TeXStructure>(
+    () => computeStructure(files, getContent),
+  );
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-    const toc: TocEntry[] = [];
-    const labels: LabelEntry[] = [];
-    const citations: CitationEntry[] = [];
+  useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      setStructure(computeStructure(files, getContent));
+    }, TOC_PARSE_DEBOUNCE);
 
-    for (const file of texFiles) {
-      const content = getContent(file.id);
-      if (!content) continue;
-      const lines = content.split("\n");
-
-      toc.push(...parseSections(lines, file.id));
-      labels.push(...parseLabels(lines, file.id));
-      citations.push(...parseCitations(lines, file.id));
-    }
-
-    // Parse .bib files and match with citation keys
-    const bibFiles = files.filter((f) => f.name.endsWith(".bib"));
-    const bibMap = new Map<string, { entryType: string; author?: string; title?: string; year?: string }>();
-    for (const bibFile of bibFiles) {
-      const content = getContent(bibFile.id);
-      if (!content) continue;
-      const entries = parseBibEntries(content);
-      for (const [key, entry] of entries) {
-        bibMap.set(key, entry);
-      }
-    }
-
-    // Enrich citations with bib data
-    const enrichedCitations = citations.map((c) => {
-      const bib = bibMap.get(c.key);
-      if (!bib) return c;
-      return { ...c, author: bib.author, title: bib.title, year: bib.year, entryType: bib.entryType };
-    });
-
-    // Add bib entries that are cited (matched)
-    // Also remove duplicates by key (keep first occurrence)
-    const seen = new Set<string>();
-    const deduped = enrichedCitations.filter((c) => {
-      if (seen.has(c.key)) return false;
-      seen.add(c.key);
-      return true;
-    });
-
-    return { toc, labels, citations: deduped, texFiles };
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, [files, getContent]);
+
+  return structure;
 }

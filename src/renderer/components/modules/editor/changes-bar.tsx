@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useChangesStore, type ProposedChange } from "@/stores/changes-store";
 import { CheckIcon, XIcon, ChevronUpIcon, ChevronDownIcon } from "lucide-react";
 import { diffLines } from "diff";
@@ -35,7 +36,10 @@ export function ChangesBar({
   onPrevChange,
   onNextChange,
 }: ChangesBarProps) {
-  const { added, removed } = countDiff(change.oldContent, change.newContent);
+  const { added, removed } = useMemo(
+    () => countDiff(change.oldContent, change.newContent),
+    [change.oldContent, change.newContent],
+  );
 
   return (
     <div className="flex h-[var(--height-changes-bar)] shrink-0 items-center gap-2 border-b border-border bg-muted/50 px-3">

@@ -158,7 +158,7 @@ export function TexworkspaceSidebar() {
   const allExpanded = Object.values(sections).every(Boolean);
 
   const files = useDocumentStore((s) => s.files);
-  const fileContents = useDocumentStore((s) => s.fileContents);
+  const openedContents = useDocumentStore((s) => s.openedContents);
   const setTexworkspaceActiveFile = useRightPanelStore((s) => s.setTexworkspaceActiveFile);
   const requestJumpToLine = useDocumentStore((s) => s.requestJumpToLine);
   const compileError = useCompileStore((s) => s.compileError);
@@ -179,16 +179,16 @@ export function TexworkspaceSidebar() {
     const resolved = resolveCompileTarget(
       firstTex?.id ?? "",
       files,
-      (id) => fileContents.get(id)?.content ?? "",
+      (id) => openedContents.get(id)?.content ?? "",
     );
     if (resolved?.rootId) {
       setTexworkspaceActiveFile(resolved.rootId);
     }
-  }, [tabs, activeTabId, files, fileContents, setTexworkspaceActiveFile]);
+  }, [tabs, activeTabId, files, openedContents, setTexworkspaceActiveFile]);
 
   const getContent = useCallback(
-    (id: string) => fileContents.get(id)?.content ?? "",
-    [fileContents],
+    (id: string) => openedContents.get(id)?.content ?? "",
+    [openedContents],
   );
 
   const { toc, labels, citations, texFiles } = useLatexStructure(files, getContent);

@@ -113,7 +113,7 @@ export function LatexEditor() {
     isMergeActiveRef.current = false;
 
     const content = fileId
-      ? (useDocumentStore.getState().fileContents.get(fileId)?.content ?? "")
+      ? (useDocumentStore.getState().openedContents.get(fileId)?.content ?? "")
       : "";
 
     const setContent = useDocumentStore.getState().setContent;
@@ -359,7 +359,7 @@ export function LatexEditor() {
   useEffect(() => {
     const view = viewRef.current;
     if (!view || !fileId || isMergeActiveRef.current) return;
-    const storeContent = useDocumentStore.getState().fileContents.get(fileId)?.content;
+    const storeContent = useDocumentStore.getState().openedContents.get(fileId)?.content;
     if (storeContent === undefined) return;
     // Only update if content actually differs — skip dirty files (editor owns truth)
     if (view.state.doc.toString() === storeContent) return;
@@ -394,7 +394,7 @@ export function LatexEditor() {
       const checkLoaded = setInterval(() => {
         const state = useDocumentStore.getState();
         if (state.activeFileId !== targetFileId) return;
-        const content = state.fileContents.get(targetFileId)?.content;
+        const content = state.openedContents.get(targetFileId)?.content;
         if (content === undefined) return;
         clearInterval(checkLoaded);
 

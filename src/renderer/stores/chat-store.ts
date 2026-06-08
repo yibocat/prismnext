@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { useDocumentStore } from "./document-store";
 import { useWorktreeStore } from "./worktree-store";
+import { useGitStore } from "./git-store";
 import { useAgentSettingsStore } from "./agent-settings-store";
 
 // ─── Types ───
@@ -226,76 +227,18 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   sendPrompt: async (userPrompt: string) => {
     const docState = useDocumentStore.getState();
     const projectPath = docState.projectRoot || "";
+    const tabId = get().activeTabId;
+    const agentId = get().selectedAgent;
 
-    // Resolve worktree: lazy-init if in "worktree" mode but not yet initialized
-    const worktreeStore = useWorktreeStore.getState();
-    let worktreePath: string | null = null;
-
-    if (worktreeStore.mode === "worktree") {
-      try {
-        // If already active, use it; otherwise initialize (first message triggers creation)
-        let wt = worktreeStore.activeWorktree;
-        if (!wt && projectPath) {
-          wt = await worktreeStore.initializeWorktree(projectPath);
-        }
-        // Ensure checkoutRoot is switched to worktree path (belt-and-suspenders:
-        // subscription in left-main-area also handles this, but we ensure it here
-        // in case sendPrompt runs before the subscription fires)
-        if (wt) {
-          await docState.switchCheckoutRoot(wt.path);
-        }
-        worktreePath = wt?.path ?? null;
-      } catch (err: any) {
-        set((s) => {
-          const tabs = s.tabs.map((t) =>
-            t.id === s.activeTabId
-              ? { ...t, error: `Worktree init failed: ${err?.message}` }
-              : t,
-          );
-          return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
-        });
-        return;
-      }
-    } else {
-      worktreePath = null;
-    }
-
-    // Check if agent is available
-    try {
-      const status = await window.electronAPI.cliStatus();
-      if (!status.available) {
-        set((s) => {
-          const tabs = s.tabs.map((t) =>
-            t.id === s.activeTabId ? { ...t, error: status.error || "Agent not available." } : t,
-          );
-          return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
-        });
-        return;
-      }
-    } catch (err: any) {
-      set((s) => {
-        const tabs = s.tabs.map((t) =>
-          t.id === s.activeTabId ? { ...t, error: `Status check failed: ${err?.message}` } : t,
-        );
-        return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
-      });
-      return;
-    }
-
-    await docState.saveAllFiles();
-
+    // ── 1. Add user message FIRST so it appears immediately ──
     const userMessage: ChatStreamMessage = {
       type: "user",
       message: { content: [{ type: "text", text: userPrompt }] },
     };
 
-    const tabId = get().activeTabId;
-    const agentId = get().selectedAgent;
-    // Set title from first prompt
     set((s) => {
       const tabs = s.tabs.map((t) => {
         if (t.id !== tabId) return t;
-        // Commit any leftover streaming message before starting a new turn
         const base = t.streamingMessage
           ? { ...t, messages: [...t.messages, t.streamingMessage], streamingMessage: null as ChatStreamMessage | null }
           : t;
@@ -307,12 +250,103 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           error: null,
         };
       });
-      return {
-        tabs,
-        ...projectActiveTab(tabs, s.activeTabId),
-      };
+      return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
     });
 
+    // ── 2. Show initialisation progress as streaming assistant messages ──
+    const emitProgress = (text: string) => {
+      const progressMsg: ChatStreamMessage = {
+        type: "assistant",
+        message: { content: [{ type: "text", text }] },
+      };
+      get()._upsertLastMessage(tabId, progressMsg);
+    };
+
+    const resolveWorktree = async (): Promise<string | null> => {
+      const worktreeStore = useWorktreeStore.getState();
+      if (worktreeStore.mode !== "worktree") return null;
+
+      try {
+        let wt = worktreeStore.activeWorktree;
+        if (!wt && projectPath) {
+          const branch = worktreeStore.pendingBranch || "current branch";
+          emitProgress(`⏳ Creating worktree on \`${branch}\`…`);
+          wt = await worktreeStore.initializeWorktree(projectPath);
+          emitProgress(`✅ Worktree \`${wt.name}\` ready`);
+          // Ensure pre-scan completes before switching (avoids cache miss in switchCheckoutRoot)
+          await worktreeStore.preScanWorktree(wt.name, wt.path).catch(() => {});
+        }
+        if (wt) {
+          emitProgress("⏳ Syncing files…");
+          await docState.switchCheckoutRoot(wt.path);
+          emitProgress("✅ Files synced");
+        }
+        return wt?.path ?? null;
+      } catch (err: any) {
+        emitProgress(`❌ Worktree init failed: ${err?.message}`);
+        throw err;
+      }
+    };
+
+    const checkAndStartAgent = async (worktreePath: string | null) => {
+      try {
+        const status = await window.electronAPI.cliStatus();
+        if (!status.available) throw new Error(status.error || "Agent not available.");
+      } catch (err: any) {
+        emitProgress(`❌ Agent check failed: ${err?.message}`);
+        throw err;
+      }
+
+      emitProgress("⏳ Starting Claude Code…");
+      try {
+        // Pre-warm to start the persistent process; cliSend will reuse it
+        await window.electronAPI.cliPrewarm(projectPath, tabId, worktreePath || undefined);
+        emitProgress("✅ Claude Code ready");
+      } catch {
+        // Prewarm is best-effort; cliSend will start the process on demand
+        emitProgress("⚠️ Agent prewarm skipped — will start on demand");
+      }
+    };
+
+    // ── 3. Resolve pending branch (lazy branch selection) ──
+    let worktreePath: string | null = null;
+    try {
+      emitProgress("⏳ Saving files…");
+      await docState.saveAllFiles();
+      emitProgress("✅ Files saved");
+
+      // Lazy branch switch: if user selected a branch in the toolbar,
+      // actually switch to it NOW (not when they clicked the dropdown).
+      const gitStore = useGitStore.getState();
+      const worktreeStore = useWorktreeStore.getState();
+      if (gitStore.pendingBranch && gitStore.pendingBranch !== gitStore.branch) {
+        if (worktreeStore.mode === "worktree") {
+          // Worktree mode: set the target branch for worktree creation
+          worktreeStore.setMode("worktree", gitStore.pendingBranch);
+          emitProgress(`📌 Will create worktree on \`${gitStore.pendingBranch}\``);
+        } else {
+          // Local mode: actually switch the git branch now
+          emitProgress(`⏳ Switching to \`${gitStore.pendingBranch}\`…`);
+          await gitStore.switchBranch(projectPath, gitStore.pendingBranch);
+          emitProgress(`✅ Switched to \`${gitStore.pendingBranch}\``);
+        }
+        gitStore.setPendingBranch(null);
+      }
+
+      worktreePath = await resolveWorktree();
+      await checkAndStartAgent(worktreePath);
+    } catch {
+      // Progress messages already emitted; stop here — don't send to CLI
+      set((s) => {
+        const tabs = s.tabs.map((t) =>
+          t.id === tabId ? { ...t, isStreaming: false } : t,
+        );
+        return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+      });
+      return;
+    }
+
+    // ── 4. Send the actual prompt — CLI responses follow naturally ──
     try {
       const agentSettings = useAgentSettingsStore.getState();
       const sessionId = get().tabs.find((t) => t.id === tabId)?.sessionId;
@@ -329,7 +363,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       set((s) => {
         const tabs = s.tabs.map((t) => {
           if (t.id !== tabId) return t;
-          // Remove the user message that was just added — don't leave orphaned messages
           const msgs = t.messages.filter((m, i) => !(m.type === "user" && i === t.messages.length - 1));
           return { ...t, messages: msgs, isStreaming: false, error: err?.message || String(err) };
         });
@@ -557,11 +590,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
       }
 
-      // Same turn: dedup blocks by type/id — keep latest version of each
+      // Same turn: dedup blocks by type/id — keep latest version of each.
+      // O(n+m) via pre-computed sets instead of O(n*m) inner `.some()` loops.
+      const newTypes = new Set(newBlocks.map((nb) => nb.type));
+      const newToolIds = new Set(newBlocks.filter((nb) => nb.type === "tool_use" && nb.id).map((nb) => nb.id));
       const preserved = oldBlocks.filter((b) => {
-        if (b.type === "text" && newBlocks.some((nb) => nb.type === "text")) return false;
-        if (b.type === "thinking" && newBlocks.some((nb) => nb.type === "thinking")) return false;
-        if (b.type === "tool_use" && b.id && newBlocks.some((nb) => nb.type === "tool_use" && nb.id === b.id)) return false;
+        if (b.type === "text" && newTypes.has("text")) return false;
+        if (b.type === "thinking" && newTypes.has("thinking")) return false;
+        if (b.type === "tool_use" && b.id && newToolIds.has(b.id)) return false;
         return true;
       });
 

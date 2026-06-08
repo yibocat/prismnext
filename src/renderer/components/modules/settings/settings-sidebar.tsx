@@ -22,6 +22,7 @@ import {
   WrenchIcon,
   GlobeIcon,
   KeyboardIcon,
+  FileTextIcon,
   XIcon,
 } from "lucide-react";
 
@@ -39,11 +40,12 @@ const SECTIONS = [
     items: [
       { id: "compiler", label: "Compiler", icon: WrenchIcon },
       { id: "external", label: "AI & APIs", icon: GlobeIcon },
+      { id: "logs", label: "Logs", icon: FileTextIcon },
     ],
   },
 ] as const;
 
-export type SettingsCategory = "general" | "appearance" | "shortcuts" | "compiler" | "external";
+export type SettingsCategory = "general" | "appearance" | "shortcuts" | "compiler" | "external" | "logs";
 
 interface SettingsSidebarProps {
   activeCategory: SettingsCategory;

@@ -7,9 +7,29 @@ export function registerFsHandlers(): void {
     return fs.scanProjectFolder(args.rootPath);
   });
 
+  ipcMain.handle("fs:scanMetadata", async (_event, args: { rootPath: string }) => {
+    return fs.scanMetadata(args.rootPath);
+  });
+
   ipcMain.handle("fs:read", async (_event, args: { absPath: string }) => {
     const content = await fs.readTexFileContent(args.absPath);
     return { content };
+  });
+
+  /** Batch-read multiple text files in a single IPC round-trip.
+   *  Returns a map of absolute-path → content for all successfully read files. */
+  ipcMain.handle("fs:readBatch", async (_event, args: { absPaths: string[] }) => {
+    const results: Record<string, string> = {};
+    await Promise.all(
+      args.absPaths.map(async (absPath) => {
+        try {
+          results[absPath] = await fs.readTexFileContent(absPath);
+        } catch {
+          // Skip files that can't be read
+        }
+      }),
+    );
+    return { results };
   });
 
   ipcMain.handle("fs:readImage", async (_event, args: { absPath: string }) => {

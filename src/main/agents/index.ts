@@ -1,5 +1,3 @@
-export { AgentManager } from "./agent-manager";
-export type { AgentStatus } from "./agent-manager";
 export {
   AGENTS,
   DEFAULT_AGENT_ID,

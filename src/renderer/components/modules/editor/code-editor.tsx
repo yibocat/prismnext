@@ -41,6 +41,10 @@ export function CodeEditor() {
 
   const changes = useChangesStore((s) => s.changes);
   const contentVersion = useDocumentStore((s) => s.contentVersion);
+  // true when file content has been fetched into openedContents (no IPC pending)
+  const contentLoaded = useDocumentStore((s) =>
+    fileId ? s.openedContents.has(fileId) : true,
+  );
 
   const activeChange = useMemo(() => {
     if (!fileId) return null;
@@ -100,7 +104,7 @@ export function CodeEditor() {
     isMergeActiveRef.current = false;
 
     const content = fileId
-      ? (useDocumentStore.getState().fileContents.get(fileId)?.content ?? "")
+      ? (useDocumentStore.getState().openedContents.get(fileId)?.content ?? "")
       : "";
 
     const setContent = useDocumentStore.getState().setContent;
@@ -353,7 +357,7 @@ export function CodeEditor() {
   useEffect(() => {
     const view = viewRef.current;
     if (!view || !fileId || isMergeActiveRef.current) return;
-    const storeContent = useDocumentStore.getState().fileContents.get(fileId)?.content;
+    const storeContent = useDocumentStore.getState().openedContents.get(fileId)?.content;
     if (storeContent === undefined) return;
     if (view.state.doc.toString() === storeContent) return;
     view.dispatch({
@@ -364,6 +368,13 @@ export function CodeEditor() {
 
   return (
     <div className="flex h-full flex-col min-h-0">
+      {/* Subtle loading bar while file content is being fetched from disk */}
+      {!contentLoaded && fileId && (
+        <div className="h-0.5 w-full bg-muted overflow-hidden shrink-0">
+          <div className="h-full w-1/3 bg-primary rounded-r-full"
+            style={{ animation: "loading-bar 1.2s ease-in-out infinite" }} />
+        </div>
+      )}
       {activeChange && (
         <ChangesBar
           change={activeChange}

@@ -147,7 +147,17 @@ export interface ElectronAPI {
     }>;
     folders: string[];
   }>;
+  fsScanMetadata: (rootPath: string) => Promise<{
+    files: Array<{
+      relativePath: string;
+      absolutePath: string;
+      type: "tex" | "image" | "pdf" | "bib" | "style" | "other";
+      fileSize: number;
+    }>;
+    folders: string[];
+  }>;
   fsRead: (absPath: string) => Promise<{ content: string }>;
+  fsReadBatch: (absPaths: string[]) => Promise<{ results: Record<string, string> }>;
   fsReadImage: (absPath: string) => Promise<{ dataUrl: string }>;
   fsWrite: (absPath: string, content: string) => Promise<void>;
   fsCreate: (
@@ -232,7 +242,7 @@ export interface ElectronAPI {
   removeCliListeners: () => void;
 
   // File watcher events (Main → Renderer)
-  onFileChanged: (callback: (data: { projectRoot: string }) => void) => () => void;
+  onFileChanged: (callback: (data: { projectRoot: string; changedPaths?: string[] }) => void) => () => void;
 
   // Settings operations
   settingsGet: () => Promise<{
@@ -269,6 +279,8 @@ export interface ElectronAPI {
   onTerminalExit: (callback: (data: { sessionId: string; exitCode: number }) => void) => () => void;
 
   // Git operations
+  gitWarmup: (projectRoot: string) => Promise<{ ok: boolean }>;
+  logFetch: (params: import("@shared/log-types").LogFetchParams) => Promise<import("@shared/log-types").LogFetchResult>;
   gitIsRepo: (projectRoot: string) => Promise<boolean>;
   gitStatus: (projectRoot: string) => Promise<GitStatusData>;
   gitBranches: (projectRoot: string) => Promise<GitBranchesData>;
@@ -295,6 +307,7 @@ export interface ElectronAPI {
   gitStash: (projectRoot: string, message?: string) => Promise<GitResultData>;
   gitStashPop: (projectRoot: string) => Promise<GitResultData>;
   gitCommitDiff: (projectRoot: string, hash: string) => Promise<string>;
+  gitCommitFiles: (projectRoot: string, hash: string) => Promise<Array<{ path: string; added: number; deleted: number }>>;
   gitCommitFileDiff: (projectRoot: string, hash: string, filePath: string) => Promise<{ path: string; oldContent: string; newContent: string }>;
 
   // Worktree operations
