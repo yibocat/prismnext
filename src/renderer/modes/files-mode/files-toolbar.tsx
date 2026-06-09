@@ -1,8 +1,8 @@
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { GlobeIcon } from "lucide-react";
-import { MarkdownToolbar } from "./markdown-toolbar";
-import { LanguageLabel } from "./language-label";
+import { MarkdownToolbar } from "@/components/modules/editor/toolbars/markdown-toolbar";
+import { LanguageLabel } from "@/components/modules/editor/toolbars/language-label";
 
 interface FileToolbarProps {
   filePath?: string;

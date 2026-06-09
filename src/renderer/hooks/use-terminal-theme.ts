@@ -82,19 +82,26 @@ function oklchToHex(oklch: string): string {
 export function useTerminalTheme(): ITheme {
   const { resolvedTheme } = useTheme();
   const themeColor = useSettingsStore((s) => s.settings.themeColor);
-  const [backgroundHex, setBackgroundHex] = useState("#1e1e2a");
+  // Read CSS variable synchronously on mount so the terminal is created
+  // with the correct background colour — avoids a one-frame colour flash.
+  const [backgroundHex, setBackgroundHex] = useState(() => {
+    const bg = getCSSVar("--background");
+    if (bg) {
+      try { return oklchToHex(bg); } catch { /* fall through */ }
+    }
+    return resolvedTheme === "light" ? "#f8f8f8" : "#1e1e2a";
+  });
 
   useEffect(() => {
-    // Delay one frame so the theme CSS variables are applied before we read them.
-    // next-themes may apply the .dark class asynchronously, so reading immediately
-    // could give the stale value from the previous mode.
+    // next-themes may apply the .dark class asynchronously on theme switch,
+    // so defer reading CSS vars by one frame when the theme changes.
     const raf = requestAnimationFrame(() => {
       const bg = getCSSVar("--background");
       if (bg) {
         try {
           setBackgroundHex(oklchToHex(bg));
         } catch {
-          // keep fallback
+          // keep current value
         }
       }
     });

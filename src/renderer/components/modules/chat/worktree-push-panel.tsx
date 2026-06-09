@@ -69,10 +69,14 @@ export function WorktreePushPanel({ onClose }: WorktreePushPanelProps) {
       .catch(() => "");
     const alreadyOnBase = currentBranch === baseBranch;
 
+    // Build step list — stash + pop are unconditional (the project repo may
+    // have uncommitted changes even when we're already on the base branch).
     const steps = alreadyOnBase
-      ? ["Saving files…", "Committing in worktree…", "Merging into " + baseBranch + "…", "Committing merge…"]
-      : ["Saving files…", "Committing in worktree…", "Switching to " + baseBranch + "…", "Merging…", "Committing merge…", "Restoring pending changes…"];
+      ? ["Saving files…", "Committing in worktree…", "Stashing project changes…", "Merging into " + baseBranch + "…", "Committing merge…", "Restoring project changes…"]
+      : ["Saving files…", "Committing in worktree…", "Stashing project changes…", "Switching to " + baseBranch + "…", "Merging…", "Committing merge…", "Restoring project changes…"];
     setPushSteps(steps);
+
+    let didStash = false;
 
     try {
       // 1. Save dirty files + commit in the worktree
@@ -90,46 +94,44 @@ export function WorktreePushPanel({ onClose }: WorktreePushPanelProps) {
         throw new Error(`Failed to commit in worktree: ${commitResult.error}`);
       }
 
-      let didStash = false;
-      if (!alreadyOnBase) {
-        setPushStep(2);
-        // Stash pending changes so checkout is clean
-        try {
-          const stashResult = await window.electronAPI.gitStash(
-            projectRoot,
-            `auto-save before push from ${activeWorktree.name}`,
-          );
-          if (stashResult.success) didStash = true;
-        } catch { /* no changes to stash */ }
+      // 2. Always stash project changes — merge requires a clean working tree
+      //    even when we're already on the base branch.
+      setPushStep(2);
+      try {
+        const stashResult = await window.electronAPI.gitStash(
+          projectRoot,
+          `auto-save before push from ${activeWorktree.name}`,
+        );
+        didStash = stashResult.success;
+      } catch { /* no changes to stash */ }
 
-        // Checkout base branch
+      // 3. Checkout base branch if needed
+      if (!alreadyOnBase) {
+        setPushStep(3);
         const checkoutResult = await window.electronAPI.gitCheckout(projectRoot, baseBranch);
         if (!checkoutResult.success) {
-          if (didStash) { try { await window.electronAPI.gitStashPop(projectRoot); } catch {} }
           throw new Error(`Failed to checkout ${baseBranch}: ${checkoutResult.error}`);
         }
       }
 
-      // 3/4. Merge worktree branch into base branch
-      setPushStep(alreadyOnBase ? 2 : 3);
+      // 4. Merge worktree branch into base branch
+      setPushStep(alreadyOnBase ? 3 : 4);
       const mergeResult = await window.electronAPI.gitMergeNoCommit(projectRoot, activeWorktree.branch);
       if (!mergeResult.success) {
-        if (didStash) { try { await window.electronAPI.gitStashPop(projectRoot); } catch {} }
         throw new Error(`Merge failed: ${mergeResult.error}`);
       }
 
-      // 4/5. Commit the merge result
-      setPushStep(alreadyOnBase ? 3 : 4);
+      // 5. Commit the merge result
+      setPushStep(alreadyOnBase ? 4 : 5);
       const mergeCommitMsg = `Merge worktree ${activeWorktree.name} into ${baseBranch}\n\n${files.length} file${files.length !== 1 ? "s" : ""} from ${activeWorktree.name}`;
       const mergeCommitResult = await window.electronAPI.gitCommit(projectRoot, mergeCommitMsg);
       if (!mergeCommitResult.success) {
-        if (didStash) { try { await window.electronAPI.gitStashPop(projectRoot); } catch {} }
         throw new Error(`Failed to commit merge: ${mergeCommitResult.error}`);
       }
 
-      // 5/6. Restore stashed changes
+      // 6. Restore stashed changes on top of the merge
       if (didStash) {
-        setPushStep(5);
+        setPushStep(alreadyOnBase ? 5 : 6);
         try {
           const popResult = await window.electronAPI.gitStashPop(projectRoot);
           if (!popResult.success) {

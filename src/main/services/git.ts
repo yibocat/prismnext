@@ -1,4 +1,4 @@
-import { exec } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile, unlink, readdir, writeFile, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -38,10 +38,20 @@ export function queueWarmup(projectRoot: string): Promise<void> {
   ].join(" && ");
 
   const task = _pending.then(() => new Promise<void>((resolve) => {
-    exec(cmd, { timeout: 30000 }, () => {
+    // Use spawn with explicit stdio to avoid EBADF in Electron
+    const child = spawn("sh", ["-c", cmd], {
+      stdio: "ignore",
+      timeout: 30000,
+    });
+    child.on("close", () => {
       const ms = performance.now() - start;
       console.log(`[git] warmup: ${Math.round(ms)}ms`);
       log.info("warmup complete", { durationMs: Math.round(ms) });
+      _warmedUpRoots.add(projectRoot);
+      resolve();
+    });
+    child.on("error", () => {
+      // Warmup failure is non-fatal — resolve anyway
       _warmedUpRoots.add(projectRoot);
       resolve();
     });
@@ -50,32 +60,34 @@ export function queueWarmup(projectRoot: string): Promise<void> {
   return task;
 }
 
-// Shell-escape a single argument so it survives /bin/sh -c parsing.
-// Arguments that are pure alphanumeric/symbols pass through as-is;
-// everything else gets single-quoted with inner quotes escaped.
-function shellEscape(arg: string): string {
-  if (/^[a-zA-Z0-9_./\-+=:;,@%^~]+$/.test(arg)) return arg;
-  return `'${arg.replace(/'/g, "'\\''")}'`;
-}
-
 function sh(projectRoot: string, gitArgs: string[]): Promise<string> {
   const run = () => new Promise<string>((resolve, reject) => {
     const start = performance.now();
-    const escaped = gitArgs.map(shellEscape).join(" ");
-    const cmd = `cd ${JSON.stringify(projectRoot)} && git -c core.quotepath=false ${escaped}`;
-    exec(cmd, {
+    // Use spawn with explicit stdio to avoid EBADF in Electron.
+    // exec() creates a stdin pipe even when unused, which fails in GUI
+    // environments where stdin may not be a valid file descriptor.
+    const child = spawn("git", ["-c", "core.quotepath=false", ...gitArgs], {
+      cwd: projectRoot,
       timeout: GIT_TIMEOUT_MS,
-      maxBuffer: 10 * 1024 * 1024,
       windowsHide: true,
-    }, (error, stdout, stderr) => {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (data: Buffer) => { stdout += data.toString(); });
+    child.stderr.on("data", (data: Buffer) => { stderr += data.toString(); });
+    child.on("close", (code) => {
       const ms = performance.now() - start;
       console.log(`[git] ${gitArgs[0]}: ${Math.round(ms)}ms`);
       log.info(`git ${gitArgs[0]}`, { durationMs: Math.round(ms), args: gitArgs.join(" ") });
-      if (error) {
-        reject(new Error(stderr.trim() || error.message));
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || `git exited with code ${code}`));
       } else {
         resolve(stdout);
       }
+    });
+    child.on("error", (err) => {
+      reject(err);
     });
   });
   // Chain onto the queue so only one shell+git runs at a time.
@@ -500,12 +512,36 @@ export async function stageFile(projectRoot: string, filePath: string): Promise<
 }
 
 /**
+ * Batch stage multiple files in a single git command.
+ */
+export async function stageFiles(projectRoot: string, filePaths: string[]): Promise<GitResult> {
+  try {
+    await execGit(projectRoot, ["add", "--", ...filePaths]);
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+/**
  * Unstage a file: `git reset HEAD -- <filePath>`
  * For untracked files, this is a no-op (git status won't show them as staged anyway).
  */
 export async function unstageFile(projectRoot: string, filePath: string): Promise<GitResult> {
   try {
     await execGit(projectRoot, ["reset", "HEAD", "--", filePath]);
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+/**
+ * Batch unstage multiple files in a single git command.
+ */
+export async function unstageFiles(projectRoot: string, filePaths: string[]): Promise<GitResult> {
+  try {
+    await execGit(projectRoot, ["reset", "HEAD", "--", ...filePaths]);
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: (err as Error).message };
@@ -662,22 +698,21 @@ export async function getLog(
   maxCount: number = 50,
 ): Promise<GitCommit[]> {
   try {
-    // Fast path: plain log without --graph (expensive, unused in UI) or
-    // --shortstat (diffs every commit — lazy-loaded on expand instead).
+    // Use %x1E (Record Separator) to delimit commits so multi-line messages (%B) parse correctly.
     const output = await execGit(projectRoot, [
       "log",
       `--max-count=${maxCount}`,
-      "--format=%H%x00%s%x00%an%x00%ai%x00%D",
+      "--format=%H%x00%B%x00%an%x00%ai%x00%D%x1E",
     ]);
 
     const commits: GitCommit[] = [];
 
-    for (const line of output.split("\n")) {
-      const parts = line.split("\0");
+    for (const record of output.split("\x1E")) {
+      const parts = record.trim().split("\0");
       if (parts.length >= 5) {
         commits.push({
           hash: parts[0].slice(0, 7),
-          message: parts[1],
+          message: parts[1].trim(),
           author: parts[2],
           date: parts[3],
           graph: "",

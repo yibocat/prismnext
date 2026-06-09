@@ -1,27 +1,12 @@
 import { create } from "zustand";
 import { useDocumentStore } from "./document-store";
 import { useTerminalStore } from "./terminal-store";
+import { useLayoutStore } from "./layout-store";
+import { modeRegistry, type RightTabKind, type RightTab } from "@/lib/mode-registry";
 
-// ─── Types ───
+// ─── Re-exports ───
 
-export type RightTabKind = "file" | "browser" | "git-overview" | "git-diff" | "texworkspace" | "terminal";
-
-export interface RightTab {
-  id: string;
-  kind: RightTabKind;
-  title: string;
-  isInitial: boolean;
-  filePath?: string;
-  fileId?: string;
-  /** Current URL for browser tabs */
-  url?: string;
-  /** Whether the browser tab is currently loading a page */
-  isLoading?: boolean;
-  /** Whether the tab has been hibernated (webview unloaded to save memory) */
-  hibernated?: boolean;
-  /** Per-tab view mode. For .md files: "source" | "preview". Defaults to "source". */
-  viewMode?: string;
-}
+export type { RightTabKind, RightTab } from "@/lib/mode-registry";
 
 // ─── Helpers ───
 
@@ -29,15 +14,6 @@ let _tabSeq = 0;
 function nextTabId(): string {
   return `right-tab-${++_tabSeq}`;
 }
-
-const INITIAL_TITLES: Record<RightTabKind, string> = {
-  file: "Untitled",
-  browser: "New Tab",
-  "git-overview": "Git",
-  "git-diff": "Diff",
-  texworkspace: "Texworkspace",
-  terminal: "Terminal",
-};
 
 // ─── Store ───
 
@@ -61,6 +37,10 @@ interface RightPanelState {
   setTabHibernated: (id: string, hibernated: boolean) => void;
   closeTab: (id: string) => void;
   closeAllTabs: () => void;
+  /** Remove all tabs of a specific kind (used when deactivating transient modes) */
+  closeTabsOfKind: (kind: RightTabKind) => void;
+  /** Check if any tabs of a given kind exist */
+  hasTabsOfKind: (kind: RightTabKind) => boolean;
   setActiveTab: (id: string) => void;
   setTabViewMode: (id: string, mode: string) => void;
   updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title">>) => void;
@@ -73,6 +53,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
 
   ensureTab: (kind: RightTabKind) => {
     const { tabs } = get();
+    // Reuse an existing initial tab if present
     const existing = tabs.find((t) => t.kind === kind && t.isInitial);
     if (existing) {
       set({ activeTabId: existing.id });
@@ -87,8 +68,8 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       }
     }
     const id = nextTabId();
-    const tab: RightTab = { id, kind, title: INITIAL_TITLES[kind], isInitial: true };
-    set((s) => ({ tabs: [...s.tabs, tab], activeTabId: id }));
+    const tab: RightTab = { id, kind, title: modeRegistry.findByTabKind(kind)?.initialTitle ?? kind, isInitial: true };
+    set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
     return id;
   },
 
@@ -117,6 +98,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   },
 
   switchToTexworkspace: (fileId: string, filePath: string, name: string) => {
+    useLayoutStore.getState().activateMode("texworkspace");
     const { tabs } = get();
     const existing = tabs.find((t) => t.kind === "texworkspace");
     if (existing) {
@@ -129,12 +111,15 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     } else {
       const id = nextTabId();
       const tab: RightTab = { id, kind: "texworkspace", title: name, fileId, filePath, isInitial: false };
-      set((s) => ({ tabs: [...s.tabs, tab], activeTabId: id }));
+      set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
     }
     useDocumentStore.getState().setActiveFile(fileId);
   },
 
   openFile: (fileId: string, filePath: string, name: string) => {
+    // Ensure Files mode is active and focused
+    useLayoutStore.getState().activateMode("files");
+
     const ext = name.slice(name.lastIndexOf(".")).toLowerCase();
     const defaultViewMode = ext === ".md" || ext === ".mdx" ? "preview" : "source";
     const { tabs, activeTabId } = get();
@@ -154,14 +139,16 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     }
     const id = nextTabId();
     const tab: RightTab = { id, kind: "file", title: name, fileId, filePath, isInitial: false, viewMode: defaultViewMode };
-    set((s) => ({ tabs: [...s.tabs, tab], activeTabId: id }));
+    set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
   },
 
   openGitDiff: (filePath: string) => {
+    // Ensure Git mode is active and focused
+    useLayoutStore.getState().activateMode("git");
     const name = filePath.split("/").pop() || filePath;
     const id = nextTabId();
     const tab: RightTab = { id, kind: "git-diff", title: name, filePath, isInitial: false };
-    set((s) => ({ tabs: [...s.tabs, tab], activeTabId: id }));
+    set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
   },
 
   navigateBrowserTab: (id: string, url: string) => {
@@ -205,16 +192,16 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     const existing = tabs.find((t) => t.kind === "browser" && t.isInitial);
     if (existing) { set({ activeTabId: existing.id }); return existing.id; }
     const id = nextTabId();
-    const tab: RightTab = { id, kind: "browser", title: INITIAL_TITLES.browser, isInitial: true };
-    set((s) => ({ tabs: [...s.tabs, tab], activeTabId: id }));
+    const tab: RightTab = { id, kind: "browser", title: modeRegistry.findByTabKind("browser")?.initialTitle ?? "Browser", isInitial: true };
+    set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
     return id;
   },
 
   newTerminalTab: () => {
     // Always create a fresh terminal — each tab is an independent shell session.
     const id = nextTabId();
-    const tab: RightTab = { id, kind: "terminal", title: INITIAL_TITLES.terminal, isInitial: false };
-    set((s) => ({ tabs: [...s.tabs, tab], activeTabId: id }));
+    const tab: RightTab = { id, kind: "terminal", title: modeRegistry.findByTabKind("terminal")?.initialTitle ?? "Terminal", isInitial: false };
+    set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
     return id;
   },
 
@@ -227,9 +214,11 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   },
 
   closeTab: (id: string) => {
-    // Confirm before closing a busy terminal tab (process still running)
     const closingTab = get().tabs.find((t) => t.id === id);
-    if (closingTab?.kind === "terminal") {
+    if (!closingTab) return;
+
+    // Confirm before closing a busy terminal tab (process still running)
+    if (closingTab.kind === "terminal") {
       const busy = useTerminalStore.getState().sessions[closingTab.id]?.busy;
       if (busy) {
         if (!window.confirm("A process is still running. Close anyway?")) {
@@ -237,12 +226,49 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
         }
       }
     }
+
+    // ── Files / Browser: last tab → regenerate home tab ──
+    const sameKind = get().tabs.filter((t) => t.kind === closingTab.kind);
+    const isLastOfKind = sameKind.length === 1;
+    const def = modeRegistry.findByTabKind(closingTab.kind);
+    const isPersistent = def?.persistence === "persistent";
+
+    if (isLastOfKind && isPersistent) {
+      set((s) => ({
+        tabs: s.tabs.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                title: modeRegistry.findByTabKind(t.kind)?.initialTitle ?? t.kind,
+                isInitial: true,
+                filePath: undefined,
+                fileId: undefined,
+                url: undefined,
+                viewMode: undefined,
+              }
+            : t,
+        ),
+      }));
+      if (closingTab.kind === "file") {
+        useDocumentStore.getState().setActiveFile("");
+      }
+      return;
+    }
+
+    // ── Normal close ──
     set((s) => {
       const closing = s.tabs.find((t) => t.id === id);
       const next = s.tabs.filter((t) => t.id !== id);
+      const closingMode = modeRegistry.findByTabKind(closing?.kind ?? "file")?.id ?? "files";
+
       let nextActive = s.activeTabId;
       if (s.activeTabId === id) {
-        nextActive = next.length > 0 ? next[next.length - 1].id : null;
+        // Prefer the next tab of the SAME mode, else fallback to first tab
+        const sameModeTab = next.find((t) => {
+          const def = modeRegistry.findByTabKind(t.kind);
+          return def?.id === closingMode;
+        });
+        nextActive = sameModeTab?.id ?? (next.length > 0 ? next[0].id : null);
       }
       const nextActiveTab = next.find((t) => t.id === nextActive);
       const nextFileId = (nextActiveTab?.kind === "file" || nextActiveTab?.kind === "texworkspace") && nextActiveTab.fileId ? nextActiveTab.fileId : "";
@@ -256,6 +282,31 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       // Destroy PTY sessions when closing a terminal tab
       if (closing?.kind === "terminal") {
         window.electronAPI.terminalDestroyTab({ tabId: closing.id });
+      }
+
+      // If no tabs remain for this mode, deactivate it
+      const hasRemainingOfMode = next.some((t) => {
+        const def = modeRegistry.findByTabKind(t.kind);
+        return def?.id === closingMode;
+      });
+      if (!hasRemainingOfMode && closing) {
+        useLayoutStore.setState((s) => {
+          const remainingModes = s.activeModes.filter((m) => m !== closingMode);
+          const newFocused = remainingModes.length > 0
+            ? remainingModes[remainingModes.length - 1]
+            : "dashboard";
+          return { activeModes: remainingModes, focusedMode: newFocused };
+        });
+        // Sync activeTabId to new focused mode (or null for dashboard)
+        if (useLayoutStore.getState().focusedMode === "dashboard") {
+          nextActive = null;
+        } else {
+          const newModeTab = next.find((t) => {
+            const def = modeRegistry.findByTabKind(t.kind);
+            return def?.id === useLayoutStore.getState().focusedMode;
+          });
+          nextActive = newModeTab?.id ?? null;
+        }
       }
 
       return { tabs: next, activeTabId: nextActive };
@@ -284,6 +335,28 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   closeAllTabs: () => {
     set({ tabs: [], activeTabId: null });
     useDocumentStore.getState().setActiveFile("");
+    useLayoutStore.setState({ activeModes: [], focusedMode: "dashboard" });
+  },
+
+  closeTabsOfKind: (kind: RightTabKind) => {
+    set((s) => {
+      const next = s.tabs.filter((t) => t.kind !== kind);
+      // Destroy terminal PTY sessions when closing terminal tabs
+      if (kind === "terminal") {
+        s.tabs.filter((t) => t.kind === "terminal").forEach((t) => {
+          window.electronAPI.terminalDestroyTab({ tabId: t.id });
+        });
+      }
+      const nextActive = next.length > 0 ? next[0].id : null;
+      if (kind === "file" || kind === "texworkspace") {
+        useDocumentStore.getState().setActiveFile("");
+      }
+      return { tabs: next, activeTabId: nextActive };
+    });
+  },
+
+  hasTabsOfKind: (kind: RightTabKind) => {
+    return get().tabs.some((t) => t.kind === kind);
   },
 
   moveTab: (fromIndex: number, toIndex: number) => {

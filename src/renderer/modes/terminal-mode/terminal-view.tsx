@@ -143,13 +143,13 @@ export function TerminalView({ tabId }: TerminalViewProps) {
     });
 
     // ─── Fit + focus ───
+    // One rAF fit is enough — the ResizeObserver handles subsequent size
+    // changes. No need for staggered retries that cause extra repaints.
     const fitAndFocus = () => {
       try { fitAddon.fit(); } catch { /* ignore */ }
       term.focus();
     };
     requestAnimationFrame(fitAndFocus);
-    const t1 = setTimeout(fitAndFocus, 100);
-    const t2 = setTimeout(() => term.focus(), 300);
 
     // ─── Resize ───
     const resizeObserver = new ResizeObserver(() => {
@@ -163,8 +163,6 @@ export function TerminalView({ tabId }: TerminalViewProps) {
 
     // ─── Cleanup ───
     return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
       unsubData();
       unsubExit();
       onDataDisposable.dispose();
@@ -186,8 +184,6 @@ export function TerminalView({ tabId }: TerminalViewProps) {
   useEffect(() => {
     if (isActive && termRef.current) {
       requestAnimationFrame(() => termRef.current?.focus());
-      setTimeout(() => termRef.current?.focus(), 60);
-      setTimeout(() => termRef.current?.focus(), 200);
     }
   }, [isActive]);
 

@@ -6,6 +6,7 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { cn } from "@/lib/utils";
+import { registerAllModes } from "@/modes/_register";
 import { GlobalErrorBoundary } from "@/components/modules/shared";
 import { ProjectSetupDialog, WelcomePage } from "@/components/modules/project";
 import { Toaster } from "@/components/ui/sonner";
@@ -19,11 +20,13 @@ import {
   SIDEBAR_LEFT_DEFAULT,
   SIDEBAR_LEFT_MAX,
   RIGHT_AREA_MIN,
-  SIDEBAR_RIGHT_MIN,
   SIDEBAR_OVERLAY_THRESHOLD,
 } from "@/styles/constants";
 
 const SEP = "w-px bg-border hover:bg-foreground/30 transition-colors outline-none relative after:absolute after:inset-y-0 after:-left-1 after:-right-1";
+
+// Register all RightArea modes before any component renders
+registerAllModes();
 
 export function App() {
   const isMobile = useIsMobile();
@@ -33,8 +36,7 @@ export function App() {
   const rightSidebarOpen = useLayoutStore((s) => s.rightSidebarOpen);
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
-  const MAIN_MIN = 150;
-  const rightAreaMin = rightSidebarOpen ? MAIN_MIN + SIDEBAR_RIGHT_MIN : RIGHT_AREA_MIN;
+  const rightAreaMin = RIGHT_AREA_MIN;
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const showWelcome = useDocumentStore((s) => s.showWelcome);

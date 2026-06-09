@@ -95,6 +95,22 @@ export function registerGitHandlers(): void {
     },
   );
 
+  // ── git:stageAll ──
+  ipcMain.handle(
+    "git:stageAll",
+    async (_event, args: { projectRoot: string; filePaths: string[] }) => {
+      return gitService.stageFiles(args.projectRoot, args.filePaths);
+    },
+  );
+
+  // ── git:unstageAll ──
+  ipcMain.handle(
+    "git:unstageAll",
+    async (_event, args: { projectRoot: string; filePaths: string[] }) => {
+      return gitService.unstageFiles(args.projectRoot, args.filePaths);
+    },
+  );
+
   // ── git:init ──
   ipcMain.handle(
     "git:init",

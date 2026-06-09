@@ -1,4 +1,4 @@
-import { useRightPanelStore } from "@/stores/right-panel-store";
+import type { RightTab } from "@/lib/mode-registry";
 import { PaneContent } from "./content";
 
 /**
@@ -17,10 +17,12 @@ const INACTIVE_TAB_STYLE: React.CSSProperties = {
   pointerEvents: "none",
 };
 
-export function RightPane() {
-  const tabs = useRightPanelStore((s) => s.tabs);
-  const activeTabId = useRightPanelStore((s) => s.activeTabId);
+interface RightPaneProps {
+  tabs: RightTab[];
+  activeTabId: string | null;
+}
 
+export function RightPane({ tabs, activeTabId }: RightPaneProps) {
   return (
     <div className="flex h-full flex-col min-w-0 relative">
       {tabs.length === 0 ? (

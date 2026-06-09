@@ -6,7 +6,7 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useGitStore } from "@/stores/git-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
-import { useIsTexworkspace } from "@/components/modules/texworkspace-mode";
+import { useIsTexworkspace } from "@/modes/texworkspace-mode/use-texworkspace";
 import {
   CheckIcon,
   FilePlusCorner,
@@ -48,8 +48,8 @@ import { buildFileTree, flattenVisibleTree, type TreeNode, type FlatVisibleNode 
 import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
-import { MODE_DIR, type SidebarMode, filterFilesByMode, filterFoldersByMode } from "./shared";
-import { FolderVirtRow, FileVirtRow, InlineEditRow, type VirtTreeCallbacks, type GitStatusInfo } from "./virtual-tree-rows";
+import { MODE_DIR, type SidebarMode, filterFilesByMode, filterFoldersByMode } from "@/components/layout/right-sidebar/shared";
+import { FolderVirtRow, FileVirtRow, InlineEditRow, type VirtTreeCallbacks, type GitStatusInfo } from "@/components/layout/right-sidebar/virtual-tree-rows";
 
 
 
@@ -446,7 +446,10 @@ export function FilesSidebar() {
     [isTexworkspaceActive, openTexworkspaceFile, setActiveFile, openFile],
   );
 
-  const handleSelectFolder = useCallback((path: string) => setSelectedFolder(path), []);
+  const handleSelectFolder = useCallback((path: string) => {
+    setSelectedFolder(path);
+    setActiveFile(""); // Clear file highlight when selecting a folder
+  }, [setActiveFile]);
   const handleEditingDone = useCallback(() => setEditing(null), []);
 
   // ─── Virtual tree: flat visible nodes + Virtuoso ref ───
@@ -608,9 +611,9 @@ export function FilesSidebar() {
           <ContextMenu>
             <ContextMenuTrigger asChild>
               <div
-                className="flex-1 h-full min-h-0"
+                className="flex-1 h-full min-h-0 px-1.5"
                 data-sidebar="content"
-                onClick={(e) => { if (e.target === e.currentTarget) setSelectedFolder(null); }}
+                onClick={(e) => { if (e.target === e.currentTarget) { setSelectedFolder(null); setActiveFile(""); } }}
               >
                 <Virtuoso
                   ref={virtuosoRef}
@@ -631,7 +634,7 @@ export function FilesSidebar() {
                     ),
                   }}
                   style={{ height: "100%" }}
-                  className="px-1.5 py-1"
+                  className="py-1"
                   increaseViewportBy={{ top: 100, bottom: 100 }}
                 />
               </div>

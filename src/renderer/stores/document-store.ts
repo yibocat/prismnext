@@ -273,7 +273,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         checkoutRoot: rootPath,
         showWelcome: false,
         files,
-        folders: deriveFolders(files),
+        folders: result.folders,
         activeFileId: null,
         fileMetadata,
         initialized: true,
@@ -921,7 +921,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
       set({
         files: newFilesList,
-        folders: deriveFolders(newFilesList),
+        folders: get().folders, // preserve empty folders — new file parent already scanned
         activeFileId: relativePath,
         fileMetadata: newMetadata,
         openedContents: newOpenedContents,
@@ -977,7 +977,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
       set({
         files: newFiles,
-        folders: deriveFolders(newFiles),
+        folders: get().folders, // preserve empty folders — deleting a file doesn't delete its parent dir
         activeFileId:
           activeFileId === id
             ? newFiles.length > 0
@@ -1116,7 +1116,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
       set({
         files: renamedFiles,
-        folders: deriveFolders(renamedFiles),
+        folders: get().folders, // preserve empty folders — rename doesn't delete dirs
         activeFileId: activeFileId === id ? newRelativePath : activeFileId,
         fileMetadata: newMetadata,
         openedContents: newOpenedContents,
@@ -1239,6 +1239,12 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
   setActiveFile: (id: string) => {
     if (get().activeFileId === id) return;
+    if (!id) {
+      // Clearing the selection — openFile can't handle empty id
+      // (it early-returns on missing metadata), so set directly.
+      set({ activeFileId: null });
+      return;
+    }
     // Trigger lazy load — openFile checks cache first, loads from disk on miss
     get().openFile(id);
   },

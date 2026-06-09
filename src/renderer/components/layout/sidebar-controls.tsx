@@ -4,7 +4,6 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { useChatStore } from "@/stores/chat-store";
 import { SIDEBAR_LEFT_DEFAULT, SIDEBAR_LEFT_MAX, SIDEBAR_OVERLAY_THRESHOLD } from "@/styles/constants";
 import { cn } from "@/lib/utils";
-import { Kbd } from "@/components/ui/kbd";
 import { CommandPalette } from "@/components/modules/shared";
 import { PanelLeft, SearchIcon, PlusIcon } from "lucide-react";
 
@@ -59,12 +58,11 @@ export function SidebarControls({ leftSidebarRef, showMacSpacer, showNewAgent = 
 
         <button
           type="button"
-          className="flex items-center gap-1.5 rounded px-1.5 py-1 border border-border/40 text-[length:var(--font-toolbar-label)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          className="flex items-center justify-center size-6 rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
           title="Command palette"
           onClick={() => setCommandOpen(true)}
         >
           <SearchIcon className="size-3.5" />
-          <Kbd className="text-[length:var(--font-kbd)] h-4 min-w-4 px-0.5 bg-transparent">⌘K</Kbd>
         </button>
 
         {showNewAgent && (

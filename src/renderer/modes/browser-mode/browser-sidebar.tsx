@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useBrowserStore } from "@/stores/browser-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { getWebview } from "@/components/modules/browser/webview-registry";
+import { getWebview } from "./webview-registry";
 import {
   SidebarHeader,
   SidebarContent,

@@ -31,7 +31,7 @@ export const SIDEBAR_RIGHT_MIN = 280;
 export const SIDEBAR_RIGHT_MAX = 520;
 
 export const RIGHT_AREA_DEFAULT = 500;
-export const RIGHT_AREA_MIN = 250;
+export const RIGHT_AREA_MIN = 280;
 export const RIGHT_AREA_MAX = 1100;
 
 // ─── Z-Index ───

@@ -1,5 +1,5 @@
-import { useState, useCallback, memo } from "react";
-import type { RightTab } from "@/stores/right-panel-store";
+import { useState, useCallback, useRef, useEffect, memo } from "react";
+import type { RightTab } from "@/lib/mode-registry";
 import { XIcon, DotIcon, FoldersIcon, Terminal as TerminalIcon } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { getFileIconName } from "@/lib/file-icon-class";
@@ -18,7 +18,10 @@ function DropZone({ active, onDragOver, onDrop }: {
 }) {
   return (
     <div
-      className="shrink-0 w-1.5 self-stretch flex items-center cursor-default"
+      className={cn(
+        "shrink-0 self-stretch flex items-center cursor-default transition-[width]",
+        active ? "w-1.5" : "w-0",
+      )}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
@@ -37,12 +40,44 @@ interface TabBarProps {
   onClose: (id: string) => void;
   onReorder?: (fromIndex: number, toIndex: number) => void;
   dirtyFileIds?: Set<string>;
+  /** When true, hide tabs regardless of internal scroll detection */
+  forceOverflow?: boolean;
 }
 
-export const TabBar = memo(function TabBar({ tabs, activeTabId, onSelect, onClose, onReorder, dirtyFileIds }: TabBarProps) {
+function tabIcon(tab: RightTab, dirtyFileIds?: Set<string>) {
+  const isDirty = dirtyFileIds?.has(tab.fileId ?? "") || dirtyFileIds?.has(tab.filePath ?? "");
+  if (isDirty) {
+    return <span title="Unsaved changes"><DotIcon className="mr-1 size-3.5 shrink-0 text-info" strokeWidth={4} /></span>;
+  }
+  if (tab.kind === "terminal") {
+    return <TerminalIcon className="mr-1 size-3.5 shrink-0 text-muted-foreground" />;
+  }
+  if (tab.kind === "file" && tab.isInitial) {
+    return <FoldersIcon className="mr-1 size-3.5 shrink-0 text-muted-foreground" />;
+  }
+  const fileName = tab.filePath ?? tab.title;
+  const iconName = getFileIconName(fileName);
+  return <Icon icon={iconName} className="mr-1 size-3.5 shrink-0" />;
+}
+
+export const TabBar = memo(function TabBar({ tabs, activeTabId, onSelect, onClose, onReorder, dirtyFileIds, forceOverflow }: TabBarProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [side, setSide] = useState<"left" | "right">("right");
+
+  // ── Overflow detection ──
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState(false);
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const check = () => setOverflow(el.scrollWidth > el.clientWidth + 1);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [tabs]);
 
   const reset = useCallback(() => {
     setDragIndex(null);
@@ -87,8 +122,18 @@ export const TabBar = memo(function TabBar({ tabs, activeTabId, onSelect, onClos
 
   if (tabs.length === 0) return null;
 
+  // ── Overflow: hide tabs — dropdown is rendered by parent (right-area) ──
+  if (overflow || forceOverflow) {
+    return null;
+  }
+
+  // ── Normal: scrollable tabs ──
   return (
-    <div className="scrollbar-none flex min-w-0 items-center gap-0.5 overflow-x-auto" onDragEnd={reset}>
+    <div
+      ref={scrollerRef}
+      className="scrollbar-none flex min-w-0 items-center gap-0.5 overflow-x-auto justify-end"
+      onDragEnd={reset}
+    >
       {/* Drop zone before first tab */}
       <DropZone
         active={overIndex === 0 && side === "left"}
@@ -119,21 +164,7 @@ export const TabBar = memo(function TabBar({ tabs, activeTabId, onSelect, onClos
                 onDragOver={(e) => handleDragOver(e, i)}
                 onDrop={(e) => handleDrop(e, i)}
               >
-                {(() => {
-                  const isDirty = dirtyFileIds?.has(tab.fileId ?? "") || dirtyFileIds?.has(tab.filePath ?? "");
-                  if (isDirty) {
-                    return <span title="Unsaved changes"><DotIcon className="mr-1 size-3.5 shrink-0 text-info" strokeWidth={4} /></span>;
-                  }
-                  if (tab.kind === "terminal") {
-                    return <TerminalIcon className="mr-1 size-3.5 shrink-0 text-muted-foreground" />;
-                  }
-                  if (tab.kind === "file" && tab.isInitial) {
-                    return <FoldersIcon className="mr-1 size-3.5 shrink-0 text-muted-foreground" />;
-                  }
-                  const fileName = tab.filePath ?? tab.title;
-                  const iconName = getFileIconName(fileName);
-                  return <Icon icon={iconName} className="mr-1 size-3.5 shrink-0" />;
-                })()}
+                {tabIcon(tab, dirtyFileIds)}
                 <span className="truncate">{tab.kind === "file" && tab.isInitial ? "folder" : tab.title}</span>
                 <button
                   type="button"

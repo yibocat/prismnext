@@ -149,6 +149,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("git:stage", { projectRoot, filePath }),
   gitUnstage: (projectRoot: string, filePath: string) =>
     ipcRenderer.invoke("git:unstage", { projectRoot, filePath }),
+  gitStageAll: (projectRoot: string, filePaths: string[]) =>
+    ipcRenderer.invoke("git:stageAll", { projectRoot, filePaths }),
+  gitUnstageAll: (projectRoot: string, filePaths: string[]) =>
+    ipcRenderer.invoke("git:unstageAll", { projectRoot, filePaths }),
   gitInit: (projectRoot: string) =>
     ipcRenderer.invoke("git:init", { projectRoot }),
   gitDiscard: (projectRoot: string, filePath: string, staged: boolean, untracked: boolean, worktreeStatus: string) =>

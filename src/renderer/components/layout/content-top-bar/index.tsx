@@ -1,5 +1,4 @@
 import { type RefObject } from "react";
-import { useTheme } from "next-themes";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useWindowState } from "@/hooks/use-window-state";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -12,15 +11,10 @@ import { SidebarControls } from "@/components/layout/sidebar-controls";
 import { SessionTitle } from "./session-title";
 import {
   PanelRight,
-  SunIcon,
-  MoonIcon,
-  MonitorIcon,
   Minimize2Icon,
   Maximize2Icon,
   XIcon,
-  LockIcon,
 } from "lucide-react";
-import { useSettingsStore } from "@/stores/settings-store";
 
 interface ContentTopBarProps {
   leftSidebarRef: RefObject<PanelImperativeHandle | null>;
@@ -36,20 +30,11 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   const inSettings = leftSidebarView === "settings";
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
-  const { theme, resolvedTheme, setTheme } = useTheme();
-  const glassEffect = useSettingsStore((s) => s.settings.glassEffect);
 
   const sessionTitle = useSessionTitle();
   const selectedAgentId = useChatStore((s) => s.selectedAgent);
   const agentName = AGENT_UI_CONFIGS[selectedAgentId]?.name ?? selectedAgentId;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-
-  const cycleTheme = () => {
-    if (glassEffect) return;
-    if (theme === "light") setTheme("dark");
-    else if (theme === "dark") setTheme("system");
-    else setTheme("light");
-  };
 
   const isMac = platform === "darwin";
   const showSidebarControls = sidebarFullyCollapsed;
@@ -81,7 +66,7 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
       {/* Spacer */}
       <div className="flex-1 min-w-0" />
 
-      {/* ── Right: theme + PanelRight (only when RightArea closed) ── */}
+      {/* ── Right: PanelRight (only when RightArea closed) ── */}
       <div className="flex items-center gap-0.5 shrink-0">
         {!isMac && (
           <>
@@ -115,25 +100,6 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
 
         {!rightAreaExpanded && (
           <>
-            <button
-              type="button"
-              className={glassEffect
-                ? "flex size-6 items-center justify-center rounded text-muted-foreground/30 transition-colors"
-                : "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"}
-              title={glassEffect ? "Theme locked (Desktop glass is on)" : `Theme: ${theme}`}
-              onClick={cycleTheme}
-            >
-              {glassEffect ? (
-                <LockIcon className="size-3.5" />
-              ) : theme === "system" ? (
-                <MonitorIcon className="size-3.5" />
-              ) : resolvedTheme === "dark" ? (
-                <SunIcon className="size-3.5" />
-              ) : (
-                <MoonIcon className="size-3.5" />
-              )}
-            </button>
-
             {rightAreaRef && !inSettings && (
               <button
                 type="button"

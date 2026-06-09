@@ -7,7 +7,7 @@ import {
   unregisterWebview,
   markTabActive,
   wakeTab,
-} from "@/components/modules/browser/webview-registry";
+} from "./webview-registry";
 import {
   DropdownMenu,
   DropdownMenuContent,

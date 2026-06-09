@@ -289,6 +289,8 @@ export interface ElectronAPI {
   gitDiff: (projectRoot: string, filePath: string, indexStatus: string, worktreeStatus: string, staged: boolean, unstaged: boolean, untracked: boolean, view?: "staged" | "unstaged" | "all") => Promise<GitFileDiffData>;
   gitStage: (projectRoot: string, filePath: string) => Promise<GitResultData>;
   gitUnstage: (projectRoot: string, filePath: string) => Promise<GitResultData>;
+  gitStageAll: (projectRoot: string, filePaths: string[]) => Promise<GitResultData>;
+  gitUnstageAll: (projectRoot: string, filePaths: string[]) => Promise<GitResultData>;
   gitInit: (projectRoot: string) => Promise<GitResultData>;
   gitCommit: (projectRoot: string, message: string) => Promise<GitResultData>;
   gitCommitAll: (projectRoot: string, filePaths: string[], message: string) => Promise<GitResultData>;

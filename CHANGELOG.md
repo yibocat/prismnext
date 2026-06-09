@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.3.14 — 2026-06-10
+
+### Mode Registry Architecture
+
+- Centralized mode registry (`lib/mode-registry.ts`) — five modes (Browser, Files, Git, Terminal, TeXWorkspace) each defining content, sidebar, toolbar, placeholder, and empty states
+- All mode components relocated from `components/modules/` and `components/layout/` into `modes/<mode-name>/` directories
+- Automatic mode registration via `_register.ts` barrel import; `mode-utils.tsx` for mode-aware UI helpers
+
+### Git Mode Rewrite
+
+- Complete overhaul: scattered components (~1700 lines across git-overview, git-history, git-toolbar) consolidated into `modes/git-mode/` with git-viewer, git-sidebar, git-toolbar, git-push-dialog, and git-utils
+- New Git sidebar with branch list, status overview, stash, and action buttons
+- New Git toolbar with branch selector, fetch/pull/push, stage all / unstage all, and commit
+- New push dialog with diff preview and confirmation flow
+- Added `stageAll` / `unstageAll` IPC handlers for batch staging
+
+### Git Service Reliability
+
+- `exec()` → `spawn()` with explicit `stdio: "ignore"` — fixes EBADF errors in Electron spawn pipeline
+- Warmup and all git operations now use spawn-based execution
+
+### Terminal Mode
+
+- Terminal sidebar restored under `modes/terminal-mode/` with session info, quick commands, and history sections
+
+### Layout & Store Refactoring
+
+- RightArea, right-pane, and right-sidebar restructured for mode registry integration
+- layout-store and right-panel-store updated with mode-aware tab management
+- Settings sidebar restructured with improved organization
+
 ## 0.3.13 — 2026-06-08
 
 ### Startup Performance

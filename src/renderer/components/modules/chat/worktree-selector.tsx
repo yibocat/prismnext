@@ -5,7 +5,7 @@ import {
   PlusIcon,
   Trash2Icon,
   Loader2Icon,
-  FolderIcon,
+  LaptopIcon,
   LockIcon,
 } from "lucide-react";
 import {
@@ -109,7 +109,7 @@ export function WorktreeSelector() {
         )}
         title="Worktree mode is locked for this conversation"
       >
-        <GitBranchIcon className="size-3.5" />
+        {mode === "local" ? <LaptopIcon className="size-3.5" /> : <GitBranchIcon className="size-3.5" />}
         <span className="max-w-[100px] truncate">{triggerLabel}</span>
         <LockIcon className="size-3 text-muted-foreground/50" />
       </span>
@@ -130,7 +130,7 @@ export function WorktreeSelector() {
           )}
           onMouseDown={(e) => e.preventDefault()}
         >
-          <GitBranchIcon className="size-3.5" />
+          {mode === "local" ? <LaptopIcon className="size-3.5" /> : <GitBranchIcon className="size-3.5" />}
           <span className="max-w-[100px] truncate">{triggerLabel}</span>
         </button>
       </DropdownMenuTrigger>
@@ -140,7 +140,7 @@ export function WorktreeSelector() {
           onClick={handleSetLocal}
           className="text-[length:var(--font-chat-meta)]"
         >
-          <FolderIcon className="size-3.5" />
+          <LaptopIcon className="size-3.5" />
           <span>Local</span>
           {mode === "local" && (
             <span className="ml-auto text-[length:var(--font-badge)] text-primary">

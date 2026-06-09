@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback } from "react";
+import { useEffect, useMemo, useCallback, useRef } from "react";
 import { GitBranchIcon, LockIcon, PlusIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -34,10 +34,27 @@ export function BranchSelector() {
     [branches],
   );
 
+  // Cache the project branch so wt-* never flashes during transitions
+  // (e.g. when switching from worktree back to local — the git store still
+  // reports the wt-* worktree branch for a frame while it refreshes).
+  const lastProjectBranch = useRef(
+    currentBranch && !currentBranch.startsWith(WT_PREFIX)
+      ? currentBranch
+      : activeWorktree?.baseBranch || "",
+  );
+  useEffect(() => {
+    if (currentBranch && !currentBranch.startsWith(WT_PREFIX)) {
+      lastProjectBranch.current = currentBranch;
+    }
+  }, [currentBranch]);
+
   const locked = activeWorktree !== null;
-  const displayBranch = locked
+  const displayBranch: string = locked
     ? activeWorktree.baseBranch
-    : (pendingBranch || currentBranch);
+    : (pendingBranch
+      || (currentBranch && !currentBranch.startsWith(WT_PREFIX)
+        ? currentBranch
+        : (lastProjectBranch.current || "...")));
 
   const handleSelectBranch = useCallback(
     (branchName: string) => {

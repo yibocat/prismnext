@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef, useMemo, memo, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import type { PanelImperativeHandle } from "react-resizable-panels";
+import { useTheme } from "next-themes";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
+import { useSettingsStore } from "@/stores/settings-store";
 import { useWindowState } from "@/hooks/use-window-state";
 import {
   Bot,
@@ -24,6 +26,10 @@ import {
   ArrowUpDown,
   ChevronDown,
   ChevronRight,
+  SunIcon,
+  MoonIcon,
+  MonitorIcon,
+  LockIcon,
 } from "lucide-react";
 import { SettingsSidebar, type SettingsCategory } from "@/components/modules/settings";
 import { Kbd } from "@/components/ui/kbd";
@@ -70,6 +76,15 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const { platform, isFullscreen } = useWindowState();
   const isMac = platform === "darwin";
   const showMacSpacer = isMac && !isFullscreen;
+  const { theme, resolvedTheme, setTheme } = useTheme();
+  const glassEffect = useSettingsStore((s) => s.settings.glassEffect);
+
+  const cycleTheme = () => {
+    if (glassEffect) return;
+    if (theme === "light") setTheme("dark");
+    else if (theme === "dark") setTheme("system");
+    else setTheme("light");
+  };
 
   const sidebarFullyCollapsed = useLayoutStore((s) => s.sidebarFullyCollapsed);
   const leftSidebarOverlay = useLayoutStore((s) => s.leftSidebarOverlay);
@@ -303,7 +318,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
             onClick={() => {
               useRightPanelStore.getState().ensureTab("texworkspace");
               const st = useLayoutStore.getState();
-              st.setRightToolbarTab("texworkspace");
+              st.activateMode("texworkspace");
               const r = rightAreaRef?.current;
               const c = centerRef?.current;
               if (!r || !c) return;
@@ -324,10 +339,10 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
             <div>
               <button
                 type="button"
-                className="w-full px-2 py-1.5 flex items-center justify-between"
+                className="w-full pt-2 pb-1 flex items-center justify-between"
                 onClick={togglePinnedExpanded}
               >
-                <span className="text-[length:var(--font-sidebar-section)] font-medium uppercase tracking-wider text-muted-foreground/70">
+                <span className="text-[length:var(--font-hint)] font-medium uppercase tracking-wider text-muted-foreground/50">
                   Pinned
                 </span>
                 {pinnedExpanded ? <ChevronDown className="size-3 text-muted-foreground/50" /> : <ChevronRight className="size-3 text-muted-foreground/50" />}
@@ -342,8 +357,8 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
             </div>
           )}
 
-          <div className="px-2 py-1.5 flex items-center justify-between">
-            <span className="text-[length:var(--font-sidebar-section)] font-medium uppercase tracking-wider text-muted-foreground/70">
+          <div className="pt-2 pb-1 flex items-center justify-between">
+            <span className="text-[length:var(--font-hint)] font-medium uppercase tracking-wider text-muted-foreground/50">
               {showArchived ? "Archived" : "Sessions"}
             </span>
             <div className="flex items-center gap-0.5">
@@ -410,24 +425,45 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
           )}
         </div>
         <SidebarFooter className="px-2 pb-2">
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-            onClick={() => {
-              const st = useLayoutStore.getState();
-              const doc = useDocumentStore.getState();
-              if (st.leftSidebarView === "settings" && !doc.projectRoot) {
-                doc.setShowWelcome(true);
-                st.setLeftSidebarView("sessions");
-              } else {
-                st.setLeftSidebarView(st.leftSidebarView === "settings" ? "sessions" : "settings");
-              }
-              setLeftSidebarOverlay(false);
-            }}
-          >
-            <SettingsIcon className="size-3.5 shrink-0" />
-            <span>Settings</span>
-          </button>
+          <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              className="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+              onClick={() => {
+                const st = useLayoutStore.getState();
+                const doc = useDocumentStore.getState();
+                if (st.leftSidebarView === "settings" && !doc.projectRoot) {
+                  doc.setShowWelcome(true);
+                  st.setLeftSidebarView("sessions");
+                } else {
+                  st.setLeftSidebarView(st.leftSidebarView === "settings" ? "sessions" : "settings");
+                }
+                setLeftSidebarOverlay(false);
+              }}
+            >
+              <SettingsIcon className="size-3.5 shrink-0" />
+              <span>Settings</span>
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors shrink-0",
+                glassEffect && "text-muted-foreground/30",
+              )}
+              title={glassEffect ? "Theme locked (Desktop glass is on)" : `Theme: ${theme}`}
+              onClick={cycleTheme}
+            >
+              {glassEffect ? (
+                <LockIcon className="size-3.5" />
+              ) : theme === "system" ? (
+                <MonitorIcon className="size-3.5" />
+              ) : resolvedTheme === "dark" ? (
+                <SunIcon className="size-3.5" />
+              ) : (
+                <MoonIcon className="size-3.5" />
+              )}
+            </button>
+          </div>
         </SidebarFooter>
       </Sidebar>
     </SidebarProvider>

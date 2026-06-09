@@ -73,11 +73,27 @@ export function ChatComposer() {
   const isArchived = activeSessionId ? archivedSessionIds.includes(activeSessionId) : false;
   const activeTabId = useChatStore((s) => s.activeTabId);
 
+  const WT_PREFIX = "wt-";
+
   // Worktree state for bottom bar labels
   const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
   const currentGitBranch = useGitStore((s) => s.branch);
   const messages = useChatStore((s) => s.messages);
   const hasMessages = messages.length > 0;
+
+  // Cache the project branch so wt-* never flashes during transitions
+  // (e.g. when switching from worktree back to local — the git store still
+  // reports the wt-* worktree branch for a frame while it refreshes).
+  const lastProjectBranch = useRef(
+    currentGitBranch && !currentGitBranch.startsWith(WT_PREFIX)
+      ? currentGitBranch
+      : activeWorktree?.baseBranch || "",
+  );
+  useEffect(() => {
+    if (currentGitBranch && !currentGitBranch.startsWith(WT_PREFIX)) {
+      lastProjectBranch.current = currentGitBranch;
+    }
+  }, [currentGitBranch]);
 
   // Document store (for @ mentions and selection)
   const files = useDocumentStore((s) => s.files);
@@ -471,7 +487,10 @@ export function ChatComposer() {
             <span className="flex items-center gap-1">
               <GitBranchIcon className="size-3" />
               <span className="font-medium text-foreground/80">
-                {activeWorktree?.baseBranch ?? currentGitBranch}
+                {activeWorktree?.baseBranch
+                ?? (currentGitBranch && !currentGitBranch.startsWith(WT_PREFIX)
+                  ? currentGitBranch
+                  : lastProjectBranch.current || "...")}
               </span>
             </span>
             {activeWorktree && (

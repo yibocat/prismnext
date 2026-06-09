@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useBrowserStore } from "@/stores/browser-store";
-import { getWebview } from "@/components/modules/browser/webview-registry";
+import { getWebview } from "./webview-registry";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,

@@ -15,7 +15,6 @@ const log = createLogger("git-store", "git");
 // ─── Types ───
 
 export type GitFilterMode = "unstaged" | "staged" | "all";
-export type GitViewMode = "changes" | "history";
 
 export interface GitCommitData {
   hash: string;
@@ -61,11 +60,13 @@ interface GitState {
   isGitRepo: boolean;
   checkingRepo: boolean;
 
-  // ── View mode ──
-  viewMode: GitViewMode;
-  listMode: "list" | "tree";
+  // ── Selection ──
+  selectedCommitHash: string | null;
+  selectedFilePaths: string[];
+  sidebarView: "changes" | "history";
   commits: GitCommitData[];
   commitsLoading: boolean;
+  _historyRequestId: number;
 
   // ── Current unit (sub-folder working directory) ──
   unitRoot: string | null;
@@ -78,8 +79,11 @@ interface GitState {
   // ── Actions ──
   selectUnit: (path: string) => Promise<void>;
   checkRepo: (projectRoot: string) => Promise<void>;
-  setViewMode: (mode: GitViewMode) => void;
-  setListMode: (mode: "list" | "tree") => void;
+  selectCommit: (hash: string) => void;
+  clearSelectedCommit: () => void;
+  toggleFile: (fileId: string) => void;
+  removeFile: (fileId: string) => void;
+  setSidebarView: (view: "changes" | "history") => void;
   loadHistory: (projectRoot: string) => Promise<void>;
   refreshStatus: (projectRoot: string) => Promise<void>;
   refreshBranches: (projectRoot: string) => Promise<void>;
@@ -168,25 +172,58 @@ export const useGitStore = create<GitState>()((set, get) => ({
   unitRoot: null,
   gitFolderVersion: 0,
   _autoRefreshTimer: null,
-  viewMode: "changes",
-  listMode: "list",
+  selectedCommitHash: null,
+  selectedFilePaths: [],
+  sidebarView: "changes",
   commits: [],
   commitsLoading: false,
+  _historyRequestId: 0,
 
-  // ── setViewMode ──
-  setViewMode: (mode: GitViewMode) => set({ viewMode: mode }),
+  // ── selectCommit ──
+  selectCommit: (hash: string) => set({ selectedCommitHash: hash, selectedFilePaths: [] }),
 
-  // ── setListMode ──
-  setListMode: (mode: "list" | "tree") => set({ listMode: mode }),
+  // ── clearSelectedCommit ──
+  clearSelectedCommit: () => set({ selectedCommitHash: null }),
+
+  // ── toggleFile ──
+  toggleFile: (fileId: string) => set((s) => {
+    const exists = s.selectedFilePaths.includes(fileId);
+    return {
+      selectedFilePaths: exists ? [] : [fileId],
+      selectedCommitHash: null,
+    };
+  }),
+
+  // ── removeFile ──
+  removeFile: (fileId: string) => set((s) => ({
+    selectedFilePaths: s.selectedFilePaths.filter((id) => id !== fileId),
+  })),
+
+  setSidebarView: (view) => {
+    set({
+      sidebarView: view,
+      // Clear opposite view's selection when switching
+      selectedCommitHash: view === "changes" ? null : get().selectedCommitHash,
+      selectedFilePaths: view === "history" ? [] : get().selectedFilePaths,
+    });
+    if (view === "history") {
+      const root = get().unitRoot;
+      if (root) get().loadHistory(root);
+    }
+  },
 
   // ── loadHistory ──
+  // Uses _historyRequestId to discard stale responses (e.g. rapid branch switches)
   loadHistory: async (projectRoot: string) => {
-    if (get().commitsLoading) return;
+    const id = ++get()._historyRequestId;
     set({ commitsLoading: true });
     try {
       const commits = await window.electronAPI.gitLog(projectRoot);
+      // Discard if a newer request was made while this one was in-flight
+      if (get()._historyRequestId !== id) return;
       set({ commits, commitsLoading: false });
     } catch {
+      if (get()._historyRequestId !== id) return;
       set({ commits: [], commitsLoading: false });
     }
   },
@@ -430,17 +467,10 @@ export const useGitStore = create<GitState>()((set, get) => ({
     invalidateStatusCache();
     const paths = filePaths.filter(Boolean);
     if (paths.length === 0) return;
-    let failed = false;
-    for (const fp of paths) {
-      const result = await window.electronAPI.gitStage(projectRoot, fp);
-      if (!result.success) {
-        console.error(`[git] stageAll failed: ${fp}`, result.error);
-        failed = true;
-      }
-    }
-    if (failed) {
-      toast.error("Some files failed to stage");
-      set({ error: "Some files failed to stage" });
+    const result = await window.electronAPI.gitStageAll(projectRoot, paths);
+    if (!result.success) {
+      console.error(`[git] stageAll failed`, result.error);
+      // Don't toast — git may refuse to stage gitignored files, that's fine
     }
     await get().refreshStatus(projectRoot);
   },
@@ -450,17 +480,9 @@ export const useGitStore = create<GitState>()((set, get) => ({
     invalidateStatusCache();
     const paths = filePaths.filter(Boolean);
     if (paths.length === 0) return;
-    let failed = false;
-    for (const fp of paths) {
-      const result = await window.electronAPI.gitUnstage(projectRoot, fp);
-      if (!result.success) {
-        console.error(`[git] unstageAll failed: ${fp}`, result.error);
-        failed = true;
-      }
-    }
-    if (failed) {
-      toast.error("Some files failed to unstage");
-      set({ error: "Some files failed to unstage" });
+    const result = await window.electronAPI.gitUnstageAll(projectRoot, paths);
+    if (!result.success) {
+      console.error(`[git] unstageAll failed`, result.error);
     }
     await get().refreshStatus(projectRoot);
   },
@@ -532,8 +554,9 @@ export const useGitStore = create<GitState>()((set, get) => ({
       get().refreshBranches(projectRoot),
     ]);
 
+    // Clear commit selection when switching branches — old hash won't exist on new branch
+    set({ switching: false, selectedCommitHash: null });
     await useDocumentStore.getState().reloadAllFromDisk();
-    set({ switching: false });
     console.log(`[switchBranch] total: ${Math.round(performance.now() - t0)}ms  (-> ${branch})`);
   },
 
@@ -681,10 +704,12 @@ export const useGitStore = create<GitState>()((set, get) => ({
       unitRoot: null,
       gitFolderVersion: 0,
       _autoRefreshTimer: null,
-      viewMode: "changes",
-      listMode: "list",
+      selectedCommitHash: null,
+      selectedFilePaths: [],
+      sidebarView: "changes",
       commits: [],
       commitsLoading: false,
+      _historyRequestId: 0,
       pendingBranch: null,
     });
   },

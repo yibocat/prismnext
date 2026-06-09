@@ -1,52 +1,37 @@
 import { useEffect, useRef, useState, useCallback, useMemo, type RefObject } from "react";
-import { useTheme } from "next-themes";
 import { useLayoutStore, type RightToolbarTab } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { useRightPanelStore, type RightTab } from "@/stores/right-panel-store";
+import { useRightPanelStore } from "@/stores/right-panel-store";
+import { modeRegistry, type RightTab } from "@/lib/mode-registry";
 import { useWindowState } from "@/hooks/use-window-state";
 import { RightMainArea } from "@/components/layout/right-main-area";
 import { RightSidebar } from "@/components/layout/right-sidebar";
 import { TabBar } from "@/components/layout/tab-bar";
 import { SidebarControls } from "@/components/layout/sidebar-controls";
 import { TabToolbar } from "@/components/layout/tab-toolbar";
-import { TexworkspaceToolbar } from "@/components/modules/texworkspace-mode";
-import { FileToolbar } from "@/components/modules/editor/toolbars/file-toolbar";
-import { BrowserToolbar } from "@/components/modules/browser/browser-toolbar";
-import { TerminalToolbar } from "@/components/modules/terminal";
-import { GitToolbar } from "@/components/modules/git/git-toolbar";
+
 import { useBrowserStore } from "@/stores/browser-store";
 import { useTerminalStore } from "@/stores/terminal-store";
 import { useGitStore } from "@/stores/git-store";
-import { useSettingsStore } from "@/stores/settings-store";
-import { LockIcon } from "lucide-react";
 import { AiBar } from "@/components/modules/chat";
 import { type PanelImperativeHandle } from "react-resizable-panels";
 import {
-  Folders as FilesIcon,
-  GitBranchIcon,
-  GlobeIcon,
-  FileType,
   PanelRight,
   MaximizeIcon,
   MinimizeIcon,
-  SunIcon,
-  MoonIcon,
-  MonitorIcon,
   Minimize2Icon,
   Maximize2Icon,
   XIcon,
-  Terminal as TerminalIcon,
 } from "lucide-react";
 import { SIDEBAR_RIGHT_MIN, SIDEBAR_RIGHT_MAX } from "@/styles/constants";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChevronsLeftRightEllipsisIcon, LayoutGridIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const TOOLBAR_TABS: { id: RightToolbarTab; label: string; icon: React.ReactNode }[] = [
-  { id: "files", label: "Files", icon: <FilesIcon className="size-3.5" /> },
-  { id: "git", label: "Git", icon: <GitBranchIcon className="size-3.5" /> },
-  { id: "browser", label: "Browser", icon: <GlobeIcon className="size-3.5" /> },
-  { id: "terminal", label: "Terminal", icon: <TerminalIcon className="size-3.5" /> },
-  { id: "texworkspace", label: "Texworkspace", icon: <FileType className="size-3.5" /> },
-];
 
 interface RightAreaProps {
   leftSidebarRef: RefObject<PanelImperativeHandle | null>;
@@ -116,66 +101,16 @@ function SidebarDragHandle({
   );
 }
 
-/**
- * Resolve the TabToolbar content based on the active tab's kind and file type.
- *
- * Mode (system) → file type hierarchy:
- *   texworkspace → TexworkspaceToolbar (full LaTeX workflow)
- *   file         → FileToolbar (dispatches by extension)
- *   others       → null (coming soon)
- */
-function resolveTabToolbar(
-  tab: RightTab | undefined,
-  compileFile: string | null | undefined,
-  projectRoot: string | null | undefined,
-): React.ReactNode {
-  if (!tab) return null;
-
-  switch (tab.kind) {
-    case "texworkspace":
-      return <TexworkspaceToolbar compileFile={compileFile} />;
-    case "file":
-      return <FileToolbar filePath={tab.filePath} />;
-    case "browser":
-      return (
-        <BrowserToolbar
-          tabId={tab.id}
-          tabUrl={tab.url ?? ""}
-          tabTitle={tab.title}
-        />
-      );
-    case "terminal":
-      return (
-        <TerminalToolbar
-          tabId={tab.id}
-          tabTitle={tab.title}
-        />
-      );
-    case "git-overview":
-    case "git-diff":
-      return <GitToolbar projectRoot={projectRoot ?? ""} />;
-    default:
-      return null;
-  }
-}
-
 export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightAreaProps) {
   const { platform, isMaximized, isFullscreen } = useWindowState();
   const isMac = platform === "darwin";
-  const { theme, resolvedTheme, setTheme } = useTheme();
-  const glassEffect = useSettingsStore((s) => s.settings.glassEffect);
-
-  const cycleTheme = () => {
-    if (glassEffect) return;
-    if (theme === "light") setTheme("dark");
-    else if (theme === "dark") setTheme("system");
-    else setTheme("light");
-  };
 
   const sidebarFullyCollapsed = useLayoutStore((s) => s.sidebarFullyCollapsed);
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
-  const rightToolbarTab = useLayoutStore((s) => s.rightToolbarTab);
-  const setRightToolbarTab = useLayoutStore((s) => s.setRightToolbarTab);
+  const activeModes = useLayoutStore((s) => s.activeModes);
+  const focusedMode = useLayoutStore((s) => s.focusedMode);
+  const toggleMode = useLayoutStore((s) => s.toggleMode);
+  const activateMode = useLayoutStore((s) => s.activateMode);
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
   const rightSidebarOpen = useLayoutStore((s) => s.rightSidebarOpen);
   const setRightSidebarOpen = useLayoutStore((s) => s.setRightSidebarOpen);
@@ -184,35 +119,8 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
 
   const tabs = useRightPanelStore((s) => s.tabs);
   const activeTabId = useRightPanelStore((s) => s.activeTabId);
-  const ensureTab = useRightPanelStore((s) => s.ensureTab);
   const activeTab = tabs.find((t) => t.id === activeTabId);
-
-  // Sync rightToolbarTab and sidebar visibility with active tab
-  const prevActiveTabKind = useRef(activeTab?.kind);
-
-  useEffect(() => {
-    // Update toolbar tab to match active tab
-    if (!activeTab) {
-      setRightToolbarTab("dashboard");
-    } else {
-      switch (activeTab.kind) {
-        case "file": setRightToolbarTab("files"); break;
-        case "git-overview": case "git-diff": setRightToolbarTab("git"); break;
-        case "browser": setRightToolbarTab("browser"); break;
-        case "terminal": setRightToolbarTab("terminal"); break;
-        case "texworkspace": setRightToolbarTab("texworkspace"); break;
-        default: setRightToolbarTab("files"); break;
-      }
-    }
-
-    // Auto-open sidebar when entering any content mode (files/git/browser/texworkspace)
-    const isContentMode = activeTab && activeTab.kind !== undefined;
-    const justEntered = activeTab?.kind !== prevActiveTabKind.current;
-    if (isContentMode && justEntered) {
-      setRightSidebarOpen(true);
-    }
-    prevActiveTabKind.current = activeTab?.kind;
-  }, [activeTab?.kind, setRightSidebarOpen]);
+  const isEditorKind = activeTab?.kind === "file" || activeTab?.kind === "texworkspace";
 
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
@@ -231,17 +139,19 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
     }
   }, [projectRoot]);
 
-  // Initialize git store when project opens
+  // ── File watcher: start when checkout root changes (project open OR worktree switch) ──
+  const checkoutRoot = useDocumentStore((s) => s.checkoutRoot);
+
+  // Initialize / sync git store when project opens or checkout root changes
+  // (e.g. switching between worktree and project views in the Files panel).
   useEffect(() => {
-    if (projectRoot) {
-      useGitStore.getState().selectUnit(projectRoot);
+    const root = checkoutRoot || projectRoot;
+    if (root) {
+      useGitStore.getState().selectUnit(root);
     } else {
       useGitStore.getState().clearAll();
     }
-  }, [projectRoot]);
-
-  // ── File watcher: start when checkout root changes (project open OR worktree switch) ──
-  const checkoutRoot = useDocumentStore((s) => s.checkoutRoot);
+  }, [projectRoot, checkoutRoot]);
 
   useEffect(() => {
     if (checkoutRoot) {
@@ -287,7 +197,16 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
 
   // Stable TabBar callbacks — prevents memo break
   const handleTabSelect = useCallback(
-    (id: string) => useRightPanelStore.getState().setActiveTab(id), []);
+    (id: string) => {
+      const store = useRightPanelStore.getState();
+      store.setActiveTab(id);
+      // Sync focusedMode to match the clicked tab
+      const tab = store.tabs.find((t) => t.id === id);
+      if (tab) {
+        const def = modeRegistry.findByTabKind(tab.kind);
+        if (def) useLayoutStore.getState().setFocusedMode(def.id as RightToolbarTab);
+      }
+    }, []);
   const handleTabClose = useCallback(
     (id: string) => useRightPanelStore.getState().closeTab(id), []);
   const handleTabReorder = useCallback(
@@ -350,10 +269,27 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
     return () => observer.disconnect();
   }, []);
 
-  // ─── Sidebar full-mode: when toggled open in narrow space, sidebar fills RightArea ───
-  // Same idea as LeftSidebar overlay: mode is decided at toggle time.
+  // ─── Sidebar full-mode: when space is too narrow for sidebar + content,
+  // sidebar fills the whole RightArea (content pane is hidden).
+  // Evaluated at toggle time AND continuously via ResizeObserver so the
+  // layout stays correct during window resize, not just at toggle.
   const containerElRef = useRef<HTMLDivElement>(null);
   const [sidebarFullMode, setSidebarFullMode] = useState(false);
+
+  // Reactively switch to/from full mode as the container width changes.
+  useEffect(() => {
+    const el = containerElRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      if (!useLayoutStore.getState().rightSidebarOpen) return;
+      const w = el.clientWidth;
+      const sidebarW = useLayoutStore.getState().rightSidebarWidth;
+      const narrow = w < sidebarW + 150;
+      setSidebarFullMode((prev) => (prev !== narrow ? narrow : prev));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const handleToggleSidebar = useCallback(() => {
     const st = useLayoutStore.getState();
@@ -370,25 +306,122 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
     }
   }, []);
 
-  const compileFile = activeTab?.kind === "file" || activeTab?.kind === "texworkspace" ? activeTab.fileId : null;
+  // ── Mode button: per-mode lifecycle (registry-driven) ──
+  const handleModeClick = useCallback(
+    (target: string) => {
+      const store = useRightPanelStore.getState();
+      const active = activeModes.includes(target as RightToolbarTab);
+      const def = modeRegistry.get(target);
+
+      if (!active) {
+        // ── Activate mode ──
+        activateMode(target as RightToolbarTab);
+        if (def) {
+          // Terminal is special: only create PTY if no sessions exist
+          if (target === "terminal" && store.hasTabsOfKind("terminal")) {
+            // reuse existing terminal tab
+          } else {
+            const kind = def.tabKinds[0];
+            if (kind) {
+              if (target === "terminal") {
+                store.newTerminalTab();
+              } else {
+                store.ensureTab(kind);
+              }
+            }
+          }
+          def.onActivate?.();
+        }
+        // Narrow window → don't auto-open sidebar (tab area is too tight)
+        if (!compactModesRef.current) {
+          setRightSidebarOpen(true);
+          // Determine full mode synchronously — don't rely solely on the
+          // async ResizeObserver which may fire during panel expansion
+          // with an intermediate width and incorrectly lock full mode.
+          const cw = containerElRef.current?.clientWidth ?? Infinity;
+          const sw = useLayoutStore.getState().rightSidebarWidth;
+          setSidebarFullMode(cw < sw + 150);
+        }
+      } else if (focusedMode === target) {
+        // ── Deactivate mode → close ALL its tabs → Dashboard ──
+        if (def) {
+          for (const k of def.tabKinds) {
+            store.closeTabsOfKind(k);
+          }
+          def.onDeactivate?.();
+        }
+        toggleMode(target as RightToolbarTab);
+        // Sync activeTabId to new focusedMode
+        const newFocused = useLayoutStore.getState().focusedMode;
+        if (newFocused !== "dashboard") {
+          const newDef = modeRegistry.get(newFocused);
+          const newTab = store.tabs.find(
+            (t) => newDef?.tabKinds.includes(t.kind),
+          );
+          if (newTab) store.setActiveTab(newTab.id);
+        }
+      } else {
+        // ── Switch focus (active but not focused) ──
+        toggleMode(target as RightToolbarTab);
+        const tab = store.tabs.find(
+          (t) => def?.tabKinds.includes(t.kind),
+        );
+        if (tab) store.setActiveTab(tab.id);
+      }
+    },
+    [activeModes, focusedMode, activateMode, toggleMode, setRightSidebarOpen],
+  );
 
   const sidebarFull = rightSidebarOpen && sidebarFullMode;
+
+  // ── Tab overflow detection ──
+  const tabBarContainerRef = useRef<HTMLDivElement>(null);
+  const [tabsOverflow, setTabsOverflow] = useState(false);
+  const tabsOverflowRef = useRef(false);
+  useEffect(() => {
+    const el = tabBarContainerRef.current;
+    if (!el) return;
+    const check = () => {
+      const ov = tabs.length > 0 && el.clientWidth < tabs.length * 126;
+      tabsOverflowRef.current = ov;
+      setTabsOverflow(ov);
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [tabs.length]);
+
+  // ─── Responsive: collapse mode buttons into dropdown on narrow windows ───
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [compactModes, setCompactModes] = useState(false);
+  const compactModesRef = useRef(false);
+  useEffect(() => {
+    const el = toolbarRef.current;
+    if (!el) return;
+    const check = () => {
+      const c = el.clientWidth < 500;
+      compactModesRef.current = c;
+      setCompactModes(c);
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   return (
     <div className="flex h-full flex-col min-w-0 glass-content">
       {/* Toolbar */}
-      <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center px-2 gap-0.5 overflow-x-auto scrollbar-none select-none">
+      <div ref={toolbarRef} className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center gap-0.5 select-none px-2">
         <div className="flex items-center gap-0.5 shrink-0">
         {/* Sidebar controls when sidebar collapsed AND editor maximized */}
         {sidebarFullyCollapsed && editorMaximized && (
           <SidebarControls leftSidebarRef={leftSidebarRef} showMacSpacer={isMac && !isFullscreen} className="-ml-[1px]" />
         )}
-        {sidebarFullyCollapsed && editorMaximized && (
-          <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
-        )}
         </div>
 
-        <div className="flex-1 min-w-0">
+        <div ref={tabBarContainerRef} className="flex-1 min-w-0">
           <TabBar
             tabs={tabs}
             activeTabId={activeTabId}
@@ -396,10 +429,48 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
             onClose={handleTabClose}
             onReorder={handleTabReorder}
             dirtyFileIds={dirtyFileIds}
+            forceOverflow={tabsOverflow}
           />
         </div>
 
         <div className="flex items-center gap-0.5 shrink-0">
+        {/* ── Tab overflow dropdown (shown when tabs don't fit) ── */}
+        {tabsOverflow && tabs.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                title="Open tabs"
+              >
+                <ChevronsLeftRightEllipsisIcon className="size-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 max-h-80 overflow-y-auto">
+              {tabs.map((tab) => (
+                <DropdownMenuItem
+                  key={tab.id}
+                  onClick={() => handleTabSelect(tab.id)}
+                  className={cn(
+                    "cursor-pointer gap-2 text-xs group pr-1",
+                    tab.id === activeTabId && "bg-accent font-medium",
+                  )}
+                >
+                  <span className="truncate flex-1">{tab.kind === "file" && tab.isInitial ? "folder" : tab.title}</span>
+                  <button
+                    type="button"
+                    className="flex size-4 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/10 transition-opacity"
+                    onClick={(e) => { e.stopPropagation(); handleTabClose(tab.id); }}
+                    title="Close tab"
+                  >
+                    <XIcon className="size-2.5" />
+                  </button>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
         {/* Window controls when editorMaximized (ContentTopBar is hidden) */}
         {editorMaximized && !isMac && (
           <>
@@ -431,67 +502,66 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
           </>
         )}
 
-        {/* Theme toggle — locked when glass is on */}
-        <button
-          type="button"
-          className={glassEffect
-            ? "flex size-6 items-center justify-center rounded text-muted-foreground/30 transition-colors"
-            : "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"}
-          title={glassEffect ? "Theme locked (Desktop glass is on)" : `Theme: ${theme}`}
-          onClick={cycleTheme}
-        >
-          {glassEffect ? (
-            <LockIcon className="size-3.5" />
-          ) : theme === "system" ? (
-            <MonitorIcon className="size-3.5" />
-          ) : resolvedTheme === "dark" ? (
-            <SunIcon className="size-3.5" />
-          ) : (
-            <MoonIcon className="size-3.5" />
-          )}
-        </button>
+        {!compactModes && <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />}
 
-        <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
-
-        {/* ── Mode buttons (right-side primary actions) ── */}
-        {TOOLBAR_TABS.map((tab) =>
-          tab.id === "files" ? (
-            <button
-              key={tab.id}
-              type="button"
-              className={cn(
-                "flex size-6 items-center justify-center rounded transition-colors",
-                rightToolbarTab === "files" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-              )}
-              title={`${tab.label} — open project folder`}
-              onClick={() => {
-                setRightToolbarTab("files");
-                ensureTab("file");
-              }}
-            >
-              {tab.icon}
-            </button>
-          ) : (
-            <button
-              key={tab.id}
-              type="button"
-              className={cn(
-                "flex size-6 items-center justify-center rounded transition-colors",
-                rightToolbarTab === tab.id ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-              )}
-              title={tab.label}
-              onClick={() => {
-                setRightToolbarTab(tab.id);
-                if (tab.id === "git") ensureTab("git-overview");
-                else if (tab.id === "browser") ensureTab("browser");
-                else if (tab.id === "terminal") ensureTab("terminal");
-                else if (tab.id === "texworkspace") ensureTab("texworkspace");
-              }}
-            >
-              {tab.icon}
-            </button>
-          ),
-        )}
+        {/* ── Mode buttons — collapse to dropdown on narrow windows ── */}
+        {compactModes ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                title="Modes"
+              >
+                <LayoutGridIcon className="size-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-36">
+              {modeRegistry.getAll().map((mode) => {
+                const isActive = activeModes.includes(mode.id as RightToolbarTab);
+                const isFocused = focusedMode === mode.id;
+                return (
+                <DropdownMenuItem
+                  key={mode.id}
+                  className={cn(
+                    "flex items-center gap-2 text-[length:var(--font-menu-item)]",
+                    isFocused && "bg-accent",
+                  )}
+                  onClick={() => handleModeClick(mode.id)}
+                >
+                  {mode.icon}
+                  <span>{mode.label}</span>
+                  {isActive && <span className="ml-auto text-[10px] text-muted-foreground">on</span>}
+                </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          modeRegistry.getAll().map((mode) => {
+            const isActive = activeModes.includes(mode.id as RightToolbarTab);
+            const isFocused = focusedMode === mode.id;
+            return (
+              <button
+                key={mode.id}
+                type="button"
+                className={cn(
+                  "flex items-center justify-center rounded transition-all",
+                  isActive
+                    ? cn(
+                        "bg-muted text-foreground h-6 px-1.5 gap-0.5",
+                        isFocused && "ring-1 ring-primary/40",
+                      )
+                    : "size-6 text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                )}
+                title={isActive && isFocused ? `Close ${mode.label}` : mode.label}
+                onClick={() => handleModeClick(mode.id)}
+              >
+                {mode.icon}
+                {isActive && <XIcon className="size-2.5" />}
+              </button>
+            );
+          }))}
 
         <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
 
@@ -542,33 +612,41 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
         </div>
       </div>
 
-      {/* Tab Toolbar */}
-      <TabToolbar
-        onToggleSidebar={handleToggleSidebar}
-        filePath={activeTab?.filePath}
-        projectName={projectRoot?.split(/[/\\]/).pop()}
-        hideSpacer={activeTab?.kind === "browser" || activeTab?.kind === "terminal" || activeTab?.kind === "git-overview" || activeTab?.kind === "git-diff"}
-      >
-        {resolveTabToolbar(activeTab, compileFile, projectRoot)}
-      </TabToolbar>
+      {/* Tab Toolbar — only shown when a mode is focused and has an active tab */}
+      {activeTab && focusedMode !== "dashboard" && (
+        <TabToolbar
+          onToggleSidebar={handleToggleSidebar}
+          filePath={activeTab.filePath}
+          projectName={projectRoot?.split(/[/\\]/).pop()}
+          hideSpacer={!isEditorKind}
+        >
+          {activeTab && (() => {
+            const def = modeRegistry.findByTabKind(activeTab.kind);
+            const ToolbarComp = def?.Toolbar;
+            return ToolbarComp ? <ToolbarComp tab={activeTab} /> : null;
+          })()}
+        </TabToolbar>
+      )}
 
       {/* Main Content: flex layout — main expands, sidebar stays fixed width */}
-      <div ref={containerElRef} className="flex flex-1 min-h-0 relative">
+      <div ref={containerElRef} className="flex flex-1 min-h-0 min-w-0 relative border-t border-border">
         {!sidebarFull && (
           <div className="flex-1 min-w-[150px]">
-            <RightMainArea />
+            <RightMainArea tabs={tabs} activeTabId={activeTabId} />
           </div>
         )}
 
-        {rightSidebarOpen && tabs.length > 0 && (
+        {rightSidebarOpen && focusedMode !== "dashboard" && (
           <>
-            <SidebarDragHandle onResize={handleSidebarResize} isDraggingRef={isDraggingSidebar} onDragChange={setSidebarDragActive} />
+            {!sidebarFull && (
+              <SidebarDragHandle onResize={handleSidebarResize} isDraggingRef={isDraggingSidebar} onDragChange={setSidebarDragActive} />
+            )}
             <div
               ref={sidebarElRef}
               className="shrink-0 overflow-hidden"
               style={{ width: sidebarFull ? "100%" : rightSidebarWidth }}
             >
-              <RightSidebar />
+              <RightSidebar fullMode={sidebarFull} />
             </div>
           </>
         )}
