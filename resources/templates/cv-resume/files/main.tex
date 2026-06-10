@@ -1,0 +1,56 @@
+\documentclass[11pt,a4paper]{article}
+
+% ── Packages ──
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=*}
+
+% ── Header ──
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+
+\begin{document}
+
+% ── Name & Contact ──
+\begin{center}
+  {\LARGE \textbf{Your Name}}\\[4pt]
+  \href{mailto:email@example.com}{email@example.com} $|$
+  \href{https://example.com}{example.com} $|$
+  Department, University
+\end{center}
+
+% ── Education ──
+\section*{Education}
+\noindent\textbf{Ph.D.}, Field of Study \hfill 20XX -- 20XX\\
+University Name, Advisor: Prof. X
+
+\noindent\textbf{B.Sc.}, Field of Study \hfill 20XX -- 20XX\\
+University Name
+
+% ── Research Interests ──
+\section*{Research Interests}
+Interest 1, Interest 2, Interest 3
+
+% ── Publications ──
+\section*{Publications}
+\begin{enumerate}
+  \item Author, A., \& Coauthor, B. (20XX).
+  Paper title. \textit{Journal}, 1(1), 1--10.
+\end{enumerate}
+
+% ── Teaching ──
+\section*{Teaching Experience}
+\noindent\textbf{Course Name} (TA) \hfill Semester 20XX\\
+University Name
+
+% ── Service ──
+\section*{Service}
+Reviewer: Conference A, Conference B
+
+\end{document}

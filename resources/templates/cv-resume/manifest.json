@@ -1,0 +1,13 @@
+{
+  "id": "cv-resume",
+  "name": "CV / Resume",
+  "description": "Clean academic CV with sections for education, publications, teaching, and service.",
+  "category": "cv",
+  "tags": [
+    "article",
+    "cv",
+    "academic"
+  ],
+  "documentClass": "article",
+  "icon": "💼"
+}

@@ -1,5 +1,70 @@
 # Changelog
 
+## 0.3.15 — 2026-06-10
+
+### Template System
+
+- Template center with gallery, detail view, file tree, PDF preview, and source viewer
+- Six built-in templates (academic paper, PhD thesis, CV, beamer, poster, letter) with manifest, preview, and LaTeX source
+- Template IPC: list, get, preview, getPdfData, apply with template state tracking in settings.json
+
+### Template Switching
+
+- Content-preserving switch with three-level category compatibility (L1 same-category merge, L2 paper↔thesis merge, L3 incompatible replace)
+- SHA-256 file fingerprint change detection against stored template state
+- A+B merge engine: preamble swap + section-aware body merge supporting nested braces and optional `[ToC]` arguments
+- Confirmation dialogs with per-level descriptions, modified-file lists, and action buttons
+- Automatic backup to `.prismnext/backups/` before every destructive switch
+- Old template-only files cleaned up on switch
+
+### Backup & Restore
+
+- Backup Manager in Settings → Project → Backups with timestamped listing, file expansion, and restore
+- Toolbar restore entry point with backup selection dialog
+- Restore validates backup manifest, cleans stale files, recomputes file hashes, and updates template state
+- Duplicate backup label collision prevention
+
+### TeXworkspace Toolbar
+
+- Redesigned layout: view mode toggles (split/TeX/PDF) at far left, standalone compile button, engine selector dropdown showing current backend name, auto-compile toggle
+- Right-side group: project search, LaTeX symbol palette, environment insertion, backup restore
+- Breadcrumb hidden in TeXworkspace mode; removed vertical divider lines
+
+### TeXworkspace Sidebar
+
+- Outline, References, Files, and Compile tabs with accordion sections and word count footer
+- Project-wide search with inline results
+- Header buttons right-aligned; accordion right-side duplicate chevron removed
+
+### LaTeX Symbols
+
+- Categorized symbol palette with KaTeX rendering (Greek, relations, arrows, operators, delimiters, accents, special)
+- Click-to-insert into editor
+
+### Bug Fixes
+
+- `$` interpolation corruption in section merge via `String.replace` escape
+- Settings.json silently destroyed on corrupted parse — now backs up and throws
+- `manifest.files` null/empty deletes all tracked files — now validates before cleanup
+- Race condition on rapid template switching clicks guarded with processing ref
+- `currentTemplate` stale after switch and restore — now re-reads from settings.json
+- Restore backup timestamp displayed as "Invalid Date" — fixed string formatting
+- Unhandled rejections on failed template switch and restore — now shows toast errors
+- Partial backup/restore mid-failure leaves indeterminate state — now cleans up partial artifacts
+- Duplicate `\end{document}` in merged output — stripped before appending
+- Empty-body LaTeX documents rejected as unparseable — now accepted
+
+### UI Polish
+
+- Template gallery cards: removed default shadow, Use button restyled as primary
+- PDF preview area: removed "Compile to preview PDF" placeholder text
+- Card component: default `shadow-sm` removed
+- Toast notifications for template apply, switch, backup restore, and errors
+
+### Project Settings
+
+- New Project settings page: manuscript directory, default document class, auto-create main.tex
+
 ## 0.3.14 — 2026-06-10
 
 ### Mode Registry Architecture

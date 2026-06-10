@@ -1,0 +1,13 @@
+{
+  "id": "academic-paper",
+  "name": "Academic Paper",
+  "description": "Standard IMRaD paper with bibliography, cross-references, and AMS math. Ideal for journal submissions.",
+  "category": "paper",
+  "tags": [
+    "article",
+    "imrad",
+    "basic"
+  ],
+  "documentClass": "article",
+  "icon": "📄"
+}

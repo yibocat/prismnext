@@ -42,7 +42,7 @@ export function LatexEditor() {
   const refreshFileContent = useDocumentStore((s) => s.refreshFileContent);
   const jumpTarget = useDocumentStore((s) => s.jumpTarget);
   const jumpToLine = useDocumentStore((s) => s.jumpToLine);
-  const requestJumpToLine = useDocumentStore((s) => s.requestJumpToLine);
+  const insertText = useDocumentStore((s) => s.insertText);
   const changes = useChangesStore((s) => s.changes);
   const contentVersion = useDocumentStore((s) => s.contentVersion);
 
@@ -429,6 +429,16 @@ export function LatexEditor() {
     });
     useDocumentStore.setState({ jumpToLine: null });
   }, [jumpToLine, fileId]);
+
+  // Toolbar insert text (Symbol Palette / Environment)
+  useEffect(() => {
+    if (insertText === null || !viewRef.current) return;
+    const view = viewRef.current;
+    view.dispatch(
+      view.state.replaceSelection(insertText)
+    );
+    useDocumentStore.setState({ insertText: null });
+  }, [insertText]);
 
   return (
     <div className="flex h-full flex-col min-h-0">

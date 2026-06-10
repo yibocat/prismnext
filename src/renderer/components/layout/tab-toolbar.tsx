@@ -16,6 +16,7 @@ interface TabToolbarProps {
   filePath?: string;
   projectName?: string;
   hideSpacer?: boolean;
+  hideBreadcrumb?: boolean;
 }
 
 /** Turn "manuscript/chapter/intro.tex" into ["manuscript", "chapter", "intro.tex"] */
@@ -23,7 +24,7 @@ function pathSegments(filePath: string): string[] {
   return filePath.split("/").filter(Boolean);
 }
 
-export const TabToolbar = memo(function TabToolbar({ children, onToggleSidebar, filePath, projectName, hideSpacer }: TabToolbarProps) {
+export const TabToolbar = memo(function TabToolbar({ children, onToggleSidebar, filePath, projectName, hideSpacer, hideBreadcrumb }: TabToolbarProps) {
   const rightSidebarOpen = useLayoutStore((s) => s.rightSidebarOpen);
   const toggleRightSidebar = useLayoutStore((s) => s.toggleRightSidebar);
   const setFileTreeNavigatePath = useLayoutStore((s) => s.setFileTreeNavigatePath);
@@ -35,7 +36,7 @@ export const TabToolbar = memo(function TabToolbar({ children, onToggleSidebar, 
   return (
     <div className="flex h-[var(--height-right-area-subtoolbar)] shrink-0 items-center px-2 gap-0.5 border-t border-border select-none text-[length:var(--font-size-12)] text-muted-foreground">
       {/* ─── Breadcrumb ─── */}
-      {hasBreadcrumb && (
+      {!hideBreadcrumb && hasBreadcrumb && (
         <Breadcrumb className="shrink-0">
           <BreadcrumbList>
             {projectName && (
@@ -82,7 +83,7 @@ export const TabToolbar = memo(function TabToolbar({ children, onToggleSidebar, 
         </Breadcrumb>
       )}
 
-      {!hideSpacer && <div className="flex-1 min-w-0" />}
+      {!hideSpacer && !hideBreadcrumb && <div className="flex-1 min-w-0" />}
 
       {/* ─── File-type toolbar ─── */}
       {children}

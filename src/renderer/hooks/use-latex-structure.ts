@@ -30,10 +30,27 @@ export interface CitationEntry {
   entryType?: string; // article, book, inproceedings, etc.
 }
 
+export interface FigureTableEntry {
+  type: "figure" | "table";
+  label: string;
+  caption: string;
+  fileId: string;
+  line: number;
+}
+
+export interface TodoEntry {
+  kind: "TODO" | "FIXME" | "HACK";
+  text: string;
+  fileId: string;
+  line: number;
+}
+
 export interface TeXStructure {
   toc: TocEntry[];
   labels: LabelEntry[];
   citations: CitationEntry[];
+  figureTables: FigureTableEntry[];
+  todos: TodoEntry[];
   /** .tex files only, keyed by file ID */
   texFiles: ProjectFile[];
 }
@@ -130,6 +147,63 @@ function parseCitations(lines: string[], fileId: string): CitationEntry[] {
   return result;
 }
 
+// ── Figure / Table parser ──
+
+const FIGURE_RE = /\\begin\{(figure|table)\}/;
+const CAPTION_RE = /\\caption(?:\[[^\]]*\])?\{([^}]*)\}/;
+
+function parseFigureTables(lines: string[], fileId: string): FigureTableEntry[] {
+  const result: FigureTableEntry[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(FIGURE_RE);
+    if (!m) continue;
+    const type = m[1] as "figure" | "table";
+    let label = "";
+    let caption = "";
+    // Scan forward to the matching \end{type}
+    for (let j = i; j < lines.length && !lines[j].includes(`\\end{${type}}`); j++) {
+      if (!label) {
+        let lm: RegExpExecArray | null;
+        LABEL_RE.lastIndex = 0;
+        if ((lm = LABEL_RE.exec(lines[j])) !== null) {
+          label = lm[1];
+        }
+      }
+      if (!caption) {
+        const cm = lines[j].match(CAPTION_RE);
+        if (cm) caption = cm[1].trim().slice(0, 80);
+      }
+    }
+    result.push({
+      type,
+      label,
+      caption: caption || "(no caption)",
+      fileId,
+      line: i + 1,
+    });
+  }
+  return result;
+}
+
+// ── TODO / FIXME / HACK parser ──
+
+const TODO_RE = /%\s*(TODO|FIXME|HACK)\b\s*(.*)/i;
+
+function parseTodos(lines: string[], fileId: string): TodoEntry[] {
+  const result: TodoEntry[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(TODO_RE);
+    if (!m) continue;
+    result.push({
+      kind: m[1].toUpperCase() as TodoEntry["kind"],
+      text: m[2].trim().slice(0, 120) || "(no description)",
+      fileId,
+      line: i + 1,
+    });
+  }
+  return result;
+}
+
 // ── BibTeX parser ──
 
 const BIB_ENTRY_RE = /@(\w+)\s*\{\s*([^,]+)\s*,/;
@@ -170,6 +244,8 @@ function computeStructure(
   const toc: TocEntry[] = [];
   const labels: LabelEntry[] = [];
   const citations: CitationEntry[] = [];
+  const figureTables: FigureTableEntry[] = [];
+  const todos: TodoEntry[] = [];
 
   for (const file of texFiles) {
     const content = getContent(file.id);
@@ -179,6 +255,8 @@ function computeStructure(
     toc.push(...parseSections(lines, file.id));
     labels.push(...parseLabels(lines, file.id));
     citations.push(...parseCitations(lines, file.id));
+    figureTables.push(...parseFigureTables(lines, file.id));
+    todos.push(...parseTodos(lines, file.id));
   }
 
   // Parse .bib files and match with citation keys
@@ -207,7 +285,7 @@ function computeStructure(
     return true;
   });
 
-  return { toc, labels, citations: deduped, texFiles };
+  return { toc, labels, citations: deduped, figureTables, todos, texFiles };
 }
 
 export function useLatexStructure(

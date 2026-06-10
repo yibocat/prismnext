@@ -6,9 +6,14 @@ import { getWebview } from "./webview-registry";
 import {
   SidebarHeader,
   SidebarContent,
-  SidebarMenu,
   SidebarMenuButton,
 } from "@/components/ui/sidebar";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -61,54 +66,35 @@ function Favicon({ url, className }: { url: string; className?: string }) {
   );
 }
 
-// ─── AccordionSection (reused pattern from texworkspace-sidebar) ───
+// ─── SidebarAccordionTrigger ───
 
-function AccordionSection({
-  title,
-  icon,
-  open,
-  onToggle,
-  badge,
-  extraAction,
-  children,
+function SidebarAccordionTrigger({
+  icon, label, badge, extraAction,
 }: {
-  title: string;
   icon?: React.ReactNode;
-  open: boolean;
-  onToggle: () => void;
+  label: string;
   badge?: string;
   extraAction?: React.ReactNode;
-  children: React.ReactNode;
 }) {
   return (
-    <div>
-      <SidebarMenuButton
-        size="sm"
-        onClick={onToggle}
-        className="[&>svg]:!size-3 h-7 text-[length:var(--font-size-12)] rounded-sm text-muted-foreground"
-      >
-        <ChevronRightIcon
-          className={cn("size-3 shrink-0 transition-transform", open && "rotate-90")}
-        />
+    <AccordionTrigger className="[&>svg]:!size-3 h-7 text-[length:var(--font-size-12)] rounded-sm text-muted-foreground hover:no-underline py-0 px-0 group">
+      <SidebarMenuButton size="sm" className="[&>svg]:!size-3 h-7 text-[length:var(--font-size-12)] rounded-sm text-muted-foreground w-full">
+        <ChevronRightIcon className="size-3 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-90" />
         {icon}
-        <span className="flex-1 text-left">{title}</span>
+        <span className="flex-1 text-left">{label}</span>
         {badge && (
-          <span className="text-[length:var(--font-hint)] text-muted-foreground/60 tabular-nums">
-            {badge}
-          </span>
+          <span className="text-[length:var(--font-hint)] text-muted-foreground/60 tabular-nums">{badge}</span>
         )}
         {extraAction}
       </SidebarMenuButton>
-      {open && <SidebarMenu className="gap-0.5 pt-0.5 pb-0.5">{children}</SidebarMenu>}
-    </div>
+    </AccordionTrigger>
   );
 }
 
 // ─── Main Component ───
 
 export function BrowserSidebar() {
-  const [sections, setSections] = useState({ bookmarks: true, recent: true });
-  const toggle = (key: keyof typeof sections) => setSections((s) => ({ ...s, [key]: !s[key] }));
+  const [accordionValue, setAccordionValue] = useState<string[]>(["bookmarks", "recent"]);
 
   const activeTabId = useRightPanelStore((s) => s.activeTabId);
   const navigateBrowserTab = useRightPanelStore((s) => s.navigateBrowserTab);
@@ -252,13 +238,14 @@ export function BrowserSidebar() {
         </button>
       </SidebarHeader>
       <SidebarContent className="overflow-auto px-1.5 py-1">
-        {/* ── Bookmarks ── */}
-        <AccordionSection
-          title="Bookmarks"
-          open={sections.bookmarks}
-          onToggle={() => toggle("bookmarks")}
-          badge={bookmarks.length > 0 ? String(bookmarks.length) : undefined}
-        >
+        <Accordion type="multiple" value={accordionValue} onValueChange={setAccordionValue}>
+          {/* ── Bookmarks ── */}
+          <AccordionItem value="bookmarks" className="border-none">
+            <SidebarAccordionTrigger
+              label="Bookmarks"
+              badge={bookmarks.length > 0 ? String(bookmarks.length) : undefined}
+            />
+            <AccordionContent className="pb-0.5">
           {bookmarks.length === 0 ? (
             <p className="pl-5 py-2 text-[length:var(--font-hint)] text-muted-foreground/60">
               No bookmarks yet
@@ -364,15 +351,15 @@ export function BrowserSidebar() {
               </div>
             ))
           )}
-        </AccordionSection>
+            </AccordionContent>
+          </AccordionItem>
 
-        {/* ── Recent ── */}
-        <AccordionSection
-          title="Recent"
-          open={sections.recent}
-          onToggle={() => toggle("recent")}
-          badge={recentVisits.length > 0 ? String(recentVisits.length) : undefined}
-          extraAction={
+          {/* ── Recent ── */}
+          <AccordionItem value="recent" className="border-none">
+            <SidebarAccordionTrigger
+              label="Recent"
+              badge={recentVisits.length > 0 ? String(recentVisits.length) : undefined}
+              extraAction={
             recentVisits.length > 0 ? (
               <button
                 type="button"
@@ -387,7 +374,8 @@ export function BrowserSidebar() {
               </button>
             ) : undefined
           }
-        >
+            />
+            <AccordionContent className="pb-0.5">
           {recentVisits.length === 0 ? (
             <p className="pl-5 py-2 text-[length:var(--font-hint)] text-muted-foreground/60">
               No recent visits
@@ -437,7 +425,9 @@ export function BrowserSidebar() {
               </ContextMenu>
             ))
           )}
-        </AccordionSection>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </SidebarContent>
 
     </>

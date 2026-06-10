@@ -8,11 +8,14 @@ import { useWorktreeStore } from "@/stores/worktree-store";
 import {
   GeneralSettings,
   AppearanceSettings,
+  ProjectSettings,
   CompilerSettings,
   ExternalSettings,
   ShortcutsSettings,
   LogViewer,
+  BackupsSettings,
 } from "@/components/modules/settings";
+import { TemplateCenter } from "@/components/modules/templates/template-center";
 import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator } from "@/components/modules/chat";
 import { WorktreeSelector } from "@/components/modules/chat/worktree-selector";
 import { BranchSelector } from "@/components/modules/chat/branch-selector";
@@ -122,14 +125,39 @@ export function LeftMainArea() {
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   const settingsCategory = useLayoutStore((s) => s.settingsCategory);
 
+  if (leftSidebarView === "templates") {
+    return (
+      <div className="flex h-full flex-col min-w-[300px] glass-content">
+        <TemplateCenter
+          onBack={() => useLayoutStore.getState().setLeftSidebarView("sessions")}
+          onUseTemplate={async (template) => {
+            if (!projectRoot) return;
+            const docSt = useDocumentStore.getState();
+            await window.electronAPI.templateApply({
+              rootPath: projectRoot,
+              manuscriptDir: docSt.manuscriptDir,
+              files: template.files,
+              templateId: template.id,
+              templateCategory: template.category,
+            });
+            docSt.refreshFiles();
+            useLayoutStore.getState().setLeftSidebarView("sessions");
+          }}
+        />
+      </div>
+    );
+  }
+
   if (leftSidebarView === "settings") {
     const SettingsContent = {
       general: GeneralSettings,
       appearance: AppearanceSettings,
+      project: ProjectSettings,
       compiler: CompilerSettings,
       external: ExternalSettings,
       shortcuts: ShortcutsSettings,
       logs: LogViewer,
+      backups: BackupsSettings,
     }[settingsCategory] || GeneralSettings;
     return <div className="flex h-full flex-col min-w-[300px] glass-content"><SettingsContent /></div>;
   }

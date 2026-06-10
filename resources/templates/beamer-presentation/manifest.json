@@ -1,0 +1,13 @@
+{
+  "id": "beamer-presentation",
+  "name": "Beamer Presentation",
+  "description": "Professional slide deck with Madrid theme, progress bar, and structured sections.",
+  "category": "beamer",
+  "tags": [
+    "beamer",
+    "slides",
+    "presentation"
+  ],
+  "documentClass": "beamer",
+  "icon": "🎯"
+}

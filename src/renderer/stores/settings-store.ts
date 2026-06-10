@@ -20,6 +20,12 @@ export interface AppSettings {
   lastProjectPath?: string | null;
   /** Last opened file — used for smart expand on project open */
   lastActiveFileId?: string | null;
+  /** Default manuscript directory name for new projects */
+  manuscriptDir?: string;
+  /** Auto-create main.tex template on new project creation */
+  autoCreateMainTex?: boolean;
+  /** Default document class for main.tex template */
+  defaultDocClass?: "article" | "report" | "book";
 }
 
 const defaults: AppSettings = {
@@ -29,6 +35,9 @@ const defaults: AppSettings = {
   rightPanelCollapsed: false,
   glassEffect: false,
   glassIntensity: 3,
+  manuscriptDir: "manuscript",
+  autoCreateMainTex: true,
+  defaultDocClass: "article",
 };
 
 interface SettingsState {

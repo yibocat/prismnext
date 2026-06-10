@@ -619,6 +619,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
           filePath={activeTab.filePath}
           projectName={projectRoot?.split(/[/\\]/).pop()}
           hideSpacer={!isEditorKind}
+          hideBreadcrumb={focusedMode === "texworkspace"}
         >
           {activeTab && (() => {
             const def = modeRegistry.findByTabKind(activeTab.kind);

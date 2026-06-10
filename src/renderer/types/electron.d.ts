@@ -170,6 +170,43 @@ export interface ElectronAPI {
   fsRename: (oldPath: string, newPath: string) => Promise<void>;
   fsMkdir: (absPath: string) => Promise<void>;
 
+  // Template operations
+  templateList: () => Promise<
+    { id: string; name: string; description: string; category: string; tags: string[]; documentClass: string; icon: string }[]
+  >;
+  templateGet: (templateId: string) => Promise<{
+    id: string; name: string; description: string; category: string; tags: string[]; documentClass: string; icon: string;
+    files: { path: string; content: string }[];
+  } | null>;
+  templatePreview: (templateId: string) => Promise<string | null>;
+  templateApply: (args: {
+    rootPath: string;
+    manuscriptDir: string;
+    files: { path: string; content: string }[];
+    templateId: string;
+    templateCategory: string;
+  }) => Promise<{ appliedFiles: Record<string, string> }>;
+  templateGetPdfData: (templateId: string) => Promise<string | null>;
+  templateDetectChanges: (args: {
+    rootPath: string;
+    manuscriptDir: string;
+    appliedFiles: Record<string, string>;
+  }) => Promise<{ changed: string[]; deleted: string[]; unchanged: string[] }>;
+  templateBackup: (args: {
+    rootPath: string;
+    manuscriptDir: string;
+    files: string[];
+    backupLabel: string;
+  }) => Promise<{ backupPath: string }>;
+  templateListBackups: (args: { rootPath: string }) => Promise<
+    { label: string; timestamp: string; files: string[] }[]
+  >;
+  templateRestoreBackup: (args: {
+    rootPath: string;
+    manuscriptDir: string;
+    backupLabel: string;
+  }) => Promise<{ restored: string[] }>;
+
   // File watcher operations
   fsWatchStart: (rootPath: string) => Promise<void>;
   fsWatchStop: () => Promise<void>;

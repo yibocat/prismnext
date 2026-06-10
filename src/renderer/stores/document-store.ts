@@ -39,6 +39,8 @@ interface FileMeta {
 
 interface DocumentState {
   projectRoot: string | null;
+  /** Configured manuscript directory name (from .prismnext/settings.json, default "manuscript") */
+  manuscriptDir: string;
   /** Current working root — projectRoot on main, worktree path when active */
   checkoutRoot: string | null;
   showWelcome: boolean;
@@ -59,6 +61,7 @@ interface DocumentState {
   jumpTarget: number | null;
   /** Jump to a specific line in a specific file (used by TOC/Labels/Citations) */
   jumpToLine: { fileId: string; line: number } | null;
+  insertText: string | null;
   selectionRange: { start: number; end: number } | null;
   /** Bumped after reloadMetadataFromDisk updates metadata — editors watch this. */
   contentVersion: number;
@@ -104,6 +107,7 @@ interface DocumentState {
   isFileDirty: (id: string) => boolean;
   requestJumpToPosition: (position: number) => void;
   requestJumpToLine: (fileId: string, line: number) => void;
+  requestInsertText: (text: string) => void;
   setSelectionRange: (range: { start: number; end: number } | null) => void;
 }
 
@@ -201,6 +205,7 @@ function markSuppressWatcherReload() {
 
 export const useDocumentStore = create<DocumentState>((set, get) => ({
   projectRoot: null,
+  manuscriptDir: "manuscript",
   checkoutRoot: null,
   showWelcome: true,
   setShowWelcome: (show) => set({ showWelcome: show }),
@@ -214,6 +219,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   openedContents: new Map(),
   jumpTarget: null,
   jumpToLine: null,
+  insertText: null,
   selectionRange: null,
   contentVersion: 0,
   dirtyVersion: 0,
@@ -1267,6 +1273,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
   requestJumpToPosition: (position: number) => set({ jumpTarget: position }),
   requestJumpToLine: (fileId: string, line: number) => set({ jumpToLine: { fileId, line } }),
+  requestInsertText: (text: string) => set({ insertText: text }),
 
   setSelectionRange: (range) => set({ selectionRange: range }),
 }));

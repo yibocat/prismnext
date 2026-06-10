@@ -8,7 +8,8 @@ import {
   SIDEBAR_RIGHT_DEFAULT,
 } from "@/styles/constants";
 
-export type AppMode = "all" | "manuscript" | "vault" | "zotero" | "code" | "assets" | "other" | "chat";
+/** App mode — "all", "manuscript", "chat", or any project subdirectory name. */
+export type AppMode = string;
 /**
  * Toolbar mode identifiers. These MUST match the `id` fields of registered
  * ModeDefinition entries in modeRegistry. The dashboard sentinel is the only
@@ -44,11 +45,13 @@ interface LayoutState {
 
   texworkspaceViewMode: TexworkspaceViewMode;
   setTexworkspaceViewMode: (mode: TexworkspaceViewMode) => void;
+  texworkspaceSearchQuery: string;
+  setTexworkspaceSearchQuery: (query: string) => void;
 
   leftSidebarOverlay: boolean;
   setLeftSidebarOverlay: (show: boolean) => void;
-  leftSidebarView: "sessions" | "settings";
-  setLeftSidebarView: (view: "sessions" | "settings") => void;
+  leftSidebarView: "sessions" | "settings" | "templates";
+  setLeftSidebarView: (view: "sessions" | "settings" | "templates") => void;
   settingsCategory: string;
   setSettingsCategory: (category: string) => void;
 
@@ -109,8 +112,8 @@ interface LayoutState {
   setMdWidthLimited: (limited: boolean) => void;
 
   /** Per-mode tabs (flat list) */
-  modeEditorTabs: Record<AppMode, EditorTab[]>;
-  modeActiveEditorTab: Record<AppMode, string | null>;
+  modeEditorTabs: Record<string, EditorTab[]>;
+  modeActiveEditorTab: Record<string, string | null>;
   openEditorTab: (tab: EditorTab) => void;
   closeEditorTab: (id: string) => void;
   setActiveEditorTab: (id: string) => void;
@@ -170,7 +173,9 @@ export const useLayoutStore = create<LayoutState>()(
       setFocusedMode: (mode) => set({ focusedMode: mode }),
 
       texworkspaceViewMode: "split",
+      texworkspaceSearchQuery: "",
       setTexworkspaceViewMode: (mode) => set({ texworkspaceViewMode: mode }),
+      setTexworkspaceSearchQuery: (query) => set({ texworkspaceSearchQuery: query }),
 
       leftSidebarOverlay: false,
       setLeftSidebarOverlay: (show) => set({ leftSidebarOverlay: show }),

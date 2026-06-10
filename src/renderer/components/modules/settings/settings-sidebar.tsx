@@ -22,6 +22,8 @@ import {
   GlobeIcon,
   KeyboardIcon,
   FileTextIcon,
+  FolderOpenIcon,
+  HistoryIcon,
   XIcon,
   SunIcon,
   MoonIcon,
@@ -35,6 +37,7 @@ const SECTIONS = [
     items: [
       { id: "general", label: "General", icon: Settings2Icon },
       { id: "appearance", label: "Appearance", icon: PaletteIcon },
+      { id: "project", label: "Projects", icon: FolderOpenIcon },
       { id: "shortcuts", label: "Shortcuts", icon: KeyboardIcon },
     ],
   },
@@ -43,12 +46,13 @@ const SECTIONS = [
     items: [
       { id: "compiler", label: "Compiler", icon: WrenchIcon },
       { id: "external", label: "AI & APIs", icon: GlobeIcon },
+      { id: "backups", label: "Backups", icon: HistoryIcon },
       { id: "logs", label: "Logs", icon: FileTextIcon },
     ],
   },
 ] as const;
 
-export type SettingsCategory = "general" | "appearance" | "shortcuts" | "compiler" | "external" | "logs";
+export type SettingsCategory = "general" | "appearance" | "shortcuts" | "project" | "compiler" | "external" | "logs" | "backups";
 
 interface SettingsSidebarProps {
   activeCategory: SettingsCategory;

@@ -1,0 +1,13 @@
+{
+  "id": "letter",
+  "name": "Cover Letter",
+  "description": "Formal letter suitable for cover letters, recommendation letters, and correspondence.",
+  "category": "letter",
+  "tags": [
+    "letter",
+    "formal",
+    "correspondence"
+  ],
+  "documentClass": "article",
+  "icon": "✉️"
+}

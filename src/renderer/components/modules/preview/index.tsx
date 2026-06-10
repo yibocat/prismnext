@@ -565,10 +565,6 @@ export function PdfPreview() {
               persistKey={persistKey}
             />
           </Root>
-        ) : !isCompiling && !source ? (
-          <span className="flex justify-center pt-20 text-muted-foreground text-[length:var(--font-placeholder)]">
-            Compile to preview PDF
-          </span>
         ) : null}
       </div>
     </div>

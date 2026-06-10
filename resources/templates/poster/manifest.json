@@ -1,0 +1,13 @@
+{
+  "id": "poster",
+  "name": "Conference Poster",
+  "description": "A0 conference poster using beamerposter with blocks for intro, methods, results, and references.",
+  "category": "poster",
+  "tags": [
+    "poster",
+    "conference",
+    "a0"
+  ],
+  "documentClass": "beamer",
+  "icon": "📊"
+}

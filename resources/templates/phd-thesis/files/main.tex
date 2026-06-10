@@ -1,0 +1,54 @@
+\documentclass[12pt,a4paper]{report}
+
+% ── Packages ──
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+\usepackage[
+  backend=biber,
+  style=apa,
+  sorting=nyt,
+]{biblatex}
+\addbibresource{references.bib}
+\usepackage[titletoc]{appendix}
+\usepackage{setspace}
+\onehalfspacing
+
+% ── Title page ──
+\title{Thesis Title}
+\author{Author Name}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+% ── Front matter ──
+\pagenumbering{roman}
+\include{frontmatter/dedication}
+\include{frontmatter/abstract}
+\include{frontmatter/acknowledgements}
+\tableofcontents
+\listoffigures
+\listoftables
+
+% ── Main chapters ──
+\pagenumbering{arabic}
+\include{chapters/introduction}
+\include{chapters/background}
+\include{chapters/methods}
+\include{chapters/results}
+\include{chapters/discussion}
+\include{chapters/conclusion}
+
+% ── Appendices ──
+\begin{appendices}
+\include{appendices/appendix-a}
+\end{appendices}
+
+% ── Bibliography ──
+\printbibliography
+
+\end{document}

@@ -1,0 +1,76 @@
+\documentclass[aspectratio=169]{beamer}
+
+% ── Theme ──
+\usetheme{Madrid}
+\usecolortheme{default}
+\setbeamertemplate{footline}[frame number]
+\setbeamertemplate{navigation symbols}{}
+
+% ── Packages ──
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage[style=authoryear]{biblatex}
+\addbibresource{references.bib}
+
+% ── Metadata ──
+\title[Short Title]{Full Presentation Title}
+\author[Author]{Author Name}
+\institute[University]{Department, University}
+\date{\today}
+
+\begin{document}
+
+% ── Title slide ──
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% ── Outline ──
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ── Sections ──
+\section{Introduction}
+\begin{frame}{Introduction}
+  \begin{itemize}
+    \item Background of the problem
+    \item Motivation for this work
+    \item Key contributions
+  \end{itemize}
+\end{frame}
+
+\section{Methods}
+\begin{frame}{Methods}
+  \begin{block}{Approach}
+    Describe your approach here.
+  \end{block}
+\end{frame}
+
+\section{Results}
+\begin{frame}{Results}
+  Present your key findings.
+\end{frame}
+
+\section{Conclusion}
+\begin{frame}{Conclusion}
+  \begin{itemize}
+    \item Summary of contributions
+    \item Future work
+  \end{itemize}
+\end{frame}
+
+% ── Thank you ──
+\begin{frame}
+  \centering
+  \Huge Thank you!\\[12pt]
+  \large Questions?
+\end{frame}
+
+% ── References ──
+\begin{frame}[allowframebreaks]{References}
+  \printbibliography
+\end{frame}
+
+\end{document}

@@ -12,6 +12,7 @@ import { useWindowState } from "@/hooks/use-window-state";
 import {
   Bot,
   FileType,
+  LayoutTemplate,
   PinIcon,
   PinOff,
   Dot,
@@ -305,7 +306,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
           <button
             type="button"
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-            onClick={() => { newSession(); setLeftSidebarOverlay(false); }}
+            onClick={() => { newSession(); useLayoutStore.getState().setLeftSidebarView("sessions"); setLeftSidebarOverlay(false); }}
           >
             <Bot className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="flex-1 text-left">New Agent</span>
@@ -316,8 +317,24 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
             type="button"
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
             onClick={() => {
+              const st = useLayoutStore.getState();
+              st.setLeftSidebarView(
+                st.leftSidebarView === "templates" ? "sessions" : "templates",
+              );
+              setLeftSidebarOverlay(false);
+            }}
+          >
+            <LayoutTemplate className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="flex-1 text-left">Templates</span>
+          </button>
+
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+            onClick={() => {
               useRightPanelStore.getState().ensureTab("texworkspace");
               const st = useLayoutStore.getState();
+              st.setLeftSidebarView("sessions");
               st.activateMode("texworkspace");
               const r = rightAreaRef?.current;
               const c = centerRef?.current;

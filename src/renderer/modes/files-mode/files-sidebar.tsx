@@ -48,7 +48,7 @@ import { buildFileTree, flattenVisibleTree, type TreeNode, type FlatVisibleNode 
 import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
-import { MODE_DIR, type SidebarMode, filterFilesByMode, filterFoldersByMode } from "@/components/layout/right-sidebar/shared";
+import { getModeDir, type SidebarMode, filterFilesByMode, filterFoldersByMode } from "@/components/layout/right-sidebar/shared";
 import { FolderVirtRow, FileVirtRow, InlineEditRow, type VirtTreeCallbacks, type GitStatusInfo } from "@/components/layout/right-sidebar/virtual-tree-rows";
 
 
@@ -133,6 +133,7 @@ export function FilesSidebar() {
   const dirtyVersion = useDocumentStore((s) => s.dirtyVersion);
   const setActiveFile = useDocumentStore((s) => s.setActiveFile);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const manuscriptDir = useDocumentStore((s) => s.manuscriptDir);
   const openFile = useRightPanelStore((s) => s.openFile);
   const openTexworkspaceFile = useRightPanelStore((s) => s.openTexworkspaceFile);
   const deleteFile = useDocumentStore((s) => s.deleteFile);
@@ -240,8 +241,8 @@ export function FilesSidebar() {
     },
     [],
   );
-  const files = useMemo(() => filterFilesByMode(allFiles, currentMode), [allFiles, currentMode]);
-  const folders = useMemo(() => filterFoldersByMode(allFolders, currentMode), [allFolders, currentMode]);
+  const files = useMemo(() => filterFilesByMode(allFiles, currentMode, manuscriptDir), [allFiles, currentMode, manuscriptDir]);
+  const folders = useMemo(() => filterFoldersByMode(allFolders, currentMode, manuscriptDir), [allFolders, currentMode, manuscriptDir]);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const tree = useMemo(() => buildFileTree(files, folders), [files, folders]);
   const dirtyFiles = useMemo(() => {
@@ -332,9 +333,9 @@ export function FilesSidebar() {
   const resolveCreateFolder = useCallback(
     (modeFolderPath?: string): string | undefined => {
       if (!modeFolderPath && currentMode === "all") return undefined;
-      if (!modeFolderPath) return MODE_DIR[currentMode];
+      if (!modeFolderPath) return getModeDir(currentMode, manuscriptDir);
       if (currentMode === "all") return modeFolderPath;
-      return `${MODE_DIR[currentMode]}/${modeFolderPath}`;
+      return `${getModeDir(currentMode, manuscriptDir)}/${modeFolderPath}`;
     },
     [currentMode],
   );
@@ -564,10 +565,10 @@ export function FilesSidebar() {
     let targetPath = fileTreeNavigatePath;
 
     if (currentMode !== "all") {
-      const prefix = `${MODE_DIR[currentMode]}/`;
+      const prefix = `${getModeDir(currentMode, manuscriptDir)}/`;
       if (targetPath.startsWith(prefix)) {
         targetPath = targetPath.slice(prefix.length);
-      } else if (targetPath === MODE_DIR[currentMode]) {
+      } else if (targetPath === getModeDir(currentMode, manuscriptDir)) {
         targetPath = "";
       }
     }

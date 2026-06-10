@@ -1,0 +1,13 @@
+{
+  "id": "phd-thesis",
+  "name": "PhD Thesis",
+  "description": "Multi-chapter thesis with front matter, dedication, and appendices. Uses the report class.",
+  "category": "thesis",
+  "tags": [
+    "book",
+    "thesis",
+    "chapters"
+  ],
+  "documentClass": "report",
+  "icon": "🎓"
+}

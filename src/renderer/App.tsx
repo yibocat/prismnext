@@ -162,24 +162,22 @@ export function App() {
     style.setProperty("--glass-border-dark", p.borderDark);
   }, [glassEffect, glassIntensity, setTheme]);
 
-  // Auto-collapse RightArea when entering settings, restore on exit
+  // Auto-collapse RightArea when entering settings/templates, restore on exit
   const savedRightArea = useRef(false);
   useEffect(() => {
     const r = rightAreaRef.current;
+    const st = useLayoutStore.getState();
     if (!r) return;
-    if (leftSidebarView === "settings") {
-      // Save current state and collapse
-      savedRightArea.current = !r.isCollapsed();
+    if (leftSidebarView === "settings" || leftSidebarView === "templates") {
       if (!r.isCollapsed()) {
-        const st = useLayoutStore.getState();
         st.setRightAreaWidth(r.getSize().inPixels);
         r.collapse();
         centerRef.current?.resize(9999);
       }
+      savedRightArea.current = true;
     } else {
-      // Restore previous state when leaving settings
       if (savedRightArea.current && r.isCollapsed()) {
-        r.resize(useLayoutStore.getState().rightAreaWidth);
+        r.resize(st.rightAreaWidth);
         savedRightArea.current = false;
       }
     }
