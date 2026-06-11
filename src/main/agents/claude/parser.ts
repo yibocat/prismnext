@@ -1,4 +1,4 @@
-import type { CliParser } from "./types";
+import type { CliParser } from "../../cli/types";
 
 interface AccumBlock {
   type: string;
@@ -21,6 +21,23 @@ interface AccumBlock {
 export class ClaudeParser implements CliParser {
   private blocks: AccumBlock[] = [];
   private sessionId: string | null = null;
+  /** Uncached input_tokens from the most recent message_start event. */
+  private _inputTokens: number | null = null;
+  /** Cache creation tokens from the most recent message_start. */
+  private _cacheCreationTokens: number = 0;
+  /** Cache read tokens from the most recent message_start. */
+  private _cacheReadTokens: number = 0;
+
+  /** Return the latest input token count (uncached only — use totalContextTokens for full context). */
+  get inputTokens(): number | null {
+    return this._inputTokens;
+  }
+
+  /** Return total context window consumption: uncached + cache_creation + cache_read. */
+  get totalContextTokens(): number | null {
+    if (this._inputTokens === null) return null;
+    return this._inputTokens + this._cacheCreationTokens + this._cacheReadTokens;
+  }
 
   parse(line: string): Record<string, unknown> | null {
     let json: Record<string, unknown>;
@@ -43,6 +60,19 @@ export class ClaudeParser implements CliParser {
 
       if (innerType === "message_start") {
         this.resetMessage();
+        // Capture token usage from the API. input_tokens is the UN-CACHED
+        // portion; cache_read_input_tokens + cache_creation_input_tokens
+        // represent the cached context. The true context window consumption
+        // is the sum of all three.
+        const msg = inner.message as Record<string, unknown> | undefined;
+        const usage = msg?.usage as Record<string, unknown> | undefined;
+        if (typeof usage?.input_tokens === "number") {
+          this._inputTokens = usage.input_tokens as number;
+        }
+        const cr = usage?.cache_read_input_tokens;
+        const cc = usage?.cache_creation_input_tokens;
+        this._cacheCreationTokens = typeof cc === "number" ? cc : 0;
+        this._cacheReadTokens = typeof cr === "number" ? cr : 0;
         return null;
       }
       if (
@@ -194,9 +224,22 @@ export class ClaudeParser implements CliParser {
 
     const msg: Record<string, unknown> = {
       type: "assistant",
-      message: { content },
+      message: { content } as Record<string, unknown>,
+      __partial: true, // streaming delta — skip when persisting to JSONL
     };
     if (this.sessionId) msg.session_id = this.sessionId;
+
+    // Include usage data so the frontend's message-scan path
+    // (projectActiveTab / computeContextTokens) can extract token counts
+    // from committed messages, in addition to the fast-path via cli:complete.
+    if (this._inputTokens !== null) {
+      (msg.message as Record<string, unknown>).usage = {
+        input_tokens: this._inputTokens,
+        cache_creation_input_tokens: this._cacheCreationTokens || undefined,
+        cache_read_input_tokens: this._cacheReadTokens || undefined,
+      };
+    }
+
     return msg;
   }
 
@@ -208,5 +251,8 @@ export class ClaudeParser implements CliParser {
   reset(): void {
     this.resetMessage();
     this.sessionId = null;
+    this._inputTokens = null;
+    this._cacheCreationTokens = 0;
+    this._cacheReadTokens = 0;
   }
 }

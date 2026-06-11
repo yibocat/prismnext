@@ -4,7 +4,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useChatStore } from "@/stores/chat-store";
-import { ChevronDownIcon } from "lucide-react";
+import { SlidersHorizontalIcon } from "lucide-react";
 import { ClaudeSettingsContent, ClaudeSettingsLabel } from "./claude-settings";
 import { GeminiSettingsContent, GeminiSettingsLabel } from "./gemini-settings";
 import { OpenCodeSettingsContent, OpenCodeSettingsLabel } from "./opencode-settings";
@@ -32,10 +32,15 @@ export function AgentSettingsBar() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex items-center gap-1 rounded px-2 py-1 text-muted-foreground text-[length:var(--font-chat-meta)] transition-colors hover:bg-accent hover:text-accent-foreground"
+          className="flex items-center gap-0 @md:gap-1 rounded px-1.5 @md:px-2 py-1 text-muted-foreground text-[length:var(--font-chat-meta)] transition-colors hover:bg-accent hover:text-accent-foreground"
+          title="Model settings"
         >
-          <Label />
-          <ChevronDownIcon className="size-3" />
+          {/* Icon-only mode (below @md) */}
+          <SlidersHorizontalIcon className="size-3.5 shrink-0 @md:hidden" />
+          {/* Full mode: label (@md+) */}
+          <span className="hidden @md:contents">
+            <Label />
+          </span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">

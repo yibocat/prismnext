@@ -4,7 +4,6 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { exec } from "node:child_process";
 import { registerIpcHandlers } from "./ipc/index";
 import { setMainWindow, registerWindowHandlers } from "./ipc/window";
-import { killAllClaudeProcesses } from "./services/claude";
 import { disposeCliManager } from "./ipc/cli";
 import { destroyAllTerminalSessions } from "./ipc/terminal";
 
@@ -108,7 +107,6 @@ function createWindow() {
   });
 
   mainWindow.on("closed", () => {
-    killAllClaudeProcesses();
     disposeCliManager();
     destroyAllTerminalSessions();
     import("./ipc/log").then((m) => m.disposeLogger());

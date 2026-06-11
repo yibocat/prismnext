@@ -1,22 +1,40 @@
 import { create } from "zustand";
 
+export type AgentSettings = Record<string, string | null>;
+
 interface AgentSettingsState {
-  settings: Record<string, string | null>;
-  setSetting: (key: string, value: string | null) => void;
-  getSetting: (key: string) => string | null;
+  /** Per-agent settings, keyed by agent ID */
+  settings: Record<string, AgentSettings>;
+  setSetting: (agentId: string, key: string, value: string | null) => void;
+  /** Get a single setting value for an agent */
+  getSetting: (agentId: string, key: string) => string | null;
+  /** Get all settings for an agent */
+  getAgentSettings: (agentId: string) => AgentSettings;
 }
 
-const DEFAULTS: Record<string, string | null> = {
-  model: null,
-  agentMode: "edit-before-ask",
-  effort: "medium",
+const DEFAULTS: Record<string, AgentSettings> = {
+  claude: {
+    model: null,
+    agentMode: "edit-before-ask",
+    effort: "medium",
+  },
+  gemini: {},
+  opencode: {},
+  qoder: {},
 };
 
 export const useAgentSettingsStore = create<AgentSettingsState>()((set, get) => ({
-  settings: { ...DEFAULTS },
+  settings: structuredClone(DEFAULTS),
 
-  setSetting: (key, value) =>
-    set((s) => ({ settings: { ...s.settings, [key]: value } })),
+  setSetting: (agentId, key, value) =>
+    set((s) => ({
+      settings: {
+        ...s.settings,
+        [agentId]: { ...(s.settings[agentId] ?? {}), [key]: value },
+      },
+    })),
 
-  getSetting: (key) => get().settings[key] ?? null,
+  getSetting: (agentId, key) => get().settings[agentId]?.[key] ?? null,
+
+  getAgentSettings: (agentId) => get().settings[agentId] ?? {},
 }));

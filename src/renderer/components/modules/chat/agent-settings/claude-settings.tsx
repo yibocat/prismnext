@@ -27,6 +27,8 @@ const MODE_OPTIONS: SettingOption[] = [
 
 const EFFORT_LEVELS = ["low", "medium", "high"] as const;
 
+const AGENT_ID = "claude";
+
 function SelectSection({
   label,
   options,
@@ -36,7 +38,7 @@ function SelectSection({
   options: SettingOption[];
   settingKey: string;
 }) {
-  const rawValue = useAgentSettingsStore((s) => s.settings[settingKey]);
+  const rawValue = useAgentSettingsStore((s) => s.settings[AGENT_ID]?.[settingKey]);
   const setSetting = useAgentSettingsStore((s) => s.setSetting);
 
   return (
@@ -48,7 +50,7 @@ function SelectSection({
         <DropdownMenuItem
           key={opt.id ?? "default"}
           onSelect={(e) => e.preventDefault()}
-          onClick={() => setSetting(settingKey, opt.id)}
+          onClick={() => setSetting(AGENT_ID, settingKey, opt.id)}
         >
           <div className="min-w-0 flex-1">
             <div className="font-medium text-[length:var(--font-chat-meta)]">{opt.name}</div>
@@ -64,7 +66,7 @@ function SelectSection({
 }
 
 function EffortSection() {
-  const effortLevel = useAgentSettingsStore((s) => s.settings["effort"]) ?? "medium";
+  const effortLevel = useAgentSettingsStore((s) => s.settings[AGENT_ID]?.effort) ?? "medium";
   const setSetting = useAgentSettingsStore((s) => s.setSetting);
 
   return (
@@ -85,7 +87,7 @@ function EffortSection() {
                 ? "bg-primary text-primary-foreground"
                 : "bg-muted text-muted-foreground hover:bg-muted/80",
             )}
-            onClick={(e) => { e.stopPropagation(); setSetting("effort", level); }}
+            onClick={(e) => { e.stopPropagation(); setSetting(AGENT_ID, "effort", level); }}
           >
             {level === "low" ? "L" : level === "medium" ? "M" : "H"}
           </button>
@@ -108,7 +110,7 @@ export function ClaudeSettingsContent() {
 }
 
 export function ClaudeSettingsLabel() {
-  const settings = useAgentSettingsStore((s) => s.settings);
+  const settings = useAgentSettingsStore((s) => s.settings[AGENT_ID]) ?? {};
   const model = settings["model"];
   const mode = settings["agentMode"];
   const effort = settings["effort"] ?? "medium";

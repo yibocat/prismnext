@@ -24,15 +24,19 @@ export function ThinkingWidget({
   duration,
   persistKey,
   isStreamingMsg,
+  isProgress,
 }: {
   thinking: string;
   duration?: number;
   persistKey?: string;
   /** Whether THIS message is still being streamed (not a global flag). */
   isStreamingMsg?: boolean;
+  /** When true, this is init progress (not real AI thinking).
+   *  Shows "Initialization" label, defaults collapsed, no timer. */
+  isProgress?: boolean;
 }) {
   const [expanded, setExpanded] = useState(
-    () => (persistKey ? getThinkingState(persistKey) : false),
+    () => isProgress ? false : (persistKey ? getThinkingState(persistKey) : false),
   );
   const [elapsed, setElapsed] = useState(0);
   // Fall back to global isStreaming if prop not provided (backward compat).
@@ -46,13 +50,13 @@ export function ThinkingWidget({
   }, [persistKey, expanded]);
 
   useEffect(() => {
-    if (!isStreaming) return;
+    if (!isStreaming || isProgress) return;
     const start = Date.now();
     const timer = setInterval(() => {
       setElapsed((Date.now() - start) / 1000);
     }, 100);
     return () => clearInterval(timer);
-  }, [isStreaming]);
+  }, [isStreaming, isProgress]);
 
   // Format a duration in seconds to 1 decimal place.
   const fmt = (s: number) => s.toFixed(1);
@@ -73,7 +77,9 @@ export function ThinkingWidget({
       >
         <BrainIcon className="size-3.5" />
         <span className="text-[length:var(--font-code)]">
-          {isStreaming ? `Thinking... ${fmt(elapsed)}s` : `Thought for ${fmt(displayDuration)}s`}
+          {isProgress
+            ? "Initialization"
+            : (isStreaming ? `Thinking... ${fmt(elapsed)}s` : `Thought for ${fmt(displayDuration)}s`)}
         </span>
         <ChevronDownIcon
           className={cn("size-3.5 transition-transform ml-auto", expanded && "rotate-180")}

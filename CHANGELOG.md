@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.3.16 — 2026-06-11
+
+### Multi-Agent Architecture
+
+- Abstract agent layer replacing hardcoded Claude-only service with pluggable agent registry
+- Agent integrations: Claude Code, OpenCode, Gemini CLI, Qoder (each with config, parser, sessions, calculator)
+- `CliManager` generalized from Claude-specific to agent-agnostic: settings apply, context assembly, MCP config injection
+- Session providers per agent with project-local JSONL persistence under `.prismnext/sessions/<agent>/`
+- Agent-aware tokenizer with per-model encoding support
+- Project context resolver: app shell system prompt + CLAUDE.md/rules + MCP config + venv/PATH augmentation
+- Old `src/main/services/claude.ts` and `src/main/agents/configs.ts` removed
+
+### Context Window Tracking
+
+- Token calculator with categorized breakdown (system prompt, rules, skills, MCP, conversation, tools)
+- `ContextWindowIndicator` component with color-coded ring visualization
+- Token data persisted in JSONL result messages for cross-session replay
+- Per-tab context breakdown and category schema surviving tab switches
+
+### Agent Settings
+
+- Per-agent settings UI: model selector, effort level, agent mode (Claude); model, temperature (Gemini)
+- Settings stored in project-level `.prismnext/agent-config/` and applied as CLI args/env on spawn
+- Agent App Settings panel for default prompts and gateway configuration
+- Agent Project Settings panel for project-level overrides
+- `AgentSettingsStore` with per-agent, per-key typed getters
+
+### Session Resume (Critical Fix)
+
+- Fixed session not resuming after app restart — prewarmed process without `--resume` was silently reused
+- `CliSession` tracks `resumedSessionId`; `ensureProcess` detects mismatches and restarts
+- Fixed spurious `cli:complete` from old process exit handler hiding streaming indicator
+
+### Chat Initialization UX
+
+- Progress messages as collapsible "Initialization" thinking block (no Copy button)
+- Progress only on first turn of new sessions; committed to chat history on real content arrival
+- `ThinkingWidget` supports `isProgress` prop: "Initialization" label, default collapsed, no timer
+
+### Performance
+
+- Pre-warm uses reactive `useEffect([projectRoot, worktreePath])` instead of mount-only flag
+- Subsequent turns skip agent status check and prewarm IPC calls
+- `saveAllFiles` deferred to fire-and-forget on non-first turns
+- All synchronous JSONL writes deferred to `setImmediate` to unblock IPC response
+
+### UI
+
+- Agent selector dropdown in chat composer (icon + name, switchable per-tab)
+- Multi-agent session list with agent name badges
+- Branch selector and worktree selector updated for agent context
+- New settings sidebar categories: Agent App, Agent Project
+
 ## 0.3.15 — 2026-06-10
 
 ### Template System

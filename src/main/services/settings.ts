@@ -10,6 +10,9 @@ export interface AppSettings {
   lastProjectPath?: string;
   zoteroApiKey?: string;
   zoteroUserId?: string;
+  /** Custom system prompt for the agent shell (Layer 1).
+   *  When empty/undefined, APP_SYSTEM_PROMPT from app-shell.ts is used. */
+  agentSystemPrompt?: string;
 }
 
 const defaults: AppSettings = {
@@ -18,6 +21,7 @@ const defaults: AppSettings = {
   theme: "dark",
   sidebarCollapsed: false,
   rightPanelCollapsed: false,
+  agentSystemPrompt: "",
 };
 
 const store = new Store<AppSettings>({

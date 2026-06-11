@@ -24,9 +24,10 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore, type ProjectFile } from "@/stores/document-store";
 import { AgentSettingsBar } from "./agent-settings/agent-settings-bar";
 import { compileCurrentDocument } from "@/stores/compile-store";
-import { useWorktreeStore } from "@/stores/worktree-store";
-import { useGitStore } from "@/stores/git-store";
-import { GitBranchIcon } from "lucide-react";
+import { Bot } from "lucide-react";
+import { AGENT_UI_CONFIGS } from "@/lib/agent-config";
+
+const AGENTS = Object.values(AGENT_UI_CONFIGS);
 
 // ─── Helpers ───
 
@@ -68,32 +69,12 @@ export function ChatComposer() {
   const sendPrompt = useChatStore((s) => s.sendPrompt);
   const cancelExecution = useChatStore((s) => s.cancelExecution);
   const isStreaming = useChatStore((s) => s.isStreaming);
+  const selectedAgent = useChatStore((s) => s.selectedAgent);
+  const setSelectedAgent = useChatStore((s) => s.setSelectedAgent);
   const activeSessionId = useChatStore((s) => s.sessionId);
   const archivedSessionIds = useLayoutStore((s) => s.archivedSessionIds);
   const isArchived = activeSessionId ? archivedSessionIds.includes(activeSessionId) : false;
   const activeTabId = useChatStore((s) => s.activeTabId);
-
-  const WT_PREFIX = "wt-";
-
-  // Worktree state for bottom bar labels
-  const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
-  const currentGitBranch = useGitStore((s) => s.branch);
-  const messages = useChatStore((s) => s.messages);
-  const hasMessages = messages.length > 0;
-
-  // Cache the project branch so wt-* never flashes during transitions
-  // (e.g. when switching from worktree back to local — the git store still
-  // reports the wt-* worktree branch for a frame while it refreshes).
-  const lastProjectBranch = useRef(
-    currentGitBranch && !currentGitBranch.startsWith(WT_PREFIX)
-      ? currentGitBranch
-      : activeWorktree?.baseBranch || "",
-  );
-  useEffect(() => {
-    if (currentGitBranch && !currentGitBranch.startsWith(WT_PREFIX)) {
-      lastProjectBranch.current = currentGitBranch;
-    }
-  }, [currentGitBranch]);
 
   // Document store (for @ mentions and selection)
   const files = useDocumentStore((s) => s.files);
@@ -326,7 +307,7 @@ export function ChatComposer() {
 
   // ─── Render ───
   return (
-    <div className="relative pt-2 pb-1 px-3 max-w-3xl mx-auto w-full">
+    <div className="relative pt-1 pb-1 px-3 max-w-3xl mx-auto w-full">
       {/* / slash command dropdown */}
       {slashQuery !== null && (
         <div className="absolute right-3 bottom-full left-3 z-20 mb-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-background shadow-lg">
@@ -387,7 +368,7 @@ export function ChatComposer() {
         </div>
       )}
 
-      <div className="flex w-full flex-col rounded-2xl border border-input bg-card transition-colors focus-within:border-ring">
+      <div className="flex w-full flex-col rounded-2xl border border-input bg-card shadow-[0_0_2px_rgba(0,0,0,0.03)] transition-colors focus-within:border-ring">
         {/* Pinned context chips */}
         {pinnedContexts.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3 pb-0">
@@ -420,7 +401,7 @@ export function ChatComposer() {
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder="Ask me anything... (@ to mention files, / for commands)"
+              placeholder="anything, @ to mention, / for commands"
               className="max-h-40 min-h-12 w-full resize-none bg-transparent px-4 py-2 text-[length:var(--font-composer)] outline-none placeholder:text-muted-foreground"
               rows={2}
             />
@@ -457,6 +438,36 @@ export function ChatComposer() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+
+                {/* Agent selector — icon-only below @md */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex items-center gap-0 @md:gap-1 rounded px-1.5 @md:px-2 py-1 text-muted-foreground text-[length:var(--font-chat-meta)] transition-colors hover:bg-accent hover:text-accent-foreground"
+                      title={AGENTS.find((a) => a.id === selectedAgent)?.name || "Claude"}
+                    >
+                      <Bot className="size-3.5 shrink-0" />
+                      <span className="hidden @md:inline">{AGENTS.find((a) => a.id === selectedAgent)?.name || "Claude"}</span>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-36">
+                    {AGENTS.map((a) => (
+                      <DropdownMenuItem
+                        key={a.id}
+                        disabled={a.disabled}
+                        onClick={() => setSelectedAgent(a.id)}
+                        className="text-[length:var(--font-chat-meta)]"
+                      >
+                        <span>{a.name}</span>
+                        {selectedAgent === a.id && (
+                          <span className="ml-auto text-[length:var(--font-badge)] text-muted-foreground">active</span>
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
                 <AgentSettingsBar />
               </div>
 
@@ -480,38 +491,6 @@ export function ChatComposer() {
           </>
         )}
       </div>
-
-        {/* Bottom bar: branch + worktree labels (only when messages exist) */}
-        {hasMessages && (
-          <div className="flex items-center gap-2 pt-1.5 text-[length:var(--font-hint)] text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <GitBranchIcon className="size-3" />
-              <span className="font-medium text-foreground/80">
-                {activeWorktree?.baseBranch
-                ?? (currentGitBranch && !currentGitBranch.startsWith(WT_PREFIX)
-                  ? currentGitBranch
-                  : lastProjectBranch.current || "...")}
-              </span>
-            </span>
-            {activeWorktree && (
-              <>
-                <span className="opacity-40">·</span>
-                <span className="flex items-center gap-1 text-primary/70">
-                  <span>📂</span>
-                  <span className="font-medium">{activeWorktree.name}</span>
-                </span>
-                <span className="ml-auto text-[length:var(--font-hint)] opacity-50">
-                  worktree
-                </span>
-              </>
-            )}
-            {!activeWorktree && (
-              <span className="ml-auto text-[length:var(--font-hint)] opacity-50">
-                local
-              </span>
-            )}
-          </div>
-        )}
 
     </div>
   );

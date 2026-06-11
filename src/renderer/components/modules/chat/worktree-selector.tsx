@@ -101,16 +101,16 @@ export function WorktreeSelector() {
     return (
       <span
         className={cn(
-          "flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 cursor-default",
+          "flex items-center gap-0 @md:gap-1.5 rounded-full border border-border px-1.5 @md:px-2.5 py-1 cursor-default",
           "text-[length:var(--font-chat-meta)]",
           mode === "worktree"
             ? "bg-primary/10 text-primary border-primary/30"
             : "bg-card text-muted-foreground",
         )}
-        title="Worktree mode is locked for this conversation"
+        title={`Worktree mode is locked: ${triggerLabel}`}
       >
-        {mode === "local" ? <LaptopIcon className="size-3.5" /> : <GitBranchIcon className="size-3.5" />}
-        <span className="max-w-[100px] truncate">{triggerLabel}</span>
+        {mode === "local" ? <LaptopIcon className="size-3.5 shrink-0" /> : <GitBranchIcon className="size-3.5 shrink-0" />}
+        <span className="max-w-[100px] truncate hidden @md:inline">{triggerLabel}</span>
         <LockIcon className="size-3 text-muted-foreground/50" />
       </span>
     );
@@ -122,16 +122,17 @@ export function WorktreeSelector() {
         <button
           type="button"
           className={cn(
-            "flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1",
+            "flex items-center gap-0 @md:gap-1.5 rounded-full border border-border px-1.5 @md:px-2.5 py-1",
             "text-[length:var(--font-chat-meta)] transition-colors",
             mode === "worktree"
               ? "bg-primary/10 text-primary border-primary/30 hover:bg-primary/15"
               : "bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground",
           )}
           onMouseDown={(e) => e.preventDefault()}
+          title={triggerLabel}
         >
-          {mode === "local" ? <LaptopIcon className="size-3.5" /> : <GitBranchIcon className="size-3.5" />}
-          <span className="max-w-[100px] truncate">{triggerLabel}</span>
+          {mode === "local" ? <LaptopIcon className="size-3.5 shrink-0" /> : <GitBranchIcon className="size-3.5 shrink-0" />}
+          <span className="max-w-[100px] truncate hidden @md:inline">{triggerLabel}</span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">

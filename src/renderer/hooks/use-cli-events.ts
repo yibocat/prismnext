@@ -242,12 +242,17 @@ export function useCliEvents() {
     });
 
     // ─── Agent Complete Handler ───
-    const unsubComplete = window.electronAPI.onCliComplete(({ tabId, success, error }) => {
+    const unsubComplete = window.electronAPI.onCliComplete(({ tabId, success, error, inputTokens, breakdown, categorySchema }) => {
       const chatStore = useChatStore.getState();
       const tab = chatStore.tabs.find((t) => t.id === tabId);
 
       if (!success && !tab?.error && error) {
         chatStore._setError(tabId, error);
+      }
+
+      // Update context window tokens from the agent's calculator
+      if (inputTokens != null) {
+        chatStore._setContextTokens(tabId, inputTokens, breakdown?.categories ?? null, categorySchema ?? null);
       }
 
       // Delay isStreaming=false to allow any pending stream events to arrive first

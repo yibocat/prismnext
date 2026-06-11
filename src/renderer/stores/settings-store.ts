@@ -26,6 +26,8 @@ export interface AppSettings {
   autoCreateMainTex?: boolean;
   /** Default document class for main.tex template */
   defaultDocClass?: "article" | "report" | "book";
+  /** Custom system prompt for the agent shell. Empty = use built-in default. */
+  agentSystemPrompt?: string;
 }
 
 const defaults: AppSettings = {
@@ -38,6 +40,7 @@ const defaults: AppSettings = {
   manuscriptDir: "manuscript",
   autoCreateMainTex: true,
   defaultDocClass: "article",
+  agentSystemPrompt: "",
 };
 
 interface SettingsState {

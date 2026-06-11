@@ -29,6 +29,7 @@ import {
   MoonIcon,
   MonitorIcon,
   LockIcon,
+  Bot,
 } from "lucide-react";
 
 const SECTIONS = [
@@ -37,6 +38,7 @@ const SECTIONS = [
     items: [
       { id: "general", label: "General", icon: Settings2Icon },
       { id: "appearance", label: "Appearance", icon: PaletteIcon },
+      { id: "agent-app", label: "Agent", icon: Bot },
       { id: "project", label: "Projects", icon: FolderOpenIcon },
       { id: "shortcuts", label: "Shortcuts", icon: KeyboardIcon },
     ],
@@ -46,13 +48,14 @@ const SECTIONS = [
     items: [
       { id: "compiler", label: "Compiler", icon: WrenchIcon },
       { id: "external", label: "AI & APIs", icon: GlobeIcon },
+      { id: "agent-project", label: "Agent", icon: Bot },
       { id: "backups", label: "Backups", icon: HistoryIcon },
       { id: "logs", label: "Logs", icon: FileTextIcon },
     ],
   },
 ] as const;
 
-export type SettingsCategory = "general" | "appearance" | "shortcuts" | "project" | "compiler" | "external" | "logs" | "backups";
+export type SettingsCategory = "general" | "appearance" | "shortcuts" | "project" | "compiler" | "external" | "logs" | "backups" | "agent-app" | "agent-project";
 
 interface SettingsSidebarProps {
   activeCategory: SettingsCategory;

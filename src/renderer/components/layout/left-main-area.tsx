@@ -1,10 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useCliEvents } from "@/hooks/use-cli-events";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { useProjectStore } from "@/stores/project-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
+import { useGitStore } from "@/stores/git-store";
+import { GitBranchIcon } from "lucide-react";
+import { getContextWindowCapacity } from "@/lib/agent-config";
+import { useAgentSettingsStore } from "@/stores/agent-settings-store";
 import {
   GeneralSettings,
   AppearanceSettings,
@@ -14,43 +17,37 @@ import {
   ShortcutsSettings,
   LogViewer,
   BackupsSettings,
+  AgentAppSettings,
+  AgentProjectSettings,
 } from "@/components/modules/settings";
 import { TemplateCenter } from "@/components/modules/templates/template-center";
 import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator } from "@/components/modules/chat";
 import { WorktreeSelector } from "@/components/modules/chat/worktree-selector";
 import { BranchSelector } from "@/components/modules/chat/branch-selector";
 import { WorktreeActions } from "@/components/modules/chat/worktree-actions";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
-import { ChevronDownIcon, FolderOpenIcon, FolderPlusIcon } from "lucide-react";
-import { AGENT_UI_CONFIGS } from "@/lib/agent-config";
 
-const AGENTS = Object.values(AGENT_UI_CONFIGS);
-
-// Module-level flag prevents double-prewarm when React StrictMode re-runs effects
-let didPrewarm = false;
 
 export function LeftMainArea() {
   useCliEvents();
 
-  // Pre-warm agent on mount to avoid delay on first prompt (only for new sessions without loaded context)
+  const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
+  const worktreePath = activeWorktree?.path;
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
+
+  // Pre-warm the agent process whenever the project or worktree changes.
+  // The process starts in the background with default settings so the first
+  // prompt hits a warm process with sub-second latency.
+  // Dependencies keyed on projectRoot + worktreePath for auto re-pre-warm.
   useEffect(() => {
-    if (didPrewarm) return;
-    const projectPath = useDocumentStore.getState().projectRoot;
-    if (!projectPath || !window.electronAPI.cliPrewarm) return;
+    if (!projectRoot) return;
     const store = useChatStore.getState();
-    // Only prewarm if the active tab doesn't have a loaded session (which needs resume, not new)
     const tab = store.tabs.find((t) => t.id === store.activeTabId);
-    if (tab?.sessionId) return; // Session already loaded, will be resumed on first prompt
-    didPrewarm = true;
-    const worktreePath = useWorktreeStore.getState().activeWorktree?.path;
-    window.electronAPI.cliPrewarm(projectPath, store.activeTabId, worktreePath).catch(() => {});
-  }, []);
+    // Don't pre-warm if the active tab already has a loaded session —
+    // it will be resumed, which needs a different --resume flag.
+    if (tab?.sessionId) return;
+    const wtRoot = worktreePath || projectRoot;
+    window.electronAPI.cliPrewarm(projectRoot, store.activeTabId, wtRoot).catch(() => {});
+  }, [projectRoot, worktreePath]);
 
   // Sync sessionId to store when agent creates a new session (only if not already set)
   useEffect(() => {
@@ -89,45 +86,49 @@ export function LeftMainArea() {
     return unsub;
   }, []);
 
-  const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
+  const contextTokens = useChatStore((s) => s.contextTokens);
+  const contextBreakdown = useChatStore((s) => s.contextBreakdown);
+  const categorySchema = useChatStore((s) => s.categorySchema);
   const selectedAgent = useChatStore((s) => s.selectedAgent);
-  const setSelectedAgent = useChatStore((s) => s.setSelectedAgent);
-
-  const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const openProject = useDocumentStore((s) => s.openProject);
-  const recentProjects = useProjectStore((s) => s.recentProjects);
-  const addRecentProject = useProjectStore((s) => s.addRecentProject);
 
   const isEmpty = messages.length === 0 && !isStreaming;
 
-  const handleOpenProject = async () => {
-    const result = await window.electronAPI.dialogOpenFolder();
-    if (!result.canceled && result.path) {
-      addRecentProject(result.path);
-      await openProject(result.path);
+  // Context window capacity for the current agent + model
+  const agentSettings = useAgentSettingsStore((s) => s.settings);
+  const contextTotal = getContextWindowCapacity(
+    selectedAgent,
+    agentSettings[selectedAgent]?.["model"] ?? null,
+  );
+
+  // Branch + worktree label for chat view bottom bar
+  const isGitRepo = useGitStore((s) => s.isGitRepo);
+  const WT_PREFIX = "wt-";
+  const currentGitBranch = useGitStore((s) => s.branch);
+  const lastProjectBranch = useRef(
+    currentGitBranch && !currentGitBranch.startsWith(WT_PREFIX)
+      ? currentGitBranch
+      : activeWorktree?.baseBranch || "",
+  );
+  useEffect(() => {
+    if (currentGitBranch && !currentGitBranch.startsWith(WT_PREFIX)) {
+      lastProjectBranch.current = currentGitBranch;
     }
-  };
+  }, [currentGitBranch]);
 
-  const handleSwitchProject = async (path: string) => {
-    if (path === projectRoot) return;
-    addRecentProject(path);
-    await openProject(path);
-  };
-
-  const projectLabel = projectRoot
-    ? projectRoot.split("/").pop() || projectRoot
-    : "Open Project";
-
-  const currentAgent = AGENTS.find((a) => a.id === selectedAgent);
+  const displayBranch =
+    activeWorktree?.baseBranch ??
+    (currentGitBranch && !currentGitBranch.startsWith(WT_PREFIX)
+      ? currentGitBranch
+      : lastProjectBranch.current || "...");
 
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   const settingsCategory = useLayoutStore((s) => s.settingsCategory);
 
   if (leftSidebarView === "templates") {
     return (
-      <div className="flex h-full flex-col min-w-[300px] glass-content">
+      <div className="flex h-full flex-col min-w-0 glass-content">
         <TemplateCenter
           onBack={() => useLayoutStore.getState().setLeftSidebarView("sessions")}
           onUseTemplate={async (template) => {
@@ -158,86 +159,23 @@ export function LeftMainArea() {
       shortcuts: ShortcutsSettings,
       logs: LogViewer,
       backups: BackupsSettings,
+      "agent-app": AgentAppSettings,
+      "agent-project": AgentProjectSettings,
     }[settingsCategory] || GeneralSettings;
-    return <div className="flex h-full flex-col min-w-[300px] glass-content"><SettingsContent /></div>;
+    return <div className="flex h-full flex-col min-w-0 glass-content"><SettingsContent /></div>;
   }
 
   return (
-    <div className="flex h-full flex-col min-w-[300px] glass-content @container select-text">
+    <div className="flex h-full flex-col min-w-0 glass-content @container select-text">
       <ChatErrorBoundary>
         {isEmpty ? (
           /* ── Homepage ── */
           <div className="flex flex-1 flex-col items-center justify-end @xl:justify-center @xl:pb-[var(--height-titlebar)]">
-            {/* Top toolbar */}
-            <div className="w-full max-w-3xl flex items-center gap-1.5 h-7 px-3">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex items-center gap-1.5 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground/70 hover:bg-accent hover:text-accent-foreground transition-colors"
-                  >
-                    <FolderOpenIcon className="size-3" />
-                    <span className="truncate max-w-[120px]">{projectLabel}</span>
-                    <ChevronDownIcon className="size-3" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  {recentProjects.length > 0 && (
-                    <>
-                      {recentProjects.map((p) => (
-                        <DropdownMenuItem
-                          key={p.path}
-                          onClick={() => handleSwitchProject(p.path)}
-                          className="text-[length:var(--font-chat-meta)]"
-                        >
-                          <FolderOpenIcon className="size-3.5 shrink-0" />
-                          <span className="truncate">{p.name}</span>
-                          <span className="ml-auto text-[length:var(--font-path)] text-muted-foreground/50 truncate max-w-[120px]">
-                            {p.path}
-                          </span>
-                        </DropdownMenuItem>
-                      ))}
-                      <DropdownMenuSeparator />
-                    </>
-                  )}
-                  <DropdownMenuItem onClick={handleOpenProject} className="text-[length:var(--font-chat-meta)]">
-                    <FolderPlusIcon className="size-3.5" />
-                    <span>Open new folder…</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    disabled={!isEmpty}
-                    className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground/70 hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <span>{currentAgent?.name || "CLI"}</span>
-                    <ChevronDownIcon className="size-3" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-40">
-                  {AGENTS.map((a) => (
-                    <DropdownMenuItem
-                      key={a.id}
-                      disabled={a.disabled}
-                      onClick={() => setSelectedAgent(a.id)}
-                    >
-                      <span>{a.name}</span>
-                      {selectedAgent === a.id && (
-                        <span className="ml-auto text-[length:var(--font-badge)] text-muted-foreground">active</span>
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
+            {/* Top toolbar — branch & worktree selectors */}
+            <div className="w-full max-w-3xl flex items-center gap-1.5 py-1.5 px-3">
               <BranchSelector />
 
               <WorktreeSelector />
-
             </div>
 
             {/* Composer */}
@@ -254,7 +192,6 @@ export function LeftMainArea() {
                 Suggestions
               </button>
               <span className="flex-1" />
-              <ContextWindowIndicator />
             </div>
           </div>
         ) : (
@@ -270,9 +207,31 @@ export function LeftMainArea() {
             <div className="w-full max-w-3xl mx-auto">
               <ChatComposer />
             </div>
+            {/* Bottom bar: branch / worktree on left (git only), context ring on right */}
             <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-7 px-3 mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
+              {isGitRepo && (
+                <>
+                  <span className="flex items-center gap-1">
+                    <GitBranchIcon className="size-3 shrink-0" />
+                    <span className="truncate max-w-[120px]">{displayBranch}</span>
+                  </span>
+                  {activeWorktree ? (
+                    <>
+                      <span className="opacity-40">·</span>
+                      <span className="truncate max-w-[80px]">{activeWorktree.name}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="opacity-40">·</span>
+                      <span>Local</span>
+                    </>
+                  )}
+                </>
+              )}
               <span className="flex-1" />
-              <ContextWindowIndicator />
+              {contextTokens != null && (
+                <ContextWindowIndicator used={contextTokens} total={contextTotal} breakdown={contextBreakdown} schema={categorySchema} />
+              )}
             </div>
           </div>
         )}

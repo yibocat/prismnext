@@ -260,20 +260,28 @@ export interface ElectronAPI {
 
   // CLI agent operations
   cliDispose: () => Promise<{ success: boolean }>;
-  cliPrewarm: (projectPath: string, tabId?: string, worktreePath?: string) => Promise<{ success: boolean }>;
+  cliPrewarm: (projectPath: string, tabId?: string, worktreePath?: string, settings?: Record<string, string | null>) => Promise<{ success: boolean }>;
   cliStatus: () => Promise<{ available: boolean; agentId?: string; agentName?: string; error?: string }>;
-  cliSend: (args: { projectPath: string; worktreePath?: string; prompt: string; tabId?: string; agent?: string; model?: string | null; sessionId?: string | null }) => Promise<void>;
+  cliSend: (args: { projectPath: string; worktreePath?: string; prompt: string; tabId?: string; agent?: string; sessionId?: string | null; settings?: Record<string, string | null> }) => Promise<void>;
   cliSetGateway: (baseUrl?: string, apiKey?: string) => Promise<void>;
   cliCancel: (tabId?: string) => Promise<void>;
   cliCloseSession: (tabId?: string) => Promise<void>;
   cliAnswer: (tabId: string, answer: string) => Promise<void>;
-  cliListSessions: (projectPath: string, worktreePath?: string) => Promise<Array<{ id: string; title: string; lastModified: number; createdAt: number }>>;
-  cliLoadSession: (projectPath: string, sessionId: string, worktreePath?: string) => Promise<any[]>;
-  cliDeleteSession: (projectPath: string, sessionId: string) => Promise<{ success: boolean; error?: string }>;
+  cliListSessions: (projectPath: string, worktreePath?: string) => Promise<Array<{ id: string; title: string; lastModified: number; createdAt: number; agentId: string; agentName: string }>>;
+  cliLoadSession: (projectPath: string, sessionId: string, agentId?: string, worktreePath?: string) => Promise<any[]>;
+  cliDeleteSession: (projectPath: string, sessionId: string, agentId?: string, worktreePath?: string) => Promise<{ success: boolean; error?: string }>;
 
   // CLI agent events (Main → Renderer)
   onCliStream: (callback: (data: { tabId: string; data: string }) => void) => () => void;
-  onCliComplete: (callback: (data: { tabId: string; success: boolean; stopReason?: string; error?: string }) => void) => () => void;
+  onCliComplete: (callback: (data: {
+    tabId: string;
+    success: boolean;
+    stopReason?: string;
+    error?: string;
+    inputTokens?: number | null;
+    breakdown?: { categories: Record<string, number>; total: number } | null;
+    categorySchema?: { key: string; label: string; color: string; description?: string; order?: number }[] | null;
+  }) => void) => () => void;
   onCliStderr: (callback: (data: { tabId: string; data: string }) => void) => () => void;
   onCliSessionCreated: (callback: (data: { tabId: string; sessionId: string; agentId: string }) => void) => () => void;
   removeCliListeners: () => void;
@@ -293,6 +301,9 @@ export interface ElectronAPI {
     zoteroUserId?: string;
   }>;
   settingsSet: (patch: Record<string, unknown>) => Promise<void>;
+  settingsGetAgentProjectConfig: (projectPath: string) => Promise<{ contextComponents: Record<string, boolean> }>;
+  settingsSetAgentProjectConfig: (projectPath: string, config: { contextComponents: Record<string, boolean> }) => Promise<void>;
+  settingsGetDefaultAgentPrompt: () => Promise<string>;
 
   // Browser operations
   browserInit: (projectRoot: string) => Promise<BrowserStateData>;

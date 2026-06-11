@@ -164,6 +164,44 @@ export function registerFsHandlers(): void {
 \end{document}
 `;
 
+  async function createAgentConfig(prismDir: string): Promise<void> {
+    const { join } = require("node:path");
+    const { existsSync, mkdirSync, writeFileSync } = require("node:fs");
+    const agentConfigDir = join(prismDir, "agent-config", "claude");
+    const skillsDir = join(agentConfigDir, "skills");
+
+    // Create directories
+    if (!existsSync(agentConfigDir)) {
+      mkdirSync(agentConfigDir, { recursive: true });
+    }
+    if (!existsSync(skillsDir)) {
+      mkdirSync(skillsDir, { recursive: true });
+    }
+
+    // Create mcp.json template
+    const mcpPath = join(agentConfigDir, "mcp.json");
+    if (!existsSync(mcpPath)) {
+      writeFileSync(mcpPath, JSON.stringify({
+        "mcpServers": {},
+      }, null, 2), "utf-8");
+    }
+
+    // Create settings.json template
+    const settingsPath = join(agentConfigDir, "settings.json");
+    if (!existsSync(settingsPath)) {
+      writeFileSync(settingsPath, JSON.stringify({
+        "permissions": { "allow": [] },
+        "model": null,
+      }, null, 2), "utf-8");
+    }
+
+    // Create .gitkeep in skills/
+    const gitkeepPath = join(skillsDir, ".gitkeep");
+    if (!existsSync(gitkeepPath)) {
+      writeFileSync(gitkeepPath, "", "utf-8");
+    }
+  }
+
   ipcMain.handle("project:create", async (_event, args: { rootPath: string }) => {
     const { join } = require("node:path");
     const { writeFileSync } = require("node:fs");
@@ -190,6 +228,9 @@ export function registerFsHandlers(): void {
     );
     writeFileSync(join(prismDir, "state.json"), JSON.stringify({}, null, 2));
     writeFileSync(join(prismDir, ".gitignore"), "compile/\nstate.json\n");
+
+    // Create agent-config templates
+    await createAgentConfig(prismDir);
 
     // Manuscript directory + main.tex template
     const manuscriptPath = join(args.rootPath, DEFAULT_MANUSCRIPT_DIR);

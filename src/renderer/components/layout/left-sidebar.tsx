@@ -56,6 +56,8 @@ interface SessionInfo {
   title: string;
   lastModified: number;
   createdAt: number;
+  agentId: string;
+  agentName: string;
 }
 
 function relativeTime(ms: number): string {
@@ -173,7 +175,13 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     return (
       <SidebarMenuItem key={s.id}>
         <SidebarMenuButton
-          onClick={() => { loadSession(s.id); setLeftSidebarOverlay(false); }}
+          onClick={() => {
+            if (s.agentId && s.agentId !== useChatStore.getState().selectedAgent) {
+              useChatStore.getState().setSelectedAgent(s.agentId);
+            }
+            loadSession(s.id, s.agentId);
+            setLeftSidebarOverlay(false);
+          }}
           isActive={isActive}
           size="sm"
         >
@@ -221,7 +229,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                 onClick={async (e) => {
                   e.stopPropagation();
                   if (!projectRoot) return;
-                  const result = await window.electronAPI.cliDeleteSession(projectRoot, s.id);
+                  const result = await window.electronAPI.cliDeleteSession(projectRoot, s.id, s.agentId, activeWorktree?.path);
                   if (result.success) {
                     if (archivedSessionIds.includes(s.id)) toggleArchiveSession(s.id);
                     if (pinnedSessionIds.includes(s.id)) togglePinSession(s.id);
@@ -233,7 +241,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                   if (e.key === "Enter" || e.key === " ") {
                     e.stopPropagation();
                     if (!projectRoot) return;
-                    const result = await window.electronAPI.cliDeleteSession(projectRoot, s.id);
+                    const result = await window.electronAPI.cliDeleteSession(projectRoot, s.id, s.agentId, activeWorktree?.path);
                     if (result.success) {
                       if (archivedSessionIds.includes(s.id)) toggleArchiveSession(s.id);
                       if (pinnedSessionIds.includes(s.id)) togglePinSession(s.id);

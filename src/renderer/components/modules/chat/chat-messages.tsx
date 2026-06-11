@@ -10,6 +10,26 @@ import {
   ArrowDownIcon,
 } from "lucide-react";
 
+/** Check whether a user message's content consists entirely of tool_result
+ *  blocks (i.e. a tool outcome forwarded by the agent). Handles both the
+ *  array-of-blocks format (streaming) and the plain-string format (JSONL). */
+function isAllToolResults(
+  content: string | ContentBlock[] | undefined,
+): boolean {
+  if (!content) return false;
+  if (typeof content === "string") return false; // plain text → not tool results
+  return content.every((b) => b.type === "tool_result");
+}
+
+/** Safely iterate content blocks, handling both array and string formats. */
+function contentBlocks(
+  content: string | ContentBlock[] | undefined,
+): ContentBlock[] {
+  if (!content) return [];
+  if (typeof content === "string") return [{ type: "text", text: content }];
+  return content;
+}
+
 // ─── Copy Button ───
 
 const CopyButton = memo(({ text }: { text: string }) => {
@@ -52,7 +72,7 @@ StreamingIndicator.displayName = "StreamingIndicator";
 // ─── User Header ───
 
 const UserHeader = memo(function UserHeader({ msg }: { msg: ChatStreamMessage }) {
-  const textBlock = msg.message?.content?.find((b) => b.type === "text");
+  const textBlock = contentBlocks(msg.message?.content).find((b) => b.type === "text");
   const text = textBlock?.text || "";
   const [expanded, setExpanded] = useState(false);
 
@@ -61,7 +81,7 @@ const UserHeader = memo(function UserHeader({ msg }: { msg: ChatStreamMessage })
   return (
     <div className="sticky top-0 z-20 bg-transparent px-3 pb-2">
       <div className={cn(
-        "max-w-3xl mx-auto rounded-lg border border-input bg-muted px-4 py-2",
+        "max-w-3xl mx-auto rounded-lg border border-input bg-muted px-4 py-2 shadow-[0_0_6px_rgba(0,0,0,0.06)]",
         long && !expanded && "cursor-pointer hover:bg-muted/50",
       )} onClick={long && !expanded ? () => setExpanded(true) : undefined}>
         <div className="flex items-start gap-2">
@@ -104,7 +124,7 @@ const AssistantMessage = memo(function AssistantMessage({
   msgIndex: number;
   isStreamingMsg?: boolean;
 }) {
-  const blocks = msg.message?.content || [];
+  const blocks = contentBlocks(msg.message?.content);
   const textBlock = blocks.find((b) => b.type === "text");
   const fullText = textBlock?.text || "";
   const sessionId = msg.session_id || "";
@@ -117,7 +137,7 @@ const AssistantMessage = memo(function AssistantMessage({
   );
 
   return (
-    <div className="group w-full py-2 px-4 animate-in fade-in slide-in-from-bottom-1 duration-200">
+    <div className="group w-full py-2 px-6 animate-in fade-in slide-in-from-bottom-1 duration-200">
       <div className="min-w-0 flex-1">
           {blocks.map((block, i) => {
             if (block.type === "thinking" && block.thinking) {
@@ -128,6 +148,7 @@ const AssistantMessage = memo(function AssistantMessage({
                   duration={(block as any).duration}
                   persistKey={sessionId ? `${sessionId}:${msgIndex}:${i}` : undefined}
                   isStreamingMsg={isStreamingMsg && !thinkingComplete}
+                  isProgress={(block as any)._progress === true}
                 />
               );
             }
@@ -202,11 +223,9 @@ export const ChatMessages = memo(function ChatMessages() {
   const toolResultMap = useMemo(() => {
     const map = new Map<string, ContentBlock>();
     for (const msg of messages) {
-      if (msg.message?.content) {
-        for (const block of msg.message.content) {
-          if (block.type === "tool_result" && block.tool_use_id) {
-            map.set(block.tool_use_id, block);
-          }
+      for (const block of contentBlocks(msg.message?.content)) {
+        if (block.type === "tool_result" && block.tool_use_id) {
+          map.set(block.tool_use_id, block);
         }
       }
     }
@@ -218,7 +237,7 @@ export const ChatMessages = memo(function ChatMessages() {
     const idxMap = new Map<ChatStreamMessage, number>();
     const filtered = messages.filter((msg, i) => {
       if (msg.type === "system") return false;
-      if (msg.type === "user" && msg.message?.content?.every((b) => b.type === "tool_result")) {
+      if (msg.type === "user" && isAllToolResults(msg.message?.content)) {
         return false;
       }
       if (msg.type === "result") {
@@ -314,7 +333,7 @@ export const ChatMessages = memo(function ChatMessages() {
   // 1-2 character delta arrives and the ThinkingWidget isn't ready yet.
   const showStreamingIndicator = isStreaming && !displayMessages.some(
     (m) => m.type === "assistant" && m.message?.content?.some(
-      (b) => b.type === "thinking" && b.thinking && b.thinking.length >= 10,
+      (b) => b.type === "thinking" && b.thinking && b.thinking.length >= 10 && !(b as any)._progress,
     ),
   );
 

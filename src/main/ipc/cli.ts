@@ -1,10 +1,7 @@
 import { ipcMain, BrowserWindow, app } from "electron";
 import { CliManager } from "../cli/cli-manager";
-import {
-  listClaudeSessions,
-  loadSessionHistory,
-} from "../services/claude";
-import type { ClaudeSession } from "../services/claude";
+import { getAgent, getAllAgents, getDefaultAgentId } from "../agents/registry";
+import type { SessionInfo } from "../agents/types";
 
 let cliManager: CliManager | null = null;
 
@@ -25,13 +22,13 @@ export function registerCliHandlers(): void {
   // ─── Pre-warm: start persistent CLI process eagerly ───
   ipcMain.handle(
     "cli:prewarm",
-    async (event, args: { projectPath: string; worktreePath?: string; tabId?: string }) => {
+    async (event, args: { projectPath: string; worktreePath?: string; tabId?: string; settings?: Record<string, string | null> }) => {
       const tabId = args.tabId || "default";
       const win = BrowserWindow.fromWebContents(event.sender);
       if (!win) throw new Error("No window");
       const manager = getCliManager(win);
       const cwd = args.worktreePath || args.projectPath || app.getPath("home");
-      manager.prewarm(tabId, cwd);
+      manager.prewarm(tabId, cwd, args.settings);
       return { success: true };
     },
   );
@@ -40,7 +37,8 @@ export function registerCliHandlers(): void {
   ipcMain.handle("cli:status", async () => {
     const manager = cliManager;
     if (!manager) {
-      return { available: true, agentId: "claude", agentName: "Claude Code" };
+      const defaultAgent = getAgent(getDefaultAgentId());
+      return { available: true, agentId: defaultAgent?.id ?? "unknown", agentName: defaultAgent?.name ?? "Unknown" };
     }
     return manager.getStatus();
   });
@@ -56,8 +54,8 @@ export function registerCliHandlers(): void {
         prompt: string;
         tabId?: string;
         agent?: string;
-        model?: string | null;
         sessionId?: string | null;
+        settings?: Record<string, string | null>;
       },
     ) => {
       const tabId = args.tabId || "default";
@@ -66,7 +64,7 @@ export function registerCliHandlers(): void {
 
       const manager = getCliManager(win);
       const cwd = args.worktreePath || args.projectPath || app.getPath("home");
-      manager.sendPrompt(tabId, args.prompt, cwd, args.agent, args.model, args.sessionId ?? undefined);
+      manager.sendPrompt(tabId, args.prompt, cwd, args.agent, args.sessionId ?? undefined, args.settings);
     },
   );
 
@@ -115,36 +113,57 @@ export function registerCliHandlers(): void {
     "cli:listSessions",
     async (_event, args: { projectPath: string; worktreePath?: string }) => {
       try {
-        const sessions = await listClaudeSessions(args.projectPath);
-        // If a worktree is active, also include its sessions
-        if (args.worktreePath) {
+        const allSessions: SessionInfo[] = [];
+        const agents = getAllAgents();
+
+        for (const agent of agents) {
+          const provider = agent.createSessionProvider();
+          provider.setProjectRoot(args.projectPath);
           try {
-            const wtSessions = await listClaudeSessions(args.worktreePath);
-            // Merge — deduplicate by session id
-            const seen = new Set(sessions.map((s) => s.id));
-            for (const s of wtSessions) {
-              if (!seen.has(s.id)) {
-                sessions.push({ ...s, title: `[wt] ${s.title}` });
+            const sessions = await provider.listSessions();
+            allSessions.push(...sessions);
+          } catch { /* agent may not have sessions yet */ }
+
+          // Also check worktree path — reuse the same provider to avoid
+          // double migration scans and redundant index I/O.
+          if (args.worktreePath) {
+            provider.setProjectRoot(args.worktreePath);
+            try {
+              const wtSessions = await provider.listSessions();
+              const seen = new Set(allSessions.map((s) => `${s.agentId}/${s.id}`));
+              for (const s of wtSessions) {
+                if (!seen.has(`${s.agentId}/${s.id}`)) {
+                  allSessions.push({ ...s, title: `[wt] ${s.title}` });
+                }
               }
-            }
-          } catch { /* worktree sessions not critical */ }
+            } catch { /* worktree not critical */ }
+          }
         }
-        return sessions;
+
+        return allSessions.sort((a, b) => b.lastModified - a.lastModified);
       } catch {
-        return [] as ClaudeSession[];
+        return [] as SessionInfo[];
       }
     },
   );
 
   ipcMain.handle(
     "cli:loadSession",
-    async (_event, args: { projectPath: string; sessionId: string; worktreePath?: string }) => {
-      // Try projectPath first; if not found there, try worktreePath.
-      // loadSessionHistory returns [] on missing file — it does not throw.
-      const messages = await loadSessionHistory(args.projectPath, args.sessionId);
+    async (_event, args: {
+      projectPath: string;
+      sessionId: string;
+      agentId?: string;
+      worktreePath?: string;
+    }) => {
+      const agent = getAgent(args.agentId || "claude");
+      const provider = agent?.createSessionProvider();
+      if (!provider) return [];
+      provider.setProjectRoot(args.projectPath);
+      const messages = await provider.loadSession(args.sessionId);
       if (messages.length > 0) return messages;
       if (args.worktreePath) {
-        return await loadSessionHistory(args.worktreePath, args.sessionId);
+        provider.setProjectRoot(args.worktreePath);
+        return await provider.loadSession(args.sessionId);
       }
       return [];
     },
@@ -152,20 +171,29 @@ export function registerCliHandlers(): void {
 
   ipcMain.handle(
     "cli:deleteSession",
-    async (_event, args: { projectPath: string; sessionId: string }) => {
+    async (_event, args: {
+      projectPath: string;
+      sessionId: string;
+      agentId?: string;
+      worktreePath?: string;
+    }) => {
       try {
-        const { unlink } = require("node:fs/promises");
-        const { homedir } = require("node:os");
-        const { join } = require("node:path");
-        const encoded = (args as any).projectPath?.replace(/[^a-zA-Z0-9]/g, "-") || "-";
-        const sessionFile = join(
-          homedir(),
-          ".claude",
-          "projects",
-          encoded,
-          `${args.sessionId}.jsonl`,
-        );
-        await unlink(sessionFile);
+        const agent = getAgent(args.agentId || "claude");
+        // Try the project root first, then fall back to worktree path.
+        // Sessions may live in either location depending on whether the
+        // user was in worktree mode when the session was created.
+        const paths = [args.projectPath];
+        if (args.worktreePath && args.worktreePath !== args.projectPath) {
+          paths.push(args.worktreePath);
+        }
+        for (const p of paths) {
+          const provider = agent?.createSessionProvider();
+          if (!provider) continue;
+          provider.setProjectRoot(p);
+          try {
+            await provider.deleteSession(args.sessionId);
+          } catch { /* try next path */ }
+        }
         return { success: true };
       } catch (err: any) {
         return { success: false, error: err?.message || String(err) };

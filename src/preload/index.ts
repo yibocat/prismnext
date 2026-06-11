@@ -98,10 +98,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // CLI agent operations
   cliDispose: () => ipcRenderer.invoke("cli:dispose"),
-  cliPrewarm: (projectPath: string, tabId?: string, worktreePath?: string) =>
-    ipcRenderer.invoke("cli:prewarm", { projectPath, tabId, worktreePath }),
+  cliPrewarm: (projectPath: string, tabId?: string, worktreePath?: string, settings?: Record<string, string | null>) =>
+    ipcRenderer.invoke("cli:prewarm", { projectPath, tabId, worktreePath, settings }),
   cliStatus: () => ipcRenderer.invoke("cli:status"),
-  cliSend: (args: { projectPath: string; prompt: string; tabId?: string; agent?: string; model?: string | null; sessionId?: string | null }) =>
+  cliSend: (args: { projectPath: string; worktreePath?: string; prompt: string; tabId?: string; agent?: string; sessionId?: string | null; settings?: Record<string, string | null> }) =>
     ipcRenderer.invoke("cli:send", args),
   cliSetGateway: (baseUrl?: string, apiKey?: string) =>
     ipcRenderer.invoke("cli:setGateway", { baseUrl, apiKey }),
@@ -113,15 +113,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("cli:answer", { tabId, answer }),
   cliListSessions: (projectPath: string, worktreePath?: string) =>
     ipcRenderer.invoke("cli:listSessions", { projectPath, worktreePath }),
-  cliLoadSession: (projectPath: string, sessionId: string, worktreePath?: string) =>
-    ipcRenderer.invoke("cli:loadSession", { projectPath, sessionId, worktreePath }),
-  cliDeleteSession: (projectPath: string, sessionId: string) =>
-    ipcRenderer.invoke("cli:deleteSession", { projectPath, sessionId }),
+  cliLoadSession: (projectPath: string, sessionId: string, agentId?: string, worktreePath?: string) =>
+    ipcRenderer.invoke("cli:loadSession", { projectPath, sessionId, agentId, worktreePath }),
+  cliDeleteSession: (projectPath: string, sessionId: string, agentId?: string, worktreePath?: string) =>
+    ipcRenderer.invoke("cli:deleteSession", { projectPath, sessionId, agentId, worktreePath }),
 
   // Settings operations
   settingsGet: () => ipcRenderer.invoke("settings:get"),
   settingsSet: (patch: Record<string, unknown>) =>
     ipcRenderer.invoke("settings:set", patch),
+  settingsGetAgentProjectConfig: (projectPath: string) =>
+    ipcRenderer.invoke("settings:getAgentProjectConfig", { projectPath }),
+  settingsSetAgentProjectConfig: (projectPath: string, config: any) =>
+    ipcRenderer.invoke("settings:setAgentProjectConfig", { projectPath, config }),
+  settingsGetDefaultAgentPrompt: () =>
+    ipcRenderer.invoke("settings:getDefaultAgentPrompt"),
 
   // Browser operations
   browserInit: (projectRoot: string) => ipcRenderer.invoke("browser:init", { projectRoot }),
@@ -239,8 +245,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("cli:stream", handler);
     return () => ipcRenderer.removeListener("cli:stream", handler);
   },
-  onCliComplete: (callback: (data: { tabId: string; success: boolean; stopReason?: string; error?: string }) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; success: boolean; stopReason?: string; error?: string }) => callback(data);
+  onCliComplete: (callback: (data: { tabId: string; success: boolean; stopReason?: string; error?: string; inputTokens?: number | null }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; success: boolean; stopReason?: string; error?: string; inputTokens?: number | null }) => callback(data);
     ipcRenderer.on("cli:complete", handler);
     return () => ipcRenderer.removeListener("cli:complete", handler);
   },

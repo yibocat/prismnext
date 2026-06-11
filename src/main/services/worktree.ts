@@ -1,5 +1,5 @@
 import { existsSync, writeFileSync, readFileSync } from "node:fs";
-import { cp, readdir, rm } from "node:fs/promises";
+import { copyFile, cp, mkdir, readdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { execGit } from "./git";
@@ -350,37 +350,39 @@ export async function getBranchesWithLocks(projectRoot: string): Promise<BranchI
 }
 
 /**
- * Move Claude session files from a worktree to the project root.
- * Sessions are stored under ~/.claude/projects/<encoded-path>/<id>.jsonl
- * where <encoded-path> is the path with non-alphanumeric chars replaced by "-".
+ * Move agent session files from a worktree to the project root.
+ * Sessions are stored under .prismnext/sessions/<agent-id>/ within each worktree.
+ * Copies all session files except index.json (which will be rebuilt).
  */
 export async function moveSessionsToProject(
   projectRoot: string,
   worktreeName: string,
 ): Promise<number> {
-  const WORKTREES_DIR = ".prismnext/worktrees";
-  const worktreePath = join(projectRoot, WORKTREES_DIR, worktreeName);
-  const encode = (p: string) => p.replace(/[^a-zA-Z0-9]/g, "-");
-  const base = join(homedir(), ".claude", "projects");
-  const srcDir = join(base, encode(worktreePath));
-  const dstDir = join(base, encode(projectRoot));
+  const worktreePath = join(projectRoot, ".prismnext", "worktrees", worktreeName);
+  const sessionsDir = join(worktreePath, ".prismnext", "sessions");
 
   let count = 0;
+
+  if (!existsSync(sessionsDir)) {
+    return count;
+  }
+
   try {
-    // Ensure destination exists
-    const { mkdir } = require("node:fs/promises");
-    await mkdir(dstDir, { recursive: true });
+    const agentDirs = await readdir(sessionsDir, { withFileTypes: true });
+    for (const agentDir of agentDirs) {
+      if (!agentDir.isDirectory()) continue;
+      const srcDir = join(sessionsDir, agentDir.name);
+      const dstDir = join(projectRoot, ".prismnext", "sessions", agentDir.name);
+      await mkdir(dstDir, { recursive: true });
 
-    const files = await readdir(srcDir);
-    for (const file of files) {
-      if (!file.endsWith(".jsonl")) continue;
-      await cp(join(srcDir, file), join(dstDir, file), { force: true });
-      count++;
-    }
-
-    // Remove the source directory after successful copy
-    if (count > 0) {
-      try { await rm(srcDir, { recursive: true, force: true }); } catch {}
+      const files = await readdir(srcDir);
+      for (const file of files) {
+        if (file === "index.json") continue; // skip index, will be rebuilt
+        const srcPath = join(srcDir, file);
+        const dstPath = join(dstDir, file);
+        await copyFile(srcPath, dstPath);
+        count++;
+      }
     }
   } catch {
     // If source doesn't exist or is empty, that's OK — no sessions to move

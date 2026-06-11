@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useCallback, useRef } from "react";
-import { GitBranchIcon, LockIcon, PlusIcon } from "lucide-react";
+import { useEffect, useMemo, useCallback, useRef, useState } from "react";
+import { GitBranchIcon, LockIcon, Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -71,21 +71,50 @@ export function BranchSelector() {
     [projectRoot, currentBranch, locked],
   );
 
+  const [initLoading, setInitLoading] = useState(false);
+
   const handleInitGit = useCallback(async () => {
     if (!projectRoot) return;
+    setInitLoading(true);
     try {
       await useGitStore.getState().initRepo(projectRoot);
       toast.success("Git repository initialized");
     } catch (err: any) {
       toast.error(`Failed to init git: ${err?.message}`);
+    } finally {
+      setInitLoading(false);
     }
   }, [projectRoot]);
 
   if (!projectRoot) return null;
 
-  const buttonLabel = isGitRepo
-    ? (pendingBranch && !locked ? pendingBranch : (displayBranch || "..."))
-    : "Init Git";
+  // ── No Git repo yet: direct-click Init Git button ──
+  if (!isGitRepo) {
+    return (
+      <button
+        type="button"
+        onClick={handleInitGit}
+        disabled={initLoading}
+        className={cn(
+          "flex items-center gap-0 @md:gap-1.5 rounded-full border border-border px-1.5 @md:px-2.5 py-1",
+          "text-[length:var(--font-chat-meta)] transition-colors",
+          "bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+          "disabled:opacity-50 disabled:cursor-wait",
+        )}
+        title="Initialize Git repository"
+      >
+        {initLoading ? (
+          <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
+        ) : (
+          <GitBranchIcon className="size-3.5 shrink-0" />
+        )}
+        <span className="max-w-[100px] truncate hidden @md:inline">Init Git</span>
+      </button>
+    );
+  }
+
+  // ── Git repo exists: branch selector dropdown ──
+  const buttonLabel = pendingBranch && !locked ? pendingBranch : (displayBranch || "...");
 
   return (
     <DropdownMenu>
@@ -93,29 +122,22 @@ export function BranchSelector() {
         <button
           type="button"
           className={cn(
-            "flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1",
+            "flex items-center gap-0 @md:gap-1.5 rounded-full border border-border px-1.5 @md:px-2.5 py-1",
             "text-[length:var(--font-chat-meta)] transition-colors",
             locked
               ? "bg-muted text-muted-foreground/70 cursor-not-allowed"
               : "bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground",
           )}
           onMouseDown={(e) => e.preventDefault()}
+          title={buttonLabel}
         >
-          <GitBranchIcon className="size-3.5" />
-          <span className="max-w-[100px] truncate">{buttonLabel}</span>
+          <GitBranchIcon className="size-3.5 shrink-0" />
+          <span className="max-w-[100px] truncate hidden @md:inline">{buttonLabel}</span>
           {locked && <LockIcon className="size-3" />}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
-        {!isGitRepo ? (
-          <DropdownMenuItem
-            onClick={handleInitGit}
-            className="text-[length:var(--font-chat-meta)]"
-          >
-            <PlusIcon className="size-3.5" />
-            <span>Init Git</span>
-          </DropdownMenuItem>
-        ) : visibleBranches.length > 0 ? (
+        {visibleBranches.length > 0 ? (
           visibleBranches.map((b) => {
             const isCurrent = b === currentBranch;
             const isPending = b === pendingBranch;

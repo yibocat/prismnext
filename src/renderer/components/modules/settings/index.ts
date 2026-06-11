@@ -7,3 +7,5 @@ export { ExternalSettings } from "./external-settings";
 export { ShortcutsSettings } from "./shortcuts-settings";
 export { LogViewer } from "./log-viewer";
 export { BackupsSettings } from "./backups-settings";
+export { AgentAppSettings } from "./agent-app-settings";
+export { AgentProjectSettings } from "./agent-project-settings";

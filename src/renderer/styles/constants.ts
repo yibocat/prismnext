@@ -30,6 +30,9 @@ export const SIDEBAR_RIGHT_DEFAULT = 220;
 export const SIDEBAR_RIGHT_MIN = 280;
 export const SIDEBAR_RIGHT_MAX = 520;
 
+/** Center main area (editor + chat) — narrow enough for side-by-side, wide enough for code */
+export const MAIN_AREA_MIN = 400;
+
 export const RIGHT_AREA_DEFAULT = 500;
 export const RIGHT_AREA_MIN = 280;
 export const RIGHT_AREA_MAX = 1100;

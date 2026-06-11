@@ -19,6 +19,7 @@ import {
   SIDEBAR_LEFT_MIN,
   SIDEBAR_LEFT_DEFAULT,
   SIDEBAR_LEFT_MAX,
+  MAIN_AREA_MIN,
   RIGHT_AREA_MIN,
   SIDEBAR_OVERLAY_THRESHOLD,
 } from "@/styles/constants";
@@ -290,14 +291,14 @@ export function App() {
 
               <Separator id="sep-sidebar" className={SEP} />
 
-              <Panel id="main-area" minSize={300}>
+              <Panel id="main-area" minSize={MAIN_AREA_MIN}>
                 <Group
                   id="center-right"
                   orientation="horizontal"
                   className="h-full"
                   resizeTargetMinimumSize={{ fine: 5, coarse: 5 }}
                 >
-                  <Panel id="center" panelRef={centerRef} collapsible collapsedSize={0} minSize={300}
+                  <Panel id="center" panelRef={centerRef} collapsible collapsedSize={0} minSize={MAIN_AREA_MIN} className="overflow-hidden"
                     onResize={(s) => {
                       const st = useLayoutStore.getState();
                       if (s.inPixels < 20 && !st.editorMaximized) st.setEditorMaximized(true);
@@ -372,7 +373,7 @@ export function App() {
 
               <Separator id="sep-sidebar" className={SEP} />
 
-              <Panel id="main-area" minSize={300}>
+              <Panel id="main-area" minSize={MAIN_AREA_MIN}>
                 <div className="flex flex-col h-full min-w-0">
                   <ContentTopBar leftSidebarRef={leftSidebarRef} />
                   <div className="flex-1 min-h-0">
