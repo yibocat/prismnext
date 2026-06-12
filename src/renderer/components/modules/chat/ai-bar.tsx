@@ -198,7 +198,7 @@ export function AiBar() {
           <div className="px-3 w-full">
           <div
             data-ai-bar-panel
-            className="w-full pointer-events-auto rounded-2xl border border-border bg-background shadow-lg overflow-hidden flex flex-col"
+            className="w-full pointer-events-auto rounded-lg border border-border bg-card shadow-lg overflow-hidden flex flex-col"
             style={{ height: "min(60vh, 600px)" }}
           >
             {/* Panel header — session title + actions */}

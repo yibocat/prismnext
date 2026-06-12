@@ -1,21 +1,10 @@
 import { spawn, execSync, spawnSync } from "node:child_process";
-import { readdir, readFile, writeFile, mkdir, rm, stat, copyFile, access } from "node:fs/promises";
-import { join, dirname, basename, extname, resolve } from "node:path";
+import { readFile, mkdir, rm } from "node:fs/promises";
+import { join, dirname, basename, extname } from "node:path";
 import { existsSync } from "node:fs";
-import { tmpdir } from "node:os";
 
 const MAX_CONCURRENT = 3;
 const COMPILE_TIMEOUT_MS = 60000;
-
-// Artifact extensions to skip during sync
-const ARTIFACT_EXTENSIONS = new Set([
-  "aux", "log", "toc", "lof", "lot", "out", "nav", "snm", "vrb",
-  "bbl", "blg", "fls", "fdb_latexmk", "synctex", "idx", "ind",
-  "ilg", "glo", "gls", "glg", "fmt", "xdv",
-]);
-
-// Directories to skip during sync
-const SKIP_DIRS = new Set(["node_modules", "target", "dist", ".git", ".prism", ".prismnext"]);
 
 interface BuildInfo {
   workDir: string;
@@ -227,62 +216,6 @@ function texliveEnvPath(enginePath: string): string {
     : `${texbin}:${currentPath}`;
 }
 
-/**
- * Copy directory recursively, skipping hidden directories.
- */
-async function copyDirRecursive(src: string, dst: string): Promise<void> {
-  await mkdir(dst, { recursive: true });
-  const entries = await readdir(src, { withFileTypes: true });
-  for (const entry of entries) {
-    const srcPath = join(src, entry.name);
-    const dstPath = join(dst, entry.name);
-    if (entry.isDirectory()) {
-      if (entry.name.startsWith(".")) continue;
-      if (SKIP_DIRS.has(entry.name)) continue;
-      await copyDirRecursive(srcPath, dstPath);
-    } else {
-      await copyFile(srcPath, dstPath);
-    }
-  }
-}
-
-/**
- * Sync source files from project to build directory.
- * Skips build artifacts and unchanged files.
- */
-async function syncSourceFiles(src: string, dst: string): Promise<void> {
-  await mkdir(dst, { recursive: true });
-  const entries = await readdir(src, { withFileTypes: true });
-  for (const entry of entries) {
-    const srcPath = join(src, entry.name);
-    const dstPath = join(dst, entry.name);
-    if (entry.isDirectory()) {
-      if (entry.name.startsWith(".")) continue;
-      if (SKIP_DIRS.has(entry.name)) continue;
-      await syncSourceFiles(srcPath, dstPath);
-    } else {
-      const ext = extname(entry.name).slice(1).toLowerCase();
-      if (ARTIFACT_EXTENSIONS.has(ext)) continue;
-      if (entry.name.endsWith(".synctex.gz")) continue;
-
-      // Skip unchanged files (same size and mtime)
-      try {
-        const srcStat = await stat(srcPath);
-        try {
-          const dstStat = await stat(dstPath);
-          if (srcStat.size === dstStat.size && srcStat.mtimeMs === dstStat.mtimeMs) {
-            continue;
-          }
-        } catch {
-          // dst doesn't exist
-        }
-        await copyFile(srcPath, dstPath);
-      } catch {
-        // Skip files we can't read
-      }
-    }
-  }
-}
 
 /**
  * Run a command with timeout.
@@ -334,33 +267,26 @@ function runWithTimeout(
 }
 
 /**
- * Compile with Tectonic.
+ * Compile with Tectonic. Compiles in `cwd` and outputs artifacts to `outDir`.
  */
 async function compileWithTectonic(
-  workDir: string,
-  mainFile: string
+  cwd: string,
+  mainFile: string,
+  outDir: string,
 ): Promise<{ success: boolean; logContent: string }> {
-  const args = ["--keep-logs", "--synctex", mainFile];
-  const { exitCode, stdout, stderr } = await runWithTimeout(
-    "tectonic",
-    args,
-    workDir,
-    process.env,
-    COMPILE_TIMEOUT_MS
-  );
+  const args = ["--keep-logs", "--synctex", "--outdir", outDir, mainFile];
+  await runWithTimeout("tectonic", args, cwd, process.env, COMPILE_TIMEOUT_MS);
 
-  // Read log file
   const mainStem = basename(mainFile, extname(mainFile));
-  const logPath = join(workDir, `${mainStem}.log`);
+  const logPath = join(outDir, `${mainStem}.log`);
   let logContent = "";
   try {
     logContent = await readFile(logPath, "utf-8");
   } catch {
-    logContent = stdout + "\n" + stderr;
+    logContent = "";
   }
 
-  // Check if PDF was produced
-  const pdfPath = join(workDir, `${mainStem}.pdf`);
+  const pdfPath = join(outDir, `${mainStem}.pdf`);
   return {
     success: existsSync(pdfPath),
     logContent,
@@ -369,12 +295,14 @@ async function compileWithTectonic(
 
 /**
  * Compile with TeXLive (xelatex/pdflatex/lualatex).
+ * Compiles in `cwd` and outputs artifacts to `outDir`.
  */
 async function compileWithTexlive(
-  workDir: string,
+  cwd: string,
   mainFile: string,
   engine: TexEngine,
-  texContent: string
+  texContent: string,
+  outDir: string,
 ): Promise<{ success: boolean; logContent: string }> {
   const enginePath = await findTexliveBinary(engine);
   if (!enginePath) {
@@ -391,52 +319,53 @@ async function compileWithTexlive(
   const commonArgs = [
     "-synctex=1",
     "-interaction=nonstopmode",
-    "-output-directory=.",
+    "-output-directory",
+    outDir,
   ];
 
   // Pass 1
-  await runWithTimeout(enginePath, [...commonArgs, mainFile], workDir, env, COMPILE_TIMEOUT_MS);
+  await runWithTimeout(enginePath, [...commonArgs, mainFile], cwd, env, COMPILE_TIMEOUT_MS);
 
-  // Bib pass (if needed)
+  // Bib pass (if needed) — aux files are in outDir
   if (bibTool === "biber") {
     const biberPath = await findTexliveBinary("biber");
     if (biberPath) {
-      await runWithTimeout(biberPath, [mainStem], workDir, env, COMPILE_TIMEOUT_MS);
+      await runWithTimeout(biberPath, [mainStem], outDir, env, COMPILE_TIMEOUT_MS);
     }
   } else if (bibTool === "bibtex") {
     const bibtexPath = await findTexliveBinary("bibtex");
     if (bibtexPath) {
-      await runWithTimeout(bibtexPath, [`${mainStem}.aux`], workDir, env, COMPILE_TIMEOUT_MS);
+      await runWithTimeout(bibtexPath, [`${mainStem}.aux`], outDir, env, COMPILE_TIMEOUT_MS);
     }
   }
 
   // Pass 2
-  await runWithTimeout(enginePath, [...commonArgs, mainFile], workDir, env, COMPILE_TIMEOUT_MS);
+  await runWithTimeout(enginePath, [...commonArgs, mainFile], cwd, env, COMPILE_TIMEOUT_MS);
 
   // Pass 3 (if bib was used)
   if (bibTool) {
-    await runWithTimeout(enginePath, [...commonArgs, mainFile], workDir, env, COMPILE_TIMEOUT_MS);
+    await runWithTimeout(enginePath, [...commonArgs, mainFile], cwd, env, COMPILE_TIMEOUT_MS);
   }
 
   // Fallback: if xelatex produced .xdv but no .pdf, run xdvipdfmx manually
-  const pdfPath = join(workDir, `${mainStem}.pdf`);
-  const xdvPath = join(workDir, `${mainStem}.xdv`);
+  const pdfPath = join(outDir, `${mainStem}.pdf`);
+  const xdvPath = join(outDir, `${mainStem}.xdv`);
   if (!existsSync(pdfPath) && existsSync(xdvPath)) {
     console.log("[texlive] .xdv exists but no .pdf — running xdvipdfmx manually");
     const xdvipdfmxPath = await findTexliveBinary("xdvipdfmx");
     if (xdvipdfmxPath) {
       await runWithTimeout(
         xdvipdfmxPath,
-        ["-o", `${mainStem}.pdf`, `${mainStem}.xdv`],
-        workDir,
+        ["-o", join(outDir, `${mainStem}.pdf`), join(outDir, `${mainStem}.xdv`)],
+        outDir,
         env,
         COMPILE_TIMEOUT_MS
       );
     }
   }
 
-  // Read log
-  const logPath = join(workDir, `${mainStem}.log`);
+  // Read log from outDir
+  const logPath = join(outDir, `${mainStem}.log`);
   let logContent = "";
   try {
     logContent = await readFile(logPath, "utf-8");
@@ -452,6 +381,10 @@ async function compileWithTexlive(
 
 /**
  * Main compilation entry point.
+ *
+ * Compiles in the project root directory (so LaTeX can access all files via
+ * relative paths naturally) and outputs build artifacts to `.prismnext/compile/`.
+ * No file copying — the project is compiled in-place.
  */
 export async function compileLatex(
   projectDir: string,
@@ -482,25 +415,21 @@ export async function compileLatex(
   activeCount++;
 
   try {
-    // Sync source files
-    const firstBuild = !existsSync(buildDir);
-    if (firstBuild) {
-      await copyDirRecursive(projectDir, buildDir);
-    } else {
-      await syncSourceFiles(projectDir, buildDir);
-    }
+    // Ensure output directory exists
+    await mkdir(buildDir, { recursive: true });
 
-    // Remove stale PDF
     const mainStem = basename(mainFile, extname(mainFile));
     const pdfPath = join(buildDir, `${mainStem}.pdf`);
+
+    // Remove stale PDF so a broken compile doesn't show old output
     try {
       await rm(pdfPath);
     } catch {
       // ignore
     }
 
-    // Verify main file exists
-    const mainFilePath = join(buildDir, mainFile);
+    // Verify main file exists in the project (not the build dir)
+    const mainFilePath = join(projectDir, mainFile);
     if (!existsSync(mainFilePath)) {
       return {
         success: false,
@@ -509,27 +438,24 @@ export async function compileLatex(
       };
     }
 
-    // Read content for detection
+    // Read content for engine / bib detection
     const content = await readFile(mainFilePath, "utf-8");
     const engine = detectTexEngine(content) || "xelatex";
 
-    // Determine backend
+    // Determine backend — compile in projectDir, output to buildDir
     let result: { success: boolean; logContent: string };
     if (useTexlive) {
-      result = await compileWithTexlive(buildDir, mainFile, engine, content);
+      result = await compileWithTexlive(projectDir, mainFile, engine, content, buildDir);
     } else {
-      // Check if tectonic is available
       const tectonicAvailable = await findTexliveBinary("tectonic");
       if (tectonicAvailable) {
-        result = await compileWithTectonic(buildDir, mainFile);
+        result = await compileWithTectonic(projectDir, mainFile, buildDir);
       } else {
-        // Fallback to texlive
         console.log("[compiler] Tectonic not found, falling back to TeXLive");
-        result = await compileWithTexlive(buildDir, mainFile, engine, content);
+        result = await compileWithTexlive(projectDir, mainFile, engine, content, buildDir);
       }
     }
 
-    // Read PDF or error
     if (result.success) {
       const pdfBytes = await readFile(pdfPath);
       lastBuilds.set(projectDir, { workDir: buildDir, mainFileName: mainFile });

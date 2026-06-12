@@ -125,7 +125,7 @@ export function MarkdownRenderer({ content, isAnimating = false }: MarkdownRende
 
         const btn = document.createElement("button");
         btn.style.cssText =
-          "position:absolute;bottom:4px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--muted-foreground);background:color-mix(in oklab,var(--background)80%,transparent);padding:4px 12px;border-radius:4px;border:1px solid color-mix(in oklab,var(--border)50%,transparent);cursor:pointer";
+          "position:absolute;bottom:4px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--muted-foreground);background:color-mix(in oklab,var(--background)80%,transparent);padding:4px 12px;border-radius:var(--radius);border:1px solid color-mix(in oklab,var(--border)50%,transparent);cursor:pointer";
         btn.textContent = `Show all ${lines} lines`;
 
         const expand = () => {

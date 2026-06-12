@@ -275,4 +275,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Log system
   logFetch: (params: unknown) => ipcRenderer.invoke("log:fetch", params),
+
+  // Theme — glass vibrancy synchronization
+  themeSetGlassMode: (mode: "light" | "dark" | "system") =>
+    ipcRenderer.invoke("theme:setGlassMode", mode),
 });

@@ -4,8 +4,10 @@ import { ThemeProvider, useTheme } from "next-themes";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useThemeStore } from "@/stores/theme-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { cn } from "@/lib/utils";
+import { injectDiffOverrides } from "@/lib/editor-themes/diff-overrides";
 import { registerAllModes } from "@/modes/_register";
 import { GlobalErrorBoundary } from "@/components/modules/shared";
 import { ProjectSetupDialog, WelcomePage } from "@/components/modules/project";
@@ -39,6 +41,7 @@ export function App() {
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
   const rightAreaMin = RIGHT_AREA_MIN;
   const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const initTheme = useThemeStore((s) => s.loadConfig);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const showWelcome = useDocumentStore((s) => s.showWelcome);
   const isOpeningProject = useDocumentStore((s) => s.isOpeningProject);
@@ -103,65 +106,27 @@ export function App() {
     loadSettings();
   }, [loadSettings]);
 
-  // Apply theme color scheme from settings
-  const themeColor = useSettingsStore((s) => s.settings.themeColor);
+  // Initialize theme system (injects <style id="prism-theme">)
   useEffect(() => {
-    document.documentElement.dataset.themeColor = themeColor || "academic-blue";
-  }, [themeColor]);
+    initTheme();
+  }, [initTheme]);
 
-  // Apply glass transparency settings
-  const { setTheme } = useTheme();
-  const glassEffect = useSettingsStore((s) => s.settings.glassEffect);
-  const glassIntensity = useSettingsStore((s) => s.settings.glassIntensity);
+  // Inject diff override CSS once (native <style> tag — beats all CM6 theme CSS)
   useEffect(() => {
-    const root = document.documentElement;
-    if (!glassEffect) {
-      root.dataset.glass = "off";
-      root.style.removeProperty("--glass-border-light");
-      root.style.removeProperty("--glass-border-dark");
-      return;
+    injectDiffOverrides();
+  }, []);
+
+  // Sync native vibrancy to next-themes resolved theme
+  const { resolvedTheme } = useTheme();
+  const glassEffect = useThemeStore((s) => s.config.glassEffect);
+
+  useEffect(() => {
+    if (glassEffect && resolvedTheme) {
+      window.electronAPI.themeSetGlassMode(
+        resolvedTheme as "light" | "dark" | "system"
+      ).catch(() => {});
     }
-    // Glass requires native vibrancy, whose tint follows the *system* appearance.
-    // When the app theme mismatches the system, the vibrancy tint bleeds through
-    // semi-transparent surfaces and corrupts the color palette. Force System theme
-    // to keep the two in sync.
-    setTheme("system");
-    delete root.dataset.glass;
-
-    // 5 intensity presets: 1 = most solid, 5 = most transparent
-    // Opacities kept in a tighter range so body/sidebar/content feel uniform
-    // borderLight: overrides --border in light mode — glass makes light
-    // borders invisible, so we darken them proportional to glass intensity.
-    const presets: Record<number, Record<string, string>> = {
-      1: { dark:  "74%", light:  "78%", sidebarDark:  "70%", sidebarLight:  "75%",
-           toolbarDark:  "82%", toolbarLight:  "84%", contentDark:  "86%", contentLight:  "88%",
-           borderLight: "oklch(0.90 0.002 0)", borderDark: "oklch(0.24 0.002 0)" },
-      2: { dark:  "64%", light:  "68%", sidebarDark:  "57%", sidebarLight:  "63%",
-           toolbarDark:  "73%", toolbarLight:  "76%", contentDark:  "77%", contentLight:  "80%",
-           borderLight: "oklch(0.88 0.002 0)", borderDark: "oklch(0.26 0.002 0)" },
-      3: { dark:  "56%", light:  "60%", sidebarDark:  "50%", sidebarLight:  "55%",
-           toolbarDark:  "63%", toolbarLight:  "66%", contentDark:  "70%", contentLight:  "74%",
-           borderLight: "oklch(0.86 0.002 0)", borderDark: "oklch(0.28 0.002 0)" },
-      4: { dark:  "48%", light:  "52%", sidebarDark:  "43%", sidebarLight:  "47%",
-           toolbarDark:  "53%", toolbarLight:  "56%", contentDark:  "63%", contentLight:  "66%",
-           borderLight: "oklch(0.84 0.002 0)", borderDark: "oklch(0.30 0.002 0)" },
-      5: { dark:  "40%", light:  "44%", sidebarDark:  "36%", sidebarLight:  "40%",
-           toolbarDark:  "43%", toolbarLight:  "46%", contentDark:  "56%", contentLight:  "60%",
-           borderLight: "oklch(0.84 0.002 0)", borderDark: "oklch(0.32 0.002 0)" },
-    };
-    const p = presets[glassIntensity ?? 3];
-    const style = root.style;
-    style.setProperty("--glass-body-dark", p.dark);
-    style.setProperty("--glass-body-light", p.light);
-    style.setProperty("--glass-sidebar-dark", p.sidebarDark);
-    style.setProperty("--glass-sidebar-light", p.sidebarLight);
-    style.setProperty("--glass-toolbar-dark", p.toolbarDark);
-    style.setProperty("--glass-toolbar-light", p.toolbarLight);
-    style.setProperty("--glass-content-dark", p.contentDark);
-    style.setProperty("--glass-content-light", p.contentLight);
-    style.setProperty("--glass-border-light", p.borderLight);
-    style.setProperty("--glass-border-dark", p.borderDark);
-  }, [glassEffect, glassIntensity, setTheme]);
+  }, [resolvedTheme, glassEffect]);
 
   // Auto-collapse RightArea when entering settings/templates, restore on exit
   const savedRightArea = useRef(false);

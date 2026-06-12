@@ -7,6 +7,7 @@ import { registerTerminalHandlers } from "./terminal";
 import { registerGitHandlers } from "./git";
 import { registerWorktreeHandlers } from "./worktree";
 import { registerLogHandlers } from "./log";
+import { registerThemeHandlers } from "./theme";
 
 export function registerIpcHandlers(): void {
   registerFsHandlers();
@@ -18,4 +19,5 @@ export function registerIpcHandlers(): void {
   registerGitHandlers();
   registerWorktreeHandlers();
   registerLogHandlers();
+  registerThemeHandlers();
 }

@@ -9,8 +9,12 @@ import {
   highlightSpecialChars,
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
-import { oneDark } from "@codemirror/theme-one-dark";
+import { editorChromeTheme } from "@/lib/editor-themes/editor-chrome";
+import { getThemeExtensionSync, getThemeExtensionAsync } from "@/lib/editor-themes/registry";
+import { diffDisplayTheme, diffDisplayThemeExtra, contentMetricsTheme } from "@/lib/editor-themes/diff-overrides";
+import { useSettingsStore } from "@/stores/settings-store";
+import type { EditorSyntaxThemeId } from "@/lib/editor-themes/types";
+import { DEFAULT_SYNTAX_THEME } from "@/lib/editor-themes/types";
 import { unifiedMergeView, getChunks } from "@codemirror/merge";
 import { Transaction } from "@codemirror/state";
 import { useTheme } from "next-themes";
@@ -33,6 +37,9 @@ export function CodeEditor() {
   const isMergeActiveRef = useRef(false);
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
+  const editorSyntaxTheme =
+    (useSettingsStore((s) => s.settings.editorSyntaxTheme) as EditorSyntaxThemeId | undefined)
+    ?? DEFAULT_SYNTAX_THEME;
 
   const { tab, isActive } = useTabContext();
   const fileId = tab.kind === "file" || tab.kind === "texworkspace" ? tab.fileId : null;
@@ -119,6 +126,20 @@ export function CodeEditor() {
         highlightSpecialChars(),
         drawSelection(),
         highlightActiveLine(),
+        EditorView.theme({
+          "&": {
+            fontFamily: "var(--font-editor)",
+            fontSize: "var(--font-editor-size)",
+          },
+          ".cm-content": {
+            fontFamily: "var(--font-editor)",
+            fontSize: "var(--font-editor-size)",
+          },
+          ".cm-gutters": {
+            fontFamily: "var(--font-editor)",
+            fontSize: "var(--font-editor-size)",
+          },
+        }),
         history(),
         keymap.of([
           ...defaultKeymap,
@@ -173,8 +194,13 @@ export function CodeEditor() {
         ]),
         // Start with empty language — loaded async below
         languageCompartment.of([]),
-        syntaxHighlighting(defaultHighlightStyle),
-        themeCompartment.of(isDark ? oneDark : []),
+        editorChromeTheme,
+        contentMetricsTheme,
+        diffDisplayTheme,
+        diffDisplayThemeExtra,
+        themeCompartment.of(
+          getThemeExtensionSync(editorSyntaxTheme, isDark ? "dark" : "light") ?? [],
+        ),
         EditorView.lineWrapping,
         EditorState.tabSize.of(2),
         mergeCompartment.of(
@@ -310,12 +336,26 @@ export function CodeEditor() {
   // ─── Language reload when extension changes ───
   // (edge case: same fileId but different ext, handled by the full destroy/recreate above)
 
-  // ─── Theme change — reconfigure via compartment ───
+  // ─── Theme change — reconfigure syntax theme via compartment ───
   useEffect(() => {
-    viewRef.current?.dispatch({
-      effects: themeCompartment.reconfigure(isDark ? oneDark : []),
+    const view = viewRef.current;
+    if (!view) return;
+    const mode = isDark ? "dark" as const : "light" as const;
+
+    // Try sync first (Prism, oneDark fallback)
+    const syncExt = getThemeExtensionSync(editorSyntaxTheme, mode);
+    if (syncExt) {
+      view.dispatch({ effects: themeCompartment.reconfigure(syncExt) });
+      return;
+    }
+
+    // Async load for community themes
+    getThemeExtensionAsync(editorSyntaxTheme, mode).then((ext) => {
+      if (viewRef.current === view) {
+        view.dispatch({ effects: themeCompartment.reconfigure(ext) });
+      }
     });
-  }, [isDark]);
+  }, [isDark, editorSyntaxTheme]);
 
   // Track activeChange identity to detect stacked edits
   const activeChangeIdRef = useRef<string | null>(null);

@@ -45,7 +45,7 @@ export function queueWarmup(projectRoot: string): Promise<void> {
     });
     child.on("close", () => {
       const ms = performance.now() - start;
-      console.log(`[git] warmup: ${Math.round(ms)}ms`);
+      // warmup timing logged via log.info below
       log.info("warmup complete", { durationMs: Math.round(ms) });
       _warmedUpRoots.add(projectRoot);
       resolve();
@@ -78,7 +78,7 @@ function sh(projectRoot: string, gitArgs: string[]): Promise<string> {
     child.stderr.on("data", (data: Buffer) => { stderr += data.toString(); });
     child.on("close", (code) => {
       const ms = performance.now() - start;
-      console.log(`[git] ${gitArgs[0]}: ${Math.round(ms)}ms`);
+      // git timing logged via log.info below
       log.info(`git ${gitArgs[0]}`, { durationMs: Math.round(ms), args: gitArgs.join(" ") });
       if (code !== 0) {
         reject(new Error(stderr.trim() || `git exited with code ${code}`));

@@ -214,7 +214,7 @@ export function GitPushDialog({ open, onOpenChange, projectRoot }: GitPushDialog
                   >
                     <span
                       className={cn(
-                        "font-mono text-[10px] shrink-0 w-3",
+                        "font-mono text-[length:var(--font-size-10)] shrink-0 w-3",
                         f.status === "M" && "text-amber-500",
                         f.status === "A" && "text-emerald-500",
                         f.status === "D" && "text-red-500",

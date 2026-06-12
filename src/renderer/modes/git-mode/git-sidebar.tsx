@@ -275,7 +275,7 @@ export function GitSidebar() {
                 {filterMode === "all" ? "Changes" : filterMode === "staged" ? "Staged" : "Unstaged"}
               </span>
               {(totalAdded > 0 || totalDeleted > 0) && (
-                <span className="text-[11px] tabular-nums flex items-center gap-0.5 ml-auto">
+                <span className="text-[length:var(--font-size-11)] tabular-nums flex items-center gap-0.5 ml-auto">
                   {totalAdded > 0 && (
                     <span className="text-emerald-500">+{totalAdded}</span>
                   )}
@@ -402,7 +402,7 @@ function FileRow({
 
       {/* +/- counts */}
       {(file.added > 0 || file.deleted > 0) && (
-        <span className="text-[10px] tabular-nums shrink-0 flex items-center gap-0.5">
+        <span className="text-[length:var(--font-size-10)] tabular-nums shrink-0 flex items-center gap-0.5">
           {file.added > 0 && (
             <span className="text-emerald-500">+{file.added}</span>
           )}

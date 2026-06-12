@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.3.17 — 2026-06-12
+
+### Theme System Rewrite
+
+- Unified theme engine replacing 7 static CSS files with dynamic OKLCH-based generation (hue + intensity two-slider system)
+- Per-mode surface chroma multipliers — light mode surfaces now visibly reflect theme color instead of staying near-white
+- Bundled 52 local woff2 fonts (8 families × sans/mono variants) — zero CDN dependency, instant load
+- Glass vibrancy refactored: Electron native transparency with theme-aware CSS `color-mix()` per surface
+
+### Editor Syntax Themes & Diff Unification
+
+- 8 editor themes: Prism (auto-adapts to app color), GitHub, Nord, One Dark, Monokai, Dracula, Tokyo Night, Solarized Light
+- Git diff display unified across all themes — identical appearance regardless of syntax theme or mode
+- Three-layer CSS override system: external `<style>` + CM6 `Prec.highest` theme + tag-specific counter-rules
+- Diff word-level tokens: clean backgrounds without underlines, borders, or overlapping decorations
+- Content metrics unified: font-family, font-size, line-height locked to CSS variables via `Prec.highest` — no layout jumps on theme switch
+- Editor syntax theme picker with card previews in Settings → Appearance → Editor
+
+### Appearance Settings
+
+- Reorganized into 4 categories: Theme (mode, color, intensity), Typography (fonts, sizes), Editor (syntax theme), Surface (radius, glass)
+- New Slider component for base intensity with live preview
+
+### Settings Persistence Fix
+
+- Fixed `getSettings()` dropping all dynamic renderer-side keys (`editorSyntaxTheme`, `pdfDarkMode`, `manuscriptDir`, etc.) — now spreads entire raw store
+
+### Diff Colors
+
+- Word-level diff background opacity reduced (0.24 → 0.18) for subtler visual hierarchy while preserving clear distinction from line-level backgrounds
+
 ## 0.3.16 — 2026-06-11
 
 ### Multi-Agent Architecture

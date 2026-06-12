@@ -5,7 +5,6 @@ import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { useSettingsStore } from "@/stores/settings-store";
 import { useWindowState } from "@/hooks/use-window-state";
 import {
   SidebarProvider,
@@ -28,7 +27,6 @@ import {
   SunIcon,
   MoonIcon,
   MonitorIcon,
-  LockIcon,
   Bot,
 } from "lucide-react";
 
@@ -68,10 +66,8 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
   const isMac = platform === "darwin";
   const showMacSpacer = isMac && !isFullscreen;
   const { theme, resolvedTheme, setTheme } = useTheme();
-  const glassEffect = useSettingsStore((s) => s.settings.glassEffect);
 
   const cycleTheme = () => {
-    if (glassEffect) return;
     if (theme === "light") setTheme("dark");
     else if (theme === "dark") setTheme("system");
     else setTheme("light");
@@ -87,7 +83,7 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
       defaultOpen
       className="contents"
     >
-      <Sidebar collapsible="none" className="relative shrink-0 border-r-0 !w-full">
+      <Sidebar collapsible="none" className="relative shrink-0 border-r-0 !w-full" data-surface="sidebar">
         <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center px-2 select-none">
           {!sidebarFullyCollapsed && (
             <SidebarControls leftSidebarRef={leftSidebarRef!} showMacSpacer={showMacSpacer} showNewAgent={false} />
@@ -142,16 +138,11 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
             </button>
             <button
               type="button"
-              className={cn(
-                "flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors shrink-0",
-                glassEffect && "text-muted-foreground/30",
-              )}
-              title={glassEffect ? "Theme locked (Desktop glass is on)" : `Theme: ${theme}`}
+              className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors shrink-0"
+              title={`Theme: ${theme}`}
               onClick={cycleTheme}
             >
-              {glassEffect ? (
-                <LockIcon className="size-3.5" />
-              ) : theme === "system" ? (
+              {theme === "system" ? (
                 <MonitorIcon className="size-3.5" />
               ) : resolvedTheme === "dark" ? (
                 <SunIcon className="size-3.5" />
@@ -169,7 +160,7 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
     <>
       {leftSidebarOverlay &&
         createPortal(
-          <div className="fixed top-[var(--height-titlebar)] right-0 bottom-0 left-0 z-50 flex flex-col glass-content">
+          <div className="fixed top-[var(--height-titlebar)] right-0 bottom-0 left-0 z-50 flex flex-col" data-surface="content">
             <div className="flex-1 min-h-0">{sidebarContent}</div>
             <button
               type="button"

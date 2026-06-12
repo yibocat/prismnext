@@ -4,8 +4,6 @@ import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { RefObject } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLayoutStore } from "@/stores/layout-store";
-import { useSettingsStore } from "@/stores/settings-store";
-import { LockIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   PanelRight,
@@ -45,10 +43,8 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
   const isMobile = useIsMobile();
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
   const { theme, resolvedTheme, setTheme } = useTheme();
-  const glassEffect = useSettingsStore((s) => s.settings.glassEffect);
 
   const cycleTheme = () => {
-    if (glassEffect) return;
     if (theme === "light") setTheme("dark");
     else if (theme === "dark") setTheme("system");
     else setTheme("light");
@@ -57,7 +53,7 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
   const isMac = platform === "darwin";
 
   return (
-    <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center justify-end gap-1 px-2 glass-content">
+    <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center justify-end gap-1 px-2" data-surface="content">
       {!isMac && (
         <>
           <button
@@ -90,15 +86,11 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
 
       <button
         type="button"
-        className={glassEffect
-          ? "flex size-6 items-center justify-center rounded text-muted-foreground/30 transition-colors"
-          : "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"}
-        title={glassEffect ? "Theme locked (Desktop glass is on)" : `Theme: ${theme}`}
+        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+        title={`Theme: ${theme}`}
         onClick={cycleTheme}
       >
-        {glassEffect ? (
-          <LockIcon className="size-3.5" />
-        ) : theme === "system" ? (
+        {theme === "system" ? (
           <MonitorIcon className="size-3.5" />
         ) : resolvedTheme === "dark" ? (
           <SunIcon className="size-3.5" />

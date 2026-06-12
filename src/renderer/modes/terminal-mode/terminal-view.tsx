@@ -52,10 +52,14 @@ export function TerminalView({ tabId }: TerminalViewProps) {
 
     const container = containerRef.current;
 
+    const computedStyle = getComputedStyle(document.documentElement);
+    const editorFont = computedStyle.getPropertyValue("--font-editor").trim() || "'Geist Mono', 'Menlo', 'Monaco', 'Courier New', monospace";
+    const editorFontSize = parseFloat(computedStyle.getPropertyValue("--font-editor-size")) || 13;
+
     const term = new Terminal({
       theme: xtermTheme,
-      fontSize: 13,
-      fontFamily: "'Geist Mono', 'Menlo', 'Monaco', 'Courier New', monospace",
+      fontSize: editorFontSize,
+      fontFamily: editorFont,
       cursorBlink: true,
       cursorStyle: "bar",
       drawBoldTextInBrightColors: true,
@@ -209,7 +213,8 @@ export function TerminalView({ tabId }: TerminalViewProps) {
 
   return (
     <div
-      className="h-full w-full p-1.5 glass-content"
+      className="h-full w-full p-1.5"
+      data-surface="content"
       onMouseDown={handleMouseDown}
     >
       <div ref={containerRef} className="terminal-xterm h-full w-full" />

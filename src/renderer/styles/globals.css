@@ -9,6 +9,57 @@
 @source "../../../node_modules/@streamdown/mermaid/dist/*.js";
 @source "../../../node_modules/@streamdown/cjk/dist/*.js";
 
+/* ── Local font declarations (bundled, no CDN dependency) ── */
+/* Sans-serif */
+@font-face { font-family: 'Geist Sans'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('../assets/fonts/geist-sans-400.woff2') format('woff2'); }
+@font-face { font-family: 'Geist Sans'; font-style: normal; font-weight: 500;    font-display: swap; src: url('../assets/fonts/geist-sans-500.woff2') format('woff2'); }
+@font-face { font-family: 'Geist Sans'; font-style: normal; font-weight: 600;    font-display: swap; src: url('../assets/fonts/geist-sans-600.woff2') format('woff2'); }
+@font-face { font-family: 'Geist Sans'; font-style: normal; font-weight: 700;    font-display: swap; src: url('../assets/fonts/geist-sans-700.woff2') format('woff2'); }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 400; font-display: swap; src: url('../assets/fonts/inter-400.woff2') format('woff2'); }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 500; font-display: swap; src: url('../assets/fonts/inter-500.woff2') format('woff2'); }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 600; font-display: swap; src: url('../assets/fonts/inter-600.woff2') format('woff2'); }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 700; font-display: swap; src: url('../assets/fonts/inter-700.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 400; font-display: swap; src: url('../assets/fonts/ibm-plex-sans-400.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 500; font-display: swap; src: url('../assets/fonts/ibm-plex-sans-500.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 600; font-display: swap; src: url('../assets/fonts/ibm-plex-sans-600.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 700; font-display: swap; src: url('../assets/fonts/ibm-plex-sans-700.woff2') format('woff2'); }
+@font-face { font-family: 'Source Sans 3'; font-style: normal; font-weight: 400; font-display: swap; src: url('../assets/fonts/source-sans-3-400.woff2') format('woff2'); }
+@font-face { font-family: 'Source Sans 3'; font-style: normal; font-weight: 600; font-display: swap; src: url('../assets/fonts/source-sans-3-600.woff2') format('woff2'); }
+@font-face { font-family: 'Source Sans 3'; font-style: normal; font-weight: 700; font-display: swap; src: url('../assets/fonts/source-sans-3-700.woff2') format('woff2'); }
+@font-face { font-family: 'DM Sans'; font-style: normal; font-weight: 400; font-display: swap; src: url('../assets/fonts/dm-sans-400.woff2') format('woff2'); }
+@font-face { font-family: 'DM Sans'; font-style: normal; font-weight: 500; font-display: swap; src: url('../assets/fonts/dm-sans-500.woff2') format('woff2'); }
+@font-face { font-family: 'DM Sans'; font-style: normal; font-weight: 700; font-display: swap; src: url('../assets/fonts/dm-sans-700.woff2') format('woff2'); }
+@font-face { font-family: 'Plus Jakarta Sans'; font-style: normal; font-weight: 400; font-display: swap; src: url('../assets/fonts/plus-jakarta-sans-400.woff2') format('woff2'); }
+@font-face { font-family: 'Plus Jakarta Sans'; font-style: normal; font-weight: 500; font-display: swap; src: url('../assets/fonts/plus-jakarta-sans-500.woff2') format('woff2'); }
+@font-face { font-family: 'Plus Jakarta Sans'; font-style: normal; font-weight: 600; font-display: swap; src: url('../assets/fonts/plus-jakarta-sans-600.woff2') format('woff2'); }
+@font-face { font-family: 'Plus Jakarta Sans'; font-style: normal; font-weight: 700; font-display: swap; src: url('../assets/fonts/plus-jakarta-sans-700.woff2') format('woff2'); }
+
+/* Monospace */
+@font-face { font-family: 'Geist Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('../assets/fonts/geist-mono-400.woff2') format('woff2'); }
+@font-face { font-family: 'Geist Mono'; font-style: normal; font-weight: 500; font-display: swap; src: url('../assets/fonts/geist-mono-500.woff2') format('woff2'); }
+@font-face { font-family: 'Geist Mono'; font-style: normal; font-weight: 600; font-display: swap; src: url('../assets/fonts/geist-mono-600.woff2') format('woff2'); }
+@font-face { font-family: 'Geist Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('../assets/fonts/geist-mono-700.woff2') format('woff2'); }
+@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('../assets/fonts/jetbrains-mono-400.woff2') format('woff2'); }
+@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 500; font-display: swap; src: url('../assets/fonts/jetbrains-mono-500.woff2') format('woff2'); }
+@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 600; font-display: swap; src: url('../assets/fonts/jetbrains-mono-600.woff2') format('woff2'); }
+@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('../assets/fonts/jetbrains-mono-700.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('../assets/fonts/ibm-plex-mono-400.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 500; font-display: swap; src: url('../assets/fonts/ibm-plex-mono-500.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 600; font-display: swap; src: url('../assets/fonts/ibm-plex-mono-600.woff2') format('woff2'); }
+@font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('../assets/fonts/ibm-plex-mono-700.woff2') format('woff2'); }
+@font-face { font-family: 'Cascadia Code'; font-style: normal; font-weight: 400; font-display: swap; src: url('../assets/fonts/cascadia-code-400.woff2') format('woff2'); }
+@font-face { font-family: 'Cascadia Code'; font-style: normal; font-weight: 500; font-display: swap; src: url('../assets/fonts/cascadia-code-500.woff2') format('woff2'); }
+@font-face { font-family: 'Cascadia Code'; font-style: normal; font-weight: 600; font-display: swap; src: url('../assets/fonts/cascadia-code-600.woff2') format('woff2'); }
+@font-face { font-family: 'Cascadia Code'; font-style: normal; font-weight: 700; font-display: swap; src: url('../assets/fonts/cascadia-code-700.woff2') format('woff2'); }
+@font-face { font-family: 'Fira Code'; font-style: normal; font-weight: 400; font-display: swap; src: url('../assets/fonts/fira-code-400.woff2') format('woff2'); }
+@font-face { font-family: 'Fira Code'; font-style: normal; font-weight: 500; font-display: swap; src: url('../assets/fonts/fira-code-500.woff2') format('woff2'); }
+@font-face { font-family: 'Fira Code'; font-style: normal; font-weight: 600; font-display: swap; src: url('../assets/fonts/fira-code-600.woff2') format('woff2'); }
+@font-face { font-family: 'Fira Code'; font-style: normal; font-weight: 700; font-display: swap; src: url('../assets/fonts/fira-code-700.woff2') format('woff2'); }
+@font-face { font-family: 'Source Code Pro'; font-style: normal; font-weight: 400; font-display: swap; src: url('../assets/fonts/source-code-pro-400.woff2') format('woff2'); }
+@font-face { font-family: 'Source Code Pro'; font-style: normal; font-weight: 500; font-display: swap; src: url('../assets/fonts/source-code-pro-500.woff2') format('woff2'); }
+@font-face { font-family: 'Source Code Pro'; font-style: normal; font-weight: 600; font-display: swap; src: url('../assets/fonts/source-code-pro-600.woff2') format('woff2'); }
+@font-face { font-family: 'Source Code Pro'; font-style: normal; font-weight: 700; font-display: swap; src: url('../assets/fonts/source-code-pro-700.woff2') format('woff2'); }
+
 @custom-variant dark (&:is(.dark *));
 
 /*
@@ -32,8 +83,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: "Geist", system-ui, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -71,8 +122,8 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: max(0px, calc(var(--radius) - 4px));
+  --radius-md: max(0px, calc(var(--radius) - 2px));
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
@@ -96,11 +147,43 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  /* ── Glass effect tokens (Phase 1–3) ── */
+  --radius: 0.525rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.97 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.145 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+  /* ── Glass effect tokens ── */
   --glass-blur-sm: 8px;
   --glass-blur: 16px;
   --glass-blur-lg: 24px;
+
   /* ── Semantic (theme-independent) ── */
   --destructive: oklch(0.577 0.245 27.325);
   --success: oklch(0.58 0.17 150);
@@ -112,9 +195,42 @@
   --plan: oklch(0.48 0.18 290);
   --plan-foreground: oklch(1 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --font-sans: "Geist Sans", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --font-mono: "Geist Mono", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", ui-monospace, monospace;
 }
 
 .dark {
+  --background: oklch(0.18 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.22 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.22 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.18 0 0);
+  --secondary: oklch(0.26 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.26 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.26 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.22 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.922 0 0);
+  --sidebar-primary-foreground: oklch(0.18 0 0);
+  --sidebar-accent: oklch(0.26 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+
   /* ── Semantic (theme-independent) ── */
   --destructive: oklch(0.62 0.20 22);
   --success: oklch(0.62 0.16 150);
@@ -134,6 +250,7 @@
   }
   html {
     @apply h-full overscroll-y-none;
+    font-size: var(--font-ui-size);
   }
   html.dark {
     color-scheme: dark;
@@ -155,15 +272,9 @@
   .prose {
     @apply select-text;
   }
-  /* Glass body — semi-transparent so native vibrancy (macOS) / acrylic (Windows)
-     shows the blurred desktop through the app window.
-     Opacity percentages are driven by --glass-*-dark / --glass-*-light CSS variables,
-     defaulting to level 3 (medium). JS sets these vars per the user's glassIntensity setting. */
-  html.dark body {
-    background-color: color-mix(in srgb, var(--background) var(--glass-body-dark, 56%), transparent);
-  }
-  html:not(.dark) body {
-    background-color: color-mix(in srgb, var(--background) var(--glass-body-light, 60%), transparent);
+  /* Glass body — CSS vars from theme generator. Falls back to solid background. */
+  body {
+    background-color: var(--glass-body-bg, var(--background));
   }
   #root {
     @apply h-full overflow-hidden;
@@ -210,60 +321,25 @@
   scrollbar-color: var(--sidebar-border) transparent;
 }
 
-/* ── Glass sidebars — semi-transparent over native vibrancy ── */
-/* The shadcn sidebar component renders either:
-   - collapsible variants: a fixed div with data-sidebar="sidebar" + bg-sidebar
-   - collapsible="none": a plain div with bg-sidebar (no data attribute)
-   We target both so all sidebar surfaces receive the glass treatment.
-   NOTE: No CSS backdrop-filter here — sidebars are side-by-side with content,
-   not overlapping it. The desktop blur comes from native vibrancy/acrylic. */
-html.dark [data-sidebar="sidebar"],
-html.dark .bg-sidebar {
-  background-color: color-mix(in srgb, var(--sidebar) var(--glass-sidebar-dark, 50%), transparent);
-}
-html:not(.dark) [data-sidebar="sidebar"],
-html:not(.dark) .bg-sidebar {
-  background-color: color-mix(in srgb, var(--sidebar) var(--glass-sidebar-light, 55%), transparent);
-}
+  /* ── Glass surfaces — CSS vars from theme generator ── */
+  /* When glass is off, --glass-*-bg vars are not set → fall back to solid colors. */
+  /* Sidebar surfaces */
+  [data-surface="sidebar"] {
+    background-color: var(--glass-sidebar-bg, var(--sidebar));
+    border-color: var(--glass-border, var(--border));
+    box-shadow: var(--glass-edge-glow, none);
+  }
 
-/* ── Glass toolbars — semi-transparent bars over content ── */
-html.dark .glass-toolbar {
-  background-color: color-mix(in srgb, var(--background) var(--glass-toolbar-dark, 63%), transparent);
-}
-html:not(.dark) .glass-toolbar {
-  background-color: color-mix(in srgb, var(--background) var(--glass-toolbar-light, 66%), transparent);
-}
+  /* Toolbar surfaces */
+  [data-surface="toolbar"] {
+    background-color: var(--glass-toolbar-bg, var(--background));
+    border-color: var(--glass-border, var(--border));
+  }
 
-/* ── Glass content area — desktop transparency, no CSS blur (native vibrancy handles it) ── */
-html.dark .glass-content {
-  background-color: color-mix(in srgb, var(--background) var(--glass-content-dark, 70%), transparent);
-}
-html:not(.dark) .glass-content {
-  background-color: color-mix(in srgb, var(--background) var(--glass-content-light, 74%), transparent);
-}
-
-/* ── Glass off — solid backgrounds ── */
-html[data-glass="off"] body {
-  background-color: var(--background);
-}
-html[data-glass="off"] [data-sidebar="sidebar"],
-html[data-glass="off"] .bg-sidebar {
-  background-color: var(--sidebar);
-}
-html[data-glass="off"] .glass-toolbar {
-  background-color: var(--background);
-}
-html[data-glass="off"] .glass-content {
-  background-color: var(--background);
-}
-
-/* ── Glass on: mode-specific border overrides for visibility ── */
-html:not(.dark):not([data-glass="off"]) {
-  --border: var(--glass-border-light);
-}
-html.dark:not([data-glass="off"]) {
-  --border: var(--glass-border-dark);
-}
+  /* Content surfaces */
+  [data-surface="content"] {
+    background-color: var(--glass-content-bg, var(--background));
+  }
 
 /* ── Global scrollbar ── */
 ::-webkit-scrollbar {
@@ -352,7 +428,7 @@ html.dark:not([data-glass="off"]) {
 /* Ensure the accessibility tree (used for screen readers and copy)
    matches our font stack */
 .terminal-xterm .xterm-accessibility-tree {
-  font-family: "Geist Mono", "Menlo", "Monaco", "Courier New", monospace;
+  font-family: var(--font-editor);
 }
 
 /* Hide the default xterm overview ruler (scrollbar decoration) */

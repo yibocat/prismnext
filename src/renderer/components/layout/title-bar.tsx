@@ -3,8 +3,6 @@ import { useTheme } from "next-themes";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLayoutStore } from "@/stores/layout-store";
-import { useSettingsStore } from "@/stores/settings-store";
-import { LockIcon } from "lucide-react";
 import { SIDEBAR_LEFT_DEFAULT, SIDEBAR_OVERLAY_THRESHOLD } from "@/styles/constants";
 import { cn } from "@/lib/utils";
 import { Kbd } from "@/components/ui/kbd";
@@ -54,10 +52,8 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
   const inSettings = leftSidebarView === "settings";
   const [commandOpen, setCommandOpen] = useState(false);
   const { theme, resolvedTheme, setTheme } = useTheme();
-  const glassEffect = useSettingsStore((s) => s.settings.glassEffect);
 
   const cycleTheme = () => {
-    if (glassEffect) return;
     if (theme === "light") setTheme("dark");
     else if (theme === "dark") setTheme("system");
     else setTheme("light");
@@ -68,7 +64,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
 
   return (
     <>
-    <div className="drag-region relative flex h-[var(--height-titlebar)] shrink-0 items-center px-2.5 select-none glass-content">
+    <div className="drag-region relative flex h-[var(--height-titlebar)] shrink-0 items-center px-2.5 select-none" data-surface="content">
       {/* ── Left: Traffic lights spacer + Project + Sidebar toggle ── */}
       <div className="z-10 flex items-center gap-1">
         {showMacSpacer && <div className="w-[60px]" />}
@@ -153,15 +149,11 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
 
         <button
           type="button"
-          className={glassEffect
-            ? "flex size-6 items-center justify-center rounded text-muted-foreground/30 transition-colors"
-            : "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"}
-          title={glassEffect ? "Theme locked (Desktop glass is on)" : `Theme: ${theme}`}
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          title={`Theme: ${theme}`}
           onClick={cycleTheme}
         >
-          {glassEffect ? (
-            <LockIcon className="size-3.5" />
-          ) : theme === "system" ? (
+          {theme === "system" ? (
             <MonitorIcon className="size-3.5" />
           ) : resolvedTheme === "dark" ? (
             <SunIcon className="size-3.5" />

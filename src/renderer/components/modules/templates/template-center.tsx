@@ -34,10 +34,10 @@ export function TemplateCenter({ onUseTemplate, onBack }: TemplateCenterProps) {
   // Template switch dialog state
   const [switchDialog, setSwitchDialog] = useState<{
     open: boolean;
-    level: "L1" | "L2" | "L3" | "reset";
-    oldName: string;
+    level: "L1" | "L2" | "L3" | "reset" | "firstUse";
+    oldName?: string;
     newName: string;
-    oldCategory: string;
+    oldCategory?: string;
     newCategory: string;
     changedFiles: string[];
     deletedFiles: string[];
@@ -107,11 +107,47 @@ export function TemplateCenter({ onUseTemplate, onBack }: TemplateCenterProps) {
         return;
       }
 
-      // No current template — first use, apply directly
+      // No current template — first use.
+      // Check for existing files that would be overwritten.
       if (!currentTemplate || !projectRoot) {
-        processingRef.current = false;
-        onUseTemplate(full);
-        toast.success(`Template "${full.name}" applied`);
+        if (!projectRoot) {
+          processingRef.current = false;
+          onUseTemplate(full);
+          return;
+        }
+
+        // Detect user files that overlap with template files
+        const overlapping: string[] = [];
+        for (const file of full.files) {
+          const absPath = `${projectRoot}/${manuscriptDir}/${file.path}`;
+          try {
+            const exists = await window.electronAPI.fsExists(absPath);
+            if (exists) overlapping.push(file.path);
+          } catch {
+            // Ignore errors — if we can't check, assume safe
+          }
+        }
+
+        if (overlapping.length === 0) {
+          // Clean project — apply directly
+          processingRef.current = false;
+          onUseTemplate(full);
+          toast.success(`Template "${full.name}" applied`);
+          return;
+        }
+
+        // Existing files detected — show confirmation dialog
+        setSwitchDialog({
+          open: true,
+          level: "firstUse",
+          oldName: undefined,
+          newName: full.name,
+          oldCategory: undefined,
+          newCategory: full.category,
+          changedFiles: overlapping,
+          deletedFiles: [],
+          newTemplate: full,
+        });
         return;
       }
 
@@ -204,11 +240,60 @@ export function TemplateCenter({ onUseTemplate, onBack }: TemplateCenterProps) {
 
   const handleSwitchConfirm = useCallback(
     async (action: "merge" | "replace") => {
-      const { newTemplate, changedFiles, deletedFiles } = switchDialog;
-      if (!newTemplate || !projectRoot || !currentTemplate) return;
+      const { newTemplate, changedFiles, deletedFiles, level } = switchDialog;
+      if (!newTemplate || !projectRoot) return;
+      // currentTemplate can be null for firstUse
+      if (level !== "firstUse" && !currentTemplate) return;
 
       setSubmitting(true);
       try {
+        // ── firstUse: backup overlapping files, then apply directly ──
+        if (level === "firstUse") {
+          const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+          const backupLabel = `${timestamp}_first_use_${newTemplate.id}`;
+          await window.electronAPI.templateBackup({
+            rootPath: projectRoot,
+            manuscriptDir,
+            files: changedFiles,
+            backupLabel,
+          });
+
+          await window.electronAPI.templateApply({
+            rootPath: projectRoot,
+            manuscriptDir,
+            files: newTemplate.files,
+            templateId: newTemplate.id,
+            templateCategory: newTemplate.category,
+          });
+
+          // Update local state
+          const settingsPath = `${projectRoot}/.prismnext/settings.json`;
+          try {
+            const updatedResult = await window.electronAPI.fsRead(settingsPath);
+            if (updatedResult) {
+              const updated = JSON.parse(updatedResult.content);
+              if (updated.template) {
+                setCurrentTemplate({
+                  id: updated.template.id,
+                  category: updated.template.category,
+                  appliedFiles: updated.template.appliedFiles,
+                });
+              }
+            }
+          } catch { /* ignore */ }
+
+          useDocumentStore.getState().refreshFiles();
+          useLayoutStore.getState().setLeftSidebarView("sessions");
+          toast.success(`Template "${newTemplate.name}" applied — previous files backed up`);
+          setSwitchDialog((prev) => ({ ...prev, open: false }));
+          processingRef.current = false;
+          setSubmitting(false);
+          return;
+        }
+
+        // ── Existing template switch/reset flow ──
+        if (!currentTemplate) return; // TypeScript guard
+
         const allTemplateFiles = [
           ...new Set([
             ...Object.keys(currentTemplate.appliedFiles),
@@ -306,7 +391,9 @@ export function TemplateCenter({ onUseTemplate, onBack }: TemplateCenterProps) {
         useLayoutStore.getState().setLeftSidebarView("sessions");
 
         // 4.5. Notify user
-        const msg = switchDialog.level === "L1"
+        const msg = switchDialog.level === "firstUse"
+          ? `Template "${newTemplate.name}" applied — previous files backed up`
+          : switchDialog.level === "L1"
           ? `Switched to "${newTemplate.name}" — content preserved`
           : switchDialog.level === "L2"
             ? `Switched to "${newTemplate.name}" — content merged. Review recommended.`

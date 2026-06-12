@@ -92,9 +92,8 @@ function createWindow() {
   // making the first spawn after resume slow again. A quick dummy exec on
   // focus restores fast git / agent performance.
   mainWindow.on("focus", () => {
-    const t0 = performance.now();
     exec("git --version", { timeout: 15000 }, () => {
-      console.log(`[main] focus warmup: ${Math.round(performance.now() - t0)}ms`);
+      // focus warmup complete
     });
   });
 

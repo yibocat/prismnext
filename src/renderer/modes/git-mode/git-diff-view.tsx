@@ -1,11 +1,15 @@
 import { useEffect, useRef, useMemo } from "react";
 import { EditorState, Compartment } from "@codemirror/state";
 import { EditorView, lineNumbers } from "@codemirror/view";
-import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
 import { unifiedMergeView } from "@codemirror/merge";
-import { oneDark } from "@codemirror/theme-one-dark";
 import { useTheme } from "next-themes";
 import { getLanguageLoader } from "@/lib/language-mappings";
+import { editorChromeTheme } from "@/lib/editor-themes/editor-chrome";
+import { getThemeExtensionSync, getThemeExtensionAsync } from "@/lib/editor-themes/registry";
+import { diffDisplayTheme, diffDisplayThemeExtra, contentMetricsTheme } from "@/lib/editor-themes/diff-overrides";
+import { useSettingsStore } from "@/stores/settings-store";
+import type { EditorSyntaxThemeId } from "@/lib/editor-themes/types";
+import { DEFAULT_SYNTAX_THEME } from "@/lib/editor-themes/types";
 
 interface GitDiffViewProps {
   oldContent: string;
@@ -19,6 +23,10 @@ export function GitDiffView({ oldContent, newContent, filePath }: GitDiffViewPro
   const currentFileKeyRef = useRef<string>("");
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
+
+  const editorSyntaxTheme =
+    (useSettingsStore((s) => s.settings.editorSyntaxTheme) as EditorSyntaxThemeId | undefined)
+    ?? DEFAULT_SYNTAX_THEME;
 
   const themeCompartment = useMemo(() => new Compartment(), []);
   const languageCompartment = useMemo(() => new Compartment(), []);
@@ -58,8 +66,27 @@ export function GitDiffView({ oldContent, newContent, filePath }: GitDiffViewPro
       doc: newContent,
       extensions: [
         lineNumbers(),
-        syntaxHighlighting(defaultHighlightStyle),
-        themeCompartment.of(isDark ? oneDark : []),
+        editorChromeTheme,
+        contentMetricsTheme,
+        diffDisplayTheme,
+        diffDisplayThemeExtra,
+        EditorView.theme({
+          "&": {
+            fontFamily: "var(--font-editor)",
+            fontSize: "var(--font-editor-size)",
+          },
+          ".cm-content": {
+            fontFamily: "var(--font-editor)",
+            fontSize: "var(--font-editor-size)",
+          },
+          ".cm-gutters": {
+            fontFamily: "var(--font-editor)",
+            fontSize: "var(--font-editor-size)",
+          },
+        }),
+        themeCompartment.of(
+          getThemeExtensionSync(editorSyntaxTheme, isDark ? "dark" : "light") ?? [],
+        ),
         languageCompartment.of([]),
         EditorView.lineWrapping,
         EditorState.readOnly.of(true),
@@ -100,10 +127,22 @@ export function GitDiffView({ oldContent, newContent, filePath }: GitDiffViewPro
 
   // Sync theme changes reactively
   useEffect(() => {
-    viewRef.current?.dispatch({
-      effects: themeCompartment.reconfigure(isDark ? oneDark : []),
+    const view = viewRef.current;
+    if (!view) return;
+    const mode = isDark ? "dark" as const : "light" as const;
+
+    const syncExt = getThemeExtensionSync(editorSyntaxTheme, mode);
+    if (syncExt) {
+      view.dispatch({ effects: themeCompartment.reconfigure(syncExt) });
+      return;
+    }
+
+    getThemeExtensionAsync(editorSyntaxTheme, mode).then((ext) => {
+      if (viewRef.current === view) {
+        view.dispatch({ effects: themeCompartment.reconfigure(ext) });
+      }
     });
-  }, [isDark]);
+  }, [isDark, editorSyntaxTheme]);
 
   if (isBinary) {
     return (

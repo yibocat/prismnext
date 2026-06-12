@@ -149,7 +149,7 @@ export const GitFileAccordion = memo(function GitFileAccordion({ projectRoot, fi
         <div className="min-w-0 flex items-center gap-2">
           {renderFilePath()}
           {(file.added > 0 || file.deleted > 0) && (
-            <span className="shrink-0 text-[11px] flex items-center gap-0.5 tabular-nums">
+            <span className="shrink-0 text-[length:var(--font-size-11)] flex items-center gap-0.5 tabular-nums">
               {file.added > 0 && (
                 <span className="text-emerald-500">+{file.added}</span>
               )}

@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { useSettingsStore } from "@/stores/settings-store";
+import { useThemeStore } from "@/stores/theme-store";
 import type { ITheme } from "@xterm/xterm";
 
 // ─── VS Code Light+ inspired ───
@@ -81,7 +81,7 @@ function oklchToHex(oklch: string): string {
 
 export function useTerminalTheme(): ITheme {
   const { resolvedTheme } = useTheme();
-  const themeColor = useSettingsStore((s) => s.settings.themeColor);
+  const themeConfig = useThemeStore((s) => s.config);
   // Read CSS variable synchronously on mount so the terminal is created
   // with the correct background colour — avoids a one-frame colour flash.
   const [backgroundHex, setBackgroundHex] = useState(() => {
@@ -106,7 +106,7 @@ export function useTerminalTheme(): ITheme {
       }
     });
     return () => cancelAnimationFrame(raf);
-  }, [resolvedTheme, themeColor]);
+  }, [resolvedTheme, themeConfig]);
 
   return useMemo(() => {
     const base = resolvedTheme === "light" ? LIGHT_THEME : DARK_THEME;

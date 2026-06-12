@@ -5,17 +5,12 @@ const log = createLogger("settings-store");
 
 export interface AppSettings {
   theme: "dark" | "light" | "system";
-  themeColor?: "teal" | "academic-blue" | "ink-green" | "rose" | "violet" | "amber" | "mono";
   sidebarCollapsed: boolean;
   rightPanelCollapsed: boolean;
   /** PDF viewer dark mode: off | on | follow (app theme) */
   pdfDarkMode?: "off" | "on" | "follow";
   zoteroApiKey?: string;
   zoteroUserId?: string;
-  /** Desktop glass transparency: on/off */
-  glassEffect?: boolean;
-  /** Glass intensity: 1 (most transparent) to 5 (most solid) */
-  glassIntensity?: number;
   /** Path to auto-reopen on next launch */
   lastProjectPath?: string | null;
   /** Last opened file — used for smart expand on project open */
@@ -28,19 +23,19 @@ export interface AppSettings {
   defaultDocClass?: "article" | "report" | "book";
   /** Custom system prompt for the agent shell. Empty = use built-in default. */
   agentSystemPrompt?: string;
+  /** Selected editor syntax highlighting theme */
+  editorSyntaxTheme?: string;
 }
 
 const defaults: AppSettings = {
   theme: "dark",
-  themeColor: "academic-blue",
   sidebarCollapsed: false,
   rightPanelCollapsed: false,
-  glassEffect: false,
-  glassIntensity: 3,
   manuscriptDir: "manuscript",
   autoCreateMainTex: true,
   defaultDocClass: "article",
   agentSystemPrompt: "",
+  editorSyntaxTheme: "prism",
 };
 
 interface SettingsState {

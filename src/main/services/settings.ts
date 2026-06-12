@@ -48,6 +48,9 @@ function decryptIfAvailable(value: string): string {
 }
 
 export function getSettings(): AppSettings {
+  // Read ALL stored keys so dynamic renderer-side keys
+  // (editorSyntaxTheme, pdfDarkMode, manuscriptDir, etc.) are
+  // automatically included — no more manual enumeration.
   const raw = (store as unknown as { store: Record<string, unknown> }).store;
 
   // Read all plain-text fields directly
@@ -74,7 +77,16 @@ export function getSettings(): AppSettings {
     settings.zoteroUserId = decryptIfAvailable(encryptedUserId);
   }
 
-  return settings;
+  // Start with explicitly-read settings, then overlay all raw store keys
+  // so that renderer-side dynamic keys (editorSyntaxTheme, etc.) survive
+  // round-trips without needing manual enumeration here.
+  const result: Record<string, unknown> = { ...raw, ...settings };
+  // Decrypted secrets take precedence over encrypted raw
+  if (settings.zoteroApiKey !== undefined)
+    result.zoteroApiKey = settings.zoteroApiKey;
+  if (settings.zoteroUserId !== undefined)
+    result.zoteroUserId = settings.zoteroUserId;
+  return result as AppSettings;
 }
 
 export function updateSettings(patch: Partial<AppSettings>): void {

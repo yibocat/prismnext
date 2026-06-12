@@ -411,7 +411,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   }, []);
 
   return (
-    <div className="flex h-full flex-col min-w-0 glass-content">
+    <div className="flex h-full flex-col min-w-0" data-surface="content">
       {/* Toolbar */}
       <div ref={toolbarRef} className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center gap-0.5 select-none px-2">
         <div className="flex items-center gap-0.5 shrink-0">
@@ -531,7 +531,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
                 >
                   {mode.icon}
                   <span>{mode.label}</span>
-                  {isActive && <span className="ml-auto text-[10px] text-muted-foreground">on</span>}
+                  {isActive && <span className="ml-auto text-[length:var(--font-size-10)] text-muted-foreground">on</span>}
                 </DropdownMenuItem>
                 );
               })}

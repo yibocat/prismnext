@@ -5,10 +5,10 @@ import type { CompatibilityLevel } from "@/lib/template-merge";
 export interface TemplateSwitchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  level: CompatibilityLevel | "reset";
-  oldName: string;
+  level: CompatibilityLevel | "reset" | "firstUse";
+  oldName?: string;
   newName: string;
-  oldCategory: string;
+  oldCategory?: string;
   newCategory: string;
   changedFiles: string[];
   deletedFiles: string[];
@@ -17,7 +17,7 @@ export interface TemplateSwitchDialogProps {
 }
 
 const LEVEL_CONFIG: Record<
-  CompatibilityLevel | "reset",
+  CompatibilityLevel | "reset" | "firstUse",
   {
     title: string;
     icon: string;
@@ -53,6 +53,13 @@ const LEVEL_CONFIG: Record<
       "Reset to template original? Your modifications will be lost. A backup will be saved.",
     actions: ["replace"],
   },
+  firstUse: {
+    title: "⚠️ Apply Template",
+    icon: "⚠️",
+    message:
+      "This project already contains files. Applying a template will overwrite your existing content. A backup will be saved so you can restore if needed.",
+    actions: ["replace"],
+  },
 };
 
 export function TemplateSwitchDialog({
@@ -78,7 +85,9 @@ export function TemplateSwitchDialog({
             {config.icon} {config.title}
           </DialogTitle>
           <DialogDescription className="text-[length:var(--font-size-13)]">
-            {oldName} ({oldCategory}) → {newName} ({newCategory})
+            {level === "firstUse"
+              ? `Apply ${newName} (${newCategory}) template`
+              : `${oldName} (${oldCategory}) → ${newName} (${newCategory})`}
           </DialogDescription>
         </DialogHeader>
 
@@ -86,7 +95,7 @@ export function TemplateSwitchDialog({
           {/* Level-specific message */}
           <div
             className={`rounded-md border px-3 py-2.5 text-[length:var(--font-size-12)] ${
-              level === "L3" || level === "reset"
+              level === "L3" || level === "reset" || level === "firstUse"
                 ? "border-destructive/30 bg-destructive/10 text-destructive"
                 : level === "L2"
                   ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
@@ -99,7 +108,13 @@ export function TemplateSwitchDialog({
           {/* What will happen */}
           <div className="text-[length:var(--font-size-12)] text-muted-foreground space-y-1">
             <p className="font-medium text-foreground">What will happen:</p>
-            {level === "L1" || level === "L2" ? (
+            {level === "firstUse" ? (
+              <>
+                <p>1. A backup of your current files will be saved to .prismnext/backups/</p>
+                <p>2. All template files will be written, overwriting your content</p>
+                <p>3. You can restore your original files from the backup if needed</p>
+              </>
+            ) : level === "L1" || level === "L2" ? (
               <>
                 <p>1. Your written content (sections, paragraphs) will be preserved</p>
                 <p>2. Document structure (preamble, packages) will be updated</p>
@@ -161,7 +176,11 @@ export function TemplateSwitchDialog({
               disabled={submitting}
               onClick={() => onConfirm("replace")}
             >
-              {level === "reset" ? "Backup & Reset" : "Backup & Replace All"}
+              {level === "reset"
+                ? "Backup & Reset"
+                : level === "firstUse"
+                  ? "Backup & Apply Template"
+                  : "Backup & Replace All"}
             </Button>
           )}
           {config.actions.includes("merge") && (

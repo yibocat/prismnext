@@ -7,7 +7,6 @@ import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
-import { useSettingsStore } from "@/stores/settings-store";
 import { useWindowState } from "@/hooks/use-window-state";
 import {
   Bot,
@@ -30,7 +29,6 @@ import {
   SunIcon,
   MoonIcon,
   MonitorIcon,
-  LockIcon,
 } from "lucide-react";
 import { SettingsSidebar, type SettingsCategory } from "@/components/modules/settings";
 import { Kbd } from "@/components/ui/kbd";
@@ -80,10 +78,8 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const isMac = platform === "darwin";
   const showMacSpacer = isMac && !isFullscreen;
   const { theme, resolvedTheme, setTheme } = useTheme();
-  const glassEffect = useSettingsStore((s) => s.settings.glassEffect);
 
   const cycleTheme = () => {
-    if (glassEffect) return;
     if (theme === "light") setTheme("dark");
     else if (theme === "dark") setTheme("system");
     else setTheme("light");
@@ -297,7 +293,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
       defaultOpen
       className="contents"
     >
-      <Sidebar collapsible="none" className="relative shrink-0 border-r-0 !w-full">
+      <Sidebar collapsible="none" className="relative shrink-0 border-r-0 !w-full" data-surface="sidebar">
         {/* SidebarTopBar — pseudo-titlebar. Always preserves height to avoid layout jump,
             but only renders controls when sidebar is expanded (ContentTopBar handles collapsed state). */}
         <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center px-2 select-none">
@@ -471,16 +467,11 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
             </button>
             <button
               type="button"
-              className={cn(
-                "flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors shrink-0",
-                glassEffect && "text-muted-foreground/30",
-              )}
-              title={glassEffect ? "Theme locked (Desktop glass is on)" : `Theme: ${theme}`}
+              className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors shrink-0"
+              title={`Theme: ${theme}`}
               onClick={cycleTheme}
             >
-              {glassEffect ? (
-                <LockIcon className="size-3.5" />
-              ) : theme === "system" ? (
+              {theme === "system" ? (
                 <MonitorIcon className="size-3.5" />
               ) : resolvedTheme === "dark" ? (
                 <SunIcon className="size-3.5" />
@@ -498,7 +489,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     <>
       {leftSidebarOverlay &&
         createPortal(
-          <div className="fixed top-[var(--height-titlebar)] right-0 bottom-0 left-0 z-50 flex flex-col glass-content">
+          <div className="fixed top-[var(--height-titlebar)] right-0 bottom-0 left-0 z-50 flex flex-col" data-surface="content">
             <div className="flex-1 min-h-0">{sidebarContent}</div>
           </div>,
           document.body,

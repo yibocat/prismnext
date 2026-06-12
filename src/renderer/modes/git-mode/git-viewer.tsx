@@ -81,7 +81,7 @@ const CommitFileRow = memo(function CommitFileRow({
     <div>
       <div
         className={cn(
-          "flex items-center gap-1.5 px-2 h-6 cursor-pointer rounded-[2px] text-[length:var(--font-size-12)]",
+          "flex items-center gap-1.5 px-2 h-6 cursor-pointer rounded-sm text-[length:var(--font-size-12)]",
           open
             ? "sticky top-0 z-10 bg-background hover:bg-muted"
             : "hover:bg-accent/50",
@@ -98,7 +98,7 @@ const CommitFileRow = memo(function CommitFileRow({
       >
         <Icon icon={iconName} className="size-3 shrink-0" />
         <span className="truncate">{file.path}</span>
-        <span className="text-[11px] tabular-nums ml-auto shrink-0 flex items-center gap-0.5">
+        <span className="text-[length:var(--font-size-11)] tabular-nums ml-auto shrink-0 flex items-center gap-0.5">
           {file.added > 0 && <span className="text-emerald-500">+{file.added}</span>}
           {file.deleted > 0 && <span className="text-red-400">-{file.deleted}</span>}
         </span>
@@ -216,11 +216,11 @@ function GitCommitDetail({
         <span className="truncate flex-1 text-[length:var(--font-size-12)] font-medium">
           {commit.message}
         </span>
-        <span className="text-[11px] text-muted-foreground/60 shrink-0">
+        <span className="text-[length:var(--font-size-11)] text-muted-foreground/60 shrink-0">
           {formatRelativeTime(commit.date)}
         </span>
         {(totalAdded > 0 || totalDeleted > 0) && (
-          <span className="text-[11px] tabular-nums shrink-0 flex items-center gap-0.5">
+          <span className="text-[length:var(--font-size-11)] tabular-nums shrink-0 flex items-center gap-0.5">
             {totalAdded > 0 && (
               <span className="text-emerald-500">+{totalAdded}</span>
             )}
@@ -250,7 +250,7 @@ function GitCommitDetail({
                     : r.colorClass.includes("pink") ? "bg-pink-500/15 text-pink-600 dark:text-pink-400"
                     : r.colorClass.includes("sky") ? "bg-sky-500/15 text-sky-600 dark:text-sky-400"
                     : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400";
-                  return <span key={r.label} className={cn("inline-flex items-center rounded px-1 py-0 text-[10px] font-medium", bg)}>{r.label}</span>;
+                  return <span key={r.label} className={cn("inline-flex items-center rounded px-1 py-0 text-[length:var(--font-size-10)] font-medium", bg)}>{r.label}</span>;
                 })}
               </span>
             )}
@@ -276,7 +276,7 @@ function GitCommitDetail({
                   className="cursor-pointer text-xs"
                 >
                   --soft
-                  <span className="ml-auto text-[11px] text-muted-foreground">
+                  <span className="ml-auto text-[length:var(--font-size-11)] text-muted-foreground">
                     staged
                   </span>
                 </DropdownMenuItem>
@@ -291,7 +291,7 @@ function GitCommitDetail({
                   className="cursor-pointer text-xs"
                 >
                   --mixed
-                  <span className="ml-auto text-[11px] text-muted-foreground">
+                  <span className="ml-auto text-[length:var(--font-size-11)] text-muted-foreground">
                     unstaged
                   </span>
                 </DropdownMenuItem>
@@ -306,7 +306,7 @@ function GitCommitDetail({
                   className="cursor-pointer text-xs text-destructive"
                 >
                   --hard
-                  <span className="ml-auto text-[11px]">discard</span>
+                  <span className="ml-auto text-[length:var(--font-size-11)]">discard</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -538,7 +538,7 @@ function FileDiffView({
         </span>
         <span className="flex-1" />
         {(file.added > 0 || file.deleted > 0) && (
-          <span className="text-[11px] font-mono tabular-nums shrink-0 flex items-center gap-0.5">
+          <span className="text-[length:var(--font-size-11)] font-mono tabular-nums shrink-0 flex items-center gap-0.5">
             {file.added > 0 && (
               <span className="text-emerald-500">+{file.added}</span>
             )}
@@ -560,7 +560,7 @@ function FileDiffView({
                 <Undo2Icon className="size-3" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom" className="text-[11px]">Discard</TooltipContent>
+            <TooltipContent side="bottom" className="text-[length:var(--font-size-11)]">Discard</TooltipContent>
           </Tooltip>
         )}
 

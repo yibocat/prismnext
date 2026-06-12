@@ -360,6 +360,9 @@ export interface ElectronAPI {
   gitCommitFiles: (projectRoot: string, hash: string) => Promise<Array<{ path: string; added: number; deleted: number }>>;
   gitCommitFileDiff: (projectRoot: string, hash: string, filePath: string) => Promise<{ path: string; oldContent: string; newContent: string }>;
 
+  // Theme — glass vibrancy synchronization
+  themeSetGlassMode: (mode: "light" | "dark" | "system") => Promise<void>;
+
   // Worktree operations
   worktreeList: (projectRoot: string) => Promise<WorktreeInfo[]>;
   worktreeCreate: (projectRoot: string, name?: string, baseBranch?: string) => Promise<WorktreeInfo>;

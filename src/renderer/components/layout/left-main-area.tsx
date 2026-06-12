@@ -128,7 +128,7 @@ export function LeftMainArea() {
 
   if (leftSidebarView === "templates") {
     return (
-      <div className="flex h-full flex-col min-w-0 glass-content">
+      <div className="flex h-full flex-col min-w-0" data-surface="content">
         <TemplateCenter
           onBack={() => useLayoutStore.getState().setLeftSidebarView("sessions")}
           onUseTemplate={async (template) => {
@@ -162,11 +162,11 @@ export function LeftMainArea() {
       "agent-app": AgentAppSettings,
       "agent-project": AgentProjectSettings,
     }[settingsCategory] || GeneralSettings;
-    return <div className="flex h-full flex-col min-w-0 glass-content"><SettingsContent /></div>;
+    return <div className="flex h-full flex-col min-w-0" data-surface="content"><SettingsContent /></div>;
   }
 
   return (
-    <div className="flex h-full flex-col min-w-0 glass-content @container select-text">
+    <div className="flex h-full flex-col min-w-0 @container select-text" data-surface="content">
       <ChatErrorBoundary>
         {isEmpty ? (
           /* ── Homepage ── */

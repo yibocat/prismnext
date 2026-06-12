@@ -14,7 +14,8 @@
   --height-search-panel:       var(--height-base-36);
 
   /* ── Font tokens ── */
-  --font-editor:        var(--font-size-14);  /* CodeMirror body text */
+  /* --font-editor is set by theme-generator (font family, not size) */
+  --editor-line-height: 1.4;  /* uniform across all themes; overrides community themes' 1.6 */
   --font-tab-label:     var(--font-size-12);  /* editor tab labels */
   --font-file-tree:     var(--font-size-12);  /* file tree nodes */
   --font-file-tree-node: var(--font-size-14); /* workspace sidebar file tree nodes */

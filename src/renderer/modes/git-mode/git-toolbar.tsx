@@ -440,7 +440,7 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
                     <p className="px-3 py-6 text-xs text-center text-muted-foreground">{mergeCandidates.length === 0 ? "No other branches" : "No matches"}</p>
                   ) : filteredMergeCandidates.map((b) => (
                     <button key={b} type="button" onClick={() => setMergeConfirmBranch(b)} className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent transition-colors">
-                      <GitBranchIcon className="size-3.5" /><span className="truncate flex-1 text-left">{b}</span><span className="text-[10px] text-muted-foreground/50">→ {branchLabel}</span>
+                      <GitBranchIcon className="size-3.5" /><span className="truncate flex-1 text-left">{b}</span><span className="text-[length:var(--font-size-10)] text-muted-foreground/50">→ {branchLabel}</span>
                     </button>
                   ))}
                 </div>

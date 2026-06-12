@@ -37,7 +37,7 @@ export function AgentAppSettings() {
           placeholder="Leave blank to use the built-in default…"
         />
         <div className="flex items-center gap-1 mt-1">
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-[length:var(--font-size-10)] text-muted-foreground">
             {isCustom ? "Using custom prompt" : "Using built-in default"}
           </span>
         </div>
@@ -64,10 +64,10 @@ export function AgentAppSettings() {
         <h3 className="text-sm font-medium mb-1">
           Effective Prompt Preview
           {isCustom && (
-            <span className="ml-1 text-[10px] font-normal text-primary">(custom)</span>
+            <span className="ml-1 text-[length:var(--font-size-10)] font-normal text-primary">(custom)</span>
           )}
         </h3>
-        <pre className="w-full max-h-64 overflow-auto rounded-md border border-border bg-muted/30 px-3 py-2 text-[11px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
+        <pre className="w-full max-h-64 overflow-auto rounded-md border border-border bg-muted/30 px-3 py-2 text-[length:var(--font-size-11)] leading-relaxed whitespace-pre-wrap text-muted-foreground">
           {effectivePrompt || "Loading…"}
         </pre>
       </div>
