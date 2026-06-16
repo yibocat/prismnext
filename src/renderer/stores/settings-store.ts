@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { createLogger } from "@/services/logger";
+import type { WorkspaceFolder } from "@/types/workspace";
 
 const log = createLogger("settings-store");
 
@@ -15,8 +16,6 @@ export interface AppSettings {
   lastProjectPath?: string | null;
   /** Last opened file — used for smart expand on project open */
   lastActiveFileId?: string | null;
-  /** Default manuscript directory name for new projects */
-  manuscriptDir?: string;
   /** Auto-create main.tex template on new project creation */
   autoCreateMainTex?: boolean;
   /** Default document class for main.tex template */
@@ -25,17 +24,19 @@ export interface AppSettings {
   agentSystemPrompt?: string;
   /** Selected editor syntax highlighting theme */
   editorSyntaxTheme?: string;
+  /** Default workspace folder configuration for new projects */
+  defaultWorkspaceDirs?: WorkspaceFolder[];
 }
 
 const defaults: AppSettings = {
   theme: "dark",
   sidebarCollapsed: false,
   rightPanelCollapsed: false,
-  manuscriptDir: "manuscript",
   autoCreateMainTex: true,
   defaultDocClass: "article",
   agentSystemPrompt: "",
   editorSyntaxTheme: "prism",
+  defaultWorkspaceDirs: [{ function: "manuscript", name: "manuscript", mainTex: "main.tex" }],
 };
 
 interface SettingsState {
@@ -54,6 +55,22 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     const t0 = performance.now();
     try {
       const remote = await window.electronAPI.settingsGet();
+
+      // Migrate: old manuscriptDir → defaultWorkspaceDirs
+      if (
+        !remote.defaultWorkspaceDirs &&
+        typeof (remote as any).manuscriptDir === "string" &&
+        (remote as any).manuscriptDir !== "manuscript"
+      ) {
+        const migratedDir = (remote as any).manuscriptDir as string;
+        remote.defaultWorkspaceDirs = [
+          { function: "manuscript", name: migratedDir, mainTex: "main.tex" },
+        ];
+        // Persist immediately so migration only happens once
+        window.electronAPI.settingsSet({ defaultWorkspaceDirs: remote.defaultWorkspaceDirs }).catch(() => {});
+        log.info("Migrated manuscriptDir → defaultWorkspaceDirs", { from: migratedDir });
+      }
+
       set({
         settings: {
           ...defaults,

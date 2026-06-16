@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.3.18 — 2026-06-16
+
+### Functional Workspace Folders
+
+- Configurable folder structure per project: manuscript, experiment, literature, notebook, custom — with function-specific metadata and AI-readable descriptions
+- Settings → Workspace replaces old Project Settings: "Current Project" editor with auto-save, "Defaults for New Projects" template, and bridge to apply current as defaults
+- New project dialog extended with inline workspace folder editor — defaults pre-populated from global settings
+- Manuscript folder configuration decoupled from app settings: `mainTex` entry point, directory name, and description all configurable
+- TeXworkspace gracefully degrades when no manuscript is configured — shows placeholder with direct link to Workspace settings
+- Workspace layout injected as first-class context component for AI agents (`workspaceLayout`), opt-in per agent integration
+
+### Font System Defaults
+
+- System font stack (`system-ui` / `ui-monospace`) as new default — zero-loading penalty, native platform rendering
+- Default editor font synced to system mono; Code Font picker updates both editor and mono UI in one selection
+
+### Project Creation & Validation
+
+- Server-side validation for workspace folder config on project creation — rejects duplicate names, empty names, reserved names, and multiple manuscripts before writing to disk
+- Migration: old `manuscriptDir` setting automatically converted to new `defaultWorkspaceDirs` on first load
+- Settings IPC type definitions expanded to cover all persisted keys
+
+### Cross-Project State Cleanup
+
+- Git store fully cleared on non-git project open — prevents stale branch/file data from previous project
+- Removing manuscript from workspace config clears PDF cache, compile state, and TeXworkspace tabs
+- Folder deletion from file sidebar syncs workspace config entry removal
+
+### Dead Code Cleanup
+
+- Files sidebar mode filtering simplified to `"all" | "manuscript"` — removed unused generic `SidebarMode` string branch
+- Removed unused `topFolders` memo and dead `activeMode` subscription in files sidebar
+- Old `project-settings.tsx` and `right-sidebar/shared.ts` removed
+
+### Testing
+
+- Vitest configured with jsdom environment and `@/` path alias
+- Unit tests for `workspace-config` service (read/write/validate/migration) and `workspace-config-store` (CRUD, derivation, duplicates)
+
 ## 0.3.17 — 2026-06-12
 
 ### Theme System Rewrite

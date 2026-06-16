@@ -10,6 +10,7 @@ import { useLayoutStore } from "./layout-store";
 import { useChatStore } from "./chat-store";
 import { useSettingsStore } from "./settings-store";
 import { useWorktreeStore } from "./worktree-store";
+import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { clearPdfCache } from "./compile-store";
 
 export type ProjectFileType = "tex" | "image" | "pdf" | "bib" | "style" | "other";
@@ -39,8 +40,6 @@ interface FileMeta {
 
 interface DocumentState {
   projectRoot: string | null;
-  /** Configured manuscript directory name (from .prismnext/settings.json, default "manuscript") */
-  manuscriptDir: string;
   /** Current working root — projectRoot on main, worktree path when active */
   checkoutRoot: string | null;
   showWelcome: boolean;
@@ -205,7 +204,6 @@ function markSuppressWatcherReload() {
 
 export const useDocumentStore = create<DocumentState>((set, get) => ({
   projectRoot: null,
-  manuscriptDir: "manuscript",
   checkoutRoot: null,
   showWelcome: true,
   setShowWelcome: (show) => set({ showWelcome: show }),
@@ -227,6 +225,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   // ─── Project Management ───
 
   openProject: async (rootPath: string) => {
+    // Re-entrancy guard: prevent concurrent openProject calls from corrupting state
+    if (get().isOpeningProject) return;
     const t0 = performance.now();
     set({ isOpeningProject: true });
     try {
@@ -285,6 +285,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         initialized: true,
       });
 
+      // Load workspace configuration
+      const workspaceStore = useWorkspaceConfigStore.getState();
+      await workspaceStore.loadConfig(rootPath);
+
       // ── Smart expand: only expand folders on the path to the last active file ──
       const { lastActiveFileId } = useSettingsStore.getState().settings;
       if (lastActiveFileId) {
@@ -308,6 +312,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
       // ── Eagerly preload git status + branches (queues behind warmup) ──
       import("./git-store").then(({ useGitStore }) => {
+        useGitStore.getState().clearAll();
         useGitStore.getState().selectUnit(rootPath);
       });
 
@@ -337,6 +342,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     clearPdfCache();
     import("./changes-store").then((m) => m.useChangesStore.getState().clearAll());
     useWorktreeStore.getState().clearAll();
+    useWorkspaceConfigStore.getState().reset();
     set({
       projectRoot: null,
       checkoutRoot: null,
@@ -1067,6 +1073,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
           gs.refreshStatus(gs.unitRoot);
         }
       });
+
+      // Workspace config sync is handled by files-sidebar.tsx before
+      // calling deleteFolder — that component has the full workspace
+      // context needed for the confirmation dialog and config cleanup.
     } catch (error) {
       toast.error(`Failed to delete folder: ${error}`);
       throw error;

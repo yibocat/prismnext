@@ -14,6 +14,12 @@ const CN_MONO = '"PingFang SC", "Microsoft YaHei", "Noto Sans SC", ui-monospace,
 
 export const SANS_FONTS: FontOption[] = [
   {
+    id: "system-ui",
+    label: "System",
+    family: `system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, ${CN}`,
+    category: "sans",
+  },
+  {
     id: "geist-sans",
     label: "Geist Sans",
     family: `"Geist Sans", ${CN}`,
@@ -52,6 +58,18 @@ export const SANS_FONTS: FontOption[] = [
 ];
 
 export const MONO_FONTS: FontOption[] = [
+  {
+    id: "system-mono",
+    label: "System",
+    family: `ui-monospace, "SF Mono", "Cascadia Code", "Consolas", "Liberation Mono", Menlo, monospace, ${CN_MONO}`,
+    category: "mono",
+  },
+  {
+    id: "geist-mono",
+    label: "Geist Mono",
+    family: `"Geist Mono", ${CN_MONO}`,
+    category: "mono",
+  },
   {
     id: "cascadia-code",
     label: "Cascadia Code",
@@ -101,9 +119,9 @@ export function getFontById(id: string): FontOption | undefined {
 }
 
 export function getDefaultSansFont(): FontOption {
-  return SANS_FONTS[0]; // Geist Sans
+  return SANS_FONTS[0]; // System
 }
 
 export function getDefaultMonoFont(): FontOption {
-  return MONO_FONTS[0]; // Geist Mono
+  return MONO_FONTS[0]; // System
 }

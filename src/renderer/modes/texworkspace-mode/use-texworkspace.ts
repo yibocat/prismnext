@@ -3,6 +3,7 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useCompileStore, compileCurrentDocument } from "@/stores/compile-store";
+import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { resolveCompileTarget } from "@/lib/resolve-tex-root";
 
 /**
@@ -38,9 +39,16 @@ export function useTexworkspace() {
   useEffect(() => {
     if (!activeTab || activeTab.kind !== "texworkspace" || !activeTab.isInitial) return;
     if (autoOpened.current) return;
+
+    // Guard: don't auto-open if no manuscript is configured
+    const manuscriptConfig = useWorkspaceConfigStore.getState().manuscriptConfig;
+    if (!manuscriptConfig) return;
+
     autoOpened.current = true;
 
-    const firstTex = files.find((f) => f.name.endsWith(".tex"));
+    // Only consider .tex files under the configured manuscript directory
+    const prefix = `${manuscriptConfig.dir}/`;
+    const firstTex = files.find((f) => f.relativePath.startsWith(prefix) && f.name.endsWith(".tex"));
     const resolved = resolveCompileTarget(
       firstTex?.id ?? "",
       files,

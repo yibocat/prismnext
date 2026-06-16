@@ -3,6 +3,8 @@ import { Virtuoso } from "react-virtuoso";
 import type { VirtuosoHandle } from "react-virtuoso";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
+import { DEFAULT_MANUSCRIPT_DIR, FOLDER_FUNCTION_LABELS, FOLDER_FUNCTION_ICONS, type FolderFunction } from "@/types/workspace";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useGitStore } from "@/stores/git-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
@@ -38,6 +40,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -48,7 +51,7 @@ import { buildFileTree, flattenVisibleTree, type TreeNode, type FlatVisibleNode 
 import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
-import { getModeDir, type SidebarMode, filterFilesByMode, filterFoldersByMode } from "@/components/layout/right-sidebar/shared";
+import { getModeDir, type SidebarMode, filterFilesByMode, filterFoldersByMode } from "./file-filter";
 import { FolderVirtRow, FileVirtRow, InlineEditRow, type VirtTreeCallbacks, type GitStatusInfo } from "@/components/layout/right-sidebar/virtual-tree-rows";
 
 
@@ -124,7 +127,6 @@ function FilesHeader({ callbacks, projectName, anyExpanded, onToggleAll }: {
 // ─── Files Sidebar ───
 
 export function FilesSidebar() {
-  const activeMode = useLayoutStore((s) => s.activeMode);
   const tabs = useRightPanelStore((s) => s.tabs);
   const activeTabId = useRightPanelStore((s) => s.activeTabId);
   const allFiles = useDocumentStore((s) => s.files);
@@ -133,7 +135,8 @@ export function FilesSidebar() {
   const dirtyVersion = useDocumentStore((s) => s.dirtyVersion);
   const setActiveFile = useDocumentStore((s) => s.setActiveFile);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const manuscriptDir = useDocumentStore((s) => s.manuscriptDir);
+  const manuscriptConfig = useWorkspaceConfigStore((s) => s.manuscriptConfig);
+  const manuscriptDir = manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR;
   const openFile = useRightPanelStore((s) => s.openFile);
   const openTexworkspaceFile = useRightPanelStore((s) => s.openTexworkspaceFile);
   const deleteFile = useDocumentStore((s) => s.deleteFile);
@@ -161,21 +164,21 @@ export function FilesSidebar() {
   // Delete folder AND close any tabs viewing files inside it
   const handleDeleteFolder = useCallback(
     (folderPath: string) => {
-      if (!window.confirm(`Delete folder "${folderPath}" and all contents?`)) return;
-      const rps = useRightPanelStore.getState();
-      const prefix = `${folderPath}/`;
-      for (const t of rps.tabs) {
-        if (t.fileId?.startsWith(prefix) || t.filePath?.startsWith(prefix)) {
-          rps.closeTab(t.id);
-        }
-      }
-      deleteFolder(folderPath);
+      // Check if this folder is configured in workspace settings
+      const workspaceDirs = useWorkspaceConfigStore.getState().workspaceDirs;
+      const wsEntry = workspaceDirs.find((d) => d.name === folderPath);
+
+      setDeleteDialog({
+        folderPath,
+        folderName: folderPath.split("/").pop() || folderPath,
+        workspaceFunc: wsEntry?.function,
+      });
     },
-    [deleteFolder],
+    [],
   );
 
   const isTexworkspaceActive = useIsTexworkspace();
-  const currentMode: SidebarMode = isTexworkspaceActive ? "manuscript" : activeMode === "chat" ? "all" : activeMode;
+  const currentMode: SidebarMode = isTexworkspaceActive ? "manuscript" : "all";
 
   // ─── Context bar: branch + worktree ───
   const gitBranch = useGitStore((s) => s.branch);
@@ -254,10 +257,6 @@ export function FilesSidebar() {
 
   // ─── Git status — query project-level or worktree git repo ───
 
-  const topFolders = useMemo(
-    () => allFolders.filter((f) => !f.includes("/")).sort(),
-    [allFolders],
-  );
   // Derive file git status from the git store (already fetched by refreshStatus).
   // Avoids a duplicate `git status` IPC call — cuts status fetches in half.
   const gitFiles = useGitStore((s) => s.files);
@@ -337,7 +336,7 @@ export function FilesSidebar() {
       if (currentMode === "all") return modeFolderPath;
       return `${getModeDir(currentMode, manuscriptDir)}/${modeFolderPath}`;
     },
-    [currentMode],
+    [currentMode, manuscriptDir],
   );
 
   // ─── Inline editing ───
@@ -349,6 +348,44 @@ export function FilesSidebar() {
   const [isFolderRename, setIsFolderRename] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [nameError, setNameError] = useState("");
+
+  // ─── Delete folder confirmation dialog ───
+  const [deleteDialog, setDeleteDialog] = useState<{
+    folderPath: string;
+    folderName: string;
+    workspaceFunc?: FolderFunction;
+  } | null>(null);
+
+  const confirmDeleteFolder = useCallback(() => {
+    if (!deleteDialog) return;
+    const { folderPath, workspaceFunc } = deleteDialog;
+
+    // Close any tabs viewing files inside this folder
+    const rps = useRightPanelStore.getState();
+    const prefix = `${folderPath}/`;
+    for (const t of rps.tabs) {
+      if (t.fileId?.startsWith(prefix) || t.filePath?.startsWith(prefix)) {
+        rps.closeTab(t.id);
+      }
+    }
+
+    // If this folder was configured in workspace settings, remove the config entry.
+    // This keeps the workspace config in sync with the actual filesystem.
+    if (workspaceFunc) {
+      const wsStore = useWorkspaceConfigStore.getState();
+      const idx = wsStore.workspaceDirs.findIndex((d) => d.name === folderPath);
+      if (idx >= 0) {
+        wsStore.removeFolder(idx);
+        // Persist immediately — the settings component may not be mounted
+        // when the user is in files mode, so the auto-save useEffect won't fire.
+        const root = useDocumentStore.getState().projectRoot;
+        if (root) wsStore.saveConfig(root).catch(() => {});
+      }
+    }
+
+    deleteFolder(folderPath);
+    setDeleteDialog(null);
+  }, [deleteDialog, deleteFolder]);
 
   const openRenameDialog = useCallback((fileId: string, name: string) => {
     setRenameFileId(fileId);
@@ -868,6 +905,63 @@ export function FilesSidebar() {
               Cancel
             </Button>
             <Button onClick={handleRename}>Rename</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Delete Folder Confirmation Dialog ─── */}
+      <Dialog open={!!deleteDialog} onOpenChange={(o) => { if (!o) setDeleteDialog(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Folder</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-2">
+                {deleteDialog?.workspaceFunc ? (
+                  <>
+                    <p className="text-sm">
+                      This folder is configured as a{" "}
+                      <strong>
+                        {FOLDER_FUNCTION_ICONS[deleteDialog.workspaceFunc]}{" "}
+                        {FOLDER_FUNCTION_LABELS[deleteDialog.workspaceFunc]}
+                      </strong>{" "}
+                      folder in your workspace settings. Deleting it will also
+                      remove it from your workspace configuration.
+                    </p>
+                    {deleteDialog.workspaceFunc === "manuscript" &&
+                      useWorkspaceConfigStore.getState().workspaceDirs.filter(
+                        (d) => d.function === "manuscript",
+                      ).length === 1 && (
+                        <p className="text-sm text-amber-600 dark:text-amber-400">
+                          This is the only manuscript folder. Removing it will
+                          disable TeX workspace features (editor + PDF preview).
+                        </p>
+                      )}
+                  </>
+                ) : (
+                  <p className="text-sm">
+                    Are you sure you want to permanently delete this folder
+                    and all its contents?
+                  </p>
+                )}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <p className="text-sm text-muted-foreground">
+              <code className="text-destructive bg-destructive/10 px-1 rounded">
+                {deleteDialog?.folderPath}/
+              </code>{" "}
+              and all files inside will be permanently deleted. This action
+              cannot be undone.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialog(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteFolder}>
+              Delete Folder
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

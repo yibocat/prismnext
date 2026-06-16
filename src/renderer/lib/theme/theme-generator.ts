@@ -26,10 +26,10 @@ export function getDefaultThemeConfig(): ThemeConfig {
     baseIntensity: DEFAULT_INTENSITY,  // 25% default
     primaryColor: "blue",
     radius: 0.525,
-    fontSans: "geist-sans",
-    fontMono: "geist-mono",
+    fontSans: "system-ui",
+    fontMono: "system-mono",
     uiFontSize: "16px",
-    editorFontFamily: "fira-code",
+    editorFontFamily: "system-mono",
     editorFontSize: "13px",
     glassEffect: false,
     glassIntensity: 3 as GlassTier,

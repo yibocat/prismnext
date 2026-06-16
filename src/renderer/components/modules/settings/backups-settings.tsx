@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { HistoryIcon, RotateCcwIcon, FileTextIcon, CalendarIcon } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
+import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
+import { DEFAULT_MANUSCRIPT_DIR } from "@/types/workspace";
 import { clearPdfCache } from "@/stores/compile-store";
 import { toast } from "sonner";
 
@@ -42,7 +44,8 @@ function formatLabel(label: string): { date: string; from: string; to: string } 
 
 export function BackupsSettings() {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const manuscriptDir = useDocumentStore((s) => s.manuscriptDir);
+  const manuscriptConfig = useWorkspaceConfigStore((s) => s.manuscriptConfig);
+  const manuscriptDir = manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR;
   const [backups, setBackups] = useState<BackupEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);

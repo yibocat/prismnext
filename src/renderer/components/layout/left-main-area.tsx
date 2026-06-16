@@ -3,15 +3,18 @@ import { useCliEvents } from "@/hooks/use-cli-events";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
+import { DEFAULT_MANUSCRIPT_DIR } from "@/types/workspace";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import { useGitStore } from "@/stores/git-store";
+import { clearPdfCache, useCompileStore } from "@/stores/compile-store";
+import { useRightPanelStore } from "@/stores/right-panel-store";
 import { GitBranchIcon } from "lucide-react";
 import { getContextWindowCapacity } from "@/lib/agent-config";
 import { useAgentSettingsStore } from "@/stores/agent-settings-store";
 import {
   GeneralSettings,
   AppearanceSettings,
-  ProjectSettings,
   CompilerSettings,
   ExternalSettings,
   ShortcutsSettings,
@@ -19,6 +22,7 @@ import {
   BackupsSettings,
   AgentAppSettings,
   AgentProjectSettings,
+  WorkspaceSettings,
 } from "@/components/modules/settings";
 import { TemplateCenter } from "@/components/modules/templates/template-center";
 import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator } from "@/components/modules/chat";
@@ -86,6 +90,21 @@ export function LeftMainArea() {
     return unsub;
   }, []);
 
+  // When manuscript is removed from workspace config, clean up all
+  // TeXworkspace state: PDF cache, compile log, and open texworkspace tabs.
+  // The content area already shows the "No manuscript folder configured"
+  // placeholder; this ensures stale PDF data and editor state are cleared.
+  useEffect(() => {
+    const unsub = useWorkspaceConfigStore.subscribe((state, prev) => {
+      if (prev.manuscriptConfig && !state.manuscriptConfig) {
+        clearPdfCache();
+        useCompileStore.getState().clearCompileState();
+        useRightPanelStore.getState().closeTabsOfKind("texworkspace");
+      }
+    });
+    return unsub;
+  }, []);
+
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
   const contextTokens = useChatStore((s) => s.contextTokens);
@@ -133,15 +152,14 @@ export function LeftMainArea() {
           onBack={() => useLayoutStore.getState().setLeftSidebarView("sessions")}
           onUseTemplate={async (template) => {
             if (!projectRoot) return;
-            const docSt = useDocumentStore.getState();
             await window.electronAPI.templateApply({
               rootPath: projectRoot,
-              manuscriptDir: docSt.manuscriptDir,
+              manuscriptDir: useWorkspaceConfigStore.getState().manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR,
               files: template.files,
               templateId: template.id,
               templateCategory: template.category,
             });
-            docSt.refreshFiles();
+            useDocumentStore.getState().refreshFiles();
             useLayoutStore.getState().setLeftSidebarView("sessions");
           }}
         />
@@ -153,12 +171,12 @@ export function LeftMainArea() {
     const SettingsContent = {
       general: GeneralSettings,
       appearance: AppearanceSettings,
-      project: ProjectSettings,
       compiler: CompilerSettings,
       external: ExternalSettings,
       shortcuts: ShortcutsSettings,
       logs: LogViewer,
       backups: BackupsSettings,
+      workspace: WorkspaceSettings,
       "agent-app": AgentAppSettings,
       "agent-project": AgentProjectSettings,
     }[settingsCategory] || GeneralSettings;

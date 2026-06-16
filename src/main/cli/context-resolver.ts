@@ -6,11 +6,16 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ContextComponent, ResolvedContext } from "../agents/types";
 import { APP_SYSTEM_PROMPT, buildAugmentedPath } from "./app-shell";
+import { readWorkspaceDirs, buildWorkspaceSummary } from "../services/workspace-config";
 
 /**
  * Resolve the requested context components from the project directory.
  * Only components listed in `components` are populated; others are left
  * undefined to avoid unnecessary filesystem access.
+ *
+ * Workspace layout is a first-class context component ("workspaceLayout").
+ * Agents opt in via their contextComponents array; it is no longer
+ * unconditionally injected into appSystemPrompt.
  */
 export function resolveContext(
   cwd: string,
@@ -59,10 +64,27 @@ export function resolveContext(
         ctx.augmentedPath = buildAugmentedPath(cwd);
         break;
       }
+      case "workspaceLayout": {
+        ctx.workspaceLayout = buildWorkspaceSummaryForProject(cwd) ?? undefined;
+        break;
+      }
     }
   }
 
   return ctx;
+}
+
+/** Build the workspace layout summary for a project, if configured. */
+function buildWorkspaceSummaryForProject(cwd: string): string | null {
+  try {
+    const prismDir = join(cwd, ".prismnext");
+    if (!existsSync(prismDir)) return null;
+    const dirs = readWorkspaceDirs(prismDir);
+    if (dirs.length === 0) return null;
+    return buildWorkspaceSummary(dirs);
+  } catch {
+    return null;
+  }
 }
 
 /** Walk up from `cwd` to find the nearest CLAUDE.md file. */
@@ -102,6 +124,11 @@ function getAppSystemPrompt(): string {
     if (custom && typeof custom === "string" && custom.trim()) {
       return custom;
     }
-  } catch {}
+  } catch (err) {
+    console.warn(
+      "[context-resolver] Failed to load custom agent system prompt, using built-in default:",
+      (err as Error)?.message ?? err,
+    );
+  }
   return APP_SYSTEM_PROMPT;
 }

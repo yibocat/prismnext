@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { AUTO_COMPILE_DEBOUNCE } from "@/styles/constants";
 import { useDocumentStore } from "./document-store";
+import { useWorkspaceConfigStore } from "./workspace-config-store";
 import { resolveCompileTarget } from "@/lib/resolve-tex-root";
 
 // ─── PDF Bytes + Path Cache (outside Zustand state) ───
@@ -244,17 +245,38 @@ export const useCompileStore = create<CompileState>()(
           return;
         }
 
+        // Guard: no manuscript configured — nothing to auto-compile
+        const manuscriptConfig = useWorkspaceConfigStore.getState().manuscriptConfig;
+        if (!manuscriptConfig) return;
+
         _autoCompileTimer = setTimeout(async () => {
           const docState = useDocumentStore.getState();
           const { projectRoot, files, activeFileId } = docState;
-          if (!projectRoot || !activeFileId || files.length === 0) {
+          if (!projectRoot || files.length === 0) {
             return;
           }
 
-          const resolved = resolveCompileTarget(activeFileId, files, docState.getContent);
-          if (resolved) {
+          // Resolve compile target — prefer active file, fall back to manuscript config
+          let targetPath: string | null = null;
+
+          if (activeFileId) {
+            const resolved = resolveCompileTarget(activeFileId, files, docState.getContent);
+            if (resolved) targetPath = resolved.targetPath;
+          }
+
+          // Fallback: use the manuscriptConfig's mainTex as the preferred entry point
+          if (!targetPath) {
+            const mainTexRelPath = `${manuscriptConfig.dir}/${manuscriptConfig.mainTex}`;
+            const mainTexFile = files.find(f => f.relativePath === mainTexRelPath);
+            if (mainTexFile) {
+              const resolved = resolveCompileTarget(mainTexFile.id, files, docState.getContent);
+              if (resolved) targetPath = resolved.targetPath;
+            }
+          }
+
+          if (targetPath) {
             // compile() already calls saveAllFiles() internally
-            get().compile(projectRoot, resolved.targetPath);
+            get().compile(projectRoot, targetPath);
           }
         }, AUTO_COMPILE_DEBOUNCE);
       },
@@ -289,15 +311,32 @@ export async function compileCurrentDocument(): Promise<void> {
   const compileState = useCompileStore.getState();
 
   const { projectRoot, files, activeFileId } = docState;
+  if (!projectRoot || files.length === 0) return;
 
-  if (!projectRoot || !activeFileId || files.length === 0) {
-    return;
+  // Guard: no manuscript configured — nothing to compile
+  const manuscriptConfig = useWorkspaceConfigStore.getState().manuscriptConfig;
+  if (!manuscriptConfig) return;
+
+  // Resolve compile target — prefer active file, fall back to manuscript config
+  let targetPath: string | null = null;
+
+  if (activeFileId) {
+    const resolved = resolveCompileTarget(activeFileId, files, docState.getContent);
+    if (resolved) targetPath = resolved.targetPath;
   }
 
-  const resolved = resolveCompileTarget(activeFileId, files, docState.getContent);
+  // Fallback: use the manuscriptConfig's mainTex as the preferred entry point
+  if (!targetPath) {
+    const mainTexRelPath = `${manuscriptConfig.dir}/${manuscriptConfig.mainTex}`;
+    const mainTexFile = files.find(f => f.relativePath === mainTexRelPath);
+    if (mainTexFile) {
+      const resolved = resolveCompileTarget(mainTexFile.id, files, docState.getContent);
+      if (resolved) targetPath = resolved.targetPath;
+    }
+  }
 
-  if (resolved) {
-    await compileState.compile(projectRoot, resolved.targetPath);
+  if (targetPath) {
+    await compileState.compile(projectRoot, targetPath);
   }
 }
 

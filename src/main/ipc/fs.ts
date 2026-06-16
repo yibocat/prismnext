@@ -2,6 +2,8 @@ import { ipcMain, dialog, BrowserWindow } from "electron";
 import * as fs from "../services/filesystem";
 import { startWatching, stopWatching } from "../services/filesystem";
 import { createLogger } from "../services/logger";
+import type { WorkspaceFolder } from "../../renderer/types/workspace";
+import { writeWorkspaceDirs, createConfiguredFolders, validateWorkspaceDirs } from "../services/workspace-config";
 
 const log = createLogger("template-ipc");
 
@@ -123,7 +125,6 @@ export function registerFsHandlers(): void {
 
   // ─── Project creation ───
 
-  const DEFAULT_MANUSCRIPT_DIR = "manuscript";
   const DEFAULT_MAIN_TEX = String.raw`\documentclass{article}
 
 % ── Packages ──
@@ -202,40 +203,72 @@ export function registerFsHandlers(): void {
     }
   }
 
-  ipcMain.handle("project:create", async (_event, args: { rootPath: string }) => {
+  ipcMain.handle("project:create", async (_event, args: { rootPath: string; workspaceDirs?: WorkspaceFolder[] }) => {
     const { join } = require("node:path");
-    const { writeFileSync } = require("node:fs");
+    const { writeFileSync, existsSync, mkdirSync } = require("node:fs");
 
-    // Hidden .prismnext/ structure (always created)
+    // Guard against overwriting an existing project
     const prismDir = join(args.rootPath, ".prismnext");
+    if (existsSync(prismDir)) {
+      throw new Error(
+        `A Prism project already exists at "${args.rootPath}". ` +
+        `Choose a different directory or open the existing project.`
+      );
+    }
+
+    // Hidden .prismnext/ structure
     await fs.createDirectory(prismDir);
     await fs.createDirectory(join(prismDir, "sessions"));
     await fs.createDirectory(join(prismDir, "compile"));
 
-    // Initial project settings
-    writeFileSync(
-      join(prismDir, "settings.json"),
-      JSON.stringify(
-        {
-          version: 1,
-          compiler: "tectonic",
-          manuscript: { dir: DEFAULT_MANUSCRIPT_DIR, main: "main.tex" },
-          workspaceDirs: [],
-        },
-        null,
-        2,
-      ),
-    );
+    // Build workspace dirs — use provided or default
+    const workspaceDirs: WorkspaceFolder[] = args.workspaceDirs && args.workspaceDirs.length > 0
+      ? args.workspaceDirs
+      : [{ function: "manuscript", name: "manuscript", mainTex: "main.tex" }];
+
+    // Validate server-side — safety net against malformed client data
+    const validationErrors = validateWorkspaceDirs(workspaceDirs);
+    if (validationErrors.length > 0) {
+      throw new Error(
+        `Invalid workspace folder configuration:\n${validationErrors.map((e) => `- ${e}`).join("\n")}`,
+      );
+    }
+
+    // Write settings.json in ONE pass: set version + compiler, then write via workspace-config
+    // writeWorkspaceDirs does a read-modify-write, so we pre-populate the initial settings
+    // to avoid a second read-write cycle.
+    const settingsPath = join(prismDir, "settings.json");
+    const initialSettings = { version: 1, compiler: "tectonic" };
+    writeFileSync(settingsPath, JSON.stringify(initialSettings, null, 2));
+    writeWorkspaceDirs(prismDir, workspaceDirs);
+
     writeFileSync(join(prismDir, "state.json"), JSON.stringify({}, null, 2));
     writeFileSync(join(prismDir, ".gitignore"), "compile/\nstate.json\n");
 
     // Create agent-config templates
     await createAgentConfig(prismDir);
 
-    // Manuscript directory + main.tex template
-    const manuscriptPath = join(args.rootPath, DEFAULT_MANUSCRIPT_DIR);
-    await fs.createDirectory(manuscriptPath);
-    writeFileSync(join(manuscriptPath, "main.tex"), DEFAULT_MAIN_TEX);
+    // Create configured folders on disk + log any failures
+    const createResult = createConfiguredFolders(args.rootPath, workspaceDirs);
+    if (createResult.errors.length > 0) {
+      log.warn("project:create — some folders could not be created", {
+        rootPath: args.rootPath,
+        errors: createResult.errors,
+      });
+    }
+
+    // Write main.tex into the manuscript folder (if one exists)
+    const manuscriptEntry = workspaceDirs.find(d => d.function === "manuscript");
+    if (manuscriptEntry && "mainTex" in manuscriptEntry) {
+      const manuscriptPath = join(args.rootPath, manuscriptEntry.name);
+      const mainTexFullPath = join(manuscriptPath, manuscriptEntry.mainTex);
+      // Ensure the parent directory exists (handles mainTex with subdirectories like "tex/main.tex")
+      const mainTexDir = join(mainTexFullPath, "..");
+      if (!existsSync(mainTexDir)) {
+        mkdirSync(mainTexDir, { recursive: true });
+      }
+      writeFileSync(mainTexFullPath, DEFAULT_MAIN_TEX);
+    }
   });
 
   ipcMain.handle("project:check", async (_event, args: { rootPath: string }) => {

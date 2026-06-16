@@ -312,11 +312,11 @@ export function AppearanceSettings() {
               </div>
             </div>
 
-            {/* Editor Font */}
+            {/* Code Font */}
             <div className="flex items-center justify-between py-2.5 group">
               <div>
-                <p className={ROW_LABEL}>Editor Font</p>
-                <p className={ROW_DESC}>Code editor typeface and size.</p>
+                <p className={ROW_LABEL}>Code Font</p>
+                <p className={ROW_DESC}>Monospace font for editor, chat code blocks, and output.</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
@@ -324,6 +324,7 @@ export function AppearanceSettings() {
                   onClick={() =>
                     updateConfig({
                       editorFontFamily: defaults.editorFontFamily,
+                      fontMono: defaults.fontMono,
                       editorFontSize: defaults.editorFontSize,
                     })
                   }
@@ -334,7 +335,7 @@ export function AppearanceSettings() {
                 <div className="flex gap-2">
                   <Select
                     value={config.editorFontFamily}
-                    onValueChange={(v) => updateConfig({ editorFontFamily: v })}
+                    onValueChange={(v) => updateConfig({ editorFontFamily: v, fontMono: v })}
                   >
                     <SelectTrigger className={cn("w-36", TRIGGER)}>
                       <SelectValue />

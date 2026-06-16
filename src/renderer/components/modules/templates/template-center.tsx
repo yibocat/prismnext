@@ -7,6 +7,8 @@ import { DetailView } from "./template-detail";
 import { TemplateSwitchDialog } from "./template-switch-dialog";
 import { getCompatibilityLevel, mergeFile } from "@/lib/template-merge";
 import { useDocumentStore } from "@/stores/document-store";
+import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
+import { DEFAULT_MANUSCRIPT_DIR } from "@/types/workspace";
 import { useLayoutStore } from "@/stores/layout-store";
 import { toast } from "sonner";
 
@@ -61,7 +63,8 @@ export function TemplateCenter({ onUseTemplate, onBack }: TemplateCenterProps) {
   } | null>(null);
 
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const manuscriptDir = useDocumentStore((s) => s.manuscriptDir);
+  const manuscriptConfig = useWorkspaceConfigStore((s) => s.manuscriptConfig);
+  const manuscriptDir = manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR;
   const processingRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
 

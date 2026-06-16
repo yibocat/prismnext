@@ -1,5 +1,7 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useDocumentStore } from "@/stores/document-store";
+import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
+import { DEFAULT_MANUSCRIPT_DIR } from "@/types/workspace";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import {
@@ -52,6 +54,7 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getFileIconName } from "@/lib/file-icon-class";
 import { Icon } from "@iconify/react";
@@ -176,7 +179,8 @@ export function TexworkspaceSidebar() {
   const [accordionValue, setAccordionValue] = useState<string[]>([]);
 
   const files = useDocumentStore((s) => s.files);
-  const manuscriptDir = useDocumentStore((s) => s.manuscriptDir);
+  const manuscriptConfig = useWorkspaceConfigStore((s) => s.manuscriptConfig);
+  const manuscriptDir = manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR;
   const openedContents = useDocumentStore((s) => s.openedContents);
   const setTexworkspaceActiveFile = useRightPanelStore((s) => s.setTexworkspaceActiveFile);
   const requestJumpToLine = useDocumentStore((s) => s.requestJumpToLine);
@@ -191,26 +195,23 @@ export function TexworkspaceSidebar() {
   const searchResults = useProjectSearch(searchQuery);
   const isSearching = searchQuery !== "";
 
-  // Auto-open main .tex file
-  const autoOpened = useRef(false);
-  useEffect(() => {
-    const activeRt = tabs.find((t) => t.id === activeTabId);
-    if (!activeRt || activeRt.kind !== "texworkspace" || !activeRt.isInitial) return;
-    if (autoOpened.current) return;
-    autoOpened.current = true;
-    const firstTex = files.find((f) => f.name.endsWith(".tex"));
-    const resolved = resolveCompileTarget(firstTex?.id ?? "", files, (id) => openedContents.get(id)?.content ?? "");
-    if (resolved?.rootId) setTexworkspaceActiveFile(resolved.rootId);
-  }, [tabs, activeTabId, files, openedContents, setTexworkspaceActiveFile]);
+  // Auto-open is handled centrally by use-texworkspace.ts — the canonical
+  // hook that scopes to the configured manuscript directory and triggers
+  // auto-compile when enabled. No duplicate logic here.
 
   const getContent = useCallback((id: string) => openedContents.get(id)?.content ?? "", [openedContents]);
   const { toc, labels, citations, figureTables, todos, texFiles } = useLatexStructure(files, getContent);
 
   const texTree = useMemo(() => {
     const prefix = `${manuscriptDir}/`;
-    const allUnderManuscript = texFiles.every((f) => f.relativePath.startsWith(prefix));
-    if (!allUnderManuscript) return buildFileTree(texFiles, []);
-    return buildFileTree(texFiles.map((f) => ({ ...f, relativePath: f.relativePath.slice(prefix.length) })), []);
+    // Strictly show only files under the configured manuscript directory.
+    // If .tex files exist elsewhere (e.g., leftover from a previous config),
+    // they should not appear in the TeXworkspace file tree.
+    const underManuscript = texFiles.filter((f) => f.relativePath.startsWith(prefix));
+    return buildFileTree(
+      underManuscript.map((f) => ({ ...f, relativePath: f.relativePath.slice(prefix.length) })),
+      [],
+    );
   }, [texFiles, manuscriptDir]);
 
   // ─── Navigation ───
@@ -275,7 +276,34 @@ export function TexworkspaceSidebar() {
         </button>
       </SidebarHeader>
 
-      <SidebarContent className="overflow-auto px-1.5 py-1">
+      {!manuscriptConfig ? (
+        <SidebarContent className="overflow-auto px-1.5 py-1">
+          <div className="flex flex-col items-center justify-center h-full gap-3 px-4 text-center">
+            <FileTextIcon className="size-8 text-muted-foreground/30" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">
+                No manuscript folder configured
+              </p>
+              <p className="text-xs text-muted-foreground/60 max-w-[220px]">
+                Configure a manuscript folder in Settings → Workspace to
+                enable TeX editing, outline navigation, and compilation.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => {
+                useLayoutStore.getState().setLeftSidebarView("settings");
+                useLayoutStore.getState().setSettingsCategory("workspace");
+              }}
+            >
+              Open Workspace Settings
+            </Button>
+          </div>
+        </SidebarContent>
+      ) : (
+        <SidebarContent className="overflow-auto px-1.5 py-1">
         {/* ── Search Results (when searching) ── */}
         {isSearching && (
           <div>
@@ -406,9 +434,10 @@ export function TexworkspaceSidebar() {
           </div>
         )}
       </SidebarContent>
+      )}
 
-      {/* Footer: word count (Outline tab, not searching) */}
-      {!isSearching && activeTab === "outline" && (
+      {/* Footer: word count (Outline tab, not searching) — only when manuscript is configured */}
+      {manuscriptConfig && !isSearching && activeTab === "outline" && (
         <SidebarFooter className="flex-row h-6 shrink-0 items-center justify-end px-3 py-0 gap-0 pb-1">
           <span className="text-[length:var(--font-hint)] text-muted-foreground/60 tabular-nums">{wordCount.toLocaleString()} words</span>
         </SidebarFooter>

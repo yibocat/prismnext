@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useCompileStore, clearPdfCache } from "@/stores/compile-store";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
+import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
+import { DEFAULT_MANUSCRIPT_DIR } from "@/types/workspace";
 import { useLayoutStore } from "@/stores/layout-store";
 import { resolveCompileTarget } from "@/lib/resolve-tex-root";
 import {
@@ -64,7 +66,8 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
   const requestInsertText = useDocumentStore((s) => s.requestInsertText);
 
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const manuscriptDir = useDocumentStore((s) => s.manuscriptDir);
+  const manuscriptConfig = useWorkspaceConfigStore((s) => s.manuscriptConfig);
+  const manuscriptDir = manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR;
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [backups, setBackups] = useState<{ label: string; timestamp: string; files: string[] }[]>([]);
   const [restoring, setRestoring] = useState<string | null>(null);

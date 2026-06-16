@@ -81,7 +81,7 @@ export const claudeAgent: AgentIntegration = {
     return { args, env };
   },
 
-  contextComponents: ["skills", "mcp", "rules", "venv", "path"],
+  contextComponents: ["skills", "mcp", "rules", "venv", "path", "workspaceLayout"],
 
   assembleContext(ctx) {
     const args: string[] = [];
@@ -89,6 +89,10 @@ export const claudeAgent: AgentIntegration = {
 
     if (ctx.rules) {
       systemPrompt += "\n\n" + ctx.rules;
+    }
+
+    if (ctx.workspaceLayout) {
+      systemPrompt += "\n\n## Project Workspace Layout\n\n" + ctx.workspaceLayout;
     }
 
     if (ctx.mcpConfig) {

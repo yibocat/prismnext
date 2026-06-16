@@ -5,7 +5,7 @@ import type { ContextCalculator } from "./context-calculator";
 // ─── Agent Context Assembly ───
 
 /** Categories of project-level context that an agent can request. */
-export type ContextComponent = "skills" | "mcp" | "rules" | "plugins" | "venv" | "path";
+export type ContextComponent = "skills" | "mcp" | "rules" | "plugins" | "venv" | "path" | "workspaceLayout";
 
 /** Project-level context resolved by CliManager before spawning the agent.
  *  Only components listed in the agent's `contextComponents` array are populated;
@@ -25,6 +25,8 @@ export interface ResolvedContext {
   venvPath?: string;
   /** Augmented PATH string (nvm + pnpm + venv + cargo + brew). */
   augmentedPath?: string;
+  /** Human-readable summary of the project's workspace folder layout. */
+  workspaceLayout?: string;
 }
 
 /** Result of agent-specific context assembly. */

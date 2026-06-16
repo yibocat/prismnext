@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { WorkspaceFolder } from "../renderer/types/workspace";
 
 // Expose filesystem and dialog APIs to renderer
 contextBridge.exposeInMainWorld("electronAPI", {
@@ -62,7 +63,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Dialog operations
   dialogOpenFolder: () => ipcRenderer.invoke("dialog:openFolder"),
   fsExists: (absPath: string) => ipcRenderer.invoke("fs:exists", { absPath }),
-  projectCreate: (rootPath: string) => ipcRenderer.invoke("project:create", { rootPath }),
+  projectCreate: (rootPath: string, workspaceDirs?: WorkspaceFolder[]) =>
+    ipcRenderer.invoke("project:create", { rootPath, workspaceDirs }),
   projectCheck: (rootPath: string) => ipcRenderer.invoke("project:check", { rootPath }),
 
   // Window operations
@@ -128,6 +130,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("settings:setAgentProjectConfig", { projectPath, config }),
   settingsGetDefaultAgentPrompt: () =>
     ipcRenderer.invoke("settings:getDefaultAgentPrompt"),
+
+  // Workspace operations
+  workspaceGetConfig: (projectRoot: string) =>
+    ipcRenderer.invoke("workspace:getConfig", { projectRoot }),
+  workspaceUpdateConfig: (projectRoot: string, dirs: WorkspaceFolder[]) =>
+    ipcRenderer.invoke("workspace:updateConfig", { projectRoot, dirs }),
+  workspaceCreateFolders: (projectRoot: string, dirs?: WorkspaceFolder[]) =>
+    ipcRenderer.invoke("workspace:createFolders", { projectRoot, dirs }),
+  workspaceEnsureMainTex: (projectRoot: string) =>
+    ipcRenderer.invoke("workspace:ensureMainTex", { projectRoot }) as Promise<{ created: boolean; relativePath?: string }>,
 
   // Browser operations
   browserInit: (projectRoot: string) => ipcRenderer.invoke("browser:init", { projectRoot }),

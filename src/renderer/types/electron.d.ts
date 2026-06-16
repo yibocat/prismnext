@@ -217,7 +217,7 @@ export interface ElectronAPI {
     path: string | null;
   }>;
   fsExists: (absPath: string) => Promise<boolean>;
-  projectCreate: (rootPath: string) => Promise<void>;
+  projectCreate: (rootPath: string, workspaceDirs?: import("./workspace").WorkspaceFolder[]) => Promise<void>;
   projectCheck: (rootPath: string) => Promise<{ missing: string[] }>;
 
   // Platform
@@ -296,14 +296,27 @@ export interface ElectronAPI {
     theme: string;
     sidebarCollapsed: boolean;
     rightPanelCollapsed: boolean;
-    lastProjectPath?: string;
+    lastProjectPath?: string | null;
+    lastActiveFileId?: string | null;
     zoteroApiKey?: string;
     zoteroUserId?: string;
+    pdfDarkMode?: "off" | "on" | "follow";
+    autoCreateMainTex?: boolean;
+    defaultDocClass?: "article" | "report" | "book";
+    agentSystemPrompt?: string;
+    editorSyntaxTheme?: string;
+    defaultWorkspaceDirs?: import("./workspace").WorkspaceFolder[];
   }>;
   settingsSet: (patch: Record<string, unknown>) => Promise<void>;
   settingsGetAgentProjectConfig: (projectPath: string) => Promise<{ contextComponents: Record<string, boolean> }>;
   settingsSetAgentProjectConfig: (projectPath: string, config: { contextComponents: Record<string, boolean> }) => Promise<void>;
   settingsGetDefaultAgentPrompt: () => Promise<string>;
+
+  // Workspace operations
+  workspaceGetConfig: (projectRoot: string) => Promise<import("./workspace").WorkspaceFolder[]>;
+  workspaceUpdateConfig: (projectRoot: string, dirs: import("./workspace").WorkspaceFolder[]) => Promise<{ success: boolean; errors?: string[] }>;
+  workspaceCreateFolders: (projectRoot: string, dirs?: import("./workspace").WorkspaceFolder[]) => Promise<{ created: string[]; errors: { folder: string; error: string }[] }>;
+  workspaceEnsureMainTex: (projectRoot: string) => Promise<{ created: boolean; relativePath?: string }>;
 
   // Browser operations
   browserInit: (projectRoot: string) => Promise<BrowserStateData>;

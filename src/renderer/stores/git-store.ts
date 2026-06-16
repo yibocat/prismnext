@@ -238,15 +238,38 @@ export const useGitStore = create<GitState>()((set, get) => ({
   checkRepo: async (projectRoot: string) => {
     try {
       const isRepo = await window.electronAPI.gitIsRepo(projectRoot);
-      set({ isGitRepo: isRepo, checkingRepo: false });
       if (isRepo) {
+        set({ isGitRepo: true, checkingRepo: false });
         // Must be sequential: refreshStatus sets branch, refreshBranches refines it.
         // Parallel would cause a race condition on the `branch` field.
         await get().refreshStatus(projectRoot);
         await get().refreshBranches(projectRoot);
+      } else {
+        // Clear stale git data from previous project to prevent cross-project pollution
+        set({
+          isGitRepo: false,
+          checkingRepo: false,
+          files: [],
+          branch: "",
+          branches: [],
+          commits: [],
+          selectedFilePaths: [],
+          selectedCommitHash: null,
+          error: null,
+        });
       }
     } catch {
-      set({ isGitRepo: false, checkingRepo: false });
+      set({
+        isGitRepo: false,
+        checkingRepo: false,
+        files: [],
+        branch: "",
+        branches: [],
+        commits: [],
+        selectedFilePaths: [],
+        selectedCommitHash: null,
+        error: null,
+      });
     }
   },
 
