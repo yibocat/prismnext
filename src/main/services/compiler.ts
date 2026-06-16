@@ -268,14 +268,19 @@ function runWithTimeout(
 
 /**
  * Compile with Tectonic. Compiles in `cwd` and outputs artifacts to `outDir`.
+ *
+ * Accepts the resolved tectonic binary path so that compilation works even
+ * when the Electron process doesn't have TeX bin directories on its PATH
+ * (common on macOS when launched from Finder/Dock).
  */
 async function compileWithTectonic(
   cwd: string,
   mainFile: string,
   outDir: string,
+  tectonicPath: string,
 ): Promise<{ success: boolean; logContent: string }> {
   const args = ["--keep-logs", "--synctex", "--outdir", outDir, mainFile];
-  await runWithTimeout("tectonic", args, cwd, process.env, COMPILE_TIMEOUT_MS);
+  const { exitCode } = await runWithTimeout(tectonicPath, args, cwd, process.env, COMPILE_TIMEOUT_MS);
 
   const mainStem = basename(mainFile, extname(mainFile));
   const logPath = join(outDir, `${mainStem}.log`);
@@ -284,6 +289,11 @@ async function compileWithTectonic(
     logContent = await readFile(logPath, "utf-8");
   } catch {
     logContent = "";
+  }
+
+  // If Tectonic crashed / timed out / was killed, surface it in the log
+  if (exitCode !== 0 && !logContent) {
+    logContent = `Tectonic exited with code ${exitCode}. See stderr output above (if any).`;
   }
 
   const pdfPath = join(outDir, `${mainStem}.pdf`);
@@ -447,9 +457,10 @@ export async function compileLatex(
     if (useTexlive) {
       result = await compileWithTexlive(projectDir, mainFile, engine, content, buildDir);
     } else {
-      const tectonicAvailable = await findTexliveBinary("tectonic");
-      if (tectonicAvailable) {
-        result = await compileWithTectonic(projectDir, mainFile, buildDir);
+      const tectonicPath = await findTexliveBinary("tectonic");
+      if (tectonicPath) {
+        console.log("[compiler] Using Tectonic:", tectonicPath);
+        result = await compileWithTectonic(projectDir, mainFile, buildDir, tectonicPath);
       } else {
         console.log("[compiler] Tectonic not found, falling back to TeXLive");
         result = await compileWithTexlive(projectDir, mainFile, engine, content, buildDir);

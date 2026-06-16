@@ -26,6 +26,7 @@ export const editorChromeTheme = EditorView.theme({
   },
   "&.cm-focused .cm-selectionBackground, & .cm-selectionBackground, & ::selection": {
     backgroundColor: "var(--editor-selection) !important",
+    color: "var(--editor-fg) !important",
   },
   ".cm-activeLine": {
     backgroundColor: "var(--editor-active-line)",

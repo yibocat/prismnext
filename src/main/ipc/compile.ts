@@ -9,14 +9,17 @@ export function registerCompileHandlers(): void {
       _event,
       args: { projectDir: string; mainFile: string; useTexlive?: boolean },
     ) => {
+      console.log(`[compile:execute] projectDir=${args.projectDir} mainFile=${args.mainFile} useTexlive=${args.useTexlive ?? false}`);
       const result = await compileLatex(
         args.projectDir,
         args.mainFile,
         args.useTexlive,
       );
       if (result.success && result.pdfBytes) {
+        console.log(`[compile:execute] SUCCESS — ${result.pdfBytes.length} bytes`);
         return { pdfBytes: result.pdfBytes, buildDir: result.buildDir, stdout: result.logContent };
       } else {
+        console.log(`[compile:execute] FAILED — error: ${result.error || "unknown"}`);
         return { error: result.error || "Compilation failed", stdout: result.logContent };
       }
     },

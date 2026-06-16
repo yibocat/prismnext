@@ -36,6 +36,16 @@ export function useTexworkspace() {
 
   // ─── Auto-open main .tex file on initial entry ───
   const autoOpened = useRef(false);
+
+  // Reset auto-open flag when the texworkspace tab is gone (mode deactivated).
+  // RightMainArea never unmounts, so the ref persists across deactivate→activate
+  // cycles. Without this reset, re-entering texworkspace shows "No open files".
+  useEffect(() => {
+    if (!isActive) {
+      autoOpened.current = false;
+    }
+  }, [isActive]);
+
   useEffect(() => {
     if (!activeTab || activeTab.kind !== "texworkspace" || !activeTab.isInitial) return;
     if (autoOpened.current) return;
@@ -43,8 +53,6 @@ export function useTexworkspace() {
     // Guard: don't auto-open if no manuscript is configured
     const manuscriptConfig = useWorkspaceConfigStore.getState().manuscriptConfig;
     if (!manuscriptConfig) return;
-
-    autoOpened.current = true;
 
     // Only consider .tex files under the configured manuscript directory
     const prefix = `${manuscriptConfig.dir}/`;
@@ -55,6 +63,9 @@ export function useTexworkspace() {
       (id) => openedContents.get(id)?.content ?? "",
     );
     if (resolved?.rootId) {
+      // Mark as done ONLY after successfully finding a file to open.
+      // If files aren't loaded yet, we'll retry when they arrive.
+      autoOpened.current = true;
       setTexworkspaceActiveFile(resolved.rootId);
       // Auto-compile the main file when entering texworkspace
       if (useCompileStore.getState().autoCompile) {

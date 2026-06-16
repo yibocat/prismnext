@@ -96,6 +96,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("compile:execute", { projectDir, mainFile, useTexlive }),
   compileSynctex: (projectDir: string, page: number, x: number, y: number) =>
     ipcRenderer.invoke("compile:synctex", { projectDir, page, x, y }),
+  compileSynctexForward: (projectDir: string, file: string, line: number) =>
+    ipcRenderer.invoke("compile:synctexForward", { projectDir, file, line }),
   compileDetectTexlive: () => ipcRenderer.invoke("compile:detectTexlive"),
 
   // CLI agent operations

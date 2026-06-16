@@ -76,6 +76,14 @@ function generateEditorSyntaxVars(
   const editorActiveLine = neutralVars["--accent"];
   const primaryColor = mode === "light" ? primary.primaryLight : primary.primaryDark;
 
+  // Build the selection background by injecting alpha into the oklch color.
+  // oklch values look like "oklch(0.55 0.18 250)" and need the form
+  // "oklch(L C H / alpha)" for proper transparency.
+  // Dark mode gets a slightly higher alpha so the selection reads against
+  // dark backgrounds.
+  const selAlpha = mode === "dark" ? 0.35 : 0.28;
+  const selColor = primaryColor.replace(")", ` / ${selAlpha})`);
+
   // In dark mode, syntax colors should be brighter (higher lightness).
   // In light mode, they should be darker (lower lightness).
   const L = mode === "dark" ? 0.72 : 0.42;
@@ -89,7 +97,7 @@ function generateEditorSyntaxVars(
   --editor-fg: ${editorFg};
   --editor-gutter-bg: ${editorGutterBg};
   --editor-gutter-fg: ${editorGutterFg};
-  --editor-selection: ${primaryColor}26;
+  --editor-selection: ${selColor};
   --editor-active-line: ${editorActiveLine};
   --editor-cursor: ${primaryColor};
 

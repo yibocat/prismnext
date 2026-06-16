@@ -112,6 +112,7 @@ export const useCompileStore = create<CompileState>()(
         const useTexlive = state.compilerBackend === "texlive";
 
         try {
+          console.log(`[compile-store] compile: projectDir=${projectDir} mainFile=${mainFile} useTexlive=${useTexlive}`);
           const result = await window.electronAPI.compileExecute(
             projectDir,
             mainFile,
@@ -247,7 +248,10 @@ export const useCompileStore = create<CompileState>()(
 
         // Guard: no manuscript configured — nothing to auto-compile
         const manuscriptConfig = useWorkspaceConfigStore.getState().manuscriptConfig;
-        if (!manuscriptConfig) return;
+        if (!manuscriptConfig) {
+          console.warn("[compile-store] scheduleAutoCompile: no manuscript configured — skipping auto-compile.");
+          return;
+        }
 
         _autoCompileTimer = setTimeout(async () => {
           const docState = useDocumentStore.getState();
@@ -315,7 +319,10 @@ export async function compileCurrentDocument(): Promise<void> {
 
   // Guard: no manuscript configured — nothing to compile
   const manuscriptConfig = useWorkspaceConfigStore.getState().manuscriptConfig;
-  if (!manuscriptConfig) return;
+  if (!manuscriptConfig) {
+    console.warn("[compile-store] compileCurrentDocument: no manuscript configured — skipping compilation. Configure a manuscript folder in Workspace Settings.");
+    return;
+  }
 
   // Resolve compile target — prefer active file, fall back to manuscript config
   let targetPath: string | null = null;

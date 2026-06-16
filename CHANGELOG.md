@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.19 — 2026-06-16
+
+### Compiler
+
+- Tectonic backend now uses resolved binary path instead of bare command name — fixes silent spawn failure on macOS when launched from Finder/Dock
+- `compileWithTectonic` now checks exit code and surfaces crash/timeout info in compile log
+- Added diagnostic logging across the full compile pipeline (IPC handler, compiler service, compile store)
+
+### Editor
+
+- Fixed selection highlight completely invisible: `--editor-selection` CSS variable was generating invalid oklch syntax (`oklch(…)26` instead of `oklch(… / 0.28)`)
+- Selection background now uses proper oklch alpha (28% light / 35% dark) with preserved syntax highlighting colors
+
+### TeXworkspace
+
+- Fixed re-entry showing "No open files" after closing and reopening texworkspace mode — `autoOpened` ref now resets on mode deactivation
+- Auto-open file logic no longer marks itself done before confirming a `.tex` file was actually found
+- Compile toolbar now shows toast errors when compilation is blocked (no file open, unresolved compile target)
+- Missing `compileSynctexForward` IPC bridge added — forward SyncTeX search (Cmd+Shift+F) no longer throws TypeError
+
+### Workspace
+
+- Silent compile guards in `compileCurrentDocument` and `scheduleAutoCompile` now emit console warnings when blocked by missing manuscript config
+
 ## 0.3.18 — 2026-06-16
 
 ### Functional Workspace Folders

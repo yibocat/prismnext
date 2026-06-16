@@ -81,9 +81,22 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
 
   const handleCompile = async () => {
     const { projectRoot, files, getContent } = useDocumentStore.getState();
-    if (!projectRoot || !compileFile) return;
+    if (!projectRoot) {
+      console.warn("[texworkspace-toolbar] Compile blocked: no project root");
+      return;
+    }
+    if (!compileFile) {
+      console.warn("[texworkspace-toolbar] Compile blocked: no file open in texworkspace tab");
+      toast.error("No file open to compile. Open a .tex file first.");
+      return;
+    }
     const resolved = resolveCompileTarget(compileFile, files, getContent);
-    if (resolved) await compile(projectRoot, resolved.targetPath);
+    if (resolved) {
+      await compile(projectRoot, resolved.targetPath);
+    } else {
+      console.warn("[texworkspace-toolbar] Compile blocked: could not resolve compile target from file", compileFile);
+      toast.error("Could not determine which file to compile. Make sure your document has a \\documentclass declaration.");
+    }
   };
 
   const isSearching = searchQuery !== "";
