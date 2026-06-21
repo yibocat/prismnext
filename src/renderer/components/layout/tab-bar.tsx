@@ -153,7 +153,7 @@ export const TabBar = memo(function TabBar({ tabs, activeTabId, onSelect, onClos
                 className={cn(
                   "group flex w-[120px] shrink-0 items-center rounded px-2 py-1",
                   "text-[length:var(--font-toolbar-tab)] cursor-default select-none transition-colors",
-                  "border-r border-border/30 last:border-r-0",
+                  "border-r border-border/50 last:border-r-0",
                   tab.id === activeTabId
                     ? "bg-muted text-foreground"
                     : "bg-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground",

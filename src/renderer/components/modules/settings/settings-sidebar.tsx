@@ -28,32 +28,30 @@ import {
   MoonIcon,
   MonitorIcon,
   Bot,
+  BookOpenIcon,
+  PuzzleIcon,
+  PlugIcon,
+  SlashIcon,
 } from "lucide-react";
 
-const SECTIONS = [
-  {
-    label: "App",
-    items: [
-      { id: "general", label: "General", icon: Settings2Icon },
-      { id: "appearance", label: "Appearance", icon: PaletteIcon },
-      { id: "agent-app", label: "Agent", icon: Bot },
-      { id: "workspace", label: "Workspace", icon: LayoutGridIcon },
-      { id: "shortcuts", label: "Shortcuts", icon: KeyboardIcon },
-    ],
-  },
-  {
-    label: "Project",
-    items: [
-      { id: "compiler", label: "Compiler", icon: WrenchIcon },
-      { id: "external", label: "AI & APIs", icon: GlobeIcon },
-      { id: "agent-project", label: "Agent", icon: Bot },
-      { id: "backups", label: "Backups", icon: HistoryIcon },
-      { id: "logs", label: "Logs", icon: FileTextIcon },
-    ],
-  },
+const SECTIONS: Array<{ id: string; label: string; icon: typeof Settings2Icon; groupEnd?: boolean }> = [
+  { id: "general", label: "General", icon: Settings2Icon },
+  { id: "appearance", label: "Appearance", icon: PaletteIcon },
+  { id: "shortcuts", label: "Shortcuts", icon: KeyboardIcon },
+  { id: "models", label: "Models", icon: GlobeIcon, groupEnd: true },
+  { id: "agent", label: "Agent", icon: Bot },
+  { id: "prompts-rules", label: "Prompts & Rules", icon: FileTextIcon },
+  { id: "commands", label: "Commands", icon: SlashIcon },
+  { id: "tools-mcp", label: "MCP", icon: PlugIcon },
+  { id: "skills", label: "Skills", icon: PuzzleIcon, groupEnd: true },
+  { id: "compiler", label: "Compiler", icon: WrenchIcon },
+  { id: "workspace", label: "Workspace", icon: LayoutGridIcon },
+  { id: "zotero", label: "Zotero", icon: BookOpenIcon },
+  { id: "backups", label: "Backups", icon: HistoryIcon },
+  { id: "logs", label: "Logs", icon: FileTextIcon },
 ] as const;
 
-export type SettingsCategory = "general" | "appearance" | "shortcuts" | "workspace" | "compiler" | "external" | "logs" | "backups" | "agent-app" | "agent-project";
+export type SettingsCategory = (typeof SECTIONS)[number]["id"];
 
 interface SettingsSidebarProps {
   activeCategory: SettingsCategory;
@@ -79,47 +77,46 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
   const sidebarContent = (
-    <SidebarProvider
-      defaultOpen
-      className="contents"
-    >
+    <SidebarProvider defaultOpen className="contents">
       <Sidebar collapsible="none" className="relative shrink-0 border-r-0 !w-full" data-surface="sidebar">
         <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center px-2 select-none">
           {!sidebarFullyCollapsed && (
             <SidebarControls leftSidebarRef={leftSidebarRef!} showMacSpacer={showMacSpacer} showNewAgent={false} />
           )}
         </div>
-        {/* ── Fixed: project switcher ── */}
-        <div className="shrink-0 px-2 flex flex-col gap-1 mb-1.5">
-          <div>
-            <ProjectSwitcher className="flex w-full items-center gap-2 rounded-md border border-border px-2 py-1.5 text-[length:var(--font-session-item)] font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors" />
+
+        {/* Project switcher — presence depends on open project, not a separate section */}
+        {projectRoot && (
+          <div className="shrink-0 px-2 flex flex-col gap-1 mb-1.5">
+            <div>
+              <ProjectSwitcher className="flex w-full items-center gap-2 rounded-md border border-border px-2 py-1.5 text-[length:var(--font-session-item)] font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors" />
+            </div>
+          </div>
+        )}
+
+        {/* Flat settings list */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto px-2 pb-1 pt-1">
+          <div className="flex flex-col gap-1">
+            {SECTIONS.map((cat, i, arr) => (
+              <button
+                key={cat.id}
+                type="button"
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] transition-colors",
+                  cat.groupEnd && i < arr.length - 1 && "mb-3",
+                  activeCategory === cat.id
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                    : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                )}
+                onClick={() => onSelectCategory(cat.id)}
+              >
+                <cat.icon className="size-3.5 shrink-0" />
+                <span>{cat.label}</span>
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* ── Scrollable settings categories ── */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-auto px-2 pb-1">
-          {SECTIONS.filter((s) => s.label !== "Project" || projectRoot).map((section, si, arr) => (
-            <div key={section.label}>
-              <p className="pt-2 pb-1 text-[length:var(--font-hint)] font-medium uppercase tracking-wider text-muted-foreground/50">
-                {section.label}
-              </p>
-              <div className="flex flex-col gap-1">
-              {section.items.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-                  onClick={() => onSelectCategory(cat.id as SettingsCategory)}
-                >
-                  <cat.icon className="size-3.5 shrink-0" />
-                  <span>{cat.label}</span>
-                </button>
-              ))}
-              </div>
-              {si < arr.length - 1 && <div className="h-2" />}
-            </div>
-          ))}
-        </div>
         <SidebarFooter className="px-2 pb-2">
           <div className="flex items-center gap-0.5">
             <button

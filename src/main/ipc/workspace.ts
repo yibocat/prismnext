@@ -10,6 +10,7 @@ import {
   createConfiguredFolders,
 } from "../services/workspace-config";
 import type { WorkspaceFolder } from "../../renderer/types/workspace";
+import { promptManager } from "../prompts";
 
 export function registerWorkspaceHandlers(): void {
   ipcMain.handle(
@@ -36,6 +37,9 @@ export function registerWorkspaceHandlers(): void {
       }
       const prismDir = path.join(args.projectRoot, ".prismnext");
       writeWorkspaceDirs(prismDir, args.dirs);
+      // Workspace folder structure changed — invalidate prompt cache
+      // so workspace-folders module reflects the new layout.
+      promptManager.invalidate();
       return { success: true };
     },
   );

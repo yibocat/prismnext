@@ -21,6 +21,8 @@ import { useTheme } from "next-themes";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useChangesStore } from "@/stores/changes-store";
+import { useChatStore } from "@/stores/chat-store";
+import { usePermissionStore } from "@/stores/permission-store";
 import { createLogger } from "@/services/logger";
 import { getLanguageLoader } from "@/lib/language-mappings";
 import { ChangesBar } from "./changes-bar";
@@ -58,6 +60,16 @@ export function CodeEditor() {
     return changes.find((c) => c.filePath === fileId) ?? null;
   }, [changes, fileId]);
 
+  const activeTabId = useChatStore((s) => s.activeTabId);
+  const permissions = usePermissionStore((s) => s.permissions);
+  const changesBarMode = useMemo(() => {
+    if (!activeChange) return "review" as const;
+    const hasPermission = permissions.some(
+      (p) => p.tabId === activeTabId && p.toolCallId === activeChange.id,
+    );
+    return hasPermission ? ("permission" as const) : ("review" as const);
+  }, [permissions, activeTabId, activeChange]);
+
   const totalChanges = changes.length;
   const changeIndex = useMemo(() => {
     if (!activeChange) return 0;
@@ -77,7 +89,17 @@ export function CodeEditor() {
 
   const handleAcceptCurrent = useCallback(async () => {
     if (!activeChange) return;
-    await useChangesStore.getState().acceptChange(activeChange.id);
+    const tabId = useChatStore.getState().activeTabId;
+    const permissionStore = usePermissionStore.getState();
+    const permission = permissionStore.getPermissionForTool(tabId, activeChange.id);
+    if (permission) {
+      await window.electronAPI.chatAnswerPermission(permission.id, true);
+      permissionStore.markToolResolved(tabId, activeChange.id);
+      permissionStore.clearPermission(permission.id);
+      useChangesStore.getState().removeChange(activeChange.id);
+    } else {
+      await useChangesStore.getState().acceptChange(activeChange.id);
+    }
     deactivateMerge();
   }, [activeChange, deactivateMerge]);
 
@@ -87,6 +109,14 @@ export function CodeEditor() {
     const oldContent = activeChange.oldContent;
     if (docId) {
       useDocumentStore.getState().setContent(docId, oldContent);
+    }
+    const tabId = useChatStore.getState().activeTabId;
+    const permissionStore = usePermissionStore.getState();
+    const permission = permissionStore.getPermissionForTool(tabId, activeChange.id);
+    if (permission) {
+      await window.electronAPI.chatAnswerPermission(permission.id, false);
+      permissionStore.markToolResolved(tabId, activeChange.id);
+      permissionStore.clearPermission(permission.id);
     }
     await useChangesStore.getState().rejectChange(activeChange.id);
     const view = viewRef.current;
@@ -161,7 +191,17 @@ export function CodeEditor() {
               if (!isMergeActiveRef.current) return false;
               const ch = useChangesStore.getState().getChangeForFile(currentFileId ?? "");
               if (!ch) return false;
-              useChangesStore.getState().acceptChange(ch.id).then(() => {
+              const tabId = useChatStore.getState().activeTabId;
+              const permissionStore = usePermissionStore.getState();
+              const permission = permissionStore.getPermissionForTool(tabId, ch.id);
+              const accept = permission
+                ? window.electronAPI.chatAnswerPermission(permission.id, true).then(() => {
+                    permissionStore.markToolResolved(tabId, ch.id);
+                    permissionStore.clearPermission(permission.id);
+                    useChangesStore.getState().removeChange(ch.id);
+                  })
+                : useChangesStore.getState().acceptChange(ch.id);
+              accept.then(() => {
                 const view = viewRef.current;
                 if (view) {
                   isMergeActiveRef.current = false;
@@ -181,7 +221,17 @@ export function CodeEditor() {
               if (docId && ch) {
                 useDocumentStore.getState().setContent(docId, ch.oldContent);
               }
-              useChangesStore.getState().rejectChange(ch.id).then(() => {
+              const tabId = useChatStore.getState().activeTabId;
+              const permissionStore = usePermissionStore.getState();
+              const permission = permissionStore.getPermissionForTool(tabId, ch.id);
+              const reject = (permission
+                ? window.electronAPI.chatAnswerPermission(permission.id, false).then(() => {
+                    permissionStore.markToolResolved(tabId, ch.id);
+                    permissionStore.clearPermission(permission.id);
+                  })
+                : Promise.resolve()
+              ).then(() => useChangesStore.getState().rejectChange(ch.id));
+              reject.then(() => {
                 const view = viewRef.current;
                 if (view) {
                   isMergeActiveRef.current = false;
@@ -227,9 +277,31 @@ export function CodeEditor() {
                 setTimeout(() => {
                   deactivateMerge();
                   if (finalContent === ch.newContent) {
-                    useChangesStore.getState().acceptChange(ch.id);
+                    const tabId = useChatStore.getState().activeTabId;
+                    const permissionStore = usePermissionStore.getState();
+                    const permission = permissionStore.getPermissionForTool(tabId, ch.id);
+                    if (permission) {
+                      window.electronAPI.chatAnswerPermission(permission.id, true).then(() => {
+                        permissionStore.markToolResolved(tabId, ch.id);
+                        permissionStore.clearPermission(permission.id);
+                        useChangesStore.getState().removeChange(ch.id);
+                      });
+                    } else {
+                      useChangesStore.getState().acceptChange(ch.id);
+                    }
                   } else if (finalContent === ch.oldContent) {
-                    useChangesStore.getState().rejectChange(ch.id);
+                    const tabId = useChatStore.getState().activeTabId;
+                    const permissionStore = usePermissionStore.getState();
+                    const permission = permissionStore.getPermissionForTool(tabId, ch.id);
+                    if (permission) {
+                      window.electronAPI.chatAnswerPermission(permission.id, false).then(() => {
+                        permissionStore.markToolResolved(tabId, ch.id);
+                        permissionStore.clearPermission(permission.id);
+                        useChangesStore.getState().rejectChange(ch.id);
+                      });
+                    } else {
+                      useChangesStore.getState().rejectChange(ch.id);
+                    }
                   }
                 }, 0);
               }
@@ -420,6 +492,7 @@ export function CodeEditor() {
           change={activeChange}
           changeIndex={changeIndex}
           totalChanges={totalChanges}
+          mode={changesBarMode}
           onAcceptAll={handleAcceptCurrent}
           onRejectAll={handleRejectCurrent}
           onPrevChange={totalChanges > 1 ? () => {

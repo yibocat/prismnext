@@ -22,7 +22,7 @@ export class ChatErrorBoundary extends Component<Props, State> {
   }
 
   override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("[ClaudeChat] Error boundary caught:", error, errorInfo);
+    console.error("[OpenCode] Error boundary caught:", error, errorInfo);
   }
 
   private handleReset = () => {

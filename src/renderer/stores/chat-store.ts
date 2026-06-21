@@ -2,12 +2,14 @@ import { create } from "zustand";
 import { useDocumentStore } from "./document-store";
 import { useWorktreeStore } from "./worktree-store";
 import { useGitStore } from "./git-store";
-import { useAgentSettingsStore } from "./agent-settings-store";
+import { useSettingsStore } from "./settings-store";
+import { createToolResultFromState } from "@/components/modules/chat/tools/tool-result-map";
+import { truncateChatMessagesToTurn } from "@/components/modules/chat/chat-turns";
 
 // ─── Types ───
 
 export interface ContentBlock {
-  type: "text" | "tool_use" | "tool_result" | "thinking";
+  type: "text" | "tool_use" | "tool_result" | "thinking" | "command";
   text?: string;
   id?: string;
   name?: string;
@@ -15,6 +17,8 @@ export interface ContentBlock {
   tool_use_id?: string;
   content?: any;
   is_error?: boolean;
+  /** For "command" blocks: the action key if this is an action command */
+  action?: string;
   thinking?: string;
   duration?: number; // thinking duration in seconds (cached for old sessions)
   signature?: string;
@@ -22,10 +26,18 @@ export interface ContentBlock {
    *  "Initialization" block with no copy button. Committed to history on
    *  first turn only; excluded from streaming indicator logic. */
   _progress?: boolean;
+  /** OpenCode tool_call: human-readable description of what the tool is doing */
+  title?: string;
+  /** OpenCode tool_call: tool category (fs, terminal, search, network, workflow) */
+  kind?: string;
+  /** OpenCode tool_call / tool_call_update: execution status */
+  status?: string;
+  /** OpenCode tool_call: affected file locations */
+  locations?: Array<{ file: string; line?: number }>;
 }
 
 export interface ChatStreamMessage {
-  type: "system" | "assistant" | "user" | "result";
+  type: "system" | "assistant" | "user" | "result" | "action-status";
   subtype?: string;
   session_id?: string;
   message?: {
@@ -38,6 +50,12 @@ export interface ChatStreamMessage {
   result?: string;
   is_error?: boolean;
   num_turns?: number;
+  /** For "action-status" messages: the action key (e.g. "compile-document") */
+  action?: string;
+  /** For "action-status" messages: display name (e.g. "compile") */
+  actionName?: string;
+  /** For "action-status" messages: execution status */
+  status?: "running" | "success" | "error";
   /** Persisted context breakdown from result message (for JSONL replay) */
   contextBreakdown?: Record<string, number> | null;
   /** Persisted category schema from result message (for JSONL replay) */
@@ -46,6 +64,8 @@ export interface ChatStreamMessage {
 
 interface TabDraft {
   input: string;
+  /** Command chips in the composer (restored on tab switch) */
+  chips?: { id: string; commandName: string; action?: string; source: string }[];
 }
 
 interface TabState {
@@ -64,10 +84,16 @@ interface TabState {
    *  index of the assistant message in this.messages. Indices are stable
    *  because messages are only ever appended, never removed/reordered. */
   messageMeta: Record<number, string>;
-  /** Per-tab context token breakdown (set by _setContextTokens or extractPersistedBreakdown) */
+  /** Per-tab context token total — persisted alongside breakdown. Source of
+   *  truth for the context ring. Set by _setContextTokens (live) or restored
+   *  from sessions-context.json (loaded). */
+  contextTokens: number | null;
+  /** Per-tab context token breakdown (set by _setContextTokens or sessionGetContext) */
   contextBreakdown: Record<string, number> | null;
-  /** Per-tab category schema (set by _setContextTokens or extractPersistedBreakdown) */
+  /** Per-tab category schema (set by _setContextTokens or sessionGetContext) */
   categorySchema: { key: string; label: string; color: string; description?: string; order?: number }[] | null;
+  /** True when live prompt config differs from this session's injected fingerprint. */
+  promptStale: boolean;
 }
 
 let _nextTabId = 1;
@@ -86,14 +112,81 @@ function makeDefaultTab(id: string): TabState {
     error: null,
     draft: { input: "" },
     messageMeta: {},
+    contextTokens: null,
     contextBreakdown: null,
     categorySchema: null,
+    promptStale: false,
   };
 }
 
+/** Strip the Prism system prompt from the first user message's first text
+ *  block. The system prompt is sent as a content block so it reaches the
+ *  LLM, but OpenCode stores it in message history. We remove it here so
+ *  users don't see system instructions in their chat history.
+ *
+ *  Detection strategy (order of precedence):
+ *  1. Metadata flag: `hasSystemPromptBlock` from sessions-context.json
+ *  2. Content heuristic: starts with "## Role" + contains Prism marker
+ *  3. Size heuristic: first text block > 1000 chars while second block exists
+ *     and is < 500 chars (system prompts are very long, user messages are short)
+ *
+ *  Only the FIRST user message is checked — system prompt is only injected
+ *  on the first turn. */
+function stripSystemPromptFromDisplay(
+  messages: ChatStreamMessage[],
+  hasSystemPromptBlock?: boolean,
+): void {
+  // Prism-specific markers that appear in the system prompt but never in
+  // real user messages. Multiple markers avoid single-point-of-failure.
+  const PRISM_MARKERS = [
+    "integrated into Prism",
+    "LaTeX academic paper writing workspace",
+    "## Core Rules",
+  ];
+
+  for (const msg of messages) {
+    if (msg.type !== "user") continue;
+    const blocks = msg.message?.content;
+    if (!blocks || blocks.length === 0) continue;
+    const first = blocks[0];
+
+    // Strategy 1: Metadata flag from session context (most reliable)
+    let isSystemPrompt = hasSystemPromptBlock === true;
+
+    // Strategy 2: Content-based detection (backward compat)
+    if (!isSystemPrompt && first.type === "text" && first.text) {
+      const text = first.text;
+      if (text.startsWith("## Role")) {
+        // Check for at least one Prism-specific marker
+        isSystemPrompt = PRISM_MARKERS.some((m) => text.includes(m));
+      }
+    }
+
+    // Strategy 3: Size heuristic — system prompts are 1000+ chars,
+    // real user messages are typically shorter. Only applies when
+    // there's a second block (the actual user message).
+    if (!isSystemPrompt && first.type === "text" && first.text && blocks.length >= 2) {
+      const second = blocks[1];
+      if (
+        first.text.length > 1000 &&
+        second.type === "text" &&
+        second.text &&
+        second.text.length < 500
+      ) {
+        isSystemPrompt = true;
+      }
+    }
+
+    if (isSystemPrompt) {
+      blocks.shift();
+    }
+    break; // Only strip from the first user message
+  }
+}
+
 /** Extract session title from the first user message.
- *  Handles both formats: Claude CLI writes content as a plain string;
- *  the Anthropic API / streaming path uses an array of content blocks. */
+ *  Handles both formats: the agent writes content as a plain string;
+ *  the OpenCode/Anthropic API streaming path uses an array of content blocks. */
 function extractSessionTitle(messages: ChatStreamMessage[]): string | null {
   for (const msg of messages) {
     if (msg.type !== "user") continue;
@@ -102,7 +195,7 @@ function extractSessionTitle(messages: ChatStreamMessage[]): string | null {
 
     let text: string | null = null;
     if (typeof content === "string") {
-      // Claude CLI native JSONL format
+      // Agent native JSONL format
       text = content;
     } else if (Array.isArray(content) && content.length > 0) {
       // Anthropic API / streaming format (array of content blocks)
@@ -124,7 +217,6 @@ function extractSessionTitle(messages: ChatStreamMessage[]): string | null {
 }
 
 interface ChatState {
-  selectedAgent: string;
 
   // Multi-tab state
   tabs: TabState[];
@@ -141,8 +233,12 @@ interface ChatState {
   contextTokens: number | null;
   /** Categorized token breakdown (Record<categoryKey, tokenCount>). null = no data. */
   contextBreakdown: Record<string, number> | null;
-  /** Category definitions from the agent's calculator (drives UI rendering). null = no schema. */
+  /** Category definitions for the context ring (drives UI rendering). null = no schema. */
   categorySchema: { key: string; label: string; color: string; description?: string; order?: number }[] | null;
+  /** True when prompt/rules changed since this session's system prompt was set. */
+  promptStale: boolean;
+  /** Debug: incremented on every _upsertLastMessage call to verify re-renders */
+  streamTick: number;
 
   // Tab management
   createTab: () => string;
@@ -151,23 +247,32 @@ interface ChatState {
   saveDraft: (tabId: string, draft: TabDraft) => void;
 
   // Chat actions
-  sendPrompt: (userPrompt: string) => Promise<void>;
+  sendPrompt: (userPrompt: string, userContent?: ContentBlock[], skipUserMessage?: boolean) => Promise<void>;
   cancelExecution: () => Promise<void>;
   newSession: () => void;
   clearAllSessions: () => void;
   clearCurrentTab: () => void;
-  loadSession: (sessionId: string, agentId?: string) => Promise<void>;
+  loadSession: (sessionId: string) => Promise<void>;
+  /** Re-check prompt fingerprint vs session for one tab (after settings edits). */
+  checkPromptStale: (tabId?: string) => Promise<void>;
+  /** Truncate in-memory messages (and OpenCode session via checkpoint-store) to a turn. */
+  truncateToTurn: (tabId: string, turnIndex: number) => void;
+  /** Restore full message list after undoing a file restore. */
+  restoreMessages: (tabId: string, messages: ChatStreamMessage[]) => void;
 
-  // Settings
-  setSelectedAgent: (agentId: string) => void;
-
-  // Internal (called by use-cli-events)
+  // Internal (called by use-opencode-events)
   _appendMessage: (tabId: string, msg: ChatStreamMessage) => void;
   _upsertLastMessage: (tabId: string, msg: ChatStreamMessage) => void;
   _setSessionId: (tabId: string, id: string) => void;
+  _setTitle: (tabId: string, title: string) => void;
   _setStreaming: (tabId: string, streaming: boolean) => void;
   _setError: (tabId: string, error: string | null) => void;
   _setContextTokens: (tabId: string, tokens: number, breakdown?: Record<string, number> | null, schema?: { key: string; label: string; color: string; description?: string; order?: number }[] | null) => void;
+  _setPromptStale: (tabId: string, stale: boolean) => void;
+  /** Patch the input (and optionally name) of a tool_use block in committed messages or streaming message. */
+  _patchToolInput: (tabId: string, toolUseId: string, input: any, name?: string) => void;
+  /** Inject a synthetic tool_result when permission is denied/timed out. */
+  _injectToolResult: (tabId: string, toolUseId: string, content: string, isError?: boolean) => void;
 }
 
 /**
@@ -180,9 +285,9 @@ interface ChatState {
  *
  *   { input_tokens, cache_creation_input_tokens?, cache_read_input_tokens?, output_tokens }
  *
- * - Claude / Gemini: input_tokens is UN-CACHED only → must add cache_* fields
- * - OpenAI / Qoder:   no prompt caching → cache_* fields are 0 → total = input_tokens
- * - JSONL replay:     result messages may have usage at top level or inside message
+ * - Anthropic / Gemini: input_tokens is UN-CACHED only → must add cache_* fields
+ * - OpenAI / Qoder:     no prompt caching → cache_* fields are 0 → total = input_tokens
+ * - JSONL replay:       result messages may have usage at top level or inside message
  *
  * Returns null if the message doesn't contain token data.
  */
@@ -194,9 +299,9 @@ function computeContextTokens(msg: ChatStreamMessage): number | null {
       return (usage.input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0);
     }
   }
-  // Check assistant messages (Claude CLI with --include-partial-messages
-  // emits final assistant messages with message.usage containing the
-  // complete token breakdown. Other agents should follow the same convention.)
+  // Check assistant messages (OpenCode emits final assistant messages with
+  // message.usage containing the complete token breakdown.
+  // Other agents should follow the same convention.)
   if (msg.type === "assistant" && msg.message?.usage) {
     const usage = msg.message.usage;
     return (usage.input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0);
@@ -227,23 +332,21 @@ function extractPersistedBreakdown(messages: ChatStreamMessage[]): {
 
 function projectActiveTab(tabs: TabState[], activeTabId: string) {
   const tab = tabs.find((t) => t.id === activeTabId);
-  if (!tab) return { messages: [] as ChatStreamMessage[], streamingMessage: null as ChatStreamMessage | null, messageMeta: {} as Record<number, string>, sessionId: null as string | null, isStreaming: false, error: null as string | null, contextTokens: null as number | null, contextBreakdown: null as Record<string, number> | null, categorySchema: null as { key: string; label: string; color: string; description?: string; order?: number }[] | null };
+  if (!tab) return { messages: [] as ChatStreamMessage[], streamingMessage: null as ChatStreamMessage | null, messageMeta: {} as Record<number, string>, sessionId: null as string | null, isStreaming: false, error: null as string | null, contextTokens: null as number | null, contextBreakdown: null as Record<string, number> | null, categorySchema: null as { key: string; label: string; color: string; description?: string; order?: number }[] | null, promptStale: false, streamTick: 0 };
 
-  // Walk backwards through messages to find the most recent token usage.
-  let contextTokens: number | null = null;
-  for (let i = tab.messages.length - 1; i >= 0; i--) {
-    const tokens = computeContextTokens(tab.messages[i]);
-    if (tokens !== null) {
-      contextTokens = tokens;
-      break;
+  // Primary: tab-stored contextTokens (set by _setContextTokens during live
+  // chat, or restored from sessions-context.json during session load).
+  // Fallback: scan messages for usage data (live chat legacy path).
+  let contextTokens = tab.contextTokens;
+  if (contextTokens === null) {
+    for (let i = tab.messages.length - 1; i >= 0; i--) {
+      const tokens = computeContextTokens(tab.messages[i]);
+      if (tokens !== null) {
+        contextTokens = tokens;
+        break;
+      }
     }
   }
-
-  // Breakdown + schema are NOT scanned here — they come from the fast path
-  // (cli:complete → _setContextTokens) during live chat, or from loadSession
-  // during JSONL replay. Scanning messages in projectActiveTab would
-  // overwrite the fast-path values because live result messages don't carry
-  // the persisted fields.
 
   return {
     messages: tab.messages,
@@ -255,6 +358,8 @@ function projectActiveTab(tabs: TabState[], activeTabId: string) {
     contextTokens,
     contextBreakdown: tab.contextBreakdown,
     categorySchema: tab.categorySchema,
+    promptStale: tab.promptStale,
+    streamTick: (tab as any).streamTick || 0,
   };
 }
 
@@ -264,7 +369,6 @@ const initialTabId = nextTabId();
 const initialTab = makeDefaultTab(initialTabId);
 
 export const useChatStore = create<ChatState>()((set, get) => ({
-  selectedAgent: "claude",
 
   // Multi-tab
   tabs: [initialTab],
@@ -273,6 +377,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   // Projected
   ...projectActiveTab([initialTab], initialTabId),
   messageMeta: {} as Record<number, string>,
+  streamTick: 0,
 
   // ─── Tab Management ───
 
@@ -317,29 +422,50 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       ...projectActiveTab(hydratedTabs, newActiveId),
     });
 
-      // Clean up agent session for this tab — cancel any running prompt then kill process
-      window.electronAPI.cliCancel(id).catch(() => {});
-      window.electronAPI.cliCloseSession(id).catch(() => {});
+      // Clean up agent session for this tab — cancel any running prompt
+      if (closingTab.sessionId) {
+        window.electronAPI.chatCancel(closingTab.sessionId).catch(() => {});
+      }
+      void import("./checkpoint-store").then(({ useCheckpointStore }) => {
+        useCheckpointStore.getState().clearTab(id);
+      });
   },
 
   setActiveTab: (id: string) => {
     const { tabs, activeTabId } = get();
     if (id === activeTabId) return;
-    // Hydrate the target tab with persisted breakdown if it doesn't have one yet
     const targetTab = tabs.find((t) => t.id === id);
-    let updatedTabs = tabs;
-    if (targetTab && targetTab.contextBreakdown === null) {
-      const extracted = extractPersistedBreakdown(targetTab.messages);
-      if (extracted.contextBreakdown) {
-        updatedTabs = tabs.map((t) =>
-          t.id === id ? { ...t, contextBreakdown: extracted.contextBreakdown, categorySchema: extracted.categorySchema } : t,
-        );
-      }
-    }
     set({
+      tabs,
       activeTabId: id,
-      ...projectActiveTab(updatedTabs, id),
+      ...projectActiveTab(tabs, id),
     });
+
+    // Hydrate context breakdown asynchronously if missing
+    if (targetTab && targetTab.contextBreakdown === null && targetTab.sessionId) {
+      const projectPath = useDocumentStore.getState().projectRoot || "";
+      const sessionId = targetTab.sessionId;
+      window.electronAPI.sessionGetContext(projectPath, sessionId).then((ctxData) => {
+        if (ctxData) {
+          useChatStore.setState((s) => {
+            const tabs = s.tabs.map((t) =>
+              t.id === id
+                ? { ...t, contextTokens: ctxData.tokens, contextBreakdown: ctxData.breakdown, categorySchema: ctxData.schema }
+                : t,
+            );
+            if (s.activeTabId === id) {
+              return {
+                tabs,
+                contextTokens: ctxData.tokens,
+                contextBreakdown: ctxData.breakdown,
+                categorySchema: ctxData.schema,
+              };
+            }
+            return { tabs };
+          });
+        }
+      }).catch(() => {});
+    }
   },
 
   saveDraft: (tabId: string, draft: TabDraft) => {
@@ -350,25 +476,21 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   // ─── Chat Actions ───
 
-  sendPrompt: async (userPrompt: string) => {
+  sendPrompt: async (userPrompt: string, userContent?: ContentBlock[], skipUserMessage?: boolean) => {
     const docState = useDocumentStore.getState();
     const projectPath = docState.projectRoot || "";
     const tabId = get().activeTabId;
-    const agentId = get().selectedAgent;
 
-    // Gate: progress thinking only for the first turn of a new session.
-    // - No sessionId → this is a fresh session (not a resumed one)
-    // - 0 committed messages → this is the very first prompt
-    // Subsequent turns skip all emitProgressThinking calls — the process
-    // is already warm so there's nothing to report.
     const tabBeforePrompt = get().tabs.find((t) => t.id === tabId);
-    const isFirstTurn = !tabBeforePrompt?.sessionId && (tabBeforePrompt?.messages.length ?? 0) === 0;
+    const isFirstTurn = !tabBeforePrompt?.sessionId;
 
-    // ── 1. Add user message FIRST so it appears immediately ──
-    const userMessage: ChatStreamMessage = {
-      type: "user",
-      message: { content: [{ type: "text", text: userPrompt }] },
-    };
+    // ── 1. Add user message (unless skipped — caller already inserted it) ──
+    const userMessage: ChatStreamMessage | null = skipUserMessage
+      ? null
+      : {
+          type: "user",
+          message: { content: userContent || [{ type: "text", text: userPrompt }] },
+        };
 
     set((s) => {
       const tabs = s.tabs.map((t) => {
@@ -379,7 +501,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         return {
           ...base,
           title: base.messages.length === 0 ? userPrompt.slice(0, 40) : t.title,
-          messages: [...base.messages, userMessage],
+          messages: userMessage ? [...base.messages, userMessage] : base.messages,
           isStreaming: true,
           error: null,
         };
@@ -387,138 +509,76 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
     });
 
-    // ── 2. Show initialisation progress as a thinking block (not text) ──
-    // Progress log accumulated across all emitProgressThinking calls.
-    // Each call appends a line; the full log is sent as ONE thinking block
-    // so _upsertLastMessage naturally replaces the old block with the updated one.
-    let progressLog = "";
-
-    const emitProgressThinking = (text: string) => {
-      if (!isFirstTurn) return;
-      progressLog += text + "\n";
-      const progressMsg: ChatStreamMessage = {
-        type: "assistant",
-        message: {
-          content: [{
-            type: "thinking",
-            thinking: progressLog,
-            _progress: true,
-          }],
-        },
-      };
-      get()._upsertLastMessage(tabId, progressMsg);
-    };
+    const tabAfterUser = get().tabs.find((t) => t.id === tabId);
+    if (tabAfterUser) {
+      const { countUserTurns } = await import("@/components/modules/chat/chat-turns");
+      const { useCheckpointStore } = await import("./checkpoint-store");
+      const turnIndex = countUserTurns(tabAfterUser.messages) - 1;
+      if (turnIndex >= 0) {
+        useCheckpointStore.getState().beginTurn(tabId, turnIndex);
+      }
+    }
 
     const resolveWorktree = async (): Promise<string | null> => {
       const worktreeStore = useWorktreeStore.getState();
       if (worktreeStore.mode !== "worktree") return null;
-
       try {
         let wt = worktreeStore.activeWorktree;
         if (!wt && projectPath) {
-          const branch = worktreeStore.pendingBranch || "current branch";
-          emitProgressThinking(`⏳ Creating worktree on \`${branch}\`…`);
           wt = await worktreeStore.initializeWorktree(projectPath);
-          emitProgressThinking(`✅ Worktree \`${wt.name}\` ready`);
-          // Ensure pre-scan completes before switching (avoids cache miss in switchCheckoutRoot)
           await worktreeStore.preScanWorktree(wt.name, wt.path).catch(() => {});
         }
         if (wt) {
-          emitProgressThinking("⏳ Syncing files…");
           await docState.switchCheckoutRoot(wt.path);
-          emitProgressThinking("✅ Files synced");
         }
         return wt?.path ?? null;
-      } catch (err: any) {
-        emitProgressThinking(`❌ Worktree init failed: ${err?.message}`);
-        throw err;
-      }
-    };
-
-    const checkAndStartAgent = async (worktreePath: string | null, prewarmSettings?: Record<string, string | null>) => {
-      try {
-        const status = await window.electronAPI.cliStatus();
-        if (!status.available) throw new Error(status.error || "Agent not available.");
-      } catch (err: any) {
-        emitProgressThinking(`❌ Agent check failed: ${err?.message}`);
-        throw err;
-      }
-
-      emitProgressThinking("⏳ Starting Claude Code…");
-      try {
-        // Pre-warm with the current agent settings so the subsequent
-        // cliSend can reuse the process without a restart.
-        await window.electronAPI.cliPrewarm(projectPath, tabId, worktreePath || undefined, prewarmSettings);
-        emitProgressThinking("✅ Claude Code ready");
       } catch {
-        // Prewarm is best-effort; cliSend will start the process on demand
-        emitProgressThinking("⚠️ Agent prewarm skipped — will start on demand");
+        throw new Error("Worktree initialization failed");
       }
     };
 
-    // ── 3. Collect agent settings (needed for both first and subsequent turns) ──
-    const prewarmAgentSettings = useAgentSettingsStore.getState();
-    const settings: Record<string, string | null> = {};
-    const configuredKeys = ["model", "effort", "agentMode"];
-    for (const key of configuredKeys) {
-      const val = prewarmAgentSettings.getSetting(agentId, key);
-      if (val != null) settings[key] = val;
-    }
-
+    // ── 2. Collect agent settings from persisted settings ──
     let worktreePath: string | null = null;
 
     if (isFirstTurn) {
-      // ── First-turn init: save files, resolve worktree, start agent ──
-      try {
-        emitProgressThinking("⏳ Saving files…");
-        await docState.saveAllFiles();
-        emitProgressThinking("✅ Files saved");
+      // First turn: save files, handle branch switch, resolve worktree.
+      // Pre-warm already spawned OpenCode — no progress UI needed.
+      await docState.saveAllFiles();
 
-        // Lazy branch switch: if user selected a branch in the toolbar,
-        // actually switch to it NOW (not when they clicked the dropdown).
-        const gitStore = useGitStore.getState();
-        const worktreeStore = useWorktreeStore.getState();
-        if (gitStore.pendingBranch && gitStore.pendingBranch !== gitStore.branch) {
-          if (worktreeStore.mode === "worktree") {
-            worktreeStore.setMode("worktree", gitStore.pendingBranch);
-            emitProgressThinking(`📌 Will create worktree on \`${gitStore.pendingBranch}\``);
-          } else {
-            emitProgressThinking(`⏳ Switching to \`${gitStore.pendingBranch}\`…`);
-            await gitStore.switchBranch(projectPath, gitStore.pendingBranch);
-            emitProgressThinking(`✅ Switched to \`${gitStore.pendingBranch}\``);
-          }
-          gitStore.setPendingBranch(null);
+      const gitStore = useGitStore.getState();
+      const worktreeStore = useWorktreeStore.getState();
+      if (gitStore.pendingBranch && gitStore.pendingBranch !== gitStore.branch) {
+        if (worktreeStore.mode === "worktree") {
+          worktreeStore.setMode("worktree", gitStore.pendingBranch);
+        } else {
+          await gitStore.switchBranch(projectPath, gitStore.pendingBranch);
         }
-
-        worktreePath = await resolveWorktree();
-        await checkAndStartAgent(worktreePath, settings);
-      } catch {
-        // Progress messages already emitted; stop here — don't send to CLI
-        set((s) => {
-          const tabs = s.tabs.map((t) =>
-            t.id === tabId ? { ...t, isStreaming: false } : t,
-          );
-          return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
-        });
-        return;
+        gitStore.setPendingBranch(null);
       }
+
+      worktreePath = await resolveWorktree();
     } else {
-      // ── Subsequent turns: process already warm, save files fire-and-forget ──
+      // Subsequent turns: process already warm, save files fire-and-forget
       docState.saveAllFiles().catch(() => {});
       worktreePath = useWorktreeStore.getState().activeWorktree?.path ?? null;
     }
 
-    // ── 4. Send the actual prompt — CLI responses follow naturally ──
+    // ── 4. Send the actual prompt — chat responses follow naturally ──
     try {
       const sessionId = get().tabs.find((t) => t.id === tabId)?.sessionId;
-      await window.electronAPI.cliSend({
+      const persistedSettings = useSettingsStore.getState().settings;
+      const provider = persistedSettings.aiProvider || "anthropic";
+      await window.electronAPI.chatSend({
         projectPath,
         worktreePath: worktreePath || undefined,
         prompt: userPrompt,
         tabId,
-        agent: agentId,
         sessionId,
-        settings,
+        apiKey: persistedSettings.aiApiKeys?.[provider] || undefined,
+        baseUrl: persistedSettings.aiBaseUrls?.[provider] || undefined,
+        model: persistedSettings.aiModel ?? undefined,
+        provider,
+        thoughtLevel: persistedSettings.thoughtLevel || undefined,
       });
     } catch (err: any) {
       set((s) => {
@@ -534,8 +594,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   cancelExecution: async () => {
     const tabId = get().activeTabId;
+    const sessionId = get().tabs.find((t) => t.id === tabId)?.sessionId;
     try {
-      await window.electronAPI.cliCancel(tabId);
+      if (sessionId) {
+        await window.electronAPI.chatCancel(sessionId);
+      }
       set((s) => {
         const tabs = s.tabs.map((t) =>
           t.id === tabId ? { ...t, isStreaming: false } : t,
@@ -543,7 +606,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
       });
     } catch (err: any) {
-      console.error("[claude-chat] Cancel failed:", err);
+      console.error("[chat] Cancel failed:", err);
     }
   },
 
@@ -570,25 +633,72 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (tab?.isStreaming) return; // Never clear a tab with an active agent
     set((s) => {
       const tabs = s.tabs.map((t) =>
-        t.id === tabId ? { ...t, messages: [], streamingMessage: null, sessionId: null, title: "New Chat", error: null, isStreaming: false } : t,
+        t.id === tabId ? { ...t, messages: [], streamingMessage: null, sessionId: null, title: "New Chat", error: null, isStreaming: false, promptStale: false } : t,
       );
+      return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+    });
+    void import("./checkpoint-store").then(({ useCheckpointStore }) => {
+      useCheckpointStore.getState().clearTab(tabId);
+    });
+  },
+
+  checkPromptStale: async (tabId?: string) => {
+    const id = tabId ?? get().activeTabId;
+    const tab = get().tabs.find((t) => t.id === id);
+    const { useDocumentStore } = await import("./document-store");
+    const projectPath = useDocumentStore.getState().projectRoot;
+    if (!tab?.sessionId || !projectPath) {
+      get()._setPromptStale(id, false);
+      return;
+    }
+    try {
+      const [ctx, currentFp] = await Promise.all([
+        window.electronAPI.sessionGetContext(projectPath, tab.sessionId),
+        window.electronAPI.settingsComputePromptFingerprint(projectPath),
+      ]);
+      const stale = Boolean(ctx?.promptFingerprint && ctx.promptFingerprint !== currentFp);
+      get()._setPromptStale(id, stale);
+    } catch {
+      get()._setPromptStale(id, false);
+    }
+  },
+
+  truncateToTurn: (tabId, turnIndex) => {
+    set((s) => {
+      const tabs = s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const messages = truncateChatMessagesToTurn(t.messages, turnIndex);
+        if (t.sessionId) {
+          const cache = (useChatStore as any)._msgCache as Map<string, ChatStreamMessage[]> | undefined;
+          cache?.set(t.sessionId, messages);
+        }
+        return {
+          ...t,
+          messages,
+          streamingMessage: null,
+          isStreaming: false,
+          error: null,
+        };
+      });
       return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
     });
   },
 
-  loadSession: async (sessionId: string, agentId?: string) => {
-    const projectPath = useDocumentStore.getState().projectRoot || "";
-    const worktreePath = useWorktreeStore.getState().activeWorktree?.path;
+  restoreMessages: (tabId, messages) => {
+    set((s) => {
+      const tabs = s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        if (t.sessionId) {
+          const cache = (useChatStore as any)._msgCache as Map<string, ChatStreamMessage[]> | undefined;
+          cache?.set(t.sessionId, messages);
+        }
+        return { ...t, messages, streamingMessage: null, isStreaming: false, error: null };
+      });
+      return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+    });
+  },
 
-    // Resolve the effective agent — session's agentId takes precedence
-    const id = agentId || get().selectedAgent;
-
-    // Switch selectedAgent if the session belongs to a different agent.
-    // This ensures category resolution from the session's agent's
-    // token calculator is enabled for the project view.
-    if (id !== get().selectedAgent) {
-      set({ selectedAgent: id });
-    }
+  loadSession: async (sessionId: string) => {
 
     // If this session is already loaded in an existing tab, just switch to it
     const existingTab = get().tabs.find((t) => t.sessionId === sessionId);
@@ -605,64 +715,213 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const newId = nextTabId();
     const newTab = makeDefaultTab(newId);
     const tabId = newId;
-    // Switch to the new tab IMMEDIATELY so the UI responds instantly.
-    // Messages load async below and populate when ready.
+    // Switch to the new tab immediately. Messages load via fast file read (<50ms).
     set((s) => ({
       tabs: [...s.tabs, newTab],
       activeTabId: tabId,
       ...projectActiveTab([...s.tabs, newTab], tabId),
     }));
 
-    try {
-      const raw = await window.electronAPI.cliLoadSession(projectPath, sessionId, id, worktreePath);
-      const messages = raw.filter((msg: ChatStreamMessage) => {
-        if (msg.type === "system") return false;
-        // Keep result messages even without content — they carry
-        // duration_ms and usage needed for completion display.
-        if (msg.type === "result") return true;
-        if (!msg.message?.content || msg.message.content.length === 0) return false;
-        return true;
-      });
-      // Build messageMeta from loaded messages (result → preceding assistant)
-      const meta: Record<number, string> = {};
-      for (let i = 0; i < messages.length - 1; i++) {
-        const msg = messages[i];
-        const next = messages[i + 1];
-        if (msg.type === "assistant" && next.type === "result" && !next.is_error) {
-          const parts: string[] = [];
-          const ms = next.duration_ms;
-          if (ms != null) {
-            parts.push(`Completed in ${(ms / 1000).toFixed(1)}s`);
-          }
-          // usage may be at top level (live) or inside message (JSONL)
-          const usage = next.usage || next.message?.usage;
-          if (usage?.input_tokens || usage?.output_tokens) {
-            const input = usage.input_tokens >= 1000
-              ? `${(usage.input_tokens / 1000).toFixed(1)}k`
-              : `${usage.input_tokens}`;
-            const output = usage.output_tokens >= 1000
-              ? `${(usage.output_tokens / 1000).toFixed(1)}k`
-              : `${usage.output_tokens}`;
-            parts.push(`↑${input} ↓${output}`);
-          }
-          if (parts.length > 0) {
-            meta[i] = parts.join(" · ");
-          }
-        }
-      }
-      const title = extractSessionTitle(messages) || "New Chat";
+    // In-memory cache — first load takes ~1s (ACP replay), subsequent loads instant
+    const _msgCache = (useChatStore as any)._msgCache || (
+      (useChatStore as any)._msgCache = new Map<string, ChatStreamMessage[]>()
+    ) as Map<string, ChatStreamMessage[]>;
 
-      // Extract persisted context breakdown from the result message (written by CliManager)
-      const { contextBreakdown, categorySchema } = extractPersistedBreakdown(messages);
+    const cached = _msgCache.get(sessionId);
+    if (cached) {
+      // Restore persisted context even for cached messages
+      let cachedCtx: { tokens: number; breakdown: Record<string, number>; schema: any[] } | null = null;
+      const projectPath = useDocumentStore.getState().projectRoot || "";
+      window.electronAPI.sessionGetContext(projectPath, sessionId).then((d) => {
+        if (d) useChatStore.setState((s) => {
+          const tabs = s.tabs.map((t) =>
+            t.id === tabId ? { ...t, contextTokens: d.tokens, contextBreakdown: d.breakdown, categorySchema: d.schema } : t,
+          );
+          if (s.activeTabId === tabId) {
+            return { tabs, contextTokens: d.tokens, contextBreakdown: d.breakdown, categorySchema: d.schema };
+          }
+          return { tabs };
+        });
+      }).catch(() => {});
 
       set((s) => {
         const tabs = s.tabs.map((t) =>
           t.id === tabId
-            ? { ...t, messages, streamingMessage: null, title, sessionId, error: null, isStreaming: false, messageMeta: meta, contextBreakdown, categorySchema }
+            ? { ...t, messages: cached, streamingMessage: null, title: extractSessionTitle(cached) || "New Chat", sessionId, error: null, isStreaming: false }
             : t,
         );
         const projected = projectActiveTab(tabs, tabId);
         return { tabs, activeTabId: tabId, ...projected };
+      });
+      void import("./checkpoint-store").then(({ useCheckpointStore }) => {
+        useCheckpointStore.getState().initSession(tabId, sessionId);
+      });
+      return;
+    }
+
+    try {
+      const projectPath = useDocumentStore.getState().projectRoot || "";
+      const raw: any[] = await window.electronAPI.sessionLoad(sessionId, projectPath);
+
+      // Messages can come in two formats:
+      // 1. File storage: [{ info: { role }, parts: [{ type, text, ... }] }, ...]
+      // 2. ACP replay:   [{ sessionUpdate, content: { type, text }, messageId }, ...]
+      const messages: ChatStreamMessage[] = [];
+
+      if (raw.length > 0 && raw[0].info && raw[0].parts) {
+        // Format 1: file storage (SQLite) — each item is a complete message.
+        // OpenCode stores tool parts in a format that differs from what the
+        // live-streaming ACP path delivers:
+        //
+        //   { type: "tool", tool: "bash", callID: "call_xxx",
+        //     state: { status, input: {...}, output: "...", title, time } }
+        //
+        // Key differences from what we previously assumed:
+        //   - `tool` is a plain string (e.g. "bash"), not an object
+        //   - The ID lives in `callID`, not `id`
+        //   - The input lives in `state.input`, not `input`
+        //   - The result lives in `state.output` — there is NO separate
+        //     "tool_result" part type; completed tools carry their own output
+        for (const item of raw) {
+          const blocks: ContentBlock[] = (item.parts || []).flatMap((p: any): ContentBlock[] => {
+            switch (p.type) {
+              case "text":
+                return [{ type: "text", text: p.text || "" }];
+
+              case "reasoning":
+              case "thinking":
+                return [{ type: "thinking", thinking: p.text || p.thinking || "" }];
+
+              case "tool":
+              case "tool_use": {
+                const results: ContentBlock[] = [];
+
+                // Tool name: OpenCode stores it as a plain string in `p.tool`.
+                // Fall back to p.name for ACP-replay or legacy formats.
+                const toolName: string =
+                  (typeof p.tool === "string" ? p.tool : "") ||
+                  p.tool?.name || p.name || "";
+
+                const toolId: string = p.callID || p.id || "";
+
+                // Input: OpenCode wraps params in `state.input`.
+                // Try legacy locations as fallback.
+                const toolInput: any =
+                  p.state?.input || p.input || p.tool?.input || {};
+
+                results.push({
+                  type: "tool_use",
+                  id: toolId,
+                  name: toolName,
+                  input: toolInput,
+                });
+
+                // Tool output: OpenCode embeds result in `state.output` with
+                // a terminal `state.status`. Denied / cancelled tools often
+                // have no output — still emit a synthetic tool_result.
+                const status = p.state?.status || "";
+                const output = p.state?.output;
+                const toolResult = createToolResultFromState(toolId, status, output);
+                if (toolResult) {
+                  results.push(toolResult);
+                }
+                return results;
+              }
+
+              case "tool_result":
+              case "tool-result":
+                return [{
+                  type: "tool_result",
+                  tool_use_id: p.tool_use_id || p.toolUseId || "",
+                  content: p.content || p.result || "",
+                  is_error: p.isError || p.is_error || false,
+                }];
+
+              default:
+                return [{ type: "text", text: JSON.stringify(p) }];
+            }
+          }).filter((b: ContentBlock | null): b is ContentBlock => b !== null);
+          const role = (item.info?.role || "user") === "user" ? "user" : "assistant";
+          messages.push({ type: role as "user" | "assistant", message: { content: blocks } });
+        }
+      } else {
+        // Format 2: ACP replay — group chunks by messageId
+        const msgGroups = new Map<string, { role: string; blocks: ContentBlock[] }>();
+        for (const chunk of raw) {
+          const msgId = chunk.messageId || chunk.id || "";
+          if (!msgId) continue;
+          let group = msgGroups.get(msgId);
+          if (!group) {
+            const isUser = (chunk.sessionUpdate || "").startsWith("user_");
+            group = { role: isUser ? "user" : "assistant", blocks: [] };
+            msgGroups.set(msgId, group);
+          }
+          const content = chunk.content;
+          if (!content) continue;
+          const isThinking = (chunk.sessionUpdate || "") === "agent_thought_chunk";
+          if (content.type === "text" && content.text) {
+            const blockType = isThinking ? "thinking" : "text";
+            const last = group.blocks[group.blocks.length - 1];
+            if (last && last.type === blockType) {
+              const key = blockType === "thinking" ? "thinking" : "text";
+              (last as any)[key] = ((last as any)[key] || "") + content.text;
+            } else {
+              group.blocks.push(isThinking
+                ? { type: "thinking" as const, thinking: content.text }
+                : { type: "text" as const, text: content.text });
+            }
+          } else if (content.type === "tool" || content.type === "tool_use") {
+            group.blocks.push({ type: "tool_use", id: chunk.id || content.id || "", name: chunk.name || content.tool?.name || content.name || "", input: chunk.input || content.tool?.input || content.input || {} });
+          } else if (content.type === "tool_result" || content.type === "tool-result") {
+            group.blocks.push({ type: "tool_result", tool_use_id: content.tool_use_id || content.toolUseId || "", content: content.content || content.result || "", is_error: content.isError || content.is_error || false });
+          }
+        }
+        for (const [_, group] of Array.from(msgGroups.entries()).sort(([a], [b]) => a.localeCompare(b))) {
+          messages.push({ type: group.role as "user" | "assistant", message: { content: group.blocks } });
+        }
+      }
+
+      // Filter empty messages
+      let filtered = messages.filter((m) => m.message?.content && m.message.content.length > 0);
+
+      // Restore persisted session context (breakdown + system prompt flag)
+      const pp = useDocumentStore.getState().projectRoot || "";
+      let ctxData: { tokens: number; breakdown: Record<string, number>; schema: any[]; hasSystemPromptBlock?: boolean } | null = null;
+      try {
+        ctxData = await window.electronAPI.sessionGetContext(pp, sessionId);
+      } catch { /* best-effort */ }
+
+      // Strip Prism system prompt from displayed history. Uses the persisted
+      // hasSystemPromptBlock flag (set at session creation), with content-based
+      // fallback for sessions created before this metadata was tracked.
+      stripSystemPromptFromDisplay(filtered, ctxData?.hasSystemPromptBlock);
+
+      // Cache for instant reload
+      _msgCache.set(sessionId, filtered);
+
+      const title = extractSessionTitle(messages) || "New Chat";
+
+      set((s) => {
+        const tabs = s.tabs.map((t) =>
+          t.id === tabId
+            ? {
+                ...t,
+                messages: filtered,
+                streamingMessage: null,
+                title,
+                sessionId,
+                error: null,
+                isStreaming: false,
+                contextTokens: ctxData?.tokens ?? null,
+                contextBreakdown: ctxData?.breakdown ?? null,
+                categorySchema: ctxData?.schema ?? null,
+              }
+            : t,
+        );
+        return { tabs, activeTabId: tabId, ...projectActiveTab(tabs, tabId) };
+      });
+      void import("./checkpoint-store").then(({ useCheckpointStore }) => {
+        useCheckpointStore.getState().initSession(tabId, sessionId);
       });
     } catch (err: any) {
       set((s) => {
@@ -675,10 +934,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       });
     }
   },
-
-  // ─── Settings ───
-
-  setSelectedAgent: (selectedAgent) => set({ selectedAgent }),
 
   // ─── Internal ───
 
@@ -737,12 +992,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
       const tab = s.tabs[tabIdx];
       const prev = tab.streamingMessage;
+      const streamTick = ((s as any).streamTick || 0) + 1;
 
       // No existing streaming message — set as first
       if (!prev) {
         const newTabs = [...s.tabs];
         newTabs[tabIdx] = { ...tab, streamingMessage: msg };
-        return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
+        return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId), streamTick };
       }
 
       // Merge content blocks: the parser emits full accumulated state on each
@@ -772,7 +1028,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           messages: [...tab.messages, prev], // commit progress thinking to history
           streamingMessage: msg,              // start real AI streaming
         };
-        return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
+        return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId), streamTick };
       }
 
       const lastHasToolUse = oldBlocks.some((b) => b.type === "tool_use");
@@ -786,7 +1042,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           messages: [...tab.messages, prev],
           streamingMessage: msg,
         };
-        return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
+        return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId), streamTick };
       }
 
       // Same turn: dedup blocks by type/id — keep latest version of each.
@@ -807,7 +1063,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
       const newTabs = [...s.tabs];
       newTabs[tabIdx] = { ...tab, streamingMessage: merged };
-      return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
+      return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId), streamTick };
     });
   },
 
@@ -820,6 +1076,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const activeTab = tabs.find((t) => t.id === s.activeTabId);
       return { tabs, sessionId: activeTab?.sessionId ?? null };
     });
+  },
+
+  _setTitle: (tabId: string, title: string) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, title } : t)),
+    }));
   },
 
   _setStreaming: (tabId: string, isStreaming: boolean) => {
@@ -857,17 +1119,114 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   _setContextTokens: (tabId: string, tokens: number, breakdown?: Record<string, number> | null, schema?: { key: string; label: string; color: string; description?: string; order?: number }[] | null) => {
-    const active = get().activeTabId === tabId;
     set((s) => {
-      // Always write breakdown + schema to the tab, so it's preserved across tab switches
+      // Store tokens, breakdown, and schema on the TAB — survives tab switches.
       const tabs = s.tabs.map((t) =>
-        t.id === tabId ? { ...t, contextBreakdown: breakdown ?? null, categorySchema: schema ?? null } : t,
+        t.id === tabId ? { ...t, contextTokens: tokens, contextBreakdown: breakdown ?? null, categorySchema: schema ?? null } : t,
       );
-      // Only project contextTokens for the active tab
-      if (active) {
+      // Also project to store-level for the active tab
+      const isActive = s.activeTabId === tabId;
+      if (isActive) {
         return { tabs, contextTokens: tokens, contextBreakdown: breakdown ?? null, categorySchema: schema ?? null };
       }
       return { tabs };
+    });
+  },
+
+  _setPromptStale: (tabId: string, stale: boolean) => {
+    set((s) => {
+      const tabs = s.tabs.map((t) =>
+        t.id === tabId ? { ...t, promptStale: stale } : t,
+      );
+      const isActive = s.activeTabId === tabId;
+      if (isActive) {
+        return { tabs, promptStale: stale };
+      }
+      return { tabs };
+    });
+  },
+
+  /**
+   * Patch the input of an existing tool_use block (in committed messages
+   * or the streaming message) identified by its tool_use ID.
+   *
+   * Used when the initial ACP tool_call has empty rawInput (OpenCode sends
+   * rawInput: {} during "pending" status) and the real parameters arrive
+   * later via tool_call_update's _backfillInput payload.
+   */
+  _patchToolInput: (tabId: string, toolUseId: string, input: any, name?: string) => {
+    set((s) => {
+      const tabIdx = s.tabs.findIndex((t) => t.id === tabId);
+      if (tabIdx === -1) return {};
+
+      const tab = s.tabs[tabIdx];
+
+      const patchBlock = (block: ContentBlock): ContentBlock => {
+        if (block.type === "tool_use" && block.id === toolUseId) {
+          const patched: ContentBlock = { ...block, input };
+          if (name) patched.name = name;
+          return patched;
+        }
+        return block;
+      };
+
+      // Patch tool_use blocks in committed messages
+      const patchedMessages = tab.messages.map((msg) => {
+        if (!msg.message?.content) return msg;
+        return { ...msg, message: { ...msg.message, content: msg.message.content.map(patchBlock) } };
+      });
+
+      // Patch tool_use blocks in the streaming message (if still there)
+      let patchedStreaming = tab.streamingMessage;
+      if (patchedStreaming?.message?.content) {
+        patchedStreaming = {
+          ...patchedStreaming,
+          message: { ...patchedStreaming.message, content: patchedStreaming.message.content.map(patchBlock) },
+        };
+      }
+
+      const newTabs = [...s.tabs];
+      newTabs[tabIdx] = { ...tab, messages: patchedMessages, streamingMessage: patchedStreaming };
+      return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
+    });
+  },
+
+  _injectToolResult: (tabId: string, toolUseId: string, content: string, isError = true) => {
+    set((s) => {
+      const tabIdx = s.tabs.findIndex((t) => t.id === tabId);
+      if (tabIdx === -1) return {};
+
+      const tab = s.tabs[tabIdx];
+      const alreadyHasResult = tab.messages.some((msg) =>
+        msg.message?.content?.some(
+          (b) => b.type === "tool_result" && b.tool_use_id === toolUseId,
+        ),
+      );
+      if (alreadyHasResult) return {};
+
+      const block: ContentBlock = {
+        type: "tool_result",
+        tool_use_id: toolUseId,
+        content,
+        is_error: isError,
+        status: isError ? "failed" : "completed",
+      };
+
+      let msgs = tab.messages;
+      if (tab.streamingMessage) {
+        msgs = [...msgs, tab.streamingMessage];
+      }
+
+      const newTabs = [...s.tabs];
+      newTabs[tabIdx] = {
+        ...tab,
+        messages: [
+          ...msgs,
+          { type: "result", message: { content: [block] } },
+        ],
+        streamingMessage: null,
+      };
+      return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
     });
   },
 }));

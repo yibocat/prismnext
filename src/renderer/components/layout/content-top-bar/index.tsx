@@ -6,9 +6,9 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useSessionTitle } from "@/hooks/use-session-title";
-import { AGENT_UI_CONFIGS } from "@/lib/agent-config";
 import { SidebarControls } from "@/components/layout/sidebar-controls";
 import { SessionTitle } from "./session-title";
+import { ServerStatusDot } from "@/components/server-status-dot";
 import {
   PanelRight,
   Minimize2Icon,
@@ -32,8 +32,7 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
 
   const sessionTitle = useSessionTitle();
-  const selectedAgentId = useChatStore((s) => s.selectedAgent);
-  const agentName = AGENT_UI_CONFIGS[selectedAgentId]?.name ?? selectedAgentId;
+  const agentName = "OpenCode";
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
   const isMac = platform === "darwin";
@@ -54,14 +53,17 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
         )}
       </div>
 
-      {/* Session title — only when there are messages */}
-      {sessionTitle && (
-        <SessionTitle
-          title={sessionTitle}
-          projectRoot={projectRoot}
-          agentName={agentName}
-        />
-      )}
+      {/* Status dot + Session title */}
+      <div className="flex items-center min-w-0 gap-1 ml-0.5">
+        <ServerStatusDot />
+        {sessionTitle && (
+          <SessionTitle
+            title={sessionTitle}
+            projectRoot={projectRoot}
+            agentName={agentName}
+          />
+        )}
+      </div>
 
       {/* Spacer */}
       <div className="flex-1 min-w-0" />
@@ -94,7 +96,7 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
             >
               <XIcon className="size-3.5" />
             </button>
-            <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
+            <div className="mx-1 h-4 w-px bg-border shrink-0" />
           </>
         )}
 

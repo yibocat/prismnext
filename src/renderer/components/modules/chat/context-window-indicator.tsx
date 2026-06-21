@@ -1,6 +1,10 @@
+import { useState, useCallback } from "react";
+import { toast } from "sonner";
 import { CircularProgress } from "@/components/ui/circular-progress";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { Shrink } from "lucide-react";
+import { useChatStore } from "@/stores/chat-store";
+import { useDocumentStore } from "@/stores/document-store";
 
 export interface CategorySchema {
   key: string;
@@ -17,8 +21,12 @@ interface ContextWindowIndicatorProps {
   total?: number;
   /** Categorized breakdown (null = no data) */
   breakdown?: Record<string, number> | null;
-  /** Category definitions from agent's calculator */
+  /** Category definitions for the context ring visualization */
   schema?: CategorySchema[] | null;
+  /** True when prompt config changed since this session started */
+  promptStale?: boolean;
+  /** Disable compress while agent is streaming */
+  isStreaming?: boolean;
 }
 
 interface CategoryDef {
@@ -29,7 +37,6 @@ interface CategoryDef {
 }
 
 function buildCategories(breakdown: Record<string, number>, schema: CategorySchema[]): CategoryDef[] {
-  // Pre-build order map for O(n log n) sort
   const orderMap = new Map(schema.map((s) => [s.key, s.order ?? 999]));
   return schema
     .map((s) => ({
@@ -52,10 +59,31 @@ export function ContextWindowIndicator({
   total = 200000,
   breakdown,
   schema,
+  promptStale = false,
+  isStreaming = false,
 }: ContextWindowIndicatorProps) {
+  const [compacting, setCompacting] = useState(false);
   const pct = total > 0 ? Math.round((used / total) * 100) : 0;
   const categories = breakdown && schema ? buildCategories(breakdown, schema) : [];
   const hasBreakdown = categories.length > 0 && used > 0;
+
+  const handleCompact = useCallback(async () => {
+    const sessionId = useChatStore.getState().sessionId;
+    const projectPath = useDocumentStore.getState().projectRoot;
+    if (!sessionId || !projectPath) {
+      toast.error("Start a conversation before compressing context.");
+      return;
+    }
+    setCompacting(true);
+    try {
+      await window.electronAPI.chatCompact(sessionId, projectPath);
+      toast.success("Context compacted. Old messages have been summarized.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to compact context.");
+    } finally {
+      setCompacting(false);
+    }
+  }, []);
 
   return (
     <HoverCard openDelay={300} closeDelay={100}>
@@ -65,7 +93,7 @@ export function ContextWindowIndicator({
           className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-muted hover:text-muted-foreground transition-colors"
         >
           <CircularProgress value={pct} size={14} strokeWidth={1.5} />
-          <span className="tabular-nums">{pct}%</span>
+          <span className="tabular-nums text-[length:var(--font-chat-meta)]">{pct}%</span>
         </button>
       </HoverCardTrigger>
       <HoverCardContent side="top" align="end" className="w-64 p-3">
@@ -78,11 +106,11 @@ export function ContextWindowIndicator({
             </span>
           </div>
 
-          {/* Color-coded stacked progress bar */}
+          {/* Progress bar — proportion of TOTAL context window */}
           {hasBreakdown ? (
             <div className="flex h-2 rounded-full overflow-hidden gap-px bg-muted">
               {categories.map((cat) => {
-                const w = (cat.tokens / total) * 100;
+                const w = total > 0 ? (cat.tokens / total) * 100 : 0;
                 if (w <= 0) return null;
                 return (
                   <div
@@ -92,11 +120,8 @@ export function ContextWindowIndicator({
                   />
                 );
               })}
-              {/* Remaining space = unused capacity */}
               {used < total && (
-                <div
-                  className="h-full bg-muted-foreground/10 flex-1 rounded-r-full"
-                />
+                <div className="h-full bg-muted-foreground/10 flex-1 rounded-r-full" />
               )}
             </div>
           ) : (
@@ -108,11 +133,12 @@ export function ContextWindowIndicator({
             </div>
           )}
 
-          {/* Legend: category → tokens → percentage */}
+          {/* Legend: category → tokens → % of used */}
           {hasBreakdown && (
             <div className="space-y-1">
               {categories.map((cat) => {
-                const catPct = total > 0 ? Math.round((cat.tokens / total) * 100) : 0;
+                const catPct = used > 0 ? Math.round((cat.tokens / used) * 100) : 0;
+                if (cat.tokens <= 0) return null;
                 return (
                   <div
                     key={cat.key}
@@ -134,18 +160,21 @@ export function ContextWindowIndicator({
             </div>
           )}
 
-          {/* Footer: hint + compress button */}
           <p className="text-[length:var(--font-hint)] text-foreground/60">
-            Long conversations may degrade response quality. Compress to
-            summarize the conversation and free up space.
+            Category proportions are estimates only.
+            {promptStale && (
+              <> Prompt or rules were updated — start a new chat to apply changes.</>
+            )}
           </p>
+
           <button
             type="button"
-            disabled
+            disabled={isStreaming || compacting || !used}
+            onClick={() => void handleCompact()}
             className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border bg-muted/50 px-2.5 py-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Shrink className="size-3" />
-            Compress context
+            {compacting ? "Compressing…" : "Compress context"}
           </button>
         </div>
       </HoverCardContent>

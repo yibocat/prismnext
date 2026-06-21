@@ -1,6 +1,6 @@
 import { registerFsHandlers } from "./fs";
 import { registerCompileHandlers } from "./compile";
-import { registerCliHandlers } from "./cli";
+import { registerChatHandlers, disposeChat } from "./chat";
 import { registerSettingsHandlers } from "./settings";
 import { registerBrowserHandlers } from "./browser";
 import { registerTerminalHandlers } from "./terminal";
@@ -9,11 +9,13 @@ import { registerWorktreeHandlers } from "./worktree";
 import { registerLogHandlers } from "./log";
 import { registerThemeHandlers } from "./theme";
 import { registerWorkspaceHandlers } from "./workspace";
+import { registerCommandsHandlers } from "./commands";
+import { registerSkillsHandlers } from "./skills";
 
 export function registerIpcHandlers(): void {
   registerFsHandlers();
   registerCompileHandlers();
-  registerCliHandlers();
+  registerChatHandlers();
   registerSettingsHandlers();
   registerBrowserHandlers();
   registerTerminalHandlers();
@@ -22,4 +24,8 @@ export function registerIpcHandlers(): void {
   registerLogHandlers();
   registerThemeHandlers();
   registerWorkspaceHandlers();
+  registerCommandsHandlers();
+  registerSkillsHandlers();
 }
+
+export { disposeChat };

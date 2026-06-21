@@ -1,10 +1,12 @@
 import { memo } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
+import { useChatStore } from "@/stores/chat-store";
 import { ListTodoIcon, CheckIcon, CircleIcon, Loader2Icon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export const TodoWriteWidget = memo(function TodoWriteWidget({ toolUse }: { toolUse: ContentBlock }) {
+export const TodoWriteWidget = memo(function TodoWriteWidget({ toolUse, toolName }: { toolUse: ContentBlock; toolName: string }) {
   const todos: Array<{ content: string; status: string }> = toolUse.input?.todos || [];
+  const isStreaming = useChatStore((s) => s.isStreaming);
 
   if (todos.length === 0) return null;
 
@@ -12,6 +14,7 @@ export const TodoWriteWidget = memo(function TodoWriteWidget({ toolUse }: { tool
     <div className="my-2 rounded-lg border border-border bg-card text-[length:var(--font-code)] overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60">
         <ListTodoIcon className="size-3.5 text-plan" />
+        <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">{toolName}</span>
         <span className="font-medium">Task Plan</span>
         <span className="text-muted-foreground/60">
           {todos.filter((t) => t.status === "completed").length}/{todos.length}
@@ -22,8 +25,10 @@ export const TodoWriteWidget = memo(function TodoWriteWidget({ toolUse }: { tool
           <div key={i} className="flex items-center gap-2 px-3 py-1.5">
             {todo.status === "completed" ? (
               <CheckIcon className="size-3.5 text-success shrink-0" />
-            ) : todo.status === "in_progress" ? (
+            ) : todo.status === "in_progress" && isStreaming ? (
               <Loader2Icon className="size-3.5 animate-spin text-info shrink-0" />
+            ) : todo.status === "in_progress" ? (
+              <CircleIcon className="size-3.5 text-info shrink-0" />
             ) : (
               <CircleIcon className="size-3.5 text-muted-foreground shrink-0" />
             )}

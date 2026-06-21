@@ -2,12 +2,6 @@
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
-/* Streamdown — scan component sources so Tailwind doesn't purge their classes */
-@source "../../../node_modules/streamdown/dist/*.js";
-@source "../../../node_modules/@streamdown/code/dist/*.js";
-@source "../../../node_modules/@streamdown/math/dist/*.js";
-@source "../../../node_modules/@streamdown/mermaid/dist/*.js";
-@source "../../../node_modules/@streamdown/cjk/dist/*.js";
 
 /* ── Local font declarations (bundled, no CDN dependency) ── */
 /* Sans-serif */
@@ -162,8 +156,8 @@
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --border: oklch(0.88 0 0);
+  --input: oklch(0.88 0 0);
   --ring: oklch(0.708 0 0);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
@@ -176,7 +170,7 @@
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.145 0 0);
-  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-border: oklch(0.88 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
   /* ── Glass effect tokens ── */
@@ -214,8 +208,8 @@
   --muted-foreground: oklch(0.708 0 0);
   --accent: oklch(0.26 0 0);
   --accent-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
+  --border: oklch(1 0 0 / 18%);
+  --input: oklch(1 0 0 / 20%);
   --ring: oklch(0.556 0 0);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
@@ -228,7 +222,7 @@
   --sidebar-primary-foreground: oklch(0.18 0 0);
   --sidebar-accent: oklch(0.26 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-border: oklch(1 0 0 / 18%);
   --sidebar-ring: oklch(0.556 0 0);
 
   /* ── Semantic (theme-independent) ── */
@@ -434,4 +428,26 @@
 /* Hide the default xterm overview ruler (scrollbar decoration) */
 .terminal-xterm .xterm-decoration-overview-ruler {
   display: none;
+}
+
+/* ── Shiki dual-theme support ── */
+/* Shiki v4 generates inline styles like color:var(--shiki-light,#D73A49).
+   Inline styles always beat external CSS. To override them in dark mode,
+   we MUST use !important. This is the official Shiki v4 documented approach:
+   https://shiki.matsu.io/guide/dual-themes#class-based-dark-mode */
+
+/* Dark mode: switch all Shiki colors to the dark theme. */
+/* Also force transparent background — our code wrapper provides its own. */
+.dark .shiki,
+.dark .shiki span,
+.dark .shiki code {
+  color: var(--shiki-dark) !important;
+  background-color: transparent !important;
+}
+
+/* Also handle font-style, font-weight, text-decoration which Shiki may set */
+.dark .shiki span {
+  font-style: var(--shiki-dark-font-style, inherit) !important;
+  font-weight: var(--shiki-dark-font-weight, inherit) !important;
+  text-decoration: var(--shiki-dark-text-decoration, none) !important;
 }

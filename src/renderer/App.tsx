@@ -139,8 +139,8 @@ export function App() {
         st.setRightAreaWidth(r.getSize().inPixels);
         r.collapse();
         centerRef.current?.resize(9999);
+        savedRightArea.current = true;
       }
-      savedRightArea.current = true;
     } else {
       if (savedRightArea.current && r.isCollapsed()) {
         r.resize(st.rightAreaWidth);

@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import { createLogger } from "@/services/logger";
 import type { WorkspaceFolder } from "@/types/workspace";
+import {
+  DEFAULT_PERMISSION_MODE,
+  type PermissionMode,
+} from "@shared/permission-modes";
 
 const log = createLogger("settings-store");
 
@@ -22,10 +26,33 @@ export interface AppSettings {
   defaultDocClass?: "article" | "report" | "book";
   /** Custom system prompt for the agent shell. Empty = use built-in default. */
   agentSystemPrompt?: string;
+  /** Selected AI provider */
+  aiProvider?: string;
+  /** Selected AI model (null = provider default) */
+  aiModel?: string | null;
+  /** AI provider API keys (provider → key mapping) */
+  aiApiKeys?: Record<string, string>;
+  /** AI provider base URLs (provider → url mapping) */
+  aiBaseUrls?: Record<string, string>;
   /** Selected editor syntax highlighting theme */
   editorSyntaxTheme?: string;
   /** Default workspace folder configuration for new projects */
   defaultWorkspaceDirs?: WorkspaceFolder[];
+  /** AI reasoning/thinking depth level. Per-provider values: low/medium/high/max/minimal/xhigh.
+   *  undefined = provider default. */
+  thoughtLevel?: string;
+  /** User-added custom model IDs per provider */
+  aiCustomModels?: Record<string, string[]>;
+  /** User-added custom model configs per provider (structured, with name + context window) */
+  aiCustomModelsData?: Record<string, { id: string; name: string; contextWindow: string }[]>;
+  /** Enabled model IDs per provider (checked = shown in chat model dropdown) */
+  aiEnabledModels?: Record<string, string[]>;
+  /** Providers whose API keys have been verified */
+  aiVerifiedProviders?: string[];
+  /** Chat tool permission preset: ask | auto | readonly */
+  permissionMode?: PermissionMode;
+  /** User-added custom API providers */
+  aiCustomProviders?: { id: string; name: string; baseUrl: string }[];
 }
 
 const defaults: AppSettings = {
@@ -37,6 +64,7 @@ const defaults: AppSettings = {
   agentSystemPrompt: "",
   editorSyntaxTheme: "prism",
   defaultWorkspaceDirs: [{ function: "manuscript", name: "manuscript", mainTex: "main.tex" }],
+  permissionMode: DEFAULT_PERMISSION_MODE,
 };
 
 interface SettingsState {
@@ -71,6 +99,26 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         log.info("Migrated manuscriptDir → defaultWorkspaceDirs", { from: migratedDir });
       }
 
+      // Migrate: aiCustomModels (string[]) → aiCustomModelsData (structured)
+      const r = remote as any;
+      if (
+        r.aiCustomModels &&
+        Object.keys(r.aiCustomModels).length > 0 &&
+        !r.aiCustomModelsData
+      ) {
+        const migrated: Record<string, { id: string; name: string; contextWindow: string }[]> = {};
+        for (const [providerId, modelIds] of Object.entries(r.aiCustomModels)) {
+          migrated[providerId] = (modelIds as string[]).map((id: string) => ({
+            id,
+            name: id,
+            contextWindow: "Unknown",
+          }));
+        }
+        r.aiCustomModelsData = migrated;
+        window.electronAPI.settingsSet({ aiCustomModelsData: migrated }).catch(() => {});
+        log.info("Migrated aiCustomModels → aiCustomModelsData");
+      }
+
       set({
         settings: {
           ...defaults,
@@ -91,6 +139,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   updateSettings: async (patch: Partial<AppSettings>) => {
     const merged = { ...get().settings, ...patch };
     set({ settings: merged });
+
+    if (patch.permissionMode === "auto") {
+      const { useChangesStore } = await import("./changes-store");
+      useChangesStore.getState().clearAll();
+    }
 
     try {
       await window.electronAPI.settingsSet(patch);

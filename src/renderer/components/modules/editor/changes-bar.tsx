@@ -1,12 +1,15 @@
 import { useMemo } from "react";
 import { useChangesStore, type ProposedChange } from "@/stores/changes-store";
-import { CheckIcon, XIcon, ChevronUpIcon, ChevronDownIcon } from "lucide-react";
+import { CheckIcon, XIcon, ChevronUpIcon, ChevronDownIcon, ShieldAlertIcon } from "lucide-react";
 import { diffLines } from "diff";
+
+export type ChangesBarMode = "permission" | "review";
 
 interface ChangesBarProps {
   change: ProposedChange;
   changeIndex: number;
   totalChanges: number;
+  mode?: ChangesBarMode;
   onAcceptAll: () => void;
   onRejectAll: () => void;
   onPrevChange?: () => void;
@@ -18,8 +21,6 @@ function countDiff(oldContent: string, newContent: string) {
   let added = 0;
   let removed = 0;
   for (const change of changes) {
-    const lines = change.value.split("\n").filter((l) => l !== "" || change.value.endsWith("\n")).length;
-    // Count actual changed lines
     const lineCount = change.value.split("\n").length - (change.value.endsWith("\n") ? 1 : 0);
     if (change.added) added += lineCount;
     else if (change.removed) removed += lineCount;
@@ -31,6 +32,7 @@ export function ChangesBar({
   change,
   changeIndex,
   totalChanges,
+  mode = "review",
   onAcceptAll,
   onRejectAll,
   onPrevChange,
@@ -41,14 +43,21 @@ export function ChangesBar({
     [change.oldContent, change.newContent],
   );
 
+  const isPermission = mode === "permission";
+
   return (
     <div className="flex h-[var(--height-changes-bar)] shrink-0 items-center gap-2 border-b border-border bg-muted/50 px-3">
+      {isPermission && (
+        <ShieldAlertIcon className="size-3.5 shrink-0 text-primary" />
+      )}
       <span className="text-[length:var(--font-toolbar-tab)] text-muted-foreground truncate min-w-0">
-        {change.filePath.split("/").pop() || change.filePath}
+        {isPermission ? "Allow AI to edit this file?" : (change.filePath.split("/").pop() || change.filePath)}
       </span>
-      <span className="text-[length:var(--font-toolbar-label)] text-muted-foreground shrink-0">
-        ({change.toolName})
-      </span>
+      {!isPermission && (
+        <span className="text-[length:var(--font-toolbar-label)] text-muted-foreground shrink-0">
+          ({change.toolName})
+        </span>
+      )}
 
       {added > 0 && (
         <span className="text-[length:var(--font-badge)] text-success shrink-0">
@@ -94,19 +103,19 @@ export function ChangesBar({
         type="button"
         className="flex items-center gap-1 rounded px-2 py-0.5 text-[length:var(--font-toolbar-tab)] text-success hover:bg-success/10 transition-colors shrink-0"
         onClick={onAcceptAll}
-        title="Accept all changes (⌘Y)"
+        title={isPermission ? "Allow (⌘Y)" : "Accept all changes (⌘Y)"}
       >
         <CheckIcon className="size-3" />
-        Accept
+        {isPermission ? "Allow" : "Accept"}
       </button>
       <button
         type="button"
         className="flex items-center gap-1 rounded px-2 py-0.5 text-[length:var(--font-toolbar-tab)] text-destructive hover:bg-destructive/10 transition-colors shrink-0"
         onClick={onRejectAll}
-        title="Reject all changes (⌘N)"
+        title={isPermission ? "Deny (⌘N)" : "Reject all changes (⌘N)"}
       >
         <XIcon className="size-3" />
-        Reject
+        {isPermission ? "Deny" : "Reject"}
       </button>
     </div>
   );

@@ -3,32 +3,18 @@ import { cn } from "@/lib/utils";
 import { useChatStore, type ChatStreamMessage, type ContentBlock } from "@/stores/chat-store";
 import { MarkdownRenderer } from "./markdown-renderer";
 import { ToolWidget, ThinkingWidget } from "./tools";
+import { TurnFooter, extractTurnCopyText } from "./turn-footer";
+import { isToolResultUserMessage } from "./chat-turns";
+import { buildToolResultMap, contentBlocks } from "./tools/tool-result-map";
 import {
   AlertCircleIcon,
   CopyIcon,
   CheckIcon,
   ArrowDownIcon,
+  ZapIcon,
+  Loader2Icon,
+  CircleCheckIcon,
 } from "lucide-react";
-
-/** Check whether a user message's content consists entirely of tool_result
- *  blocks (i.e. a tool outcome forwarded by the agent). Handles both the
- *  array-of-blocks format (streaming) and the plain-string format (JSONL). */
-function isAllToolResults(
-  content: string | ContentBlock[] | undefined,
-): boolean {
-  if (!content) return false;
-  if (typeof content === "string") return false; // plain text → not tool results
-  return content.every((b) => b.type === "tool_result");
-}
-
-/** Safely iterate content blocks, handling both array and string formats. */
-function contentBlocks(
-  content: string | ContentBlock[] | undefined,
-): ContentBlock[] {
-  if (!content) return [];
-  if (typeof content === "string") return [{ type: "text", text: content }];
-  return content;
-}
 
 // ─── Copy Button ───
 
@@ -55,16 +41,16 @@ CopyButton.displayName = "CopyButton";
 
 // ─── Streaming Indicator ───
 
-// Static loading indicator — dots + "Thinking..." only, no timer.
-// Represents CLI startup / waiting-for-first-token, not actual AI thinking time.
+// Styled to match ThinkingWidget inside AssistantMessage (px-6) so the
+// transition from dots to thinking is horizontally seamless.
 const StreamingIndicator = memo(() => (
-  <div className="flex items-center gap-2 px-4 py-2">
+  <div className="flex items-center gap-2 px-6 py-1 my-1.5">
     <div className="flex items-center gap-1">
       <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:0ms]" />
       <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:150ms]" />
       <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:300ms]" />
     </div>
-    <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">Thinking...</span>
+    <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">Thinking…</span>
   </div>
 ));
 StreamingIndicator.displayName = "StreamingIndicator";
@@ -72,8 +58,28 @@ StreamingIndicator.displayName = "StreamingIndicator";
 // ─── User Header ───
 
 const UserHeader = memo(function UserHeader({ msg }: { msg: ChatStreamMessage }) {
-  const textBlock = contentBlocks(msg.message?.content).find((b) => b.type === "text");
-  const text = textBlock?.text || "";
+  // Join ALL text blocks to show the complete user message, filtering out
+  // system prompt blocks as a safety net. Using all blocks (not just the
+  // first) ensures that even if stripSystemPromptFromDisplay fails, the
+  // user's actual message text is still visible.
+  const allBlocks = contentBlocks(msg.message?.content);
+  const commandBlocks = allBlocks.filter((b) => b.type === "command");
+  const text = allBlocks
+    .filter((b) => {
+      if (b.type !== "text" || !b.text) return false;
+      // Safety: skip blocks that look like the Prism system prompt
+      const t = b.text;
+      if (t.startsWith("## Role") && (
+        t.includes("integrated into Prism") ||
+        t.includes("LaTeX academic paper writing workspace") ||
+        t.includes("## Core Rules")
+      )) {
+        return false;
+      }
+      return true;
+    })
+    .map((b) => b.text)
+    .join("\n");
   const [expanded, setExpanded] = useState(false);
 
   const long = text.length > 140;
@@ -85,12 +91,32 @@ const UserHeader = memo(function UserHeader({ msg }: { msg: ChatStreamMessage })
         long && !expanded && "cursor-pointer hover:bg-muted/50",
       )} onClick={long && !expanded ? () => setExpanded(true) : undefined}>
         <div className="flex items-start gap-2">
-          <span className={cn(
-            "flex-1 text-[length:var(--font-chat-message)] text-foreground",
-            long && !expanded ? "line-clamp-2" : "whitespace-pre-wrap break-words",
-          )}>
-            {text}
-          </span>
+          <div className="flex-1 min-w-0">
+            {/* Command chips */}
+            {commandBlocks.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1 mb-1.5">
+                {commandBlocks.map((block, i) => (
+                  <span
+                    key={i}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-mono font-medium text-[length:var(--font-chat-meta)]",
+                      (block as any).action
+                        ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                        : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+                    )}
+                  >
+                    /{block.name}
+                  </span>
+                ))}
+              </div>
+            )}
+            <span className={cn(
+              "text-[length:var(--font-chat-message)] text-foreground",
+              long && !expanded ? "line-clamp-2" : "whitespace-pre-wrap break-words",
+            )}>
+              {text}
+            </span>
+          </div>
           <CopyButton text={text} />
         </div>
         {long && !expanded && (
@@ -114,19 +140,16 @@ const UserHeader = memo(function UserHeader({ msg }: { msg: ChatStreamMessage })
 const AssistantMessage = memo(function AssistantMessage({
   msg,
   toolResultMap,
-  metaText,
   msgIndex,
   isStreamingMsg,
 }: {
   msg: ChatStreamMessage;
   toolResultMap: Map<string, ContentBlock>;
-  metaText?: string;
   msgIndex: number;
   isStreamingMsg?: boolean;
 }) {
   const blocks = contentBlocks(msg.message?.content);
-  const textBlock = blocks.find((b) => b.type === "text");
-  const fullText = textBlock?.text || "";
+
   const sessionId = msg.session_id || "";
 
   // Thinking is complete once the assistant emits text or tool_use blocks.
@@ -166,17 +189,6 @@ const AssistantMessage = memo(function AssistantMessage({
             return null;
           })}
       </div>
-
-      {fullText && (
-        <div className="flex items-center gap-2 mt-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <CopyButton text={fullText} />
-          {metaText && (
-            <span className="ml-auto text-[length:var(--font-chat-meta)] text-muted-foreground/50 tabular-nums">
-              {metaText}
-            </span>
-          )}
-        </div>
-      )}
     </div>
   );
 });
@@ -204,6 +216,56 @@ function ResultMessage({ msg }: { msg: ChatStreamMessage }) {
   return null;
 }
 
+// ─── Action Status Message ───
+
+function ActionStatusCard({ msg }: { msg: ChatStreamMessage }) {
+  const { actionName, status, result, duration_ms } = msg;
+
+  return (
+    <div className="px-6 py-2 animate-in fade-in slide-in-from-bottom-1 duration-200">
+      <div className="flex items-start gap-2.5 rounded-lg border border-border bg-card px-3.5 py-2.5 shadow-sm">
+        <ZapIcon className="size-4 shrink-0 mt-0.5 text-primary" />
+        <div className="flex-1 min-w-0">
+          <span className="font-mono font-medium text-[length:var(--font-chat-meta)]">
+            /{actionName || "unknown"}
+          </span>
+          <div className="flex items-center gap-1.5 mt-1">
+            {status === "running" && (
+              <>
+                <Loader2Icon className="size-3 animate-spin text-muted-foreground" />
+                <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">
+                  Executing...
+                </span>
+              </>
+            )}
+            {status === "success" && (
+              <>
+                <CircleCheckIcon className="size-3 text-success shrink-0" />
+                <span className="text-[length:var(--font-chat-meta)] text-foreground/80">
+                  {result || "Completed"}
+                </span>
+                {duration_ms != null && (
+                  <span className="text-muted-foreground/50 text-[length:var(--font-chat-meta)] tabular-nums">
+                    ({(duration_ms / 1000).toFixed(1)}s)
+                  </span>
+                )}
+              </>
+            )}
+            {status === "error" && (
+              <>
+                <AlertCircleIcon className="size-3 text-destructive shrink-0" />
+                <span className="text-destructive text-[length:var(--font-chat-meta)]">
+                  {result || "Failed"}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Chat Messages ───
 
 export const ChatMessages = memo(function ChatMessages() {
@@ -220,24 +282,17 @@ export const ChatMessages = memo(function ChatMessages() {
   // These O(n) scans only re-run when committed messages change,
   // NOT on every stream delta.
 
-  const toolResultMap = useMemo(() => {
-    const map = new Map<string, ContentBlock>();
-    for (const msg of messages) {
-      for (const block of contentBlocks(msg.message?.content)) {
-        if (block.type === "tool_result" && block.tool_use_id) {
-          map.set(block.tool_use_id, block);
-        }
-      }
-    }
-    return map;
-  }, [messages]);
+  const toolResultMap = useMemo(
+    () => buildToolResultMap(messages, { isStreaming }),
+    [messages, isStreaming],
+  );
 
   const committed = useMemo(() => {
     const seenResultKeys = new Set<string>();
     const idxMap = new Map<ChatStreamMessage, number>();
     const filtered = messages.filter((msg, i) => {
       if (msg.type === "system") return false;
-      if (msg.type === "user" && isAllToolResults(msg.message?.content)) {
+      if (msg.type === "user" && isToolResultUserMessage(msg)) {
         return false;
       }
       if (msg.type === "result") {
@@ -328,14 +383,20 @@ export const ChatMessages = memo(function ChatMessages() {
     return result;
   }, [displayMessages]);
 
-  // Show the streaming "Thinking..." indicator until the AI emits
-  // ≥10 chars of thinking content. This avoids flicker when the first
-  // 1-2 character delta arrives and the ThinkingWidget isn't ready yet.
-  const showStreamingIndicator = isStreaming && !displayMessages.some(
-    (m) => m.type === "assistant" && m.message?.content?.some(
-      (b) => b.type === "thinking" && b.thinking && b.thinking.length >= 10 && !(b as any)._progress,
-    ),
-  );
+  // Once thinking content is observed, hide the dots indicator permanently
+  // until streaming stops. Using useEffect avoids setState-in-render.
+  const [thinkingSeenThisTurn, setThinkingSeenThisTurn] = useState(false);
+  useEffect(() => { if (!isStreaming) setThinkingSeenThisTurn(false); }, [isStreaming]);
+  useEffect(() => {
+    if (!isStreaming) return;
+    const hasThinking = displayMessages.some(
+      (m) => m.type === "assistant" && m.message?.content?.some(
+        (b) => b.type === "thinking" && b.thinking && b.thinking.length >= 10 && !(b as any)._progress,
+      ),
+    );
+    if (hasThinking && !thinkingSeenThisTurn) setThinkingSeenThisTurn(true);
+  }, [displayMessages, isStreaming, thinkingSeenThisTurn]);
+  const showStreamingIndicator = isStreaming && !thinkingSeenThisTurn;
 
   // ── Auto-scroll ──
 
@@ -392,7 +453,12 @@ export const ChatMessages = memo(function ChatMessages() {
     <div className="relative flex-1 min-h-0">
       <div ref={scrollRef} className="absolute inset-0 overflow-y-auto scroll-smooth">
         <div className="min-h-full pb-4 max-w-3xl mx-auto">
-          {turns.map((turn, turnIdx) => (
+          {turns.map((turn, turnIdx) => {
+            const isTurnComplete = turnIdx < turns.length - 1 || !isStreaming;
+            const lastAsst = [...turn.responses].reverse().find((r) => r.msg.type === "assistant");
+            const turnMeta = lastAsst ? metaMap.get(lastAsst.displayIdx) : undefined;
+
+            return (
             <section key={turn.userMessage ? `turn-${committed.idxMap.get(turn.userMessage) ?? turnIdx}` : `turn-orphan-${turnIdx}`}>
               {turn.userMessage && (
                 <UserHeader msg={turn.userMessage} />
@@ -407,9 +473,16 @@ export const ChatMessages = memo(function ChatMessages() {
                         key={`asst-${idx}`}
                         msg={msg}
                         toolResultMap={toolResultMap}
-                        metaText={metaMap.get(displayIdx)}
                         msgIndex={idx}
                         isStreamingMsg={isStreamingMsg}
+                      />
+                    );
+                  }
+                  if (msg.type === "action-status") {
+                    return (
+                      <ActionStatusCard
+                        key={`action-${displayIdx}`}
+                        msg={msg}
                       />
                     );
                   }
@@ -421,9 +494,16 @@ export const ChatMessages = memo(function ChatMessages() {
                   }
                   return null;
                 })}
+                <TurnFooter
+                  turnIndex={turnIdx}
+                  copyText={extractTurnCopyText(turn.responses)}
+                  metaText={turnMeta}
+                  isComplete={isTurnComplete}
+                />
               </div>
             </section>
-          ))}
+            );
+          })}
           {showStreamingIndicator && (
             <StreamingIndicator />
           )}

@@ -3,25 +3,39 @@ import { safeStorage } from "electron";
 
 export interface AppSettings {
   aiModel: "default" | "sonnet" | "opus" | "haiku";
-  effortLevel: "low" | "medium" | "high";
   theme: "dark" | "light" | "system";
   sidebarCollapsed: boolean;
   rightPanelCollapsed: boolean;
   lastProjectPath?: string;
+  lastActiveFileId?: string | null;
   zoteroApiKey?: string;
   zoteroUserId?: string;
-  /** Custom system prompt for the agent shell (Layer 1).
-   *  When empty/undefined, APP_SYSTEM_PROMPT from app-shell.ts is used. */
+  /** Custom system prompt — replaces the built-in core persona (Layer 0) when set.
+   *  Modules, AGENTS.md, and project rules still append below. */
   agentSystemPrompt?: string;
+
+  /** Prompt module toggle states. { "citations": true, "workspace-folders": true, ... }
+   *  Missing keys default to the module's built-in default. */
+  promptModules?: Record<string, boolean>;
+  /** Prompt layer toggle states (userToggleable layers only).
+   *  { "active-modules": true, "agents-md": true, "custom-rules": true } */
+  promptLayers?: Record<string, boolean>;
+
+  /** Built-in slash command enable/disable states. { "compile": false, ... } */
+  builtinCommands?: Record<string, boolean>;
+
+  // Renderer-side dynamic keys — stored by electron-store but read via
+  // the catch-all `raw` loop in getSettings(). Listed here for documentation.
+  [key: string]: unknown;
 }
 
 const defaults: AppSettings = {
   aiModel: "default",
-  effortLevel: "low",
   theme: "dark",
   sidebarCollapsed: false,
   rightPanelCollapsed: false,
   agentSystemPrompt: "",
+  promptModules: { "workspace-folders": true },
 };
 
 const store = new Store<AppSettings>({
@@ -47,6 +61,12 @@ function decryptIfAvailable(value: string): string {
   return value;
 }
 
+const SENSITIVE_KEYS = ["zoteroApiKey", "zoteroUserId", "aiApiKeys"] as const;
+
+function isSensitiveKey(key: string): boolean {
+  return (SENSITIVE_KEYS as readonly string[]).includes(key);
+}
+
 export function getSettings(): AppSettings {
   // Read ALL stored keys so dynamic renderer-side keys
   // (editorSyntaxTheme, pdfDarkMode, manuscriptDir, etc.) are
@@ -56,8 +76,6 @@ export function getSettings(): AppSettings {
   // Read all plain-text fields directly
   const settings: AppSettings = {
     aiModel: (store.get("aiModel") as AppSettings["aiModel"]) || defaults.aiModel,
-    effortLevel:
-      (store.get("effortLevel") as AppSettings["effortLevel"]) || defaults.effortLevel,
     theme: (store.get("theme") as AppSettings["theme"]) || defaults.theme,
     sidebarCollapsed:
       (store.get("sidebarCollapsed") as boolean) ?? defaults.sidebarCollapsed,
@@ -77,6 +95,19 @@ export function getSettings(): AppSettings {
     settings.zoteroUserId = decryptIfAvailable(encryptedUserId);
   }
 
+  const encryptedAiKeys = store.get("aiApiKeys") as string | undefined;
+  if (encryptedAiKeys) {
+    try {
+      settings.aiApiKeys = JSON.parse(decryptIfAvailable(encryptedAiKeys)) as Record<string, string>;
+    } catch {
+      // Handle plaintext fallback from before encryption was added
+      settings.aiApiKeys = (store.get("aiApiKeys") as Record<string, string>) || {};
+    }
+  } else {
+    // Plaintext fallback (existing unencrypted data)
+    settings.aiApiKeys = (store.get("aiApiKeys") as Record<string, string>) || {};
+  }
+
   // Start with explicitly-read settings, then overlay all raw store keys
   // so that renderer-side dynamic keys (editorSyntaxTheme, etc.) survive
   // round-trips without needing manual enumeration here.
@@ -86,6 +117,8 @@ export function getSettings(): AppSettings {
     result.zoteroApiKey = settings.zoteroApiKey;
   if (settings.zoteroUserId !== undefined)
     result.zoteroUserId = settings.zoteroUserId;
+  if (settings.aiApiKeys !== undefined)
+    result.aiApiKeys = settings.aiApiKeys;
   return result as AppSettings;
 }
 
@@ -95,8 +128,9 @@ export function updateSettings(patch: Partial<AppSettings>): void {
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue;
 
-    if ((key === "zoteroApiKey" || key === "zoteroUserId") && typeof value === "string") {
-      encrypted[key] = encryptIfAvailable(value);
+    if (isSensitiveKey(key)) {
+      const stringValue = typeof value === "string" ? value : JSON.stringify(value);
+      encrypted[key] = encryptIfAvailable(stringValue);
     } else {
       encrypted[key] = value;
     }

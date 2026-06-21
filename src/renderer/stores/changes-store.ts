@@ -5,8 +5,8 @@ export interface ProposedChange {
   id: string; // tool_use_id
   filePath: string; // relativePath
   absolutePath: string;
-  oldContent: string; // content before Claude's edit
-  newContent: string; // content after Claude's edit
+  oldContent: string; // content before OpenCode's edit
+  newContent: string; // content after OpenCode's edit
   toolName: string; // "Edit" | "Write" | "MultiEdit"
   timestamp: number;
 }
@@ -15,6 +15,7 @@ interface ChangesState {
   changes: ProposedChange[];
 
   addChange: (change: Omit<ProposedChange, "timestamp">) => void;
+  removeChange: (id: string) => void;
   acceptChange: (id: string) => Promise<void>;
   rejectChange: (id: string) => Promise<void>;
   acceptAll: () => Promise<void>;
@@ -46,6 +47,12 @@ export const useChangesStore = create<ChangesState>()((set, get) => ({
         changes: [...state.changes, { ...change, timestamp: Date.now() }],
       };
     });
+  },
+
+  removeChange: (id) => {
+    set((state) => ({
+      changes: state.changes.filter((c) => c.id !== id),
+    }));
   },
 
   acceptChange: async (id) => {

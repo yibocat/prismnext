@@ -158,7 +158,7 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
         <StarIcon className={cn("size-3.5", isBookmarked && "fill-warning text-warning")} />
       </button>
 
-      <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
+      <div className="mx-1 h-4 w-px bg-border shrink-0" />
 
       {/* URL bar */}
       <div className="flex-1 flex items-center gap-1.5 h-6 rounded bg-muted/50 px-2 min-w-0">
@@ -173,7 +173,7 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
         />
       </div>
 
-      <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
+      <div className="mx-1 h-4 w-px bg-border shrink-0" />
 
       {/* Three-dot menu */}
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>

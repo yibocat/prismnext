@@ -1,0 +1,42 @@
+// prism-next/src/main/prompts/modules/workspace-folders.ts
+
+import type { WorkspaceFolder } from "../../../renderer/types/workspace";
+import {
+  FOLDER_FUNCTION_ICONS,
+  FOLDER_FUNCTION_LABELS,
+  DEFAULT_FUNCTION_DESCRIPTIONS,
+} from "../../../renderer/types/workspace";
+
+/** Build the prompt section describing functional workspace folders. */
+export function buildWorkspacePrompt(dirs: WorkspaceFolder[]): string {
+  if (!dirs || dirs.length === 0) return "";
+
+  const lines = dirs.map((d) => {
+    const label =
+      d.function === "custom" && "customLabel" in d
+        ? (d as any).customLabel || FOLDER_FUNCTION_LABELS.custom
+        : FOLDER_FUNCTION_LABELS[d.function];
+
+    const desc =
+      d.description ||
+      DEFAULT_FUNCTION_DESCRIPTIONS[d.function] ||
+      "User-defined folder";
+
+    const icon = FOLDER_FUNCTION_ICONS[d.function] || "";
+
+    // Include mainTex info for manuscript folders
+    const extra =
+      d.function === "manuscript" && "mainTex" in d
+        ? ` (main file: \`${(d as any).mainTex}\`)`
+        : "";
+
+    return `- \`${d.name}/\` ${icon} **${label}**${extra}: ${desc}`;
+  });
+
+  return (
+    "## Project Structure\n\n" +
+    "The project has the following functional folders. " +
+    "Use this structure to organize files and understand the project layout:\n\n" +
+    lines.join("\n")
+  );
+}

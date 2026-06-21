@@ -1,0 +1,75 @@
+// src/renderer/lib/providers/openai.ts
+import type { ProviderConfig } from "../types";
+
+export const openaiProvider: ProviderConfig = {
+  id: "openai",
+  name: "OpenAI",
+  defaultBaseUrl: "https://api.openai.com",
+  defaultModel: "gpt-5.4",
+  models: [
+    {
+      id: "gpt-5.5-pro",
+      name: "GPT-5.5 Pro",
+      contextWindow: "1M",
+      reasoning: ["minimal", "low", "medium", "high", "xhigh"],
+      defaultReasoning: "high",
+    },
+    {
+      id: "gpt-5.5",
+      name: "GPT-5.5",
+      contextWindow: "1M",
+      reasoning: ["minimal", "low", "medium", "high", "xhigh"],
+      defaultReasoning: "medium",
+    },
+    {
+      id: "gpt-5.4-pro",
+      name: "GPT-5.4 Pro",
+      contextWindow: "1M",
+      reasoning: ["minimal", "low", "medium", "high", "xhigh"],
+      defaultReasoning: "high",
+    },
+    {
+      id: "gpt-5.4",
+      name: "GPT-5.4",
+      contextWindow: "1M",
+      reasoning: ["minimal", "low", "medium", "high", "xhigh"],
+      defaultReasoning: "medium",
+    },
+    {
+      id: "gpt-5.4-mini",
+      name: "GPT-5.4 Mini",
+      contextWindow: "1M",
+      reasoning: ["minimal", "low", "medium", "high"],
+      defaultReasoning: "low",
+    },
+    {
+      id: "gpt-5.4-nano",
+      name: "GPT-5.4 Nano",
+      contextWindow: "1M",
+      reasoning: undefined,
+    },
+    {
+      id: "gpt-5.2",
+      name: "GPT-5.2",
+      contextWindow: "128K",
+      reasoning: ["minimal", "low", "medium", "high", "xhigh"],
+      defaultReasoning: "medium",
+    },
+    {
+      id: "gpt-5.1",
+      name: "GPT-5.1",
+      contextWindow: "128K",
+      reasoning: ["minimal", "low", "medium", "high", "xhigh"],
+      defaultReasoning: "medium",
+    },
+    {
+      id: "gpt-5",
+      name: "GPT-5",
+      contextWindow: "128K",
+      reasoning: ["minimal", "low", "medium", "high"],
+      defaultReasoning: "medium",
+    },
+  ],
+  reasoning: ["minimal", "low", "medium", "high", "xhigh"],
+  defaultReasoning: "medium",
+};

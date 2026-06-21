@@ -1,0 +1,123 @@
+{
+  "skills": [
+    {
+      "id": "academic-citations",
+      "name": "academic-citations",
+      "description": "BibTeX/biblatex citation keys, \\cite commands, and bibliography hygiene",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "latex-figures-tables",
+      "name": "latex-figures-tables",
+      "description": "Figures, tables, subfloats, captions, and cross-references in LaTeX",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "math-equations",
+      "name": "math-equations",
+      "description": "Display math, align environments, notation, and equation referencing",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "paper-structure",
+      "name": "paper-structure",
+      "description": "IMRaD and venue-specific paper section structure and flow",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "literature-review",
+      "name": "literature-review",
+      "description": "Synthesize prior work, compare methods, and write Related Work sections",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "peer-review-response",
+      "name": "peer-review-response",
+      "description": "Structure rebuttal letters and point-by-point reviewer responses",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "grant-proposal",
+      "name": "grant-proposal",
+      "description": "NSF/NIH-style proposals: aims, significance, innovation, approach",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "thesis-dissertation",
+      "name": "thesis-dissertation",
+      "description": "Thesis chapter planning, front matter, and long-document LaTeX conventions",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "academic-english",
+      "name": "academic-english",
+      "description": "Formal academic tone, clarity, and common ESL fixes for STEM writing",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "data-analysis-report",
+      "name": "data-analysis-report",
+      "description": "Describe experiments, statistics, reproducibility, and results reporting",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "git-commit-messages",
+      "name": "git-commit-messages",
+      "description": "Write clear conventional commit messages from diffs or summaries",
+      "category": "general",
+      "license": "MIT"
+    },
+    {
+      "id": "code-review",
+      "name": "code-review",
+      "description": "Structured code review: correctness, edge cases, tests, maintainability",
+      "category": "general",
+      "license": "MIT"
+    },
+    {
+      "id": "debug-systematic",
+      "name": "debug-systematic",
+      "description": "Systematic debugging: reproduce, isolate, hypothesize, verify",
+      "category": "general",
+      "license": "MIT"
+    },
+    {
+      "id": "technical-writing",
+      "name": "technical-writing",
+      "description": "README, API docs, and user-facing technical explanations",
+      "category": "general",
+      "license": "MIT"
+    },
+    {
+      "id": "api-design",
+      "name": "api-design",
+      "description": "REST/IPC API naming, versioning, errors, and consistency",
+      "category": "general",
+      "license": "MIT"
+    },
+    {
+      "id": "meeting-notes",
+      "name": "meeting-notes",
+      "description": "Turn messy notes into decisions, action items, and owners",
+      "category": "general",
+      "license": "MIT"
+    },
+    {
+      "id": "skill-creator",
+      "name": "skill-creator",
+      "description": "Use when the user wants to create, write, or author a new agent skill (SKILL.md), extend agent capabilities, or asks to make a skill, create a skill, or define a reusable workflow.",
+      "category": "general",
+      "license": "MIT"
+    }
+  ]
+}

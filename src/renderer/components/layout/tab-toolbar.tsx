@@ -88,7 +88,7 @@ export const TabToolbar = memo(function TabToolbar({ children, onToggleSidebar, 
       {/* ─── File-type toolbar ─── */}
       {children}
 
-      {children && <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />}
+      {children && <div className="mx-1 h-4 w-px bg-border shrink-0" />}
 
       {/* ─── Sidebar toggle ─── */}
       <button

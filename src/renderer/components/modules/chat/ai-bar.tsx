@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { Kbd } from "@/components/ui/kbd";
 import { ChatComposer } from "./chat-composer";
 import { ChatMessages } from "./chat-messages";
+import { RestoreUndoBar } from "./restore-undo-bar";
 import { useChatStore } from "@/stores/chat-store";
 import {
   ArrowUpIcon,
@@ -228,6 +229,7 @@ export function AiBar() {
             <div className="flex-1 min-h-0 flex flex-col">
               <ChatMessages />
             </div>
+            <RestoreUndoBar />
           </div>
           </div>
         </div>
@@ -345,7 +347,7 @@ export function AiBar() {
                 </DropdownMenu>
                 <input
                   ref={inputRef}
-                  className="flex-1 bg-transparent text-[length:var(--font-size-14)] outline-none placeholder:text-muted-foreground"
+                  className="flex-1 bg-transparent text-[length:var(--font-composer)] outline-none placeholder:text-muted-foreground"
                   placeholder="Ask AI about your research..."
                   value={value}
                   onChange={handleInputChange}

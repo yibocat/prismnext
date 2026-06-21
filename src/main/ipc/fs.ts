@@ -1,6 +1,7 @@
 import { ipcMain, dialog, BrowserWindow } from "electron";
 import * as fs from "../services/filesystem";
 import { startWatching, stopWatching } from "../services/filesystem";
+import { buildAgentsMdScaffold } from "../services/agents-md-scaffold";
 import { createLogger } from "../services/logger";
 import type { WorkspaceFolder } from "../../renderer/types/workspace";
 import { writeWorkspaceDirs, createConfiguredFolders, validateWorkspaceDirs } from "../services/workspace-config";
@@ -167,32 +168,40 @@ export function registerFsHandlers(): void {
 
   async function createAgentConfig(prismDir: string): Promise<void> {
     const { join } = require("node:path");
-    const { existsSync, mkdirSync, writeFileSync } = require("node:fs");
-    const agentConfigDir = join(prismDir, "agent-config", "claude");
-    const skillsDir = join(agentConfigDir, "skills");
+    const { existsSync, mkdirSync, writeFileSync, renameSync, rmSync } = require("node:fs");
 
-    // Create directories
-    if (!existsSync(agentConfigDir)) {
-      mkdirSync(agentConfigDir, { recursive: true });
+    const newAgentDir = join(prismDir, "agent");
+    const oldAgentDir = join(prismDir, "agent-config", "opencode");
+
+    // Migration: rename old .prismnext/agent-config/opencode/ → .prismnext/agent/
+    if (existsSync(oldAgentDir) && !existsSync(newAgentDir)) {
+      try {
+        renameSync(oldAgentDir, newAgentDir);
+        // Remove settings.json (permissions belong to app-level OpenCode config)
+        const oldSettings = join(newAgentDir, "settings.json");
+        if (existsSync(oldSettings)) rmSync(oldSettings);
+        // Clean up empty agent-config/ parent if empty
+        const agentConfigDir = join(prismDir, "agent-config");
+        try { rmSync(agentConfigDir, { recursive: true }); } catch { /* not empty, leave it */ }
+      } catch (err: any) {
+        console.warn(`[project] agent config migration failed: ${err.message}`);
+      }
+    }
+
+    // Create new directory structure
+    const skillsDir = join(newAgentDir, "skills");
+    if (!existsSync(newAgentDir)) {
+      mkdirSync(newAgentDir, { recursive: true });
     }
     if (!existsSync(skillsDir)) {
       mkdirSync(skillsDir, { recursive: true });
     }
 
     // Create mcp.json template
-    const mcpPath = join(agentConfigDir, "mcp.json");
+    const mcpPath = join(newAgentDir, "mcp.json");
     if (!existsSync(mcpPath)) {
       writeFileSync(mcpPath, JSON.stringify({
         "mcpServers": {},
-      }, null, 2), "utf-8");
-    }
-
-    // Create settings.json template
-    const settingsPath = join(agentConfigDir, "settings.json");
-    if (!existsSync(settingsPath)) {
-      writeFileSync(settingsPath, JSON.stringify({
-        "permissions": { "allow": [] },
-        "model": null,
       }, null, 2), "utf-8");
     }
 
@@ -200,6 +209,12 @@ export function registerFsHandlers(): void {
     const gitkeepPath = join(skillsDir, ".gitkeep");
     if (!existsSync(gitkeepPath)) {
       writeFileSync(gitkeepPath, "", "utf-8");
+    }
+
+    // Create AGENTS.md template (empty, ready for user to fill in)
+    const agentsMdPath = join(newAgentDir, "AGENTS.md");
+    if (!existsSync(agentsMdPath)) {
+      writeFileSync(agentsMdPath, "", "utf-8");
     }
   }
 
@@ -269,6 +284,48 @@ export function registerFsHandlers(): void {
       }
       writeFileSync(mainTexFullPath, DEFAULT_MAIN_TEX);
     }
+  });
+
+  // ─── Ensure .prismnext/ exists (idempotent) ───
+  // Called on every project open (not just create) so that the data hub
+  // directory tree is always present. Safe to call on already-initialized
+  // projects — it only creates missing files/dirs.
+  ipcMain.handle("project:ensure", async (_event, args: { rootPath: string }) => {
+    const { join } = require("node:path");
+    const { existsSync, mkdirSync } = require("node:fs");
+
+    const prismDir = join(args.rootPath, ".prismnext");
+    if (!existsSync(prismDir)) {
+      mkdirSync(prismDir, { recursive: true });
+    }
+    if (!existsSync(join(prismDir, "sessions"))) {
+      mkdirSync(join(prismDir, "sessions"), { recursive: true });
+    }
+    if (!existsSync(join(prismDir, "compile"))) {
+      mkdirSync(join(prismDir, "compile"), { recursive: true });
+    }
+
+    // Agent config templates — only created if missing, never overwrite
+    await createAgentConfig(prismDir);
+    const { syncProjectSkillsIntegration } = await import("../services/skills-sync");
+    syncProjectSkillsIntegration(args.rootPath);
+
+    // .gitignore — only create if missing
+    const gitignorePath = join(prismDir, ".gitignore");
+    if (!existsSync(gitignorePath)) {
+      const { writeFileSync } = require("node:fs");
+      writeFileSync(gitignorePath, "compile/\nstate.json\nopencode/\ncache/\nstate/\n", "utf-8");
+    }
+
+    return { success: true };
+  });
+
+  ipcMain.handle("project:scaffoldAgentsMd", async (_event, args: { rootPath: string }) => {
+    const { join } = require("node:path");
+    const { mkdirSync } = require("node:fs");
+    const agentDir = join(args.rootPath, ".prismnext", "agent");
+    mkdirSync(agentDir, { recursive: true });
+    return await buildAgentsMdScaffold(args.rootPath);
   });
 
   ipcMain.handle("project:check", async (_event, args: { rootPath: string }) => {
@@ -770,15 +827,4 @@ export function registerFsHandlers(): void {
     },
   );
 
-  // ─── Window ───
-
-  ipcMain.handle(
-    "window:setTitle",
-    (event, args: { title: string }) => {
-      const win = BrowserWindow.fromWebContents(event.sender);
-      if (win) {
-        win.setTitle(args.title);
-      }
-    },
-  );
 }

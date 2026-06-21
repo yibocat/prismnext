@@ -33,8 +33,8 @@ const NEUTRAL_LIGHT: NeutralBase = {
   mutedForeground:   "oklch(0.556 0 0)",
   accent:            "oklch(0.97 0 0)",
   accentForeground:  "oklch(0.205 0 0)",
-  border:            "oklch(0.922 0 0)",
-  input:             "oklch(0.922 0 0)",
+  border:            "oklch(0.88 0 0)",
+  input:             "oklch(0.88 0 0)",
   ring:              "oklch(0.708 0 0)",
 };
 
@@ -52,8 +52,8 @@ const NEUTRAL_DARK: NeutralBase = {
   mutedForeground:   "oklch(0.708 0 0)",
   accent:            "oklch(0.26 0 0)",
   accentForeground:  "oklch(0.985 0 0)",
-  border:            "oklch(1 0 0 / 10%)",
-  input:             "oklch(1 0 0 / 15%)",
+  border:            "oklch(1 0 0 / 18%)",
+  input:             "oklch(1 0 0 / 20%)",
   ring:              "oklch(0.556 0 0)",
 };
 
@@ -69,8 +69,8 @@ export const SURFACE_MULTIPLIERS = {
     secondary:      0.095,
     muted:          0.095,
     accent:         0.12,
-    border:         0.12,
-    input:          0.12,
+    border:         0.18,
+    input:          0.18,
     sidebar:        0.08,
     sidebarAccent:  0.25,
   },
@@ -81,8 +81,8 @@ export const SURFACE_MULTIPLIERS = {
     secondary:      0.065,
     muted:          0.065,
     accent:         0.08,
-    border:         0.035,
-    input:          0.035,
+    border:         0.07,
+    input:          0.07,
     sidebar:        0.04,
     sidebarAccent:  0.125,
   },

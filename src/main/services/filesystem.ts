@@ -17,7 +17,7 @@ export interface ScanResult {
   folders: string[];
 }
 
-export { LARGE_FILE_THRESHOLD, TEXT_FILE_SIZE_LIMIT } from "@shared/constants";
+export { LARGE_FILE_THRESHOLD, TEXT_FILE_SIZE_LIMIT } from "./file-constants";
 
 const IMAGE_EXTENSIONS = new Set([
   ".png",

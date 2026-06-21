@@ -1,51 +1,12 @@
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { useChatStore } from "@/stores/chat-store";
-import { SlidersHorizontalIcon } from "lucide-react";
-import { ClaudeSettingsContent, ClaudeSettingsLabel } from "./claude-settings";
-import { GeminiSettingsContent, GeminiSettingsLabel } from "./gemini-settings";
-import { OpenCodeSettingsContent, OpenCodeSettingsLabel } from "./opencode-settings";
-import { QoderSettingsContent, QoderSettingsLabel } from "./qoder-settings";
-
-interface AgentSettingsComponent {
-  Content: React.ComponentType;
-  Label: React.ComponentType;
-}
-
-const REGISTRY: Record<string, AgentSettingsComponent> = {
-  claude: { Content: ClaudeSettingsContent, Label: ClaudeSettingsLabel },
-  gemini: { Content: GeminiSettingsContent, Label: GeminiSettingsLabel },
-  opencode: { Content: OpenCodeSettingsContent, Label: OpenCodeSettingsLabel },
-  qoder: { Content: QoderSettingsContent, Label: QoderSettingsLabel },
-};
+// src/renderer/components/modules/chat/agent-settings/agent-settings-bar.tsx
+import { ModelSelect } from "./model-select";
+import { ThoughtLevelSelect } from "./thought-level-select";
 
 export function AgentSettingsBar() {
-  const selectedAgent = useChatStore((s) => s.selectedAgent);
-  const entry = REGISTRY[selectedAgent] || REGISTRY.claude;
-  const { Content, Label } = entry;
-
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="flex items-center gap-0 @md:gap-1 rounded px-1.5 @md:px-2 py-1 text-muted-foreground text-[length:var(--font-chat-meta)] transition-colors hover:bg-accent hover:text-accent-foreground"
-          title="Model settings"
-        >
-          {/* Icon-only mode (below @md) */}
-          <SlidersHorizontalIcon className="size-3.5 shrink-0 @md:hidden" />
-          {/* Full mode: label (@md+) */}
-          <span className="hidden @md:contents">
-            <Label />
-          </span>
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-64">
-        <Content />
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div className="flex items-center gap-0.5">
+      <ModelSelect />
+      <ThoughtLevelSelect />
+    </div>
   );
 }

@@ -6,7 +6,7 @@ export default defineConfig({
   main: {
     resolve: {
       alias: {
-        "@shared": resolve("src/shared"),
+        "@shared": resolve("src/main/services"),
       },
     },
     build: {
@@ -18,7 +18,7 @@ export default defineConfig({
   preload: {
     resolve: {
       alias: {
-        "@shared": resolve("src/shared"),
+        "@shared": resolve("src/main/services"),
       },
     },
     build: {
@@ -32,7 +32,8 @@ export default defineConfig({
     resolve: {
       alias: {
         "@": resolve("src/renderer"),
-        "@shared": resolve("src/shared"),
+        "@shared": resolve("src/main/services"),
+        "@commands": resolve("src/main/commands"),
       },
       dedupe: ["@codemirror/state", "@codemirror/view", "@codemirror/merge", "pdfjs-dist"],
     },
@@ -59,6 +60,9 @@ export default defineConfig({
             }
             if (id.includes("node_modules/pdfjs-dist")) {
               return "pdfjs";
+            }
+            if (id.includes("node_modules/shiki") || id.includes("node_modules/@shikijs")) {
+              return "markdown-viewer";
             }
             if (
               id.includes("node_modules/react-markdown") ||

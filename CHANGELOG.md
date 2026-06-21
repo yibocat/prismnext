@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.4.0 — 2026-06-21
+
+### OpenCode ACP Kernel
+
+- Replaced multi-agent CLI architecture (Claude / Gemini / Qoder per-agent parsers and sessions) with a single OpenCode runtime over ACP (JSON-RPC over stdio)
+- New `AcpService` manages process lifecycle, sessions, prompts, permissions, and MCP server injection — no HTTP/SSE server or port management
+- Chat IPC consolidated under `chat:*` channels; legacy `cli:*` and per-agent registry removed
+- OpenCode binary bundling script and `electron-builder` packaging config added
+
+### Prompt System
+
+- Layered prompt composition: core persona → domain modules → AGENTS.md → user custom rules — append-only, never full replacement
+- Domain modules activated for academic writing, citations, figures/tables, math equations, and workspace folders
+- Prompt preview and per-module toggles in Settings → Prompts & Rules
+- AGENTS.md auto-discovery and scaffold under `.prismnext/agent/`
+
+### Skills & Slash Commands
+
+- 16 bundled academic skills shipped in `resources/skills/` with sync to project `.prismnext/agent/skills/`
+- Skills registry with remote index discovery and install/uninstall IPC
+- Slash command engine: built-in commands, app commands, and user-defined commands in `.prismnext/agent/commands/` with template expansion and local action dispatch
+
+### Chat UI
+
+- Turn-based message layout with dedicated tool widgets (read, edit, bash, grep, glob, patch, web search/fetch, skill, task, LSP, and more)
+- Permission ask panel with mode selector (auto / ask / deny) wired to ACP permission flow
+- Agent settings bar: provider/model select, thought level, and permission mode as inline controls
+- Restore/undo bar for checkpoint rollback; context window indicator retained
+
+### Settings
+
+- Settings → AI redesigned as expandable provider list with API key test, model picker, and reasoning depth
+- New Commands and Prompts & Rules settings pages; old per-agent App/Project settings panels removed
+- Provider registry with dynamic ACP `config/providers` fallback
+
+### Markdown Streaming
+
+- Removed `streamdown` and companion plugins; unified chat and file preview on `react-markdown` + Shiki
+- Block-caching streaming strategy: completed blocks frozen, only tail re-parsed — eliminates caret lag during streaming
+
+### Testing
+
+- Unit tests added for prompt composition, skills sync/registry, permission modes, MCP transform, chat session load, and tool widgets
+
 ## 0.3.19 — 2026-06-16
 
 ### Compiler

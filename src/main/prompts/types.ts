@@ -1,0 +1,50 @@
+// prism-next/src/main/prompts/types.ts
+
+import type { WorkspaceFolder } from "../../renderer/types/workspace";
+
+/** Context passed to dynamic prompt builders. */
+export interface PromptContext {
+  projectRoot?: string;
+  workspaceDirs?: WorkspaceFolder[];
+  agentsMdContent?: string;
+  userCustomPrompt?: string;
+  /** User-created custom rules (enabled only) */
+  customRules?: Array<{ name: string; content: string }>;
+}
+
+/** A single layer in the prompt stack. */
+export interface PromptLayer {
+  /** Unique identifier, e.g. "core-persona", "workspace-folders" */
+  id: string;
+  /** Ordering — lower numbers appear earlier in the final prompt */
+  priority: number;
+  /** Where this layer's content originates */
+  source: "app" | "project" | "user" | "plugin";
+  /** Can the user toggle this layer on/off? */
+  userToggleable: boolean;
+  /** Current enabled state */
+  enabled: boolean;
+  /** Whether this layer's build() returns the same result regardless of
+   *  PromptContext. Static layers are precomputed once at registration time. */
+  isStatic: boolean;
+  /** Build this layer's prompt text. Return "" to skip. */
+  build: (ctx: PromptContext) => string;
+}
+
+/** A content module that can be toggled on/off globally. */
+export interface PromptModule {
+  /** Unique key, e.g. "citations", "workspace-folders" */
+  key: string;
+  /** Human-readable label for the settings UI */
+  label: string;
+  /** Description shown in the settings UI */
+  description: string;
+  /** Global toggle state */
+  enabled: boolean;
+  /** Origin of this module */
+  source: "app" | "project" | "plugin";
+  /** Static prompt text (mutually exclusive with build) */
+  prompt?: string;
+  /** Dynamic prompt builder (mutually exclusive with prompt) */
+  build?: (ctx: PromptContext) => string;
+}

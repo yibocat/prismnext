@@ -8,6 +8,7 @@ import { RightMainArea } from "@/components/layout/right-main-area";
 import { RightSidebar } from "@/components/layout/right-sidebar";
 import { TabBar } from "@/components/layout/tab-bar";
 import { SidebarControls } from "@/components/layout/sidebar-controls";
+import { ServerStatusDot } from "@/components/server-status-dot";
 import { TabToolbar } from "@/components/layout/tab-toolbar";
 
 import { useBrowserStore } from "@/stores/browser-store";
@@ -255,6 +256,18 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
       // loop (drag → setState → DOM update → ResizeObserver → setState again).
       if (isDraggingSidebar.current) return;
 
+      // CRITICAL: Never save the sidebar width when in full mode. Full mode
+      // sets the sidebar to 100% of the container, which is NOT a user's
+      // preferred width — it's a layout compromise due to limited space.
+      // Saving this width permanently corrupts the persisted rightSidebarWidth,
+      // making the sidebar excessively wide even after exiting full mode.
+      // This is the root cause of the "sidebar too wide after returning from
+      // Settings" bug: when the RightArea panel collapses (Settings entry),
+      // container ResizeObserver sets fullMode=true; when the panel re-expands,
+      // this sidebar observer fires before fullMode is cleared — capturing the
+      // 100% panel width as if the user wanted it that wide.
+      if (sidebarFullModeRef.current) return;
+
       const actualWidth = Math.round(entries[0].contentRect.width);
       if (actualWidth <= 0) return;
       const st = useLayoutStore.getState();
@@ -273,23 +286,48 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   // sidebar fills the whole RightArea (content pane is hidden).
   // Evaluated at toggle time AND continuously via ResizeObserver so the
   // layout stays correct during window resize, not just at toggle.
+  //
+  // IMPORTANT: The full-mode threshold uses SIDEBAR_RIGHT_MIN (280px), NOT
+  // the user's stored rightSidebarWidth (which can be up to 520px). Using
+  // the stored value causes full-mode to trigger unnecessarily when the user
+  // has previously resized the sidebar wide — e.g. a 400px stored width
+  // makes `500 < 400 + 150` true even at the default RightArea panel size.
+  // The correct question is: "is this container too narrow for even the
+  // MINIMUM sidebar + minimum content?" — not "is it too narrow for my
+  // preferred sidebar width?"
+  const MIN_CONTENT_WIDTH = 150;
   const containerElRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
   const [sidebarFullMode, setSidebarFullMode] = useState(false);
+  // Ref mirror for the sidebar ResizeObserver (which can't read React state
+  // without re-creating the observer on every state change).
+  const sidebarFullModeRef = useRef(false);
+  useEffect(() => {
+    sidebarFullModeRef.current = sidebarFullMode;
+  }, [sidebarFullMode]);
+
+  /** Returns true when the container is too narrow to fit sidebar + content. */
+  const isTooNarrow = useCallback((containerWidth: number) => {
+    return containerWidth < SIDEBAR_RIGHT_MIN + MIN_CONTENT_WIDTH;
+  }, []);
 
   // Reactively switch to/from full mode as the container width changes.
   useEffect(() => {
     const el = containerElRef.current;
     if (!el) return;
     const ro = new ResizeObserver(() => {
-      if (!useLayoutStore.getState().rightSidebarOpen) return;
       const w = el.clientWidth;
-      const sidebarW = useLayoutStore.getState().rightSidebarWidth;
-      const narrow = w < sidebarW + 150;
+      setContainerWidth(w);
+      // Don't evaluate full-mode when panel is collapsed (w = 0) —
+      // this is not a "narrow container" situation, it's just hidden.
+      if (w <= 0) return;
+      if (!useLayoutStore.getState().rightSidebarOpen) return;
+      const narrow = isTooNarrow(w);
       setSidebarFullMode((prev) => (prev !== narrow ? narrow : prev));
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [isTooNarrow]);
 
   const handleToggleSidebar = useCallback(() => {
     const st = useLayoutStore.getState();
@@ -299,12 +337,12 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
       st.setRightSidebarOpen(false);
     } else {
       // Opening: check if space is narrow → full mode
-      const containerWidth = containerElRef.current?.clientWidth ?? Infinity;
-      const narrow = containerWidth < st.rightSidebarWidth + 150;
-      if (narrow) setSidebarFullMode(true);
+      const cw = containerElRef.current?.clientWidth ?? Infinity;
+      if (isFinite(cw)) setContainerWidth(cw);
+      if (isTooNarrow(cw)) setSidebarFullMode(true);
       st.setRightSidebarOpen(true);
     }
-  }, []);
+  }, [isTooNarrow]);
 
   // ── Mode button: per-mode lifecycle (registry-driven) ──
   const handleModeClick = useCallback(
@@ -339,8 +377,8 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
           // async ResizeObserver which may fire during panel expansion
           // with an intermediate width and incorrectly lock full mode.
           const cw = containerElRef.current?.clientWidth ?? Infinity;
-          const sw = useLayoutStore.getState().rightSidebarWidth;
-          setSidebarFullMode(cw < sw + 150);
+          if (isFinite(cw)) setContainerWidth(cw);
+          setSidebarFullMode(isTooNarrow(cw));
         }
       } else if (focusedMode === target) {
         // ── Deactivate mode → close ALL its tabs → Dashboard ──
@@ -373,6 +411,13 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   );
 
   const sidebarFull = rightSidebarOpen && sidebarFullMode;
+
+  // Effective sidebar width: clamp to leave at least MIN_CONTENT_WIDTH for content.
+  // Only used when NOT in full mode (full mode uses "100%").
+  const effectiveSidebarWidth = useMemo(() => {
+    if (sidebarFull || containerWidth <= 0) return rightSidebarWidth;
+    return Math.min(rightSidebarWidth, Math.max(SIDEBAR_RIGHT_MIN, containerWidth - MIN_CONTENT_WIDTH));
+  }, [sidebarFull, rightSidebarWidth, containerWidth]);
 
   // ── Tab overflow detection ──
   const tabBarContainerRef = useRef<HTMLDivElement>(null);
@@ -418,6 +463,12 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
         {/* Sidebar controls when sidebar collapsed AND editor maximized */}
         {sidebarFullyCollapsed && editorMaximized && (
           <SidebarControls leftSidebarRef={leftSidebarRef} showMacSpacer={isMac && !isFullscreen} className="-ml-[1px]" />
+        )}
+        {/* Status dot — visible when ContentTopBar is hidden (editor maximized) */}
+        {editorMaximized && (
+          <div className="flex items-center ml-0.5">
+            <ServerStatusDot />
+          </div>
         )}
         </div>
 
@@ -498,11 +549,11 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
             >
               <XIcon className="size-3.5" />
             </button>
-            <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
+            <div className="mx-1 h-4 w-px bg-border shrink-0" />
           </>
         )}
 
-        {!compactModes && <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />}
+        {!compactModes && <div className="mx-1 h-4 w-px bg-border shrink-0" />}
 
         {/* ── Mode buttons — collapse to dropdown on narrow windows ── */}
         {compactModes ? (
@@ -563,7 +614,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
             );
           }))}
 
-        <div className="mx-1 h-4 w-px bg-border/60 shrink-0" />
+        <div className="mx-1 h-4 w-px bg-border shrink-0" />
 
         {/* Editor maximize / restore */}
         <button
@@ -645,7 +696,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
             <div
               ref={sidebarElRef}
               className="shrink-0 overflow-hidden"
-              style={{ width: sidebarFull ? "100%" : rightSidebarWidth }}
+              style={{ width: sidebarFull ? "100%" : effectiveSidebarWidth }}
             >
               <RightSidebar fullMode={sidebarFull} />
             </div>

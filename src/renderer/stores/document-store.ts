@@ -231,7 +231,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     set({ isOpeningProject: true });
     try {
       const t1 = performance.now();
-      await window.electronAPI.cliDispose();
+      await window.electronAPI.chatDispose();
       useRightPanelStore.getState().closeAllTabs();
       useChatStore.getState().clearAllSessions();
       useLayoutStore.getState().setLeftSidebarView("sessions");
@@ -244,6 +244,19 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       console.log(`[openProject] cleanup: ${Math.round(performance.now() - t1)}ms`);
 
       const t2 = performance.now();
+      // Ensure .prismnext/ data hub exists before any agent operations.
+      window.electronAPI.projectEnsure(rootPath).catch(() => {});
+
+      // Pre-warm OpenCode: spawn the persistent process ahead of time
+      // so the first sendPrompt skips ~200ms of process startup latency.
+      // Session creation is NOT done here — sessions are created on first
+      // prompt to avoid polluting the session list with empty entries.
+      window.electronAPI.chatPrewarm(rootPath).then(() => {
+        import("./command-store").then(({ useCommandStore }) => {
+          useCommandStore.getState().reloadCommands();
+        });
+      }).catch(() => {});
+
       const result = await window.electronAPI.fsScanMetadata(rootPath);
       console.log(`[openProject] fsScanMetadata: ${Math.round(performance.now() - t2)}ms`);
       const files: ProjectFile[] = result.files.map((f) => ({
@@ -316,10 +329,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         useGitStore.getState().selectUnit(rootPath);
       });
 
-      // ── Eagerly prewarm Agent CLI during the loading screen ──
-      if (window.electronAPI.cliPrewarm) {
-        window.electronAPI.cliPrewarm(rootPath, undefined, undefined).catch(() => {});
-      }
+      // OpenCode service auto-starts on first prompt; no explicit prewarm needed.
     } catch (error) {
       toast.error(`Failed to open project: ${error}`);
       throw error;
@@ -336,7 +346,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // Clear last project path so next launch shows welcome page
     window.electronAPI.settingsSet({ lastProjectPath: null } as any);
     // Clean up sub-stores to prevent session/tab pollution
-    await window.electronAPI.cliDispose();
+    await window.electronAPI.chatDispose();
     useRightPanelStore.getState().closeAllTabs();
     useChatStore.getState().clearAllSessions();
     clearPdfCache();

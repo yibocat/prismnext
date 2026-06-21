@@ -4,8 +4,11 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { exec } from "node:child_process";
 import { registerIpcHandlers } from "./ipc/index";
 import { setMainWindow, registerWindowHandlers } from "./ipc/window";
-import { disposeCliManager } from "./ipc/cli";
+import { disposeChat } from "./ipc/chat";
 import { destroyAllTerminalSessions } from "./ipc/terminal";
+import { createLogger } from "./services/logger";
+
+const log = createLogger("main", "startup");
 
 const isMac = process.platform === "darwin";
 
@@ -106,7 +109,7 @@ function createWindow() {
   });
 
   mainWindow.on("closed", () => {
-    disposeCliManager();
+    disposeChat();
     destroyAllTerminalSessions();
     import("./ipc/log").then((m) => m.disposeLogger());
     mainWindow = null;
@@ -126,7 +129,87 @@ function createWindow() {
 // Register IPC handlers that don't need the window reference
 registerIpcHandlers();
 
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+  createWindow();
+
+  // App-level ACP warm-up — spawn opencode once at startup.
+  // The same process serves all projects. First session/create is instant.
+  try {
+    const { AcpService } = await import("./acp/service");
+    const { getSettings } = await import("./services/settings");
+
+    const settings = getSettings() as Record<string, unknown>;
+    const aiApiKeys = (settings.aiApiKeys as Record<string, string>) || {};
+    const aiBaseUrls = (settings.aiBaseUrls as Record<string, string>) || {};
+
+    // ── Initialize Prompt System ──
+    try {
+      const { promptManager } = await import("./prompts");
+      promptManager.initialize();
+
+      // Restore module toggle states from persisted settings
+      if ((settings as any).promptModules) {
+        promptManager.loadModuleStates((settings as any).promptModules as Record<string, boolean>);
+      }
+      // Restore layer toggle states from persisted settings
+      if ((settings as any).promptLayers) {
+        promptManager.loadLayerStates((settings as any).promptLayers as Record<string, boolean>);
+      }
+
+      const { commandRegistry } = await import("./commands/registry");
+      if ((settings as any).builtinCommands) {
+        commandRegistry.applyBuiltinStates((settings as any).builtinCommands as Record<string, boolean>);
+      }
+
+      log.info("Prompt system initialized");
+    } catch (err: any) {
+      log.warn("Prompt system init failed", { error: (err as Error).message });
+    }
+
+    // Build env vars from ALL saved keys so OpenCode can use them
+    const extraEnv: Record<string, string> = {};
+    for (const [provider, apiKey] of Object.entries(aiApiKeys)) {
+      if (!apiKey) continue;
+      // OpenCode expects specific env var names per provider
+      const envKey = (() => {
+        if (provider === "google") return "GOOGLE_GENERATIVE_AI_API_KEY";
+        return `${provider.toUpperCase()}_API_KEY`;
+      })();
+      extraEnv[envKey] = apiKey;
+      if (aiBaseUrls[provider]) {
+        extraEnv[`${provider.toUpperCase()}_BASE_URL`] = aiBaseUrls[provider];
+      }
+    }
+
+    const service = AcpService.getInstance();
+    await service.initialize(extraEnv);
+    console.log("[prism] OpenCode ACP ready");
+    log.info("OpenCode ACP server ready");
+
+    // Register non-bundled providers (DeepSeek, OpenRouter, custom) via ACP
+    // Built-in providers (anthropic, openai, google) are already recognized.
+    for (const [provider] of Object.entries(aiApiKeys)) {
+      if (!aiApiKeys[provider]) continue;
+      try {
+        const result = await service.setAuth(provider, {
+          apiKey: aiApiKeys[provider],
+          baseUrl: aiBaseUrls[provider] || "",
+        });
+        if (result.success) {
+          console.log(`[prism] Provider registered: ${provider}`);
+          log.info(`Provider registered: ${provider}`);
+        }
+        // Non-builtin providers may not support ACP providers/set —
+        // they still work via env vars passed to the process.
+      } catch (err: any) {
+        console.warn(`[prism] Failed to register ${provider}: ${err.message}`);
+        log.warn(`Failed to register provider ${provider}`, { error: err.message });
+      }
+    }
+  } catch {
+    // Pre-warm is best-effort — app still works, initialize retries on first use
+  }
+});
 
 app.on("window-all-closed", () => {
   if (!isMac) {

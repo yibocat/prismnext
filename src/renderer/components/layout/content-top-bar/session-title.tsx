@@ -39,7 +39,7 @@ export function SessionTitle({
         <HoverCardTrigger asChild>
           <button
             type="button"
-            className="truncate rounded px-2 py-0.5 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors max-w-full"
+            className="truncate rounded px-2 py-0.5 text-[length:var(--font-chat-meta)] text-muted-foreground hover:text-foreground transition-colors max-w-full"
           >
             {title}
           </button>

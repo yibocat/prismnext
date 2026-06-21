@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { useCliEvents } from "@/hooks/use-cli-events";
+import { useEffect, useRef, useMemo } from "react";
+import { useOpenCodeEvents } from "@/hooks/use-opencode-events";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -9,60 +9,40 @@ import { useWorktreeStore } from "@/stores/worktree-store";
 import { useGitStore } from "@/stores/git-store";
 import { clearPdfCache, useCompileStore } from "@/stores/compile-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
+import { useSettingsStore } from "@/stores/settings-store";
+import { getAllEnabledModels } from "@/lib/providers";
+import { parseContextWindow, DEFAULT_CONTEXT_WINDOW } from "@shared/context-constants";
 import { GitBranchIcon } from "lucide-react";
-import { getContextWindowCapacity } from "@/lib/agent-config";
-import { useAgentSettingsStore } from "@/stores/agent-settings-store";
+
 import {
   GeneralSettings,
   AppearanceSettings,
   CompilerSettings,
-  ExternalSettings,
+  ModelSettings,
+  ZoteroSettings,
   ShortcutsSettings,
   LogViewer,
   BackupsSettings,
-  AgentAppSettings,
-  AgentProjectSettings,
+  AgentSettings,
+  PromptsRulesSettings,
+  SlashCommandsSettings,
+  ToolsMcpSettings,
+  SkillsSettings,
   WorkspaceSettings,
 } from "@/components/modules/settings";
 import { TemplateCenter } from "@/components/modules/templates/template-center";
-import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator } from "@/components/modules/chat";
+import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator, RestoreUndoBar } from "@/components/modules/chat";
 import { WorktreeSelector } from "@/components/modules/chat/worktree-selector";
 import { BranchSelector } from "@/components/modules/chat/branch-selector";
 import { WorktreeActions } from "@/components/modules/chat/worktree-actions";
 
 
 export function LeftMainArea() {
-  useCliEvents();
+  useOpenCodeEvents();
 
   const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
-  const worktreePath = activeWorktree?.path;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
-  // Pre-warm the agent process whenever the project or worktree changes.
-  // The process starts in the background with default settings so the first
-  // prompt hits a warm process with sub-second latency.
-  // Dependencies keyed on projectRoot + worktreePath for auto re-pre-warm.
-  useEffect(() => {
-    if (!projectRoot) return;
-    const store = useChatStore.getState();
-    const tab = store.tabs.find((t) => t.id === store.activeTabId);
-    // Don't pre-warm if the active tab already has a loaded session —
-    // it will be resumed, which needs a different --resume flag.
-    if (tab?.sessionId) return;
-    const wtRoot = worktreePath || projectRoot;
-    window.electronAPI.cliPrewarm(projectRoot, store.activeTabId, wtRoot).catch(() => {});
-  }, [projectRoot, worktreePath]);
-
-  // Sync sessionId to store when agent creates a new session (only if not already set)
-  useEffect(() => {
-    return window.electronAPI.onCliSessionCreated(({ tabId: eventTabId, sessionId }) => {
-      const store = useChatStore.getState();
-      const targetTabId = eventTabId || store.activeTabId;
-      // Always update — the latest session for this tab is the correct one.
-      // (StrictMode double-prewarm or session resumption can produce newer IDs.)
-      store._setSessionId(targetTabId, sessionId);
-    });
-  }, []);
 
   // When activeWorktree changes (select existing, lazy-init, or move-to-local),
   // automatically switch the document checkout root so that file operations
@@ -74,17 +54,6 @@ export function LeftMainArea() {
       const newRoot = state.activeWorktree?.path ?? docStore.projectRoot;
       if (newRoot && newRoot !== docStore.checkoutRoot) {
         docStore.switchCheckoutRoot(newRoot);
-      }
-      // Pre-warm the agent process in the new worktree directory immediately
-      // so the first prompt doesn't wait 20 s for Claude Code startup.
-      const worktreePath = state.activeWorktree?.path;
-      if (docStore.projectRoot && window.electronAPI.cliPrewarm) {
-        const chatStore = useChatStore.getState();
-        window.electronAPI.cliPrewarm(
-          docStore.projectRoot,
-          chatStore.activeTabId,
-          worktreePath,
-        ).catch(() => {});
       }
     });
     return unsub;
@@ -110,16 +79,34 @@ export function LeftMainArea() {
   const contextTokens = useChatStore((s) => s.contextTokens);
   const contextBreakdown = useChatStore((s) => s.contextBreakdown);
   const categorySchema = useChatStore((s) => s.categorySchema);
-  const selectedAgent = useChatStore((s) => s.selectedAgent);
-
+  const promptStale = useChatStore((s) => s.promptStale);
+  const sessionId = useChatStore((s) => s.sessionId);
   const isEmpty = messages.length === 0 && !isStreaming;
 
-  // Context window capacity for the current agent + model
-  const agentSettings = useAgentSettingsStore((s) => s.settings);
-  const contextTotal = getContextWindowCapacity(
-    selectedAgent,
-    agentSettings[selectedAgent]?.["model"] ?? null,
-  );
+  useEffect(() => {
+    if (sessionId) {
+      void useChatStore.getState().checkPromptStale();
+    }
+  }, [sessionId]);
+
+  // ── Dynamic context window total from selected model ──
+  const aiProvider = useSettingsStore((s) => s.settings.aiProvider) || "anthropic";
+  const aiModel = useSettingsStore((s) => s.settings.aiModel);
+  const aiEnabledModels = useSettingsStore((s) => s.settings.aiEnabledModels);
+  const aiCustomModelsData = useSettingsStore((s) => s.settings.aiCustomModelsData);
+  const contextTotal = useMemo(() => {
+    if (!aiModel) return DEFAULT_CONTEXT_WINDOW;
+    const custom = aiCustomModelsData
+      ? Object.fromEntries(
+          Object.entries(aiCustomModelsData).map(([k, v]) => [k, v as any]),
+        )
+      : undefined;
+    const allModels = getAllEnabledModels(aiEnabledModels, custom);
+    const found = allModels.find(
+      (m) => m.provider.id === aiProvider && m.model.id === aiModel,
+    );
+    return parseContextWindow(found?.model.contextWindow);
+  }, [aiProvider, aiModel, aiEnabledModels, aiCustomModelsData]);
 
   // Branch + worktree label for chat view bottom bar
   const isGitRepo = useGitStore((s) => s.isGitRepo);
@@ -171,14 +158,19 @@ export function LeftMainArea() {
     const SettingsContent = {
       general: GeneralSettings,
       appearance: AppearanceSettings,
-      compiler: CompilerSettings,
-      external: ExternalSettings,
       shortcuts: ShortcutsSettings,
-      logs: LogViewer,
-      backups: BackupsSettings,
+      models: ModelSettings,
+      agent: AgentSettings,
+      "prompts-rules": PromptsRulesSettings,
+      "prompts-rules-commands": PromptsRulesSettings,
+      commands: SlashCommandsSettings,
+      "tools-mcp": ToolsMcpSettings,
+      skills: SkillsSettings,
+      compiler: CompilerSettings,
       workspace: WorkspaceSettings,
-      "agent-app": AgentAppSettings,
-      "agent-project": AgentProjectSettings,
+      zotero: ZoteroSettings,
+      backups: BackupsSettings,
+      logs: LogViewer,
     }[settingsCategory] || GeneralSettings;
     return <div className="flex h-full flex-col min-w-0" data-surface="content"><SettingsContent /></div>;
   }
@@ -216,6 +208,7 @@ export function LeftMainArea() {
           /* ── Chat view ── */
           <div className="flex flex-1 flex-col">
             <ChatMessages />
+            <RestoreUndoBar />
             {/* Worktree actions above composer — only when worktree is active */}
             {activeWorktree && (
               <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 px-3">
@@ -248,7 +241,14 @@ export function LeftMainArea() {
               )}
               <span className="flex-1" />
               {contextTokens != null && (
-                <ContextWindowIndicator used={contextTokens} total={contextTotal} breakdown={contextBreakdown} schema={categorySchema} />
+                <ContextWindowIndicator
+                  used={contextTokens}
+                  total={contextTotal}
+                  breakdown={contextBreakdown}
+                  schema={categorySchema}
+                  promptStale={promptStale}
+                  isStreaming={isStreaming}
+                />
               )}
             </div>
           </div>

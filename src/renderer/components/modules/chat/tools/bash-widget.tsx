@@ -1,46 +1,91 @@
 import { useState, memo } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
-import { TerminalIcon, ChevronDownIcon } from "lucide-react";
+import { TerminalIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { StatusIcon } from "./shared";
+import { ToolCard, param } from "./shared";
+import { useToolPermission } from "./use-tool-permission";
 
 export const BashWidget = memo(function BashWidget({
   toolUse,
   toolResult,
+  toolName,
 }: {
   toolUse: ContentBlock;
   toolResult?: ContentBlock;
+  toolName: string;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const command = toolUse.input?.command || "";
+  const command = param(toolUse.input, "command")
+    || (toolUse.input as any)?._title
+    || toolUse.title
+    || "";
   const isError = toolResult?.is_error;
-  const isLoading = !toolResult;
+  const hasContent = toolResult?.content != null;
+  const { isAwaitingPermission, isToolDenied } = useToolPermission(
+    toolUse.id || "",
+    toolName,
+  );
+  const isDenied = isToolDenied;
+  const isLoading = !toolResult && !isAwaitingPermission && !isDenied;
+
+  const exitCode = toolResult?.content?.exitCode
+    ?? toolResult?.content?.exit_code
+    ?? toolResult?.input?.exitCode
+    ?? undefined;
+
+  const showBody = hasContent || isAwaitingPermission || !!command;
 
   return (
-    <div className="my-2 rounded-lg border border-border bg-card text-[length:var(--font-code)] overflow-hidden">
-      <button
-        type="button"
-        className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/50 transition-colors"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <StatusIcon isLoading={isLoading} isError={!!isError} />
-        <TerminalIcon className="size-3.5 text-warning" />
-        <span className="truncate font-mono">{command.slice(0, 80)}</span>
-        <ChevronDownIcon
-          className={cn("ml-auto size-3.5 text-muted-foreground transition-transform", expanded && "rotate-180")}
-        />
-      </button>
-      {expanded && toolResult?.content && (
-        <div className="border-t border-border bg-muted/50 px-3 py-2 font-mono text-[length:var(--font-code)] whitespace-pre-wrap">
-          {(() => {
-            const raw = typeof toolResult.content === "string"
-              ? toolResult.content
-              : JSON.stringify(toolResult.content, null, 2);
-            const truncated = raw.length > 500 ? raw.slice(0, 500) + `\n\n··· ${raw.length - 500} more chars` : raw;
-            return truncated;
+    <ToolCard
+      toolName={toolName}
+      icon={<TerminalIcon className="size-3.5 text-warning" />}
+      label={<span className="truncate font-mono">{command.slice(0, 80) || "shell command"}</span>}
+      meta={
+        <>
+          {isAwaitingPermission && (
+            <span className="text-primary shrink-0 text-[length:var(--font-chat-meta)]">
+              Awaiting permission
+            </span>
+          )}
+          {isDenied && (
+            <span className="text-destructive shrink-0 text-[length:var(--font-chat-meta)]">
+              Denied
+            </span>
+          )}
+          {exitCode !== undefined && (
+            <span className={cn(
+              "shrink-0 text-[length:var(--font-chat-meta)] font-mono",
+              exitCode === 0 ? "text-success" : "text-destructive",
+            )}>
+              exit {exitCode}
+            </span>
+          )}
+        </>
+      }
+      expanded={expanded}
+      onToggle={() => setExpanded(!expanded)}
+      isLoading={isLoading}
+      isError={!!isError || isDenied}
+      hasContent={showBody}
+      bodyClassName="font-mono whitespace-pre-wrap"
+    >
+      {() => (
+        <>
+          {isAwaitingPermission && command ? (
+            <pre className="rounded border border-border bg-muted/40 px-2 py-1.5 text-[length:var(--font-code)] whitespace-pre-wrap break-all mb-2">
+              {command}
+            </pre>
+          ) : null}
+          {hasContent && (() => {
+            const raw = typeof toolResult!.content === "string"
+              ? toolResult!.content
+              : JSON.stringify(toolResult!.content, null, 2);
+            return raw.length > 500
+              ? raw.slice(0, 500) + `\n\n··· ${raw.length - 500} more chars`
+              : raw;
           })()}
-        </div>
+        </>
       )}
-    </div>
+    </ToolCard>
   );
 });

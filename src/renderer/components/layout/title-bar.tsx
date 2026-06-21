@@ -143,7 +143,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
               <XIcon className="size-4" />
             </button>
 
-            <div className="mx-1 h-4 w-px bg-border/60" />
+            <div className="mx-1 h-4 w-px bg-border" />
           </>
         )}
 

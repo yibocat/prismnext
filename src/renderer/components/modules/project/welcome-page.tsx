@@ -193,7 +193,7 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
           </div>
 
           {/* Divider — horizontal on narrow, vertical on wide */}
-          <div className="h-px w-56 md:w-px md:h-48 bg-border/60 shrink-0" />
+          <div className="h-px w-56 md:w-px md:h-48 bg-border shrink-0" />
 
           {/* Right column: Recent projects */}
           <div className="w-full md:w-56">

@@ -218,6 +218,14 @@ export interface ElectronAPI {
   }>;
   fsExists: (absPath: string) => Promise<boolean>;
   projectCreate: (rootPath: string, workspaceDirs?: import("./workspace").WorkspaceFolder[]) => Promise<void>;
+  projectEnsure: (rootPath: string) => Promise<{ success: boolean }>;
+  projectScaffoldAgentsMd: (rootPath: string) => Promise<{
+    agentsMdPath: string;
+    content: string;
+    digestMarkdown: string;
+    updated: boolean;
+    stats: { dirsListed: number; filesListed: number };
+  }>;
   projectCheck: (rootPath: string) => Promise<{ missing: string[] }>;
 
   // Platform
@@ -258,33 +266,121 @@ export interface ElectronAPI {
   ) => Promise<SynctexForwardResult | null>;
   compileDetectTexlive: () => Promise<CompilerStatus>;
 
-  // CLI agent operations
-  cliDispose: () => Promise<{ success: boolean }>;
-  cliPrewarm: (projectPath: string, tabId?: string, worktreePath?: string, settings?: Record<string, string | null>) => Promise<{ success: boolean }>;
-  cliStatus: () => Promise<{ available: boolean; agentId?: string; agentName?: string; error?: string }>;
-  cliSend: (args: { projectPath: string; worktreePath?: string; prompt: string; tabId?: string; agent?: string; sessionId?: string | null; settings?: Record<string, string | null> }) => Promise<void>;
-  cliSetGateway: (baseUrl?: string, apiKey?: string) => Promise<void>;
-  cliCancel: (tabId?: string) => Promise<void>;
-  cliCloseSession: (tabId?: string) => Promise<void>;
-  cliAnswer: (tabId: string, answer: string) => Promise<void>;
-  cliListSessions: (projectPath: string, worktreePath?: string) => Promise<Array<{ id: string; title: string; lastModified: number; createdAt: number; agentId: string; agentName: string }>>;
-  cliLoadSession: (projectPath: string, sessionId: string, agentId?: string, worktreePath?: string) => Promise<any[]>;
-  cliDeleteSession: (projectPath: string, sessionId: string, agentId?: string, worktreePath?: string) => Promise<{ success: boolean; error?: string }>;
+  // OpenCode chat operations
+  chatDispose: () => Promise<{ success: boolean }>;
+  chatPrewarm: (projectPath: string) => Promise<{ sessionId: string | null }>;
+  agentListSkills: (projectPath: string) => Promise<Array<{
+    id: string;
+    name: string;
+    description: string;
+    skillDirRel: string;
+    enabled: boolean;
+  }>>;
+  agentListSkillRegistries: (projectPath: string) => Promise<string[]>;
+  agentListSkillLibrarySources: (projectPath: string) => Promise<Array<{
+    id: string;
+    kind: "bundled" | "remote";
+    url?: string;
+    connected: boolean;
+    name: string;
+    description: string;
+    removable: boolean;
+  }>>;
+  agentAddSkillLibrarySource: (projectPath: string, registryUrl: string) => Promise<{
+    sources: Array<{
+      id: string;
+      kind: "bundled" | "remote";
+      url?: string;
+      connected: boolean;
+      name: string;
+      description: string;
+      removable: boolean;
+    }>;
+    indexUrl: string;
+  }>;
+  agentRemoveSkillLibrarySource: (projectPath: string, sourceId: string) => Promise<{
+    sources: Array<{
+      id: string;
+      kind: "bundled" | "remote";
+      url?: string;
+      connected: boolean;
+      name: string;
+      description: string;
+      removable: boolean;
+    }>;
+  }>;
+  agentSetSkillLibrarySourceConnected: (
+    projectPath: string,
+    sourceId: string,
+    connected: boolean,
+  ) => Promise<{
+    sources: Array<{
+      id: string;
+      kind: "bundled" | "remote";
+      url?: string;
+      connected: boolean;
+      name: string;
+      description: string;
+      removable: boolean;
+    }>;
+  }>;
+  agentListBundledSkills: () => Promise<Array<{
+    id: string;
+    name: string;
+    description: string;
+    category: "academic" | "general";
+    license?: string;
+  }>>;
+  agentInstallBundledSkill: (projectPath: string, skillId: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
+  agentSyncSkills: (projectPath: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
+  agentFetchSkillRegistry: (registryUrl: string) => Promise<{
+    indexUrl: string;
+    skills: Array<{
+      name: string;
+      description: string;
+      type: "skill-md" | "archive" | "unknown";
+      url: string;
+      digest?: string;
+    }>;
+  }>;
+  agentConnectSkillRegistry: (projectPath: string, registryUrl: string) => Promise<{ registryUrls: string[]; indexUrl: string }>;
+  agentDisconnectSkillRegistry: (projectPath: string, registryUrl: string) => Promise<{ registryUrls: string[] }>;
+  agentSetSkillEnabled: (projectPath: string, skillId: string, enabled: boolean) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
+  agentInstallSkill: (projectPath: string, skillId: string, content: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
+  agentInstallSkillFromRegistry: (projectPath: string, skillName: string, artifactUrl: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
+  agentDeleteSkill: (projectPath: string, skillId: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
+  chatSend: (args: { projectPath: string; worktreePath?: string; prompt: string; tabId?: string; sessionId?: string | null; apiKey?: string; baseUrl?: string; model?: string; provider?: string; thoughtLevel?: string }) => Promise<void>;
+  chatCancel: (sessionId: string) => Promise<void>;
+  chatCompact: (sessionId: string, projectPath: string) => Promise<void>;
+  chatAnswer: (sessionId: string, answer: string) => Promise<void>;
+  chatAnswerQuestion: (questionId: string, answer: string) => Promise<{ success: boolean; error?: string }>;
+  chatAnswerPermission: (permissionId: string, approved: boolean) => Promise<void>;
+  chatStatus: () => Promise<{ available: boolean; version: string }>;
+  sessionList: (projectPath?: string) => Promise<Array<{ id: string; title: string; lastModified: number; createdAt: number }>>;
+  sessionLoad: (sessionId: string, projectPath?: string) => Promise<any[]>;
+  sessionDelete: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
+  sessionTruncateToTurn: (args: {
+    sessionId: string;
+    projectPath: string;
+    worktreePath?: string;
+    turnIndex: number;
+  }) => Promise<{ removedCount: number }>;
+  sessionUndoTruncate: (args: {
+    sessionId: string;
+    projectPath: string;
+    worktreePath?: string;
+  }) => Promise<{ success: boolean }>;
+  sessionGetContext: (projectPath: string, sessionId: string) => Promise<{ tokens: number; breakdown: Record<string, number>; schema: { key: string; label: string; color: string; description?: string; order?: number }[]; updatedAt: number; hasSystemPromptBlock?: boolean; promptFingerprint?: string } | null>;
+  chatGetProviders: () => Promise<any[]>;
+  chatSetAuth: (provider: string, credentials: Record<string, string>) => Promise<{ success: boolean }>;
+  chatTestConnection(args: { provider: string; apiKey: string; baseUrl?: string }): Promise<{ success: boolean; models?: string[] }>;
 
-  // CLI agent events (Main → Renderer)
-  onCliStream: (callback: (data: { tabId: string; data: string }) => void) => () => void;
-  onCliComplete: (callback: (data: {
-    tabId: string;
-    success: boolean;
-    stopReason?: string;
-    error?: string;
-    inputTokens?: number | null;
-    breakdown?: { categories: Record<string, number>; total: number } | null;
-    categorySchema?: { key: string; label: string; color: string; description?: string; order?: number }[] | null;
-  }) => void) => () => void;
-  onCliStderr: (callback: (data: { tabId: string; data: string }) => void) => () => void;
-  onCliSessionCreated: (callback: (data: { tabId: string; sessionId: string; agentId: string }) => void) => () => void;
-  removeCliListeners: () => void;
+  // Chat events (Main → Renderer)
+  onChatStream: (callback: (data: { tabId: string; type: string; data: any }) => void) => () => void;
+  onChatComplete: (callback: (data: { tabId: string; sessionId: string; success: boolean; error?: string; tokenUsage?: any; contextBreakdown?: Record<string, number> | null; categorySchema?: import("../../shared/constants").ContextCategoryDef[] | null; promptStale?: boolean }) => void) => () => void;
+  onChatPermission: (callback: (data: { tabId: string; permissionId: string; message: string; options: any; toolCallId?: string; toolName?: string; raw?: any }) => void) => () => void;
+  onChatSessionCreated: (callback: (data: { tabId: string; sessionId: string }) => void) => () => void;
+  removeChatListeners: () => void;
 
   // File watcher events (Main → Renderer)
   onFileChanged: (callback: (data: { projectRoot: string; changedPaths?: string[] }) => void) => () => void;
@@ -292,7 +388,6 @@ export interface ElectronAPI {
   // Settings operations
   settingsGet: () => Promise<{
     aiModel: string;
-    effortLevel: string;
     theme: string;
     sidebarCollapsed: boolean;
     rightPanelCollapsed: boolean;
@@ -308,9 +403,24 @@ export interface ElectronAPI {
     defaultWorkspaceDirs?: import("./workspace").WorkspaceFolder[];
   }>;
   settingsSet: (patch: Record<string, unknown>) => Promise<void>;
+  settingsGetModules: () => Promise<Array<{ key: string; label: string; description: string; enabled: boolean; source: string }>>;
+  settingsSetModule: (key: string, enabled: boolean) => Promise<void>;
+  settingsGetLayers: () => Promise<Array<{ id: string; priority: number; source: string; userToggleable: boolean; enabled: boolean }>>;
+  settingsSetLayer: (id: string, enabled: boolean) => Promise<void>;
   settingsGetAgentProjectConfig: (projectPath: string) => Promise<{ contextComponents: Record<string, boolean> }>;
   settingsSetAgentProjectConfig: (projectPath: string, config: { contextComponents: Record<string, boolean> }) => Promise<void>;
-  settingsGetDefaultAgentPrompt: () => Promise<string>;
+  settingsGetAssembledPrompt: (projectRoot?: string, userCustomPrompt?: string) => Promise<string>;
+  settingsComputePromptFingerprint: (projectRoot?: string) => Promise<string>;
+  settingsGetDefaultPersona: () => Promise<string>;
+
+  // Commands operations
+  commandsList: () => Promise<import("@commands/types").CommandDef[]>;
+  commandsExpand: (name: string, rawInput: string, projectRoot: string) => Promise<string>;
+  commandsCreate: (payload: import("@commands/types").CreateCommandPayload) => Promise<import("@commands/types").CommandDef>;
+  commandsUpdate: (id: string, payload: import("@commands/types").UpdateCommandPayload) => Promise<import("@commands/types").CommandDef>;
+  commandsDelete: (id: string) => Promise<void>;
+  commandsToggle: (id: string, enabled: boolean) => Promise<import("@commands/types").CommandDef[]>;
+  commandsReload: () => Promise<import("@commands/types").CommandDef[]>;
 
   // Workspace operations
   workspaceGetConfig: (projectRoot: string) => Promise<import("./workspace").WorkspaceFolder[]>;

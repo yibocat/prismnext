@@ -1,6 +1,3 @@
-// Agent module barrel — re-exports from the new per-agent architecture.
-// See agents/registry.ts for the primary API.
-// See agents/types.ts for the core interfaces.
-
-export { getAgent, getAvailableAgents, getAllAgents, getDefaultAgentId } from "./registry";
-export type { AgentIntegration, AgentSetting, AgentSettingOption, AgentSettingType, SessionInfo, SessionProvider } from "./types";
+// Agent module — migrated to OpenCode ACP.
+// See src/main/acp/service.ts for the AcpService singleton.
+// See src/main/acp/event-mapper.ts for ACP notification → IPC event routing.

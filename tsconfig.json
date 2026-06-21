@@ -8,9 +8,9 @@
     "skipLibCheck": true,
     "paths": {
       "@/*": ["./src/renderer/*"],
-      "@shared/*": ["./src/shared/*"]
+      "@shared/*": ["./src/main/services/*"],
+      "@commands/*": ["./src/main/commands/*"]
     }
   },
-  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx", "src/renderer/**/*.d.ts", "src/shared/**/*.ts"],
-  "exclude": ["src/renderer/components/__archive"]
+  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx", "src/renderer/**/*.d.ts", "src/main/commands/types.ts", "src/main/services/log-types.ts", "src/main/services/context-constants.ts", "src/main/services/permission-modes.ts"]
 }

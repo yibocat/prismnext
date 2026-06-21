@@ -7,6 +7,16 @@ export function setMainWindow(win: BrowserWindow) {
 }
 
 export function registerWindowHandlers() {
+  ipcMain.handle(
+    "window:setTitle",
+    (event, args: { title: string }) => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (win) {
+        win.setTitle(args.title);
+      }
+    },
+  );
+
   ipcMain.handle("window:isMaximized", () => mainWindow?.isMaximized() ?? false);
   ipcMain.handle("window:isFullscreen", () => mainWindow?.isFullScreen() ?? false);
 

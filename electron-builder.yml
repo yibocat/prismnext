@@ -1,0 +1,27 @@
+appId: com.prism-next.app
+productName: Prism Next
+directories:
+  output: dist
+
+extraResources:
+  - from: "bin/opencode/${os}-${arch}/"
+    to: "opencode"
+    filter:
+      - "opencode*"
+  - from: "resources"
+    to: "resources"
+
+mac:
+  target:
+    - dmg
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+
+win:
+  target:
+    - nsis
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+
+linux:
+  target:
+    - AppImage
+  artifactName: "${productName}-${version}-${arch}.${ext}"

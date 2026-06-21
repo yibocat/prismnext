@@ -1,21 +1,20 @@
-import { memo, useCallback, useState, useEffect } from "react";
+import { memo, useCallback, useState, useEffect, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
+import type { Components } from "react-markdown";
 import "katex/dist/katex.min.css";
 import "@/styles/code-highlight.css";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useTabContext } from "@/lib/tab-context";
-import { remarkWikilinks } from "@/lib/remark-wikilinks";
 import { cn } from "@/lib/utils";
-
-// ─── Module-scope constants ───
-
-const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkWikilinks];
-const REHYPE_PLUGINS = [rehypeKatex];
+import {
+  REMARK_PLUGINS,
+  REHYPE_PLUGINS,
+  MARKDOWN_COMPONENTS,
+  DOCUMENT_MARKDOWN_TYPOGRAPHY,
+  normalizeMathDelimiters,
+} from "@/lib/markdown-config";
 
 /** CSS containment + GPU layer promotion.
  *  `contain: layout style paint` isolates this subtree from global reflow.
@@ -56,29 +55,9 @@ function Wikilink({ target, children }: { target: string; children: React.ReactN
 
 // ─── Custom elements ───
 
-type AnyTagProps = React.PropsWithChildren<Record<string, unknown>>;
-
-const COMPONENTS: Record<string, React.FC<AnyTagProps>> = {
-  table: ({ children, ...rest }) => (
-    <div className="my-4 overflow-hidden rounded-lg border border-border">
-      <div className="overflow-x-auto">
-        <table className="min-w-full" {...rest}>{children}</table>
-      </div>
-    </div>
-  ),
-  thead: ({ children, ...rest }) => (
-    <thead className="border-b border-border" {...rest}>{children}</thead>
-  ),
-  th: ({ children, ...rest }) => (
-    <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground" {...rest}>{children}</th>
-  ),
-  td: ({ children, ...rest }) => (
-    <td className="px-4 py-2.5 text-sm" {...rest}>{children}</td>
-  ),
-  tr: ({ children, ...rest }) => (
-    <tr className="border-b border-border last:border-0" {...rest}>{children}</tr>
-  ),
-  a: ({ href, children, ...props }: { href?: string; children?: React.ReactNode; [key: string]: unknown }) => {
+const COMPONENTS: Components = {
+  ...MARKDOWN_COMPONENTS,
+  a: ({ href, children, ...props }: any) => {
     if (href?.startsWith("wikilink:")) {
       const target = href.slice("wikilink:".length).split("#")[0];
       return <Wikilink target={target}>{children}</Wikilink>;
@@ -86,22 +65,6 @@ const COMPONENTS: Record<string, React.FC<AnyTagProps>> = {
     return <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline" {...props}>{children}</a>;
   },
 };
-
-const TYPOGRAPHY = cn(
-  "[&_h1]:text-lg [&_h1]:font-semibold [&_h1]:mt-6 [&_h1]:mb-2",
-  "[&_h2]:text-base [&_h2]:font-semibold [&_h2]:mt-5 [&_h2]:mb-1",
-  "[&_h3]:text-sm [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1",
-  "[&_h4]:text-sm [&_h4]:font-semibold [&_h4]:mt-3 [&_h4]:mb-1",
-  "[&_p]:my-1 [&_p]:leading-normal",
-  "[&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-6",
-  "[&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-6",
-  "[&_li]:my-0.5 [&_li]:leading-normal",
-  "[&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_blockquote]:my-2 [&_blockquote]:text-muted-foreground",
-  "[&_hr]:my-4 [&_hr]:border-border",
-  "[&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:bg-muted [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:py-0.5 [&_code:not(pre_code)]:font-mono [&_code:not(pre_code)]:text-[length:var(--font-code)]",
-  "[&_.katex-display]:my-3 [&_.katex]:text-[length:var(--font-chat-message)]",
-  "[&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border [&_pre]:p-4 [&_pre]:overflow-x-auto [&_pre]:text-[length:var(--font-code)]",
-);
 
 // ─── Markdown Preview ───
 
@@ -114,6 +77,7 @@ export const MarkdownPreview = memo(function MarkdownPreview() {
     fileId ? s.openedContents.get(fileId) : undefined,
   );
   const content = entry?.content ?? "";
+  const normalized = useMemo(() => normalizeMathDelimiters(content), [content]);
   const mdWidthLimited = useLayoutStore((s) => s.mdWidthLimited);
 
   // Deferred render — skip first paint so the UI stays responsive on open
@@ -162,13 +126,13 @@ export const MarkdownPreview = memo(function MarkdownPreview() {
   return (
     <div className="h-full overflow-auto px-6 py-4" style={CONTAIN_STYLE}>
       <div className={cn(mdWidthLimited && "max-w-prose mx-auto")}>
-        <div className={TYPOGRAPHY}>
+        <div className={DOCUMENT_MARKDOWN_TYPOGRAPHY}>
           <ReactMarkdown
             remarkPlugins={REMARK_PLUGINS}
             rehypePlugins={REHYPE_PLUGINS}
             components={COMPONENTS}
           >
-            {content}
+            {normalized}
           </ReactMarkdown>
         </div>
       </div>

@@ -54,8 +54,6 @@ interface SessionInfo {
   title: string;
   lastModified: number;
   createdAt: number;
-  agentId: string;
-  agentName: string;
 }
 
 function relativeTime(ms: number): string {
@@ -127,38 +125,135 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     }
     setLoading(true);
     try {
-      const worktreePath = activeWorktree?.path;
-      const result = await window.electronAPI.cliListSessions(projectRoot, worktreePath);
-      setSessions(result);
+      const result = await window.electronAPI.sessionList(projectRoot);
+      const chatStore = useChatStore.getState();
+      const tabs = chatStore.tabs;
+      const merged = result.map((s) => {
+        if ((s.title.startsWith("New Chat") || s.title.startsWith("New session"))) {
+          const tab = tabs.find((t) => t.sessionId === s.id);
+          if (tab?.title && tab.title !== "New Chat") {
+            return { ...s, title: tab.title };
+          }
+        }
+        return s;
+      });
+
+      // Sync OpenCode-generated titles back to open tabs
+      for (const s of result) {
+        if (!(s.title.startsWith("New Chat") || s.title.startsWith("New session"))) {
+          const tab = tabs.find((t) => t.sessionId === s.id);
+          if (tab && tab.title !== s.title) {
+            chatStore._setTitle(tab.id, s.title);
+          }
+        }
+      }
+
+      setSessions(merged);
     } catch {
       setSessions([]);
     } finally {
       setLoading(false);
     }
-  }, [projectRoot, activeWorktree]);
+  }, [projectRoot]);
 
   useEffect(() => {
     fetchSessions();
   }, [fetchSessions]);
 
   const prevAnyStreaming = useRef(hasAnyStreaming);
+
+  // Delayed title refresh: OpenCode generates conversation titles
+  // asynchronously after session completion (≈2-3 second delay).
+  // A one-shot timer picks up the real title without waiting for
+  // the NEXT streaming exchange to trigger fetchSessions.
+  const titleRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Keep a ref to the latest fetchSessions so the timer always uses
+  // the current callback (with the correct projectRoot) even if the
+  // user switches projects before the timer fires.
+  const fetchSessionsRef = useRef(fetchSessions);
+  fetchSessionsRef.current = fetchSessions;
+
   useEffect(() => {
     if (prevAnyStreaming.current && !hasAnyStreaming) {
       fetchSessions();
+      // Schedule a delayed re-fetch so OpenCode's async title generation
+      // has time to write the real title to SQLite.
+      if (titleRefreshTimerRef.current) clearTimeout(titleRefreshTimerRef.current);
+      titleRefreshTimerRef.current = setTimeout(() => {
+        titleRefreshTimerRef.current = null;
+        fetchSessionsRef.current();
+      }, 3000);
     }
     prevAnyStreaming.current = hasAnyStreaming;
   }, [hasAnyStreaming, fetchSessions]);
 
+  // Clean up the delayed title refresh timer on unmount
   useEffect(() => {
-    return window.electronAPI.onCliSessionCreated(() => {
-      fetchSessions();
+    return () => {
+      if (titleRefreshTimerRef.current) clearTimeout(titleRefreshTimerRef.current);
+    };
+  }, []);
+
+  // When a new session is created, insert it into the list immediately
+  // with the tab's title — no async SQLite round-trip needed.
+  // The next fetchSessions() call will refresh the list from disk.
+  useEffect(() => {
+    return window.electronAPI.onChatSessionCreated(({ tabId: eventTabId, sessionId }) => {
+      const chatState = useChatStore.getState();
+      const tab = chatState.tabs.find(
+        (t) => t.id === (eventTabId || chatState.activeTabId),
+      );
+      const title =
+        tab?.title && tab.title !== "New Chat"
+          ? tab.title
+          : "New Chat";
+      setSessions((prev) => {
+        if (prev.some((s) => s.id === sessionId)) return prev;
+        // Prepend new session; fetchSessions will sort it correctly later
+        return [
+          {
+            id: sessionId,
+            title,
+            lastModified: Date.now(),
+            createdAt: Date.now(),
+          },
+          ...prev,
+        ];
+      });
     });
-  }, [fetchSessions]);
+  }, []);
 
   const settingsCategory = useLayoutStore((s) => s.settingsCategory);
   const setSettingsCategory = useLayoutStore((s) => s.setSettingsCategory);
 
-  const sortedSessions = [...sessions].sort((a, b) => {
+  // Build a sessionId → tab-title map from currently open tabs.
+  // This provides instant titles for newly created sessions without
+  // waiting for OpenCode to write messages to SQLite.
+  const tabTitlesBySession = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of tabs) {
+      if (t.sessionId && t.title && t.title !== "New Chat") {
+        map.set(t.sessionId, t.title);
+      }
+    }
+    return map;
+  }, [tabs]);
+
+  // Derive enriched sessions: inject tab titles into sessions with generic
+  // OpenCode defaults. Because this is a useMemo on both sessions AND tabs,
+  // titles update instantly when the tab's sessionId + title are set —
+  // no need to wait for the next fetchSessions round-trip.
+  const enrichedSessions = useMemo(() => {
+    return sessions.map((s) => {
+      if ((s.title.startsWith("New Chat") || s.title.startsWith("New session"))) {
+        const tabTitle = tabTitlesBySession.get(s.id);
+        if (tabTitle) return { ...s, title: tabTitle };
+      }
+      return s;
+    });
+  }, [sessions, tabTitlesBySession]);
+
+  const sortedSessions = [...enrichedSessions].sort((a, b) => {
     if (sessionSort === "created") return b.createdAt - a.createdAt;
     return b.lastModified - a.lastModified;
   });
@@ -172,10 +267,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
       <SidebarMenuItem key={s.id}>
         <SidebarMenuButton
           onClick={() => {
-            if (s.agentId && s.agentId !== useChatStore.getState().selectedAgent) {
-              useChatStore.getState().setSelectedAgent(s.agentId);
-            }
-            loadSession(s.id, s.agentId);
+            loadSession(s.id);
             setLeftSidebarOverlay(false);
           }}
           isActive={isActive}
@@ -225,7 +317,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                 onClick={async (e) => {
                   e.stopPropagation();
                   if (!projectRoot) return;
-                  const result = await window.electronAPI.cliDeleteSession(projectRoot, s.id, s.agentId, activeWorktree?.path);
+                  const result = await window.electronAPI.sessionDelete(s.id);
                   if (result.success) {
                     if (archivedSessionIds.includes(s.id)) toggleArchiveSession(s.id);
                     if (pinnedSessionIds.includes(s.id)) togglePinSession(s.id);
@@ -237,7 +329,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                   if (e.key === "Enter" || e.key === " ") {
                     e.stopPropagation();
                     if (!projectRoot) return;
-                    const result = await window.electronAPI.cliDeleteSession(projectRoot, s.id, s.agentId, activeWorktree?.path);
+                    const result = await window.electronAPI.sessionDelete(s.id);
                     if (result.success) {
                       if (archivedSessionIds.includes(s.id)) toggleArchiveSession(s.id);
                       if (pinnedSessionIds.includes(s.id)) togglePinSession(s.id);

@@ -29,17 +29,13 @@ export function ThinkingWidget({
   thinking: string;
   duration?: number;
   persistKey?: string;
-  /** Whether THIS message is still being streamed (not a global flag). */
   isStreamingMsg?: boolean;
-  /** When true, this is init progress (not real AI thinking).
-   *  Shows "Initialization" label, defaults collapsed, no timer. */
   isProgress?: boolean;
 }) {
   const [expanded, setExpanded] = useState(
     () => isProgress ? false : (persistKey ? getThinkingState(persistKey) : false),
   );
   const [elapsed, setElapsed] = useState(0);
-  // Fall back to global isStreaming if prop not provided (backward compat).
   const globalStreaming = useChatStore((s) => s.isStreaming);
   const isStreaming = isStreamingMsg ?? globalStreaming;
 
@@ -54,19 +50,20 @@ export function ThinkingWidget({
     const start = Date.now();
     const timer = setInterval(() => {
       setElapsed((Date.now() - start) / 1000);
-    }, 100);
+    }, 200);
     return () => clearInterval(timer);
   }, [isStreaming, isProgress]);
 
-  // Format a duration in seconds to 1 decimal place.
   const fmt = (s: number) => s.toFixed(1);
 
-  const estimatedDuration = Math.max(0.1, thinking.length / 50);
-  // When the timer stops (thinking complete or message finished), use the
-  // frozen elapsed value — it reflects actual thinking time, not total response time.
-  const displayDuration = !isStreaming
-    ? (duration != null ? duration : (elapsed > 0 ? elapsed : estimatedDuration))
-    : elapsed;
+  // Suppress fractional seconds for the first 0.8s to avoid jittery
+  // "0.0s" → "0.2s" → "0.4s" flicker. Then smoothly show the live timer.
+  const showTimer = elapsed >= 0.8;
+
+  // When done: prefer persisted duration, then frozen elapsed, then estimate.
+  const frozenDuration = duration != null
+    ? duration
+    : (elapsed > 0 ? Math.round(elapsed * 10) / 10 : Math.max(0.1, Math.round(thinking.length / 5) / 10));
 
   return (
     <div className="my-1.5">
@@ -75,14 +72,19 @@ export function ThinkingWidget({
         className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors group"
         onClick={toggleExpanded}
       >
-        <BrainIcon className="size-3.5" />
-        <span className="text-[length:var(--font-code)]">
+        <BrainIcon className="size-3.5 shrink-0" />
+        <span
+          className="text-[length:var(--font-chat-meta)] tabular-nums transition-opacity duration-200"
+          key={isStreaming ? "live" : "frozen"}
+        >
           {isProgress
             ? "Initialization"
-            : (isStreaming ? `Thinking... ${fmt(elapsed)}s` : `Thought for ${fmt(displayDuration)}s`)}
+            : isStreaming
+              ? (showTimer ? `Thinking… ${fmt(elapsed)}s` : "Thinking…")
+              : `Thought for ${fmt(frozenDuration)}s`}
         </span>
         <ChevronDownIcon
-          className={cn("size-3.5 transition-transform ml-auto", expanded && "rotate-180")}
+          className={cn("size-3.5 shrink-0 transition-transform ml-auto", expanded && "rotate-180")}
         />
       </button>
       {expanded && (
