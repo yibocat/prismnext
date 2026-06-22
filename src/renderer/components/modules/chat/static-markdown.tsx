@@ -25,7 +25,7 @@ export const StaticMarkdown = memo(function StaticMarkdown({
   const normalized = useMemo(() => normalizeMathDelimiters(content), [content]);
 
   return (
-    <div className={cn("text-[length:var(--font-chat-message)] text-foreground leading-normal", CHAT_MARKDOWN_TYPOGRAPHY)}>
+    <div className={cn("text-[length:var(--font-chat-message)] text-foreground leading-normal min-w-0 max-w-full overflow-hidden", CHAT_MARKDOWN_TYPOGRAPHY)}>
       <ReactMarkdown
         remarkPlugins={REMARK_PLUGINS}
         rehypePlugins={REHYPE_PLUGINS}

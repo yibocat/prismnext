@@ -7,13 +7,12 @@ import { app } from "electron";
  *
  * ## Architecture
  *
- * OpenCode discovers custom tools by scanning:
- *   1. `$XDG_CONFIG_HOME/opencode/tools/`  — global (all projects)
- *   2. `<project>/.opencode/tools/`        — per-project
+ * prism-next keeps built-in OpenCode tools in the app-level config directory:
+ *   `$XDG_CONFIG_HOME/opencode/tools/`
  *
- * prism‑next sets `XDG_CONFIG_HOME` → `<userData>/opencode-server/config/`,
+ * `AcpService` sets `XDG_CONFIG_HOME` to `<userData>/opencode-server/config/`,
  * so tools placed at `<userData>/opencode-server/config/opencode/tools/`
- * are automatically discovered by OpenCode on next startup.
+ * are discovered by OpenCode without creating project-level `.opencode/`.
  *
  * `AcpService.syncBuiltinTools()` copies the files defined in `src/main/tools/`
  * into that directory every time the app starts.
@@ -67,8 +66,8 @@ import { app } from "electron";
  *
  * ### Step 4 — (Optional) Add a permission preset
  *
- * If the tool needs explicit user approval, add a permission entry in the
- * project's `opencode.json` or prism‑next's settings.
+ * If the tool needs explicit user approval, add a permission entry in
+ * prism-next's app-level OpenCode config/settings.
  */
 
 // ─── Tool metadata (used by renderer for Widget display) ────────────

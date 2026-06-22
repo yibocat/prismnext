@@ -12,7 +12,6 @@ import {
   listLibrarySources,
   PRISM_CURATED_SOURCE_ID,
   activeRemoteRegistryUrls,
-  PROJECT_OPENCODE_REL,
   PRISM_SKILLS_REL,
   type InstalledSkillInfo,
   type SkillLibrarySourceInfo,

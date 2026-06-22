@@ -1,0 +1,26 @@
+{
+  "profiles": [
+    {
+      "id": "academic-writer",
+      "name": "Academic Writer",
+      "description": "LaTeX manuscript writing assistant for ResearchPrism projects.",
+      "builtin": true,
+      "modules": ["academic-writing", "citations", "math-equations", "figures-tables"]
+    },
+    {
+      "id": "citation-auditor",
+      "name": "Citation Auditor",
+      "description": "Focused review of citations, bib entries, and reference consistency.",
+      "builtin": true,
+      "skills": ["citations"],
+      "modules": ["citations"]
+    },
+    {
+      "id": "literature-scout",
+      "name": "Literature Scout",
+      "description": "Explores external sources and summarizes findings for your manuscript.",
+      "builtin": true,
+      "modules": ["citations"]
+    }
+  ]
+}

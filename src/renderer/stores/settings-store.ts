@@ -47,6 +47,8 @@ export interface AppSettings {
   aiCustomModelsData?: Record<string, { id: string; name: string; contextWindow: string }[]>;
   /** Enabled model IDs per provider (checked = shown in chat model dropdown) */
   aiEnabledModels?: Record<string, string[]>;
+  /** Per-model reasoning depth: key = `providerId/modelId` */
+  aiModelThoughtLevels?: Record<string, string>;
   /** Providers whose API keys have been verified */
   aiVerifiedProviders?: string[];
   /** Chat tool permission preset: ask | auto | readonly */

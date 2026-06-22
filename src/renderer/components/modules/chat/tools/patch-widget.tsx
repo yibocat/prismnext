@@ -1,7 +1,7 @@
-import { useState, memo } from "react";
+import { useState, useMemo, memo } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { FileDiffIcon } from "lucide-react";
-import { ToolCard, DiffLines, param } from "./shared";
+import { ToolCard, DiffLines, DiffStatBadge, computePatchLineStats, param } from "./shared";
 import { useToolPermission } from "./use-tool-permission";
 import { useSettingsStore } from "@/stores/settings-store";
 import { resolvePermissionMode } from "@shared/permission-modes";
@@ -37,6 +37,17 @@ export const PatchWidget = memo(function PatchWidget({
 
   const fileName = filePath.split("/").pop() || (fileCount > 1 ? `${Math.ceil(fileCount)} files` : "patch");
   const showBody = !!patchContent || hasContent || showPermissionAsk;
+  const patchStats = useMemo(
+    () => (patchContent ? computePatchLineStats(patchContent) : { added: 0, removed: 0 }),
+    [patchContent],
+  );
+  const showPatchStats =
+    !!patchContent
+    && !isLoading
+    && !isDenied
+    && !showPermissionAsk
+    && !isError
+    && (patchStats.added > 0 || patchStats.removed > 0);
 
   return (
     <ToolCard
@@ -44,29 +55,26 @@ export const PatchWidget = memo(function PatchWidget({
       icon={<FileDiffIcon className="size-3.5 text-info" />}
       label={<span className="truncate font-medium">{fileName}</span>}
       meta={
-        <>
-          {showPermissionAsk && (
-            <span className="text-primary shrink-0 text-[length:var(--font-chat-meta)]">
-              Awaiting permission
-            </span>
-          )}
-          {fileCount > 1 && (
-            <span className="text-muted-foreground/70 shrink-0 text-[length:var(--font-chat-meta)]">
-              {Math.ceil(fileCount)} files
-            </span>
-          )}
-          <span className="text-muted-foreground/60 shrink-0">
+        fileCount > 1 ? (
+          <span className="text-muted-foreground/70 shrink-0 text-[length:var(--font-chat-meta)]">
+            {Math.ceil(fileCount)} files
+          </span>
+        ) : isDenied || showPermissionAsk || isLoading || isError ? (
+          <span className="text-muted-foreground/60 shrink-0 text-[length:var(--font-chat-meta)]">
             {showPermissionAsk
-              ? "Permission required"
+              ? "Awaiting permission"
               : isDenied
                 ? "Denied"
-              : isLoading
-                ? "Applying…"
-                : isError
-                  ? "Failed"
-                  : "Applied"}
+                : isLoading
+                  ? "Applying…"
+                  : "Failed"}
           </span>
-        </>
+        ) : undefined
+      }
+      headerEnd={
+        showPatchStats ? (
+          <DiffStatBadge added={patchStats.added} removed={patchStats.removed} />
+        ) : undefined
       }
       expanded={expanded}
       onToggle={() => setExpanded(!expanded)}

@@ -317,7 +317,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                 onClick={async (e) => {
                   e.stopPropagation();
                   if (!projectRoot) return;
-                  const result = await window.electronAPI.sessionDelete(s.id);
+                  const result = await window.electronAPI.sessionDelete(s.id, projectRoot);
                   if (result.success) {
                     if (archivedSessionIds.includes(s.id)) toggleArchiveSession(s.id);
                     if (pinnedSessionIds.includes(s.id)) togglePinSession(s.id);
@@ -329,7 +329,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                   if (e.key === "Enter" || e.key === " ") {
                     e.stopPropagation();
                     if (!projectRoot) return;
-                    const result = await window.electronAPI.sessionDelete(s.id);
+                    const result = await window.electronAPI.sessionDelete(s.id, projectRoot);
                     if (result.success) {
                       if (archivedSessionIds.includes(s.id)) toggleArchiveSession(s.id);
                       if (pinnedSessionIds.includes(s.id)) togglePinSession(s.id);

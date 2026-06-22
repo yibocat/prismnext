@@ -9,12 +9,11 @@ import { buildWorkspacePrompt } from "./workspace-folders";
 
 /** All available prompt modules.
  *
- *  `workspace-folders` is the only module enabled by default — it generates
- *  functional folder descriptions from the project's workspace config.
+ *  Academic modules are enabled by default so built-in agent profiles work
+ *  out of the box. Users can turn them off in Settings → Prompts & Rules;
+ *  profiles that depend on disabled modules become unavailable until re-enabled.
  *
- *  The other four modules are EXAMPLE templates that users can enable
- *  globally via Settings → Agent → Prompt Modules. They are NOT injected
- *  unless the user explicitly turns them on.
+ *  `workspace-folders` generates folder descriptions from the project workspace config.
  */
 export const ALL_MODULES: PromptModule[] = [
   {
@@ -32,7 +31,7 @@ export const ALL_MODULES: PromptModule[] = [
     key: "academic-writing",
     label: "Academic Writing",
     description: "Sectioning, abstracts, cross-references, footnotes, hyperref.",
-    enabled: false,
+    enabled: true,
     source: "app",
     prompt: ACADEMIC_WRITING_PROMPT,
   },
@@ -40,7 +39,7 @@ export const ALL_MODULES: PromptModule[] = [
     key: "citations",
     label: "Citations & Bibliography",
     description: "BibTeX, BibLaTeX, cite commands, bibliography management.",
-    enabled: false,
+    enabled: true,
     source: "app",
     prompt: CITATIONS_PROMPT,
   },
@@ -48,7 +47,7 @@ export const ALL_MODULES: PromptModule[] = [
     key: "figures-tables",
     label: "Figures & Tables",
     description: "Floats, captions, booktabs, subcaption, graphicx.",
-    enabled: false,
+    enabled: true,
     source: "app",
     prompt: FIGURES_TABLES_PROMPT,
   },
@@ -56,7 +55,7 @@ export const ALL_MODULES: PromptModule[] = [
     key: "math-equations",
     label: "Math & Equations",
     description: "AMS packages, align, matrices, theorem environments.",
-    enabled: false,
+    enabled: true,
     source: "app",
     prompt: MATH_EQUATIONS_PROMPT,
   },

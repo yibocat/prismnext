@@ -140,7 +140,7 @@ export const ShikiCodeBlock = memo(function ShikiCodeBlock({
   const isFolded = shouldFold && folded;
 
   return (
-    <div className="my-4 overflow-hidden rounded-lg border border-border">
+    <div className="my-4 max-w-full overflow-hidden rounded-lg border border-border">
       {/* Header bar: language label + copy button */}
       <div className="flex items-center justify-between px-4 py-1.5 bg-muted/50 border-b border-border">
         <span className="text-xs text-muted-foreground font-mono">{resolvedLang}</span>

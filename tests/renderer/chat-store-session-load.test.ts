@@ -6,6 +6,7 @@ vi.stubGlobal("window", {
   electronAPI: {
     sessionLoad,
     sessionGetContext: vi.fn().mockResolvedValue(null),
+    sessionGetUserDisplays: vi.fn().mockResolvedValue([]),
   },
 });
 
@@ -74,5 +75,42 @@ describe("chat-store session loading", () => {
         is_error: true,
       },
     ]);
+  });
+
+  it("sets isLoadingSession while session history loads from disk", async () => {
+    let resolveLoad!: (value: unknown[]) => void;
+    sessionLoad.mockImplementation(
+      () => new Promise((resolve) => { resolveLoad = resolve; }),
+    );
+
+    const loadPromise = useChatStore.getState().loadSession("session-loading");
+    expect(useChatStore.getState().isLoadingSession).toBe(true);
+    expect(useChatStore.getState().messages).toEqual([]);
+
+    resolveLoad([
+      {
+        info: { role: "user" },
+        parts: [{ type: "text", text: "Hello" }],
+      },
+    ]);
+    await loadPromise;
+
+    expect(useChatStore.getState().isLoadingSession).toBe(false);
+    expect(useChatStore.getState().messages.length).toBeGreaterThan(0);
+  });
+
+  it("hydrates cached sessions without entering loading state", async () => {
+    const cached = [
+      {
+        type: "user" as const,
+        message: { content: [{ type: "text" as const, text: "Cached hello" }] },
+      },
+    ];
+    (useChatStore as any)._msgCache = new Map([["session-cached", cached]]);
+
+    await useChatStore.getState().loadSession("session-cached");
+
+    expect(useChatStore.getState().isLoadingSession).toBe(false);
+    expect(useChatStore.getState().messages).toEqual(cached);
   });
 });

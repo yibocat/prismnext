@@ -32,7 +32,7 @@ Install skills under:
 ```
 
 - `<skill-id>` must match the `name` in frontmatter (lowercase letters, numbers, hyphens only; e.g. `bibtex-cleanup`, `my-workflow`)
-- OpenCode discovers them via project `.opencode/opencode.json` (`skills.paths`)
+- Prism loads skills from `.prismnext/agent/skills/` through the app agent config; do not create `.opencode/` or `opencode.json`
 - After creating or editing a skill, tell the user to **start a new chat tab** for the agent to pick it up
 
 ## SKILL.md format

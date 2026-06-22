@@ -1,4 +1,19 @@
-import type { ChatStreamMessage } from "@/stores/chat-store";
+import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
+
+/** Restore Prism UI display (inline @ / tokens) over OpenCode-stored user text. */
+export function applyUserDisplaySnapshots(
+  messages: ChatStreamMessage[],
+  snapshots: ContentBlock[][],
+): ChatStreamMessage[] {
+  if (!snapshots.length) return messages;
+  let snapIdx = 0;
+  return messages.map((m) => {
+    if (m.type !== "user" || isToolResultUserMessage(m)) return m;
+    const snap = snapshots[snapIdx++];
+    if (!snap?.length) return m;
+    return { ...m, message: { content: snap } };
+  });
+}
 
 /** User messages that are only tool_result blocks (hidden from turn UI). */
 export function isToolResultUserMessage(msg: ChatStreamMessage): boolean {

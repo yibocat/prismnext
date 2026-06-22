@@ -147,6 +147,10 @@ export class PromptComposer {
         ? djb2Hash(ctx.customRules.map((r) => `${r.name}:${r.content}`).join("|"))
         : "0",
       acrs: ctx.customRules?.length ? String(ctx.customRules.length) : "0",
+      pid: ctx.profileId ?? "",
+      pin: ctx.profileInstructions ? djb2Hash(ctx.profileInstructions) : "0",
+      pm: ctx.profileModules?.join(",") ?? "",
+      prf: ctx.profileRules?.join(",") ?? "",
       en: this.layers.map((l) => `${l.id}=${l.enabled ? 1 : 0}`).join(","),
     };
     return JSON.stringify(normalized);

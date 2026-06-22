@@ -314,7 +314,7 @@ export function registerFsHandlers(): void {
     const gitignorePath = join(prismDir, ".gitignore");
     if (!existsSync(gitignorePath)) {
       const { writeFileSync } = require("node:fs");
-      writeFileSync(gitignorePath, "compile/\nstate.json\nopencode/\ncache/\nstate/\n", "utf-8");
+      writeFileSync(gitignorePath, "compile/\nstate.json\ncache/\nstate/\n", "utf-8");
     }
 
     return { success: true };

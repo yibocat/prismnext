@@ -10,6 +10,16 @@ export interface PromptContext {
   userCustomPrompt?: string;
   /** User-created custom rules (enabled only) */
   customRules?: Array<{ name: string; content: string }>;
+  /** Main-session agent profile overlay */
+  profileId?: string;
+  profileName?: string;
+  profileInstructions?: string;
+  /** Profile-scoped allowlists (undefined = no extra restriction) */
+  profileModules?: string[];
+  profileSkills?: string[];
+  profileMcpServers?: string[];
+  profileCommands?: string[];
+  profileRules?: string[];
 }
 
 /** A single layer in the prompt stack. */

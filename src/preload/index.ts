@@ -135,7 +135,48 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("agent:installSkillFromRegistry", { projectPath, skillName, artifactUrl }),
 	agentDeleteSkill: (projectPath: string, skillId: string) =>
 		ipcRenderer.invoke("agent:deleteSkill", { projectPath, skillId }),
-	chatSend: (args: { projectPath: string; worktreePath?: string; prompt: string; tabId?: string; sessionId?: string | null; apiKey?: string; baseUrl?: string; model?: string; provider?: string; thoughtLevel?: string }) =>
+	agentListProfiles: (projectPath: string) =>
+		ipcRenderer.invoke("agent:listProfiles", { projectPath }),
+	agentListDisabledBuiltinProfiles: (projectPath: string) =>
+		ipcRenderer.invoke("agent:listDisabledBuiltinProfiles", { projectPath }),
+	agentRestoreBuiltinProfiles: (projectPath: string, profileIds?: string[]) =>
+		ipcRenderer.invoke("agent:restoreBuiltinProfiles", { projectPath, profileIds }),
+	agentResetBuiltinProfilesToDefaults: (projectPath: string) =>
+		ipcRenderer.invoke("agent:resetBuiltinProfilesToDefaults", { projectPath }),
+	agentGetProfilesManifest: (projectPath: string) =>
+		ipcRenderer.invoke("agent:getProfilesManifest", { projectPath }),
+	agentSetBuiltinProfileEnabled: (projectPath: string, profileId: string, enabled: boolean) =>
+		ipcRenderer.invoke("agent:setBuiltinProfileEnabled", { projectPath, profileId, enabled }),
+	agentGetProfileEditorOptions: (projectPath: string) =>
+		ipcRenderer.invoke("agent:getProfileEditorOptions", { projectPath }),
+	agentGetProfileDetail: (projectPath: string, profileId: string) =>
+		ipcRenderer.invoke("agent:getProfileDetail", { projectPath, profileId }),
+	agentSaveCustomProfile: (
+		projectPath: string,
+		payload: import("@shared/agent-profiles").SaveCustomProfilePayload,
+	) => ipcRenderer.invoke("agent:saveCustomProfile", { projectPath, payload }),
+	agentSaveBuiltinProfileOverride: (
+		projectPath: string,
+		payload: import("@shared/agent-profiles").SaveBuiltinProfileOverridePayload,
+	) => ipcRenderer.invoke("agent:saveBuiltinProfileOverride", { projectPath, payload }),
+	agentResetBuiltinProfileOverride: (projectPath: string, profileId: string) =>
+		ipcRenderer.invoke("agent:resetBuiltinProfileOverride", { projectPath, profileId }),
+	agentDeleteCustomProfile: (projectPath: string, profileId: string) =>
+		ipcRenderer.invoke("agent:deleteCustomProfile", { projectPath, profileId }),
+	chatSend: (args: {
+		projectPath: string;
+		worktreePath?: string;
+		prompt: string;
+		tabId?: string;
+		sessionId?: string | null;
+		apiKey?: string;
+		baseUrl?: string;
+		model?: string;
+		provider?: string;
+		thoughtLevel?: string;
+		profileId?: string | null;
+		userDisplayContent?: Record<string, unknown>[];
+	}) =>
 		ipcRenderer.invoke("chat:send", args),
 	chatCancel: (sessionId: string) =>
 		ipcRenderer.invoke("chat:cancel", { sessionId }),
@@ -151,8 +192,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	sessionList: (projectPath?: string) => ipcRenderer.invoke("session:list", { projectPath }),
 	sessionLoad: (sessionId: string, projectPath?: string) =>
 		ipcRenderer.invoke("session:load", { sessionId, projectPath }),
-	sessionDelete: (sessionId: string) =>
-		ipcRenderer.invoke("session:delete", { sessionId }),
+	sessionDelete: (sessionId: string, projectPath?: string) =>
+		ipcRenderer.invoke("session:delete", { sessionId, projectPath }),
 	sessionTruncateToTurn: (args: {
 		sessionId: string;
 		projectPath: string;
@@ -166,6 +207,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	}) => ipcRenderer.invoke("session:undoTruncate", args),
 	sessionGetContext: (projectPath: string, sessionId: string) =>
 		ipcRenderer.invoke("session:getContext", { projectPath, sessionId }),
+	sessionGetUserDisplays: (projectPath: string, sessionId: string) =>
+		ipcRenderer.invoke("session:getUserDisplays", { projectPath, sessionId }),
+	sessionAppendUserDisplay: (
+		projectPath: string,
+		sessionId: string,
+		content: Record<string, unknown>[],
+	) => ipcRenderer.invoke("session:appendUserDisplay", { projectPath, sessionId, content }),
 	chatGetProviders: () => ipcRenderer.invoke("chat:getProviders"),
 	chatSetAuth: (provider: string, credentials: Record<string, string>) =>
 		ipcRenderer.invoke("chat:setAuth", { provider, credentials }),

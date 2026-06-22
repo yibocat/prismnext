@@ -12,7 +12,7 @@ export const StreamingCodeFrame = memo(function StreamingCodeFrame({
   code: string;
 }) {
   return (
-    <div className="my-4 overflow-hidden rounded-lg border border-border">
+    <div className="my-4 max-w-full overflow-hidden rounded-lg border border-border">
       {/* Header bar */}
       <div className="flex items-center justify-between px-4 py-1.5 bg-muted/50 border-b border-border">
         <span className="text-xs text-muted-foreground font-mono">
@@ -24,8 +24,8 @@ export const StreamingCodeFrame = memo(function StreamingCodeFrame({
       </div>
 
       {/* Code area — plain monospace, no syntax highlighting */}
-      <div className="overflow-x-auto">
-        <pre className="!bg-transparent !p-4 !m-0 font-mono text-[length:var(--font-code)] whitespace-pre-wrap break-words">
+      <div className="max-w-full overflow-x-auto">
+        <pre className="!bg-transparent !p-4 !m-0 font-mono text-[length:var(--font-code)] whitespace-pre-wrap break-all">
           <code>
             {code}
             <span className="inline-block w-[0.6em] h-[1.1em] bg-primary align-text-bottom animate-pulse rounded-[1px]" />

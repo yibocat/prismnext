@@ -6,6 +6,7 @@ import { createCorePersonaLayer } from "./layers/core-persona";
 import { createActiveModulesLayer } from "./layers/active-modules";
 import { createAgentsMdLayer } from "./layers/agents-md";
 import { createCustomRulesLayer } from "./layers/custom-rules";
+import { createProfileOverlayLayer } from "./layers/profile-overlay";
 import { CORE_PERSONA_PROMPT } from "./layers/core-persona";
 import { ALL_MODULES } from "./modules";
 import { createLogger } from "../services/logger";
@@ -32,6 +33,9 @@ class PromptManager {
     // Layer 1: AGENTS.md — project rules (before generic modules)
     this.composer.register(createAgentsMdLayer());
 
+    // Layer 1.5: Active agent profile overlay (main session)
+    this.composer.register(createProfileOverlayLayer());
+
     // Layer 2: Active modules (built-in toggles)
     this.composer.register(createActiveModulesLayer());
 
@@ -42,7 +46,7 @@ class PromptManager {
     this.composer.preComputeStatic();
 
     this.initialized = true;
-    console.log("[prism] PromptManager initialized (4 layers, 5 modules)");
+    console.log("[prism] PromptManager initialized (5 layers, 5 modules)");
     log.info("PromptManager initialized");
   }
 

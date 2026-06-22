@@ -349,7 +349,67 @@ export interface ElectronAPI {
   agentInstallSkill: (projectPath: string, skillId: string, content: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
   agentInstallSkillFromRegistry: (projectPath: string, skillName: string, artifactUrl: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
   agentDeleteSkill: (projectPath: string, skillId: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
-  chatSend: (args: { projectPath: string; worktreePath?: string; prompt: string; tabId?: string; sessionId?: string | null; apiKey?: string; baseUrl?: string; model?: string; provider?: string; thoughtLevel?: string }) => Promise<void>;
+  agentListProfiles: (projectPath: string) => Promise<import("@shared/agent-profiles").AgentProfileInfo[]>;
+  agentListDisabledBuiltinProfiles: (projectPath: string) => Promise<import("@shared/agent-profiles").AgentProfileInfo[]>;
+  agentRestoreBuiltinProfiles: (
+    projectPath: string,
+    profileIds?: string[],
+  ) => Promise<{
+    manifest: import("@shared/agent-profiles").ProfilesManifest;
+    profiles: import("@shared/agent-profiles").AgentProfileInfo[];
+  }>;
+  agentResetBuiltinProfilesToDefaults: (projectPath: string) => Promise<{
+    manifest: import("@shared/agent-profiles").ProfilesManifest;
+    profiles: import("@shared/agent-profiles").AgentProfileInfo[];
+  }>;
+  agentGetProfilesManifest: (projectPath: string) => Promise<import("@shared/agent-profiles").ProfilesManifest>;
+  agentSetBuiltinProfileEnabled: (projectPath: string, profileId: string, enabled: boolean) => Promise<{
+    manifest: import("@shared/agent-profiles").ProfilesManifest;
+    profiles: import("@shared/agent-profiles").AgentProfileInfo[];
+  }>;
+  agentGetProfileEditorOptions: (projectPath: string) => Promise<import("@shared/agent-profiles").ProfileEditorOptions>;
+  agentGetProfileDetail: (
+    projectPath: string,
+    profileId: string,
+  ) => Promise<(import("@shared/agent-profiles").AgentProfileInfo & { instructions: string }) | null>;
+  agentSaveCustomProfile: (
+    projectPath: string,
+    payload: import("@shared/agent-profiles").SaveCustomProfilePayload,
+  ) => Promise<{
+    profile: import("@shared/agent-profiles").AgentProfileInfo;
+    profiles: import("@shared/agent-profiles").AgentProfileInfo[];
+  }>;
+  agentSaveBuiltinProfileOverride: (
+    projectPath: string,
+    payload: import("@shared/agent-profiles").SaveBuiltinProfileOverridePayload,
+  ) => Promise<{
+    profile: import("@shared/agent-profiles").AgentProfileInfo;
+    profiles: import("@shared/agent-profiles").AgentProfileInfo[];
+  }>;
+  agentResetBuiltinProfileOverride: (
+    projectPath: string,
+    profileId: string,
+  ) => Promise<{
+    profile: import("@shared/agent-profiles").AgentProfileInfo;
+    profiles: import("@shared/agent-profiles").AgentProfileInfo[];
+  }>;
+  agentDeleteCustomProfile: (projectPath: string, profileId: string) => Promise<{
+    profiles: import("@shared/agent-profiles").AgentProfileInfo[];
+  }>;
+  chatSend: (args: {
+    projectPath: string;
+    worktreePath?: string;
+    prompt: string;
+    tabId?: string;
+    sessionId?: string | null;
+    apiKey?: string;
+    baseUrl?: string;
+    model?: string;
+    provider?: string;
+    thoughtLevel?: string;
+    profileId?: string | null;
+    userDisplayContent?: Record<string, unknown>[];
+  }) => Promise<void>;
   chatCancel: (sessionId: string) => Promise<void>;
   chatCompact: (sessionId: string, projectPath: string) => Promise<void>;
   chatAnswer: (sessionId: string, answer: string) => Promise<void>;
@@ -358,7 +418,7 @@ export interface ElectronAPI {
   chatStatus: () => Promise<{ available: boolean; version: string }>;
   sessionList: (projectPath?: string) => Promise<Array<{ id: string; title: string; lastModified: number; createdAt: number }>>;
   sessionLoad: (sessionId: string, projectPath?: string) => Promise<any[]>;
-  sessionDelete: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
+  sessionDelete: (sessionId: string, projectPath?: string) => Promise<{ success: boolean; error?: string }>;
   sessionTruncateToTurn: (args: {
     sessionId: string;
     projectPath: string;
@@ -371,6 +431,12 @@ export interface ElectronAPI {
     worktreePath?: string;
   }) => Promise<{ success: boolean }>;
   sessionGetContext: (projectPath: string, sessionId: string) => Promise<{ tokens: number; breakdown: Record<string, number>; schema: { key: string; label: string; color: string; description?: string; order?: number }[]; updatedAt: number; hasSystemPromptBlock?: boolean; promptFingerprint?: string } | null>;
+  sessionGetUserDisplays: (projectPath: string, sessionId: string) => Promise<import("@/stores/chat-store").ContentBlock[][]>;
+  sessionAppendUserDisplay: (
+    projectPath: string,
+    sessionId: string,
+    content: import("@/stores/chat-store").ContentBlock[],
+  ) => Promise<{ success: boolean }>;
   chatGetProviders: () => Promise<any[]>;
   chatSetAuth: (provider: string, credentials: Record<string, string>) => Promise<{ success: boolean }>;
   chatTestConnection(args: { provider: string; apiKey: string; baseUrl?: string }): Promise<{ success: boolean; models?: string[] }>;

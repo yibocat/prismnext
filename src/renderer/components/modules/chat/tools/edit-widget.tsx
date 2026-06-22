@@ -1,9 +1,8 @@
-import { useState, useEffect, memo } from "react";
+import { useState, useEffect, useMemo, memo } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { useChangesStore } from "@/stores/changes-store";
 import { FileEditIcon, CheckIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { ToolCard, DiffLines, param } from "./shared";
+import { ToolCard, DiffLines, DiffStatBadge, computeLineDiffStats, param } from "./shared";
 import { ChangeReviewBar } from "./change-review-bar";
 import { useToolPermission } from "./use-tool-permission";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -60,6 +59,17 @@ export const EditWidget = memo(function EditWidget({
   const isError = toolResult?.is_error;
   const isDenied = isToolDenied;
   const isLoading = !toolResult && !showPermissionAsk && !isDenied;
+  const lineStats = useMemo(
+    () => computeLineDiffStats(activeOldText, activeNewText),
+    [activeOldText, activeNewText],
+  );
+  const showLineStats =
+    !isLoading
+    && !isDenied
+    && !showPermissionAsk
+    && !isError
+    && !resolved
+    && (lineStats.added > 0 || lineStats.removed > 0);
   const hasData = !!(change || snapshot?.oldContent
     || toolUse.input?.old_string || toolUse.input?.oldString
     || toolUse.input?.new_string || toolUse.input?.newString);
@@ -94,28 +104,25 @@ export const EditWidget = memo(function EditWidget({
       icon={<FileEditIcon className="size-3.5 text-info" />}
       label={<span className="truncate font-medium">{fileName}</span>}
       meta={
-        <span className="text-muted-foreground/60 shrink-0">
-          {resolved
-            ? resolved === "accepted" ? "Accepted" : "Rejected"
-            : isDenied
-              ? "Denied"
-            : showPermissionAsk
-              ? "Awaiting permission"
-              : isLoading
-                ? (isWrite ? "Writing..." : "Editing...")
-                : isError
-                  ? "Failed"
-                  : (isWrite ? "Written" : "Edited")}
-        </span>
+        resolved || isDenied || showPermissionAsk || isLoading || isError ? (
+          <span className="text-muted-foreground/60 shrink-0 text-[length:var(--font-chat-meta)]">
+            {resolved
+              ? resolved === "accepted" ? "Accepted" : "Rejected"
+              : isDenied
+                ? "Denied"
+                : showPermissionAsk
+                  ? "Awaiting permission"
+                  : isLoading
+                    ? (isWrite ? "Writing…" : "Editing…")
+                    : "Failed"}
+          </span>
+        ) : undefined
       }
-      headerEnd={!resolved && change ? (
-        <span className={cn(
-          "text-[length:var(--font-badge)] font-mono shrink-0",
-          activeNewText.length - activeOldText.length >= 0 ? "text-success" : "text-destructive",
-        )}>
-          {activeNewText.length - activeOldText.length >= 0 ? "+" : ""}{activeNewText.length - activeOldText.length}
-        </span>
-      ) : undefined}
+      headerEnd={
+        showLineStats ? (
+          <DiffStatBadge added={lineStats.added} removed={lineStats.removed} />
+        ) : undefined
+      }
       expanded={expanded}
       onToggle={() => setExpanded(!expanded)}
       isLoading={isLoading}
@@ -123,7 +130,7 @@ export const EditWidget = memo(function EditWidget({
       hasContent={hasData || isAwaitingPermission}
       statusIcon={resolved ? <CheckIcon className="size-3.5 text-success" /> : undefined}
     >
-      <pre className="font-mono whitespace-pre-wrap break-all overflow-x-auto max-h-80 overflow-y-auto">
+      <pre className="max-w-full font-mono whitespace-pre-wrap break-all overflow-x-hidden overflow-y-auto max-h-80">
         {(change || snapshot) ? (
           <DiffLines oldStr={activeOldText} newStr={activeNewText} />
         ) : activeOldText || activeNewText ? (

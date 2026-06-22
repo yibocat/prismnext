@@ -35,7 +35,13 @@ const defaults: AppSettings = {
   sidebarCollapsed: false,
   rightPanelCollapsed: false,
   agentSystemPrompt: "",
-  promptModules: { "workspace-folders": true },
+  promptModules: {
+    "workspace-folders": true,
+    "academic-writing": true,
+    "citations": true,
+    "figures-tables": true,
+    "math-equations": true,
+  },
 };
 
 const store = new Store<AppSettings>({

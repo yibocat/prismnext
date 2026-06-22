@@ -67,7 +67,7 @@ export const BashWidget = memo(function BashWidget({
       isLoading={isLoading}
       isError={!!isError || isDenied}
       hasContent={showBody}
-      bodyClassName="font-mono whitespace-pre-wrap"
+      bodyClassName="font-mono whitespace-pre-wrap break-all"
     >
       {() => (
         <>

@@ -11,6 +11,7 @@ import { registerThemeHandlers } from "./theme";
 import { registerWorkspaceHandlers } from "./workspace";
 import { registerCommandsHandlers } from "./commands";
 import { registerSkillsHandlers } from "./skills";
+import { registerProfilesHandlers } from "./profiles";
 
 export function registerIpcHandlers(): void {
   registerFsHandlers();
@@ -26,6 +27,7 @@ export function registerIpcHandlers(): void {
   registerWorkspaceHandlers();
   registerCommandsHandlers();
   registerSkillsHandlers();
+  registerProfilesHandlers();
 }
 
 export { disposeChat };

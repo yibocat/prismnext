@@ -8,3 +8,4 @@ src/renderer/public/pdfjs-dist/
 
 # OpenCode binary (downloaded or manually placed)
 bin/opencode/
+.cursor/

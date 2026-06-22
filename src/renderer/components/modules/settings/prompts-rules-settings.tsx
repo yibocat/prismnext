@@ -647,7 +647,7 @@ export function PromptsRulesSettings() {
         <div>
           <h3 className={CATEGORY_HEADER}>Knowledge Modules</h3>
           <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-2">
-            Domain-specific knowledge appended to the system prompt.
+            Project-wide capability pool. Agent profiles only show and use modules enabled here.
           </p>
           <KnowledgeModulesSection onRefresh={() => refreshPreview()} />
         </div>

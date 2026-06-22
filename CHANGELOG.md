@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.4.1 — 2026-06-22
+
+### Agent Profiles
+
+- Bundled agent profiles: **Academic Writer** (main), **Citation Auditor** and **Literature Scout** (subagents) under `resources/profiles/`
+- Profile select in chat composer toolbar — per-tab `activeProfileId` injects a `profile-overlay` prompt layer into the system prompt
+- Settings → Agent: list profiles, set project default, enable/disable builtins; profile editor dialog for custom profiles
+- Profiles sync to `.prismnext/agent/profiles/` and subagent definitions to `.opencode/agents/` on project open
+- New `profiles:*` IPC and `agent-profiles` / `profiles-sync` main-process services
+
+### Inline Composer
+
+- Token-based composer editor: `@file`, `@profile`, and `/command` chips rendered inline (replacing plain-text chips for new messages)
+- Composer dropdown for file/profile/command autocomplete; structured draft serialization for session reload
+- User display snapshots persisted per session so inline tokens restore correctly on history load
+
+### Chat UI & Scrolling
+
+- Cursor-style turn scrolling: latest user message pins to viewport top; AI output expands below with dynamic bottom runway
+- Only the active turn uses a sticky user header — older turns no longer stick when scrolling history
+- Session switch no longer flashes the centered “new chat” homepage: tab-level `isLoadingSession` with loading state; cached sessions hydrate synchronously
+- Narrow chat panel: horizontal page scroll eliminated — long tool output and code blocks wrap or scroll inside their cards
+- Tool widgets polished to Cursor-style collapsible rows: unified `ToolCard` shell, `+N`/`-M` diff badges on edit/patch, refined thinking/todo/ask-question panels
+- Composer toolbar refactor: chat mode (Agent / Expert team), model & thought selectors, profile picker, permission mode with distinct icons (Ask / Auto / Read-only)
+
+### Prompt System
+
+- `resolve-active-modules` respects profile module overrides; profile overlay layer composes on top of domain modules
+
+### Testing
+
+- Tests added for profiles sync, active-module resolution, session display store, inline composer, session loading state, and user display snapshots
+
 ## 0.4.0 — 2026-06-21
 
 ### OpenCode ACP Kernel

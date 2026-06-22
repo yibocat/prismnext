@@ -1,14 +1,18 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 
 export const PRISM_SKILLS_REL = ".prismnext/agent/skills";
 export const SKILLS_MANIFEST_REL = ".prismnext/agent/skills-manifest.json";
-export const PROJECT_OPENCODE_REL = ".opencode/opencode.json";
 
-const SKILLS_PATH_ENTRY = ".prismnext/agent/skills";
+const LEGACY_OPENCODE_ARTIFACTS = [
+  ".opencode",
+  ".prismnext/.opencode",
+  ".prismnext/opencode",
+] as const;
 
-/** OpenCode built-in skills we keep enabled in core but hide from the agent. */
-export const OPENCODE_HIDDEN_SKILLS = ["customize-opencode"] as const;
+function normalizeProjectRoot(projectRoot: string): string {
+  return basename(projectRoot) === ".prismnext" ? dirname(projectRoot) : projectRoot;
+}
 
 export const PRISM_CURATED_SOURCE_ID = "prism-curated";
 
@@ -200,79 +204,68 @@ export function listProjectSkills(projectRoot: string): InstalledSkillInfo[] {
   return results.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function buildSkillPermissions(disabled: string[]): Record<string, string> {
-  const skill: Record<string, string> = { "*": "allow" };
-  for (const name of OPENCODE_HIDDEN_SKILLS) {
-    skill[name] = "deny";
+/** Merge global disabled skills with profile allowlist (deny skills outside allowlist). */
+export function computeProfileSkillDisabled(
+  projectRoot: string,
+  profileSkillAllowlist?: string[],
+): string[] {
+  const manifest = readSkillsManifest(projectRoot);
+  const disabled = new Set((manifest.disabled ?? []).filter(Boolean));
+  if (!profileSkillAllowlist?.length) {
+    return Array.from(disabled);
   }
-  for (const name of disabled) {
-    if (name.trim()) skill[name.trim()] = "deny";
+  const allow = new Set(profileSkillAllowlist);
+  for (const skill of listProjectSkills(projectRoot)) {
+    if (!allow.has(skill.id) && !allow.has(skill.name)) {
+      disabled.add(skill.id);
+      disabled.add(skill.name);
+    }
   }
-  return skill;
+  return Array.from(disabled);
+}
+
+/** Remove legacy OpenCode project artifacts. Prism-owned agent config lives in `.prismnext/agent/`. */
+export function cleanupProjectOpenCodeArtifacts(projectRoot: string): void {
+  const root = normalizeProjectRoot(projectRoot);
+  for (const rel of LEGACY_OPENCODE_ARTIFACTS) {
+    const path = join(root, rel);
+    if (existsSync(path)) {
+      rmSync(path, { recursive: true, force: true });
+    }
+  }
 }
 
 /**
- * Ensure OpenCode discovers Prism project skills via skills.paths and honor
- * disabled entries through permission.skill.
+ * Ensure Prism project skills directory exists.
+ *
+ * OpenCode project config used to be written to `.opencode/opencode.json`.
+ * That leaked OpenCode implementation details into user projects and could
+ * create `<project>/.prismnext/.opencode/` if the wrong root was passed.
+ * Runtime discovery now goes through ACP `additionalDirectories`.
  */
-export function syncProjectSkillsIntegration(projectRoot: string): {
+export function syncProjectSkillsIntegration(
+  projectRoot: string,
+  options?: { profileSkillAllowlist?: string[] },
+): {
   skillsCount: number;
   configPath: string;
 } {
-  const skillsRoot = join(projectRoot, PRISM_SKILLS_REL);
+  const root = normalizeProjectRoot(projectRoot);
+  cleanupProjectOpenCodeArtifacts(root);
+
+  const skillsRoot = join(root, PRISM_SKILLS_REL);
   if (!existsSync(skillsRoot)) {
     mkdirSync(skillsRoot, { recursive: true });
   }
 
-  const manifest = readSkillsManifest(projectRoot);
-  const disabled = manifest.disabled ?? [];
-  const configPath = join(projectRoot, PROJECT_OPENCODE_REL);
-  mkdirSync(join(projectRoot, ".opencode"), { recursive: true });
-
-  let config: Record<string, unknown> = {};
-  if (existsSync(configPath)) {
-    try {
-      config = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>;
-    } catch {
-      config = {};
-    }
-  }
-
-  if (!config.$schema) {
-    config.$schema = "https://opencode.ai/config.json";
-  }
-
-  const existingSkills = (config.skills as Record<string, unknown> | undefined) ?? {};
-  const paths = new Set(
-    Array.isArray(existingSkills.paths)
-      ? existingSkills.paths.filter((p): p is string => typeof p === "string")
-      : [],
-  );
-  paths.add(SKILLS_PATH_ENTRY);
-  // Agent only discovers installed skills under skills.paths.
-  // Connected library sources are browse/install UI only — never skills.urls.
-  config.skills = {
-    ...existingSkills,
-    paths: Array.from(paths),
-    urls: [],
-  };
-
-  const existingPermission = (config.permission as Record<string, unknown> | undefined) ?? {};
-  const existingSkillPerm =
-    (existingPermission.skill as Record<string, string> | undefined) ?? {};
-  config.permission = {
-    ...existingPermission,
-    skill: {
-      ...existingSkillPerm,
-      ...buildSkillPermissions(disabled),
-    },
-  };
-
-  writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
+  // Keep this computation for callers that sync after profile/skill changes:
+  // it validates manifests and preserves the current API shape without writing
+  // OpenCode project config.
+  computeProfileSkillDisabled(root, options?.profileSkillAllowlist);
 
   return {
-    skillsCount: listProjectSkills(projectRoot).length,
-    configPath,
+    skillsCount: listProjectSkills(root).length,
+    configPath: "",
     registryUrls: [] as string[],
   };
 }

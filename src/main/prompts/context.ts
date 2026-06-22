@@ -44,6 +44,7 @@ function readFileIfExists(absPath: string): string | null {
  */
 export async function buildPromptContext(
   projectRoot?: string,
+  options?: { profileId?: string | null },
 ): Promise<PromptContext> {
   const ctx: PromptContext = { projectRoot };
 
@@ -91,6 +92,33 @@ export async function buildPromptContext(
     if (allRules.length > 0) ctx.customRules = allRules;
   } catch {
     // settings may not be available during early startup
+  }
+
+  if (projectRoot && options?.profileId) {
+    try {
+      const { buildProfilePromptOverlay, getProfileRuntimeFilters } = await import("../services/profiles-sync");
+      const profileId = options.profileId;
+      const overlay = buildProfilePromptOverlay(projectRoot, profileId);
+      if (overlay) {
+        ctx.profileId = overlay.profileId;
+        ctx.profileName = overlay.profileName;
+        ctx.profileInstructions = overlay.profileInstructions;
+      }
+      const filters = getProfileRuntimeFilters(projectRoot, profileId);
+      if (filters?.modules?.length) ctx.profileModules = filters.modules;
+      if (filters?.skills?.length) ctx.profileSkills = filters.skills;
+      if (filters?.mcpServers?.length) ctx.profileMcpServers = filters.mcpServers;
+      if (filters?.commands?.length) ctx.profileCommands = filters.commands;
+      if (filters?.rules?.length) {
+        ctx.profileRules = filters.rules;
+        if (ctx.customRules?.length) {
+          const allowed = new Set(filters.rules);
+          ctx.customRules = ctx.customRules.filter((r) => allowed.has(r.name));
+        }
+      }
+    } catch {
+      // profiles optional during early startup
+    }
   }
 
   return ctx;

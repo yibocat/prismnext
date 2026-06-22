@@ -8,11 +8,20 @@ import { createLogger } from "../services/logger";
 import { promptManager } from "../prompts";
 import { buildPromptContext } from "../prompts/context";
 import { CONTEXT_CATEGORY_SCHEMA } from "../services/context-constants";
+import {
+  appendUserDisplay,
+  deleteSessionDisplays,
+  getUserDisplays,
+  restoreUserDisplays,
+  truncateUserDisplays,
+  type UserDisplayContent,
+} from "../services/session-display-store";
 
 const log = createLogger("chat-ipc", "agent");
 
 /** Full SQLite snapshot before session:truncateToTurn — used by session:undoTruncate. */
 const sessionTruncationBackups = new Map<string, SessionMessageBackup>();
+const sessionDisplayBackups = new Map<string, UserDisplayContent[]>();
 
 // ── Session context persistence ──────────────────────────────────
 
@@ -140,6 +149,10 @@ export function registerChatHandlers(): void {
         apiKey?: string;
         baseUrl?: string;
         thoughtLevel?: string;
+        /** Per-tab agent profile id */
+        profileId?: string | null;
+        /** UI display blocks for this user turn (inline tokens); not sent to the model. */
+        userDisplayContent?: Record<string, unknown>[];
       },
     ) => {
       const tabId = args.tabId || "default";
@@ -173,9 +186,45 @@ export function registerChatHandlers(): void {
       }
 
       // ── Assemble system prompt (Prism layers) ──
-      // Main process owns prompt assembly — renderer never passes systemPrompt.
-      // Delivery: first-turn content block in sendPrompt() only.
-      const promptCtx = await buildPromptContext(args.projectPath);
+      const {
+        resolveProfileId,
+        getProfileRuntimeFilters,
+      } = await import("../services/profiles-sync");
+      const { syncProjectSkillsIntegration } = await import("../services/skills-sync");
+
+      const userPrompt = args.prompt;
+
+      const profileId = args.projectPath && args.profileId
+        ? resolveProfileId(args.projectPath, args.profileId) ?? undefined
+        : undefined;
+
+      let provider = args.provider || "anthropic";
+      let modelId = args.model;
+      let thoughtLevel = args.thoughtLevel;
+
+      if (profileId && args.projectPath) {
+        const { getAgentProfile } = await import("../services/profiles-sync");
+        const profile = getAgentProfile(args.projectPath, profileId);
+        if (profile?.model) {
+          const slash = profile.model.indexOf("/");
+          if (slash > 0) {
+            provider = profile.model.slice(0, slash);
+            modelId = profile.model.slice(slash + 1);
+          }
+        }
+        if (profile?.thoughtLevel) thoughtLevel = profile.thoughtLevel;
+      }
+
+      if (args.projectPath && profileId) {
+        const filters = getProfileRuntimeFilters(args.projectPath, profileId);
+        syncProjectSkillsIntegration(args.projectPath, {
+          profileSkillAllowlist: filters?.skills,
+        });
+      }
+
+      const promptCtx = await buildPromptContext(args.projectPath, {
+        profileId,
+      });
       const assembledPrompt = promptManager.compose(promptCtx);
       const currentFingerprint = promptManager.computePromptFingerprint(promptCtx);
       if (assembledPrompt) {
@@ -196,11 +245,18 @@ export function registerChatHandlers(): void {
       const existingSessionId = args.sessionId;
       if (!sessionId) {
         isFirstTurn = true;
-        const model = args.model && args.provider
-          ? `${args.provider}/${args.model}`
-          : args.model || undefined;
+        const model = modelId && provider
+          ? `${provider}/${modelId}`
+          : modelId || undefined;
         const session = await service.createSession(
-          cwd, model, args.projectPath,
+          cwd,
+          model,
+          args.projectPath,
+          {
+            mcpServerAllowlist: profileId && args.projectPath
+              ? getProfileRuntimeFilters(args.projectPath, profileId)?.mcpServers
+              : undefined,
+          },
         );
         sessionId = session.id;
         win.webContents.send("chat:sessionCreated", { tabId, sessionId });
@@ -211,9 +267,9 @@ export function registerChatHandlers(): void {
       bridge.start();
 
       // Set thought level if specified via ACP session/set_config_option.
-      if (args.thoughtLevel) {
+      if (thoughtLevel) {
         try {
-          await service.setConfigOption(sessionId, "thought_level", args.thoughtLevel);
+          await service.setConfigOption(sessionId, "thought_level", thoughtLevel);
         } catch (err: any) {
           log.debug(`setConfigOption thought_level not supported by this OpenCode version: ${err.message}`);
         }
@@ -240,15 +296,18 @@ export function registerChatHandlers(): void {
       // First turn of a new session, or prompt config changed since last injection.
       const injectSystemPrompt = isFirstTurn || promptStale;
 
-      log.info(`Sending prompt: sessionId=${sessionId} tabId=${tabId} promptLen=${args.prompt.length} injectSystem=${injectSystemPrompt}`);
+      log.info(`Sending prompt: sessionId=${sessionId} tabId=${tabId} promptLen=${userPrompt.length} injectSystem=${injectSystemPrompt}`);
       let usage = null;
       try {
-        const result = await service.sendPrompt(sessionId, args.prompt, {
-          model: args.model,
-          provider: args.provider,
+        const result = await service.sendPrompt(sessionId, userPrompt, {
+          model: modelId,
+          provider,
           systemPrompt: assembledPrompt || undefined,
           injectSystemPrompt,
         });
+        if (args.userDisplayContent?.length && args.projectPath && sessionId) {
+          appendUserDisplay(args.projectPath, sessionId, args.userDisplayContent);
+        }
         // ACP PromptResponse.usage uses camelCase: { inputTokens, outputTokens, ... }
         // Map to snake_case for backward compat with renderer token formatting
         const acpUsage = (result as any)?.usage;
@@ -527,8 +586,11 @@ export function registerChatHandlers(): void {
 
   ipcMain.handle(
     "session:delete",
-    async (_event, args: { sessionId: string }) => {
+    async (_event, args: { sessionId: string; projectPath?: string }) => {
       sessionTruncationBackups.delete(args.sessionId);
+      if (args.projectPath) {
+        deleteSessionDisplays(args.projectPath, args.sessionId);
+      }
       return await getService().deleteSession(args.sessionId);
     },
   );
@@ -553,10 +615,19 @@ export function registerChatHandlers(): void {
 
       const backup = await service.backupSessionMessages(args.sessionId);
       sessionTruncationBackups.set(args.sessionId, backup);
+      if (args.projectPath) {
+        sessionDisplayBackups.set(
+          args.sessionId,
+          getUserDisplays(args.projectPath, args.sessionId),
+        );
+      }
 
       const result = await service.truncateSessionToTurn(args.sessionId, args.turnIndex);
       const cwd = args.worktreePath || args.projectPath || "";
       await service.initSession(args.sessionId, cwd);
+      if (args.projectPath) {
+        truncateUserDisplays(args.projectPath, args.sessionId, args.turnIndex + 1);
+      }
 
       log.info(`Session truncated: sessionId=${args.sessionId} turnIndex=${args.turnIndex} removed=${result.removedCount}`);
       return result;
@@ -578,9 +649,16 @@ export function registerChatHandlers(): void {
         throw new Error("No session backup available for undo");
       }
 
+      const displayBackup = sessionDisplayBackups.get(args.sessionId);
+
       const service = getService();
       await service.restoreSessionFromBackup(backup);
       sessionTruncationBackups.delete(args.sessionId);
+      sessionDisplayBackups.delete(args.sessionId);
+
+      if (displayBackup && args.projectPath) {
+        restoreUserDisplays(args.projectPath, args.sessionId, displayBackup);
+      }
 
       const cwd = args.worktreePath || args.projectPath || "";
       await service.initSession(args.sessionId, cwd);
@@ -595,6 +673,24 @@ export function registerChatHandlers(): void {
     "session:getContext",
     async (_event, args: { projectPath: string; sessionId: string }) => {
       return loadSessionContext(args.projectPath, args.sessionId);
+    },
+  );
+
+  ipcMain.handle(
+    "session:getUserDisplays",
+    async (_event, args: { projectPath: string; sessionId: string }) => {
+      return getUserDisplays(args.projectPath, args.sessionId);
+    },
+  );
+
+  ipcMain.handle(
+    "session:appendUserDisplay",
+    async (
+      _event,
+      args: { projectPath: string; sessionId: string; content: UserDisplayContent },
+    ) => {
+      appendUserDisplay(args.projectPath, args.sessionId, args.content);
+      return { success: true };
     },
   );
 

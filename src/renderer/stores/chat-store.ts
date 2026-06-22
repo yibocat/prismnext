@@ -1,18 +1,23 @@
 import { create } from "zustand";
+import type { ComposerPart } from "@/components/modules/chat/inline-composer/tokens";
 import { useDocumentStore } from "./document-store";
 import { useWorktreeStore } from "./worktree-store";
 import { useGitStore } from "./git-store";
 import { useSettingsStore } from "./settings-store";
 import { createToolResultFromState } from "@/components/modules/chat/tools/tool-result-map";
-import { truncateChatMessagesToTurn } from "@/components/modules/chat/chat-turns";
+import { truncateChatMessagesToTurn, applyUserDisplaySnapshots } from "@/components/modules/chat/chat-turns";
 
 // ─── Types ───
 
 export interface ContentBlock {
-  type: "text" | "tool_use" | "tool_result" | "thinking" | "command";
+  type: "text" | "tool_use" | "tool_result" | "thinking" | "command" | "profile";
   text?: string;
+  /** Inline @file / @profile / /command tokens in user message order */
+  inlineParts?: ComposerPart[];
   id?: string;
   name?: string;
+  /** For "profile" blocks: agent profile id */
+  profileId?: string;
   input?: any;
   tool_use_id?: string;
   content?: any;
@@ -63,9 +68,14 @@ export interface ChatStreamMessage {
 }
 
 interface TabDraft {
+  /** JSON draft (`draftToJson`) or legacy plain text */
   input: string;
-  /** Command chips in the composer (restored on tab switch) */
+  /** Structured inline composer parts (preferred) */
+  parts?: ComposerPart[];
+  /** @deprecated legacy command chips */
   chips?: { id: string; commandName: string; action?: string; source: string }[];
+  /** @deprecated legacy profile chip */
+  profileChip?: { id: string; profileId: string; profileName: string } | null;
 }
 
 interface TabState {
@@ -94,7 +104,15 @@ interface TabState {
   categorySchema: { key: string; label: string; color: string; description?: string; order?: number }[] | null;
   /** True when live prompt config differs from this session's injected fingerprint. */
   promptStale: boolean;
+  /** Agent profile for this tab (null = project default). */
+  activeProfileId: string | null;
+  /** Chat execution mode for this tab. */
+  chatMode: ChatExecutionMode;
+  /** True while session history is being loaded from disk (avoids homepage flash). */
+  isLoadingSession: boolean;
 }
+
+export type ChatExecutionMode = "agent" | "expert-team";
 
 let _nextTabId = 1;
 function nextTabId(): string {
@@ -116,6 +134,9 @@ function makeDefaultTab(id: string): TabState {
     contextBreakdown: null,
     categorySchema: null,
     promptStale: false,
+    activeProfileId: null,
+    chatMode: "agent",
+    isLoadingSession: false,
   };
 }
 
@@ -237,6 +258,8 @@ interface ChatState {
   categorySchema: { key: string; label: string; color: string; description?: string; order?: number }[] | null;
   /** True when prompt/rules changed since this session's system prompt was set. */
   promptStale: boolean;
+  /** True while the active tab is loading session history from disk. */
+  isLoadingSession: boolean;
   /** Debug: incremented on every _upsertLastMessage call to verify re-renders */
   streamTick: number;
 
@@ -245,9 +268,16 @@ interface ChatState {
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   saveDraft: (tabId: string, draft: TabDraft) => void;
+  setActiveProfile: (tabId: string, profileId: string | null) => void;
+  setChatMode: (tabId: string, mode: ChatExecutionMode) => void;
 
   // Chat actions
-  sendPrompt: (userPrompt: string, userContent?: ContentBlock[], skipUserMessage?: boolean) => Promise<void>;
+  sendPrompt: (
+    userPrompt: string,
+    userContent?: ContentBlock[],
+    skipUserMessage?: boolean,
+    profileId?: string | null,
+  ) => Promise<void>;
   cancelExecution: () => Promise<void>;
   newSession: () => void;
   clearAllSessions: () => void;
@@ -332,7 +362,7 @@ function extractPersistedBreakdown(messages: ChatStreamMessage[]): {
 
 function projectActiveTab(tabs: TabState[], activeTabId: string) {
   const tab = tabs.find((t) => t.id === activeTabId);
-  if (!tab) return { messages: [] as ChatStreamMessage[], streamingMessage: null as ChatStreamMessage | null, messageMeta: {} as Record<number, string>, sessionId: null as string | null, isStreaming: false, error: null as string | null, contextTokens: null as number | null, contextBreakdown: null as Record<string, number> | null, categorySchema: null as { key: string; label: string; color: string; description?: string; order?: number }[] | null, promptStale: false, streamTick: 0 };
+  if (!tab) return { messages: [] as ChatStreamMessage[], streamingMessage: null as ChatStreamMessage | null, messageMeta: {} as Record<number, string>, sessionId: null as string | null, isStreaming: false, error: null as string | null, contextTokens: null as number | null, contextBreakdown: null as Record<string, number> | null, categorySchema: null as { key: string; label: string; color: string; description?: string; order?: number }[] | null, promptStale: false, isLoadingSession: false, streamTick: 0 };
 
   // Primary: tab-stored contextTokens (set by _setContextTokens during live
   // chat, or restored from sessions-context.json during session load).
@@ -359,6 +389,7 @@ function projectActiveTab(tabs: TabState[], activeTabId: string) {
     contextBreakdown: tab.contextBreakdown,
     categorySchema: tab.categorySchema,
     promptStale: tab.promptStale,
+    isLoadingSession: tab.isLoadingSession,
     streamTick: (tab as any).streamTick || 0,
   };
 }
@@ -474,9 +505,30 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }));
   },
 
+  setActiveProfile: (tabId: string, profileId: string | null) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId ? { ...t, activeProfileId: profileId } : t,
+      ),
+    }));
+  },
+
+  setChatMode: (tabId: string, mode: ChatExecutionMode) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId ? { ...t, chatMode: mode } : t,
+      ),
+    }));
+  },
+
   // ─── Chat Actions ───
 
-  sendPrompt: async (userPrompt: string, userContent?: ContentBlock[], skipUserMessage?: boolean) => {
+  sendPrompt: async (
+    userPrompt: string,
+    userContent?: ContentBlock[],
+    skipUserMessage?: boolean,
+    profileIdOverride?: string | null,
+  ) => {
     const docState = useDocumentStore.getState();
     const projectPath = docState.projectRoot || "";
     const tabId = get().activeTabId;
@@ -566,8 +618,33 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     // ── 4. Send the actual prompt — chat responses follow naturally ──
     try {
       const sessionId = get().tabs.find((t) => t.id === tabId)?.sessionId;
+      const activeTab = get().tabs.find((t) => t.id === tabId);
       const persistedSettings = useSettingsStore.getState().settings;
-      const provider = persistedSettings.aiProvider || "anthropic";
+      let provider = persistedSettings.aiProvider || "anthropic";
+      let model = persistedSettings.aiModel ?? undefined;
+      let thoughtLevel = persistedSettings.thoughtLevel || undefined;
+
+      const effectiveProfileId = profileIdOverride ?? activeTab?.activeProfileId ?? null;
+
+      if (effectiveProfileId && projectPath) {
+        try {
+          const detail = await window.electronAPI.agentGetProfileDetail(
+            projectPath,
+            effectiveProfileId,
+          );
+          if (detail?.model) {
+            const slash = detail.model.indexOf("/");
+            if (slash > 0) {
+              provider = detail.model.slice(0, slash);
+              model = detail.model.slice(slash + 1);
+            }
+          }
+          if (detail?.thoughtLevel) thoughtLevel = detail.thoughtLevel;
+        } catch {
+          // use session defaults
+        }
+      }
+
       await window.electronAPI.chatSend({
         projectPath,
         worktreePath: worktreePath || undefined,
@@ -576,9 +653,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         sessionId,
         apiKey: persistedSettings.aiApiKeys?.[provider] || undefined,
         baseUrl: persistedSettings.aiBaseUrls?.[provider] || undefined,
-        model: persistedSettings.aiModel ?? undefined,
+        model,
         provider,
-        thoughtLevel: persistedSettings.thoughtLevel || undefined,
+        thoughtLevel,
+        profileId: effectiveProfileId ?? undefined,
+        userDisplayContent:
+          skipUserMessage && userContent?.length
+            ? (userContent as unknown as Record<string, unknown>[])
+            : undefined,
       });
     } catch (err: any) {
       set((s) => {
@@ -633,7 +715,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (tab?.isStreaming) return; // Never clear a tab with an active agent
     set((s) => {
       const tabs = s.tabs.map((t) =>
-        t.id === tabId ? { ...t, messages: [], streamingMessage: null, sessionId: null, title: "New Chat", error: null, isStreaming: false, promptStale: false } : t,
+        t.id === tabId ? { ...t, messages: [], streamingMessage: null, sessionId: null, title: "New Chat", error: null, isStreaming: false, promptStale: false, isLoadingSession: false } : t,
       );
       return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
     });
@@ -710,57 +792,89 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return;
     }
 
-    // Always create a new tab — never overwrite an existing one.
-    // This preserves in-memory data (result messages, meta) on the current tab.
-    const newId = nextTabId();
-    const newTab = makeDefaultTab(newId);
-    const tabId = newId;
-    // Switch to the new tab immediately. Messages load via fast file read (<50ms).
-    set((s) => ({
-      tabs: [...s.tabs, newTab],
-      activeTabId: tabId,
-      ...projectActiveTab([...s.tabs, newTab], tabId),
-    }));
-
-    // In-memory cache — first load takes ~1s (ACP replay), subsequent loads instant
     const _msgCache = (useChatStore as any)._msgCache || (
       (useChatStore as any)._msgCache = new Map<string, ChatStreamMessage[]>()
     ) as Map<string, ChatStreamMessage[]>;
 
-    const cached = _msgCache.get(sessionId);
-    if (cached) {
-      // Restore persisted context even for cached messages
-      let cachedCtx: { tokens: number; breakdown: Record<string, number>; schema: any[] } | null = null;
-      const projectPath = useDocumentStore.getState().projectRoot || "";
+    const projectPath = useDocumentStore.getState().projectRoot || "";
+    const newId = nextTabId();
+    const tabId = newId;
+
+    const hydrateSessionContext = () => {
       window.electronAPI.sessionGetContext(projectPath, sessionId).then((d) => {
-        if (d) useChatStore.setState((s) => {
+        if (!d) return;
+        useChatStore.setState((s) => {
           const tabs = s.tabs.map((t) =>
-            t.id === tabId ? { ...t, contextTokens: d.tokens, contextBreakdown: d.breakdown, categorySchema: d.schema } : t,
+            t.id === tabId
+              ? { ...t, contextTokens: d.tokens, contextBreakdown: d.breakdown, categorySchema: d.schema }
+              : t,
           );
           if (s.activeTabId === tabId) {
-            return { tabs, contextTokens: d.tokens, contextBreakdown: d.breakdown, categorySchema: d.schema };
+            return {
+              tabs,
+              contextTokens: d.tokens,
+              contextBreakdown: d.breakdown,
+              categorySchema: d.schema,
+            };
           }
           return { tabs };
         });
       }).catch(() => {});
+    };
 
-      set((s) => {
-        const tabs = s.tabs.map((t) =>
-          t.id === tabId
-            ? { ...t, messages: cached, streamingMessage: null, title: extractSessionTitle(cached) || "New Chat", sessionId, error: null, isStreaming: false }
-            : t,
-        );
-        const projected = projectActiveTab(tabs, tabId);
-        return { tabs, activeTabId: tabId, ...projected };
-      });
+    const cached = _msgCache.get(sessionId);
+    if (cached) {
+      // Sync hydrate from cache — avoids empty-tab flash on repeat opens.
+      const title = extractSessionTitle(cached) || "New Chat";
+      const hydratedTab: TabState = {
+        ...makeDefaultTab(newId),
+        messages: cached,
+        sessionId,
+        title,
+        isLoadingSession: false,
+      };
+      set((s) => ({
+        tabs: [...s.tabs, hydratedTab],
+        activeTabId: tabId,
+        ...projectActiveTab([...s.tabs, hydratedTab], tabId),
+      }));
       void import("./checkpoint-store").then(({ useCheckpointStore }) => {
         useCheckpointStore.getState().initSession(tabId, sessionId);
       });
+      hydrateSessionContext();
+      void (async () => {
+        try {
+          const displays = await window.electronAPI.sessionGetUserDisplays(projectPath, sessionId);
+          if (!displays?.length) return;
+          const enriched = applyUserDisplaySnapshots(cached, displays);
+          _msgCache.set(sessionId, enriched);
+          useChatStore.setState((s) => {
+            const tabs = s.tabs.map((t) =>
+              t.id === tabId ? { ...t, messages: enriched } : t,
+            );
+            return s.activeTabId === tabId
+              ? { tabs, ...projectActiveTab(tabs, tabId) }
+              : { tabs };
+          });
+        } catch { /* best-effort */ }
+      })();
       return;
     }
 
+    // Always create a new tab — never overwrite an existing one.
+    // Show chat layout with loading state until history arrives from disk.
+    const loadingTab: TabState = {
+      ...makeDefaultTab(newId),
+      sessionId,
+      isLoadingSession: true,
+    };
+    set((s) => ({
+      tabs: [...s.tabs, loadingTab],
+      activeTabId: tabId,
+      ...projectActiveTab([...s.tabs, loadingTab], tabId),
+    }));
+
     try {
-      const projectPath = useDocumentStore.getState().projectRoot || "";
       const raw: any[] = await window.electronAPI.sessionLoad(sessionId, projectPath);
 
       // Messages can come in two formats:
@@ -769,19 +883,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const messages: ChatStreamMessage[] = [];
 
       if (raw.length > 0 && raw[0].info && raw[0].parts) {
-        // Format 1: file storage (SQLite) — each item is a complete message.
-        // OpenCode stores tool parts in a format that differs from what the
-        // live-streaming ACP path delivers:
-        //
-        //   { type: "tool", tool: "bash", callID: "call_xxx",
-        //     state: { status, input: {...}, output: "...", title, time } }
-        //
-        // Key differences from what we previously assumed:
-        //   - `tool` is a plain string (e.g. "bash"), not an object
-        //   - The ID lives in `callID`, not `id`
-        //   - The input lives in `state.input`, not `input`
-        //   - The result lives in `state.output` — there is NO separate
-        //     "tool_result" part type; completed tools carry their own output
         for (const item of raw) {
           const blocks: ContentBlock[] = (item.parts || []).flatMap((p: any): ContentBlock[] => {
             switch (p.type) {
@@ -796,16 +897,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
               case "tool_use": {
                 const results: ContentBlock[] = [];
 
-                // Tool name: OpenCode stores it as a plain string in `p.tool`.
-                // Fall back to p.name for ACP-replay or legacy formats.
                 const toolName: string =
                   (typeof p.tool === "string" ? p.tool : "") ||
                   p.tool?.name || p.name || "";
 
                 const toolId: string = p.callID || p.id || "";
 
-                // Input: OpenCode wraps params in `state.input`.
-                // Try legacy locations as fallback.
                 const toolInput: any =
                   p.state?.input || p.input || p.tool?.input || {};
 
@@ -816,9 +913,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                   input: toolInput,
                 });
 
-                // Tool output: OpenCode embeds result in `state.output` with
-                // a terminal `state.status`. Denied / cancelled tools often
-                // have no output — still emit a synthetic tool_result.
                 const status = p.state?.status || "";
                 const output = p.state?.output;
                 const toolResult = createToolResultFromState(toolId, status, output);
@@ -845,7 +939,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           messages.push({ type: role as "user" | "assistant", message: { content: blocks } });
         }
       } else {
-        // Format 2: ACP replay — group chunks by messageId
         const msgGroups = new Map<string, { role: string; blocks: ContentBlock[] }>();
         for (const chunk of raw) {
           const msgId = chunk.messageId || chunk.id || "";
@@ -881,22 +974,22 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         }
       }
 
-      // Filter empty messages
       let filtered = messages.filter((m) => m.message?.content && m.message.content.length > 0);
 
-      // Restore persisted session context (breakdown + system prompt flag)
-      const pp = useDocumentStore.getState().projectRoot || "";
       let ctxData: { tokens: number; breakdown: Record<string, number>; schema: any[]; hasSystemPromptBlock?: boolean } | null = null;
       try {
-        ctxData = await window.electronAPI.sessionGetContext(pp, sessionId);
+        ctxData = await window.electronAPI.sessionGetContext(projectPath, sessionId);
       } catch { /* best-effort */ }
 
-      // Strip Prism system prompt from displayed history. Uses the persisted
-      // hasSystemPromptBlock flag (set at session creation), with content-based
-      // fallback for sessions created before this metadata was tracked.
       stripSystemPromptFromDisplay(filtered, ctxData?.hasSystemPromptBlock);
 
-      // Cache for instant reload
+      try {
+        const displays = await window.electronAPI.sessionGetUserDisplays(projectPath, sessionId);
+        if (displays?.length) {
+          filtered = applyUserDisplaySnapshots(filtered, displays);
+        }
+      } catch { /* best-effort */ }
+
       _msgCache.set(sessionId, filtered);
 
       const title = extractSessionTitle(messages) || "New Chat";
@@ -912,6 +1005,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                 sessionId,
                 error: null,
                 isStreaming: false,
+                isLoadingSession: false,
                 contextTokens: ctxData?.tokens ?? null,
                 contextBreakdown: ctxData?.breakdown ?? null,
                 categorySchema: ctxData?.schema ?? null,
@@ -927,7 +1021,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       set((s) => {
         const tabs = s.tabs.map((t) =>
           t.id === tabId
-            ? { ...t, error: `Failed to load session: ${err?.message || String(err)}` }
+            ? {
+                ...t,
+                error: `Failed to load session: ${err?.message || String(err)}`,
+                isLoadingSession: false,
+              }
             : t,
         );
         return { tabs, activeTabId: tabId, ...projectActiveTab(tabs, tabId) };

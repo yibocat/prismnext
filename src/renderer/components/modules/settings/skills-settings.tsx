@@ -787,8 +787,7 @@ export function SkillsSettings() {
               <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">
                 .prismnext/agent/skills/&lt;name&gt;/SKILL.md
               </code>
-              . OpenCode discovers them via project{" "}
-              <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">.opencode/opencode.json</code>.
+              . Chat sessions load them through Prism&apos;s agent config.
               New chat tabs pick up changes.
             </p>
 

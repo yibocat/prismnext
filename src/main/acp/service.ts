@@ -444,12 +444,11 @@ export class AcpService {
    *
    * ## How prism‑next custom tools work
    *
-   * OpenCode discovers custom tools by scanning two directories at startup:
-   *   1. `$XDG_CONFIG_HOME/opencode/tools/`  — global (all projects)
-   *   2. `<project>/.opencode/tools/`        — per-project
+   * prism-next only syncs built-in tools into the app-level config directory.
+   * We intentionally do not write project-level `.opencode/` tools/config.
    *
-   * prism‑next sets `XDG_CONFIG_HOME` to `<userData>/opencode-server/config/`,
-   * so the global tools directory resolves to:
+   * prism-next sets `XDG_CONFIG_HOME` to `<userData>/opencode-server/config/`,
+   * so the tools directory resolves to:
    *   `<userData>/opencode-server/config/opencode/tools/`
    *
    * On **every app startup**, this method copies the built-in tool files from
@@ -642,21 +641,34 @@ export class AcpService {
   }
 
   /** Load project-level agent config. Uses cache from prewarmProject when available. */
-  private loadProjectAgentConfig(projectRoot: string): {
+  private loadProjectAgentConfig(
+    projectRoot: string,
+    options?: { mcpServerAllowlist?: string[] },
+  ): {
     mcpServers: AcpMcpServer[];
     additionalDirectories: string[];
   } {
-    // Cache hit — same project, already prewarmed
-    if (this.cachedAgentConfig?.projectRoot === projectRoot) {
+    const useCache = !options?.mcpServerAllowlist?.length;
+    if (useCache && this.cachedAgentConfig?.projectRoot === projectRoot) {
       return {
         mcpServers: this.cachedAgentConfig.mcpServers,
         additionalDirectories: this.cachedAgentConfig.additionalDirectories,
       };
     }
 
-    // Cache miss — fallback to direct read (should not normally happen)
-    log.warn("Agent config cache miss — reading from disk", { projectRoot });
-    return this.readAgentConfig(projectRoot);
+    const config = this.readAgentConfig(projectRoot);
+    if (!options?.mcpServerAllowlist?.length) {
+      if (!this.cachedAgentConfig || this.cachedAgentConfig.projectRoot !== projectRoot) {
+        log.warn("Agent config cache miss — reading from disk", { projectRoot });
+      }
+      return config;
+    }
+
+    const allow = new Set(options.mcpServerAllowlist);
+    return {
+      ...config,
+      mcpServers: config.mcpServers.filter((s) => allow.has(s.name)),
+    };
   }
 
   /**
@@ -669,12 +681,13 @@ export class AcpService {
     cwd: string,
     model?: string,
     projectRoot?: string,
+    options?: { mcpServerAllowlist?: string[] },
   ): Promise<SessionInfo> {
     if (!this.conn) throw new Error("AcpService not initialized");
 
     this.projectPath = cwd;
     const root = projectRoot || cwd;
-    const { mcpServers, additionalDirectories } = this.loadProjectAgentConfig(root);
+    const { mcpServers, additionalDirectories } = this.loadProjectAgentConfig(root, options);
 
     const params: any = { cwd, mcpServers };
     if (additionalDirectories.length > 0) {

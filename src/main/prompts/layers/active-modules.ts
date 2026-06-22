@@ -1,7 +1,7 @@
 // prism-next/src/main/prompts/layers/active-modules.ts
 
 import type { PromptLayer, PromptContext } from "../types";
-import { ALL_MODULES } from "../modules";
+import { resolveActiveModules } from "../resolve-active-modules";
 import { createLogger } from "../../services/logger";
 
 const log = createLogger("active-modules", "agent");
@@ -16,7 +16,7 @@ export function createActiveModulesLayer(): PromptLayer {
     enabled: true, // the LAYER is enabled; individual modules toggle inside
     isStatic: false,
     build: (ctx: PromptContext) => {
-      const enabled = ALL_MODULES.filter((m) => m.enabled);
+      const enabled = resolveActiveModules(ctx);
       if (enabled.length === 0) return "";
 
       const parts: string[] = [];
@@ -38,7 +38,7 @@ export function createActiveModulesLayer(): PromptLayer {
       }
 
       log.info(
-        `Modules assembled: ${parts.length}/${ALL_MODULES.length} active ` +
+        `Modules assembled: ${parts.length}/${enabled.length} active ` +
         `(${parts.reduce((s, p) => s + p.length, 0)} chars)`,
         { activeModules: enabled.map((m) => m.key) },
       );

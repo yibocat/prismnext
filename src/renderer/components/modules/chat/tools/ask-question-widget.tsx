@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { StatusIcon, param } from "./shared";
+import { StatusIcon, param, TOOL_PANEL_CLASS, TOOL_PANEL_HEADER_CLASS, TOOL_INLINE_ROW_CLASS, TOOL_EXPANDED_CONTENT_CLASS } from "./shared";
 
 /** Extract the human-readable answer string from toolResult.content. */
 function parseAnswer(content: unknown): string {
@@ -121,42 +121,41 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
   // Compact loading / empty-question fallback
   if (!question && !options.length) {
     return (
-      <div className="my-2 flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-[length:var(--font-code)]">
+      <div className={cn(TOOL_INLINE_ROW_CLASS, "text-[length:var(--font-code)] py-0.5")}>
         <StatusIcon isLoading={!hasResult} isError={!!isError} />
-        <span className="text-muted-foreground text-[length:var(--font-chat-meta)] shrink-0">{toolName}</span>
-        <MessageCircleQuestionIcon className="size-3.5 text-info" />
-        <span className="text-muted-foreground">
+        <span className="text-[length:var(--font-chat-meta)] shrink-0">{toolName}</span>
+        <MessageCircleQuestionIcon className="size-3.5 shrink-0 text-info" />
+        <span className="text-muted-foreground truncate">
           {!hasResult ? "Waiting for question…" : isError ? "Question failed" : "Question asked"}
         </span>
       </div>
     );
   }
 
-  // ── Answered state (collapsible) ──
+  // ── Answered state (collapsible inline row) ──
   if (isAlreadyAnswered) {
     return (
-      <div className="my-2 rounded-lg border border-border bg-card overflow-hidden text-[length:var(--font-code)]">
+      <div>
         <button
           type="button"
-          className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors"
+          className={cn(TOOL_INLINE_ROW_CLASS, "text-left text-[length:var(--font-code)] py-0.5")}
           onClick={() => setExpanded(!expanded)}
         >
           <StatusIcon isLoading={false} isError={false} />
-          <span className="text-muted-foreground text-[length:var(--font-chat-meta)] shrink-0">{toolName}</span>
-          <MessageCircleQuestionIcon className="size-3.5 text-info" />
-          <span className="font-medium">Answered</span>
-          <span className="text-muted-foreground truncate">
-            — {answerLabel.slice(0, 50)}{answerLabel.length > 50 && "…"}
+          <span className="text-[length:var(--font-chat-meta)] shrink-0">{toolName}</span>
+          <MessageCircleQuestionIcon className="size-3.5 shrink-0 text-info" />
+          <span className="min-w-0 truncate font-medium text-foreground/90">
+            {answerLabel.slice(0, 80)}{answerLabel.length > 80 && "…"}
           </span>
           <ChevronDownIcon
             className={cn(
-              "ml-auto size-3.5 text-muted-foreground transition-transform",
-              expanded && "rotate-180",
+              "size-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
+              expanded ? "rotate-0" : "-rotate-90",
             )}
           />
         </button>
         {expanded && (
-          <div className="border-t border-border bg-muted/20 px-3 py-2 text-[length:var(--font-chat-message)] space-y-1.5">
+          <div className={cn(TOOL_EXPANDED_CONTENT_CLASS, "text-[length:var(--font-chat-message)] space-y-1.5")}>
             {question && (
               <>
                 <span className="text-[length:var(--font-chat-meta)] text-muted-foreground/70">Question</span>
@@ -173,9 +172,9 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
 
   // ── Active (awaiting answer) state ──
   return (
-    <div className="my-2 rounded-lg border border-border bg-card overflow-hidden text-[length:var(--font-code)]">
+    <div className={cn("text-[length:var(--font-code)]", TOOL_PANEL_CLASS)}>
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/20">
+      <div className={cn("flex items-center gap-2 px-3 py-2", TOOL_PANEL_HEADER_CLASS)}>
         <StatusIcon isLoading={!hasResult} isError={!!isError} />
         <span className="text-muted-foreground text-[length:var(--font-chat-meta)] shrink-0">{toolName}</span>
         <MessageCircleQuestionIcon className="size-3.5 text-info" />
@@ -257,7 +256,7 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
       </div>
 
       {/* Action bar */}
-      <div className="flex items-center justify-end gap-1.5 px-3 py-1.5 border-t border-border bg-muted/10">
+      <div className={cn("flex items-center justify-end gap-1.5 px-3 py-1.5", TOOL_PANEL_HEADER_CLASS)}>
         <Button type="button" variant="ghost" size="xs" disabled={!hasSelection} onClick={handleCancel}>
           <XIcon className="size-3" />
           Clear

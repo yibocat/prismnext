@@ -81,7 +81,8 @@ export function LeftMainArea() {
   const categorySchema = useChatStore((s) => s.categorySchema);
   const promptStale = useChatStore((s) => s.promptStale);
   const sessionId = useChatStore((s) => s.sessionId);
-  const isEmpty = messages.length === 0 && !isStreaming;
+  const isLoadingSession = useChatStore((s) => s.isLoadingSession);
+  const showHomepage = messages.length === 0 && !isStreaming && !isLoadingSession;
 
   useEffect(() => {
     if (sessionId) {
@@ -178,7 +179,7 @@ export function LeftMainArea() {
   return (
     <div className="flex h-full flex-col min-w-0 @container select-text" data-surface="content">
       <ChatErrorBoundary>
-        {isEmpty ? (
+        {showHomepage ? (
           /* ── Homepage ── */
           <div className="flex flex-1 flex-col items-center justify-end @xl:justify-center @xl:pb-[var(--height-titlebar)]">
             {/* Top toolbar — branch & worktree selectors */}
@@ -206,7 +207,7 @@ export function LeftMainArea() {
           </div>
         ) : (
           /* ── Chat view ── */
-          <div className="flex flex-1 flex-col">
+          <div className="flex flex-1 flex-col min-w-0 overflow-x-hidden">
             <ChatMessages />
             <RestoreUndoBar />
             {/* Worktree actions above composer — only when worktree is active */}

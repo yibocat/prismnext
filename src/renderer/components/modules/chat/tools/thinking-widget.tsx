@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useChatStore } from "@/stores/chat-store";
 import { BrainIcon, ChevronDownIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TOOL_EXPANDED_CONTENT_CLASS } from "./shared";
 
 // ─── LocalStorage persistence ───
 
@@ -66,7 +67,7 @@ export function ThinkingWidget({
     : (elapsed > 0 ? Math.round(elapsed * 10) / 10 : Math.max(0.1, Math.round(thinking.length / 5) / 10));
 
   return (
-    <div className="my-1.5">
+    <div>
       <button
         type="button"
         className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors group"
@@ -84,11 +85,14 @@ export function ThinkingWidget({
               : `Thought for ${fmt(frozenDuration)}s`}
         </span>
         <ChevronDownIcon
-          className={cn("size-3.5 shrink-0 transition-transform ml-auto", expanded && "rotate-180")}
+          className={cn(
+            "size-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
+            expanded ? "rotate-0" : "-rotate-90",
+          )}
         />
       </button>
       {expanded && (
-        <div className="mt-1.5 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-[length:var(--font-code)] text-muted-foreground whitespace-pre-wrap leading-relaxed animate-in fade-in slide-in-from-top-1 duration-150">
+        <div className={cn(TOOL_EXPANDED_CONTENT_CLASS, "text-muted-foreground whitespace-pre-wrap leading-relaxed")}>
           {thinking}
         </div>
       )}
