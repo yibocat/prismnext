@@ -1,4 +1,4 @@
-import type { RightTab } from "@/lib/mode-registry";
+import type { RightTab } from "@/lib/workspace/mode-registry";
 import { PaneContent } from "./content";
 
 /**

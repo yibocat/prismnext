@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.4.2 — 2026-06-23
+
+### Terminal × AI
+
+- AI bash execution over main-process PTY (`ai-pty`, `ai-bash-runner`) with live stream to ✨ AI terminal tabs; `sessionMirrorLog` keyed by OpenCode session for durable replay
+- AI terminal lifecycle (Phases A–D): session-scoped cancel/GC, live vs replay view modes, one ✨ tab per chat session, busy-tab close confirmation
+- Custom OpenCode `bash` tool bridged to Prism terminal; `chat:cancel` and project teardown cancel in-flight AI PTY jobs
+- Bash widget **Terminal** button: focus live stream while running, replay from log when completed
+- `terminal-ai-store`, session title / left-sidebar running indicators, server status dot activity counts
+- Settings → **Agent** (AI Terminal) and **Terminal** (lifecycle + Advanced PTY/Mirror transport + User Terminal placeholder)
+
+### Interactive Terminal
+
+- User terminal PTY stability: per-tab lifecycle, OSC 133 busy detection, worktree-aware cwd, restart/kill toolbar actions
+- Terminal mode sidebar: Quick Commands accordion, **Live** / **Saved** AI sessions plus shell-named user tabs (`zsh`, `bash`, `PowerShell`, …)
+- ✨ AI terminal toolbar: read-only · live/replay badge, pin (skip idle GC), copy output
+- **Add to Chat** from terminal selection (anchored chip, `⌘L`); terminal snippets in inline composer
+- Narrow RightArea: progressive sidebar squeeze then auto-close split layout; explicit open in narrow width still uses full overlay
+
+### Files & Browser
+
+- Files tab UX: open external paths, recent files, breadcrumb navigation, improved tree visibility and preview routing
+- Browser mode: home page, favicon, link context menu, in-app / external open helpers (`browser-link` lib)
+- Tab close confirmation for dirty files, busy terminals, and running AI commands
+
+### Chat & Composer
+
+- Inline token rendering split into `inline-tokens` module; terminal/file snippet parts in composer prompt compile path
+- Chat scroll anchor preservation; active-turn scroll helpers; insert-to-chat from editor/terminal selections
+
+### Architecture & Layout
+
+- Renderer `lib/` domain layout: `workspace/`, `terminal/`, `files/`, `chat/`, `agent/`, `browser-link/`, `tex/`, `templates/`, `editor/`, `markdown/`
+- Mode registry-driven right panel tabs with AI terminal metadata (`terminalSource`, `linkedChatTabId`)
+- Git mode diff/accordion polish; tex workspace toolbar/sidebar alignment with shared tab patterns
+
+### Testing
+
+- Broad coverage for AI PTY, terminal bridge, mirror-key migration, AI terminal store/lifecycle, files-tab UX, tab-close confirmation, right-area sidebar layout, terminal buffer/OSC/input-line, and related renderer utilities
+
 ## 0.4.1 — 2026-06-22
 
 ### Agent Profiles

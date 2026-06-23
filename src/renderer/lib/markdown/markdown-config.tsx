@@ -1,9 +1,10 @@
 // src/renderer/lib/markdown-config.ts
 import type { Components } from "react-markdown";
+import { AppBrowserLink } from "@/components/modules/shared/app-browser-link";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
-import { remarkWikilinks } from "@/lib/remark-wikilinks";
+import { remarkWikilinks } from "./remark-wikilinks";
 import { cn } from "@/lib/utils";
 
 export const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkWikilinks];
@@ -128,7 +129,7 @@ export const CHAT_MARKDOWN_TYPOGRAPHY = cn(
   "[&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-6",
   "[&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-6",
   "[&_li]:my-0.5 [&_li]:leading-normal",
-  "[&_a]:text-primary [&_a]:underline",
+  "[&_a:not([data-inline-token])]:text-primary [&_a:not([data-inline-token])]:underline",
   "[&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_blockquote]:my-2 [&_blockquote]:text-muted-foreground",
   "[&_hr]:my-4 [&_hr]:border-border",
   "[&_th]:text-[0.85em] [&_th]:font-medium [&_th]:text-muted-foreground",
@@ -171,9 +172,9 @@ export const MARKDOWN_COMPONENTS: Components = {
       );
     }
     return (
-      <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline" {...props}>
+      <AppBrowserLink href={href}>
         {children}
-      </a>
+      </AppBrowserLink>
     );
   },
 };

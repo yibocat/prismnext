@@ -13,6 +13,7 @@ import {
   resolvePermissionAction,
 } from "@shared/permission-modes";
 import { finalizePermissionDeny, schedulePermissionTimeout } from "@/stores/permission-actions";
+import { handleBashToolUse, handleBashToolResult, handleBashPermissionDenied } from "@/lib/terminal/ai-bridge";
 import { shouldTrackProposedChange, isDiskMutationTool, isFileWriteTool, isPatchTool, extractPatchTargetPaths } from "@/components/modules/chat/tools/tool-meta";
 import { useCheckpointStore, resolveRelativeToolPath } from "@/stores/checkpoint-store";
 import { compileCurrentDocument, pauseAutoCompileForAi, resumeAutoCompileAfterAi } from "@/stores/compile-store";
@@ -468,12 +469,30 @@ export function useOpenCodeEvents() {
             chatStore._upsertLastMessage(tabId, msg);
 
             // Track tool uses for change registration
-            if (block.type === "tool_use" && block.name && block.id) {
-              const toolName = (block.name as string).toLowerCase();
+            if (
+              block.type === "tool_use"
+              && block.id
+              && (block.name || block.kind === "execute")
+            ) {
+              const toolName = (
+                (block.name as string)
+                || (block.kind === "execute" ? "bash" : "")
+              ).toLowerCase();
+              if (toolName === "bash" || toolName === "shell" || toolName === "terminal" || toolName === "execute") {
+                const tabTools = pendingToolUsesRef.current.get(tabId) ||
+                  pendingToolUsesRef.current.set(tabId, new Map()).get(tabId)!;
+                tabTools.set(block.id, { name: block.name || toolName, input: block.input });
+                handleBashToolUse(
+                  tabId,
+                  block.id,
+                  toolName,
+                  block.input as Record<string, unknown> | undefined,
+                );
+              }
               if (isDiskMutationTool(toolName)) {
                 const tabTools = pendingToolUsesRef.current.get(tabId) ||
                   pendingToolUsesRef.current.set(tabId, new Map()).get(tabId)!;
-                tabTools.set(block.id, { name: block.name, input: block.input });
+                tabTools.set(block.id, { name: block.name || toolName, input: block.input });
 
                 const filePaths = isPatchTool(toolName)
                   ? extractPatchTargetPaths(block.input)
@@ -539,6 +558,15 @@ export function useOpenCodeEvents() {
                 console.log(`[opencode-events] storing tool_result: tool_use_id=${toolUseId} status=${status || "(none)"} contentLen=${typeof block.content === "string" ? block.content.length : JSON.stringify(block.content || "").length} isError=${block.is_error}`);
                 chatStore._appendMessage(tabId, resultMsg);
 
+                const toolName = (
+                  pendingToolUsesRef.current.get(tabId)?.get(toolUseId)?.name
+                  || (block as any)._backfillName
+                  || ""
+                ).toLowerCase();
+                if (toolName === "bash" || toolName === "shell" || toolName === "terminal" || toolName === "execute") {
+                  handleBashToolResult(toolUseId, block.content, block.is_error);
+                }
+
                 if (!block.is_error) {
                   const tabTools = pendingToolUsesRef.current.get(tabId);
                   const toolUse = tabTools?.get(toolUseId);
@@ -568,6 +596,20 @@ export function useOpenCodeEvents() {
                   if (backfillName) pendingTool.name = backfillName;
 
                   const toolName = (pendingTool.name as string).toLowerCase();
+                  if (
+                    toolName === "bash"
+                    || toolName === "shell"
+                    || toolName === "terminal"
+                    || toolName === "execute"
+                  ) {
+                    handleBashToolUse(
+                      tabId,
+                      toolUseId,
+                      backfillName?.toLowerCase() || toolName,
+                      backfillInput as Record<string, unknown>,
+                    );
+                  }
+
                   const filePath = backfillInput.file_path || backfillInput.filePath || backfillInput.path || "";
                   const projectRoot = useDocumentStore.getState().projectRoot || "";
                   const docState = useDocumentStore.getState();

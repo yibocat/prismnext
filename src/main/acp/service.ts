@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, accessSync, constants, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, accessSync, constants, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { Readable, Writable } from "node:stream";
 import { app } from "electron";
@@ -177,6 +177,7 @@ export class AcpService {
     this.writeDefaultConfig();
     const settings = getSettings() as Record<string, unknown>;
     this.applyPermissionMode(resolvePermissionMode(settings.permissionMode as string | undefined));
+    await this.applyAgentTerminalMode(settings.agentTerminalMode as string | undefined);
 
     // Ensure PATH includes standard system dirs. Electron dev mode may strip
     // them, causing spawn ENOENT for valid binaries.
@@ -484,8 +485,20 @@ export class AcpService {
     }
 
     let synced = 0;
+    const { getSettings } = await import("../services/settings");
+    const agentTerminalMode = (getSettings().agentTerminalMode as string) || "pty";
+
     for (const { name, content } of files) {
       const dest = join(toolsDir, `${name}.ts`);
+
+      if (name === "bash" && agentTerminalMode !== "pty") {
+        if (existsSync(dest)) {
+          try { unlinkSync(dest); } catch {}
+          log.info("Removed prism bash tool (mirror mode uses OpenCode built-in)");
+        }
+        continue;
+      }
+
       try {
         // Write tool file (idempotent — only overwrites if content differs)
         if (existsSync(dest)) {
@@ -562,6 +575,40 @@ export class AcpService {
     log.info("Restarting OpenCode to apply permission mode change");
     await this.shutdown();
     await this.initialize();
+  }
+
+  /** Restart OpenCode so custom tools (e.g. prism bash) are picked up. */
+  async reloadAfterToolsChange(): Promise<void> {
+    if (!this.proc && !this.conn) return;
+    log.info("Restarting OpenCode to apply agent terminal mode / tools change");
+    await this.shutdown();
+    await this.initialize();
+  }
+
+  async applyAgentTerminalMode(mode: string | undefined): Promise<void> {
+    const resolved = (mode as string) || "pty";
+    const enableBuiltinBash = resolved !== "pty";
+
+    for (const p of this.getOpencodeConfigPaths()) {
+      try {
+        let config: Record<string, unknown> = {};
+        if (existsSync(p)) {
+          try {
+            config = JSON.parse(readFileSync(p, "utf-8")) as Record<string, unknown>;
+          } catch {
+            continue;
+          }
+        }
+        const tools = (config.tools as Record<string, unknown>) || {};
+        config.tools = { ...tools, bash: enableBuiltinBash };
+        mkdirSync(dirname(p), { recursive: true });
+        writeFileSync(p, JSON.stringify(config, null, 2), "utf-8");
+        log.info(`Applied agent terminal mode "${resolved}" (bash=${enableBuiltinBash}) to ${p}`);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(`Failed to apply agent terminal mode to ${p}: ${message}`);
+      }
+    }
   }
 
   /**

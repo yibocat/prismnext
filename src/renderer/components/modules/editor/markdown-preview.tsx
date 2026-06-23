@@ -6,7 +6,7 @@ import "@/styles/code-highlight.css";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useLayoutStore } from "@/stores/layout-store";
-import { useTabContext } from "@/lib/tab-context";
+import { useTabContext } from "@/lib/workspace/tab-context";
 import { cn } from "@/lib/utils";
 import {
   REMARK_PLUGINS,
@@ -14,7 +14,8 @@ import {
   MARKDOWN_COMPONENTS,
   DOCUMENT_MARKDOWN_TYPOGRAPHY,
   normalizeMathDelimiters,
-} from "@/lib/markdown-config";
+} from "@/lib/markdown/markdown-config";
+import { AppBrowserLink } from "@/components/modules/shared/app-browser-link";
 
 /** CSS containment + GPU layer promotion.
  *  `contain: layout style paint` isolates this subtree from global reflow.
@@ -62,7 +63,7 @@ const COMPONENTS: Components = {
       const target = href.slice("wikilink:".length).split("#")[0];
       return <Wikilink target={target}>{children}</Wikilink>;
     }
-    return <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline" {...props}>{children}</a>;
+    return <AppBrowserLink href={href} className="text-primary underline" {...props}>{children}</AppBrowserLink>;
   },
 };
 

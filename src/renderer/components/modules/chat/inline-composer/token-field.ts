@@ -2,9 +2,10 @@ import { StateField, StateEffect, RangeSetBuilder, EditorState } from "@codemirr
 import { Decoration, EditorView, WidgetType } from "@codemirror/view";
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import type { ComposerPart } from "./tokens";
-import { TOKEN_MARKER_END, TOKEN_MARKER_START } from "./serialize";
-import { TokenChip } from "./token-widgets";
+import type { ComposerPart } from "@/lib/chat/composer-parts";
+import { expandLinkTokensInParts, mergeAdjacentText } from "@/lib/chat/composer-parts";
+import { TOKEN_MARKER_END, TOKEN_MARKER_START, partsToDoc, docToParts } from "./serialize";
+import { ComposerTokenChip } from "../inline-tokens";
 
 export const setTokenMapEffect = StateEffect.define<Map<string, ComposerPart>>();
 
@@ -34,7 +35,7 @@ class TokenWidget extends WidgetType {
     wrap.className = "inline-composer-token";
     wrap.setAttribute("contenteditable", "false");
     const root: Root = createRoot(wrap);
-    root.render(createElement(TokenChip, { part: this.part }));
+    root.render(createElement(ComposerTokenChip, { part: this.part }));
     (wrap as HTMLElement & { __cmRoot?: Root }).__cmRoot = root;
     return wrap;
   }
@@ -133,12 +134,31 @@ export function insertComposerToken(
   replaceFrom: number,
   replaceTo: number,
 ): void {
-  const tokenMap = new Map(view.state.field(tokenMapStateField));
-  tokenMap.set(part.id, part);
-  const marker = `${TOKEN_MARKER_START}${part.id}${TOKEN_MARKER_END}`;
-  const insert = `${marker} `;
-  const cursor = replaceFrom + insert.length;
+  insertComposerParts(view, [part], replaceFrom, replaceTo);
+}
 
+/** Insert mixed text + token parts at a range (e.g. paste with URLs). */
+export function insertComposerParts(
+  view: EditorView,
+  parts: ComposerPart[],
+  replaceFrom: number,
+  replaceTo: number,
+): void {
+  const merged = mergeAdjacentText(parts);
+  const tokenMap = new Map(view.state.field(tokenMapStateField));
+  let insert = "";
+
+  for (const part of merged) {
+    if (part.type === "text") {
+      insert += part.text;
+      continue;
+    }
+    tokenMap.set(part.id, part);
+    insert += `${TOKEN_MARKER_START}${part.id}${TOKEN_MARKER_END}`;
+    insert += " ";
+  }
+
+  const cursor = replaceFrom + insert.length;
   view.dispatch({
     changes: { from: replaceFrom, to: replaceTo, insert },
     selection: { anchor: cursor },
@@ -167,40 +187,22 @@ function mapsEqual(a: Map<string, ComposerPart>, b: Map<string, ComposerPart>): 
 export function readPartsFromView(view: EditorView): ComposerPart[] {
   const doc = view.state.doc.toString();
   const tokenMap = view.state.field(tokenMapStateField);
-  return docToPartsInline(doc, tokenMap);
+  return docToParts(doc, tokenMap);
 }
 
-function docToPartsInline(doc: string, tokenMap: Map<string, ComposerPart>): ComposerPart[] {
-  const parts: ComposerPart[] = [];
-  let lastIndex = 0;
-  const re = /\uE000([^\uE001]+)\uE001/g;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(doc)) !== null) {
-    const before = doc.slice(lastIndex, match.index);
-    if (before) parts.push({ type: "text", text: before });
-    const tokenId = match[1];
-    const token = tokenMap.get(tokenId);
-    if (token) parts.push(token);
-    else parts.push({ type: "text", text: match[0] });
-    lastIndex = match.index + match[0].length;
-  }
-  const tail = doc.slice(lastIndex);
-  if (tail) parts.push({ type: "text", text: tail });
-  return mergeAdjacent(parts);
-}
+/** Promote typed URLs in plain text to link tokens when triggered (space, punctuation, blur). */
+export function linkifyViewIfNeeded(view: EditorView): boolean {
+  const parts = readPartsFromView(view);
+  const expanded = expandLinkTokensInParts(parts);
+  const { doc: nextDoc, tokenMap: nextMap } = partsToDoc(expanded);
+  const currentDoc = view.state.doc.toString();
+  if (currentDoc === nextDoc) return false;
 
-function mergeAdjacent(parts: ComposerPart[]): ComposerPart[] {
-  const merged: ComposerPart[] = [];
-  for (const part of parts) {
-    if (part.type === "text" && merged.length > 0) {
-      const prev = merged[merged.length - 1];
-      if (prev.type === "text") {
-        prev.text += part.text;
-        continue;
-      }
-    }
-    if (part.type === "text" && !part.text) continue;
-    merged.push(part.type === "text" ? { ...part } : { ...part });
-  }
-  return merged;
+  const cursor = view.state.selection.main.head;
+  view.dispatch({
+    changes: { from: 0, to: currentDoc.length, insert: nextDoc },
+    selection: { anchor: Math.min(cursor, nextDoc.length) },
+    effects: setTokenMapEffect.of(nextMap),
+  });
+  return true;
 }

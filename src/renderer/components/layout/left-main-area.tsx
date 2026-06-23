@@ -29,6 +29,7 @@ import {
   ToolsMcpSettings,
   SkillsSettings,
   WorkspaceSettings,
+  TerminalSettings,
 } from "@/components/modules/settings";
 import { TemplateCenter } from "@/components/modules/templates/template-center";
 import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator, RestoreUndoBar } from "@/components/modules/chat";
@@ -162,6 +163,7 @@ export function LeftMainArea() {
       shortcuts: ShortcutsSettings,
       models: ModelSettings,
       agent: AgentSettings,
+      terminal: TerminalSettings,
       "prompts-rules": PromptsRulesSettings,
       "prompts-rules-commands": PromptsRulesSettings,
       commands: SlashCommandsSettings,

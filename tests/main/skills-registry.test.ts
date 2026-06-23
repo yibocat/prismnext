@@ -9,7 +9,7 @@ import {
   findLibraryCardByRegistryUrl,
   libraryCardForRegistryUrl,
   SKILL_LIBRARY_CARDS,
-} from "../../src/renderer/lib/skill-libraries";
+} from "../../src/renderer/lib/agent/skill-libraries";
 
 describe("skills-registry", () => {
   it("normalizes hostname to well-known index.json", () => {

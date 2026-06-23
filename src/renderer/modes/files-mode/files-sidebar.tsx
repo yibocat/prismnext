@@ -46,12 +46,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { buildFileTree, flattenVisibleTree, type TreeNode, type FlatVisibleNode } from "@/lib/file-tree";
+import { buildFileTree, flattenVisibleTree, type TreeNode, type FlatVisibleNode } from "@/lib/files/file-tree";
 
 import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 import { getModeDir, type SidebarMode, filterFilesByMode, filterFoldersByMode } from "./file-filter";
+import { trackRecentOpenedFile } from "@/lib/files/recent-files";
 import { FolderVirtRow, FileVirtRow, InlineEditRow, type VirtTreeCallbacks, type GitStatusInfo } from "@/components/layout/right-sidebar/virtual-tree-rows";
 
 
@@ -77,6 +78,7 @@ function FilesHeader({ callbacks, projectName, anyExpanded, onToggleAll }: {
     refreshFiles();
     setTimeout(() => setSpinning(false), 400);
   };
+
   return (
     <SidebarHeader className="flex h-[var(--height-mode-selector)] shrink-0 flex-row items-center justify-between px-3">
       <span className="truncate text-[length:var(--font-size-12)] font-medium text-muted-foreground">
@@ -153,7 +155,7 @@ export function FilesSidebar() {
       const rps = useRightPanelStore.getState();
       for (const t of rps.tabs) {
         if (t.fileId === fileId || t.filePath === fileId) {
-          rps.closeTab(t.id);
+          rps.requestCloseTab(t.id);
         }
       }
       deleteFile(fileId);
@@ -365,7 +367,7 @@ export function FilesSidebar() {
     const prefix = `${folderPath}/`;
     for (const t of rps.tabs) {
       if (t.fileId?.startsWith(prefix) || t.filePath?.startsWith(prefix)) {
-        rps.closeTab(t.id);
+        rps.requestCloseTab(t.id);
       }
     }
 
@@ -455,14 +457,28 @@ export function FilesSidebar() {
 
   // ─── File tree callbacks (stabilized so FileTreeNode memo works) ───
 
-  const treeCallbacks: VirtTreeCallbacks = useMemo(() => ({
-    onNewFile: (path: string) => setEditing({ type: "file", parentPath: resolveCreateFolder(path) }),
-    onNewFolder: (path: string) => setEditing({ type: "folder", parentPath: resolveCreateFolder(path) }),
-    onRenameFile: openRenameDialog,
-    onDeleteFile: handleDeleteFile,
-    onDeleteFolder: handleDeleteFolder,
-    onRenameFolder: openFolderRenameDialog,
-  }), [resolveCreateFolder, openRenameDialog, handleDeleteFile, handleDeleteFolder, openFolderRenameDialog]);
+  const treeCallbacks: VirtTreeCallbacks = useMemo(() => {
+    const toAbsPath = (pathOrRel: string) => {
+      const root = useDocumentStore.getState().checkoutRoot;
+      if (!root) return pathOrRel;
+      if (/^([A-Za-z]:\\|\/)/.test(pathOrRel)) return pathOrRel;
+      return pathOrRel ? `${root}/${pathOrRel}` : root;
+    };
+    return {
+      onNewFile: (path: string) => setEditing({ type: "file", parentPath: resolveCreateFolder(path) }),
+      onNewFolder: (path: string) => setEditing({ type: "folder", parentPath: resolveCreateFolder(path) }),
+      onRenameFile: openRenameDialog,
+      onDeleteFile: handleDeleteFile,
+      onDeleteFolder: handleDeleteFolder,
+      onRenameFolder: openFolderRenameDialog,
+      onRevealInFinder: (pathOrRel: string) => {
+        const abs = toAbsPath(pathOrRel);
+        if (abs) void window.electronAPI.shellShowItemInFolder(abs);
+      },
+      onCopyPath: (text: string) => void navigator.clipboard.writeText(text),
+      onCopyRelativePath: (rel: string) => void navigator.clipboard.writeText(rel),
+    };
+  }, [resolveCreateFolder, openRenameDialog, handleDeleteFile, handleDeleteFolder, openFolderRenameDialog]);
 
   const headerCallbacks: FilesHeaderCallbacks = useMemo(() => ({
     onNewFile: () => setEditing({ type: "file", parentPath: resolveCreateFolder(selectedFolder ?? undefined) }),
@@ -470,15 +486,15 @@ export function FilesSidebar() {
   }), [resolveCreateFolder, selectedFolder]);
 
   const handleSelectFile = useCallback(
-    (id: string, name: string) => {
+    (id: string, name: string, pin = false) => {
       setSelectedFolder(null);
-      // Persist last active file for smart expand on next launch
       window.electronAPI.settingsSet({ lastActiveFileId: id } as any);
+      void trackRecentOpenedFile(id, name);
       if (isTexworkspaceActive) {
         openTexworkspaceFile(id, id, name);
       } else {
         setActiveFile(id);
-        openFile(id, id, name);
+        openFile(id, id, name, { pin });
       }
     },
     [isTexworkspaceActive, openTexworkspaceFile, setActiveFile, openFile],
@@ -574,6 +590,7 @@ export function FilesSidebar() {
           isDirty={dirtyFiles.has(file.id)}
           gitStatus={getGitStatus(file.id, file.name, file.relativePath)}
           onSelect={() => handleSelectFile(file.id, file.name)}
+          onOpenPinned={() => handleSelectFile(file.id, file.name, true)}
           callbacks={treeCallbacks}
         />
       );

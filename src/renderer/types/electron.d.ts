@@ -216,6 +216,11 @@ export interface ElectronAPI {
     canceled: boolean;
     path: string | null;
   }>;
+  dialogOpenFile: () => Promise<{
+    canceled: boolean;
+    paths: string[];
+  }>;
+  shellShowItemInFolder: (absPath: string) => Promise<void>;
   fsExists: (absPath: string) => Promise<boolean>;
   projectCreate: (rootPath: string, workspaceDirs?: import("./workspace").WorkspaceFolder[]) => Promise<void>;
   projectEnsure: (rootPath: string) => Promise<{ success: boolean }>;
@@ -246,6 +251,8 @@ export interface ElectronAPI {
       isFullscreen: boolean;
     }) => void,
   ) => () => void;
+
+  onCloseTabRequest: (callback: () => void) => () => void;
 
   // Compile operations
   compileExecute: (
@@ -502,18 +509,48 @@ export interface ElectronAPI {
   browserClearCache: () => Promise<{ success: boolean; error?: string }>;
 
   // Terminal operations
-  terminalCreate: (args: { sessionId: string; projectRoot: string }) => Promise<{ shell: string; cwd: string; pid: number }>;
+  terminalCreate: (args: {
+    sessionId: string;
+    tabId: string;
+    projectRoot: string;
+    cwd: string;
+  }) => Promise<{ shell: string; cwd: string; pid: number; tabId: string }>;
   terminalDestroy: (args: { sessionId: string }) => Promise<void>;
   terminalDestroyTab: (args: { tabId: string }) => Promise<void>;
+  terminalDestroyTabs: (args: { tabIds: string[] }) => Promise<void>;
   terminalWrite: (args: { sessionId: string; data: string }) => Promise<void>;
   terminalResize: (args: { sessionId: string; cols: number; rows: number }) => Promise<void>;
   terminalEnvInfo: () => Promise<TerminalEnvInfo>;
   terminalLoadConfig: (projectRoot: string) => Promise<TerminalConfig>;
   terminalSaveConfig: (projectRoot: string, config: TerminalConfig) => Promise<void>;
+  terminalRunAiBash: (args: {
+    sessionId: string;
+    chatTabId: string;
+    toolCallId: string;
+    command: string;
+    cwd?: string;
+  }) => Promise<{ output: string; exitCode: number; cwd: string }>;
+  terminalDestroyAllAiPty: () => Promise<void>;
 
   // Terminal events (Main → Renderer)
-  onTerminalData: (callback: (data: { sessionId: string; data: string }) => void) => () => void;
-  onTerminalExit: (callback: (data: { sessionId: string; exitCode: number }) => void) => () => void;
+  onTerminalData: (callback: (data: { sessionId: string; tabId: string; data: string }) => void) => () => void;
+  onTerminalExit: (callback: (data: { sessionId: string; tabId: string; exitCode: number }) => void) => () => void;
+  onTerminalAiStream: (callback: (data: {
+    sessionId: string;
+    chatTabId: string;
+    requestId: string;
+    toolCallId?: string;
+    chunk: string;
+    phase: "output";
+  }) => void) => () => void;
+  onTerminalAiExit: (callback: (data: {
+    sessionId: string;
+    chatTabId: string;
+    requestId: string;
+    toolCallId?: string;
+    exitCode: number;
+    cwd: string;
+  }) => void) => () => void;
 
   // Git operations
   gitWarmup: (projectRoot: string) => Promise<{ ok: boolean }>;

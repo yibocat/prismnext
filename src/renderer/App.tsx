@@ -12,9 +12,13 @@ import { registerAllModes } from "@/modes/_register";
 import { GlobalErrorBoundary } from "@/components/modules/shared";
 import { ProjectSetupDialog, WelcomePage } from "@/components/modules/project";
 import { Toaster } from "@/components/ui/sonner";
+import { TabCloseConfirmDialog } from "@/components/layout/tab-close-confirm-dialog";
 import { LeftSidebar } from "@/components/layout/left-sidebar";
 import { LeftMainArea } from "@/components/layout/left-main-area";
 import { RightArea } from "@/components/layout/right-area";
+import { useAppCloseTab } from "@/hooks/use-app-close-tab";
+import { useTerminalAiStream } from "@/hooks/use-terminal-ai-stream";
+import { useAiTerminalSweep } from "@/hooks/use-ai-terminal-sweep";
 
 import { ContentTopBar } from "@/components/layout/content-top-bar";
 import {
@@ -24,6 +28,7 @@ import {
   MAIN_AREA_MIN,
   RIGHT_AREA_MIN,
   SIDEBAR_OVERLAY_THRESHOLD,
+  RIGHT_AREA_DEFAULT,
 } from "@/styles/constants";
 
 const SEP = "w-px bg-border hover:bg-foreground/30 transition-colors outline-none relative after:absolute after:inset-y-0 after:-left-1 after:-right-1";
@@ -50,6 +55,40 @@ export function App() {
   const leftSidebarRef = usePanelRef();
   const centerRef = usePanelRef();
   const rightAreaRef = usePanelRef();
+
+  useAppCloseTab();
+  useTerminalAiStream();
+  useAiTerminalSweep();
+
+  const rightAreaExpandNonce = useLayoutStore((s) => s.rightAreaExpandNonce);
+  const centerExpandNonce = useLayoutStore((s) => s.centerExpandNonce);
+
+  // Programmatic RightArea expand (Browser link chips, etc.)
+  useLayoutEffect(() => {
+    if (rightAreaExpandNonce === 0) return;
+    const r = rightAreaRef.current;
+    const c = centerRef.current;
+    if (!r) return;
+    const st = useLayoutStore.getState();
+    const width = st.rightAreaWidth || RIGHT_AREA_DEFAULT;
+    if (isMobile) {
+      r.resize(9999);
+      c?.collapse();
+    } else if (r.isCollapsed()) {
+      r.resize(width);
+      c?.expand();
+    } else {
+      r.resize(width);
+    }
+  }, [rightAreaExpandNonce, isMobile]);
+
+  // Programmatic center (Chat) expand — terminal snippet insert, etc.
+  useLayoutEffect(() => {
+    if (centerExpandNonce === 0) return;
+    const c = centerRef.current;
+    if (!c?.isCollapsed()) return;
+    c.expand();
+  }, [centerExpandNonce]);
 
   // RightArea starts collapsed
   useLayoutEffect(() => { if (projectRoot) rightAreaRef.current?.collapse(); }, [projectRoot]);
@@ -211,6 +250,7 @@ export function App() {
           closeButton
           richColors
         />
+        <TabCloseConfirmDialog />
         {showWelcome ? (
           <WelcomePage onSkip={() => setShowWelcome(false)} />
         ) : projectRoot ? (

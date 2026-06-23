@@ -2,11 +2,13 @@ import { useEffect, useRef, useState, useCallback, useMemo, type RefObject } fro
 import { useLayoutStore, type RightToolbarTab } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
-import { modeRegistry, type RightTab } from "@/lib/mode-registry";
+import { modeRegistry, type RightTab } from "@/lib/workspace/mode-registry";
 import { useWindowState } from "@/hooks/use-window-state";
 import { RightMainArea } from "@/components/layout/right-main-area";
 import { RightSidebar } from "@/components/layout/right-sidebar";
 import { TabBar } from "@/components/layout/tab-bar";
+import { useRightAreaShortcuts } from "@/hooks/use-right-area-shortcuts";
+import { tabDisplayTitle } from "@/lib/workspace/tab-lifecycle";
 import { SidebarControls } from "@/components/layout/sidebar-controls";
 import { ServerStatusDot } from "@/components/server-status-dot";
 import { TabToolbar } from "@/components/layout/tab-toolbar";
@@ -25,6 +27,13 @@ import {
   XIcon,
 } from "lucide-react";
 import { SIDEBAR_RIGHT_MIN, SIDEBAR_RIGHT_MAX } from "@/styles/constants";
+import {
+  computeEffectiveSidebarWidth,
+  shouldAutoCloseSplitSidebar,
+  shouldExitFullMode,
+  canAutoOpenSplitSidebar,
+  RIGHT_AREA_SPLIT_THRESHOLD,
+} from "@/lib/workspace/right-area-sidebar-layout";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -209,9 +218,13 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
       }
     }, []);
   const handleTabClose = useCallback(
-    (id: string) => useRightPanelStore.getState().closeTab(id), []);
+    (id: string) => useRightPanelStore.getState().requestCloseTab(id), []);
+  const handleTabPin = useCallback(
+    (id: string) => useRightPanelStore.getState().pinTab(id), []);
   const handleTabReorder = useCallback(
     (from: number, to: number) => useRightPanelStore.getState().moveTab(from, to), []);
+
+  useRightAreaShortcuts(rightAreaExpanded && focusedMode !== "dashboard");
 
   // ─── Sidebar drag-to-resize ───
   // Same pattern as App.tsx Panel onResize:
@@ -282,67 +295,66 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
     return () => observer.disconnect();
   }, []);
 
-  // ─── Sidebar full-mode: when space is too narrow for sidebar + content,
-  // sidebar fills the whole RightArea (content pane is hidden).
-  // Evaluated at toggle time AND continuously via ResizeObserver so the
-  // layout stays correct during window resize, not just at toggle.
-  //
-  // IMPORTANT: The full-mode threshold uses SIDEBAR_RIGHT_MIN (280px), NOT
-  // the user's stored rightSidebarWidth (which can be up to 520px). Using
-  // the stored value causes full-mode to trigger unnecessarily when the user
-  // has previously resized the sidebar wide — e.g. a 400px stored width
-  // makes `500 < 400 + 150` true even at the default RightArea panel size.
-  // The correct question is: "is this container too narrow for even the
-  // MINIMUM sidebar + minimum content?" — not "is it too narrow for my
-  // preferred sidebar width?"
-  const MIN_CONTENT_WIDTH = 150;
+  // ─── Narrow container: squeeze split sidebar, then close instantly at threshold.
+  // Full-mode overlay only when the user explicitly toggles open while narrow.
   const containerElRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [sidebarFullMode, setSidebarFullMode] = useState(false);
-  // Ref mirror for the sidebar ResizeObserver (which can't read React state
-  // without re-creating the observer on every state change).
   const sidebarFullModeRef = useRef(false);
   useEffect(() => {
     sidebarFullModeRef.current = sidebarFullMode;
   }, [sidebarFullMode]);
 
-  /** Returns true when the container is too narrow to fit sidebar + content. */
-  const isTooNarrow = useCallback((containerWidth: number) => {
-    return containerWidth < SIDEBAR_RIGHT_MIN + MIN_CONTENT_WIDTH;
+  const isTooNarrowForSplit = useCallback((width: number) => {
+    return width > 0 && width < RIGHT_AREA_SPLIT_THRESHOLD;
   }, []);
 
-  // Reactively switch to/from full mode as the container width changes.
+  // Reactively squeeze split sidebar, then close when container shrinks past threshold.
   useEffect(() => {
     const el = containerElRef.current;
     if (!el) return;
+    let rafId: number | null = null;
     const ro = new ResizeObserver(() => {
-      const w = el.clientWidth;
-      setContainerWidth(w);
-      // Don't evaluate full-mode when panel is collapsed (w = 0) —
-      // this is not a "narrow container" situation, it's just hidden.
-      if (w <= 0) return;
-      if (!useLayoutStore.getState().rightSidebarOpen) return;
-      const narrow = isTooNarrow(w);
-      setSidebarFullMode((prev) => (prev !== narrow ? narrow : prev));
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        const w = el.clientWidth;
+        setContainerWidth(w);
+        if (w <= 0) return;
+
+        if (shouldAutoCloseSplitSidebar(w, sidebarFullModeRef.current)) {
+          const st = useLayoutStore.getState();
+          if (st.rightSidebarOpen) {
+            st.setRightSidebarOpen(false);
+          }
+          setSidebarFullMode(false);
+          return;
+        }
+
+        if (shouldExitFullMode(w)) {
+          setSidebarFullMode((prev) => (prev ? false : prev));
+        }
+      });
     });
     ro.observe(el);
-    return () => ro.disconnect();
-  }, [isTooNarrow]);
+    return () => {
+      ro.disconnect();
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, []);
 
   const handleToggleSidebar = useCallback(() => {
     const st = useLayoutStore.getState();
     if (st.rightSidebarOpen) {
-      // Closing: clear full mode
       setSidebarFullMode(false);
       st.setRightSidebarOpen(false);
     } else {
-      // Opening: check if space is narrow → full mode
       const cw = containerElRef.current?.clientWidth ?? Infinity;
       if (isFinite(cw)) setContainerWidth(cw);
-      if (isTooNarrow(cw)) setSidebarFullMode(true);
+      if (isTooNarrowForSplit(cw)) setSidebarFullMode(true);
       st.setRightSidebarOpen(true);
     }
-  }, [isTooNarrow]);
+  }, [isTooNarrowForSplit]);
 
   // ── Mode button: per-mode lifecycle (registry-driven) ──
   const handleModeClick = useCallback(
@@ -370,33 +382,43 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
           }
           def.onActivate?.();
         }
-        // Narrow window → don't auto-open sidebar (tab area is too tight)
+        // Auto-open sidebar only when there is room for sidebar + content.
         if (!compactModesRef.current) {
-          setRightSidebarOpen(true);
-          // Determine full mode synchronously — don't rely solely on the
-          // async ResizeObserver which may fire during panel expansion
-          // with an intermediate width and incorrectly lock full mode.
           const cw = containerElRef.current?.clientWidth ?? Infinity;
           if (isFinite(cw)) setContainerWidth(cw);
-          setSidebarFullMode(isTooNarrow(cw));
+          if (canAutoOpenSplitSidebar(cw)) {
+            setRightSidebarOpen(true);
+            setSidebarFullMode(false);
+          }
         }
       } else if (focusedMode === target) {
         // ── Deactivate mode → close ALL its tabs → Dashboard ──
         if (def) {
-          for (const k of def.tabKinds) {
-            store.closeTabsOfKind(k);
-          }
-          def.onDeactivate?.();
-        }
-        toggleMode(target as RightToolbarTab);
-        // Sync activeTabId to new focusedMode
-        const newFocused = useLayoutStore.getState().focusedMode;
-        if (newFocused !== "dashboard") {
-          const newDef = modeRegistry.get(newFocused);
-          const newTab = store.tabs.find(
-            (t) => newDef?.tabKinds.includes(t.kind),
-          );
-          if (newTab) store.setActiveTab(newTab.id);
+          const kinds = def.tabKinds;
+          const finishDeactivate = () => {
+            def.onDeactivate?.();
+            toggleMode(target as RightToolbarTab);
+            const newFocused = useLayoutStore.getState().focusedMode;
+            if (newFocused !== "dashboard") {
+              const newDef = modeRegistry.get(newFocused);
+              const newTab = useRightPanelStore.getState().tabs.find((t) =>
+                newDef?.tabKinds.includes(t.kind),
+              );
+              if (newTab) useRightPanelStore.getState().setActiveTab(newTab.id);
+            }
+          };
+          const closeKindAt = (index: number) => {
+            if (index >= kinds.length) {
+              finishDeactivate();
+              return;
+            }
+            store.closeTabsOfKind(kinds[index], {
+              onClosed: () => closeKindAt(index + 1),
+            });
+          };
+          closeKindAt(0);
+        } else {
+          toggleMode(target as RightToolbarTab);
         }
       } else {
         // ── Switch focus (active but not focused) ──
@@ -412,11 +434,9 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
 
   const sidebarFull = rightSidebarOpen && sidebarFullMode;
 
-  // Effective sidebar width: clamp to leave at least MIN_CONTENT_WIDTH for content.
-  // Only used when NOT in full mode (full mode uses "100%").
   const effectiveSidebarWidth = useMemo(() => {
     if (sidebarFull || containerWidth <= 0) return rightSidebarWidth;
-    return Math.min(rightSidebarWidth, Math.max(SIDEBAR_RIGHT_MIN, containerWidth - MIN_CONTENT_WIDTH));
+    return computeEffectiveSidebarWidth(containerWidth, rightSidebarWidth);
   }, [sidebarFull, rightSidebarWidth, containerWidth]);
 
   // ── Tab overflow detection ──
@@ -456,7 +476,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   }, []);
 
   return (
-    <div className="flex h-full flex-col min-w-0" data-surface="content">
+    <div className="flex h-full flex-col min-w-0" data-surface="content" data-right-area>
       {/* Toolbar */}
       <div ref={toolbarRef} className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center gap-0.5 select-none px-2">
         <div className="flex items-center gap-0.5 shrink-0">
@@ -478,6 +498,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
             activeTabId={activeTabId}
             onSelect={handleTabSelect}
             onClose={handleTabClose}
+            onPinTab={handleTabPin}
             onReorder={handleTabReorder}
             dirtyFileIds={dirtyFileIds}
             forceOverflow={tabsOverflow}
@@ -507,7 +528,9 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
                     tab.id === activeTabId && "bg-accent font-medium",
                   )}
                 >
-                  <span className="truncate flex-1">{tab.kind === "file" && tab.isInitial ? "folder" : tab.title}</span>
+                  <span className={cn("truncate flex-1", tab.isPreview && "italic")}>
+                    {tabDisplayTitle(tab, dirtyFileIds)}
+                  </span>
                   <button
                     type="button"
                     className="flex size-4 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/10 transition-opacity"
@@ -668,7 +691,8 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
         <TabToolbar
           onToggleSidebar={handleToggleSidebar}
           filePath={activeTab.filePath}
-          projectName={projectRoot?.split(/[/\\]/).pop()}
+          projectName={activeTab.isExternal ? undefined : projectRoot?.split(/[/\\]/).pop()}
+          isExternal={activeTab.isExternal}
           hideSpacer={!isEditorKind}
           hideBreadcrumb={focusedMode === "texworkspace"}
         >

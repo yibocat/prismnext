@@ -1,12 +1,19 @@
 import { create } from "zustand";
 import { useDocumentStore } from "./document-store";
-import { useTerminalStore } from "./terminal-store";
 import { useLayoutStore } from "./layout-store";
-import { modeRegistry, type RightTabKind, type RightTab } from "@/lib/mode-registry";
+import { useTerminalStore } from "./terminal-store";
+import { shellDisplayName } from "@/lib/terminal/shell-label";
+import { useTerminalAiStore } from "./terminal-ai-store";
+import { modeRegistry, type RightTabKind, type RightTab } from "@/lib/workspace/mode-registry";
+import { getTabCloseConfirmation, getBatchTabCloseConfirmation } from "@/lib/workspace/tab-close-confirmation";
+import { useTabCloseConfirmStore } from "@/stores/tab-close-confirm-store";
+import { useSettingsStore } from "@/stores/settings-store";
+import { useChatStore } from "@/stores/chat-store";
+import { deactivateModeByTabKind } from "@/lib/workspace/deactivate-mode";
 
 // ─── Re-exports ───
 
-export type { RightTabKind, RightTab } from "@/lib/mode-registry";
+export type { RightTabKind, RightTab } from "@/lib/workspace/mode-registry";
 
 // ─── Helpers ───
 
@@ -22,7 +29,14 @@ interface RightPanelState {
   activeTabId: string | null;
 
   ensureTab: (kind: RightTabKind) => string;
-  openFile: (fileId: string, filePath: string, name: string) => void;
+  openFile: (
+    fileId: string,
+    filePath: string,
+    name: string,
+    opts?: { pin?: boolean; isExternal?: boolean },
+  ) => void;
+  /** Pin a preview tab (italic → normal) */
+  pinTab: (id: string) => void;
   openTexworkspaceFile: (fileId: string, filePath: string, name: string) => void;
   /** Switch the texworkspace tab's active file without changing the tab title */
   setTexworkspaceActiveFile: (fileId: string) => void;
@@ -30,20 +44,31 @@ interface RightPanelState {
   openGitDiff: (filePath: string) => void;
   newBrowserTab: () => string;
   newTerminalTab: () => string;
+  newAiTerminalTab: (opts: {
+    chatTabId: string;
+    toolCallId?: string;
+    title?: string;
+  }) => string;
+  /** Close AI terminal without confirmation or PTY destroy */
+  closeAiTab: (id: string) => void;
+  /** Remove duplicate AI tab without marking session dismissed */
+  removeAiTabSilently: (id: string) => void;
   updateTerminalTabTitle: (id: string, title: string) => void;
   navigateBrowserTab: (id: string, url: string) => void;
   updateBrowserTabTitle: (id: string, title: string) => void;
   setBrowserTabLoading: (id: string, isLoading: boolean) => void;
   setTabHibernated: (id: string, hibernated: boolean) => void;
   closeTab: (id: string) => void;
+  /** Close with unsaved/busy confirmation. Returns false if user cancelled. */
+  requestCloseTab: (id: string) => boolean;
   closeAllTabs: () => void;
   /** Remove all tabs of a specific kind (used when deactivating transient modes) */
-  closeTabsOfKind: (kind: RightTabKind) => void;
+  closeTabsOfKind: (kind: RightTabKind, options?: { onClosed?: () => void }) => void;
   /** Check if any tabs of a given kind exist */
   hasTabsOfKind: (kind: RightTabKind) => boolean;
   setActiveTab: (id: string) => void;
   setTabViewMode: (id: string, mode: string) => void;
-  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title">>) => void;
+  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title" | "terminalSource" | "linkedChatTabId" | "linkedToolCallId">>) => void;
   moveTab: (fromIndex: number, toIndex: number) => void;
 }
 
@@ -116,30 +141,85 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     useDocumentStore.getState().setActiveFile(fileId);
   },
 
-  openFile: (fileId: string, filePath: string, name: string) => {
-    // Ensure Files mode is active and focused
+  openFile: (fileId, filePath, name, opts) => {
+    const pin = opts?.pin ?? false;
+    const isExternal = opts?.isExternal ?? false;
+
     useLayoutStore.getState().activateMode("files");
 
     const ext = name.slice(name.lastIndexOf(".")).toLowerCase();
     const defaultViewMode = ext === ".md" || ext === ".mdx" ? "preview" : "source";
     const { tabs, activeTabId } = get();
+
+    const existing = tabs.find((t) => t.kind === "file" && t.fileId === fileId);
+    if (existing) {
+      if (pin && existing.isPreview) {
+        set((s) => ({
+          tabs: s.tabs.map((t) =>
+            t.id === existing.id ? { ...t, isPreview: false } : t,
+          ),
+          activeTabId: existing.id,
+        }));
+      } else {
+        set({ activeTabId: existing.id });
+      }
+      return;
+    }
+
+    const makeFileTab = (id: string): RightTab => ({
+      id,
+      kind: "file",
+      title: name,
+      fileId,
+      filePath,
+      isInitial: false,
+      isPreview: !pin,
+      isExternal,
+      viewMode: defaultViewMode,
+    });
+
     const active = tabs.find((t) => t.id === activeTabId);
+
+    // Replace empty home tab
     if (active?.kind === "file" && active.isInitial) {
       set((s) => ({
         tabs: s.tabs.map((t) =>
-          t.id === active.id ? { ...t, title: name, fileId, filePath, isInitial: false, viewMode: defaultViewMode } : t,
+          t.id === active.id ? makeFileTab(active.id) : t,
         ),
+        activeTabId: active.id,
       }));
       return;
     }
-    const existing = tabs.find((t) => t.kind === "file" && t.fileId === fileId);
-    if (existing) {
-      set({ activeTabId: existing.id });
-      return;
+
+    // Single-click preview: reuse the one preview tab (VS Code behavior)
+    if (!pin) {
+      const previewTab = tabs.find((t) => t.kind === "file" && t.isPreview);
+      if (previewTab) {
+        set((s) => ({
+          tabs: s.tabs.map((t) =>
+            t.id === previewTab.id ? makeFileTab(previewTab.id) : t,
+          ),
+          activeTabId: previewTab.id,
+        }));
+        return;
+      }
     }
+
     const id = nextTabId();
-    const tab: RightTab = { id, kind: "file", title: name, fileId, filePath, isInitial: false, viewMode: defaultViewMode };
-    set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
+    set((s) => ({
+      tabs: [makeFileTab(id), ...s.tabs],
+      activeTabId: id,
+    }));
+  },
+
+  pinTab: (id: string) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === id && t.kind === "file" && t.isPreview
+          ? { ...t, isPreview: false }
+          : t,
+      ),
+    }));
   },
 
   openGitDiff: (filePath: string) => {
@@ -198,11 +278,42 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   },
 
   newTerminalTab: () => {
-    // Always create a fresh terminal — each tab is an independent shell session.
     const id = nextTabId();
-    const tab: RightTab = { id, kind: "terminal", title: modeRegistry.findByTabKind("terminal")?.initialTitle ?? "Terminal", isInitial: false };
+    const shell = useTerminalStore.getState().envInfo?.shell;
+    const tab: RightTab = {
+      id,
+      kind: "terminal",
+      title: shell
+        ? shellDisplayName(shell)
+        : modeRegistry.findByTabKind("terminal")?.initialTitle ?? "Shell",
+      isInitial: false,
+      terminalSource: "user",
+    };
     set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
     return id;
+  },
+
+  newAiTerminalTab: (opts) => {
+    const id = nextTabId();
+    const tab: RightTab = {
+      id,
+      kind: "terminal",
+      title: opts.title ?? "AI Terminal",
+      isInitial: false,
+      terminalSource: "ai",
+      linkedChatTabId: opts.chatTabId,
+      linkedToolCallId: opts.toolCallId,
+    };
+    set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
+    return id;
+  },
+
+  closeAiTab: (id) => {
+    performCloseTab(id, { skipTerminalDestroy: true });
+  },
+
+  removeAiTabSilently: (id) => {
+    performCloseTab(id, { skipTerminalDestroy: true, skipAiDismiss: true });
   },
 
   updateTerminalTabTitle: (id: string, title: string) => {
@@ -214,103 +325,38 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   },
 
   closeTab: (id: string) => {
+    get().requestCloseTab(id);
+  },
+
+  requestCloseTab: (id: string) => {
     const closingTab = get().tabs.find((t) => t.id === id);
-    if (!closingTab) return;
+    if (!closingTab) return false;
 
-    // Confirm before closing a busy terminal tab (process still running)
-    if (closingTab.kind === "terminal") {
-      const busy = useTerminalStore.getState().sessions[closingTab.id]?.busy;
-      if (busy) {
-        if (!window.confirm("A process is still running. Close anyway?")) {
-          return;
-        }
-      }
-    }
-
-    // ── Files / Browser: last tab → regenerate home tab ──
-    const sameKind = get().tabs.filter((t) => t.kind === closingTab.kind);
-    const isLastOfKind = sameKind.length === 1;
-    const def = modeRegistry.findByTabKind(closingTab.kind);
-    const isPersistent = def?.persistence === "persistent";
-
-    if (isLastOfKind && isPersistent) {
-      set((s) => ({
-        tabs: s.tabs.map((t) =>
-          t.id === id
-            ? {
-                ...t,
-                title: modeRegistry.findByTabKind(t.kind)?.initialTitle ?? t.kind,
-                isInitial: true,
-                filePath: undefined,
-                fileId: undefined,
-                url: undefined,
-                viewMode: undefined,
-              }
-            : t,
-        ),
-      }));
-      if (closingTab.kind === "file") {
-        useDocumentStore.getState().setActiveFile("");
-      }
-      return;
-    }
-
-    // ── Normal close ──
-    set((s) => {
-      const closing = s.tabs.find((t) => t.id === id);
-      const next = s.tabs.filter((t) => t.id !== id);
-      const closingMode = modeRegistry.findByTabKind(closing?.kind ?? "file")?.id ?? "files";
-
-      let nextActive = s.activeTabId;
-      if (s.activeTabId === id) {
-        // Prefer the next tab of the SAME mode, else fallback to first tab
-        const sameModeTab = next.find((t) => {
-          const def = modeRegistry.findByTabKind(t.kind);
-          return def?.id === closingMode;
-        });
-        nextActive = sameModeTab?.id ?? (next.length > 0 ? next[0].id : null);
-      }
-      const nextActiveTab = next.find((t) => t.id === nextActive);
-      const nextFileId = (nextActiveTab?.kind === "file" || nextActiveTab?.kind === "texworkspace") && nextActiveTab.fileId ? nextActiveTab.fileId : "";
-      useDocumentStore.getState().setActiveFile(nextFileId);
-
-      // Fully release PDF file resources when closing a PDF tab
-      if (closing?.kind === "file" && closing.filePath?.toLowerCase().endsWith(".pdf")) {
-        // TODO: wire up Lector PDF resource cleanup
-      }
-
-      // Destroy PTY sessions when closing a terminal tab
-      if (closing?.kind === "terminal") {
-        window.electronAPI.terminalDestroyTab({ tabId: closing.id });
-      }
-
-      // If no tabs remain for this mode, deactivate it
-      const hasRemainingOfMode = next.some((t) => {
-        const def = modeRegistry.findByTabKind(t.kind);
-        return def?.id === closingMode;
+    const confirmation = getTabCloseConfirmation(closingTab);
+    if (confirmation) {
+      useTabCloseConfirmStore.getState().open({
+        ...confirmation,
+        onConfirm: () => {
+          if (
+            closingTab.terminalSource === "ai"
+            && useSettingsStore.getState().settings.aiTerminalCloseTabKillsProcess === true
+            && closingTab.linkedChatTabId
+          ) {
+            const sessionId = useChatStore
+              .getState()
+              .tabs.find((t) => t.id === closingTab.linkedChatTabId)?.sessionId;
+            if (sessionId) {
+              void window.electronAPI.chatCancel(sessionId);
+            }
+          }
+          performCloseTab(id);
+        },
       });
-      if (!hasRemainingOfMode && closing) {
-        useLayoutStore.setState((s) => {
-          const remainingModes = s.activeModes.filter((m) => m !== closingMode);
-          const newFocused = remainingModes.length > 0
-            ? remainingModes[remainingModes.length - 1]
-            : "dashboard";
-          return { activeModes: remainingModes, focusedMode: newFocused };
-        });
-        // Sync activeTabId to new focused mode (or null for dashboard)
-        if (useLayoutStore.getState().focusedMode === "dashboard") {
-          nextActive = null;
-        } else {
-          const newModeTab = next.find((t) => {
-            const def = modeRegistry.findByTabKind(t.kind);
-            return def?.id === useLayoutStore.getState().focusedMode;
-          });
-          nextActive = newModeTab?.id ?? null;
-        }
-      }
+      return false;
+    }
 
-      return { tabs: next, activeTabId: nextActive };
-    });
+    performCloseTab(id);
+    return true;
   },
 
   setActiveTab: (id: string) => {
@@ -318,6 +364,9 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     set({ activeTabId: id });
     const fileId = (tab?.kind === "file" || tab?.kind === "texworkspace") && tab.fileId ? tab.fileId : "";
     useDocumentStore.getState().setActiveFile(fileId);
+    if (tab?.terminalSource === "ai" && tab.linkedChatTabId) {
+      useTerminalAiStore.getState().touchSessionViewed(tab.linkedChatTabId);
+    }
   },
 
   setTabViewMode: (id: string, mode: string) => {
@@ -333,26 +382,71 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   },
 
   closeAllTabs: () => {
-    set({ tabs: [], activeTabId: null });
-    useDocumentStore.getState().setActiveFile("");
-    useLayoutStore.setState({ activeModes: [], focusedMode: "dashboard" });
+    const tabs = get().tabs;
+    const confirmation = getBatchTabCloseConfirmation(tabs);
+
+    const doCloseAll = () => {
+      const terminalTabIds = tabs
+        .filter((t) => t.kind === "terminal" && t.terminalSource !== "ai")
+        .map((t) => t.id);
+      if (terminalTabIds.length > 0) {
+        useTerminalStore.getState().destroyAllTerminalTabs(terminalTabIds);
+      }
+      useTerminalStore.getState().resetProjectState();
+      useRightPanelStore.setState({ tabs: [], activeTabId: null });
+      useDocumentStore.getState().setActiveFile("");
+      useLayoutStore.setState({ activeModes: [], focusedMode: "dashboard" });
+    };
+
+    if (confirmation) {
+      useTabCloseConfirmStore.getState().open({
+        ...confirmation,
+        onConfirm: doCloseAll,
+      });
+      return;
+    }
+
+    doCloseAll();
   },
 
-  closeTabsOfKind: (kind: RightTabKind) => {
-    set((s) => {
-      const next = s.tabs.filter((t) => t.kind !== kind);
-      // Destroy terminal PTY sessions when closing terminal tabs
-      if (kind === "terminal") {
-        s.tabs.filter((t) => t.kind === "terminal").forEach((t) => {
-          window.electronAPI.terminalDestroyTab({ tabId: t.id });
-        });
+  closeTabsOfKind: (kind, options) => {
+    const toClose = get().tabs.filter((t) => t.kind === kind);
+    if (toClose.length === 0) {
+      options?.onClosed?.();
+      return;
+    }
+
+    const confirmation = getBatchTabCloseConfirmation(toClose);
+
+    const doClose = () => {
+      const terminalTabIds = toClose
+        .filter((t) => t.kind === "terminal" && t.terminalSource !== "ai")
+        .map((t) => t.id);
+
+      if (kind === "terminal" && terminalTabIds.length > 0) {
+        useTerminalStore.getState().destroyAllTerminalTabs(terminalTabIds);
       }
-      const nextActive = next.length > 0 ? next[0].id : null;
-      if (kind === "file" || kind === "texworkspace") {
-        useDocumentStore.getState().setActiveFile("");
-      }
-      return { tabs: next, activeTabId: nextActive };
-    });
+
+      useRightPanelStore.setState((s) => {
+        const next = s.tabs.filter((t) => t.kind !== kind);
+        const nextActive = next.length > 0 ? next[0].id : null;
+        if (kind === "file" || kind === "texworkspace") {
+          useDocumentStore.getState().setActiveFile("");
+        }
+        return { tabs: next, activeTabId: nextActive };
+      });
+      options?.onClosed?.();
+    };
+
+    if (confirmation) {
+      useTabCloseConfirmStore.getState().open({
+        ...confirmation,
+        onConfirm: doClose,
+      });
+      return;
+    }
+
+    doClose();
   },
 
   hasTabsOfKind: (kind: RightTabKind) => {
@@ -368,3 +462,105 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     });
   },
 }));
+
+function performCloseTab(
+  id: string,
+  options?: { skipTerminalDestroy?: boolean; skipAiDismiss?: boolean },
+): void {
+  const state = useRightPanelStore.getState();
+  const closingTab = state.tabs.find((t) => t.id === id);
+  if (!closingTab) return;
+
+  const sameKind = state.tabs.filter((t) => t.kind === closingTab.kind);
+  const isLastOfKind = sameKind.length === 1;
+  const def = modeRegistry.findByTabKind(closingTab.kind);
+  const isPersistent = def?.persistence === "persistent";
+
+  if (isLastOfKind && isPersistent) {
+    if (closingTab.isInitial) {
+      deactivateModeByTabKind(closingTab.kind);
+      return;
+    }
+    useRightPanelStore.setState((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              title: modeRegistry.findByTabKind(t.kind)?.initialTitle ?? t.kind,
+              isInitial: true,
+              isPreview: undefined,
+              isExternal: undefined,
+              filePath: undefined,
+              fileId: undefined,
+              url: undefined,
+              viewMode: undefined,
+            }
+          : t,
+      ),
+    }));
+    if (closingTab.kind === "file") {
+      useDocumentStore.getState().setActiveFile("");
+    }
+    return;
+  }
+
+  let closedAiTabId: string | undefined;
+
+  useRightPanelStore.setState((s) => {
+    const closing = s.tabs.find((t) => t.id === id);
+    const next = s.tabs.filter((t) => t.id !== id);
+    const closingMode = modeRegistry.findByTabKind(closing?.kind ?? "file")?.id ?? "files";
+
+    let nextActive = s.activeTabId;
+    if (s.activeTabId === id) {
+      const sameModeTab = next.find((t) => {
+        const modeDef = modeRegistry.findByTabKind(t.kind);
+        return modeDef?.id === closingMode;
+      });
+      nextActive = sameModeTab?.id ?? (next.length > 0 ? next[0].id : null);
+    }
+    const nextActiveTab = next.find((t) => t.id === nextActive);
+    const nextFileId =
+      (nextActiveTab?.kind === "file" || nextActiveTab?.kind === "texworkspace") && nextActiveTab.fileId
+        ? nextActiveTab.fileId
+        : "";
+    useDocumentStore.getState().setActiveFile(nextFileId);
+
+    if (closing?.kind === "terminal" && closing.terminalSource !== "ai" && !options?.skipTerminalDestroy) {
+      useTerminalStore.getState().destroyTab(closing.id);
+    }
+
+    if (closing?.kind === "terminal" && closing.terminalSource === "ai") {
+      closedAiTabId = closing.id;
+    }
+
+    const hasRemainingOfMode = next.some((t) => {
+      const modeDef = modeRegistry.findByTabKind(t.kind);
+      return modeDef?.id === closingMode;
+    });
+    if (!hasRemainingOfMode && closing) {
+      useLayoutStore.setState((st) => {
+        const remainingModes = st.activeModes.filter((m) => m !== closingMode);
+        const newFocused = remainingModes.length > 0
+          ? remainingModes[remainingModes.length - 1]
+          : "dashboard";
+        return { activeModes: remainingModes, focusedMode: newFocused };
+      });
+      if (useLayoutStore.getState().focusedMode === "dashboard") {
+        nextActive = null;
+      } else {
+        const newModeTab = next.find((t) => {
+          const modeDef = modeRegistry.findByTabKind(t.kind);
+          return modeDef?.id === useLayoutStore.getState().focusedMode;
+        });
+        nextActive = newModeTab?.id ?? null;
+      }
+    }
+
+    return { tabs: next, activeTabId: nextActive };
+  });
+
+  if (closedAiTabId && !options?.skipAiDismiss) {
+    useTerminalAiStore.getState().onAiTabClosedByUser(closedAiTabId);
+  }
+}

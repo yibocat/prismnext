@@ -1,4 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { getMentionableFiles } from "@/lib/files/mentionable-files";
+import { pickComposerAttachments } from "@/lib/chat/composer-attach-file";
 import { flushSync } from "react-dom";
 import {
   ArrowUpIcon,
@@ -7,19 +9,17 @@ import {
   FileTextIcon,
   ImageIcon,
   PlusIcon,
-  LinkIcon,
-  Code2Icon,
 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useComposerInsertStore, terminalSnippetToPart } from "@/stores/composer-insert-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { ComposerToolbar } from "./agent-settings/composer-toolbar";
 import { PermissionAskPanel, usePermissionAskOpen } from "./permission-ask-panel";
@@ -31,12 +31,11 @@ import {
   InlineComposerEditor,
   compileComposerPrompt,
   shouldSendPromptToAgent,
-  isComposerEmpty,
   loadDraftParts,
   saveDraftFromParts,
-  type ComposerPart,
   type InlineComposerEditorHandle,
 } from "./inline-composer";
+import { isComposerEmpty, type ComposerPart } from "@/lib/chat/composer-parts";
 
 function offsetToLineCol(
   text: string,
@@ -65,6 +64,7 @@ export function ChatComposer() {
   const archivedSessionIds = useLayoutStore((s) => s.archivedSessionIds);
   const isArchived = activeSessionId ? archivedSessionIds.includes(activeSessionId) : false;
   const activeTabId = useChatStore((s) => s.activeTabId);
+  const composerInsertNonce = useComposerInsertStore((s) => s.nonce);
   const chatMode = useChatStore(
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.chatMode ?? "agent",
   );
@@ -76,6 +76,11 @@ export function ChatComposer() {
   const loadCommands = useCommandStore((s) => s.loadCommands);
 
   const files = useDocumentStore((s) => s.files);
+  const fileMetadata = useDocumentStore((s) => s.fileMetadata);
+  const mentionableFiles = useMemo(
+    () => getMentionableFiles(files, fileMetadata),
+    [files, fileMetadata],
+  );
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const activeFileId = useDocumentStore((s) => s.activeFileId);
   const selectionRange = useDocumentStore((s) => s.selectionRange);
@@ -110,6 +115,13 @@ export function ChatComposer() {
       useChatStore.getState().saveDraft(activeTabId, saveDraftFromParts(draftPartsRef.current));
     };
   }, [activeTabId]);
+
+  useEffect(() => {
+    const pending = useComposerInsertStore.getState().consumeTerminalSnippet();
+    if (!pending) return;
+    const part = terminalSnippetToPart(pending);
+    editorRef.current?.insertTerminalSnippet(part);
+  }, [composerInsertNonce]);
 
   const currentContextLabel = useMemo(() => {
     if (!selectionRange) return null;
@@ -150,6 +162,20 @@ export function ChatComposer() {
   }, [loadCommands]);
 
   const canSend = !isComposerEmpty(draftParts) || pinnedContexts.length > 0;
+
+  const handleAddFile = useCallback(async () => {
+    const picked = await pickComposerAttachments();
+    for (const file of picked) {
+      editorRef.current?.insertFileMention(file);
+    }
+  }, []);
+
+  const handleAddImage = useCallback(async () => {
+    const picked = await pickComposerAttachments({ imagesOnly: true });
+    for (const file of picked) {
+      editorRef.current?.insertFileMention(file);
+    }
+  }, []);
 
   const handleSend = useCallback(async () => {
     const parts = editorRef.current?.getParts() ?? draftPartsRef.current;
@@ -326,7 +352,7 @@ export function ChatComposer() {
                 parts={draftParts}
                 onChange={setDraftParts}
                 profiles={profiles}
-                files={files}
+                files={mentionableFiles}
                 searchCommands={searchCommands}
                 onEnter={handleSend}
                 placeholder={
@@ -349,22 +375,19 @@ export function ChatComposer() {
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-48">
-                      <DropdownMenuItem className="text-[length:var(--font-chat-meta)]">
+                      <DropdownMenuItem
+                        className="text-[length:var(--font-chat-meta)] cursor-pointer"
+                        onClick={() => void handleAddFile()}
+                      >
                         <FileTextIcon className="size-3.5" />
-                        <span>Select file</span>
+                        <span>Add file</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="text-[length:var(--font-chat-meta)]">
+                      <DropdownMenuItem
+                        className="text-[length:var(--font-chat-meta)] cursor-pointer"
+                        onClick={() => void handleAddImage()}
+                      >
                         <ImageIcon className="size-3.5" />
-                        <span>Upload image</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-[length:var(--font-chat-meta)]" disabled>
-                        <LinkIcon className="size-3.5" />
-                        <span>Add link</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="text-[length:var(--font-chat-meta)]" disabled>
-                        <Code2Icon className="size-3.5" />
-                        <span>Add code snippet</span>
+                        <span>Add image</span>
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

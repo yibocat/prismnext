@@ -17,6 +17,9 @@ export const COPY_FEEDBACK_DURATION = 2000;
 /** Maximum number of recent projects to keep */
 export const MAX_RECENT_PROJECTS = 10;
 
+/** Maximum number of recently opened files to remember */
+export const MAX_RECENT_OPENED_FILES = 10;
+
 // ─── Layout ───
 
 export const SIDEBAR_LEFT_DEFAULT = 220;

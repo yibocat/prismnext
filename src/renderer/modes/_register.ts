@@ -1,4 +1,4 @@
-import { modeRegistry } from "@/lib/mode-registry";
+import { modeRegistry } from "@/lib/workspace/mode-registry";
 import { filesMode } from "./files-mode";
 import { gitMode } from "./git-mode";
 import { browserMode } from "./browser-mode";

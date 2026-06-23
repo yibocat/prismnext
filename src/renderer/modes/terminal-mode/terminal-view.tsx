@@ -1,12 +1,20 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { useDocumentStore } from "@/stores/document-store";
-import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTerminalTheme } from "@/hooks/use-terminal-theme";
 import { useTerminalStore } from "@/stores/terminal-store";
-import { useTabContext } from "@/lib/tab-context";
+import { useTabContext } from "@/lib/workspace/tab-context";
+import {
+  resolveTerminalRoot,
+} from "@/lib/terminal/root";
+import { applyOsc133BusySequence, parseOsc133Events } from "@/lib/terminal/osc";
+import { applyTerminalInput, type TerminalInputLineState } from "@/lib/terminal/input-line";
+import { appendTerminalCapture, stripTerminalAnsi } from "@/lib/terminal/buffer";
+import { terminalSelectionRegistry } from "@/lib/terminal/selection-registry";
+import { useTerminalSelectionStore } from "@/stores/terminal-selection-store";
 import { TerminalPlaceholder } from "./terminal-placeholder";
+import { TerminalInsertHost } from "./terminal-insert-host";
 import "@xterm/xterm/css/xterm.css";
 
 // ─── Generation counter: ensures each mount gets a unique session ID ───
@@ -26,31 +34,27 @@ export function TerminalView({ tabId }: TerminalViewProps) {
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const checkoutRoot = useDocumentStore((s) => s.checkoutRoot);
+  const terminalRoot = resolveTerminalRoot(checkoutRoot, projectRoot);
   const xtermTheme = useTerminalTheme();
-  const addToHistory = useTerminalStore((s) => s.addToHistory);
+  const setSessionCommand = useTerminalStore((s) => s.setSessionCommand);
+  const restartNonce = useTerminalStore((s) => s.restartNonce[tabId] ?? 0);
+  const sessionStatus = useTerminalStore((s) => s.sessions[tabId]?.status);
   const { isActive } = useTabContext();
-
-  // ─── Stable mount reference ───
-  // The ref is read inside the effect so each mount (even strict-mode
-  // double-mount) gets a fresh generation, but the CLOSE callback in
-  // right-panel-store still uses `tab.id` without the generation suffix.
-  // We bridge this by storing the current generation so closeTab can
-  // find and destroy it.
-  const mountGenRef = useRef(0);
+  const [spawnError, setSpawnError] = useState<string | null>(null);
+  const [termReadySignal, setTermReadySignal] = useState(0);
 
   // ─── Initialize terminal ───
 
   useEffect(() => {
-    if (!projectRoot || !containerRef.current) return;
+    if (!terminalRoot || !projectRoot || !containerRef.current) return;
 
-    // Each mount (including strict-mode remount) uses a unique generation.
-    // This prevents a late-arriving terminalDestroy from a previous
-    // mount from killing the current session.
     const gen = ++_globalGen;
-    mountGenRef.current = gen;
-    const sessionId = `${tabId}:${gen}`;
+    const sessionId = `${tabId}:${gen}:${restartNonce}`;
 
     const container = containerRef.current;
+    setSpawnError(null);
+    useTerminalStore.getState().markSessionStarting(tabId, sessionId);
 
     const computedStyle = getComputedStyle(document.documentElement);
     const editorFont = computedStyle.getPropertyValue("--font-editor").trim() || "'Geist Mono', 'Menlo', 'Monaco', 'Courier New', monospace";
@@ -70,85 +74,117 @@ export function TerminalView({ tabId }: TerminalViewProps) {
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.open(container);
+    setTermReadySignal((n) => n + 1);
 
     termRef.current = term;
     fitAddonRef.current = fitAddon;
+    terminalSelectionRegistry.register(tabId, () => term.getSelection());
+
+    let activeSessionId = sessionId;
+    let disposed = false;
+    let inputLine: TerminalInputLineState = { line: "" };
+    let captureBuf = "";
+    let capturing = false;
 
     // ─── Spawn PTY ───
     window.electronAPI
-      .terminalCreate({ sessionId, projectRoot })
+      .terminalCreate({
+        sessionId,
+        tabId,
+        projectRoot,
+        cwd: terminalRoot,
+      })
       .then(({ shell, cwd, pid }) => {
-        // Register session info for sidebar display
-        useTerminalStore.getState().registerSession(tabId, sessionId, { shell, cwd, pid, busy: false });
-        // Set tab title to the last directory name
-        const dirName = cwd.split("/").filter(Boolean).pop() || cwd;
-        useRightPanelStore.getState().updateTerminalTabTitle(tabId, dirName);
+        if (disposed) return;
+        useTerminalStore.getState().registerSession(tabId, sessionId, { shell, cwd, pid });
       })
       .catch((err) => {
-        term.writeln(`\x1b[1;31mPTY failed: ${err}\x1b[0m`);
+        if (disposed) return;
+        const message = err instanceof Error ? err.message : String(err);
+        setSpawnError(message);
+        useTerminalStore.getState().markSessionExited(tabId, 1);
+        term.writeln(`\x1b[1;31mPTY failed: ${message}\x1b[0m`);
       });
 
     // ─── Input → PTY ───
-    let idleTimer: ReturnType<typeof setTimeout> | null = null;
     const onDataDisposable = term.onData((data) => {
-      if (data === "\r") {
-        // Mark busy when user submits a command
-        useTerminalStore.getState().setBusy(tabId, true);
-        const buffer = term.buffer.active;
-        const line = buffer.getLine(buffer.baseY + buffer.cursorY);
-        if (line) {
-          const cmd = line.translateToString(true).trim();
-          if (cmd) addToHistory(cmd);
-        }
+      const current = useTerminalStore.getState().sessions[tabId];
+      if (current?.status === "exited" || current?.status === "killed" || current?.status === "error") {
+        return;
       }
-      window.electronAPI.terminalWrite({ sessionId, data });
+
+      const submitted = data.includes("\r") || data.includes("\n");
+      if (submitted) {
+        useTerminalStore.getState().markCommandSubmitted(tabId);
+      }
+
+      const inputResult = applyTerminalInput(data, inputLine);
+      inputLine = inputResult.state;
+      if (inputResult.submitted) {
+        setSessionCommand(tabId, inputResult.submitted);
+      }
+
+      if (data.includes("\x03")) {
+        // Ctrl+C — stay busy until shell integration reports command end.
+        useTerminalStore.getState().markCommandSubmitted(tabId);
+      }
+
+      window.electronAPI.terminalWrite({ sessionId: activeSessionId, data });
     });
 
     // ─── PTY output → display ───
     const unsubData = window.electronAPI.onTerminalData(({ sessionId: sid, data }) => {
-      if (sid === sessionId) {
-        term.write(data);
-        // Debounce: after 400ms of no output, consider command finished
-        if (idleTimer) clearTimeout(idleTimer);
-        idleTimer = setTimeout(() => {
-          useTerminalStore.getState().setBusy(tabId, false);
-        }, 400);
+      if (sid !== activeSessionId) return;
+
+      term.write(data);
+
+      const events = parseOsc133Events(data);
+      if (events.includes("commandStart")) {
+        capturing = true;
+        captureBuf = "";
+      }
+      if (capturing) {
+        captureBuf = appendTerminalCapture(captureBuf, data);
+      }
+      if (events.includes("commandEnd") || events.includes("promptStart")) {
+        if (capturing) {
+          const cmd = useTerminalStore.getState().sessions[tabId]?.lastCommand;
+          const output = stripTerminalAnsi(captureBuf).trim();
+          if (output || cmd) {
+            useTerminalStore.getState().setLastCommandBlock(tabId, {
+              command: cmd,
+              output,
+              capturedAt: Date.now(),
+            });
+          }
+        }
+        capturing = false;
+      }
+
+      if (events.length === 0) return;
+
+      const session = useTerminalStore.getState().sessions[tabId];
+      if (!session) return;
+
+      const nextBusy = applyOsc133BusySequence(events, session.busy);
+      if (nextBusy !== session.busy) {
+        useTerminalStore.getState().setBusy(tabId, nextBusy);
+      }
+
+      if (events.includes("promptStart")) {
+        inputLine = { line: "" };
       }
     });
 
     // ─── PTY exit ───
-    let exited = false;
     const unsubExit = window.electronAPI.onTerminalExit(({ sessionId: sid, exitCode }) => {
-      if (sid === sessionId) {
-        exited = true;
-        useTerminalStore.getState().setBusy(tabId, false);
-        if (idleTimer) clearTimeout(idleTimer);
-        term.write(`\r\n\x1b[1;33m[Process exited with code ${exitCode}]\x1b[0m\r\n`);
-        term.writeln(`\x1b[2mPress Enter to restart, or close this tab\x1b[0m`);
-      }
-    });
-
-    // ─── Restart on Enter after exit ───
-    const restartOnEnter = term.onData((data) => {
-      if (!exited) return;
-      if (data === "\r") {
-        exited = false;
-        term.writeln("");
-        // Respawn PTY
-        window.electronAPI
-          .terminalCreate({ sessionId, projectRoot })
-          .then(({ shell, cwd, pid }) => {
-            useTerminalStore.getState().registerSession(tabId, sessionId, { shell, cwd, pid, busy: false });
-          })
-          .catch((err) => {
-            term.writeln(`\x1b[1;31mPTY failed: ${err}\x1b[0m`);
-          });
-      }
+      if (sid !== activeSessionId) return;
+      useTerminalStore.getState().markSessionExited(tabId, exitCode);
+      term.write(`\r\n\x1b[1;33m[Process exited with code ${exitCode}]\x1b[0m\r\n`);
+      term.writeln(`\x1b[2mUse Restart in the toolbar, or close this tab\x1b[0m`);
     });
 
     // ─── Fit + focus ───
-    // One rAF fit is enough — the ResizeObserver handles subsequent size
-    // changes. No need for staggered retries that cause extra repaints.
     const fitAndFocus = () => {
       try { fitAddon.fit(); } catch { /* ignore */ }
       term.focus();
@@ -162,26 +198,29 @@ export function TerminalView({ tabId }: TerminalViewProps) {
     resizeObserver.observe(container);
 
     const resizeDisposable = term.onResize(({ cols, rows }) => {
-      window.electronAPI.terminalResize({ sessionId, cols, rows });
+      window.electronAPI.terminalResize({ sessionId: activeSessionId, cols, rows });
     });
 
     // ─── Cleanup ───
     return () => {
+      disposed = true;
+      terminalSelectionRegistry.unregister(tabId);
+      useTerminalSelectionStore.getState().unregister(tabId);
       unsubData();
       unsubExit();
       onDataDisposable.dispose();
-      restartOnEnter.dispose();
-      if (idleTimer) clearTimeout(idleTimer);
       resizeObserver.disconnect();
       resizeDisposable.dispose();
-      // Destroy THIS mount's PTY — the generation check ensures we
-      // only destroy the session that belongs to this mount instance.
-      window.electronAPI.terminalDestroy({ sessionId });
+      window.electronAPI.terminalDestroy({ sessionId: activeSessionId });
+      const current = useTerminalStore.getState().sessions[tabId];
+      if (current?.sessionId === activeSessionId) {
+        useTerminalStore.getState().removeSession(tabId);
+      }
       term.dispose();
       termRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [projectRoot, tabId]);
+  }, [projectRoot, terminalRoot, tabId, restartNonce, setSessionCommand]);
 
   // ─── Focus when tab becomes active ───
 
@@ -208,16 +247,27 @@ export function TerminalView({ tabId }: TerminalViewProps) {
   // ─── Render ───
 
   if (!projectRoot) {
-    return <TerminalPlaceholder />;
+    return <TerminalPlaceholder reason="no-project" />;
+  }
+
+  if (!terminalRoot) {
+    return <TerminalPlaceholder reason="no-root" />;
   }
 
   return (
-    <div
-      className="h-full w-full p-1.5"
-      data-surface="content"
-      onMouseDown={handleMouseDown}
-    >
-      <div ref={containerRef} className="terminal-xterm h-full w-full" />
-    </div>
+    <TerminalInsertHost tabId={tabId} termRef={termRef} termReadySignal={termReadySignal}>
+      <div
+        className="h-full w-full p-1.5"
+        data-surface="content"
+        onMouseDown={handleMouseDown}
+      >
+        {spawnError && sessionStatus === "exited" ? (
+          <div className="mb-1 px-1 text-[length:var(--font-hint)] text-destructive">
+            Failed to start terminal: {spawnError}
+          </div>
+        ) : null}
+        <div ref={containerRef} className="terminal-xterm h-full w-full" />
+      </div>
+    </TerminalInsertHost>
   );
 }

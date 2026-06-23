@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import type { CompatibilityLevel } from "@/lib/template-merge";
+import type { CompatibilityLevel } from "@/lib/templates/template-merge";
 
 export interface TemplateSwitchDialogProps {
   open: boolean;

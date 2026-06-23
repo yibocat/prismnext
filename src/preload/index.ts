@@ -62,6 +62,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
 	// Dialog operations
 	dialogOpenFolder: () => ipcRenderer.invoke("dialog:openFolder"),
+	dialogOpenFile: () => ipcRenderer.invoke("dialog:openFile"),
+	shellShowItemInFolder: (absPath: string) =>
+		ipcRenderer.invoke("shell:showItemInFolder", { absPath }),
 	fsExists: (absPath: string) => ipcRenderer.invoke("fs:exists", { absPath }),
 	projectCreate: (rootPath: string, workspaceDirs?: WorkspaceFolder[]) =>
 		ipcRenderer.invoke("project:create", { rootPath, workspaceDirs }),
@@ -92,6 +95,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		) => callback(state);
 		ipcRenderer.on("window:stateChange", handler);
 		return () => ipcRenderer.removeListener("window:stateChange", handler);
+	},
+
+	onCloseTabRequest: (callback: () => void) => {
+		const handler = () => callback();
+		ipcRenderer.on("app:closeTab", handler);
+		return () => ipcRenderer.removeListener("app:closeTab", handler);
 	},
 
 	// Compile operations
@@ -277,12 +286,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	browserClearCache: () => ipcRenderer.invoke("browser:clearCache"),
 
 	// Terminal operations
-	terminalCreate: (args: { sessionId: string; projectRoot: string }) =>
-		ipcRenderer.invoke("terminal:create", args),
+	terminalCreate: (args: {
+		sessionId: string;
+		tabId: string;
+		projectRoot: string;
+		cwd: string;
+	}) => ipcRenderer.invoke("terminal:create", args),
 	terminalDestroy: (args: { sessionId: string }) =>
 		ipcRenderer.invoke("terminal:destroy", args),
 	terminalDestroyTab: (args: { tabId: string }) =>
 		ipcRenderer.invoke("terminal:destroyTab", args),
+	terminalDestroyTabs: (args: { tabIds: string[] }) =>
+		ipcRenderer.invoke("terminal:destroyTabs", args),
 	terminalWrite: (args: { sessionId: string; data: string }) =>
 		ipcRenderer.invoke("terminal:write", args),
 	terminalResize: (args: { sessionId: string; cols: number; rows: number }) =>
@@ -292,17 +307,73 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("terminal:loadConfig", { projectRoot }),
 	terminalSaveConfig: (projectRoot: string, config: unknown) =>
 		ipcRenderer.invoke("terminal:saveConfig", { projectRoot, config }),
+	terminalRunAiBash: (args: {
+		sessionId: string;
+		chatTabId: string;
+		toolCallId: string;
+		command: string;
+		cwd?: string;
+	}) => ipcRenderer.invoke("terminal:runAiBash", args),
+	terminalDestroyAllAiPty: () => ipcRenderer.invoke("terminal:destroyAllAiPty"),
 
 	// Terminal events (Main → Renderer)
-	onTerminalData: (callback: (data: { sessionId: string; data: string }) => void) => {
-		const handler = (_event: Electron.IpcRendererEvent, data: { sessionId: string; data: string }) => callback(data);
+	onTerminalData: (callback: (data: { sessionId: string; tabId: string; data: string }) => void) => {
+		const handler = (_event: Electron.IpcRendererEvent, data: { sessionId: string; tabId: string; data: string }) => callback(data);
 		ipcRenderer.on("terminal:data", handler);
 		return () => ipcRenderer.removeListener("terminal:data", handler);
 	},
-	onTerminalExit: (callback: (data: { sessionId: string; exitCode: number }) => void) => {
-		const handler = (_event: Electron.IpcRendererEvent, data: { sessionId: string; exitCode: number }) => callback(data);
+	onTerminalExit: (callback: (data: { sessionId: string; tabId: string; exitCode: number }) => void) => {
+		const handler = (_event: Electron.IpcRendererEvent, data: { sessionId: string; tabId: string; exitCode: number }) => callback(data);
 		ipcRenderer.on("terminal:exit", handler);
 		return () => ipcRenderer.removeListener("terminal:exit", handler);
+	},
+	onTerminalAiStream: (
+		callback: (data: {
+			sessionId: string;
+			chatTabId: string;
+			requestId: string;
+			toolCallId?: string;
+			chunk: string;
+			phase: "output";
+		}) => void,
+	) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			data: {
+				sessionId: string;
+				chatTabId: string;
+				requestId: string;
+				toolCallId?: string;
+				chunk: string;
+				phase: "output";
+			},
+		) => callback(data);
+		ipcRenderer.on("terminal:aiStream", handler);
+		return () => ipcRenderer.removeListener("terminal:aiStream", handler);
+	},
+	onTerminalAiExit: (
+		callback: (data: {
+			sessionId: string;
+			chatTabId: string;
+			requestId: string;
+			toolCallId?: string;
+			exitCode: number;
+			cwd: string;
+		}) => void,
+	) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			data: {
+				sessionId: string;
+				chatTabId: string;
+				requestId: string;
+				toolCallId?: string;
+				exitCode: number;
+				cwd: string;
+			},
+		) => callback(data);
+		ipcRenderer.on("terminal:aiExit", handler);
+		return () => ipcRenderer.removeListener("terminal:aiExit", handler);
 	},
 
 	// Git operations

@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { TemplateMeta, TemplateFull, TemplateCategory } from "./types";
-import { getTemplates } from "@/lib/template-data";
+import { getTemplates } from "@/lib/templates/template-data";
 import { TemplateSidebar, DetailSidebar } from "./template-sidebar";
 import { GalleryView } from "./template-gallery";
 import { DetailView } from "./template-detail";
 import { TemplateSwitchDialog } from "./template-switch-dialog";
-import { getCompatibilityLevel, mergeFile } from "@/lib/template-merge";
+import { getCompatibilityLevel, mergeFile } from "@/lib/templates/template-merge";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { DEFAULT_MANUSCRIPT_DIR } from "@/types/workspace";

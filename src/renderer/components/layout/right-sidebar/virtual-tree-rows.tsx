@@ -7,6 +7,8 @@ import {
   FolderPlusIcon,
   PencilIcon,
   Trash2Icon,
+  FolderSearchIcon,
+  CopyIcon,
 } from "lucide-react";
 import {
   ContextMenu,
@@ -17,12 +19,12 @@ import {
 } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { getFileIcon } from "@/lib/file-tree";
-import { getFileIconName } from "@/lib/file-icon-class";
+import { getFileIcon } from "@/lib/files/file-tree";
+import { getFileIconName } from "@/lib/files/file-icon-class";
 import { Icon } from "@iconify/react";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
-import type { FlatVisibleNode } from "@/lib/file-tree";
+import type { FlatVisibleNode } from "@/lib/files/file-tree";
 
 // ─── Callbacks interface ───
 
@@ -33,6 +35,9 @@ export interface VirtTreeCallbacks {
   onDeleteFile: (fileId: string) => void;
   onDeleteFolder: (folderPath: string) => void;
   onRenameFolder: (folderPath: string, name: string) => void;
+  onRevealInFinder: (absPath: string) => void;
+  onCopyPath: (text: string) => void;
+  onCopyRelativePath: (relativePath: string) => void;
 }
 
 // ─── Git status type (subset used by FileVirtRow) ───
@@ -99,6 +104,15 @@ export const FolderVirtRow = memo(function FolderVirtRow({
           New Folder
         </ContextMenuItem>
         <ContextMenuSeparator />
+        <ContextMenuItem onClick={() => callbacks.onRevealInFinder(item.key)}>
+          <FolderSearchIcon className="mr-2 size-4" />
+          Reveal in Finder
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => callbacks.onCopyRelativePath(item.key)}>
+          <CopyIcon className="mr-2 size-4" />
+          Copy Relative Path
+        </ContextMenuItem>
+        <ContextMenuSeparator />
         <ContextMenuItem onClick={() => callbacks.onRenameFolder(item.key, item.name)}>
           <PencilIcon className="mr-2 size-4" />
           Rename
@@ -121,6 +135,7 @@ export const FileVirtRow = memo(function FileVirtRow({
   isDirty,
   gitStatus,
   onSelect,
+  onOpenPinned,
   callbacks,
 }: {
   item: FlatVisibleNode;
@@ -129,6 +144,7 @@ export const FileVirtRow = memo(function FileVirtRow({
   isDirty: boolean;
   gitStatus?: GitStatusInfo;
   onSelect: () => void;
+  onOpenPinned?: () => void;
   callbacks: VirtTreeCallbacks;
 }) {
   const gitFileNameStyle: React.CSSProperties | undefined = gitStatus?.isDeleted
@@ -164,6 +180,10 @@ export const FileVirtRow = memo(function FileVirtRow({
           )}
           style={{ paddingLeft: INDENT(depth) }}
           onClick={onSelect}
+          onDoubleClick={(e) => {
+            e.preventDefault();
+            onOpenPinned?.();
+          }}
         >
           {getFileIcon(file)}
           <span className="truncate" style={gitFileNameStyle} title={gitTitle}>
@@ -175,6 +195,19 @@ export const FileVirtRow = memo(function FileVirtRow({
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
+        <ContextMenuItem onClick={() => callbacks.onRevealInFinder(file.absolutePath)}>
+          <FolderSearchIcon className="mr-2 size-4" />
+          Reveal in Finder
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => callbacks.onCopyPath(file.absolutePath)}>
+          <CopyIcon className="mr-2 size-4" />
+          Copy Path
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => callbacks.onCopyRelativePath(file.relativePath)}>
+          <CopyIcon className="mr-2 size-4" />
+          Copy Relative Path
+        </ContextMenuItem>
+        <ContextMenuSeparator />
         <ContextMenuItem onClick={() => callbacks.onRenameFile(file.id, file.name)}>
           <PencilIcon className="mr-2 size-4" />
           Rename

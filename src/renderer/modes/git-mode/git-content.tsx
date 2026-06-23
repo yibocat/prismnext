@@ -1,8 +1,8 @@
 import { useMemo, lazy } from "react";
-import type { RightTab } from "@/lib/mode-registry";
+import type { RightTab } from "@/lib/workspace/mode-registry";
 import { useDocumentStore } from "@/stores/document-store";
-import { TabContext, type TabContextValue } from "@/lib/tab-context";
-import { resolveViewer, wrapTabContext } from "@/lib/mode-utils";
+import { TabContext, type TabContextValue } from "@/lib/workspace/tab-context";
+import { resolveViewer, wrapTabContext } from "@/lib/workspace/mode-utils";
 import { GitToolbar } from "./git-toolbar";
 
 const GitViewer = lazy(() => import("./git-viewer").then((m) => ({ default: m.default })));

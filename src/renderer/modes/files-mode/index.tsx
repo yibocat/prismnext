@@ -1,4 +1,4 @@
-import type { ModeDefinition, RightTab } from "@/lib/mode-registry";
+import type { ModeDefinition, RightTab } from "@/lib/workspace/mode-registry";
 import { Folders as FilesIcon } from "lucide-react";
 import { FilesSidebar } from "./files-sidebar";
 import { FileToolbar } from "./files-toolbar";

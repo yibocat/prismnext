@@ -8,11 +8,9 @@ export function GeneralSettings() {
             Basic application settings.
           </p>
         </div>
-        <div className="rounded-md border border-border p-4">
-          <p className="text-[length:var(--font-button)] text-muted-foreground">
-            General settings will be available in a future update.
-          </p>
-        </div>
+        <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+          Terminal and agent bash settings live under Agent and Terminal in the sidebar.
+        </p>
       </div>
     </div>
   );

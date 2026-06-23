@@ -3,7 +3,7 @@ import { EditorState, Compartment } from "@codemirror/state";
 import { EditorView, lineNumbers } from "@codemirror/view";
 import { unifiedMergeView } from "@codemirror/merge";
 import { useTheme } from "next-themes";
-import { getLanguageLoader } from "@/lib/language-mappings";
+import { getLanguageLoader } from "@/lib/editor/language-mappings";
 import { editorChromeTheme } from "@/lib/editor-themes/editor-chrome";
 import { getThemeExtensionSync, getThemeExtensionAsync } from "@/lib/editor-themes/registry";
 import { diffDisplayTheme, diffDisplayThemeExtra, contentMetricsTheme } from "@/lib/editor-themes/diff-overrides";

@@ -69,6 +69,12 @@ interface LayoutState {
 
   rightAreaExpanded: boolean;
   rightAreaWidth: number;
+  /** Incremented to programmatically expand the RightArea panel (e.g. open Browser link). */
+  rightAreaExpandNonce: number;
+  requestRightAreaExpand: () => void;
+  /** Incremented to show the center Chat panel (e.g. terminal → composer insert). */
+  centerExpandNonce: number;
+  requestCenterExpand: () => void;
   rightSidebarWidth: number;
   editorMaximized: boolean;
   toggleRightArea: () => void;
@@ -198,6 +204,12 @@ export const useLayoutStore = create<LayoutState>()(
 
       rightAreaExpanded: false,
       rightAreaWidth: RIGHT_AREA_DEFAULT,
+      rightAreaExpandNonce: 0,
+      requestRightAreaExpand: () =>
+        set((s) => ({ rightAreaExpandNonce: s.rightAreaExpandNonce + 1, rightAreaExpanded: true })),
+      centerExpandNonce: 0,
+      requestCenterExpand: () =>
+        set((s) => ({ centerExpandNonce: s.centerExpandNonce + 1 })),
       rightSidebarWidth: SIDEBAR_RIGHT_DEFAULT,
       editorMaximized: false,
       toggleRightArea: () => set((s) => ({ rightAreaExpanded: !s.rightAreaExpanded })),

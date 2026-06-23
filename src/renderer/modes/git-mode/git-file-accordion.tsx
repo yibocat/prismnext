@@ -11,7 +11,7 @@ import { useGitStore, type GitFileItem } from "@/stores/git-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { GitDiffView } from "./git-diff-view";
-import { getFileIconName } from "@/lib/file-icon-class";
+import { getFileIconName } from "@/lib/files/file-icon-class";
 import {
   DropdownMenu,
   DropdownMenuContent,

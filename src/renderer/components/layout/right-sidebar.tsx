@@ -1,7 +1,7 @@
 import { useLayoutStore } from "@/stores/layout-store";
 import { SidebarProvider, Sidebar } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "./right-sidebar/dashboard-sidebar";
-import { modeRegistry } from "@/lib/mode-registry";
+import { modeRegistry } from "@/lib/workspace/mode-registry";
 
 export { FilesSidebar } from "@/modes/files-mode/files-sidebar";
 export { GitSidebar } from "@/modes/git-mode/git-sidebar";

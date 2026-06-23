@@ -28,6 +28,13 @@ export function registerSettingsHandlers(): void {
         // in use-opencode-events (auto allow/deny). Config applies on next app launch.
         service.applyPermissionMode(mode);
       }
+      if ("agentTerminalMode" in patch) {
+        const service = AcpService.getInstance();
+        const mode = (patch.agentTerminalMode as string) || "mirror";
+        await service.applyAgentTerminalMode(mode);
+        await service.syncBuiltinTools();
+        await service.reloadAfterToolsChange();
+      }
     },
   );
 

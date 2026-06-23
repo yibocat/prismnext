@@ -15,12 +15,22 @@ export interface RightTab {
   kind: RightTabKind;
   title: string;
   isInitial: boolean;
+  /** Preview tab (italic) — replaced on next single-click open until pinned */
+  isPreview?: boolean;
+  /** File lives outside the project root */
+  isExternal?: boolean;
   filePath?: string;
   fileId?: string;
   url?: string;
   isLoading?: boolean;
   hibernated?: boolean;
   viewMode?: string;
+  /** User shell vs AI agent mirror terminal */
+  terminalSource?: "user" | "ai";
+  /** Chat tab that owns this AI terminal */
+  linkedChatTabId?: string;
+  /** Latest bash tool call mirrored in this tab */
+  linkedToolCallId?: string;
 }
 
 // ── Mode Definition ──

@@ -24,18 +24,27 @@ export function queueWarmup(projectRoot: string): Promise<void> {
   if (_warmedUpRoots.has(projectRoot)) return Promise.resolve();
 
   const start = performance.now();
-  // touch+rm warms the read/write TCC path for new files;
-  // echo+checkout warms the "modify tracked file" TCC path that git switch needs;
-  // git status / branch / log / update-index warm the respective git plumbing.
-  const cmd = [
+  // touch+rm warms the read/write TCC path for new files.
+  // Git-specific warmup runs ONLY when a repo exists — appending to .gitignore
+  // on a non-git project would leave a stray root .gitignore behind.
+  const hasGit = existsSync(join(projectRoot, ".git"));
+  const cmdParts = [
     `cd ${JSON.stringify(projectRoot)}`,
     `touch .prism_warmup && rm .prism_warmup`,
-    `echo "warmup" >> .gitignore && git checkout -- .gitignore`,
-    `git status --porcelain -b >/dev/null`,
-    `git branch --list >/dev/null`,
-    `git log --oneline -1 >/dev/null`,
-    `git update-index --refresh`,
-  ].join(" && ");
+  ];
+  if (hasGit) {
+    const gitignorePath = join(projectRoot, ".gitignore");
+    if (existsSync(gitignorePath)) {
+      cmdParts.push(`echo "warmup" >> .gitignore && git checkout -- .gitignore`);
+    }
+    cmdParts.push(
+      `git status --porcelain -b >/dev/null`,
+      `git branch --list >/dev/null`,
+      `git log --oneline -1 >/dev/null`,
+      `git update-index --refresh`,
+    );
+  }
+  const cmd = cmdParts.join(" && ");
 
   const task = _pending.then(() => new Promise<void>((resolve) => {
     // Use spawn with explicit stdio to avoid EBADF in Electron

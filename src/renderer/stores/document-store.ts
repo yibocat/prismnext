@@ -12,6 +12,8 @@ import { useSettingsStore } from "./settings-store";
 import { useWorktreeStore } from "./worktree-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { clearPdfCache } from "./compile-store";
+import { externalFileId } from "@/lib/files/external-file";
+import { trackRecentOpenedFile } from "@/lib/files/recent-files";
 
 export type ProjectFileType = "tex" | "image" | "pdf" | "bib" | "style" | "other";
 
@@ -36,6 +38,7 @@ interface FileMeta {
   name: string;
   type: ProjectFileType;
   fileSize?: number;
+  isExternal?: boolean;
 }
 
 interface DocumentState {
@@ -73,6 +76,10 @@ interface DocumentState {
   closeProject: () => Promise<void>;
   /** Open a file for editing — loads content from disk if not already cached */
   openFile: (id: string) => Promise<void>;
+  /** Open a file outside the project root */
+  openExternalFile: (absolutePath: string, opts?: { pin?: boolean }) => Promise<void>;
+  /** Register external path for @mention / context without opening a tab */
+  registerExternalFile: (absolutePath: string) => ProjectFile;
   saveFile: (id: string) => Promise<void>;
   saveAllFiles: () => Promise<void>;
   refreshFiles: () => Promise<void>;
@@ -232,6 +239,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     try {
       const t1 = performance.now();
       await window.electronAPI.chatDispose();
+      void window.electronAPI.terminalDestroyAllAiPty();
       useRightPanelStore.getState().closeAllTabs();
       useChatStore.getState().clearAllSessions();
       useLayoutStore.getState().setLeftSidebarView("sessions");
@@ -347,6 +355,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     window.electronAPI.settingsSet({ lastProjectPath: null } as any);
     // Clean up sub-stores to prevent session/tab pollution
     await window.electronAPI.chatDispose();
+    void window.electronAPI.terminalDestroyAllAiPty();
     useRightPanelStore.getState().closeAllTabs();
     useChatStore.getState().clearAllSessions();
     clearPdfCache();
@@ -381,7 +390,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
     // Need to load from disk
     const meta = fileMetadata.get(id);
-    if (!meta) return; // file doesn't exist in project
+    if (!meta) return;
 
     try {
       if (meta.type === "image") {
@@ -396,9 +405,45 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         set({ openedContents: newMap, activeFileId: id });
       }
     } catch {
-      // File can't be read — still allow selecting it
       set({ activeFileId: id });
     }
+  },
+
+  registerExternalFile: (absolutePath: string) => {
+    const id = externalFileId(absolutePath);
+    const name = absolutePath.split(/[/\\]/).pop() || absolutePath;
+    const { type } = inferFromExtension(name);
+
+    const meta: FileMeta = {
+      relativePath: absolutePath,
+      absolutePath,
+      name,
+      type,
+      isExternal: true,
+    };
+
+    const newMetadata = new Map(get().fileMetadata);
+    newMetadata.set(id, meta);
+    set({ fileMetadata: newMetadata });
+    void trackRecentOpenedFile(id, name);
+
+    return {
+      id,
+      name,
+      relativePath: absolutePath,
+      absolutePath,
+      type,
+    };
+  },
+
+  openExternalFile: async (absolutePath: string, opts?: { pin?: boolean }) => {
+    const file = get().registerExternalFile(absolutePath);
+
+    useRightPanelStore.getState().openFile(file.id, file.absolutePath, file.name, {
+      pin: opts?.pin ?? false,
+      isExternal: true,
+    });
+    await get().openFile(file.id);
   },
 
   // ─── File Operations ───
@@ -406,19 +451,22 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   saveFile: async (id: string) => {
     const state = get();
     const file = state.files.find((f) => f.id === id);
+    const meta = state.fileMetadata.get(id);
+    const absPath = file?.absolutePath ?? meta?.absolutePath;
+    const displayName = file?.name ?? meta?.name ?? id;
     const content = state.openedContents.get(id);
 
-    if (!file || !content?.content || !content.isDirty) return;
+    if (!absPath || !content?.content || !content.isDirty) return;
 
     set({ isSaving: true });
 
     try {
-      await window.electronAPI.fsWrite(file.absolutePath, content.content);
+      await window.electronAPI.fsWrite(absPath, content.content);
       const newMap = new Map(state.openedContents);
       newMap.set(id, { ...content, isDirty: false });
       set({ openedContents: newMap, isSaving: false, dirtyVersion: state.dirtyVersion + 1 });
     } catch (error) {
-      toast.error(`Failed to save ${file.name}: ${error}`);
+      toast.error(`Failed to save ${displayName}: ${error}`);
       set({ isSaving: false });
     }
   },
@@ -439,8 +487,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const results = await Promise.allSettled(
       dirtyEntries.map(([id, fc]) => {
         const file = state.files.find((f) => f.id === id);
-        if (!file) return Promise.resolve();
-        return window.electronAPI.fsWrite(file.absolutePath, fc.content!);
+        const meta = state.fileMetadata.get(id);
+        const absPath = file?.absolutePath ?? meta?.absolutePath;
+        if (!absPath) return Promise.resolve();
+        return window.electronAPI.fsWrite(absPath, fc.content!);
       }),
     );
 
@@ -1285,6 +1335,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const newMap = new Map(state.openedContents);
     newMap.set(id, { content, isDirty: true });
     set({ openedContents: newMap, dirtyVersion: state.dirtyVersion + 1 });
+
+    const rp = useRightPanelStore.getState();
+    const previewTab = rp.tabs.find((t) => t.kind === "file" && t.fileId === id && t.isPreview);
+    if (previewTab) rp.pinTab(previewTab.id);
 
     scheduleAutoSave();
   },

@@ -1,5 +1,5 @@
 import { lazy, type ReactNode } from "react";
-import { TabContext, type TabContextValue } from "@/lib/tab-context";
+import { TabContext, type TabContextValue } from "./tab-context";
 
 // ── Lazy-loaded viewers (single canonical source) ──
 export const CodeEditor = lazy(() => import("@/components/modules/editor/code-editor").then((m) => ({ default: m.CodeEditor })));

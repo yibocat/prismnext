@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useCompileStore } from "@/stores/compile-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
-import type { RightTab } from "@/lib/mode-registry";
+import type { RightTab } from "@/lib/workspace/mode-registry";
 import { useTexworkspace } from "@/modes/texworkspace-mode/use-texworkspace";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { RightPane } from "@/components/layout/right-pane";

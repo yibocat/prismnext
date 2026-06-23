@@ -4,10 +4,16 @@ import {
   HoverCardContent,
 } from "@/components/ui/hover-card";
 import { useWorktreeStore } from "@/stores/worktree-store";
+import { useChatStore } from "@/stores/chat-store";
+import { useTerminalAiStore } from "@/stores/terminal-ai-store";
+import { useSettingsStore } from "@/stores/settings-store";
+import { formatAiTerminalStatus } from "@/lib/terminal/ai-terminal-lifecycle";
+import { resolveAiMirrorKey } from "@/lib/terminal/mirror-key";
 import {
   FolderOpenIcon,
   BotIcon,
   GitBranchIcon,
+  TerminalIcon,
 } from "lucide-react";
 
 interface SessionTitleProps {
@@ -33,6 +39,16 @@ export function SessionTitle({
       ? "Pending worktree"
       : "Local";
 
+  const activeTabId = useChatStore((s) => s.activeTabId);
+  const mirrorKey = activeTabId ? resolveAiMirrorKey(activeTabId) : "";
+  const sessionState = useTerminalAiStore((s) =>
+    mirrorKey ? s.sessionStates[mirrorKey] : undefined,
+  );
+  const showIndicator =
+    useSettingsStore((s) => s.settings.aiTerminalShowSessionIndicator !== false);
+  const terminalStatus = showIndicator ? formatAiTerminalStatus(sessionState) : null;
+  const focusOrOpen = useTerminalAiStore((s) => s.focusOrOpenAiTerminal);
+
   return (
     <div className="flex items-center min-w-0 max-w-[240px]">
       <HoverCard openDelay={300} closeDelay={100}>
@@ -46,7 +62,6 @@ export function SessionTitle({
         </HoverCardTrigger>
         <HoverCardContent side="bottom" align="start" className="w-64 p-3">
           <div className="space-y-2">
-            {/* Project */}
             <div className="flex items-start gap-2">
               <FolderOpenIcon className="size-3.5 shrink-0 text-muted-foreground mt-0.5" />
               <div className="min-w-0">
@@ -58,20 +73,30 @@ export function SessionTitle({
                 </div>
               </div>
             </div>
-            {/* Agent */}
             <div className="flex items-center gap-2">
               <BotIcon className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="text-[length:var(--font-chat-meta)] text-foreground">
                 {agentName}
               </span>
             </div>
-            {/* Worktree */}
             <div className="flex items-center gap-2">
               <GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="text-[length:var(--font-chat-meta)] text-muted-foreground">
                 {worktreeLabel}
               </span>
             </div>
+            {terminalStatus && activeTabId ? (
+              <button
+                type="button"
+                className="flex items-center gap-2 w-full pt-1 border-t border-border/60 text-left rounded-sm cursor-pointer transition-colors -mx-1 px-1 py-1 text-muted-foreground hover:bg-accent/50 hover:text-warning group/term"
+                onClick={() => focusOrOpen(activeTabId)}
+              >
+                <TerminalIcon className="size-3.5 shrink-0 text-warning/80 group-hover/term:text-warning transition-colors" />
+                <span className="min-w-0 flex-1 text-[length:var(--font-chat-meta)] truncate group-hover/term:text-warning transition-colors">
+                  {terminalStatus}
+                </span>
+              </button>
+            ) : null}
           </div>
         </HoverCardContent>
       </HoverCard>

@@ -53,6 +53,9 @@ import { app } from "electron";
  * **The file name (minus `.ts`) IS the tool name.**
  * To override an OpenCode built-in tool, name the file the same (e.g. `bash.ts`).
  *
+ * **Self-contained only:** synced tool files run in OpenCode's Bun runtime.
+ * Do not import from `../services/` or other Electron main-process modules.
+ *
  * ### Step 2 — Register metadata
  *
  * Add an entry to `BUILTIN_TOOLS` below. This is used by the renderer to
@@ -104,6 +107,12 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     name: "question",
     label: "Question",
     description: "Ask the user a question and pause until they respond (replaces built-in question tool)",
+    category: "utility",
+  },
+  {
+    name: "bash",
+    label: "Shell",
+    description: "Execute shell commands via Prism terminal bridge (pty mode)",
     category: "utility",
   },
 ];

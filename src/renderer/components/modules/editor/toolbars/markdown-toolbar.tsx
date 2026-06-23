@@ -31,7 +31,7 @@ export function MarkdownToolbar() {
       <button
         type="button"
         className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-        title={isPreview ? "Source" : "Preview"}
+        title={isPreview ? "Source view" : "Rendered view"}
         onClick={() => {
           if (activeTabId) setTabViewMode(activeTabId, isPreview ? "source" : "preview");
         }}

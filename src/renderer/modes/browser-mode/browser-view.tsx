@@ -1,20 +1,34 @@
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState, type RefObject } from "react";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useBrowserStore } from "@/stores/browser-store";
-import { useTabContext } from "@/lib/tab-context";
+import { useTabContext } from "@/lib/workspace/tab-context";
+import {
+  isBrowsableUrl,
+  navigateBrowserUrl,
+  openUrlInBrowser,
+} from "@/lib/browser-link";
 import {
   registerWebview,
   unregisterWebview,
   markTabActive,
   wakeTab,
 } from "./webview-registry";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { ExternalLinkIcon, PlusSquareIcon, AlertTriangleIcon, RefreshCwIcon } from "lucide-react";
+import { BrowserHome } from "./browser-home";
+import { BrowserLinkMenu } from "./browser-link-menu";
+import { AlertTriangleIcon, RefreshCwIcon } from "lucide-react";
+
+const MAGIC = "__PRISM_NEW_TAB__";
+const LINK_MAGIC = "__PRISM_LINK_MENU__";
+
+type PrismWebview = HTMLWebViewElement & {
+  executeJavaScript?: (code: string) => Promise<unknown>;
+  reload?: () => void;
+  getURL?: () => string;
+};
+
+function getPrismWebview(ref: RefObject<HTMLWebViewElement | null>): PrismWebview | null {
+  return ref.current as PrismWebview | null;
+}
 
 export function BrowserView() {
   const { tab, isActive } = useTabContext();
@@ -25,41 +39,26 @@ export function BrowserView() {
   const webviewRef = useRef<HTMLWebViewElement>(null);
   const webviewElRef = useRef<HTMLDivElement>(null);
 
-  // Link context menu state (populated by webview JS)
   const [linkMenu, setLinkMenu] = useState<{ x: number; y: number; url: string } | null>(null);
-
-  // Page load error state
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const newBrowserTab = useRightPanelStore((s) => s.newBrowserTab);
-  const navigateBrowserTab = useRightPanelStore((s) => s.navigateBrowserTab);
   const updateBrowserTabTitle = useRightPanelStore((s) => s.updateBrowserTabTitle);
+  const navigateBrowserTab = useRightPanelStore((s) => s.navigateBrowserTab);
   const setBrowserTabLoading = useRightPanelStore((s) => s.setBrowserTabLoading);
   const setTabHibernated = useRightPanelStore((s) => s.setTabHibernated);
   const recordVisit = useBrowserStore((s) => s.recordVisit);
 
-  // ─── Hibernation management ───
-  // When this tab becomes active, mark it as active in the LRU registry.
-  // If another tab needs to be evicted, hibernate it via the store.
   useEffect(() => {
     if (isActive && url) {
       const evicted = markTabActive(tabId, url);
-      if (evicted) {
-        // Hibernate the evicted tab — its BrowserView will re-render
-        // and unmount its webview
-        setTabHibernated(evicted, true);
-      }
-      // Wake this tab if it was hibernated
+      if (evicted) setTabHibernated(evicted, true);
       if (hibernated) {
         setTabHibernated(tabId, false);
         wakeTab(tabId);
       }
     }
-  }, [isActive, url, tabId]);
+  }, [isActive, url, tabId, hibernated, setTabHibernated]);
 
-  // ─── Webview lifecycle ───
-
-  // Register webview ref so BrowserToolbar can access it
   useEffect(() => {
     const el = webviewRef.current;
     if (el) {
@@ -68,16 +67,15 @@ export function BrowserView() {
     }
   }, [tabId, url]);
 
-  // Sync page title from webview → tab title + recent visits
   useEffect(() => {
-    const webview = webviewRef.current as any;
+    const webview = getPrismWebview(webviewRef);
     if (!webview) return;
 
-    const handlePageTitleUpdated = (e: any) => {
+    const handlePageTitleUpdated = (e: Event & { title?: string }) => {
       const title = e.title;
       if (title && title !== "about:blank") {
         updateBrowserTabTitle(tabId, title);
-        const currentUrl = (webview as any).getURL?.() || url;
+        const currentUrl = webview.getURL?.() || url;
         if (currentUrl) recordVisit(currentUrl, title);
       }
     };
@@ -86,15 +84,12 @@ export function BrowserView() {
     return () => webview.removeEventListener("page-title-updated", handlePageTitleUpdated);
   }, [tabId, url, updateBrowserTabTitle, recordVisit]);
 
-  // Listen for page URL changes (in-page navigation via pushState)
   useEffect(() => {
-    const webview = webviewRef.current as any;
+    const webview = getPrismWebview(webviewRef);
     if (!webview) return;
 
-    const handleNavigation = (e: any) => {
-      if (e.url) {
-        navigateBrowserTab(tabId, e.url);
-      }
+    const handleNavigation = (e: Event & { url?: string }) => {
+      if (e.url) navigateBrowserTab(tabId, e.url);
     };
 
     webview.addEventListener("did-navigate-in-page", handleNavigation);
@@ -103,11 +98,10 @@ export function BrowserView() {
       webview.removeEventListener("did-navigate-in-page", handleNavigation);
       webview.removeEventListener("did-navigate", handleNavigation);
     };
-  }, [tabId, url, navigateBrowserTab]);
+  }, [tabId, navigateBrowserTab]);
 
-  // Track page loading state for progress bar / button feedback
   useEffect(() => {
-    const webview = webviewRef.current as any;
+    const webview = getPrismWebview(webviewRef);
     if (!webview) return;
 
     const handleStartLoading = () => setBrowserTabLoading(tabId, true);
@@ -121,13 +115,11 @@ export function BrowserView() {
     };
   }, [tabId, url, setBrowserTabLoading]);
 
-  // Track page load errors
   useEffect(() => {
-    const webview = webviewRef.current as any;
+    const webview = getPrismWebview(webviewRef);
     if (!webview) return;
 
-    const handleFailLoad = (e: any) => {
-      // Only show errors for the main frame, ignore iframe/subframe failures
+    const handleFailLoad = (e: Event & { isMainFrame?: boolean; errorDescription?: string }) => {
       if (e.isMainFrame && e.errorDescription) {
         setLoadError(e.errorDescription);
         setBrowserTabLoading(tabId, false);
@@ -138,29 +130,30 @@ export function BrowserView() {
     return () => webview.removeEventListener("did-fail-load", handleFailLoad);
   }, [tabId, url, setBrowserTabLoading]);
 
-  // Clear error when navigating to a new URL
   useEffect(() => {
     setLoadError(null);
   }, [url]);
 
-  // Intercept target="_blank" links and window.open() via script injection
   useEffect(() => {
-    const webview = webviewRef.current as any;
+    const webview = getPrismWebview(webviewRef);
     if (!webview) return;
 
-    const MAGIC = "__PRISM_NEW_TAB__";
-    const LINK_MAGIC = "__PRISM_LINK_MENU__";
+    const handleNewWindow = (e: Event & { preventDefault?: () => void; url?: string }) => {
+      e.preventDefault?.();
+      if (e.url && isBrowsableUrl(e.url)) {
+        openUrlInBrowser(e.url, { newTab: true });
+      }
+    };
 
-    const handleConsoleMessage = (e: any) => {
-      const msg: string = e.message ?? "";
+    const handleConsoleMessage = (e: Event & { message?: string }) => {
+      const msg = e.message ?? "";
       if (msg.startsWith(LINK_MAGIC)) {
         const parts = msg.slice(LINK_MAGIC.length).split("__");
         if (parts.length >= 3) {
           const x = parseInt(parts[0], 10);
           const y = parseInt(parts[1], 10);
-          const linkUrl = parts.slice(2).join("__"); // URL may contain __
-          if (linkUrl && /^https?:\/\//i.test(linkUrl)) {
-            // Adjust coordinates relative to the webview element
+          const linkUrl = parts.slice(2).join("__");
+          if (linkUrl && isBrowsableUrl(linkUrl)) {
             const rect = webviewElRef.current?.getBoundingClientRect();
             setLinkMenu({
               x: rect ? rect.left + x : x,
@@ -173,23 +166,21 @@ export function BrowserView() {
       }
       if (msg.startsWith(MAGIC)) {
         const newUrl = msg.slice(MAGIC.length);
-        if (newUrl && /^https?:\/\//i.test(newUrl)) {
-          const newTabId = newBrowserTab();
-          navigateBrowserTab(newTabId, newUrl);
+        if (newUrl && isBrowsableUrl(newUrl)) {
+          openUrlInBrowser(newUrl, { newTab: true });
         }
       }
     };
 
     const injectInterceptor = () => {
-      webview.executeJavaScript(`
+      webview.executeJavaScript?.(`
         (function() {
           if (window.__prismInterceptorInstalled) return;
           window.__prismInterceptorInstalled = true;
           var MAGIC = "${MAGIC}";
           var LINK_MAGIC = "${LINK_MAGIC}";
 
-          var _origOpen = window.open;
-          window.open = function(url, target, features) {
+          window.open = function(url) {
             if (url && url !== "about:blank" && url !== "") {
               console.log(MAGIC + url);
             }
@@ -208,7 +199,6 @@ export function BrowserView() {
             }
           }, true);
 
-          // Right-click on links → show custom context menu
           document.addEventListener("contextmenu", function(e) {
             var el = e.target;
             while (el && el.tagName !== "A") el = el.parentElement;
@@ -222,30 +212,24 @@ export function BrowserView() {
       `).catch(() => {});
     };
 
+    webview.addEventListener("new-window", handleNewWindow);
     webview.addEventListener("dom-ready", injectInterceptor);
     webview.addEventListener("console-message", handleConsoleMessage);
     return () => {
+      webview.removeEventListener("new-window", handleNewWindow);
       webview.removeEventListener("dom-ready", injectInterceptor);
       webview.removeEventListener("console-message", handleConsoleMessage);
     };
-  }, [tabId, url, newBrowserTab, navigateBrowserTab]);
+  }, [tabId, url]);
 
   const isLoading = useRightPanelStore(
     (s) => s.tabs.find((t) => t.id === tabId)?.isLoading ?? false,
   );
 
-  // ─── Render: empty state ───
   if (!url) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
-          Enter a URL or search term above
-        </p>
-      </div>
-    );
+    return <BrowserHome tabId={tabId} />;
   }
 
-  // ─── Render: hibernated (webview unloaded to save memory) ───
   if (hibernated) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -256,17 +240,15 @@ export function BrowserView() {
     );
   }
 
-  // ─── Render: load error ───
   if (loadError) {
     const retry = () => {
       setLoadError(null);
-      const wv = webviewRef.current as any;
-      if (wv) wv.reload();
+      getPrismWebview(webviewRef)?.reload?.();
     };
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
         <AlertTriangleIcon className="size-10 opacity-30" />
-        <p className="text-[length:var(--font-placeholder)] text-muted-foreground text-center max-w-xs">
+        <p className="text-[length:var(--font-placeholder)] text-center max-w-xs">
           {loadError}
         </p>
         <button
@@ -281,7 +263,6 @@ export function BrowserView() {
     );
   }
 
-  // ─── Render: live webview ───
   return (
     <div ref={webviewElRef} className="flex h-full flex-col min-h-0">
       {isLoading && (
@@ -294,45 +275,23 @@ export function BrowserView() {
         src={url}
         className="flex-1"
         style={{ width: "100%", height: "100%" }}
-        {...{ webpreferences: "contextIsolation=yes" } as any}
+        {...{ webpreferences: "contextIsolation=yes" } as React.HTMLAttributes<HTMLElement>}
       />
 
-      {/* Link context menu — shown when right-clicking a link in the webview */}
       {linkMenu && (
-        <DropdownMenu
-          open={true}
-          onOpenChange={(open) => { if (!open) setLinkMenu(null); }}
-        >
-          <DropdownMenuTrigger asChild>
-            <div
-              className="fixed size-0"
-              style={{ left: linkMenu.x, top: linkMenu.y }}
-            />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-44">
-            <DropdownMenuItem
-              onClick={() => {
-                navigateBrowserTab(tabId, linkMenu.url);
-                const wv = webviewRef.current as any;
-                if (wv) wv.loadURL(linkMenu.url);
-                setLinkMenu(null);
-              }}
-            >
-              <ExternalLinkIcon className="size-3.5 mr-2" />
-              Open
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                const newTabId = newBrowserTab();
-                navigateBrowserTab(newTabId, linkMenu.url);
-                setLinkMenu(null);
-              }}
-            >
-              <PlusSquareIcon className="size-3.5 mr-2" />
-              Open in New Tab
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <BrowserLinkMenu
+          x={linkMenu.x}
+          y={linkMenu.y}
+          onClose={() => setLinkMenu(null)}
+          onOpen={() => {
+            navigateBrowserUrl(tabId, linkMenu.url);
+            setLinkMenu(null);
+          }}
+          onOpenInNewTab={() => {
+            openUrlInBrowser(linkMenu.url, { newTab: true });
+            setLinkMenu(null);
+          }}
+        />
       )}
     </div>
   );

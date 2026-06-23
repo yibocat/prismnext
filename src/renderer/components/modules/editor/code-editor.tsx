@@ -24,10 +24,10 @@ import { useChangesStore } from "@/stores/changes-store";
 import { useChatStore } from "@/stores/chat-store";
 import { usePermissionStore } from "@/stores/permission-store";
 import { createLogger } from "@/services/logger";
-import { getLanguageLoader } from "@/lib/language-mappings";
+import { getLanguageLoader } from "@/lib/editor/language-mappings";
 import { ChangesBar } from "./changes-bar";
-import { saveViewerPosition, loadViewerPosition } from "@/lib/viewer-position";
-import { useTabContext } from "@/lib/tab-context";
+import { saveViewerPosition, loadViewerPosition } from "@/lib/editor/viewer-position";
+import { useTabContext } from "@/lib/workspace/tab-context";
 
 const log = createLogger("code-editor");
 

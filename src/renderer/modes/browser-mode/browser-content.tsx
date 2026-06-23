@@ -1,6 +1,6 @@
 import { useMemo, lazy } from "react";
-import type { RightTab } from "@/lib/mode-registry";
-import { TabContext, type TabContextValue } from "@/lib/tab-context";
+import type { RightTab } from "@/lib/workspace/mode-registry";
+import { TabContext, type TabContextValue } from "@/lib/workspace/tab-context";
 
 const BrowserView = lazy(() => import("./browser-view").then((m) => ({ default: m.BrowserView })));
 

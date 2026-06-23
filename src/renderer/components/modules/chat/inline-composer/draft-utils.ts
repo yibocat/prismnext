@@ -1,6 +1,6 @@
-import type { ComposerPart } from "./tokens";
-import { createTokenId, partsToPlainText } from "./tokens";
-import { mergeAdjacentText, parseDraftJson } from "./serialize";
+import type { ComposerPart } from "@/lib/chat/composer-parts";
+import { createTokenId, mergeAdjacentText, partsToPlainText } from "@/lib/chat/composer-parts";
+import { parseDraftJson } from "./serialize";
 
 export interface ComposerTabDraft {
   input: string;

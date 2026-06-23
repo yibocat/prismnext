@@ -30,7 +30,7 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { cn } from "@/lib/utils";
 import { GitDiffView } from "./git-diff-view";
-import { getFileIconName } from "@/lib/file-icon-class";
+import { getFileIconName } from "@/lib/files/file-icon-class";
 import {
   formatRelativeTime,
   parseRefs,

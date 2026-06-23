@@ -1,7 +1,12 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useLayoutEffect, useRef, type ReactNode } from "react";
 import { diffLines } from "diff";
 import { Loader2Icon, CheckIcon, AlertCircleIcon, ChevronDownIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  captureViewportAnchor,
+  restoreViewportAnchor,
+  type ViewportAnchorCapture,
+} from "@/lib/chat/preserve-viewport-anchor";
 
 // ─── Status Icon ───
 
@@ -70,17 +75,37 @@ export function ToolCard({
   className,
 }: ToolCardProps) {
   const collapsible = hasContent;
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const pendingAnchorRef = useRef<ViewportAnchorCapture | null>(null);
+
+  useLayoutEffect(() => {
+    const anchor = toggleRef.current;
+    const captured = pendingAnchorRef.current;
+    if (!anchor || !captured) return;
+    restoreViewportAnchor(captured, anchor);
+    pendingAnchorRef.current = null;
+  }, [expanded]);
+
+  const handleToggle = () => {
+    if (!collapsible || !toggleRef.current) return;
+    pendingAnchorRef.current = captureViewportAnchor(toggleRef.current);
+    onToggle();
+  };
 
   return (
     <div className={cn("min-w-0 max-w-full", className)}>
       <button
+        ref={toggleRef}
         type="button"
         className={cn(
           TOOL_INLINE_ROW_CLASS,
           "w-full max-w-full overflow-hidden text-left text-[length:var(--font-code)] py-0.5",
           collapsible ? "cursor-pointer" : "cursor-default",
         )}
-        onClick={() => collapsible && onToggle()}
+        onMouseDown={(e) => {
+          if (collapsible) e.preventDefault();
+        }}
+        onClick={handleToggle}
       >
         {statusIcon ?? <StatusIcon isLoading={isLoading} isError={isError} />}
         <span className="text-[length:var(--font-chat-meta)] shrink-0 tabular-nums">

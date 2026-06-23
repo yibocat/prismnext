@@ -7,6 +7,7 @@ import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
+import { useTerminalAiStore } from "@/stores/terminal-ai-store";
 import { useWindowState } from "@/hooks/use-window-state";
 import {
   Bot,
@@ -35,6 +36,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { ProjectSwitcher } from "@/components/modules/shared";
 import { SidebarControls } from "@/components/layout/sidebar-controls";
 import { cn } from "@/lib/utils";
+import { isGenericSessionTitle, resolveSessionTitle } from "@/lib/chat/session-title";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -106,6 +108,15 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const streamingSessionIds = useMemo(
     () => new Set(tabs.filter((t) => t.isStreaming && t.sessionId).map((t) => t.sessionId as string)),
     [tabs],
+  );
+  const sessionStates = useTerminalAiStore((s) => s.sessionStates);
+  const aiTerminalRunningSessionIds = useMemo(
+    () => new Set(
+      Object.values(sessionStates)
+        .filter((st) => st.phase === "running")
+        .map((st) => st.sessionId),
+    ),
+    [sessionStates],
   );
   const hasAnyStreaming = streamingSessionIds.size > 0;
   const loadSession = useChatStore((s) => s.loadSession);
@@ -232,8 +243,10 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const tabTitlesBySession = useMemo(() => {
     const map = new Map<string, string>();
     for (const t of tabs) {
-      if (t.sessionId && t.title && t.title !== "New Chat") {
-        map.set(t.sessionId, t.title);
+      if (!t.sessionId) continue;
+      const title = resolveSessionTitle(t);
+      if (title && !isGenericSessionTitle(title)) {
+        map.set(t.sessionId, title);
       }
     }
     return map;
@@ -263,6 +276,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const renderSessionItem = (s: SessionInfo) => {
     const isActive = s.id === sessionId;
     const isSessionStreaming = streamingSessionIds.has(s.id);
+    const isAiTerminalRunning = aiTerminalRunningSessionIds.has(s.id);
     return (
       <SidebarMenuItem key={s.id}>
         <SidebarMenuButton
@@ -276,6 +290,8 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
           <span className="relative size-3.5 shrink-0 flex items-center justify-center">
             {isSessionStreaming ? (
               <CircleDotDashed className="absolute size-3.5 text-primary transition-opacity group-hover/menu-item:opacity-0" strokeWidth={2.5} />
+            ) : isAiTerminalRunning ? (
+              <CircleDotDashed className="absolute size-3.5 text-warning transition-opacity group-hover/menu-item:opacity-0" strokeWidth={2.5} />
             ) : (
               <Dot className="absolute size-3.5 text-muted-foreground/30 transition-opacity group-hover/menu-item:opacity-0" strokeWidth={5.5} />
             )}

@@ -1,11 +1,16 @@
 import { create } from "zustand";
-import type { ComposerPart } from "@/components/modules/chat/inline-composer/tokens";
+import type { ComposerPart } from "@/lib/chat/composer-parts";
 import { useDocumentStore } from "./document-store";
 import { useWorktreeStore } from "./worktree-store";
 import { useGitStore } from "./git-store";
 import { useSettingsStore } from "./settings-store";
 import { createToolResultFromState } from "@/components/modules/chat/tools/tool-result-map";
-import { truncateChatMessagesToTurn, applyUserDisplaySnapshots } from "@/components/modules/chat/chat-turns";
+import { truncateChatMessagesToTurn, applyUserDisplaySnapshots, isToolResultUserMessage } from "@/components/modules/chat/chat-turns";
+import {
+  deriveSessionTitleForSend,
+  extractSessionTitle,
+  isGenericSessionTitle,
+} from "@/lib/chat/session-title";
 
 // ─── Types ───
 
@@ -203,38 +208,6 @@ function stripSystemPromptFromDisplay(
     }
     break; // Only strip from the first user message
   }
-}
-
-/** Extract session title from the first user message.
- *  Handles both formats: the agent writes content as a plain string;
- *  the OpenCode/Anthropic API streaming path uses an array of content blocks. */
-function extractSessionTitle(messages: ChatStreamMessage[]): string | null {
-  for (const msg of messages) {
-    if (msg.type !== "user") continue;
-    const content = msg.message?.content;
-    if (!content) continue;
-
-    let text: string | null = null;
-    if (typeof content === "string") {
-      // Agent native JSONL format
-      text = content;
-    } else if (Array.isArray(content) && content.length > 0) {
-      // Anthropic API / streaming format (array of content blocks)
-      text = content
-        .filter((b) => b.type === "text" && b.text)
-        .map((b) => b.text!)
-        .join(" ");
-    }
-    if (!text) continue;
-
-    const cleaned = text
-      .replace(/<[^>]+>/g, "")
-      .replace(/^\[Currently open file:.*?\]\n?\n?/, "")
-      .trim();
-
-    if (cleaned) return cleaned.slice(0, 40);
-  }
-  return null;
 }
 
 interface ChatState {
@@ -460,6 +433,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       void import("./checkpoint-store").then(({ useCheckpointStore }) => {
         useCheckpointStore.getState().clearTab(id);
       });
+      void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
+        useTerminalAiStore.getState().removeAiTabsForChat(id);
+      });
   },
 
   setActiveTab: (id: string) => {
@@ -470,6 +446,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       tabs,
       activeTabId: id,
       ...projectActiveTab(tabs, id),
+    });
+    void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
+      useTerminalAiStore.getState().touchSessionViewed(id);
     });
 
     // Hydrate context breakdown asynchronously if missing
@@ -552,7 +531,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           : t;
         return {
           ...base,
-          title: base.messages.length === 0 ? userPrompt.slice(0, 40) : t.title,
+          title: deriveSessionTitleForSend(base, userPrompt, userContent, userMessage),
           messages: userMessage ? [...base.messages, userMessage] : base.messages,
           isStreaming: true,
           error: null,
@@ -788,6 +767,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       set({
         activeTabId: existingTab.id,
         ...projectActiveTab(get().tabs, existingTab.id),
+      });
+      void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
+        useTerminalAiStore.getState().touchSessionViewed(existingTab.id);
       });
       return;
     }
@@ -1077,8 +1059,18 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
       msgs = [...msgs, msg];
 
+      let title = tab.title;
+      if (
+        isGenericSessionTitle(tab.title) &&
+        msg.type === "user" &&
+        !isToolResultUserMessage(msg)
+      ) {
+        const extracted = extractSessionTitle([msg]);
+        if (extracted) title = extracted;
+      }
+
       const newTabs = [...s.tabs];
-      newTabs[tabIdx] = { ...tab, messages: msgs, messageMeta: meta, streamingMessage: null };
+      newTabs[tabIdx] = { ...tab, messages: msgs, messageMeta: meta, streamingMessage: null, title };
       return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
     });
   },
@@ -1170,9 +1162,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const tabs = s.tabs.map((t) =>
         t.id === tabId ? { ...t, sessionId } : t,
       );
-      // Only update the sessionId projected field — don't touch messages etc.
       const activeTab = tabs.find((t) => t.id === s.activeTabId);
       return { tabs, sessionId: activeTab?.sessionId ?? null };
+    });
+    void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
+      useTerminalAiStore.getState().migrateSessionMirrorLog(tabId, sessionId);
     });
   },
 

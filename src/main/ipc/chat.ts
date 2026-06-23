@@ -16,6 +16,7 @@ import {
   truncateUserDisplays,
   type UserDisplayContent,
 } from "../services/session-display-store";
+import { cancelAiCommandForSession } from "../services/ai-pty";
 
 const log = createLogger("chat-ipc", "agent");
 
@@ -484,6 +485,7 @@ export function registerChatHandlers(): void {
   ipcMain.handle(
     "chat:cancel",
     async (_event, args: { sessionId: string }) => {
+      cancelAiCommandForSession(args.sessionId);
       await getService().abort(args.sessionId);
     },
   );

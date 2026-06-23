@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import type { RightTab } from "@/lib/mode-registry";
+import type { RightTab } from "./mode-registry";
 
 /**
  * Per-tab context provided by PaneContent so each viewer inside a

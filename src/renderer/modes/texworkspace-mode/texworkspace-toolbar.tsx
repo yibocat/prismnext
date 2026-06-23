@@ -5,7 +5,7 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { DEFAULT_MANUSCRIPT_DIR } from "@/types/workspace";
 import { useLayoutStore } from "@/stores/layout-store";
-import { resolveCompileTarget } from "@/lib/resolve-tex-root";
+import { resolveCompileTarget } from "@/lib/tex/resolve-tex-root";
 import {
   PlayIcon,
   Loader2Icon,
@@ -41,7 +41,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { SYMBOL_CATEGORIES, getSymbolHtml, preRenderAllSymbols } from "@/lib/latex-symbols";
+import { SYMBOL_CATEGORIES, getSymbolHtml, preRenderAllSymbols } from "@/lib/tex/latex-symbols";
 
 interface TexworkspaceToolbarProps {
   compileFile: string | null | undefined;

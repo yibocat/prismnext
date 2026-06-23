@@ -8,12 +8,12 @@ import {
   parseMcpConfig,
   parsePastedMcpJson,
   serializeMcpConfig,
-} from "../../src/renderer/lib/mcp-config";
+} from "../../src/renderer/lib/agent/mcp-config";
 import {
   presetToEntry,
   findPresetForEntry,
   MCP_PRESETS,
-} from "../../src/renderer/lib/mcp-presets";
+} from "../../src/renderer/lib/agent/mcp-presets";
 
 describe("mcp-config", () => {
   it("parses OpenCode-style local server", () => {

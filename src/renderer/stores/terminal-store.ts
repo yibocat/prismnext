@@ -1,40 +1,56 @@
 import { create } from "zustand";
 import { useDocumentStore } from "@/stores/document-store";
-import type { TerminalQuickCommand, TerminalEnvInfo } from "@/types/terminal";
+import { useRightPanelStore } from "@/stores/right-panel-store";
+import { shellDisplayName, isGenericTerminalTabTitle } from "@/lib/terminal/shell-label";
+import { terminalTabLabelFromCommand } from "@/lib/terminal/root";
+import type {
+  TerminalQuickCommand,
+  TerminalEnvInfo,
+  TerminalSessionInfo,
+  TerminalProcessStatus,
+  TerminalCommandBlock,
+} from "@/types/terminal";
 
 // ─── Types ───
-
-export interface TerminalSessionInfo {
-  shell: string;
-  cwd: string;
-  pid: number;
-  busy: boolean;
-}
 
 interface TerminalState {
   quickCommands: TerminalQuickCommand[];
   envInfo: TerminalEnvInfo | null;
-  commandHistory: string[];
   loaded: boolean;
-  /** Per-tab session info, keyed by tab id (without generation suffix). */
+  /** Per-tab session info, keyed by tab id. */
   sessions: Record<string, TerminalSessionInfo>;
-  /** Maps tab id → full session id (with generation) for IPC calls. */
-  sessionIds: Record<string, string>;
+  /** Incremented to trigger TerminalView respawn after exit. */
+  restartNonce: Record<string, number>;
 
   loadFromProject: (projectRoot: string) => Promise<void>;
   fetchEnvInfo: () => Promise<void>;
 
-  registerSession: (tabId: string, sessionId: string, info: TerminalSessionInfo) => void;
-  removeSession: (tabId: string) => void;
+  markSessionStarting: (tabId: string, sessionId: string) => void;
+  registerSession: (
+    tabId: string,
+    sessionId: string,
+    info: Omit<TerminalSessionInfo, "tabId" | "sessionId" | "status" | "startedAt" | "busy">,
+  ) => void;
+  markSessionExited: (tabId: string, exitCode: number) => void;
+  markSessionKilled: (tabId: string) => void;
   setBusy: (tabId: string, busy: boolean) => void;
+  /** User submitted a command (Enter or quick command). */
+  markCommandSubmitted: (tabId: string) => void;
+  /** Update per-tab last command and sync tab/toolbar label. */
+  setSessionCommand: (tabId: string, command: string) => void;
+  /** Store last completed command output block (OSC 133). */
+  setLastCommandBlock: (tabId: string, block: TerminalCommandBlock) => void;
+  removeSession: (tabId: string) => void;
+  destroyTab: (tabId: string) => void;
+  destroyAllTerminalTabs: (tabIds: string[]) => void;
+  resetProjectState: () => void;
+  requestRestart: (tabId: string) => void;
 
   addQuickCommand: (label: string, command: string, description?: string) => Promise<void>;
   updateQuickCommand: (id: string, patch: Partial<Pick<TerminalQuickCommand, "label" | "command" | "description">>) => void;
   removeQuickCommand: (id: string) => Promise<void>;
   reorderQuickCommands: (commands: TerminalQuickCommand[]) => Promise<void>;
 
-  addToHistory: (command: string) => void;
-  clearHistory: () => void;
 }
 
 // ─── Helpers ───
@@ -55,18 +71,29 @@ async function persist(commands: TerminalQuickCommand[]): Promise<void> {
 export const useTerminalStore = create<TerminalState>()((set, get) => ({
   quickCommands: [],
   envInfo: null,
-  commandHistory: [],
   loaded: false,
   sessions: {},
-  sessionIds: {},
+  restartNonce: {},
 
   loadFromProject: async (projectRoot: string) => {
     if (!projectRoot) return;
     try {
       const config = await window.electronAPI.terminalLoadConfig(projectRoot);
-      set({ quickCommands: config.quickCommands ?? [], loaded: true });
+      set({
+        quickCommands: config.quickCommands ?? [],
+        loaded: true,
+        sessions: {},
+        envInfo: null,
+        restartNonce: {},
+      });
     } catch {
-      set({ quickCommands: [], loaded: true });
+      set({
+        quickCommands: [],
+        loaded: true,
+        sessions: {},
+        envInfo: null,
+        restartNonce: {},
+      });
     }
   },
 
@@ -74,39 +101,188 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
     try {
       const info = await window.electronAPI.terminalEnvInfo();
       set({ envInfo: info });
+      const label = shellDisplayName(info.shell);
+      for (const tab of useRightPanelStore.getState().tabs) {
+        if (
+          tab.kind === "terminal"
+          && tab.terminalSource !== "ai"
+          && isGenericTerminalTabTitle(tab.title)
+        ) {
+          useRightPanelStore.getState().updateTerminalTabTitle(tab.id, label);
+        }
+      }
     } catch {
       // env info is non-critical — ignore errors
     }
   },
 
-  registerSession: (tabId: string, sessionId: string, info: TerminalSessionInfo) => {
+  markSessionStarting: (tabId: string, sessionId: string) => {
     set((s) => ({
-      sessions: { ...s.sessions, [tabId]: { ...info, busy: false } },
-      sessionIds: { ...s.sessionIds, [tabId]: sessionId },
+      sessions: {
+        ...s.sessions,
+        [tabId]: {
+          tabId,
+          sessionId,
+          shell: "",
+          cwd: "",
+          pid: 0,
+          status: "starting",
+          busy: false,
+          startedAt: Date.now(),
+        },
+      },
     }));
   },
 
-  setBusy: (tabId: string, busy: boolean) => {
+  registerSession: (tabId, sessionId, info) => {
+    set((s) => ({
+      sessions: {
+        ...s.sessions,
+        [tabId]: {
+          tabId,
+          sessionId,
+          ...info,
+          status: "running" as TerminalProcessStatus,
+          busy: false,
+          startedAt: s.sessions[tabId]?.startedAt ?? Date.now(),
+        },
+      },
+    }));
+    const tab = useRightPanelStore.getState().tabs.find((t) => t.id === tabId);
+    if (tab && isGenericTerminalTabTitle(tab.title)) {
+      useRightPanelStore.getState().updateTerminalTabTitle(tabId, shellDisplayName(info.shell));
+    }
+  },
+
+  markSessionExited: (tabId, exitCode) => {
     set((s) => {
       const existing = s.sessions[tabId];
       if (!existing) return {};
       return {
-        sessions: { ...s.sessions, [tabId]: { ...existing, busy } },
+        sessions: {
+          ...s.sessions,
+          [tabId]: {
+            ...existing,
+            status: "exited",
+            exitCode,
+            busy: false,
+            endedAt: Date.now(),
+          },
+        },
       };
     });
   },
 
-  removeSession: (tabId: string) => {
+  markSessionKilled: (tabId) => {
     set((s) => {
-      const next = { ...s.sessions };
-      delete next[tabId];
-      const nextIds = { ...s.sessionIds };
-      delete nextIds[tabId];
-      return { sessions: next, sessionIds: nextIds };
+      const existing = s.sessions[tabId];
+      if (!existing) return {};
+      return {
+        sessions: {
+          ...s.sessions,
+          [tabId]: {
+            ...existing,
+            status: "killed",
+            busy: false,
+            endedAt: Date.now(),
+          },
+        },
+      };
     });
   },
 
-  addQuickCommand: async (label: string, command: string, description?: string) => {
+  setBusy: (tabId, busy) => {
+    set((s) => {
+      const existing = s.sessions[tabId];
+      if (!existing || existing.busy === busy) return {};
+      return {
+        sessions: {
+          ...s.sessions,
+          [tabId]: { ...existing, busy },
+        },
+      };
+    });
+  },
+
+  markCommandSubmitted: (tabId) => {
+    get().setBusy(tabId, true);
+  },
+
+  setSessionCommand: (tabId, command) => {
+    const trimmed = command.trim();
+    if (!trimmed) return;
+    set((s) => {
+      const existing = s.sessions[tabId];
+      if (!existing) return {};
+      return {
+        sessions: {
+          ...s.sessions,
+          [tabId]: { ...existing, lastCommand: trimmed },
+        },
+      };
+    });
+    useRightPanelStore.getState().updateTerminalTabTitle(
+      tabId,
+      terminalTabLabelFromCommand(trimmed),
+    );
+  },
+
+  setLastCommandBlock: (tabId, block) => {
+    set((s) => {
+      const existing = s.sessions[tabId];
+      if (!existing) return {};
+      return {
+        sessions: {
+          ...s.sessions,
+          [tabId]: { ...existing, lastCommandBlock: block },
+        },
+      };
+    });
+  },
+
+  removeSession: (tabId) => {
+    set((s) => {
+      const next = { ...s.sessions };
+      delete next[tabId];
+      return { sessions: next };
+    });
+  },
+
+  destroyTab: (tabId) => {
+    window.electronAPI.terminalDestroyTab({ tabId });
+    get().markSessionKilled(tabId);
+    get().removeSession(tabId);
+  },
+
+  destroyAllTerminalTabs: (tabIds) => {
+    if (tabIds.length === 0) return;
+    window.electronAPI.terminalDestroyTabs({ tabIds });
+    for (const tabId of tabIds) {
+      get().markSessionKilled(tabId);
+      get().removeSession(tabId);
+    }
+  },
+
+  resetProjectState: () => {
+    set({
+      sessions: {},
+      envInfo: null,
+      loaded: false,
+      quickCommands: [],
+      restartNonce: {},
+    });
+  },
+
+  requestRestart: (tabId) => {
+    set((s) => ({
+      restartNonce: {
+        ...s.restartNonce,
+        [tabId]: (s.restartNonce[tabId] ?? 0) + 1,
+      },
+    }));
+  },
+
+  addQuickCommand: async (label, command, description) => {
     const { quickCommands } = get();
     const newCommand: TerminalQuickCommand = {
       id: `tqc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -121,7 +297,7 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
     await persist(updated);
   },
 
-  updateQuickCommand: (id: string, patch) => {
+  updateQuickCommand: (id, patch) => {
     const updated = get().quickCommands.map((c) =>
       c.id === id ? { ...c, ...patch } : c,
     );
@@ -129,27 +305,18 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
     persist(updated);
   },
 
-  removeQuickCommand: async (id: string) => {
+  removeQuickCommand: async (id) => {
     const updated = get().quickCommands.filter((c) => c.id !== id);
     set({ quickCommands: updated });
     await persist(updated);
   },
 
-  reorderQuickCommands: async (commands: TerminalQuickCommand[]) => {
+  reorderQuickCommands: async (commands) => {
     set({ quickCommands: commands });
     await persist(commands);
   },
 
-  addToHistory: (command: string) => {
-    const trimmed = command.trim();
-    if (!trimmed) return;
-    const { commandHistory } = get();
-    const filtered = commandHistory.filter((c) => c !== trimmed);
-    const updated = [trimmed, ...filtered].slice(0, 100);
-    set({ commandHistory: updated });
-  },
-
-  clearHistory: () => {
-    set({ commandHistory: [] });
-  },
 }));
+
+// Re-export types for consumers
+export type { TerminalSessionInfo, TerminalProcessStatus } from "@/types/terminal";

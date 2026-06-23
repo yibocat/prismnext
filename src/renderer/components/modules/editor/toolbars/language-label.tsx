@@ -1,4 +1,4 @@
-import { getLanguageName } from "@/lib/language-mappings";
+import { getLanguageName } from "@/lib/editor/language-mappings";
 
 interface LanguageLabelProps {
   ext: string;

@@ -4,7 +4,7 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useCompileStore, compileCurrentDocument } from "@/stores/compile-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
-import { resolveCompileTarget } from "@/lib/resolve-tex-root";
+import { resolveCompileTarget } from "@/lib/tex/resolve-tex-root";
 
 /**
  * Centralized hook for all texworkspace-specific logic.

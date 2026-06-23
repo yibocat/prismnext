@@ -4,9 +4,14 @@ import { useChatStore, type ChatStreamMessage, type ContentBlock } from "@/store
 import { MarkdownRenderer } from "./markdown-renderer";
 import { ToolWidget, ThinkingWidget } from "./tools";
 import { TurnFooter, extractTurnCopyText } from "./turn-footer";
-import { InlineMessageParts } from "./inline-composer";
-import { partsToPlainText } from "./inline-composer/tokens";
-import type { ComposerPart } from "./inline-composer/tokens";
+import { InlineRichText, InlineTokenChip } from "./inline-tokens";
+import { partsToPlainText, type ComposerPart } from "@/lib/chat/composer-parts";
+import {
+  followActiveTurnTail,
+  getTurnScrollTop,
+  isFollowingStreamTurn,
+  pinActiveTurnTop,
+} from "@/lib/chat/active-turn-scroll";
 import { isToolResultUserMessage } from "./chat-turns";
 import { buildToolResultMap, contentBlocks } from "./tools/tool-result-map";
 import {
@@ -60,21 +65,6 @@ StreamingIndicator.displayName = "StreamingIndicator";
 
 // ─── User Header ───
 
-function getTurnScrollTop(container: HTMLElement, turn: HTMLElement): number {
-  const containerRect = container.getBoundingClientRect();
-  const turnRect = turn.getBoundingClientRect();
-  return container.scrollTop + (turnRect.top - containerRect.top);
-}
-
-function computeBottomSpacer(viewportHeight: number, lastTurnHeight: number): number {
-  if (viewportHeight <= 0) return 0;
-  if (lastTurnHeight <= 0) return viewportHeight;
-  if (lastTurnHeight < viewportHeight) {
-    return viewportHeight - lastTurnHeight;
-  }
-  return 140;
-}
-
 const UserHeader = memo(function UserHeader({
   msg,
   isActiveTurn = false,
@@ -119,8 +109,8 @@ const UserHeader = memo(function UserHeader({
   return (
     <div
       className={cn(
-        "px-3 pb-2",
-        isActiveTurn && "sticky top-0 z-20 bg-background/95 backdrop-blur-sm",
+        "px-3 pb-2 sticky top-0 z-20 bg-background/95 backdrop-blur-sm",
+        isActiveTurn && "z-30",
       )}
     >
       <div
@@ -136,25 +126,20 @@ const UserHeader = memo(function UserHeader({
             {!hasInline && (profileBlocks.length > 0 || commandBlocks.length > 0) && (
               <div className="flex flex-wrap items-center gap-1 mb-1.5">
                 {profileBlocks.map((block, i) => (
-                  <span
+                  <InlineTokenChip
                     key={`profile-${i}`}
-                    className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium text-[length:var(--font-chat-meta)] bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300"
-                  >
-                    @{block.name}
-                  </span>
+                    variant="profile"
+                    prefix="@"
+                    label={block.name ?? "profile"}
+                  />
                 ))}
                 {commandBlocks.map((block, i) => (
-                  <span
+                  <InlineTokenChip
                     key={i}
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-mono font-medium text-[length:var(--font-chat-meta)]",
-                      (block as any).action
-                        ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                        : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-                    )}
-                  >
-                    /{block.name}
-                  </span>
+                    variant={(block as ContentBlock & { action?: string }).action ? "command-action" : "command"}
+                    prefix="/"
+                    label={block.name ?? "command"}
+                  />
                 ))}
               </div>
             )}
@@ -164,7 +149,11 @@ const UserHeader = memo(function UserHeader({
                 long && !expanded ? "line-clamp-2" : "whitespace-pre-wrap break-words",
               )}
             >
-              {hasInline ? <InlineMessageParts parts={inlineParts} /> : text}
+              {hasInline ? (
+                <InlineRichText parts={inlineParts} />
+              ) : text ? (
+                <InlineRichText text={text} />
+              ) : null}
             </span>
           </div>
           <CopyButton text={text} />
@@ -327,65 +316,42 @@ export const ChatMessages = memo(function ChatMessages() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastTurnRef = useRef<HTMLElement>(null);
-  const pendingPinTurnKeyRef = useRef<number | null>(null);
   const shouldAutoScrollRef = useRef(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
-  const [scrollViewportHeight, setScrollViewportHeight] = useState(0);
-  const [bottomSpacerHeight, setBottomSpacerHeight] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const [isActiveTurnMode, setIsActiveTurnMode] = useState(true);
 
-  const measureAndUpdateSpacer = useCallback(() => {
-    const container = scrollRef.current;
-    const turn = lastTurnRef.current;
-    if (!container) return { viewportHeight: 0, spacer: 0 };
-
-    const viewportHeight = container.clientHeight;
-    const lastTurnHeight = turn?.offsetHeight ?? 0;
-    const spacer = computeBottomSpacer(viewportHeight, lastTurnHeight);
-
-    setScrollViewportHeight(viewportHeight);
-    setBottomSpacerHeight(spacer);
-    return { viewportHeight, spacer };
-  }, []);
-
-  /** Pin active turn: user message at viewport top (sticky header keeps it there while scrolling). */
-  const scrollToActiveTurnTop = useCallback((smooth = false) => {
+  const pinToActiveTurn = useCallback((smooth = false) => {
     const container = scrollRef.current;
     const turn = lastTurnRef.current;
     if (!container || !turn) return;
-
-    const turnTop = getTurnScrollTop(container, turn);
-    const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
-    container.scrollTo({
-      top: Math.min(turnTop, maxScroll),
-      behavior: smooth ? "smooth" : "instant",
-    });
+    pinActiveTurnTop(container, turn, smooth);
     setShowScrollButton(false);
   }, []);
 
-  /** When AI output overflows the viewport, follow the growing tail. */
-  const scrollToActiveTurnTail = useCallback((smooth = false) => {
+  const followStreamTail = useCallback((smooth = false) => {
     const container = scrollRef.current;
     const turn = lastTurnRef.current;
     if (!container || !turn) return;
-
-    const turnTop = getTurnScrollTop(container, turn);
-    const turnHeight = turn.offsetHeight;
-    const viewH = container.clientHeight;
-
-    if (turnHeight <= viewH) return;
-
-    container.scrollTo({
-      top: turnTop + turnHeight - viewH,
-      behavior: smooth ? "smooth" : "instant",
-    });
+    followActiveTurnTail(container, turn, smooth);
     setShowScrollButton(false);
   }, []);
 
-  const scrollToBottom = useCallback((smooth = false) => {
+  const returnToActiveTurn = useCallback((smooth = false) => {
+    shouldAutoScrollRef.current = true;
+    setIsActiveTurnMode(true);
+    pinToActiveTurn(smooth);
+  }, [pinToActiveTurn]);
+
+  const syncViewportHeight = useCallback(() => {
     const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight - el.clientHeight, behavior: smooth ? "smooth" : "instant" });
-    setShowScrollButton(false);
+    if (!el) return 0;
+    const next = el.clientHeight;
+    if (next > 0) {
+      el.style.setProperty("--chat-runway-h", `${next}px`);
+    }
+    setViewportHeight((prev) => (prev === next ? prev : next));
+    return next;
   }, []);
 
   // ── Stable computations (committed messages only) ──
@@ -512,104 +478,102 @@ export const ChatMessages = memo(function ChatMessages() {
     ? committed.idxMap.get(turns[turns.length - 1].userMessage!) ?? turns.length
     : turns.length;
 
-  // Re-measure spacer from live DOM whenever content or viewport changes.
-  useLayoutEffect(() => {
-    measureAndUpdateSpacer();
-  }, [displayMessages, lastTurnUserKey, measureAndUpdateSpacer]);
+  /** Apply runway + pin once session content is mounted (fixes cold-start race). */
+  const applyRunwayAndPin = useCallback(() => {
+    const container = scrollRef.current;
+    const turn = lastTurnRef.current;
+    if (!container || !turn) return false;
 
-  useEffect(() => {
+    const h = syncViewportHeight();
+    if (h <= 0) return false;
+
+    void turn.offsetHeight;
+    pinToActiveTurn(false);
+    return true;
+  }, [pinToActiveTurn, syncViewportHeight]);
+
+  useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    syncViewportHeight();
     const ro = new ResizeObserver(() => {
-      measureAndUpdateSpacer();
+      syncViewportHeight();
     });
     ro.observe(el);
-    const turn = lastTurnRef.current;
-    if (turn) ro.observe(turn);
     return () => ro.disconnect();
-  }, [measureAndUpdateSpacer, turns.length]);
+  }, [syncViewportHeight]);
 
-  // ── Auto-scroll (Cursor-style: active turn from top, not bottom-print) ──
+  // ── Active Turn Scroll: newest user message starts at viewport top ──
 
-  // Track whether user is at bottom/following active turn during streaming
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const handleScroll = () => {
       const turn = lastTurnRef.current;
-      let atBottom = false;
+      let activeTurnMode = true;
 
       if (isStreaming && turn) {
+        activeTurnMode = isFollowingStreamTurn(el, turn);
+      } else if (turn) {
         const turnTop = getTurnScrollTop(el, turn);
-        const turnHeight = turn.offsetHeight;
-        const viewH = el.clientHeight;
-        const tailScrollTop = turnTop + turnHeight - viewH;
-
-        if (turnHeight <= viewH) {
-          atBottom = el.scrollTop <= turnTop + 10;
-        } else {
-          atBottom = el.scrollTop >= tailScrollTop - 80;
-        }
-      } else {
-        atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
+        // Reading history means the viewport is above the newest turn.
+        // Scrolling within the newest turn is still active-turn mode.
+        // If maxScroll cannot reach turnTop yet, keep active mode so the
+        // latest turn runway can be applied instead of self-disabling.
+        activeTurnMode = el.scrollTop >= turnTop - 20 || maxScroll < turnTop - 20;
       }
 
-      shouldAutoScrollRef.current = atBottom;
-      setShowScrollButton(!atBottom && el.scrollHeight > el.clientHeight + 100);
+      shouldAutoScrollRef.current = activeTurnMode;
+      setIsActiveTurnMode(activeTurnMode);
+      setShowScrollButton(!activeTurnMode && el.scrollHeight > el.clientHeight + 100);
     };
+    handleScroll();
     el.addEventListener("scroll", handleScroll, { passive: true });
     return () => el.removeEventListener("scroll", handleScroll);
   }, [isStreaming]);
 
-  // Follow tail only when streamed content overflows (do not reset scroll on every token for short turns).
-  useEffect(() => {
-    if (!shouldAutoScrollRef.current || !isStreaming) return;
-    scrollToActiveTurnTail(false);
-  }, [displayMessages, isStreaming, scrollToActiveTurnTail]);
+  useLayoutEffect(() => {
+    shouldAutoScrollRef.current = true;
+    setIsActiveTurnMode(true);
+  }, [lastTurnUserKey]);
 
-  // Pin user message to viewport top when a new stream starts.
+  // Session / tab content just mounted after loading spinner — pin before paint settles.
+  useLayoutEffect(() => {
+    if (isLoadingSession || turns.length === 0) return;
+
+    shouldAutoScrollRef.current = true;
+    setIsActiveTurnMode(true);
+
+    if (!applyRunwayAndPin()) return;
+
+    const id = requestAnimationFrame(() => {
+      applyRunwayAndPin();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [isLoadingSession, turns.length, lastTurnUserKey, activeTabId, applyRunwayAndPin]);
+
   useEffect(() => {
     if (isStreaming) {
       shouldAutoScrollRef.current = true;
-      // Wait for layout (min-height on last turn) before pinning.
-      requestAnimationFrame(() => scrollToActiveTurnTop(false));
+      setIsActiveTurnMode(true);
     }
-  }, [isStreaming, activeTabId, scrollToActiveTurnTop]);
+  }, [isStreaming, activeTabId]);
 
-  // Pin when user sends a new message (turn grows) while not yet streaming.
+  // Pin after layout: minHeight on last turn + viewport known.
   useLayoutEffect(() => {
-    pendingPinTurnKeyRef.current = lastTurnUserKey;
-    shouldAutoScrollRef.current = true;
-  }, [lastTurnUserKey]);
+    if (!isActiveTurnMode && !isStreaming) return;
 
-  useLayoutEffect(() => {
-    if (pendingPinTurnKeyRef.current !== lastTurnUserKey) return;
+    if (!applyRunwayAndPin()) return;
 
-    const container = scrollRef.current;
-    const turn = lastTurnRef.current;
-    if (!container || !turn || scrollViewportHeight <= 0) return;
+    const id = requestAnimationFrame(() => applyRunwayAndPin());
+    return () => cancelAnimationFrame(id);
+  }, [lastTurnUserKey, isStreaming, isActiveTurnMode, viewportHeight, applyRunwayAndPin]);
 
-    const turnTop = getTurnScrollTop(container, turn);
-    const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
-
-    // Spacer may still reflect the previous turn on the first layout pass — grow it until pin is possible.
-    if (turnTop > maxScroll + 1) {
-      setBottomSpacerHeight((h) => h + (turnTop - maxScroll));
-      return;
-    }
-
-    scrollToActiveTurnTop(false);
-    const raf = requestAnimationFrame(() => {
-      scrollToActiveTurnTop(false);
-      pendingPinTurnKeyRef.current = null;
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [
-    bottomSpacerHeight,
-    lastTurnUserKey,
-    scrollToActiveTurnTop,
-    scrollViewportHeight,
-  ]);
+  useEffect(() => {
+    if (!shouldAutoScrollRef.current || !isStreaming) return;
+    followStreamTail(false);
+  }, [displayMessages, isStreaming, followStreamTail]);
 
   // ── Loading / empty state ──
 
@@ -638,8 +602,12 @@ export const ChatMessages = memo(function ChatMessages() {
 
   return (
     <div className="relative flex-1 min-h-0 min-w-0 overflow-hidden">
-      <div ref={scrollRef} className="absolute inset-0 overflow-y-auto overflow-x-hidden scroll-smooth">
-        <div className="min-h-full w-full min-w-0 max-w-3xl mx-auto">
+      <div
+        ref={scrollRef}
+        data-chat-scroll
+        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
+      >
+        <div className="w-full min-w-0 max-w-3xl mx-auto">
           {turns.map((turn, turnIdx) => {
             const isLastTurn = turnIdx === turns.length - 1;
             const isTurnComplete = !isLastTurn || !isStreaming;
@@ -650,6 +618,11 @@ export const ChatMessages = memo(function ChatMessages() {
             <section
               key={turn.userMessage ? `turn-${committed.idxMap.get(turn.userMessage) ?? turnIdx}` : `turn-orphan-${turnIdx}`}
               ref={isLastTurn ? lastTurnRef : undefined}
+              style={
+                isLastTurn
+                  ? { minHeight: "var(--chat-runway-h, 100%)" }
+                  : undefined
+              }
             >
               {turn.userMessage && (
                 <UserHeader msg={turn.userMessage} isActiveTurn={isLastTurn} />
@@ -696,14 +669,6 @@ export const ChatMessages = memo(function ChatMessages() {
             </section>
             );
           })}
-          {/* Scroll runway: long replies can scroll until AI ends with blank above composer. */}
-          {bottomSpacerHeight > 0 && (
-            <div
-              aria-hidden
-              className="shrink-0 pointer-events-none"
-              style={{ height: bottomSpacerHeight }}
-            />
-          )}
         </div>
       </div>
 
@@ -713,7 +678,7 @@ export const ChatMessages = memo(function ChatMessages() {
           {showScrollButton && (
             <button
               type="button"
-              onClick={() => scrollToBottom(true)}
+              onClick={() => returnToActiveTurn(true)}
               className="pointer-events-auto flex size-8 items-center justify-center rounded-full border border-border bg-background shadow-md text-muted-foreground hover:text-foreground transition-all hover:shadow-lg"
             >
               <ArrowDownIcon className="size-4" />

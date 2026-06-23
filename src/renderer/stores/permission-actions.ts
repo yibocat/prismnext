@@ -1,6 +1,7 @@
-import { useChatStore, type ContentBlock } from "@/stores/chat-store";
+import { handleBashPermissionDenied } from "@/lib/terminal/ai-bridge";
 import { useChangesStore } from "@/stores/changes-store";
 import { usePermissionStore } from "@/stores/permission-store";
+import { useChatStore, type ContentBlock } from "@/stores/chat-store";
 import { usesProposedChange } from "@/components/modules/chat/tools/tool-meta";
 
 /** Keep in sync with main `PERMISSION_TIMEOUT_MS`. */
@@ -85,6 +86,19 @@ export async function finalizePermissionDeny(opts: {
     permissionStore.markToolResolved(tabId, toolCallId);
     if (!hasToolResult(tabId, toolCallId)) {
       useChatStore.getState()._injectToolResult(tabId, toolCallId, reason, true);
+    }
+    const tn = (toolName || "").toLowerCase();
+    if ((tn === "bash" || tn === "shell") && toolCallId) {
+      const tabTools = useChatStore.getState().tabs.find((t) => t.id === tabId);
+      const toolUseMsg = tabTools?.messages
+        .flatMap((m) => m.message?.content ?? [])
+        .find((b) => b.type === "tool_use" && b.id === toolCallId);
+      handleBashPermissionDenied(
+        tabId,
+        toolCallId,
+        tn,
+        toolUseMsg?.input as Record<string, unknown> | undefined,
+      );
     }
     if (usesProposedChange(toolName || "")) {
       await useChangesStore.getState().rejectChange(toolCallId);

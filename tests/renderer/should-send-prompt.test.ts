@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   shouldSendPromptToAgent,
 } from "../../src/renderer/components/modules/chat/inline-composer/compile-composer-prompt";
-import type { ComposerPart } from "../../src/renderer/components/modules/chat/inline-composer/tokens";
+import type { ComposerPart } from "../../src/renderer/lib/chat/composer-parts";
 
 describe("shouldSendPromptToAgent", () => {
   const base = {
@@ -33,6 +33,26 @@ describe("shouldSendPromptToAgent", () => {
     expect(
       shouldSendPromptToAgent(
         { ...base, promptText: "x", aiCommandNames: ["review"], actionCommands: [] },
+        parts,
+        0,
+      ),
+    ).toBe(true);
+  });
+
+  it("sends for terminal-snippet parts", () => {
+    const parts: ComposerPart[] = [
+      {
+        type: "terminal-snippet",
+        id: "t1",
+        label: "$ npm test",
+        command: "npm test",
+        output: "ok",
+        exitCode: 0,
+      },
+    ];
+    expect(
+      shouldSendPromptToAgent(
+        { promptText: "[terminal: $ npm test]", aiCommandNames: [], actionCommands: [] },
         parts,
         0,
       ),

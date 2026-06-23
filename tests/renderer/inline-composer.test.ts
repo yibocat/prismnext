@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { detectQueryAtCursor } from "../../src/renderer/components/modules/chat/inline-composer/query";
-import { createTokenId, partsToPlainText, isComposerEmpty } from "../../src/renderer/components/modules/chat/inline-composer/tokens";
+import { createTokenId, partsToPlainText, partsToAgentText, isComposerEmpty, mergeAdjacentText, parseTextToComposerParts, parseTextWithLinks, hasLinkParts } from "../../src/renderer/lib/chat/composer-parts";
 import {
   partsToDoc,
   docToParts,
   parseDraftJson,
   draftToJson,
-  mergeAdjacentText,
 } from "../../src/renderer/components/modules/chat/inline-composer/serialize";
 import { loadDraftParts } from "../../src/renderer/components/modules/chat/inline-composer/draft-utils";
 
@@ -101,5 +100,56 @@ describe("inline composer serialize", () => {
         },
       ]),
     ).toBe(false);
+  });
+});
+
+describe("parseTextWithLinks", () => {
+  it("extracts https URLs from plain text", () => {
+    const parts = parseTextWithLinks("see https://example.com/docs for info");
+    expect(hasLinkParts(parts)).toBe(true);
+    expect(parts.find((p) => p.type === "link")).toMatchObject({
+      type: "link",
+      url: "https://example.com/docs",
+      label: "example.com",
+    });
+  });
+
+  it("handles trailing punctuation", () => {
+    const parts = parseTextWithLinks("Visit https://arxiv.org/abs/1234.");
+    const link = parts.find((p) => p.type === "link");
+    expect(link && link.type === "link" ? link.url : "").toBe("https://arxiv.org/abs/1234");
+    expect(parts.some((p) => p.type === "text" && p.text === ".")).toBe(true);
+  });
+
+  it("does not treat Python attribute access as URLs", () => {
+    const code = "import time\nfor i in range(3):\n    time.sleep(0.35)\n    time.sleep(0.5)";
+    const parts = parseTextWithLinks(code);
+    expect(hasLinkParts(parts)).toBe(false);
+  });
+
+  it("still linkifies bare domains with common TLDs", () => {
+    const parts = parseTextWithLinks("see example.com for docs");
+    expect(parts.find((p) => p.type === "link")).toMatchObject({
+      type: "link",
+      url: "https://example.com",
+      label: "example.com",
+    });
+  });
+});
+
+describe("parseTextToComposerParts", () => {
+  it("converts pasted URLs into link tokens", () => {
+    const parts = parseTextToComposerParts("see https://example.com/path for more");
+    expect(parts.some((p) => p.type === "link" && p.url === "https://example.com/path")).toBe(true);
+    expect(parts.some((p) => p.type === "text" && p.text.includes("see"))).toBe(true);
+  });
+
+  it("uses full URL in agent text but short label in display text", () => {
+    const parts = parseTextToComposerParts("https://example.com");
+    const link = parts.find((p) => p.type === "link");
+    expect(link).toBeDefined();
+    if (link?.type !== "link") return;
+    expect(partsToPlainText([link])).toBe(link.label);
+    expect(partsToAgentText([link])).toBe(link.url);
   });
 });

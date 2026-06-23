@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { AppBrowserLink } from "@/components/modules/shared/app-browser-link";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
 import {
@@ -31,7 +32,7 @@ import {
   parsePastedMcpJson,
   serializeMcpConfig,
   type McpServerEntry,
-} from "@/lib/mcp-config";
+} from "@/lib/agent/mcp-config";
 import {
   MCP_PRESETS,
   MCP_CATEGORY_LABELS,
@@ -41,7 +42,7 @@ import {
   presetRequiresFields,
   presetToEntry,
   type McpPreset,
-} from "@/lib/mcp-presets";
+} from "@/lib/agent/mcp-presets";
 
 const CATEGORY_HEADER =
   "text-[length:var(--font-size-12)] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2";
@@ -107,14 +108,12 @@ function PresetFieldInputs({
         </div>
       ))}
       {preset.docsUrl && (
-        <a
+        <AppBrowserLink
           href={preset.docsUrl}
-          target="_blank"
-          rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-[length:var(--font-size-11)] text-primary hover:underline"
         >
           Documentation <ExternalLinkIcon className="size-3" />
-        </a>
+        </AppBrowserLink>
       )}
     </div>
   );

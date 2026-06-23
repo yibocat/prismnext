@@ -1,6 +1,7 @@
 import { useState, memo } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { SearchIcon, ExternalLinkIcon } from "lucide-react";
+import { openUrlInBrowser } from "@/lib/browser-link";
 import { ToolCard, param } from "./shared";
 
 interface SearchResult {
@@ -66,16 +67,17 @@ export const WebSearchWidget = memo(function WebSearchWidget({
         <div className="space-y-2">
           {results.slice(0, 20).map((r, i) => (
             <div key={i} className="border-b border-border/50 pb-2 last:border-0 last:pb-0">
-              <a
-                href={r.url || "#"}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-info hover:text-info/80 font-medium text-[length:var(--font-chat-message)] flex items-center gap-1"
-                onClick={(e) => e.stopPropagation()}
+              <button
+                type="button"
+                className="text-info hover:text-info/80 font-medium text-[length:var(--font-chat-message)] flex items-center gap-1 text-left"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (r.url) openUrlInBrowser(r.url);
+                }}
               >
                 {r.title || r.url || `Result ${i + 1}`}
                 <ExternalLinkIcon className="size-3 shrink-0" />
-              </a>
+              </button>
               {r.url && (
                 <div className="text-muted-foreground text-[length:var(--font-chat-meta)] truncate">
                   {r.url}

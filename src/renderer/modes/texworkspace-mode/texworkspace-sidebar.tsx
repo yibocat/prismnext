@@ -13,8 +13,8 @@ import {
   type TodoEntry,
 } from "@/hooks/use-latex-structure";
 import { useProjectSearch, type SearchResult } from "@/hooks/use-project-search";
-import { resolveCompileTarget } from "@/lib/resolve-tex-root";
-import { buildFileTree } from "@/lib/file-tree";
+import { resolveCompileTarget } from "@/lib/tex/resolve-tex-root";
+import { buildFileTree } from "@/lib/files/file-tree";
 import {
   ChevronRightIcon,
   FileTextIcon,
@@ -56,7 +56,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { getFileIconName } from "@/lib/file-icon-class";
+import { getFileIconName } from "@/lib/files/file-icon-class";
 import { Icon } from "@iconify/react";
 
 // ─── Constants ───

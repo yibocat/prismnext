@@ -1,4 +1,4 @@
-import type { ModeDefinition } from "@/lib/mode-registry";
+import type { ModeDefinition } from "@/lib/workspace/mode-registry";
 import { GitBranchIcon } from "lucide-react";
 import { GitSidebar } from "./git-sidebar";
 import { GitToolbarWrapper, GitContent } from "./git-content";

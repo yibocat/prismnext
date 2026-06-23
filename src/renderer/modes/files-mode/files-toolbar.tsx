@@ -1,5 +1,5 @@
 import { useDocumentStore } from "@/stores/document-store";
-import { useRightPanelStore } from "@/stores/right-panel-store";
+import { openUrlInBrowser } from "@/lib/browser-link";
 import { GlobeIcon } from "lucide-react";
 import { MarkdownToolbar } from "@/components/modules/editor/toolbars/markdown-toolbar";
 import { LanguageLabel } from "@/components/modules/editor/toolbars/language-label";
@@ -14,11 +14,8 @@ function HtmlPreviewButton({ filePath }: { filePath: string }) {
   const handlePreview = () => {
     if (!projectRoot) return;
     const absPath = `${projectRoot}/${filePath}`;
-    // file:/// for macOS/Linux (empty authority), encodeURI for spaces/special chars
     const fileUrl = `file://${encodeURI(absPath)}`;
-    const store = useRightPanelStore.getState();
-    const tabId = store.newBrowserTab();
-    store.navigateBrowserTab(tabId, fileUrl);
+    openUrlInBrowser(fileUrl);
   };
 
   return (

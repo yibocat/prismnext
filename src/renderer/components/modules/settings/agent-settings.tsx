@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { BotIcon, PlusIcon, RotateCcwIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
+import { useLayoutStore } from "@/stores/layout-store";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
@@ -13,6 +14,7 @@ import {
   parseProfileModel,
   type ProfileFormState,
 } from "./profile-editor-dialog";
+import { AiTerminalSettingsFields } from "./ai-terminal-settings-fields";
 import type {
   AgentProfileInfo,
   ProfileEditorOptions,
@@ -342,6 +344,25 @@ export function AgentSettings() {
               New profile
             </Button>
           )}
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <p className={cn(CATEGORY_HEADER, "mb-0")}>AI Terminal</p>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="shrink-0 text-muted-foreground"
+              onClick={() => useLayoutStore.getState().setSettingsCategory("terminal")}
+            >
+              All terminal settings
+            </Button>
+          </div>
+          <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-2">
+            How bash commands open, keep, and clean up ✨ AI terminal tabs. Output is always
+            saved to the session log.
+          </p>
+          <AiTerminalSettingsFields hideExecutionMode />
         </div>
 
         {!projectRoot ? (

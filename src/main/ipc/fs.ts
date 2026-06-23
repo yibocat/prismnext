@@ -117,6 +117,24 @@ export function registerFsHandlers(): void {
     return { canceled: false, path: result.filePaths[0] };
   });
 
+  ipcMain.handle("dialog:openFile", async () => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (!win) {
+      return { canceled: true, paths: [] as string[] };
+    }
+
+    const result = await dialog.showOpenDialog(win, {
+      properties: ["openFile", "multiSelections"],
+      title: "Open File",
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { canceled: true, paths: [] as string[] };
+    }
+
+    return { canceled: false, paths: result.filePaths };
+  });
+
   // ─── Path check ───
 
   ipcMain.handle("fs:exists", async (_event, args: { absPath: string }) => {

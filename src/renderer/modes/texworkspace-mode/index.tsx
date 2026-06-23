@@ -1,4 +1,4 @@
-import type { ModeDefinition } from "@/lib/mode-registry";
+import type { ModeDefinition } from "@/lib/workspace/mode-registry";
 import { FileType } from "lucide-react";
 import { TexworkspaceSidebar } from "./texworkspace-sidebar";
 import { TexworkspaceContent, TexworkspaceToolbarWrapper } from "./texworkspace-content";

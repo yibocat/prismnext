@@ -1,8 +1,8 @@
 import { useMemo } from "react";
-import type { RightTab } from "@/lib/mode-registry";
+import type { RightTab } from "@/lib/workspace/mode-registry";
 import { NoFileOpen } from "@/components/modules/editor/no-file-open";
-import { TabContext, type TabContextValue } from "@/lib/tab-context";
-import { resolveViewer, wrapTabContext } from "@/lib/mode-utils";
+import { TabContext, type TabContextValue } from "@/lib/workspace/tab-context";
+import { resolveViewer, wrapTabContext } from "@/lib/workspace/mode-utils";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { Button } from "@/components/ui/button";

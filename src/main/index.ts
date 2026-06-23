@@ -4,8 +4,11 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { exec } from "node:child_process";
 import { registerIpcHandlers } from "./ipc/index";
 import { setMainWindow, registerWindowHandlers } from "./ipc/window";
+import { installApplicationMenu } from "./menu";
 import { disposeChat } from "./ipc/chat";
 import { destroyAllTerminalSessions } from "./ipc/terminal";
+import { destroyAllAiPty } from "./services/ai-pty";
+import { startTerminalBridge, stopTerminalBridge, setTerminalBridgeWindow } from "./services/terminal-bridge";
 import { createLogger } from "./services/logger";
 
 const log = createLogger("main", "startup");
@@ -86,8 +89,11 @@ function createWindow() {
 
   mainWindow = new BrowserWindow(windowConfig);
 
+  installApplicationMenu(() => mainWindow);
+
   // Make window available to IPC handlers and register window events
   setMainWindow(mainWindow);
+  setTerminalBridgeWindow(mainWindow);
   registerWindowHandlers();
 
   // Re-warm child_process after macOS App Nap / background suspension.
@@ -110,7 +116,10 @@ function createWindow() {
 
   mainWindow.on("closed", () => {
     disposeChat();
+    destroyAllAiPty();
     destroyAllTerminalSessions();
+    stopTerminalBridge();
+    setTerminalBridgeWindow(null);
     import("./ipc/log").then((m) => m.disposeLogger());
     mainWindow = null;
   });
@@ -130,6 +139,7 @@ function createWindow() {
 registerIpcHandlers();
 
 app.whenReady().then(async () => {
+  startTerminalBridge();
   createWindow();
 
   // App-level ACP warm-up — spawn opencode once at startup.

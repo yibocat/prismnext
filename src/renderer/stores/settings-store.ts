@@ -20,6 +20,8 @@ export interface AppSettings {
   lastProjectPath?: string | null;
   /** Last opened file — used for smart expand on project open */
   lastActiveFileId?: string | null;
+  /** Recently opened files across sessions */
+  recentOpenedFiles?: Array<{ id: string; name: string; lastOpened: number }>;
   /** Auto-create main.tex template on new project creation */
   autoCreateMainTex?: boolean;
   /** Default document class for main.tex template */
@@ -53,6 +55,18 @@ export interface AppSettings {
   aiVerifiedProviders?: string[];
   /** Chat tool permission preset: ask | auto | readonly */
   permissionMode?: PermissionMode;
+  /** Agent shell execution: mirror (OpenCode bash + UI mirror) | pty (custom bash tool) */
+  agentTerminalMode?: "mirror" | "pty";
+  /** Auto-open AI terminal tab when agent runs bash (default true). */
+  aiTerminalAutoOpen?: boolean;
+  /** Ms to keep AI terminal tab after command exits (default 60s). */
+  aiTerminalPostExitGraceMs?: number;
+  /** Ms of session inactivity before GC closes idle AI tab (default 10 min). */
+  aiTerminalIdleCloseMs?: number;
+  /** Closing AI terminal tab while running also cancels the command (default false). */
+  aiTerminalCloseTabKillsProcess?: boolean;
+  /** Show AI terminal status in session title hover card (default true). */
+  aiTerminalShowSessionIndicator?: boolean;
   /** User-added custom API providers */
   aiCustomProviders?: { id: string; name: string; baseUrl: string }[];
 }
@@ -67,6 +81,12 @@ const defaults: AppSettings = {
   editorSyntaxTheme: "prism",
   defaultWorkspaceDirs: [{ function: "manuscript", name: "manuscript", mainTex: "main.tex" }],
   permissionMode: DEFAULT_PERMISSION_MODE,
+  agentTerminalMode: "pty",
+  aiTerminalAutoOpen: true,
+  aiTerminalPostExitGraceMs: 60_000,
+  aiTerminalIdleCloseMs: 600_000,
+  aiTerminalCloseTabKillsProcess: false,
+  aiTerminalShowSessionIndicator: true,
 };
 
 interface SettingsState {

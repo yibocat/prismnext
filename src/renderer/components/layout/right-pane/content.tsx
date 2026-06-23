@@ -1,6 +1,6 @@
 import { Suspense } from "react";
-import type { RightTab } from "@/lib/mode-registry";
-import { modeRegistry } from "@/lib/mode-registry";
+import type { RightTab } from "@/lib/workspace/mode-registry";
+import { modeRegistry } from "@/lib/workspace/mode-registry";
 
 interface PaneContentProps {
   activeTab: RightTab | undefined;

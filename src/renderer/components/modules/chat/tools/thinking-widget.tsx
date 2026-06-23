@@ -1,7 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useChatStore } from "@/stores/chat-store";
 import { BrainIcon, ChevronDownIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  captureViewportAnchor,
+  restoreViewportAnchor,
+  type ViewportAnchorCapture,
+} from "@/lib/chat/preserve-viewport-anchor";
 import { TOOL_EXPANDED_CONTENT_CLASS } from "./shared";
 
 // ─── LocalStorage persistence ───
@@ -40,7 +45,23 @@ export function ThinkingWidget({
   const globalStreaming = useChatStore((s) => s.isStreaming);
   const isStreaming = isStreamingMsg ?? globalStreaming;
 
-  const toggleExpanded = () => setExpanded((prev) => !prev);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const pendingAnchorRef = useRef<ViewportAnchorCapture | null>(null);
+
+  useLayoutEffect(() => {
+    const anchor = toggleRef.current;
+    const captured = pendingAnchorRef.current;
+    if (!anchor || !captured) return;
+    restoreViewportAnchor(captured, anchor);
+    pendingAnchorRef.current = null;
+  }, [expanded]);
+
+  const toggleExpanded = () => {
+    if (toggleRef.current) {
+      pendingAnchorRef.current = captureViewportAnchor(toggleRef.current);
+    }
+    setExpanded((prev) => !prev);
+  };
 
   useEffect(() => {
     if (persistKey) saveThinkingState(persistKey, expanded);
@@ -69,8 +90,10 @@ export function ThinkingWidget({
   return (
     <div>
       <button
+        ref={toggleRef}
         type="button"
         className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors group"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={toggleExpanded}
       >
         <BrainIcon className="size-3.5 shrink-0" />

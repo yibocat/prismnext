@@ -13,3 +13,5 @@ export { SlashCommandsSettings } from "./slash-commands-settings";
 export { ToolsMcpSettings } from "./tools-mcp-settings";
 export { SkillsSettings } from "./skills-settings";
 export { WorkspaceSettings } from "./workspace-settings";
+export { TerminalSettings } from "./terminal-settings";
+export { AiTerminalSettingsFields } from "./ai-terminal-settings-fields";

@@ -26,15 +26,15 @@ import {
   isValidSkillName,
   normalizePastedSkill,
   parseSkillMd,
-} from "@/lib/skill-config";
+} from "@/lib/agent/skill-config";
 import {
   SKILL_CATEGORY_LABELS,
   type BundledSkillInfo,
   type SkillCategory,
-} from "@/lib/skill-categories";
+} from "@/lib/agent/skill-categories";
 import {
   PRISM_CURATED_LIBRARY,
-} from "@/lib/skill-libraries";
+} from "@/lib/agent/skill-libraries";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
 

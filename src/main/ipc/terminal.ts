@@ -1,6 +1,8 @@
 import { ipcMain, BrowserWindow } from "electron";
 import * as terminalService from "../services/terminal";
 import * as terminalConfig from "../services/terminal-config";
+import { runAiBashJob, setAiBashRunnerWindow } from "../services/ai-bash-runner";
+import { destroyAllAiPty } from "../services/ai-pty";
 import type { TerminalConfig } from "../services/terminal-config";
 
 export function registerTerminalHandlers(): void {
@@ -8,25 +10,30 @@ export function registerTerminalHandlers(): void {
 
   ipcMain.handle(
     "terminal:create",
-    async (event, args: { sessionId: string; projectRoot: string }) => {
+    async (
+      event,
+      args: { sessionId: string; tabId: string; projectRoot: string; cwd: string },
+    ) => {
       const win = BrowserWindow.fromWebContents(event.sender);
       if (!win) throw new Error("No window available");
 
-      const onData = (sid: string, data: string) => {
+      const onData = (sid: string, tabId: string, data: string) => {
         if (win.isDestroyed()) return;
-        win.webContents.send("terminal:data", { sessionId: sid, data });
+        win.webContents.send("terminal:data", { sessionId: sid, tabId, data });
       };
-      const onExit = (sid: string, exitCode: number) => {
+      const onExit = (sid: string, tabId: string, exitCode: number) => {
         if (win.isDestroyed()) return;
-        win.webContents.send("terminal:exit", { sessionId: sid, exitCode });
+        win.webContents.send("terminal:exit", { sessionId: sid, tabId, exitCode });
       };
 
-      return terminalService.createSession(
-        args.sessionId,
-        args.projectRoot,
+      return terminalService.createSession({
+        sessionId: args.sessionId,
+        tabId: args.tabId,
+        projectRoot: args.projectRoot,
+        cwd: args.cwd,
         onData,
         onExit,
-      );
+      });
     },
   );
 
@@ -44,6 +51,41 @@ export function registerTerminalHandlers(): void {
       terminalService.destroySessionsByPrefix(args.tabId + ":");
     },
   );
+
+  ipcMain.handle(
+    "terminal:destroyTabs",
+    async (_event, args: { tabIds: string[] }) => {
+      terminalService.destroySessionsByTabIds(args.tabIds);
+    },
+  );
+
+  ipcMain.handle(
+    "terminal:runAiBash",
+    async (
+      event,
+      args: {
+        sessionId: string;
+        chatTabId: string;
+        toolCallId: string;
+        command: string;
+        cwd?: string;
+      },
+    ) => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (win) setAiBashRunnerWindow(win);
+      return runAiBashJob({
+        sessionId: args.sessionId,
+        chatTabId: args.chatTabId,
+        toolCallId: args.toolCallId,
+        command: args.command,
+        cwd: args.cwd || process.cwd(),
+      });
+    },
+  );
+
+  ipcMain.handle("terminal:destroyAllAiPty", async () => {
+    destroyAllAiPty();
+  });
 
   // ─── I/O ───
 

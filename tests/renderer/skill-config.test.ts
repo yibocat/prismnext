@@ -4,7 +4,7 @@ import {
   isValidSkillName,
   normalizePastedSkill,
   parseSkillMd,
-} from "../../src/renderer/lib/skill-config";
+} from "../../src/renderer/lib/agent/skill-config";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 

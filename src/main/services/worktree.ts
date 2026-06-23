@@ -78,29 +78,10 @@ export async function createWorktree(
     throw new Error(`Worktree "${resolvedName}" already exists`);
   }
 
-  // Ensure git is initialized
   if (!existsSync(join(projectRoot, ".git"))) {
-    await execGit(projectRoot, ["init"]);
-    // Write default .gitignore so .prismnext/ is not tracked
-    const gitignorePath = join(projectRoot, ".gitignore");
-    if (!existsSync(gitignorePath)) {
-      const { writeFile } = await import("node:fs/promises");
-      const defaultGitignore = [
-        "# LaTeX build artifacts",
-        "*.aux", "*.log", "*.out", "*.toc", "*.bbl", "*.blg", "*.synctex.gz",
-        "*.fdb_latexmk", "*.fls", "*.xdv", "*.nav", "*.snm", "*.vrb",
-        "",
-        "# Prism internal data",
-        ".prismnext/",
-        ".prism-worktree-meta",
-        "",
-        "# System",
-        ".DS_Store", "Thumbs.db",
-        "*.swp", "*.swo", "*~",
-        "",
-      ].join("\n") + "\n";
-      try { await writeFile(gitignorePath, defaultGitignore); } catch {}
-    }
+    throw new Error(
+      "Git repository required. Initialize Git in this project before creating a worktree.",
+    );
   }
 
   // Ensure at least one commit exists (git worktree add requires it)

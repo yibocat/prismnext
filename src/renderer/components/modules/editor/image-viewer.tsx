@@ -1,5 +1,5 @@
 import { useDocumentStore } from "@/stores/document-store";
-import { useTabContext } from "@/lib/tab-context";
+import { useTabContext } from "@/lib/workspace/tab-context";
 
 export function ImageViewer() {
   const { tab } = useTabContext();

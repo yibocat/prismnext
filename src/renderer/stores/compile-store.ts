@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 import { AUTO_COMPILE_DEBOUNCE } from "@/styles/constants";
 import { useDocumentStore } from "./document-store";
 import { useWorkspaceConfigStore } from "./workspace-config-store";
-import { resolveCompileTarget } from "@/lib/resolve-tex-root";
+import { resolveCompileTarget } from "@/lib/tex/resolve-tex-root";
 
 // ─── PDF Bytes + Path Cache (outside Zustand state) ───
 

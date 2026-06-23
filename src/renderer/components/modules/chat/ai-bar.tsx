@@ -9,8 +9,6 @@ import {
   PlusIcon,
   FileTextIcon,
   ImageIcon,
-  LinkIcon,
-  Code2Icon,
   XIcon,
   Maximize2Icon,
 } from "lucide-react";
@@ -18,7 +16,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { WorktreeSelector } from "./worktree-selector";
@@ -325,23 +322,14 @@ export function AiBar() {
                       onClick={expandFromDropdown}
                     >
                       <FileTextIcon className="size-3.5" />
-                      <span>Select file</span>
+                      <span>Add file</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="text-[length:var(--font-chat-meta)]"
                       onClick={expandFromDropdown}
                     >
                       <ImageIcon className="size-3.5" />
-                      <span>Upload image</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-[length:var(--font-chat-meta)]" disabled>
-                      <LinkIcon className="size-3.5" />
-                      <span>Add link</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="text-[length:var(--font-chat-meta)]" disabled>
-                      <Code2Icon className="size-3.5" />
-                      <span>Add code snippet</span>
+                      <span>Add image</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

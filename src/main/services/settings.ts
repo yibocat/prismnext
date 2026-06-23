@@ -24,7 +24,21 @@ export interface AppSettings {
   /** Built-in slash command enable/disable states. { "compile": false, ... } */
   builtinCommands?: Record<string, boolean>;
 
-  // Renderer-side dynamic keys — stored by electron-store but read via
+  /** Agent shell: mirror (default) or pty (Prism bash tool + bridge) */
+  agentTerminalMode?: "mirror" | "pty";
+
+  /** Auto-open AI terminal when agent runs bash (default true). */
+  aiTerminalAutoOpen?: boolean;
+  /** Ms to keep AI terminal tab after command exits. */
+  aiTerminalPostExitGraceMs?: number;
+  /** Ms of session inactivity before GC closes idle AI tab. */
+  aiTerminalIdleCloseMs?: number;
+  /** Closing AI terminal tab while running also cancels the command. */
+  aiTerminalCloseTabKillsProcess?: boolean;
+  /** Show AI terminal status in session title hover card. */
+  aiTerminalShowSessionIndicator?: boolean;
+
+  // Renderer-side dynamic keys
   // the catch-all `raw` loop in getSettings(). Listed here for documentation.
   [key: string]: unknown;
 }
@@ -34,6 +48,7 @@ const defaults: AppSettings = {
   theme: "dark",
   sidebarCollapsed: false,
   rightPanelCollapsed: false,
+  agentTerminalMode: "pty",
   agentSystemPrompt: "",
   promptModules: {
     "workspace-folders": true,

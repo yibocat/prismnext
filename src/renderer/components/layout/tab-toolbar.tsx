@@ -1,5 +1,8 @@
-import { memo, type ReactNode } from "react";
+import { memo, type ReactNode, useCallback } from "react";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useDocumentStore } from "@/stores/document-store";
+import { useRightPanelStore } from "@/stores/right-panel-store";
+import { collapseBreadcrumbSegments } from "@/lib/files/breadcrumb-segments";
 import { cn } from "@/lib/utils";
 import { ListTreeIcon, FolderIcon } from "lucide-react";
 import {
@@ -15,23 +18,42 @@ interface TabToolbarProps {
   onToggleSidebar?: () => void;
   filePath?: string;
   projectName?: string;
+  isExternal?: boolean;
   hideSpacer?: boolean;
   hideBreadcrumb?: boolean;
 }
 
-/** Turn "manuscript/chapter/intro.tex" into ["manuscript", "chapter", "intro.tex"] */
-function pathSegments(filePath: string): string[] {
+/** Turn a path into breadcrumb segments */
+function pathSegments(filePath: string, isExternal?: boolean): string[] {
+  if (isExternal) {
+    return filePath.split(/[/\\]/).filter(Boolean);
+  }
   return filePath.split("/").filter(Boolean);
 }
 
-export const TabToolbar = memo(function TabToolbar({ children, onToggleSidebar, filePath, projectName, hideSpacer, hideBreadcrumb }: TabToolbarProps) {
+export const TabToolbar = memo(function TabToolbar({ children, onToggleSidebar, filePath, projectName, isExternal, hideSpacer, hideBreadcrumb }: TabToolbarProps) {
   const rightSidebarOpen = useLayoutStore((s) => s.rightSidebarOpen);
   const toggleRightSidebar = useLayoutStore((s) => s.toggleRightSidebar);
   const setFileTreeNavigatePath = useLayoutStore((s) => s.setFileTreeNavigatePath);
   const toggle = onToggleSidebar ?? toggleRightSidebar;
 
-  const segments = filePath ? pathSegments(filePath) : [];
+  const segments = filePath ? pathSegments(filePath, isExternal) : [];
   const hasBreadcrumb = segments.length > 0;
+  const collapsed = collapseBreadcrumbSegments(segments);
+
+  const navigateToPath = useCallback(
+    (cumPath: string) => {
+      if (!isExternal) {
+        useLayoutStore.getState().setFileTreeNavigatePath(cumPath);
+      }
+      const meta = useDocumentStore.getState().fileMetadata.get(cumPath);
+      if (meta) {
+        useRightPanelStore.getState().openFile(cumPath, cumPath, meta.name, { pin: true });
+        useDocumentStore.getState().setActiveFile(cumPath);
+      }
+    },
+    [isExternal],
+  );
 
   return (
     <div className="flex h-[var(--height-right-area-subtoolbar)] shrink-0 items-center px-2 gap-0.5 border-t border-border select-none text-[length:var(--font-size-12)] text-muted-foreground">
@@ -39,7 +61,7 @@ export const TabToolbar = memo(function TabToolbar({ children, onToggleSidebar, 
       {!hideBreadcrumb && hasBreadcrumb && (
         <Breadcrumb className="shrink-0">
           <BreadcrumbList>
-            {projectName && (
+            {projectName && !isExternal && (
               <>
                 <BreadcrumbItem>
                   <button
@@ -55,22 +77,40 @@ export const TabToolbar = memo(function TabToolbar({ children, onToggleSidebar, 
                 <BreadcrumbSeparator />
               </>
             )}
-            {segments.map((seg, i) => {
-              const isLast = i === segments.length - 1;
+            {collapsed.map((item, i) => {
+              const isLast = i === collapsed.length - 1;
+              if (item.isEllipsis) {
+                return (
+                  <BreadcrumbItem key="ellipsis">
+                    <span className="text-muted-foreground px-0.5">…</span>
+                    <BreadcrumbSeparator />
+                  </BreadcrumbItem>
+                );
+              }
+              const seg = item.label;
+              const segIndex = item.index;
               if (isLast) {
                 return (
-                  <BreadcrumbItem key={`${i}-${seg}`}>
+                  <BreadcrumbItem key={`${segIndex}-${seg}`}>
                     <BreadcrumbPage>{seg}</BreadcrumbPage>
                   </BreadcrumbItem>
                 );
               }
-              const cumPath = segments.slice(0, i + 1).join("/");
+              if (isExternal) {
+                return (
+                  <BreadcrumbItem key={`${segIndex}-${seg}`}>
+                    <span className="text-muted-foreground">{seg}</span>
+                    <BreadcrumbSeparator />
+                  </BreadcrumbItem>
+                );
+              }
+              const cumPath = segments.slice(0, segIndex + 1).join("/");
               return (
-                <BreadcrumbItem key={`${i}-${seg}`}>
+                <BreadcrumbItem key={`${segIndex}-${seg}`}>
                   <button
                     type="button"
                     className="hover:text-foreground transition-colors cursor-pointer"
-                    onClick={() => setFileTreeNavigatePath(cumPath)}
+                    onClick={() => navigateToPath(cumPath)}
                     title={`Go to ${cumPath}`}
                   >
                     {seg}

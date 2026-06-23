@@ -13,12 +13,19 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import type { CommandDef } from "@commands/types";
 import type { AgentProfileInfo } from "@shared/agent-profiles";
 import type { ProjectFile } from "@/stores/document-store";
-import type { ComposerPart } from "./tokens";
-import { createTokenId } from "./tokens";
+import { mentionFileLabel } from "@/lib/files/mentionable-files";
+import type { ComposerPart } from "@/lib/chat/composer-parts";
+import {
+  createTokenId,
+  insertedTextTriggersLinkify,
+  parseTextToComposerParts,
+} from "@/lib/chat/composer-parts";
 import { partsToDoc } from "./serialize";
 import {
   atomicTokenDelete,
   insertComposerToken,
+  insertComposerParts,
+  linkifyViewIfNeeded,
   readPartsFromView,
   setTokenMapEffect,
   syncTokenMapFromParts,
@@ -29,6 +36,14 @@ import { detectQueryAtCursor, type ComposerQuery } from "./query";
 import { MentionDropdown, SlashCommandDropdown } from "./composer-dropdown";
 import { anchorFromCoords } from "./dropdown-position";
 import type { CursorAnchor } from "./dropdown-position";
+
+function collectInsertedText(changes: import("@codemirror/state").ChangeSet): string {
+  let text = "";
+  changes.iterChanges((_fromA, _toA, _fromB, _toB, inserted) => {
+    text += inserted.toString();
+  });
+  return text;
+}
 
 const composerTheme = EditorView.theme({
   "&": {
@@ -63,6 +78,8 @@ const composerTheme = EditorView.theme({
 export interface InlineComposerEditorHandle {
   focus: () => void;
   getParts: () => ComposerPart[];
+  insertFileMention: (file: ProjectFile) => void;
+  insertTerminalSnippet: (part: ComposerPart) => void;
 }
 
 export interface InlineComposerEditorProps {
@@ -254,12 +271,13 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
 
     const insertFile = useCallback(
       (file: ProjectFile) => {
+        const label = mentionFileLabel(file);
         insertAtQuery({
           type: "mention",
           mentionType: "file",
           id: createTokenId(),
-          label: file.relativePath,
-          filePath: file.relativePath,
+          label,
+          filePath: label,
           fileId: file.id,
         });
       },
@@ -385,7 +403,13 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             EditorView.updateListener.of((update) => {
               if (!update.docChanged && !update.selectionSet) return;
               const v = update.view;
-              if (update.docChanged) emitChange(v);
+              if (update.docChanged) {
+                const inserted = collectInsertedText(update.changes);
+                if (insertedTextTriggersLinkify(inserted)) {
+                  linkifyViewIfNeeded(v);
+                }
+                emitChange(v);
+              }
               const cursor = v.state.selection.main.head;
               const query = detectQueryAtCursor(v.state.doc.toString(), cursor);
               activeQueryRef.current = query;
@@ -394,11 +418,17 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
               else setDropdownAnchor(null);
             }),
             EditorView.domEventHandlers({
+              blur(_event, view) {
+                if (linkifyViewIfNeeded(view)) emitChange(view);
+                return false;
+              },
               paste(event, view) {
                 const text = event.clipboardData?.getData("text/plain");
                 if (text == null) return false;
                 event.preventDefault();
-                view.dispatch(view.state.replaceSelection(text));
+                const parts = parseTextToComposerParts(text);
+                const sel = view.state.selection.main;
+                insertComposerParts(view, parts, sel.from, sel.to);
                 return true;
               },
             }),
@@ -454,6 +484,35 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
     useImperativeHandle(ref, () => ({
       focus: () => viewRef.current?.focus(),
       getParts: () => (viewRef.current ? readPartsFromView(viewRef.current) : parts),
+      insertFileMention: (file: ProjectFile) => {
+        const view = viewRef.current;
+        if (!view) return;
+        const label = mentionFileLabel(file);
+        const pos = view.state.selection.main.head;
+        insertComposerToken(
+          view,
+          {
+            type: "mention",
+            mentionType: "file",
+            id: createTokenId(),
+            label,
+            filePath: label,
+            fileId: file.id,
+          },
+          pos,
+          pos,
+        );
+        emitChange(view);
+        view.focus();
+      },
+      insertTerminalSnippet: (part) => {
+        const view = viewRef.current;
+        if (!view || part.type !== "terminal-snippet") return;
+        const pos = view.state.selection.main.head;
+        insertComposerToken(view, part, pos, pos);
+        emitChange(view);
+        view.focus();
+      },
     }));
 
     return (

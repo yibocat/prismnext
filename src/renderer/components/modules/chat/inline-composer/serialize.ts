@@ -1,4 +1,5 @@
-import type { ComposerPart } from "./tokens";
+import type { ComposerPart } from "@/lib/chat/composer-parts";
+import { mergeAdjacentText } from "@/lib/chat/composer-parts";
 
 /** Private-use marker wrapping a token id inside the CodeMirror document. */
 export const TOKEN_MARKER_START = "\uE000";
@@ -41,22 +42,6 @@ export function docToParts(doc: string, tokenMap: Map<string, ComposerPart>): Co
   const tail = doc.slice(lastIndex);
   if (tail) parts.push({ type: "text", text: tail });
   return mergeAdjacentText(parts);
-}
-
-export function mergeAdjacentText(parts: ComposerPart[]): ComposerPart[] {
-  const merged: ComposerPart[] = [];
-  for (const part of parts) {
-    if (part.type === "text" && merged.length > 0) {
-      const prev = merged[merged.length - 1];
-      if (prev.type === "text") {
-        prev.text += part.text;
-        continue;
-      }
-    }
-    if (part.type === "text" && !part.text) continue;
-    merged.push(part.type === "text" ? { ...part } : { ...part });
-  }
-  return merged;
 }
 
 export function parseDraftJson(raw: string | undefined): ComposerPart[] {

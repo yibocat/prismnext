@@ -27,8 +27,8 @@ import { usePermissionStore } from "@/stores/permission-store";
 import { compileCurrentDocument } from "@/stores/compile-store";
 import { createLogger } from "@/services/logger";
 import { ChangesBar } from "./changes-bar";
-import { saveViewerPosition, loadViewerPosition } from "@/lib/viewer-position";
-import { useTabContext } from "@/lib/tab-context";
+import { saveViewerPosition, loadViewerPosition } from "@/lib/editor/viewer-position";
+import { useTabContext } from "@/lib/workspace/tab-context";
 
 const log = createLogger("editor");
 

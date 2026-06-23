@@ -42,11 +42,23 @@ const STYLE_EXTENSIONS = new Set([
   ".ldf",
 ]);
 
-export const IGNORED_DIRECTORY_NAMES = new Set([
+/** Directories hidden from the project file tree. */
+export const HIDDEN_DIRECTORY_NAMES = new Set([
+  ".git",
+  ".prismnext",
   "node_modules",
   "__pycache__",
   "venv",
   "env",
+]);
+
+/** @deprecated Use HIDDEN_DIRECTORY_NAMES */
+export const IGNORED_DIRECTORY_NAMES = HIDDEN_DIRECTORY_NAMES;
+
+/** Files that should never appear in the tree. */
+const HIDDEN_FILE_NAMES = new Set([
+  ".ds_store",
+  "thumbs.db",
 ]);
 
 export const IGNORED_EXTENSIONS = new Set([
@@ -149,15 +161,13 @@ let changedPaths: Set<string> = new Set();
 const WATCHER_DEBOUNCE_MS = 500;
 
 export function shouldSkipProjectDirectory(name: string): boolean {
-  return name.startsWith(".") || IGNORED_DIRECTORY_NAMES.has(name.toLowerCase());
+  return HIDDEN_DIRECTORY_NAMES.has(name) || HIDDEN_DIRECTORY_NAMES.has(name.toLowerCase());
 }
 
 export function getProjectFileType(name: string): ProjectFileType | null {
   const lower = name.toLowerCase();
 
-  // Skip hidden files (starting with .) like .DS_Store, etc.
-  // Exception: .gitignore is a user-facing file that should be visible.
-  if (name.startsWith(".") && name !== ".gitignore") return null;
+  if (HIDDEN_FILE_NAMES.has(lower)) return null;
 
   // Skip ignored file extensions (build artifacts, binary/non-text files)
   for (const ext of IGNORED_EXTENSIONS) {

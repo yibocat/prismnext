@@ -56,8 +56,8 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSyncTex } from "@/hooks/use-synctex";
-import { saveViewerPosition, loadViewerPosition } from "@/lib/viewer-position";
-import { TabContext } from "@/lib/tab-context";
+import { saveViewerPosition, loadViewerPosition } from "@/lib/editor/viewer-position";
+import { TabContext } from "@/lib/workspace/tab-context";
 
 GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 

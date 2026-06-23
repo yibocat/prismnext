@@ -1,9 +1,11 @@
 import { useState, useCallback, useRef, useEffect, memo } from "react";
-import type { RightTab } from "@/lib/mode-registry";
-import { XIcon, DotIcon, FoldersIcon, Terminal as TerminalIcon } from "lucide-react";
+import type { RightTab } from "@/lib/workspace/mode-registry";
+import { XIcon, DotIcon, FoldersIcon, Terminal as TerminalIcon, SparklesIcon } from "lucide-react";
 import { Icon } from "@iconify/react";
-import { getFileIconName } from "@/lib/file-icon-class";
+import { getFileIconName } from "@/lib/files/file-icon-class";
 import { cn } from "@/lib/utils";
+import { tabDisplayTitle } from "@/lib/workspace/tab-lifecycle";
+import { useTerminalStore } from "@/stores/terminal-store";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -39,18 +41,38 @@ interface TabBarProps {
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
   onReorder?: (fromIndex: number, toIndex: number) => void;
+  onPinTab?: (id: string) => void;
   dirtyFileIds?: Set<string>;
   /** When true, hide tabs regardless of internal scroll detection */
   forceOverflow?: boolean;
 }
 
-function tabIcon(tab: RightTab, dirtyFileIds?: Set<string>) {
+function tabIcon(
+  tab: RightTab,
+  dirtyFileIds?: Set<string>,
+  terminalStatus?: string,
+) {
   const isDirty = dirtyFileIds?.has(tab.fileId ?? "") || dirtyFileIds?.has(tab.filePath ?? "");
   if (isDirty) {
     return <span title="Unsaved changes"><DotIcon className="mr-1 size-3.5 shrink-0 text-info" strokeWidth={4} /></span>;
   }
   if (tab.kind === "terminal") {
-    return <TerminalIcon className="mr-1 size-3.5 shrink-0 text-muted-foreground" />;
+    if (tab.terminalSource === "ai") {
+      return (
+        <span title="AI Agent Terminal">
+          <SparklesIcon className="mr-1 size-3.5 shrink-0 text-primary/80" />
+        </span>
+      );
+    }
+    const muted = terminalStatus === "exited" || terminalStatus === "error" || terminalStatus === "killed";
+    return (
+      <TerminalIcon
+        className={cn(
+          "mr-1 size-3.5 shrink-0",
+          muted ? "text-muted-foreground/40" : "text-muted-foreground",
+        )}
+      />
+    );
   }
   if (tab.kind === "file" && tab.isInitial) {
     return <FoldersIcon className="mr-1 size-3.5 shrink-0 text-muted-foreground" />;
@@ -60,7 +82,8 @@ function tabIcon(tab: RightTab, dirtyFileIds?: Set<string>) {
   return <Icon icon={iconName} className="mr-1 size-3.5 shrink-0" />;
 }
 
-export const TabBar = memo(function TabBar({ tabs, activeTabId, onSelect, onClose, onReorder, dirtyFileIds, forceOverflow }: TabBarProps) {
+export const TabBar = memo(function TabBar({ tabs, activeTabId, onSelect, onClose, onReorder, onPinTab, dirtyFileIds, forceOverflow }: TabBarProps) {
+  const terminalSessions = useTerminalStore((s) => s.sessions);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [side, setSide] = useState<"left" | "right">("right");
@@ -160,12 +183,17 @@ export const TabBar = memo(function TabBar({ tabs, activeTabId, onSelect, onClos
                   dragIndex === i && "opacity-40",
                 )}
                 onClick={() => onSelect(tab.id)}
+                onDoubleClick={() => {
+                  if (tab.kind === "file" && tab.isPreview) onPinTab?.(tab.id);
+                }}
                 onDragStart={(e) => handleDragStart(e, i)}
                 onDragOver={(e) => handleDragOver(e, i)}
                 onDrop={(e) => handleDrop(e, i)}
               >
-                {tabIcon(tab, dirtyFileIds)}
-                <span className="truncate">{tab.kind === "file" && tab.isInitial ? "folder" : tab.title}</span>
+                {tabIcon(tab, dirtyFileIds, terminalSessions[tab.id]?.status)}
+                <span className={cn("truncate", tab.isPreview && "italic")}>
+                  {tabDisplayTitle(tab, dirtyFileIds)}
+                </span>
                 <button
                   type="button"
                   className="ml-auto flex size-4 shrink-0 items-center justify-center rounded invisible group-hover:visible hover:bg-muted-foreground/10"

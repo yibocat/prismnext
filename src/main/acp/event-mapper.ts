@@ -1,6 +1,7 @@
 import type { BrowserWindow } from "electron";
 import { AcpService } from "./service";
 import { createLogger } from "../services/logger";
+import { registerChatSession, unregisterChatSession } from "../services/chat-session-registry";
 
 const log = createLogger("event-mapper", "agent");
 
@@ -23,6 +24,7 @@ export class EventMapper {
   }
 
   registerSession(sessionId: string, tabId: string): void {
+    registerChatSession(sessionId, tabId);
     // Clean up any previous session mapping for this tab (prevents stale routing)
     const prevSession = this.tabToSession.get(tabId);
     if (prevSession && prevSession !== sessionId) {
@@ -36,6 +38,7 @@ export class EventMapper {
   }
 
   unregisterSession(sessionId: string): void {
+    unregisterChatSession(sessionId);
     const tabId = this.sessionToTab.get(sessionId);
     if (tabId) this.tabToSession.delete(tabId);
     this.sessionToTab.delete(sessionId);
@@ -349,12 +352,7 @@ export class EventMapper {
       // Extract human-readable text from the tool result.
       const rawResult: any =
         tu.rawOutput || tu.raw_output || tu.state?.output || tu.content || "";
-      const resultContent: string = this.extractOutputText(rawResult);
 
-      // Backfill tool input + name: OpenCode sends rawInput: {} in the
-      // initial tool_call (pending) and populates real params later.
-      // We also re-derive the tool name from the real input in case the
-      // initial identification was wrong (e.g. kind="other" is ambiguous).
       const updateInput =
         tu.rawInput || tu.raw_input || tu.state?.input;
       const backfillInput: any =
@@ -372,6 +370,9 @@ export class EventMapper {
       if (backfillInput) {
         log.debug(`tool_call_update backfill: id=${updateId} inputKeys=${JSON.stringify(Object.keys(backfillInput))} name=${backfillName || "(unchanged)"}`);
       }
+
+      const toolNameHint = backfillName || tu.tool_name || tu.toolName || "";
+      const resultContent = this.extractToolResultContent(rawResult, toolNameHint);
 
       // Single message.updated event — tool_result + optional backfill
       this.win.webContents.send("chat:stream", {
@@ -613,6 +614,23 @@ export class EventMapper {
     }
 
     return null;
+  }
+
+  private extractToolResultContent(raw: any, toolName?: string): string | Record<string, unknown> {
+    const isBash = (toolName || "").toLowerCase() === "bash"
+      || (raw && typeof raw === "object" && !Array.isArray(raw) && ("command" in raw || "exit" in raw || "exitCode" in raw));
+
+    if (isBash && raw && typeof raw === "object" && !Array.isArray(raw)) {
+      const output = this.extractOutputText(raw);
+      const exitRaw = raw.exit ?? raw.exitCode ?? raw.exit_code;
+      const exitCode = typeof exitRaw === "number" ? exitRaw : undefined;
+      const cwd = typeof raw.cwd === "string" ? raw.cwd
+        : typeof raw.workdir === "string" ? raw.workdir
+        : undefined;
+      return { output, exitCode, cwd };
+    }
+
+    return this.extractOutputText(raw);
   }
 
   /**

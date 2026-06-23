@@ -2,7 +2,7 @@ import { memo, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
 import "katex/dist/katex.min.css";
-import { REMARK_PLUGINS, REHYPE_PLUGINS, MARKDOWN_COMPONENTS, CHAT_MARKDOWN_TYPOGRAPHY, normalizeMathDelimiters } from "@/lib/markdown-config";
+import { REMARK_PLUGINS, REHYPE_PLUGINS, MARKDOWN_COMPONENTS, CHAT_MARKDOWN_TYPOGRAPHY, normalizeMathDelimiters } from "@/lib/markdown/markdown-config";
 import { ShikiCodeBlock } from "./shiki-code-block";
 import { cn } from "@/lib/utils";
 

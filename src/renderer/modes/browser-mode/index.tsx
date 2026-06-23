@@ -1,4 +1,4 @@
-import type { ModeDefinition, RightTab } from "@/lib/mode-registry";
+import type { ModeDefinition, RightTab } from "@/lib/workspace/mode-registry";
 import { GlobeIcon } from "lucide-react";
 import { BrowserSidebar } from "./browser-sidebar";
 import { BrowserToolbar } from "./browser-toolbar";
