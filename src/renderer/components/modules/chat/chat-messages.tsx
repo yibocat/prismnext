@@ -49,10 +49,9 @@ CopyButton.displayName = "CopyButton";
 
 // ─── Streaming Indicator ───
 
-// Styled to match ThinkingWidget inside AssistantMessage (px-6) so the
-// transition from dots to thinking is horizontally seamless.
+// Parent turn column already applies px-6 — keep this flush with ThinkingWidget.
 const StreamingIndicator = memo(() => (
-  <div className="flex items-center gap-2 px-6">
+  <div className="flex items-center gap-2">
     <div className="flex items-center gap-1">
       <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:0ms]" />
       <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:150ms]" />

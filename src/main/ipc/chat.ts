@@ -152,6 +152,10 @@ export function registerChatHandlers(): void {
         thoughtLevel?: string;
         /** Per-tab agent profile id */
         profileId?: string | null;
+        /** Composer `/` MCP tokens — limit tools for this turn. */
+        mcpServerAllowlist?: string[];
+        /** Composer `/` skill tokens — ensure these skills are enabled. */
+        skillIds?: string[];
         /** UI display blocks for this user turn (inline tokens); not sent to the model. */
         userDisplayContent?: Record<string, unknown>[];
       },
@@ -191,8 +195,6 @@ export function registerChatHandlers(): void {
         resolveProfileId,
         getProfileRuntimeFilters,
       } = await import("../services/profiles-sync");
-      const { syncProjectSkillsIntegration } = await import("../services/skills-sync");
-
       const userPrompt = args.prompt;
 
       const profileId = args.projectPath && args.profileId
@@ -218,10 +220,32 @@ export function registerChatHandlers(): void {
 
       if (args.projectPath && profileId) {
         const filters = getProfileRuntimeFilters(args.projectPath, profileId);
-        syncProjectSkillsIntegration(args.projectPath, {
-          profileSkillAllowlist: filters?.skills,
+        const profileSkills = filters?.skills;
+        const composerSkills = args.skillIds?.filter(Boolean) ?? [];
+        const skillAllowlist =
+          composerSkills.length > 0
+            ? [...new Set([...(profileSkills ?? []), ...composerSkills])]
+            : profileSkills;
+        const { refreshProjectSkillsIntegration } = await import("../services/project-skills-refresh");
+        await refreshProjectSkillsIntegration(args.projectPath, {
+          profileSkillAllowlist: skillAllowlist,
+        });
+      } else if (args.projectPath && args.skillIds?.length) {
+        const { refreshProjectSkillsIntegration } = await import("../services/project-skills-refresh");
+        await refreshProjectSkillsIntegration(args.projectPath, {
+          profileSkillAllowlist: args.skillIds,
         });
       }
+
+      const profileMcpAllowlist =
+        profileId && args.projectPath
+          ? getProfileRuntimeFilters(args.projectPath, profileId)?.mcpServers
+          : undefined;
+      const composerMcps = args.mcpServerAllowlist?.filter(Boolean) ?? [];
+      const mcpServerAllowlist =
+        composerMcps.length > 0
+          ? [...new Set([...(profileMcpAllowlist ?? []), ...composerMcps])]
+          : profileMcpAllowlist;
 
       const promptCtx = await buildPromptContext(args.projectPath, {
         profileId,
@@ -254,13 +278,18 @@ export function registerChatHandlers(): void {
           model,
           args.projectPath,
           {
-            mcpServerAllowlist: profileId && args.projectPath
-              ? getProfileRuntimeFilters(args.projectPath, profileId)?.mcpServers
-              : undefined,
+            mcpServerAllowlist: mcpServerAllowlist?.length ? mcpServerAllowlist : undefined,
           },
         );
         sessionId = session.id;
         win.webContents.send("chat:sessionCreated", { tabId, sessionId });
+      } else if (sessionId && composerMcps.length > 0 && args.projectPath) {
+        await service.reloadSessionMcps(
+          sessionId,
+          cwd,
+          args.projectPath,
+          mcpServerAllowlist ?? composerMcps,
+        );
       }
 
       const bridge = getMapper(win);
@@ -519,9 +548,8 @@ export function registerChatHandlers(): void {
       try {
         await ensureConnected();
         if (args.projectPath) {
-          const { syncProjectSkillsIntegration } = await import("../services/skills-sync");
-          syncProjectSkillsIntegration(args.projectPath);
-          getService().prewarmProject(args.projectPath);
+          const { refreshProjectSkillsIntegrationWithReload } = await import("../services/project-skills-refresh");
+          await refreshProjectSkillsIntegrationWithReload(args.projectPath);
           // Set project root for command registry (scan user commands)
           const { commandRegistry } = await import("../commands/registry");
           commandRegistry.setProjectRoot(args.projectPath);
@@ -560,12 +588,15 @@ export function registerChatHandlers(): void {
         return [];
       }
     }
+    if (args.projectPath) {
+      return await service.listProjectSessions(args.projectPath);
+    }
     return await service.listSessions(args.projectPath);
   });
 
   ipcMain.handle(
     "session:load",
-    async (_event, args: { sessionId: string; projectPath?: string }) => {
+    async (_event, args: { sessionId: string; projectPath?: string; cwd?: string }) => {
       const service = getService();
       if (!service.getConnection()) {
         try {
@@ -574,15 +605,41 @@ export function registerChatHandlers(): void {
           throw new Error(`Cannot load session: OpenCode is not available — ${err.message}`);
         }
       }
-      const messages = await service.getMessages(args.sessionId, args.projectPath || "");
+      const cwd = args.cwd || args.projectPath || "";
+      const messages = await service.getMessages(args.sessionId, cwd, args.projectPath);
 
-      // If messages came from SQLite (fast path), fire-and-forget ACP
-      // session/load to initialize session state for continued conversation
       if (service.getConnection()) {
-        service.initSession(args.sessionId, args.projectPath || "").catch(() => {});
+        service.initSession(args.sessionId, cwd, args.projectPath).catch(() => {});
       }
 
       return messages;
+    },
+  );
+
+  ipcMain.handle("session:getDirectory", async (_event, args: { sessionId: string }) => {
+    const service = getService();
+    if (!service.getConnection()) {
+      try {
+        await service.initialize();
+      } catch {
+        return null;
+      }
+    }
+    return await service.getSessionDirectory(args.sessionId);
+  });
+
+  ipcMain.handle(
+    "session:reassignDirectory",
+    async (_event, args: { fromDirectory: string; toDirectory: string }) => {
+      const service = getService();
+      if (!service.getConnection()) {
+        try {
+          await service.initialize();
+        } catch {
+          return 0;
+        }
+      }
+      return await service.reassignSessionsDirectory(args.fromDirectory, args.toDirectory);
     },
   );
 

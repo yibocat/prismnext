@@ -9,6 +9,7 @@ export const filesMode: ModeDefinition = {
   label: "Files",
   icon: <FilesIcon className="size-3.5" />,
   tabKinds: ["file"],
+  surface: "any",
   persistence: "persistent",
   initialTitle: "Files",
   Sidebar: FilesSidebar,

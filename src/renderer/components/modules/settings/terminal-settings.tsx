@@ -1,20 +1,18 @@
 import { TerminalIcon } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+  AppSelect,
+  AppSelectContent,
+  AppSelectItem,
+  AppSelectTrigger,
+  AppSelectValue,
+} from "@/components/ui/app-select";
 import {
   AiTerminalSettingsFields,
   SETTINGS_CARD,
   SETTINGS_ROW,
   SETTINGS_ROW_DESC,
   SETTINGS_ROW_LABEL,
-  SETTINGS_TRIGGER,
 } from "./ai-terminal-settings-fields";
 
 export function TerminalSettings() {
@@ -51,20 +49,20 @@ export function TerminalSettings() {
                   output from the tool result without a live stream.
                 </p>
               </div>
-              <Select
+              <AppSelect
                 value={agentTerminalMode}
                 onValueChange={(value: "mirror" | "pty") =>
                   void updateSettings({ agentTerminalMode: value })
                 }
               >
-                <SelectTrigger className={cn(SETTINGS_TRIGGER)}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pty">PTY stream</SelectItem>
-                  <SelectItem value="mirror">Mirror (fallback)</SelectItem>
-                </SelectContent>
-              </Select>
+                <AppSelectTrigger variant="wide">
+                  <AppSelectValue />
+                </AppSelectTrigger>
+                <AppSelectContent>
+                  <AppSelectItem value="pty">PTY stream</AppSelectItem>
+                  <AppSelectItem value="mirror">Mirror (fallback)</AppSelectItem>
+                </AppSelectContent>
+              </AppSelect>
             </div>
           </div>
         </div>

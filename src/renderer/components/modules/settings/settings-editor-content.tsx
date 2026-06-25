@@ -1,0 +1,99 @@
+import type { ReactNode } from "react";
+import { SlidersHorizontalIcon } from "lucide-react";
+import type { RightTab } from "@/lib/workspace/mode-registry";
+import {
+  type SettingsPanelSlot,
+} from "@/lib/settings/settings-panel-slots";
+import { WorkspaceFolderEditor } from "./workspace-folder-editor";
+import { ProviderEditorPanel } from "./provider-editor-panel";
+import { ProfileEditorPanel } from "./profile-editor-panel";
+import { PromptMarkdownPanel } from "./prompt-markdown-panel";
+import { ProjectRuleEditorPanel } from "./project-rule-editor-panel";
+import { CustomCommandEditorPanel } from "./custom-command-editor-panel";
+import { McpJsonEditorPanel } from "./mcp-json-editor-panel";
+import { McpCatalogPanel } from "./mcp-catalog-panel";
+import { McpPasteJsonPanel } from "./mcp-paste-json-panel";
+import { McpServerEditorPanel } from "./mcp-server-editor-panel";
+import { SkillMarkdownPanel } from "./skill-markdown-panel";
+import { SkillLibraryPanel } from "./skill-library-panel";
+
+function PlaceholderSlot({ slot }: { slot: Extract<SettingsPanelSlot, { kind: "placeholder" }> }) {
+  return (
+    <div className="px-4 py-6">
+      <p className="text-[length:var(--font-size-13)] text-muted-foreground leading-relaxed">
+        {slot.description ??
+          "This slot is reserved for a settings editor that will migrate here from the main list."}
+      </p>
+    </div>
+  );
+}
+
+export function renderSettingsPanelSlot(slot: SettingsPanelSlot): ReactNode {
+  switch (slot.kind) {
+    case "placeholder":
+      return <PlaceholderSlot slot={slot} />;
+    case "workspace-folder":
+      return <WorkspaceFolderEditor slot={slot} />;
+    case "ai-provider":
+      return <ProviderEditorPanel slot={slot} />;
+    case "agent-profile":
+      return <ProfileEditorPanel slot={slot} />;
+    case "prompt-markdown":
+      return <PromptMarkdownPanel slot={slot} />;
+    case "project-rule":
+      return <ProjectRuleEditorPanel slot={slot} />;
+    case "custom-command":
+      return <CustomCommandEditorPanel slot={slot} />;
+    case "mcp-json":
+      return <McpJsonEditorPanel />;
+    case "mcp-catalog":
+      return <McpCatalogPanel />;
+    case "mcp-paste-json":
+      return <McpPasteJsonPanel />;
+    case "mcp-server":
+      return <McpServerEditorPanel slot={slot} />;
+    case "skill-markdown":
+      return <SkillMarkdownPanel slot={slot} />;
+    case "skill-library":
+      return <SkillLibraryPanel />;
+  }
+}
+
+export function settingsSlotBodyClassName(slot: SettingsPanelSlot): string {
+  if (
+    slot.kind === "prompt-markdown" ||
+    slot.kind === "mcp-json" ||
+    slot.kind === "skill-markdown"
+  ) {
+    return "flex-1 min-h-0 w-full overflow-hidden";
+  }
+  return "flex-1 min-h-0 w-full overflow-auto";
+}
+
+/** Unified RightArea tab content for settings editors. */
+export function SettingsEditorContent({ tab }: { tab: RightTab; isActive: boolean }) {
+  const slot = tab.settingsSlot;
+  if (!slot) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-[length:var(--font-size-12)] text-muted-foreground">
+        Missing settings editor payload.
+      </div>
+    );
+  }
+
+  return <div className={settingsSlotBodyClassName(slot)}>{renderSettingsPanelSlot(slot)}</div>;
+}
+
+export function SettingsEditorEmptyState() {
+  return (
+    <div className="flex flex-1 min-h-0 w-full items-center justify-center overflow-auto px-6">
+      <div className="max-w-[16rem] space-y-2 text-center">
+        <SlidersHorizontalIcon className="mx-auto size-5 text-muted-foreground/40" />
+        <p className="text-[length:var(--font-size-13)] font-medium text-foreground/80">No editor open</p>
+        <p className="text-[length:var(--font-size-12)] text-muted-foreground leading-relaxed">
+          Choose an action in settings to open an editor tab here.
+        </p>
+      </div>
+    </div>
+  );
+}

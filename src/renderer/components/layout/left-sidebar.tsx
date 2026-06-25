@@ -3,16 +3,12 @@ import { createPortal } from "react-dom";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useTheme } from "next-themes";
 import { useLayoutStore } from "@/stores/layout-store";
-import { useChatStore } from "@/stores/chat-store";
+import { useChatStore, type ChatStreamMessage } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { useWorktreeStore } from "@/stores/worktree-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTerminalAiStore } from "@/stores/terminal-ai-store";
 import { useWindowState } from "@/hooks/use-window-state";
 import {
-  Bot,
-  FileType,
-  LayoutTemplate,
   PinIcon,
   PinOff,
   Dot,
@@ -22,7 +18,7 @@ import {
   Archive,
   ArchiveRestore,
   Trash2Icon,
-  SettingsIcon,
+  WorkflowIcon,
   ListFilter,
   ArrowUpDown,
   ChevronDown,
@@ -32,17 +28,21 @@ import {
   MonitorIcon,
 } from "lucide-react";
 import { SettingsSidebar, type SettingsCategory } from "@/components/modules/settings";
-import { Kbd } from "@/components/ui/kbd";
 import { ProjectSwitcher } from "@/components/modules/shared";
 import { SidebarControls } from "@/components/layout/sidebar-controls";
+import { LeftNavButton, LeftNavButtonBar, leftNavPanelRefs } from "@/components/layout/left-nav-button";
+import { leftNavRegistry } from "@/lib/workspace/left-nav";
 import { cn } from "@/lib/utils";
 import { isGenericSessionTitle, resolveSessionTitle } from "@/lib/chat/session-title";
+import { captureSessionCwd } from "@/lib/git/checkout-context";
+import { resolveSessionWorktreeContext } from "@/lib/git/session-worktree-context";
+import { useWorktreeStore } from "@/stores/worktree-store";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  AppMenu,
+  AppMenuCheckItem,
+  AppMenuContent,
+  AppMenuTrigger,
+} from "@/components/ui/app-menu";
 import {
   SidebarProvider,
   Sidebar,
@@ -56,6 +56,67 @@ interface SessionInfo {
   title: string;
   lastModified: number;
   createdAt: number;
+  directory?: string;
+}
+
+type FetchSessionsOptions = {
+  /** Keep showing the current list while refreshing — no loading spinner. */
+  silent?: boolean;
+};
+
+function sessionsListEqual(a: SessionInfo[], b: SessionInfo[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (
+      x.id !== y.id
+      || x.title !== y.title
+      || x.lastModified !== y.lastModified
+      || x.createdAt !== y.createdAt
+      || x.directory !== y.directory
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Stable store selector — only changes when streaming session ids change. */
+function selectStreamingSessionKey(state: { tabs: { isStreaming: boolean; sessionId: string | null }[] }): string {
+  const ids: string[] = [];
+  for (const t of state.tabs) {
+    if (t.isStreaming && t.sessionId) ids.push(t.sessionId);
+  }
+  ids.sort();
+  return ids.join("\0");
+}
+
+/** Stable store selector — only changes when non-generic tab titles change. */
+function selectTabTitleKey(state: {
+  tabs: { sessionId: string | null; title: string; messages: ChatStreamMessage[] }[];
+}): string {
+  const parts: string[] = [];
+  for (const t of state.tabs) {
+    if (!t.sessionId) continue;
+    const title = resolveSessionTitle(t);
+    if (title && !isGenericSessionTitle(title)) {
+      parts.push(`${t.sessionId}\x01${title}`);
+    }
+  }
+  parts.sort();
+  return parts.join("\0");
+}
+
+function tabTitlesFromKey(key: string): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!key) return map;
+  for (const part of key.split("\0")) {
+    const sep = part.indexOf("\x01");
+    if (sep === -1) continue;
+    map.set(part.slice(0, sep), part.slice(sep + 1));
+  }
+  return map;
 }
 
 function relativeTime(ms: number): string {
@@ -89,6 +150,11 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const leftSidebarOverlay = useLayoutStore((s) => s.leftSidebarOverlay);
   const setLeftSidebarOverlay = useLayoutStore((s) => s.setLeftSidebarOverlay);
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
+  const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
+  const focusedMode = useLayoutStore((s) => s.focusedMode);
+  const hasTexWorkspaceTab = useRightPanelStore((s) =>
+    s.tabs.some((t) => t.kind === "texworkspace"),
+  );
   const pinnedSessionIds = useLayoutStore((s) => s.pinnedSessionIds);
   const pinnedExpanded = useLayoutStore((s) => s.pinnedExpanded);
   const togglePinSession = useLayoutStore((s) => s.togglePinSession);
@@ -101,14 +167,13 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const setSessionSort = useLayoutStore((s) => s.setSessionSort);
 
   const sessionId = useChatStore((s) => s.sessionId);
-  // Track which sessions are currently streaming across ALL tabs, not just the active one.
-  // This ensures the running indicator (CircleDotDashed) remains visible when the user
-  // switches away from a tab that is still executing.
-  const tabs = useChatStore((s) => s.tabs);
+  const streamingSessionKey = useChatStore(selectStreamingSessionKey);
   const streamingSessionIds = useMemo(
-    () => new Set(tabs.filter((t) => t.isStreaming && t.sessionId).map((t) => t.sessionId as string)),
-    [tabs],
+    () => new Set(streamingSessionKey ? streamingSessionKey.split("\0") : []),
+    [streamingSessionKey],
   );
+  const tabTitleKey = useChatStore(selectTabTitleKey);
+  const tabTitlesBySession = useMemo(() => tabTitlesFromKey(tabTitleKey), [tabTitleKey]);
   const sessionStates = useTerminalAiStore((s) => s.sessionStates);
   const aiTerminalRunningSessionIds = useMemo(
     () => new Set(
@@ -120,21 +185,22 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   );
   const hasAnyStreaming = streamingSessionIds.size > 0;
   const loadSession = useChatStore((s) => s.loadSession);
-  const newSession = useChatStore((s) => s.newSession);
   const clearCurrentTab = useChatStore((s) => s.clearCurrentTab);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const worktrees = useWorktreeStore((s) => s.worktrees);
 
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(false);
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
 
-  const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
-
-  const fetchSessions = useCallback(async () => {
+  const fetchSessions = useCallback(async (options?: FetchSessionsOptions) => {
     if (!projectRoot) {
       setSessions([]);
       return;
     }
-    setLoading(true);
+    const silent = options?.silent ?? sessionsRef.current.length > 0;
+    if (!silent) setLoading(true);
     try {
       const result = await window.electronAPI.sessionList(projectRoot);
       const chatStore = useChatStore.getState();
@@ -159,44 +225,70 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
         }
       }
 
-      setSessions(merged);
+      setSessions((prev) => (sessionsListEqual(prev, merged) ? prev : merged));
     } catch {
-      setSessions([]);
+      if (!silent) setSessions([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [projectRoot]);
+
+  const fetchSessionsRef = useRef(fetchSessions);
+  fetchSessionsRef.current = fetchSessions;
 
   useEffect(() => {
     fetchSessions();
   }, [fetchSessions]);
 
+  useEffect(() => {
+    const onRefresh = () => void fetchSessionsRef.current({ silent: true });
+    window.addEventListener("prism:session-list-refresh", onRefresh);
+    return () => window.removeEventListener("prism:session-list-refresh", onRefresh);
+  }, []);
+
   const prevAnyStreaming = useRef(hasAnyStreaming);
+  const prevStreamingSessionIds = useRef<Set<string>>(new Set());
 
   // Delayed title refresh: OpenCode generates conversation titles
   // asynchronously after session completion (≈2-3 second delay).
-  // A one-shot timer picks up the real title without waiting for
-  // the NEXT streaming exchange to trigger fetchSessions.
+  // Only scheduled when a tab still has a generic title.
   const titleRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Keep a ref to the latest fetchSessions so the timer always uses
-  // the current callback (with the correct projectRoot) even if the
-  // user switches projects before the timer fires.
-  const fetchSessionsRef = useRef(fetchSessions);
-  fetchSessionsRef.current = fetchSessions;
 
   useEffect(() => {
     if (prevAnyStreaming.current && !hasAnyStreaming) {
-      fetchSessions();
-      // Schedule a delayed re-fetch so OpenCode's async title generation
-      // has time to write the real title to SQLite.
-      if (titleRefreshTimerRef.current) clearTimeout(titleRefreshTimerRef.current);
-      titleRefreshTimerRef.current = setTimeout(() => {
-        titleRefreshTimerRef.current = null;
-        fetchSessionsRef.current();
-      }, 3000);
+      const finishedIds = [...prevStreamingSessionIds.current];
+      if (finishedIds.length > 0) {
+        const now = Date.now();
+        setSessions((prev) => {
+          let changed = false;
+          const next = prev.map((s) => {
+            if (!finishedIds.includes(s.id)) return s;
+            changed = true;
+            return { ...s, lastModified: now };
+          });
+          return changed ? next : prev;
+        });
+      }
+
+      void fetchSessions({ silent: true });
+
+      const chatState = useChatStore.getState();
+      const needsTitleRefresh = chatState.tabs.some((t) => {
+        if (!t.sessionId) return false;
+        const title = resolveSessionTitle(t);
+        return title == null || isGenericSessionTitle(title);
+      });
+      if (needsTitleRefresh) {
+        if (titleRefreshTimerRef.current) clearTimeout(titleRefreshTimerRef.current);
+        titleRefreshTimerRef.current = setTimeout(() => {
+          titleRefreshTimerRef.current = null;
+          void fetchSessionsRef.current({ silent: true });
+        }, 3000);
+      }
     }
+    prevStreamingSessionIds.current = new Set(streamingSessionIds);
     prevAnyStreaming.current = hasAnyStreaming;
-  }, [hasAnyStreaming, fetchSessions]);
+  }, [hasAnyStreaming, fetchSessions, streamingSessionIds]);
 
   // Clean up the delayed title refresh timer on unmount
   useEffect(() => {
@@ -218,15 +310,16 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
         tab?.title && tab.title !== "New Chat"
           ? tab.title
           : "New Chat";
+      const directory = tab?.sessionCwd ?? captureSessionCwd() ?? undefined;
       setSessions((prev) => {
         if (prev.some((s) => s.id === sessionId)) return prev;
-        // Prepend new session; fetchSessions will sort it correctly later
         return [
           {
             id: sessionId,
             title,
             lastModified: Date.now(),
             createdAt: Date.now(),
+            directory,
           },
           ...prev,
         ];
@@ -234,26 +327,21 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     });
   }, []);
 
+  const primaryNavItems = useMemo(
+    () => leftNavRegistry.getBySection("primary"),
+    [leftSidebarView, rightAreaExpanded, focusedMode, hasTexWorkspaceTab],
+  );
+  const footerNavItems = useMemo(
+    () => leftNavRegistry.getBySection("footer"),
+    [leftSidebarView, rightAreaExpanded, focusedMode, hasTexWorkspaceTab],
+  );
+  const navPanelRefs = leftNavPanelRefs({ centerRef, rightAreaRef });
+  const dismissOverlay = () => setLeftSidebarOverlay(false);
   const settingsCategory = useLayoutStore((s) => s.settingsCategory);
   const setSettingsCategory = useLayoutStore((s) => s.setSettingsCategory);
 
-  // Build a sessionId → tab-title map from currently open tabs.
-  // This provides instant titles for newly created sessions without
-  // waiting for OpenCode to write messages to SQLite.
-  const tabTitlesBySession = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const t of tabs) {
-      if (!t.sessionId) continue;
-      const title = resolveSessionTitle(t);
-      if (title && !isGenericSessionTitle(title)) {
-        map.set(t.sessionId, title);
-      }
-    }
-    return map;
-  }, [tabs]);
-
   // Derive enriched sessions: inject tab titles into sessions with generic
-  // OpenCode defaults. Because this is a useMemo on both sessions AND tabs,
+  // OpenCode defaults. Because this is a useMemo on both sessions AND tab titles,
   // titles update instantly when the tab's sessionId + title are set —
   // no need to wait for the next fetchSessions round-trip.
   const enrichedSessions = useMemo(() => {
@@ -277,18 +365,22 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     const isActive = s.id === sessionId;
     const isSessionStreaming = streamingSessionIds.has(s.id);
     const isAiTerminalRunning = aiTerminalRunningSessionIds.has(s.id);
+    const checkoutContext = resolveSessionWorktreeContext(s.directory, projectRoot, worktrees);
+    const isWorktreeSession = checkoutContext.kind !== "local";
     return (
       <SidebarMenuItem key={s.id}>
         <SidebarMenuButton
           onClick={() => {
-            loadSession(s.id);
+            loadSession(s.id, s.directory);
             setLeftSidebarOverlay(false);
           }}
           isActive={isActive}
           size="sm"
         >
           <span className="relative size-3.5 shrink-0 flex items-center justify-center">
-            {isSessionStreaming ? (
+            {isWorktreeSession ? (
+              <WorkflowIcon className="absolute size-3 text-primary/70 transition-opacity group-hover/menu-item:opacity-0" strokeWidth={2} />
+            ) : isSessionStreaming ? (
               <CircleDotDashed className="absolute size-3.5 text-primary transition-opacity group-hover/menu-item:opacity-0" strokeWidth={2.5} />
             ) : isAiTerminalRunning ? (
               <CircleDotDashed className="absolute size-3.5 text-warning transition-opacity group-hover/menu-item:opacity-0" strokeWidth={2.5} />
@@ -415,51 +507,12 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
             <ProjectSwitcher className="flex w-full items-center gap-2 rounded-md border border-border px-2 py-1.5 text-[length:var(--font-session-item)] font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors" />
           </div>
 
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-            onClick={() => { newSession(); useLayoutStore.getState().setLeftSidebarView("sessions"); setLeftSidebarOverlay(false); }}
-          >
-            <Bot className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="flex-1 text-left">New Agent</span>
-            <Kbd className="text-[length:var(--font-kbd)] h-4 min-w-4 px-0.5 bg-transparent">⌘N</Kbd>
-          </button>
-
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-            onClick={() => {
-              const st = useLayoutStore.getState();
-              st.setLeftSidebarView(
-                st.leftSidebarView === "templates" ? "sessions" : "templates",
-              );
-              setLeftSidebarOverlay(false);
-            }}
-          >
-            <LayoutTemplate className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="flex-1 text-left">Templates</span>
-          </button>
-
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-            onClick={() => {
-              useRightPanelStore.getState().ensureTab("texworkspace");
-              const st = useLayoutStore.getState();
-              st.setLeftSidebarView("sessions");
-              st.activateMode("texworkspace");
-              const r = rightAreaRef?.current;
-              const c = centerRef?.current;
-              if (!r || !c) return;
-              if (r.isCollapsed()) r.expand();
-              c.collapse();
-              r.resize(9999);
-              setLeftSidebarOverlay(false);
-            }}
-          >
-            <FileType className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="flex-1 text-left">TeX Workspace</span>
-          </button>
+          {/* 导航按钮由 leftNavRegistry 驱动，新增入口见 left-nav/items.tsx */}
+          <LeftNavButtonBar
+            items={primaryNavItems}
+            panelRefs={navPanelRefs}
+            onPressed={dismissOverlay}
+          />
         </div>
 
         {/* ── Scrollable session list ── */}
@@ -505,27 +558,27 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
               <button type="button" className="flex size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors" title="Filter">
                 <ListFilter className="size-3" />
               </button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+              <AppMenu>
+                <AppMenuTrigger asChild>
                   <button type="button" className="flex size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors" title="Sort">
                     <ArrowUpDown className="size-3" />
                   </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-36">
-                  <DropdownMenuItem
-                    className="flex items-center gap-2 text-[length:var(--font-menu-item)]"
+                </AppMenuTrigger>
+                <AppMenuContent align="end" className="min-w-[8.5rem]">
+                  <AppMenuCheckItem
+                    selected={sessionSort === "updated"}
                     onClick={() => setSessionSort("updated")}
                   >
-                    <span className={cn(sessionSort === "updated" && "text-foreground font-medium")}>Last updated</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="flex items-center gap-2 text-[length:var(--font-menu-item)]"
+                    Last updated
+                  </AppMenuCheckItem>
+                  <AppMenuCheckItem
+                    selected={sessionSort === "created"}
                     onClick={() => setSessionSort("created")}
                   >
-                    <span className={cn(sessionSort === "created" && "text-foreground font-medium")}>Date created</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    Date created
+                  </AppMenuCheckItem>
+                </AppMenuContent>
+              </AppMenu>
             </div>
           </div>
           {loading ? (
@@ -555,24 +608,15 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
         </div>
         <SidebarFooter className="px-2 pb-2">
           <div className="flex items-center gap-0.5">
-            <button
-              type="button"
-              className="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-              onClick={() => {
-                const st = useLayoutStore.getState();
-                const doc = useDocumentStore.getState();
-                if (st.leftSidebarView === "settings" && !doc.projectRoot) {
-                  doc.setShowWelcome(true);
-                  st.setLeftSidebarView("sessions");
-                } else {
-                  st.setLeftSidebarView(st.leftSidebarView === "settings" ? "sessions" : "settings");
-                }
-                setLeftSidebarOverlay(false);
-              }}
-            >
-              <SettingsIcon className="size-3.5 shrink-0" />
-              <span>Settings</span>
-            </button>
+            {footerNavItems.map((item) => (
+              <div key={item.id} className="flex-1 min-w-0">
+                <LeftNavButton
+                  item={item}
+                  panelRefs={navPanelRefs}
+                  onPressed={dismissOverlay}
+                />
+              </div>
+            ))}
             <button
               type="button"
               className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors shrink-0"

@@ -46,11 +46,11 @@ import {
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  AppMenu,
+  AppMenuCheckItem,
+  AppMenuContent,
+  AppMenuTrigger,
+} from "@/components/ui/app-menu";
 import { useCompileStore, getPdfBytes } from "@/stores/compile-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
@@ -69,6 +69,8 @@ const PDFJS_DOCUMENT_OPTIONS = {
 } as const;
 
 type SidePanel = "outline" | "search" | "thumbnails" | null;
+
+const ZOOM_PRESETS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 
 // ─── Side Panel Sub-Components (rendered inside <Root>) ───
 
@@ -388,24 +390,27 @@ function PdfViewerInner({ isPdfFile, isCompiling, compileError, persistKey }: Pd
           >
             <MinusIcon className="size-3.5" />
           </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+          <AppMenu>
+            <AppMenuTrigger asChild>
               <button
                 className="h-6 min-w-[3rem] px-0.5 tabular-nums text-muted-foreground hover:text-foreground rounded transition-colors cursor-pointer select-none"
                 title="Zoom presets"
               >
                 {Math.round(zoom * 100)}%
               </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="center" className="min-w-[6rem]">
-              <DropdownMenuItem onClick={() => updateZoom(0.5)}>50%</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => updateZoom(0.75)}>75%</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => updateZoom(1)}>100%</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => updateZoom(1.25)}>125%</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => updateZoom(1.5)}>150%</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => updateZoom(2)}>200%</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </AppMenuTrigger>
+            <AppMenuContent align="center" className="min-w-[5.5rem]">
+              {ZOOM_PRESETS.map((preset) => (
+                <AppMenuCheckItem
+                  key={preset}
+                  selected={Math.abs(zoom - preset) < 0.001}
+                  onClick={() => updateZoom(preset)}
+                >
+                  {Math.round(preset * 100)}%
+                </AppMenuCheckItem>
+              ))}
+            </AppMenuContent>
+          </AppMenu>
           <Button
             variant="ghost" size="icon" className="size-6 rounded-l-none"
             title="Zoom in" onClick={handleZoomIn}
@@ -470,7 +475,7 @@ function PdfViewerInner({ isPdfFile, isCompiling, compileError, persistKey }: Pd
             We pass scroll + click props directly to Pages rather than wrapping in
             an extra div, which would interfere with the virtualizer's height calc. */}
         <Pages
-          className={`flex-1 min-w-0 overflow-auto overscroll-contain p-4 select-text${pdfDarkActive ? " [filter:invert(87%)_hue-rotate(180deg)]" : ""}`}
+          className={`flex-1 min-w-0 overflow-auto overscroll-contain p-4${pdfDarkActive ? " [filter:invert(87%)_hue-rotate(180deg)]" : ""}`}
           gap={16}
           onClick={handlePageClick}
         >

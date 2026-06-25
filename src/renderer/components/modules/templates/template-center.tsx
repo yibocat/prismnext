@@ -1,467 +1,232 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { TemplateMeta, TemplateFull, TemplateCategory } from "./types";
-import { getTemplates } from "@/lib/templates/template-data";
+import { getTemplates, invalidateTemplatesCache } from "@/lib/templates/template-data";
 import { TemplateSidebar, DetailSidebar } from "./template-sidebar";
 import { GalleryView } from "./template-gallery";
 import { DetailView } from "./template-detail";
 import { TemplateSwitchDialog } from "./template-switch-dialog";
-import { getCompatibilityLevel, mergeFile } from "@/lib/templates/template-merge";
+import {
+  requestApplyTemplate,
+  confirmApplyTemplate,
+  type TemplateSwitchDialogState,
+} from "@/lib/templates/apply-template-flow";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
-import { DEFAULT_MANUSCRIPT_DIR } from "@/types/workspace";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useProjectTemplate } from "@/hooks/use-project-template";
 import { toast } from "sonner";
-
-// ─── Props ───
+import { ArrowLeftIcon } from "lucide-react";
 
 export interface TemplateCenterProps {
-  onUseTemplate: (template: TemplateFull) => void;
   onBack: () => void;
 }
 
-// ─── Main ───
+const EMPTY_DIALOG: TemplateSwitchDialogState = {
+  open: false,
+  level: "L1",
+  newName: "",
+  newCategory: "",
+  changedFiles: [],
+  deletedFiles: [],
+  newTemplate: null,
+  dialogActions: [],
+};
 
-export function TemplateCenter({ onUseTemplate, onBack }: TemplateCenterProps) {
+export function TemplateCenter({ onBack }: TemplateCenterProps) {
   const [templates, setTemplates] = useState<TemplateMeta[] | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    getTemplates().then((data) => { if (!cancelled) setTemplates(data); });
-    return () => { cancelled = true; };
-  }, []);
   const [category, setCategory] = useState<TemplateCategory | "all">("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<TemplateFull | null>(null);
-
-  // Template switch dialog state
-  const [switchDialog, setSwitchDialog] = useState<{
-    open: boolean;
-    level: "L1" | "L2" | "L3" | "reset" | "firstUse";
-    oldName?: string;
-    newName: string;
-    oldCategory?: string;
-    newCategory: string;
-    changedFiles: string[];
-    deletedFiles: string[];
-    newTemplate: TemplateFull | null;
-  }>({
-    open: false,
-    level: "L1",
-    oldName: "",
-    newName: "",
-    oldCategory: "",
-    newCategory: "",
-    changedFiles: [],
-    deletedFiles: [],
-    newTemplate: null,
-  });
-
-  const [currentTemplate, setCurrentTemplate] = useState<{
-    id: string;
-    category: string;
-    appliedFiles: Record<string, string>;
-  } | null>(null);
+  const [switchDialog, setSwitchDialog] = useState<TemplateSwitchDialogState>(EMPTY_DIALOG);
+  const [submitting, setSubmitting] = useState(false);
 
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const manuscriptConfig = useWorkspaceConfigStore((s) => s.manuscriptConfig);
-  const manuscriptDir = manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR;
+  const workspaceLoaded = useWorkspaceConfigStore((s) => s.loaded);
+  const { state: currentTemplate, loading: templateLoading, reload } = useProjectTemplate();
+
   const processingRef = useRef(false);
-  const [submitting, setSubmitting] = useState(false);
+  const dialogResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleDialogReset = useCallback(() => {
+    if (dialogResetTimerRef.current) clearTimeout(dialogResetTimerRef.current);
+    dialogResetTimerRef.current = setTimeout(() => {
+      setSwitchDialog(EMPTY_DIALOG);
+      dialogResetTimerRef.current = null;
+    }, 250);
+  }, []);
+
+  const closeSwitchDialog = useCallback(() => {
+    setSwitchDialog((prev) => ({ ...prev, open: false }));
+    scheduleDialogReset();
+  }, [scheduleDialogReset]);
+
+  const canApply = Boolean(projectRoot && workspaceLoaded && manuscriptConfig && !templateLoading);
 
   useEffect(() => {
-    if (!projectRoot) return;
+    return () => {
+      if (dialogResetTimerRef.current) clearTimeout(dialogResetTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const settingsPath = `${projectRoot}/.prismnext/settings.json`;
-        const exists = await window.electronAPI.fsExists(settingsPath);
-        if (!exists || cancelled) return;
-        const readResult = await window.electronAPI.fsRead(settingsPath);
-        if (!readResult || cancelled) return;
-        const settings = JSON.parse(readResult.content);
-        if (settings.template && settings.template.id) {
-          setCurrentTemplate({
-            id: settings.template.id,
-            category: settings.template.category || "",
-            appliedFiles: settings.template.appliedFiles || {},
-          });
-        }
-      } catch {
-        // No template state — first use
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [projectRoot]);
+    invalidateTemplatesCache();
+    getTemplates({ refresh: true }).then((data) => {
+      if (!cancelled) setTemplates(data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const handleSelect = async (t: TemplateMeta) => {
-    const full = await window.electronAPI.templateGet(t.id);
-    if (full) setSelected(full);
-  };
+  const flowContext = useMemo(() => {
+    if (!projectRoot || !manuscriptConfig) return null;
+    return {
+      projectRoot,
+      manuscriptDir: manuscriptConfig.dir,
+      currentTemplate,
+      reloadTemplate: reload,
+    };
+  }, [projectRoot, manuscriptConfig, currentTemplate, reload]);
 
-  const handleUseWithDetection = useCallback(
+  const handleUse = useCallback(
     async (t: TemplateMeta) => {
-      // Prevent concurrent detection while a flow is in progress
       if (processingRef.current) return;
+
+      if (!projectRoot) {
+        toast.error("Open a project before applying a template.");
+        return;
+      }
+      if (!workspaceLoaded) {
+        toast.info("Loading workspace configuration…");
+        return;
+      }
+      if (!manuscriptConfig) {
+        toast.error("Configure a manuscript folder in Workspace settings first.");
+        useLayoutStore.getState().setLeftSidebarView("settings");
+        useLayoutStore.getState().setSettingsCategory("workspace");
+        return;
+      }
+      if (templateLoading) return;
+
+      if (!flowContext) return;
+
       processingRef.current = true;
-
-      const full = await window.electronAPI.templateGet(t.id);
-      if (!full) {
+      try {
+        const result = await requestApplyTemplate(t, flowContext);
+        if (result.type === "dialog") {
+          setSwitchDialog(result.dialog);
+        }
+      } catch (err) {
+        toast.error(
+          `Failed to apply template: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
+      } finally {
         processingRef.current = false;
-        return;
       }
-
-      // No current template — first use.
-      // Check for existing files that would be overwritten.
-      if (!currentTemplate || !projectRoot) {
-        if (!projectRoot) {
-          processingRef.current = false;
-          onUseTemplate(full);
-          return;
-        }
-
-        // Detect user files that overlap with template files
-        const overlapping: string[] = [];
-        for (const file of full.files) {
-          const absPath = `${projectRoot}/${manuscriptDir}/${file.path}`;
-          try {
-            const exists = await window.electronAPI.fsExists(absPath);
-            if (exists) overlapping.push(file.path);
-          } catch {
-            // Ignore errors — if we can't check, assume safe
-          }
-        }
-
-        if (overlapping.length === 0) {
-          // Clean project — apply directly
-          processingRef.current = false;
-          onUseTemplate(full);
-          toast.success(`Template "${full.name}" applied`);
-          return;
-        }
-
-        // Existing files detected — show confirmation dialog
-        setSwitchDialog({
-          open: true,
-          level: "firstUse",
-          oldName: undefined,
-          newName: full.name,
-          oldCategory: undefined,
-          newCategory: full.category,
-          changedFiles: overlapping,
-          deletedFiles: [],
-          newTemplate: full,
-        });
-        return;
-      }
-
-      // Same template — check if user wants to reset
-      if (currentTemplate.id === t.id) {
-        const changes = await window.electronAPI.templateDetectChanges({
-          rootPath: projectRoot,
-          manuscriptDir,
-          appliedFiles: currentTemplate.appliedFiles,
-        });
-        const hasChanges = changes.changed.length > 0 || changes.deleted.length > 0;
-        if (!hasChanges) {
-          processingRef.current = false;
-          return; // No changes, nothing to do
-        }
-
-        const oldFull = await window.electronAPI.templateGet(currentTemplate.id);
-        setSwitchDialog({
-          open: true,
-          level: "reset",
-          oldName: oldFull?.name || currentTemplate.id,
-          newName: full.name,
-          oldCategory: currentTemplate.category,
-          newCategory: full.category,
-          changedFiles: changes.changed,
-          deletedFiles: changes.deleted,
-          newTemplate: full,
-        });
-        return;
-      }
-
-      // Different template — detect changes
-      const changes = await window.electronAPI.templateDetectChanges({
-        rootPath: projectRoot,
-        manuscriptDir,
-        appliedFiles: currentTemplate.appliedFiles,
-      });
-      const hasChanges = changes.changed.length > 0 || changes.deleted.length > 0;
-
-      if (!hasChanges) {
-        // No changes — silent switch
-        try {
-          await window.electronAPI.templateApply({
-            rootPath: projectRoot,
-            manuscriptDir,
-            files: full.files,
-            templateId: full.id,
-            templateCategory: full.category,
-          });
-          // Update local state from the saved settings
-          const settingsPath = `${projectRoot}/.prismnext/settings.json`;
-          const updatedResult = await window.electronAPI.fsRead(settingsPath);
-          if (updatedResult) {
-            const updated = JSON.parse(updatedResult.content);
-            if (updated.template) {
-              setCurrentTemplate({
-                id: updated.template.id,
-                category: updated.template.category,
-                appliedFiles: updated.template.appliedFiles,
-              });
-            }
-          }
-          useDocumentStore.getState().refreshFiles();
-          useLayoutStore.getState().setLeftSidebarView("sessions");
-          toast.success(`Switched to "${full.name}"`);
-        } catch {
-          onUseTemplate(full);
-        }
-        processingRef.current = false;
-        return;
-      }
-
-      // Has changes — determine level and show dialog
-      const level = getCompatibilityLevel(currentTemplate.category, full.category);
-      const oldFull = await window.electronAPI.templateGet(currentTemplate.id);
-      setSwitchDialog({
-        open: true,
-        level,
-        oldName: oldFull?.name || currentTemplate.id,
-        newName: full.name,
-        oldCategory: currentTemplate.category,
-        newCategory: full.category,
-        changedFiles: changes.changed,
-        deletedFiles: changes.deleted,
-        newTemplate: full,
-      });
     },
-    [currentTemplate, projectRoot, manuscriptDir, onUseTemplate],
+    [projectRoot, workspaceLoaded, manuscriptConfig, templateLoading, flowContext],
   );
 
   const handleSwitchConfirm = useCallback(
     async (action: "merge" | "replace") => {
-      const { newTemplate, changedFiles, deletedFiles, level } = switchDialog;
-      if (!newTemplate || !projectRoot) return;
-      // currentTemplate can be null for firstUse
-      if (level !== "firstUse" && !currentTemplate) return;
-
+      if (!flowContext) return;
       setSubmitting(true);
       try {
-        // ── firstUse: backup overlapping files, then apply directly ──
-        if (level === "firstUse") {
-          const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-          const backupLabel = `${timestamp}_first_use_${newTemplate.id}`;
-          await window.electronAPI.templateBackup({
-            rootPath: projectRoot,
-            manuscriptDir,
-            files: changedFiles,
-            backupLabel,
-          });
-
-          await window.electronAPI.templateApply({
-            rootPath: projectRoot,
-            manuscriptDir,
-            files: newTemplate.files,
-            templateId: newTemplate.id,
-            templateCategory: newTemplate.category,
-          });
-
-          // Update local state
-          const settingsPath = `${projectRoot}/.prismnext/settings.json`;
-          try {
-            const updatedResult = await window.electronAPI.fsRead(settingsPath);
-            if (updatedResult) {
-              const updated = JSON.parse(updatedResult.content);
-              if (updated.template) {
-                setCurrentTemplate({
-                  id: updated.template.id,
-                  category: updated.template.category,
-                  appliedFiles: updated.template.appliedFiles,
-                });
-              }
-            }
-          } catch { /* ignore */ }
-
-          useDocumentStore.getState().refreshFiles();
-          useLayoutStore.getState().setLeftSidebarView("sessions");
-          toast.success(`Template "${newTemplate.name}" applied — previous files backed up`);
-          setSwitchDialog((prev) => ({ ...prev, open: false }));
-          processingRef.current = false;
-          setSubmitting(false);
-          return;
-        }
-
-        // ── Existing template switch/reset flow ──
-        if (!currentTemplate) return; // TypeScript guard
-
-        const allTemplateFiles = [
-          ...new Set([
-            ...Object.keys(currentTemplate.appliedFiles),
-            ...newTemplate.files.map((f) => f.path),
-          ]),
-        ];
-
-        // 1. Backup current files
-        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-        const backupLabel = `${timestamp}_${currentTemplate.id}_to_${newTemplate.id}`;
-        await window.electronAPI.templateBackup({
-          rootPath: projectRoot,
-          manuscriptDir,
-          files: allTemplateFiles,
-          backupLabel,
-        });
-
-        // 2. Prepare files for apply
-        let filesToApply = newTemplate.files;
-
-        if (action === "merge") {
-          const mergedFiles: { path: string; content: string }[] = [];
-          for (const newFile of newTemplate.files) {
-            const isChanged =
-              changedFiles.includes(newFile.path) || deletedFiles.includes(newFile.path);
-            let oldContent = "";
-            if (isChanged) {
-              try {
-                const oldResult =
-                  await window.electronAPI.fsRead(
-                    `${projectRoot}/${manuscriptDir}/${newFile.path}`,
-                  );
-                oldContent = oldResult?.content || "";
-              } catch {
-                oldContent = "";
-              }
-            }
-            const mergedContent = mergeFile(
-              oldContent,
-              newFile.content,
-              newFile.path,
-              isChanged,
-            );
-            mergedFiles.push({ path: newFile.path, content: mergedContent });
-          }
-
-          // Keep old-only files that the user may reference
-          const newFilePaths = new Set(newTemplate.files.map((f) => f.path));
-          for (const oldPath of Object.keys(currentTemplate.appliedFiles)) {
-            if (!newFilePaths.has(oldPath)) {
-              try {
-                const readResult = await window.electronAPI.fsRead(
-                  `${projectRoot}/${manuscriptDir}/${oldPath}`,
-                );
-                if (readResult?.content) {
-                  mergedFiles.push({ path: oldPath, content: readResult.content });
-                }
-              } catch {
-                // File no longer exists — skip
-              }
-            }
-          }
-          filesToApply = mergedFiles;
-        }
-
-        // 3. Apply new template
-        await window.electronAPI.templateApply({
-          rootPath: projectRoot,
-          manuscriptDir,
-          files: filesToApply,
-          templateId: newTemplate.id,
-          templateCategory: newTemplate.category,
-        });
-
-        // Update local template state
-        const settingsPath = `${projectRoot}/.prismnext/settings.json`;
-        try {
-          const updatedResult = await window.electronAPI.fsRead(settingsPath);
-          if (updatedResult) {
-            const updated = JSON.parse(updatedResult.content);
-            if (updated.template) {
-              setCurrentTemplate({
-                id: updated.template.id,
-                category: updated.template.category,
-                appliedFiles: updated.template.appliedFiles,
-              });
-            }
-          }
-        } catch {
-          /* ignore */
-        }
-
-        // 4. Refresh file tree and navigate back
-        useDocumentStore.getState().refreshFiles();
-        useLayoutStore.getState().setLeftSidebarView("sessions");
-
-        // 4.5. Notify user
-        const msg = switchDialog.level === "firstUse"
-          ? `Template "${newTemplate.name}" applied — previous files backed up`
-          : switchDialog.level === "L1"
-          ? `Switched to "${newTemplate.name}" — content preserved`
-          : switchDialog.level === "L2"
-            ? `Switched to "${newTemplate.name}" — content merged. Review recommended.`
-            : switchDialog.level === "reset"
-              ? `"${newTemplate.name}" reset to original — previous content backed up`
-              : `Switched to "${newTemplate.name}" — previous content backed up`;
-        toast.success(msg);
-
-        // 5. Close dialog
-        setSwitchDialog((prev) => ({ ...prev, open: false }));
-        processingRef.current = false;
+        await confirmApplyTemplate(switchDialog, action, flowContext);
+        closeSwitchDialog();
       } catch (err) {
-        console.error("Template switch failed:", err);
-        toast.error(`Failed to switch template: ${err instanceof Error ? err.message : "Unknown error"}`);
-        // Dialog stays open — user can try again or cancel
+        toast.error(
+          `Failed to switch template: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
       } finally {
         setSubmitting(false);
+        processingRef.current = false;
       }
     },
-    [switchDialog, projectRoot, manuscriptDir, currentTemplate],
+    [switchDialog, flowContext, closeSwitchDialog],
   );
 
   return (
-    <div className="flex-1 overflow-y-auto @container">
-      <div className="max-w-5xl mx-auto px-8 flex flex-col @lg:flex-row min-h-0 flex-1">
-        {/* Left sidebar */}
-        {selected ? (
-          <DetailSidebar template={selected} />
-        ) : (
-          <TemplateSidebar
-            category={category}
-            setCategory={setCategory}
-          />
-        )}
+    <div className="flex-1 overflow-y-auto flex flex-col">
+      <div className="max-w-6xl mx-auto w-full px-8 pt-8 pb-8">
+        <h2 className="text-[length:var(--font-session-item)] font-semibold mb-6 hidden lg:block">
+          {selected ? selected.name : "Template Center"}
+        </h2>
+        <div className="flex flex-col lg:flex-row lg:items-start min-h-0 gap-6">
+        <div className="shrink-0 w-full lg:w-[200px]">
+          <button
+            type="button"
+            className="flex items-center gap-1.5 text-[length:var(--font-size-12)] text-muted-foreground hover:text-foreground transition-colors mb-4 lg:hidden"
+            onClick={onBack}
+          >
+            <ArrowLeftIcon className="size-3.5" />
+            Back
+          </button>
+          {!canApply && projectRoot && workspaceLoaded && !manuscriptConfig && (
+            <p className="mb-4 text-[length:var(--font-size-12)] text-destructive lg:hidden">
+              Bind a manuscript folder in Workspace settings to apply templates.
+            </p>
+          )}
+          {selected ? (
+            <DetailSidebar template={selected} />
+          ) : (
+            <TemplateSidebar category={category} setCategory={setCategory} templates={templates} />
+          )}
+        </div>
 
-        {/* Right content area */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 @container">
           {selected ? (
             <DetailView
               template={selected}
               onBack={() => setSelected(null)}
-              onUse={handleUseWithDetection}
+              onUse={handleUse}
+              canApply={canApply}
+              applyDisabledReason={
+                !projectRoot
+                  ? "Open a project first"
+                  : templateLoading
+                    ? "Loading…"
+                    : !manuscriptConfig
+                      ? "Configure manuscript folder"
+                      : undefined
+              }
             />
           ) : (
             <GalleryView
               templates={templates}
               category={category}
+              setCategory={setCategory}
               search={search}
               setSearch={setSearch}
-              onSelect={handleSelect}
-              onUse={handleUseWithDetection}
+              onSelect={async (t) => {
+                const full = await window.electronAPI.templateGet(t.id);
+                if (full) setSelected(full);
+              }}
+              onUse={handleUse}
+              canApply={canApply}
             />
           )}
         </div>
+        </div>
       </div>
 
-      {/* Template switch confirmation dialog */}
       <TemplateSwitchDialog
         open={switchDialog.open}
         onOpenChange={(open) => {
           if (!open) {
             processingRef.current = false;
             setSubmitting(false);
+            setSwitchDialog((prev) => ({ ...prev, open: false }));
+            scheduleDialogReset();
+          } else {
+            if (dialogResetTimerRef.current) {
+              clearTimeout(dialogResetTimerRef.current);
+              dialogResetTimerRef.current = null;
+            }
+            setSwitchDialog((prev) => ({ ...prev, open }));
           }
-          setSwitchDialog((prev) => ({ ...prev, open }));
         }}
         level={switchDialog.level}
         oldName={switchDialog.oldName}
@@ -470,6 +235,7 @@ export function TemplateCenter({ onUseTemplate, onBack }: TemplateCenterProps) {
         newCategory={switchDialog.newCategory}
         changedFiles={switchDialog.changedFiles}
         deletedFiles={switchDialog.deletedFiles}
+        dialogActions={switchDialog.dialogActions}
         onConfirm={handleSwitchConfirm}
         submitting={submitting}
       />

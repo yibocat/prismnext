@@ -1,6 +1,6 @@
 // prism-next/src/main/commands/expander.ts
 import { readFileSync, existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { execSync } from "node:child_process";
 import type { ParsedCommand } from "./types";
 
@@ -39,7 +39,7 @@ export function expandTemplate(
 
   // !`cmd` shell expansion — execute and replace with stdout
   result = result.replace(/!`([^`]+)`/g, (_match: string, cmd: string) => {
-    return execShellCommand(cmd);
+    return execShellCommand(cmd.trim(), projectRoot);
   });
 
   return result;
@@ -66,7 +66,7 @@ function resolveFileRef(filePath: string, projectRoot: string): string {
   }
 }
 
-function execShellCommand(cmd: string): string {
+function execShellCommand(cmd: string, projectRoot: string): string {
   try {
     const stdout = execSync(cmd, {
       timeout: SHELL_TIMEOUT_MS,

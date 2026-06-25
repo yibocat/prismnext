@@ -55,6 +55,7 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
   loadFromProject: async (projectRoot: string) => {
     if (!projectRoot) return;
     const data = await window.electronAPI.browserInit(projectRoot);
+    if (useDocumentStore.getState().projectRoot !== projectRoot) return;
     set({
       bookmarks: data.bookmarks,
       recentVisits: data.recent,

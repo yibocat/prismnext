@@ -4,6 +4,7 @@ import { gitMode } from "./git-mode";
 import { browserMode } from "./browser-mode";
 import { terminalMode } from "./terminal-mode";
 import { texworkspaceMode } from "./texworkspace-mode";
+import { settingsEditorMode } from "./settings-editor-mode";
 
 export function registerAllModes(): void {
   modeRegistry.register(filesMode);
@@ -11,4 +12,5 @@ export function registerAllModes(): void {
   modeRegistry.register(browserMode);
   modeRegistry.register(terminalMode);
   modeRegistry.register(texworkspaceMode);
+  modeRegistry.register(settingsEditorMode);
 }

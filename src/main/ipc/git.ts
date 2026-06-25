@@ -258,4 +258,9 @@ export function registerGitHandlers(): void {
   ipcMain.handle("git:deleteBranch", async (_e, args: {
     projectRoot: string; branch: string;
   }) => gitService.deleteBranch(args.projectRoot, args.branch));
+
+  // ── git:push ──
+  ipcMain.handle("git:push", async (_e, args: { projectRoot: string }) =>
+    gitService.pushBranch(args.projectRoot),
+  );
 }

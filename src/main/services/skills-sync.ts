@@ -3,15 +3,60 @@ import { basename, dirname, join } from "node:path";
 
 export const PRISM_SKILLS_REL = ".prismnext/agent/skills";
 export const SKILLS_MANIFEST_REL = ".prismnext/agent/skills-manifest.json";
+/**
+ * OpenCode `skills.paths` entry (relative to session cwd).
+ * Must be the parent of a `skills/` folder (OpenCode globs skill folders beneath it).
+ */
+export const PRISM_OPENCODE_SKILLS_SCAN_REL = ".prismnext/agent";
 
-const LEGACY_OPENCODE_ARTIFACTS = [
+/** OpenCode built-in skills we keep enabled in core but hide from the agent. */
+export const OPENCODE_HIDDEN_SKILLS = ["customize-opencode"] as const;
+
+/**
+ * Project-root artifacts OpenCode may create when cwd is the project.
+ * Prism never stores skills or OpenCode packages here — config lives in app userData.
+ */
+const PROJECT_OPENCODE_ARTIFACT_DIRS = [
   ".opencode",
+  ".agents",
   ".prismnext/.opencode",
   ".prismnext/opencode",
 ] as const;
 
+const OPENCODE_GITIGNORE_LINES = [".opencode/", ".agents/"];
+
 function normalizeProjectRoot(projectRoot: string): string {
   return basename(projectRoot) === ".prismnext" ? dirname(projectRoot) : projectRoot;
+}
+
+/** Absolute paths in OpenCode JSON config — forward slashes on all OSes. */
+export function normalizeOpencodeConfigPath(absPath: string): string {
+  return absPath.replace(/\\/g, "/");
+}
+
+/** Project root when path is under `.prismnext/agent/`. */
+export function projectRootFromAgentPath(absPath: string): string | null {
+  const normalized = normalizeOpencodeConfigPath(absPath);
+  const marker = "/.prismnext/agent/";
+  const idx = normalized.toLowerCase().indexOf(marker);
+  if (idx === -1) return null;
+  return normalized.slice(0, idx);
+}
+
+/** Whether a filesystem change should trigger skills OpenCode sync. */
+export function isSkillsIntegrationPath(absPath: string, projectRoot: string): boolean {
+  const root = normalizeOpencodeConfigPath(normalizeProjectRoot(projectRoot)).replace(/\/$/, "");
+  const normalized = normalizeOpencodeConfigPath(absPath);
+  const rootLower = root.toLowerCase();
+  const normLower = normalized.toLowerCase();
+  if (!normLower.startsWith(rootLower + "/") && normLower !== rootLower) return false;
+
+  const rel = normalized.slice(root.length).replace(/^\//, "");
+  const manifestRel = SKILLS_MANIFEST_REL.replace(/\\/g, "/");
+  const skillsRel = PRISM_SKILLS_REL.replace(/\\/g, "/");
+  if (rel === manifestRel || rel.startsWith(`${manifestRel}/`)) return true;
+  if (rel === skillsRel || rel.startsWith(`${skillsRel}/`)) return true;
+  return false;
 }
 
 export const PRISM_CURATED_SOURCE_ID = "prism-curated";
@@ -224,10 +269,48 @@ export function computeProfileSkillDisabled(
   return Array.from(disabled);
 }
 
-/** Remove legacy OpenCode project artifacts. Prism-owned agent config lives in `.prismnext/agent/`. */
+export function buildSkillPermissions(disabled: string[]): Record<string, string> {
+  const skill: Record<string, string> = { "*": "allow" };
+  for (const name of OPENCODE_HIDDEN_SKILLS) {
+    skill[name] = "deny";
+  }
+  for (const name of disabled) {
+    if (name.trim()) skill[name.trim()] = "deny";
+  }
+  return skill;
+}
+
+/**
+ * Merge skill permission maps for OpenCode config.
+ * Never spread a string into an object — that produces {"0":"a",...} and crashes OpenCode.
+ */
+export function sanitizeSkillPermissionMap(
+  existing: unknown,
+  patch: Record<string, string>,
+): Record<string, string> {
+  const base: Record<string, string> = {};
+  if (typeof existing === "string" && existing.trim()) {
+    base["*"] = existing.trim();
+  } else if (existing && typeof existing === "object" && !Array.isArray(existing)) {
+    for (const [key, value] of Object.entries(existing as Record<string, unknown>)) {
+      if (/^\d+$/.test(key)) continue;
+      if (typeof value === "string" && value.trim()) base[key] = value.trim();
+    }
+  }
+  return { ...base, ...patch };
+}
+
+/** True when legacy bugs left numeric keys from spreading `"allow"` into an object. */
+export function skillPermissionNeedsRepair(existing: unknown): boolean {
+  if (typeof existing === "string") return false;
+  if (!existing || typeof existing !== "object" || Array.isArray(existing)) return false;
+  return Object.keys(existing as Record<string, unknown>).some((k) => /^\d+$/.test(k));
+}
+
+/** Remove OpenCode runtime dirs from the project tree (never Prism's storage location). */
 export function cleanupProjectOpenCodeArtifacts(projectRoot: string): void {
   const root = normalizeProjectRoot(projectRoot);
-  for (const rel of LEGACY_OPENCODE_ARTIFACTS) {
+  for (const rel of PROJECT_OPENCODE_ARTIFACT_DIRS) {
     const path = join(root, rel);
     if (existsSync(path)) {
       rmSync(path, { recursive: true, force: true });
@@ -235,37 +318,63 @@ export function cleanupProjectOpenCodeArtifacts(projectRoot: string): void {
   }
 }
 
+/** Keep accidental OpenCode init artifacts out of git when the project uses git. */
+export function ensureOpencodeArtifactsGitignored(projectRoot: string): void {
+  const root = normalizeProjectRoot(projectRoot);
+  const gitignorePath = join(root, ".gitignore");
+  let content = "";
+  if (existsSync(gitignorePath)) {
+    try {
+      content = readFileSync(gitignorePath, "utf-8");
+    } catch {
+      return;
+    }
+  }
+  const missing = OPENCODE_GITIGNORE_LINES.filter((line) => !content.includes(line));
+  if (missing.length === 0) return;
+
+  const prefix = content.length > 0 && !content.endsWith("\n") ? "\n" : "";
+  const block =
+    "\n# OpenCode runtime artifacts (managed by Prism, not project source)\n" +
+    missing.join("\n") +
+    "\n";
+  writeFileSync(gitignorePath, content + prefix + block, "utf-8");
+}
+
+export interface ProjectSkillsOpencodePatch {
+  skillsPaths: string[];
+  skillPermissions: Record<string, string>;
+}
+
 /**
- * Ensure Prism project skills directory exists.
- *
- * OpenCode project config used to be written to `.opencode/opencode.json`.
- * That leaked OpenCode implementation details into user projects and could
- * create `<project>/.prismnext/.opencode/` if the wrong root was passed.
- * Runtime discovery now goes through ACP `additionalDirectories`.
+ * Prepare project skills state for OpenCode. Skill files live only in
+ * `.prismnext/agent/skills/`. OpenCode config is written to app userData
+ * via `AcpService.applyProjectSkillsIntegration` — never project-root `.opencode/`.
  */
 export function syncProjectSkillsIntegration(
   projectRoot: string,
   options?: { profileSkillAllowlist?: string[] },
 ): {
   skillsCount: number;
-  configPath: string;
+  skillsPaths: string[];
+  skillPermissions: Record<string, string>;
+  registryUrls: string[];
 } {
   const root = normalizeProjectRoot(projectRoot);
   cleanupProjectOpenCodeArtifacts(root);
+  ensureOpencodeArtifactsGitignored(root);
 
   const skillsRoot = join(root, PRISM_SKILLS_REL);
   if (!existsSync(skillsRoot)) {
     mkdirSync(skillsRoot, { recursive: true });
   }
 
-  // Keep this computation for callers that sync after profile/skill changes:
-  // it validates manifests and preserves the current API shape without writing
-  // OpenCode project config.
-  computeProfileSkillDisabled(root, options?.profileSkillAllowlist);
+  const disabled = computeProfileSkillDisabled(root, options?.profileSkillAllowlist);
 
   return {
     skillsCount: listProjectSkills(root).length,
-    configPath: "",
+    skillsPaths: [PRISM_OPENCODE_SKILLS_SCAN_REL],
+    skillPermissions: buildSkillPermissions(disabled),
     registryUrls: [] as string[],
   };
 }

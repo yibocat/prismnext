@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
@@ -27,6 +27,13 @@ export function useTexworkspace() {
 
   const texworkspaceViewMode = useLayoutStore((s) => s.texworkspaceViewMode);
   const setTexworkspaceViewMode = useLayoutStore((s) => s.setTexworkspaceViewMode);
+  const setTexworkspaceProblemsOpen = useLayoutStore((s) => s.setTexworkspaceProblemsOpen);
+
+  const isCompiling = useCompileStore((s) => s.isCompiling);
+  const compileError = useCompileStore((s) => s.compileError);
+  const pdfRevision = useCompileStore((s) => s.pdfRevision);
+  const wasCompilingRef = useRef(false);
+  const lastPdfRevisionRef = useRef(pdfRevision);
 
   const files = useDocumentStore((s) => s.files);
   const openedContents = useDocumentStore((s) => s.openedContents);
@@ -75,6 +82,34 @@ export function useTexworkspace() {
       }
     }
   }, [activeTab, files, openedContents, setTexworkspaceActiveFile]);
+
+  // ─── Apply default layout when entering TeX Workspace ───
+  const wasActiveRef = useRef(false);
+  useEffect(() => {
+    if (isActive && !wasActiveRef.current) {
+      const defaultMode = useLayoutStore.getState().texworkspaceDefaultViewMode;
+      setTexworkspaceViewMode(defaultMode);
+    }
+    wasActiveRef.current = isActive;
+  }, [isActive, setTexworkspaceViewMode]);
+
+  // ─── Compile success → close problems overlay ───
+  useEffect(() => {
+    if (!isActive) {
+      wasCompilingRef.current = isCompiling;
+      lastPdfRevisionRef.current = pdfRevision;
+      return;
+    }
+
+    if (wasCompilingRef.current && !isCompiling) {
+      if (!compileError && pdfRevision > lastPdfRevisionRef.current) {
+        setTexworkspaceProblemsOpen(false);
+      }
+    }
+
+    wasCompilingRef.current = isCompiling;
+    lastPdfRevisionRef.current = pdfRevision;
+  }, [isActive, isCompiling, compileError, pdfRevision, setTexworkspaceProblemsOpen]);
 
   // ─── Compile completion → switch to texworkspace tab ───
   // This was previously in right-main-area.tsx

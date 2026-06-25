@@ -3,6 +3,16 @@ import { readdirSync, readFileSync, existsSync, writeFileSync, mkdirSync, unlink
 import { join, basename, extname } from "node:path";
 import type { CommandDef, CreateCommandPayload, UpdateCommandPayload } from "./types";
 import { BUILTIN_COMMANDS } from "./builtin-commands";
+import {
+  buildCommandPack,
+  parseCommandPack,
+  previewCommandImport,
+  type CommandImportConflictStrategy,
+  type CommandImportPreview,
+  type CommandImportResult,
+  type CommandPack,
+} from "./export-import";
+import { isValidCommandName } from "./template-utils";
 
 /**
  * CommandRegistry — merges three layers into a unified list.
@@ -86,6 +96,7 @@ export class CommandRegistry {
       description: payload.description,
       source: "user",
       template: payload.template,
+      action: payload.action || undefined,
       agent: payload.agent,
       model: payload.model,
       order: 1000,
@@ -115,6 +126,10 @@ export class CommandRegistry {
       name: payload.name ?? existing.name,
       description: payload.description ?? existing.description,
       template: payload.template ?? existing.template,
+      action:
+        payload.action !== undefined
+          ? payload.action.trim() || undefined
+          : existing.action,
       agent: payload.agent !== undefined ? payload.agent : existing.agent,
       model: payload.model !== undefined ? payload.model : existing.model,
     };
@@ -176,6 +191,73 @@ export class CommandRegistry {
     for (const cmd of BUILTIN_COMMANDS) {
       result[cmd.name] = cmd.enabled;
     }
+    return result;
+  }
+
+  exportPack(): CommandPack {
+    return buildCommandPack(this.scanUserCommands());
+  }
+
+  previewImport(packRaw: unknown): CommandImportPreview {
+    const pack = parseCommandPack(packRaw);
+    const existingNames = new Set(this.scanUserCommands().map((c) => c.name));
+    return previewCommandImport(existingNames, pack);
+  }
+
+  importPack(packRaw: unknown, strategy: CommandImportConflictStrategy): CommandImportResult {
+    const pack = parseCommandPack(packRaw);
+    const result: CommandImportResult = {
+      imported: 0,
+      skipped: 0,
+      renamed: [],
+    };
+
+    const existingNames = new Set(this.scanUserCommands().map((c) => c.name));
+
+    for (const entry of pack.commands) {
+      const baseName = entry.name?.trim().toLowerCase();
+      if (!baseName || !isValidCommandName(baseName)) continue;
+
+      let targetName = baseName;
+      if (existingNames.has(baseName)) {
+        if (strategy === "skip") {
+          result.skipped += 1;
+          continue;
+        }
+        if (strategy === "rename") {
+          let n = 2;
+          while (existingNames.has(`${baseName}-${n}`)) n += 1;
+          targetName = `${baseName}-${n}`;
+          result.renamed.push({ from: baseName, to: targetName });
+        }
+      }
+
+      const def: CommandDef = {
+        id: `user:${targetName}`,
+        name: targetName,
+        description: entry.description ?? "",
+        source: "user",
+        template: entry.template ?? "",
+        action: entry.action || undefined,
+        agent: entry.agent || undefined,
+        model: entry.model || undefined,
+        order: 1000,
+        enabled: entry.enabled !== false,
+      };
+
+      if (strategy === "replace" && existingNames.has(baseName) && targetName === baseName) {
+        const existing = this.list().find((c) => c.id === `user:${baseName}`);
+        if (existing && existing.source === "user" && existing.name !== targetName) {
+          this.deleteFile(existing);
+        }
+      }
+
+      this.writeFile(def);
+      existingNames.add(targetName);
+      result.imported += 1;
+    }
+
+    this.cache = null;
     return result;
   }
 
@@ -255,6 +337,7 @@ export class CommandRegistry {
       description: fm.description || "",
       source: "user",
       template: body,
+      action: fm.action || undefined,
       agent: fm.agent || undefined,
       model: fm.model || undefined,
       order: 1000,
@@ -273,6 +356,7 @@ export class CommandRegistry {
     const frontmatter = [
       "---",
       `description: ${def.description || ""}`,
+      ...(def.action ? [`action: ${def.action}`] : []),
       ...(def.agent ? [`agent: ${def.agent}`] : []),
       ...(def.model ? [`model: ${def.model}`] : []),
       `enabled: ${def.enabled}`,

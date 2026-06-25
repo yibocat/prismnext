@@ -30,12 +30,10 @@ export interface GitCommitData {
 export interface GitFileItem extends GitFileStatusData {
   /** Unique id for this item (path + splitView for MM files) */
   id: string;
-  /** Diff content, loaded on demand when accordion expands */
+  /** Diff content, loaded on demand when row expands */
   diff: { oldContent: string; newContent: string } | null;
   /** Whether diff is currently loading */
   diffLoading: boolean;
-  /** Whether the accordion item is expanded */
-  expanded: boolean;
   /** Line change counts */
   added: number;
   deleted: number;
@@ -62,7 +60,11 @@ interface GitState {
 
   // ── Selection ──
   selectedCommitHash: string | null;
-  selectedFilePaths: string[];
+  /** Main diff list — multiple rows may be expanded at once */
+  expandedChangeIds: string[];
+  /** History commit detail — expanded file diff rows */
+  expandedCommitFilePaths: string[];
+  gitExpandedFolders: string[];
   sidebarView: "changes" | "history";
   commits: GitCommitData[];
   commitsLoading: boolean;
@@ -81,15 +83,27 @@ interface GitState {
   checkRepo: (projectRoot: string) => Promise<void>;
   selectCommit: (hash: string) => void;
   clearSelectedCommit: () => void;
-  toggleFile: (fileId: string) => void;
-  removeFile: (fileId: string) => void;
+  toggleChangeExpanded: (fileId: string) => void;
+  expandChange: (fileId: string) => void;
+  selectChangeFromSidebar: (fileId: string) => void;
+  toggleCommitFileExpanded: (filePath: string) => void;
+  collapseAllCommitFiles: () => void;
+  collapseAllChanges: () => void;
+  /** Clear cached per-file diff content (e.g. after ignore-whitespace toggle). */
+  clearAllDiffs: () => void;
+  /** Re-load diffs for currently expanded change rows. */
+  reloadExpandedDiffs: (projectRoot: string) => Promise<void>;
+  toggleGitFolder: (folderPath: string) => void;
   setSidebarView: (view: "changes" | "history") => void;
   loadHistory: (projectRoot: string) => Promise<void>;
   refreshStatus: (projectRoot: string) => Promise<void>;
+  /** Bypass status cache — use after external git mutations (push/merge on disk). */
+  forceRefreshStatus: (projectRoot: string) => Promise<void>;
+  /** Refresh sidebar after worktree Merge to Branch (clears stale debounced refresh). */
+  refreshAfterWorktreeMerge: (projectRoot: string, worktreeRoot: string) => Promise<void>;
   refreshBranches: (projectRoot: string) => Promise<void>;
   loadDiff: (projectRoot: string, fileId: string, filePath: string) => Promise<void>;
   setFilterMode: (mode: GitFilterMode) => void;
-  setFileExpanded: (id: string, expanded: boolean) => void;
   stageFile: (projectRoot: string, filePath: string) => Promise<void>;
   unstageFile: (projectRoot: string, filePath: string) => Promise<void>;
   stageAll: (projectRoot: string, filePaths: string[]) => Promise<void>;
@@ -99,6 +113,7 @@ interface GitState {
   switchBranch: (projectRoot: string, branch: string) => Promise<void>;
   createBranch: (projectRoot: string, branchName: string) => Promise<void>;
   mergeBranch: (projectRoot: string, sourceBranch: string) => Promise<void>;
+  pushRemote: (projectRoot: string) => Promise<void>;
   abortMerge: (projectRoot: string) => Promise<void>;
   revertCommit: (projectRoot: string, hash: string) => Promise<void>;
   resetToCommit: (projectRoot: string, hash: string, mode: "soft" | "mixed" | "hard") => Promise<void>;
@@ -149,11 +164,20 @@ function makeItem(
     id: stableId(f.path, overrides?.splitView),
     diff: null,
     diffLoading: false,
-    expanded: false,
     added: 0,
     deleted: 0,
     ...overrides,
   };
+}
+
+function idsForFilterMode(files: GitFileItem[], mode: GitFilterMode): Set<string> {
+  const filtered =
+    mode === "staged"
+      ? files.filter((f) => f.staged)
+      : mode === "unstaged"
+        ? files.filter((f) => f.unstaged || f.untracked)
+        : files;
+  return new Set(filtered.map((f) => f.id));
 }
 
 // ─── Store ───
@@ -173,38 +197,80 @@ export const useGitStore = create<GitState>()((set, get) => ({
   gitFolderVersion: 0,
   _autoRefreshTimer: null,
   selectedCommitHash: null,
-  selectedFilePaths: [],
+  expandedChangeIds: [],
+  expandedCommitFilePaths: [],
+  gitExpandedFolders: [],
   sidebarView: "changes",
   commits: [],
   commitsLoading: false,
   _historyRequestId: 0,
 
   // ── selectCommit ──
-  selectCommit: (hash: string) => set({ selectedCommitHash: hash, selectedFilePaths: [] }),
+  selectCommit: (hash: string) =>
+    set({ selectedCommitHash: hash, expandedCommitFilePaths: [] }),
 
   // ── clearSelectedCommit ──
-  clearSelectedCommit: () => set({ selectedCommitHash: null }),
+  clearSelectedCommit: () =>
+    set({ selectedCommitHash: null, expandedCommitFilePaths: [] }),
 
-  // ── toggleFile ──
-  toggleFile: (fileId: string) => set((s) => {
-    const exists = s.selectedFilePaths.includes(fileId);
-    return {
-      selectedFilePaths: exists ? [] : [fileId],
-      selectedCommitHash: null,
-    };
-  }),
+  toggleChangeExpanded: (fileId: string) =>
+    set((s) => {
+      const expanded = new Set(s.expandedChangeIds);
+      if (expanded.has(fileId)) expanded.delete(fileId);
+      else expanded.add(fileId);
+      return { expandedChangeIds: [...expanded] };
+    }),
 
-  // ── removeFile ──
-  removeFile: (fileId: string) => set((s) => ({
-    selectedFilePaths: s.selectedFilePaths.filter((id) => id !== fileId),
-  })),
+  expandChange: (fileId: string) =>
+    set((s) => {
+      if (s.expandedChangeIds.includes(fileId)) return s;
+      return { expandedChangeIds: [...s.expandedChangeIds, fileId] };
+    }),
+
+  selectChangeFromSidebar: (fileId: string) => {
+    get().expandChange(fileId);
+    set({ selectedCommitHash: null, expandedCommitFilePaths: [] });
+  },
+
+  toggleCommitFileExpanded: (filePath: string) =>
+    set((s) => {
+      const expanded = new Set(s.expandedCommitFilePaths);
+      if (expanded.has(filePath)) expanded.delete(filePath);
+      else expanded.add(filePath);
+      return { expandedCommitFilePaths: [...expanded] };
+    }),
+
+  collapseAllCommitFiles: () => set({ expandedCommitFilePaths: [] }),
+
+  collapseAllChanges: () => set({ expandedChangeIds: [] }),
+
+  clearAllDiffs: () =>
+    set((s) => ({
+      files: s.files.map((f) => ({ ...f, diff: null, diffLoading: false })),
+    })),
+
+  reloadExpandedDiffs: async (projectRoot: string) => {
+    const { expandedChangeIds, files } = get();
+    await Promise.all(
+      expandedChangeIds.map(async (id) => {
+        const file = files.find((f) => f.id === id);
+        if (file) await get().loadDiff(projectRoot, id, file.path);
+      }),
+    );
+  },
+
+  toggleGitFolder: (folderPath: string) =>
+    set((s) => {
+      const expanded = new Set(s.gitExpandedFolders);
+      if (expanded.has(folderPath)) expanded.delete(folderPath);
+      else expanded.add(folderPath);
+      return { gitExpandedFolders: [...expanded] };
+    }),
 
   setSidebarView: (view) => {
     set({
       sidebarView: view,
-      // Clear opposite view's selection when switching
       selectedCommitHash: view === "changes" ? null : get().selectedCommitHash,
-      selectedFilePaths: view === "history" ? [] : get().selectedFilePaths,
     });
     if (view === "history") {
       const root = get().unitRoot;
@@ -253,7 +319,6 @@ export const useGitStore = create<GitState>()((set, get) => ({
           branch: "",
           branches: [],
           commits: [],
-          selectedFilePaths: [],
           selectedCommitHash: null,
           error: null,
         });
@@ -266,7 +331,6 @@ export const useGitStore = create<GitState>()((set, get) => ({
         branch: "",
         branches: [],
         commits: [],
-        selectedFilePaths: [],
         selectedCommitHash: null,
         error: null,
       });
@@ -322,7 +386,6 @@ export const useGitStore = create<GitState>()((set, get) => ({
               unstaged: false,
               splitView: "staged",
               diff: prevStaged?.diff ?? null,
-              expanded: prevStaged?.expanded ?? false,
               added: stagedStat.added,
               deleted: stagedStat.deleted,
             }),
@@ -331,7 +394,6 @@ export const useGitStore = create<GitState>()((set, get) => ({
               unstaged: true,
               splitView: "unstaged",
               diff: prevUnstaged?.diff ?? null,
-              expanded: prevUnstaged?.expanded ?? false,
               added: unstagedStat.added,
               deleted: unstagedStat.deleted,
             }),
@@ -352,7 +414,6 @@ export const useGitStore = create<GitState>()((set, get) => ({
           files.push(
             makeItem(f, {
               diff: prev?.diff ?? null,
-              expanded: prev?.expanded ?? false,
               added,
               deleted,
             }),
@@ -370,6 +431,48 @@ export const useGitStore = create<GitState>()((set, get) => ({
       if (get().commits.length === 0) {
         get().loadHistory(projectRoot);
       }
+  },
+
+  forceRefreshStatus: async (projectRoot: string) => {
+    invalidateStatusCache();
+    await get().refreshStatus(projectRoot);
+  },
+
+  refreshAfterWorktreeMerge: async (projectRoot: string, worktreeRoot: string) => {
+    invalidateStatusCache();
+
+    const state = get();
+    if (state._autoRefreshTimer) {
+      clearTimeout(state._autoRefreshTimer);
+      set({ _autoRefreshTimer: null });
+    }
+
+    const activeRoot = useDocumentStore.getState().checkoutRoot || projectRoot;
+
+    set({
+      selectedCommitHash: null,
+      expandedChangeIds: [],
+      loading: true,
+      commits: [],
+    });
+
+    await get().refreshBranches(projectRoot);
+
+    // When viewing project files, also refresh worktree so counts stay accurate.
+    if (worktreeRoot !== projectRoot && activeRoot === projectRoot) {
+      invalidateStatusCache();
+      await get().refreshStatus(worktreeRoot);
+    }
+
+    invalidateStatusCache();
+    await get().refreshStatus(activeRoot);
+
+    set((s) => ({
+      unitRoot: activeRoot,
+      gitFolderVersion: s.gitFolderVersion + 1,
+    }));
+
+    await get().loadHistory(projectRoot);
   },
 
   // ── scheduleAutoRefresh ──
@@ -449,15 +552,14 @@ export const useGitStore = create<GitState>()((set, get) => ({
   },
 
   // ── setFilterMode ──
-  setFilterMode: (mode: GitFilterMode) => set({ filterMode: mode }),
-
-  // ── setFileExpanded ──
-  setFileExpanded: (id: string, expanded: boolean) =>
-    set((s) => ({
-      files: s.files.map((f) =>
-        f.id === id ? { ...f, expanded } : f,
-      ),
-    })),
+  setFilterMode: (mode: GitFilterMode) =>
+    set((s) => {
+      const visible = idsForFilterMode(s.files, mode);
+      return {
+        filterMode: mode,
+        expandedChangeIds: s.expandedChangeIds.filter((id) => visible.has(id)),
+      };
+    }),
 
   // ── stageFile ──
   stageFile: async (projectRoot: string, filePath: string) => {
@@ -572,7 +674,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
       return;
     }
 
-    Promise.all([
+    await Promise.all([
       get().refreshStatus(projectRoot),
       get().refreshBranches(projectRoot),
     ]);
@@ -596,6 +698,20 @@ export const useGitStore = create<GitState>()((set, get) => ({
       get().refreshStatus(projectRoot),
       get().refreshBranches(projectRoot),
     ]);
+  },
+
+  // ── pushRemote ──
+  pushRemote: async (projectRoot: string) => {
+    invalidateStatusCache();
+    const result = await window.electronAPI.gitPush(projectRoot);
+    if (!result.success) {
+      toast.error(result.error || "Push failed");
+      set({ error: result.error || "Push failed" });
+      return;
+    }
+    const summary = result.output?.trim();
+    toast.success(summary || "Pushed successfully");
+    await get().refreshBranches(projectRoot);
   },
 
   // ── mergeBranch ──
@@ -728,7 +844,9 @@ export const useGitStore = create<GitState>()((set, get) => ({
       gitFolderVersion: 0,
       _autoRefreshTimer: null,
       selectedCommitHash: null,
-      selectedFilePaths: [],
+      expandedChangeIds: [],
+      expandedCommitFilePaths: [],
+      gitExpandedFolders: [],
       sidebarView: "changes",
       commits: [],
       commitsLoading: false,

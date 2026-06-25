@@ -2,6 +2,10 @@ import { useMemo } from "react";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import {
+  filterRecentForDisplay,
+  getRecentOpenedFilesForProject,
+} from "@/lib/files/recent-files";
 import { isExternalFileId, resolveExternalPath } from "@/lib/files/external-file";
 
 export function NoFileOpen() {
@@ -9,14 +13,13 @@ export function NoFileOpen() {
   const openFile = useRightPanelStore((s) => s.openFile);
   const setActiveFile = useDocumentStore((s) => s.setActiveFile);
   const fileMetadata = useDocumentStore((s) => s.fileMetadata);
-  const recentOpenedFiles = useSettingsStore((s) => s.settings.recentOpenedFiles);
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const recentByProject = useSettingsStore((s) => s.settings.recentOpenedFilesByProject);
 
   const recent = useMemo(() => {
-    const entries = recentOpenedFiles ?? [];
-    return entries
-      .filter((e) => fileMetadata.has(e.id) || isExternalFileId(e.id))
-      .slice(0, 8);
-  }, [recentOpenedFiles, fileMetadata]);
+    const entries = getRecentOpenedFilesForProject(projectRoot);
+    return filterRecentForDisplay(entries, fileMetadata, projectRoot).slice(0, 8);
+  }, [projectRoot, recentByProject, fileMetadata]);
 
   const handleOpenRecent = async (id: string, name: string) => {
     if (isExternalFileId(id)) {

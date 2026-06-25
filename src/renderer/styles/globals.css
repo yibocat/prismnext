@@ -256,16 +256,6 @@
     @apply h-full text-foreground;
     /* bg-background removed — body is semi-transparent for desktop glass */
   }
-  /* Re-enable text selection where it's intentional */
-  input, textarea, [contenteditable] {
-    @apply select-text;
-  }
-  .cm-editor {
-    @apply select-text;
-  }
-  .prose {
-    @apply select-text;
-  }
   /* Glass body — CSS vars from theme generator. Falls back to solid background. */
   body {
     background-color: var(--glass-body-bg, var(--background));

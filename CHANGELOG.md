@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.4.3 — 2026-06-26
+
+### Chat & Inline Composer
+
+- **Inline composer rewrite**: single-object-character token document model (`\uFFFC`) replaces multi-marker decorations — fixes cursor drift, block-edge typing, Backspace/arrow movement, and URL linkify offset bugs
+- Unified `chat-composer-core` for panel chat and AiBar; shared query sync, compact overflow, and slash/`@` catalog plumbing
+- Clickable file paths in AI replies and tool widgets (`ChatFileLink`); opens Files tab and **auto-expands RightArea**
+- Chat turn layout alignment: thinking header, streaming dots, and copy footer share one `px-6` column (no double padding)
+- Left sidebar session list: silent background refresh, optimistic `lastModified`, conditional title re-fetch
+
+### Settings & RightArea Editors
+
+- Settings redesigned as **list + detail panel** in RightArea (providers, models, profiles, prompts/rules, commands, skills, MCP, backups, compiler, TeX workspace, terminal, appearance)
+- New settings-editor tab kind; stacked/split layout with `expand-settings-detail-panel` orchestration
+- Commands import/export, custom command editor, MCP catalog + JSON/paste editors, skill library panel, profile/project-rule markdown panels
+- Shared settings primitives: form fields, JSON/markdown editors, markdown preview, design tokens
+
+### Git, Worktrees & Checkpoints
+
+- Git mode overhaul: changes tree sidebar, diff chunk lines, hunk snippets, gutter highlights, filter dropdown, commit detail/file rows
+- Git diff toolbar and insert-to-chat; worktree merge dialog/panel; `git-orchestrator` for push/sync flows
+- Worktree selector, branch context, session-bound checkout cwd, checkpoint turn finalize/restore lifecycle
+- `checkout-context` and `session-worktree-context` unify Files/Git/Chat worktree awareness
+
+### Templates & TeX Workspace
+
+- Template system hardening: safer path resolution, merge/apply flow, project template state, PhD thesis template content refresh
+- TeX Workspace UX: compile problems panel (`parse-latex-log`), sidebar/toolbar polish, dedicated settings page
+- Template center/gallery/detail improvements; workspace folder editor
+
+### Layout, Navigation & Selection
+
+- Left nav registry drives primary/footer entries (`left-nav-button`, immersive center views)
+- RightArea inner sidebar: restored proven flex drag handle (30px collapse threshold, container squeeze) — matches outer panel feel
+- Editor/terminal **Add to Chat** via selection anchors and CodeMirror insert host; right-area shortcuts
+- App-native menus (`app-menu`, `app-popover`, `app-select`); content top bar and session title polish
+
+### Agent, Commands & Skills
+
+- Project skills refresh pipeline; OpenCode config repair on spawn; skills/commands export-import
+- Command template utils and expanded slash-command registry; prompt stale detection and user display snapshots
+- Skills sync and skill-creator resource updates
+
+### Architecture & Testing
+
+- Renderer `lib/` growth: `git/`, `settings/`, `workspace/left-nav/`, `files/open-project-file`, `chat/worktree-checkpoint-lifecycle`, `templates/project-template-state`
+- Broad Vitest coverage for inline composer, git diff/tree, worktree lifecycle, settings layout, templates, and filesystem safety
+
 ## 0.4.2 — 2026-06-23
 
 ### Terminal × AI

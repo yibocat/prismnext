@@ -18,9 +18,13 @@ export interface AppSettings {
   zoteroUserId?: string;
   /** Path to auto-reopen on next launch */
   lastProjectPath?: string | null;
-  /** Last opened file — used for smart expand on project open */
+  /** @deprecated Use lastActiveFileIdByProject */
   lastActiveFileId?: string | null;
-  /** Recently opened files across sessions */
+  /** Recently opened files per project root */
+  recentOpenedFilesByProject?: Record<string, Array<{ id: string; name: string; lastOpened: number }>>;
+  /** Last opened file per project root */
+  lastActiveFileIdByProject?: Record<string, string | null>;
+  /** @deprecated Global list — do not read; use recentOpenedFilesByProject */
   recentOpenedFiles?: Array<{ id: string; name: string; lastOpened: number }>;
   /** Auto-create main.tex template on new project creation */
   autoCreateMainTex?: boolean;
@@ -139,6 +143,39 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         r.aiCustomModelsData = migrated;
         window.electronAPI.settingsSet({ aiCustomModelsData: migrated }).catch(() => {});
         log.info("Migrated aiCustomModels → aiCustomModelsData");
+      }
+
+      // Migrate: global recent/lastActive → per-project maps (one-time, keyed by lastProjectPath)
+      const legacyProject = typeof r.lastProjectPath === "string" ? r.lastProjectPath : null;
+      if (legacyProject) {
+        let migratedScoped = false;
+        if (r.lastActiveFileId && !r.lastActiveFileIdByProject?.[legacyProject]) {
+          r.lastActiveFileIdByProject = {
+            ...(r.lastActiveFileIdByProject ?? {}),
+            [legacyProject]: r.lastActiveFileId,
+          };
+          migratedScoped = true;
+        }
+        if (
+          Array.isArray(r.recentOpenedFiles) &&
+          r.recentOpenedFiles.length > 0 &&
+          !r.recentOpenedFilesByProject?.[legacyProject]
+        ) {
+          r.recentOpenedFilesByProject = {
+            ...(r.recentOpenedFilesByProject ?? {}),
+            [legacyProject]: r.recentOpenedFiles,
+          };
+          migratedScoped = true;
+        }
+        if (migratedScoped) {
+          window.electronAPI
+            .settingsSet({
+              lastActiveFileIdByProject: r.lastActiveFileIdByProject,
+              recentOpenedFilesByProject: r.recentOpenedFilesByProject,
+            })
+            .catch(() => {});
+          log.info("Migrated global recent/lastActive → per-project maps", { legacyProject });
+        }
       }
 
       set({

@@ -1,0 +1,32 @@
+/** Utilities for resolving project-relative paths (including hidden `.prismnext/`). */
+
+const PRISMNEXT_PREFIX = ".prismnext/";
+
+export function normalizeProjectRoot(root: string): string {
+  return root.replace(/[/\\]+$/, "");
+}
+
+/** Project-relative paths safe to resolve under the project root (no `..` segments). */
+export function isSafeProjectRelativePath(relativePath: string): boolean {
+  const normalized = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
+  if (!normalized) return false;
+  if (normalized.includes("..")) return false;
+  return true;
+}
+
+/** Hidden agent/config paths excluded from the file tree scan. */
+export function isLazyProjectFilePath(relativePath: string): boolean {
+  const normalized = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
+  return normalized.startsWith(PRISMNEXT_PREFIX) || normalized === ".prismnext";
+}
+
+/** Resolve a safe project-relative path to an absolute path, or null if unsafe. */
+export function resolveProjectRelativePath(projectRoot: string, relativePath: string): string | null {
+  if (!isSafeProjectRelativePath(relativePath)) return null;
+  const normalized = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
+  const root = normalizeProjectRoot(projectRoot);
+  const abs = `${root}/${normalized}`;
+  const rootPrefix = root.endsWith("/") ? root : `${root}/`;
+  if (!abs.startsWith(rootPrefix) && abs !== root) return null;
+  return abs;
+}

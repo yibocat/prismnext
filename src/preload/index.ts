@@ -41,12 +41,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		manuscriptDir: string;
 		appliedFiles: Record<string, string>;
 	}) => ipcRenderer.invoke("template:detectChanges", args),
-	templateBackup: (args: {
-		rootPath: string;
-		manuscriptDir: string;
-		files: string[];
-		backupLabel: string;
-	}) => ipcRenderer.invoke("template:backup", args),
+  templateBackup: (args: {
+    rootPath: string;
+    manuscriptDir: string;
+    files: string[];
+    backupLabel: string;
+    sourceTemplateId?: string;
+    targetTemplateId?: string;
+  }) => ipcRenderer.invoke("template:backup", args),
 	templateListBackups: (args: { rootPath: string }) =>
 		ipcRenderer.invoke("template:listBackups", args),
 	templateRestoreBackup: (args: {
@@ -54,6 +56,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		manuscriptDir: string;
 		backupLabel: string;
 	}) => ipcRenderer.invoke("template:restoreBackup", args),
+	templateDeleteBackup: (args: { rootPath: string; backupLabel: string }) =>
+		ipcRenderer.invoke("template:deleteBackup", args),
 
 	// File watcher
 	fsWatchStart: (rootPath: string) =>
@@ -63,9 +67,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	// Dialog operations
 	dialogOpenFolder: () => ipcRenderer.invoke("dialog:openFolder"),
 	dialogOpenFile: () => ipcRenderer.invoke("dialog:openFile"),
+	dialogOpenJsonFile: () => ipcRenderer.invoke("dialog:openJsonFile"),
+	dialogSaveJsonFile: (defaultPath?: string) =>
+		ipcRenderer.invoke("dialog:saveJsonFile", { defaultPath }),
 	shellShowItemInFolder: (absPath: string) =>
 		ipcRenderer.invoke("shell:showItemInFolder", { absPath }),
 	fsExists: (absPath: string) => ipcRenderer.invoke("fs:exists", { absPath }),
+	fsIsFile: (absPath: string) => ipcRenderer.invoke("fs:isFile", { absPath }),
 	projectCreate: (rootPath: string, workspaceDirs?: WorkspaceFolder[]) =>
 		ipcRenderer.invoke("project:create", { rootPath, workspaceDirs }),
 	projectEnsure: (rootPath: string) => ipcRenderer.invoke("project:ensure", { rootPath }),
@@ -184,6 +192,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		provider?: string;
 		thoughtLevel?: string;
 		profileId?: string | null;
+		mcpServerAllowlist?: string[];
+		skillIds?: string[];
 		userDisplayContent?: Record<string, unknown>[];
 	}) =>
 		ipcRenderer.invoke("chat:send", args),
@@ -199,8 +209,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			ipcRenderer.invoke("chat:answerPermission", { permissionId, approved }),
 	chatStatus: () => ipcRenderer.invoke("chat:status"),
 	sessionList: (projectPath?: string) => ipcRenderer.invoke("session:list", { projectPath }),
-	sessionLoad: (sessionId: string, projectPath?: string) =>
-		ipcRenderer.invoke("session:load", { sessionId, projectPath }),
+	sessionLoad: (sessionId: string, projectPath?: string, cwd?: string) =>
+		ipcRenderer.invoke("session:load", { sessionId, projectPath, cwd }),
+	sessionGetDirectory: (sessionId: string) =>
+		ipcRenderer.invoke("session:getDirectory", { sessionId }),
+	sessionReassignDirectory: (fromDirectory: string, toDirectory: string) =>
+		ipcRenderer.invoke("session:reassignDirectory", { fromDirectory, toDirectory }),
 	sessionDelete: (sessionId: string, projectPath?: string) =>
 		ipcRenderer.invoke("session:delete", { sessionId, projectPath }),
 	sessionTruncateToTurn: (args: {
@@ -253,18 +267,36 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("settings:setLayer", { id, enabled }),
 
 	// Commands operations
-	commandsList: () => ipcRenderer.invoke("commands:list"),
+	commandsList: (projectRoot?: string | null) =>
+		ipcRenderer.invoke("commands:list", { projectRoot }),
 	commandsExpand: (name: string, rawInput: string, projectRoot: string) =>
 		ipcRenderer.invoke("commands:expand", { name, rawInput, projectRoot }),
-	commandsCreate: (payload: import("../main/commands/types").CreateCommandPayload) =>
-		ipcRenderer.invoke("commands:create", payload),
-	commandsUpdate: (id: string, payload: import("../main/commands/types").UpdateCommandPayload) =>
-		ipcRenderer.invoke("commands:update", { id, payload }),
-	commandsDelete: (id: string) =>
-		ipcRenderer.invoke("commands:delete", { id }),
+	commandsCreate: (
+		projectRoot: string,
+		payload: import("../main/commands/types").CreateCommandPayload,
+	) => ipcRenderer.invoke("commands:create", { projectRoot, payload }),
+	commandsUpdate: (
+		projectRoot: string,
+		id: string,
+		payload: import("../main/commands/types").UpdateCommandPayload,
+	) => ipcRenderer.invoke("commands:update", { projectRoot, id, payload }),
+	commandsDelete: (projectRoot: string, id: string) =>
+		ipcRenderer.invoke("commands:delete", { projectRoot, id }),
 	commandsToggle: (id: string, enabled: boolean) =>
 		ipcRenderer.invoke("commands:toggle", { id, enabled }),
-	commandsReload: () => ipcRenderer.invoke("commands:reload"),
+	commandsReload: (projectRoot?: string | null) =>
+		ipcRenderer.invoke("commands:reload", { projectRoot }),
+	commandsPreviewImport: (projectRoot: string, pack: unknown) =>
+		ipcRenderer.invoke("commands:previewImport", { projectRoot, pack }),
+	commandsImportPack: (
+		projectRoot: string,
+		pack: unknown,
+		strategy: "skip" | "replace" | "rename",
+	) => ipcRenderer.invoke("commands:importPack", { projectRoot, pack, strategy }),
+	commandsWriteExportFile: (filePath: string, projectRoot: string) =>
+		ipcRenderer.invoke("commands:writeExportFile", { filePath, projectRoot }),
+	commandsReadImportFile: (filePath: string) =>
+		ipcRenderer.invoke("commands:readImportFile", { filePath }),
 
 	// Workspace operations
 	workspaceGetConfig: (projectRoot: string) =>
@@ -417,6 +449,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("git:diffStats", { projectRoot }),
 	gitLog: (projectRoot: string, maxCount?: number) =>
 		ipcRenderer.invoke("git:log", { projectRoot, maxCount }),
+	gitPush: (projectRoot: string) =>
+		ipcRenderer.invoke("git:push", { projectRoot }),
 	gitMerge: (projectRoot: string, sourceBranch: string) =>
 		ipcRenderer.invoke("git:merge", { projectRoot, sourceBranch }),
 	gitMergeNoCommit: (projectRoot: string, sourceBranch: string) =>
@@ -481,6 +515,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		const handler = (_event: Electron.IpcRendererEvent, data: { projectRoot: string; changedPaths?: string[] }) => callback(data);
 		ipcRenderer.on("fs:fileChanged", handler);
 		return () => ipcRenderer.removeListener("fs:fileChanged", handler);
+	},
+	onSkillsIntegrationChanged: (callback: (data: { projectPath: string }) => void) => {
+		const handler = (_event: Electron.IpcRendererEvent, data: { projectPath: string }) => callback(data);
+		ipcRenderer.on("skills:integrationChanged", handler);
+		return () => ipcRenderer.removeListener("skills:integrationChanged", handler);
 	},
 
 	// Log system

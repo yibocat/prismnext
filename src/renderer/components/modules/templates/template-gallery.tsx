@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { SearchIcon, XIcon, FileTextIcon } from "lucide-react";
-import { TemplateMeta, TemplateCategory, TEMPLATE_ICONS } from "./types";
+import { TemplateMeta, TemplateCategory, TEMPLATE_ICONS, CATEGORIES } from "./types";
 
 
 // ─── Gallery ───
@@ -12,17 +12,21 @@ import { TemplateMeta, TemplateCategory, TEMPLATE_ICONS } from "./types";
 export function GalleryView({
   templates,
   category,
+  setCategory,
   search,
   setSearch,
   onSelect,
   onUse,
+  canApply = true,
 }: {
   templates: TemplateMeta[] | null;
   category: TemplateCategory | "all";
+  setCategory: (c: TemplateCategory | "all") => void;
   search: string;
   setSearch: (s: string) => void;
   onSelect: (t: TemplateMeta) => void;
   onUse: (t: TemplateMeta) => void;
+  canApply?: boolean;
 }) {
   if (!templates) {
     return (
@@ -44,12 +48,16 @@ export function GalleryView({
       );
     }
     return list;
-  }, [category, search]);
+  }, [templates, category, search]);
+
+  const activeCategoryLabel =
+    category === "all" ? null : CATEGORIES.find((c) => c.id === category)?.label ?? category;
+  const totalCount = templates?.length ?? 0;
 
   return (
-    <div className="flex-1 overflow-y-auto pt-8 pb-8">
+    <div className="flex-1 overflow-y-auto pb-8">
       {/* Search bar */}
-      <div className="relative mb-6">
+      <div className="relative mb-4">
         <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/40 pointer-events-none" />
         <Input
           value={search}
@@ -67,13 +75,48 @@ export function GalleryView({
         )}
       </div>
 
+      {templates && totalCount > 0 && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-4 text-[length:var(--font-size-11)] text-muted-foreground">
+          <span>
+            {filtered.length === totalCount
+              ? `${totalCount} templates`
+              : `Showing ${filtered.length} of ${totalCount}`}
+          </span>
+          {activeCategoryLabel ? (
+            <>
+              <span className="text-muted-foreground/40">·</span>
+              <span>Category: {activeCategoryLabel}</span>
+              <button
+                type="button"
+                className="text-primary hover:underline underline-offset-2"
+                onClick={() => setCategory("all")}
+              >
+                Show all
+              </button>
+            </>
+          ) : null}
+          {search.trim() ? (
+            <>
+              <span className="text-muted-foreground/40">·</span>
+              <button
+                type="button"
+                className="text-primary hover:underline underline-offset-2"
+                onClick={() => setSearch("")}
+              >
+                Clear search
+              </button>
+            </>
+          ) : null}
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
           <SearchIcon className="size-8 opacity-20" />
           <p className="text-[length:var(--font-size-13)]">No templates found</p>
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
+        <div className="grid grid-cols-1 @sm:grid-cols-2 @md:grid-cols-3 @2xl:grid-cols-4 gap-3">
           {filtered.map((t) => (
             <Card
               key={t.id}
@@ -93,6 +136,7 @@ export function GalleryView({
                 <Button
                   size="sm"
                   className="h-7 w-full text-[length:var(--font-size-12)] shadow-none"
+                  disabled={!canApply}
                   onClick={(e) => { e.stopPropagation(); onUse(t); }}
                 >
                   Use

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   computeEffectiveSidebarWidth,
+  clampSidebarWidth,
+  isSidebarSqueezedByContainer,
   shouldAutoCloseSplitSidebar,
   shouldExitFullMode,
   canAutoOpenSplitSidebar,
@@ -25,5 +27,16 @@ describe("right-area-sidebar-layout", () => {
     expect(shouldExitFullMode(RIGHT_AREA_SPLIT_RECOVER - 1)).toBe(false);
     expect(shouldExitFullMode(RIGHT_AREA_SPLIT_RECOVER)).toBe(true);
     expect(canAutoOpenSplitSidebar(RIGHT_AREA_SPLIT_RECOVER)).toBe(true);
+  });
+
+  it("clamps drag width to sidebar min/max", () => {
+    expect(clampSidebarWidth(100)).toBe(280);
+    expect(clampSidebarWidth(320)).toBe(320);
+    expect(clampSidebarWidth(900)).toBe(520);
+  });
+
+  it("detects container squeeze without overwriting stored preference", () => {
+    expect(isSidebarSqueezedByContainer(300, 450, 320)).toBe(true);
+    expect(isSidebarSqueezedByContainer(320, 600, 320)).toBe(false);
   });
 });

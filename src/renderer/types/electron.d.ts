@@ -197,6 +197,8 @@ export interface ElectronAPI {
     manuscriptDir: string;
     files: string[];
     backupLabel: string;
+    sourceTemplateId?: string;
+    targetTemplateId?: string;
   }) => Promise<{ backupPath: string }>;
   templateListBackups: (args: { rootPath: string }) => Promise<
     { label: string; timestamp: string; files: string[] }[]
@@ -206,6 +208,10 @@ export interface ElectronAPI {
     manuscriptDir: string;
     backupLabel: string;
   }) => Promise<{ restored: string[] }>;
+  templateDeleteBackup: (args: {
+    rootPath: string;
+    backupLabel: string;
+  }) => Promise<{ deleted: boolean }>;
 
   // File watcher operations
   fsWatchStart: (rootPath: string) => Promise<void>;
@@ -220,8 +226,17 @@ export interface ElectronAPI {
     canceled: boolean;
     paths: string[];
   }>;
+  dialogOpenJsonFile: () => Promise<{
+    canceled: boolean;
+    path: string | null;
+  }>;
+  dialogSaveJsonFile: (defaultPath?: string) => Promise<{
+    canceled: boolean;
+    path: string | null;
+  }>;
   shellShowItemInFolder: (absPath: string) => Promise<void>;
   fsExists: (absPath: string) => Promise<boolean>;
+  fsIsFile: (absPath: string) => Promise<boolean>;
   projectCreate: (rootPath: string, workspaceDirs?: import("./workspace").WorkspaceFolder[]) => Promise<void>;
   projectEnsure: (rootPath: string) => Promise<{ success: boolean }>;
   projectScaffoldAgentsMd: (rootPath: string) => Promise<{
@@ -415,6 +430,8 @@ export interface ElectronAPI {
     provider?: string;
     thoughtLevel?: string;
     profileId?: string | null;
+    mcpServerAllowlist?: string[];
+    skillIds?: string[];
     userDisplayContent?: Record<string, unknown>[];
   }) => Promise<void>;
   chatCancel: (sessionId: string) => Promise<void>;
@@ -423,8 +440,10 @@ export interface ElectronAPI {
   chatAnswerQuestion: (questionId: string, answer: string) => Promise<{ success: boolean; error?: string }>;
   chatAnswerPermission: (permissionId: string, approved: boolean) => Promise<void>;
   chatStatus: () => Promise<{ available: boolean; version: string }>;
-  sessionList: (projectPath?: string) => Promise<Array<{ id: string; title: string; lastModified: number; createdAt: number }>>;
-  sessionLoad: (sessionId: string, projectPath?: string) => Promise<any[]>;
+  sessionList: (projectPath?: string) => Promise<Array<{ id: string; title: string; lastModified: number; createdAt: number; directory?: string }>>;
+  sessionLoad: (sessionId: string, projectPath?: string, cwd?: string) => Promise<any[]>;
+  sessionGetDirectory: (sessionId: string) => Promise<string | null>;
+  sessionReassignDirectory: (fromDirectory: string, toDirectory: string) => Promise<number>;
   sessionDelete: (sessionId: string, projectPath?: string) => Promise<{ success: boolean; error?: string }>;
   sessionTruncateToTurn: (args: {
     sessionId: string;
@@ -457,6 +476,7 @@ export interface ElectronAPI {
 
   // File watcher events (Main → Renderer)
   onFileChanged: (callback: (data: { projectRoot: string; changedPaths?: string[] }) => void) => () => void;
+  onSkillsIntegrationChanged: (callback: (data: { projectPath: string }) => void) => () => void;
 
   // Settings operations
   settingsGet: () => Promise<{
@@ -487,13 +507,31 @@ export interface ElectronAPI {
   settingsGetDefaultPersona: () => Promise<string>;
 
   // Commands operations
-  commandsList: () => Promise<import("@commands/types").CommandDef[]>;
+  commandsList: (projectRoot?: string | null) => Promise<import("@commands/types").CommandDef[]>;
   commandsExpand: (name: string, rawInput: string, projectRoot: string) => Promise<string>;
-  commandsCreate: (payload: import("@commands/types").CreateCommandPayload) => Promise<import("@commands/types").CommandDef>;
-  commandsUpdate: (id: string, payload: import("@commands/types").UpdateCommandPayload) => Promise<import("@commands/types").CommandDef>;
-  commandsDelete: (id: string) => Promise<void>;
+  commandsCreate: (
+    projectRoot: string,
+    payload: import("@commands/types").CreateCommandPayload,
+  ) => Promise<import("@commands/types").CommandDef>;
+  commandsUpdate: (
+    projectRoot: string,
+    id: string,
+    payload: import("@commands/types").UpdateCommandPayload,
+  ) => Promise<import("@commands/types").CommandDef>;
+  commandsDelete: (projectRoot: string, id: string) => Promise<void>;
   commandsToggle: (id: string, enabled: boolean) => Promise<import("@commands/types").CommandDef[]>;
-  commandsReload: () => Promise<import("@commands/types").CommandDef[]>;
+  commandsReload: (projectRoot?: string | null) => Promise<import("@commands/types").CommandDef[]>;
+  commandsPreviewImport: (
+    projectRoot: string,
+    pack: unknown,
+  ) => Promise<import("@commands/export-import").CommandImportPreview>;
+  commandsImportPack: (
+    projectRoot: string,
+    pack: unknown,
+    strategy: import("@commands/export-import").CommandImportConflictStrategy,
+  ) => Promise<import("@commands/export-import").CommandImportResult>;
+  commandsWriteExportFile: (filePath: string, projectRoot: string) => Promise<void>;
+  commandsReadImportFile: (filePath: string) => Promise<unknown>;
 
   // Workspace operations
   workspaceGetConfig: (projectRoot: string) => Promise<import("./workspace").WorkspaceFolder[]>;
@@ -577,6 +615,7 @@ export interface ElectronAPI {
   }>;
   gitLog: (projectRoot: string, maxCount?: number) => Promise<Array<{ hash: string; message: string; author: string; date: string; graph: string; refs: string; insertions: number; deletions: number }>>;
   gitDiscard: (projectRoot: string, filePath: string, staged: boolean, untracked: boolean, worktreeStatus: string) => Promise<GitResultData>;
+  gitPush: (projectRoot: string) => Promise<GitResultData & { output?: string }>;
   gitMerge: (projectRoot: string, sourceBranch: string) => Promise<GitMergeResultData>;
   gitMergeNoCommit: (projectRoot: string, sourceBranch: string) => Promise<GitMergeResultData>;
   gitAbortMerge: (projectRoot: string) => Promise<GitResultData>;

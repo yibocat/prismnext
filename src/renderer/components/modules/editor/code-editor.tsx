@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useCallback } from "react";
+import { useEffect, useRef, useMemo, useCallback, useState } from "react";
 import { EditorState, Compartment } from "@codemirror/state";
 import {
   EditorView,
@@ -9,7 +9,7 @@ import {
   highlightSpecialChars,
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { editorChromeTheme } from "@/lib/editor-themes/editor-chrome";
+import { editorChromeTheme, editorTypographyTheme } from "@/lib/editor-themes/editor-chrome";
 import { getThemeExtensionSync, getThemeExtensionAsync } from "@/lib/editor-themes/registry";
 import { diffDisplayTheme, diffDisplayThemeExtra, contentMetricsTheme } from "@/lib/editor-themes/diff-overrides";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -28,6 +28,7 @@ import { getLanguageLoader } from "@/lib/editor/language-mappings";
 import { ChangesBar } from "./changes-bar";
 import { saveViewerPosition, loadViewerPosition } from "@/lib/editor/viewer-position";
 import { useTabContext } from "@/lib/workspace/tab-context";
+import { CodeMirrorInsertHost } from "./codemirror-insert-host";
 
 const log = createLogger("code-editor");
 
@@ -36,6 +37,7 @@ const mergeCompartment = new Compartment();
 export function CodeEditor() {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const [viewEpoch, setViewEpoch] = useState(0);
   const isMergeActiveRef = useRef(false);
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -46,7 +48,10 @@ export function CodeEditor() {
   const { tab, isActive } = useTabContext();
   const fileId = tab.kind === "file" || tab.kind === "texworkspace" ? tab.fileId : null;
   const filePath = tab.filePath ?? "";
-  const ext = (() => { const dot = filePath.lastIndexOf("."); return dot === -1 ? "" : filePath.slice(dot).toLowerCase(); })();
+  const ext = (() => {
+    const dot = filePath.lastIndexOf(".");
+    return dot === -1 ? "" : filePath.slice(dot).toLowerCase();
+  })();
 
   const changes = useChangesStore((s) => s.changes);
   const contentVersion = useDocumentStore((s) => s.contentVersion);
@@ -156,20 +161,7 @@ export function CodeEditor() {
         highlightSpecialChars(),
         drawSelection(),
         highlightActiveLine(),
-        EditorView.theme({
-          "&": {
-            fontFamily: "var(--font-editor)",
-            fontSize: "var(--font-editor-size)",
-          },
-          ".cm-content": {
-            fontFamily: "var(--font-editor)",
-            fontSize: "var(--font-editor-size)",
-          },
-          ".cm-gutters": {
-            fontFamily: "var(--font-editor)",
-            fontSize: "var(--font-editor-size)",
-          },
-        }),
+        editorTypographyTheme,
         history(),
         keymap.of([
           ...defaultKeymap,
@@ -315,6 +307,7 @@ export function CodeEditor() {
 
     const view = new EditorView({ state, parent: containerRef.current });
     viewRef.current = view;
+    setViewEpoch((n) => n + 1);
 
     if (isActive) {
       view.focus();
@@ -479,7 +472,16 @@ export function CodeEditor() {
   }, [contentVersion]);
 
   return (
-    <div className="flex h-full flex-col min-h-0">
+    <CodeMirrorInsertHost
+      viewRef={viewRef}
+      filePath={filePath}
+      fileId={fileId ?? undefined}
+      source="editor"
+      sourceTabId={tab.id}
+      enabled={isActive && !!fileId}
+      viewReadySignal={viewEpoch}
+    >
+      <div className="flex h-full flex-col min-h-0">
       {/* Subtle loading bar while file content is being fetched from disk */}
       {!contentLoaded && fileId && (
         <div className="h-0.5 w-full bg-muted overflow-hidden shrink-0">
@@ -508,6 +510,7 @@ export function CodeEditor() {
         />
       )}
       <div ref={containerRef} className="flex-1 overflow-auto [&_.cm-editor]:h-full" />
-    </div>
+      </div>
+    </CodeMirrorInsertHost>
   );
 }

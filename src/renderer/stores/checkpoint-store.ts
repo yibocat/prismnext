@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import { useDocumentStore } from "./document-store";
-import { useWorktreeStore } from "./worktree-store";
-import { useChangesStore } from "./changes-store";
+import { resolveWorktreePathForSend, resolveWorktreeAtCheckout } from "@/lib/git/checkout-context";
 import { useChatStore, type ChatStreamMessage } from "./chat-store";
+import { useChangesStore } from "./changes-store";
 import { createLogger } from "@/services/logger";
 
 const log = createLogger("checkpoint-store");
@@ -42,6 +42,8 @@ interface TabCheckpointState {
   pendingTurn: PendingTurn | null;
   /** Single-step undo: workspace + checkpoints before the last restore */
   restoreUndo: RestoreUndoState | null;
+  /** Checkout root when checkpoints were captured (worktree path or project root). */
+  boundCheckoutPath: string | null;
 }
 
 interface CheckpointStoreState {
@@ -50,6 +52,11 @@ interface CheckpointStoreState {
   initSession: (tabId: string, sessionId: string) => Promise<void>;
   setSessionId: (tabId: string, sessionId: string) => void;
   clearTab: (tabId: string) => void;
+  /** Remove all restore snapshots for a tab (worktree merge/close). */
+  clearTabCheckpoints: (tabId: string) => Promise<void>;
+  /** Delete on-disk checkpoint files that reference a closed/merged worktree. */
+  clearOrphanCheckpointsOnDiskForWorktree: (worktreePath: string) => Promise<void>;
+  clearAll: () => void;
   beginTurn: (tabId: string, turnIndex: number) => void;
   noteFileMutation: (
     tabId: string,
@@ -73,7 +80,45 @@ function emptyTabState(): TabCheckpointState {
     checkpoints: [],
     pendingTurn: null,
     restoreUndo: null,
+    boundCheckoutPath: null,
   };
+}
+
+function normalizeCheckoutPath(path: string): string {
+  return path.replace(/\/+$/, "");
+}
+
+function worktreePathPrefix(worktreePath: string): string {
+  return `${normalizeCheckoutPath(worktreePath)}/`;
+}
+
+function checkpointReferencesWorktree(
+  checkpoints: TurnCheckpoint[],
+  worktreePath: string,
+): boolean {
+  const wt = normalizeCheckoutPath(worktreePath);
+  const prefix = worktreePathPrefix(wt);
+  for (const cp of checkpoints) {
+    for (const f of cp.files) {
+      const abs = normalizeCheckoutPath(f.absolutePath);
+      if (abs === wt || abs.startsWith(prefix)) return true;
+    }
+  }
+  return false;
+}
+
+async function listCheckpointSessionIds(projectRoot: string): Promise<string[]> {
+  const dir = `${projectRoot}/.prismnext/agent/checkpoints`;
+  try {
+    const exists = await window.electronAPI.fsExists(dir);
+    if (!exists) return [];
+    const { files } = await window.electronAPI.fsScan(dir);
+    return files
+      .filter((f) => f.relativePath.endsWith(".json"))
+      .map((f) => f.relativePath.replace(/\.json$/, "").split("/").pop() || "");
+  } catch {
+    return [];
+  }
 }
 
 function checkpointPath(projectRoot: string, sessionId: string): string {
@@ -165,9 +210,50 @@ function snapshotFromCheckpoints(checkpoints: TurnCheckpoint[]): CheckpointFile[
   return [...map.values()];
 }
 
-function sessionPaths() {
+async function deleteCheckpointsOnDisk(projectRoot: string, sessionId: string): Promise<void> {
+  const path = checkpointPath(projectRoot, sessionId);
+  try {
+    const exists = await window.electronAPI.fsExists(path);
+    if (exists) await window.electronAPI.fsDelete(path);
+  } catch {
+    // Best-effort
+  }
+}
+
+function currentBoundCheckoutPath(tabId?: string): string | null {
+  const projectRoot = useDocumentStore.getState().projectRoot;
+  if (!projectRoot) return null;
+  const chat = useChatStore.getState();
+  const tab = tabId
+    ? chat.tabs.find((t) => t.id === tabId)
+    : chat.tabs.find((t) => t.id === chat.activeTabId);
+  return tab?.sessionCwd ?? projectRoot;
+}
+
+function checkpointsMatchCheckout(
+  checkpoints: TurnCheckpoint[],
+  boundPath: string | null,
+): boolean {
+  if (!boundPath || checkpoints.length === 0) return true;
+  const prefix = boundPath.endsWith("/") ? boundPath : `${boundPath}/`;
+  for (const cp of checkpoints) {
+    for (const f of cp.files) {
+      if (f.absolutePath === boundPath || f.absolutePath.startsWith(prefix)) {
+        return true;
+      }
+    }
+  }
+  // Legacy checkpoints without matching paths — require current cwd match
+  return boundPath === useDocumentStore.getState().checkoutRoot;
+}
+
+function sessionPaths(tabId?: string) {
   const projectRoot = useDocumentStore.getState().projectRoot || "";
-  const worktreePath = useWorktreeStore.getState().activeWorktree?.path;
+  const chat = useChatStore.getState();
+  const tab = tabId
+    ? chat.tabs.find((t) => t.id === tabId)
+    : chat.tabs.find((t) => t.id === chat.activeTabId);
+  const worktreePath = resolveWorktreePathForSend(tab, projectRoot || null);
   return { projectRoot, worktreePath };
 }
 
@@ -189,6 +275,9 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
           checkpoints,
           pendingTurn: existing?.pendingTurn ?? null,
           restoreUndo: existing?.restoreUndo ?? null,
+          boundCheckoutPath:
+            existing?.boundCheckoutPath
+            ?? currentBoundCheckoutPath(tabId),
         },
       },
     }));
@@ -214,6 +303,45 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
       return { byTab: next };
     });
   },
+
+  clearTabCheckpoints: async (tabId) => {
+    const tab = get().byTab[tabId];
+    const chatTab = useChatStore.getState().tabs.find((t) => t.id === tabId);
+    const sessionId = tab?.sessionId ?? chatTab?.sessionId ?? null;
+    const projectRoot = useDocumentStore.getState().projectRoot;
+    if (projectRoot && sessionId) {
+      await deleteCheckpointsOnDisk(projectRoot, sessionId);
+    }
+    set((s) => {
+      const existing = s.byTab[tabId] ?? emptyTabState();
+      return {
+        byTab: {
+          ...s.byTab,
+          [tabId]: {
+            ...existing,
+            sessionId: sessionId ?? existing.sessionId,
+            checkpoints: [],
+            pendingTurn: null,
+            restoreUndo: null,
+            boundCheckoutPath: currentBoundCheckoutPath(tabId),
+          },
+        },
+      };
+    });
+  },
+
+  clearOrphanCheckpointsOnDiskForWorktree: async (worktreePath) => {
+    const projectRoot = useDocumentStore.getState().projectRoot;
+    if (!projectRoot) return;
+
+    for (const sessionId of await listCheckpointSessionIds(projectRoot)) {
+      const checkpoints = await loadCheckpointsFromDisk(projectRoot, sessionId);
+      if (!checkpointReferencesWorktree(checkpoints, worktreePath)) continue;
+      await deleteCheckpointsOnDisk(projectRoot, sessionId);
+    }
+  },
+
+  clearAll: () => set({ byTab: {} }),
 
   beginTurn: (tabId, turnIndex) => {
     set((s) => {
@@ -313,6 +441,7 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
           checkpoints,
           pendingTurn: null,
           restoreUndo: null,
+          boundCheckoutPath: tab.boundCheckoutPath ?? currentBoundCheckoutPath(tabId),
         },
       },
     }));
@@ -332,8 +461,13 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
   },
 
   canRestoreToTurn: (tabId, turnIndex) => {
-    const cp = get().getCheckpoint(tabId, turnIndex);
-    return Boolean(cp && cp.touchedThisTurn.length > 0);
+    const tab = get().byTab[tabId];
+    const cp = tab?.checkpoints.find((c) => c.turnIndex === turnIndex);
+    if (!cp || cp.touchedThisTurn.length === 0) return false;
+    const bound = tab.boundCheckoutPath ?? currentBoundCheckoutPath(tabId);
+    const cwd = currentBoundCheckoutPath(tabId);
+    if (bound && cwd && bound !== cwd) return false;
+    return checkpointsMatchCheckout(tab.checkpoints, bound);
   },
 
   canUndoRestore: (tabId) => Boolean(get().byTab[tabId]?.restoreUndo),
@@ -343,11 +477,11 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
     const target = tab?.checkpoints.find((c) => c.turnIndex === turnIndex);
     if (!tab || !target) return 0;
 
-    const { projectRoot, worktreePath } = sessionPaths();
-    if (!projectRoot) return 0;
-
     const chatTab = useChatStore.getState().tabs.find((t) => t.id === tabId);
     const messagesBefore = chatTab ? [...chatTab.messages] : [];
+
+    const { projectRoot, worktreePath } = sessionPaths(tabId);
+    if (!projectRoot) return 0;
 
     const currentSnapshot: RestoreUndoState = {
       files: await Promise.all(
@@ -360,7 +494,7 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
       messages: messagesBefore,
     };
 
-    const sessionId = tab.sessionId ?? chatTab?.sessionId ?? null;
+    const sessionId = tab?.sessionId ?? chatTab?.sessionId ?? null;
     if (sessionId) {
       await window.electronAPI.sessionTruncateToTurn({
         sessionId,
@@ -368,7 +502,7 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
         worktreePath,
         turnIndex,
       });
-      useChatStore.getState().truncateToTurn(tabId, turnIndex);
+      await useChatStore.getState().resyncTabMessagesFromDisk(tabId);
     } else {
       useChatStore.getState().truncateToTurn(tabId, turnIndex);
     }
@@ -410,7 +544,7 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
     const undo = tab?.restoreUndo;
     if (!tab || !undo) return false;
 
-    const { projectRoot, worktreePath } = sessionPaths();
+    const { projectRoot, worktreePath } = sessionPaths(tabId);
     const sessionId = tab.sessionId
       ?? useChatStore.getState().tabs.find((t) => t.id === tabId)?.sessionId
       ?? null;
@@ -459,7 +593,7 @@ export function resolveRelativeToolPath(filePath: string): {
   const projectRoot = docState.projectRoot;
   if (!projectRoot) return null;
 
-  const activeWorktree = useWorktreeStore.getState().activeWorktree;
+  const activeWorktree = resolveWorktreeAtCheckout();
 
   let relativePath = filePath;
   if (activeWorktree && filePath.startsWith(activeWorktree.path)) {

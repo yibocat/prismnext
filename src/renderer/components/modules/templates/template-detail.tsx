@@ -67,10 +67,14 @@ export function DetailView({
   template,
   onBack,
   onUse,
+  canApply = true,
+  applyDisabledReason,
 }: {
   template: TemplateFull;
   onBack: () => void;
   onUse: (t: TemplateFull) => void;
+  canApply?: boolean;
+  applyDisabledReason?: string;
 }) {
   const [showSource, setShowSource] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -88,7 +92,7 @@ export function DetailView({
   }, [template.id]);
 
   return (
-    <div className="flex-1 overflow-y-auto pt-8 pb-8">
+    <div className="flex-1 overflow-y-auto pb-8">
       <button
         type="button"
         className="flex items-center gap-1.5 text-[length:var(--font-size-12)] text-muted-foreground hover:text-foreground transition-colors mb-6"
@@ -130,7 +134,13 @@ export function DetailView({
 
           {/* Actions */}
           <div className="flex items-center gap-2 pt-2">
-            <Button onClick={() => onUse(template)} size="sm" className="shadow-none">
+            <Button
+              onClick={() => onUse(template)}
+              size="sm"
+              className="shadow-none"
+              disabled={!canApply}
+              title={applyDisabledReason}
+            >
               Use
             </Button>
             <Button variant="outline" size="sm" className="shadow-none" onClick={() => setShowSource(true)}>

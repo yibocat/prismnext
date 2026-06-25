@@ -1,31 +1,24 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { Kbd } from "@/components/ui/kbd";
-import { ChatComposer } from "./chat-composer";
+import { ChatComposerCore } from "./chat-composer-core";
 import { ChatMessages } from "./chat-messages";
 import { RestoreUndoBar } from "./restore-undo-bar";
 import { useChatStore } from "@/stores/chat-store";
-import {
-  ArrowUpIcon,
-  PlusIcon,
-  FileTextIcon,
-  ImageIcon,
-  XIcon,
-  Maximize2Icon,
-} from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { useLayoutStore } from "@/stores/layout-store";
+import { useComposerInsertStore } from "@/stores/composer-insert-store";
+import { useComposerEditorStore } from "@/stores/composer-editor-store";
+import { composerNeedsExpandedLayout } from "@/hooks/use-chat-composer";
+import { isComposerEmpty } from "@/lib/chat/composer-parts";
+import { loadDraftParts } from "./inline-composer";
+import { XIcon } from "lucide-react";
 import { WorktreeSelector } from "./worktree-selector";
 import { cn } from "@/lib/utils";
 
+/** idle: hover pill · input: compact capsule · expanded: full composer */
 type Phase = "idle" | "input" | "expanded";
 
 export function AiBar() {
   const [phase, setPhase] = useState<Phase>("idle");
-  const [value, setValue] = useState("");
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [panelClosing, setPanelClosing] = useState(false);
   const panelClosingRef = useRef(false);
@@ -40,86 +33,113 @@ export function AiBar() {
       setPanelClosing(false);
     }, 150);
   }, []);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const expandedRef = useRef<HTMLDivElement>(null);
-  const capsuleRef = useRef<HTMLDivElement>(null);
-  const pendingTextRef = useRef("");
-  const willExpandRef = useRef(false);
 
-  // Keep latest value accessible from the document-level listener
-  const valueRef = useRef(value);
-  valueRef.current = value;
+  const composerShellRef = useRef<HTMLDivElement>(null);
+  const morphRef = useRef<HTMLDivElement>(null);
 
-  const sendPrompt = useChatStore((s) => s.sendPrompt);
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
+  const tabDraft = useChatStore(
+    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.draft,
+  );
   const activeTabTitle = useChatStore((s) => {
     const tab = s.tabs.find((t) => t.id === s.activeTabId);
     return tab?.title ?? "Chat";
   });
 
-  // Toolbar visible when there's a conversation (messages or streaming)
-  const hasConversation = messages.length > 0 || isStreaming;
+  const aiBarComposerFocusNonce = useLayoutStore((s) => s.aiBarComposerFocusNonce);
+  const pendingInsert = useComposerInsertStore((s) => s.pendingInsert);
 
+  const draftParts = loadDraftParts(tabDraft);
+  const draftEmpty = isComposerEmpty(draftParts);
+  const draftEmptyRef = useRef(draftEmpty);
+  draftEmptyRef.current = draftEmpty;
+
+  const hasConversation = messages.length > 0 || isStreaming;
   const isInputting = phase === "input";
+  const isExpanded = phase === "expanded";
+  const isComposerVisible = phase !== "idle";
+
+  const focusComposer = useCallback(() => {
+    requestAnimationFrame(() => {
+      useComposerEditorStore.getState().handle?.focus();
+    });
+  }, []);
 
   const openInput = useCallback(() => {
     setPhase("input");
-    requestAnimationFrame(() => inputRef.current?.focus());
-  }, []);
+    focusComposer();
+  }, [focusComposer]);
+
+  const openExpanded = useCallback(() => {
+    setPhase("expanded");
+    focusComposer();
+  }, [focusComposer]);
 
   const collapseToIdle = useCallback(() => {
     setPhase("idle");
-    setValue("");
   }, []);
 
-  const expandFromDropdown = useCallback(() => {
-    willExpandRef.current = true;
-    setPhase("expanded");
-  }, []);
+  const collapseToInput = useCallback(() => {
+    setPhase("input");
+    focusComposer();
+  }, [focusComposer]);
 
-  // ─── Collapse on click-outside (only when input is empty, not when panel is open) ───
+  // Restore compact capsule when draft has content (e.g. after tab switch)
   useEffect(() => {
-    if (!isInputting || isPanelOpen) return;
+    if (phase === "idle" && !draftEmpty) {
+      setPhase("input");
+    }
+  }, [phase, draftEmpty]);
+
+  useEffect(() => {
+    if (aiBarComposerFocusNonce === 0) return;
+    const expandForInsert =
+      pendingInsert?.kind === "code" ||
+      pendingInsert?.kind === "git-diff" ||
+      pendingInsert?.kind === "terminal";
+    if (expandForInsert) openExpanded();
+    else openInput();
+  }, [aiBarComposerFocusNonce, openExpanded, openInput, pendingInsert?.kind]);
+
+  // Expand only for explicit newlines in draft — line-full overflow handled in editor
+  useEffect(() => {
+    if (phase !== "input") return;
+    if (composerNeedsExpandedLayout(draftParts)) {
+      setPhase("expanded");
+    }
+  }, [draftParts, phase]);
+
+  // Shrink back to compact capsule when expanded content is cleared
+  useEffect(() => {
+    if (phase === "expanded" && draftEmpty) {
+      collapseToInput();
+    }
+  }, [phase, draftEmpty, collapseToInput]);
+
+  // Click outside → idle when compact capsule is empty
+  useEffect(() => {
+    if (phase !== "input" || isPanelOpen) return;
 
     const handleMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!capsuleRef.current) return;
-
-      // Click inside capsule → stay
-      if (capsuleRef.current.contains(target)) return;
-
-      // Click inside a Radix dropdown/portal → stay
+      if (composerShellRef.current?.contains(target)) return;
       if (target.closest("[data-radix-menu-content]") || target.closest("[data-radix-popper-content-wrapper]")) return;
-
-      // Click outside, input empty → collapse
-      if (!valueRef.current.trim()) {
-        collapseToIdle();
-      }
+      if (draftEmptyRef.current) collapseToIdle();
     };
 
     document.addEventListener("mousedown", handleMouseDown, true);
     return () => document.removeEventListener("mousedown", handleMouseDown, true);
-  }, [isInputting, isPanelOpen, collapseToIdle]);
+  }, [phase, isPanelOpen, collapseToIdle]);
 
-  // ─── Close panel on click-outside ───
   useEffect(() => {
     if (!isPanelOpen) return;
 
     const handleMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-
-      // Click inside the panel → stay
       if (target.closest("[data-ai-bar-panel]")) return;
-
-      // Click inside the capsule or expanded composer → stay (user is typing)
-      if (capsuleRef.current?.contains(target)) return;
-      if (expandedRef.current?.contains(target)) return;
-
-      // Click inside a Radix dropdown/portal → stay
+      if (composerShellRef.current?.contains(target)) return;
       if (target.closest("[data-radix-menu-content]") || target.closest("[data-radix-popper-content-wrapper]")) return;
-
-      // Click anywhere else → close panel
       closePanel();
     };
 
@@ -127,91 +147,59 @@ export function AiBar() {
     return () => document.removeEventListener("mousedown", handleMouseDown, true);
   }, [isPanelOpen, closePanel]);
 
-  // ─── After ChatComposer mounts, inject the pending text and resume typing ───
-  useEffect(() => {
-    if (phase !== "expanded" || !pendingTextRef.current) return;
-    const container = expandedRef.current;
-    if (!container) return;
-    const timer = requestAnimationFrame(() => {
-      const textarea = container.querySelector("textarea");
-      if (!textarea) return;
-      const text = pendingTextRef.current;
-      pendingTextRef.current = "";
-      const nativeSetter = Object.getOwnPropertyDescriptor(
-        HTMLTextAreaElement.prototype, "value",
-      )?.set;
-      nativeSetter?.call(textarea, text);
-      textarea.dispatchEvent(new Event("input", { bubbles: true }));
-      requestAnimationFrame(() => {
-        textarea.focus();
-        textarea.setSelectionRange(text.length, text.length);
-      });
-    });
-    return () => cancelAnimationFrame(timer);
-  }, [phase]);
-
-  const expandToComposer = useCallback((text: string) => {
-    if (!text.trim()) return;
-    willExpandRef.current = true;
-    pendingTextRef.current = text;
-    setPhase("expanded");
-  }, []);
-
-  const handleSend = useCallback(() => {
-    if (!value.trim() || isStreaming) return;
-    sendPrompt(value);
-    setValue("");
-    inputRef.current?.focus();
-  }, [value, isStreaming, sendPrompt]);
-
-  const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const v = e.target.value;
-      setValue(v);
-      if (e.target.scrollWidth > e.target.clientWidth && v.trim()) {
-        expandToComposer(v);
-      }
-    },
-    [expandToComposer],
-  );
-
-  const handleInputKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        handleSend();
-      }
-    },
-    [handleSend],
+  const toolbar = !isPanelOpen && (
+    <div
+      className={cn(
+        "flex items-center pointer-events-auto transition-all duration-200 ease-out",
+        isComposerVisible
+          ? "h-7 mb-2 opacity-100 translate-y-0"
+          : "h-0 mb-0 opacity-0 -translate-y-1 overflow-hidden",
+      )}
+    >
+      {hasConversation && (
+        <button
+          type="button"
+          className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors mr-1"
+          onClick={openPanel}
+        >
+          {isStreaming ? (
+            <>
+              <span className="relative flex size-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                <span className="relative inline-flex size-1.5 rounded-full bg-primary" />
+              </span>
+              Running
+            </>
+          ) : (
+            "Done"
+          )}
+        </button>
+      )}
+      <WorktreeSelector />
+    </div>
   );
 
   return (
     <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center pb-5 pointer-events-none z-10">
-      {/* ── Chat Panel — conversation messages only ── */}
       {(isPanelOpen || panelClosing) && (
-        <div className={cn(
-          "w-full max-w-3xl mx-auto pointer-events-none mb-2",
-          panelClosing ? "animate-out fade-out slide-out-to-bottom-2 duration-150" : "animate-in fade-in slide-in-from-bottom-2 duration-200",
-        )}>
+        <div
+          className={cn(
+            "w-full max-w-3xl mx-auto pointer-events-none mb-2",
+            panelClosing
+              ? "animate-out fade-out slide-out-to-bottom-2 duration-150"
+              : "animate-in fade-in slide-in-from-bottom-2 duration-200",
+          )}
+        >
           <div className="px-3 w-full">
-          <div
-            data-ai-bar-panel
-            className="w-full pointer-events-auto rounded-lg border border-border bg-card shadow-lg overflow-hidden flex flex-col"
-            style={{ height: "min(60vh, 600px)" }}
-          >
-            {/* Panel header — session title + actions */}
-            <div className="flex items-center justify-between shrink-0 px-3 py-1.5">
-              <span className="text-[length:var(--font-chat-meta)] text-muted-foreground truncate">
-                {activeTabTitle}
-              </span>
-              <div className="flex items-center gap-0.5 shrink-0">
-                <button
-                  type="button"
-                  className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                  title="Maximize"
-                >
-                  <Maximize2Icon className="size-3.5" />
-                </button>
+            <div
+              data-ai-bar-panel
+              className="w-full pointer-events-auto rounded-lg border border-border bg-card shadow-lg overflow-hidden flex flex-col"
+              style={{ height: "min(60vh, 600px)" }}
+            >
+              <div className="flex items-center justify-between shrink-0 px-3 py-1.5">
+                <span className="text-[length:var(--font-chat-meta)] text-muted-foreground truncate">
+                  {activeTabTitle}
+                </span>
                 <button
                   type="button"
                   className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -221,71 +209,37 @@ export function AiBar() {
                   <XIcon className="size-3.5" />
                 </button>
               </div>
+              <div className="flex-1 min-h-0 flex flex-col">
+                <ChatMessages />
+              </div>
+              <RestoreUndoBar />
             </div>
-            {/* Messages — needs flex-col parent so ChatMessages' flex-1 resolves to a height */}
-            <div className="flex-1 min-h-0 flex flex-col">
-              <ChatMessages />
-            </div>
-            <RestoreUndoBar />
-          </div>
           </div>
         </div>
       )}
 
-      {/* ── idle + input: shared capsule element for smooth transitions ── */}
-      {phase !== "expanded" && (
-        <div
-          ref={capsuleRef}
-          data-ai-bar-capsule
-          className="w-full max-w-3xl mx-auto pointer-events-none"
-        >
+      {/* idle ↔ input morph on one shell; expanded shares composer instance with input */}
+      <div
+        ref={composerShellRef}
+        data-ai-bar-capsule
+        className="w-full max-w-3xl mx-auto pointer-events-none"
+      >
         <div className="px-3 w-full">
-          {/* Toolbar — hidden when chat panel is open */}
-          {!isPanelOpen && (
-            <div
-              className={cn(
-                "flex items-center pointer-events-auto transition-all duration-200 ease-out",
-                isInputting
-                  ? "h-7 mb-2 opacity-100 translate-y-0"
-                  : "h-0 mb-0 opacity-0 -translate-y-1 overflow-hidden",
-              )}
-            >
-              {hasConversation && (
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors mr-1"
-                  onClick={openPanel}
-                >
-                  {isStreaming ? (
-                    <>
-                      <span className="relative flex size-1.5">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                        <span className="relative inline-flex size-1.5 rounded-full bg-primary" />
-                      </span>
-                      Running
-                    </>
-                  ) : (
-                    "Done"
-                  )}
-                </button>
-              )}
-              <WorktreeSelector />
-            </div>
-          )}
-          {/* Capsule — same DOM element, classes transition smoothly */}
+          {toolbar}
           <div
+            ref={morphRef}
             className={cn(
-              "flex items-center gap-2 rounded-full pointer-events-auto border mx-auto",
-              "transition-all duration-200 ease-out",
-              "w-full",
-              isInputting
-                ? "h-12 max-w-3xl px-3 bg-card border-border cursor-text"
-                : "group h-1.5 max-w-30 px-0 bg-muted-foreground/75 border-border/40 cursor-pointer hover:h-8 hover:max-w-[220px] hover:bg-muted hover:border-border hover:delay-0 delay-100",
+              "pointer-events-auto mx-auto w-full transition-all duration-200 ease-out overflow-hidden",
+              phase === "idle" &&
+                "group flex items-center rounded-full border h-1.5 max-w-30 px-0 bg-muted-foreground/75 border-border/40 cursor-pointer hover:h-8 hover:max-w-[220px] hover:bg-muted hover:border-border hover:delay-0 delay-100",
+              phase === "input" &&
+                "flex items-center rounded-full h-12 max-w-3xl px-3 border border-border bg-card cursor-text",
+              phase === "expanded" &&
+                "rounded-2xl border border-border bg-card animate-in fade-in slide-in-from-bottom-1 duration-200",
             )}
-            onClick={() => { if (!isInputting) openInput(); }}
+            onClick={phase === "idle" ? openInput : undefined}
           >
-            {/* Idle label — sync delay with capsule */}
-            {!isInputting && (
+            {phase === "idle" ? (
               <span
                 className="opacity-0 group-hover:opacity-100 scale-50 group-hover:scale-100 origin-center
                   transition-all duration-200 ease-out delay-100 group-hover:delay-0
@@ -296,110 +250,24 @@ export function AiBar() {
                 </span>
                 <Kbd className="bg-transparent transition-colors duration-200">⌘I</Kbd>
               </span>
-            )}
-            {/* Input content */}
-            {isInputting && (
-              <>
-                <DropdownMenu
-                  onOpenChange={(open) => {
-                    if (!open) {
-                      setTimeout(() => inputRef.current?.focus(), 0);
-                    }
-                  }}
-                >
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex size-7 items-center justify-center rounded-full bg-muted-foreground/20 text-muted-foreground transition-colors hover:bg-muted-foreground/30 hover:text-foreground shrink-0"
-                      title="Add context"
-                    >
-                      <PlusIcon className="size-4" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-48">
-                    <DropdownMenuItem
-                      className="text-[length:var(--font-chat-meta)]"
-                      onClick={expandFromDropdown}
-                    >
-                      <FileTextIcon className="size-3.5" />
-                      <span>Add file</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-[length:var(--font-chat-meta)]"
-                      onClick={expandFromDropdown}
-                    >
-                      <ImageIcon className="size-3.5" />
-                      <span>Add image</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <input
-                  ref={inputRef}
-                  className="flex-1 bg-transparent text-[length:var(--font-composer)] outline-none placeholder:text-muted-foreground"
-                  placeholder="Ask AI about your research..."
-                  value={value}
-                  onChange={handleInputChange}
-                  onKeyDown={handleInputKeyDown}
+            ) : (
+              <div
+                className={cn(
+                  "w-full min-w-0 animate-in fade-in duration-150",
+                  phase === "input" && "h-full",
+                )}
+              >
+                <ChatComposerCore
+                  variant={isExpanded ? "capsule-expanded" : "capsule-compact"}
+                  capsulePlaceholder="Ask AI about your research..."
+                  onLayoutExpand={openExpanded}
+                  className={isInputting ? "h-full w-full" : undefined}
                 />
-                <button
-                  type="button"
-                  className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shrink-0"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={handleSend}
-                  title="Send"
-                >
-                  <ArrowUpIcon className="size-3.5" />
-                </button>
-              </>
+              </div>
             )}
           </div>
         </div>
-        </div>
-      )}
-
-      {/* ── expanded — toolbar + ChatComposer */}
-      {phase === "expanded" && (
-        <div
-          ref={expandedRef}
-          className="pointer-events-auto w-full max-w-3xl mx-auto"
-          onInput={(e) => {
-            const t = e.target;
-            if (t instanceof HTMLTextAreaElement && t.value === "") {
-              willExpandRef.current = false;
-              setPhase("input");
-              setValue("");
-              requestAnimationFrame(() => inputRef.current?.focus());
-            }
-          }}
-        >
-          {/* Toolbar — hidden when chat panel is open */}
-          {!isPanelOpen && (
-            <div className="flex items-center h-7 mb-2 pl-3">
-              {hasConversation && (
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors mr-1"
-                  onClick={openPanel}
-                >
-                  {isStreaming ? (
-                    <>
-                      <span className="relative flex size-1.5">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                        <span className="relative inline-flex size-1.5 rounded-full bg-primary" />
-                      </span>
-                      Running
-                    </>
-                  ) : (
-                    "Done"
-                  )}
-                </button>
-              )}
-              <WorktreeSelector />
-            </div>
-          )}
-          <ChatComposer />
-        </div>
-      )}
+      </div>
     </div>
   );
 }

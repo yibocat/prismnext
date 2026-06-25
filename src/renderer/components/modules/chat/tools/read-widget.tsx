@@ -2,6 +2,7 @@ import { useState, memo } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { FileTextIcon } from "lucide-react";
 import { ToolCard, param } from "./shared";
+import { ChatFileLink } from "../chat-file-link";
 
 export const ReadWidget = memo(function ReadWidget({
   toolUse,
@@ -30,7 +31,7 @@ export const ReadWidget = memo(function ReadWidget({
     <ToolCard
       toolName={toolName}
       icon={<FileTextIcon className="size-3.5 text-info" />}
-      label={<span className="truncate font-medium">{fileName}</span>}
+      label={filePath ? <ChatFileLink path={filePath} /> : <span className="truncate font-medium">{fileName}</span>}
       meta={rangeLabel && (
         <span className="text-muted-foreground/70 shrink-0 text-[length:var(--font-chat-meta)]">{rangeLabel}</span>
       )}
@@ -43,7 +44,9 @@ export const ReadWidget = memo(function ReadWidget({
     >
       {() => (
         <>
-          <div className="text-[length:var(--font-chat-meta)] text-muted-foreground/70 mb-1">{filePath}</div>
+          <div className="text-[length:var(--font-chat-meta)] text-muted-foreground/70 mb-1">
+            {filePath ? <ChatFileLink path={filePath} className="font-normal" /> : null}
+          </div>
           <pre className="whitespace-pre-wrap break-all">
             {(() => {
               const raw = typeof toolResult!.content === "string"

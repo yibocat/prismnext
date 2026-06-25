@@ -911,6 +911,28 @@ export async function initRepo(projectRoot: string): Promise<GitResult> {
 }
 
 /**
+ * Push current branch to its upstream, or set upstream via `origin` on first push.
+ */
+export async function pushBranch(
+  projectRoot: string,
+): Promise<GitResult & { output?: string }> {
+  try {
+    const branch = (await execGit(projectRoot, ["rev-parse", "--abbrev-ref", "HEAD"])).trim();
+    if (!branch || branch === "HEAD") {
+      return { success: false, error: "Detached HEAD — cannot push" };
+    }
+    const upstream = await execGitOrNull(projectRoot, ["rev-parse", "--abbrev-ref", "@{upstream}"]);
+    const output = upstream
+      ? await execGit(projectRoot, ["push"])
+      : await execGit(projectRoot, ["push", "-u", "origin", branch]);
+    return { success: true, output: output.trim() || "Pushed successfully." };
+  } catch (err: unknown) {
+    const msg = (err as Error).message || "Push failed";
+    return { success: false, error: msg, output: msg };
+  }
+}
+
+/**
  * Merge a branch into the current branch: `git merge <branch>`
  * Returns the merge output on success, or the conflict details on failure.
  */

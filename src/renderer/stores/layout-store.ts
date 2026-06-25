@@ -45,15 +45,30 @@ interface LayoutState {
 
   texworkspaceViewMode: TexworkspaceViewMode;
   setTexworkspaceViewMode: (mode: TexworkspaceViewMode) => void;
+  /** Default layout applied when entering TeX Workspace. */
+  texworkspaceDefaultViewMode: TexworkspaceViewMode;
+  setTexworkspaceDefaultViewMode: (mode: TexworkspaceViewMode) => void;
+  /** When true, the PDF preview slot shows compile problems (texworkspace only). */
+  texworkspaceProblemsOpen: boolean;
+  setTexworkspaceProblemsOpen: (open: boolean) => void;
   texworkspaceSearchQuery: string;
   setTexworkspaceSearchQuery: (query: string) => void;
 
   leftSidebarOverlay: boolean;
   setLeftSidebarOverlay: (show: boolean) => void;
+  /** 中间主区域当前视图；centerView 型导航项激活时写入，见 left-nav/items.tsx */
   leftSidebarView: "sessions" | "settings" | "templates";
   setLeftSidebarView: (view: "sessions" | "settings" | "templates") => void;
+  /** Set when settings/templates collapse the right area; restored on exit unless cleared. */
+  pendingRightAreaRestore: boolean;
+  setPendingRightAreaRestore: (pending: boolean) => void;
+  clearPendingRightAreaRestore: () => void;
   settingsCategory: string;
   setSettingsCategory: (category: string) => void;
+
+  /** Settings detail fills main area when window is too narrow for split view. */
+  settingsDetailStacked: boolean;
+  setSettingsDetailStacked: (stacked: boolean) => void;
 
   rightSidebarOpen: boolean;
   toggleRightSidebar: () => void;
@@ -69,12 +84,21 @@ interface LayoutState {
 
   rightAreaExpanded: boolean;
   rightAreaWidth: number;
+  /** User-resized width for Settings detail panel (split mode) — separate from workspace RightArea. */
+  settingsDetailWidth: number;
+  setSettingsDetailWidth: (width: number) => void;
   /** Incremented to programmatically expand the RightArea panel (e.g. open Browser link). */
   rightAreaExpandNonce: number;
   requestRightAreaExpand: () => void;
+  /** Incremented to close the settings detail editor (collapse + clear slot). */
+  settingsDetailCloseNonce: number;
+  requestCloseSettingsDetailPanel: () => void;
   /** Incremented to show the center Chat panel (e.g. terminal → composer insert). */
   centerExpandNonce: number;
   requestCenterExpand: () => void;
+  /** Incremented to focus the AiBar composer when editor is maximized. */
+  aiBarComposerFocusNonce: number;
+  requestAiBarComposerFocus: () => void;
   rightSidebarWidth: number;
   editorMaximized: boolean;
   toggleRightArea: () => void;
@@ -179,16 +203,31 @@ export const useLayoutStore = create<LayoutState>()(
       setFocusedMode: (mode) => set({ focusedMode: mode }),
 
       texworkspaceViewMode: "split",
+      texworkspaceDefaultViewMode: "split",
+      setTexworkspaceDefaultViewMode: (mode) => set({ texworkspaceDefaultViewMode: mode }),
+      texworkspaceProblemsOpen: false,
+      setTexworkspaceProblemsOpen: (open) => set({ texworkspaceProblemsOpen: open }),
       texworkspaceSearchQuery: "",
-      setTexworkspaceViewMode: (mode) => set({ texworkspaceViewMode: mode }),
+      setTexworkspaceViewMode: (mode) =>
+        set({
+          texworkspaceViewMode: mode,
+          texworkspaceProblemsOpen: false,
+        }),
       setTexworkspaceSearchQuery: (query) => set({ texworkspaceSearchQuery: query }),
 
       leftSidebarOverlay: false,
       setLeftSidebarOverlay: (show) => set({ leftSidebarOverlay: show }),
       leftSidebarView: "sessions",
       setLeftSidebarView: (view) => set({ leftSidebarView: view }),
+      pendingRightAreaRestore: false,
+      setPendingRightAreaRestore: (pending) => set({ pendingRightAreaRestore: pending }),
+      clearPendingRightAreaRestore: () => set({ pendingRightAreaRestore: false }),
       settingsCategory: "general",
       setSettingsCategory: (category) => set({ settingsCategory: category }),
+
+      settingsDetailStacked: false,
+      setSettingsDetailStacked: (stacked) =>
+        set((s) => (s.settingsDetailStacked === stacked ? s : { settingsDetailStacked: stacked })),
 
       rightSidebarOpen: false,
       toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
@@ -204,20 +243,30 @@ export const useLayoutStore = create<LayoutState>()(
 
       rightAreaExpanded: false,
       rightAreaWidth: RIGHT_AREA_DEFAULT,
+      settingsDetailWidth: RIGHT_AREA_DEFAULT,
       rightAreaExpandNonce: 0,
       requestRightAreaExpand: () =>
         set((s) => ({ rightAreaExpandNonce: s.rightAreaExpandNonce + 1, rightAreaExpanded: true })),
+      settingsDetailCloseNonce: 0,
+      requestCloseSettingsDetailPanel: () =>
+        set((s) => ({ settingsDetailCloseNonce: s.settingsDetailCloseNonce + 1 })),
       centerExpandNonce: 0,
       requestCenterExpand: () =>
         set((s) => ({ centerExpandNonce: s.centerExpandNonce + 1 })),
+      aiBarComposerFocusNonce: 0,
+      requestAiBarComposerFocus: () =>
+        set((s) => ({ aiBarComposerFocusNonce: s.aiBarComposerFocusNonce + 1 })),
       rightSidebarWidth: SIDEBAR_RIGHT_DEFAULT,
       editorMaximized: false,
       toggleRightArea: () => set((s) => ({ rightAreaExpanded: !s.rightAreaExpanded })),
-      setRightAreaExpanded: (expanded) => set({ rightAreaExpanded: expanded }),
+      setRightAreaExpanded: (expanded) =>
+        set((s) => (s.rightAreaExpanded === expanded ? s : { rightAreaExpanded: expanded })),
       setRightAreaWidth: (width) => set({ rightAreaWidth: width }),
+      setSettingsDetailWidth: (width) => set({ settingsDetailWidth: width }),
       setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
       toggleEditorMaximized: () => set((s) => ({ editorMaximized: !s.editorMaximized })),
-      setEditorMaximized: (maximized) => set({ editorMaximized: maximized }),
+      setEditorMaximized: (maximized) =>
+        set((s) => (s.editorMaximized === maximized ? s : { editorMaximized: maximized })),
 
       pinnedSessionIds: [],
       pinnedExpanded: true,
@@ -336,10 +385,12 @@ export const useLayoutStore = create<LayoutState>()(
         sidebarWidth: state.sidebarWidth,
         rightSidebarWidth: state.rightSidebarWidth,
         rightAreaWidth: state.rightAreaWidth,
+        settingsDetailWidth: state.settingsDetailWidth,
         pinnedSessionIds: state.pinnedSessionIds,
         archivedSessionIds: state.archivedSessionIds,
         sessionSort: state.sessionSort,
         expandedFileTreeFolders: state.expandedFileTreeFolders,
+        texworkspaceDefaultViewMode: state.texworkspaceDefaultViewMode,
       }),
     },
   ),

@@ -1,0 +1,147 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useChatStore } from "@/stores/chat-store";
+import { useCheckpointStore } from "@/stores/checkpoint-store";
+import { useDocumentStore } from "@/stores/document-store";
+import { clearCheckpointsForWorktree } from "@/lib/chat/worktree-checkpoint-lifecycle";
+
+const PROJECT = "/proj";
+const WT = `${PROJECT}/.prismnext/worktrees/owl`;
+
+describe("clearCheckpointsForWorktree", () => {
+  beforeEach(() => {
+    useDocumentStore.setState({ projectRoot: PROJECT });
+    useCheckpointStore.setState({ byTab: {} });
+    useChatStore.setState({
+      tabs: [
+        {
+          id: "tab-1",
+          sessionId: "sess-1",
+          sessionCwd: WT,
+          title: "Test",
+          messages: [],
+          streamingMessage: null,
+          error: null,
+          isStreaming: false,
+          promptStale: false,
+          isLoadingSession: false,
+        } as any,
+      ],
+      activeTabId: "tab-1",
+    });
+    vi.stubGlobal("electronAPI", {
+      fsExists: vi.fn().mockResolvedValue(true),
+      fsDelete: vi.fn().mockResolvedValue(undefined),
+      fsScan: vi.fn().mockResolvedValue({ files: [] }),
+    });
+  });
+
+  it("clears checkpoints for tabs bound to the worktree path", async () => {
+    useCheckpointStore.setState({
+      byTab: {
+        "tab-1": {
+          sessionId: "sess-1",
+          checkpoints: [
+            {
+              turnIndex: 0,
+              createdAt: 1,
+              files: [],
+              touchedThisTurn: ["main.tex"],
+            },
+          ],
+          pendingTurn: null,
+          restoreUndo: null,
+          boundCheckoutPath: WT,
+        },
+      },
+    });
+
+    await clearCheckpointsForWorktree(
+      { path: WT, name: "owl", baseBranch: "main" },
+      "merged",
+    );
+
+    expect(useCheckpointStore.getState().byTab["tab-1"].checkpoints).toEqual([]);
+    expect(window.electronAPI.fsDelete).toHaveBeenCalled();
+  });
+
+  it("clears checkpoints when only checkpoint store references the worktree", async () => {
+    useChatStore.setState({
+      tabs: [
+        {
+          ...(useChatStore.getState().tabs[0] as any),
+          sessionCwd: PROJECT,
+        },
+      ],
+    } as any);
+
+    useCheckpointStore.setState({
+      byTab: {
+        "tab-1": {
+          sessionId: "sess-1",
+          checkpoints: [
+            {
+              turnIndex: 0,
+              createdAt: 1,
+              files: [
+                {
+                  relativePath: "main.tex",
+                  absolutePath: `${WT}/main.tex`,
+                  content: "x",
+                },
+              ],
+              touchedThisTurn: ["main.tex"],
+            },
+          ],
+          pendingTurn: null,
+          restoreUndo: null,
+          boundCheckoutPath: WT,
+        },
+      },
+    });
+
+    await clearCheckpointsForWorktree(
+      { path: WT, name: "owl", baseBranch: "main" },
+      "merged",
+    );
+
+    expect(useCheckpointStore.getState().byTab["tab-1"].checkpoints).toEqual([]);
+    expect(window.electronAPI.fsDelete).toHaveBeenCalled();
+  });
+
+  it("canRestore is false when session cwd no longer matches bound checkout", () => {
+    useCheckpointStore.setState({
+      byTab: {
+        "tab-1": {
+          sessionId: "sess-1",
+          checkpoints: [
+            {
+              turnIndex: 0,
+              createdAt: 1,
+              files: [
+                {
+                  relativePath: "main.tex",
+                  absolutePath: `${WT}/main.tex`,
+                  content: "x",
+                },
+              ],
+              touchedThisTurn: ["main.tex"],
+            },
+          ],
+          pendingTurn: null,
+          restoreUndo: null,
+          boundCheckoutPath: WT,
+        },
+      },
+    });
+    useChatStore.setState({
+      tabs: [
+        {
+          ...(useChatStore.getState().tabs[0] as any),
+          sessionCwd: PROJECT,
+        },
+      ],
+    } as any);
+
+    expect(useCheckpointStore.getState().canRestoreToTurn("tab-1", 0)).toBe(false);
+  });
+});

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  AppMenu,
+  AppMenuCheckItem,
+  AppMenuContent,
+  AppMenuLabel,
+  AppMenuTrigger,
+} from "@/components/ui/app-menu";
 import { useDocumentStore } from "@/stores/document-store";
 import { useChatStore } from "@/stores/chat-store";
-import { CheckIcon, ChevronDownIcon, BotIcon } from "lucide-react";
+import { ChevronDownIcon, BotIcon } from "lucide-react";
 import type { AgentProfileInfo } from "@shared/agent-profiles";
 
 export function ProfileSelect() {
@@ -48,8 +49,8 @@ export function ProfileSelect() {
   if (!projectRoot || profiles.length === 0) return null;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <AppMenu>
+      <AppMenuTrigger asChild>
         <button
           type="button"
           className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors max-w-[9rem]"
@@ -59,27 +60,25 @@ export function ProfileSelect() {
           <span className="truncate">{current?.name || "Profile"}</span>
           <ChevronDownIcon className="size-3 shrink-0" />
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-56">
-        <div className="px-2 py-1 font-medium text-muted-foreground text-[length:var(--font-chat-meta)]">
-          Agent Profile
-        </div>
-        <DropdownMenuItem onClick={() => setActiveProfile(activeTabId, null)}>
-          <span className="flex-1 text-[length:var(--font-chat-meta)]">Project default</span>
-          {!activeProfileId && <CheckIcon className="size-3 shrink-0" />}
-        </DropdownMenuItem>
+      </AppMenuTrigger>
+      <AppMenuContent align="start" className="w-56">
+        <AppMenuLabel>Agent Profile</AppMenuLabel>
+        <AppMenuCheckItem
+          selected={!activeProfileId}
+          onClick={() => setActiveProfile(activeTabId, null)}
+        >
+          Project default
+        </AppMenuCheckItem>
         {profiles.map((profile) => (
-          <DropdownMenuItem
+          <AppMenuCheckItem
             key={profile.id}
+            selected={effectiveId === profile.id}
             onClick={() => setActiveProfile(activeTabId, profile.id)}
           >
-            <span className="flex-1 text-[length:var(--font-chat-meta)] truncate">
-              {profile.name}
-            </span>
-            {effectiveId === profile.id && <CheckIcon className="size-3 shrink-0" />}
-          </DropdownMenuItem>
+            {profile.name}
+          </AppMenuCheckItem>
         ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </AppMenuContent>
+    </AppMenu>
   );
 }

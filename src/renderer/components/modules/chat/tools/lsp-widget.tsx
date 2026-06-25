@@ -2,6 +2,7 @@ import { useState, memo } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { CodeIcon } from "lucide-react";
 import { ToolCard, param } from "./shared";
+import { ChatFileLink } from "../chat-file-link";
 
 /** Human-readable labels for LSP operations */
 const LSP_OP_LABELS: Record<string, string> = {
@@ -49,7 +50,7 @@ export const LspWidget = memo(function LspWidget({
           )}
           {filePath && (
             <span className="text-muted-foreground/50 truncate text-[length:var(--font-chat-meta)] hidden sm:inline">
-              {filePath.split("/").pop()}
+              <ChatFileLink path={filePath} className="font-normal inline" />
             </span>
           )}
         </>
@@ -64,7 +65,13 @@ export const LspWidget = memo(function LspWidget({
       {() => (
         <>
           <div className="text-[length:var(--font-chat-meta)] text-muted-foreground/70 mb-1">
-            {opLabel}{symbol ? `: ${symbol}` : ""}{filePath ? ` in ${filePath}` : ""}
+            {opLabel}{symbol ? `: ${symbol}` : ""}
+            {filePath ? (
+              <>
+                {" in "}
+                <ChatFileLink path={filePath} className="font-normal inline" />
+              </>
+            ) : null}
           </div>
           <pre className="whitespace-pre-wrap break-all text-muted-foreground">
             {(() => {

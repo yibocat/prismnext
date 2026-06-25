@@ -1,12 +1,14 @@
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  AppMenu,
+  AppMenuCheckItem,
+  AppMenuContent,
+  AppMenuItem,
+  AppMenuLabel,
+  AppMenuTrigger,
+} from "@/components/ui/app-menu";
 import { useChatStore, type ChatExecutionMode } from "@/stores/chat-store";
 import { cn } from "@/lib/utils";
-import { BotIcon, CheckIcon, ChevronDownIcon, UsersIcon } from "lucide-react";
+import { BotIcon, ChevronDownIcon, UsersIcon } from "lucide-react";
 
 const MODES: Array<{
   value: ChatExecutionMode;
@@ -43,8 +45,8 @@ export function ChatModeSelect({ compact }: ChatModeSelectProps) {
   const Icon = current.icon;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <AppMenu>
+      <AppMenuTrigger asChild>
         <button
           type="button"
           className={cn(
@@ -61,30 +63,20 @@ export function ChatModeSelect({ compact }: ChatModeSelectProps) {
             </>
           )}
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-60">
-        <div className="px-2 py-1 font-medium text-muted-foreground text-[length:var(--font-chat-meta)]">
-          Chat mode
-        </div>
-        {MODES.map((mode) => {
-          const ModeIcon = mode.icon;
-          return (
-            <DropdownMenuItem
-              key={mode.value}
-              onClick={() => setChatMode(activeTabId, mode.value)}
-            >
-              <ModeIcon className="size-3.5 shrink-0 text-muted-foreground" />
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="text-[length:var(--font-chat-meta)]">{mode.label}</span>
-                <span className="text-[length:var(--font-size-11)] text-muted-foreground/70 leading-snug">
-                  {mode.description}
-                </span>
-              </div>
-              {chatMode === mode.value && <CheckIcon className="size-3 shrink-0 ml-1" />}
-            </DropdownMenuItem>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </AppMenuTrigger>
+      <AppMenuContent align="start" className="w-60">
+        <AppMenuLabel>Chat mode</AppMenuLabel>
+        {MODES.map((mode) => (
+          <AppMenuCheckItem
+            key={mode.value}
+            selected={chatMode === mode.value}
+            description={mode.description}
+            onClick={() => setChatMode(activeTabId, mode.value)}
+          >
+            {mode.label}
+          </AppMenuCheckItem>
+        ))}
+      </AppMenuContent>
+    </AppMenu>
   );
 }

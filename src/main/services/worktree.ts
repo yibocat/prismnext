@@ -1,7 +1,7 @@
 import { existsSync, writeFileSync, readFileSync } from "node:fs";
 import { copyFile, cp, mkdir, readdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { execGit } from "./git";
 
 // ─── Types ───
@@ -35,11 +35,58 @@ export interface BranchInfo {
 const WORKTREES_DIR = ".prismnext/worktrees";
 const BRANCH_PREFIX = "wt-";
 
-const ADJECTIVES = ["bright","calm","quick","sharp","cool","warm","bold","swift","keen","deep","fresh","clear","smart","eager","brave","quiet"];
-const NOUNS = ["fox","owl","bear","hawk","wolf","deer","dove","lynx","puma","wren","crab","koi","newt","ray","seal","swan"];
+function normalizeWorktreePath(worktreePath: string): string {
+  return resolve(worktreePath);
+}
+
+const ADJECTIVES = [
+  "amber", "azure", "bold", "brave", "bright", "calm", "clear", "cool",
+  "coral", "crisp", "deep", "eager", "fair", "fast", "fresh", "gentle",
+  "golden", "grand", "green", "happy", "keen", "kind", "light", "lively",
+  "lucky", "mellow", "merry", "mild", "mint", "noble", "pale", "proud",
+  "quick", "quiet", "rapid", "rich", "sharp", "shy", "sleek", "smart",
+  "soft", "solid", "steady", "still", "sunny", "super", "sure", "sweet",
+  "swift", "tall", "teal", "tidy", "true", "vivid", "warm", "wild",
+  "wise", "young", "zesty",
+];
+
+const NOUNS = [
+  "ant", "auk", "bat", "bear", "bee", "bird", "boar", "buck",
+  "bull", "cat", "clam", "cod", "crab", "crow", "deer", "dog",
+  "dove", "duck", "eel", "elk", "emu", "finch", "fish", "fly",
+  "fox", "frog", "goat", "grub", "gull", "hare", "hawk", "heron",
+  "ibis", "jay", "kite", "kiwi", "koi", "lark", "lion", "lynx",
+  "mink", "mole", "moth", "mouse", "newt", "orca", "otter", "owl",
+  "panda", "perch", "pike", "pony", "puma", "quail", "ray", "robin",
+  "seal", "shark", "sheep", "slug", "snail", "snipe", "sole", "stag",
+  "swan", "teal", "tern", "toad", "trout", "vole", "wasp", "whale",
+  "wolf", "worm", "wren", "yak",
+];
 
 function generateWorktreeName(): string {
-  return `${ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)]}-${NOUNS[Math.floor(Math.random() * NOUNS.length)]}`;
+  const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+  return `${adj}-${noun}`;
+}
+
+/** @internal Exported for unit tests */
+export function generateWorktreeNameForTest(): string {
+  return generateWorktreeName();
+}
+
+function worktreePathForName(projectRoot: string, name: string): string {
+  return join(projectRoot, WORKTREES_DIR, name);
+}
+
+/** Pick a random adjective-noun name not already used under .prismnext/worktrees/. */
+function generateUniqueWorktreeName(projectRoot: string, maxAttempts = 64): string {
+  for (let i = 0; i < maxAttempts; i++) {
+    const candidate = generateWorktreeName();
+    if (!existsSync(worktreePathForName(projectRoot, candidate))) {
+      return candidate;
+    }
+  }
+  throw new Error("Could not generate a unique worktree name — try again or remove old worktrees.");
 }
 
 /** Return the name of the default main branch (main or master, whichever exists). */
@@ -70,9 +117,9 @@ export async function createWorktree(
   name?: string,
   baseBranch?: string,
 ): Promise<WorktreeInfo> {
-  const resolvedName = name || generateWorktreeName();
+  const resolvedName = name || generateUniqueWorktreeName(projectRoot);
   const branchName = `${BRANCH_PREFIX}${resolvedName}`;
-  const worktreePath = join(projectRoot, WORKTREES_DIR, resolvedName);
+  const worktreePath = worktreePathForName(projectRoot, resolvedName);
 
   if (existsSync(worktreePath)) {
     throw new Error(`Worktree "${resolvedName}" already exists`);
@@ -118,7 +165,7 @@ export async function createWorktree(
 
   return {
     name: resolvedName,
-    path: worktreePath,
+    path: normalizeWorktreePath(worktreePath),
     branch: branchName,
     baseBranch: resolvedBase,
     head,
@@ -131,6 +178,10 @@ export async function removeWorktree(
   projectRoot: string,
   name: string,
 ): Promise<void> {
+  if (!name || name.includes("/") || name.includes("\\") || name === "." || name === "..") {
+    throw new Error(`Invalid worktree name: ${name || "(empty)"}`);
+  }
+
   const worktreePath = join(projectRoot, WORKTREES_DIR, name);
   const branchName = `${BRANCH_PREFIX}${name}`;
 
@@ -141,11 +192,8 @@ export async function removeWorktree(
     try {
       await execGit(projectRoot, ["worktree", "remove", "--force", worktreePath]);
     } catch {
-      // If remove fails (e.g. corrupted metadata), try prune to clean up
-      try { await execGit(projectRoot, ["worktree", "prune"]); } catch {}
-      // Then try to manually delete the directory
+      // If git remove fails, delete only this checkout directory — never prune all worktrees.
       try { await rm(worktreePath, { recursive: true, force: true }); } catch {}
-      // Check if it's actually gone
       if (existsSync(worktreePath)) {
         errors.push(`Failed to remove worktree directory: ${worktreePath}`);
       }
@@ -173,11 +221,11 @@ export async function listWorktrees(projectRoot: string): Promise<WorktreeInfo[]
   const worktreesDir = join(projectRoot, WORKTREES_DIR);
   if (!existsSync(worktreesDir)) return [];
 
-  let output: string;
+  let output = "";
   try {
     output = await execGit(projectRoot, ["worktree", "list", "--porcelain"]);
   } catch {
-    return [];
+    // Fall through to filesystem scan — git list can fail transiently during worktree remove.
   }
 
   const result: WorktreeInfo[] = [];
@@ -205,23 +253,8 @@ export async function listWorktrees(projectRoot: string): Promise<WorktreeInfo[]
     const wtName = worktreePath.split("/").pop() || "";
     if (!wtName) continue;
 
-    // Skip main worktree (the bare repo itself)
-    if (branch === mainBranch) continue;
-
     // Validate: worktree checkout must exist and have a .git file
     if (!existsSync(worktreePath) || !existsSync(join(worktreePath, ".git"))) continue;
-
-    let aheadCount = 0;
-    try {
-      const count = await execGit(projectRoot, ["rev-list", "--count", `${mainBranch}..${branch}`]);
-      aheadCount = parseInt(count.trim(), 10) || 0;
-    } catch {}
-
-    let behindCount = 0;
-    try {
-      const count = await execGit(projectRoot, ["rev-list", "--count", `${branch}..${mainBranch}`]);
-      behindCount = parseInt(count.trim(), 10) || 0;
-    } catch {}
 
     // Read the base branch from metadata file written at create time.
     // Falls back to main branch for worktrees created before this file was introduced.
@@ -231,7 +264,27 @@ export async function listWorktrees(projectRoot: string): Promise<WorktreeInfo[]
       if (meta) baseBranch = meta;
     } catch {}
 
-    result.push({ name: wtName, path: worktreePath, branch, baseBranch, head, aheadCount, behindCount });
+    let aheadCount = 0;
+    try {
+      const count = await execGit(projectRoot, ["rev-list", "--count", `${baseBranch}..${branch}`]);
+      aheadCount = parseInt(count.trim(), 10) || 0;
+    } catch {}
+
+    let behindCount = 0;
+    try {
+      const count = await execGit(projectRoot, ["rev-list", "--count", `${branch}..${baseBranch}`]);
+      behindCount = parseInt(count.trim(), 10) || 0;
+    } catch {}
+
+    result.push({
+      name: wtName,
+      path: normalizeWorktreePath(worktreePath),
+      branch,
+      baseBranch,
+      head,
+      aheadCount,
+      behindCount,
+    });
   }
 
   // Also scan the filesystem for directories in .prismnext/worktrees/ that
@@ -248,14 +301,25 @@ export async function listWorktrees(projectRoot: string): Promise<WorktreeInfo[]
       const meta = readFileSync(join(worktreesDir, entry.name, ".prism-worktree-meta"), "utf-8").trim();
       if (meta) baseBranch = meta;
     } catch {}
+    const branch = `${BRANCH_PREFIX}${entry.name}`;
+    let aheadCount = 0;
+    let behindCount = 0;
+    try {
+      const ahead = await execGit(projectRoot, ["rev-list", "--count", `${baseBranch}..${branch}`]);
+      aheadCount = parseInt(ahead.trim(), 10) || 0;
+    } catch {}
+    try {
+      const behind = await execGit(projectRoot, ["rev-list", "--count", `${branch}..${baseBranch}`]);
+      behindCount = parseInt(behind.trim(), 10) || 0;
+    } catch {}
     result.push({
       name: entry.name,
-      path: join(worktreesDir, entry.name),
-      branch: `${BRANCH_PREFIX}${entry.name}`,
+      path: normalizeWorktreePath(join(worktreesDir, entry.name)),
+      branch,
       baseBranch,
       head: "",
-      aheadCount: 0,
-      behindCount: 0,
+      aheadCount,
+      behindCount,
     });
   }
 

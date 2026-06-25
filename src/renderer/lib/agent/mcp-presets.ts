@@ -232,6 +232,13 @@ export function presetRequiresFields(preset: McpPreset): boolean {
   return (preset.fields?.length ?? 0) > 0;
 }
 
+/** Whether an installed server should expose a Configure action in Settings. */
+export function serverIsConfigurable(entry: McpServerEntry): boolean {
+  const preset = findPresetForEntry(entry);
+  if (!preset) return true;
+  return presetRequiresFields(preset);
+}
+
 export function presetFieldsValid(preset: McpPreset, values: Record<string, string>): boolean {
   if (!preset.fields?.length) return true;
   return preset.fields.every((f) => {

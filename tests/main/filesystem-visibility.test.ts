@@ -14,6 +14,11 @@ describe("filesystem visibility", () => {
     expect(shouldSkipProjectDirectory("manuscript")).toBe(false);
   });
 
+  it("hides git worktree metadata files at checkout root", () => {
+    expect(getProjectFileType(".git")).toBeNull();
+    expect(getProjectFileType(".prism-worktree-meta")).toBeNull();
+  });
+
   it("shows common dotfiles except system junk", () => {
     expect(getProjectFileType(".gitignore")).toBe("other");
     expect(getProjectFileType(".env")).toBe("other");

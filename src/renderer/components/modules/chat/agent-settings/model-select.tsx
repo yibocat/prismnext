@@ -1,23 +1,24 @@
 // src/renderer/components/modules/chat/agent-settings/model-select.tsx
 import { useMemo } from "react";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+  AppMenu,
+  AppMenuCheckItem,
+  AppMenuContent,
+  AppMenuLabel,
+  AppMenuSeparator,
+  AppMenuTrigger,
+  appMenuFontClass,
+} from "@/components/ui/app-menu";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
-  ALL_PROVIDERS,
   getProvider,
   getModel,
   getAllEnabledModels,
   type ProviderConfig,
   type ModelConfig,
 } from "@/lib/providers";
-import { CheckIcon, ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function ModelSelect() {
   const settings = useSettingsStore((s) => s.settings);
@@ -61,8 +62,8 @@ export function ModelSelect() {
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <AppMenu>
+      <AppMenuTrigger asChild>
         <button
           type="button"
           className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors max-w-56"
@@ -71,51 +72,47 @@ export function ModelSelect() {
           <span className="truncate">{displayName}</span>
           <ChevronDownIcon className="size-3 shrink-0" />
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuLabel className="text-[length:var(--font-chat-meta)]">
-          Select Model
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
+      </AppMenuTrigger>
+      <AppMenuContent align="start" className="w-56">
+        <AppMenuLabel>Select Model</AppMenuLabel>
+        <AppMenuSeparator />
 
         {isEmpty && (
-          <div className="px-2 py-4 text-center text-[length:var(--font-chat-meta)] text-muted-foreground">
+          <p className={cn("px-2 py-3 text-center text-muted-foreground", appMenuFontClass)}>
             Enable models in Settings → AI&amp;APIs
-          </div>
+          </p>
         )}
 
-        <div className="max-h-72 overflow-y-auto">
-        {grouped.map(({ provider, models }) => (
-          <div key={provider.id}>
-            <DropdownMenuLabel className="text-[length:var(--font-size-11)] text-muted-foreground/60 font-medium pt-1">
-              {provider.name}
-            </DropdownMenuLabel>
-            {models.map((model) => {
-              const isSelected =
-                aiProvider === provider.id &&
-                (aiModel === model.id ||
-                  (!aiModel && provider.defaultModel === model.id));
-              return (
-                <DropdownMenuItem
-                  key={`${provider.id}:${model.id}`}
-                  onClick={() => handleSelect(provider.id, model.id)}
-                >
-                  <span className="flex-1 text-[length:var(--font-chat-meta)] truncate">
+        <div className="max-h-72 overflow-y-auto flex flex-col gap-px">
+          {grouped.map(({ provider, models }) => (
+            <div key={provider.id}>
+              <AppMenuLabel className="pt-1 normal-case tracking-normal text-[length:var(--font-size-11)]">
+                {provider.name}
+              </AppMenuLabel>
+              {models.map((model) => {
+                const isSelected =
+                  aiProvider === provider.id &&
+                  (aiModel === model.id ||
+                    (!aiModel && provider.defaultModel === model.id));
+                return (
+                  <AppMenuCheckItem
+                    key={`${provider.id}:${model.id}`}
+                    selected={isSelected}
+                    onClick={() => handleSelect(provider.id, model.id)}
+                    trailing={
+                      <span className="text-[length:var(--font-size-11)] text-muted-foreground/40">
+                        {model.contextWindow}
+                      </span>
+                    }
+                  >
                     {model.name}
-                  </span>
-                  <span className="text-[length:var(--font-size-11)] text-muted-foreground/40 ml-2 shrink-0">
-                    {model.contextWindow}
-                  </span>
-                  {isSelected && (
-                    <CheckIcon className="size-3 shrink-0 ml-1" />
-                  )}
-                </DropdownMenuItem>
-              );
-            })}
-          </div>
-        ))}
+                  </AppMenuCheckItem>
+                );
+              })}
+            </div>
+          ))}
         </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </AppMenuContent>
+    </AppMenu>
   );
 }

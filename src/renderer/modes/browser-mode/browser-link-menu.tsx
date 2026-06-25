@@ -1,10 +1,10 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { ExternalLinkIcon, PlusSquareIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const menuItemClass =
-  "relative flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-[length:var(--font-size-14)] outline-hidden hover:bg-accent hover:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground";
+import {
+  appContextMenuItemClass,
+  appContextMenuPanelClass,
+} from "@/components/ui/app-context-menu";
 
 interface BrowserLinkMenuProps {
   x: number;
@@ -14,7 +14,7 @@ interface BrowserLinkMenuProps {
   onOpenInNewTab: () => void;
 }
 
-/** Fixed-position link menu — matches app ContextMenu styling (not DropdownMenu). */
+/** Fixed-position link menu — shares AppContextMenu styling. */
 export function BrowserLinkMenu({
   x,
   y,
@@ -30,6 +30,11 @@ export function BrowserLinkMenu({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  const itemClass = cn(
+    appContextMenuItemClass,
+    "w-full border-0 bg-transparent text-left outline-hidden",
+  );
+
   return createPortal(
     <>
       <div
@@ -42,18 +47,14 @@ export function BrowserLinkMenu({
       />
       <div
         role="menu"
-        className={cn(
-          "fixed z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md",
-        )}
+        className={cn(appContextMenuPanelClass, "fixed z-50 shadow-md")}
         style={{ left: x, top: y }}
       >
-        <button type="button" role="menuitem" className={menuItemClass} onClick={onOpen}>
-          <ExternalLinkIcon />
-          Open
+        <button type="button" role="menuitem" className={itemClass} onClick={onOpen}>
+          <span className="truncate">Open</span>
         </button>
-        <button type="button" role="menuitem" className={menuItemClass} onClick={onOpenInNewTab}>
-          <PlusSquareIcon />
-          Open in New Tab
+        <button type="button" role="menuitem" className={itemClass} onClick={onOpenInNewTab}>
+          <span className="truncate">Open in New Tab</span>
         </button>
       </div>
     </>,

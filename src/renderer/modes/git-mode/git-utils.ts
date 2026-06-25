@@ -102,6 +102,26 @@ export function parseRefs(refs: string): RefBadge[] {
   return result;
 }
 
+/** Pill background for ref badges in commit metadata. */
+export function refBadgePillClass(ref: RefBadge): string {
+  if (ref.colorClass.includes("amber")) {
+    return "bg-amber-500/15 text-amber-600 dark:text-amber-400";
+  }
+  if (ref.colorClass.includes("pink")) {
+    return "bg-pink-500/15 text-pink-600 dark:text-pink-400";
+  }
+  if (ref.colorClass.includes("sky")) {
+    return "bg-sky-500/15 text-sky-600 dark:text-sky-400";
+  }
+  return "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400";
+}
+
+/** First line of a commit message for compact headers. */
+export function commitSubjectLine(message: string): string {
+  const line = message.split("\n")[0]?.trim();
+  return line || message.trim();
+}
+
 // ─── parseStatFiles ───
 
 export function parseStatFiles(raw: string): CommitFile[] {

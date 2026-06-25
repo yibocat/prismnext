@@ -29,8 +29,8 @@ export function TexworkspaceContent({ tab, isActive }: { tab: RightTab; isActive
           </p>
           <p className="text-sm text-muted-foreground/60 max-w-[320px]">
             A manuscript folder is required for TeX editing, PDF preview,
-            outline navigation, and compilation. Configure one in your
-            workspace settings to get started.
+            outline navigation, and compilation. Configure one in Settings →
+            TeX Workspace to get started.
           </p>
         </div>
         <Button
@@ -38,10 +38,10 @@ export function TexworkspaceContent({ tab, isActive }: { tab: RightTab; isActive
           size="sm"
           onClick={() => {
             useLayoutStore.getState().setLeftSidebarView("settings");
-            useLayoutStore.getState().setSettingsCategory("workspace");
+            useLayoutStore.getState().setSettingsCategory("texworkspace");
           }}
         >
-          Open Workspace Settings
+          Open TeX Workspace Settings
         </Button>
       </div>,
     );

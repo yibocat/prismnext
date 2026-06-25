@@ -9,35 +9,39 @@ import { useTerminalAiStore } from "@/stores/terminal-ai-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { formatAiTerminalStatus } from "@/lib/terminal/ai-terminal-lifecycle";
 import { resolveAiMirrorKey } from "@/lib/terminal/mirror-key";
+import { resolveSessionWorktreeContext } from "@/lib/git/session-worktree-context";
 import {
   FolderOpenIcon,
   BotIcon,
   GitBranchIcon,
   TerminalIcon,
+  WorkflowIcon,
 } from "lucide-react";
 
 interface SessionTitleProps {
   title: string;
   projectRoot: string | null;
   agentName: string;
+  /** Session-bound cwd — preferred over global active worktree. */
+  sessionDirectory?: string | null;
 }
 
 export function SessionTitle({
   title,
   projectRoot,
   agentName,
+  sessionDirectory,
 }: SessionTitleProps) {
   const projectName = projectRoot
     ? projectRoot.split("/").pop() || projectRoot
     : "—";
 
-  const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
-  const mode = useWorktreeStore((s) => s.mode);
-  const worktreeLabel = activeWorktree?.name
-    ? `📂 ${activeWorktree.name}`
-    : mode === "worktree"
-      ? "Pending worktree"
-      : "Local";
+  const worktrees = useWorktreeStore((s) => s.worktrees);
+  const checkoutContext = resolveSessionWorktreeContext(
+    sessionDirectory ?? projectRoot,
+    projectRoot,
+    worktrees,
+  );
 
   const activeTabId = useChatStore((s) => s.activeTabId);
   const mirrorKey = activeTabId ? resolveAiMirrorKey(activeTabId) : "";
@@ -79,11 +83,26 @@ export function SessionTitle({
                 {agentName}
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="text-[length:var(--font-chat-meta)] text-muted-foreground">
-                {worktreeLabel}
-              </span>
+            <div className="flex items-center gap-2 min-w-0">
+              {checkoutContext.kind === "local" ? (
+                <GitBranchIcon className="size-3.5 shrink-0 text-muted-foreground" />
+              ) : (
+                <WorkflowIcon className="size-3.5 shrink-0 text-primary/80" />
+              )}
+              <div className="min-w-0">
+                <div className="text-[length:var(--font-chat-meta)] text-foreground truncate">
+                  {checkoutContext.label}
+                </div>
+                {checkoutContext.kind === "worktree" && checkoutContext.baseBranch ? (
+                  <div className="text-[length:var(--font-hint)] text-muted-foreground truncate">
+                    Merges into {checkoutContext.baseBranch}
+                  </div>
+                ) : checkoutContext.kind === "closed-worktree" ? (
+                  <div className="text-[length:var(--font-hint)] text-muted-foreground truncate">
+                    Worktree removed — session kept on project
+                  </div>
+                ) : null}
+              </div>
             </div>
             {terminalStatus && activeTabId ? (
               <button

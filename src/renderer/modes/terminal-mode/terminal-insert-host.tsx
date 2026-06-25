@@ -11,9 +11,9 @@ import { SelectionInsertAction } from "@/components/modules/shared/selection-ins
 import { insertTerminalToChat } from "@/lib/chat/insert-to-chat";
 import {
   getTerminalSelectionAnchor,
-  chipPositionFromAnchor,
   type TerminalSelectionAnchor,
 } from "@/lib/terminal/selection-anchor";
+import { chipPositionAtSelectionTopRight } from "@/lib/selection-chip-position";
 
 interface TerminalInsertHostProps {
   tabId: string;
@@ -56,7 +56,7 @@ export function TerminalInsertHost({
       return;
     }
     setSelectionAnchor(anchor);
-    setChipPos(chipPositionFromAnchor(anchor, container));
+    setChipPos(chipPositionAtSelectionTopRight(anchor, container));
   }, [termRef, dismissAction]);
 
   const runInsert = useCallback(() => {
@@ -133,8 +133,7 @@ export function TerminalInsertHost({
         x={chipPos?.left ?? 0}
         y={chipPos?.top ?? 0}
         anchor="parent"
-        align="start"
-        variant="inline-chip"
+        placement="selection-top-right"
         shortcut="⌘L"
         label="Add to Chat"
         onInsert={runInsert}

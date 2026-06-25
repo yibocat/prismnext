@@ -1,4 +1,4 @@
-import { SIDEBAR_RIGHT_MIN } from "@/styles/constants";
+import { SIDEBAR_RIGHT_MIN, SIDEBAR_RIGHT_MAX } from "@/styles/constants";
 
 /** Minimum main-pane width when sidebar is split alongside content. */
 export const RIGHT_AREA_MIN_CONTENT = 150;
@@ -8,6 +8,10 @@ export const RIGHT_AREA_SPLIT_THRESHOLD = SIDEBAR_RIGHT_MIN + RIGHT_AREA_MIN_CON
 
 /** Hysteresis: widen past this before leaving full-mode overlay. */
 export const RIGHT_AREA_SPLIT_RECOVER = RIGHT_AREA_SPLIT_THRESHOLD + 40;
+
+export function clampSidebarWidth(width: number): number {
+  return Math.max(SIDEBAR_RIGHT_MIN, Math.min(SIDEBAR_RIGHT_MAX, width));
+}
 
 export function computeEffectiveSidebarWidth(
   containerWidth: number,
@@ -19,6 +23,17 @@ export function computeEffectiveSidebarWidth(
     preferredWidth,
     Math.max(SIDEBAR_RIGHT_MIN, containerWidth - minContent),
   );
+}
+
+/** True when rendered width is capped by container squeeze, not user preference. */
+export function isSidebarSqueezedByContainer(
+  actualWidth: number,
+  containerWidth: number,
+  preferredWidth: number,
+): boolean {
+  if (containerWidth <= 0) return false;
+  const effective = computeEffectiveSidebarWidth(containerWidth, preferredWidth);
+  return preferredWidth > effective + 1 && actualWidth <= effective + 1;
 }
 
 /** Auto-close only applies to split sidebar — not user-opened full overlay. */

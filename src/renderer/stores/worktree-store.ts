@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import { toast } from "sonner";
 import type { WorktreeInfo, BranchInfo } from "@/types/electron";
+import { applyCheckoutTransition } from "@/lib/git/checkout-context";
+import { rehomeWorktreeSessions } from "@/lib/git/worktree-sessions";
+import { worktreePathsEqual } from "@/lib/git/worktree-path";
+import { reconcileWorktreeList, isWorktreeCheckoutOnDisk } from "@/lib/git/worktree-present";
+import { clearCheckpointsForWorktree } from "@/lib/chat/worktree-checkpoint-lifecycle";
+import { useDocumentStore } from "@/stores/document-store";
 
 export type WorktreeMode = "local" | "worktree";
 
@@ -13,8 +19,7 @@ interface WorktreeState {
   loading: boolean;
   error: string | null;
 
-  /** Cache of pre-scanned file trees for worktrees.
-   *  Key: worktree name. Populated on creation, consumed on switch. */
+  /** Cache of pre-scanned file trees — keyed by absolute worktree path. */
   fileTreeCache: Map<string, {
     files: Array<{
       id: string;
@@ -27,20 +32,18 @@ interface WorktreeState {
     folders: string[];
     scannedAt: number;
   }>;
-  /** Pre-scan worktree file tree (metadata only) and cache it */
-  preScanWorktree: (name: string, path: string) => Promise<void>;
-  /** Get cached file tree for a worktree, or undefined if not cached */
-  getCachedTree: (name: string) => { files: any[]; folders: string[] } | undefined;
-  /** Invalidate a worktree's cache entry */
-  invalidateCache: (name: string) => void;
+  preScanWorktree: (worktreePath: string) => Promise<void>;
+  getCachedTree: (worktreePath: string) => { files: any[]; folders: string[] } | undefined;
+  invalidateCache: (worktreePath: string) => void;
 
   refreshWorktrees: (projectRoot: string) => Promise<void>;
   setMode: (mode: WorktreeMode, branch?: string) => void;
   selectExistingWorktree: (worktree: WorktreeInfo) => void;
   initializeWorktree: (projectRoot: string) => Promise<WorktreeInfo>;
-  moveToLocal: (projectRoot: string) => Promise<void>;
+  moveToLocal: (projectRoot: string, target?: WorktreeInfo) => Promise<void>;
   removeWorktree: (projectRoot: string, name: string) => Promise<void>;
   refreshBranches: (projectRoot: string) => Promise<void>;
+  clearActiveWorktree: () => void;
   clearAll: () => void;
 }
 
@@ -57,23 +60,32 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
   refreshWorktrees: async (projectRoot: string) => {
     set({ loading: true, error: null });
     try {
-      const worktrees = await window.electronAPI.worktreeList(projectRoot);
+      let worktrees = await window.electronAPI.worktreeList(projectRoot);
+      if (useDocumentStore.getState().projectRoot !== projectRoot) return;
+
+      worktrees = await reconcileWorktreeList(worktrees, get().worktrees);
+
       const { activeWorktree: active, mode: currentMode } = get();
-      // Only reset mode if the previously-active worktree was deleted externally.
-      // If there was no active worktree (pending "New Worktree" state), preserve the mode.
       const hadActive = active !== null;
-      const stillExists = hadActive
-        ? worktrees.some((w) => w.name === active!.name)
+      let stillExists = hadActive
+        ? worktrees.some((w) => worktreePathsEqual(w.path, active!.path))
         : false;
+      if (hadActive && !stillExists && active) {
+        if (await isWorktreeCheckoutOnDisk(active.path)) {
+          worktrees = [...worktrees, active];
+          stillExists = true;
+        }
+      }
+
       set({
         worktrees,
         loading: false,
         activeWorktree: stillExists ? active : (hadActive ? null : active),
-        // Only downgrade to "local" if we LOST an active worktree — not when pending
         mode: hadActive && !stillExists ? "local" : currentMode,
         pendingBranch: hadActive && !stillExists ? null : get().pendingBranch,
       });
     } catch (err: unknown) {
+      if (useDocumentStore.getState().projectRoot !== projectRoot) return;
       set({
         error: (err as Error).message || "Failed to list worktrees",
         loading: false,
@@ -81,9 +93,9 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
     }
   },
 
-  preScanWorktree: async (name: string, path: string) => {
+  preScanWorktree: async (worktreePath: string) => {
     try {
-      const result = await window.electronAPI.fsScanMetadata(path);
+      const result = await window.electronAPI.fsScanMetadata(worktreePath);
       const files = result.files.map((f) => ({
         id: f.relativePath,
         name: f.relativePath.split("/").pop() || f.relativePath,
@@ -93,22 +105,22 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
         fileSize: f.fileSize,
       }));
       const newCache = new Map(get().fileTreeCache);
-      newCache.set(name, { files, folders: result.folders, scannedAt: Date.now() });
+      newCache.set(worktreePath, { files, folders: result.folders, scannedAt: Date.now() });
       set({ fileTreeCache: newCache });
     } catch {
-      // Pre-scan is best-effort; switch will fall back to live scan if cache misses
+      // Best-effort
     }
   },
 
-  getCachedTree: (name: string) => {
-    const entry = get().fileTreeCache.get(name);
+  getCachedTree: (worktreePath: string) => {
+    const entry = get().fileTreeCache.get(worktreePath);
     if (!entry) return undefined;
     return { files: entry.files, folders: entry.folders };
   },
 
-  invalidateCache: (name: string) => {
+  invalidateCache: (worktreePath: string) => {
     const newCache = new Map(get().fileTreeCache);
-    newCache.delete(name);
+    newCache.delete(worktreePath);
     set({ fileTreeCache: newCache });
   },
 
@@ -116,7 +128,6 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
     if (mode === "local") {
       set({ mode: "local", pendingBranch: null, activeWorktree: null });
     } else {
-      // "New Worktree" is a fresh intent — clear any existing worktree
       set({ mode: "worktree", pendingBranch: branch ?? null, activeWorktree: null });
     }
   },
@@ -132,27 +143,27 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
   initializeWorktree: async (projectRoot: string) => {
     const { pendingBranch, mode, activeWorktree } = get();
 
-    // If already initialized (selectExistingWorktree was used), just return it
-    if (activeWorktree) return activeWorktree;
-
-    // If in local mode, nothing to do
     if (mode !== "worktree") throw new Error("Not in worktree mode");
 
-    if (!pendingBranch) throw new Error("No branch selected for worktree");
+    // Reuse an already-attached worktree only when user did not ask for a new one.
+    if (!pendingBranch) {
+      if (activeWorktree) return activeWorktree;
+      throw new Error("No branch selected for worktree");
+    }
 
-    set({ loading: true, error: null });
+    set({ loading: true, error: null, activeWorktree: null });
     try {
       const info = await window.electronAPI.worktreeCreate(
         projectRoot,
-        undefined, // auto-generate name
+        undefined,
         pendingBranch,
       );
-      // Set activeWorktree BEFORE refreshWorktrees so it won't reset mode to "local"
+      if (useDocumentStore.getState().projectRoot !== projectRoot) {
+        throw new Error("Project changed during worktree creation");
+      }
+
       set({ activeWorktree: info, pendingBranch: null, loading: false });
-      // Pre-scan worktree file tree while we're here (background, non-blocking)
-      const wtName = info.name;
-      const wtPath = info.path;
-      get().preScanWorktree(wtName, wtPath).catch(() => {});
+      get().preScanWorktree(info.path).catch(() => {});
       await get().refreshWorktrees(projectRoot);
       return info;
     } catch (err: unknown) {
@@ -164,35 +175,43 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
     }
   },
 
-  moveToLocal: async (projectRoot: string) => {
+  moveToLocal: async (projectRoot: string, target?: WorktreeInfo) => {
     const { activeWorktree } = get();
-    if (!activeWorktree) {
+    const closing = target ?? activeWorktree;
+    if (!closing) {
       set({ mode: "local", pendingBranch: null });
       return;
     }
 
+    const closingActive =
+      !!activeWorktree &&
+      (worktreePathsEqual(activeWorktree.path, closing.path) ||
+        activeWorktree.name === closing.name);
+
     set({ loading: true, error: null });
     let sessionCount = 0;
+    const wtPath = closing.path;
+    await clearCheckpointsForWorktree(closing, "closed");
     try {
-      // Move session files from worktree to project so the conversation
-      // becomes a normal project-level session instead of being deleted.
       try {
-        sessionCount = await window.electronAPI.worktreeMoveSessions(projectRoot, activeWorktree.name);
+        sessionCount = await window.electronAPI.worktreeMoveSessions(projectRoot, closing.name);
       } catch {
-        // Session migration is best-effort — warn but proceed with removal
         toast.warning("Conversation history could not be migrated", {
           description: "Sessions from this worktree may be lost.",
           duration: 6000,
         });
       }
-      await window.electronAPI.worktreeRemove(projectRoot, activeWorktree.name);
+      const reassigned = await rehomeWorktreeSessions(projectRoot, wtPath);
+      if (reassigned > 0) sessionCount = Math.max(sessionCount, reassigned);
+      await window.electronAPI.worktreeRemove(projectRoot, closing.name);
     } catch {
-      // Even if removal fails, reset local state
+      // Even if removal fails, reset local state when we closed the active checkout
     }
+    get().invalidateCache(wtPath);
     set({
-      activeWorktree: null,
-      mode: "local",
-      pendingBranch: null,
+      activeWorktree: closingActive ? null : activeWorktree,
+      mode: closingActive ? "local" : get().mode,
+      pendingBranch: closingActive ? null : get().pendingBranch,
       loading: false,
     });
     await get().refreshWorktrees(projectRoot);
@@ -207,14 +226,28 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
 
   removeWorktree: async (projectRoot: string, name: string) => {
     set({ loading: true, error: null });
+    const active = get().activeWorktree;
+    const wasActive = active?.name === name;
+    const wtPath = active?.name === name ? active.path : get().worktrees.find((w) => w.name === name)?.path;
+    const wtInfo = active?.name === name
+      ? active
+      : get().worktrees.find((w) => w.name === name);
+    if (wtInfo) {
+      await clearCheckpointsForWorktree(wtInfo, "closed");
+    }
     try {
+      if (wtPath) {
+        await rehomeWorktreeSessions(projectRoot, wtPath);
+      }
       await window.electronAPI.worktreeRemove(projectRoot, name);
-      get().invalidateCache(name);
-      const { activeWorktree, mode } = get();
-      if (activeWorktree?.name === name) {
-        set({ activeWorktree: null, mode: "local", pendingBranch: null });
+      if (wtPath) {
+        get().invalidateCache(wtPath);
+      }
+      if (wasActive) {
+        await applyCheckoutTransition({ type: "local" });
       }
       await get().refreshWorktrees(projectRoot);
+      set({ loading: false });
     } catch (err: unknown) {
       set({
         error: (err as Error).message || "Failed to remove worktree",
@@ -224,9 +257,14 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
     }
   },
 
+  clearActiveWorktree: () => {
+    set({ activeWorktree: null, mode: "local", pendingBranch: null });
+  },
+
   refreshBranches: async (projectRoot: string) => {
     try {
       const branches = await window.electronAPI.worktreeBranches(projectRoot);
+      if (useDocumentStore.getState().projectRoot !== projectRoot) return;
       set({ branches });
     } catch {}
   },

@@ -2,7 +2,7 @@ import type { ModeDefinition } from "@/lib/workspace/mode-registry";
 import { GitBranchIcon } from "lucide-react";
 import { GitSidebar } from "./git-sidebar";
 import { GitToolbarWrapper, GitContent } from "./git-content";
-import { useDocumentStore } from "@/stores/document-store";
+import { resolveGitRefreshRoot } from "@/lib/git/checkout-context";
 
 export const gitMode: ModeDefinition = {
   id: "git",
@@ -15,11 +15,15 @@ export const gitMode: ModeDefinition = {
   Toolbar: GitToolbarWrapper,
   Content: GitContent,
   onActivate: () => {
-    const projectRoot = useDocumentStore.getState().projectRoot;
-    if (projectRoot) {
-      import("@/stores/git-store").then(({ useGitStore }) => {
-        useGitStore.getState().selectUnit(projectRoot);
-      });
-    }
+    const root = resolveGitRefreshRoot();
+    if (!root) return;
+    import("@/stores/git-store").then(({ useGitStore }) => {
+      const gs = useGitStore.getState();
+      if (gs.unitRoot === root) {
+        void gs.forceRefreshStatus(root);
+      } else {
+        void gs.selectUnit(root);
+      }
+    });
   },
 };

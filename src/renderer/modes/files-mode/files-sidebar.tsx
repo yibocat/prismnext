@@ -8,11 +8,10 @@ import { DEFAULT_MANUSCRIPT_DIR, FOLDER_FUNCTION_LABELS, FOLDER_FUNCTION_ICONS, 
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useGitStore } from "@/stores/git-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
+import { applyCheckoutTransition } from "@/lib/git/checkout-context";
 import { useIsTexworkspace } from "@/modes/texworkspace-mode/use-texworkspace";
 import {
-  CheckIcon,
   FilePlusCorner,
-  FolderOpenIcon,
   FolderPlusIcon,
   FoldVerticalIcon,
   UnfoldVerticalIcon,
@@ -22,19 +21,20 @@ import {
 } from "lucide-react";
 
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+  AppContextMenu,
+  AppContextMenuContent,
+  AppContextMenuItem,
+  AppContextMenuTrigger,
+} from "@/components/ui/app-context-menu";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  AppMenu,
+  AppMenuCheckItem,
+  AppMenuContent,
+  AppMenuItem,
+  AppMenuSeparator,
+  AppMenuTrigger,
+  appMenuFontClass,
+} from "@/components/ui/app-menu";
 import {
   Dialog,
   DialogContent,
@@ -52,8 +52,12 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 import { getModeDir, type SidebarMode, filterFilesByMode, filterFoldersByMode } from "./file-filter";
-import { trackRecentOpenedFile } from "@/lib/files/recent-files";
-import { FolderVirtRow, FileVirtRow, InlineEditRow, type VirtTreeCallbacks, type GitStatusInfo } from "@/components/layout/right-sidebar/virtual-tree-rows";
+import { trackRecentOpenedFile, setProjectLastActiveFileId } from "@/lib/files/recent-files";
+import { FolderVirtRow, FileVirtRow, InlineEditRow, type VirtTreeCallbacks } from "@/components/layout/right-sidebar/virtual-tree-rows";
+import {
+  pickGitFileItemForPath,
+  resolveGitChangeBadgeForPath,
+} from "@/modes/git-mode/git-change-status";
 
 
 
@@ -204,23 +208,13 @@ export function FilesSidebar() {
 
   const handleViewProject = useCallback(async () => {
     if (!projectRoot) return;
-    // Switch view to project root first
-    await useDocumentStore.getState().switchCheckoutRoot(projectRoot);
+    await applyCheckoutTransition({ type: "project-view-while-worktree" });
     setFilesView("project");
-    // Then checkout the worktree's base branch so the file tree
-    // shows the correct branch content, not whatever the project
-    // happened to be on before the worktree was created.
-    if (activeWorktree?.baseBranch) {
-      const gs = useGitStore.getState();
-      if (gs.branch !== activeWorktree.baseBranch) {
-        await gs.switchBranch(projectRoot, activeWorktree.baseBranch).catch(() => {});
-      }
-    }
-  }, [projectRoot, activeWorktree?.baseBranch]);
+  }, [projectRoot]);
 
   const handleViewWorktree = useCallback(() => {
     if (!activeWorktree) return;
-    useDocumentStore.getState().switchCheckoutRoot(activeWorktree.path);
+    void applyCheckoutTransition({ type: "worktree-existing", worktree: activeWorktree });
     setFilesView("worktree");
   }, [activeWorktree]);
 
@@ -242,7 +236,7 @@ export function FilesSidebar() {
   // Worktree: switch to another existing worktree (real switch, not just view)
   const handleSwitchWorktree = useCallback(
     (wt: NonNullable<typeof activeWorktree>) => {
-      useWorktreeStore.getState().selectExistingWorktree(wt);
+      void applyCheckoutTransition({ type: "worktree-existing", worktree: wt });
     },
     [],
   );
@@ -262,26 +256,22 @@ export function FilesSidebar() {
   // Derive file git status from the git store (already fetched by refreshStatus).
   // Avoids a duplicate `git status` IPC call — cuts status fetches in half.
   const gitFiles = useGitStore((s) => s.files);
-  const gitStatusMap = useMemo(() => {
-    const map = new Map<string, { isDeleted: boolean; isStagedOnly: boolean; isUnstaged: boolean; isUntracked: boolean }>();
-    for (const f of gitFiles) {
-      const isDeleted = f.worktreeStatus === "D" || f.indexStatus === "D";
-      map.set(f.path, { isStagedOnly: f.staged && !f.unstaged, isUnstaged: f.unstaged, isUntracked: f.untracked, isDeleted });
-    }
-    return map;
-  }, [gitFiles]);
 
-  // ─── Git status summary for context bar ───
   const gitSummary = useMemo(() => {
     if (!isGitRepo) return null;
     let staged = 0;
     let changed = 0;
-    gitStatusMap.forEach((v) => {
-      if (v.isStagedOnly) staged++;
-      if (v.isUnstaged || v.isUntracked) changed++;
-    });
+    const seen = new Set<string>();
+    for (const f of gitFiles) {
+      if (seen.has(f.path)) continue;
+      seen.add(f.path);
+      const pick = pickGitFileItemForPath(gitFiles, f.path);
+      if (!pick) continue;
+      if (pick.staged && !pick.unstaged) staged++;
+      if (pick.unstaged || pick.untracked) changed++;
+    }
     return { staged, changed };
-  }, [isGitRepo, gitStatusMap]);
+  }, [isGitRepo, gitFiles]);
 
   // ─── Expand / collapse (persisted to layout-store) ───
   const persistedExpanded = useLayoutStore((s) => s.expandedFileTreeFolders);
@@ -488,7 +478,7 @@ export function FilesSidebar() {
   const handleSelectFile = useCallback(
     (id: string, name: string, pin = false) => {
       setSelectedFolder(null);
-      window.electronAPI.settingsSet({ lastActiveFileId: id } as any);
+      if (projectRoot) void setProjectLastActiveFileId(projectRoot, id);
       void trackRecentOpenedFile(id, name);
       if (isTexworkspaceActive) {
         openTexworkspaceFile(id, id, name);
@@ -497,7 +487,7 @@ export function FilesSidebar() {
         openFile(id, id, name, { pin });
       }
     },
-    [isTexworkspaceActive, openTexworkspaceFile, setActiveFile, openFile],
+    [isTexworkspaceActive, openTexworkspaceFile, projectRoot, setActiveFile, openFile],
   );
 
   const handleSelectFolder = useCallback((path: string) => {
@@ -535,18 +525,20 @@ export function FilesSidebar() {
   }, [tree, expandedFolders, editing]);
 
   // ─── Git status lookup helper (same 3-level fallback as before) ───
-  const getGitStatus = useCallback(
-    (fileId: string, fileName: string, relativePath: string): GitStatusInfo | undefined => {
-      const direct = gitStatusMap.get(fileId);
-      if (direct !== undefined) return direct;
-      const byRel = gitStatusMap.get(relativePath);
-      if (byRel !== undefined) return byRel;
-      for (const [key, val] of gitStatusMap) {
-        if (key === fileName || key.endsWith("/" + fileName)) return val;
+  const getGitBadge = useCallback(
+    (fileId: string, fileName: string, relativePath: string) => {
+      const direct = resolveGitChangeBadgeForPath(gitFiles, fileId);
+      if (direct) return direct;
+      const byRel = resolveGitChangeBadgeForPath(gitFiles, relativePath);
+      if (byRel) return byRel;
+      for (const f of gitFiles) {
+        if (f.path === fileName || f.path.endsWith("/" + fileName)) {
+          return resolveGitChangeBadgeForPath(gitFiles, f.path);
+        }
       }
       return undefined;
     },
-    [gitStatusMap],
+    [gitFiles],
   );
 
   // ─── Virtuoso item renderer ───
@@ -588,7 +580,7 @@ export function FilesSidebar() {
           depth={item.depth}
           isActive={file.id === activeFileId}
           isDirty={dirtyFiles.has(file.id)}
-          gitStatus={getGitStatus(file.id, file.name, file.relativePath)}
+          gitBadge={getGitBadge(file.id, file.name, file.relativePath)}
           onSelect={() => handleSelectFile(file.id, file.name)}
           onOpenPinned={() => handleSelectFile(file.id, file.name, true)}
           callbacks={treeCallbacks}
@@ -600,7 +592,7 @@ export function FilesSidebar() {
       selectedFolder,
       activeFileId,
       dirtyFiles,
-      getGitStatus,
+      getGitBadge,
       handleToggleFolder,
       handleSelectFolder,
       handleSelectFile,
@@ -624,33 +616,49 @@ export function FilesSidebar() {
         targetPath = targetPath.slice(prefix.length);
       } else if (targetPath === getModeDir(currentMode, manuscriptDir)) {
         targetPath = "";
+      } else {
+        setFileTreeNavigatePath(null);
+        return;
       }
     }
 
     if (targetPath !== "") {
       const parts = targetPath.split("/");
-      const next = new Set(persistedExpanded);
-      for (let i = 1; i <= parts.length; i++) {
-        next.add(parts.slice(0, i).join("/"));
+      const requiredFolders: string[] = [];
+      for (let i = 1; i < parts.length; i++) {
+        requiredFolders.push(parts.slice(0, i).join("/"));
       }
-      setPersistedExpanded([...next]);
+      const missing = requiredFolders.some((p) => !expandedFolders.has(p));
+      if (missing) {
+        const next = new Set(expandedFolders);
+        for (const p of requiredFolders) next.add(p);
+        setPersistedExpanded([...next]);
+        return;
+      }
     }
 
-    // Scroll Virtuoso to the target item after React commits the expand
-    if (targetPath) {
-      const resolvedPath = targetPath;
-      queueMicrotask(() => {
-        const idx = flatItems.findIndex(
-          (item) => item.key === resolvedPath || item.key.startsWith(resolvedPath + "/"),
-        );
-        if (idx >= 0 && virtuosoRef.current) {
-          virtuosoRef.current.scrollToIndex({ index: idx, align: "start" });
-        }
-      });
+    if (!targetPath) {
+      setFileTreeNavigatePath(null);
+      return;
     }
 
-    setFileTreeNavigatePath(null);
-  }, [fileTreeNavigatePath, currentMode, persistedExpanded, setPersistedExpanded, setFileTreeNavigatePath, flatItems]);
+    const idx = flatItems.findIndex((item) => item.key === targetPath);
+    if (idx >= 0 && virtuosoRef.current) {
+      virtuosoRef.current.scrollToIndex({ index: idx, align: "center" });
+      setFileTreeNavigatePath(null);
+    } else {
+      setFileTreeNavigatePath(null);
+    }
+  }, [
+    fileTreeNavigatePath,
+    currentMode,
+    manuscriptDir,
+    expandedFolders,
+    persistedExpanded,
+    setPersistedExpanded,
+    setFileTreeNavigatePath,
+    flatItems,
+  ]);
 
   return (
     <>
@@ -663,8 +671,8 @@ export function FilesSidebar() {
       <div className="flex-1 min-h-0 flex flex-col">
         {/* ─── Virtualized file tree ─── */}
         <div className="flex-1 min-h-0">
-          <ContextMenu>
-            <ContextMenuTrigger asChild>
+          <AppContextMenu>
+            <AppContextMenuTrigger asChild>
               <div
                 className="flex-1 h-full min-h-0 px-1.5"
                 data-sidebar="content"
@@ -693,32 +701,30 @@ export function FilesSidebar() {
                   increaseViewportBy={{ top: 100, bottom: 100 }}
                 />
               </div>
-            </ContextMenuTrigger>
-            <ContextMenuContent>
-              <ContextMenuItem onClick={() => setEditing({ type: "file", parentPath: resolveCreateFolder() })}>
-                <FilePlusCorner className="mr-2 size-4" />
+            </AppContextMenuTrigger>
+            <AppContextMenuContent>
+              <AppContextMenuItem onClick={() => setEditing({ type: "file", parentPath: resolveCreateFolder() })}>
                 New File
-              </ContextMenuItem>
-              <ContextMenuItem onClick={() => setEditing({ type: "folder", parentPath: resolveCreateFolder() })}>
-                <FolderPlusIcon className="mr-2 size-4" />
+              </AppContextMenuItem>
+              <AppContextMenuItem onClick={() => setEditing({ type: "folder", parentPath: resolveCreateFolder() })}>
                 New Folder
-              </ContextMenuItem>
-            </ContextMenuContent>
-          </ContextMenu>
+              </AppContextMenuItem>
+            </AppContextMenuContent>
+          </AppContextMenu>
         </div>
 
       </div>
 
       {/* ── Bottom status bar ── */}
       {(isGitRepo || activeWorktree) && (
-        <div className="flex items-center gap-2 h-[var(--height-mode-selector)] px-3 shrink-0 text-[length:var(--font-size-12)] text-muted-foreground">
+        <div className={cn("flex items-center gap-2 h-[var(--height-mode-selector)] px-3 shrink-0 text-muted-foreground", appMenuFontClass)}>
           {activeWorktree ? (
             <>
               {/* ── View switcher: worktree ↔ project ── */}
               {filesView === "worktree" ? (
                 <>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                  <AppMenu>
+                    <AppMenuTrigger asChild>
                       <button
                         type="button"
                         className="flex items-center gap-1.5 rounded px-1 -ml-1 h-5 hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -726,31 +732,23 @@ export function FilesSidebar() {
                         <SplitIcon className="size-3.5 shrink-0" />
                         <span className="truncate max-w-[100px]">{activeWorktree.name}</span>
                       </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" side="top" className="w-44">
-                      <DropdownMenuItem onClick={handleViewProject} className="cursor-pointer gap-2 text-xs">
-                        <FolderOpenIcon className="size-3.5 shrink-0" />
-                        <span>View Project Files</span>
-                      </DropdownMenuItem>
+                    </AppMenuTrigger>
+                    <AppMenuContent align="start" side="top" className="w-44">
+                      <AppMenuItem onClick={handleViewProject}>View Project Files</AppMenuItem>
                       {allWorktrees.filter((w) => w.name !== activeWorktree.name).length > 0 && (
                         <>
-                          <DropdownMenuSeparator />
+                          <AppMenuSeparator />
                           {allWorktrees
                             .filter((w) => w.name !== activeWorktree.name)
                             .map((w) => (
-                              <DropdownMenuItem
-                                key={w.name}
-                                onClick={() => handleSwitchWorktree(w)}
-                                className="cursor-pointer gap-2 text-xs"
-                              >
-                                <SplitIcon className="size-3.5 shrink-0" />
-                                <span className="truncate">{w.name}</span>
-                              </DropdownMenuItem>
+                              <AppMenuItem key={w.name} onClick={() => handleSwitchWorktree(w)}>
+                                {w.name}
+                              </AppMenuItem>
                             ))}
                         </>
                       )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                    </AppMenuContent>
+                  </AppMenu>
 
                   <span className="text-muted-foreground/30 shrink-0">→</span>
 
@@ -769,8 +767,8 @@ export function FilesSidebar() {
                       Only show the worktree label when the current branch
                       matches the worktree's base — otherwise it's irrelevant. */}
                   {isGitRepo && gitBranch ? (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
+                    <AppMenu>
+                      <AppMenuTrigger asChild>
                         <button
                           type="button"
                           className="flex items-center gap-1.5 rounded px-1 -ml-1 h-5 hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -783,37 +781,27 @@ export function FilesSidebar() {
                           <span className="truncate max-w-[100px]">
                             {gitSwitching ? "Switching…" : gitBranch}
                           </span>
-                          </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" side="top" className="w-48 max-h-56 overflow-y-auto">
+                        </button>
+                      </AppMenuTrigger>
+                      <AppMenuContent align="start" side="top" className="w-48 max-h-56 overflow-y-auto">
                         {activeWorktree?.baseBranch === gitBranch && (
                           <>
-                            <DropdownMenuItem onClick={handleViewWorktree} className="cursor-pointer gap-2 text-xs">
-                              <SplitIcon className="size-3.5 shrink-0" />
-                              <span>View Worktree Files</span>
-                            </DropdownMenuItem>
-                            {branches.length > 0 && <DropdownMenuSeparator />}
+                            <AppMenuItem onClick={handleViewWorktree}>View Worktree Files</AppMenuItem>
+                            {branches.length > 0 && <AppMenuSeparator />}
                           </>
                         )}
-                        {branches.map((b) => {
-                          const isCurrent = b === gitBranch;
-                          return (
-                            <DropdownMenuItem
-                              key={b}
-                              onClick={() => handleSwitchBranch(b)}
-                              disabled={isCurrent}
-                              className="cursor-pointer gap-2 text-xs"
-                            >
-                              <GitBranchIcon
-                                className={`size-3.5 shrink-0 ${isCurrent ? "text-foreground" : "text-muted-foreground"}`}
-                              />
-                              <span className="truncate flex-1">{b}</span>
-                              {isCurrent && <CheckIcon className="size-3.5 shrink-0" />}
-                            </DropdownMenuItem>
-                          );
-                        })}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                        {branches.map((b) => (
+                          <AppMenuCheckItem
+                            key={b}
+                            selected={b === gitBranch}
+                            onClick={() => handleSwitchBranch(b)}
+                            className={cn(b === gitBranch && "font-medium")}
+                          >
+                            {b}
+                          </AppMenuCheckItem>
+                        ))}
+                      </AppMenuContent>
+                    </AppMenu>
                   ) : (
                     <span className="truncate max-w-[100px]">{projectRoot?.split(/[/\\]/).pop()}</span>
                   )}
@@ -835,8 +823,8 @@ export function FilesSidebar() {
             <>
               {/* ── Branch switcher ── */}
               {isGitRepo && gitBranch && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+                <AppMenu>
+                  <AppMenuTrigger asChild>
                     <button
                       type="button"
                       className="flex items-center gap-1.5 rounded px-1 -ml-1 h-5 hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -850,33 +838,26 @@ export function FilesSidebar() {
                         {gitSwitching ? "Switching…" : gitBranch}
                       </span>
                     </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" side="top" className="w-48 max-h-56 overflow-y-auto">
+                  </AppMenuTrigger>
+                  <AppMenuContent align="start" side="top" className="w-48 max-h-56 overflow-y-auto">
                     {branches.length === 0 ? (
-                      <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+                      <p className={cn("px-2 py-3 text-center text-muted-foreground", appMenuFontClass)}>
                         No branches
-                      </div>
+                      </p>
                     ) : (
-                      branches.map((b) => {
-                        const isCurrent = b === gitBranch;
-                        return (
-                          <DropdownMenuItem
-                            key={b}
-                            onClick={() => handleSwitchBranch(b)}
-                            disabled={isCurrent}
-                            className="cursor-pointer gap-2 text-xs"
-                          >
-                            <GitBranchIcon
-                              className={`size-3.5 shrink-0 ${isCurrent ? "text-foreground" : "text-muted-foreground"}`}
-                            />
-                            <span className="truncate flex-1">{b}</span>
-                            {isCurrent && <CheckIcon className="size-3.5 shrink-0" />}
-                          </DropdownMenuItem>
-                        );
-                      })
+                      branches.map((b) => (
+                        <AppMenuCheckItem
+                          key={b}
+                          selected={b === gitBranch}
+                          onClick={() => handleSwitchBranch(b)}
+                          className={cn(b === gitBranch && "font-medium")}
+                        >
+                          {b}
+                        </AppMenuCheckItem>
+                      ))
                     )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  </AppMenuContent>
+                </AppMenu>
               )}
             </>
           )}

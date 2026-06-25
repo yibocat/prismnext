@@ -1,14 +1,19 @@
-// prism-next/src/renderer/stores/command-store.ts
 import { create } from "zustand";
-import type { CommandDef, CreateCommandPayload, UpdateCommandPayload } from "@commands/types";
+import type {
+  CommandDef,
+  CreateCommandPayload,
+  UpdateCommandPayload,
+} from "@commands/types";
+import type {
+  CommandImportConflictStrategy,
+  CommandImportPreview,
+  CommandImportResult,
+} from "@commands/export-import";
 
 interface CommandState {
-  /** Full command list (all three layers, including disabled) */
   commands: CommandDef[];
-  /** True after initial load */
   loaded: boolean;
 
-  // Actions
   loadCommands: () => Promise<void>;
   searchCommands: (query: string) => CommandDef[];
   expandCommand: (name: string, rawInput: string) => Promise<string>;
@@ -17,6 +22,21 @@ interface CommandState {
   deleteCommand: (id: string) => Promise<void>;
   toggleCommand: (id: string, enabled: boolean) => Promise<void>;
   reloadCommands: () => Promise<void>;
+  previewImport: (projectRoot: string, pack: unknown) => Promise<CommandImportPreview>;
+  importPack: (
+    projectRoot: string,
+    pack: unknown,
+    strategy: CommandImportConflictStrategy,
+  ) => Promise<CommandImportResult>;
+  writeExportFile: (filePath: string, projectRoot: string) => Promise<void>;
+  readImportFile: (filePath: string) => Promise<unknown>;
+}
+
+async function getProjectRoot(): Promise<string> {
+  const { useDocumentStore } = await import("./document-store");
+  const projectRoot = useDocumentStore.getState().projectRoot;
+  if (!projectRoot) throw new Error("No project open");
+  return projectRoot;
 }
 
 export const useCommandStore = create<CommandState>()((set, get) => ({
@@ -25,7 +45,9 @@ export const useCommandStore = create<CommandState>()((set, get) => ({
 
   loadCommands: async () => {
     try {
-      const commands = await window.electronAPI.commandsList();
+      const { useDocumentStore } = await import("./document-store");
+      const projectRoot = useDocumentStore.getState().projectRoot;
+      const commands = await window.electronAPI.commandsList(projectRoot);
       set({ commands, loaded: true });
     } catch (err) {
       console.error("[command-store] Failed to load commands:", err);
@@ -46,27 +68,27 @@ export const useCommandStore = create<CommandState>()((set, get) => ({
   },
 
   expandCommand: async (name: string, rawInput: string) => {
-    // Get project root from document store (avoids circular import at module level)
-    const { useDocumentStore } = await import("./document-store");
-    const projectRoot = useDocumentStore.getState().projectRoot;
-    if (!projectRoot) throw new Error("No project open");
+    const projectRoot = await getProjectRoot();
     return window.electronAPI.commandsExpand(name, rawInput, projectRoot);
   },
 
   createCommand: async (payload) => {
-    const created = await window.electronAPI.commandsCreate(payload);
+    const projectRoot = await getProjectRoot();
+    const created = await window.electronAPI.commandsCreate(projectRoot, payload);
     await get().reloadCommands();
     return created;
   },
 
   updateCommand: async (id, payload) => {
-    const updated = await window.electronAPI.commandsUpdate(id, payload);
+    const projectRoot = await getProjectRoot();
+    const updated = await window.electronAPI.commandsUpdate(projectRoot, id, payload);
     await get().reloadCommands();
     return updated;
   },
 
   deleteCommand: async (id) => {
-    await window.electronAPI.commandsDelete(id);
+    const projectRoot = await getProjectRoot();
+    await window.electronAPI.commandsDelete(projectRoot, id);
     await get().reloadCommands();
   },
 
@@ -76,7 +98,20 @@ export const useCommandStore = create<CommandState>()((set, get) => ({
   },
 
   reloadCommands: async () => {
-    const commands = await window.electronAPI.commandsReload();
+    const { useDocumentStore } = await import("./document-store");
+    const projectRoot = useDocumentStore.getState().projectRoot;
+    const commands = await window.electronAPI.commandsReload(projectRoot);
     set({ commands });
   },
+
+  previewImport: (projectRoot, pack) =>
+    window.electronAPI.commandsPreviewImport(projectRoot, pack),
+
+  importPack: (projectRoot, pack, strategy) =>
+    window.electronAPI.commandsImportPack(projectRoot, pack, strategy),
+
+  writeExportFile: (filePath, projectRoot) =>
+    window.electronAPI.commandsWriteExportFile(filePath, projectRoot),
+
+  readImportFile: (filePath) => window.electronAPI.commandsReadImportFile(filePath),
 }));

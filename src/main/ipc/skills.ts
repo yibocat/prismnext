@@ -4,7 +4,6 @@ import { join } from "node:path";
 import {
   listProjectSkills,
   readSkillsManifest,
-  syncProjectSkillsIntegration,
   writeSkillsManifest,
   addSkillLibrarySource,
   removeSkillLibrarySource,
@@ -16,6 +15,7 @@ import {
   type InstalledSkillInfo,
   type SkillLibrarySourceInfo,
 } from "../services/skills-sync";
+import { refreshProjectSkillsIntegrationWithReload } from "../services/project-skills-refresh";
 import {
   fetchRegistryIndex,
   fetchSkillMarkdown,
@@ -26,6 +26,13 @@ import {
   listBundledSkills,
   copyBundledSkillToProject,
 } from "../services/bundled-skills";
+
+function refreshProjectSkills(
+  projectPath: string,
+  options?: { profileSkillAllowlist?: string[] },
+) {
+  return refreshProjectSkillsIntegrationWithReload(projectPath, options);
+}
 
 export function registerSkillsHandlers(): void {
   ipcMain.handle("agent:listSkills", async (_event, args: { projectPath: string }) => {
@@ -79,13 +86,13 @@ export function registerSkillsHandlers(): void {
     "agent:installBundledSkill",
     async (_event, args: { projectPath: string; skillId: string }) => {
       copyBundledSkillToProject(args.projectPath, args.skillId);
-      return syncProjectSkillsIntegration(args.projectPath);
+      return refreshProjectSkills(args.projectPath);
     },
   );
 
   ipcMain.handle("agent:syncSkills", async (_event, args: { projectPath: string }) => {
     if (!args.projectPath) return { skillsCount: 0, configPath: "", registryUrls: [] as string[] };
-    return syncProjectSkillsIntegration(args.projectPath);
+    return refreshProjectSkills(args.projectPath);
   });
 
   ipcMain.handle(
@@ -138,7 +145,7 @@ export function registerSkillsHandlers(): void {
         disabled.add(args.skillId);
       }
       writeSkillsManifest(args.projectPath, { ...manifest, disabled: Array.from(disabled) });
-      return syncProjectSkillsIntegration(args.projectPath);
+      return refreshProjectSkills(args.projectPath);
     },
   );
 
@@ -151,7 +158,7 @@ export function registerSkillsHandlers(): void {
       const skillDir = join(args.projectPath, PRISM_SKILLS_REL, args.skillId);
       mkdirSync(skillDir, { recursive: true });
       writeFileSync(join(skillDir, "SKILL.md"), args.content, "utf-8");
-      return syncProjectSkillsIntegration(args.projectPath);
+      return refreshProjectSkills(args.projectPath);
     },
   );
 
@@ -166,7 +173,7 @@ export function registerSkillsHandlers(): void {
       const skillDir = join(args.projectPath, PRISM_SKILLS_REL, skillId);
       mkdirSync(skillDir, { recursive: true });
       writeFileSync(join(skillDir, "SKILL.md"), content, "utf-8");
-      return syncProjectSkillsIntegration(args.projectPath);
+      return refreshProjectSkills(args.projectPath);
     },
   );
 
@@ -180,7 +187,7 @@ export function registerSkillsHandlers(): void {
       const manifest = readSkillsManifest(args.projectPath);
       const disabled = (manifest.disabled ?? []).filter((id) => id !== args.skillId);
       writeSkillsManifest(args.projectPath, { ...manifest, disabled });
-      return syncProjectSkillsIntegration(args.projectPath);
+      return refreshProjectSkills(args.projectPath);
     },
   );
 }

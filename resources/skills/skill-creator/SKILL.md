@@ -25,15 +25,19 @@ Do not over-interview. If the user already gave enough detail, proceed.
 
 ## Prism project layout
 
-Install skills under:
+Install skills under this **relative** path (same on macOS, Windows, and Linux):
 
 ```
 .prismnext/agent/skills/<skill-id>/SKILL.md
 ```
 
 - `<skill-id>` must match the `name` in frontmatter (lowercase letters, numbers, hyphens only; e.g. `bibtex-cleanup`, `my-workflow`)
-- Prism loads skills from `.prismnext/agent/skills/` through the app agent config; do not create `.opencode/` or `opencode.json`
-- After creating or editing a skill, tell the user to **start a new chat tab** for the agent to pick it up
+- Use the project's **relative** path above — never absolute paths, never `.agents/`, never project-root `.opencode/`
+- Prism stores skill files only under `.prismnext/agent/skills/`
+- After you write `SKILL.md`, Prism **automatically** syncs OpenCode (app-level config in the user's app data directory — not inside the project)
+- Do **not** create `.opencode/`, `.agents/`, or run `npm install` for OpenCode in the project
+- To use the skill in chat, the user must **start a new chat tab** (OpenCode skill lists are session-scoped)
+- Optional: enable/disable in Settings → Skills
 
 ## SKILL.md format
 
@@ -63,8 +67,9 @@ Rules:
 
 1. Propose a `skill-id` and one-line description; confirm if naming is ambiguous
 2. Draft the full SKILL.md (frontmatter + body)
-3. Write the file to `.prismnext/agent/skills/<skill-id>/SKILL.md` using the project's file tools
-4. Confirm the path and remind: new chat tab to use it; optional toggle in Settings → Skills
+3. Write the file to `.prismnext/agent/skills/<skill-id>/SKILL.md` using the project's file tools (write/edit tools that target the project tree)
+4. Confirm the relative path; remind the user that Prism syncs automatically but a **new chat tab** is needed to invoke the skill via the `skill` tool
+5. If the skill should stay disabled until reviewed, mention Settings → Skills toggle
 
 ## Quality bar
 
@@ -72,3 +77,11 @@ Rules:
 - Include examples or checklists when helpful
 - If similar skills exist in the project, match their tone and depth
 - Do not create skills for one-off tasks that do not need reuse
+
+## Forbidden paths (never create)
+
+| Path | Why |
+|------|-----|
+| `.agents/` or `.agents/skills/` | OpenCode default — not Prism storage |
+| `<project>/.opencode/` | Runtime/npm artifacts; pollutes Git |
+| Any path outside `.prismnext/agent/skills/` for SKILL.md | Breaks Settings + sync |

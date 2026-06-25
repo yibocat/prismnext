@@ -1,3 +1,8 @@
+export {
+  SettingsEditorContent,
+  SettingsEditorEmptyState,
+  renderSettingsPanelSlot,
+} from "./settings-editor-content";
 export { SettingsSidebar, type SettingsCategory } from "./settings-sidebar";
 export { GeneralSettings } from "./general-settings";
 export { AppearanceSettings } from "./appearance-settings";
@@ -14,4 +19,5 @@ export { ToolsMcpSettings } from "./tools-mcp-settings";
 export { SkillsSettings } from "./skills-settings";
 export { WorkspaceSettings } from "./workspace-settings";
 export { TerminalSettings } from "./terminal-settings";
+export { TexworkspaceSettings } from "./texworkspace-settings";
 export { AiTerminalSettingsFields } from "./ai-terminal-settings-fields";

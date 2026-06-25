@@ -2,10 +2,15 @@ import { create } from "zustand";
 import type { ComposerPart } from "@/lib/chat/composer-parts";
 import { useDocumentStore } from "./document-store";
 import { useWorktreeStore } from "./worktree-store";
+import { applyCheckoutTransition, attachWorktreeForSessionDirectory, captureSessionCwd, resolveWorktreeAtCheckout, resolveWorktreePathForSend, isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
+import { isWorktreeDirectoryActive } from "@/lib/git/worktree-path";
+import { isWorktreeCheckoutOnDisk } from "@/lib/git/worktree-present";
+import { rehomeWorktreeSessions } from "@/lib/git/worktree-sessions";
 import { useGitStore } from "./git-store";
 import { useSettingsStore } from "./settings-store";
-import { createToolResultFromState } from "@/components/modules/chat/tools/tool-result-map";
 import { truncateChatMessagesToTurn, applyUserDisplaySnapshots, isToolResultUserMessage } from "@/components/modules/chat/chat-turns";
+import { mapOpenCodePartToBlocks } from "@/lib/chat/message-parts";
+import { hydrateSessionMessages } from "@/lib/chat/session-message-hydrate";
 import {
   deriveSessionTitleForSend,
   extractSessionTitle,
@@ -115,6 +120,8 @@ interface TabState {
   chatMode: ChatExecutionMode;
   /** True while session history is being loaded from disk (avoids homepage flash). */
   isLoadingSession: boolean;
+  /** OpenCode session directory — worktree path or project root. */
+  sessionCwd: string | null;
 }
 
 export type ChatExecutionMode = "agent" | "expert-team";
@@ -142,73 +149,11 @@ function makeDefaultTab(id: string): TabState {
     activeProfileId: null,
     chatMode: "agent",
     isLoadingSession: false,
+    sessionCwd: null,
   };
 }
 
-/** Strip the Prism system prompt from the first user message's first text
- *  block. The system prompt is sent as a content block so it reaches the
- *  LLM, but OpenCode stores it in message history. We remove it here so
- *  users don't see system instructions in their chat history.
- *
- *  Detection strategy (order of precedence):
- *  1. Metadata flag: `hasSystemPromptBlock` from sessions-context.json
- *  2. Content heuristic: starts with "## Role" + contains Prism marker
- *  3. Size heuristic: first text block > 1000 chars while second block exists
- *     and is < 500 chars (system prompts are very long, user messages are short)
- *
- *  Only the FIRST user message is checked — system prompt is only injected
- *  on the first turn. */
-function stripSystemPromptFromDisplay(
-  messages: ChatStreamMessage[],
-  hasSystemPromptBlock?: boolean,
-): void {
-  // Prism-specific markers that appear in the system prompt but never in
-  // real user messages. Multiple markers avoid single-point-of-failure.
-  const PRISM_MARKERS = [
-    "integrated into Prism",
-    "LaTeX academic paper writing workspace",
-    "## Core Rules",
-  ];
-
-  for (const msg of messages) {
-    if (msg.type !== "user") continue;
-    const blocks = msg.message?.content;
-    if (!blocks || blocks.length === 0) continue;
-    const first = blocks[0];
-
-    // Strategy 1: Metadata flag from session context (most reliable)
-    let isSystemPrompt = hasSystemPromptBlock === true;
-
-    // Strategy 2: Content-based detection (backward compat)
-    if (!isSystemPrompt && first.type === "text" && first.text) {
-      const text = first.text;
-      if (text.startsWith("## Role")) {
-        // Check for at least one Prism-specific marker
-        isSystemPrompt = PRISM_MARKERS.some((m) => text.includes(m));
-      }
-    }
-
-    // Strategy 3: Size heuristic — system prompts are 1000+ chars,
-    // real user messages are typically shorter. Only applies when
-    // there's a second block (the actual user message).
-    if (!isSystemPrompt && first.type === "text" && first.text && blocks.length >= 2) {
-      const second = blocks[1];
-      if (
-        first.text.length > 1000 &&
-        second.type === "text" &&
-        second.text &&
-        second.text.length < 500
-      ) {
-        isSystemPrompt = true;
-      }
-    }
-
-    if (isSystemPrompt) {
-      blocks.shift();
-    }
-    break; // Only strip from the first user message
-  }
-}
+const _msgCache = new Map<string, ChatStreamMessage[]>();
 
 interface ChatState {
 
@@ -250,18 +195,21 @@ interface ChatState {
     userContent?: ContentBlock[],
     skipUserMessage?: boolean,
     profileId?: string | null,
+    composerExtras?: { mcpServerAllowlist?: string[]; skillIds?: string[] },
   ) => Promise<void>;
   cancelExecution: () => Promise<void>;
   newSession: () => void;
   clearAllSessions: () => void;
   clearCurrentTab: () => void;
-  loadSession: (sessionId: string) => Promise<void>;
+  loadSession: (sessionId: string, sessionDirectory?: string) => Promise<void>;
   /** Re-check prompt fingerprint vs session for one tab (after settings edits). */
   checkPromptStale: (tabId?: string) => Promise<void>;
   /** Truncate in-memory messages (and OpenCode session via checkpoint-store) to a turn. */
   truncateToTurn: (tabId: string, turnIndex: number) => void;
   /** Restore full message list after undoing a file restore. */
   restoreMessages: (tabId: string, messages: ChatStreamMessage[]) => void;
+  /** Reload sanitized messages from disk after OpenCode session truncation. */
+  resyncTabMessagesFromDisk: (tabId: string) => Promise<void>;
 
   // Internal (called by use-opencode-events)
   _appendMessage: (tabId: string, msg: ChatStreamMessage) => void;
@@ -507,6 +455,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     userContent?: ContentBlock[],
     skipUserMessage?: boolean,
     profileIdOverride?: string | null,
+    composerExtras?: { mcpServerAllowlist?: string[]; skillIds?: string[] },
   ) => {
     const docState = useDocumentStore.getState();
     const projectPath = docState.projectRoot || "";
@@ -555,12 +504,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       if (worktreeStore.mode !== "worktree") return null;
       try {
         let wt = worktreeStore.activeWorktree;
-        if (!wt && projectPath) {
+        if (!wt && worktreeStore.pendingBranch && projectPath) {
           wt = await worktreeStore.initializeWorktree(projectPath);
-          await worktreeStore.preScanWorktree(wt.name, wt.path).catch(() => {});
+          await worktreeStore.preScanWorktree(wt.path).catch(() => {});
         }
         if (wt) {
-          await docState.switchCheckoutRoot(wt.path);
+          await applyCheckoutTransition({ type: "checkout-at", root: wt.path, worktree: wt });
         }
         return wt?.path ?? null;
       } catch {
@@ -571,6 +520,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     // ── 2. Collect agent settings from persisted settings ──
     let worktreePath: string | null = null;
 
+    const tabForSend = get().tabs.find((t) => t.id === tabId);
+
     if (isFirstTurn) {
       // First turn: save files, handle branch switch, resolve worktree.
       // Pre-warm already spawned OpenCode — no progress UI needed.
@@ -579,9 +530,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const gitStore = useGitStore.getState();
       const worktreeStore = useWorktreeStore.getState();
       if (gitStore.pendingBranch && gitStore.pendingBranch !== gitStore.branch) {
-        if (worktreeStore.mode === "worktree") {
-          worktreeStore.setMode("worktree", gitStore.pendingBranch);
-        } else {
+        if (worktreeStore.mode === "worktree" && !worktreeStore.activeWorktree) {
+          applyCheckoutTransition({
+            type: "worktree-intent",
+            baseBranch: gitStore.pendingBranch,
+          });
+        } else if (worktreeStore.mode !== "worktree") {
           await gitStore.switchBranch(projectPath, gitStore.pendingBranch);
         }
         gitStore.setPendingBranch(null);
@@ -591,7 +545,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     } else {
       // Subsequent turns: process already warm, save files fire-and-forget
       docState.saveAllFiles().catch(() => {});
-      worktreePath = useWorktreeStore.getState().activeWorktree?.path ?? null;
+      worktreePath = resolveWorktreePathForSend(tabForSend, projectPath) ?? null;
     }
 
     // ── 4. Send the actual prompt — chat responses follow naturally ──
@@ -636,10 +590,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         provider,
         thoughtLevel,
         profileId: effectiveProfileId ?? undefined,
-        userDisplayContent:
-          skipUserMessage && userContent?.length
-            ? (userContent as unknown as Record<string, unknown>[])
-            : undefined,
+        mcpServerAllowlist: composerExtras?.mcpServerAllowlist,
+        skillIds: composerExtras?.skillIds,
+        userDisplayContent: userContent?.length
+          ? (userContent as unknown as Record<string, unknown>[])
+          : undefined,
       });
     } catch (err: any) {
       set((s) => {
@@ -694,7 +649,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (tab?.isStreaming) return; // Never clear a tab with an active agent
     set((s) => {
       const tabs = s.tabs.map((t) =>
-        t.id === tabId ? { ...t, messages: [], streamingMessage: null, sessionId: null, title: "New Chat", error: null, isStreaming: false, promptStale: false, isLoadingSession: false } : t,
+        t.id === tabId ? { ...t, messages: [], streamingMessage: null, sessionId: null, sessionCwd: null, title: "New Chat", error: null, isStreaming: false, promptStale: false, isLoadingSession: false } : t,
       );
       return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
     });
@@ -730,7 +685,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         if (t.id !== tabId) return t;
         const messages = truncateChatMessagesToTurn(t.messages, turnIndex);
         if (t.sessionId) {
-          const cache = (useChatStore as any)._msgCache as Map<string, ChatStreamMessage[]> | undefined;
+          const cache = _msgCache;
           cache?.set(t.sessionId, messages);
         }
         return {
@@ -750,7 +705,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const tabs = s.tabs.map((t) => {
         if (t.id !== tabId) return t;
         if (t.sessionId) {
-          const cache = (useChatStore as any)._msgCache as Map<string, ChatStreamMessage[]> | undefined;
+          const cache = _msgCache;
           cache?.set(t.sessionId, messages);
         }
         return { ...t, messages, streamingMessage: null, isStreaming: false, error: null };
@@ -759,11 +714,73 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
   },
 
-  loadSession: async (sessionId: string) => {
+  resyncTabMessagesFromDisk: async (tabId) => {
+    const tab = get().tabs.find((t) => t.id === tabId);
+    const projectPath = useDocumentStore.getState().projectRoot || "";
+    if (!tab?.sessionId || !projectPath) return;
+    const sessionCwd = tab.sessionCwd ?? projectPath;
+    const raw = await window.electronAPI.sessionLoad(tab.sessionId, projectPath, sessionCwd);
+    const filtered = await hydrateSessionMessages(raw, projectPath, tab.sessionId);
+    _msgCache.set(tab.sessionId, filtered);
+    set((s) => {
+      const tabs = s.tabs.map((t) =>
+        t.id === tabId
+          ? { ...t, messages: filtered, streamingMessage: null, isStreaming: false, error: null }
+          : t,
+      );
+      return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+    });
+  },
 
-    // If this session is already loaded in an existing tab, just switch to it
+  loadSession: async (sessionId: string, sessionDirectory?: string) => {
+    const projectPath = useDocumentStore.getState().projectRoot || "";
+    let sessionCwd = sessionDirectory ?? projectPath;
+    if (!sessionDirectory && projectPath) {
+      try {
+        const dir = await window.electronAPI.sessionGetDirectory(sessionId);
+        if (dir) sessionCwd = dir;
+      } catch {
+        // fall back to project root
+      }
+    }
+
+    if (
+      projectPath &&
+      sessionCwd !== projectPath &&
+      isWorktreeCheckoutPath(sessionCwd, projectPath)
+    ) {
+      const wtStore = useWorktreeStore.getState();
+      if (!isWorktreeDirectoryActive(sessionCwd, wtStore.worktrees, projectPath)) {
+        await wtStore.refreshWorktrees(projectPath);
+      }
+      const stillMissing = !isWorktreeDirectoryActive(
+        sessionCwd,
+        useWorktreeStore.getState().worktrees,
+        projectPath,
+      );
+      if (stillMissing) {
+        const onDisk = await isWorktreeCheckoutOnDisk(sessionCwd);
+        if (onDisk) {
+          await wtStore.refreshWorktrees(projectPath);
+        } else {
+          await rehomeWorktreeSessions(projectPath, sessionCwd);
+          sessionCwd = projectPath;
+        }
+      }
+    }
+
     const existingTab = get().tabs.find((t) => t.sessionId === sessionId);
     if (existingTab) {
+      if (sessionCwd && sessionCwd !== existingTab.sessionCwd) {
+        set((s) => ({
+          tabs: s.tabs.map((t) =>
+            t.id === existingTab.id ? { ...t, sessionCwd } : t,
+          ),
+        }));
+      }
+      if (sessionCwd && sessionCwd !== projectPath) {
+        await attachWorktreeForSessionDirectory(sessionCwd);
+      }
       set({
         activeTabId: existingTab.id,
         ...projectActiveTab(get().tabs, existingTab.id),
@@ -774,11 +791,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return;
     }
 
-    const _msgCache = (useChatStore as any)._msgCache || (
-      (useChatStore as any)._msgCache = new Map<string, ChatStreamMessage[]>()
-    ) as Map<string, ChatStreamMessage[]>;
+    if (sessionCwd && sessionCwd !== projectPath) {
+      await attachWorktreeForSessionDirectory(sessionCwd);
+    }
 
-    const projectPath = useDocumentStore.getState().projectRoot || "";
     const newId = nextTabId();
     const tabId = newId;
 
@@ -812,6 +828,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         ...makeDefaultTab(newId),
         messages: cached,
         sessionId,
+        sessionCwd,
         title,
         isLoadingSession: false,
       };
@@ -848,6 +865,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const loadingTab: TabState = {
       ...makeDefaultTab(newId),
       sessionId,
+      sessionCwd,
       isLoadingSession: true,
     };
     set((s) => ({
@@ -857,124 +875,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }));
 
     try {
-      const raw: any[] = await window.electronAPI.sessionLoad(sessionId, projectPath);
-
-      // Messages can come in two formats:
-      // 1. File storage: [{ info: { role }, parts: [{ type, text, ... }] }, ...]
-      // 2. ACP replay:   [{ sessionUpdate, content: { type, text }, messageId }, ...]
-      const messages: ChatStreamMessage[] = [];
-
-      if (raw.length > 0 && raw[0].info && raw[0].parts) {
-        for (const item of raw) {
-          const blocks: ContentBlock[] = (item.parts || []).flatMap((p: any): ContentBlock[] => {
-            switch (p.type) {
-              case "text":
-                return [{ type: "text", text: p.text || "" }];
-
-              case "reasoning":
-              case "thinking":
-                return [{ type: "thinking", thinking: p.text || p.thinking || "" }];
-
-              case "tool":
-              case "tool_use": {
-                const results: ContentBlock[] = [];
-
-                const toolName: string =
-                  (typeof p.tool === "string" ? p.tool : "") ||
-                  p.tool?.name || p.name || "";
-
-                const toolId: string = p.callID || p.id || "";
-
-                const toolInput: any =
-                  p.state?.input || p.input || p.tool?.input || {};
-
-                results.push({
-                  type: "tool_use",
-                  id: toolId,
-                  name: toolName,
-                  input: toolInput,
-                });
-
-                const status = p.state?.status || "";
-                const output = p.state?.output;
-                const toolResult = createToolResultFromState(toolId, status, output);
-                if (toolResult) {
-                  results.push(toolResult);
-                }
-                return results;
-              }
-
-              case "tool_result":
-              case "tool-result":
-                return [{
-                  type: "tool_result",
-                  tool_use_id: p.tool_use_id || p.toolUseId || "",
-                  content: p.content || p.result || "",
-                  is_error: p.isError || p.is_error || false,
-                }];
-
-              default:
-                return [{ type: "text", text: JSON.stringify(p) }];
-            }
-          }).filter((b: ContentBlock | null): b is ContentBlock => b !== null);
-          const role = (item.info?.role || "user") === "user" ? "user" : "assistant";
-          messages.push({ type: role as "user" | "assistant", message: { content: blocks } });
-        }
-      } else {
-        const msgGroups = new Map<string, { role: string; blocks: ContentBlock[] }>();
-        for (const chunk of raw) {
-          const msgId = chunk.messageId || chunk.id || "";
-          if (!msgId) continue;
-          let group = msgGroups.get(msgId);
-          if (!group) {
-            const isUser = (chunk.sessionUpdate || "").startsWith("user_");
-            group = { role: isUser ? "user" : "assistant", blocks: [] };
-            msgGroups.set(msgId, group);
-          }
-          const content = chunk.content;
-          if (!content) continue;
-          const isThinking = (chunk.sessionUpdate || "") === "agent_thought_chunk";
-          if (content.type === "text" && content.text) {
-            const blockType = isThinking ? "thinking" : "text";
-            const last = group.blocks[group.blocks.length - 1];
-            if (last && last.type === blockType) {
-              const key = blockType === "thinking" ? "thinking" : "text";
-              (last as any)[key] = ((last as any)[key] || "") + content.text;
-            } else {
-              group.blocks.push(isThinking
-                ? { type: "thinking" as const, thinking: content.text }
-                : { type: "text" as const, text: content.text });
-            }
-          } else if (content.type === "tool" || content.type === "tool_use") {
-            group.blocks.push({ type: "tool_use", id: chunk.id || content.id || "", name: chunk.name || content.tool?.name || content.name || "", input: chunk.input || content.tool?.input || content.input || {} });
-          } else if (content.type === "tool_result" || content.type === "tool-result") {
-            group.blocks.push({ type: "tool_result", tool_use_id: content.tool_use_id || content.toolUseId || "", content: content.content || content.result || "", is_error: content.isError || content.is_error || false });
-          }
-        }
-        for (const [_, group] of Array.from(msgGroups.entries()).sort(([a], [b]) => a.localeCompare(b))) {
-          messages.push({ type: group.role as "user" | "assistant", message: { content: group.blocks } });
-        }
-      }
-
-      let filtered = messages.filter((m) => m.message?.content && m.message.content.length > 0);
-
-      let ctxData: { tokens: number; breakdown: Record<string, number>; schema: any[]; hasSystemPromptBlock?: boolean } | null = null;
-      try {
-        ctxData = await window.electronAPI.sessionGetContext(projectPath, sessionId);
-      } catch { /* best-effort */ }
-
-      stripSystemPromptFromDisplay(filtered, ctxData?.hasSystemPromptBlock);
-
-      try {
-        const displays = await window.electronAPI.sessionGetUserDisplays(projectPath, sessionId);
-        if (displays?.length) {
-          filtered = applyUserDisplaySnapshots(filtered, displays);
-        }
-      } catch { /* best-effort */ }
+      const raw: any[] = await window.electronAPI.sessionLoad(sessionId, projectPath, sessionCwd);
+      const filtered = await hydrateSessionMessages(raw, projectPath, sessionId);
 
       _msgCache.set(sessionId, filtered);
 
-      const title = extractSessionTitle(messages) || "New Chat";
+      const title = extractSessionTitle(filtered) || "New Chat";
+
+      let ctxData: { tokens: number; breakdown: Record<string, number>; schema: any[] } | null = null;
+      try {
+        ctxData = await window.electronAPI.sessionGetContext(projectPath, sessionId);
+      } catch { /* best-effort */ }
 
       set((s) => {
         const tabs = s.tabs.map((t) =>
@@ -985,6 +896,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                 streamingMessage: null,
                 title,
                 sessionId,
+                sessionCwd,
                 error: null,
                 isStreaming: false,
                 isLoadingSession: false,
@@ -1158,9 +1070,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   _setSessionId: (tabId: string, sessionId: string) => {
+    const sessionCwd = captureSessionCwd();
     set((s) => {
       const tabs = s.tabs.map((t) =>
-        t.id === tabId ? { ...t, sessionId } : t,
+        t.id === tabId ? { ...t, sessionId, sessionCwd: sessionCwd ?? t.sessionCwd } : t,
       );
       const activeTab = tabs.find((t) => t.id === s.activeTabId);
       return { tabs, sessionId: activeTab?.sessionId ?? null };
@@ -1322,3 +1235,5 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
   },
 }));
+
+(useChatStore as any)._msgCache = _msgCache;

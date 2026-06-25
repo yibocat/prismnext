@@ -15,15 +15,14 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+  AppContextMenu,
+  AppContextMenuContent,
+  AppContextMenuItem,
+  AppContextMenuTrigger,
+} from "@/components/ui/app-context-menu";
 import {
   PlusIcon,
   Trash2Icon,
-  PencilIcon,
   PlayIcon,
   ChevronRightIcon,
   SparklesIcon,
@@ -289,8 +288,8 @@ export function TerminalSidebar() {
               ) : (
                 <div className="space-y-0.5">
                   {quickCommands.map((cmd) => (
-                    <ContextMenu key={cmd.id}>
-                      <ContextMenuTrigger asChild>
+                    <AppContextMenu key={cmd.id}>
+                      <AppContextMenuTrigger asChild>
                         <button
                           type="button"
                           onClick={() => handleRunCommand(cmd.command)}
@@ -314,23 +313,21 @@ export function TerminalSidebar() {
                             <Trash2Icon className="size-3" />
                           </button>
                         </button>
-                      </ContextMenuTrigger>
-                      <ContextMenuContent className="w-36">
-                        <ContextMenuItem onClick={() => handleRunCommand(cmd.command)}>
-                          <PlayIcon className="size-3.5 mr-2" />
+                      </AppContextMenuTrigger>
+                      <AppContextMenuContent className="min-w-[5.5rem]">
+                        <AppContextMenuItem onClick={() => handleRunCommand(cmd.command)}>
                           Run
-                        </ContextMenuItem>
-                        <ContextMenuItem
+                        </AppContextMenuItem>
+                        <AppContextMenuItem
                           onClick={() => {
                             setEditCommand(cmd);
                             setDialogOpen(true);
                           }}
                         >
-                          <PencilIcon className="size-3.5 mr-2" />
                           Edit
-                        </ContextMenuItem>
-                      </ContextMenuContent>
-                    </ContextMenu>
+                        </AppContextMenuItem>
+                      </AppContextMenuContent>
+                    </AppContextMenu>
                   ))}
                 </div>
               )}

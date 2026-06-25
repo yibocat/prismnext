@@ -1,135 +1,115 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { useCommandStore } from "@/stores/command-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { openSettingsPanel } from "@/stores/settings-panel-store";
+import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
-import type { CommandDef } from "@commands/types";
-
-// ── Style tokens ──
+import { CommandsImportDialog } from "./commands-import-dialog";
 
 const CARD = "rounded-lg border border-border px-4 divide-y divide-border";
 const ROW = "flex items-center justify-between py-2.5 group";
 const ROW_LABEL = "text-[length:var(--font-size-13)] font-medium";
 const ROW_DESC = "text-[length:var(--font-size-12)] text-muted-foreground mt-0.5 truncate";
-const BADGE = "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide";
+const BADGE =
+  "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide";
 const SUB_HEADER = "text-[length:var(--font-size-12)] font-medium text-foreground mb-1.5";
 const SUB_DESC = "text-[length:var(--font-size-12)] text-muted-foreground mb-2";
-
-// ── Component ──
 
 export default function CommandsSettings() {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const commands = useCommandStore((s) => s.commands);
   const loaded = useCommandStore((s) => s.loaded);
   const loadCommands = useCommandStore((s) => s.loadCommands);
-  const createCommand = useCommandStore((s) => s.createCommand);
-  const updateCommand = useCommandStore((s) => s.updateCommand);
   const deleteCommand = useCommandStore((s) => s.deleteCommand);
   const toggleCommand = useCommandStore((s) => s.toggleCommand);
+  const writeExportFile = useCommandStore((s) => s.writeExportFile);
+  const readImportFile = useCommandStore((s) => s.readImportFile);
+  const previewImport = useCommandStore((s) => s.previewImport);
 
-  useEffect(() => { loadCommands(); }, [loadCommands]);
-
-  const builtInCommands = commands.filter(
-    (c) => c.source === "builtin",
-  );
-  const customCommands = commands.filter((c) => c.source === "user");
-
-  // ── Form state ──
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editTemplate, setEditTemplate] = useState("");
-  const [showAddForm, setShowAddForm] = useState(false);
   const deleteConfirm = useInlineDeleteConfirm();
 
-  const openCommand = (cmd: CommandDef) => {
-    setExpandedId(cmd.id);
-    setEditName(cmd.name);
-    setEditDescription(cmd.description);
-    setEditTemplate(cmd.template ?? "");
-    setShowAddForm(false);
-  };
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importPack, setImportPack] = useState<unknown>(null);
+  const [importPreview, setImportPreview] = useState<{
+    incoming: string[];
+    conflicts: string[];
+    invalid: string[];
+  } | null>(null);
+  const [exporting, setExporting] = useState(false);
 
-  const cancelForm = () => {
+  useEffect(() => {
+    void loadCommands();
+  }, [loadCommands]);
+
+  useOnSettingsEditorKindsClosed(["custom-command"], () => {
+    void loadCommands();
+  });
+
+  const builtInCommands = commands.filter((c) => c.source === "builtin");
+  const customCommands = commands.filter((c) => c.source === "user");
+
+  const openEdit = (commandId: string, title: string) => {
     deleteConfirm.clearPending();
-    setExpandedId(null);
-    setShowAddForm(false);
-    setEditName("");
-    setEditDescription("");
-    setEditTemplate("");
-  };
-
-  const handleSave = async () => {
-    if (!editName.trim() || !editDescription.trim() || !editTemplate.trim()) return;
-    const isNew = showAddForm;
-    if (isNew) {
-      await createCommand({
-        name: editName.trim(),
-        description: editDescription.trim(),
-        template: editTemplate.trim(),
-      });
-    } else if (expandedId) {
-      await updateCommand(expandedId, {
-        name: editName.trim(),
-        description: editDescription.trim(),
-        template: editTemplate.trim(),
-      });
-    }
-    cancelForm();
+    openSettingsPanel({
+      kind: "custom-command",
+      mode: "edit",
+      commandId,
+      title,
+    });
   };
 
   const confirmDelete = async (id: string) => {
     deleteConfirm.clearPending();
-    if (expandedId === id) cancelForm();
     await deleteCommand(id);
   };
 
-  // ── Inline edit/add form ──
-  const renderForm = (saveLabel: string) => (
-    <div className="py-3 space-y-3">
-      <input
-        type="text"
-        className="w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-[length:var(--font-size-13)] outline-none focus:border-primary/40"
-        placeholder="Command name (without /)"
-        value={editName}
-        onChange={(e) => setEditName(e.target.value)}
-      />
-      <input
-        type="text"
-        className="w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-[length:var(--font-size-13)] outline-none focus:border-primary/40"
-        placeholder="Short description"
-        value={editDescription}
-        onChange={(e) => setEditDescription(e.target.value)}
-      />
-      <Textarea
-        className="min-h-24 font-mono !text-[length:var(--font-size-12)] resize-y"
-        value={editTemplate}
-        onChange={(e) => setEditTemplate(e.target.value)}
-        placeholder="Command template — use $ARGUMENTS, $1..$N, @path, !`cmd`"
-      />
-      <div className="flex items-center gap-2">
-        <Button size="xs" onClick={handleSave} disabled={!editName.trim() || !editDescription.trim() || !editTemplate.trim()}>
-          {saveLabel}
-        </Button>
-        <Button variant="ghost" size="xs" onClick={cancelForm}>
-          Cancel
-        </Button>
-      </div>
-    </div>
-  );
+  const handleExport = async () => {
+    if (!projectRoot) return;
+    setExporting(true);
+    try {
+      const dlg = await window.electronAPI.dialogSaveJsonFile("prismnext-commands.json");
+      if (dlg.canceled || !dlg.path) return;
+      await writeExportFile(dlg.path, projectRoot);
+      toast.success("Commands exported.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Export failed.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
-  // ── Render ──
+  const handleImportPick = async () => {
+    if (!projectRoot) return;
+    try {
+      const dlg = await window.electronAPI.dialogOpenJsonFile();
+      if (dlg.canceled || !dlg.path) return;
+      const pack = await readImportFile(dlg.path);
+      const preview = await previewImport(projectRoot, pack);
+      if (preview.incoming.length === 0) {
+        toast.error("No valid commands found in file.");
+        return;
+      }
+      setImportPack(pack);
+      setImportPreview(preview);
+      setImportDialogOpen(true);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Could not read import file.");
+    }
+  };
 
   return (
     <div className="space-y-6">
-      {/* Built-in commands */}
       <div>
-        <p className={SUB_HEADER}>Built-in Commands</p>
-        <p className={SUB_DESC}>App-wide slash commands. Toggle to enable or disable.</p>
+        <p className={SUB_HEADER}>App shortcuts</p>
+        <p className={SUB_DESC}>
+          Built-in slash commands that run locally in the app (compile, setup, checkpoints). Toggle
+          to enable or disable. Combine with free text in chat when needed.
+        </p>
         <div className={CARD}>
           {!loaded ? (
             <div className={cn(ROW, "!block")}>
@@ -137,7 +117,9 @@ export default function CommandsSettings() {
             </div>
           ) : builtInCommands.length === 0 ? (
             <div className={cn(ROW, "!block")}>
-              <p className="text-[length:var(--font-size-12)] text-muted-foreground">No built-in commands available.</p>
+              <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+                No built-in commands available.
+              </p>
             </div>
           ) : (
             builtInCommands.map((cmd) => (
@@ -147,9 +129,9 @@ export default function CommandsSettings() {
                     <span className="font-mono text-primary text-[length:var(--font-size-13)] font-medium">
                       /{cmd.name}
                     </span>
-                    {cmd.action && (
-                      <span className={cn(BADGE, "bg-primary/10 text-primary")}>Action</span>
-                    )}
+                    {cmd.action ? (
+                      <span className={cn(BADGE, "bg-primary/10 text-primary")}>Shortcut</span>
+                    ) : null}
                     <span className={cn(BADGE, "bg-muted text-muted-foreground")}>Built-in</span>
                   </div>
                   <p className={ROW_DESC}>{cmd.description}</p>
@@ -164,68 +146,104 @@ export default function CommandsSettings() {
         </div>
       </div>
 
-      {/* Custom commands */}
       <div>
-        <p className={SUB_HEADER}>Custom Commands</p>
+        <div className="flex items-start justify-between gap-3 mb-1.5">
+          <p className={SUB_HEADER}>Custom Commands</p>
+          {projectRoot ? (
+            <div className="flex items-center gap-1 shrink-0">
+              <Button
+                variant="ghost"
+                size="xs"
+                className="shrink-0"
+                disabled={exporting || customCommands.length === 0}
+                onClick={() => void handleExport()}
+              >
+                Export
+              </Button>
+              <Button
+                variant="ghost"
+                size="xs"
+                className="shrink-0"
+                onClick={() => void handleImportPick()}
+              >
+                Import
+              </Button>
+            </div>
+          ) : null}
+        </div>
         {!projectRoot ? (
           <p className={SUB_DESC}>Open a project to create and manage custom commands.</p>
         ) : (
           <>
             <p className={SUB_DESC}>
-              Per-project commands in{" "}
+              Per-project prompt templates in{" "}
               <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">
                 .prismnext/agent/commands/
               </code>
             </p>
             <div className={CARD}>
-              {customCommands.length === 0 && !showAddForm ? (
+              {customCommands.length === 0 ? (
                 <div className={cn(ROW, "!block")}>
-                  <p className="text-[length:var(--font-size-12)] text-muted-foreground">No custom commands yet.</p>
+                  <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+                    No custom commands yet.
+                  </p>
                 </div>
               ) : (
-                customCommands.map((cmd) =>
-                  expandedId === cmd.id ? (
-                    <div key={cmd.id}>
-                      {renderForm("Save")}
-                    </div>
-                  ) : (
-                    <div
-                      key={cmd.id}
-                      className={cn(ROW, "cursor-pointer")}
-                      onClick={() => openCommand(cmd)}
-                    >
-                      <div className="min-w-0 flex-1 pr-4">
-                        <div className="flex items-center gap-2">
-                          <p className={ROW_LABEL}>/{cmd.name}</p>
-                          <span className={cn(BADGE, "bg-muted text-muted-foreground")}>Custom</span>
-                        </div>
-                        <p className={ROW_DESC}>{cmd.description}</p>
+                customCommands.map((cmd) => (
+                  <div key={cmd.id} className={ROW}>
+                    <div className="min-w-0 flex-1 pr-4">
+                      <div className="flex items-center gap-2">
+                        <p className={ROW_LABEL}>/{cmd.name}</p>
                       </div>
+                      <p className={ROW_DESC}>{cmd.description}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="shrink-0"
+                        onClick={() => openEdit(cmd.id, cmd.name)}
+                      >
+                        Edit
+                      </Button>
                       <InlineDeleteButton
                         itemId={cmd.id}
                         pending={deleteConfirm.isPending(cmd.id)}
-                        stopPropagation
                         onRequest={() => deleteConfirm.setPendingId(cmd.id)}
                         onConfirm={() => void confirmDelete(cmd.id)}
                       />
                     </div>
-                  ),
-                )
+                  </div>
+                ))
               )}
-
-              {showAddForm ? (
-                renderForm("Add command")
-              ) : (
-                <div className="py-2.5">
-                  <Button variant="ghost" size="xs" onClick={() => { cancelForm(); setShowAddForm(true); }}>
-                    + Add custom command
-                  </Button>
-                </div>
-              )}
+              <div className="py-2.5">
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() =>
+                    openSettingsPanel({ kind: "custom-command", mode: "new" })
+                  }
+                >
+                  + Add custom command
+                </Button>
+              </div>
             </div>
           </>
         )}
       </div>
+
+      {projectRoot && importPreview && importPack ? (
+        <CommandsImportDialog
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          projectRoot={projectRoot}
+          conflictCount={importPreview.conflicts.length}
+          invalidCount={importPreview.invalid.length}
+          incomingCount={importPreview.incoming.length}
+          pack={importPack}
+          onComplete={() => void loadCommands()}
+        />
+      ) : null}
     </div>
   );
 }

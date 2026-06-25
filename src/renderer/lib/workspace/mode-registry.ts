@@ -1,4 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
+import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 
 // ── Tab Types ──
 
@@ -8,7 +9,11 @@ export type RightTabKind =
   | "git-overview"
   | "git-diff"
   | "texworkspace"
-  | "terminal";
+  | "terminal"
+  | "settings-editor";
+
+/** Where a mode may appear in the app chrome. */
+export type ModeSurface = "workspace" | "settings" | "any";
 
 export interface RightTab {
   id: string;
@@ -31,6 +36,10 @@ export interface RightTab {
   linkedChatTabId?: string;
   /** Latest bash tool call mirrored in this tab */
   linkedToolCallId?: string;
+  /** Settings RightArea editor payload (forms, markdown, MCP, skills, …) */
+  settingsSlot?: SettingsPanelSlot;
+  /** Serialized slot identity for tab dedupe */
+  settingsSlotKey?: string;
 }
 
 // ── Mode Definition ──
@@ -44,6 +53,10 @@ export interface ModeDefinition {
   icon: ReactNode;
   /** 该模式拥有的 tab 类型。第一个 = 点击模式按钮时默认创建的 tab 类型 */
   tabKinds: RightTabKind[];
+  /** 在 workspace / settings 哪些上下文中可用 */
+  surface?: ModeSurface;
+  /** 是否出现在 RightArea 模式工具栏（Files / Browser / …） */
+  showInModeToolbar?: boolean;
   /** persistent: 最后 tab 关闭时重生 home tab；transient: 去激活模式 */
   persistence: "persistent" | "transient";
   /** home / initial tab 默认标题 */
@@ -93,5 +106,15 @@ export const modeRegistry = {
   /** 获取某模式的默认 tab 类型（tabKinds 的第一个） */
   defaultTabKind(modeId: string): RightTabKind | undefined {
     return registry.get(modeId)?.tabKinds[0];
+  },
+
+  /** Modes shown in the RightArea toolbar for a given surface context. */
+  getToolbarModes(surface: "workspace" | "settings"): ModeDefinition[] {
+    return Array.from(registry.values()).filter((def) => {
+      if (def.showInModeToolbar === false) return false;
+      const modeSurface = def.surface ?? "workspace";
+      if (modeSurface === "any") return true;
+      return modeSurface === surface;
+    });
   },
 };

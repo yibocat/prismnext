@@ -17,12 +17,10 @@ import {
   ArrowLeftIcon,
   Settings2Icon,
   PaletteIcon,
-  WrenchIcon,
   GlobeIcon,
   TerminalIcon,
   KeyboardIcon,
   FileTextIcon,
-  HistoryIcon,
   LayoutGridIcon,
   XIcon,
   SunIcon,
@@ -35,25 +33,42 @@ import {
   SlashIcon,
 } from "lucide-react";
 
-const SECTIONS: Array<{ id: string; label: string; icon: typeof Settings2Icon; groupEnd?: boolean }> = [
-  { id: "general", label: "General", icon: Settings2Icon },
-  { id: "appearance", label: "Appearance", icon: PaletteIcon },
-  { id: "shortcuts", label: "Shortcuts", icon: KeyboardIcon },
-  { id: "models", label: "Models", icon: GlobeIcon, groupEnd: true },
-  { id: "agent", label: "Agent", icon: Bot },
-  { id: "prompts-rules", label: "Prompts & Rules", icon: FileTextIcon },
-  { id: "commands", label: "Commands", icon: SlashIcon },
-  { id: "tools-mcp", label: "MCP", icon: PlugIcon },
-  { id: "skills", label: "Skills", icon: PuzzleIcon, groupEnd: true },
-  { id: "compiler", label: "Compiler", icon: WrenchIcon },
-  { id: "terminal", label: "Terminal", icon: TerminalIcon },
-  { id: "workspace", label: "Workspace", icon: LayoutGridIcon },
-  { id: "zotero", label: "Zotero", icon: BookOpenIcon },
-  { id: "backups", label: "Backups", icon: HistoryIcon },
-  { id: "logs", label: "Logs", icon: FileTextIcon },
+const SECTION_LABEL =
+  "text-[length:var(--font-hint)] font-medium uppercase tracking-wider text-muted-foreground/50";
+
+const SETTINGS_GROUPS = [
+  {
+    label: "Application",
+    items: [
+      { id: "general", label: "General", icon: Settings2Icon },
+      { id: "appearance", label: "Appearance", icon: PaletteIcon },
+      { id: "shortcuts", label: "Shortcuts", icon: KeyboardIcon },
+      { id: "workspace", label: "Workspace", icon: LayoutGridIcon },
+      { id: "logs", label: "Logs", icon: FileTextIcon },
+    ],
+  },
+  {
+    label: "Agent & AI",
+    items: [
+      { id: "models", label: "Models", icon: GlobeIcon },
+      { id: "agent", label: "Agent", icon: Bot },
+      { id: "prompts-rules", label: "Prompts & Rules", icon: FileTextIcon },
+      { id: "commands", label: "Commands", icon: SlashIcon },
+      { id: "tools-mcp", label: "MCP", icon: PlugIcon },
+      { id: "skills", label: "Skills", icon: PuzzleIcon },
+    ],
+  },
+  {
+    label: "Components",
+    items: [
+      { id: "texworkspace", label: "TeX Workspace", icon: FileTextIcon },
+      { id: "terminal", label: "Terminal", icon: TerminalIcon },
+      { id: "zotero", label: "Zotero", icon: BookOpenIcon },
+    ],
+  },
 ] as const;
 
-export type SettingsCategory = (typeof SECTIONS)[number]["id"];
+export type SettingsCategory = (typeof SETTINGS_GROUPS)[number]["items"][number]["id"];
 
 interface SettingsSidebarProps {
   activeCategory: SettingsCategory;
@@ -87,36 +102,40 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
           )}
         </div>
 
-        {/* Project switcher — presence depends on open project, not a separate section */}
         {projectRoot && (
-          <div className="shrink-0 px-2 flex flex-col gap-1 mb-1.5">
+          <div className="shrink-0 px-2 flex flex-col gap-1">
             <div>
               <ProjectSwitcher className="flex w-full items-center gap-2 rounded-md border border-border px-2 py-1.5 text-[length:var(--font-session-item)] font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors" />
             </div>
           </div>
         )}
 
-        {/* Flat settings list */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-auto px-2 pb-1 pt-1">
-          <div className="flex flex-col gap-1">
-            {SECTIONS.map((cat, i, arr) => (
-              <button
-                key={cat.id}
-                type="button"
-                className={cn(
-                  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] transition-colors",
-                  cat.groupEnd && i < arr.length - 1 && "mb-3",
-                  activeCategory === cat.id
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                    : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                )}
-                onClick={() => onSelectCategory(cat.id)}
-              >
-                <cat.icon className="size-3.5 shrink-0" />
-                <span>{cat.label}</span>
-              </button>
-            ))}
-          </div>
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto px-2 pb-1">
+          {SETTINGS_GROUPS.map((group) => (
+            <div key={group.label}>
+              <div className="pt-2 pb-1">
+                <span className={SECTION_LABEL}>{group.label}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                {group.items.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] transition-colors",
+                      activeCategory === cat.id
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                        : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    )}
+                    onClick={() => onSelectCategory(cat.id)}
+                  >
+                    <cat.icon className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className="flex-1 text-left">{cat.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
 
         <SidebarFooter className="px-2 pb-2">

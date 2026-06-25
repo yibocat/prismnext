@@ -2,24 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { BotIcon, PlusIcon, RotateCcwIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
-import { useLayoutStore } from "@/stores/layout-store";
+import { openSettingsPanel } from "@/stores/settings-panel-store";
+import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
-import {
-  ProfileEditorDialog,
-  emptyProfileForm,
-  formatProfileModel,
-  parseProfileModel,
-  type ProfileFormState,
-} from "./profile-editor-dialog";
-import { AiTerminalSettingsFields } from "./ai-terminal-settings-fields";
-import type {
-  AgentProfileInfo,
-  ProfileEditorOptions,
-  SaveCustomProfilePayload,
-} from "@shared/agent-profiles";
+import type { AgentProfileInfo } from "@shared/agent-profiles";
 
 const CATEGORY_HEADER =
   "text-[length:var(--font-size-12)] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2";
@@ -30,25 +19,6 @@ const ROW_DESC = "text-[length:var(--font-size-12)] text-muted-foreground mt-0.5
 const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
 const BUILTIN_RESET_ID = "builtin-profiles-reset";
-
-function formFromDetail(
-  detail: AgentProfileInfo & { instructions: string },
-): ProfileFormState {
-  const { providerId, modelId } = parseProfileModel(detail.model);
-  return {
-    id: detail.id,
-    name: detail.name,
-    description: detail.description,
-    instructions: detail.instructions,
-    modelProvider: providerId,
-    modelId,
-    thoughtLevel: detail.thoughtLevel ?? "",
-    skills: detail.skills ?? [],
-    mcpServers: detail.mcpServers ?? [],
-    modules: detail.modules ?? [],
-    rules: detail.rules ?? [],
-  };
-}
 
 function bundleSummary(profile: AgentProfileInfo): string {
   const parts: string[] = [];
@@ -80,16 +50,12 @@ function builtinsDifferFromManifest(manifest: {
 
 export function AgentSettings() {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+
   const [profiles, setProfiles] = useState<AgentProfileInfo[]>([]);
   const [builtinsModified, setBuiltinsModified] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [editorOptions, setEditorOptions] = useState<ProfileEditorOptions | null>(null);
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogMode, setDialogMode] = useState<"new" | "edit" | "customize-builtin">("edit");
-  const [form, setForm] = useState<ProfileFormState>(emptyProfileForm());
-  const deleteConfirm = useInlineDeleteConfirm();
   const rowDeleteConfirm = useInlineDeleteConfirm();
   const builtinResetConfirm = useInlineDeleteConfirm();
 
@@ -97,23 +63,19 @@ export function AgentSettings() {
     if (!projectRoot) {
       setProfiles([]);
       setBuiltinsModified(false);
-      setEditorOptions(null);
       return;
     }
     setLoading(true);
     try {
-      const [list, options, manifest] = await Promise.all([
+      const [list, manifest] = await Promise.all([
         window.electronAPI.agentListProfiles(projectRoot),
-        window.electronAPI.agentGetProfileEditorOptions(projectRoot),
         window.electronAPI.agentGetProfilesManifest(projectRoot),
       ]);
       setProfiles(sortProfiles(list));
-      setEditorOptions(options);
       setBuiltinsModified(builtinsDifferFromManifest(manifest));
     } catch {
       setProfiles([]);
       setBuiltinsModified(false);
-      setEditorOptions(null);
     } finally {
       setLoading(false);
     }
@@ -123,28 +85,32 @@ export function AgentSettings() {
     void loadProfiles();
   }, [loadProfiles]);
 
-  const closeDialog = () => {
-    deleteConfirm.clearPending();
-    setDialogOpen(false);
-  };
+  useOnSettingsEditorKindsClosed(["agent-profile"], () => {
+    void loadProfiles();
+  });
 
   const openNewProfile = () => {
-    deleteConfirm.clearPending();
     rowDeleteConfirm.clearPending();
-    setForm(emptyProfileForm());
-    setDialogMode("new");
-    setDialogOpen(true);
+    openSettingsPanel({ kind: "agent-profile", mode: "new" });
   };
 
-  const openProfile = async (profile: AgentProfileInfo) => {
-    if (!projectRoot) return;
-    deleteConfirm.clearPending();
+  const openProfile = (profile: AgentProfileInfo) => {
     rowDeleteConfirm.clearPending();
-    const detail = await window.electronAPI.agentGetProfileDetail(projectRoot, profile.id);
-    if (!detail) return;
-    setForm(formFromDetail(detail));
-    setDialogMode(profile.builtin ? "customize-builtin" : "edit");
-    setDialogOpen(true);
+    if (profile.builtin) {
+      openSettingsPanel({
+        kind: "agent-profile",
+        mode: "customize-builtin",
+        profileId: profile.id,
+        title: profile.name,
+      });
+    } else {
+      openSettingsPanel({
+        kind: "agent-profile",
+        mode: "edit",
+        profileId: profile.id,
+        title: profile.name,
+      });
+    }
   };
 
   const removeBuiltinProfile = async (profileId: string) => {
@@ -172,96 +138,9 @@ export function AgentSettings() {
       await window.electronAPI.agentResetBuiltinProfilesToDefaults(projectRoot);
       await loadProfiles();
       builtinResetConfirm.clearPending();
-      if (dialogOpen && dialogMode === "customize-builtin" && form.id) {
-        const full = await window.electronAPI.agentGetProfileDetail(projectRoot, form.id);
-        if (full) setForm(formFromDetail(full));
-      }
       toast.success("Built-in profiles restored to defaults.");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to reset built-in profiles.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveProfile = async () => {
-    if (!projectRoot || (dialogMode !== "customize-builtin" && dialogMode !== "new" && dialogMode !== "edit")) return;
-    if (dialogMode !== "customize-builtin" && !form.name.trim()) {
-      toast.error("Profile name is required.");
-      return;
-    }
-    setSaving(true);
-    try {
-      const enabledModuleKeys = new Set(
-        editorOptions?.modules.filter((m) => m.globallyEnabled).map((m) => m.key) ?? [],
-      );
-      const modules = form.modules.filter((key) => enabledModuleKeys.has(key));
-
-      if (dialogMode === "customize-builtin" && form.id) {
-        await window.electronAPI.agentSaveBuiltinProfileOverride(projectRoot, {
-          profileId: form.id,
-          model: formatProfileModel(form.modelProvider, form.modelId),
-          thoughtLevel: form.thoughtLevel.trim() || undefined,
-          skills: form.skills,
-          mcpServers: form.mcpServers,
-          modules,
-          rules: form.rules,
-        });
-        const manifest = await window.electronAPI.agentGetProfilesManifest(projectRoot);
-        setBuiltinsModified(builtinsDifferFromManifest(manifest));
-      } else {
-        const payload: SaveCustomProfilePayload = {
-          id: form.id,
-          name: form.name.trim(),
-          description: form.description.trim(),
-          instructions: form.instructions,
-          model: formatProfileModel(form.modelProvider, form.modelId),
-          thoughtLevel: form.thoughtLevel.trim() || undefined,
-          skills: form.skills,
-          mcpServers: form.mcpServers,
-          modules,
-          rules: form.rules,
-        };
-        await window.electronAPI.agentSaveCustomProfile(projectRoot, payload);
-      }
-      await loadProfiles();
-      closeDialog();
-      toast.success(dialogMode === "new" ? "Profile created." : "Profile saved.");
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to save profile.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const resetBuiltinCustomization = async () => {
-    if (!projectRoot || !form.id || dialogMode !== "customize-builtin") return;
-    setSaving(true);
-    try {
-      const result = await window.electronAPI.agentResetBuiltinProfileOverride(projectRoot, form.id);
-      setProfiles(sortProfiles(result.profiles));
-      const manifest = await window.electronAPI.agentGetProfilesManifest(projectRoot);
-      setBuiltinsModified(builtinsDifferFromManifest(manifest));
-      const full = await window.electronAPI.agentGetProfileDetail(projectRoot, form.id);
-      if (full) setForm(formFromDetail(full));
-      toast.success("Restored built-in defaults.");
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to reset profile.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const deleteProfile = async () => {
-    if (!projectRoot || !form.id) return;
-    setSaving(true);
-    try {
-      await window.electronAPI.agentDeleteCustomProfile(projectRoot, form.id);
-      await loadProfiles();
-      closeDialog();
-      toast.success("Profile deleted.");
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete profile.");
     } finally {
       setSaving(false);
     }
@@ -287,7 +166,7 @@ export function AgentSettings() {
           size="xs"
           className="shrink-0"
           disabled={saving}
-          onClick={() => void openProfile(profile)}
+          onClick={() => openProfile(profile)}
         >
           {profile.builtin ? "Customize" : "Edit"}
         </Button>
@@ -344,25 +223,6 @@ export function AgentSettings() {
               New profile
             </Button>
           )}
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <p className={cn(CATEGORY_HEADER, "mb-0")}>AI Terminal</p>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="shrink-0 text-muted-foreground"
-              onClick={() => useLayoutStore.getState().setSettingsCategory("terminal")}
-            >
-              All terminal settings
-            </Button>
-          </div>
-          <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-2">
-            How bash commands open, keep, and clean up ✨ AI terminal tabs. Output is always
-            saved to the session log.
-          </p>
-          <AiTerminalSettingsFields hideExecutionMode />
         </div>
 
         {!projectRoot ? (
@@ -435,24 +295,6 @@ export function AgentSettings() {
           </>
         )}
       </div>
-
-      <ProfileEditorDialog
-        open={dialogOpen}
-        onOpenChange={(open) => { if (!open) closeDialog(); else setDialogOpen(true); }}
-        form={form}
-        onFormChange={setForm}
-        editorOptions={editorOptions}
-        builtinCustomize={dialogMode === "customize-builtin"}
-        saving={saving}
-        saveLabel={dialogMode === "new" ? "Create" : "Save"}
-        onSave={() => void saveProfile()}
-        onResetBuiltin={
-          dialogMode === "customize-builtin" ? () => void resetBuiltinCustomization() : undefined
-        }
-        onDelete={dialogMode === "edit" ? () => void deleteProfile() : undefined}
-        deletePending={form.id ? deleteConfirm.isPending(form.id) : false}
-        onDeleteRequest={form.id ? () => deleteConfirm.setPendingId(form.id!) : undefined}
-      />
     </div>
   );
 }

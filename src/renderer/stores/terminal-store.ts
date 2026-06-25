@@ -79,6 +79,7 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
     if (!projectRoot) return;
     try {
       const config = await window.electronAPI.terminalLoadConfig(projectRoot);
+      if (useDocumentStore.getState().projectRoot !== projectRoot) return;
       set({
         quickCommands: config.quickCommands ?? [],
         loaded: true,
@@ -87,6 +88,7 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
         restartNonce: {},
       });
     } catch {
+      if (useDocumentStore.getState().projectRoot !== projectRoot) return;
       set({
         quickCommands: [],
         loaded: true,

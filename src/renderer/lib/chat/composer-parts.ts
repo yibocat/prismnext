@@ -6,6 +6,7 @@ import {
   looksLikeUrl,
   normalizeBrowserUrl,
 } from "@/lib/browser-link/normalize";
+import type { GitDiffHunk } from "@/lib/git/diff-hunk-snippet";
 
 export type ComposerPart =
   | { type: "text"; text: string }
@@ -33,6 +34,18 @@ export type ComposerPart =
       source: string;
     }
   | {
+      type: "skill";
+      id: string;
+      label: string;
+      skillId: string;
+    }
+  | {
+      type: "mcp";
+      id: string;
+      label: string;
+      serverName: string;
+    }
+  | {
       type: "link";
       id: string;
       url: string;
@@ -46,6 +59,32 @@ export type ComposerPart =
       output: string;
       exitCode?: number;
       cwd?: string;
+      sourceTabId?: string;
+    }
+  | {
+      type: "code-snippet";
+      id: string;
+      label: string;
+      filePath: string;
+      fileId?: string;
+      text: string;
+      startLine: number;
+      endLine: number;
+      startCol?: number;
+      endCol?: number;
+      source: "editor" | "git-diff";
+      sourceTabId?: string;
+    }
+  | {
+      type: "git-diff-snippet";
+      id: string;
+      label: string;
+      title: string;
+      filePath: string;
+      layout: "unified" | "split";
+      hunks: GitDiffHunk[];
+      removedLineCount: number;
+      addedLineCount: number;
       sourceTabId?: string;
     };
 
@@ -70,24 +109,47 @@ export function plainLabelForPart(part: ComposerPart): string {
   if (part.type === "mention") return `@${part.label}`;
   if (part.type === "link") return part.label;
   if (part.type === "terminal-snippet") return `[${part.label}]`;
+  if (part.type === "code-snippet") return `[${part.label}]`;
+  if (part.type === "git-diff-snippet") return `[${part.label}]`;
+  if (part.type === "skill" || part.type === "mcp") return `/${part.label}`;
   return `/${part.label}`;
+}
+
+/** Join parts; insert a space between a token and following text when needed. */
+function joinComposerParts(
+  parts: ComposerPart[],
+  render: (part: ComposerPart) => string,
+): string {
+  let out = "";
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    const chunk = render(part);
+    if (part.type === "text" && out && !out.endsWith(" ") && !chunk.startsWith(" ")) {
+      const prev = parts[i - 1];
+      if (prev && prev.type !== "text") out += " ";
+    }
+    out += chunk;
+  }
+  return out;
 }
 
 /** Flatten parts to human-readable plain text (for copy / session title). */
 export function partsToPlainText(parts: ComposerPart[]): string {
-  return parts.map(plainLabelForPart).join("");
+  return joinComposerParts(parts, plainLabelForPart);
 }
 
 /** Flatten parts for the agent prompt (links use full URL). */
 export function partsToAgentText(parts: ComposerPart[]): string {
-  return parts
-    .map((part) => {
-      if (part.type === "text") return part.text;
-      if (part.type === "link") return part.url;
-      if (part.type === "terminal-snippet") return `[terminal: ${part.label}]`;
-      return plainLabelForPart(part);
-    })
-    .join("");
+  return joinComposerParts(parts, (part) => {
+    if (part.type === "text") return part.text;
+    if (part.type === "link") return part.url;
+    if (part.type === "terminal-snippet") return `[terminal: ${part.label}]`;
+    if (part.type === "code-snippet") return `[code: ${part.label}]`;
+    if (part.type === "git-diff-snippet") return `[diff: ${part.label}]`;
+    if (part.type === "skill") return `[skill: ${part.label}]`;
+    if (part.type === "mcp") return `[mcp: ${part.label}]`;
+    return plainLabelForPart(part);
+  });
 }
 
 export function mergeAdjacentText(parts: ComposerPart[]): ComposerPart[] {

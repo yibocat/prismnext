@@ -7,11 +7,11 @@ import { cn } from "@/lib/utils";
 import { tabDisplayTitle } from "@/lib/workspace/tab-lifecycle";
 import { useTerminalStore } from "@/stores/terminal-store";
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+  AppContextMenu,
+  AppContextMenuContent,
+  AppContextMenuItem,
+  AppContextMenuTrigger,
+} from "@/components/ui/app-context-menu";
 
 function DropZone({ active, onDragOver, onDrop }: {
   active: boolean;
@@ -164,8 +164,8 @@ export const TabBar = memo(function TabBar({ tabs, activeTabId, onSelect, onClos
         onDrop={(e) => { e.preventDefault(); reset(); if (dragIndex !== null && onReorder) onReorder(dragIndex, 0); }}
       />
       {tabs.map((tab, i) => (
-        <ContextMenu key={tab.id}>
-          <ContextMenuTrigger asChild>
+        <AppContextMenu key={tab.id}>
+          <AppContextMenuTrigger asChild>
             <div className="flex shrink-0">
               {overIndex === i && side === "left" && (
                 <div className="mx-0.5 w-0.5 rounded-full bg-primary" />
@@ -206,16 +206,16 @@ export const TabBar = memo(function TabBar({ tabs, activeTabId, onSelect, onClos
                 <div className="mx-0.5 h-[var(--height-tab-bar)] w-0.5 rounded-full bg-primary" />
               )}
             </div>
-          </ContextMenuTrigger>
-          <ContextMenuContent className="w-40">
-            <ContextMenuItem onClick={() => onClose(tab.id)}>Close</ContextMenuItem>
-            <ContextMenuItem
+          </AppContextMenuTrigger>
+          <AppContextMenuContent className="min-w-[8rem]">
+            <AppContextMenuItem onClick={() => onClose(tab.id)}>Close</AppContextMenuItem>
+            <AppContextMenuItem
               onClick={() => { for (const t of tabs) { if (t.id !== tab.id) onClose(t.id); } }}
             >
               Close Others
-            </ContextMenuItem>
-          </ContextMenuContent>
-        </ContextMenu>
+            </AppContextMenuItem>
+          </AppContextMenuContent>
+        </AppContextMenu>
       ))}
       {/* Drop zone after last tab */}
       <DropZone

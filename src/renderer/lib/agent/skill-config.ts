@@ -1,6 +1,6 @@
 /** Parse and build OpenCode-compatible SKILL.md files. */
 
-const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
+import { splitMarkdownFrontmatter } from "@/lib/markdown/frontmatter";
 
 export interface SkillMeta {
   name: string;
@@ -13,22 +13,15 @@ export function isValidSkillName(name: string): boolean {
   return /^[a-z0-9]+(-[a-z0-9]+)*$/.test(name.trim());
 }
 
-function parseFrontmatterField(block: string, key: string): string {
-  const match = block.match(new RegExp(`^${key}:\\s*(.+)$`, "m"));
-  if (!match) return "";
-  return match[1].trim().replace(/^['"]|['"]$/g, "");
-}
-
 export function parseSkillMd(content: string): SkillMeta {
-  const match = content.match(FRONTMATTER_RE);
-  if (!match) {
+  const { hasFrontmatter, fields, body } = splitMarkdownFrontmatter(content);
+  if (!hasFrontmatter) {
     return { name: "", description: "", body: content.trim() };
   }
-  const [, fm, body] = match;
-  const license = parseFrontmatterField(fm, "license");
+  const license = fields.license;
   return {
-    name: parseFrontmatterField(fm, "name"),
-    description: parseFrontmatterField(fm, "description"),
+    name: fields.name ?? "",
+    description: fields.description ?? "",
     ...(license ? { license } : {}),
     body: body.trim(),
   };

@@ -8,7 +8,7 @@ export function detectQueryAtCursor(doc: string, cursor: number): ComposerQuery 
   const lineStart = doc.lastIndexOf("\n", cursor - 1) + 1;
   const before = doc.slice(lineStart, cursor);
 
-  const mentionMatch = before.match(/(?:^|[\s])@([^\s\uE000\uE001]*)$/);
+  const mentionMatch = before.match(/(?:^|[\s])@([^\s\uE000\uE001\uFFFC]*)$/);
   if (mentionMatch) {
     const query = mentionMatch[1] ?? "";
     const atOffset = before.length - mentionMatch[0].length + (mentionMatch[0].startsWith("@") ? 0 : 1);

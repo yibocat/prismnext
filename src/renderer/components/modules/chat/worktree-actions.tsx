@@ -1,52 +1,45 @@
 import { useState, useCallback } from "react";
 import { ArrowLeftIcon, AlertTriangleIcon } from "lucide-react";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  AppMenu,
+  AppMenuContent,
+  AppMenuTrigger,
+} from "@/components/ui/app-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useWorktreeStore } from "@/stores/worktree-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { WorktreePushPanel } from "./worktree-push-panel";
+import { discardAndCloseWorktree } from "@/lib/git/git-orchestrator";
+import { useResolvedWorktree } from "@/lib/git/use-resolved-worktree";
+import { WorktreeMergePanel } from "./worktree-merge-panel";
 import { cn } from "@/lib/utils";
 
 export function WorktreeActions() {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const switchCheckoutRoot = useDocumentStore((s) => s.switchCheckoutRoot);
-  const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
-  const moveToLocal = useWorktreeStore((s) => s.moveToLocal);
-  const [pushOpen, setPushOpen] = useState(false);
+  const activeWorktree = useResolvedWorktree();
+  const [mergeOpen, setMergeOpen] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   const handleMoveToLocal = useCallback(async () => {
     if (!projectRoot || !activeWorktree) return;
 
-    // Safety check: if the worktree has unpushed commits, warn before
-    // permanently deleting them (git branch -D is irreversible).
     if (activeWorktree.aheadCount > 0) {
       setShowDiscardConfirm(true);
       return;
     }
 
-    await moveToLocal(projectRoot);
-    switchCheckoutRoot(projectRoot);
-  }, [projectRoot, activeWorktree, moveToLocal, switchCheckoutRoot]);
+    await discardAndCloseWorktree(projectRoot, activeWorktree);
+  }, [projectRoot, activeWorktree]);
 
   const handleConfirmDiscard = useCallback(async () => {
-    if (!projectRoot) return;
+    if (!projectRoot || !activeWorktree) return;
     setShowDiscardConfirm(false);
-    await moveToLocal(projectRoot);
-    switchCheckoutRoot(projectRoot);
-  }, [projectRoot, moveToLocal, switchCheckoutRoot]);
+    await discardAndCloseWorktree(projectRoot, activeWorktree);
+  }, [projectRoot, activeWorktree]);
 
-  // Only render when a worktree is active
   if (!activeWorktree) return null;
 
   return (
     <div className="flex items-center gap-2">
-      {/* Close Worktree — discard isolation and return to main project */}
       <button
         type="button"
         onClick={handleMoveToLocal}
@@ -61,48 +54,46 @@ export function WorktreeActions() {
         <span>Close Worktree</span>
       </button>
 
-      {/* Push */}
-      <DropdownMenu open={pushOpen} onOpenChange={setPushOpen}>
-        <DropdownMenuTrigger asChild>
+      <AppMenu open={mergeOpen} onOpenChange={setMergeOpen}>
+        <AppMenuTrigger asChild>
           <button
             type="button"
             className={cn(
               "flex items-center gap-1.5 rounded-full border px-2.5 py-1",
               "text-[length:var(--font-chat-meta)] transition-colors",
-              pushOpen
+              mergeOpen
                 ? "bg-primary/15 text-primary border-primary/30"
                 : "bg-primary/10 text-primary border-primary/30 hover:bg-primary/15",
             )}
             onMouseDown={(e) => e.preventDefault()}
           >
-            <span>Push</span>
+            <span>Merge to Branch</span>
             <span className="text-[length:var(--font-hint)] opacity-60">▾</span>
           </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-72 p-0">
-          <WorktreePushPanel onClose={() => setPushOpen(false)} />
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </AppMenuTrigger>
+        <AppMenuContent align="end" className="w-80 !gap-0 !p-0 overflow-hidden">
+          <WorktreeMergePanel onClose={() => setMergeOpen(false)} />
+        </AppMenuContent>
+      </AppMenu>
 
-      {/* Discard confirmation dialog — shown when worktree has unpushed commits */}
       <Dialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <AlertTriangleIcon className="size-4 text-amber-500" />
-              Discard unpushed work?
+              Discard unmerged work?
             </DialogTitle>
           </DialogHeader>
           <div className="text-sm text-muted-foreground space-y-2">
             <p>
               This worktree has{" "}
               <strong className="text-foreground">
-                {activeWorktree.aheadCount} unpushed commit{activeWorktree.aheadCount !== 1 ? "s" : ""}
+                {activeWorktree.aheadCount} unmerged commit{activeWorktree.aheadCount !== 1 ? "s" : ""}
               </strong>{" "}
               that will be <strong className="text-destructive">permanently deleted</strong>.
             </p>
             <p>
-              Push your changes first to save them to{" "}
+              Merge to Branch first to integrate changes into{" "}
               <code className="text-xs bg-muted px-1 rounded">{activeWorktree.baseBranch}</code>,
               or discard them if you no longer need this work.
             </p>

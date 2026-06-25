@@ -18,6 +18,7 @@ import { shouldTrackProposedChange, isDiskMutationTool, isFileWriteTool, isPatch
 import { useCheckpointStore, resolveRelativeToolPath } from "@/stores/checkpoint-store";
 import { compileCurrentDocument, pauseAutoCompileForAi, resumeAutoCompileAfterAi } from "@/stores/compile-store";
 import { createLogger } from "@/services/logger";
+import { isPrismSystemPromptText } from "@/lib/chat/session-message-hydrate";
 
 const log = createLogger("opencode-events");
 
@@ -444,6 +445,9 @@ export function useOpenCodeEvents() {
             // Only applies when there's no real assistant content yet
             // (streamingMessage is empty or only has progress blocks).
             if (block.type === "text" && block.text) {
+              if (isPrismSystemPromptText(block.text)) {
+                break;
+              }
               const existing = tab.streamingMessage?.message?.content || [];
               const hasRealContent = existing.some(
                 (b: any) => (b.type === "text" || b.type === "thinking") && !b._progress

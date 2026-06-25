@@ -1,13 +1,14 @@
 // src/renderer/components/modules/chat/agent-settings/thought-level-select.tsx
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  AppMenu,
+  AppMenuCheckItem,
+  AppMenuContent,
+  AppMenuLabel,
+  AppMenuTrigger,
+} from "@/components/ui/app-menu";
 import { useSettingsStore } from "@/stores/settings-store";
 import { getThoughtLevels } from "@/lib/providers";
-import { CheckIcon, ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon } from "lucide-react";
 
 export function ThoughtLevelSelect() {
   const aiProvider = useSettingsStore((s) => s.settings.aiProvider) || "anthropic";
@@ -18,8 +19,8 @@ export function ThoughtLevelSelect() {
   const current = levels.find((l) => l.value === thoughtLevel);
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <AppMenu>
+      <AppMenuTrigger asChild>
         <button
           type="button"
           className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -28,27 +29,25 @@ export function ThoughtLevelSelect() {
           <span>{current?.label || "Default"}</span>
           <ChevronDownIcon className="size-3" />
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-48">
-        <div className="px-2 py-1 font-medium text-muted-foreground text-[length:var(--font-chat-meta)]">
-          Reasoning Depth
-        </div>
-        <DropdownMenuItem
+      </AppMenuTrigger>
+      <AppMenuContent align="start" className="min-w-[9rem]">
+        <AppMenuLabel>Reasoning Depth</AppMenuLabel>
+        <AppMenuCheckItem
+          selected={!thoughtLevel}
           onClick={() => updateSettings({ thoughtLevel: undefined })}
         >
-          <span className="flex-1 text-[length:var(--font-chat-meta)]">Default</span>
-          {!thoughtLevel && <CheckIcon className="size-3 shrink-0" />}
-        </DropdownMenuItem>
+          Default
+        </AppMenuCheckItem>
         {levels.map((l) => (
-          <DropdownMenuItem
+          <AppMenuCheckItem
             key={l.value}
+            selected={thoughtLevel === l.value}
             onClick={() => updateSettings({ thoughtLevel: l.value })}
           >
-            <span className="flex-1 text-[length:var(--font-chat-meta)]">{l.label}</span>
-            {thoughtLevel === l.value && <CheckIcon className="size-3 shrink-0" />}
-          </DropdownMenuItem>
+            {l.label}
+          </AppMenuCheckItem>
         ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </AppMenuContent>
+    </AppMenu>
   );
 }

@@ -10,6 +10,9 @@ import { useTabCloseConfirmStore } from "@/stores/tab-close-confirm-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
 import { deactivateModeByTabKind } from "@/lib/workspace/deactivate-mode";
+import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
+import { settingsPanelSlotKey } from "@/lib/settings/settings-panel-slot-key";
+import { settingsPanelSlotTitle } from "@/lib/settings/settings-panel-slots";
 
 // ─── Re-exports ───
 
@@ -49,6 +52,7 @@ interface RightPanelState {
     toolCallId?: string;
     title?: string;
   }) => string;
+  openSettingsEditorTab: (slot: SettingsPanelSlot) => string;
   /** Close AI terminal without confirmation or PTY destroy */
   closeAiTab: (id: string) => void;
   /** Remove duplicate AI tab without marking session dismissed */
@@ -68,7 +72,7 @@ interface RightPanelState {
   hasTabsOfKind: (kind: RightTabKind) => boolean;
   setActiveTab: (id: string) => void;
   setTabViewMode: (id: string, mode: string) => void;
-  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title" | "terminalSource" | "linkedChatTabId" | "linkedToolCallId">>) => void;
+  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title" | "terminalSource" | "linkedChatTabId" | "linkedToolCallId" | "settingsSlot" | "settingsSlotKey">>) => void;
   moveTab: (fromIndex: number, toIndex: number) => void;
 }
 
@@ -114,9 +118,14 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     const { tabs, activeTabId } = get();
     const texworkspaceTab = tabs.find((t) => t.kind === "texworkspace" && t.id === activeTabId);
     if (!texworkspaceTab) return;
+    const meta = useDocumentStore.getState().fileMetadata.get(fileId);
+    const filePath = meta?.relativePath ?? fileId;
+    const title = meta?.name ?? texworkspaceTab.title;
     set((s) => ({
       tabs: s.tabs.map((t) =>
-        t.id === texworkspaceTab.id ? { ...t, fileId, filePath: fileId, isInitial: false } : t,
+        t.id === texworkspaceTab.id
+          ? { ...t, fileId, filePath, title, isInitial: false }
+          : t,
       ),
     }));
     useDocumentStore.getState().setActiveFile(fileId);
@@ -303,6 +312,37 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       terminalSource: "ai",
       linkedChatTabId: opts.chatTabId,
       linkedToolCallId: opts.toolCallId,
+    };
+    set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
+    return id;
+  },
+
+  openSettingsEditorTab: (slot) => {
+    const key = settingsPanelSlotKey(slot);
+    const title = settingsPanelSlotTitle(slot) ?? "Settings";
+    const { tabs } = get();
+    const existing = tabs.find(
+      (t) => t.kind === "settings-editor" && t.settingsSlotKey === key,
+    );
+    if (existing) {
+      set({
+        activeTabId: existing.id,
+        tabs: tabs.map((t) =>
+          t.kind === "settings-editor" && t.settingsSlotKey === key
+            ? { ...t, settingsSlot: slot, title }
+            : t,
+        ),
+      });
+      return existing.id;
+    }
+    const id = nextTabId();
+    const tab: RightTab = {
+      id,
+      kind: "settings-editor",
+      title,
+      isInitial: false,
+      settingsSlot: slot,
+      settingsSlotKey: key,
     };
     set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
     return id;

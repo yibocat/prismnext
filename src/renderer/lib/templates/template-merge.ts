@@ -1,11 +1,29 @@
 // ─── Template Merge Library ───
 // Pure functions for content-preserving template switching.
-// All functions are synchronous and side-effect-free.
 
 /** Compatibility level for switching between template categories. */
 export type CompatibilityLevel = "L1" | "L2" | "L3";
 
+export type SwitchDialogLevel = CompatibilityLevel | "reset" | "firstUse";
+
+export type TemplateSwitchAction = "merge" | "replace" | "silent";
+
+export interface TemplateSwitchStrategy {
+  level: SwitchDialogLevel;
+  /** Actions shown in the confirmation dialog (empty = no dialog). */
+  dialogActions: ("merge" | "replace")[];
+  /** Default path when no user edits exist. */
+  silentAction: "replace";
+}
+
+export const NON_MERGE_CATEGORIES = new Set(["letter", "beamer", "poster", "cv"]);
+
 const L2_PAIRS: [string, string][] = [["paper", "thesis"]];
+
+/** Categories that support section-aware merge (paper / thesis only). */
+export function supportsSectionMerge(category: string): boolean {
+  return category === "paper" || category === "thesis";
+}
 
 /**
  * Determine the compatibility level when switching from oldCategory to newCategory.
@@ -20,16 +38,52 @@ export function getCompatibilityLevel(
   return "L3";
 }
 
+/**
+ * Full switch strategy including whether merge is offered.
+ */
+export function getTemplateSwitchStrategy(
+  oldCategory: string,
+  newCategory: string,
+  options: {
+    sameTemplate: boolean;
+    hasChanges: boolean;
+    isFirstUse: boolean;
+  },
+): TemplateSwitchStrategy {
+  if (options.isFirstUse) {
+    return { level: "firstUse", dialogActions: ["replace"], silentAction: "replace" };
+  }
+  if (options.sameTemplate) {
+    if (!options.hasChanges) {
+      return { level: "L1", dialogActions: [], silentAction: "replace" };
+    }
+    return { level: "reset", dialogActions: ["replace"], silentAction: "replace" };
+  }
+  if (!options.hasChanges) {
+    return { level: "L1", dialogActions: [], silentAction: "replace" };
+  }
+
+  const nonMerge =
+    NON_MERGE_CATEGORIES.has(oldCategory) || NON_MERGE_CATEGORIES.has(newCategory);
+  if (nonMerge) {
+    return { level: "L3", dialogActions: ["replace"], silentAction: "replace" };
+  }
+
+  const level = getCompatibilityLevel(oldCategory, newCategory);
+  if (level === "L3") {
+    return { level: "L3", dialogActions: ["replace"], silentAction: "replace" };
+  }
+  if (level === "L2") {
+    return { level: "L2", dialogActions: ["merge", "replace"], silentAction: "replace" };
+  }
+  return { level: "L1", dialogActions: ["merge", "replace"], silentAction: "replace" };
+}
+
 // ─── Body Extraction ───
 
 const BEGIN_DOC = /\\begin\{document\}/;
 const END_DOC = /\\end\{document\}/;
 
-/**
- * Split a .tex file into preamble (everything before \begin{document})
- * and body (between \begin{document} and \end{document}).
- * Returns null if the document structure cannot be parsed.
- */
 export function splitDocument(
   content: string,
 ): { preamble: string; body: string } | null {
@@ -50,30 +104,21 @@ export function splitDocument(
 // ─── Section Parsing ───
 
 interface Section {
-  /** The full heading line (e.g., "\section{Introduction}") */
   heading: string;
-  /** Normalized name for matching (lowercase, trimmed) */
   name: string;
-  /** Content between this heading and the next heading (or end) */
   content: string;
-  /** The raw source text for this entire section (heading + content) */
   raw: string;
+  start: number;
+  end: number;
 }
 
-// Handle optional [ToC Title] and one level of nested braces in section names
-const SECTION_RE = /\\(?:section|subsection|chapter|section\*|subsection\*|chapter\*)(?:\[[^\]]*\])?\{((?:[^{}]|\{[^{}]*\})*)\}/g;
+const SECTION_RE =
+  /\\(?:section|subsection|chapter|section\*|subsection\*|chapter\*)(?:\[[^\]]*\])?\{((?:[^{}]|\{[^{}]*\})*)\}/g;
 
-/**
- * Parse body content into an ordered list of sections.
- * Content before the first section heading is treated as "preamble" content
- * (e.g., \maketitle, \begin{abstract}...\end{abstract}) and returned as the
- * first item with an empty name.
- */
 export function parseSections(body: string): Section[] {
   const sections: Section[] = [];
   const matches: { name: string; index: number; endIndex: number }[] = [];
 
-  // Find all section headings with their positions
   let match: RegExpExecArray | null;
   SECTION_RE.lastIndex = 0;
   while ((match = SECTION_RE.exec(body)) !== null) {
@@ -85,33 +130,33 @@ export function parseSections(body: string): Section[] {
   }
 
   if (matches.length === 0) {
-    // No sections found — treat entire body as one block
     sections.push({
       heading: "",
       name: "",
       content: body,
       raw: body,
+      start: 0,
+      end: body.length,
     });
     return sections;
   }
 
-  // Content before first section heading
   const firstMatch = matches[0];
-  const beforeFirst = body.slice(0, firstMatch.index).trim();
-  if (beforeFirst.length > 0) {
+  const beforeFirst = body.slice(0, firstMatch.index);
+  if (beforeFirst.trim().length > 0) {
     sections.push({
       heading: "",
       name: "",
       content: beforeFirst,
       raw: beforeFirst,
+      start: 0,
+      end: firstMatch.index,
     });
   }
 
-  // Process each section
   for (let i = 0; i < matches.length; i++) {
     const m = matches[i];
     const heading = body.slice(m.index, m.endIndex);
-    // Content from after this heading to before the next heading (or end)
     const contentStart = m.endIndex;
     const contentEnd = i < matches.length - 1 ? matches[i + 1].index : body.length;
     const content = body.slice(contentStart, contentEnd);
@@ -120,6 +165,8 @@ export function parseSections(body: string): Section[] {
       name: m.name.toLowerCase(),
       content,
       raw: body.slice(m.index, contentEnd),
+      start: m.index,
+      end: contentEnd,
     });
   }
 
@@ -129,22 +176,24 @@ export function parseSections(body: string): Section[] {
 // ─── Section Merging ───
 
 /**
- * Merge old user sections into a new template's body.
- *
- * Rules:
- * 1. For each section in newBody that matches an old section by name:
- *    replace the template placeholder with the user's content.
- * 2. New-only sections: keep template placeholder.
- * 3. Old-only sections: append at the end (before \end{document}).
+ * Rebuild body by splicing sections at exact indices (avoids String.replace pitfalls).
  */
-export function mergeSections(
-  oldBody: string,
-  newBody: string,
+function rebuildBodyWithReplacements(
+  body: string,
+  replacements: { start: number; end: number; text: string }[],
 ): string {
+  const sorted = [...replacements].sort((a, b) => b.start - a.start);
+  let result = body;
+  for (const r of sorted) {
+    result = result.slice(0, r.start) + r.text + result.slice(r.end);
+  }
+  return result;
+}
+
+export function mergeSections(oldBody: string, newBody: string): string {
   const oldSections = parseSections(oldBody);
   const newSections = parseSections(newBody);
 
-  // Build lookup: normalized name → user content
   const oldContentMap = new Map<string, string>();
   for (const sec of oldSections) {
     if (sec.name) {
@@ -152,24 +201,35 @@ export function mergeSections(
     }
   }
 
-  // Track which old sections were matched
   const matchedOldNames = new Set<string>();
+  const replacements: { start: number; end: number; text: string }[] = [];
 
-  // Rebuild new body with matched content replaced
-  let result = newBody;
+  // Preamble blocks (abstract, maketitle, etc.)
+  const oldPreamble = oldSections.find((s) => !s.name);
+  const newPreamble = newSections.find((s) => !s.name);
+  if (oldPreamble && newPreamble && oldPreamble.content.trim().length > 0) {
+    replacements.push({
+      start: newPreamble.start,
+      end: newPreamble.end,
+      text: oldPreamble.raw,
+    });
+  }
+
   for (const newSec of newSections) {
     if (!newSec.name) continue;
     const oldContent = oldContentMap.get(newSec.name);
     if (oldContent !== undefined) {
       matchedOldNames.add(newSec.name);
-      // Replace the content after the heading in the template
-      // Escape $ in replacement to avoid String.replace interpreting $&, $`, $', $$
-      const safeContent = (newSec.heading + oldContent).replace(/\$/g, "$$$$");
-      result = result.replace(newSec.raw, safeContent);
+      replacements.push({
+        start: newSec.start,
+        end: newSec.end,
+        text: newSec.heading + oldContent,
+      });
     }
   }
 
-  // Append unmatched old sections
+  let result = rebuildBodyWithReplacements(newBody, replacements);
+
   for (const oldSec of oldSections) {
     if (!oldSec.name) continue;
     if (!matchedOldNames.has(oldSec.name)) {
@@ -180,49 +240,34 @@ export function mergeSections(
   return result;
 }
 
-// ─── Full Merge (for a single file) ───
-
-/**
- * Merge user content from oldContent into a new template file.
- * For .tex files: preamble swap + section-aware body merge.
- * For non-.tex files: keep user's version if it exists and differs.
- *
- * @param oldContent - Current file content on disk (may be empty if new file)
- * @param newContent - Template file content from the new template
- * @param filePath - Relative file path (used to check extension)
- * @param hasUserChanges - Whether this file was modified by the user
- * @returns The merged content
- */
 export function mergeFile(
   oldContent: string,
   newContent: string,
   filePath: string,
   hasUserChanges: boolean,
+  templateCategory: string,
 ): string {
   const isTex = filePath.endsWith(".tex");
   if (!isTex) {
-    // Non-.tex files: keep user's version if modified, else use template
     return hasUserChanges ? oldContent : newContent;
   }
 
   if (!hasUserChanges) {
-    // User hasn't touched this file — use new template content as-is
     return newContent;
   }
 
-  // Try A+B merge for .tex files with user changes
+  if (!supportsSectionMerge(templateCategory)) {
+    return newContent;
+  }
+
   const oldSplit = splitDocument(oldContent);
   const newSplit = splitDocument(newContent);
 
   if (!oldSplit || !newSplit) {
-    // Fallback: can't parse structure — return new template content
-    // (caller should have created a backup)
     return newContent;
   }
 
   const mergedBody = mergeSections(oldSplit.body, newSplit.body);
-
-  // Remove any existing \end{document} from merged body before appending
   const END_DOC_PATTERN = /\n?\\end\{document\}\s*$/;
   const cleanBody = mergedBody.replace(END_DOC_PATTERN, "");
 

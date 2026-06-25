@@ -13,12 +13,12 @@ import { useThemeStore } from "@/stores/theme-store";
 import { getDefaultThemeConfig } from "@/lib/theme/theme-generator";
 import { GLASS_TIER_LABELS, type GlassTier } from "@/lib/theme/glass-system";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  AppSelect,
+  AppSelectContent,
+  AppSelectItem,
+  AppSelectTrigger,
+  AppSelectValue,
+} from "@/components/ui/app-select";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
@@ -26,6 +26,15 @@ import { cn } from "@/lib/utils";
 import { EditorThemePicker } from "./editor-theme-picker";
 import { PRIMARY_COLORS } from "@/lib/theme/primary-colors";
 import { SANS_FONTS, MONO_FONTS } from "@/lib/theme/font-options";
+import {
+  SETTINGS_CARD,
+  SETTINGS_CATEGORY_HEADER,
+  SETTINGS_RESET_ICON,
+  SETTINGS_ROW_DESC,
+  SETTINGS_ROW_LABEL,
+  SETTINGS_STEPPER,
+  SETTINGS_STEPPER_BTN,
+} from "./settings-tokens";
 
 const RADIUS_LEVELS = [
   { value: "0", label: "Sharp" },
@@ -46,20 +55,13 @@ function cycleSize(current: string, dir: 1 | -1, sizes: readonly string[]): stri
   return sizes[next];
 }
 
-// ── Shared tokens ──
-const TRIGGER = "!h-6 !px-2 !py-0 !text-[length:var(--font-size-11)] bg-background [&_svg]:!size-3";
-const STEPPER = "inline-flex items-center border border-input bg-background rounded-md h-6";
-const STEPPER_BTN = "rounded-none h-full hover:bg-transparent [&_svg]:size-3";
-const MENU = "!p-0.5";
-const MENU_ITEM = "!py-1 !text-[length:var(--font-size-11)]";
-
-const ROW_LABEL = "text-[length:var(--font-size-13)] font-medium";
-const ROW_DESC = "text-[length:var(--font-size-12)] text-muted-foreground mt-0.5";
-const CATEGORY_HEADER =
-  "text-[length:var(--font-size-12)] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1";
-const CARD = "rounded-lg border border-border px-4 divide-y divide-border";
-const RESET_ICON =
-  "opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground";
+const CARD = SETTINGS_CARD;
+const ROW_LABEL = SETTINGS_ROW_LABEL;
+const ROW_DESC = SETTINGS_ROW_DESC;
+const CATEGORY_HEADER = SETTINGS_CATEGORY_HEADER;
+const RESET_ICON = SETTINGS_RESET_ICON;
+const STEPPER = SETTINGS_STEPPER;
+const STEPPER_BTN = SETTINGS_STEPPER_BTN;
 
 export function AppearanceSettings() {
   const { theme, setTheme } = useTheme();
@@ -160,16 +162,16 @@ export function AppearanceSettings() {
                 >
                   <RotateCcwIcon className="size-3" />
                 </button>
-                <Select value={theme} onValueChange={(v) => setTheme(v)}>
-                  <SelectTrigger className={cn("w-24", TRIGGER)}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className={MENU}>
-                    <SelectItem className={MENU_ITEM} value="dark">Dark</SelectItem>
-                    <SelectItem className={MENU_ITEM} value="light">Light</SelectItem>
-                    <SelectItem className={MENU_ITEM} value="system">System</SelectItem>
-                  </SelectContent>
-                </Select>
+                <AppSelect value={theme} onValueChange={(v) => setTheme(v)}>
+                  <AppSelectTrigger className="w-24">
+                    <AppSelectValue />
+                  </AppSelectTrigger>
+                  <AppSelectContent>
+                    <AppSelectItem value="dark">Dark</AppSelectItem>
+                    <AppSelectItem value="light">Light</AppSelectItem>
+                    <AppSelectItem value="system">System</AppSelectItem>
+                  </AppSelectContent>
+                </AppSelect>
               </div>
             </div>
 
@@ -187,13 +189,13 @@ export function AppearanceSettings() {
                 >
                   <RotateCcwIcon className="size-3" />
                 </button>
-                <Select value={config.primaryColor} onValueChange={(v) => updateConfig({ primaryColor: v })}>
-                  <SelectTrigger className={cn("w-32", TRIGGER)}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className={MENU}>
+                <AppSelect value={config.primaryColor} onValueChange={(v) => updateConfig({ primaryColor: v })}>
+                  <AppSelectTrigger className="w-32">
+                    <AppSelectValue />
+                  </AppSelectTrigger>
+                  <AppSelectContent>
                     {PRIMARY_COLORS.map((p) => (
-                      <SelectItem className={MENU_ITEM} key={p.id} value={p.id}>
+                      <AppSelectItem key={p.id} value={p.id}>
                         <span className="flex items-center gap-2">
                           <span
                             className="inline-block size-3 rounded-full"
@@ -201,10 +203,10 @@ export function AppearanceSettings() {
                           />
                           {p.label}
                         </span>
-                      </SelectItem>
+                      </AppSelectItem>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </AppSelectContent>
+                </AppSelect>
               </div>
             </div>
 
@@ -271,18 +273,18 @@ export function AppearanceSettings() {
                   <RotateCcwIcon className="size-3" />
                 </button>
                 <div className="flex gap-2">
-                  <Select value={config.fontSans} onValueChange={(v) => updateConfig({ fontSans: v })}>
-                    <SelectTrigger className={cn("w-28", TRIGGER)}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className={MENU}>
+                  <AppSelect value={config.fontSans} onValueChange={(v) => updateConfig({ fontSans: v })}>
+                    <AppSelectTrigger className="w-28">
+                      <AppSelectValue />
+                    </AppSelectTrigger>
+                    <AppSelectContent>
                       {SANS_FONTS.map((f) => (
-                        <SelectItem className={MENU_ITEM} key={f.id} value={f.id}>
+                        <AppSelectItem key={f.id} value={f.id}>
                           {f.label}
-                        </SelectItem>
+                        </AppSelectItem>
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </AppSelectContent>
+                  </AppSelect>
                   <div className={STEPPER}>
                     <Button
                       variant="ghost"
@@ -333,21 +335,21 @@ export function AppearanceSettings() {
                   <RotateCcwIcon className="size-3" />
                 </button>
                 <div className="flex gap-2">
-                  <Select
+                  <AppSelect
                     value={config.editorFontFamily}
                     onValueChange={(v) => updateConfig({ editorFontFamily: v, fontMono: v })}
                   >
-                    <SelectTrigger className={cn("w-36", TRIGGER)}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className={MENU}>
+                    <AppSelectTrigger className="w-36">
+                      <AppSelectValue />
+                    </AppSelectTrigger>
+                    <AppSelectContent>
                       {MONO_FONTS.map((f) => (
-                        <SelectItem className={MENU_ITEM} key={f.id} value={f.id}>
+                        <AppSelectItem key={f.id} value={f.id}>
                           {f.label}
-                        </SelectItem>
+                        </AppSelectItem>
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </AppSelectContent>
+                  </AppSelect>
                   <div className={STEPPER}>
                     <Button
                       variant="ghost"
@@ -412,21 +414,21 @@ export function AppearanceSettings() {
                 >
                   <RotateCcwIcon className="size-3" />
                 </button>
-                <Select
+                <AppSelect
                   value={config.radius.toString()}
                   onValueChange={(v) => updateConfig({ radius: parseFloat(v) })}
                 >
-                  <SelectTrigger className={cn("w-28", TRIGGER)}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className={MENU}>
+                  <AppSelectTrigger className="w-28">
+                    <AppSelectValue />
+                  </AppSelectTrigger>
+                  <AppSelectContent>
                     {RADIUS_LEVELS.map((l) => (
-                      <SelectItem className={MENU_ITEM} key={l.value} value={l.value}>
+                      <AppSelectItem key={l.value} value={l.value}>
                         {l.label}
-                      </SelectItem>
+                      </AppSelectItem>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </AppSelectContent>
+                </AppSelect>
               </div>
             </div>
 

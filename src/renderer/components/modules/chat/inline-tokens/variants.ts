@@ -3,5 +3,10 @@ export type InlineTokenVariant =
   | "profile"
   | "command"
   | "command-action"
+  | "skill"
+  | "mcp"
   | "link"
-  | "terminal";
+  | "terminal"
+  | "code"
+  | "code-git"
+  | "git-diff";

@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import { ThemeProvider, useTheme } from "next-themes";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { leftNavRegistry } from "@/lib/workspace/left-nav";
+import { registerLeftNavItems } from "@/lib/workspace/left-nav/items";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useThemeStore } from "@/stores/theme-store";
@@ -19,27 +21,38 @@ import { RightArea } from "@/components/layout/right-area";
 import { useAppCloseTab } from "@/hooks/use-app-close-tab";
 import { useTerminalAiStream } from "@/hooks/use-terminal-ai-stream";
 import { useAiTerminalSweep } from "@/hooks/use-ai-terminal-sweep";
+import { useSkillsIntegrationEvents } from "@/hooks/use-skills-integration-events";
 
 import { ContentTopBar } from "@/components/layout/content-top-bar";
+import {
+  expandSettingsDetailPanel,
+  enforceSettingsSplitLayout,
+  collapseSettingsDetailPanel,
+  closeSettingsDetailPanel,
+} from "@/lib/workspace/expand-settings-detail-panel";
+import { hasOpenSettingsEditor } from "@/hooks/use-settings-editor";
 import {
   SIDEBAR_LEFT_MIN,
   SIDEBAR_LEFT_DEFAULT,
   SIDEBAR_LEFT_MAX,
   MAIN_AREA_MIN,
   RIGHT_AREA_MIN,
+  RIGHT_AREA_MAX,
   SIDEBAR_OVERLAY_THRESHOLD,
   RIGHT_AREA_DEFAULT,
 } from "@/styles/constants";
 
 const SEP = "w-px bg-border hover:bg-foreground/30 transition-colors outline-none relative after:absolute after:inset-y-0 after:-left-1 after:-right-1";
 
-// Register all RightArea modes before any component renders
+// 左侧栏导航注册（与右侧 mode 注册并列）。新入口见 left-nav/items.tsx
 registerAllModes();
+registerLeftNavItems();
 
 export function App() {
   const isMobile = useIsMobile();
   const setSidebarWidth = useLayoutStore((s) => s.setSidebarWidth);
   const setRightAreaWidth = useLayoutStore((s) => s.setRightAreaWidth);
+  const setSettingsDetailWidth = useLayoutStore((s) => s.setSettingsDetailWidth);
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
   const rightSidebarOpen = useLayoutStore((s) => s.rightSidebarOpen);
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
@@ -51,6 +64,9 @@ export function App() {
   const showWelcome = useDocumentStore((s) => s.showWelcome);
   const isOpeningProject = useDocumentStore((s) => s.isOpeningProject);
   const setShowWelcome = useDocumentStore((s) => s.setShowWelcome);
+  const inSettings = leftSidebarView === "settings";
+  const settingsDetailStacked = useLayoutStore((s) => s.settingsDetailStacked);
+  const settingsDetailOpen = inSettings && hasOpenSettingsEditor();
 
   const leftSidebarRef = usePanelRef();
   const centerRef = usePanelRef();
@@ -59,17 +75,27 @@ export function App() {
   useAppCloseTab();
   useTerminalAiStream();
   useAiTerminalSweep();
+  useSkillsIntegrationEvents();
 
   const rightAreaExpandNonce = useLayoutStore((s) => s.rightAreaExpandNonce);
+  const settingsDetailCloseNonce = useLayoutStore((s) => s.settingsDetailCloseNonce);
   const centerExpandNonce = useLayoutStore((s) => s.centerExpandNonce);
 
-  // Programmatic RightArea expand (Browser link chips, etc.)
+  // Programmatic RightArea expand (Browser link chips, settings detail, etc.)
   useLayoutEffect(() => {
     if (rightAreaExpandNonce === 0) return;
     const r = rightAreaRef.current;
     const c = centerRef.current;
     if (!r) return;
     const st = useLayoutStore.getState();
+    if (st.leftSidebarView === "settings" && hasOpenSettingsEditor()) {
+      expandSettingsDetailPanel({
+        centerRef: c,
+        rightAreaRef: r,
+        mainAreaWidthPx: measureMainAreaFallback(),
+      });
+      return;
+    }
     const width = st.rightAreaWidth || RIGHT_AREA_DEFAULT;
     if (isMobile) {
       r.resize(9999);
@@ -81,6 +107,17 @@ export function App() {
       r.resize(width);
     }
   }, [rightAreaExpandNonce, isMobile]);
+
+  // Programmatic settings detail close (editor Cancel/Save, etc.)
+  useLayoutEffect(() => {
+    if (settingsDetailCloseNonce === 0) return;
+    closeSettingsDetailPanel(centerRef.current, rightAreaRef.current);
+  }, [settingsDetailCloseNonce]);
+
+  function measureMainAreaFallback(): number {
+    const left = leftSidebarRef.current?.getSize().inPixels ?? 0;
+    return Math.max(window.innerWidth - left, 0);
+  }
 
   // Programmatic center (Chat) expand — terminal snippet insert, etc.
   useLayoutEffect(() => {
@@ -132,14 +169,14 @@ export function App() {
     };
   }, []);
 
-  // Mobile (<768px): collapse right area
+  // Mobile (<768px): collapse workspace right area (settings uses stacked detail instead).
   useLayoutEffect(() => {
-    if (!isMobile) return;
+    if (!isMobile || inSettings) return;
     const right = rightAreaRef.current;
     if (right && !right.isCollapsed() && !useLayoutStore.getState().editorMaximized) {
       right.collapse();
     }
-  }, [isMobile]);
+  }, [isMobile, inSettings]);
 
   useEffect(() => {
     loadSettings();
@@ -167,26 +204,127 @@ export function App() {
     }
   }, [resolvedTheme, glassEffect]);
 
-  // Auto-collapse RightArea when entering settings/templates, restore on exit
-  const savedRightArea = useRef(false);
+  // Auto-collapse RightArea when entering immersive center views (leftNavRegistry.isImmersiveCenterView)
   useEffect(() => {
     const r = rightAreaRef.current;
     const st = useLayoutStore.getState();
     if (!r) return;
-    if (leftSidebarView === "settings" || leftSidebarView === "templates") {
+    if (leftNavRegistry.isImmersiveCenterView(leftSidebarView)) {
+      if (st.editorMaximized) st.setEditorMaximized(false);
       if (!r.isCollapsed()) {
         st.setRightAreaWidth(r.getSize().inPixels);
         r.collapse();
         centerRef.current?.resize(9999);
-        savedRightArea.current = true;
+        st.setPendingRightAreaRestore(true);
       }
-    } else {
-      if (savedRightArea.current && r.isCollapsed()) {
-        r.resize(st.rightAreaWidth);
-        savedRightArea.current = false;
-      }
+    } else if (st.pendingRightAreaRestore && r.isCollapsed()) {
+      r.resize(st.rightAreaWidth);
+      st.setPendingRightAreaRestore(false);
     }
   }, [leftSidebarView]);
+
+  // Settings: keep list visible in split mode; collapse detail pane when no editor is open.
+  useEffect(() => {
+    if (!inSettings) return;
+    const st = useLayoutStore.getState();
+    if (st.editorMaximized) st.setEditorMaximized(false);
+
+    if (!hasOpenSettingsEditor()) {
+      st.setSettingsDetailStacked(false);
+      st.setRightAreaExpanded(false);
+      const r = rightAreaRef.current;
+      if (r && !r.isCollapsed()) {
+        collapseSettingsDetailPanel(centerRef.current, r);
+      } else {
+        centerRef.current?.expand();
+      }
+      return;
+    }
+  }, [inSettings, settingsDetailOpen]);
+
+  // Settings stacked mode: apply panel sizes after React has committed
+  // the center panel's collapsible/minSize props for stacked layout.
+  useLayoutEffect(() => {
+    if (!inSettings || !hasOpenSettingsEditor() || !settingsDetailStacked) return;
+    const r = rightAreaRef.current;
+    const c = centerRef.current;
+    if (!r) return;
+
+    const st = useLayoutStore.getState();
+    st.setRightAreaExpanded(true);
+    if (r.isCollapsed()) r.expand();
+    c?.collapse();
+    r.resize(Math.max(measureMainAreaFallback(), RIGHT_AREA_MIN));
+  }, [inSettings, settingsDetailOpen, settingsDetailStacked]);
+
+  // Leaving settings: tear down shared right panel state so it does not leak into workspace.
+  const prevInSettingsRef = useRef(inSettings);
+  useLayoutEffect(() => {
+    const exitingSettings = prevInSettingsRef.current && !inSettings;
+    prevInSettingsRef.current = inSettings;
+    if (!exitingSettings) return;
+
+    const st = useLayoutStore.getState();
+    const r = rightAreaRef.current;
+    const c = centerRef.current;
+    if (!r) return;
+
+    st.setSettingsDetailStacked(false);
+
+    const shouldRestore = st.pendingRightAreaRestore;
+    if (shouldRestore) st.clearPendingRightAreaRestore();
+
+    if (hasOpenSettingsEditor()) {
+      closeSettingsDetailPanel(c, r);
+      if (shouldRestore) {
+        r.expand();
+        r.resize(st.rightAreaWidth || RIGHT_AREA_DEFAULT);
+        st.setRightAreaExpanded(true);
+        c?.expand();
+      }
+      return;
+    }
+
+    if (!r.isCollapsed()) {
+      st.setRightAreaExpanded(false);
+      r.collapse();
+      c?.expand();
+    }
+
+    if (shouldRestore) {
+      r.expand();
+      r.resize(st.rightAreaWidth || RIGHT_AREA_DEFAULT);
+      st.setRightAreaExpanded(true);
+      c?.expand();
+    }
+  }, [inSettings]);
+
+  // Rebalance settings detail when the window is resized.
+  useEffect(() => {
+    if (!inSettings) return;
+    let rafId: number | null = null;
+    const onResize = () => {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        const st = useLayoutStore.getState();
+        if (st.leftSidebarView !== "settings") return;
+        if (!hasOpenSettingsEditor()) return;
+        const r = rightAreaRef.current;
+        if (!r) return;
+        expandSettingsDetailPanel({
+          centerRef: centerRef.current,
+          rightAreaRef: r,
+          mainAreaWidthPx: measureMainAreaFallback(),
+        });
+      });
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, [inSettings]);
 
   useEffect(() => {
     if (projectRoot || !showWelcome) return;
@@ -254,7 +392,7 @@ export function App() {
         {showWelcome ? (
           <WelcomePage onSkip={() => setShowWelcome(false)} />
         ) : projectRoot ? (
-          <div className="flex flex-col h-full select-none" key={projectRoot}>
+          <div className="flex flex-col h-full" key={projectRoot}>
             {/* Subtle loading bar during project open / switch */}
             {isOpeningProject && (
               <div className="h-0.5 w-full bg-muted overflow-hidden shrink-0">
@@ -286,7 +424,8 @@ export function App() {
                   if (s.inPixels >= 30) setSidebarWidth(s.inPixels);
                   if (s.inPixels < 30 && st.sidebarExpanded) st.setSidebarExpanded(false);
                   if (s.inPixels >= 30 && !st.sidebarExpanded) st.setSidebarExpanded(true);
-                  if (s.inPixels === 0 && st.editorMaximized) {
+                  const immersiveView = leftNavRegistry.isImmersiveCenterView(st.leftSidebarView);
+                  if (s.inPixels === 0 && st.editorMaximized && !immersiveView) {
                     rightAreaRef.current?.resize(9999);
                   }
                 }}
@@ -303,11 +442,30 @@ export function App() {
                   className="h-full"
                   resizeTargetMinimumSize={{ fine: 5, coarse: 5 }}
                 >
-                  <Panel id="center" panelRef={centerRef} collapsible collapsedSize={0} minSize={MAIN_AREA_MIN} className="overflow-hidden"
+                  <Panel
+                    id="center"
+                    panelRef={centerRef}
+                    collapsible={!inSettings || settingsDetailStacked}
+                    collapsedSize={0}
+                    minSize={inSettings && settingsDetailStacked ? 0 : MAIN_AREA_MIN}
+                    className="overflow-hidden"
+                    groupResizeBehavior="preserve-pixel-size"
                     onResize={(s) => {
                       const st = useLayoutStore.getState();
-                      if (s.inPixels < 20 && !st.editorMaximized) st.setEditorMaximized(true);
-                      if (s.inPixels >= 20 && st.editorMaximized) st.setEditorMaximized(false);
+                      if (inSettings) {
+                        if (!st.settingsDetailStacked) {
+                          enforceSettingsSplitLayout(
+                            centerRef.current,
+                            rightAreaRef.current,
+                          );
+                        }
+                        return;
+                      }
+                      const immersiveView = leftNavRegistry.isImmersiveCenterView(st.leftSidebarView);
+                      if (!immersiveView) {
+                        if (s.inPixels < 20 && !st.editorMaximized) st.setEditorMaximized(true);
+                        if (s.inPixels >= 20 && st.editorMaximized) st.setEditorMaximized(false);
+                      }
                     }}
                   >
                     <div className="flex flex-col h-full min-w-0">
@@ -322,25 +480,69 @@ export function App() {
                     </div>
                   </Panel>
 
-                  <Separator id="sep-center-right" className={cn(SEP, (editorMaximized || !rightAreaExpanded) && "w-0")} disabled={editorMaximized} />
+                  <Separator
+                    id="sep-center-right"
+                    className={cn(SEP, ((editorMaximized && !inSettings) || !rightAreaExpanded) && "w-0")}
+                    disabled={(editorMaximized && !inSettings) || (inSettings && settingsDetailStacked)}
+                  />
 
                   <Panel
                     id="right-area"
                     panelRef={rightAreaRef}
                     collapsible
                     collapsedSize={0}
-                    minSize={rightAreaMin}
+                    minSize={
+                      inSettings
+                        ? (settingsDetailOpen ? rightAreaMin : 0)
+                        : rightAreaMin
+                    }
                     defaultSize={0}
+                    groupResizeBehavior="preserve-pixel-size"
                     onResize={(s) => {
                       const st = useLayoutStore.getState();
-                      // Only save width when panel is expanded (>= 30px threshold)
-                      // to prevent collapse animation from polluting rightAreaWidth
-                      if (s.inPixels >= 30 && !st.editorMaximized) setRightAreaWidth(s.inPixels);
-                      if (s.inPixels < 30 && st.rightAreaExpanded) st.setRightAreaExpanded(false);
-                      if (s.inPixels >= 30 && !st.rightAreaExpanded) st.setRightAreaExpanded(true);
+                      const r = rightAreaRef.current;
+                      if (inSettings && !hasOpenSettingsEditor()) {
+                        if (st.settingsDetailStacked) {
+                          st.setSettingsDetailStacked(false);
+                        }
+                        if (s.inPixels >= 30) {
+                          r?.collapse();
+                          st.setRightAreaExpanded(false);
+                        }
+                        return;
+                      }
+
+                      const settingsSlotOpen = inSettings && hasOpenSettingsEditor();
+
+                      if (s.inPixels < 30) {
+                        if (st.rightAreaExpanded) st.setRightAreaExpanded(false);
+                        if (r && !r.isCollapsed()) {
+                          r.collapse();
+                        }
+                        return;
+                      }
+
+                      if (!st.editorMaximized || inSettings) {
+                        if (settingsSlotOpen && !st.settingsDetailStacked) {
+                          setSettingsDetailWidth(Math.min(s.inPixels, RIGHT_AREA_MAX));
+                        } else if (!inSettings) {
+                          setRightAreaWidth(Math.min(Math.max(s.inPixels, RIGHT_AREA_MIN), RIGHT_AREA_MAX));
+                        }
+                      }
+                      if (!st.rightAreaExpanded) st.setRightAreaExpanded(true);
+                      if (inSettings && !st.settingsDetailStacked && s.inPixels >= 30) {
+                        enforceSettingsSplitLayout(
+                          centerRef.current,
+                          rightAreaRef.current,
+                        );
+                      }
                     }}
                   >
-                    <RightArea leftSidebarRef={leftSidebarRef} centerRef={centerRef} rightAreaRef={rightAreaRef} />
+                    <RightArea
+                      leftSidebarRef={leftSidebarRef}
+                      centerRef={centerRef}
+                      rightAreaRef={rightAreaRef}
+                    />
                   </Panel>
                 </Group>
               </Panel>
@@ -348,7 +550,7 @@ export function App() {
 
           </div>
         ) : (
-          <div className="flex flex-col h-full select-none">
+          <div className="flex flex-col h-full">
             <Group
               id="main-layout"
               orientation="horizontal"

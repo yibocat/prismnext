@@ -2,6 +2,8 @@ import { useState, useMemo, memo } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { FileDiffIcon } from "lucide-react";
 import { ToolCard, DiffLines, DiffStatBadge, computePatchLineStats, param } from "./shared";
+import { ChatFileLink } from "../chat-file-link";
+import { extractPatchTargetPaths } from "./tool-meta";
 import { useToolPermission } from "./use-tool-permission";
 import { useSettingsStore } from "@/stores/settings-store";
 import { resolvePermissionMode } from "@shared/permission-modes";
@@ -30,12 +32,17 @@ export const PatchWidget = memo(function PatchWidget({
 
   const patchContent = param(toolUse.input, "patch") || param(toolUse.input, "content") || "";
   const filePath = param(toolUse.input, "file_path", "filePath") || param(toolUse.input, "path") || "";
+  const patchPaths = useMemo(
+    () => extractPatchTargetPaths(toolUse.input as Record<string, unknown>),
+    [toolUse.input],
+  );
+  const primaryPath = filePath || patchPaths[0] || "";
 
   const fileCount = patchContent
     ? (patchContent.match(/^diff --git|^--- |^\+\+\+ /gm) || []).length / 3 || 1
     : 0;
 
-  const fileName = filePath.split("/").pop() || (fileCount > 1 ? `${Math.ceil(fileCount)} files` : "patch");
+  const fileName = primaryPath.split("/").pop() || (fileCount > 1 ? `${Math.ceil(fileCount)} files` : "patch");
   const showBody = !!patchContent || hasContent || showPermissionAsk;
   const patchStats = useMemo(
     () => (patchContent ? computePatchLineStats(patchContent) : { added: 0, removed: 0 }),
@@ -53,7 +60,11 @@ export const PatchWidget = memo(function PatchWidget({
     <ToolCard
       toolName={toolName}
       icon={<FileDiffIcon className="size-3.5 text-info" />}
-      label={<span className="truncate font-medium">{fileName}</span>}
+      label={primaryPath ? (
+        <ChatFileLink path={primaryPath} />
+      ) : (
+        <span className="truncate font-medium">{fileName}</span>
+      )}
       meta={
         fileCount > 1 ? (
           <span className="text-muted-foreground/70 shrink-0 text-[length:var(--font-chat-meta)]">

@@ -19,6 +19,7 @@ export const browserMode: ModeDefinition = {
   label: "Browser",
   icon: <GlobeIcon className="size-3.5" />,
   tabKinds: ["browser"],
+  surface: "any",
   persistence: "persistent",
   initialTitle: "Browser",
   Sidebar: BrowserSidebar,

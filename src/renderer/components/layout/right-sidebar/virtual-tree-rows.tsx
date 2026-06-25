@@ -3,20 +3,15 @@ import {
   FolderIcon,
   FolderOpenIcon,
   ChevronRightIcon,
-  FileTextIcon,
-  FolderPlusIcon,
-  PencilIcon,
-  Trash2Icon,
-  FolderSearchIcon,
-  CopyIcon,
 } from "lucide-react";
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+  AppContextMenu,
+  AppContextMenuContent,
+  AppContextMenuDestructiveItem,
+  AppContextMenuItem,
+  AppContextMenuSeparator,
+  AppContextMenuTrigger,
+} from "@/components/ui/app-context-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { getFileIcon } from "@/lib/files/file-tree";
@@ -40,16 +35,10 @@ export interface VirtTreeCallbacks {
   onCopyRelativePath: (relativePath: string) => void;
 }
 
-// ─── Git status type (subset used by FileVirtRow) ───
-
-export interface GitStatusInfo {
-  isDeleted: boolean;
-  isStagedOnly: boolean;
-  isUnstaged: boolean;
-  isUntracked: boolean;
-}
-
-// ─── Shared row base style ───
+import type { GitChangeStatusBadge } from "@/modes/git-mode/git-change-status";
+import {
+  gitChangeStatusTextClass,
+} from "@/modes/git-mode/git-change-status";
 
 const ROW_BASE = "flex h-6 items-center gap-2 rounded-sm px-2 text-[length:var(--font-size-12)] text-muted-foreground";
 const ROW_SELECTED = "bg-sidebar-accent text-sidebar-accent-foreground";
@@ -73,8 +62,8 @@ export const FolderVirtRow = memo(function FolderVirtRow({
   callbacks: VirtTreeCallbacks;
 }) {
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
+    <AppContextMenu>
+      <AppContextMenuTrigger asChild>
         <div
           className={cn(ROW_BASE, "cursor-pointer", isSelected && ROW_SELECTED)}
           style={{ paddingLeft: INDENT(depth) }}
@@ -93,36 +82,30 @@ export const FolderVirtRow = memo(function FolderVirtRow({
           )}
           <span className="truncate">{item.name}</span>
         </div>
-      </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem onClick={() => callbacks.onNewFile(item.key)}>
-          <FileTextIcon className="mr-2 size-4" />
+      </AppContextMenuTrigger>
+      <AppContextMenuContent>
+        <AppContextMenuItem onClick={() => callbacks.onNewFile(item.key)}>
           New File Here
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => callbacks.onNewFolder(item.key)}>
-          <FolderPlusIcon className="mr-2 size-4" />
+        </AppContextMenuItem>
+        <AppContextMenuItem onClick={() => callbacks.onNewFolder(item.key)}>
           New Folder
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onClick={() => callbacks.onRevealInFinder(item.key)}>
-          <FolderSearchIcon className="mr-2 size-4" />
+        </AppContextMenuItem>
+        <AppContextMenuSeparator />
+        <AppContextMenuItem onClick={() => callbacks.onRevealInFinder(item.key)}>
           Reveal in Finder
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => callbacks.onCopyRelativePath(item.key)}>
-          <CopyIcon className="mr-2 size-4" />
+        </AppContextMenuItem>
+        <AppContextMenuItem onClick={() => callbacks.onCopyRelativePath(item.key)}>
           Copy Relative Path
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onClick={() => callbacks.onRenameFolder(item.key, item.name)}>
-          <PencilIcon className="mr-2 size-4" />
+        </AppContextMenuItem>
+        <AppContextMenuSeparator />
+        <AppContextMenuItem onClick={() => callbacks.onRenameFolder(item.key, item.name)}>
           Rename
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => callbacks.onDeleteFolder(item.key)}>
-          <Trash2Icon className="mr-2 size-4" />
+        </AppContextMenuItem>
+        <AppContextMenuDestructiveItem onClick={() => callbacks.onDeleteFolder(item.key)}>
           Delete
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
+        </AppContextMenuDestructiveItem>
+      </AppContextMenuContent>
+    </AppContextMenu>
   );
 });
 
@@ -133,7 +116,7 @@ export const FileVirtRow = memo(function FileVirtRow({
   depth,
   isActive,
   isDirty,
-  gitStatus,
+  gitBadge,
   onSelect,
   onOpenPinned,
   callbacks,
@@ -142,36 +125,16 @@ export const FileVirtRow = memo(function FileVirtRow({
   depth: number;
   isActive: boolean;
   isDirty: boolean;
-  gitStatus?: GitStatusInfo;
+  gitBadge?: GitChangeStatusBadge;
   onSelect: () => void;
   onOpenPinned?: () => void;
   callbacks: VirtTreeCallbacks;
 }) {
-  const gitFileNameStyle: React.CSSProperties | undefined = gitStatus?.isDeleted
-    ? { color: "var(--destructive)", textDecoration: "line-through" }
-    : gitStatus?.isStagedOnly
-      ? { color: "var(--success)" }
-      : gitStatus?.isUnstaged || gitStatus?.isUntracked
-        ? { color: "var(--warning)" }
-        : undefined;
-
-  const gitTitle = gitStatus
-    ? gitStatus.isStagedOnly
-      ? "Staged"
-      : gitStatus.isUnstaged
-        ? "Modified"
-        : gitStatus.isUntracked
-          ? "Untracked"
-          : gitStatus.isDeleted
-            ? "Deleted"
-            : ""
-    : undefined;
-
   const file = item.node.file!;
 
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
+    <AppContextMenu>
+      <AppContextMenuTrigger asChild>
         <div
           className={cn(
             ROW_BASE,
@@ -186,38 +149,49 @@ export const FileVirtRow = memo(function FileVirtRow({
           }}
         >
           {getFileIcon(file)}
-          <span className="truncate" style={gitFileNameStyle} title={gitTitle}>
+          <span
+            className={cn(
+              "truncate flex-1",
+              gitBadge && gitChangeStatusTextClass(gitBadge.tone),
+              gitBadge?.tone === "deleted" && "line-through",
+            )}
+          >
             {item.name}
           </span>
           {isDirty && (
-            <span className="ml-auto size-2 shrink-0 rounded-full bg-info" title="Unsaved changes" />
+            <span className="size-2 shrink-0 rounded-full bg-info" title="Unsaved changes" />
+          )}
+          {gitBadge && (
+            <span
+              className={cn(
+                "text-[length:var(--font-size-10)] font-medium tabular-nums shrink-0 pr-0.5",
+                gitChangeStatusTextClass(gitBadge.tone),
+              )}
+            >
+              {gitBadge.letter}
+            </span>
           )}
         </div>
-      </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem onClick={() => callbacks.onRevealInFinder(file.absolutePath)}>
-          <FolderSearchIcon className="mr-2 size-4" />
+      </AppContextMenuTrigger>
+      <AppContextMenuContent>
+        <AppContextMenuItem onClick={() => callbacks.onRevealInFinder(file.absolutePath)}>
           Reveal in Finder
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => callbacks.onCopyPath(file.absolutePath)}>
-          <CopyIcon className="mr-2 size-4" />
+        </AppContextMenuItem>
+        <AppContextMenuItem onClick={() => callbacks.onCopyPath(file.absolutePath)}>
           Copy Path
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => callbacks.onCopyRelativePath(file.relativePath)}>
-          <CopyIcon className="mr-2 size-4" />
+        </AppContextMenuItem>
+        <AppContextMenuItem onClick={() => callbacks.onCopyRelativePath(file.relativePath)}>
           Copy Relative Path
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onClick={() => callbacks.onRenameFile(file.id, file.name)}>
-          <PencilIcon className="mr-2 size-4" />
+        </AppContextMenuItem>
+        <AppContextMenuSeparator />
+        <AppContextMenuItem onClick={() => callbacks.onRenameFile(file.id, file.name)}>
           Rename
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => callbacks.onDeleteFile(file.id)}>
-          <Trash2Icon className="mr-2 size-4" />
+        </AppContextMenuItem>
+        <AppContextMenuDestructiveItem onClick={() => callbacks.onDeleteFile(file.id)}>
           Delete
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
+        </AppContextMenuDestructiveItem>
+      </AppContextMenuContent>
+    </AppContextMenu>
   );
 });
 

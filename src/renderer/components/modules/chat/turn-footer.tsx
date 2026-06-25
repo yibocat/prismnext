@@ -56,7 +56,7 @@ export const TurnFooter = memo(function TurnFooter({
   if (!showActions && !metaText) return null;
 
   return (
-    <div className="group/footer flex items-center gap-2 px-6 py-1.5 mt-0.5">
+    <div className="group/footer flex items-center gap-2 py-1.5 mt-0.5">
       {copyText.trim().length > 0 && (
         <button
           type="button"

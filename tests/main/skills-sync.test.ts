@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it, afterEach } from "vitest";
@@ -12,6 +12,14 @@ import {
   setSkillLibrarySourceConnected,
   listLibrarySources,
   PRISM_CURATED_SOURCE_ID,
+  OPENCODE_HIDDEN_SKILLS,
+  PRISM_OPENCODE_SKILLS_SCAN_REL,
+  buildSkillPermissions,
+  sanitizeSkillPermissionMap,
+  skillPermissionNeedsRepair,
+  sanitizeSkillPermissionMap,
+  isSkillsIntegrationPath,
+  projectRootFromAgentPath,
 } from "../../src/main/services/skills-sync";
 
 describe("skills-sync", () => {
@@ -42,23 +50,58 @@ description: Manage BibTeX citations
     expect(skills[0].enabled).toBe(true);
   });
 
-  it("sync does not create OpenCode project artifacts", () => {
+  it("sync returns relative skills scan path and does not write project-root opencode.json", () => {
     root = mkdtempSync(join(tmpdir(), "prism-skills-"));
     const result = syncProjectSkillsIntegration(root);
-    expect(result.configPath).toBe("");
-    expect(existsSync(join(root, ".opencode"))).toBe(false);
-    expect(existsSync(join(root, ".prismnext/.opencode"))).toBe(false);
-    expect(existsSync(join(root, ".prismnext/opencode"))).toBe(false);
-    expect(existsSync(join(root, ".prismnext/agent/skills"))).toBe(true);
+
+    expect(result.skillsPaths).toEqual([PRISM_OPENCODE_SKILLS_SCAN_REL]);
+    expect(existsSync(join(root, ".opencode/opencode.json"))).toBe(false);
+    expect(existsSync(join(root, ".agents/skills"))).toBe(false);
   });
 
-  it("keeps disabled skills in Prism manifest only", () => {
+  it("skills scan path is parent of skills/ for OpenCode glob", () => {
+    expect(PRISM_OPENCODE_SKILLS_SCAN_REL).toBe(".prismnext/agent");
+  });
+
+  it("detects skills integration paths cross-platform", () => {
     root = mkdtempSync(join(tmpdir(), "prism-skills-"));
-    writeSkillsManifest(root, { disabled: ["old-skill"] });
-    syncProjectSkillsIntegration(root);
-    const manifest = readSkillsManifest(root);
-    expect(manifest.disabled).toContain("old-skill");
-    expect(existsSync(join(root, ".opencode"))).toBe(false);
+    const skillMd = join(root, ".prismnext/agent/skills/demo/SKILL.md");
+    const manifest = join(root, ".prismnext/agent/skills-manifest.json");
+    const winSkillMd = skillMd.replace(/\//g, "\\");
+    expect(isSkillsIntegrationPath(winSkillMd, root)).toBe(true);
+    expect(isSkillsIntegrationPath(manifest.replace(/\//g, "\\"), root)).toBe(true);
+    expect(isSkillsIntegrationPath(join(root, "main.tex"), root)).toBe(false);
+  });
+
+  it("resolves project root from agent path on Windows-style separators", () => {
+    root = mkdtempSync(join(tmpdir(), "prism-skills-"));
+    const abs = "C:/Users/test/project/.prismnext/agent/skills/x/SKILL.md";
+    expect(projectRootFromAgentPath(abs)).toBe("C:/Users/test/project");
+    const backslash = "C:\\Users\\test\\project\\.prismnext\\agent\\skills\\x\\SKILL.md";
+    expect(projectRootFromAgentPath(backslash)).toBe("C:/Users/test/project");
+  });
+
+  it("sanitizeSkillPermissionMap never spreads string allow into numeric keys", () => {
+    const corrupted = sanitizeSkillPermissionMap("allow", { "customize-opencode": "deny" });
+    expect(corrupted).toEqual({ "*": "allow", "customize-opencode": "deny" });
+    expect(corrupted["0"]).toBeUndefined();
+
+    const repaired = sanitizeSkillPermissionMap(
+      { "0": "a", "1": "l", "*": "allow", "customize-opencode": "deny" },
+      {},
+    );
+    expect(repaired).toEqual({ "*": "allow", "customize-opencode": "deny" });
+    expect(skillPermissionNeedsRepair(repaired)).toBe(false);
+    expect(skillPermissionNeedsRepair({ "0": "a", "1": "l" })).toBe(true);
+  });
+
+  it("buildSkillPermissions denies disabled skills and hides customize-opencode", () => {
+    const perms = buildSkillPermissions(["old-skill"]);
+    expect(perms["old-skill"]).toBe("deny");
+    for (const hidden of OPENCODE_HIDDEN_SKILLS) {
+      expect(perms[hidden]).toBe("deny");
+    }
+    expect(perms["*"]).toBe("allow");
   });
 
   it("always includes prism-curated bundled source", () => {
@@ -67,18 +110,19 @@ description: Manage BibTeX citations
     expect(sources.some((s) => s.id === PRISM_CURATED_SOURCE_ID && s.kind === "bundled")).toBe(true);
   });
 
-  it("does not write library sources to OpenCode project config", () => {
+  it("does not write library registry URLs to skills patch", () => {
     root = mkdtempSync(join(tmpdir(), "prism-skills-"));
     const registryUrl = "https://agentskills.io/.well-known/agent-skills/index.json";
     addSkillLibrarySource(root, registryUrl);
-    syncProjectSkillsIntegration(root);
-    expect(existsSync(join(root, ".opencode"))).toBe(false);
+    const result = syncProjectSkillsIntegration(root);
+    expect(result.registryUrls).toEqual([]);
     expect(listLibrarySources(root).some((s) => s.url === registryUrl)).toBe(true);
   });
 
-  it("removes legacy OpenCode project artifacts on sync", () => {
+  it("removes project-root and nested OpenCode/agent artifact dirs", () => {
     root = mkdtempSync(join(tmpdir(), "prism-skills-"));
     mkdirSync(join(root, ".opencode"), { recursive: true });
+    mkdirSync(join(root, ".agents/skills"), { recursive: true });
     mkdirSync(join(root, ".prismnext/.opencode"), { recursive: true });
     mkdirSync(join(root, ".prismnext/opencode"), { recursive: true });
     writeFileSync(
@@ -97,8 +141,18 @@ description: Manage BibTeX citations
     );
     syncProjectSkillsIntegration(root);
     expect(existsSync(join(root, ".opencode"))).toBe(false);
+    expect(existsSync(join(root, ".agents"))).toBe(false);
     expect(existsSync(join(root, ".prismnext/.opencode"))).toBe(false);
     expect(existsSync(join(root, ".prismnext/opencode"))).toBe(false);
+    expect(existsSync(join(root, ".prismnext/agent/skills"))).toBe(true);
+  });
+
+  it("appends opencode artifact lines to project .gitignore", () => {
+    root = mkdtempSync(join(tmpdir(), "prism-skills-"));
+    syncProjectSkillsIntegration(root);
+    const gitignore = readFileSync(join(root, ".gitignore"), "utf-8");
+    expect(gitignore).toContain(".opencode/");
+    expect(gitignore).toContain(".agents/");
   });
 
   it("normalizes accidental .prismnext project roots before syncing", () => {
@@ -111,6 +165,7 @@ description: Manage BibTeX citations
     expect(existsSync(join(root, ".prismnext/.opencode"))).toBe(false);
     expect(existsSync(join(root, ".prismnext/.prismnext"))).toBe(false);
     expect(existsSync(join(root, ".prismnext/agent/skills"))).toBe(true);
+    expect(existsSync(join(root, ".opencode"))).toBe(false);
   });
 
   it("remove deletes remote source from manifest", () => {

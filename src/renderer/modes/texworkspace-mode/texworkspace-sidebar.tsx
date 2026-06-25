@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { DEFAULT_MANUSCRIPT_DIR } from "@/types/workspace";
@@ -13,8 +13,8 @@ import {
   type TodoEntry,
 } from "@/hooks/use-latex-structure";
 import { useProjectSearch, type SearchResult } from "@/hooks/use-project-search";
-import { resolveCompileTarget } from "@/lib/tex/resolve-tex-root";
 import { buildFileTree } from "@/lib/files/file-tree";
+import { filterFilesByMode, filterFoldersByMode } from "@/modes/files-mode/file-filter";
 import {
   ChevronRightIcon,
   FileTextIcon,
@@ -30,7 +30,6 @@ import {
   SigmaIcon,
   TagIcon,
   QuoteIcon,
-  ScrollTextIcon,
   HashIcon,
   FoldVerticalIcon,
   UnfoldVerticalIcon,
@@ -40,7 +39,6 @@ import {
   SearchIcon,
   XIcon,
 } from "lucide-react";
-import { useCompileStore } from "@/stores/compile-store";
 import {
   SidebarHeader,
   SidebarContent,
@@ -61,13 +59,12 @@ import { Icon } from "@iconify/react";
 
 // ─── Constants ───
 
-type SidebarTab = "outline" | "refs" | "files" | "compile";
+type SidebarTab = "outline" | "refs" | "files";
 
 const TABS: { key: SidebarTab; icon: React.ReactNode; label: string }[] = [
   { key: "outline", icon: <ListTreeIcon className="size-3.5" />, label: "Outline" },
   { key: "refs", icon: <Link2Icon className="size-3.5" />, label: "References" },
   { key: "files", icon: <FileTextIcon className="size-3.5" />, label: "Files" },
-  { key: "compile", icon: <ScrollTextIcon className="size-3.5" />, label: "Compile" },
 ];
 
 const LABEL_ICON: Record<LabelEntry["kind"], React.ReactNode> = {
@@ -131,7 +128,8 @@ function TexFileTree({ tree, depth, onSelect }: { tree: ReturnType<typeof buildF
       {node.type === "folder" ? (
         <FolderNode node={node} depth={depth} onSelect={onSelect} />
       ) : (
-        <SidebarMenuButton size="sm" onClick={() => onSelect(node.file?.id ?? node.relativePath)}
+        <SidebarMenuButton size="sm" onClick={() => onSelect(node.file?.id ?? "")}
+          disabled={!node.file?.id}
           className="[&>svg]:!size-3 h-6 py-0.5 text-[length:var(--font-size-12)] rounded-sm text-muted-foreground"
           style={{ paddingLeft: `${8 + depth * 16}px` }}>
           <Icon icon={getFileIconName(node.name)} className="size-3.5 shrink-0" />
@@ -179,16 +177,12 @@ export function TexworkspaceSidebar() {
   const [accordionValue, setAccordionValue] = useState<string[]>([]);
 
   const files = useDocumentStore((s) => s.files);
+  const allFolders = useDocumentStore((s) => s.folders);
   const manuscriptConfig = useWorkspaceConfigStore((s) => s.manuscriptConfig);
   const manuscriptDir = manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR;
   const openedContents = useDocumentStore((s) => s.openedContents);
   const setTexworkspaceActiveFile = useRightPanelStore((s) => s.setTexworkspaceActiveFile);
   const requestJumpToLine = useDocumentStore((s) => s.requestJumpToLine);
-  const compileError = useCompileStore((s) => s.compileError);
-  const compileLog = useCompileStore((s) => s.compileLog);
-  const isCompiling = useCompileStore((s) => s.isCompiling);
-  const tabs = useRightPanelStore((s) => s.tabs);
-  const activeTabId = useRightPanelStore((s) => s.activeTabId);
   const searchQuery = useLayoutStore((s) => s.texworkspaceSearchQuery);
   const setSearchQuery = useLayoutStore((s) => s.setTexworkspaceSearchQuery);
 
@@ -202,17 +196,11 @@ export function TexworkspaceSidebar() {
   const getContent = useCallback((id: string) => openedContents.get(id)?.content ?? "", [openedContents]);
   const { toc, labels, citations, figureTables, todos, texFiles } = useLatexStructure(files, getContent);
 
-  const texTree = useMemo(() => {
-    const prefix = `${manuscriptDir}/`;
-    // Strictly show only files under the configured manuscript directory.
-    // If .tex files exist elsewhere (e.g., leftover from a previous config),
-    // they should not appear in the TeXworkspace file tree.
-    const underManuscript = texFiles.filter((f) => f.relativePath.startsWith(prefix));
-    return buildFileTree(
-      underManuscript.map((f) => ({ ...f, relativePath: f.relativePath.slice(prefix.length) })),
-      [],
-    );
-  }, [texFiles, manuscriptDir]);
+  const manuscriptTree = useMemo(() => {
+    const scopedFiles = filterFilesByMode(files, "manuscript", manuscriptDir);
+    const scopedFolders = filterFoldersByMode(allFolders, "manuscript", manuscriptDir);
+    return buildFileTree(scopedFiles, scopedFolders);
+  }, [files, allFolders, manuscriptDir]);
 
   // ─── Navigation ───
 
@@ -226,7 +214,7 @@ export function TexworkspaceSidebar() {
   const handleCiteSelect = useCallback((e: CitationEntry) => navigateTo(e.fileId, e.line), [navigateTo]);
   const handleFigureTableSelect = useCallback((e: FigureTableEntry) => navigateTo(e.fileId, e.line), [navigateTo]);
   const handleTodoSelect = useCallback((e: TodoEntry) => navigateTo(e.fileId, e.line), [navigateTo]);
-  const handleTexFileSelect = useCallback((id: string) => setTexworkspaceActiveFile(id), [setTexworkspaceActiveFile]);
+  const handleFileSelect = useCallback((id: string) => setTexworkspaceActiveFile(id), [setTexworkspaceActiveFile]);
   const handleSearchResultSelect = useCallback((r: SearchResult) => navigateTo(r.fileId, r.line), [navigateTo]);
 
   // ─── Word count ───
@@ -285,7 +273,7 @@ export function TexworkspaceSidebar() {
                 No manuscript folder configured
               </p>
               <p className="text-xs text-muted-foreground/60 max-w-[220px]">
-                Configure a manuscript folder in Settings → Workspace to
+                Configure a manuscript folder in Settings → TeX Workspace to
                 enable TeX editing, outline navigation, and compilation.
               </p>
             </div>
@@ -295,7 +283,7 @@ export function TexworkspaceSidebar() {
               className="h-7 text-xs"
               onClick={() => {
                 useLayoutStore.getState().setLeftSidebarView("settings");
-                useLayoutStore.getState().setSettingsCategory("workspace");
+                useLayoutStore.getState().setSettingsCategory("texworkspace");
               }}
             >
               Open Workspace Settings
@@ -420,19 +408,16 @@ export function TexworkspaceSidebar() {
         {/* ── Files Tab ── */}
         {!isSearching && activeTab === "files" && (
           <div>
-            {texTree.length === 0 ? <p className="px-3 py-2 text-[length:var(--font-hint)] text-muted-foreground/60">No .tex files</p>
-              : <TexFileTree tree={texTree} depth={0} onSelect={handleTexFileSelect} />}
+            {manuscriptTree.length === 0 ? (
+              <p className="px-3 py-2 text-[length:var(--font-hint)] text-muted-foreground/60">
+                No files in manuscript folder
+              </p>
+            ) : (
+              <TexFileTree tree={manuscriptTree} depth={0} onSelect={handleFileSelect} />
+            )}
           </div>
         )}
 
-        {/* ── Compile Tab ── */}
-        {!isSearching && activeTab === "compile" && (
-          <div className="p-2">
-            {isCompiling ? <p className="text-[length:var(--font-hint)] text-muted-foreground/60 text-center py-8">Compiling…</p>
-              : compileLog ? <pre className={`text-[length:var(--font-size-12)] whitespace-pre-wrap break-words font-mono ${compileError ? "text-destructive" : "text-muted-foreground"}`}>{compileLog}</pre>
-              : <p className="text-[length:var(--font-hint)] text-muted-foreground/60 text-center py-8">No compilation output yet</p>}
-          </div>
-        )}
       </SidebarContent>
       )}
 

@@ -19,6 +19,7 @@ import {
   type PermissionMode,
 } from "../services/permission-modes";
 import { getSettings } from "../services/settings";
+import { sanitizeSkillPermissionMap, skillPermissionNeedsRepair } from "../services/skills-sync";
 import { messageIdsAfterTurn } from "../../shared/chat-turns";
 
 const log = createLogger("acp-service", "agent");
@@ -34,6 +35,8 @@ export interface SessionInfo {
   title: string;
   lastModified: number;
   createdAt: number;
+  /** OpenCode session cwd — project root or a worktree path. */
+  directory?: string;
 }
 
 export interface SessionPartBackup {
@@ -170,6 +173,9 @@ export class AcpService {
 
     // Sync prism-next's built-in custom tools so OpenCode can discover them.
     await this.syncBuiltinTools();
+
+    // Repair known-bad permission.skill shapes before OpenCode reads config.
+    this.repairOpencodeServerConfigs();
 
     // Write default OpenCode config to enable ALL built-in tools.  OpenCode
     // disables websearch, question, etc. by default (privacy-first).  We
@@ -441,6 +447,70 @@ export class AcpService {
   }
 
   /**
+   * Merge per-project skill discovery into app-level OpenCode config
+   * (`userData/opencode-server/config/opencode/opencode.json`), not the project tree.
+   * skills.paths use forward slashes — valid on Windows, macOS, and Linux.
+   */
+  applyProjectSkillsIntegration(
+    projectRoot: string,
+    patch: { skillsPaths: string[]; skillPermissions: Record<string, string> },
+  ): string {
+    const primaryPath = join(this.getServerDataDir(), "config", "opencode", "opencode.json");
+    for (const p of this.getOpencodeConfigPaths()) {
+      try {
+        let config: Record<string, unknown> = {};
+        if (existsSync(p)) {
+          try {
+            config = JSON.parse(readFileSync(p, "utf-8")) as Record<string, unknown>;
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            log.warn(`Skipping invalid OpenCode config ${p}: ${message}`);
+            continue;
+          }
+        }
+
+        if (!config.$schema) {
+          config.$schema = "https://opencode.ai/config.json";
+        }
+
+        const existingSkills = (config.skills as Record<string, unknown> | undefined) ?? {};
+        const nextSkills: Record<string, unknown> = {
+          ...existingSkills,
+          paths: patch.skillsPaths,
+        };
+        delete nextSkills.urls;
+        config.skills = nextSkills;
+
+        const existingPermission = (config.permission as Record<string, unknown> | undefined) ?? {};
+        config.permission = {
+          ...existingPermission,
+          skill: sanitizeSkillPermissionMap(existingPermission.skill, patch.skillPermissions),
+        };
+
+        mkdirSync(dirname(p), { recursive: true });
+        writeFileSync(p, JSON.stringify(config, null, 2), "utf-8");
+        log.info("Applied project skills integration", {
+          projectRoot,
+          configPath: p,
+          skillsPaths: patch.skillsPaths,
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(`Failed to apply project skills to ${p}: ${message}`);
+      }
+    }
+    return primaryPath;
+  }
+
+  /** Restart OpenCode so skills.paths / permission.skill changes are picked up. */
+  async reloadAfterSkillsIntegration(): Promise<void> {
+    if (!this.conn) return;
+    log.info("Restarting OpenCode to apply skills integration");
+    await this.shutdown();
+    await this.initialize();
+  }
+
+  /**
    * Sync prism-next's built-in custom tools to the directory OpenCode scans.
    *
    * ## How prism‑next custom tools work
@@ -529,6 +599,31 @@ export class AcpService {
   }
 
   /**
+   * Fix corrupted `permission.skill` objects in app-level OpenCode config.
+   * Runs automatically on every OpenCode spawn — users never edit Application Support manually.
+   */
+  repairOpencodeServerConfigs(): void {
+    for (const p of this.getOpencodeConfigPaths()) {
+      if (!existsSync(p)) continue;
+      try {
+        const config = JSON.parse(readFileSync(p, "utf-8")) as Record<string, unknown>;
+        const permission = config.permission as Record<string, unknown> | undefined;
+        if (!permission) continue;
+
+        const before = permission.skill;
+        if (!skillPermissionNeedsRepair(before) && typeof before !== "string") continue;
+
+        permission.skill = sanitizeSkillPermissionMap(before, {});
+        writeFileSync(p, JSON.stringify(config, null, 2), "utf-8");
+        log.info("Repaired OpenCode permission.skill in app config", { path: p });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(`Failed to repair OpenCode config ${p}: ${message}`);
+      }
+    }
+  }
+
+  /**
    * Merge permission rules for the given mode into all OpenCode config files.
    * Called on startup and whenever the user changes permission mode in settings.
    */
@@ -552,10 +647,27 @@ export class AcpService {
           config.$schema = "https://opencode.ai/config.json";
         }
 
+        const { skill: toolSkillRule, ...toolRules } = permissions;
+        const existingPermission = (config.permission as Record<string, unknown> | undefined) ?? {};
+        const existingSkillPerm = existingPermission.skill;
+        const hasSkillMap =
+          existingSkillPerm &&
+          typeof existingSkillPerm === "object" &&
+          !Array.isArray(existingSkillPerm);
+
         config.permission = {
-          ...((config.permission as Record<string, string> | undefined) ?? {}),
-          ...permissions,
+          ...existingPermission,
+          ...toolRules,
         };
+
+        if (hasSkillMap) {
+          (config.permission as Record<string, unknown>).skill = sanitizeSkillPermissionMap(
+            existingSkillPerm,
+            {},
+          );
+        } else if (toolSkillRule) {
+          (config.permission as Record<string, unknown>).skill = toolSkillRule;
+        }
 
         mkdirSync(dirname(p), { recursive: true });
         writeFileSync(p, JSON.stringify(config, null, 2), "utf-8");
@@ -901,11 +1013,111 @@ export class AcpService {
             title: r.title || r.id,
             lastModified: r.time_updated,
             createdAt: r.time_created,
+            directory: dir,
           }));
       }, { readonly: true });
     } catch (err: any) {
       log.warn(`Failed to list sessions from SQLite: ${err.message}`);
       return [];
+    }
+  }
+
+  /** List sessions for the project root and every Prism worktree checkout. */
+  async listProjectSessions(projectRoot: string): Promise<SessionInfo[]> {
+    const { listWorktrees } = await import("../services/worktree");
+    const directories = new Set<string>([projectRoot]);
+    try {
+      const worktrees = await listWorktrees(projectRoot);
+      for (const wt of worktrees) directories.add(wt.path);
+    } catch {
+      // Non-fatal — still return local sessions
+    }
+
+    try {
+      const stored = await this.listWorktreeSessionDirectories(projectRoot);
+      for (const dir of stored) directories.add(dir);
+    } catch {
+      // Non-fatal
+    }
+
+    const byId = new Map<string, SessionInfo>();
+    for (const dir of directories) {
+      const sessions = await this.listSessions(dir);
+      for (const session of sessions) {
+        if (!byId.has(session.id)) byId.set(session.id, session);
+      }
+    }
+    return [...byId.values()].sort((a, b) => b.lastModified - a.lastModified);
+  }
+
+  /** Distinct session directories under .prismnext/worktrees/ (includes closed worktrees). */
+  private async listWorktreeSessionDirectories(projectRoot: string): Promise<string[]> {
+    const prefix = join(projectRoot, ".prismnext", "worktrees") + "/";
+    try {
+      return await this.withDb((db) => {
+        const rows = db.prepare(
+          `SELECT DISTINCT directory FROM session
+           WHERE directory LIKE ?
+             AND time_archived IS NULL
+             AND parent_id IS NULL`,
+        ).all(prefix + "%") as Array<{ directory: string }>;
+        return rows.map((r) => r.directory).filter(Boolean);
+      }, { readonly: true });
+    } catch {
+      return [];
+    }
+  }
+
+  /** Move sessions from a removed worktree directory to the project root. */
+  async reassignSessionsDirectory(fromDirectory: string, toDirectory: string): Promise<number> {
+    if (!fromDirectory || !toDirectory) return 0;
+    const { resolve, join, sep } = await import("node:path");
+    const projectRoot = resolve(toDirectory);
+    const from = resolve(fromDirectory);
+    if (from === projectRoot) return 0;
+
+    const worktreesPrefix = join(projectRoot, ".prismnext", "worktrees") + sep;
+    const closingName = from.startsWith(worktreesPrefix)
+      ? from.slice(worktreesPrefix.length).split(/[/\\]/)[0]
+      : null;
+    if (!closingName) return 0;
+
+    try {
+      return await this.withDb((db) => {
+        const rows = db.prepare(
+          `SELECT id, directory FROM session
+           WHERE time_archived IS NULL AND parent_id IS NULL`,
+        ).all() as Array<{ id: string; directory: string }>;
+        const update = db.prepare(`UPDATE session SET directory = ? WHERE id = ?`);
+        let changes = 0;
+        for (const row of rows) {
+          if (!row.directory) continue;
+          const rowDir = resolve(row.directory);
+          if (!rowDir.startsWith(worktreesPrefix)) continue;
+          const rowName = rowDir.slice(worktreesPrefix.length).split(/[/\\]/)[0];
+          if (rowName !== closingName) continue;
+          update.run(projectRoot, row.id);
+          changes++;
+        }
+        return changes;
+      });
+    } catch (err: any) {
+      log.warn(`reassignSessionsDirectory failed: ${err.message}`);
+      return 0;
+    }
+  }
+
+  async getSessionDirectory(sessionId: string): Promise<string | null> {
+    try {
+      return await this.withDb((db) => {
+        const row = db.prepare(
+          `SELECT directory FROM session WHERE id = ?`,
+        ).get(sessionId) as { directory?: string } | undefined;
+        return row?.directory ?? null;
+      }, { readonly: true });
+    } catch (err: any) {
+      log.debug(`getSessionDirectory failed for ${sessionId}: ${err.message}`);
+      return null;
     }
   }
 
@@ -919,6 +1131,28 @@ export class AcpService {
       () => this.conn!.extMethod("session/load", { sessionId, cwd, mcpServers }),
     ).catch((err: any) => {
       log.debug(`session/load failed for ${sessionId}: ${err.message}`);
+    });
+  }
+
+  /** Reload MCP tool definitions for an existing session (composer `/` MCP tokens). */
+  async reloadSessionMcps(
+    sessionId: string,
+    cwd: string,
+    projectRoot: string,
+    mcpServerAllowlist: string[],
+  ): Promise<void> {
+    if (!this.conn || mcpServerAllowlist.length === 0) return;
+    const { mcpServers } = this.loadProjectAgentConfig(projectRoot, { mcpServerAllowlist });
+    log.info("Reloading session MCP servers", {
+      sessionId,
+      allowlist: mcpServerAllowlist,
+      loaded: mcpServers.map((s) => s.name),
+    });
+    await this.withNotificationCollector(
+      () => {},
+      () => this.conn!.extMethod("session/load", { sessionId, cwd, mcpServers }),
+    ).catch((err: any) => {
+      log.warn(`session/load (MCP reload) failed for ${sessionId}: ${err.message}`);
     });
   }
 
@@ -939,7 +1173,11 @@ export class AcpService {
           ).all(m.id) as Array<{ id: string; data: string }>;
           const parts = partRows
             .map((p) => JSON.parse(p.data || "{}"))
-            .filter((p: any) => p.type !== "step-start" && p.type !== "step-finish");
+            .filter((p: any) =>
+              p.type !== "step-start"
+              && p.type !== "step-finish"
+              && p.type !== "patch",
+            );
           messages.push({ info: { role: msgData.role || "user" }, parts });
         }
         return messages;

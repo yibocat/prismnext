@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useCallback } from "react";
+import { useEffect, useRef, useMemo, useCallback, useState } from "react";
 import { EditorState, Compartment } from "@codemirror/state";
 import {
   EditorView,
@@ -27,6 +27,7 @@ import { usePermissionStore } from "@/stores/permission-store";
 import { compileCurrentDocument } from "@/stores/compile-store";
 import { createLogger } from "@/services/logger";
 import { ChangesBar } from "./changes-bar";
+import { CodeMirrorInsertHost } from "./codemirror-insert-host";
 import { saveViewerPosition, loadViewerPosition } from "@/lib/editor/viewer-position";
 import { useTabContext } from "@/lib/workspace/tab-context";
 
@@ -37,6 +38,7 @@ const mergeCompartment = new Compartment();
 export function LatexEditor() {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const [viewEpoch, setViewEpoch] = useState(0);
   const isMergeActiveRef = useRef(false);
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -47,6 +49,7 @@ export function LatexEditor() {
 
   const { tab, isActive } = useTabContext();
   const fileId = tab.kind === "file" || tab.kind === "texworkspace" ? tab.fileId : null;
+  const filePath = tab.filePath ?? "";
   const isTexworkspace = tab.kind === "texworkspace";
 
   const refreshFileContent = useDocumentStore((s) => s.refreshFileContent);
@@ -331,6 +334,7 @@ export function LatexEditor() {
 
     const view = new EditorView({ state, parent: containerRef.current });
     viewRef.current = view;
+    setViewEpoch((n) => n + 1);
 
     if (isActive) {
       view.focus();
@@ -553,8 +557,17 @@ export function LatexEditor() {
   }, [insertText]);
 
   return (
-    <div className="flex h-full flex-col min-h-0">
-      {activeChange && (
+    <CodeMirrorInsertHost
+      viewRef={viewRef}
+      filePath={filePath}
+      fileId={fileId ?? undefined}
+      source="editor"
+      sourceTabId={tab.id}
+      enabled={isActive && !!fileId}
+      viewReadySignal={viewEpoch}
+    >
+      <div className="flex h-full flex-col min-h-0">
+        {activeChange && (
         <ChangesBar
           change={activeChange}
           changeIndex={changeIndex}
@@ -575,6 +588,7 @@ export function LatexEditor() {
         />
       )}
       <div ref={containerRef} className="flex-1 overflow-auto [&_.cm-editor]:h-full" />
-    </div>
+      </div>
+    </CodeMirrorInsertHost>
   );
 }

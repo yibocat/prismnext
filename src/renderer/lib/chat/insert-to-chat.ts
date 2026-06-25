@@ -10,16 +10,31 @@ import {
   getTerminalViewportText,
   type TerminalCommandBlock,
 } from "@/lib/terminal/buffer";
+import type { CodeSnippetRequest, ContextInsertRequest } from "@/lib/chat/context-insert";
+import type { GitDiffHunkSnippet } from "@/lib/git/diff-hunk-snippet";
+import { resolveSnippetFilePathFromStore } from "@/lib/files/snippet-file-path";
+import { offsetToLineCol } from "@/lib/editor/selection-anchor";
+import { useComposerEditorStore } from "@/stores/composer-editor-store";
 
 export interface TerminalInsertContext {
   tabId: string;
   isAi?: boolean;
-  /** Override selection (e.g. from xterm directly). */
   selection?: string;
   term?: Terminal | null;
-  /** When true, use last block / viewport if selection is empty. */
   allowFallback?: boolean;
-  /** Suppress success toast (e.g. when triggered from floating action). */
+  quiet?: boolean;
+}
+
+export interface CodeInsertContext {
+  filePath: string;
+  fileId?: string;
+  text: string;
+  startLine: number;
+  endLine: number;
+  startCol?: number;
+  endCol?: number;
+  source: CodeSnippetRequest["source"];
+  sourceTabId?: string;
   quiet?: boolean;
 }
 
@@ -79,6 +94,86 @@ function resolveTerminalSnippet(
   return null;
 }
 
+/** Navigate to Chat and enqueue a context insert for the composer. */
+export function insertContextToChat(req: ContextInsertRequest, options?: { quiet?: boolean }): boolean {
+  const layout = useLayoutStore.getState();
+
+  if (layout.editorMaximized) {
+    useComposerInsertStore.getState().requestInsert(req);
+    layout.requestAiBarComposerFocus();
+    useComposerEditorStore.getState().flushPendingInsert();
+  } else {
+    layout.setLeftSidebarView("sessions");
+    layout.requestCenterExpand();
+    useComposerInsertStore.getState().requestInsert(req);
+    useComposerEditorStore.getState().flushPendingInsert();
+  }
+
+  if (!options?.quiet) {
+    toast.success("Added to Chat");
+  }
+  return true;
+}
+
+/** Insert git diff hunk snippet into the active Chat composer. */
+export function insertGitDiffToChat(
+  snippet: GitDiffHunkSnippet & { sourceTabId?: string; quiet?: boolean },
+): boolean {
+  const { quiet, sourceTabId, ...payload } = snippet;
+  return insertContextToChat(
+    {
+      kind: "git-diff",
+      ...payload,
+      sourceTabId,
+    },
+    { quiet },
+  );
+}
+
+/** Insert editor selection into the active Chat composer. */
+export function insertCodeToChat(ctx: CodeInsertContext): boolean {
+  if (!ctx.text.trim()) {
+    toast.info("Select text in the editor first");
+    return false;
+  }
+
+  const filePath = resolveSnippetFilePathFromStore(ctx.fileId, ctx.filePath);
+
+  return insertContextToChat(
+    {
+      kind: "code",
+      filePath,
+      fileId: ctx.fileId,
+      text: ctx.text,
+      startLine: ctx.startLine,
+      endLine: ctx.endLine,
+      startCol: ctx.startCol,
+      endCol: ctx.endCol,
+      source: ctx.source,
+      sourceTabId: ctx.sourceTabId,
+    },
+    { quiet: ctx.quiet },
+  );
+}
+
+/** Build line range from full document text and selection offsets. */
+export function lineRangeFromSelection(
+  doc: string,
+  from: number,
+  to: number,
+): Pick<CodeInsertContext, "text" | "startLine" | "endLine" | "startCol" | "endCol"> {
+  const text = doc.slice(from, to);
+  const start = offsetToLineCol(doc, from);
+  const end = offsetToLineCol(doc, to);
+  return {
+    text,
+    startLine: start.line,
+    endLine: end.line,
+    startCol: start.col,
+    endCol: end.col,
+  };
+}
+
 /** Insert terminal context into the active Chat composer. */
 export function insertTerminalToChat(ctx: TerminalInsertContext): boolean {
   const payload = resolveTerminalSnippet(ctx);
@@ -87,19 +182,16 @@ export function insertTerminalToChat(ctx: TerminalInsertContext): boolean {
     return false;
   }
 
-  useLayoutStore.getState().setLeftSidebarView("sessions");
-  useLayoutStore.getState().requestCenterExpand();
-  useComposerInsertStore.getState().requestTerminalSnippet({
-    command: payload.command,
-    output: payload.output,
-    exitCode: payload.exitCode,
-    cwd: payload.cwd,
-    sourceTabId: ctx.tabId,
-    selection: ctx.selection,
-  });
-
-  if (!ctx.quiet) {
-    toast.success("Added to Chat");
-  }
-  return true;
+  return insertContextToChat(
+    {
+      kind: "terminal",
+      command: payload.command,
+      output: payload.output,
+      exitCode: payload.exitCode,
+      cwd: payload.cwd,
+      sourceTabId: ctx.tabId,
+      selection: ctx.selection,
+    },
+    { quiet: ctx.quiet },
+  );
 }

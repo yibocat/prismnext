@@ -2,21 +2,23 @@ import { useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import {
   GitBranchIcon,
-  PlusIcon,
-  Trash2Icon,
   Loader2Icon,
   LaptopIcon,
   LockIcon,
+  Trash2Icon,
 } from "lucide-react";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  AppMenu,
+  AppMenuCheckItem,
+  AppMenuContent,
+  AppMenuItem,
+  AppMenuLabel,
+  AppMenuSeparator,
+  AppMenuTrigger,
+} from "@/components/ui/app-menu";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { applyCheckoutTransition } from "@/lib/git/checkout-context";
 import { useGitStore } from "@/stores/git-store";
 import { useChatStore } from "@/stores/chat-store";
 import { cn } from "@/lib/utils";
@@ -31,12 +33,8 @@ export function WorktreeSelector() {
     mode,
     loading,
     refreshWorktrees,
-    setMode,
-    selectExistingWorktree,
     removeWorktree,
   } = useWorktreeStore();
-
-  // ── All hooks must be called unconditionally (React rules of hooks) ──
 
   useEffect(() => {
     if (projectRoot) {
@@ -45,32 +43,33 @@ export function WorktreeSelector() {
   }, [projectRoot, refreshWorktrees]);
 
   const handleSetLocal = useCallback(() => {
-    setMode("local");
-  }, [setMode]);
+    void applyCheckoutTransition({ type: "local" });
+  }, []);
 
   const handleSetNewWorktree = useCallback(async () => {
     const gs = useGitStore.getState();
-    // Ensure git state is loaded before reading the current branch.
-    if (!gs.branch && projectRoot && gs.isGitRepo) {
-      await gs.refreshStatus(projectRoot);
-      await gs.refreshBranches(projectRoot);
+    const wtStore = useWorktreeStore.getState();
+    let baseBranch = wtStore.activeWorktree?.baseBranch ?? null;
+    if (!baseBranch && projectRoot && gs.isGitRepo) {
+      if (!gs.branch) {
+        await gs.refreshStatus(projectRoot);
+        await gs.refreshBranches(projectRoot);
+      }
+      baseBranch = useGitStore.getState().branch;
     }
-    const currentBranch = useGitStore.getState().branch;
-    if (!currentBranch) {
-      toast.error("Cannot determine current branch — is Git initialized?");
+    if (!baseBranch) {
+      toast.error("Cannot determine base branch — is Git initialized?");
       return;
     }
-    // Lazy: worktree is created when the first message is sent.
-    // Progress is shown in-chat while the worktree initialises.
-    setMode("worktree", currentBranch);
-  }, [setMode, projectRoot]);
+    void applyCheckoutTransition({ type: "worktree-intent", baseBranch });
+  }, [projectRoot]);
 
   const handleSelectExisting = useCallback(
     (wtName: string) => {
       const wt = worktrees.find((w) => w.name === wtName);
-      if (wt) selectExistingWorktree(wt);
+      if (wt) void applyCheckoutTransition({ type: "worktree-existing", worktree: wt });
     },
-    [worktrees, selectExistingWorktree],
+    [worktrees],
   );
 
   const handleRemove = useCallback(
@@ -92,11 +91,8 @@ export function WorktreeSelector() {
       ? "New Worktree"
       : "Local";
 
-  // ── Conditional render — only after ALL hooks ──
   if (!isGitRepo) return null;
 
-  // When chat has messages, the worktree mode is locked — show a non-interactive
-  // badge so the user can still see their current context.
   if (hasMessages) {
     return (
       <span
@@ -117,8 +113,8 @@ export function WorktreeSelector() {
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <AppMenu>
+      <AppMenuTrigger asChild>
         <button
           type="button"
           className={cn(
@@ -134,89 +130,71 @@ export function WorktreeSelector() {
           {mode === "local" ? <LaptopIcon className="size-3.5 shrink-0" /> : <GitBranchIcon className="size-3.5 shrink-0" />}
           <span className="max-w-[100px] truncate hidden @md:inline">{triggerLabel}</span>
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-56">
-        {/* Local option */}
-        <DropdownMenuItem
-          onClick={handleSetLocal}
-          className="text-[length:var(--font-chat-meta)]"
-        >
-          <LaptopIcon className="size-3.5" />
-          <span>Local</span>
-          {mode === "local" && (
-            <span className="ml-auto text-[length:var(--font-badge)] text-primary">
-              active
-            </span>
-          )}
-        </DropdownMenuItem>
+      </AppMenuTrigger>
+      <AppMenuContent align="start" className="w-56">
+        <AppMenuCheckItem selected={mode === "local"} onClick={handleSetLocal}>
+          Local
+        </AppMenuCheckItem>
 
-        {/* Existing worktrees — only if any exist */}
         {worktrees.length > 0 && (
           <>
-            <DropdownMenuSeparator />
-            <div className="px-2 py-1 text-[length:var(--font-hint)] text-muted-foreground uppercase tracking-wider">
-              Existing worktrees
-            </div>
+            <AppMenuSeparator />
+            <AppMenuLabel>Existing worktrees</AppMenuLabel>
             {worktrees.map((wt) => (
-              <DropdownMenuItem
+              <AppMenuItem
                 key={wt.name}
                 onClick={() => handleSelectExisting(wt.name)}
-                className="text-[length:var(--font-chat-meta)] group"
+                className="group"
+                trailing={
+                  <span className="flex items-center gap-0.5 shrink-0">
+                    {wt.aheadCount > 0 && (
+                      <span className="text-[length:var(--font-hint)] text-muted-foreground/50">
+                        {wt.aheadCount}↑
+                      </span>
+                    )}
+                    {wt.behindCount > 0 && (
+                      <span
+                        className="text-[length:var(--font-hint)] text-amber-500"
+                        title={`${wt.behindCount} commits behind base`}
+                      >
+                        {wt.behindCount}↓
+                      </span>
+                    )}
+                    {activeWorktree?.name === wt.name && (
+                      <span className="text-[length:var(--font-badge)] text-primary">active</span>
+                    )}
+                    <button
+                      type="button"
+                      className="flex size-4 items-center justify-center rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all"
+                      onClick={(e) => void handleRemove(wt.name, e)}
+                      title={`Remove ${wt.name}`}
+                    >
+                      <Trash2Icon className="size-2.5" />
+                    </button>
+                  </span>
+                }
               >
-                <GitBranchIcon className="size-3.5 shrink-0" />
-                <span className="truncate flex-1">{wt.name}</span>
-                {wt.aheadCount > 0 && (
-                  <span className="text-[length:var(--font-hint)] text-muted-foreground/50 shrink-0 ml-1">
-                    {wt.aheadCount}↑
-                  </span>
-                )}
-                {wt.behindCount > 0 && (
-                  <span
-                    className="text-[length:var(--font-hint)] text-amber-500 shrink-0 ml-0.5"
-                    title={`${wt.behindCount} commits behind base — consider merging main into this worktree first`}
-                  >
-                    {wt.behindCount}↓
-                  </span>
-                )}
-                {activeWorktree?.name === wt.name && (
-                  <span className="text-[length:var(--font-badge)] text-primary shrink-0 ml-1">
-                    active
-                  </span>
-                )}
-                <button
-                  type="button"
-                  className="ml-1 flex size-5 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all"
-                  onClick={(e) => handleRemove(wt.name, e)}
-                  title={`Remove ${wt.name}`}
-                >
-                  <Trash2Icon className="size-3" />
-                </button>
-              </DropdownMenuItem>
+                {wt.name}
+              </AppMenuItem>
             ))}
           </>
         )}
 
-        <DropdownMenuSeparator />
-
-        {/* New Worktree option — sets intent, does NOT create */}
-        <DropdownMenuItem
+        <AppMenuSeparator />
+        <AppMenuItem
           onClick={handleSetNewWorktree}
-          className="text-[length:var(--font-chat-meta)]"
           disabled={loading}
+          trailing={
+            loading ? (
+              <Loader2Icon className="size-3 animate-spin opacity-80" />
+            ) : mode === "worktree" && !isActive ? (
+              <span className="text-[length:var(--font-badge)] text-primary">selected</span>
+            ) : null
+          }
         >
-          {loading ? (
-            <Loader2Icon className="size-3.5 animate-spin" />
-          ) : (
-            <PlusIcon className="size-3.5" />
-          )}
-          <span>New Worktree</span>
-          {mode === "worktree" && !isActive && (
-            <span className="ml-auto text-[length:var(--font-badge)] text-primary">
-              selected
-            </span>
-          )}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          New Worktree
+        </AppMenuItem>
+      </AppMenuContent>
+    </AppMenu>
   );
 }

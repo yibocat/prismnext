@@ -4,7 +4,6 @@ import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
-import { DEFAULT_MANUSCRIPT_DIR } from "@/types/workspace";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import { useGitStore } from "@/stores/git-store";
 import { clearPdfCache, useCompileStore } from "@/stores/compile-store";
@@ -30,35 +29,26 @@ import {
   SkillsSettings,
   WorkspaceSettings,
   TerminalSettings,
+  TexworkspaceSettings,
 } from "@/components/modules/settings";
 import { TemplateCenter } from "@/components/modules/templates/template-center";
 import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator, RestoreUndoBar } from "@/components/modules/chat";
 import { WorktreeSelector } from "@/components/modules/chat/worktree-selector";
 import { BranchSelector } from "@/components/modules/chat/branch-selector";
 import { WorktreeActions } from "@/components/modules/chat/worktree-actions";
+import { isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
 
 
 export function LeftMainArea() {
   useOpenCodeEvents();
 
   const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
+  const checkoutRoot = useDocumentStore((s) => s.checkoutRoot);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const showWorktreeActions = Boolean(
+    activeWorktree || (projectRoot && checkoutRoot && isWorktreeCheckoutPath(checkoutRoot, projectRoot)),
+  );
 
-
-  // When activeWorktree changes (select existing, lazy-init, or move-to-local),
-  // automatically switch the document checkout root so that file operations
-  // and AI edits happen in the correct directory.
-  useEffect(() => {
-    const unsub = useWorktreeStore.subscribe((state, prev) => {
-      if (state.activeWorktree === prev.activeWorktree) return;
-      const docStore = useDocumentStore.getState();
-      const newRoot = state.activeWorktree?.path ?? docStore.projectRoot;
-      if (newRoot && newRoot !== docStore.checkoutRoot) {
-        docStore.switchCheckoutRoot(newRoot);
-      }
-    });
-    return unsub;
-  }, []);
 
   // When manuscript is removed from workspace config, clean up all
   // TeXworkspace state: PDF cache, compile log, and open texworkspace tabs.
@@ -84,6 +74,7 @@ export function LeftMainArea() {
   const sessionId = useChatStore((s) => s.sessionId);
   const isLoadingSession = useChatStore((s) => s.isLoadingSession);
   const showHomepage = messages.length === 0 && !isStreaming && !isLoadingSession;
+  const editorMaximized = useLayoutStore((s) => s.editorMaximized);
 
   useEffect(() => {
     if (sessionId) {
@@ -134,23 +125,13 @@ export function LeftMainArea() {
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   const settingsCategory = useLayoutStore((s) => s.settingsCategory);
 
+  // centerView 型导航项的页面路由：新增入口时在此增加 leftSidebarView 分支
+  // （定义见 left-nav/items.tsx，centerView 字段须与下方判断一致）
   if (leftSidebarView === "templates") {
     return (
       <div className="flex h-full flex-col min-w-0" data-surface="content">
         <TemplateCenter
           onBack={() => useLayoutStore.getState().setLeftSidebarView("sessions")}
-          onUseTemplate={async (template) => {
-            if (!projectRoot) return;
-            await window.electronAPI.templateApply({
-              rootPath: projectRoot,
-              manuscriptDir: useWorkspaceConfigStore.getState().manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR,
-              files: template.files,
-              templateId: template.id,
-              templateCategory: template.category,
-            });
-            useDocumentStore.getState().refreshFiles();
-            useLayoutStore.getState().setLeftSidebarView("sessions");
-          }}
         />
       </div>
     );
@@ -170,16 +151,21 @@ export function LeftMainArea() {
       "tools-mcp": ToolsMcpSettings,
       skills: SkillsSettings,
       compiler: CompilerSettings,
+      texworkspace: TexworkspaceSettings,
       workspace: WorkspaceSettings,
       zotero: ZoteroSettings,
       backups: BackupsSettings,
       logs: LogViewer,
     }[settingsCategory] || GeneralSettings;
-    return <div className="flex h-full flex-col min-w-0" data-surface="content"><SettingsContent /></div>;
+    return (
+      <div className="flex h-full flex-col min-w-0" data-surface="content">
+        <SettingsContent />
+      </div>
+    );
   }
 
   return (
-    <div className="flex h-full flex-col min-w-0 @container select-text" data-surface="content">
+    <div className="flex h-full flex-col min-w-0 @container" data-surface="content">
       <ChatErrorBoundary>
         {showHomepage ? (
           /* ── Homepage ── */
@@ -192,9 +178,11 @@ export function LeftMainArea() {
             </div>
 
             {/* Composer */}
-            <div className="w-full max-w-3xl mx-auto">
-              <ChatComposer />
-            </div>
+            {!editorMaximized && (
+              <div className="w-full max-w-3xl mx-auto">
+                <ChatComposer />
+              </div>
+            )}
             {/* Context bar — matches toolbar height, bottom padding for breathing room */}
             <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-7 px-3 mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
               {/* Placeholder — future: suggested follow-up prompts */}
@@ -213,13 +201,13 @@ export function LeftMainArea() {
             <ChatMessages />
             <RestoreUndoBar />
             {/* Worktree actions above composer — only when worktree is active */}
-            {activeWorktree && (
+            {showWorktreeActions && (
               <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 px-3">
                 <WorktreeActions />
               </div>
             )}
             <div className="w-full max-w-3xl mx-auto">
-              <ChatComposer />
+              {!editorMaximized && <ChatComposer />}
             </div>
             {/* Bottom bar: branch / worktree on left (git only), context ring on right */}
             <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-7 px-3 mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">

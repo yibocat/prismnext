@@ -1,20 +1,58 @@
 import type { Terminal } from "@xterm/xterm";
+import {
+  chipPositionAtSelectionTopRight,
+  type SelectionChipAnchor,
+} from "@/lib/selection-chip-position";
 
-/** Anchor for inline "Add to Chat" — container-local coords, top-right of selection. */
-export interface TerminalSelectionAnchor {
-  top: number;
-  /** Container-local X of the anchor point (button right edge aligns here). */
-  rightX: number;
-}
+export type TerminalSelectionAnchor = SelectionChipAnchor;
 
 /** Pixel anchor for the current xterm selection (first line, trailing edge). */
 export function getTerminalSelectionAnchor(
   term: Terminal,
   container: HTMLElement,
-): TerminalSelectionAnchor | null {
-  const range = term.getSelectionPosition();
+): SelectionChipAnchor | null {
   const text = term.getSelection().trim();
-  if (!range || !text) return null;
+  if (!text) return null;
+
+  const domAnchor = getTerminalSelectionAnchorFromDom(container);
+  if (domAnchor) return domAnchor;
+
+  return getTerminalSelectionAnchorFromCells(term, container);
+}
+
+/** Prefer xterm's rendered selection layer — most accurate. */
+function getTerminalSelectionAnchorFromDom(
+  container: HTMLElement,
+): SelectionChipAnchor | null {
+  const containerBounds = container.getBoundingClientRect();
+  const nodes = container.querySelectorAll(".xterm-selection div");
+
+  let minTop = Infinity;
+  let maxRight = -Infinity;
+  let found = false;
+
+  for (const node of nodes) {
+    const rect = node.getBoundingClientRect();
+    if (rect.width < 1 && rect.height < 1) continue;
+    found = true;
+    minTop = Math.min(minTop, rect.top);
+    maxRight = Math.max(maxRight, rect.right);
+  }
+
+  if (!found) return null;
+
+  return {
+    top: minTop - containerBounds.top,
+    rightX: maxRight - containerBounds.left,
+  };
+}
+
+function getTerminalSelectionAnchorFromCells(
+  term: Terminal,
+  container: HTMLElement,
+): SelectionChipAnchor | null {
+  const range = term.getSelectionPosition();
+  if (!range) return null;
 
   const core = (term as {
     _core?: { _renderService?: { dimensions?: { css?: { cell?: { width?: number; height?: number } } } } };
@@ -48,25 +86,10 @@ export function getTerminalSelectionAnchor(
   };
 }
 
-/** Estimated chip width — keeps clamp stable before paint. */
-export const TERMINAL_SELECTION_CHIP_WIDTH = 132;
-
-/** Place chip inside container; right edge prefers anchor.rightX. */
+/** @deprecated Use chipPositionAtSelectionTopRight */
 export function chipPositionFromAnchor(
-  anchor: TerminalSelectionAnchor,
+  anchor: SelectionChipAnchor,
   container: HTMLElement,
 ): { left: number; top: number } {
-  const pad = 6;
-  const chipW = TERMINAL_SELECTION_CHIP_WIDTH;
-  const chipH = 22;
-  const w = container.clientWidth;
-  const h = container.clientHeight;
-
-  let left = anchor.rightX - chipW;
-  left = Math.max(pad, Math.min(left, w - chipW - pad));
-
-  let top = anchor.top;
-  top = Math.max(pad, Math.min(top, h - chipH - pad));
-
-  return { left, top };
+  return chipPositionAtSelectionTopRight(anchor, container);
 }

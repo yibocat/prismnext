@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo, type RefObject } from "react";
+import { type PanelImperativeHandle } from "react-resizable-panels";
 import { useLayoutStore, type RightToolbarTab } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
@@ -16,8 +17,8 @@ import { TabToolbar } from "@/components/layout/tab-toolbar";
 import { useBrowserStore } from "@/stores/browser-store";
 import { useTerminalStore } from "@/stores/terminal-store";
 import { useGitStore } from "@/stores/git-store";
+import { scheduleGitStatusRefresh } from "@/lib/git/checkout-context";
 import { AiBar } from "@/components/modules/chat";
-import { type PanelImperativeHandle } from "react-resizable-panels";
 import {
   PanelRight,
   MaximizeIcon,
@@ -25,8 +26,8 @@ import {
   Minimize2Icon,
   Maximize2Icon,
   XIcon,
+  ArrowLeftIcon,
 } from "lucide-react";
-import { SIDEBAR_RIGHT_MIN, SIDEBAR_RIGHT_MAX } from "@/styles/constants";
 import {
   computeEffectiveSidebarWidth,
   shouldAutoCloseSplitSidebar,
@@ -34,14 +35,18 @@ import {
   canAutoOpenSplitSidebar,
   RIGHT_AREA_SPLIT_THRESHOLD,
 } from "@/lib/workspace/right-area-sidebar-layout";
+import { SIDEBAR_RIGHT_MIN, SIDEBAR_RIGHT_MAX } from "@/styles/constants";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  AppMenu,
+  AppMenuContent,
+  AppMenuItem,
+  AppMenuTrigger,
+} from "@/components/ui/app-menu";
 import { ChevronsLeftRightEllipsisIcon, LayoutGridIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useOpenSettingsEditorSlot } from "@/hooks/use-settings-editor";
+import { settingsPanelSlotTitle } from "@/lib/settings/settings-panel-slots";
+import { closeSettingsDetailPanel } from "@/lib/workspace/expand-settings-detail-panel";
 
 interface RightAreaProps {
   leftSidebarRef: RefObject<PanelImperativeHandle | null>;
@@ -49,23 +54,26 @@ interface RightAreaProps {
   rightAreaRef: RefObject<PanelImperativeHandle | null>;
 }
 
+const TITLEBAR_BTN =
+  "flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors";
+
 function SidebarDragHandle({
   onResize,
+  getStartWidth,
   isDraggingRef,
   onDragChange,
 }: {
   onResize: (width: number) => void;
-  /** Set to true while the user is actively dragging — used to suppress
-   *  ResizeObserver feedback during drag (prevents state-update loop). */
+  /** Visible sidebar width when drag begins (may be squeezed below stored preference). */
+  getStartWidth: () => number;
   isDraggingRef?: React.MutableRefObject<boolean>;
-  /** Called when drag starts (true) or ends (false) — for overlay/UI state. */
   onDragChange?: (dragging: boolean) => void;
 }) {
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
       const startX = e.clientX;
-      const startWidth = useLayoutStore.getState().rightSidebarWidth;
+      const startWidth = getStartWidth();
 
       if (isDraggingRef) isDraggingRef.current = true;
       if (onDragChange) onDragChange(true);
@@ -74,9 +82,8 @@ function SidebarDragHandle({
       const latestEventRef = { current: null as MouseEvent | null };
 
       const onMouseMove = (ev: MouseEvent) => {
-        // Store the latest event so the RAF callback always uses current mouse position
         latestEventRef.current = ev;
-        if (rafId !== null) return; // Already scheduled for this frame
+        if (rafId !== null) return;
         rafId = requestAnimationFrame(() => {
           rafId = null;
           const latest = latestEventRef.current;
@@ -97,7 +104,7 @@ function SidebarDragHandle({
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [onResize, isDraggingRef, onDragChange],
+    [onResize, getStartWidth, isDraggingRef, onDragChange],
   );
 
   return (
@@ -105,13 +112,30 @@ function SidebarDragHandle({
       className="w-px bg-border hover:bg-foreground/30 transition-colors cursor-col-resize shrink-0 relative group"
       onMouseDown={handleMouseDown}
     >
-      {/* Wider hit area for easier grabbing */}
       <div className="absolute inset-y-0 -left-1 -right-1" />
     </div>
   );
 }
 
-export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightAreaProps) {
+export function RightArea({
+  leftSidebarRef,
+  centerRef,
+  rightAreaRef,
+}: RightAreaProps) {
+  return (
+    <RightAreaWorkspace
+      leftSidebarRef={leftSidebarRef}
+      centerRef={centerRef}
+      rightAreaRef={rightAreaRef}
+    />
+  );
+}
+
+function RightAreaWorkspace({
+  leftSidebarRef,
+  centerRef,
+  rightAreaRef,
+}: RightAreaProps) {
   const { platform, isMaximized, isFullscreen } = useWindowState();
   const isMac = platform === "darwin";
 
@@ -119,6 +143,9 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
   const activeModes = useLayoutStore((s) => s.activeModes);
   const focusedMode = useLayoutStore((s) => s.focusedMode);
+  const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
+  const settingsDetailStacked = useLayoutStore((s) => s.settingsDetailStacked);
+  const settingsCategory = useLayoutStore((s) => s.settingsCategory);
   const toggleMode = useLayoutStore((s) => s.toggleMode);
   const activateMode = useLayoutStore((s) => s.activateMode);
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
@@ -126,11 +153,47 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
   const setRightSidebarOpen = useLayoutStore((s) => s.setRightSidebarOpen);
   const rightSidebarWidth = useLayoutStore((s) => s.rightSidebarWidth);
   const setRightSidebarWidth = useLayoutStore((s) => s.setRightSidebarWidth);
+  const settingsSlot = useOpenSettingsEditorSlot();
+  const hasSettingsEditorTab = useRightPanelStore((s) =>
+    s.tabs.some((t) => t.kind === "settings-editor"),
+  );
+  const inSettings = leftSidebarView === "settings";
+  const settingsEditorOpen = hasSettingsEditorTab;
+  const showSettingsStackedChrome =
+    inSettings && settingsDetailStacked && settingsEditorOpen;
+  const toolbarModes = useMemo(
+    () => modeRegistry.getToolbarModes(inSettings ? "settings" : "workspace"),
+    [inSettings],
+  );
+  const prevCategoryRef = useRef(settingsCategory);
+
+  const slotTitle = settingsPanelSlotTitle(settingsSlot);
+  const stackedToolbarTitle = slotTitle ?? (settingsSlot ? "Editor" : "Settings editor");
+
+  useEffect(() => {
+    if (!inSettings) return;
+    if (prevCategoryRef.current === settingsCategory) return;
+    prevCategoryRef.current = settingsCategory;
+    closeSettingsDetailPanel(centerRef.current, rightAreaRef.current);
+  }, [inSettings, settingsCategory, centerRef, rightAreaRef]);
 
   const tabs = useRightPanelStore((s) => s.tabs);
   const activeTabId = useRightPanelStore((s) => s.activeTabId);
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const isEditorKind = activeTab?.kind === "file" || activeTab?.kind === "texworkspace";
+  const isSettingsEditorTab = activeTab?.kind === "settings-editor";
+  const showTabToolbar =
+    activeTab &&
+    focusedMode !== "dashboard" &&
+    !isSettingsEditorTab;
+  const showModeSidebar =
+    rightSidebarOpen &&
+    focusedMode !== "dashboard" &&
+    !isSettingsEditorTab;
+
+  const closeSettingsPanel = () => {
+    closeSettingsDetailPanel(centerRef.current, rightAreaRef.current);
+  };
 
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
@@ -187,10 +250,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
         useDocumentStore.getState().reloadMetadataFromDisk();
       }
 
-      const gs = useGitStore.getState();
-      if (gs.isGitRepo && gs.unitRoot) {
-        gs.scheduleAutoRefresh(gs.unitRoot);
-      }
+      scheduleGitStatusRefresh();
     });
     return unsubscribe;
   }, []);
@@ -212,7 +272,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
       store.setActiveTab(id);
       // Sync focusedMode to match the clicked tab
       const tab = store.tabs.find((t) => t.id === id);
-      if (tab) {
+      if (tab && tab.kind !== "settings-editor") {
         const def = modeRegistry.findByTabKind(tab.kind);
         if (def) useLayoutStore.getState().setFocusedMode(def.id as RightToolbarTab);
       }
@@ -226,37 +286,41 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
 
   useRightAreaShortcuts(rightAreaExpanded && focusedMode !== "dashboard");
 
-  // ─── Sidebar drag-to-resize ───
   // Same pattern as App.tsx Panel onResize:
   //   - Only save width when >= 30px (preserve last real width on collapse)
   //   - Close sidebar when width drops below 30px
   const COLLAPSE_THRESHOLD = 30;
 
-  // Flag to suppress ResizeObserver while the user is actively dragging the
-  // sidebar handle. Without this, each drag-induced state update triggers a
-  // DOM change, which the ResizeObserver picks up and turns back into another
-  // state update — a feedback loop that doubles the per-frame work.
-  // Dual-track: ref (fast, no re-render) for ResizeObserver suppression;
-  // state (triggers re-render) for the drag overlay that captures mouse
-  // events from the webview's native window.
   const isDraggingSidebar = useRef(false);
   const [sidebarDragActive, setSidebarDragActive] = useState(false);
+  const containerElRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [sidebarFullMode, setSidebarFullMode] = useState(false);
+  const sidebarFullModeRef = useRef(false);
+  useEffect(() => {
+    sidebarFullModeRef.current = sidebarFullMode;
+  }, [sidebarFullMode]);
 
-  const handleSidebarResize = useCallback(
-    (width: number) => {
-      const st = useLayoutStore.getState();
-      if (width >= COLLAPSE_THRESHOLD) {
-        const clamped = Math.max(SIDEBAR_RIGHT_MIN, Math.min(SIDEBAR_RIGHT_MAX, width));
-        st.setRightSidebarWidth(clamped);
-        if (!st.rightSidebarOpen) st.setRightSidebarOpen(true);
-      } else {
-        if (st.rightSidebarOpen) st.setRightSidebarOpen(false);
-      }
-    },
-    [],
-  );
+  const getSidebarDragStartWidth = useCallback(() => {
+    const preferred = useLayoutStore.getState().rightSidebarWidth;
+    if (sidebarFullModeRef.current) return preferred;
+    const cw = containerElRef.current?.clientWidth ?? 0;
+    if (cw <= 0) return preferred;
+    return computeEffectiveSidebarWidth(cw, preferred);
+  }, []);
 
-  // ─── ResizeObserver: sync sidebar width when squeezed by container ───
+  const handleSidebarResize = useCallback((width: number) => {
+    const st = useLayoutStore.getState();
+    if (width >= COLLAPSE_THRESHOLD) {
+      const clamped = Math.max(SIDEBAR_RIGHT_MIN, Math.min(SIDEBAR_RIGHT_MAX, width));
+      st.setRightSidebarWidth(clamped);
+      if (!st.rightSidebarOpen) st.setRightSidebarOpen(true);
+      if (sidebarFullModeRef.current) setSidebarFullMode(false);
+    } else if (st.rightSidebarOpen) {
+      st.setRightSidebarOpen(false);
+    }
+  }, []);
+
   const sidebarElRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -264,21 +328,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
     if (!sidebarEl) return;
 
     const observer = new ResizeObserver((entries) => {
-      // Skip while the user is actively dragging — the drag handler is already
-      // setting the width, and the ResizeObserver would only create a feedback
-      // loop (drag → setState → DOM update → ResizeObserver → setState again).
       if (isDraggingSidebar.current) return;
-
-      // CRITICAL: Never save the sidebar width when in full mode. Full mode
-      // sets the sidebar to 100% of the container, which is NOT a user's
-      // preferred width — it's a layout compromise due to limited space.
-      // Saving this width permanently corrupts the persisted rightSidebarWidth,
-      // making the sidebar excessively wide even after exiting full mode.
-      // This is the root cause of the "sidebar too wide after returning from
-      // Settings" bug: when the RightArea panel collapses (Settings entry),
-      // container ResizeObserver sets fullMode=true; when the panel re-expands,
-      // this sidebar observer fires before fullMode is cleared — capturing the
-      // 100% panel width as if the user wanted it that wide.
       if (sidebarFullModeRef.current) return;
 
       const actualWidth = Math.round(entries[0].contentRect.width);
@@ -287,23 +337,13 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
       if (actualWidth >= COLLAPSE_THRESHOLD) {
         st.setRightSidebarWidth(Math.max(SIDEBAR_RIGHT_MIN, actualWidth));
         if (!st.rightSidebarOpen) st.setRightSidebarOpen(true);
-      } else {
-        if (st.rightSidebarOpen) st.setRightSidebarOpen(false);
+      } else if (st.rightSidebarOpen) {
+        st.setRightSidebarOpen(false);
       }
     });
     observer.observe(sidebarEl);
     return () => observer.disconnect();
   }, []);
-
-  // ─── Narrow container: squeeze split sidebar, then close instantly at threshold.
-  // Full-mode overlay only when the user explicitly toggles open while narrow.
-  const containerElRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState(0);
-  const [sidebarFullMode, setSidebarFullMode] = useState(false);
-  const sidebarFullModeRef = useRef(false);
-  useEffect(() => {
-    sidebarFullModeRef.current = sidebarFullMode;
-  }, [sidebarFullMode]);
 
   const isTooNarrowForSplit = useCallback((width: number) => {
     return width > 0 && width < RIGHT_AREA_SPLIT_THRESHOLD;
@@ -477,6 +517,70 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
 
   return (
     <div className="flex h-full flex-col min-w-0" data-surface="content" data-right-area>
+      {showSettingsStackedChrome ? (
+        <div
+          className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center gap-0.5 select-none px-2 min-w-0"
+          data-surface="content"
+        >
+          <div className="flex items-center gap-0.5 shrink-0">
+            {sidebarFullyCollapsed ? (
+              <SidebarControls
+                leftSidebarRef={leftSidebarRef}
+                showMacSpacer={isMac && !isFullscreen}
+                className="-ml-[1px]"
+              />
+            ) : (
+              isMac && !isFullscreen && <div className="w-[68px]" />
+            )}
+          </div>
+          <div className="flex items-center min-w-0 gap-1 ml-0.5 shrink-0">
+            <button
+              type="button"
+              className={TITLEBAR_BTN}
+              title="Back to settings"
+              onClick={closeSettingsPanel}
+            >
+              <ArrowLeftIcon className="size-3.5" />
+            </button>
+            <ServerStatusDot />
+            <p className="min-w-0 max-w-[14rem] truncate text-[length:var(--font-size-12)] font-medium">
+              {stackedToolbarTitle}
+            </p>
+          </div>
+          <div className="flex-1 min-w-0" />
+          <div className="flex items-center gap-0.5 shrink-0">
+            {!isMac ? (
+              <>
+                <button
+                  type="button"
+                  className={TITLEBAR_BTN}
+                  title="Minimize"
+                  onClick={() => window.electronAPI?.windowMinimize()}
+                >
+                  <Minimize2Icon className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  className={TITLEBAR_BTN}
+                  title={isMaximized ? "Restore" : "Maximize"}
+                  onClick={() => window.electronAPI?.windowMaximize()}
+                >
+                  <Maximize2Icon className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  className={cn(TITLEBAR_BTN, "hover:bg-destructive hover:text-white")}
+                  title="Close"
+                  onClick={() => window.electronAPI?.windowClose()}
+                >
+                  <XIcon className="size-3.5" />
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       {/* Toolbar */}
       <div ref={toolbarRef} className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center gap-0.5 select-none px-2">
         <div className="flex items-center gap-0.5 shrink-0">
@@ -508,8 +612,8 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
         <div className="flex items-center gap-0.5 shrink-0">
         {/* ── Tab overflow dropdown (shown when tabs don't fit) ── */}
         {tabsOverflow && tabs.length > 0 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+          <AppMenu>
+            <AppMenuTrigger asChild>
               <button
                 type="button"
                 className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
@@ -517,32 +621,37 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
               >
                 <ChevronsLeftRightEllipsisIcon className="size-3.5" />
               </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52 max-h-80 overflow-y-auto">
+            </AppMenuTrigger>
+            <AppMenuContent align="end" className="w-52 max-h-80 overflow-y-auto">
               {tabs.map((tab) => (
-                <DropdownMenuItem
+                <AppMenuItem
                   key={tab.id}
                   onClick={() => handleTabSelect(tab.id)}
                   className={cn(
-                    "cursor-pointer gap-2 text-xs group pr-1",
-                    tab.id === activeTabId && "bg-accent font-medium",
+                    "group pr-1",
+                    tab.id === activeTabId && "font-medium",
                   )}
+                  trailing={
+                    <button
+                      type="button"
+                      className="flex size-4 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/10 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleTabClose(tab.id);
+                      }}
+                      title="Close tab"
+                    >
+                      <XIcon className="size-2.5" />
+                    </button>
+                  }
                 >
-                  <span className={cn("truncate flex-1", tab.isPreview && "italic")}>
+                  <span className={cn(tab.isPreview && "italic")}>
                     {tabDisplayTitle(tab, dirtyFileIds)}
                   </span>
-                  <button
-                    type="button"
-                    className="flex size-4 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/10 transition-opacity"
-                    onClick={(e) => { e.stopPropagation(); handleTabClose(tab.id); }}
-                    title="Close tab"
-                  >
-                    <XIcon className="size-2.5" />
-                  </button>
-                </DropdownMenuItem>
+                </AppMenuItem>
               ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </AppMenuContent>
+          </AppMenu>
         )}
 
         {/* Window controls when editorMaximized (ContentTopBar is hidden) */}
@@ -580,8 +689,8 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
 
         {/* ── Mode buttons — collapse to dropdown on narrow windows ── */}
         {compactModes ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+          <AppMenu>
+            <AppMenuTrigger asChild>
               <button
                 type="button"
                 className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -589,30 +698,33 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
               >
                 <LayoutGridIcon className="size-3.5" />
               </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-36">
-              {modeRegistry.getAll().map((mode) => {
+            </AppMenuTrigger>
+            <AppMenuContent align="end" className="min-w-[8.5rem]">
+              {toolbarModes.map((mode) => {
                 const isActive = activeModes.includes(mode.id as RightToolbarTab);
                 const isFocused = focusedMode === mode.id;
                 return (
-                <DropdownMenuItem
-                  key={mode.id}
-                  className={cn(
-                    "flex items-center gap-2 text-[length:var(--font-menu-item)]",
-                    isFocused && "bg-accent",
-                  )}
-                  onClick={() => handleModeClick(mode.id)}
-                >
-                  {mode.icon}
-                  <span>{mode.label}</span>
-                  {isActive && <span className="ml-auto text-[length:var(--font-size-10)] text-muted-foreground">on</span>}
-                </DropdownMenuItem>
+                  <AppMenuItem
+                    key={mode.id}
+                    leading={<span className="[&>svg]:size-3.5 shrink-0">{mode.icon}</span>}
+                    className={cn(isFocused && "font-medium")}
+                    trailing={
+                      isActive ? (
+                        <span className="text-[length:var(--font-size-10)] text-muted-foreground">
+                          on
+                        </span>
+                      ) : null
+                    }
+                    onClick={() => handleModeClick(mode.id)}
+                  >
+                    {mode.label}
+                  </AppMenuItem>
                 );
               })}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </AppMenuContent>
+          </AppMenu>
         ) : (
-          modeRegistry.getAll().map((mode) => {
+          toolbarModes.map((mode) => {
             const isActive = activeModes.includes(mode.id as RightToolbarTab);
             const isFocused = focusedMode === mode.id;
             return (
@@ -687,7 +799,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
       </div>
 
       {/* Tab Toolbar — only shown when a mode is focused and has an active tab */}
-      {activeTab && focusedMode !== "dashboard" && (
+      {showTabToolbar && (
         <TabToolbar
           onToggleSidebar={handleToggleSidebar}
           filePath={activeTab.filePath}
@@ -704,7 +816,7 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
         </TabToolbar>
       )}
 
-      {/* Main Content: flex layout — main expands, sidebar stays fixed width */}
+      {/* Main content: flex layout — main expands, sidebar stays fixed width */}
       <div ref={containerElRef} className="flex flex-1 min-h-0 min-w-0 relative border-t border-border">
         {!sidebarFull && (
           <div className="flex-1 min-w-[150px]">
@@ -712,10 +824,15 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
           </div>
         )}
 
-        {rightSidebarOpen && focusedMode !== "dashboard" && (
+        {showModeSidebar && (
           <>
             {!sidebarFull && (
-              <SidebarDragHandle onResize={handleSidebarResize} isDraggingRef={isDraggingSidebar} onDragChange={setSidebarDragActive} />
+              <SidebarDragHandle
+                onResize={handleSidebarResize}
+                getStartWidth={getSidebarDragStartWidth}
+                isDraggingRef={isDraggingSidebar}
+                onDragChange={setSidebarDragActive}
+              />
             )}
             <div
               ref={sidebarElRef}
@@ -729,13 +846,8 @@ export function RightArea({ leftSidebarRef, centerRef, rightAreaRef }: RightArea
 
         {editorMaximized && <AiBar />}
 
-        {/* Drag overlay: blocks the webview's native surface from intercepting
-            mouse events and prevents frame-by-frame webview resize during
-            sidebar drag — both are expensive per-frame operations that cause jank. */}
         {sidebarDragActive && (
-          <div
-            className="fixed inset-0 z-50 cursor-col-resize"
-          />
+          <div className="fixed inset-0 z-50 cursor-col-resize" />
         )}
       </div>
     </div>

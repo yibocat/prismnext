@@ -5,6 +5,11 @@ import { buildAgentsMdScaffold } from "../services/agents-md-scaffold";
 import { createLogger } from "../services/logger";
 import type { WorkspaceFolder } from "../../renderer/types/workspace";
 import { writeWorkspaceDirs, createConfiguredFolders, validateWorkspaceDirs } from "../services/workspace-config";
+import {
+  assertSafeRelativePath,
+  assertSafeRelativePaths,
+  parseBackupLabelIds,
+} from "../lib/template-path";
 
 const log = createLogger("template-ipc");
 
@@ -47,6 +52,8 @@ export function registerFsHandlers(): void {
     "fs:write",
     async (_event, args: { absPath: string; content: string }) => {
       await fs.writeTexFileContent(args.absPath, args.content);
+      const { scheduleSkillsRefreshFromAgentPath } = await import("../services/project-skills-refresh");
+      scheduleSkillsRefreshFromAgentPath(args.absPath);
     },
   );
 
@@ -61,18 +68,24 @@ export function registerFsHandlers(): void {
         args.relativePath,
         args.content,
       );
+      const { scheduleSkillsRefreshFromAgentPath } = await import("../services/project-skills-refresh");
+      scheduleSkillsRefreshFromAgentPath(absPath);
       return { absPath };
     },
   );
 
   ipcMain.handle("fs:delete", async (_event, args: { absPath: string }) => {
     await fs.deleteFileFromDisk(args.absPath);
+    const { scheduleSkillsRefreshFromAgentPath } = await import("../services/project-skills-refresh");
+    scheduleSkillsRefreshFromAgentPath(args.absPath);
   });
 
   ipcMain.handle(
     "fs:deleteFolder",
     async (_event, args: { absPath: string }) => {
       await fs.deleteFolderFromDisk(args.absPath);
+      const { scheduleSkillsRefreshFromAgentPath } = await import("../services/project-skills-refresh");
+      scheduleSkillsRefreshFromAgentPath(args.absPath);
     },
   );
 
@@ -80,6 +93,9 @@ export function registerFsHandlers(): void {
     "fs:rename",
     async (_event, args: { oldPath: string; newPath: string }) => {
       await fs.renameFileOnDisk(args.oldPath, args.newPath);
+      const { scheduleSkillsRefreshFromAgentPath } = await import("../services/project-skills-refresh");
+      scheduleSkillsRefreshFromAgentPath(args.oldPath);
+      scheduleSkillsRefreshFromAgentPath(args.newPath);
     },
   );
 
@@ -135,11 +151,64 @@ export function registerFsHandlers(): void {
     return { canceled: false, paths: result.filePaths };
   });
 
+  ipcMain.handle(
+    "dialog:openJsonFile",
+    async () => {
+      const win = BrowserWindow.getFocusedWindow();
+      if (!win) {
+        return { canceled: true, path: null as string | null };
+      }
+
+      const result = await dialog.showOpenDialog(win, {
+        properties: ["openFile"],
+        title: "Import commands",
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return { canceled: true, path: null };
+      }
+
+      return { canceled: false, path: result.filePaths[0] };
+    },
+  );
+
+  ipcMain.handle(
+    "dialog:saveJsonFile",
+    async (_event, args: { defaultPath?: string }) => {
+      const win = BrowserWindow.getFocusedWindow();
+      if (!win) {
+        return { canceled: true, path: null as string | null };
+      }
+
+      const result = await dialog.showSaveDialog(win, {
+        title: "Export commands",
+        defaultPath: args.defaultPath ?? "prismnext-commands.json",
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+
+      if (result.canceled || !result.filePath) {
+        return { canceled: true, path: null };
+      }
+
+      return { canceled: false, path: result.filePath };
+    },
+  );
+
   // ─── Path check ───
 
   ipcMain.handle("fs:exists", async (_event, args: { absPath: string }) => {
     const { existsSync } = require("node:fs");
     return existsSync(args.absPath);
+  });
+
+  ipcMain.handle("fs:isFile", async (_event, args: { absPath: string }) => {
+    const { existsSync, statSync } = require("node:fs");
+    try {
+      return existsSync(args.absPath) && statSync(args.absPath).isFile();
+    } catch {
+      return false;
+    }
   });
 
   // ─── Project creation ───
@@ -325,8 +394,8 @@ export function registerFsHandlers(): void {
 
     // Agent config templates — only created if missing, never overwrite
     await createAgentConfig(prismDir);
-    const { syncProjectSkillsIntegration } = await import("../services/skills-sync");
-    syncProjectSkillsIntegration(args.rootPath);
+    const { refreshProjectSkillsIntegration } = await import("../services/project-skills-refresh");
+    await refreshProjectSkillsIntegration(args.rootPath);
 
     // .gitignore — only create if missing
     const gitignorePath = join(prismDir, ".gitignore");
@@ -374,7 +443,7 @@ export function registerFsHandlers(): void {
     return { missing };
   });
 
-  // ─── Template apply (with state tracking) ───
+  // ─── Template apply (staged writes) ───
 
   ipcMain.handle(
     "template:apply",
@@ -388,15 +457,27 @@ export function registerFsHandlers(): void {
         templateCategory: string;
       },
     ) => {
-      const { join } = require("node:path");
-      const { writeFileSync, mkdirSync, readFileSync, existsSync, unlinkSync } = require("node:fs");
+      const { join, dirname } = require("node:path");
+      const {
+        writeFileSync,
+        mkdirSync,
+        readFileSync,
+        existsSync,
+        unlinkSync,
+        copyFileSync,
+        rmSync,
+      } = require("node:fs");
       const { createHash } = require("node:crypto");
+
+      for (const file of args.files) {
+        assertSafeRelativePath(file.path);
+      }
 
       const basePath = join(args.rootPath, args.manuscriptDir);
       const prismDir = join(args.rootPath, ".prismnext");
       const settingsPath = join(prismDir, "settings.json");
+      const stagingDir = join(prismDir, ".template-staging");
 
-      // Read old template state to find orphaned files
       let oldAppliedFiles: Record<string, string> = {};
       let oldSettings: Record<string, unknown>;
       if (existsSync(settingsPath)) {
@@ -404,12 +485,11 @@ export function registerFsHandlers(): void {
         try {
           oldSettings = JSON.parse(raw);
         } catch {
-          // Settings file corrupted — don't lose it, write a backup and throw
           const backupPath = settingsPath + ".corrupted." + Date.now();
           writeFileSync(backupPath, raw, "utf-8");
           throw new Error(
             `Project settings file is corrupted. A backup was saved to ${backupPath}. ` +
-            `Please restore your settings before switching templates.`
+              `Please restore your settings before switching templates.`,
           );
         }
         const oldTemplate = oldSettings.template as Record<string, unknown> | undefined;
@@ -420,52 +500,66 @@ export function registerFsHandlers(): void {
 
       const newFilePaths = new Set(args.files.map((f) => f.path));
 
-      // Remove files from old template that are NOT in the new template
-      for (const oldPath of Object.keys(oldAppliedFiles)) {
-        if (!newFilePaths.has(oldPath)) {
-          const fullPath = join(basePath, oldPath);
-          try {
-            if (existsSync(fullPath)) unlinkSync(fullPath);
-          } catch { /* best effort */ }
-        }
-      }
-
-      // Write new template files
-      const appliedFiles: Record<string, string> = {};
       try {
-        for (const file of args.files) {
-          const fullPath = join(basePath, file.path);
-          const parent = join(fullPath, "..");
-          mkdirSync(parent, { recursive: true });
-          writeFileSync(fullPath, file.content, "utf-8");
+        if (existsSync(stagingDir)) {
+          rmSync(stagingDir, { recursive: true, force: true });
+        }
+        mkdirSync(stagingDir, { recursive: true });
 
-          // Compute hash for change detection
+        for (const file of args.files) {
+          const stagedPath = join(stagingDir, file.path);
+          mkdirSync(dirname(stagedPath), { recursive: true });
+          writeFileSync(stagedPath, file.content, "utf-8");
+        }
+
+        for (const oldPath of Object.keys(oldAppliedFiles)) {
+          if (!newFilePaths.has(oldPath)) {
+            assertSafeRelativePath(oldPath);
+            const fullPath = join(basePath, oldPath);
+            try {
+              if (existsSync(fullPath)) unlinkSync(fullPath);
+            } catch {
+              /* best effort */
+            }
+          }
+        }
+
+        const appliedFiles: Record<string, string> = {};
+        for (const file of args.files) {
+          const stagedPath = join(stagingDir, file.path);
+          const fullPath = join(basePath, file.path);
+          mkdirSync(dirname(fullPath), { recursive: true });
+          copyFileSync(stagedPath, fullPath);
           const hash = createHash("sha256").update(file.content).digest("hex");
           appliedFiles[file.path] = `sha256:${hash}`;
         }
+
+        oldSettings.template = {
+          id: args.templateId,
+          category: args.templateCategory,
+          appliedAt: new Date().toISOString(),
+          appliedFiles,
+        };
+
+        mkdirSync(prismDir, { recursive: true });
+        writeFileSync(settingsPath, JSON.stringify(oldSettings, null, 2), "utf-8");
+
+        log.info("template:apply", {
+          rootPath: args.rootPath,
+          templateId: args.templateId,
+          count: args.files.length,
+        });
+        return { appliedFiles };
       } catch (err) {
-        // If writing fails, don't update settings — old settings still valid
-        log.error("template:apply write failed", { error: String(err) });
+        log.error("template:apply failed", { error: String(err) });
         throw err;
+      } finally {
+        try {
+          if (existsSync(stagingDir)) rmSync(stagingDir, { recursive: true, force: true });
+        } catch {
+          /* ignore */
+        }
       }
-
-      // Update .prismnext/settings.json with template state
-      oldSettings.template = {
-        id: args.templateId,
-        category: args.templateCategory,
-        appliedAt: new Date().toISOString(),
-        appliedFiles,
-      };
-
-      mkdirSync(prismDir, { recursive: true });
-      writeFileSync(settingsPath, JSON.stringify(oldSettings, null, 2), "utf-8");
-
-      log.info("template:apply", {
-        rootPath: args.rootPath,
-        templateId: args.templateId,
-        count: args.files.length,
-      });
-      return { appliedFiles };
     },
   );
 
@@ -539,7 +633,13 @@ export function registerFsHandlers(): void {
     const manifestPath = join(templateDir, "manifest.json");
     if (!existsSync(manifestPath)) return null;
 
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
+    let manifest: Record<string, unknown>;
+    try {
+      manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
+    } catch {
+      log.error("template:get — invalid manifest", { templateId: args.templateId });
+      return null;
+    }
     const filesDir = join(templateDir, "files");
 
     // Recursively read all files
@@ -612,6 +712,7 @@ export function registerFsHandlers(): void {
       const unchanged: string[] = [];
 
       for (const [relativePath, originalHash] of Object.entries(args.appliedFiles)) {
+        assertSafeRelativePath(relativePath);
         const fullPath = join(basePath, relativePath);
         if (!existsSync(fullPath)) {
           deleted.push(relativePath);
@@ -651,10 +752,14 @@ export function registerFsHandlers(): void {
         manuscriptDir: string;
         files: string[];
         backupLabel: string;
+        sourceTemplateId?: string;
+        targetTemplateId?: string;
       },
     ) => {
-      const { join } = require("node:path");
+      const { join, dirname } = require("node:path");
       const { copyFileSync, mkdirSync, writeFileSync, existsSync, rmSync } = require("node:fs");
+
+      assertSafeRelativePaths(args.files);
 
       const basePath = join(args.rootPath, args.manuscriptDir);
       const backupsDir = join(args.rootPath, ".prismnext", "backups");
@@ -694,6 +799,8 @@ export function registerFsHandlers(): void {
           backupLabel: actualLabel,
           timestamp: new Date().toISOString(),
           files: copied,
+          sourceTemplateId: args.sourceTemplateId,
+          targetTemplateId: args.targetTemplateId,
         };
         writeFileSync(join(actualBackupDir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf-8");
       } catch (err) {
@@ -773,6 +880,8 @@ export function registerFsHandlers(): void {
         throw new Error(`Backup manifest is empty or invalid: ${args.backupLabel}`);
       }
 
+      assertSafeRelativePaths(manifestFiles);
+
       const basePath = join(args.rootPath, args.manuscriptDir);
 
       // Read current settings to find stale files to remove
@@ -793,6 +902,7 @@ export function registerFsHandlers(): void {
       // Remove files that exist in current manuscript but NOT in the backup
       for (const oldPath of Object.keys(currentAppliedFiles)) {
         if (!backupFileSet.has(oldPath)) {
+          assertSafeRelativePath(oldPath);
           const fullPath = join(basePath, oldPath);
           try {
             if (existsSync(fullPath)) unlinkSync(fullPath);
@@ -807,6 +917,7 @@ export function registerFsHandlers(): void {
 
       try {
         for (const relativePath of manifestFiles) {
+          assertSafeRelativePath(relativePath);
           const srcPath = join(backupDir, relativePath);
           const destPath = join(basePath, relativePath);
           if (!existsSync(srcPath)) continue;
@@ -831,17 +942,85 @@ export function registerFsHandlers(): void {
         throw err;
       }
 
-      // Update settings.json with restored file hashes
-      if (!settings.template) {
-        settings.template = {};
+      // Update settings.json with restored file hashes and template metadata
+      const labelIds = parseBackupLabelIds(args.backupLabel);
+      const restoredTemplateId: string | undefined =
+        manifest.sourceTemplateId ?? labelIds.sourceTemplateId;
+      const { app } = require("electron");
+      const templatesDir = app.isPackaged
+        ? join(process.resourcesPath, "resources", "templates")
+        : join(app.getAppPath(), "resources", "templates");
+
+      const resolveCategory = (templateId: string): string | undefined => {
+        const mPath = join(templatesDir, templateId, "manifest.json");
+        if (!existsSync(mPath)) return undefined;
+        try {
+          const m = JSON.parse(readFileSync(mPath, "utf-8"));
+          return typeof m.category === "string" ? m.category : undefined;
+        } catch {
+          return undefined;
+        }
+      };
+
+      if (restoredTemplateId) {
+        if (!settings.template || typeof settings.template !== "object") {
+          settings.template = {};
+        }
+        const tmpl = settings.template as Record<string, unknown>;
+        tmpl.id = restoredTemplateId;
+        const cat = resolveCategory(restoredTemplateId);
+        if (cat) tmpl.category = cat;
+        tmpl.appliedFiles = newAppliedFiles;
+        tmpl.appliedAt = new Date().toISOString();
+      } else if (!manifest.sourceTemplateId && !labelIds.sourceTemplateId) {
+        // first-use style backup — restored user content before any template id
+        delete settings.template;
+      } else {
+        if (!settings.template) {
+          settings.template = {};
+        }
+        (settings.template as Record<string, unknown>).appliedFiles = newAppliedFiles;
+        (settings.template as Record<string, unknown>).appliedAt = new Date().toISOString();
       }
-      (settings.template as Record<string, unknown>).appliedFiles = newAppliedFiles;
-      (settings.template as Record<string, unknown>).appliedAt = new Date().toISOString();
+
       mkdirSync(prismDir, { recursive: true });
       writeFileSync(settingsPath, JSON.stringify(settings, null, 2), "utf-8");
 
       log.info("template:restoreBackup", { backupLabel: args.backupLabel, restored: restored.length });
       return { restored };
+    },
+  );
+
+  // ─── Template backup delete ───
+
+  ipcMain.handle(
+    "template:deleteBackup",
+    async (
+      _event,
+      args: { rootPath: string; backupLabel: string },
+    ) => {
+      const { join, resolve, relative, isAbsolute } = require("node:path");
+      const { existsSync, rmSync } = require("node:fs");
+
+      const label = args.backupLabel;
+      if (!label || label.includes("/") || label.includes("\\") || label.includes("..")) {
+        throw new Error(`Invalid backup label: ${label}`);
+      }
+
+      const backupsDir = join(args.rootPath, ".prismnext", "backups");
+      const backupDir = join(backupsDir, label);
+      const rel = relative(resolve(backupsDir), resolve(backupDir));
+      if (!rel || rel.startsWith("..") || isAbsolute(rel)) {
+        throw new Error(`Invalid backup path: ${label}`);
+      }
+
+      if (!existsSync(backupDir)) {
+        throw new Error(`Backup not found: ${label}`);
+      }
+
+      rmSync(backupDir, { recursive: true, force: true });
+      log.info("template:deleteBackup", { backupLabel: label });
+      return { deleted: true };
     },
   );
 

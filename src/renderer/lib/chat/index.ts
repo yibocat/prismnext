@@ -3,4 +3,5 @@ export * from "./composer-parts";
 export * from "./composer-attach-file";
 export * from "./session-title";
 export * from "./insert-to-chat";
+export * from "./context-insert";
 export * from "./preserve-viewport-anchor";

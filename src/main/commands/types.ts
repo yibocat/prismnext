@@ -34,6 +34,7 @@ export interface CreateCommandPayload {
   name: string;
   description: string;
   template: string;
+  action?: string;
   agent?: string;
   model?: string;
 }
@@ -43,6 +44,8 @@ export interface UpdateCommandPayload {
   name?: string;
   description?: string;
   template?: string;
+  /** Set to empty string to clear action */
+  action?: string;
   agent?: string;
   model?: string;
 }

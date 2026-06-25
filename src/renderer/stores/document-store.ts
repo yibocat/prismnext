@@ -4,16 +4,21 @@ import { AUTO_SAVE_DELAY } from "@/styles/constants";
 import { createLogger } from "@/services/logger";
 
 const log = createLogger("document-store", "startup");
+
+/** Monotonic id so stale async openProject work is discarded after a newer open. */
+let openProjectGeneration = 0;
 import { useProjectStore } from "./project-store";
 import { useRightPanelStore } from "./right-panel-store";
 import { useLayoutStore } from "./layout-store";
-import { useChatStore } from "./chat-store";
-import { useSettingsStore } from "./settings-store";
 import { useWorktreeStore } from "./worktree-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
-import { clearPdfCache } from "./compile-store";
 import { externalFileId } from "@/lib/files/external-file";
-import { trackRecentOpenedFile } from "@/lib/files/recent-files";
+import {
+  isLazyProjectFilePath,
+  resolveProjectRelativePath,
+} from "@/lib/files/project-path";
+import { trackRecentOpenedFile, getProjectLastActiveFileId } from "@/lib/files/recent-files";
+import { resetApplicationStateForProjectSwitch } from "@/lib/workspace/project-lifecycle";
 
 export type ProjectFileType = "tex" | "image" | "pdf" | "bib" | "style" | "other";
 
@@ -76,6 +81,8 @@ interface DocumentState {
   closeProject: () => Promise<void>;
   /** Open a file for editing — loads content from disk if not already cached */
   openFile: (id: string) => Promise<void>;
+  /** Register metadata for a hidden `.prismnext/` file not in the file tree scan */
+  ensureLazyProjectFileMeta: (relativePath: string) => Promise<boolean>;
   /** Open a file outside the project root */
   openExternalFile: (absolutePath: string, opts?: { pin?: boolean }) => Promise<void>;
   /** Register external path for @mention / context without opening a tab */
@@ -232,23 +239,13 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   // ─── Project Management ───
 
   openProject: async (rootPath: string) => {
-    // Re-entrancy guard: prevent concurrent openProject calls from corrupting state
-    if (get().isOpeningProject) return;
+    const generation = ++openProjectGeneration;
     const t0 = performance.now();
     set({ isOpeningProject: true });
     try {
       const t1 = performance.now();
-      await window.electronAPI.chatDispose();
-      void window.electronAPI.terminalDestroyAllAiPty();
-      useRightPanelStore.getState().closeAllTabs();
-      useChatStore.getState().clearAllSessions();
-      useLayoutStore.getState().setLeftSidebarView("sessions");
-      useLayoutStore.getState().setLeftSidebarOverlay(false);
-      useLayoutStore.getState().setRightSidebarOpen(false);
-      useLayoutStore.setState({ showArchived: false });
-      clearPdfCache();
-      (await import("./changes-store")).useChangesStore.getState().clearAll();
-      useWorktreeStore.getState().clearAll();
+      await resetApplicationStateForProjectSwitch();
+      if (generation !== openProjectGeneration) return;
       console.log(`[openProject] cleanup: ${Math.round(performance.now() - t1)}ms`);
 
       const t2 = performance.now();
@@ -260,12 +257,14 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       // Session creation is NOT done here — sessions are created on first
       // prompt to avoid polluting the session list with empty entries.
       window.electronAPI.chatPrewarm(rootPath).then(() => {
+        if (generation !== openProjectGeneration) return;
         import("./command-store").then(({ useCommandStore }) => {
           useCommandStore.getState().reloadCommands();
         });
       }).catch(() => {});
 
       const result = await window.electronAPI.fsScanMetadata(rootPath);
+      if (generation !== openProjectGeneration) return;
       console.log(`[openProject] fsScanMetadata: ${Math.round(performance.now() - t2)}ms`);
       const files: ProjectFile[] = result.files.map((f) => ({
         id: f.relativePath,
@@ -303,15 +302,17 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         folders: result.folders,
         activeFileId: null,
         fileMetadata,
+        openedContents: new Map(),
         initialized: true,
       });
 
       // Load workspace configuration
       const workspaceStore = useWorkspaceConfigStore.getState();
       await workspaceStore.loadConfig(rootPath);
+      if (generation !== openProjectGeneration) return;
 
       // ── Smart expand: only expand folders on the path to the last active file ──
-      const { lastActiveFileId } = useSettingsStore.getState().settings;
+      const lastActiveFileId = getProjectLastActiveFileId(rootPath);
       if (lastActiveFileId) {
         const parts = lastActiveFileId.split("/");
         const ancestors: string[] = [];
@@ -342,26 +343,21 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       toast.error(`Failed to open project: ${error}`);
       throw error;
     } finally {
-      const ms = Math.round(performance.now() - t0);
-      console.log(`[openProject] total: ${ms}ms  (${rootPath})`);
-      log.info("openProject complete", { durationMs: ms, path: rootPath });
-      set({ isOpeningProject: false });
+      if (generation === openProjectGeneration) {
+        const ms = Math.round(performance.now() - t0);
+        console.log(`[openProject] total: ${ms}ms  (${rootPath})`);
+        log.info("openProject complete", { durationMs: ms, path: rootPath });
+        set({ isOpeningProject: false });
+      }
     }
   },
 
   closeProject: async () => {
+    openProjectGeneration++;
     clearAutoSaveTimer();
     // Clear last project path so next launch shows welcome page
     window.electronAPI.settingsSet({ lastProjectPath: null } as any);
-    // Clean up sub-stores to prevent session/tab pollution
-    await window.electronAPI.chatDispose();
-    void window.electronAPI.terminalDestroyAllAiPty();
-    useRightPanelStore.getState().closeAllTabs();
-    useChatStore.getState().clearAllSessions();
-    clearPdfCache();
-    import("./changes-store").then((m) => m.useChangesStore.getState().clearAll());
-    useWorktreeStore.getState().clearAll();
-    useWorkspaceConfigStore.getState().reset();
+    await resetApplicationStateForProjectSwitch();
     set({
       projectRoot: null,
       checkoutRoot: null,
@@ -389,8 +385,13 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     }
 
     // Need to load from disk
-    const meta = fileMetadata.get(id);
-    if (!meta) return;
+    let meta = fileMetadata.get(id);
+    if (!meta) {
+      const registered = await get().ensureLazyProjectFileMeta(id);
+      if (!registered) return;
+      meta = get().fileMetadata.get(id);
+      if (!meta) return;
+    }
 
     try {
       if (meta.type === "image") {
@@ -406,6 +407,39 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       }
     } catch {
       set({ activeFileId: id });
+    }
+  },
+
+  ensureLazyProjectFileMeta: async (relativePath: string): Promise<boolean> => {
+    const { fileMetadata, projectRoot } = get();
+    if (fileMetadata.has(relativePath)) return true;
+    if (!projectRoot || !isLazyProjectFilePath(relativePath)) return false;
+
+    const abs = resolveProjectRelativePath(projectRoot, relativePath);
+    if (!abs) return false;
+
+    try {
+      const exists = await window.electronAPI.fsExists(abs);
+      if (!exists) return false;
+      const isFile = await window.electronAPI.fsIsFile(abs);
+      if (!isFile) return false;
+
+      const name = relativePath.split("/").pop() || relativePath;
+      const { type } = inferFromExtension(name);
+      const meta: FileMeta = {
+        relativePath,
+        absolutePath: abs,
+        name,
+        type,
+      };
+
+      const newMetadata = new Map(get().fileMetadata);
+      newMetadata.set(relativePath, meta);
+      set({ fileMetadata: newMetadata });
+      void trackRecentOpenedFile(relativePath, name);
+      return true;
+    } catch {
+      return false;
     }
   },
 
@@ -515,11 +549,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       // Suppress watcher reload during the refresh window to prevent
       // the save→git→watcher→reload cascade.
       markSuppressWatcherReload();
-      import("./git-store").then(({ useGitStore }) => {
-        const gs = useGitStore.getState();
-        if (gs.isGitRepo && gs.unitRoot) {
-          gs.scheduleAutoRefresh(gs.unitRoot);
-        }
+      import("@/lib/git/git-refresh-root").then(({ scheduleGitStatusRefresh }) => {
+        scheduleGitStatusRefresh();
       });
     } else {
       set({ isSaving: false });
@@ -540,7 +571,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     try {
       const wtState = useWorktreeStore.getState();
       if (wtState.activeWorktree && wtState.activeWorktree.path === newRoot) {
-        const cached = wtState.getCachedTree(wtState.activeWorktree.name);
+        const cached = wtState.getCachedTree(wtState.activeWorktree.path);
         if (cached) {
           // Use cached metadata — instant file tree
           const { files, folders } = cached;
@@ -1000,12 +1031,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       });
 
       // Trigger git refresh — new file may show as untracked
-      import("./git-store").then(({ useGitStore }) => {
-        const gs = useGitStore.getState();
-        if (gs.isGitRepo && gs.unitRoot) {
-          markSuppressWatcherReload();
-          gs.refreshStatus(gs.unitRoot);
-        }
+      import("@/lib/git/git-refresh-root").then(({ refreshGitStatusNow }) => {
+        markSuppressWatcherReload();
+        refreshGitStatusNow();
       });
     } catch (error) {
       toast.error(`Failed to create file: ${error}`);
@@ -1061,12 +1089,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       });
 
       // Trigger git refresh — deleted file changes git status
-      import("./git-store").then(({ useGitStore }) => {
-        const gs = useGitStore.getState();
-        if (gs.isGitRepo && gs.unitRoot) {
-          markSuppressWatcherReload();
-          gs.refreshStatus(gs.unitRoot);
-        }
+      import("@/lib/git/git-refresh-root").then(({ refreshGitStatusNow }) => {
+        markSuppressWatcherReload();
+        refreshGitStatusNow();
       });
     } catch (error) {
       toast.error(`Failed to delete file: ${error}`);
@@ -1126,12 +1151,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       });
 
       // Trigger git refresh — deleted files change git status
-      import("./git-store").then(({ useGitStore }) => {
-        const gs = useGitStore.getState();
-        if (gs.isGitRepo && gs.unitRoot) {
-          markSuppressWatcherReload();
-          gs.refreshStatus(gs.unitRoot);
-        }
+      import("@/lib/git/git-refresh-root").then(({ refreshGitStatusNow }) => {
+        markSuppressWatcherReload();
+        refreshGitStatusNow();
       });
 
       // Workspace config sync is handled by files-sidebar.tsx before
@@ -1199,12 +1221,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       });
 
       // Trigger git refresh — renamed file may show as renamed/moved
-      import("./git-store").then(({ useGitStore }) => {
-        const gs = useGitStore.getState();
-        if (gs.isGitRepo && gs.unitRoot) {
-          markSuppressWatcherReload();
-          gs.refreshStatus(gs.unitRoot);
-        }
+      import("@/lib/git/git-refresh-root").then(({ refreshGitStatusNow }) => {
+        markSuppressWatcherReload();
+        refreshGitStatusNow();
       });
     } catch (error) {
       toast.error(`Failed to rename file: ${error}`);
@@ -1298,12 +1317,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       });
 
       // Trigger git refresh — renamed files change git status
-      import("./git-store").then(({ useGitStore }) => {
-        const gs = useGitStore.getState();
-        if (gs.isGitRepo && gs.unitRoot) {
-          markSuppressWatcherReload();
-          gs.refreshStatus(gs.unitRoot);
-        }
+      import("@/lib/git/git-refresh-root").then(({ refreshGitStatusNow }) => {
+        markSuppressWatcherReload();
+        refreshGitStatusNow();
       });
     } catch (error) {
       toast.error(`Failed to rename folder: ${error}`);

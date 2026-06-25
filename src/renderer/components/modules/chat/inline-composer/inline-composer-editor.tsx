@@ -18,24 +18,35 @@ import type { ComposerPart } from "@/lib/chat/composer-parts";
 import {
   createTokenId,
   insertedTextTriggersLinkify,
+  isComposerEmpty,
   parseTextToComposerParts,
 } from "@/lib/chat/composer-parts";
-import { partsToDoc } from "./serialize";
+import { partsToDoc, stripTokenSeparators } from "./serialize";
 import {
-  atomicTokenDelete,
+  atomicTokenBackspace,
+  atomicTokenDeleteForward,
   insertComposerToken,
   insertComposerParts,
   linkifyViewIfNeeded,
   readPartsFromView,
+  repairComposerDocIfNeeded,
+  composerTokenTransactionFilter,
+  composerTokenAtomicRanges,
   setTokenMapEffect,
+  selectionAfterDocReplace,
   syncTokenMapFromParts,
   tokenDecorationsField,
   tokenMapStateField,
 } from "./token-field";
 import { detectQueryAtCursor, type ComposerQuery } from "./query";
-import { MentionDropdown, SlashCommandDropdown } from "./composer-dropdown";
-import { anchorFromCoords } from "./dropdown-position";
+import { MentionDropdown, SlashCommandDropdown, buildSlashOptions, type SlashCatalogMcp, type SlashCatalogSkill, type SlashOption } from "./composer-dropdown";
 import type { CursorAnchor } from "./dropdown-position";
+import { useComposerEditorStore } from "@/stores/composer-editor-store";
+import { compactComposerNeedsExpand } from "./compact-overflow";
+import { syncComposerQueryState } from "./composer-query-sync";
+import { loadDraftParts } from "./draft-utils";
+import { useChatStore } from "@/stores/chat-store";
+import type { Extension } from "@codemirror/state";
 
 function collectInsertedText(changes: import("@codemirror/state").ChangeSet): string {
   let text = "";
@@ -55,10 +66,13 @@ const composerTheme = EditorView.theme({
     minHeight: "48px",
     maxHeight: "160px",
     fontFamily: "inherit",
-    caretColor: "var(--foreground)",
+    caretColor: "transparent",
+    lineHeight: "20px",
   },
   ".cm-line": {
     padding: "0",
+    lineHeight: "20px",
+    minHeight: "20px",
   },
   ".cm-scroller": {
     overflow: "auto",
@@ -68,17 +82,105 @@ const composerTheme = EditorView.theme({
     outline: "none",
   },
   ".cm-cursor": {
+    borderLeftWidth: "1.5px",
     borderLeftColor: "var(--foreground)",
   },
-  ".inline-composer-token": {
-    verticalAlign: "baseline",
+  ".cm-dropCursor": {
+    display: "none !important",
+  },
+  ".cm-cursorLayer > .cm-cursor ~ .cm-cursor": {
+    display: "none !important",
+  },
+  "&:not(.cm-focused) .cm-cursor": {
+    display: "none !important",
   },
 });
+
+const composerInlineTokenTheme = EditorView.theme({
+  ".inline-composer-token": {
+    display: "inline-flex",
+    verticalAlign: "middle",
+    alignItems: "center",
+    height: "20px",
+    lineHeight: "20px",
+    marginInline: "1px",
+  },
+  ".inline-composer-token [data-inline-token]": {
+    fontSize: "12px",
+    padding: "0 5px",
+    height: "18px",
+    lineHeight: "18px",
+    gap: "2px",
+    borderRadius: "3px",
+  },
+  ".inline-composer-token [data-inline-token] svg": {
+    width: "10px",
+    height: "10px",
+  },
+});
+
+const COMPACT_LINE_HEIGHT = "24px";
+
+const composerCompactTheme = EditorView.theme({
+  "&.cm-editor": {
+    backgroundColor: "transparent",
+    fontSize: "var(--font-composer)",
+    maxHeight: COMPACT_LINE_HEIGHT,
+  },
+  ".cm-content": {
+    padding: "0",
+    minHeight: COMPACT_LINE_HEIGHT,
+    maxHeight: COMPACT_LINE_HEIGHT,
+    lineHeight: COMPACT_LINE_HEIGHT,
+    caretColor: "var(--foreground)",
+    fontFamily: "inherit",
+  },
+  ".cm-line": {
+    padding: "0",
+    lineHeight: COMPACT_LINE_HEIGHT,
+  },
+  ".cm-scroller": {
+    overflow: "hidden",
+    maxHeight: COMPACT_LINE_HEIGHT,
+    lineHeight: COMPACT_LINE_HEIGHT,
+    fontFamily: "inherit",
+  },
+  ".cm-cursor, .cm-dropCursor, .cm-cursorLayer, .cm-cursor-secondary": {
+    display: "none !important",
+  },
+  "&.cm-focused .cm-cursor": {
+    display: "block !important",
+    borderLeftWidth: "1.5px",
+    borderLeftColor: "var(--foreground)",
+  },
+  "&.cm-focused .cm-selectionBackground, & .cm-selectionBackground": {
+    backgroundColor: "transparent !important",
+  },
+});
+
+function densityExtensions(density: "default" | "compact", placeholderText: string): Extension[] {
+  if (density === "compact") {
+    // Overlay placeholder in React — CM placeholder widget draws a phantom cursor at line end.
+    return [composerCompactTheme];
+  }
+  return [composerTheme, EditorView.lineWrapping, cmPlaceholder(placeholderText)];
+}
+
+function selectionExtensions(density: "default" | "compact"): Extension[] {
+  if (density === "compact") {
+    // Native caret only — avoids duplicate / dashed drawSelection cursors in single-line capsule.
+    return [];
+  }
+  return [drawSelection({ drawRangeCursor: false })];
+}
 
 export interface InlineComposerEditorHandle {
   focus: () => void;
   getParts: () => ComposerPart[];
   insertFileMention: (file: ProjectFile) => void;
+  /** Insert a context token from RightArea (terminal, editor, git diff, …). */
+  insertContextPart: (part: Exclude<ComposerPart, { type: "text" }>) => boolean;
+  /** @deprecated Use insertContextPart */
   insertTerminalSnippet: (part: ComposerPart) => void;
 }
 
@@ -90,14 +192,20 @@ export interface InlineComposerEditorProps {
   profiles: AgentProfileInfo[];
   files: ProjectFile[];
   searchCommands: (query: string) => CommandDef[];
+  slashSkills: SlashCatalogSkill[];
+  slashMcps: SlashCatalogMcp[];
   onEnter?: () => void;
+  /** Compact single-line styling for AiBar capsule. */
+  density?: "default" | "compact";
+  /** AiBar compact → expanded when a line is full or content wraps. */
+  onLayoutExpand?: () => void;
 }
 
 function insertFromDropdown(
   view: EditorView,
   q: ComposerQuery,
   mentionOptions: ReturnType<typeof buildMentionOptions>,
-  slashCommands: CommandDef[],
+  slashOptions: SlashOption[],
   index: number,
 ): void {
   if (q.kind === "mention") {
@@ -134,17 +242,49 @@ function insertFromDropdown(
     return;
   }
 
-  const cmd = slashCommands[index];
-  if (!cmd) return;
+  const option = slashOptions[index];
+  if (!option) return;
+
+  if (option.kind === "command") {
+    const cmd = option.command;
+    insertComposerToken(
+      view,
+      {
+        type: "command",
+        id: createTokenId(),
+        label: cmd.name,
+        commandName: cmd.name,
+        action: cmd.action,
+        source: cmd.source,
+      },
+      q.from,
+      q.to,
+    );
+    return;
+  }
+
+  if (option.kind === "skill") {
+    insertComposerToken(
+      view,
+      {
+        type: "skill",
+        id: createTokenId(),
+        label: option.skill.name,
+        skillId: option.skill.id,
+      },
+      q.from,
+      q.to,
+    );
+    return;
+  }
+
   insertComposerToken(
     view,
     {
-      type: "command",
+      type: "mcp",
       id: createTokenId(),
-      label: cmd.name,
-      commandName: cmd.name,
-      action: cmd.action,
-      source: cmd.source,
+      label: option.mcp.name,
+      serverName: option.mcp.name,
     },
     q.from,
     q.to,
@@ -184,24 +324,52 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       profiles,
       files,
       searchCommands,
+      slashSkills,
+      slashMcps,
       onEnter,
+      density = "default",
+      onLayoutExpand,
     },
     ref,
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
     const editableCompartmentRef = useRef(new Compartment());
+    const densityCompartmentRef = useRef(new Compartment());
+    const selectionCompartmentRef = useRef(new Compartment());
+    const densityRef = useRef(density);
+    densityRef.current = density;
     const onChangeRef = useRef(onChange);
     onChangeRef.current = onChange;
     const onEnterRef = useRef(onEnter);
     onEnterRef.current = onEnter;
+    const onLayoutExpandRef = useRef(onLayoutExpand);
+    onLayoutExpandRef.current = onLayoutExpand;
     const profilesRef = useRef(profiles);
     profilesRef.current = profiles;
     const filesRef = useRef(files);
     filesRef.current = files;
     const searchCommandsRef = useRef(searchCommands);
     searchCommandsRef.current = searchCommands;
+    const slashSkillsRef = useRef(slashSkills);
+    slashSkillsRef.current = slashSkills;
+    const slashMcpsRef = useRef(slashMcps);
+    slashMcpsRef.current = slashMcps;
 
+    /** Mouse hover disabled while using arrow keys — scrollIntoView can fake-enter row 0. */
+    const pointerHoverEnabledRef = useRef(false);
+
+    const enableDropdownPointerHover = useCallback(() => {
+      pointerHoverEnabledRef.current = true;
+    }, []);
+
+    const disableDropdownPointerHover = useCallback(() => {
+      pointerHoverEnabledRef.current = false;
+    }, []);
+
+    const canHoverDropdownItem = useCallback(() => pointerHoverEnabledRef.current, []);
+
+    const [editorFocused, setEditorFocused] = useState(false);
     const [activeQuery, setActiveQuery] = useState<ComposerQuery | null>(null);
     const [dropdownIndex, setDropdownIndex] = useState(0);
     const [dropdownAnchor, setDropdownAnchor] = useState<CursorAnchor | null>(null);
@@ -210,38 +378,77 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
     const dropdownIndexRef = useRef(dropdownIndex);
     dropdownIndexRef.current = dropdownIndex;
 
+    const syncQuery = useCallback((view: EditorView) => {
+      const query = syncComposerQueryState(view, setActiveQuery, setDropdownAnchor);
+      activeQueryRef.current = query;
+      return query;
+    }, []);
+
+    const clearQuery = useCallback(() => {
+      activeQueryRef.current = null;
+      setActiveQuery(null);
+      setDropdownAnchor(null);
+    }, []);
+
+    const maybeExpandCompactLayout = useCallback((view: EditorView) => {
+      if (densityRef.current !== "compact") return;
+      if (!onLayoutExpandRef.current) return;
+      requestAnimationFrame(() => {
+        if (densityRef.current !== "compact") return;
+        const available = containerRef.current?.clientWidth ?? view.scrollDOM.clientWidth;
+        if (compactComposerNeedsExpand(view, available)) {
+          onLayoutExpandRef.current?.();
+        }
+      });
+    }, []);
+
+    const handleDropdownHover = useCallback((index: number) => {
+      if (!pointerHoverEnabledRef.current) return;
+      setDropdownIndex(index);
+    }, []);
+
+    const showDropdown = editorFocused && activeQuery !== null;
+    const isEmpty = useMemo(() => isComposerEmpty(parts), [parts]);
+
     const mentionOptions = useMemo(() => {
       if (!activeQuery || activeQuery.kind !== "mention") return [];
       return buildMentionOptions(activeQuery.query, profiles, files);
     }, [activeQuery, profiles, files]);
 
-    const slashCommands = useMemo(() => {
+    const slashOptions = useMemo(() => {
       if (!activeQuery || activeQuery.kind !== "slash") return [];
-      return searchCommands(activeQuery.query);
-    }, [activeQuery, searchCommands]);
+      return buildSlashOptions(
+        activeQuery.query,
+        searchCommands(activeQuery.query),
+        slashSkills,
+        slashMcps,
+      );
+    }, [activeQuery, searchCommands, slashSkills, slashMcps]);
 
     const dropdownCount =
-      activeQuery?.kind === "mention" ? mentionOptions.length : slashCommands.length;
+      activeQuery?.kind === "mention" ? mentionOptions.length : slashOptions.length;
+
+    const clampedDropdownIndex =
+      dropdownCount > 0 ? Math.min(dropdownIndex, dropdownCount - 1) : 0;
+
+    useEffect(() => {
+      if (dropdownCount > 0 && dropdownIndex >= dropdownCount) {
+        setDropdownIndex(dropdownCount - 1);
+      }
+    }, [dropdownCount, dropdownIndex]);
 
     useEffect(() => {
       setDropdownIndex(0);
-    }, [activeQuery?.kind, activeQuery?.query]);
-
-    const updateDropdownPosition = useCallback((view: EditorView) => {
-      const cursor = view.state.selection.main.head;
-      const coords = view.coordsAtPos(cursor);
-      if (!coords) return;
-      setDropdownAnchor(anchorFromCoords(coords));
-    }, []);
+      disableDropdownPointerHover();
+    }, [activeQuery?.kind, activeQuery?.query, disableDropdownPointerHover]);
 
     const emitChange = useCallback((view: EditorView) => {
       onChangeRef.current(readPartsFromView(view));
     }, []);
 
     const closeDropdown = useCallback(() => {
-      activeQueryRef.current = null;
-      setActiveQuery(null);
-    }, []);
+      clearQuery();
+    }, [clearQuery]);
 
     const insertAtQuery = useCallback(
       (part: Exclude<ComposerPart, { type: "text" }>) => {
@@ -284,39 +491,66 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       [insertAtQuery],
     );
 
-    const insertCommand = useCallback(
-      (cmd: CommandDef) => {
+    const insertSlashOption = useCallback(
+      (option: SlashOption) => {
+        if (option.kind === "command") {
+          const cmd = option.command;
+          insertAtQuery({
+            type: "command",
+            id: createTokenId(),
+            label: cmd.name,
+            commandName: cmd.name,
+            action: cmd.action,
+            source: cmd.source,
+          });
+          return;
+        }
+        if (option.kind === "skill") {
+          insertAtQuery({
+            type: "skill",
+            id: createTokenId(),
+            label: option.skill.name,
+            skillId: option.skill.id,
+          });
+          return;
+        }
         insertAtQuery({
-          type: "command",
+          type: "mcp",
           id: createTokenId(),
-          label: cmd.name,
-          commandName: cmd.name,
-          action: cmd.action,
-          source: cmd.source,
+          label: option.mcp.name,
+          serverName: option.mcp.name,
         });
       },
       [insertAtQuery],
     );
 
+    const resolveSlashOptions = useCallback((query: string) => {
+      return buildSlashOptions(
+        query,
+        searchCommandsRef.current(query),
+        slashSkillsRef.current,
+        slashMcpsRef.current,
+      );
+    }, []);
+
     const selectDropdownItem = useCallback(
       (view: EditorView): boolean => {
         const q = activeQueryRef.current;
         if (!q) return false;
-        const idx = dropdownIndexRef.current;
         const mentions =
           q.kind === "mention"
             ? buildMentionOptions(q.query, profilesRef.current, filesRef.current)
             : [];
-        const commands = q.kind === "slash" ? searchCommandsRef.current(q.query) : [];
-        const count = q.kind === "mention" ? mentions.length : commands.length;
+        const slashOpts = q.kind === "slash" ? resolveSlashOptions(q.query) : [];
+        const count = q.kind === "mention" ? mentions.length : slashOpts.length;
         if (count === 0) return false;
-        insertFromDropdown(view, q, mentions, commands, idx);
+        const idx = Math.min(dropdownIndexRef.current, count - 1);
+        insertFromDropdown(view, q, mentions, slashOpts, idx);
         emitChange(view);
-        activeQueryRef.current = null;
-        setActiveQuery(null);
+        clearQuery();
         return true;
       },
-      [emitChange],
+      [emitChange, resolveSlashOptions, clearQuery],
     );
 
     useEffect(() => {
@@ -335,6 +569,9 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         {
           key: "Shift-Enter",
           run: (view) => {
+            if (densityRef.current === "compact") {
+              onLayoutExpandRef.current?.();
+            }
             view.dispatch(view.state.replaceSelection("\n"));
             return true;
           },
@@ -352,9 +589,10 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
               q.kind === "mention"
                 ? buildMentionOptions(q.query, profilesRef.current, filesRef.current)
                 : [];
-            const commands = q.kind === "slash" ? searchCommandsRef.current(q.query) : [];
-            const count = q.kind === "mention" ? mentions.length : commands.length;
+            const slashOpts = q.kind === "slash" ? resolveSlashOptions(q.query) : [];
+            const count = q.kind === "mention" ? mentions.length : slashOpts.length;
             if (count === 0) return false;
+            disableDropdownPointerHover();
             setDropdownIndex((i) => Math.min(i + 1, count - 1));
             return true;
           },
@@ -363,6 +601,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
           key: "ArrowUp",
           run: () => {
             if (!activeQueryRef.current) return false;
+            disableDropdownPointerHover();
             setDropdownIndex((i) => Math.max(i - 1, 0));
             return true;
           },
@@ -371,18 +610,23 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
           key: "Escape",
           run: () => {
             if (!activeQueryRef.current) return false;
-            activeQueryRef.current = null;
-            setActiveQuery(null);
+            clearQuery();
             return true;
           },
         },
         {
           key: "Backspace",
-          run: (view) => atomicTokenDelete(view),
+          run: (view) => {
+            if (view.composing) return false;
+            return atomicTokenBackspace(view) || false;
+          },
         },
         {
           key: "Delete",
-          run: (view) => atomicTokenDelete(view),
+          run: (view) => {
+            if (view.composing) return false;
+            return atomicTokenDeleteForward(view) || false;
+          },
         },
       ]);
 
@@ -392,30 +636,50 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
           extensions: [
             tokenMapStateField,
             tokenDecorationsField,
+            composerInlineTokenTheme,
+            composerTokenTransactionFilter,
+            composerTokenAtomicRanges,
             history(),
-            drawSelection(),
-            EditorView.lineWrapping,
-            composerTheme,
-            cmPlaceholder(placeholder),
+            selectionCompartmentRef.current.of(selectionExtensions(density)),
+            densityCompartmentRef.current.of(densityExtensions(density, placeholder)),
             editableCompartmentRef.current.of(EditorView.editable.of(!disabled)),
             Prec.highest(composerKeymap),
             keymap.of([...defaultKeymap, ...historyKeymap]),
             EditorView.updateListener.of((update) => {
-              if (!update.docChanged && !update.selectionSet) return;
               const v = update.view;
+
+              if (update.focusChanged) {
+                setEditorFocused(v.hasFocus);
+                if (v.hasFocus) {
+                  syncQuery(v);
+                } else {
+                  setDropdownAnchor(null);
+                }
+              }
+
+              if (!update.docChanged && !update.selectionSet && !update.focusChanged) return;
+
               if (update.docChanged) {
+                if (repairComposerDocIfNeeded(v)) {
+                  emitChange(v);
+                  return;
+                }
                 const inserted = collectInsertedText(update.changes);
                 if (insertedTextTriggersLinkify(inserted)) {
                   linkifyViewIfNeeded(v);
                 }
                 emitChange(v);
+                if (densityRef.current === "compact") {
+                  const scroller = v.scrollDOM;
+                  if (v.state.doc.lines > 1 || scroller.scrollWidth > scroller.clientWidth + 1) {
+                    maybeExpandCompactLayout(v);
+                  }
+                }
               }
-              const cursor = v.state.selection.main.head;
-              const query = detectQueryAtCursor(v.state.doc.toString(), cursor);
-              activeQueryRef.current = query;
-              setActiveQuery(query);
-              if (query) updateDropdownPosition(v);
-              else setDropdownAnchor(null);
+
+              if (update.docChanged || update.selectionSet || update.focusChanged) {
+                syncQuery(v);
+              }
             }),
             EditorView.domEventHandlers({
               blur(_event, view) {
@@ -429,6 +693,9 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
                 const parts = parseTextToComposerParts(text);
                 const sel = view.state.selection.main;
                 insertComposerParts(view, parts, sel.from, sel.to);
+                if (densityRef.current === "compact" && text.includes("\n")) {
+                  onLayoutExpandRef.current?.();
+                }
                 return true;
               },
             }),
@@ -439,7 +706,53 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
 
       view.dispatch({ effects: setTokenMapEffect.of(tokenMap) });
       viewRef.current = view;
+      useComposerEditorStore.getState().register({
+        focus: () => view.focus(),
+        getParts: () => readPartsFromView(view),
+        insertFileMention: (file: ProjectFile) => {
+          const label = mentionFileLabel(file);
+          const pos = view.state.selection.main.head;
+          insertComposerToken(
+            view,
+            {
+              type: "mention",
+              mentionType: "file",
+              id: createTokenId(),
+              label,
+              filePath: label,
+              fileId: file.id,
+            },
+            pos,
+            pos,
+          );
+          emitChange(view);
+          view.focus();
+        },
+        insertContextPart: (part) => {
+          if (
+            part.type !== "terminal-snippet" &&
+            part.type !== "code-snippet" &&
+            part.type !== "git-diff-snippet"
+          ) {
+            return false;
+          }
+          const pos = view.state.selection.main.head;
+          insertComposerToken(view, part, pos, pos);
+          emitChange(view);
+          view.focus();
+          return true;
+        },
+        insertTerminalSnippet: (part) => {
+          if (part.type !== "terminal-snippet") return;
+          const pos = view.state.selection.main.head;
+          insertComposerToken(view, part, pos, pos);
+          emitChange(view);
+          view.focus();
+        },
+      });
+      useComposerEditorStore.getState().flushPendingInsert();
       return () => {
+        useComposerEditorStore.getState().register(null);
         view.destroy();
         viewRef.current = null;
       };
@@ -459,12 +772,30 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         return;
       }
 
+      // Parent props can lag one frame behind the editor (Add to Chat on empty capsule).
+      if (isComposerEmpty(parts) && !isComposerEmpty(currentParts)) {
+        const tab = useChatStore.getState().tabs.find(
+          (t) => t.id === useChatStore.getState().activeTabId,
+        );
+        const storeKey = JSON.stringify(loadDraftParts(tab?.draft));
+        if (storeKey === currentKey) {
+          partsKeyRef.current = currentKey;
+          return;
+        }
+      }
+
       const { doc, tokenMap } = partsToDoc(parts);
       const currentDoc = view.state.doc.toString();
-      if (currentDoc !== doc) {
+      if (currentDoc !== doc && stripTokenSeparators(currentDoc) !== stripTokenSeparators(doc)) {
+        const sel = view.state.selection.main;
         view.dispatch({
           changes: { from: 0, to: currentDoc.length, insert: doc },
-          selection: EditorSelection.cursor(doc.length),
+          selection: selectionAfterDocReplace(
+            currentDoc,
+            doc,
+            sel.head,
+            (sel.assoc ?? 0) as -1 | 0 | 1,
+          ),
           effects: setTokenMapEffect.of(tokenMap),
         });
       } else {
@@ -472,6 +803,32 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       }
       partsKeyRef.current = incomingKey;
     }, [parts]);
+
+    useEffect(() => {
+      const view = viewRef.current;
+      if (!view) return;
+      view.dispatch({
+        effects: [
+          densityCompartmentRef.current.reconfigure(
+            densityExtensions(density, placeholder),
+          ),
+          selectionCompartmentRef.current.reconfigure(selectionExtensions(density)),
+        ],
+      });
+      maybeExpandCompactLayout(view);
+    }, [density, placeholder, maybeExpandCompactLayout]);
+
+    useEffect(() => {
+      if (density !== "compact" || !onLayoutExpand) return;
+      const el = containerRef.current;
+      if (!el) return;
+      const ro = new ResizeObserver(() => {
+        const view = viewRef.current;
+        if (view) maybeExpandCompactLayout(view);
+      });
+      ro.observe(el);
+      return () => ro.disconnect();
+    }, [density, onLayoutExpand, maybeExpandCompactLayout]);
 
     useEffect(() => {
       const view = viewRef.current;
@@ -505,6 +862,22 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         emitChange(view);
         view.focus();
       },
+      insertContextPart: (part) => {
+        const view = viewRef.current;
+        if (!view) return false;
+        if (
+          part.type !== "terminal-snippet" &&
+          part.type !== "code-snippet" &&
+          part.type !== "git-diff-snippet"
+        ) {
+          return false;
+        }
+        const pos = view.state.selection.main.head;
+        insertComposerToken(view, part, pos, pos);
+        emitChange(view);
+        view.focus();
+        return true;
+      },
       insertTerminalSnippet: (part) => {
         const view = viewRef.current;
         if (!view || part.type !== "terminal-snippet") return;
@@ -517,28 +890,55 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
 
     return (
       <>
-        {activeQuery?.kind === "slash" && (
+        {showDropdown && activeQuery?.kind === "slash" && (
           <SlashCommandDropdown
             open
-            commands={slashCommands}
-            activeIndex={dropdownIndex}
+            options={slashOptions}
+            activeIndex={clampedDropdownIndex}
             anchor={dropdownAnchor}
-            onSelect={insertCommand}
-            onHover={setDropdownIndex}
+            onSelect={insertSlashOption}
+            onHover={handleDropdownHover}
+            onListPointerMove={enableDropdownPointerHover}
+            canHoverItem={canHoverDropdownItem}
           />
         )}
-        {activeQuery?.kind === "mention" && (
+        {showDropdown && activeQuery?.kind === "mention" && (
           <MentionDropdown
             open
             options={mentionOptions}
-            activeIndex={dropdownIndex}
+            activeIndex={clampedDropdownIndex}
             anchor={dropdownAnchor}
             onSelectProfile={insertProfile}
             onSelectFile={insertFile}
-            onHover={setDropdownIndex}
+            onHover={handleDropdownHover}
+            onListPointerMove={enableDropdownPointerHover}
+            canHoverItem={canHoverDropdownItem}
           />
         )}
-        <div ref={containerRef} className="w-full" />
+        <div
+          className={
+            density === "compact"
+              ? "relative flex h-6 w-full min-w-0 items-center overflow-hidden"
+              : "w-full"
+          }
+        >
+          {density === "compact" && isEmpty && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 left-0 z-0 flex max-w-full items-center truncate pr-1 text-[length:var(--font-composer)] text-muted-foreground"
+            >
+              {placeholder}
+            </span>
+          )}
+          <div
+            ref={containerRef}
+            className={
+              density === "compact"
+                ? "relative z-[1] h-full w-full min-w-0"
+                : "w-full"
+            }
+          />
+        </div>
       </>
     );
   },

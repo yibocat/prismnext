@@ -4,23 +4,23 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useProjectStore } from "@/stores/project-store";
 import { useProjectOpen } from "@/hooks/use-project-open";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  AppMenu,
+  AppMenuContent,
+  AppMenuItem,
+  AppMenuSeparator,
+  AppMenuTrigger,
+  appMenuFontClass,
+} from "@/components/ui/app-menu";
 import { NewProjectDialog } from "@/components/modules/project/new-project-dialog";
-import {
-  FolderOpenIcon,
-  FolderPlusIcon,
-  FolderIcon,
-  LogOutIcon,
-} from "lucide-react";
+import { FolderOpenIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ProjectSwitcherProps {
   className?: string;
 }
+
+const sidebarItemClass =
+  "focus:bg-sidebar-accent focus:text-sidebar-accent-foreground";
 
 export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
@@ -56,62 +56,58 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            className={className}
-          >
+      <AppMenu>
+        <AppMenuTrigger asChild>
+          <button type="button" className={className}>
             <FolderOpenIcon className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="truncate flex-1 text-left">{projectName}</span>
           </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
+        </AppMenuTrigger>
+        <AppMenuContent
           align="start"
-          className="w-[var(--radix-dropdown-menu-trigger-width)]"
+          sideOffset={2}
+          alignOffset={-1}
+          collisionPadding={8}
+          className="min-w-[var(--radix-dropdown-menu-trigger-width)] max-w-[min(20rem,var(--radix-dropdown-menu-content-available-width))]"
         >
           {recentProjects.length > 0 ? (
             recentProjects.map((p) => (
-              <DropdownMenuItem
+              <AppMenuItem
                 key={p.path}
-                className="flex items-center gap-2 text-[length:var(--font-menu-item)] focus:bg-sidebar-accent focus:text-sidebar-accent-foreground"
+                className={sidebarItemClass}
+                leading={<FolderOpenIcon className="size-3.5 shrink-0 text-muted-foreground" />}
+                description={p.path}
                 onClick={() => handleOpenProjectPath(p.path)}
               >
-                <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="flex-1 truncate">{p.name}</span>
-                <span className="shrink-0 text-[length:var(--font-path)] text-muted-foreground/60 truncate max-w-[100px]">{p.path}</span>
-              </DropdownMenuItem>
+                {p.name}
+              </AppMenuItem>
             ))
           ) : (
-            <div className="px-2 py-3 text-[length:var(--font-empty-state)] text-muted-foreground text-center">
+            <div
+              className={cn(
+                "px-2 py-3 text-muted-foreground text-center",
+                appMenuFontClass,
+              )}
+            >
               No recent projects
             </div>
           )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="flex items-center gap-2 text-[length:var(--font-menu-item)] focus:bg-sidebar-accent focus:text-sidebar-accent-foreground"
+          <AppMenuSeparator />
+          <AppMenuItem
+            className={sidebarItemClass}
             onClick={() => newProjectTriggerRef.current?.click()}
           >
-            <FolderPlusIcon className="size-3.5 shrink-0" />
             New Project...
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="flex items-center gap-2 text-[length:var(--font-menu-item)] focus:bg-sidebar-accent focus:text-sidebar-accent-foreground"
-            onClick={handleOpenProjectDialog}
-          >
-            <FolderOpenIcon className="size-3.5 shrink-0" />
+          </AppMenuItem>
+          <AppMenuItem className={sidebarItemClass} onClick={handleOpenProjectDialog}>
             Open Project...
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="flex items-center gap-2 text-[length:var(--font-menu-item)] focus:bg-sidebar-accent focus:text-sidebar-accent-foreground"
-            onClick={handleCloseProject}
-          >
-            <LogOutIcon className="size-3.5 shrink-0" />
+          </AppMenuItem>
+          <AppMenuSeparator />
+          <AppMenuItem className={sidebarItemClass} onClick={handleCloseProject}>
             Close Project
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          </AppMenuItem>
+        </AppMenuContent>
+      </AppMenu>
 
       <NewProjectDialog>
         <button ref={newProjectTriggerRef} className="hidden" />

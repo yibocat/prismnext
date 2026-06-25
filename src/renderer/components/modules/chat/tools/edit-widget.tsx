@@ -3,6 +3,7 @@ import type { ContentBlock } from "@/stores/chat-store";
 import { useChangesStore } from "@/stores/changes-store";
 import { FileEditIcon, CheckIcon } from "lucide-react";
 import { ToolCard, DiffLines, DiffStatBadge, computeLineDiffStats, param } from "./shared";
+import { ChatFileLink } from "../chat-file-link";
 import { ChangeReviewBar } from "./change-review-bar";
 import { useToolPermission } from "./use-tool-permission";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -102,7 +103,11 @@ export const EditWidget = memo(function EditWidget({
     <ToolCard
       toolName={toolName}
       icon={<FileEditIcon className="size-3.5 text-info" />}
-      label={<span className="truncate font-medium">{fileName}</span>}
+      label={activeFilePath !== "unknown" ? (
+        <ChatFileLink path={activeFilePath} />
+      ) : (
+        <span className="truncate font-medium">{fileName}</span>
+      )}
       meta={
         resolved || isDenied || showPermissionAsk || isLoading || isError ? (
           <span className="text-muted-foreground/60 shrink-0 text-[length:var(--font-chat-meta)]">

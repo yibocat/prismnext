@@ -1,11 +1,9 @@
-import { useState, useEffect } from "react";
-import { useCompileStore, clearPdfCache } from "@/stores/compile-store";
+import { useCompileStore } from "@/stores/compile-store";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
-import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
-import { DEFAULT_MANUSCRIPT_DIR } from "@/types/workspace";
 import { useLayoutStore } from "@/stores/layout-store";
 import { resolveCompileTarget } from "@/lib/tex/resolve-tex-root";
+import { hasCompileProblems } from "./parse-latex-log";
 import {
   PlayIcon,
   Loader2Icon,
@@ -18,30 +16,24 @@ import {
   SearchIcon,
   SigmaIcon,
   BookOpenIcon,
-  HistoryIcon,
-  RotateCcwIcon,
-  CalendarIcon,
+  AlertCircleIcon,
 } from "lucide-react";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  AppMenu,
+  AppMenuCheckItem,
+  AppMenuContent,
+  AppMenuItem,
+  AppMenuLabel,
+  AppMenuSeparator,
+  AppMenuTrigger,
+} from "@/components/ui/app-menu";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { SYMBOL_CATEGORIES, getSymbolHtml, preRenderAllSymbols } from "@/lib/tex/latex-symbols";
+import { SYMBOL_CATEGORIES, getSymbolHtml } from "@/lib/tex/latex-symbols";
+import { cn } from "@/lib/utils";
 
 interface TexworkspaceToolbarProps {
   compileFile: string | null | undefined;
@@ -55,29 +47,32 @@ const ENGINE_LABELS: Record<string, string> = {
 export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
   const isCompiling = useCompileStore((s) => s.isCompiling);
   const compile = useCompileStore((s) => s.compile);
+  const compileError = useCompileStore((s) => s.compileError);
+  const compileLog = useCompileStore((s) => s.compileLog);
   const autoCompile = useCompileStore((s) => s.autoCompile);
   const toggleAutoCompile = useCompileStore((s) => s.toggleAutoCompile);
   const compilerBackend = useCompileStore((s) => s.compilerBackend);
   const setCompilerBackend = useCompileStore((s) => s.setCompilerBackend);
   const texworkspaceViewMode = useLayoutStore((s) => s.texworkspaceViewMode);
   const setTexworkspaceViewMode = useLayoutStore((s) => s.setTexworkspaceViewMode);
+  const texworkspaceProblemsOpen = useLayoutStore((s) => s.texworkspaceProblemsOpen);
+  const setTexworkspaceProblemsOpen = useLayoutStore((s) => s.setTexworkspaceProblemsOpen);
   const searchQuery = useLayoutStore((s) => s.texworkspaceSearchQuery);
   const setSearchQuery = useLayoutStore((s) => s.setTexworkspaceSearchQuery);
   const requestInsertText = useDocumentStore((s) => s.requestInsertText);
 
-  const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const manuscriptConfig = useWorkspaceConfigStore((s) => s.manuscriptConfig);
-  const manuscriptDir = manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR;
-  const [restoreOpen, setRestoreOpen] = useState(false);
-  const [backups, setBackups] = useState<{ label: string; timestamp: string; files: string[] }[]>([]);
-  const [restoring, setRestoring] = useState<string | null>(null);
-  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const showProblemsButton = hasCompileProblems(compileError, compileLog);
 
-  useEffect(() => {
-    if (!restoreOpen || !projectRoot) return;
-    setRestoreError(null);
-    window.electronAPI.templateListBackups({ rootPath: projectRoot }).then(setBackups).catch(() => setBackups([]));
-  }, [restoreOpen, projectRoot]);
+  const handleToggleProblems = () => {
+    if (texworkspaceProblemsOpen) {
+      setTexworkspaceProblemsOpen(false);
+      return;
+    }
+    if (texworkspaceViewMode === "tex") {
+      setTexworkspaceViewMode("split");
+    }
+    setTexworkspaceProblemsOpen(true);
+  };
 
   const handleCompile = async () => {
     const { projectRoot, files, getContent } = useDocumentStore.getState();
@@ -109,11 +104,12 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
           type="button"
           onClick={() => setTexworkspaceViewMode("split")}
           title="Split view"
-          className={`flex size-6 items-center justify-center rounded-sm transition-colors ${
+          className={cn(
+            "flex size-6 items-center justify-center rounded-sm transition-colors",
             texworkspaceViewMode === "split"
               ? "bg-muted text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
+              : "text-muted-foreground hover:text-foreground",
+          )}
         >
           <Columns2Icon className="size-3.5" />
         </button>
@@ -121,11 +117,12 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
           type="button"
           onClick={() => setTexworkspaceViewMode("tex")}
           title="TeX only"
-          className={`flex size-6 items-center justify-center rounded-sm transition-colors ${
+          className={cn(
+            "flex size-6 items-center justify-center rounded-sm transition-colors",
             texworkspaceViewMode === "tex"
               ? "bg-muted text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
+              : "text-muted-foreground hover:text-foreground",
+          )}
         >
           <FileTextIcon className="size-3.5" />
         </button>
@@ -133,16 +130,16 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
           type="button"
           onClick={() => setTexworkspaceViewMode("pdf")}
           title="PDF only"
-          className={`flex size-6 items-center justify-center rounded-sm transition-colors ${
+          className={cn(
+            "flex size-6 items-center justify-center rounded-sm transition-colors",
             texworkspaceViewMode === "pdf"
               ? "bg-muted text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
+              : "text-muted-foreground hover:text-foreground",
+          )}
         >
           <EyeIcon className="size-3.5" />
         </button>
       </div>
-
 
       {/* Compile button */}
       <button
@@ -160,38 +157,32 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
       </button>
 
       {/* Compiler engine selector */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
+      <AppMenu>
+        <AppMenuTrigger asChild>
           <button
             type="button"
-            className="flex items-center gap-1 h-6 px-1.5 rounded text-[length:var(--font-size-12)] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0"
+            className="flex items-center gap-1 h-6 px-1.5 rounded text-[length:var(--font-menu-item)] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0"
             title="Select compiler"
           >
             <span>{ENGINE_LABELS[compilerBackend]}</span>
             <ChevronDownIcon className="size-3" />
           </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-28">
-          <DropdownMenuItem
+        </AppMenuTrigger>
+        <AppMenuContent align="start" className="min-w-[6.5rem]">
+          <AppMenuCheckItem
+            selected={compilerBackend === "tectonic"}
             onClick={() => setCompilerBackend("tectonic")}
-            className="cursor-pointer text-xs gap-2"
           >
-            <span>Tectonic</span>
-            {compilerBackend === "tectonic" && (
-              <span className="ml-auto text-muted-foreground">✓</span>
-            )}
-          </DropdownMenuItem>
-          <DropdownMenuItem
+            Tectonic
+          </AppMenuCheckItem>
+          <AppMenuCheckItem
+            selected={compilerBackend === "texlive"}
             onClick={() => setCompilerBackend("texlive")}
-            className="cursor-pointer text-xs gap-2"
           >
-            <span>TeXLive</span>
-            {compilerBackend === "texlive" && (
-              <span className="ml-auto text-muted-foreground">✓</span>
-            )}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            TeXLive
+          </AppMenuCheckItem>
+        </AppMenuContent>
+      </AppMenu>
 
       {/* Auto-compile toggle */}
       <button
@@ -207,19 +198,34 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
         )}
       </button>
 
+      {showProblemsButton && (
+        <button
+          type="button"
+          className={cn(
+            "flex size-6 items-center justify-center rounded transition-colors shrink-0",
+            texworkspaceProblemsOpen
+              ? "bg-destructive/15 text-destructive"
+              : "text-destructive hover:bg-destructive/10",
+          )}
+          title={texworkspaceProblemsOpen ? "Back to PDF preview" : "Show compile problems"}
+          onClick={handleToggleProblems}
+        >
+          <AlertCircleIcon className="size-3.5" />
+        </button>
+      )}
 
-      {/* Spacer — pushes right group to the end */}
       <div className="flex-1" />
 
-      {/* Search toggle */}
+      {/* Search toggle — drives sidebar project search */}
       <button
         type="button"
-        className={`flex size-6 items-center justify-center rounded transition-colors shrink-0 ${
+        className={cn(
+          "flex size-6 items-center justify-center rounded transition-colors shrink-0",
           isSearching
             ? "bg-muted text-foreground"
-            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-        }`}
-        title="Search in project"
+            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+        )}
+        title="Search in manuscript (sidebar)"
         onClick={() => setSearchQuery(isSearching ? "" : " ")}
       >
         <SearchIcon className="size-3.5" />
@@ -247,23 +253,24 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
                   {cat.symbols.map((sym) => {
                     const html = getSymbolHtml(sym);
                     return (
-                    <button
-                      key={sym.command}
-                      type="button"
-                      className="flex items-center justify-center rounded-sm h-9 hover:bg-accent transition-colors"
-                      title={sym.command}
-                      onClick={() => requestInsertText(sym.command + " ")}
-                    >
-                      {html ? (
-                        <span
-                          className="katex-symbol inline-flex items-center justify-center text-sm"
-                          dangerouslySetInnerHTML={{ __html: html }}
-                        />
-                      ) : (
-                        <span className="text-sm">{sym.display}</span>
-                      )}
-                    </button>
-                  )})}
+                      <button
+                        key={sym.command}
+                        type="button"
+                        className="flex items-center justify-center rounded-sm h-9 hover:bg-accent transition-colors"
+                        title={sym.command}
+                        onClick={() => requestInsertText(sym.command + " ")}
+                      >
+                        {html ? (
+                          <span
+                            className="katex-symbol inline-flex items-center justify-center text-sm"
+                            dangerouslySetInnerHTML={{ __html: html }}
+                          />
+                        ) : (
+                          <span className="text-sm">{sym.display}</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -272,8 +279,8 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
       </Popover>
 
       {/* Environment Insertion */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
+      <AppMenu>
+        <AppMenuTrigger asChild>
           <button
             type="button"
             className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
@@ -281,9 +288,9 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
           >
             <BookOpenIcon className="size-3.5" />
           </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          <div className="px-2 py-1 text-[length:var(--font-hint)] text-muted-foreground/60 uppercase tracking-wider">Common</div>
+        </AppMenuTrigger>
+        <AppMenuContent align="end" className="w-40">
+          <AppMenuLabel>Common</AppMenuLabel>
           {[
             { label: "Figure", env: "figure" },
             { label: "Table", env: "table" },
@@ -294,15 +301,15 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
             { label: "Description", env: "description" },
             { label: "Center", env: "center" },
           ].map((item) => (
-            <DropdownMenuItem
+            <AppMenuItem
               key={item.env}
               onClick={() => requestInsertText(`\\begin{${item.env}}\n  \n\\end{${item.env}}`)}
-              className="cursor-pointer text-xs"
             >
               {item.label}
-            </DropdownMenuItem>
+            </AppMenuItem>
           ))}
-          <div className="border-t mt-1 pt-1 px-2 py-1 text-[length:var(--font-hint)] text-muted-foreground/60 uppercase tracking-wider">Theorem-like</div>
+          <AppMenuSeparator />
+          <AppMenuLabel>Theorem-like</AppMenuLabel>
           {[
             { label: "Theorem", env: "theorem" },
             { label: "Lemma", env: "lemma" },
@@ -313,105 +320,15 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
             { label: "Remark", env: "remark" },
             { label: "Proof", env: "proof" },
           ].map((item) => (
-            <DropdownMenuItem
+            <AppMenuItem
               key={item.env}
               onClick={() => requestInsertText(`\\begin{${item.env}}\n  \n\\end{${item.env}}`)}
-              className="cursor-pointer text-xs"
             >
               {item.label}
-            </DropdownMenuItem>
+            </AppMenuItem>
           ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {/* Restore backup button */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7 text-muted-foreground hover:text-foreground"
-        title="Restore from backup"
-        onClick={() => setRestoreOpen(true)}
-      >
-        <HistoryIcon className="size-4" />
-      </Button>
-      {/* Backup restore dialog */}
-      <Dialog open={restoreOpen} onOpenChange={setRestoreOpen}>
-        <DialogContent className="!max-w-lg max-h-[70vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Restore from Backup</DialogTitle>
-            <DialogDescription>
-              Select a backup to restore. Current files will be overwritten.
-            </DialogDescription>
-          </DialogHeader>
-
-          {restoreError && (
-            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-[length:var(--font-size-12)] text-destructive mb-3">
-              {restoreError}
-            </div>
-          )}
-
-          <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
-            {backups.length === 0 ? (
-              <p className="text-center text-muted-foreground text-[length:var(--font-size-13)] py-8">
-                No backups found
-              </p>
-            ) : (
-              backups.map((b) => {
-                const firstUnderscore = b.label.indexOf("_");
-                const rest = firstUnderscore > 0 ? b.label.slice(firstUnderscore + 1) : b.label;
-                const toIdx = rest.lastIndexOf("_to_");
-                const from = toIdx > 0 ? rest.slice(0, toIdx) : rest;
-                const to = toIdx > 0 ? rest.slice(toIdx + 4) : "";
-                const isRestoring = restoring === b.label;
-
-                return (
-                  <div key={b.label} className="flex items-center gap-2 rounded-lg border px-3 py-2">
-                    <HistoryIcon className="size-4 shrink-0 text-muted-foreground" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[length:var(--font-size-12)] font-medium">
-                        {from} → {to}
-                      </div>
-                      <div className="text-[length:var(--font-size-11)] text-muted-foreground">
-                        {b.timestamp ? new Date(b.timestamp).toLocaleString() : b.label} · {b.files.length} files
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-[length:var(--font-size-11)] shadow-none"
-                      disabled={!!restoring}
-                      onClick={async () => {
-                        if (!projectRoot) return;
-                        setRestoreError(null);
-                        setRestoring(b.label);
-                        try {
-                          await window.electronAPI.templateRestoreBackup({
-                            rootPath: projectRoot,
-                            manuscriptDir,
-                            backupLabel: b.label,
-                          });
-                          clearPdfCache();
-                          useDocumentStore.getState().refreshFiles();
-                          setRestoreOpen(false);
-                          toast.success("Backup restored — files recovered");
-                        } catch (err) {
-                          const msg = err instanceof Error ? err.message : "Restore failed";
-                          setRestoreError(msg);
-                          toast.error(`Restore failed: ${msg}`);
-                        }
-                        setRestoring(null);
-                      }}
-                    >
-                      <RotateCcwIcon className="size-3 mr-1" />
-                      {isRestoring ? "Restoring…" : "Restore"}
-                    </Button>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+        </AppMenuContent>
+      </AppMenu>
     </>
   );
 }

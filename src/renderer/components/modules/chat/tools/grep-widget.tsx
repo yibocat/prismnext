@@ -2,6 +2,20 @@ import { useState, memo } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { SearchIcon } from "lucide-react";
 import { ToolCard, param } from "./shared";
+import { ChatFileLink } from "../chat-file-link";
+import { parseGrepResultLine } from "@/lib/files/open-project-file";
+
+function GrepOutputLine({ line }: { line: string }) {
+  const hit = parseGrepResultLine(line);
+  if (!hit) return <>{line}</>;
+  const rest = line.slice(hit.path.length);
+  return (
+    <>
+      <ChatFileLink path={hit.path} className="font-mono font-normal inline" />
+      {rest}
+    </>
+  );
+}
 
 export const GrepWidget = memo(function GrepWidget({
   toolUse,
@@ -39,7 +53,7 @@ export const GrepWidget = memo(function GrepWidget({
           )}
           {path && (
             <span className="text-muted-foreground/50 truncate text-[length:var(--font-chat-meta)] hidden sm:inline">
-              in {path.split("/").pop() || path}
+              in <ChatFileLink path={path} className="font-normal inline" />
             </span>
           )}
         </>
@@ -52,13 +66,25 @@ export const GrepWidget = memo(function GrepWidget({
       bodyClassName="font-mono text-muted-foreground max-h-80 overflow-y-auto"
     >
       <div className="text-[length:var(--font-chat-meta)] text-muted-foreground/70 mb-1">
-        grep {pattern}{path ? ` → ${path}` : ""}
+        grep {pattern}
+        {path ? (
+          <>
+            {" → "}
+            <ChatFileLink path={path} className="font-normal inline" />
+          </>
+        ) : null}
       </div>
-      <pre className="whitespace-pre-wrap break-all">
-        {outputText.length > 3000
-          ? outputText.slice(0, 3000) + `\n\n··· ${outputText.length - 3000} more chars`
-          : outputText}
-      </pre>
+      <div className="font-mono whitespace-pre-wrap break-all">
+        {outputText.length > 3000 ? (
+          outputText.slice(0, 3000) + `\n\n··· ${outputText.length - 3000} more chars`
+        ) : (
+          outputText.split("\n").map((line, i) => (
+            <div key={i} className="break-all">
+              <GrepOutputLine line={line} />
+            </div>
+          ))
+        )}
+      </div>
     </ToolCard>
   );
 });

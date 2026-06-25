@@ -1,22 +1,26 @@
 import { cn } from "@/lib/utils";
+import type { TemplateMeta } from "./types";
 import { TemplateFull, TemplateCategory, CATEGORIES } from "./types";
+
+function categoryCount(templates: TemplateMeta[] | null, categoryId: string): number {
+  if (!templates) return 0;
+  if (categoryId === "all") return templates.length;
+  return templates.filter((t) => t.category === categoryId).length;
+}
 
 // ─── Sidebar ───
 
 export function TemplateSidebar({
   category,
   setCategory,
+  templates,
 }: {
   category: TemplateCategory | "all";
   setCategory: (c: TemplateCategory | "all") => void;
+  templates: TemplateMeta[] | null;
 }) {
   return (
-    <div className="lg:w-[200px] shrink-0 flex flex-col gap-1 px-2 pt-8">
-      {/* Header */}
-      <div className="px-2 mb-6 hidden lg:block">
-        <h2 className="text-[length:var(--font-session-item)] font-semibold">Template Center</h2>
-      </div>
-
+    <div className="lg:w-[200px] shrink-0 flex flex-col gap-1 px-2">
       {/* Category label */}
       <p className="px-2 pb-1 text-[length:var(--font-hint)] text-muted-foreground/60 uppercase tracking-wider hidden lg:block">
         Categories
@@ -24,7 +28,9 @@ export function TemplateSidebar({
 
       {/* Category items */}
       <div className="flex flex-col gap-1">
-        {CATEGORIES.map((cat) => (
+        {CATEGORIES.map((cat) => {
+          const count = categoryCount(templates, cat.id);
+          return (
           <button
             key={cat.id}
             type="button"
@@ -37,9 +43,13 @@ export function TemplateSidebar({
             onClick={() => setCategory(cat.id)}
           >
             {cat.icon}
-            <span className="truncate">{cat.label}</span>
+            <span className="truncate flex-1">{cat.label}</span>
+            <span className="text-[length:var(--font-size-10)] tabular-nums text-muted-foreground/60 shrink-0">
+              {count}
+            </span>
           </button>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -49,13 +59,7 @@ export function TemplateSidebar({
 
 export function DetailSidebar({ template }: { template: TemplateFull }) {
   return (
-    <div className="lg:w-[200px] shrink-0 flex flex-col gap-1 px-2 pt-8 order-2 @lg:order-none">
-      <div className="px-2 mb-6 hidden lg:block">
-        <h2 className="text-[length:var(--font-session-item)] font-semibold">
-          Template / {template.name}
-        </h2>
-      </div>
-
+    <div className="lg:w-[200px] shrink-0 flex flex-col gap-1 px-2 order-2 lg:order-none">
       <p className="px-2 pb-1 text-[length:var(--font-hint)] text-muted-foreground/60 uppercase tracking-wider hidden lg:block">
         Info
       </p>
@@ -71,12 +75,8 @@ export function DetailSidebar({ template }: { template: TemplateFull }) {
           <p>{template.files.length}</p>
         </div>
         <div>
-          <span className="text-muted-foreground/60">Created</span>
-          <p>Jun 2024</p>
-        </div>
-        <div>
-          <span className="text-muted-foreground/60">Updated</span>
-          <p>Jun 2024</p>
+          <span className="text-muted-foreground/60">Source</span>
+          <p>Built-in</p>
         </div>
       </div>
     </div>

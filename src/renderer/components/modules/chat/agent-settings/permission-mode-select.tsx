@@ -1,10 +1,11 @@
 // src/renderer/components/modules/chat/agent-settings/permission-mode-select.tsx
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  AppMenu,
+  AppMenuCheckItem,
+  AppMenuContent,
+  AppMenuLabel,
+  AppMenuTrigger,
+} from "@/components/ui/app-menu";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
   DEFAULT_PERMISSION_MODE,
@@ -12,7 +13,6 @@ import {
   type PermissionMode,
 } from "@shared/permission-modes";
 import {
-  CheckIcon,
   ChevronDownIcon,
   EyeIcon,
   ShieldQuestionIcon,
@@ -46,8 +46,8 @@ export function PermissionModeSelect({ compact }: PermissionModeSelectProps) {
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <AppMenu>
+      <AppMenuTrigger asChild>
         <button
           type="button"
           className={cn(
@@ -64,32 +64,20 @@ export function PermissionModeSelect({ compact }: PermissionModeSelectProps) {
             </>
           )}
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <div className="px-2 py-1 font-medium text-muted-foreground text-[length:var(--font-chat-meta)]">
-          Permission Mode
-        </div>
-        {PERMISSION_MODE_OPTIONS.map((option) => {
-          const OptionIcon = PERMISSION_MODE_ICONS[option.value];
-          return (
-            <DropdownMenuItem
-              key={option.value}
-              onClick={() => handleSelect(option.value)}
-            >
-              <OptionIcon className="size-3.5 shrink-0 text-muted-foreground" />
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="text-[length:var(--font-chat-meta)]">{option.label}</span>
-                <span className="text-[length:var(--font-size-11)] text-muted-foreground/70 leading-snug">
-                  {option.description}
-                </span>
-              </div>
-              {permissionMode === option.value && (
-                <CheckIcon className="size-3 shrink-0 ml-2" />
-              )}
-            </DropdownMenuItem>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </AppMenuTrigger>
+      <AppMenuContent align="end" className="w-56">
+        <AppMenuLabel>Permission Mode</AppMenuLabel>
+        {PERMISSION_MODE_OPTIONS.map((option) => (
+          <AppMenuCheckItem
+            key={option.value}
+            selected={permissionMode === option.value}
+            description={option.description}
+            onClick={() => handleSelect(option.value)}
+          >
+            {option.label}
+          </AppMenuCheckItem>
+        ))}
+      </AppMenuContent>
+    </AppMenu>
   );
 }

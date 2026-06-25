@@ -1,57 +1,56 @@
 import { create } from "zustand";
-import { createTokenId, type ComposerPart } from "@/lib/chat/composer-parts";
-import { terminalTabLabelFromCommand } from "@/lib/terminal/root";
-import { truncateTerminalOutput } from "@/lib/terminal/ai-mirror";
-
-export interface TerminalSnippetRequest {
-  command?: string;
-  output: string;
-  exitCode?: number;
-  cwd?: string;
-  sourceTabId?: string;
-  selection?: string;
-}
+import type { ComposerPart } from "@/lib/chat/composer-parts";
+import {
+  contextInsertToPart,
+  legacyTerminalRequest,
+  type ContextInsertRequest,
+  type LegacyTerminalSnippetRequest,
+} from "@/lib/chat/context-insert";
 
 interface ComposerInsertState {
-  pendingTerminalSnippet: TerminalSnippetRequest | null;
+  pendingInsert: ContextInsertRequest | null;
   nonce: number;
-  requestTerminalSnippet: (req: TerminalSnippetRequest) => void;
-  consumeTerminalSnippet: () => TerminalSnippetRequest | null;
+  requestInsert: (req: ContextInsertRequest) => void;
+  consumeInsert: () => ContextInsertRequest | null;
+  /** @deprecated Use requestInsert with kind: "terminal" */
+  requestTerminalSnippet: (req: LegacyTerminalSnippetRequest) => void;
+  /** @deprecated Use consumeInsert */
+  consumeTerminalSnippet: () => LegacyTerminalSnippetRequest | null;
 }
 
-export function terminalSnippetToPart(req: TerminalSnippetRequest): ComposerPart {
-  const command = req.command?.trim();
-  const output = truncateTerminalOutput(req.output || req.selection || "");
-  const label = command
-    ? `$ ${terminalTabLabelFromCommand(command, 32)}`
-    : "Terminal output";
-  return {
-    type: "terminal-snippet",
-    id: createTokenId(),
-    label,
-    command,
-    output,
-    exitCode: req.exitCode,
-    cwd: req.cwd,
-    sourceTabId: req.sourceTabId,
-  };
+export function contextInsertToComposerPart(req: ContextInsertRequest): ComposerPart {
+  return contextInsertToPart(req);
 }
+
+/** @deprecated Use contextInsertToComposerPart */
+export const terminalSnippetToPart = contextInsertToComposerPart;
 
 export const useComposerInsertStore = create<ComposerInsertState>()((set, get) => ({
-  pendingTerminalSnippet: null,
+  pendingInsert: null,
   nonce: 0,
 
-  requestTerminalSnippet: (req) => {
+  requestInsert: (req) => {
     set((s) => ({
-      pendingTerminalSnippet: req,
+      pendingInsert: req,
       nonce: s.nonce + 1,
     }));
   },
 
-  consumeTerminalSnippet: () => {
-    const pending = get().pendingTerminalSnippet;
+  consumeInsert: () => {
+    const pending = get().pendingInsert;
     if (!pending) return null;
-    set({ pendingTerminalSnippet: null });
+    set({ pendingInsert: null });
     return pending;
+  },
+
+  requestTerminalSnippet: (req) => {
+    get().requestInsert(legacyTerminalRequest(req));
+  },
+
+  consumeTerminalSnippet: () => {
+    const pending = get().consumeInsert();
+    if (!pending || pending.kind !== "terminal") return null;
+    const { kind: _kind, ...rest } = pending;
+    return rest;
   },
 }));

@@ -102,10 +102,12 @@ function generateEditorSyntaxVars(
   --editor-cursor: ${primaryColor};
 
   /* Diff colors — unified across all themes */
-  --editor-diff-deleted-bg: ${mode === "dark" ? "rgba(248,81,81,0.12)" : "rgba(239,68,68,0.10)"};
-  --editor-diff-inserted-bg: ${mode === "dark" ? "rgba(52,211,110,0.12)" : "rgba(34,197,94,0.10)"};
-  --editor-diff-deleted-text: ${mode === "dark" ? "rgba(248,81,81,0.18)" : "rgba(239,68,68,0.15)"};
-  --editor-diff-inserted-text: ${mode === "dark" ? "rgba(52,211,110,0.18)" : "rgba(34,197,94,0.15)"};
+  --editor-diff-deleted-bg: ${mode === "dark" ? "rgba(248,81,81,0.18)" : "rgba(239,68,68,0.20)"};
+  --editor-diff-inserted-bg: ${mode === "dark" ? "rgba(52,211,110,0.18)" : "rgba(34,197,94,0.20)"};
+  --editor-diff-deleted-text: ${mode === "dark" ? "rgba(248,81,81,0.24)" : "rgba(239,68,68,0.22)"};
+  --editor-diff-inserted-text: ${mode === "dark" ? "rgba(52,211,110,0.24)" : "rgba(34,197,94,0.22)"};
+  --editor-diff-deleted-fg: ${mode === "dark" ? "oklch(0.72 0.17 25)" : "oklch(0.55 0.2 25)"};
+  --editor-diff-inserted-fg: ${mode === "dark" ? "oklch(0.78 0.15 145)" : "oklch(0.52 0.16 145)"};
 
   /* Syntax token colors — Prism custom theme
      Semantic hues: keyword=brand, string=green, number=amber,

@@ -59,6 +59,9 @@ export const IGNORED_DIRECTORY_NAMES = HIDDEN_DIRECTORY_NAMES;
 const HIDDEN_FILE_NAMES = new Set([
   ".ds_store",
   "thumbs.db",
+  // Git worktree checkout uses a .git *file* (not directory) at the worktree root.
+  ".git",
+  ".prism-worktree-meta",
 ]);
 
 export const IGNORED_EXTENSIONS = new Set([
@@ -128,30 +131,56 @@ export const IGNORED_EXTENSIONS = new Set([
 
 // ─── File watcher ───
 
-/** Patterns excluded from the chokidar watcher. */
-const WATCH_IGNORED = [
-  /(^|[\/\\])\.[^\/\\]/,
-  "**/node_modules/**",
-  "**/__pycache__/**",
-  "**/.prismnext/compile/**",
-  "**/*.aux",
-  "**/*.log",
-  "**/*.out",
-  "**/*.toc",
-  "**/*.lof",
-  "**/*.lot",
-  "**/*.fls",
-  "**/*.fdb_latexmk",
-  "**/*.synctex.gz",
-  "**/*.synctex",
-  "**/*.blg",
-  "**/*.bbl",
-  "**/*.nav",
-  "**/*.snm",
-  "**/*.vrb",
-  "**/*.run.xml",
-  "**/*.bcf",
+const WATCH_IGNORED_EXTENSIONS = [
+  ".aux",
+  ".log",
+  ".out",
+  ".toc",
+  ".lof",
+  ".lot",
+  ".fls",
+  ".fdb_latexmk",
+  ".synctex.gz",
+  ".synctex",
+  ".blg",
+  ".bbl",
+  ".nav",
+  ".snm",
+  ".vrb",
+  ".run.xml",
+  ".bcf",
 ];
+
+function normalizeWatchPath(filePath: string): string {
+  return filePath.replace(/\\/g, "/").toLowerCase();
+}
+
+function isPrismAgentSkillsWatchPath(normalized: string): boolean {
+  return normalized.includes("/.prismnext/agent/skills");
+}
+
+/** chokidar ignored callback — allow `.prismnext/agent/skills` despite dot-dir rule. */
+function isWatchIgnored(filePath: string): boolean {
+  const n = normalizeWatchPath(filePath);
+  if (isPrismAgentSkillsWatchPath(n)) return false;
+  if (n.includes("/.prismnext/agent/skills-manifest.json")) return false;
+
+  if (/(^|\/)\.[^\/]/.test(n)) return true;
+  if (n.includes("/node_modules/")) return true;
+  if (n.includes("/__pycache__/")) return true;
+  if (n.includes("/.prismnext/compile/")) return true;
+
+  for (const ext of WATCH_IGNORED_EXTENSIONS) {
+    if (n.endsWith(ext)) return true;
+  }
+  return false;
+}
+
+function pathsEqualOrNested(child: string, parent: string): boolean {
+  const c = normalizeWatchPath(child).replace(/\/$/, "");
+  const p = normalizeWatchPath(parent).replace(/\/$/, "");
+  return c === p || c.startsWith(`${p}/`);
+}
 
 let activeWatcher: FSWatcher | null = null;
 let watcherDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -355,7 +384,7 @@ export async function startWatching(rootPath: string): Promise<void> {
     const watched = activeWatcher.getWatched();
     const watchedRoots = Object.keys(watched);
     // rootPath is already covered if it IS a watched root or is a CHILD of one
-    if (watchedRoots.some((r) => rootPath === r || rootPath.startsWith(r + "/"))) {
+    if (watchedRoots.some((r) => pathsEqualOrNested(rootPath, r))) {
       return;
     }
     // Different path or broader scope — stop old watcher first
@@ -363,7 +392,7 @@ export async function startWatching(rootPath: string): Promise<void> {
   }
 
   activeWatcher = watch(rootPath, {
-    ignored: WATCH_IGNORED,
+    ignored: isWatchIgnored,
     ignoreInitial: true,
     depth: 50,
     awaitWriteFinish: {
@@ -381,6 +410,13 @@ export async function startWatching(rootPath: string): Promise<void> {
     watcherDebounceTimer = setTimeout(() => {
       const paths = changedPaths.size > 0 ? Array.from(changedPaths) : undefined;
       changedPaths = new Set();
+      if (paths?.length) {
+        import("./project-skills-refresh").then(({ scheduleSkillsRefreshFromPaths }) => {
+          scheduleSkillsRefreshFromPaths(rootPath, paths);
+        }).catch((err) => {
+          console.error("[fs-watch] skills refresh scheduling failed:", err);
+        });
+      }
       const wins = BrowserWindow.getAllWindows();
       for (const win of wins) {
         if (!win.isDestroyed()) {

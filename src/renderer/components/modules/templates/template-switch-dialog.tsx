@@ -1,64 +1,53 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import type { CompatibilityLevel } from "@/lib/templates/template-merge";
+import type { SwitchDialogLevel } from "@/lib/templates/template-merge";
 
 export interface TemplateSwitchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  level: CompatibilityLevel | "reset" | "firstUse";
+  level: SwitchDialogLevel;
   oldName?: string;
   newName: string;
   oldCategory?: string;
   newCategory: string;
   changedFiles: string[];
   deletedFiles: string[];
+  dialogActions: ("merge" | "replace")[];
   onConfirm: (action: "merge" | "replace") => void;
   submitting?: boolean;
 }
 
 const LEVEL_CONFIG: Record<
-  CompatibilityLevel | "reset" | "firstUse",
+  SwitchDialogLevel,
   {
     title: string;
-    icon: string;
     message: string;
-    actions: ("merge" | "replace")[];
   }
 > = {
   L1: {
     title: "Switch Template",
-    icon: "✅",
     message:
-      "Same category — your content will be preserved and merged into the new template structure.",
-    actions: ["merge"],
+      "Same document family — matching sections and the abstract/front matter will be preserved where possible. Preamble and packages come from the new template.",
   },
   L2: {
-    title: "⚠️ Switch Template",
-    icon: "⚠️",
+    title: "Switch Template",
     message:
-      "Different document type — section structure may not fully transfer. We'll attempt to merge your content automatically. Review the result after switching.",
-    actions: ["merge", "replace"],
+      "Related document types (paper ↔ thesis) — section merge will be attempted. Review the result after switching.",
   },
   L3: {
-    title: "🚫 Switch Template",
-    icon: "🚫",
+    title: "Switch Template",
     message:
-      "Incompatible formats — content cannot be transferred automatically. Your existing files will be fully replaced. A backup will be saved.",
-    actions: ["replace"],
+      "These template types cannot be merged automatically. Your existing template files will be fully replaced. A backup will be saved.",
   },
   reset: {
     title: "Reset Template",
-    icon: "🔄",
     message:
-      "Reset to template original? Your modifications will be lost. A backup will be saved.",
-    actions: ["replace"],
+      "Reset to the template original? Your modifications will be lost. A backup will be saved.",
   },
   firstUse: {
-    title: "⚠️ Apply Template",
-    icon: "⚠️",
+    title: "Apply Template",
     message:
-      "This project already contains files. Applying a template will overwrite your existing content. A backup will be saved so you can restore if needed.",
-    actions: ["replace"],
+      "This project already contains files that overlap with the template. Applying will overwrite them. A backup will be saved.",
   },
 };
 
@@ -72,32 +61,32 @@ export function TemplateSwitchDialog({
   newCategory,
   changedFiles,
   deletedFiles,
+  dialogActions,
   onConfirm,
   submitting = false,
 }: TemplateSwitchDialogProps) {
   const config = LEVEL_CONFIG[level];
+  const isDestructive = level === "L3" || level === "reset" || level === "firstUse";
+  const isWarning = level === "L2";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="!max-w-lg">
         <DialogHeader>
-          <DialogTitle>
-            {config.icon} {config.title}
-          </DialogTitle>
+          <DialogTitle>{config.title}</DialogTitle>
           <DialogDescription className="text-[length:var(--font-size-13)]">
             {level === "firstUse"
-              ? `Apply ${newName} (${newCategory}) template`
+              ? `Apply ${newName} (${newCategory})`
               : `${oldName} (${oldCategory}) → ${newName} (${newCategory})`}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
-          {/* Level-specific message */}
           <div
             className={`rounded-md border px-3 py-2.5 text-[length:var(--font-size-12)] ${
-              level === "L3" || level === "reset" || level === "firstUse"
+              isDestructive
                 ? "border-destructive/30 bg-destructive/10 text-destructive"
-                : level === "L2"
+                : isWarning
                   ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
                   : "border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400"
             }`}
@@ -105,36 +94,9 @@ export function TemplateSwitchDialog({
             {config.message}
           </div>
 
-          {/* What will happen */}
-          <div className="text-[length:var(--font-size-12)] text-muted-foreground space-y-1">
-            <p className="font-medium text-foreground">What will happen:</p>
-            {level === "firstUse" ? (
-              <>
-                <p>1. A backup of your current files will be saved to .prismnext/backups/</p>
-                <p>2. All template files will be written, overwriting your content</p>
-                <p>3. You can restore your original files from the backup if needed</p>
-              </>
-            ) : level === "L1" || level === "L2" ? (
-              <>
-                <p>1. Your written content (sections, paragraphs) will be preserved</p>
-                <p>2. Document structure (preamble, packages) will be updated</p>
-                {level === "L2" && (
-                  <p>3. Unmapped sections will be appended at the end</p>
-                )}
-                <p>{level === "L2" ? "4" : "3"}. A backup will be saved to .prismnext/backups/</p>
-              </>
-            ) : (
-              <>
-                <p>1. All current template files will be replaced</p>
-                <p>2. A full backup will be saved to .prismnext/backups/</p>
-              </>
-            )}
-          </div>
-
-          {/* Changed files */}
           {(changedFiles.length > 0 || deletedFiles.length > 0) && (
             <div className="text-[length:var(--font-size-12)]">
-              <span className="text-muted-foreground">Modified files: </span>
+              <span className="text-muted-foreground">Affected files: </span>
               {changedFiles.map((f) => (
                 <code
                   key={f}
@@ -160,16 +122,17 @@ export function TemplateSwitchDialog({
             variant="outline"
             size="sm"
             className="shadow-none"
+            disabled={submitting}
             onClick={() => onOpenChange(false)}
           >
             Cancel
           </Button>
-          {config.actions.includes("replace") && (
+          {dialogActions.includes("replace") && (
             <Button
-              variant={level === "L3" || level === "reset" ? "default" : "outline"}
+              variant={isDestructive ? "default" : "outline"}
               size="sm"
               className={
-                level === "L3" || level === "reset"
+                isDestructive
                   ? "shadow-none bg-destructive hover:bg-destructive/90"
                   : "shadow-none"
               }
@@ -179,18 +142,18 @@ export function TemplateSwitchDialog({
               {level === "reset"
                 ? "Backup & Reset"
                 : level === "firstUse"
-                  ? "Backup & Apply Template"
-                  : "Backup & Replace All"}
+                  ? "Backup & Apply"
+                  : "Backup & Replace"}
             </Button>
           )}
-          {config.actions.includes("merge") && (
+          {dialogActions.includes("merge") && (
             <Button
               size="sm"
               className="shadow-none"
               disabled={submitting}
               onClick={() => onConfirm("merge")}
             >
-              {level === "L2" ? "Backup & Attempt Merge" : "Backup & Switch"}
+              {level === "L2" ? "Backup & Merge" : "Backup & Switch"}
             </Button>
           )}
         </DialogFooter>

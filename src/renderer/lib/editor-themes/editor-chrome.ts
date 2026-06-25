@@ -53,3 +53,19 @@ export const editorChromeTheme = EditorView.theme({
     color: "var(--primary)",
   },
 });
+
+/** Font family/size from Appearance → Editor (CSS vars on :root). */
+export const editorTypographyTheme = EditorView.theme({
+  "&": {
+    fontFamily: "var(--font-editor)",
+    fontSize: "var(--font-editor-size)",
+  },
+  ".cm-content": {
+    fontFamily: "var(--font-editor)",
+    fontSize: "var(--font-editor-size)",
+  },
+  ".cm-gutters": {
+    fontFamily: "var(--font-editor)",
+    fontSize: "var(--font-editor-size)",
+  },
+});

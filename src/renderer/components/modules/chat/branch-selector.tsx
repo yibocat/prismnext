@@ -2,11 +2,13 @@ import { useEffect, useMemo, useCallback, useRef, useState } from "react";
 import { GitBranchIcon, LockIcon, Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  AppMenu,
+  AppMenuCheckItem,
+  AppMenuContent,
+  AppMenuItem,
+  AppMenuTrigger,
+  appMenuFontClass,
+} from "@/components/ui/app-menu";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useGitStore } from "@/stores/git-store";
@@ -34,9 +36,6 @@ export function BranchSelector() {
     [branches],
   );
 
-  // Cache the project branch so wt-* never flashes during transitions
-  // (e.g. when switching from worktree back to local — the git store still
-  // reports the wt-* worktree branch for a frame while it refreshes).
   const lastProjectBranch = useRef(
     currentBranch && !currentBranch.startsWith(WT_PREFIX)
       ? currentBranch
@@ -60,8 +59,6 @@ export function BranchSelector() {
     (branchName: string) => {
       if (locked) return;
       if (!projectRoot) return;
-      // Lazy branch selection — only stores intent.
-      // Actual git checkout happens later in sendPrompt.
       if (branchName === currentBranch) {
         useGitStore.getState().setPendingBranch(null);
       } else {
@@ -88,7 +85,6 @@ export function BranchSelector() {
 
   if (!projectRoot) return null;
 
-  // ── No Git repo yet: direct-click Init Git button ──
   if (!isGitRepo) {
     return (
       <button
@@ -113,12 +109,11 @@ export function BranchSelector() {
     );
   }
 
-  // ── Git repo exists: branch selector dropdown ──
   const buttonLabel = pendingBranch && !locked ? pendingBranch : (displayBranch || "...");
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <AppMenu>
+      <AppMenuTrigger asChild>
         <button
           type="button"
           className={cn(
@@ -130,48 +125,41 @@ export function BranchSelector() {
           )}
           onMouseDown={(e) => e.preventDefault()}
           title={buttonLabel}
+          disabled={locked}
         >
           <GitBranchIcon className="size-3.5 shrink-0" />
           <span className="max-w-[100px] truncate hidden @md:inline">{buttonLabel}</span>
           {locked && <LockIcon className="size-3" />}
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-56">
+      </AppMenuTrigger>
+      <AppMenuContent align="start" className="w-56 max-h-56 overflow-y-auto">
         {visibleBranches.length > 0 ? (
           visibleBranches.map((b) => {
             const isCurrent = b === currentBranch;
             const isPending = b === pendingBranch;
             return (
-              <DropdownMenuItem
+              <AppMenuCheckItem
                 key={b}
+                selected={isCurrent}
                 onClick={() => handleSelectBranch(b)}
                 disabled={locked}
-                className={cn(
-                  "text-[length:var(--font-chat-meta)]",
-                  (locked || isCurrent) && "opacity-50",
-                )}
+                className={cn(locked && "opacity-50")}
+                trailing={
+                  isPending && !isCurrent ? (
+                    <span className="text-[length:var(--font-badge)] text-amber-500">next</span>
+                  ) : isCurrent ? (
+                    <span className="text-[length:var(--font-badge)] text-primary">current</span>
+                  ) : null
+                }
               >
-                <GitBranchIcon className="size-3.5 shrink-0" />
-                <span className="truncate flex-1">{b}</span>
-                {isCurrent && (
-                  <span className="text-[length:var(--font-badge)] text-primary shrink-0 ml-1">
-                    current
-                  </span>
-                )}
-                {isPending && !isCurrent && (
-                  <span className="text-[length:var(--font-badge)] text-amber-500 shrink-0 ml-1">
-                    next
-                  </span>
-                )}
-              </DropdownMenuItem>
+                {b}
+              </AppMenuCheckItem>
             );
           })
         ) : (
-          <div className="px-2 py-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
-            No branches
-          </div>
+          <p className={cn("px-2 py-2 text-muted-foreground", appMenuFontClass)}>No branches</p>
         )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </AppMenuContent>
+    </AppMenu>
   );
 }

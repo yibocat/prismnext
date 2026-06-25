@@ -16,18 +16,14 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
+  AppContextMenu,
+  AppContextMenuContent,
+  AppContextMenuItem,
+  AppContextMenuSeparator,
+  AppContextMenuTrigger,
+} from "@/components/ui/app-context-menu";
 import {
   RefreshCwIcon,
-  ExternalLinkIcon,
-  PlusSquareIcon,
-  PencilIcon,
-  LinkIcon,
   ChevronRightIcon,
   StarIcon,
   XIcon,
@@ -222,8 +218,8 @@ export function BrowserSidebar() {
               ) : (
                 bookmarks.map((b) => (
                   <div key={b.id}>
-                    <ContextMenu>
-                      <ContextMenuTrigger asChild>
+                    <AppContextMenu>
+                      <AppContextMenuTrigger asChild>
                         <SidebarMenuButton
                           size="sm"
                           onClick={() => handleNavigate(b.url)}
@@ -265,27 +261,23 @@ export function BrowserSidebar() {
                             </button>
                           )}
                         </SidebarMenuButton>
-                      </ContextMenuTrigger>
-                      <ContextMenuContent>
-                        <ContextMenuItem onClick={() => handleNavigate(b.url)}>
-                          <ExternalLinkIcon />
+                      </AppContextMenuTrigger>
+                      <AppContextMenuContent>
+                        <AppContextMenuItem onClick={() => handleNavigate(b.url)}>
                           Open
-                        </ContextMenuItem>
-                        <ContextMenuItem onClick={() => handleOpenInNewTab(b.url)}>
-                          <PlusSquareIcon />
+                        </AppContextMenuItem>
+                        <AppContextMenuItem onClick={() => handleOpenInNewTab(b.url)}>
                           Open in New Tab
-                        </ContextMenuItem>
-                        <ContextMenuSeparator />
-                        <ContextMenuItem onClick={() => handleStartRename(b.id, b.title)}>
-                          <PencilIcon />
+                        </AppContextMenuItem>
+                        <AppContextMenuSeparator />
+                        <AppContextMenuItem onClick={() => handleStartRename(b.id, b.title)}>
                           Rename
-                        </ContextMenuItem>
-                        <ContextMenuItem onClick={() => handleStartChangeUrl(b.id, b.url)}>
-                          <LinkIcon />
+                        </AppContextMenuItem>
+                        <AppContextMenuItem onClick={() => handleStartChangeUrl(b.id, b.url)}>
                           Change URL
-                        </ContextMenuItem>
-                      </ContextMenuContent>
-                    </ContextMenu>
+                        </AppContextMenuItem>
+                      </AppContextMenuContent>
+                    </AppContextMenu>
                     {editing?.id === b.id && editing.type === "url" && (
                       <div className="flex items-center gap-1 pl-3 h-6 py-0.5">
                         <input
@@ -338,8 +330,8 @@ export function BrowserSidebar() {
                 </p>
               ) : (
                 recentVisits.map((v, i) => (
-                  <ContextMenu key={`${v.url}-${i}`}>
-                    <ContextMenuTrigger asChild>
+                  <AppContextMenu key={`${v.url}-${i}`}>
+                    <AppContextMenuTrigger asChild>
                       <SidebarMenuButton
                         size="sm"
                         onClick={() => handleNavigate(v.url)}
@@ -367,18 +359,16 @@ export function BrowserSidebar() {
                           <XIcon className="size-3" />
                         </button>
                       </SidebarMenuButton>
-                    </ContextMenuTrigger>
-                    <ContextMenuContent>
-                      <ContextMenuItem onClick={() => handleNavigate(v.url)}>
-                        <ExternalLinkIcon />
+                    </AppContextMenuTrigger>
+                    <AppContextMenuContent>
+                      <AppContextMenuItem onClick={() => handleNavigate(v.url)}>
                         Open
-                      </ContextMenuItem>
-                      <ContextMenuItem onClick={() => handleOpenInNewTab(v.url)}>
-                        <PlusSquareIcon />
+                      </AppContextMenuItem>
+                      <AppContextMenuItem onClick={() => handleOpenInNewTab(v.url)}>
                         Open in New Tab
-                      </ContextMenuItem>
-                    </ContextMenuContent>
-                  </ContextMenu>
+                      </AppContextMenuItem>
+                    </AppContextMenuContent>
+                  </AppContextMenu>
                 ))
               )}
             </AccordionContent>

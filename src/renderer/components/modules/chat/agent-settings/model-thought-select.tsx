@@ -1,17 +1,18 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { useSettingsStore, type AppSettings } from "@/stores/settings-store";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-  DropdownMenuPortal,
-} from "@/components/ui/dropdown-menu";
+  AppMenu,
+  AppMenuCheckItem,
+  AppMenuContent,
+  AppMenuLabel,
+  AppMenuSeparator,
+  AppMenuSub,
+  AppMenuSubContent,
+  AppMenuSubTrigger,
+  AppMenuTrigger,
+  appMenuFontClass,
+} from "@/components/ui/app-menu";
+import { DropdownMenuPortal } from "@/components/ui/dropdown-menu";
 import {
   getAllEnabledModels,
   getModel,
@@ -21,12 +22,14 @@ import {
   type ProviderConfig,
 } from "@/lib/providers";
 import { cn } from "@/lib/utils";
-import { CheckIcon, ChevronDownIcon, SparklesIcon } from "lucide-react";
+import { ChevronDownIcon, SparklesIcon } from "lucide-react";
 import { modelPreferenceKey } from "./model-keys";
 import { useModelMenuPlacement } from "./use-submenu-side";
 
 interface ModelThoughtSelectProps {
   compact?: boolean;
+  /** Capsule AiBar: model label + chevron to the left of send. */
+  presentation?: "default" | "icon" | "capsule";
 }
 
 function capitalize(s: string): string {
@@ -48,7 +51,7 @@ export function getModelThoughtLevels(
   return levels.map((r: string) => ({ value: r, label: capitalize(r) }));
 }
 
-export function ModelThoughtSelect({ compact }: ModelThoughtSelectProps) {
+export function ModelThoughtSelect({ compact, presentation = "default" }: ModelThoughtSelectProps) {
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -105,6 +108,8 @@ export function ModelThoughtSelect({ compact }: ModelThoughtSelectProps) {
   }, [visible]);
 
   const isEmpty = grouped.length === 0;
+  const useIconTrigger = presentation === "icon" || (presentation === "default" && compact);
+  const useCapsuleTrigger = presentation === "capsule";
 
   const handleSelectModel = (providerId: string, modelId: string, levelValue?: string) => {
     const key = modelPreferenceKey(providerId, modelId);
@@ -133,59 +138,61 @@ export function ModelThoughtSelect({ compact }: ModelThoughtSelectProps) {
   };
 
   return (
-    <DropdownMenu
+    <AppMenu
       open={menuOpen}
       onOpenChange={(open) => {
         setMenuOpen(open);
         if (open) refreshPlacement();
       }}
     >
-      <DropdownMenuTrigger asChild>
+      <AppMenuTrigger asChild>
         <button
           ref={triggerRef}
           type="button"
           className={cn(
-            "flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors min-w-0 outline-hidden focus-visible:ring-1 focus-visible:ring-ring",
-            compact ? "size-7 justify-center px-0 max-w-none" : "max-w-56",
+            "flex items-center gap-0.5 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors min-w-0 outline-hidden focus-visible:ring-1 focus-visible:ring-ring shrink-0",
+            useIconTrigger && "size-7 justify-center px-0 max-w-none",
+            useCapsuleTrigger && "max-w-[9rem] px-1",
+            !useIconTrigger && !useCapsuleTrigger && "max-w-56",
           )}
           title={triggerDetail}
         >
-          {compact ? (
+          {useIconTrigger ? (
             <SparklesIcon className="size-3.5 shrink-0" />
           ) : (
             <>
-              <span className="truncate">{triggerDetail}</span>
-              <ChevronDownIcon className="size-3 shrink-0" />
+              <span className="truncate">
+                {useCapsuleTrigger ? displayName : triggerDetail}
+              </span>
+              <ChevronDownIcon className="size-3 shrink-0 opacity-60" />
             </>
           )}
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
+      </AppMenuTrigger>
+      <AppMenuContent
         align={menuAlign}
         side="top"
         sideOffset={6}
         collisionPadding={16}
         className={cn(
           "w-44 max-h-80 overflow-y-auto",
-          compact && "max-w-[min(11rem,calc(100vw-2rem))]",
+          (compact || useCapsuleTrigger) && "max-w-[min(11rem,calc(100vw-2rem))]",
         )}
       >
-        <DropdownMenuLabel className="text-[length:var(--font-chat-meta)] px-2 py-1.5">
-          Select Model
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator className="-mx-1 my-1" />
+        <AppMenuLabel>Select Model</AppMenuLabel>
+        <AppMenuSeparator />
 
         {isEmpty && (
-          <div className="px-2 py-4 text-center text-[length:var(--font-chat-meta)] text-muted-foreground">
+          <p className={cn("px-2 py-3 text-center text-muted-foreground", appMenuFontClass)}>
             Enable models in Settings → AI&amp;APIs
-          </div>
+          </p>
         )}
 
         {grouped.map(({ provider, models }) => (
           <div key={provider.id}>
-            <DropdownMenuLabel className="text-[length:var(--font-size-11)] text-muted-foreground/60 font-medium pt-2 pb-0.5 px-2">
+            <AppMenuLabel className="pt-1 normal-case tracking-normal text-[length:var(--font-size-11)]">
               {provider.name}
-            </DropdownMenuLabel>
+            </AppMenuLabel>
             {models.map((model) => {
               const key = modelPreferenceKey(provider.id, model.id);
               const isSelected =
@@ -201,80 +208,69 @@ export function ModelThoughtSelect({ compact }: ModelThoughtSelectProps) {
                   : null;
 
                 return (
-                  <DropdownMenuSub key={key}>
-                    <DropdownMenuSubTrigger
-                      className={cn(
-                        "flex w-full items-center gap-1 rounded-sm px-2 py-1.5 text-left text-[length:var(--font-chat-meta)] focus:bg-accent",
-                        isSelected && "bg-accent/40 font-medium",
-                      )}
+                  <AppMenuSub key={key}>
+                    <AppMenuSubTrigger
+                      className={cn(isSelected && "font-medium")}
                       onClick={() => handleSelectModel(provider.id, model.id)}
+                      trailing={
+                        currentModelThoughtLabel ? (
+                          <span className="text-[length:var(--font-size-10)] text-muted-foreground/60">
+                            {currentModelThoughtLabel}
+                          </span>
+                        ) : null
+                      }
                     >
-                      <span className="flex-1 truncate">{model.name}</span>
-                      {currentModelThoughtLabel && (
-                        <span className="text-[length:var(--font-size-10)] text-muted-foreground/60 mr-1 shrink-0">
-                          {currentModelThoughtLabel}
-                        </span>
-                      )}
-                    </DropdownMenuSubTrigger>
+                      {model.name}
+                    </AppMenuSubTrigger>
                     <DropdownMenuPortal>
-                      <DropdownMenuSubContent
-                        collisionPadding={16}
-                        className="w-28 p-1"
-                      >
-                        <DropdownMenuLabel className="text-[length:var(--font-size-11)] text-muted-foreground/60 font-medium px-2 py-1">
+                      <AppMenuSubContent className="min-w-[7rem]">
+                        <AppMenuLabel className="normal-case tracking-normal text-[length:var(--font-size-11)]">
                           Reasoning Depth
-                        </DropdownMenuLabel>
-                        <DropdownMenuSeparator className="-mx-1 my-1" />
-                        <DropdownMenuItem
-                          className="flex items-center gap-2 py-1 px-2 text-[length:var(--font-chat-meta)] rounded-sm"
+                        </AppMenuLabel>
+                        <AppMenuSeparator />
+                        <AppMenuCheckItem
+                          selected={!savedThought}
                           onSelect={(e) => {
                             e.preventDefault();
                             handleSelectThought(key, provider.id, undefined);
                             handleSelectModel(provider.id, model.id, undefined);
                           }}
                         >
-                          <span className="flex-1">Default</span>
-                          {!savedThought && <CheckIcon className="size-3 shrink-0 ml-1" />}
-                        </DropdownMenuItem>
+                          Default
+                        </AppMenuCheckItem>
                         {levels.map((level) => (
-                          <DropdownMenuItem
+                          <AppMenuCheckItem
                             key={level.value}
-                            className="flex items-center gap-2 py-1 px-2 text-[length:var(--font-chat-meta)] rounded-sm"
+                            selected={savedThought === level.value}
                             onSelect={(e) => {
                               e.preventDefault();
                               handleSelectThought(key, provider.id, level.value);
                               handleSelectModel(provider.id, model.id, level.value);
                             }}
                           >
-                            <span className="flex-1">{level.label}</span>
-                            {savedThought === level.value && (
-                              <CheckIcon className="size-3 shrink-0 ml-1" />
-                            )}
-                          </DropdownMenuItem>
+                            {level.label}
+                          </AppMenuCheckItem>
                         ))}
-                      </DropdownMenuSubContent>
+                      </AppMenuSubContent>
                     </DropdownMenuPortal>
-                  </DropdownMenuSub>
+                  </AppMenuSub>
                 );
               }
 
               return (
-                <DropdownMenuItem
+                <AppMenuCheckItem
                   key={key}
-                  className={cn(
-                    "flex items-center gap-1 py-1.5 px-2 text-[length:var(--font-chat-meta)] rounded-sm",
-                    isSelected && "bg-accent/40 font-medium",
-                  )}
+                  selected={isSelected}
+                  className={cn(isSelected && "font-medium")}
                   onSelect={() => handleSelectModel(provider.id, model.id)}
                 >
-                  <span className="flex-1 truncate">{model.name}</span>
-                  {isSelected && <CheckIcon className="size-3 shrink-0 ml-1" />}
-                </DropdownMenuItem>
+                  {model.name}
+                </AppMenuCheckItem>
               );
             })}
           </div>
         ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </AppMenuContent>
+    </AppMenu>
   );
 }

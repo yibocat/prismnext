@@ -106,11 +106,45 @@ describe("chat-store session loading", () => {
         message: { content: [{ type: "text" as const, text: "Cached hello" }] },
       },
     ];
-    (useChatStore as any)._msgCache = new Map([["session-cached", cached]]);
+    (useChatStore as any)._msgCache.set("session-cached", cached);
 
     await useChatStore.getState().loadSession("session-cached");
 
     expect(useChatStore.getState().isLoadingSession).toBe(false);
     expect(useChatStore.getState().messages).toEqual(cached);
+  });
+
+  it("drops internal patch metadata parts on session load", async () => {
+    sessionLoad.mockResolvedValue([
+      {
+        info: { role: "assistant" },
+        parts: [
+          {
+            type: "tool",
+            tool: "apply_patch",
+            callID: "call-patch",
+            state: {
+              status: "completed",
+              input: { patch: "diff" },
+              output: "ok",
+            },
+          },
+          {
+            type: "patch",
+            hash: "df7612e3",
+            files: ["/proj/.prismnext/worktrees/wt/main.tex"],
+          },
+        ],
+      },
+    ]);
+
+    await useChatStore.getState().loadSession("session-patch");
+
+    const content = useChatStore.getState().messages[0].message?.content || [];
+    expect(content.some((b) => b.type === "text" && String(b.text).includes('"type":"patch"'))).toBe(false);
+    expect(content).toEqual([
+      { type: "tool_use", id: "call-patch", name: "apply_patch", input: { patch: "diff" } },
+      { type: "tool_result", tool_use_id: "call-patch", content: "ok", is_error: false },
+    ]);
   });
 });

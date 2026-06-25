@@ -425,7 +425,11 @@ export class EventMapper {
             delta,
           },
         });
-      } else if (chunkType === "agent_message_chunk" || chunkType === "user_message_chunk") {
+      } else if (chunkType === "user_message_chunk") {
+        // User turns are rendered from composer/display snapshots — never replay
+        // stored user chunks (includes injected system prompt on session/load).
+        return;
+      } else if (chunkType === "agent_message_chunk") {
         // ── Message text chunks (agent response or user echo) ──
         const key = msgId || `${sessionId}-text`;
         const delta = content.text;

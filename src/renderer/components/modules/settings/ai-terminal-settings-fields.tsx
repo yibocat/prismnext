@@ -1,20 +1,26 @@
 import { TerminalIcon } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+  AppSelect,
+  AppSelectContent,
+  AppSelectItem,
+  AppSelectTrigger,
+  AppSelectValue,
+} from "@/components/ui/app-select";
+import {
+  SETTINGS_CARD,
+  SETTINGS_ROW,
+  SETTINGS_ROW_DESC,
+  SETTINGS_ROW_LABEL,
+} from "./settings-tokens";
 
-export const SETTINGS_CARD = "rounded-lg border border-border px-4 divide-y divide-border";
-export const SETTINGS_ROW = "flex items-center justify-between gap-3 py-2.5";
-export const SETTINGS_ROW_LABEL = "text-[length:var(--font-size-13)] font-medium";
-export const SETTINGS_ROW_DESC = "text-[length:var(--font-size-12)] text-muted-foreground mt-0.5";
-export const SETTINGS_TRIGGER =
-  "!h-7 !px-2 !py-0 !text-[length:var(--font-size-12)] bg-background [&_svg]:!size-3 min-w-[9rem]";
+export {
+  SETTINGS_CARD,
+  SETTINGS_ROW,
+  SETTINGS_ROW_DESC,
+  SETTINGS_ROW_LABEL,
+  SETTINGS_TRIGGER,
+} from "./settings-tokens";
 
 interface AiTerminalSettingsFieldsProps {
   /** Hide PTY/Mirror execution mode (show in Advanced only). */
@@ -48,18 +54,18 @@ export function AiTerminalSettingsFields({ hideExecutionMode = true }: AiTermina
               then replays the log — a fallback if PTY has issues.
             </p>
           </div>
-          <Select
+          <AppSelect
             value={agentTerminalMode}
             onValueChange={(value: "mirror" | "pty") => void updateSettings({ agentTerminalMode: value })}
           >
-            <SelectTrigger className={cn(SETTINGS_TRIGGER)}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pty">PTY stream (default)</SelectItem>
-              <SelectItem value="mirror">Mirror (fallback)</SelectItem>
-            </SelectContent>
-          </Select>
+            <AppSelectTrigger variant="wide">
+              <AppSelectValue />
+            </AppSelectTrigger>
+            <AppSelectContent>
+              <AppSelectItem value="pty">PTY stream (default)</AppSelectItem>
+              <AppSelectItem value="mirror">Mirror (fallback)</AppSelectItem>
+            </AppSelectContent>
+          </AppSelect>
         </div>
       ) : null}
       <div className={SETTINGS_ROW}>
@@ -70,20 +76,20 @@ export function AiTerminalSettingsFields({ hideExecutionMode = true }: AiTermina
             saved to the session log either way.
           </p>
         </div>
-        <Select
+        <AppSelect
           value={aiTerminalAutoOpen ? "auto" : "manual"}
           onValueChange={(value: "auto" | "manual") =>
             void updateSettings({ aiTerminalAutoOpen: value === "auto" })
           }
         >
-          <SelectTrigger className={cn(SETTINGS_TRIGGER)}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="auto">Auto open</SelectItem>
-            <SelectItem value="manual">Manual only</SelectItem>
-          </SelectContent>
-        </Select>
+          <AppSelectTrigger variant="wide">
+            <AppSelectValue />
+          </AppSelectTrigger>
+          <AppSelectContent>
+            <AppSelectItem value="auto">Auto open</AppSelectItem>
+            <AppSelectItem value="manual">Manual only</AppSelectItem>
+          </AppSelectContent>
+        </AppSelect>
       </div>
       <div className={SETTINGS_ROW}>
         <div className="min-w-0">
@@ -93,22 +99,22 @@ export function AiTerminalSettingsFields({ hideExecutionMode = true }: AiTermina
             (PTY has already exited). Idle cleanup applies after this grace period.
           </p>
         </div>
-        <Select
+        <AppSelect
           value={String(aiTerminalPostExitGraceMs)}
           onValueChange={(value) =>
             void updateSettings({ aiTerminalPostExitGraceMs: Number(value) })
           }
         >
-          <SelectTrigger className={cn(SETTINGS_TRIGGER)}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="30000">30 seconds</SelectItem>
-            <SelectItem value="60000">1 minute</SelectItem>
-            <SelectItem value="120000">2 minutes</SelectItem>
-            <SelectItem value="300000">5 minutes</SelectItem>
-          </SelectContent>
-        </Select>
+          <AppSelectTrigger variant="wide">
+            <AppSelectValue />
+          </AppSelectTrigger>
+          <AppSelectContent>
+            <AppSelectItem value="30000">30 seconds</AppSelectItem>
+            <AppSelectItem value="60000">1 minute</AppSelectItem>
+            <AppSelectItem value="120000">2 minutes</AppSelectItem>
+            <AppSelectItem value="300000">5 minutes</AppSelectItem>
+          </AppSelectContent>
+        </AppSelect>
       </div>
       <div className={SETTINGS_ROW}>
         <div className="min-w-0">
@@ -118,22 +124,22 @@ export function AiTerminalSettingsFields({ hideExecutionMode = true }: AiTermina
             for this long (after the post-exit grace).
           </p>
         </div>
-        <Select
+        <AppSelect
           value={String(aiTerminalIdleCloseMs)}
           onValueChange={(value) =>
             void updateSettings({ aiTerminalIdleCloseMs: Number(value) })
           }
         >
-          <SelectTrigger className={cn(SETTINGS_TRIGGER)}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="300000">5 minutes</SelectItem>
-            <SelectItem value="600000">10 minutes</SelectItem>
-            <SelectItem value="1800000">30 minutes</SelectItem>
-            <SelectItem value="3600000">1 hour</SelectItem>
-          </SelectContent>
-        </Select>
+          <AppSelectTrigger variant="wide">
+            <AppSelectValue />
+          </AppSelectTrigger>
+          <AppSelectContent>
+            <AppSelectItem value="300000">5 minutes</AppSelectItem>
+            <AppSelectItem value="600000">10 minutes</AppSelectItem>
+            <AppSelectItem value="1800000">30 minutes</AppSelectItem>
+            <AppSelectItem value="3600000">1 hour</AppSelectItem>
+          </AppSelectContent>
+        </AppSelect>
       </div>
       <div className={SETTINGS_ROW}>
         <div className="min-w-0">
@@ -143,20 +149,20 @@ export function AiTerminalSettingsFields({ hideExecutionMode = true }: AiTermina
             the command. Default: close the view only; the command keeps running.
           </p>
         </div>
-        <Select
+        <AppSelect
           value={aiTerminalCloseTabKillsProcess ? "kill" : "keep"}
           onValueChange={(value: "kill" | "keep") =>
             void updateSettings({ aiTerminalCloseTabKillsProcess: value === "kill" })
           }
         >
-          <SelectTrigger className={cn(SETTINGS_TRIGGER)}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="keep">Keep running (default)</SelectItem>
-            <SelectItem value="kill">Cancel command</SelectItem>
-          </SelectContent>
-        </Select>
+          <AppSelectTrigger variant="wide">
+            <AppSelectValue />
+          </AppSelectTrigger>
+          <AppSelectContent>
+            <AppSelectItem value="keep">Keep running (default)</AppSelectItem>
+            <AppSelectItem value="kill">Cancel command</AppSelectItem>
+          </AppSelectContent>
+        </AppSelect>
       </div>
       <div className={SETTINGS_ROW}>
         <div className="min-w-0">
@@ -165,20 +171,20 @@ export function AiTerminalSettingsFields({ hideExecutionMode = true }: AiTermina
             Show AI terminal running / idle status in the session title hover card.
           </p>
         </div>
-        <Select
+        <AppSelect
           value={aiTerminalShowSessionIndicator ? "show" : "hide"}
           onValueChange={(value: "show" | "hide") =>
             void updateSettings({ aiTerminalShowSessionIndicator: value === "show" })
           }
         >
-          <SelectTrigger className={cn(SETTINGS_TRIGGER)}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="show">Show</SelectItem>
-            <SelectItem value="hide">Hide</SelectItem>
-          </SelectContent>
-        </Select>
+          <AppSelectTrigger variant="wide">
+            <AppSelectValue />
+          </AppSelectTrigger>
+          <AppSelectContent>
+            <AppSelectItem value="show">Show</AppSelectItem>
+            <AppSelectItem value="hide">Hide</AppSelectItem>
+          </AppSelectContent>
+        </AppSelect>
       </div>
     </div>
   );

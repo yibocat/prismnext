@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useGitStore } from "@/stores/git-store";
 import { modeRegistry } from "@/lib/workspace/mode-registry";
 
 /** Right-panel keyboard shortcuts — scoped to `[data-right-area]`. Cmd+W is app-wide via menu IPC. */
@@ -20,9 +21,7 @@ export function useRightAreaShortcuts(enabled: boolean) {
       const activeTab = rp.tabs.find((t) => t.id === rp.activeTabId);
       const focusedMode = useLayoutStore.getState().focusedMode;
 
-      if (!activeTab) return;
-
-      if (mod && e.key === "s" && !e.shiftKey && !e.altKey) {
+      if (mod && e.key === "s" && !e.shiftKey && !e.altKey && activeTab) {
         const fileId = activeTab.fileId;
         if (
           fileId &&
@@ -31,6 +30,30 @@ export function useRightAreaShortcuts(enabled: boolean) {
         ) {
           e.preventDefault();
           void useDocumentStore.getState().saveFile(fileId);
+        }
+        return;
+      }
+
+      if (!activeTab) return;
+
+      if (
+        mod &&
+        e.key === "r" &&
+        !e.shiftKey &&
+        !e.altKey &&
+        focusedMode === "git"
+      ) {
+        const gitRoot = useGitStore.getState().unitRoot
+          ?? useDocumentStore.getState().projectRoot;
+        if (gitRoot && useGitStore.getState().isGitRepo) {
+          e.preventDefault();
+          const sidebarView = useGitStore.getState().sidebarView;
+          if (sidebarView === "history") {
+            void useGitStore.getState().loadHistory(gitRoot);
+          } else {
+            void useGitStore.getState().forceRefreshStatus(gitRoot);
+            void useGitStore.getState().refreshBranches(gitRoot);
+          }
         }
         return;
       }

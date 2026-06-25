@@ -4,12 +4,12 @@ import { useBrowserStore } from "@/stores/browser-store";
 import { getWebview } from "./webview-registry";
 import { cn } from "@/lib/utils";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  AppMenu,
+  AppMenuContent,
+  AppMenuItem,
+  AppMenuSeparator,
+  AppMenuTrigger,
+} from "@/components/ui/app-menu";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -17,9 +17,6 @@ import {
   GlobeIcon,
   StarIcon,
   EllipsisIcon,
-  Trash2Icon,
-  CookieIcon,
-  HardDriveIcon,
 } from "lucide-react";
 
 /** Normalize URL for comparison: strip trailing slash, fragment, and www prefix */
@@ -176,8 +173,8 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
       <div className="mx-1 h-4 w-px bg-border shrink-0" />
 
       {/* Three-dot menu */}
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-        <DropdownMenuTrigger asChild>
+      <AppMenu open={menuOpen} onOpenChange={setMenuOpen}>
+        <AppMenuTrigger asChild>
           <button
             type="button"
             className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
@@ -185,23 +182,14 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
           >
             <EllipsisIcon className="size-3.5" />
           </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuItem onClick={handleClearHistory}>
-            <Trash2Icon className="size-3.5 mr-2" />
-            <span>Clear History</span>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleClearCookies}>
-            <CookieIcon className="size-3.5 mr-2" />
-            <span>Clear Cookies</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleClearCache}>
-            <HardDriveIcon className="size-3.5 mr-2" />
-            <span>Clear Cache</span>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </AppMenuTrigger>
+        <AppMenuContent align="end" className="min-w-[8.5rem]">
+          <AppMenuItem onClick={handleClearHistory}>Clear History</AppMenuItem>
+          <AppMenuSeparator />
+          <AppMenuItem onClick={handleClearCookies}>Clear Cookies</AppMenuItem>
+          <AppMenuItem onClick={handleClearCache}>Clear Cache</AppMenuItem>
+        </AppMenuContent>
+      </AppMenu>
     </>
   );
 }
