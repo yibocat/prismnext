@@ -130,6 +130,14 @@ function createWindow() {
       ? process.env.ELECTRON_RENDERER_URL + "?freeze-splash"
       : process.env.ELECTRON_RENDERER_URL;
     mainWindow.loadURL(url);
+
+    // Dev only: Cmd+Option+I toggles DevTools (no menu entry in production builds).
+    mainWindow.webContents.on("before-input-event", (_event, input) => {
+      if (input.type !== "keyDown") return;
+      if (input.meta && input.alt && input.key?.toLowerCase() === "i") {
+        mainWindow?.webContents.toggleDevTools();
+      }
+    });
   } else {
     mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }

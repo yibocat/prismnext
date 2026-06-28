@@ -6,11 +6,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ArrowLeftIcon, FileTextIcon } from "lucide-react";
 import { Root, Pages, Page, CanvasLayer, TextLayer } from "@anaralabs/lector";
 import "pdfjs-dist/web/pdf_viewer.css";
-import { GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
-import pdfjsWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+import { PDFJS_DOCUMENT_OPTIONS, PDF_PAGES_CLASS, PDF_PAGES_STYLE, PDF_PAGE_CLASS } from "@/components/modules/preview/pdf-config";
+import { PdfScrollClamp } from "@/components/modules/preview/pdf-scroll-clamp";
 import { TemplateFull } from "./types";
-
-GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
 // ─── File tree ───
 
@@ -186,10 +184,17 @@ export function DetailView({
             </DialogHeader>
             {pdfDataUrl && (
               <div className="flex-1 min-h-0">
-                <Root source={pdfDataUrl} className="h-full flex flex-col" isZoomFitWidth
-                  loader={<span className="flex justify-center pt-20 text-muted-foreground">Loading...</span>}>
-                  <Pages className="flex-1 overflow-auto" gap={8}>
-                    <Page className="bg-white shadow-md">
+                <Root
+                  key={template.id}
+                  source={pdfDataUrl}
+                  documentOptions={PDFJS_DOCUMENT_OPTIONS}
+                  isZoomFitWidth
+                  className="h-full flex flex-col"
+                  loader={<span className="flex justify-center pt-20 text-muted-foreground">Loading...</span>}
+                >
+                  <PdfScrollClamp />
+                  <Pages className={PDF_PAGES_CLASS} style={PDF_PAGES_STYLE} gap={8}>
+                    <Page className={PDF_PAGE_CLASS}>
                       <CanvasLayer />
                       <TextLayer />
                     </Page>

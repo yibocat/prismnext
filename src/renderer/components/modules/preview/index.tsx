@@ -6,7 +6,7 @@ import {
   CanvasLayer,
   TextLayer,
   AnnotationLayer,
-  ColoredHighlightLayer,
+  HighlightLayer,
   Outline,
   OutlineItem,
   OutlineChildItems,
@@ -16,18 +16,13 @@ import {
   useSearch,
   usePdfJump,
   usePdf,
+  calculateHighlightRects,
 } from "@anaralabs/lector";
-import type { SearchResult, ColoredHighlight } from "@anaralabs/lector";
+import type { SearchResult } from "@anaralabs/lector";
 import "pdfjs-dist/web/pdf_viewer.css";
-// Import GlobalWorkerOptions from the same legacy build that Lector uses
-// internally (pdfjs-dist/legacy/build/pdf.mjs). If we import from the
-// standard "pdfjs-dist" entry, we get a DIFFERENT GlobalWorkerOptions
-// instance — and Lector's getDocument() won't see our workerSrc setting.
-//
-// Likewise, we must use the LEGACY worker — the legacy main library and
-// standard worker have incompatible internal APIs (e.g. toHex differences).
-import { GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
-import pdfjsWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+import { PDFJS_DOCUMENT_OPTIONS, PDF_PAGES_CLASS, PDF_PAGES_DARK_CLASS, PDF_PAGES_STYLE, PDF_PAGE_CLASS, PDF_PAGE_DARK_FILTER, PDF_PAGE_INVERTED_CLASS } from "./pdf-config";
+import { PdfScrollClamp } from "./pdf-scroll-clamp";
+import { applyPdfZoomMode, PDF_ZOOM_MODE_LABELS, type PdfZoomMode } from "./pdf-zoom";
 import {
   LoaderIcon,
   AlertCircleIcon,
@@ -55,22 +50,16 @@ import { useCompileStore, getPdfBytes } from "@/stores/compile-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
-import { useSyncTex } from "@/hooks/use-synctex";
 import { saveViewerPosition, loadViewerPosition } from "@/lib/editor/viewer-position";
 import { TabContext } from "@/lib/workspace/tab-context";
-
-GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
-
-const PDFJS_DOCUMENT_OPTIONS = {
-  cMapUrl: "./pdfjs-dist/cmaps/",
-  standardFontDataUrl: "./pdfjs-dist/standard_fonts/",
-  wasmUrl: "./pdfjs-dist/wasm/",
-  iccUrl: "./pdfjs-dist/iccs/",
-} as const;
 
 type SidePanel = "outline" | "search" | "thumbnails" | null;
 
 const ZOOM_PRESETS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+const FIT_ZOOM_MODES: PdfZoomMode[] = ["fit-width", "fit-height", "fit-page", "actual-size"];
+
+const outlineItemClass =
+  "cursor-pointer text-muted-foreground hover:text-foreground transition-colors [&_a]:block [&_a]:truncate [&_a]:py-0.5 [&_a]:px-2 [&_a[data-level='0']]:pl-2 [&_a[data-level='1']]:pl-5 [&_a[data-level='2']]:pl-8 [&_a[data-level='3']]:pl-11 [&_a[data-level='4']]:pl-14";
 
 // ─── Side Panel Sub-Components (rendered inside <Root>) ───
 
@@ -80,21 +69,15 @@ function OutlinePanel({ onJump }: { onJump?: () => void }) {
       <div className="flex h-[var(--height-preview-thin-toolbar)] shrink-0 items-center border-b border-border px-2">
         <span className="text-[length:var(--font-toolbar-label)] font-medium text-muted-foreground">Outline</span>
       </div>
-      <div className="flex-1 overflow-auto">
-        <Outline className="text-[length:var(--font-toolbar-label)]">
-          <OutlineItem
-            className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors [&>[data-level]]:block [&>[data-level]]:truncate [&>[data-level]]:py-0.5 [&>[data-level]]:px-2 [&>[data-level='0']]:pl-2 [&>[data-level='1']]:pl-5 [&>[data-level='2']]:pl-8 [&>[data-level='3']]:pl-11"
-            onClick={onJump}
-          >
-            <OutlineChildItems
-              children={
-                [<OutlineItem
-                  key="nested"
-                  className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors [&>[data-level]]:block [&>[data-level]]:truncate [&>[data-level]]:py-0.5 [&>[data-level]]:px-2"
-                  onClick={onJump}
-                />] as any
-              }
-            />
+      <div
+        className="flex-1 overflow-auto"
+        onClick={(e) => {
+          if ((e.target as HTMLElement).closest("a[role='button']")) onJump?.();
+        }}
+      >
+        <Outline className="text-[length:var(--font-toolbar-label)] p-1">
+          <OutlineItem className={outlineItemClass}>
+            <OutlineChildItems className="list-none pl-0" />
           </OutlineItem>
         </Outline>
       </div>
@@ -102,19 +85,61 @@ function OutlinePanel({ onJump }: { onJump?: () => void }) {
   );
 }
 
+function SearchResultItem({
+  result,
+  searchText,
+}: {
+  result: SearchResult;
+  searchText: string;
+}) {
+  const { jumpToHighlightRects } = usePdfJump();
+  const getPdfPageProxy = usePdf((s) => s.getPdfPageProxy);
+
+  const handleClick = async () => {
+    const pageProxy = getPdfPageProxy(result.pageNumber);
+    const rects = await calculateHighlightRects(pageProxy, {
+      pageNumber: result.pageNumber,
+      text: result.text,
+      matchIndex: result.matchIndex,
+      searchText,
+    });
+    jumpToHighlightRects(rects, "pixels");
+  };
+
+  return (
+    <button
+      type="button"
+      className="w-full text-left px-2 py-1.5 text-[length:var(--font-toolbar-label)] hover:bg-muted transition-colors border-b border-border/50"
+      onClick={() => void handleClick()}
+    >
+      <span className="text-muted-foreground">p.{result.pageNumber}</span>{" "}
+      <span className="text-foreground truncate block">{result.text.trim() || searchText}</span>
+    </button>
+  );
+}
+
 function SearchPanel() {
-  const { search } = useSearch();
-  const { jumpToPage } = usePdfJump();
+  const { search, searchResults } = useSearch();
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
 
-  const results = query.trim()
-    ? search(query, { limit: 50 })
-    : { exactMatches: [], fuzzyMatches: [], hasMoreResults: false };
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
-  const allMatches = [
-    ...results.exactMatches.map((m: SearchResult) => ({ ...m, label: "exact" as const })),
-    ...results.fuzzyMatches.map((m: SearchResult) => ({ ...m, label: "fuzzy" as const })),
-  ];
+  useEffect(() => {
+    if (!debouncedQuery) return;
+    void search(debouncedQuery, { limit: 50 });
+  }, [debouncedQuery, search]);
+
+  const hasQuery = debouncedQuery.length > 0;
+  const allMatches = hasQuery
+    ? [
+        ...searchResults.exactMatches.map((m) => ({ ...m, kind: "exact" as const })),
+        ...searchResults.fuzzyMatches.map((m) => ({ ...m, kind: "fuzzy" as const })),
+      ]
+    : [];
 
   return (
     <div className="flex flex-col h-full">
@@ -133,21 +158,18 @@ function SearchPanel() {
         )}
       </div>
       <div className="flex-1 overflow-auto">
-        {query.trim() && allMatches.length === 0 && (
+        {hasQuery && allMatches.length === 0 && (
           <p className="px-2 py-4 text-[length:var(--font-toolbar-label)] text-muted-foreground text-center">No results</p>
         )}
+        {!hasQuery && (
+          <p className="px-2 py-4 text-[length:var(--font-toolbar-label)] text-muted-foreground text-center">Type to search</p>
+        )}
         {allMatches.map((m, i) => (
-          <button
-            key={`${m.pageNumber}-${m.matchIndex}-${i}`}
-            type="button"
-            className="w-full text-left px-2 py-1.5 text-[length:var(--font-toolbar-label)] hover:bg-muted transition-colors border-b border-border/50"
-            onClick={() => jumpToPage(m.pageNumber, { align: "start", behavior: "auto" })}
-          >
-            <span className="text-muted-foreground">p.{m.pageNumber}</span>{" "}
-            <span className="text-muted-foreground/70 truncate block">
-              {m.text.slice(Math.max(0, m.matchIndex - 20), m.matchIndex + 80)}
-            </span>
-          </button>
+          <SearchResultItem
+            key={`${m.pageNumber}-${m.matchIndex}-${m.kind}-${i}`}
+            result={m}
+            searchText={debouncedQuery}
+          />
         ))}
       </div>
     </div>
@@ -253,87 +275,60 @@ function PdfViewerInner({ isPdfFile, isCompiling, compileError, persistKey }: Pd
     };
   }, [persistKey]);
 
-  // ─── SyncTeX (TeX mode only) ───
-  const { forwardSearch, reverseSearch } = useSyncTex();
-  const addColoredHighlight = usePdf((s) => s.addColoredHighlight);
-  const deleteColoredHighlight = usePdf((s) => s.deleteColoredHighlight);
-  const synctexHighlightRef = useRef<string | null>(null);
-
-  const handleForwardSearch = useCallback(
-    async (line: number) => {
-      const pos = await forwardSearch(line);
-      if (!pos) return;
-
-      if (synctexHighlightRef.current) {
-        deleteColoredHighlight(synctexHighlightRef.current);
-      }
-
-      const uuid = `synctex-${Date.now()}`;
-      synctexHighlightRef.current = uuid;
-      addColoredHighlight({
-        color: "color-mix(in srgb, var(--warning) 40%, transparent)",
-        rectangles: [{
-          pageNumber: pos.page, top: pos.y, left: pos.x,
-          height: pos.height, width: pos.width, type: "pixels",
-        }],
-        pageNumber: pos.page,
-        text: "",
-        uuid,
-      });
-
-      jumpToPage(pos.page - 1, { align: "start", behavior: "smooth" });
-    },
-    [forwardSearch, addColoredHighlight, deleteColoredHighlight, jumpToPage],
-  );
-
-  const handlePageClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (!e.metaKey && !e.ctrlKey) return;
-      if (isPdfFile) return;
-      e.preventDefault();
-
-      const pageEl = (e.target as HTMLElement).closest("[data-page-number]") as HTMLElement | null;
-      if (!pageEl) return;
-
-      const pageNumber = parseInt(pageEl.dataset.pageNumber || "0", 10);
-      if (!pageNumber) return;
-
-      const pageRect = pageEl.getBoundingClientRect();
-      const zoom = parseFloat(
-        pageEl.style.transform?.match(/scale3?\(([\d.]+)/)?.[1] || "1",
-      );
-      const x = (e.clientX - pageRect.left) / zoom;
-      const y = (e.clientY - pageRect.top) / zoom;
-
-      reverseSearch(pageNumber, x, y);
-    },
-    [isPdfFile, reverseSearch],
-  );
-
-  // Keyboard shortcut: Cmd+Shift+F = forward search
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "f") {
-        e.preventDefault();
-        if (isPdfFile) return;
-        const editorView = (window as any).__cmEditorView;
-        if (editorView) {
-          const line = editorView.state.doc.lineAt(editorView.state.selection.main.head);
-          handleForwardSearch(line.number);
-        }
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isPdfFile, handleForwardSearch]);
-
   const panelOpen = sidePanel !== null;
   const zoom = usePdf((s) => s.zoom);
   const updateZoom = usePdf((s) => s.updateZoom);
+  const zoomFitWidth = usePdf((s) => s.zoomFitWidth);
+  const isZoomFitWidth = usePdf((s) => s.isZoomFitWidth);
+  const isPinching = usePdf((s) => s.isPinching);
+  const viewportRef = usePdf((s) => s.viewportRef);
+  const viewports = usePdf((s) => s.viewports);
+  const zoomOptions = usePdf((s) => s.zoomOptions);
   const totalPages = usePdf((s) => s.pdfDocumentProxy?.numPages ?? 0);
+  const [zoomMode, setZoomMode] = useState<PdfZoomMode>("fit-width");
+  const zoomModeRef = useRef<PdfZoomMode>("fit-width");
 
-  const handleZoomIn = useCallback(() => updateZoom((z: number) => Math.round((z + 0.1) * 10) / 10), [updateZoom]);
-  const handleZoomOut = useCallback(() => updateZoom((z: number) => Math.round((z - 0.1) * 10) / 10), [updateZoom]);
+  const zoomStore = useMemo(
+    () => ({ viewportRef, viewports, zoomOptions, currentPage, updateZoom, zoomFitWidth }),
+    [viewportRef, viewports, zoomOptions, currentPage, updateZoom, zoomFitWidth],
+  );
+
+  /** Leave fit-* lock so manual zoom / pinch is not overwritten by Lector fit-width resize. */
+  const exitFitLock = useCallback(() => {
+    zoomModeRef.current = "custom";
+    setZoomMode("custom");
+    updateZoom((z) => z, false);
+  }, [updateZoom]);
+
+  const applyZoomMode = useCallback(
+    (mode: PdfZoomMode) => {
+      zoomModeRef.current = mode;
+      setZoomMode(mode);
+      applyPdfZoomMode(mode, zoomStore);
+    },
+    [zoomStore],
+  );
+
+  // Pinch zoom must clear isZoomFitWidth or Lector snaps back on the next layout pass.
+  useEffect(() => {
+    if (isPinching) exitFitLock();
+  }, [isPinching, exitFitLock]);
+
+  const zoomLabel =
+    zoomMode === "custom"
+      ? `${Math.round(zoom * 100)}%`
+      : zoomMode === "fit-width" && isZoomFitWidth
+        ? PDF_ZOOM_MODE_LABELS["fit-width"]
+        : PDF_ZOOM_MODE_LABELS[zoomMode];
+
+  const handleZoomIn = useCallback(() => {
+    exitFitLock();
+    updateZoom((z: number) => Math.round((z + 0.1) * 10) / 10, false);
+  }, [exitFitLock, updateZoom]);
+  const handleZoomOut = useCallback(() => {
+    exitFitLock();
+    updateZoom((z: number) => Math.round((z - 0.1) * 10) / 10, false);
+  }, [exitFitLock, updateZoom]);
   const handlePrevPage = useCallback(() => {
     if (currentPage > 1) jumpToPage(currentPage - 1, { align: "start", behavior: "auto" });
   }, [currentPage, jumpToPage]);
@@ -343,6 +338,11 @@ function PdfViewerInner({ isPdfFile, isCompiling, compileError, persistKey }: Pd
 
   return (
     <>
+      {/* Index PDF text once on load (Search unmounts if only tied to the side panel). */}
+      <Search loading={null}>
+        <span className="hidden" aria-hidden />
+      </Search>
+      <PdfScrollClamp />
       {/* Toolbar */}
       <div className="flex h-8 shrink-0 items-center gap-0.5 border-b border-border bg-card px-2 text-[length:var(--font-toolbar-label)]">
         {/* Left: side panel toggles */}
@@ -393,18 +393,32 @@ function PdfViewerInner({ isPdfFile, isCompiling, compileError, persistKey }: Pd
           <AppMenu>
             <AppMenuTrigger asChild>
               <button
-                className="h-6 min-w-[3rem] px-0.5 tabular-nums text-muted-foreground hover:text-foreground rounded transition-colors cursor-pointer select-none"
-                title="Zoom presets"
+                className="h-6 min-w-[4.5rem] px-1 tabular-nums text-muted-foreground hover:text-foreground rounded transition-colors cursor-pointer select-none text-center"
+                title="Zoom"
               >
-                {Math.round(zoom * 100)}%
+                {zoomLabel}
               </button>
             </AppMenuTrigger>
-            <AppMenuContent align="center" className="min-w-[5.5rem]">
+            <AppMenuContent align="center" className="min-w-[8.5rem]">
+              {FIT_ZOOM_MODES.map((mode) => (
+                <AppMenuCheckItem
+                  key={mode}
+                  selected={zoomMode === mode}
+                  onClick={() => applyZoomMode(mode)}
+                >
+                  {PDF_ZOOM_MODE_LABELS[mode]}
+                </AppMenuCheckItem>
+              ))}
+              <div className="my-1 h-px bg-border" />
               {ZOOM_PRESETS.map((preset) => (
                 <AppMenuCheckItem
                   key={preset}
-                  selected={Math.abs(zoom - preset) < 0.001}
-                  onClick={() => updateZoom(preset)}
+                  selected={zoomMode === "custom" && Math.abs(zoom - preset) < 0.01}
+                  onClick={() => {
+                    zoomModeRef.current = "custom";
+                    setZoomMode("custom");
+                    updateZoom(preset, false);
+                  }}
                 >
                   {Math.round(preset * 100)}%
                 </AppMenuCheckItem>
@@ -458,15 +472,11 @@ function PdfViewerInner({ isPdfFile, isCompiling, compileError, persistKey }: Pd
       </div>
 
       {/* Body: Side Panel + Pages */}
-      <div className="flex flex-1 min-h-0">
+      <div className="relative flex flex-1 min-h-0">
         {panelOpen && (
           <div className="shrink-0 border-r border-border bg-card overflow-hidden" style={{ width: PANEL_WIDTH }}>
             {sidePanel === "outline" && <OutlinePanel onJump={() => setSidePanel(null)} />}
-            {sidePanel === "search" && (
-              <Search loading={<span className="flex justify-center pt-10 text-muted-foreground text-[length:var(--font-placeholder)]">Indexing…</span>}>
-                <SearchPanel />
-              </Search>
-            )}
+            {sidePanel === "search" && <SearchPanel />}
             {sidePanel === "thumbnails" && <ThumbnailsPanel />}
           </div>
         )}
@@ -475,15 +485,17 @@ function PdfViewerInner({ isPdfFile, isCompiling, compileError, persistKey }: Pd
             We pass scroll + click props directly to Pages rather than wrapping in
             an extra div, which would interfere with the virtualizer's height calc. */}
         <Pages
-          className={`flex-1 min-w-0 overflow-auto overscroll-contain p-4${pdfDarkActive ? " [filter:invert(87%)_hue-rotate(180deg)]" : ""}`}
+          className={`${PDF_PAGES_CLASS}${pdfDarkActive ? ` ${PDF_PAGES_DARK_CLASS}` : ""}`}
+          style={PDF_PAGES_STYLE}
           gap={16}
-          onClick={handlePageClick}
         >
-          <Page className="bg-white shadow-md">
+          <Page
+            className={`${PDF_PAGE_CLASS}${pdfDarkActive ? ` ${PDF_PAGE_INVERTED_CLASS}${PDF_PAGE_DARK_FILTER}` : ""}`}
+          >
             <CanvasLayer />
             <TextLayer />
             <AnnotationLayer />
-            {!isPdfFile && <ColoredHighlightLayer />}
+            <HighlightLayer className="bg-[color-mix(in_srgb,var(--warning)_40%,transparent)]" />
           </Page>
         </Pages>
       </div>
@@ -550,7 +562,7 @@ export function PdfPreview() {
 
   return (
     <div className="flex h-full flex-col bg-background">
-      <div className="flex-1 overflow-hidden bg-muted/30">
+      <div className="flex-1 overflow-hidden bg-background">
         {source ? (
           <Root
             source={source}

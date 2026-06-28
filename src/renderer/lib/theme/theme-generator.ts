@@ -73,7 +73,11 @@ function generateEditorSyntaxVars(
   const editorFg = neutralVars["--foreground"];
   const editorGutterBg = neutralVars["--background"];  // same as editor bg — seamless
   const editorGutterFg = neutralVars["--muted-foreground"];
-  const editorActiveLine = neutralVars["--accent"];
+  // Subtle gray band — must stay weaker than selection so partial-line select reads clearly.
+  const editorActiveLine =
+    mode === "dark"
+      ? "color-mix(in oklch, var(--muted) 55%, transparent)"
+      : "color-mix(in oklch, var(--muted) 55%, transparent)";
   const primaryColor = mode === "light" ? primary.primaryLight : primary.primaryDark;
 
   // Build the selection background by injecting alpha into the oklch color.
@@ -81,7 +85,7 @@ function generateEditorSyntaxVars(
   // "oklch(L C H / alpha)" for proper transparency.
   // Dark mode gets a slightly higher alpha so the selection reads against
   // dark backgrounds.
-  const selAlpha = mode === "dark" ? 0.35 : 0.28;
+  const selAlpha = mode === "dark" ? 0.35 : 0.36;
   const selColor = primaryColor.replace(")", ` / ${selAlpha})`);
 
   // In dark mode, syntax colors should be brighter (higher lightness).

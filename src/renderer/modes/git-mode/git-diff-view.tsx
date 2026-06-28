@@ -6,7 +6,7 @@ import { gitDiffLineNumbers, gitDiffGutterExtension } from "@/lib/git/diff-gutte
 import { gitDiffLineHighlights } from "@/lib/git/diff-line-highlights";
 import { useTheme } from "next-themes";
 import { getLanguageLoader } from "@/lib/editor/language-mappings";
-import { editorChromeTheme } from "@/lib/editor-themes/editor-chrome";
+import { editorChromeTheme, editorSelectionTheme } from "@/lib/editor-themes/editor-chrome";
 import { getThemeExtensionSync, getThemeExtensionAsync } from "@/lib/editor-themes/registry";
 import {
   diffLayoutTheme,
@@ -166,6 +166,7 @@ export function GitDiffView({
       themeCompartment.of(
         getThemeExtensionSync(editorSyntaxTheme, isDark ? "dark" : "light") ?? [],
       ),
+      editorSelectionTheme,
       gitDiffChromeCompartment.of(gitDiffChromeExtensions),
       languageCompartment.of([]),
       wordWrapCompartment.of(wordWrap ? EditorView.lineWrapping : []),

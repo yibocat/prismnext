@@ -9,7 +9,7 @@ import {
   highlightSpecialChars,
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { editorChromeTheme, editorTypographyTheme } from "@/lib/editor-themes/editor-chrome";
+import { editorChromeTheme, editorSelectionTheme, editorTypographyTheme } from "@/lib/editor-themes/editor-chrome";
 import { getThemeExtensionSync, getThemeExtensionAsync } from "@/lib/editor-themes/registry";
 import { diffDisplayTheme, diffDisplayThemeExtra, contentMetricsTheme } from "@/lib/editor-themes/diff-overrides";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -256,6 +256,7 @@ export function CodeEditor() {
         themeCompartment.of(
           getThemeExtensionSync(editorSyntaxTheme, isDark ? "dark" : "light") ?? [],
         ),
+        editorSelectionTheme,
         EditorView.lineWrapping,
         EditorState.tabSize.of(2),
         mergeCompartment.of(

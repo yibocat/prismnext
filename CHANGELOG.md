@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.5 — 2026-06-28
+
+### PDF Preview
+
+- Fix scroll/zoom drift: left-align pages, clamp scroll after zoom, and stabilize Lector layout via `preview.css`
+- Shared PDF config (`pdf-config`, `pdf-zoom`, `pdf-scroll-clamp`) for preview and template detail
+- Toolbar polish: Outline / Search / Thumbnails side panels, zoom presets and fit modes, page navigation
+- Light canvas + page shadow; PDF dark mode via invert filter (Sun / Moon / Monitor toggle)
+- Remove SyncTeX UI and stored highlight layer — preview is read-only navigation again
+
+### Editor
+
+- Fix light-mode selection flattening syntax colors: `editorSelectionTheme` hides native `::selection` color and beats community themes (e.g. GitHub Light)
+- Tune selection/active-line tokens in theme generator for clearer partial-line select
+
+### Dev
+
+- Dev build: **Cmd+Option+I** toggles DevTools (no production menu entry)
+
 ## 0.4.4 — 2026-06-27
 
 ### Permission Gate & Tools

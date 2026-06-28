@@ -1,5 +1,6 @@
 // prism-next/src/renderer/lib/editor-themes/editor-chrome.ts
 
+import { Prec } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
 /**
@@ -23,10 +24,6 @@ export const editorChromeTheme = EditorView.theme({
   },
   ".cm-cursor, .cm-dropCursor": {
     borderLeftColor: "var(--editor-cursor)",
-  },
-  "&.cm-focused .cm-selectionBackground, & .cm-selectionBackground, & ::selection": {
-    backgroundColor: "var(--editor-selection) !important",
-    color: "var(--editor-fg) !important",
   },
   ".cm-activeLine": {
     backgroundColor: "var(--editor-active-line)",
@@ -53,6 +50,41 @@ export const editorChromeTheme = EditorView.theme({
     color: "var(--primary)",
   },
 });
+
+/**
+ * Selection chrome at highest precedence — beats community syntax themes (e.g.
+ * GitHub Light sets `color` on `.cm-content ::selection`, flattening token colors)
+ * and CM drawSelection's focused `Highlight` fallback. Native ::selection stays
+ * transparent; only `.cm-selectionBackground` paints the highlight layer.
+ */
+export const editorSelectionTheme = Prec.highest(
+  EditorView.theme({
+    ".cm-line": {
+      "& ::selection, &::selection": {
+        backgroundColor: "transparent !important",
+        color: "unset !important",
+        WebkitTextFillColor: "unset !important",
+      },
+    },
+    ".cm-content": {
+      "& ::selection, &::selection": {
+        backgroundColor: "transparent !important",
+        color: "unset !important",
+        WebkitTextFillColor: "unset !important",
+      },
+      // drawSelection ships `Highlight !important` here — breaks light-mode syntax colors
+      "& :focus::selection, & :focus ::selection": {
+        backgroundColor: "transparent !important",
+        color: "unset !important",
+        WebkitTextFillColor: "unset !important",
+      },
+    },
+    "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, &.cm-focused .cm-selectionBackground, & .cm-selectionBackground":
+      {
+        backgroundColor: "var(--editor-selection) !important",
+      },
+  }),
+);
 
 /** Font family/size from Appearance → Editor (CSS vars on :root). */
 export const editorTypographyTheme = EditorView.theme({

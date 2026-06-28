@@ -10,7 +10,7 @@ import {
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { useTheme } from "next-themes";
-import { editorChromeTheme, editorTypographyTheme } from "@/lib/editor-themes/editor-chrome";
+import { editorChromeTheme, editorSelectionTheme, editorTypographyTheme } from "@/lib/editor-themes/editor-chrome";
 import { getThemeExtensionSync, getThemeExtensionAsync } from "@/lib/editor-themes/registry";
 import type { EditorSyntaxThemeId } from "@/lib/editor-themes/types";
 import { DEFAULT_SYNTAX_THEME } from "@/lib/editor-themes/types";
@@ -66,6 +66,7 @@ export function SettingsJsonEditor({
         themeCompartment.of(
           getThemeExtensionSync(editorSyntaxTheme, isDark ? "dark" : "light") ?? [],
         ),
+        editorSelectionTheme,
         readOnlyCompartment.of(EditorState.readOnly.of(readOnly)),
         EditorView.lineWrapping,
         EditorState.tabSize.of(2),
