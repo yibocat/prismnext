@@ -15,6 +15,13 @@ function djb2Hash(s: string): string {
   return (hash >>> 0).toString(36);
 }
 
+export interface ComposeOptions {
+  /** Skip these layer ids (e.g. custom-rules for per-turn injection). */
+  excludeLayerIds?: string[];
+  /** When set, only include these layer ids. */
+  onlyLayerIds?: string[];
+}
+
 export class PromptComposer {
   private layers: PromptLayer[] = [];
 
@@ -62,15 +69,24 @@ export class PromptComposer {
   // ── Composition ───────────────────────────────────────────
 
   /** Assemble the final prompt string from all enabled layers. */
-  compose(ctx: PromptContext): string {
-    const key = this.computeCacheKey(ctx);
-    if (key === this.cacheKey && this.cachedResult !== null) {
+  compose(ctx: PromptContext, options?: ComposeOptions): string {
+    const exclude = new Set(options?.excludeLayerIds ?? []);
+    const only = options?.onlyLayerIds ? new Set(options.onlyLayerIds) : null;
+    const partial = exclude.size > 0 || only !== null;
+
+    const key = partial
+      ? `${this.computeCacheKey(ctx, { excludeLayerIds: options?.excludeLayerIds })}|ex:${[...exclude].sort().join(",")}|on:${only ? [...only].sort().join(",") : ""}`
+      : this.computeCacheKey(ctx);
+
+    if (!partial && key === this.cacheKey && this.cachedResult !== null) {
       return this.cachedResult;
     }
 
     const parts: string[] = [];
 
     for (const layer of this.layers) {
+      if (exclude.has(layer.id)) continue;
+      if (only && !only.has(layer.id)) continue;
       if (!layer.enabled) continue;
 
       // Static cache hit — use precomputed result
@@ -90,8 +106,10 @@ export class PromptComposer {
     }
 
     const assembled = parts.join("\n\n");
-    this.cacheKey = key;
-    this.cachedResult = assembled;
+    if (!partial) {
+      this.cacheKey = key;
+      this.cachedResult = assembled;
+    }
     return assembled;
   }
 
@@ -128,11 +146,15 @@ export class PromptComposer {
   }
 
   /** Stable fingerprint for prompt configuration (session staleness checks). */
-  fingerprint(ctx: PromptContext): string {
-    return this.computeCacheKey(ctx);
+  fingerprint(ctx: PromptContext, options?: { excludeLayerIds?: string[] }): string {
+    return this.computeCacheKey(ctx, options);
   }
 
-  private computeCacheKey(ctx: PromptContext): string {
+  private computeCacheKey(
+    ctx: PromptContext,
+    options?: { excludeLayerIds?: string[] },
+  ): string {
+    const excludeRules = options?.excludeLayerIds?.includes("custom-rules") ?? false;
     // Stable hash: sort keys to avoid ordering differences.
     // Content fields use djb2 hash so equivalent content always matches
     // regardless of surrounding whitespace or encoding differences.
@@ -143,10 +165,12 @@ export class PromptComposer {
         : [],
       amd: ctx.agentsMdContent ? djb2Hash(ctx.agentsMdContent) : "0",
       ucp: ctx.userCustomPrompt ? djb2Hash(ctx.userCustomPrompt) : "0",
-      acr: ctx.customRules?.length
-        ? djb2Hash(ctx.customRules.map((r) => `${r.name}:${r.content}`).join("|"))
-        : "0",
-      acrs: ctx.customRules?.length ? String(ctx.customRules.length) : "0",
+      acr: excludeRules
+        ? "0"
+        : ctx.customRules?.length
+          ? djb2Hash(ctx.customRules.map((r) => `${r.name}:${r.content}`).join("|"))
+          : "0",
+      acrs: excludeRules ? "0" : ctx.customRules?.length ? String(ctx.customRules.length) : "0",
       pid: ctx.profileId ?? "",
       pin: ctx.profileInstructions ? djb2Hash(ctx.profileInstructions) : "0",
       pm: ctx.profileModules?.join(",") ?? "",

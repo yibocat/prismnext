@@ -14,7 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ComposerToolbar } from "./agent-settings/composer-toolbar";
 import { ModelThoughtSelect } from "./agent-settings/model-thought-select";
-import { PermissionAskPanel, usePermissionAskOpen } from "./permission-ask-panel";
+import { PermissionGatePanel, usePermissionGateOpen } from "./permission-gate-panel";
 import { InlineComposerEditor } from "./inline-composer";
 import { useChatComposer } from "@/hooks/use-chat-composer";
 import { useChatStore } from "@/stores/chat-store";
@@ -36,7 +36,7 @@ export function ChatComposerCore({
   hideToolbar = false,
   onLayoutExpand,
 }: ChatComposerCoreProps) {
-  const permissionAskOpen = usePermissionAskOpen();
+  const permissionGateOpen = usePermissionGateOpen();
   const composer = useChatComposer();
   const chatMode = useChatStore(
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.chatMode ?? "agent",
@@ -159,16 +159,14 @@ export function ChatComposerCore({
           isCompact ? "h-full" : className,
         )}
       >
-        <PermissionAskPanel />
+        <PermissionGatePanel />
 
         <div
           className={cn(
-            "flex w-full flex-col overflow-hidden border border-border bg-card",
-            "shadow-[0_0_2px_rgba(0,0,0,0.03)] transition-colors focus-within:border-ring",
-            permissionAskOpen && !isCompact && "rounded-b-lg rounded-t-none",
+            "flex w-full flex-col overflow-hidden transition-colors",
             isCompact
               ? "h-full flex-row items-center gap-1.5 border-0 bg-transparent shadow-none"
-              : "rounded-2xl",
+              : "border-0 bg-transparent shadow-none rounded-none",
           )}
         >
           {!isCompact && composer.pinnedContexts.length > 0 && (
@@ -232,13 +230,13 @@ export function ChatComposerCore({
       )}
     >
       <div className="flex w-full flex-col">
-        <PermissionAskPanel />
+        <PermissionGatePanel />
 
         <div
           className={cn(
             "flex w-full flex-col overflow-hidden border border-border bg-card",
             "shadow-[0_0_2px_rgba(0,0,0,0.03)] transition-colors focus-within:border-ring",
-            permissionAskOpen ? "rounded-b-lg rounded-t-none" : isCapsule ? "rounded-2xl" : "rounded-lg",
+            permissionGateOpen ? "rounded-b-lg rounded-t-none" : isCapsule ? "rounded-2xl" : "rounded-lg",
           )}
         >
           {composer.pinnedContexts.length > 0 && (

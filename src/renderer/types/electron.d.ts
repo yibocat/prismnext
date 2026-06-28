@@ -298,6 +298,17 @@ export interface ElectronAPI {
     skillDirRel: string;
     enabled: boolean;
   }>>;
+  agentListRules: (projectPath: string) => Promise<Array<{
+    id: string;
+    name: string;
+    description: string;
+    apply: string;
+    enabled: boolean;
+    ruleDirRel: string;
+  }>>;
+  agentInstallRule: (projectPath: string, ruleId: string, content: string) => Promise<void>;
+  agentDeleteRule: (projectPath: string, ruleId: string) => Promise<void>;
+  agentSetRuleEnabled: (projectPath: string, ruleId: string, enabled: boolean) => Promise<void>;
   agentListSkillRegistries: (projectPath: string) => Promise<string[]>;
   agentListSkillLibrarySources: (projectPath: string) => Promise<Array<{
     id: string;
@@ -438,7 +449,7 @@ export interface ElectronAPI {
   chatCompact: (sessionId: string, projectPath: string) => Promise<void>;
   chatAnswer: (sessionId: string, answer: string) => Promise<void>;
   chatAnswerQuestion: (questionId: string, answer: string) => Promise<{ success: boolean; error?: string }>;
-  chatAnswerPermission: (permissionId: string, approved: boolean) => Promise<void>;
+  chatAnswerPermission: (permissionId: string, approved: boolean, toolCallId?: string) => Promise<void>;
   chatStatus: () => Promise<{ available: boolean; version: string }>;
   sessionList: (projectPath?: string) => Promise<Array<{ id: string; title: string; lastModified: number; createdAt: number; directory?: string }>>;
   sessionLoad: (sessionId: string, projectPath?: string, cwd?: string) => Promise<any[]>;
@@ -568,6 +579,11 @@ export interface ElectronAPI {
     command: string;
     cwd?: string;
   }) => Promise<{ output: string; exitCode: number; cwd: string }>;
+  terminalRegisterBashJob: (args: {
+    sessionId: string;
+    toolCallId: string;
+    command: string;
+  }) => Promise<void>;
   terminalDestroyAllAiPty: () => Promise<void>;
 
   // Terminal events (Main → Renderer)

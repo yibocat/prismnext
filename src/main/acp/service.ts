@@ -10,17 +10,31 @@ import {
 import { createLogger } from "../services/logger";
 import { getBuiltinToolFiles } from "../tools";
 import { buildPermissionOutcome, type PermissionResponse } from "./permission";
+import { resolveChatTabId } from "../services/chat-session-registry";
 import { mcpJsonToAcpServers, type AcpMcpServer } from "./mcp-transform";
 import {
   getPermissionRulesForMode,
   resolvePermissionMode,
+  resolveEffectiveAgentTerminalMode,
   extractPermissionToolName,
   resolvePermissionAction,
   type PermissionMode,
 } from "../services/permission-modes";
 import { getSettings } from "../services/settings";
 import { sanitizeSkillPermissionMap, skillPermissionNeedsRepair } from "../services/skills-sync";
+import { buildEnabledToolsConfig } from "../services/opencode-tools-config";
 import { messageIdsAfterTurn } from "../../shared/chat-turns";
+import {
+  approveCustomToolJob,
+  denyBashJob,
+  executeApprovedBashJob,
+  extractBashCommandFromInput,
+  isRunnableBashCommand,
+  registerCustomToolJobIntent,
+  type ApprovedBashJob,
+} from "../services/bash-permission-bridge";
+
+const CUSTOM_GATED_TOOLS = new Set(["delete", "move"]);
 
 const log = createLogger("acp-service", "agent");
 
@@ -82,7 +96,28 @@ export class AcpService {
     resolve: (value: PermissionResponse) => void;
     timer: ReturnType<typeof setTimeout>;
     options: Array<{ optionId: string; kind: string; name?: string }>;
+    toolCallId?: string;
+    toolName?: string;
+    sessionId?: string;
+    tabId?: string;
+    bashCommand?: string;
+    bashCwd?: string;
   }>();
+  /** Bash jobs awaiting UI when OpenCode custom bash runs without ACP permission. */
+  private bashJobContext = new Map<string, ApprovedBashJob>();
+  private emittedBashUi = new Set<string>();
+  /** toolCallIds that were auto-allowed before real command arrived — execute on backfill. */
+  private bashAutoApproved = new Set<string>();
+  /** Custom delete/move jobs awaiting UI when execute() starts before ACP permission. */
+  private customToolJobContext = new Map<string, {
+    sessionId: string;
+    chatTabId: string;
+    toolCallId: string;
+    toolName: string;
+  }>();
+  private emittedCustomToolUi = new Set<string>();
+  /** Auto-deny timers for synthetic permission gates (bash-gate-*, delete-gate-*). */
+  private syntheticPermissionTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectBaseDelay = 1000;
@@ -172,18 +207,22 @@ export class AcpService {
     this.loadSubAgentSessions();
 
     // Sync prism-next's built-in custom tools so OpenCode can discover them.
-    await this.syncBuiltinTools();
-
-    // Repair known-bad permission.skill shapes before OpenCode reads config.
     this.repairOpencodeServerConfigs();
 
     // Write default OpenCode config to enable ALL built-in tools.  OpenCode
     // disables websearch, question, etc. by default (privacy-first).  We
     // enable everything so the AI has the full toolbox available.
     this.writeDefaultConfig();
+    this.applyBuiltinToolsConfig();
     const settings = getSettings() as Record<string, unknown>;
-    this.applyPermissionMode(resolvePermissionMode(settings.permissionMode as string | undefined));
-    await this.applyAgentTerminalMode(settings.agentTerminalMode as string | undefined);
+    const permMode = resolvePermissionMode(settings.permissionMode as string | undefined);
+    this.applyPermissionMode(permMode);
+    const terminalMode = resolveEffectiveAgentTerminalMode(
+      permMode,
+      settings.agentTerminalMode as string | undefined,
+    );
+    await this.applyAgentTerminalMode(terminalMode);
+    await this.syncBuiltinTools();
 
     // Ensure PATH includes standard system dirs. Electron dev mode may strip
     // them, causing spawn ENOENT for valid binaries.
@@ -252,26 +291,130 @@ export class AcpService {
           const mode = resolvePermissionMode(settings.permissionMode as string | undefined);
           const toolName = extractPermissionToolName(params as Record<string, unknown>);
           const action = resolvePermissionAction(mode, toolName);
+          const sessionId =
+            (params as { sessionId?: string }).sessionId
+            || (params as { session?: { id?: string } }).session?.id;
+          const tabId = sessionId ? resolveChatTabId(sessionId) : undefined;
+          const toolCallId =
+            (params as { toolCallId?: string }).toolCallId
+            || (params as { tool_call_id?: string }).tool_call_id
+            || (params as { callID?: string }).callID
+            || ((params as { toolCall?: { id?: string; toolCallId?: string } }).toolCall?.toolCallId)
+            || ((params as { toolCall?: { id?: string } }).toolCall?.id);
+
+          const bashCommand = this.extractBashCommandFromPermissionParams(
+            params as Record<string, unknown>,
+          );
+          const bashCwd =
+            (params as { directory?: string }).directory
+            || (params as { cwd?: string }).cwd
+            || this.projectPath;
 
           if (action === "allow") {
-            log.debug(`Auto-allow permission ${permissionId} (mode=${mode}, tool=${toolName || "?"})`);
+            log.debug(`permission:auto-allow id=${permissionId} mode=${mode} tool=${toolName || "?"} toolCallId=${toolCallId ?? "(none)"}`);
+            if (
+              this.isBashTool(toolName)
+              && sessionId
+              && toolCallId
+              && isRunnableBashCommand(bashCommand)
+            ) {
+              this.runApprovedBash({
+                sessionId,
+                chatTabId: tabId || sessionId,
+                toolCallId,
+                command: bashCommand,
+                cwd: bashCwd || process.cwd(),
+              });
+            } else if (this.isBashTool(toolName) && sessionId && toolCallId) {
+              // Auto-allow arrived before real command — remember context, wait for backfill.
+              this.bashJobContext.set(toolCallId, {
+                sessionId,
+                chatTabId: tabId || sessionId,
+                toolCallId,
+                command: bashCommand,
+                cwd: bashCwd || process.cwd(),
+              });
+              this.bashAutoApproved.add(toolCallId);
+            }
             return buildPermissionOutcome(options, true);
           }
           if (action === "deny") {
-            log.debug(`Auto-deny permission ${permissionId} (mode=${mode}, tool=${toolName || "?"})`);
+            log.debug(`permission:auto-deny id=${permissionId} mode=${mode} tool=${toolName || "?"} toolCallId=${toolCallId ?? "(none)"}`);
+            if (this.isBashTool(toolName) && sessionId && toolCallId) {
+              denyBashJob(sessionId, toolCallId);
+            }
+            if (this.isCustomGatedTool(toolName) && sessionId && toolCallId) {
+              denyBashJob(sessionId, toolCallId);
+              this.customToolJobContext.delete(toolCallId);
+              this.emittedCustomToolUi.delete(toolCallId);
+            }
             return buildPermissionOutcome(options, false);
           }
 
-          this.emitNotification("session/permission", { ...params, id: permissionId });
+          if (this.isCustomGatedTool(toolName) && sessionId && toolCallId) {
+            registerCustomToolJobIntent({ sessionId, toolCallId, toolName: toolName.toLowerCase() });
+            this.customToolJobContext.set(toolCallId, {
+              sessionId,
+              chatTabId: tabId || sessionId,
+              toolCallId,
+              toolName: toolName.toLowerCase(),
+            });
+          }
+
+          if (this.isBashTool(toolName) && toolCallId && sessionId) {
+            this.bashJobContext.set(toolCallId, {
+              sessionId,
+              chatTabId: tabId || sessionId,
+              toolCallId,
+              command: bashCommand,
+              cwd: bashCwd || process.cwd(),
+            });
+          }
+
+          log.info(`permission:prompt id=${permissionId} tool=${toolName || "?"} sessionId=${sessionId ?? "(none)"} tabId=${tabId ?? "(none)"} toolCallId=${toolCallId ?? "(none)"}`);
+          const skipUiEmit = !!(
+            toolCallId
+            && (this.emittedBashUi.has(toolCallId) || this.emittedCustomToolUi.has(toolCallId))
+          );
+          if (!skipUiEmit) {
+            this.emitNotification("session/permission", {
+              ...params,
+              id: permissionId,
+              sessionId,
+              tabId,
+              toolCallId,
+              toolName,
+            });
+          } else if (toolCallId) {
+            log.info(`permission:bash-acp-linked toolCallId=${toolCallId} acpId=${permissionId}`);
+          }
           return new Promise((resolve) => {
             const timer = setTimeout(() => {
               this.pendingPermissions.delete(permissionId);
+              if (this.isBashTool(toolName) && sessionId && toolCallId) {
+                denyBashJob(sessionId, toolCallId);
+                this.bashJobContext.delete(toolCallId);
+                this.emittedBashUi.delete(toolCallId);
+                this.bashAutoApproved.delete(toolCallId);
+              }
+              if (this.isCustomGatedTool(toolName) && sessionId && toolCallId) {
+                denyBashJob(sessionId, toolCallId);
+                this.customToolJobContext.delete(toolCallId);
+                this.emittedCustomToolUi.delete(toolCallId);
+              }
+              log.warn(`permission:timeout id=${permissionId} toolCallId=${toolCallId ?? "(none)"}`);
               resolve({ outcome: { outcome: "cancelled" as const } });
             }, PERMISSION_TIMEOUT_MS);
             this.pendingPermissions.set(permissionId, {
               resolve,
               timer,
               options: Array.isArray(params.options) ? params.options : [],
+              toolCallId,
+              toolName,
+              sessionId,
+              tabId,
+              bashCommand,
+              bashCwd,
             });
           });
         },
@@ -585,6 +728,9 @@ export class AcpService {
 
     if (synced > 0) {
       log.info(`Synced ${synced} built-in tool(s) to ${toolsDir}`);
+      if (this.conn || this.proc) {
+        log.info("Built-in tool files changed — OpenCode restart required on next initialize");
+      }
     } else {
       log.debug("Built-in tools already up-to-date");
     }
@@ -599,8 +745,15 @@ export class AcpService {
   }
 
   /**
-   * Fix corrupted `permission.skill` objects in app-level OpenCode config.
+   * Fix corrupted/stale `permission.skill` maps in app-level OpenCode config.
    * Runs automatically on every OpenCode spawn — users never edit Application Support manually.
+   *
+   * Two cases handled:
+   * 1. Legacy numeric-key corruption (string spread bug).
+   * 2. Stale per-skill `deny` entries left by previous profile whitelist runs
+   *    — these would keep skills blocked forever after switching profiles.
+   *    We reset the map to just the wildcard; per-project denies are re-added
+   *    by `applyProjectSkillsIntegration` when a project is loaded.
    */
   repairOpencodeServerConfigs(): void {
     for (const p of this.getOpencodeConfigPaths()) {
@@ -611,7 +764,12 @@ export class AcpService {
         if (!permission) continue;
 
         const before = permission.skill;
-        if (!skillPermissionNeedsRepair(before) && typeof before !== "string") continue;
+        const needsRepair =
+          skillPermissionNeedsRepair(before)
+          || typeof before === "string"
+          || (before && typeof before === "object" && !Array.isArray(before)
+            && Object.keys(before as Record<string, unknown>).some((k) => k !== "*"));
+        if (!needsRepair) continue;
 
         permission.skill = sanitizeSkillPermissionMap(before, {});
         writeFileSync(p, JSON.stringify(config, null, 2), "utf-8");
@@ -619,6 +777,41 @@ export class AcpService {
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         log.warn(`Failed to repair OpenCode config ${p}: ${message}`);
+      }
+    }
+  }
+
+  /**
+   * Merge enabled tools into all OpenCode config files on every startup.
+   * Ensures new Prism custom tools (delete, move, …) are visible to the model
+   * even when opencode.json already exists on disk.
+   */
+  applyBuiltinToolsConfig(overrides?: Record<string, boolean>): void {
+    for (const p of this.getOpencodeConfigPaths()) {
+      try {
+        let config: Record<string, unknown> = {};
+        if (existsSync(p)) {
+          try {
+            config = JSON.parse(readFileSync(p, "utf-8")) as Record<string, unknown>;
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            log.warn(`Skipping invalid OpenCode config ${p}: ${message}`);
+            continue;
+          }
+        }
+        if (!config.$schema) {
+          config.$schema = "https://opencode.ai/config.json";
+        }
+        config.tools = buildEnabledToolsConfig(
+          config.tools as Record<string, unknown> | undefined,
+          overrides,
+        );
+        mkdirSync(dirname(p), { recursive: true });
+        writeFileSync(p, JSON.stringify(config, null, 2), "utf-8");
+        log.info(`Applied built-in tools config to ${p}`);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(`Failed to apply built-in tools to ${p}: ${message}`);
       }
     }
   }
@@ -700,27 +893,7 @@ export class AcpService {
   async applyAgentTerminalMode(mode: string | undefined): Promise<void> {
     const resolved = (mode as string) || "pty";
     const enableBuiltinBash = resolved !== "pty";
-
-    for (const p of this.getOpencodeConfigPaths()) {
-      try {
-        let config: Record<string, unknown> = {};
-        if (existsSync(p)) {
-          try {
-            config = JSON.parse(readFileSync(p, "utf-8")) as Record<string, unknown>;
-          } catch {
-            continue;
-          }
-        }
-        const tools = (config.tools as Record<string, unknown>) || {};
-        config.tools = { ...tools, bash: enableBuiltinBash };
-        mkdirSync(dirname(p), { recursive: true });
-        writeFileSync(p, JSON.stringify(config, null, 2), "utf-8");
-        log.info(`Applied agent terminal mode "${resolved}" (bash=${enableBuiltinBash}) to ${p}`);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        log.warn(`Failed to apply agent terminal mode to ${p}: ${message}`);
-      }
-    }
+    this.applyBuiltinToolsConfig({ bash: enableBuiltinBash });
   }
 
   /**
@@ -737,23 +910,7 @@ export class AcpService {
   private writeDefaultConfig(): void {
     const defaultConfig = {
       $schema: "https://opencode.ai/config.json",
-      // Enable all built-in tools — OpenCode disables several by default
-      tools: {
-        websearch: true,
-        webfetch: true,
-        grep: true,
-        glob: true,
-        list: true,
-        bash: true,
-        edit: true,
-        write: true,
-        read: true,
-        apply_patch: true,
-        question: true,
-        task: true,
-        todowrite: true,
-        skill: true,
-      },
+      tools: buildEnabledToolsConfig(),
       permission: {
         edit: "ask",
         bash: "ask",
@@ -1397,7 +1554,9 @@ export class AcpService {
       model?: string;
       provider?: string;
       systemPrompt?: string;
-      /** When true, prepend assembled Prism system prompt as the first content block. */
+      /** Project rules — read fresh each turn; always injected when non-empty. */
+      projectRulesPrompt?: string;
+      /** When true, prepend base system prompt (excludes rules) as first content block. */
       injectSystemPrompt?: boolean;
     },
   ): Promise<{ usage?: any }> {
@@ -1408,6 +1567,7 @@ export class AcpService {
     // Inject assembled prompt as the first user-message content block.
     // OpenCode ACP does not expose per-session `system` on the wire — Prism layers
     // must ride along as message content. Tagged with _meta for UI stripping.
+    // Base system prompt — session-scoped (first turn or stale base config).
     if (opts?.injectSystemPrompt && opts?.systemPrompt) {
       content.push({
         type: "text",
@@ -1416,7 +1576,18 @@ export class AcpService {
       });
       log.info(`System prompt injected: ${opts.systemPrompt.length} chars`);
     } else if (!opts?.injectSystemPrompt) {
-      log.debug("System prompt not injected this turn (already in session context)");
+      log.debug("Base system prompt not injected this turn (already in session context)");
+    }
+
+    // Project rules — every turn, fresh from RULE.md on disk.
+    const rules = opts?.projectRulesPrompt?.trim();
+    if (rules) {
+      content.push({
+        type: "text",
+        text: rules,
+        _meta: { prism: "project-rules" },
+      });
+      log.info(`Project rules injected: ${rules.length} chars`);
     }
 
     content.push({ type: "text", text: prompt });
@@ -1462,6 +1633,7 @@ export class AcpService {
   }
 
   async abort(sessionId: string): Promise<void> {
+    this.releaseSessionPendingWork(sessionId);
     if (!this.conn) return;
 
     try {
@@ -1471,13 +1643,312 @@ export class AcpService {
     }
   }
 
-  async answerPermission(permissionId: string, approved: boolean): Promise<void> {
-    const pending = this.pendingPermissions.get(permissionId);
+  /**
+   * Deny in-flight bridge jobs and resolve pending ACP permissions for a session.
+   * Called on cancel/abort so blocked custom tools (delete, bash) unblock promptly.
+   */
+  releaseSessionPendingWork(sessionId: string): void {
+    for (const [permissionId, entry] of this.pendingPermissions.entries()) {
+      if (entry.sessionId !== sessionId) continue;
+      clearTimeout(entry.timer);
+      entry.resolve(buildPermissionOutcome(entry.options, false));
+      this.pendingPermissions.delete(permissionId);
+      log.info(`permission:release-session id=${permissionId} sessionId=${sessionId}`);
+    }
+
+    for (const [toolCallId, ctx] of this.bashJobContext.entries()) {
+      if (ctx.sessionId !== sessionId) continue;
+      denyBashJob(ctx.sessionId, toolCallId);
+      this.bashJobContext.delete(toolCallId);
+      this.emittedBashUi.delete(toolCallId);
+      this.bashAutoApproved.delete(toolCallId);
+      this.clearSyntheticPermissionTimeout(`bash-gate-${toolCallId}`);
+    }
+
+    for (const [toolCallId, ctx] of this.customToolJobContext.entries()) {
+      if (ctx.sessionId !== sessionId) continue;
+      denyBashJob(ctx.sessionId, toolCallId);
+      this.customToolJobContext.delete(toolCallId);
+      this.emittedCustomToolUi.delete(toolCallId);
+      this.clearSyntheticPermissionTimeout(`${ctx.toolName}-gate-${toolCallId}`);
+    }
+  }
+
+  async answerPermission(
+    permissionId: string,
+    approved: boolean,
+    toolCallId?: string,
+  ): Promise<void> {
+    let resolvedId = permissionId;
+    let pending = this.pendingPermissions.get(permissionId);
+    if (!pending && toolCallId) {
+      for (const [id, entry] of this.pendingPermissions.entries()) {
+        if (entry.toolCallId === toolCallId) {
+          resolvedId = id;
+          pending = entry;
+          break;
+        }
+      }
+    }
+
+    const resolvedToolCallId = pending?.toolCallId || toolCallId;
+    const bashCtx = resolvedToolCallId
+      ? (this.bashJobContext.get(resolvedToolCallId)
+        ?? (pending?.sessionId && pending.toolCallId
+          ? {
+              sessionId: pending.sessionId,
+              chatTabId: pending.tabId || pending.sessionId,
+              toolCallId: pending.toolCallId,
+              command: pending.bashCommand || "",
+              cwd: pending.bashCwd || this.projectPath || process.cwd(),
+            }
+          : undefined))
+      : undefined;
+
     if (pending) {
       clearTimeout(pending.timer);
-      this.pendingPermissions.delete(permissionId);
+      this.pendingPermissions.delete(resolvedId);
+      log.info(`permission:answer id=${resolvedId} approved=${approved} toolCallId=${pending.toolCallId ?? "(none)"}`);
       pending.resolve(buildPermissionOutcome(pending.options, approved));
+    } else {
+      log.warn(`permission:answer-miss id=${permissionId} toolCallId=${toolCallId ?? "(none)"} approved=${approved}`);
     }
+
+    if (resolvedToolCallId) {
+      this.clearSyntheticPermissionTimeout(`bash-gate-${resolvedToolCallId}`);
+      for (const tool of CUSTOM_GATED_TOOLS) {
+        this.clearSyntheticPermissionTimeout(`${tool}-gate-${resolvedToolCallId}`);
+      }
+    }
+    this.clearSyntheticPermissionTimeout(permissionId);
+
+    if (bashCtx) {
+      if (approved && isRunnableBashCommand(bashCtx.command)) {
+        this.runApprovedBash(bashCtx);
+      } else if (approved && bashCtx.toolCallId) {
+        // Command not yet known (early tool_call only had a title). Wait for backfill
+        // to drive syncBashPermissionFromToolCall again; keep context for later answer.
+        log.info(`permission:bash-wait-command toolCallId=${bashCtx.toolCallId} approved=1 command=${JSON.stringify(bashCtx.command)}`);
+      } else if (!approved) {
+        denyBashJob(bashCtx.sessionId, bashCtx.toolCallId);
+      }
+      if (!approved) {
+        this.bashJobContext.delete(bashCtx.toolCallId);
+        this.emittedBashUi.delete(bashCtx.toolCallId);
+        this.bashAutoApproved.delete(bashCtx.toolCallId);
+      }
+    }
+
+    const customCtx = resolvedToolCallId
+      ? this.customToolJobContext.get(resolvedToolCallId)
+      : undefined;
+    if (customCtx) {
+      if (approved) {
+        approveCustomToolJob(customCtx.sessionId, customCtx.toolCallId);
+        log.info(`permission:custom-tool-approved tool=${customCtx.toolName} toolCallId=${customCtx.toolCallId}`);
+      } else {
+        denyBashJob(customCtx.sessionId, customCtx.toolCallId);
+        this.emittedCustomToolUi.delete(customCtx.toolCallId);
+      }
+      this.customToolJobContext.delete(customCtx.toolCallId);
+    }
+  }
+
+  /**
+   * OpenCode custom bash may invoke execute() before ACP requestPermission.
+   * When we see a bash tool_call and no ACP pending exists, emit the same UI gate.
+   */
+  syncBashPermissionFromToolCall(args: {
+    sessionId: string;
+    tabId: string;
+    toolCallId: string;
+    command: string;
+    cwd?: string;
+  }): void {
+    const { toolCallId, sessionId, tabId, command } = args;
+    if (!toolCallId || !isRunnableBashCommand(command)) {
+      log.debug(`permission:bash-tool-call waiting-for-command toolCallId=${toolCallId || "(none)"} command=${JSON.stringify(command)}`);
+      return;
+    }
+
+    // If we already approved (auto-allow arrived before real command) — execute now.
+    const existing = this.bashJobContext.get(toolCallId);
+    if (existing && this.bashAutoApproved.has(toolCallId)) {
+      const updated = { ...existing, command: command.trim() };
+      this.bashJobContext.set(toolCallId, updated);
+      log.info(`permission:bash-backfill-execute toolCallId=${toolCallId} command=${command.trim()}`);
+      this.runApprovedBash(updated);
+      this.bashJobContext.delete(toolCallId);
+      this.bashAutoApproved.delete(toolCallId);
+      return;
+    }
+
+    const mode = resolvePermissionMode(
+      (getSettings() as Record<string, unknown>).permissionMode as string | undefined,
+    );
+    if (resolvePermissionAction(mode, "bash") !== "prompt") return;
+    if (this.emittedBashUi.has(toolCallId)) return;
+    if (this.hasAcpPendingForToolCall(toolCallId)) return;
+
+    const cwd = args.cwd || this.projectPath || process.cwd();
+    this.emittedBashUi.add(toolCallId);
+    const permissionId = `bash-gate-${toolCallId}`;
+    this.bashJobContext.set(toolCallId, {
+      sessionId,
+      chatTabId: tabId,
+      toolCallId,
+      command: command.trim(),
+      cwd,
+    });
+
+    log.info(`permission:bash-tool-call gate=${permissionId} toolCallId=${toolCallId}`);
+    this.emitNotification("session/permission", {
+      id: permissionId,
+      sessionId,
+      tabId,
+      toolCallId,
+      toolName: "bash",
+      message: command.trim(),
+      options: [
+        { optionId: "allow_once", kind: "allow_once", name: "Allow" },
+        { optionId: "reject_once", kind: "reject_once", name: "Reject" },
+      ],
+    });
+    this.scheduleSyntheticPermissionTimeout(permissionId, () => {
+      log.warn(`permission:bash-gate-timeout toolCallId=${toolCallId}`);
+      denyBashJob(sessionId, toolCallId);
+      this.bashJobContext.delete(toolCallId);
+      this.emittedBashUi.delete(toolCallId);
+      this.bashAutoApproved.delete(toolCallId);
+    });
+  }
+
+  /**
+   * OpenCode custom delete/move may invoke execute() before ACP requestPermission.
+   * When we see a tool_call, emit the same PermissionGatePanel as built-in tools.
+   */
+  syncCustomToolPermissionFromToolCall(args: {
+    sessionId: string;
+    tabId: string;
+    toolCallId: string;
+    toolName: string;
+    input?: Record<string, unknown>;
+  }): void {
+    const { toolCallId, sessionId, tabId, toolName, input } = args;
+    const normalized = toolName.toLowerCase();
+    if (!toolCallId || !CUSTOM_GATED_TOOLS.has(normalized)) return;
+
+    const mode = resolvePermissionMode(
+      (getSettings() as Record<string, unknown>).permissionMode as string | undefined,
+    );
+    if (resolvePermissionAction(mode, normalized) !== "prompt") return;
+    if (this.emittedCustomToolUi.has(toolCallId)) return;
+    if (this.hasAcpPendingForToolCall(toolCallId)) return;
+
+    this.emittedCustomToolUi.add(toolCallId);
+    registerCustomToolJobIntent({ sessionId, toolCallId, toolName: normalized });
+    this.customToolJobContext.set(toolCallId, {
+      sessionId,
+      chatTabId: tabId,
+      toolCallId,
+      toolName: normalized,
+    });
+
+    const permissionId = `${normalized}-gate-${toolCallId}`;
+    const detail = this.formatCustomToolPermissionMessage(normalized, input);
+
+    log.info(`permission:custom-tool-call gate=${permissionId} tool=${normalized} toolCallId=${toolCallId}`);
+    this.emitNotification("session/permission", {
+      id: permissionId,
+      sessionId,
+      tabId,
+      toolCallId,
+      toolName: normalized,
+      message: detail,
+      options: [
+        { optionId: "allow_once", kind: "allow_once", name: "Allow" },
+        { optionId: "reject_once", kind: "reject_once", name: "Reject" },
+      ],
+    });
+    this.scheduleSyntheticPermissionTimeout(permissionId, () => {
+      log.warn(`permission:custom-gate-timeout tool=${normalized} toolCallId=${toolCallId}`);
+      denyBashJob(sessionId, toolCallId);
+      this.customToolJobContext.delete(toolCallId);
+      this.emittedCustomToolUi.delete(toolCallId);
+    });
+  }
+
+  private scheduleSyntheticPermissionTimeout(
+    permissionId: string,
+    onTimeout: () => void,
+  ): void {
+    this.clearSyntheticPermissionTimeout(permissionId);
+    const timer = setTimeout(() => {
+      this.syntheticPermissionTimers.delete(permissionId);
+      onTimeout();
+    }, PERMISSION_TIMEOUT_MS);
+    this.syntheticPermissionTimers.set(permissionId, timer);
+  }
+
+  private clearSyntheticPermissionTimeout(permissionId: string): void {
+    const timer = this.syntheticPermissionTimers.get(permissionId);
+    if (!timer) return;
+    clearTimeout(timer);
+    this.syntheticPermissionTimers.delete(permissionId);
+  }
+
+  private formatCustomToolPermissionMessage(
+    toolName: string,
+    input?: Record<string, unknown>,
+  ): string {
+    if (toolName === "delete") {
+      const path = input?.file_path;
+      return typeof path === "string" && path.trim() ? path.trim() : "Delete file";
+    }
+    if (toolName === "move") {
+      const src = input?.source_path;
+      const dst = input?.destination_path;
+      if (typeof src === "string" && typeof dst === "string") {
+        return `${src.trim()} → ${dst.trim()}`;
+      }
+      return "Move file";
+    }
+    return toolName;
+  }
+
+  private hasAcpPendingForToolCall(toolCallId: string): boolean {
+    for (const entry of this.pendingPermissions.values()) {
+      if (entry.toolCallId === toolCallId) return true;
+    }
+    return false;
+  }
+
+  private isBashTool(toolName: string): boolean {
+    const n = (toolName || "").toLowerCase();
+    return n === "bash" || n === "shell" || n === "terminal" || n === "execute";
+  }
+
+  private isCustomGatedTool(toolName: string): boolean {
+    return CUSTOM_GATED_TOOLS.has((toolName || "").toLowerCase());
+  }
+
+  private runApprovedBash(job: ApprovedBashJob): void {
+    if (!isRunnableBashCommand(job.command)) {
+      log.warn(`permission:bash-run skipped non-command toolCallId=${job.toolCallId} command=${JSON.stringify(job.command)}`);
+      return;
+    }
+    executeApprovedBashJob(job);
+  }
+
+  private extractBashCommandFromPermissionParams(params: Record<string, unknown>): string {
+    const tc = (params.toolCall ?? params.tool_call) as Record<string, unknown> | undefined;
+    const input = (tc?.rawInput ?? tc?.raw_input ?? tc?.input ?? params.input) as
+      | Record<string, unknown>
+      | undefined;
+    const fromInput = extractBashCommandFromInput(input);
+    if (fromInput) return fromInput;
+    const msg = params.message ?? params.title ?? tc?.title;
+    return typeof msg === "string" ? msg.trim() : "";
   }
 
   // ─── Config ─────────────────────────────────────────────────

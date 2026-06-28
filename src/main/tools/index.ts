@@ -67,10 +67,15 @@ import { app } from "electron";
  * following the existing Widget pattern. Then register it in the
  * `CUSTOM_TOOL_WIDGETS` map in that directory's `index.tsx`.
  *
- * ### Step 4 — (Optional) Add a permission preset
+ * ### Step 4 — Register permission rules (if gated)
  *
- * If the tool needs explicit user approval, add a permission entry in
- * prism-next's app-level OpenCode config/settings.
+ * Add an entry to `src/main/services/tool-permission-registry.ts`.
+ *
+ * ### Step 5 — Enable in OpenCode config (automatic)
+ *
+ * Add metadata to `BUILTIN_TOOLS` below. `AcpService.applyBuiltinToolsConfig()`
+ * force-enables every `BUILTIN_TOOLS` entry on startup — the model will see the
+ * tool without manual opencode.json edits.
  */
 
 // ─── Tool metadata (used by renderer for Widget display) ────────────
@@ -113,6 +118,18 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     name: "bash",
     label: "Shell",
     description: "Execute shell commands via Prism terminal bridge (pty mode)",
+    category: "utility",
+  },
+  {
+    name: "delete",
+    label: "Delete",
+    description: "Delete a file (Prism custom tool — replaces bash rm for single files)",
+    category: "utility",
+  },
+  {
+    name: "move",
+    label: "Move",
+    description: "Move or rename a file (Prism custom tool — replaces bash mv for single files)",
     category: "utility",
   },
 ];

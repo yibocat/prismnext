@@ -1,4 +1,4 @@
-import { useState, memo, useCallback } from "react";
+import { memo, useCallback, useState } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { TerminalIcon, ExternalLinkIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -74,7 +74,7 @@ export const BashWidget = memo(function BashWidget({
         <>
           {isAwaitingPermission && (
             <span className="text-primary shrink-0 text-[length:var(--font-chat-meta)]">
-              Awaiting permission
+              Confirm above
             </span>
           )}
           {isDenied && (
@@ -114,7 +114,7 @@ export const BashWidget = memo(function BashWidget({
       {() => (
         <>
           {isAwaitingPermission && command ? (
-            <pre className="rounded border border-border bg-muted/40 px-2 py-1.5 text-[length:var(--font-code)] whitespace-pre-wrap break-all mb-2">
+            <pre className="rounded border border-border bg-muted/40 px-2 py-1.5 text-[length:var(--font-code)] whitespace-pre-wrap break-all">
               {command}
             </pre>
           ) : null}

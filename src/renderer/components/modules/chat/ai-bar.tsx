@@ -14,8 +14,19 @@ import { XIcon } from "lucide-react";
 import { WorktreeSelector } from "./worktree-selector";
 import { cn } from "@/lib/utils";
 
+/** Capsule AiBar toolbar — dedicated pill radius (not Appearance). */
+const CAPSULE_TOOLBAR_PILL =
+  "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-border px-2.5 text-[length:var(--font-chat-meta)] transition-colors";
+
+/** Capsule outer shell — neutral gray border (not theme accent). */
+const CAPSULE_SHELL_BORDER = "border-neutral-400/55 dark:border-neutral-600/70";
+const CAPSULE_SHELL_BORDER_IDLE = "border-neutral-400/35 dark:border-neutral-600/45";
+
 /** idle: hover pill · input: compact capsule · expanded: full composer */
 type Phase = "idle" | "input" | "expanded";
+
+const CAPSULE_MORPH_TRANSITION =
+  "transition-all duration-200 ease-out";
 
 export function AiBar() {
   const [phase, setPhase] = useState<Phase>("idle");
@@ -57,7 +68,6 @@ export function AiBar() {
 
   const hasConversation = messages.length > 0 || isStreaming;
   const isInputting = phase === "input";
-  const isExpanded = phase === "expanded";
   const isComposerVisible = phase !== "idle";
 
   const focusComposer = useCallback(() => {
@@ -159,7 +169,10 @@ export function AiBar() {
       {hasConversation && (
         <button
           type="button"
-          className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors mr-1"
+          className={cn(
+            CAPSULE_TOOLBAR_PILL,
+            "bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground mr-1",
+          )}
           onClick={openPanel}
         >
           {isStreaming ? (
@@ -175,7 +188,7 @@ export function AiBar() {
           )}
         </button>
       )}
-      <WorktreeSelector />
+      <WorktreeSelector variant="capsule" />
     </div>
   );
 
@@ -222,20 +235,31 @@ export function AiBar() {
       <div
         ref={composerShellRef}
         data-ai-bar-capsule
-        className="w-full max-w-3xl mx-auto pointer-events-none"
+        className="w-full max-w-3xl mx-auto pointer-events-none @container"
       >
         <div className="px-3 w-full">
           {toolbar}
           <div
             ref={morphRef}
             className={cn(
-              "pointer-events-auto mx-auto w-full transition-all duration-200 ease-out overflow-hidden",
+              "pointer-events-auto overflow-hidden border w-full mx-auto",
+              CAPSULE_MORPH_TRANSITION,
               phase === "idle" &&
-                "group flex items-center rounded-full border h-1.5 max-w-30 px-0 bg-muted-foreground/75 border-border/40 cursor-pointer hover:h-8 hover:max-w-[220px] hover:bg-muted hover:border-border hover:delay-0 delay-100",
+                cn(
+                  "group flex items-center rounded-full bg-muted-foreground/75 h-1.5 max-h-1.5 max-w-30 px-0 cursor-pointer hover:h-8 hover:max-h-8 hover:max-w-[220px] hover:bg-muted hover:delay-0 delay-100",
+                  CAPSULE_SHELL_BORDER_IDLE,
+                  "hover:border-neutral-400/55 dark:hover:border-neutral-600/70",
+                ),
               phase === "input" &&
-                "flex items-center rounded-full h-12 max-w-3xl px-3 border border-border bg-card cursor-text",
+                cn(
+                  "flex items-center rounded-full h-12 max-h-12 max-w-3xl px-3 bg-card cursor-text",
+                  CAPSULE_SHELL_BORDER,
+                ),
               phase === "expanded" &&
-                "rounded-2xl border border-border bg-card animate-in fade-in slide-in-from-bottom-1 duration-200",
+                cn(
+                  "rounded-2xl max-h-[min(60vh,480px)] max-w-3xl bg-card",
+                  CAPSULE_SHELL_BORDER,
+                ),
             )}
             onClick={phase === "idle" ? openInput : undefined}
           >
@@ -251,14 +275,9 @@ export function AiBar() {
                 <Kbd className="bg-transparent transition-colors duration-200">⌘I</Kbd>
               </span>
             ) : (
-              <div
-                className={cn(
-                  "w-full min-w-0 animate-in fade-in duration-150",
-                  phase === "input" && "h-full",
-                )}
-              >
+              <div className={cn("w-full min-w-0", phase === "input" && "h-full")}>
                 <ChatComposerCore
-                  variant={isExpanded ? "capsule-expanded" : "capsule-compact"}
+                  variant={phase === "expanded" ? "capsule-expanded" : "capsule-compact"}
                   capsulePlaceholder="Ask AI about your research..."
                   onLayoutExpand={openExpanded}
                   className={isInputting ? "h-full w-full" : undefined}

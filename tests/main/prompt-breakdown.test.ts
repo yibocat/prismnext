@@ -36,7 +36,8 @@ describe("estimateTokenBreakdown", () => {
     const breakdown = promptManager.estimateTokenBreakdown(ctx);
 
     expect(breakdown["project-rules"]).toBeGreaterThan(0);
-    expect(breakdown["modules"]).toBeUndefined();
+    // active-modules layer is independent; rules must not replace it
+    expect(breakdown["project-rules"]).not.toBe(breakdown["modules"]);
   });
 
   it("classifies AGENTS.md content under project-instructions", () => {

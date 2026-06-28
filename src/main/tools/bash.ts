@@ -1,6 +1,6 @@
 /**
  * Custom bash tool (PTY mode) — polls results from the renderer-started PTY job.
- * Execution is started once by renderer IPC (`terminal:runAiBash`) on tool_use.
+ * Execution is started by main after the user approves shell permission.
  *
  * IMPORTANT: Self-contained — copied to OpenCode's tools directory (Bun runtime).
  * Keep polling helpers in sync with src/main/services/bash-bridge-poll.ts
@@ -45,6 +45,21 @@ function resolveToolCallId(sessionDir: string, context: Record<string, unknown>)
   return extractToolCallId(context) ?? readActiveToolCallId(sessionDir);
 }
 
+function readPermissionStatus(
+  sessionDir: string,
+  toolCallId: string,
+): "approved" | "denied" | undefined {
+  const resPath = path.join(sessionDir, `${toolCallId}.permission.json`);
+  if (!fs.existsSync(resPath)) return undefined;
+  try {
+    const data = JSON.parse(fs.readFileSync(resPath, "utf-8")) as { status?: string };
+    if (data.status === "approved" || data.status === "denied") return data.status;
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function readResult(
   sessionDir: string,
   toolCallId: string,
@@ -82,23 +97,9 @@ export default tool({
     const deadline = Date.now() + 130_000;
     let toolCallId = resolveToolCallId(sessionDir, context as Record<string, unknown>);
 
-    while (!context.abort.aborted && Date.now() < deadline) {
-      if (!toolCallId) {
-        toolCallId = resolveToolCallId(sessionDir, context as Record<string, unknown>);
-      }
-
-      if (toolCallId) {
-        const result = readResult(sessionDir, toolCallId);
-        if (result) {
-          return {
-            output: result.output,
-            exit: result.exit,
-            cwd: result.cwd ?? cwd,
-          };
-        }
-      }
-
+    while (!toolCallId && !context.abort.aborted && Date.now() < deadline) {
       await delay(50);
+      toolCallId = resolveToolCallId(sessionDir, context as Record<string, unknown>);
     }
 
     if (!toolCallId) {
@@ -107,6 +108,32 @@ export default tool({
         exit: 1,
         cwd,
       };
+    }
+
+    // Custom bash may start before ACP permission — block until Prism writes decision.
+    while (!context.abort.aborted && Date.now() < deadline) {
+      const perm = readPermissionStatus(sessionDir, toolCallId);
+      if (perm === "denied") {
+        return { output: "Permission denied by user", exit: 1, cwd };
+      }
+      if (perm === "approved") break;
+      await delay(50);
+    }
+
+    if (readPermissionStatus(sessionDir, toolCallId) !== "approved") {
+      return { output: "Permission timed out waiting for user approval", exit: 1, cwd };
+    }
+
+    while (!context.abort.aborted && Date.now() < deadline) {
+      const result = readResult(sessionDir, toolCallId);
+      if (result) {
+        return {
+          output: result.output,
+          exit: result.exit,
+          cwd: result.cwd ?? cwd,
+        };
+      }
+      await delay(50);
     }
 
     return {

@@ -68,9 +68,22 @@ function AppSelectTrigger({
 
 function AppSelectContent({
   className,
+  position = "popper",
+  align = "start",
+  side = "bottom",
+  sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof SelectContent>) {
-  return <SelectContent className={cn(appSelectContentClass, className)} {...props} />;
+  return (
+    <SelectContent
+      className={cn(appSelectContentClass, className)}
+      position={position}
+      align={align}
+      side={side}
+      sideOffset={sideOffset}
+      {...props}
+    />
+  );
 }
 
 function AppSelectItem({ className, ...props }: React.ComponentProps<typeof SelectItem>) {

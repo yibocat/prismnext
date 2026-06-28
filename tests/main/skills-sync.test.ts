@@ -15,6 +15,7 @@ import {
   OPENCODE_HIDDEN_SKILLS,
   PRISM_OPENCODE_SKILLS_SCAN_REL,
   buildSkillPermissions,
+  computeProfileSkillDisabled,
   sanitizeSkillPermissionMap,
   skillPermissionNeedsRepair,
   sanitizeSkillPermissionMap,
@@ -90,9 +91,19 @@ description: Manage BibTeX citations
       { "0": "a", "1": "l", "*": "allow", "customize-opencode": "deny" },
       {},
     );
-    expect(repaired).toEqual({ "*": "allow", "customize-opencode": "deny" });
+    expect(repaired).toEqual({ "*": "allow" });
     expect(skillPermissionNeedsRepair(repaired)).toBe(false);
     expect(skillPermissionNeedsRepair({ "0": "a", "1": "l" })).toBe(true);
+  });
+
+  it("sanitizeSkillPermissionMap drops stale per-skill denies not in patch", () => {
+    const cleaned = sanitizeSkillPermissionMap(
+      { "*": "allow", "peer-review-response": "deny", "academic-citations": "deny" },
+      { "customize-opencode": "deny" },
+    );
+    expect(cleaned).toEqual({ "*": "allow", "customize-opencode": "deny" });
+    expect(cleaned["peer-review-response"]).toBeUndefined();
+    expect(cleaned["academic-citations"]).toBeUndefined();
   });
 
   it("buildSkillPermissions denies disabled skills and hides customize-opencode", () => {
@@ -102,6 +113,31 @@ description: Manage BibTeX citations
       expect(perms[hidden]).toBe("deny");
     }
     expect(perms["*"]).toBe("allow");
+  });
+
+  it("computeProfileSkillDisabled does NOT deny skills outside the profile whitelist", () => {
+    root = mkdtempSync(join(tmpdir(), "prism-skills-"));
+    for (const id of ["academic-citations", "peer-review-response", "literature-review"]) {
+      const dir = join(root, `.prismnext/agent/skills/${id}`);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        join(dir, "SKILL.md"),
+        `---
+name: ${id}
+description: ${id}
+---
+# ${id}`,
+        "utf-8",
+      );
+    }
+    writeSkillsManifest(root, { disabled: ["literature-review"] });
+
+    // Profile whitelists only academic-citations, but the other installed
+    // skills must NOT be denied — only the manifest-disabled one is.
+    const disabled = computeProfileSkillDisabled(root, ["academic-citations"]);
+    expect(disabled).toEqual(["literature-review"]);
+    expect(disabled).not.toContain("peer-review-response");
+    expect(disabled).not.toContain("academic-citations");
   });
 
   it("always includes prism-curated bundled source", () => {

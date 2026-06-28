@@ -75,6 +75,30 @@ function jobKey(sessionId: string, toolCallId: string): string {
   return `${sessionId}:${toolCallId}`;
 }
 
+/** Register pending bash job before user approves — OpenCode polls bridge by sessionId. */
+export function registerBashJobIntent(args: {
+  sessionId: string;
+  toolCallId: string;
+  command: string;
+}): void {
+  const sessionDir = join(getBridgeRoot(), args.sessionId);
+  mkdirSync(sessionDir, { recursive: true });
+  try {
+    writeFileSync(
+      join(sessionDir, ".active-tool.json"),
+      JSON.stringify({
+        toolCallId: args.toolCallId,
+        command: args.command,
+        startedAt: Date.now(),
+        phase: "awaiting_approval",
+      }),
+      "utf-8",
+    );
+  } catch {
+    // ignore
+  }
+}
+
 /** Run one AI bash job (PTY). Deduped per session + toolCallId. */
 export function runAiBashJob(args: RunAiBashJobArgs): Promise<RunAiBashJobResult> {
   const key = jobKey(args.sessionId, args.toolCallId);

@@ -11,6 +11,7 @@ import { registerThemeHandlers } from "./theme";
 import { registerWorkspaceHandlers } from "./workspace";
 import { registerCommandsHandlers } from "./commands";
 import { registerSkillsHandlers } from "./skills";
+import { registerRulesHandlers } from "./rules";
 import { registerProfilesHandlers } from "./profiles";
 import { registerShellHandlers } from "./shell";
 
@@ -28,6 +29,7 @@ export function registerIpcHandlers(): void {
   registerWorkspaceHandlers();
   registerCommandsHandlers();
   registerSkillsHandlers();
+  registerRulesHandlers();
   registerProfilesHandlers();
   registerShellHandlers();
 }

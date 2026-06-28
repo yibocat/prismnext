@@ -51,7 +51,8 @@ export function AiTerminalSettingsFields({ hideExecutionMode = true }: AiTermina
             </div>
             <p className={SETTINGS_ROW_DESC}>
               PTY stream shows live output while commands run. Mirror waits for completion
-              then replays the log — a fallback if PTY has issues.
+              then replays the log. In Ask and Auto permission modes, shell always uses PTY
+              so commands run only after you Allow in the permission gate.
             </p>
           </div>
           <AppSelect

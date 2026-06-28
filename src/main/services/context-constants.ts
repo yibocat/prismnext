@@ -41,7 +41,7 @@ export const CONTEXT_CATEGORY_SCHEMA: ContextCategoryDef[] = [
   { key: "messages",             label: "Messages",             color: "bg-rose-400",   description: "Chat messages and tool call results",              order: 0 },
   { key: "user-instructions",    label: "User Instructions",    color: "bg-purple-500", description: "Custom system prompt from app settings",         order: 1 },
   { key: "project-instructions", label: "Project Instructions", color: "bg-amber-500", description: "AGENTS.md — per-project agent instructions",     order: 2 },
-  { key: "project-rules",        label: "Project Rules",        color: "bg-yellow-500", description: "Custom rules from project settings",             order: 3 },
+  { key: "project-rules",        label: "Project Rules",        color: "bg-yellow-500", description: "Custom rules from RULE.md files",                order: 3 },
   { key: "skills",               label: "Skills",               color: "bg-cyan-500",   description: "Agent skills (.prismnext/agent/skills/)",        order: 4 },
   { key: "modules",              label: "Prompt Modules",       color: "bg-emerald-500", description: "Domain-specific knowledge modules",             order: 5 },
   { key: "mcp-tools",            label: "MCP Tools",            color: "bg-orange-500", description: "MCP server tool definitions",                    order: 6 },

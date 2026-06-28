@@ -32,7 +32,7 @@ const updateTerminalTabTitle = vi.fn();
 
 vi.mock("@/stores/right-panel-store", () => ({
   useRightPanelStore: {
-    getState: () => ({ updateTerminalTabTitle }),
+    getState: () => ({ tabs: [], updateTerminalTabTitle }),
   },
 }));
 

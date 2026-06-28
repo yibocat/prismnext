@@ -14,6 +14,8 @@ import { WebSearchWidget } from "./websearch-widget";
 import { TaskWidget } from "./task-widget";
 import { SkillWidget } from "./skill-widget";
 import { PatchWidget } from "./patch-widget";
+import { DeleteWidget } from "./delete-widget";
+import { MoveWidget } from "./move-widget";
 import { LspWidget } from "./lsp-widget";
 import { GenericWidget } from "./generic-widget";
 
@@ -31,6 +33,8 @@ export { WebSearchWidget } from "./websearch-widget";
 export { TaskWidget } from "./task-widget";
 export { SkillWidget } from "./skill-widget";
 export { PatchWidget } from "./patch-widget";
+export { DeleteWidget } from "./delete-widget";
+export { MoveWidget } from "./move-widget";
 export { LspWidget } from "./lsp-widget";
 export { GenericWidget } from "./generic-widget";
 export { getToolMeta, usesProposedChange, shouldTrackProposedChange, isFileWriteTool, isPatchTool, isDiskMutationTool, extractPatchTargetPaths } from "./tool-meta";
@@ -57,12 +61,10 @@ const BUILTIN_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
   write: EditWidget, // write and edit share EditWidget (diff + accept/reject)
   read: ReadWidget,
   apply_patch: PatchWidget,
-  patch: PatchWidget, // both "apply_patch" and "patch" are used by OpenCode
 
   // Search
   grep: GrepWidget,
   glob: GlobWidget,
-  list: ListWidget,
   // lsp_* is handled by a prefix match below
 
   // Execution
@@ -116,8 +118,10 @@ const BUILTIN_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
  * @see src/main/tools/index.ts — tool registration on the main-process side
  */
 const CUSTOM_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
-  // prism‑next built-in custom tools
-  "question": AskUserQuestionWidget,
+  // prism‑next built-in custom tools (see src/main/tools/index.ts BUILTIN_TOOLS)
+  question: AskUserQuestionWidget,
+  delete: DeleteWidget,
+  move: MoveWidget,
 };
 
 // ─── ToolWidget Dispatcher ──────────────────────────────────────────

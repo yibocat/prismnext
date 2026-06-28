@@ -98,7 +98,7 @@ export const GitChangeFileRow = memo(function GitChangeFileRow({
     [file.path],
   );
 
-  const isChecked = file.staged || file.worktreeStatus === "D";
+  const isChecked = file.staged;
   const showDiscard = !file.staged && (file.unstaged || file.untracked);
   const showNew = isGitChangeNewFile(file);
 

@@ -18,6 +18,8 @@ function charsToTokens(text: string): number {
 
 const log = createLogger("prompt-manager", "agent");
 
+const PROJECT_RULES_LAYER_ID = "custom-rules";
+
 class PromptManager {
   private composer = new PromptComposer();
   private initialized = false;
@@ -58,6 +60,18 @@ class PromptManager {
   compose(ctx: PromptContext): string {
     this.initialize();
     return this.composer.compose(ctx);
+  }
+
+  /** Base system prompt without project rules (injected once per session). */
+  composeBase(ctx: PromptContext): string {
+    this.initialize();
+    return this.composer.compose(ctx, { excludeLayerIds: [PROJECT_RULES_LAYER_ID] });
+  }
+
+  /** Project rules only — re-read from disk and injected on every chat turn. */
+  composeProjectRules(ctx: PromptContext): string {
+    this.initialize();
+    return this.composer.compose(ctx, { onlyLayerIds: [PROJECT_RULES_LAYER_ID] });
   }
 
   /** Get all layers (for settings UI introspection). */
@@ -182,11 +196,10 @@ class PromptManager {
     return breakdown;
   }
 
-  /** Stable fingerprint of the assembled prompt configuration.
-   *  Used to detect when an existing session was created with outdated rules. */
+  /** Stable fingerprint of the base prompt (excludes project rules — those inject per turn). */
   computePromptFingerprint(ctx: PromptContext): string {
     this.initialize();
-    const base = this.composer.fingerprint(ctx);
+    const base = this.composer.fingerprint(ctx, { excludeLayerIds: [PROJECT_RULES_LAYER_ID] });
     const mod = ALL_MODULES.map((m) => `${m.key}=${m.enabled ? 1 : 0}`).join(",");
     return `${base}|${mod}`;
   }

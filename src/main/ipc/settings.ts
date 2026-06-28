@@ -5,6 +5,7 @@ import { buildPromptContext } from "../prompts/context";
 import { CORE_PERSONA_PROMPT } from "../prompts/layers/core-persona";
 import { AcpService } from "../acp/service";
 import { resolvePermissionMode } from "../services/permission-modes";
+import { resolveEffectiveAgentTerminalMode } from "../services/permission-modes";
 
 export function registerSettingsHandlers(): void {
   ipcMain.handle("settings:get", async () => {
@@ -22,11 +23,17 @@ export function registerSettingsHandlers(): void {
       if ("permissionMode" in patch) {
         const service = AcpService.getInstance();
         const mode = resolvePermissionMode(patch.permissionMode as string | undefined);
-        // Write config to disk only — do NOT restart OpenCode here.
-        // Restart invalidates in-memory sessions while renderer still holds old sessionIds,
-        // causing the next prompt to fail immediately. Runtime mode is enforced client-side
-        // in use-opencode-events (auto allow/deny). Config applies on next app launch.
         service.applyPermissionMode(mode);
+        service.applyBuiltinToolsConfig();
+        const terminalMode = resolveEffectiveAgentTerminalMode(
+          mode,
+          getSettings().agentTerminalMode as string | undefined,
+        );
+        await service.applyAgentTerminalMode(terminalMode);
+        await service.syncBuiltinTools();
+        // OpenCode reads opencode.json at process start — restart to apply new rules.
+        // Active chat sessions may need a new tab after this.
+        await service.reloadAfterPermissionModeChange();
       }
       if ("agentTerminalMode" in patch) {
         const service = AcpService.getInstance();

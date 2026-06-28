@@ -20,7 +20,12 @@ describe("permission outcome", () => {
     expect(outcome).toEqual({ outcome: { outcome: "selected", optionId: "reject" } });
   });
 
-  it("cancels when no matching option exists", () => {
-    expect(buildPermissionOutcome([], true)).toEqual({ outcome: { outcome: "cancelled" } });
+  it("falls back when options array is empty", () => {
+    expect(buildPermissionOutcome([], true)).toEqual({
+      outcome: { outcome: "selected", optionId: "allow_once" },
+    });
+    expect(buildPermissionOutcome([], false)).toEqual({
+      outcome: { outcome: "selected", optionId: "reject_once" },
+    });
   });
 });

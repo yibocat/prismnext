@@ -30,7 +30,7 @@ const DEFAULT_LINK_COMPONENTS: Components = {
   ),
 };
 
-export type MarkdownDocumentPreviewVariant = "default" | "skill";
+export type MarkdownDocumentPreviewVariant = "default" | "skill" | "rule";
 
 export interface MarkdownDocumentPreviewProps {
   content: string;

@@ -23,6 +23,7 @@ import {
   readBundledProfileDefinition,
 } from "./bundled-profiles";
 import { listProjectSkills } from "./skills-sync";
+import { listProjectRules } from "./rules-sync";
 import { ALL_MODULES } from "../prompts/modules";
 import { resolveActiveModuleKeys } from "../prompts/resolve-active-modules";
 import { commandRegistry } from "../commands/registry";
@@ -401,19 +402,9 @@ export function getProfileEditorOptions(projectRoot: string): ProfileEditorOptio
   }));
 
   const rules: Array<{ name: string }> = [];
-  const settingsPath = join(projectRoot, ".prismnext", "settings.json");
-  if (existsSync(settingsPath)) {
-    try {
-      const settings = JSON.parse(readFileSync(settingsPath, "utf-8")) as {
-        customRules?: Array<{ name: string; enabled?: boolean }>;
-      };
-      for (const rule of settings.customRules ?? []) {
-        if (rule.enabled !== false && rule.name?.trim()) {
-          rules.push({ name: rule.name.trim() });
-        }
-      }
-    } catch {
-      // ignore
+  for (const rule of listProjectRules(projectRoot)) {
+    if (rule.enabled && rule.name.trim()) {
+      rules.push({ name: rule.name.trim() });
     }
   }
 

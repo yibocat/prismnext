@@ -11,6 +11,10 @@ import { useDocumentStore } from "@/stores/document-store";
 import { discardAndCloseWorktree } from "@/lib/git/git-orchestrator";
 import { useResolvedWorktree } from "@/lib/git/use-resolved-worktree";
 import { WorktreeMergePanel } from "./worktree-merge-panel";
+import {
+  CHAT_PANEL_TOOLBAR_BUTTON,
+  CHAT_PANEL_TOOLBAR_BUTTON_PRIMARY,
+} from "./worktree-selector";
 import { cn } from "@/lib/utils";
 
 export function WorktreeActions() {
@@ -39,15 +43,11 @@ export function WorktreeActions() {
   if (!activeWorktree) return null;
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
       <button
         type="button"
         onClick={handleMoveToLocal}
-        className={cn(
-          "flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1",
-          "text-[length:var(--font-chat-meta)] transition-colors",
-          "bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-        )}
+        className={CHAT_PANEL_TOOLBAR_BUTTON}
         title="Discard worktree and return to main project"
       >
         <ArrowLeftIcon className="size-3" />
@@ -59,11 +59,8 @@ export function WorktreeActions() {
           <button
             type="button"
             className={cn(
-              "flex items-center gap-1.5 rounded-full border px-2.5 py-1",
-              "text-[length:var(--font-chat-meta)] transition-colors",
-              mergeOpen
-                ? "bg-primary/15 text-primary border-primary/30"
-                : "bg-primary/10 text-primary border-primary/30 hover:bg-primary/15",
+              CHAT_PANEL_TOOLBAR_BUTTON_PRIMARY,
+              mergeOpen && "bg-primary/10",
             )}
             onMouseDown={(e) => e.preventDefault()}
           >

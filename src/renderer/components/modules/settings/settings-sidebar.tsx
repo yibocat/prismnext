@@ -19,7 +19,6 @@ import {
   PaletteIcon,
   GlobeIcon,
   TerminalIcon,
-  KeyboardIcon,
   FileTextIcon,
   LayoutGridIcon,
   XIcon,
@@ -42,9 +41,7 @@ const SETTINGS_GROUPS = [
     items: [
       { id: "general", label: "General", icon: Settings2Icon },
       { id: "appearance", label: "Appearance", icon: PaletteIcon },
-      { id: "shortcuts", label: "Shortcuts", icon: KeyboardIcon },
       { id: "workspace", label: "Workspace", icon: LayoutGridIcon },
-      { id: "logs", label: "Logs", icon: FileTextIcon },
     ],
   },
   {

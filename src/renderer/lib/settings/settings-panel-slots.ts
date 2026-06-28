@@ -24,8 +24,8 @@ export type SettingsPanelSlot =
   | { kind: "agent-profile"; mode: "edit"; profileId: string; title?: string }
   | { kind: "agent-profile"; mode: "customize-builtin"; profileId: string; title?: string }
   | { kind: "prompt-markdown"; doc: "system-prompt" | "agents-md" | "assembled" }
-  | { kind: "project-rule"; mode: "new" }
-  | { kind: "project-rule"; mode: "edit"; ruleId: string; title?: string }
+  | { kind: "rule-markdown"; mode: "new" }
+  | { kind: "rule-markdown"; mode: "edit"; ruleId: string; title?: string }
   | { kind: "custom-command"; mode: "new" }
   | { kind: "custom-command"; mode: "edit"; commandId: string; title?: string }
   | { kind: "mcp-json" }
@@ -34,7 +34,9 @@ export type SettingsPanelSlot =
   | { kind: "mcp-server"; serverName: string; title?: string }
   | { kind: "skill-markdown"; mode: "new" }
   | { kind: "skill-markdown"; mode: "edit"; skillId: string; title?: string }
-  | { kind: "skill-library" };
+  | { kind: "skill-library" }
+  | { kind: "shortcuts" }
+  | { kind: "logs" };
 
 export function settingsPanelSlotTitle(slot: SettingsPanelSlot | null): string | null {
   if (!slot) return null;
@@ -70,9 +72,9 @@ export function settingsPanelSlotTitle(slot: SettingsPanelSlot | null): string |
       if (slot.doc === "agents-md") return "AGENTS.md";
       return "Prompt preview";
     }
-    case "project-rule": {
+    case "rule-markdown": {
       if (slot.mode === "new") return "New rule";
-      return slot.title ?? "Rule";
+      return slot.title ?? slot.ruleId;
     }
     case "custom-command": {
       if (slot.mode === "new") return "New command";
@@ -92,6 +94,10 @@ export function settingsPanelSlotTitle(slot: SettingsPanelSlot | null): string |
     }
     case "skill-library":
       return "Skill library";
+    case "shortcuts":
+      return "Shortcuts";
+    case "logs":
+      return "Logs";
     default:
       return null;
   }

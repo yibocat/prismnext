@@ -21,6 +21,7 @@ interface PermissionState {
   deniedToolIds: Record<string, string[]>;
   addPermission: (permission: PendingPermission) => void;
   clearPermission: (id: string) => void;
+  clearPermissionsForTool: (tabId: string, toolCallId: string) => void;
   clearTabPermissions: (tabId: string) => void;
   clearAllPermissions: () => void;
   markToolResolved: (tabId: string, toolUseId: string) => void;
@@ -43,6 +44,16 @@ export const usePermissionStore = create<PermissionState>()((set, get) => ({
         next[existingIdx] = permission;
         return { permissions: next };
       }
+      if (permission.toolCallId) {
+        const dupIdx = state.permissions.findIndex(
+          (p) => p.tabId === permission.tabId && p.toolCallId === permission.toolCallId,
+        );
+        if (dupIdx >= 0) {
+          const next = [...state.permissions];
+          next[dupIdx] = permission;
+          return { permissions: next };
+        }
+      }
       return { permissions: [...state.permissions, permission] };
     });
   },
@@ -50,6 +61,14 @@ export const usePermissionStore = create<PermissionState>()((set, get) => ({
   clearPermission: (id) => {
     set((state) => ({
       permissions: state.permissions.filter((p) => p.id !== id),
+    }));
+  },
+
+  clearPermissionsForTool: (tabId, toolCallId) => {
+    set((state) => ({
+      permissions: state.permissions.filter(
+        (p) => !(p.tabId === tabId && p.toolCallId === toolCallId),
+      ),
     }));
   },
 
@@ -104,13 +123,9 @@ export const usePermissionStore = create<PermissionState>()((set, get) => ({
   },
 
   getPermissionForTool: (tabId, toolUseId) => {
-    const tabPermissions = get().permissions.filter((p) => p.tabId === tabId);
-    const exact = tabPermissions.find((p) => p.toolCallId === toolUseId);
-    if (exact) return exact;
-
-    // Some ACP implementations omit toolCallId from permission payloads.
-    // In that case only fall back when there is exactly one pending permission
-    // for the active tab, avoiding accidental approval of the wrong tool.
-    return tabPermissions.length === 1 ? tabPermissions[0] : undefined;
+    if (!toolUseId) return undefined;
+    return get().permissions.find(
+      (p) => p.tabId === tabId && p.toolCallId === toolUseId,
+    );
   },
 }));

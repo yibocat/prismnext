@@ -9,11 +9,6 @@ import { cn } from "@/lib/utils";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
 import { notifyPromptConfigChanged } from "@/lib/settings/prompt-config-notify";
-import {
-  loadProjectRules,
-  saveProjectRules,
-  type ProjectRule,
-} from "@/lib/settings/project-rules";
 
 const CATEGORY_HEADER =
   "text-[length:var(--font-size-12)] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1";
@@ -87,8 +82,10 @@ function KnowledgeModulesSection({ onRefresh }: { onRefresh: () => void }) {
 
 function ProjectRulesSection() {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const [rules, setRules] = useState<ProjectRule[]>([]);
-  const [saving, setSaving] = useState(false);
+  const [rules, setRules] = useState<
+    Awaited<ReturnType<typeof window.electronAPI.agentListRules>>
+  >([]);
+  const [busy, setBusy] = useState(false);
   const deleteConfirm = useInlineDeleteConfirm();
 
   const loadRules = useCallback(async () => {
@@ -96,44 +93,53 @@ function ProjectRulesSection() {
       setRules([]);
       return;
     }
-    setRules(await loadProjectRules(projectRoot));
+    try {
+      setRules(await window.electronAPI.agentListRules(projectRoot));
+    } catch {
+      setRules([]);
+    }
   }, [projectRoot]);
 
   useEffect(() => {
     void loadRules();
   }, [loadRules]);
 
-  useOnSettingsEditorKindsClosed(["project-rule"], () => {
+  useOnSettingsEditorKindsClosed(["rule-markdown"], () => {
     void loadRules();
   });
 
   const handleToggleRule = async (id: string, enabled: boolean) => {
     if (!projectRoot) return;
     deleteConfirm.clearPending();
-    const updated = rules.map((r) => (r.id === id ? { ...r, enabled } : r));
-    setRules(updated);
-    await saveProjectRules(projectRoot, updated);
-    notifyPromptConfigChanged();
+    setRules((prev) => prev.map((r) => (r.id === id ? { ...r, enabled } : r)));
+    setBusy(true);
+    try {
+      await window.electronAPI.agentSetRuleEnabled(projectRoot, id, enabled);
+      notifyPromptConfigChanged();
+    } catch {
+      await loadRules();
+    } finally {
+      setBusy(false);
+    }
   };
 
   const confirmDelete = async (id: string) => {
     if (!projectRoot) return;
     deleteConfirm.clearPending();
-    setSaving(true);
+    setBusy(true);
     try {
-      const updated = rules.filter((r) => r.id !== id);
-      await saveProjectRules(projectRoot, updated);
-      setRules(updated);
+      await window.electronAPI.agentDeleteRule(projectRoot, id);
+      setRules((prev) => prev.filter((r) => r.id !== id));
       notifyPromptConfigChanged();
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   };
 
-  const openRule = (rule: ProjectRule) => {
+  const openRule = (rule: (typeof rules)[number]) => {
     deleteConfirm.clearPending();
     openSettingsPanel({
-      kind: "project-rule",
+      kind: "rule-markdown",
       mode: "edit",
       ruleId: rule.id,
       title: rule.name,
@@ -171,12 +177,11 @@ function ProjectRulesSection() {
                 <span className={cn(BADGE, "bg-muted text-muted-foreground")}>Custom</span>
               </div>
               <p className={cn(ROW_DESC, "truncate")}>
-                {rule.content.slice(0, 80)}
-                {rule.content.length > 80 && "…"}
+                {rule.description || "No description."}
               </p>
             </button>
             <div className="flex items-center gap-1 shrink-0">
-              <Button variant="ghost" size="xs" disabled={saving} onClick={() => openRule(rule)}>
+              <Button variant="ghost" size="xs" disabled={busy} onClick={() => openRule(rule)}>
                 Edit
               </Button>
               <Switch
@@ -186,7 +191,7 @@ function ProjectRulesSection() {
               <InlineDeleteButton
                 itemId={rule.id}
                 pending={deleteConfirm.isPending(rule.id)}
-                disabled={saving}
+                disabled={busy}
                 stopPropagation
                 onRequest={() => deleteConfirm.setPendingId(rule.id)}
                 onConfirm={() => void confirmDelete(rule.id)}
@@ -199,7 +204,7 @@ function ProjectRulesSection() {
         <Button
           variant="ghost"
           size="xs"
-          onClick={() => openSettingsPanel({ kind: "project-rule", mode: "new" })}
+          onClick={() => openSettingsPanel({ kind: "rule-markdown", mode: "new" })}
         >
           + Add project rule
         </Button>
@@ -258,7 +263,7 @@ export function PromptsRulesSettings() {
     void refreshSummaries();
   }, [refreshSummaries]);
 
-  useOnSettingsEditorKindsClosed(["prompt-markdown", "project-rule"], () => {
+  useOnSettingsEditorKindsClosed(["prompt-markdown", "rule-markdown"], () => {
     void refreshSummaries();
   });
 
@@ -378,7 +383,7 @@ export function PromptsRulesSettings() {
           <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-2">
             Additional per-project rules stored in{" "}
             <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">
-              .prismnext/settings.json
+              .prismnext/agent/rules/&lt;id&gt;/RULE.md
             </code>
           </p>
           <ProjectRulesSection />

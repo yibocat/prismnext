@@ -1,7 +1,7 @@
 import type { BrowserWindow } from "electron";
 import { AcpService } from "./service";
 import { createLogger } from "../services/logger";
-import { registerChatSession, unregisterChatSession } from "../services/chat-session-registry";
+import { registerChatSession, unregisterChatSession, resolveChatTabId } from "../services/chat-session-registry";
 
 const log = createLogger("event-mapper", "agent");
 
@@ -89,8 +89,20 @@ export class EventMapper {
     }
 
     const sessionId = this.extractSessionId(method, params);
-    const tabId = sessionId ? this.sessionToTab.get(sessionId) : undefined;
-    if (!tabId) return;
+    const tabId = method === "session/permission"
+      ? this.resolveTabForPermission(sessionId, params)
+      : this.resolveTabForSession(sessionId, params);
+    if (!tabId) {
+      if (method === "session/permission") {
+        log.warn("permission:dropped — no chat tab mapping", {
+          sessionId,
+          permissionId: params?.id || params?.permissionId,
+          toolCallId: params?.toolCallId || params?.tool_call_id,
+          toolName: params?.toolName || params?.tool_name,
+        });
+      }
+      return;
+    }
 
     switch (method) {
       case "session/update":
@@ -143,6 +155,60 @@ export class EventMapper {
     if (params?.sessionId) return params.sessionId;
     if (params?.session?.id) return params.session.id;
     if (params?.info?.id) return params.info.id;
+    return undefined;
+  }
+
+  /** Permission callbacks may omit sessionId — fall back to hinted tabId or sole active tab. */
+  private resolveTabForPermission(sessionId: string | undefined, params?: any): string | undefined {
+    if (typeof params?.tabId === "string" && params.tabId) {
+      return params.tabId;
+    }
+    const fromSession = this.resolveTabForSession(sessionId, params);
+    if (fromSession) return fromSession;
+    if (this.tabToSession.size === 1) {
+      return [...this.tabToSession.keys()][0];
+    }
+    return undefined;
+  }
+
+  /**
+   * Resolve renderer tab for an OpenCode session, including sub-agent sessions
+   * spawned by the task tool (inherit parent tab mapping).
+   */
+  private resolveTabForSession(sessionId: string | undefined, params?: any): string | undefined {
+    if (!sessionId) return undefined;
+
+    const cached = this.sessionToTab.get(sessionId);
+    if (cached) return cached;
+
+    const fromRegistry = resolveChatTabId(sessionId);
+    if (fromRegistry) {
+      this.sessionToTab.set(sessionId, fromRegistry);
+      return fromRegistry;
+    }
+
+    const parentId =
+      params?.parentSessionId
+      ?? params?.parent_session_id
+      ?? params?.session?.parentId
+      ?? params?.session?.parentSessionId;
+    if (typeof parentId === "string" && parentId) {
+      const parentTab = this.resolveTabForSession(parentId, params);
+      if (parentTab) {
+        registerChatSession(sessionId, parentTab);
+        this.sessionToTab.set(sessionId, parentTab);
+        return parentTab;
+      }
+    }
+
+    // Single active chat tab: sub-agent sessions inherit that tab.
+    if (this.tabToSession.size === 1) {
+      const onlyTab = [...this.tabToSession.keys()][0];
+      registerChatSession(sessionId, onlyTab);
+      this.sessionToTab.set(sessionId, onlyTab);
+      return onlyTab;
+    }
+
     return undefined;
   }
 
@@ -230,13 +296,23 @@ export class EventMapper {
 
       // Explicit name fields (if any ACP extension populates them), then
       // kind mapping, then input-shape inference, then kind raw as fallback.
-      const toolName =
+      let toolName =
         tc.tool_name || tc.toolName || tc.name ||
         (typeof tc.tool === "string" ? tc.tool : "") ||
-        fromInput ||
-        fromKind ||
-        (typeof tc.kind === "string" ? tc.kind : "") ||
         "";
+
+      const titleLower = (tc.title || "").toLowerCase();
+      if (!toolName && (titleLower === "delete" || titleLower === "move" || titleLower === "question" || titleLower === "bash")) {
+        toolName = titleLower;
+      }
+
+      if (!toolName) {
+        toolName =
+          fromInput ||
+          fromKind ||
+          (typeof tc.kind === "string" ? tc.kind : "") ||
+          "";
+      }
 
       // ── Tool ID ──────────────────────────────────────────────
       // ACP uses camelCase: toolCallId.  Also try callID (SQLite) + id (legacy).
@@ -302,6 +378,39 @@ export class EventMapper {
         log.info(`[TASK-TOOL] tool_call detected: name="${toolName}" kind=${tc.kind} title="${(tc.title || "").slice(0, 100)}" inputKeys=${JSON.stringify(Object.keys(toolInput))} hasRawInput=${!!tc.rawInput} hasStateInput=${!!tc.state?.input}`);
       }
 
+      const isBash =
+        toolName === "bash"
+        || toolName === "shell"
+        || toolName === "terminal"
+        || toolName === "execute"
+        || tc.kind === "execute";
+      if (isBash && toolId) {
+        const command =
+          (typeof toolInput?.command === "string" ? toolInput.command : "")
+          || (typeof toolInput?._title === "string" ? toolInput._title : "")
+          || (typeof tc.title === "string" ? tc.title : "");
+        const cwd =
+          (typeof toolInput?.workdir === "string" ? toolInput.workdir : undefined)
+          || (typeof toolInput?.cwd === "string" ? toolInput.cwd : undefined);
+        AcpService.getInstance().syncBashPermissionFromToolCall({
+          sessionId,
+          tabId,
+          toolCallId: toolId,
+          command,
+          cwd,
+        });
+      }
+
+      if ((toolName === "delete" || toolName === "move") && toolId) {
+        AcpService.getInstance().syncCustomToolPermissionFromToolCall({
+          sessionId,
+          tabId,
+          toolCallId: toolId,
+          toolName,
+          input: toolInput,
+        });
+      }
+
       // Extract file locations so the renderer can capture old content
       // BEFORE OpenCode modifies files.  Critical for Accept/Reject diff.
       const locations: Array<{ file: string; line?: number }> =
@@ -358,17 +467,61 @@ export class EventMapper {
       const backfillInput: any =
         (updateInput && typeof updateInput === "object" && Object.keys(updateInput).length > 0)
           ? updateInput : null;
-      const backfillName: string | null = backfillInput
+      let backfillName: string | null = backfillInput
         ? (
             tu.tool_name || tu.toolName ||
             (typeof tu.tool === "string" ? tu.tool : "") ||
-            this.inferToolName(backfillInput) ||
-            null
+            ""
           )
         : null;
 
+      const tuTitleLower = (tu.title || "").toLowerCase();
+      if (backfillInput && !backfillName && (tuTitleLower === "delete" || tuTitleLower === "move" || tuTitleLower === "question" || tuTitleLower === "bash")) {
+        backfillName = tuTitleLower;
+      }
+
+      if (backfillInput && !backfillName) {
+        backfillName = this.inferToolName(backfillInput) || null;
+      }
+
       if (backfillInput) {
         log.debug(`tool_call_update backfill: id=${updateId} inputKeys=${JSON.stringify(Object.keys(backfillInput))} name=${backfillName || "(unchanged)"}`);
+        const backfillToolName = (backfillName || "").toLowerCase();
+        if (
+          updateId
+          && (
+            backfillToolName === "bash"
+            || backfillToolName === "shell"
+            || backfillToolName === "terminal"
+            || backfillToolName === "execute"
+          )
+        ) {
+          const command =
+            (typeof backfillInput.command === "string" ? backfillInput.command : "")
+            || (typeof backfillInput.cmd === "string" ? backfillInput.cmd : "");
+          const cwd =
+            (typeof backfillInput.workdir === "string" ? backfillInput.workdir : undefined)
+            || (typeof backfillInput.cwd === "string" ? backfillInput.cwd : undefined);
+          AcpService.getInstance().syncBashPermissionFromToolCall({
+            sessionId,
+            tabId,
+            toolCallId: updateId,
+            command,
+            cwd,
+          });
+        }
+        if (
+          updateId
+          && (backfillToolName === "delete" || backfillToolName === "move")
+        ) {
+          AcpService.getInstance().syncCustomToolPermissionFromToolCall({
+            sessionId,
+            tabId,
+            toolCallId: updateId,
+            toolName: backfillToolName,
+            input: backfillInput,
+          });
+        }
       }
 
       const toolNameHint = backfillName || tu.tool_name || tu.toolName || "";
@@ -582,9 +735,16 @@ export class EventMapper {
         return "edit";
       if (has("content") && !has("old_string") && !has("oldString"))
         return "write";
+      if (has("description") && !has("offset") && !has("limit"))
+        return "delete";
       // read = file_path with no mutation fields
       if (!has("content") && !has("old_string") && !has("oldString"))
         return "read";
+    }
+
+    // ── source_path based (move) ──
+    if (has("source_path") || has("sourcePath") || has("destination_path") || has("destinationPath")) {
+      return "move";
     }
 
     // ── pattern based ──
@@ -599,8 +759,9 @@ export class EventMapper {
     }
 
     // ── path-only or directory ──
+    // OpenCode has no `list` tool; bare path/directory maps to `glob`.
     if ((has("path") || has("directory")) && keys.length <= 2)
-      return "list";
+      return "glob";
 
     // ── patch ──
     if (has("patch"))                                          return "apply_patch";
@@ -695,21 +856,27 @@ export class EventMapper {
 
     switch (status) {
       case "completed":
-        // Clean accumulators but do NOT send chat:complete.
-        // Completion is signaled exclusively by ipc/chat.ts when
-        // sendPrompt returns — this avoids duplicate completion events.
+      case "idle":
+        // Primary completion is ipc/chat.ts when sendPrompt returns.
+        // Also forward status so the renderer can recover if a tool hang
+        // prevented chat:complete (isStreaming would otherwise stay true).
         this.accumText.clear();
         this.accumThinking.clear();
+        this.win.webContents.send("chat:stream", {
+          tabId,
+          type: "session.status",
+          data: { status, sessionId, ...params },
+        });
         break;
 
       case "error":
         this.accumText.clear();
         this.accumThinking.clear();
-        break;
-
-      case "idle":
-        this.accumText.clear();
-        this.accumThinking.clear();
+        this.win.webContents.send("chat:stream", {
+          tabId,
+          type: "session.status",
+          data: { status, sessionId, ...params },
+        });
         break;
 
       default:

@@ -163,7 +163,7 @@ export function ContextWindowIndicator({
           <p className="text-[length:var(--font-hint)] text-foreground/60">
             Category proportions are estimates only.
             {promptStale && (
-              <> Prompt or rules were updated — start a new chat to apply changes.</>
+              <> Base prompt was updated — it will refresh on your next message.</>
             )}
           </p>
 

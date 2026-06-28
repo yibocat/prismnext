@@ -23,7 +23,23 @@ import { useGitStore } from "@/stores/git-store";
 import { useChatStore } from "@/stores/chat-store";
 import { cn } from "@/lib/utils";
 
-export function WorktreeSelector() {
+/** AI Chat panel toolbar above composer — ghost button (hover bg only). */
+export const CHAT_PANEL_TOOLBAR_BUTTON =
+  "inline-flex h-7 shrink-0 items-center gap-0 @md:gap-1.5 rounded-md border-0 bg-transparent px-1.5 @md:px-2.5 text-[length:var(--font-chat-meta)] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground";
+
+export const CHAT_PANEL_TOOLBAR_BUTTON_PRIMARY =
+  "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border-0 bg-transparent px-2.5 text-[length:var(--font-chat-meta)] text-primary transition-colors hover:bg-primary/10 hover:text-primary";
+
+/** Capsule AiBar only — dedicated pill, not Appearance border radius. */
+const CAPSULE_TOOLBAR_PILL =
+  "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-border px-2.5 text-[length:var(--font-chat-meta)] transition-colors";
+
+interface WorktreeSelectorProps {
+  /** `capsule` = AiBar toolbar pill; default = left chat panel (unchanged). */
+  variant?: "default" | "capsule";
+}
+
+export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps) {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const isGitRepo = useGitStore((s) => s.isGitRepo);
   const hasMessages = useChatStore((s) => s.messages.length > 0);
@@ -93,15 +109,18 @@ export function WorktreeSelector() {
 
   if (!isGitRepo) return null;
 
+  const isCapsule = variant === "capsule";
+
   if (hasMessages) {
     return (
       <span
         className={cn(
-          "flex items-center gap-0 @md:gap-1.5 rounded-full border border-border px-1.5 @md:px-2.5 py-1 cursor-default",
-          "text-[length:var(--font-chat-meta)]",
-          mode === "worktree"
-            ? "bg-primary/10 text-primary border-primary/30"
-            : "bg-card text-muted-foreground",
+          isCapsule ? CAPSULE_TOOLBAR_PILL : CHAT_PANEL_TOOLBAR_BUTTON,
+          "cursor-default",
+          !isCapsule && "hover:bg-transparent hover:text-muted-foreground",
+          mode === "worktree" && !isCapsule && "text-primary hover:text-primary",
+          isCapsule && mode === "worktree" && "bg-primary/10 text-primary border-primary/30",
+          isCapsule && mode !== "worktree" && "bg-card text-muted-foreground",
         )}
         title={`Worktree mode is locked: ${triggerLabel}`}
       >
@@ -118,11 +137,14 @@ export function WorktreeSelector() {
         <button
           type="button"
           className={cn(
-            "flex items-center gap-0 @md:gap-1.5 rounded-full border border-border px-1.5 @md:px-2.5 py-1",
-            "text-[length:var(--font-chat-meta)] transition-colors",
+            isCapsule ? CAPSULE_TOOLBAR_PILL : CHAT_PANEL_TOOLBAR_BUTTON,
             mode === "worktree"
-              ? "bg-primary/10 text-primary border-primary/30 hover:bg-primary/15"
-              : "bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+              ? isCapsule
+                ? "bg-primary/10 text-primary border-primary/30 hover:bg-primary/15"
+                : "text-primary hover:bg-primary/10 hover:text-primary"
+              : isCapsule
+                ? "bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                : undefined,
           )}
           onMouseDown={(e) => e.preventDefault()}
           title={triggerLabel}

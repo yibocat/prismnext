@@ -124,6 +124,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	chatDispose: () => ipcRenderer.invoke("chat:dispose"),
 	chatPrewarm: (projectPath: string) => ipcRenderer.invoke("chat:prewarm", { projectPath }),
 	agentListSkills: (projectPath: string) => ipcRenderer.invoke("agent:listSkills", { projectPath }),
+	agentListRules: (projectPath: string) => ipcRenderer.invoke("agent:listRules", { projectPath }),
+	agentInstallRule: (projectPath: string, ruleId: string, content: string) =>
+		ipcRenderer.invoke("agent:installRule", { projectPath, ruleId, content }),
+	agentDeleteRule: (projectPath: string, ruleId: string) =>
+		ipcRenderer.invoke("agent:deleteRule", { projectPath, ruleId }),
+	agentSetRuleEnabled: (projectPath: string, ruleId: string, enabled: boolean) =>
+		ipcRenderer.invoke("agent:setRuleEnabled", { projectPath, ruleId, enabled }),
 	agentListSkillRegistries: (projectPath: string) =>
 		ipcRenderer.invoke("agent:listSkillRegistries", { projectPath }),
 	agentListSkillLibrarySources: (projectPath: string) =>
@@ -205,8 +212,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("chat:answer", { sessionId, answer }),
 		chatAnswerQuestion: (questionId: string, answer: string) =>
 			ipcRenderer.invoke("chat:answerQuestion", { questionId, answer }),
-		chatAnswerPermission: (permissionId: string, approved: boolean) =>
-			ipcRenderer.invoke("chat:answerPermission", { permissionId, approved }),
+		chatAnswerPermission: (permissionId: string, approved: boolean, toolCallId?: string) =>
+			ipcRenderer.invoke("chat:answerPermission", { permissionId, approved, toolCallId }),
 	chatStatus: () => ipcRenderer.invoke("chat:status"),
 	sessionList: (projectPath?: string) => ipcRenderer.invoke("session:list", { projectPath }),
 	sessionLoad: (sessionId: string, projectPath?: string, cwd?: string) =>
@@ -346,6 +353,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		command: string;
 		cwd?: string;
 	}) => ipcRenderer.invoke("terminal:runAiBash", args),
+	terminalRegisterBashJob: (args: {
+		sessionId: string;
+		toolCallId: string;
+		command: string;
+	}) => ipcRenderer.invoke("terminal:registerBashJob", args),
 	terminalDestroyAllAiPty: () => ipcRenderer.invoke("terminal:destroyAllAiPty"),
 
 	// Terminal events (Main → Renderer)

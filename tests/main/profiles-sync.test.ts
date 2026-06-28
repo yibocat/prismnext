@@ -49,7 +49,7 @@ describe("profiles-sync", () => {
 
   it("returns runtime filters for profiles with allowlists", () => {
     const filters = getProfileRuntimeFilters(root, "citation-auditor");
-    expect(filters?.skills).toContain("citations");
+    expect(filters?.skills).toContain("academic-citations");
     expect(filters?.modules).toContain("citations");
   });
 

@@ -1,17 +1,34 @@
 import { describe, it, expect } from "vitest";
-import { getToolMeta, usesProposedChange, shouldTrackProposedChange, isPatchTool, isDiskMutationTool, extractPatchTargetPaths } from "../../src/renderer/components/modules/chat/tools/tool-meta";
+import {
+  getToolMeta,
+  usesProposedChange,
+  shouldTrackProposedChange,
+  isPatchTool,
+  isFileWriteTool,
+  isDiskMutationTool,
+  extractPatchTargetPaths,
+} from "../../src/renderer/components/modules/chat/tools/tool-meta";
 
 describe("tool-meta", () => {
-  it("maps destructive tools to permission confirm UX", () => {
+  it("maps file-write tools to diff confirm UX", () => {
     expect(getToolMeta("edit")).toMatchObject({
       permissionGroup: "file_write",
       confirmUx: "diff",
-      usesProposedChange: true,
     });
+    expect(getToolMeta("write")).toMatchObject({
+      permissionGroup: "file_write",
+      confirmUx: "diff",
+    });
+  });
+
+  it("maps bash to command confirm UX", () => {
     expect(getToolMeta("bash")).toMatchObject({
       permissionGroup: "shell",
       confirmUx: "command",
     });
+  });
+
+  it("maps apply_patch to patch confirm UX", () => {
     expect(getToolMeta("apply_patch")).toMatchObject({
       permissionGroup: "patch",
       confirmUx: "patch",
@@ -21,26 +38,49 @@ describe("tool-meta", () => {
   it("maps read-only tools to none confirm UX", () => {
     expect(getToolMeta("read").confirmUx).toBe("none");
     expect(getToolMeta("grep").confirmUx).toBe("none");
+    expect(getToolMeta("glob").confirmUx).toBe("none");
   });
 
-  it("detects proposed-change tools", () => {
-    expect(usesProposedChange("write")).toBe(true);
+  it("returns default meta for unknown tools", () => {
+    expect(getToolMeta("multiedit").confirmUx).toBe("none");
+    expect(getToolMeta("list").confirmUx).toBe("none");
+  });
+
+  it("maps prism custom delete/move tools", () => {
+    expect(getToolMeta("delete")).toMatchObject({
+      permissionGroup: "file_write",
+      confirmUx: "inline",
+    });
+    expect(getToolMeta("move")).toMatchObject({
+      permissionGroup: "file_write",
+      confirmUx: "inline",
+    });
+    expect(isDiskMutationTool("delete")).toBe(true);
+    expect(isDiskMutationTool("move")).toBe(true);
+  });
+
+  it("proposed-change review is disabled (scheme A)", () => {
+    expect(usesProposedChange("edit")).toBe(false);
+    expect(usesProposedChange("write")).toBe(false);
     expect(usesProposedChange("bash")).toBe(false);
   });
 
-  it("tracks proposed changes only in ask mode for file writes", () => {
-    expect(shouldTrackProposedChange("ask", "edit")).toBe(true);
+  it("tracks proposed changes is always false (scheme A)", () => {
+    expect(shouldTrackProposedChange("ask", "edit")).toBe(false);
     expect(shouldTrackProposedChange("auto", "edit")).toBe(false);
     expect(shouldTrackProposedChange("readonly", "write")).toBe(false);
     expect(shouldTrackProposedChange("auto", "bash")).toBe(false);
     expect(shouldTrackProposedChange("auto", "apply_patch")).toBe(false);
   });
 
-  it("classifies disk mutation tools", () => {
+  it("classifies file-write and patch tools", () => {
+    expect(isFileWriteTool("edit")).toBe(true);
+    expect(isFileWriteTool("write")).toBe(true);
+    expect(isFileWriteTool("multiedit")).toBe(false); // not an OpenCode tool
+    expect(isPatchTool("apply_patch")).toBe(true);
+    expect(isPatchTool("patch")).toBe(false); // not an OpenCode tool name
     expect(isDiskMutationTool("edit")).toBe(true);
     expect(isDiskMutationTool("write")).toBe(true);
-    expect(isPatchTool("apply_patch")).toBe(true);
-    expect(isPatchTool("patch")).toBe(true);
     expect(isDiskMutationTool("apply_patch")).toBe(true);
     expect(isDiskMutationTool("bash")).toBe(false);
   });

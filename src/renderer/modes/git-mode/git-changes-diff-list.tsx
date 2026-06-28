@@ -32,7 +32,7 @@ export function GitChangesDiffList({ files, gitRoot }: GitChangesDiffListProps) 
   );
 
   const allStaged =
-    files.length > 0 && files.every((f) => f.staged || f.worktreeStatus === "D");
+    files.length > 0 && files.every((f) => f.staged);
   const someStaged = !allStaged && files.some((f) => f.staged);
   const canDiscardAll = discardableFiles(files).length > 0;
 

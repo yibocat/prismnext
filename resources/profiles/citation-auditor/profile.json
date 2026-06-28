@@ -3,6 +3,6 @@
   "name": "Citation Auditor",
   "description": "Focused review of citations, bib entries, and reference consistency.",
   "builtin": true,
-  "skills": ["citations"],
+  "skills": ["academic-citations"],
   "modules": ["citations"]
 }

@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/app-menu";
 import { ChevronsLeftRightEllipsisIcon, LayoutGridIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useOpenSettingsEditorSlot } from "@/hooks/use-settings-editor";
+import { useActiveSettingsEditorSlot } from "@/hooks/use-settings-editor";
 import { settingsPanelSlotTitle } from "@/lib/settings/settings-panel-slots";
 import { closeSettingsDetailPanel } from "@/lib/workspace/expand-settings-detail-panel";
 
@@ -153,7 +153,7 @@ function RightAreaWorkspace({
   const setRightSidebarOpen = useLayoutStore((s) => s.setRightSidebarOpen);
   const rightSidebarWidth = useLayoutStore((s) => s.rightSidebarWidth);
   const setRightSidebarWidth = useLayoutStore((s) => s.setRightSidebarWidth);
-  const settingsSlot = useOpenSettingsEditorSlot();
+  const settingsSlot = useActiveSettingsEditorSlot();
   const hasSettingsEditorTab = useRightPanelStore((s) =>
     s.tabs.some((t) => t.kind === "settings-editor"),
   );

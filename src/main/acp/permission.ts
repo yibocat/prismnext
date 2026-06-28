@@ -21,6 +21,15 @@ export function buildPermissionOutcome(
     .find(Boolean);
 
   if (!option) {
+    // Some OpenCode builds omit options — still resolve allow/deny for ACP.
+    if (options.length === 0) {
+      return {
+        outcome: {
+          outcome: "selected",
+          optionId: approved ? "allow_once" : "reject_once",
+        },
+      };
+    }
     return { outcome: { outcome: "cancelled" } };
   }
 

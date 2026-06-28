@@ -12,6 +12,7 @@ import {
 import { useWorktreeStore } from "@/stores/worktree-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useGitStore } from "@/stores/git-store";
+import { CHAT_PANEL_TOOLBAR_BUTTON } from "./worktree-selector";
 import { cn } from "@/lib/utils";
 
 const WT_PREFIX = "wt-";
@@ -92,10 +93,8 @@ export function BranchSelector() {
         onClick={handleInitGit}
         disabled={initLoading}
         className={cn(
-          "flex items-center gap-0 @md:gap-1.5 rounded-full border border-border px-1.5 @md:px-2.5 py-1",
-          "text-[length:var(--font-chat-meta)] transition-colors",
-          "bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-          "disabled:opacity-50 disabled:cursor-wait",
+          CHAT_PANEL_TOOLBAR_BUTTON,
+          "disabled:opacity-50 disabled:cursor-wait disabled:hover:bg-transparent disabled:hover:text-muted-foreground",
         )}
         title="Initialize Git repository"
       >
@@ -117,11 +116,10 @@ export function BranchSelector() {
         <button
           type="button"
           className={cn(
-            "flex items-center gap-0 @md:gap-1.5 rounded-full border border-border px-1.5 @md:px-2.5 py-1",
-            "text-[length:var(--font-chat-meta)] transition-colors",
+            CHAT_PANEL_TOOLBAR_BUTTON,
             locked
-              ? "bg-muted text-muted-foreground/70 cursor-not-allowed"
-              : "bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+              ? "cursor-not-allowed opacity-70 hover:bg-transparent hover:text-muted-foreground/70"
+              : undefined,
           )}
           onMouseDown={(e) => e.preventDefault()}
           title={buttonLabel}

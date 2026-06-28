@@ -8,7 +8,7 @@ import { WorkspaceFolderEditor } from "./workspace-folder-editor";
 import { ProviderEditorPanel } from "./provider-editor-panel";
 import { ProfileEditorPanel } from "./profile-editor-panel";
 import { PromptMarkdownPanel } from "./prompt-markdown-panel";
-import { ProjectRuleEditorPanel } from "./project-rule-editor-panel";
+import { RuleMarkdownPanel } from "./rule-markdown-panel";
 import { CustomCommandEditorPanel } from "./custom-command-editor-panel";
 import { McpJsonEditorPanel } from "./mcp-json-editor-panel";
 import { McpCatalogPanel } from "./mcp-catalog-panel";
@@ -16,6 +16,8 @@ import { McpPasteJsonPanel } from "./mcp-paste-json-panel";
 import { McpServerEditorPanel } from "./mcp-server-editor-panel";
 import { SkillMarkdownPanel } from "./skill-markdown-panel";
 import { SkillLibraryPanel } from "./skill-library-panel";
+import { ShortcutsSettings } from "./shortcuts-settings";
+import { LogViewer } from "./log-viewer";
 
 function PlaceholderSlot({ slot }: { slot: Extract<SettingsPanelSlot, { kind: "placeholder" }> }) {
   return (
@@ -40,8 +42,8 @@ export function renderSettingsPanelSlot(slot: SettingsPanelSlot): ReactNode {
       return <ProfileEditorPanel slot={slot} />;
     case "prompt-markdown":
       return <PromptMarkdownPanel slot={slot} />;
-    case "project-rule":
-      return <ProjectRuleEditorPanel slot={slot} />;
+    case "rule-markdown":
+      return <RuleMarkdownPanel slot={slot} />;
     case "custom-command":
       return <CustomCommandEditorPanel slot={slot} />;
     case "mcp-json":
@@ -56,6 +58,10 @@ export function renderSettingsPanelSlot(slot: SettingsPanelSlot): ReactNode {
       return <SkillMarkdownPanel slot={slot} />;
     case "skill-library":
       return <SkillLibraryPanel />;
+    case "shortcuts":
+      return <ShortcutsSettings />;
+    case "logs":
+      return <LogViewer />;
   }
 }
 
@@ -63,7 +69,9 @@ export function settingsSlotBodyClassName(slot: SettingsPanelSlot): string {
   if (
     slot.kind === "prompt-markdown" ||
     slot.kind === "mcp-json" ||
-    slot.kind === "skill-markdown"
+    slot.kind === "skill-markdown" ||
+    slot.kind === "rule-markdown" ||
+    slot.kind === "logs"
   ) {
     return "flex-1 min-h-0 w-full overflow-hidden";
   }
@@ -71,7 +79,7 @@ export function settingsSlotBodyClassName(slot: SettingsPanelSlot): string {
 }
 
 /** Unified RightArea tab content for settings editors. */
-export function SettingsEditorContent({ tab }: { tab: RightTab; isActive: boolean }) {
+export function SettingsEditorContent({ tab, isActive }: { tab: RightTab; isActive: boolean }) {
   const slot = tab.settingsSlot;
   if (!slot) {
     return (
@@ -80,6 +88,10 @@ export function SettingsEditorContent({ tab }: { tab: RightTab; isActive: boolea
       </div>
     );
   }
+
+  // Unmount inactive editors so hidden RightArea tabs cannot bleed stale UI layers
+  // (e.g. LogViewer list showing through an empty-state panel).
+  if (!isActive) return null;
 
   return <div className={settingsSlotBodyClassName(slot)}>{renderSettingsPanelSlot(slot)}</div>;
 }

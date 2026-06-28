@@ -36,6 +36,10 @@ import { cn } from "@/lib/utils";
 import { isGenericSessionTitle, resolveSessionTitle } from "@/lib/chat/session-title";
 import { captureSessionCwd } from "@/lib/git/checkout-context";
 import { resolveSessionWorktreeContext } from "@/lib/git/session-worktree-context";
+import {
+  toggleArchiveSessionForProject,
+  togglePinSessionForProject,
+} from "@/lib/chat/session-ui-prefs";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import {
   AppMenu,
@@ -157,11 +161,9 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   );
   const pinnedSessionIds = useLayoutStore((s) => s.pinnedSessionIds);
   const pinnedExpanded = useLayoutStore((s) => s.pinnedExpanded);
-  const togglePinSession = useLayoutStore((s) => s.togglePinSession);
   const togglePinnedExpanded = useLayoutStore((s) => s.togglePinnedExpanded);
   const archivedSessionIds = useLayoutStore((s) => s.archivedSessionIds);
   const showArchived = useLayoutStore((s) => s.showArchived);
-  const toggleArchiveSession = useLayoutStore((s) => s.toggleArchiveSession);
   const toggleShowArchived = useLayoutStore((s) => s.toggleShowArchived);
   const sessionSort = useLayoutStore((s) => s.sessionSort);
   const setSessionSort = useLayoutStore((s) => s.setSessionSort);
@@ -188,6 +190,26 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const clearCurrentTab = useChatStore((s) => s.clearCurrentTab);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const worktrees = useWorktreeStore((s) => s.worktrees);
+
+  const archiveSession = useCallback((sessionId: string) => {
+    if (!projectRoot) return;
+    void toggleArchiveSessionForProject(projectRoot, sessionId);
+  }, [projectRoot]);
+
+  const pinSession = useCallback((sessionId: string) => {
+    if (!projectRoot) return;
+    void togglePinSessionForProject(projectRoot, sessionId);
+  }, [projectRoot]);
+
+  const clearSessionUiPrefs = useCallback((sessionId: string) => {
+    if (!projectRoot) return;
+    if (archivedSessionIds.includes(sessionId)) {
+      void toggleArchiveSessionForProject(projectRoot, sessionId);
+    }
+    if (pinnedSessionIds.includes(sessionId)) {
+      void togglePinSessionForProject(projectRoot, sessionId);
+    }
+  }, [projectRoot, archivedSessionIds, pinnedSessionIds]);
 
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -391,8 +413,8 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
               role="button"
               tabIndex={0}
               className="absolute opacity-0 group-hover/menu-item:opacity-100 transition-opacity text-muted-foreground hover:text-foreground cursor-pointer"
-              onClick={(e) => { e.stopPropagation(); togglePinSession(s.id); }}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); togglePinSession(s.id); } }}
+              onClick={(e) => { e.stopPropagation(); pinSession(s.id); }}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); pinSession(s.id); } }}
               title={pinnedSessionIds.includes(s.id) ? "Unpin session" : "Pin session"}
             >
               {pinnedSessionIds.includes(s.id) ? (
@@ -412,8 +434,8 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                 role="button"
                 tabIndex={0}
                 className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
-                onClick={(e) => { e.stopPropagation(); toggleArchiveSession(s.id); }}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); toggleArchiveSession(s.id); } }}
+                onClick={(e) => { e.stopPropagation(); archiveSession(s.id); }}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); archiveSession(s.id); } }}
                 title="Restore from archive"
               >
                 <ArchiveRestore className="size-3" />
@@ -427,8 +449,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                   if (!projectRoot) return;
                   const result = await window.electronAPI.sessionDelete(s.id, projectRoot);
                   if (result.success) {
-                    if (archivedSessionIds.includes(s.id)) toggleArchiveSession(s.id);
-                    if (pinnedSessionIds.includes(s.id)) togglePinSession(s.id);
+                    clearSessionUiPrefs(s.id);
                     setSessions((prev) => prev.filter((x) => x.id !== s.id));
                     if (s.id === sessionId) clearCurrentTab();
                   }
@@ -439,8 +460,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                     if (!projectRoot) return;
                     const result = await window.electronAPI.sessionDelete(s.id, projectRoot);
                     if (result.success) {
-                      if (archivedSessionIds.includes(s.id)) toggleArchiveSession(s.id);
-                      if (pinnedSessionIds.includes(s.id)) togglePinSession(s.id);
+                      clearSessionUiPrefs(s.id);
                       setSessions((prev) => prev.filter((x) => x.id !== s.id));
                       if (s.id === sessionId) clearCurrentTab();
                     }
@@ -458,13 +478,13 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
               className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation();
-                toggleArchiveSession(s.id);
+                archiveSession(s.id);
                 if (s.id === sessionId) clearCurrentTab();
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.stopPropagation();
-                  toggleArchiveSession(s.id);
+                  archiveSession(s.id);
                   if (s.id === sessionId) clearCurrentTab();
                 }
               }}

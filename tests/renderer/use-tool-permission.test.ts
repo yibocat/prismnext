@@ -42,9 +42,10 @@ describe("useToolPermission", () => {
       await result.current.allow();
     });
 
-    expect(window.electronAPI.chatAnswerPermission).toHaveBeenCalledWith("perm-1", true);
+    expect(window.electronAPI.chatAnswerPermission).toHaveBeenCalledWith("perm-1", true, "call-1");
     expect(usePermissionStore.getState().getPermissionForTool("tab-1", "call-1")).toBeUndefined();
-    expect(useChangesStore.getState().changes).toHaveLength(0);
+    // Scheme A: edit uses permission gate only — proposed changes are not auto-cleared on allow
+    expect(useChangesStore.getState().changes).toHaveLength(1);
   });
 
   it("denies permission and rejects proposed change for edit tools", async () => {
@@ -65,18 +66,17 @@ describe("useToolPermission", () => {
       options: [],
     });
 
-    const rejectSpy = vi.spyOn(useChangesStore.getState(), "rejectChange");
-
     const { result } = renderHook(() => useToolPermission("call-1", "edit"));
 
     await act(async () => {
       await result.current.deny();
     });
 
-    expect(window.electronAPI.chatAnswerPermission).toHaveBeenCalledWith("perm-1", false);
-    expect(rejectSpy).toHaveBeenCalledWith("call-1");
+    expect(window.electronAPI.chatAnswerPermission).toHaveBeenCalledWith("perm-1", false, "call-1");
     expect(usePermissionStore.getState().getPermissionForTool("tab-1", "call-1")).toBeUndefined();
     expect(usePermissionStore.getState().isToolDenied("tab-1", "call-1")).toBe(true);
+    // Scheme A: deny does not revert disk via changes-store for edit tools
+    expect(useChangesStore.getState().changes).toHaveLength(1);
   });
 
   it("allows bash permission without touching changes-store", async () => {
@@ -95,7 +95,7 @@ describe("useToolPermission", () => {
       await result.current.allow();
     });
 
-    expect(window.electronAPI.chatAnswerPermission).toHaveBeenCalledWith("perm-2", true);
+    expect(window.electronAPI.chatAnswerPermission).toHaveBeenCalledWith("perm-2", true, "call-2");
     expect(useChangesStore.getState().changes).toHaveLength(0);
   });
 });

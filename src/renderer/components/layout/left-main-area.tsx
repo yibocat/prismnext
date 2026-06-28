@@ -19,8 +19,6 @@ import {
   CompilerSettings,
   ModelSettings,
   ZoteroSettings,
-  ShortcutsSettings,
-  LogViewer,
   BackupsSettings,
   AgentSettings,
   PromptsRulesSettings,
@@ -141,7 +139,6 @@ export function LeftMainArea() {
     const SettingsContent = {
       general: GeneralSettings,
       appearance: AppearanceSettings,
-      shortcuts: ShortcutsSettings,
       models: ModelSettings,
       agent: AgentSettings,
       terminal: TerminalSettings,
@@ -155,7 +152,6 @@ export function LeftMainArea() {
       workspace: WorkspaceSettings,
       zotero: ZoteroSettings,
       backups: BackupsSettings,
-      logs: LogViewer,
     }[settingsCategory] || GeneralSettings;
     return (
       <div className="flex h-full flex-col min-w-0" data-surface="content">
@@ -202,7 +198,7 @@ export function LeftMainArea() {
             <RestoreUndoBar />
             {/* Worktree actions above composer — only when worktree is active */}
             {showWorktreeActions && (
-              <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 px-3">
+              <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-7 px-3 mb-1.5">
                 <WorktreeActions />
               </div>
             )}

@@ -155,6 +155,19 @@ function makeDefaultTab(id: string): TabState {
 
 const _msgCache = new Map<string, ChatStreamMessage[]>();
 
+function syncCheckoutForTab(tab: Pick<TabState, "sessionCwd"> | undefined): void {
+  const projectRoot = useDocumentStore.getState().projectRoot;
+  if (!projectRoot) return;
+
+  const cwd = tab?.sessionCwd;
+  if (cwd && cwd !== projectRoot && isWorktreeCheckoutPath(cwd, projectRoot)) {
+    void attachWorktreeForSessionDirectory(cwd);
+    return;
+  }
+
+  void applyCheckoutTransition({ type: "local" });
+}
+
 interface ChatState {
 
   // Multi-tab state
@@ -341,6 +354,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       activeTabId: id,
       ...projectActiveTab([...s.tabs, tab], id),
     }));
+    syncCheckoutForTab(tab);
     return id;
   },
 
@@ -373,6 +387,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       activeTabId: newActiveId,
       ...projectActiveTab(hydratedTabs, newActiveId),
     });
+    syncCheckoutForTab(hydratedTabs.find((t) => t.id === newActiveId));
 
       // Clean up agent session for this tab — cancel any running prompt
       if (closingTab.sessionId) {
@@ -395,6 +410,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       activeTabId: id,
       ...projectActiveTab(tabs, id),
     });
+    syncCheckoutForTab(targetTab);
     void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
       useTerminalAiStore.getState().touchSessionViewed(id);
     });
@@ -629,6 +645,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   newSession: () => {
     const id = get().createTab();
     get().setActiveTab(id);
+    syncCheckoutForTab(get().tabs.find((t) => t.id === id));
   },
 
   clearAllSessions: () => {
@@ -771,19 +788,23 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     const existingTab = get().tabs.find((t) => t.sessionId === sessionId);
     if (existingTab) {
+      let nextTabs = get().tabs;
       if (sessionCwd && sessionCwd !== existingTab.sessionCwd) {
+        nextTabs = nextTabs.map((t) =>
+          t.id === existingTab.id ? { ...t, sessionCwd } : t,
+        );
         set((s) => ({
-          tabs: s.tabs.map((t) =>
-            t.id === existingTab.id ? { ...t, sessionCwd } : t,
-          ),
+          tabs: s.tabs.map((t) => (t.id === existingTab.id ? { ...t, sessionCwd } : t)),
         }));
       }
       if (sessionCwd && sessionCwd !== projectPath) {
         await attachWorktreeForSessionDirectory(sessionCwd);
+      } else {
+        await applyCheckoutTransition({ type: "local" });
       }
       set({
         activeTabId: existingTab.id,
-        ...projectActiveTab(get().tabs, existingTab.id),
+        ...projectActiveTab(nextTabs, existingTab.id),
       });
       void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
         useTerminalAiStore.getState().touchSessionViewed(existingTab.id);
@@ -793,6 +814,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     if (sessionCwd && sessionCwd !== projectPath) {
       await attachWorktreeForSessionDirectory(sessionCwd);
+    } else {
+      await applyCheckoutTransition({ type: "local" });
     }
 
     const newId = nextTabId();

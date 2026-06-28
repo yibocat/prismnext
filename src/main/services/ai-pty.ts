@@ -1,6 +1,5 @@
 import * as pty from "node-pty";
 import type { IPty } from "node-pty";
-import { detectDefaultShell } from "./terminal";
 
 export interface RunAiCommandArgs {
   command: string;
@@ -32,14 +31,22 @@ function shellArgs(command: string): string[] {
   if (process.platform === "win32") {
     return ["/c", command];
   }
-  return ["-c", command];
+  const shell = shellBinary();
+  // Non-interactive one-shot: skip rc/profile (avoids macOS bash→zsh nag + bash-3.2$ prompt).
+  if (shell.includes("zsh")) {
+    return ["-f", "-c", command];
+  }
+  return ["--noprofile", "--norc", "-c", command];
 }
 
 function shellBinary(): string {
   if (process.platform === "win32") {
     return process.env.COMSPEC || "cmd.exe";
   }
-  return detectDefaultShell();
+  if (process.platform === "darwin") {
+    return "/bin/zsh";
+  }
+  return process.env.SHELL || "/bin/bash";
 }
 
 /** Cancel any in-flight AI command for this OpenCode session. */
@@ -66,6 +73,12 @@ export function cancelAiCommandForChat(chatTabId: string): void {
 
 export function runAiCommand(args: RunAiCommandArgs): Promise<RunAiCommandResult> {
   const { command, cwd, sessionId, chatTabId, requestId, onChunk } = args;
+  const trimmed = command.trim();
+  if (!trimmed) {
+    const message = "Prism AI bash: empty command";
+    onChunk(message);
+    return Promise.resolve({ output: message, exitCode: 1, cwd });
+  }
 
   cancelAiCommandForSession(sessionId);
 
@@ -82,7 +95,7 @@ export function runAiCommand(args: RunAiCommandArgs): Promise<RunAiCommandResult
 
     let ptyProcess: IPty;
     try {
-      ptyProcess = pty.spawn(shellBinary(), shellArgs(command), {
+      ptyProcess = pty.spawn(shellBinary(), shellArgs(trimmed), {
         name: "xterm-256color",
         cols: 80,
         rows: 24,

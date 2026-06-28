@@ -10,6 +10,7 @@ import { useChatStore } from "@/stores/chat-store";
 import { resolveAiTabMirror } from "@/lib/terminal/ai-session";
 import { formatMirrorExitFooter } from "@/lib/terminal/ai-mirror";
 import { resolveAiMirrorKey } from "@/lib/terminal/mirror-key";
+import { resolveEffectiveAgentTerminalMode } from "@shared/permission-modes";
 import { resolveAiTerminalViewMode } from "@/lib/terminal/ai-terminal-lifecycle";
 import { terminalSelectionRegistry } from "@/lib/terminal/selection-registry";
 import { TerminalInsertHost } from "./terminal-insert-host";
@@ -41,7 +42,12 @@ export function AiTerminalView({ tabId }: AiTerminalViewProps) {
   const fitAddonRef = useRef<FitAddon | null>(null);
   const lastWrittenRef = useRef("");
   const pendingChunksRef = useRef<string[]>([]);
+  const permissionMode = useSettingsStore((s) => s.settings.permissionMode);
   const agentTerminalMode = useSettingsStore((s) => s.settings.agentTerminalMode ?? "pty");
+  const effectiveTerminalMode = resolveEffectiveAgentTerminalMode(
+    permissionMode,
+    agentTerminalMode,
+  );
   const linkedChatTabId = useRightPanelStore(
     (s) => s.tabs.find((t) => t.id === tabId)?.linkedChatTabId,
   );
@@ -49,7 +55,7 @@ export function AiTerminalView({ tabId }: AiTerminalViewProps) {
   const sessionPhase = useTerminalAiStore((s) =>
     mirrorKey ? s.sessionStates[mirrorKey]?.phase : undefined,
   );
-  const viewMode = resolveAiTerminalViewMode(agentTerminalMode, sessionPhase);
+  const viewMode = resolveAiTerminalViewMode(effectiveTerminalMode, sessionPhase);
   const opencodeSessionId = useChatStore((s) =>
     linkedChatTabId ? s.tabs.find((t) => t.id === linkedChatTabId)?.sessionId : undefined,
   );

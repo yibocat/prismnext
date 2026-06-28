@@ -251,9 +251,11 @@ export function registerChatHandlers(): void {
         profileId,
       });
       const assembledPrompt = promptManager.compose(promptCtx);
+      const baseSystemPrompt = promptManager.composeBase(promptCtx);
+      const projectRulesPrompt = promptManager.composeProjectRules(promptCtx);
       const currentFingerprint = promptManager.computePromptFingerprint(promptCtx);
       if (assembledPrompt) {
-        log.info(`System prompt assembled: ${assembledPrompt.length} chars`);
+        log.info(`System prompt assembled: ${assembledPrompt.length} chars (base ${baseSystemPrompt.length}, rules ${projectRulesPrompt.length})`);
       } else {
         log.warn("Assembled prompt is EMPTY — agent will use OpenCode defaults only");
         // Notify renderer so UI can show a warning
@@ -263,8 +265,8 @@ export function registerChatHandlers(): void {
       }
 
       // Create or reuse session.
-      // isFirstTurn: inject assembled prompt as first content block on turn 1
-      // only. Subsequent turns skip re-injection to save tokens.
+      // isFirstTurn: inject base system prompt (no project rules) on turn 1
+      // or when base config changed. Project rules inject every turn separately.
       let sessionId = args.sessionId;
       let isFirstTurn = false;
       const existingSessionId = args.sessionId;
@@ -332,7 +334,8 @@ export function registerChatHandlers(): void {
         const result = await service.sendPrompt(sessionId, userPrompt, {
           model: modelId,
           provider,
-          systemPrompt: assembledPrompt || undefined,
+          systemPrompt: baseSystemPrompt || undefined,
+          projectRulesPrompt: projectRulesPrompt || undefined,
           injectSystemPrompt,
         });
         if (args.userDisplayContent?.length && args.projectPath && sessionId) {
@@ -515,6 +518,7 @@ export function registerChatHandlers(): void {
     "chat:cancel",
     async (_event, args: { sessionId: string }) => {
       cancelAiCommandForSession(args.sessionId);
+      getService().releaseSessionPendingWork(args.sessionId);
       await getService().abort(args.sessionId);
     },
   );
@@ -533,8 +537,8 @@ export function registerChatHandlers(): void {
   // ─── Permission Answer ───
   ipcMain.handle(
     "chat:answerPermission",
-    async (_event, args: { permissionId: string; approved: boolean }) => {
-      await getService().answerPermission(args.permissionId, args.approved);
+    async (_event, args: { permissionId: string; approved: boolean; toolCallId?: string }) => {
+      await getService().answerPermission(args.permissionId, args.approved, args.toolCallId);
     },
   );
 

@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow } from "electron";
 import * as terminalService from "../services/terminal";
 import * as terminalConfig from "../services/terminal-config";
-import { runAiBashJob, setAiBashRunnerWindow } from "../services/ai-bash-runner";
+import { runAiBashJob, setAiBashRunnerWindow, registerBashJobIntent } from "../services/ai-bash-runner";
 import { destroyAllAiPty } from "../services/ai-pty";
 import type { TerminalConfig } from "../services/terminal-config";
 
@@ -80,6 +80,16 @@ export function registerTerminalHandlers(): void {
         command: args.command,
         cwd: args.cwd || process.cwd(),
       });
+    },
+  );
+
+  ipcMain.handle(
+    "terminal:registerBashJob",
+    async (
+      _event,
+      args: { sessionId: string; toolCallId: string; command: string },
+    ) => {
+      registerBashJobIntent(args);
     },
   );
 

@@ -18,6 +18,7 @@ import {
   resolveProjectRelativePath,
 } from "@/lib/files/project-path";
 import { trackRecentOpenedFile, getProjectLastActiveFileId } from "@/lib/files/recent-files";
+import { loadSessionUiPrefsIntoLayout } from "@/lib/chat/session-ui-prefs";
 import { resetApplicationStateForProjectSwitch } from "@/lib/workspace/project-lifecycle";
 
 export type ProjectFileType = "tex" | "image" | "pdf" | "bib" | "style" | "other";
@@ -305,6 +306,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         openedContents: new Map(),
         initialized: true,
       });
+
+      loadSessionUiPrefsIntoLayout(rootPath);
 
       // Load workspace configuration
       const workspaceStore = useWorkspaceConfigStore.getState();

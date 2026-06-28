@@ -249,24 +249,20 @@ export function listProjectSkills(projectRoot: string): InstalledSkillInfo[] {
   return results.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Merge global disabled skills with profile allowlist (deny skills outside allowlist). */
+/**
+ * Compute which skills should be denied in OpenCode config.
+ *
+ * Only the project's `skills-manifest.json` `disabled` list denies skills.
+ * A profile's `skills` field is a *recommendation / ensure-enabled* list —
+ * it does NOT deny other skills. (Previous behavior denied every skill
+ * outside the profile whitelist, which blocked the whole skill toolbox.)
+ */
 export function computeProfileSkillDisabled(
   projectRoot: string,
-  profileSkillAllowlist?: string[],
+  _profileSkillAllowlist?: string[],
 ): string[] {
   const manifest = readSkillsManifest(projectRoot);
-  const disabled = new Set((manifest.disabled ?? []).filter(Boolean));
-  if (!profileSkillAllowlist?.length) {
-    return Array.from(disabled);
-  }
-  const allow = new Set(profileSkillAllowlist);
-  for (const skill of listProjectSkills(projectRoot)) {
-    if (!allow.has(skill.id) && !allow.has(skill.name)) {
-      disabled.add(skill.id);
-      disabled.add(skill.name);
-    }
-  }
-  return Array.from(disabled);
+  return Array.from(new Set((manifest.disabled ?? []).filter(Boolean)));
 }
 
 export function buildSkillPermissions(disabled: string[]): Record<string, string> {
@@ -283,6 +279,11 @@ export function buildSkillPermissions(disabled: string[]): Record<string, string
 /**
  * Merge skill permission maps for OpenCode config.
  * Never spread a string into an object — that produces {"0":"a",...} and crashes OpenCode.
+ *
+ * The result is authoritative: only `patch` (Prism's computed allow/deny map)
+ * plus the inherited `*` wildcard survive. Stale deny entries from previous
+ * profile whitelists are dropped so skills don't stay blocked forever after
+ * the user switches profiles.
  */
 export function sanitizeSkillPermissionMap(
   existing: unknown,
@@ -297,7 +298,10 @@ export function sanitizeSkillPermissionMap(
       if (typeof value === "string" && value.trim()) base[key] = value.trim();
     }
   }
-  return { ...base, ...patch };
+  // Preserve only the wildcard from the inherited map; per-skill entries are
+  // recomputed from `patch` so stale denies don't linger across profile switches.
+  const wildcard = base["*"] ?? "allow";
+  return { "*": wildcard, ...patch };
 }
 
 /** True when legacy bugs left numeric keys from spreading `"allow"` into an object. */

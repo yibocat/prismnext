@@ -2,9 +2,35 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const sessionLoad = vi.fn();
 
+vi.mock("@/stores/document-store", () => ({
+  useDocumentStore: { getState: () => ({ projectRoot: "" }) },
+}));
+
+vi.mock("@/lib/git/checkout-context", () => ({
+  applyCheckoutTransition: vi.fn().mockResolvedValue(undefined),
+  attachWorktreeForSessionDirectory: vi.fn().mockResolvedValue(undefined),
+  captureSessionCwd: vi.fn(),
+  resolveWorktreeAtCheckout: vi.fn(),
+  resolveWorktreePathForSend: vi.fn(),
+  isWorktreeCheckoutPath: vi.fn().mockReturnValue(false),
+}));
+
+vi.mock("@/lib/git/worktree-path", () => ({
+  isWorktreeDirectoryActive: vi.fn().mockReturnValue(false),
+}));
+
+vi.mock("@/lib/git/worktree-present", () => ({
+  isWorktreeCheckoutOnDisk: vi.fn().mockResolvedValue(false),
+}));
+
+vi.mock("@/lib/git/worktree-sessions", () => ({
+  rehomeWorktreeSessions: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.stubGlobal("window", {
   electronAPI: {
     sessionLoad,
+    sessionGetDirectory: vi.fn().mockResolvedValue(null),
     sessionGetContext: vi.fn().mockResolvedValue(null),
     sessionGetUserDisplays: vi.fn().mockResolvedValue([]),
   },
@@ -15,6 +41,7 @@ import { useChatStore } from "../../src/renderer/stores/chat-store";
 describe("chat-store session loading", () => {
   beforeEach(() => {
     useChatStore.getState().clearAllSessions();
+    (useChatStore as any)._msgCache.clear();
     sessionLoad.mockReset();
   });
 
@@ -84,6 +111,7 @@ describe("chat-store session loading", () => {
     );
 
     const loadPromise = useChatStore.getState().loadSession("session-loading");
+    await Promise.resolve();
     expect(useChatStore.getState().isLoadingSession).toBe(true);
     expect(useChatStore.getState().messages).toEqual([]);
 

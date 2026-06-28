@@ -23,8 +23,16 @@ export function registerFsHandlers(): void {
   });
 
   ipcMain.handle("fs:read", async (_event, args: { absPath: string }) => {
-    const content = await fs.readTexFileContent(args.absPath);
-    return { content };
+    try {
+      const content = await fs.readTexFileContent(args.absPath);
+      return { content };
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException)?.code;
+      if (code === "ENOENT") {
+        return { content: "", missing: true };
+      }
+      throw err;
+    }
   });
 
   /** Batch-read multiple text files in a single IPC round-trip.

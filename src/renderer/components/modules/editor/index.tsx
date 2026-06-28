@@ -24,6 +24,10 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useChangesStore } from "@/stores/changes-store";
 import { useChatStore } from "@/stores/chat-store";
 import { usePermissionStore } from "@/stores/permission-store";
+import {
+  finalizePermissionAllow,
+  finalizePermissionDeny,
+} from "@/stores/permission-actions";
 import { compileCurrentDocument } from "@/stores/compile-store";
 import { createLogger } from "@/services/logger";
 import { ChangesBar } from "./changes-bar";
@@ -96,10 +100,12 @@ export function LatexEditor() {
     const permissionStore = usePermissionStore.getState();
     const permission = permissionStore.getPermissionForTool(tabId, activeChange.id);
     if (permission) {
-      await window.electronAPI.chatAnswerPermission(permission.id, true);
-      permissionStore.markToolResolved(tabId, activeChange.id);
-      permissionStore.clearPermission(permission.id);
-      useChangesStore.getState().removeChange(activeChange.id);
+      await finalizePermissionAllow({
+        tabId,
+        permissionId: permission.id,
+        toolCallId: activeChange.id,
+        toolName: permission.toolName,
+      });
     } else {
       await useChangesStore.getState().acceptChange(activeChange.id);
     }
@@ -118,11 +124,15 @@ export function LatexEditor() {
     const permissionStore = usePermissionStore.getState();
     const permission = permissionStore.getPermissionForTool(tabId, activeChange.id);
     if (permission) {
-      await window.electronAPI.chatAnswerPermission(permission.id, false);
-      permissionStore.markToolResolved(tabId, activeChange.id);
-      permissionStore.clearPermission(permission.id);
+      await finalizePermissionDeny({
+        tabId,
+        permissionId: permission.id,
+        toolCallId: activeChange.id,
+        toolName: permission.toolName,
+      });
+    } else {
+      await useChangesStore.getState().rejectChange(activeChange.id);
     }
-    await useChangesStore.getState().rejectChange(activeChange.id);
     // Replace editor doc with oldContent after deactivating merge view
     const view = viewRef.current;
     if (view) {
@@ -213,10 +223,11 @@ export function LatexEditor() {
               const permissionStore = usePermissionStore.getState();
               const permission = permissionStore.getPermissionForTool(tabId, ch.id);
               const accept = permission
-                ? window.electronAPI.chatAnswerPermission(permission.id, true).then(() => {
-                    permissionStore.markToolResolved(tabId, ch.id);
-                    permissionStore.clearPermission(permission.id);
-                    useChangesStore.getState().removeChange(ch.id);
+                ? finalizePermissionAllow({
+                    tabId,
+                    permissionId: permission.id,
+                    toolCallId: ch.id,
+                    toolName: permission.toolName,
                   })
                 : useChangesStore.getState().acceptChange(ch.id);
               accept.then(() => {
@@ -243,13 +254,14 @@ export function LatexEditor() {
               const tabId = useChatStore.getState().activeTabId;
               const permissionStore = usePermissionStore.getState();
               const permission = permissionStore.getPermissionForTool(tabId, ch.id);
-              const reject = (permission
-                ? window.electronAPI.chatAnswerPermission(permission.id, false).then(() => {
-                    permissionStore.markToolResolved(tabId, ch.id);
-                    permissionStore.clearPermission(permission.id);
+              const reject = permission
+                ? finalizePermissionDeny({
+                    tabId,
+                    permissionId: permission.id,
+                    toolCallId: ch.id,
+                    toolName: permission.toolName,
                   })
-                : Promise.resolve()
-              ).then(() => useChangesStore.getState().rejectChange(ch.id));
+                : useChangesStore.getState().rejectChange(ch.id);
               reject.then(() => {
                 const view = viewRef.current;
                 if (view) {
@@ -300,10 +312,11 @@ export function LatexEditor() {
                     const permissionStore = usePermissionStore.getState();
                     const permission = permissionStore.getPermissionForTool(tabId, ch.id);
                     if (permission) {
-                      window.electronAPI.chatAnswerPermission(permission.id, true).then(() => {
-                        permissionStore.markToolResolved(tabId, ch.id);
-                        permissionStore.clearPermission(permission.id);
-                        useChangesStore.getState().removeChange(ch.id);
+                      void finalizePermissionAllow({
+                        tabId,
+                        permissionId: permission.id,
+                        toolCallId: ch.id,
+                        toolName: permission.toolName,
                       });
                     } else {
                       useChangesStore.getState().acceptChange(ch.id);
@@ -313,10 +326,11 @@ export function LatexEditor() {
                     const permissionStore = usePermissionStore.getState();
                     const permission = permissionStore.getPermissionForTool(tabId, ch.id);
                     if (permission) {
-                      window.electronAPI.chatAnswerPermission(permission.id, false).then(() => {
-                        permissionStore.markToolResolved(tabId, ch.id);
-                        permissionStore.clearPermission(permission.id);
-                        useChangesStore.getState().rejectChange(ch.id);
+                      void finalizePermissionDeny({
+                        tabId,
+                        permissionId: permission.id,
+                        toolCallId: ch.id,
+                        toolName: permission.toolName,
                       });
                     } else {
                       useChangesStore.getState().rejectChange(ch.id);

@@ -70,26 +70,11 @@ export async function buildPromptContext(
     const userPrompt = settings.agentSystemPrompt as string | undefined;
     ctx.userCustomPrompt = userPrompt || undefined;
 
-    // Project custom rules from .prismnext/settings.json
-    const allRules: Array<{ name: string; content: string }> = [];
     if (projectRoot) {
-      const settingsPath = path.join(projectRoot, ".prismnext", "settings.json");
-      try {
-        if (fs.existsSync(settingsPath)) {
-          const projectSettings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
-          const projectRules = projectSettings.customRules as Array<{ name: string; content: string; enabled?: boolean }> | undefined;
-          if (Array.isArray(projectRules)) {
-            for (const r of projectRules) {
-              if (r.enabled !== false) {
-                allRules.push({ name: r.name, content: r.content });
-              }
-            }
-          }
-        }
-      } catch { /* best-effort */ }
+      const { getPromptProjectRules } = await import("../services/rules-sync");
+      const allRules = getPromptProjectRules(projectRoot);
+      if (allRules.length > 0) ctx.customRules = allRules;
     }
-
-    if (allRules.length > 0) ctx.customRules = allRules;
   } catch {
     // settings may not be available during early startup
   }

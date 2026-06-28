@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.4.4 — 2026-06-27
+
+### Permission Gate & Tools
+
+- Unified **permission gate** for Ask/Auto/Read-only modes — single approval path via `finalizePermissionAllow` / `finalizePermissionDeny` and new `PermissionGatePanel`
+- Custom OpenCode tools **`bash`**, **`delete`**, **`move`** with file-bridge polling (`bash-permission-bridge`) when ACP permission races tool execution
+- Central **`tool-permission-registry`** drives mode rules, widget metadata, and OpenCode tools config sync
+- **Scheme A** for file edits: Allow authorizes disk writes; diff widgets are preview-only — no second accept via proposed-changes bar
+- Bash widget, delete/move tool widgets, and AI terminal PTY execution wired through the same gate
+
+### Project Rules
+
+- File-based **Project Rules** under `.prismnext/agent/rules/` — list, install, delete, enable/disable via new `rules:*` IPC
+- Settings → Prompts & Rules: rule markdown panel (frontmatter + preview) replaces legacy JSON `customRules` editor
+- Rules injected into Prism prompt **every turn** (always-on + enabled); not passed to OpenCode config
+
+### Skills & Profiles
+
+- Skills sync no longer denies non-profile skills; profile allowlists filter at runtime only
+- Citation Auditor profile skill id updated to **`academic-citations`**
+
+### Settings & Log Viewer
+
+- **General** settings hub: four overview cards; Shortcuts and Logs open in RightArea detail slots (not separate sidebar entries)
+- **Log Viewer** redesign: mutually exclusive level tabs (All/Debug/Info/Warn/Error), live filter remount, cleaner empty states
+- App select dropdowns default to **bottom** popper alignment (fixes category filter clipped at top)
+- Git warmup / branch-switch noise moved to **debug** level
+
+### Layout & UI Fixes
+
+- Right pane renders **only the active tab** — fixes ghost log lines when switching editor tabs
+- Chat permission ask panel and tool widgets aligned with gate flow; session UI prefs for per-tab composer state
+
+### Architecture & Testing
+
+- `opencode-tools-config`, `rules-sync`, permission gate spec under `docs/superpowers/specs/`
+- Vitest coverage for rules sync/injection, permission gate, bash bridge, log filtering, and updated permission/tool-meta expectations (444 tests)
+
 ## 0.4.3 — 2026-06-26
 
 ### Chat & Inline Composer

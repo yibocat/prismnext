@@ -24,6 +24,10 @@ export interface AppSettings {
   recentOpenedFilesByProject?: Record<string, Array<{ id: string; name: string; lastOpened: number }>>;
   /** Last opened file per project root */
   lastActiveFileIdByProject?: Record<string, string | null>;
+  /** Archived chat session ids per project root */
+  archivedSessionIdsByProject?: Record<string, string[]>;
+  /** Pinned chat session ids per project root */
+  pinnedSessionIdsByProject?: Record<string, string[]>;
   /** @deprecated Global list — do not read; use recentOpenedFilesByProject */
   recentOpenedFiles?: Array<{ id: string; name: string; lastOpened: number }>;
   /** Auto-create main.tex template on new project creation */

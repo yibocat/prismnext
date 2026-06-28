@@ -1,48 +1,32 @@
-import { resolvePermissionMode } from "@shared/permission-modes";
+export type {
+  PermissionConfirmUx,
+  PermissionGroup,
+  ToolPermissionEntry,
+} from "@shared/tool-permission-registry";
+export {
+  TOOL_PERMISSION_REGISTRY,
+  getToolPermissionEntry,
+  buildPermissionRulesForMode,
+} from "@shared/tool-permission-registry";
 
-export type PermissionConfirmUx = "diff" | "command" | "patch" | "none";
-
-export type PermissionGroup =
-  | "file_write"
-  | "shell"
-  | "patch"
-  | "read"
-  | "network"
-  | "interactive";
+import { getToolPermissionEntry } from "@shared/tool-permission-registry";
 
 export interface ToolMeta {
-  permissionGroup?: PermissionGroup;
-  confirmUx: PermissionConfirmUx;
-  /** Whether the tool feeds into changes-store proposed-change review */
+  permissionGroup?: import("@shared/tool-permission-registry").PermissionGroup;
+  confirmUx: import("@shared/tool-permission-registry").PermissionConfirmUx;
   usesProposedChange?: boolean;
 }
 
 const DEFAULT_META: ToolMeta = { confirmUx: "none" };
 
-const TOOL_META: Record<string, ToolMeta> = {
-  edit: { permissionGroup: "file_write", confirmUx: "diff", usesProposedChange: true },
-  write: { permissionGroup: "file_write", confirmUx: "diff", usesProposedChange: true },
-  apply_patch: { permissionGroup: "patch", confirmUx: "patch" },
-  patch: { permissionGroup: "patch", confirmUx: "patch" },
-  bash: { permissionGroup: "shell", confirmUx: "command" },
-  read: { permissionGroup: "read", confirmUx: "none" },
-  grep: { permissionGroup: "read", confirmUx: "none" },
-  glob: { permissionGroup: "read", confirmUx: "none" },
-  list: { permissionGroup: "read", confirmUx: "none" },
-  webfetch: { permissionGroup: "network", confirmUx: "none" },
-  websearch: { permissionGroup: "network", confirmUx: "none" },
-  question: { permissionGroup: "interactive", confirmUx: "none" },
-  task: { confirmUx: "none" },
-  skill: { confirmUx: "none" },
-  todowrite: { confirmUx: "none" },
-  plan: { confirmUx: "none" },
-};
-
 export function getToolMeta(toolName: string): ToolMeta {
-  const key = toolName.toLowerCase();
-  if (TOOL_META[key]) return TOOL_META[key];
-  if (key.startsWith("lsp")) return { permissionGroup: "read", confirmUx: "none" };
-  return DEFAULT_META;
+  const entry = getToolPermissionEntry(toolName);
+  if (!entry) return DEFAULT_META;
+  return {
+    permissionGroup: entry.permissionGroup,
+    confirmUx: entry.confirmUx,
+    usesProposedChange: entry.usesProposedChange,
+  };
 }
 
 export function usesProposedChange(toolName: string): boolean {
@@ -51,16 +35,18 @@ export function usesProposedChange(toolName: string): boolean {
 
 export function isFileWriteTool(toolName: string): boolean {
   const n = toolName.toLowerCase();
-  return n.startsWith("edit") || n.startsWith("write") || n.startsWith("multiedit");
+  return n.startsWith("edit") || n.startsWith("write");
 }
 
 export function isPatchTool(toolName: string): boolean {
   const n = toolName.toLowerCase();
-  return n === "patch" || n === "apply_patch" || n.startsWith("apply_patch");
+  return n === "apply_patch" || n.startsWith("apply_patch");
 }
 
 /** Tools that mutate files on disk (edit/write/patch). Used for Auto-mode disk refresh. */
 export function isDiskMutationTool(toolName: string): boolean {
+  const entry = getToolPermissionEntry(toolName);
+  if (entry?.diskMutation) return true;
   return isFileWriteTool(toolName) || isPatchTool(toolName);
 }
 
@@ -91,10 +77,10 @@ export function extractPatchTargetPaths(
   return [...new Set(paths)];
 }
 
-/** Proposed-change review (Accept/Reject) is Ask-mode only. Auto applies edits directly. */
+/** Proposed-change review disabled — Ask mode uses permission gate only (scheme A). */
 export function shouldTrackProposedChange(
-  permissionMode: string | undefined,
-  toolName: string,
+  _permissionMode: string | undefined,
+  _toolName: string,
 ): boolean {
-  return resolvePermissionMode(permissionMode) === "ask" && isFileWriteTool(toolName);
+  return false;
 }

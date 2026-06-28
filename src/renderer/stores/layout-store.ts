@@ -386,8 +386,6 @@ export const useLayoutStore = create<LayoutState>()(
         rightSidebarWidth: state.rightSidebarWidth,
         rightAreaWidth: state.rightAreaWidth,
         settingsDetailWidth: state.settingsDetailWidth,
-        pinnedSessionIds: state.pinnedSessionIds,
-        archivedSessionIds: state.archivedSessionIds,
         sessionSort: state.sessionSort,
         expandedFileTreeFolders: state.expandedFileTreeFolders,
         texworkspaceDefaultViewMode: state.texworkspaceDefaultViewMode,

@@ -10,15 +10,15 @@ import { useSettingsStore } from "@/stores/settings-store";
 import {
   resolvePermissionMode,
   extractPermissionToolName,
-  resolvePermissionAction,
 } from "@shared/permission-modes";
-import { finalizePermissionDeny, schedulePermissionTimeout } from "@/stores/permission-actions";
-import { handleBashToolUse, handleBashToolResult, handleBashPermissionDenied } from "@/lib/terminal/ai-bridge";
+import { schedulePermissionTimeout, clearPermissionTimer } from "@/stores/permission-actions";
+import { handleBashToolUse, handleBashToolResult, handleBashPermissionDenied, isBashToolName } from "@/lib/terminal/ai-bridge";
 import { shouldTrackProposedChange, isDiskMutationTool, isFileWriteTool, isPatchTool, extractPatchTargetPaths } from "@/components/modules/chat/tools/tool-meta";
 import { useCheckpointStore, resolveRelativeToolPath } from "@/stores/checkpoint-store";
 import { compileCurrentDocument, pauseAutoCompileForAi, resumeAutoCompileAfterAi } from "@/stores/compile-store";
 import { createLogger } from "@/services/logger";
 import { isPrismSystemPromptText } from "@/lib/chat/session-message-hydrate";
+import { refreshGitStatusNow } from "@/lib/git/checkout-context";
 
 const log = createLogger("opencode-events");
 
@@ -215,33 +215,6 @@ export function useOpenCodeEvents() {
             newContent = oldContent.replace(new RegExp(escapedOld, "g"), newStr);
           }
         }
-      } else if (name.startsWith("multiedit") && Array.isArray(toolInput?.edits || toolInput?.Edits)) {
-        const edits = toolInput?.edits || toolInput?.Edits || [];
-        // Forward compute by default: apply edits to disk content
-        oldContent = diskContent ||
-          capturedOldContent ||
-          (file ? docState.getContent(file.id) : "") || "";
-        newContent = oldContent;
-        for (const edit of edits) {
-          const eOld: string = edit.old_string ?? edit.oldString ?? "";
-          const eNew: string = edit.new_string ?? edit.newString ?? "";
-          if (eOld === "" && eNew === "") continue;
-          const escaped = eOld.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          newContent = newContent.replace(new RegExp(escaped, "g"), eNew);
-        }
-        // If forward didn't change anything, try reverse
-        if (newContent === oldContent && diskContent) {
-          newContent = diskContent;
-          oldContent = diskContent;
-          const reversed = [...edits].reverse();
-          for (const edit of reversed) {
-            const eOld: string = edit.old_string ?? edit.oldString ?? "";
-            const eNew: string = edit.new_string ?? edit.newString ?? "";
-            if (eOld === "" && eNew === "") continue;
-            const escapedNew = eNew.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-            oldContent = oldContent.replace(new RegExp(escapedNew, "g"), eOld);
-          }
-        }
       } else {
         // Fallback: use captured/tracked content with forward edit
         oldContent = capturedOldContent ||
@@ -309,6 +282,19 @@ export function useOpenCodeEvents() {
   }
 
   function refreshAfterAutoDiskMutation(tabId: string, toolName: string, toolInput: any) {
+    const normalizedTool = toolName.toLowerCase();
+    if (normalizedTool === "delete" || normalizedTool === "move") {
+      noteCheckpointForDiskTool(tabId, toolName, toolInput, fileContentTrackerRef.current);
+      void useDocumentStore.getState().refreshFiles();
+      refreshGitStatusNow();
+      if (normalizedTool === "move") {
+        const dest =
+          toolInput?.destination_path || toolInput?.destinationPath || toolInput?.dest || "";
+        if (dest) refreshFileFromDiskAfterAutoApply(dest);
+      }
+      return;
+    }
+
     if (resolvePermissionMode(useSettingsStore.getState().settings.permissionMode) !== "auto") {
       return;
     }
@@ -614,6 +600,13 @@ export function useOpenCodeEvents() {
                     );
                   }
 
+                  if (toolName === "delete" || toolName === "move") {
+                    if (isFinalToolResult && !block.is_error) {
+                      refreshAfterAutoDiskMutation(tabId, pendingTool.name, backfillInput);
+                    }
+                    continue;
+                  }
+
                   const filePath = backfillInput.file_path || backfillInput.filePath || backfillInput.path || "";
                   const projectRoot = useDocumentStore.getState().projectRoot || "";
                   const docState = useDocumentStore.getState();
@@ -697,42 +690,52 @@ export function useOpenCodeEvents() {
           chatStore._appendMessage(tabId, planMsg);
           break;
         }
+
+        case "session.status": {
+          const status = String(data?.status ?? "").toLowerCase();
+          if (status === "completed" || status === "idle" || status === "error") {
+            // Backup path: if sendPrompt hung (tool blocked), chat:complete never
+            // fires and isStreaming stays true — blocking the next user message.
+            window.setTimeout(() => {
+              const current = useChatStore.getState().tabs.find((t) => t.id === tabId);
+              if (!current?.isStreaming) return;
+              log.warn("session.status backup — clearing stuck isStreaming", { tabId, status });
+              chatStore._setStreaming(tabId, false);
+              usePermissionStore.getState().clearTabPermissions(tabId);
+              void useCheckpointStore.getState().finalizeTurn(tabId, status !== "error");
+            }, 400);
+          }
+          break;
+        }
       }
     });
 
     // ─── Permission Handler ───
+    // Main process is the sole decision point — events here are always "prompt".
     const unsubPermission = window.electronAPI.onChatPermission((permission) => {
       const raw = (permission.raw ?? permission) as Record<string, unknown>;
       const toolName =
         extractPermissionToolName(raw) ||
         (permission.toolName || "").toLowerCase();
-      const mode = resolvePermissionMode(
-        useSettingsStore.getState().settings.permissionMode,
-      );
-      const action = resolvePermissionAction(mode, toolName);
-
-      // Fallback if main-process auto-resolve did not run (older build / edge case)
-      if (action === "allow") {
-        void window.electronAPI.chatAnswerPermission(permission.permissionId, true);
-        return;
-      }
-      if (action === "deny") {
-        void finalizePermissionDeny({
-          tabId: permission.tabId,
-          permissionId: permission.permissionId,
-          toolCallId: permission.toolCallId,
-          toolName,
-        });
-        return;
-      }
-
       const toolCallId =
         permission.toolCallId ||
         (permission.raw as Record<string, unknown> | undefined)?.toolCallId as string ||
         (permission.raw as Record<string, unknown> | undefined)?.tool_call_id as string ||
         (permission.raw as Record<string, unknown> | undefined)?.callID as string;
 
-      usePermissionStore.getState().addPermission({
+      const permissionStore = usePermissionStore.getState();
+      if (toolCallId && permissionStore.isToolResolved(permission.tabId, toolCallId)) {
+        return;
+      }
+      if (toolCallId) {
+        const existing = permissionStore.getPermissionForTool(permission.tabId, toolCallId);
+        if (existing && existing.id !== permission.permissionId) {
+          clearPermissionTimer(existing.id);
+          permissionStore.clearPermission(existing.id);
+        }
+      }
+
+      permissionStore.addPermission({
         id: permission.permissionId,
         tabId: permission.tabId,
         toolCallId,

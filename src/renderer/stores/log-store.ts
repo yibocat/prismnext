@@ -5,13 +5,14 @@ import { logBuffer } from "@/services/logger";
 interface LogState {
   // View state
   filterCategory: LogCategory | "all";
-  filterLevel: LogLevel;
+  /** Exclusive level tab — "all" shows every level. */
+  filterLevel: LogLevel | "all";
   search: string;
   entries: LogEntry[];
 
   // Actions
   setFilterCategory: (c: LogCategory | "all") => void;
-  setFilterLevel: (l: LogLevel) => void;
+  setFilterLevel: (l: LogLevel | "all") => void;
   setSearch: (s: string) => void;
   refresh: () => void;
 
@@ -23,57 +24,69 @@ interface LogState {
   exportLogs: () => string;
 }
 
+export function filterLogEntries(
+  mainEntries: LogEntry[],
+  filterCategory: LogCategory | "all",
+  filterLevel: LogLevel | "all",
+  search: string,
+): LogEntry[] {
+  const all = [...mainEntries, ...logBuffer].sort((a, b) => a.ts - b.ts || a.id - b.id);
+
+  let filtered = all;
+  if (filterCategory !== "all") {
+    filtered = filtered.filter((e) => e.category === filterCategory);
+  }
+  if (filterLevel !== "all") {
+    filtered = filtered.filter((e) => e.level === filterLevel);
+  }
+  if (search) {
+    const q = search.toLowerCase();
+    filtered = filtered.filter(
+      (e) =>
+        e.message.toLowerCase().includes(q) ||
+        e.module.toLowerCase().includes(q),
+    );
+  }
+  return filtered;
+}
+
 export const useLogStore = create<LogState>((set, get) => ({
   filterCategory: "all",
-  filterLevel: "debug",
+  filterLevel: "all",
   search: "",
   entries: [],
   mainEntries: [],
 
   setFilterCategory: (c) => {
-    set({ filterCategory: c });
-    get().refresh();
+    set((s) => ({
+      filterCategory: c,
+      entries: filterLogEntries(s.mainEntries, c, s.filterLevel, s.search),
+    }));
   },
 
   setFilterLevel: (l) => {
-    set({ filterLevel: l });
-    get().refresh();
+    set((s) => ({
+      filterLevel: l,
+      entries: filterLogEntries(s.mainEntries, s.filterCategory, l, s.search),
+    }));
   },
 
   setSearch: (s) => {
-    set({ search: s });
-    get().refresh();
+    set((state) => ({
+      search: s,
+      entries: filterLogEntries(state.mainEntries, state.filterCategory, state.filterLevel, s),
+    }));
   },
 
   refresh: () => {
-    const { filterCategory, filterLevel, search } = get();
-
-    // Merge main + renderer logs, sorted by id
-    const all = [...get().mainEntries, ...logBuffer].sort((a, b) => a.id - b.id);
-
-    let filtered = all;
-    if (filterCategory !== "all") {
-      filtered = filtered.filter((e) => e.category === filterCategory);
-    }
-    const LEVEL_ORDER: Record<string, number> = { debug: 0, info: 1, warn: 2, error: 3 };
-    filtered = filtered.filter((e) => LEVEL_ORDER[e.level] >= LEVEL_ORDER[filterLevel]);
-    if (search) {
-      const q = search.toLowerCase();
-      filtered = filtered.filter(
-        (e) =>
-          e.message.toLowerCase().includes(q) ||
-          e.module.toLowerCase().includes(q),
-      );
-    }
-
-    set({ entries: filtered });
+    const { filterCategory, filterLevel, search, mainEntries } = get();
+    set({ entries: filterLogEntries(mainEntries, filterCategory, filterLevel, search) });
   },
 
   fetchMainLogs: async () => {
     try {
       const result = await window.electronAPI.logFetch({
         category: get().filterCategory === "all" ? undefined : get().filterCategory as LogCategory,
-        level: get().filterLevel,
         limit: 2000,
       });
       set({ mainEntries: result.entries });

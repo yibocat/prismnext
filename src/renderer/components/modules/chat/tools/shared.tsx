@@ -133,7 +133,10 @@ export function ToolCard({
   );
 }
 
-// ─── Parameter extraction (camelCase + snake_case compatible) ───
+/** Basename for compact tool result lines. */
+export function basenamePath(p: string): string {
+  return p.split(/[/\\]/).pop() || p;
+}
 
 /**
  * Extract a parameter value from a tool input object, trying both snake_case

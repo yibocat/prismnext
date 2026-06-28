@@ -1,8 +1,15 @@
-import { handleBashPermissionDenied } from "@/lib/terminal/ai-bridge";
+import {
+  handleBashPermissionDenied,
+  isBashToolName,
+  tryExecutePtyBashAfterPermission,
+} from "@/lib/terminal/ai-bridge";
 import { useChangesStore } from "@/stores/changes-store";
 import { usePermissionStore } from "@/stores/permission-store";
 import { useChatStore, type ContentBlock } from "@/stores/chat-store";
 import { usesProposedChange } from "@/components/modules/chat/tools/tool-meta";
+import { createLogger } from "@/services/logger";
+
+const log = createLogger("permission-actions");
 
 /** Keep in sync with main `PERMISSION_TIMEOUT_MS`. */
 export const PERMISSION_UI_TIMEOUT_MS = 120_000;
@@ -51,7 +58,6 @@ export function schedulePermissionTimeout(
         toolCallId: toolCallId || pending.toolCallId,
         toolName: toolName || pending.toolName,
         reason: "Permission timed out",
-        skipApi: true,
       });
     }, PERMISSION_UI_TIMEOUT_MS),
   );
@@ -77,7 +83,8 @@ export async function finalizePermissionDeny(opts: {
   clearPermissionTimer(permissionId);
 
   if (!skipApi) {
-    await window.electronAPI.chatAnswerPermission(permissionId, false);
+    log.debug("finalizePermissionDeny", { permissionId, toolCallId, toolName });
+    await window.electronAPI.chatAnswerPermission(permissionId, false, toolCallId);
   }
 
   const permissionStore = usePermissionStore.getState();
@@ -88,7 +95,7 @@ export async function finalizePermissionDeny(opts: {
       useChatStore.getState()._injectToolResult(tabId, toolCallId, reason, true);
     }
     const tn = (toolName || "").toLowerCase();
-    if ((tn === "bash" || tn === "shell") && toolCallId) {
+    if (isBashToolName(tn) && toolCallId) {
       const tabTools = useChatStore.getState().tabs.find((t) => t.id === tabId);
       const toolUseMsg = tabTools?.messages
         .flatMap((m) => m.message?.content ?? [])
@@ -115,14 +122,32 @@ export async function finalizePermissionAllow(opts: {
 }) {
   const { tabId, permissionId, toolCallId, toolName } = opts;
   clearPermissionTimer(permissionId);
-  await window.electronAPI.chatAnswerPermission(permissionId, true);
+
+  log.debug("finalizePermissionAllow", { permissionId, toolCallId, toolName });
+  await window.electronAPI.chatAnswerPermission(permissionId, true, toolCallId);
 
   const permissionStore = usePermissionStore.getState();
   if (toolCallId) {
     permissionStore.markToolResolved(tabId, toolCallId);
+    permissionStore.clearPermissionsForTool(tabId, toolCallId);
+  } else {
+    permissionStore.clearPermission(permissionId);
   }
-  permissionStore.clearPermission(permissionId);
   if (usesProposedChange(toolName || "") && toolCallId) {
     useChangesStore.getState().removeChange(toolCallId);
+  }
+
+  if (toolCallId && isBashToolName(toolName || "")) {
+    const tab = useChatStore.getState().tabs.find((t) => t.id === tabId);
+    const toolUseMsg = [
+      ...(tab?.streamingMessage?.message?.content ?? []),
+      ...(tab?.messages.flatMap((m) => m.message?.content ?? []) ?? []),
+    ].find((b) => b.type === "tool_use" && b.id === toolCallId);
+    tryExecutePtyBashAfterPermission(
+      tabId,
+      toolCallId,
+      toolName || "bash",
+      toolUseMsg?.input as Record<string, unknown> | undefined,
+    );
   }
 }

@@ -14,6 +14,8 @@ const FIELD_ICONS: Record<string, LucideIcon> = {
 
 const SKILL_FIELD_ORDER = ["name", "description", "license"];
 
+const RULE_FIELD_ORDER = ["name", "description", "apply", "enabled"];
+
 export function MarkdownFrontmatterCard({
   fields,
   rawFrontmatter,
@@ -22,14 +24,18 @@ export function MarkdownFrontmatterCard({
 }: {
   fields: Record<string, string>;
   rawFrontmatter?: string;
-  variant?: "default" | "skill";
+  variant?: "default" | "skill" | "rule";
   className?: string;
 }) {
   const entries = Object.entries(fields);
   if (entries.length === 0 && !rawFrontmatter?.trim()) return null;
 
   const orderedEntries =
-    variant === "skill" ? orderSkillFields(entries) : entries;
+    variant === "skill"
+      ? orderSkillFields(entries)
+      : variant === "rule"
+        ? orderRuleFields(entries)
+        : entries;
 
   return (
     <section className={cn("mb-5 pb-5 border-b border-border/50", className)}>
@@ -50,6 +56,20 @@ export function MarkdownFrontmatterCard({
       ) : null}
     </section>
   );
+}
+
+function orderRuleFields(entries: [string, string][]): [string, string][] {
+  const map = new Map(entries);
+  const result: [string, string][] = [];
+  for (const key of RULE_FIELD_ORDER) {
+    const value = map.get(key);
+    if (value !== undefined) result.push([key, value]);
+    map.delete(key);
+  }
+  for (const [key, value] of map.entries()) {
+    result.push([key, value]);
+  }
+  return result;
 }
 
 function orderSkillFields(entries: [string, string][]): [string, string][] {

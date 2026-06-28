@@ -657,13 +657,13 @@ export const useGitStore = create<GitState>()((set, get) => ({
     await window.electronAPI.gitWarmup?.(projectRoot).catch(() => {});
     const wMs = Math.round(performance.now() - tWarmup);
     console.log(`[switchBranch] warmup: ${wMs}ms  (${branch})`);
-    log.info("switchBranch warmup", { durationMs: wMs, branch });
+    log.debug("switchBranch warmup", { durationMs: wMs, branch });
 
     const tCheckout = performance.now();
     const result = await window.electronAPI.gitCheckout(projectRoot, branch);
     const cMs = Math.round(performance.now() - tCheckout);
     console.log(`[switchBranch] gitCheckout: ${cMs}ms  (${branch})`);
-    log.info("gitCheckout", { durationMs: cMs, branch });
+    log.debug("gitCheckout", { durationMs: cMs, branch });
     if (!result.success) {
       set({
         branch: prevBranch,
