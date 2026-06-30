@@ -263,19 +263,15 @@ export function TexworkspaceSettings() {
         <div>
           <p className={SECTION_HEADER}>References</p>
           <p className={SECTION_DESC}>
-            Citation library sync will be configured here in a future update. For now, use{" "}
-            <SettingsInlineLink
-              onClick={() => useLayoutStore.getState().setSettingsCategory("zotero")}
-            >
-              Zotero settings
-            </SettingsInlineLink>
-            .
+            Manage citations and reading notes in{" "}
+            <span className="text-foreground/85">Literature</span> mode (right panel). Zotero sync
+            is configured from the Literature library sidebar when a project is open.
           </p>
           <div className={SETTINGS_CARD}>
             <div className="py-4 px-1 flex items-start gap-3 text-muted-foreground">
               <BookOpenIcon className="size-4 shrink-0 mt-0.5 opacity-60" />
               <p className={SETTINGS_ROW_DESC}>
-                Zotero API key and library sync are not yet integrated into TeX Workspace.
+                BibTeX export and manuscript citation checks live in the TeX workspace compile flow.
               </p>
             </div>
           </div>

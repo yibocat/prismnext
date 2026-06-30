@@ -180,15 +180,15 @@ const AssistantMessage = memo(function AssistantMessage({
   toolResultMap,
   msgIndex,
   isStreamingMsg,
+  sessionId,
 }: {
   msg: ChatStreamMessage;
   toolResultMap: Map<string, ContentBlock>;
   msgIndex: number;
   isStreamingMsg?: boolean;
+  sessionId: string;
 }) {
   const blocks = contentBlocks(msg.message?.content);
-
-  const sessionId = msg.session_id || "";
 
   // Thinking is complete once the assistant emits text or tool_use blocks.
   // The thinking timer should stop — it measures thinking time, not the
@@ -216,7 +216,11 @@ const AssistantMessage = memo(function AssistantMessage({
             if (block.type === "text" && block.text) {
               return (
                 <div key={i} className="min-w-0 max-w-full overflow-hidden text-[length:var(--font-chat-message)]">
-                  <MarkdownRenderer content={block.text} isAnimating={isStreamingMsg} />
+                  <MarkdownRenderer
+                    content={block.text}
+                    isAnimating={isStreamingMsg}
+                    sessionId={sessionId}
+                  />
                 </div>
               );
             }
@@ -312,6 +316,7 @@ export const ChatMessages = memo(function ChatMessages() {
   const isStreaming = useChatStore((s) => s.isStreaming);
   const isLoadingSession = useChatStore((s) => s.isLoadingSession);
   const activeTabId = useChatStore((s) => s.activeTabId);
+  const chatSessionId = useChatStore((s) => s.sessionId);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastTurnRef = useRef<HTMLElement>(null);
@@ -638,6 +643,7 @@ export const ChatMessages = memo(function ChatMessages() {
                         toolResultMap={toolResultMap}
                         msgIndex={idx}
                         isStreamingMsg={isStreamingMsg}
+                        sessionId={chatSessionId ?? ""}
                       />
                     );
                   }

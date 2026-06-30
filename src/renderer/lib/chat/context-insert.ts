@@ -41,15 +41,30 @@ export interface GitDiffSnippetRequest {
   sourceTabId?: string;
 }
 
+export interface PaperSnippetRequest {
+  kind: "paper";
+  bibkey: string;
+  title: string;
+  page: number;
+  quotedText: string;
+  annotationId?: string;
+  sourceTabId?: string;
+}
+
 export type ContextInsertRequest =
   | TerminalSnippetRequest
   | CodeSnippetRequest
-  | GitDiffSnippetRequest;
+  | GitDiffSnippetRequest
+  | PaperSnippetRequest;
 
 export function codeSnippetLabel(req: Pick<CodeSnippetRequest, "filePath" | "startLine" | "endLine">): string {
   const shortPath = req.filePath.split("/").pop() || req.filePath;
   if (req.startLine === req.endLine) return `${shortPath}:${req.startLine}`;
   return `${shortPath}:${req.startLine}-${req.endLine}`;
+}
+
+export function paperSnippetLabel(req: Pick<PaperSnippetRequest, "bibkey" | "page">): string {
+  return `${req.bibkey}:p${req.page}`;
 }
 
 export function contextInsertToPart(req: ContextInsertRequest): ComposerPart {
@@ -85,6 +100,20 @@ export function contextInsertToPart(req: ContextInsertRequest): ComposerPart {
       hunks: req.hunks,
       removedLineCount: req.removedLineCount,
       addedLineCount: req.addedLineCount,
+      sourceTabId: req.sourceTabId,
+    };
+  }
+
+  if (req.kind === "paper") {
+    return {
+      type: "paper-snippet",
+      id: createTokenId(),
+      label: paperSnippetLabel(req),
+      bibkey: req.bibkey,
+      title: req.title,
+      page: req.page,
+      quotedText: req.quotedText,
+      annotationId: req.annotationId,
       sourceTabId: req.sourceTabId,
     };
   }

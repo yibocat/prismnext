@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.5.0 — 2026-07-01
+
+### Literature Library & Reader
+
+- **Literature mode** in RightArea: project library (`.prismnext/library/library.db`), PDF reader (Lector + pdf.js), collections sidebar, entry panel with CSL metadata, inline field editing, and reading-notes pane
+- Import PDF / BibTeX (+ optional Better BibTeX `.json`), add by DOI or arXiv ID, manual entry, duplicate detection, FTS search, and orphan-attachment cleanup
+- **Enrich pipeline** resolves metadata from Crossref, arXiv, OpenAlex, Semantic Scholar, DataCite, DBLP, and OpenReview; auto-attaches PDFs when catalogs expose them
+- PDF cache under `.prismnext/library/attachments/`; custom `prism-literature-pdf://` protocol for in-app rendering; SyncTeX-free read-only preview path shared with existing PDF toolbar patterns
+- **Workspace split** for library list + reader/notes; toolbar subview dropdown (**All entries** / **Session citations**); left sidebar **Library** entry opens maximized RightArea (same pattern as TeX Workspace)
+
+### Zotero Integration
+
+- Optional Zotero desktop + Web API: probe status, Better BibTeX detection, collection bind/sync, streaming PDF fetch into local attachments (no full Zotero data dir import)
+- Connect dialog, disconnect, push/pull writers, and CSL-JSON helpers; Settings → **Literature** panel (storage stats + Zotero credentials — replaces standalone Zotero settings page)
+
+### Agent Tools & Chat Citations
+
+- OpenCode tools: **`literature-search`**, **`literature-read`**, **`literature-cite`**, **`literature-stage`** (verify-only, default for citing), **`literature-add`** (explicit library write)
+- Main-process **literature bridge** for tool IPC; prompt rules in `citations.ts` — stage first, cite as `[n]`, no auto-add to library
+- **Session citation staging**: per-chat-session store (localStorage), **Session citations** panel, staged entry panel, **Add to library** / **Add all**, panel-only **Clear** (chat `[n]` links preserved)
+- Clickable **`[n]`** in chat markdown (`remark-citation-refs`); jump to Literature session list with RightArea expand when collapsed
+- `@paper` composer mentions inject bibliographic context + reading notes; `paper-snippet` and literature tool widgets in chat
+
+### Files, Notes & Workspace
+
+- Default **`notes/`** workspace folder; per-paper note directories (`notes/{bibkey}/`), frontmatter-linked **Open in Literature**, PDF selection → insert quote into note
+- Configurable workspace folder icons; literature note tabs and recover-paper-from-note helpers
+- Files sidebar notebook badge; open-project-file routes literature PDFs and notes into the right modes
+
+### Bibliography & Metadata
+
+- Shared **`bibliographic-metadata`** resolver with rate-limit-aware catalog fetch and normalization helpers
+- Bibliography IPC (BibTeX export), bibkey utilities, DOI/arXiv normalization, BibTeX parse/import
+- CSL bibliography tests and paper identity / cite-check coverage
+
+### Layout & Settings
+
+- Literature registered in mode registry; tab lifecycle for literature paper tabs; git-mode row chrome tweaks alongside literature sidebar integration
+- Settings sidebar restores **Literature** under Components; TeX workspace settings cross-link literature/Zotero behavior
+
+### Architecture & Testing
+
+- Plans/specs under `docs/superpowers/` for reader, caching, Zotero decoupling, citation staging, and global library design
+- `ensure-native-modules.mjs` dev bootstrap; tool-name inference for ACP event mapping
+- Broad Vitest suite: literature service/bridge/enrich/PDF cache, Zotero client/sync, citation staging, remark citation refs, jump-to-citation, paper notes, workspace split
+
 ## 0.4.5 — 2026-06-28
 
 ### PDF Preview

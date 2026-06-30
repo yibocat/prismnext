@@ -4,6 +4,7 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTabContext } from "@/lib/workspace/tab-context";
 import { MarkdownDocumentPreview } from "@/components/modules/shared/markdown-document-preview";
+import { AppBrowserLink } from "@/components/modules/shared/app-browser-link";
 import { MARKDOWN_COMPONENTS } from "@/lib/markdown/markdown-config";
 
 const CONTAIN_STYLE: React.CSSProperties = {
@@ -39,15 +40,15 @@ function Wikilink({ target, children }: { target: string; children: React.ReactN
 
 const WIKILINK_COMPONENTS: Components = {
   ...MARKDOWN_COMPONENTS,
-  a: ({ href, children, ...props }: React.ComponentProps<"a">) => {
+  a: ({ href, children }: React.ComponentProps<"a">) => {
     if (href?.startsWith("wikilink:")) {
       const target = href.slice("wikilink:".length).split("#")[0];
       return <Wikilink target={target}>{children}</Wikilink>;
     }
     return (
-      <a href={href} className="text-primary underline" {...props}>
+      <AppBrowserLink href={href} className="text-primary underline">
         {children}
-      </a>
+      </AppBrowserLink>
     );
   },
 };

@@ -5,9 +5,10 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { remarkWikilinks } from "./remark-wikilinks";
+import { remarkCitationRefs } from "./remark-citation-refs";
 import { cn } from "@/lib/utils";
 
-export const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkWikilinks];
+export const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkWikilinks, remarkCitationRefs];
 export const REHYPE_PLUGINS = [rehypeKatex];
 
 /** Typography for file/document markdown preview — follows Appearance → Editor font. */

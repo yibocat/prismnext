@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef, useContext } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, useContext, type ReactNode } from "react";
 import {
   Root,
   Pages,
@@ -22,6 +22,7 @@ import type { SearchResult } from "@anaralabs/lector";
 import "pdfjs-dist/web/pdf_viewer.css";
 import { PDFJS_DOCUMENT_OPTIONS, PDF_PAGES_CLASS, PDF_PAGES_DARK_CLASS, PDF_PAGES_STYLE, PDF_PAGE_CLASS, PDF_PAGE_DARK_FILTER, PDF_PAGE_INVERTED_CLASS } from "./pdf-config";
 import { PdfScrollClamp } from "./pdf-scroll-clamp";
+import { cn } from "@/lib/utils";
 import { applyPdfZoomMode, PDF_ZOOM_MODE_LABELS, type PdfZoomMode } from "./pdf-zoom";
 import {
   LoaderIcon,
@@ -52,6 +53,7 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { saveViewerPosition, loadViewerPosition } from "@/lib/editor/viewer-position";
 import { TabContext } from "@/lib/workspace/tab-context";
+import { isBrowsableUrl, normalizeBrowserUrl, openUrlInBrowser } from "@/lib/browser-link";
 
 type SidePanel = "outline" | "search" | "thumbnails" | null;
 
@@ -60,6 +62,58 @@ const FIT_ZOOM_MODES: PdfZoomMode[] = ["fit-width", "fit-height", "fit-page", "a
 
 const outlineItemClass =
   "cursor-pointer text-muted-foreground hover:text-foreground transition-colors [&_a]:block [&_a]:truncate [&_a]:py-0.5 [&_a]:px-2 [&_a[data-level='0']]:pl-2 [&_a[data-level='1']]:pl-5 [&_a[data-level='2']]:pl-8 [&_a[data-level='3']]:pl-11 [&_a[data-level='4']]:pl-14";
+
+/** Route PDF annotation / text-layer links to in-app Browser (not Electron pop-out windows). */
+function PdfExternalLinkCapture() {
+  const viewportRef = usePdf((s) => s.viewportRef);
+  const pdfDocumentProxy = usePdf((s) => s.pdfDocumentProxy);
+
+  useEffect(() => {
+    const root = viewportRef.current;
+    if (!root || !pdfDocumentProxy) return;
+
+    const resolvePdfLink = (anchor: HTMLAnchorElement): string | null => {
+      const href = anchor.getAttribute("href")?.trim() ?? "";
+      if (!href || href === "#") return null;
+      if (href.startsWith("#")) return null;
+      const normalized = normalizeBrowserUrl(href);
+      return isBrowsableUrl(normalized) ? normalized : null;
+    };
+
+    const handleLinkActivate = (e: MouseEvent, newTab: boolean) => {
+      const target = e.target;
+      if (!target || !(target instanceof Element)) return;
+      const anchor = target.closest("a");
+      if (!anchor?.closest(".annotationLayer, .textLayer")) return;
+
+      const url = resolvePdfLink(anchor);
+      if (!url) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      openUrlInBrowser(url, { newTab });
+    };
+
+    const onClickCapture = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      handleLinkActivate(e, e.metaKey || e.ctrlKey);
+    };
+
+    const onAuxClickCapture = (e: MouseEvent) => {
+      if (e.button !== 1) return;
+      handleLinkActivate(e, true);
+    };
+
+    root.addEventListener("click", onClickCapture, true);
+    root.addEventListener("auxclick", onAuxClickCapture, true);
+    return () => {
+      root.removeEventListener("click", onClickCapture, true);
+      root.removeEventListener("auxclick", onAuxClickCapture, true);
+    };
+  }, [viewportRef, pdfDocumentProxy]);
+
+  return null;
+}
 
 // ─── Side Panel Sub-Components (rendered inside <Root>) ───
 
@@ -209,15 +263,29 @@ const PANEL_TOGGLES: PanelToggle[] = [
 
 // ─── Inner Component (renders inside <Root> — safe to use PDF context hooks) ───
 
-interface PdfViewerInnerProps {
+export interface PdfViewerInnerProps {
   isPdfFile: boolean;
   isCompiling: boolean;
   compileError: string | null;
   /** Key used to persist/restore page position across sessions. */
   persistKey?: string;
+  /** Extra toolbar controls (must use PDF context hooks — rendered inside Root). */
+  toolbarExtra?: ReactNode;
+  /** Custom page layers; defaults to sync-highlight layer for TeX preview. */
+  pageLayers?: ReactNode;
+  /** Layers rendered once per document (inside Root, outside virtualized Pages). */
+  documentLayers?: ReactNode;
 }
 
-function PdfViewerInner({ isPdfFile, isCompiling, compileError, persistKey }: PdfViewerInnerProps) {
+export function PdfViewerInner({
+  isPdfFile,
+  isCompiling,
+  compileError,
+  persistKey,
+  toolbarExtra,
+  pageLayers,
+  documentLayers,
+}: PdfViewerInnerProps) {
   const [sidePanel, setSidePanel] = useState<SidePanel>(null);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const pdfDarkFromSettings = useSettingsStore((s) => s.settings.pdfDarkMode);
@@ -343,8 +411,9 @@ function PdfViewerInner({ isPdfFile, isCompiling, compileError, persistKey }: Pd
         <span className="hidden" aria-hidden />
       </Search>
       <PdfScrollClamp />
+      <PdfExternalLinkCapture />
       {/* Toolbar */}
-      <div className="flex h-8 shrink-0 items-center gap-0.5 border-b border-border bg-card px-2 text-[length:var(--font-toolbar-label)]">
+      <div className="flex h-[var(--height-right-area-subtoolbar)] shrink-0 items-center gap-0.5 border-b border-border bg-card px-2 text-[length:var(--font-toolbar-label)]">
         {/* Left: side panel toggles */}
         <div className="flex items-center gap-0.5">
           {PANEL_TOGGLES.map((t) => (
@@ -363,6 +432,8 @@ function PdfViewerInner({ isPdfFile, isCompiling, compileError, persistKey }: Pd
             </button>
           ))}
         </div>
+
+        {toolbarExtra}
 
         {/* Compile status (TeX mode only) */}
         <div className="flex items-center gap-1.5">
@@ -495,15 +566,77 @@ function PdfViewerInner({ isPdfFile, isCompiling, compileError, persistKey }: Pd
             <CanvasLayer />
             <TextLayer />
             <AnnotationLayer />
-            <HighlightLayer className="bg-[color-mix(in_srgb,var(--warning)_40%,transparent)]" />
+            {pageLayers ?? (
+              <HighlightLayer className="bg-[color-mix(in_srgb,var(--warning)_40%,transparent)]" />
+            )}
           </Page>
         </Pages>
+        {documentLayers}
       </div>
     </>
   );
 }
 
-// ─── Outer Component (handles file loading, source computation) ───
+// ─── Shared document shell (TeX preview, literature reader, etc.) ───
+
+export interface PdfDocumentViewProps {
+  source: string | Uint8Array;
+  persistKey?: string;
+  isPdfFile?: boolean;
+  isCompiling?: boolean;
+  compileError?: string | null;
+  toolbarExtra?: ReactNode;
+  pageLayers?: ReactNode;
+  documentLayers?: ReactNode;
+  className?: string;
+}
+
+export function PdfDocumentView({
+  source,
+  persistKey,
+  isPdfFile = false,
+  isCompiling = false,
+  compileError = null,
+  toolbarExtra,
+  pageLayers,
+  documentLayers,
+  className,
+}: PdfDocumentViewProps) {
+  const pdfSource = useMemo(() => {
+    if (typeof source === "string") return source;
+    return source.slice();
+  }, [source]);
+
+  return (
+    <div className={cn("flex h-full flex-col bg-background", className)}>
+      <div className="flex-1 overflow-hidden bg-background">
+        <Root
+          source={pdfSource}
+          documentOptions={PDFJS_DOCUMENT_OPTIONS}
+          isZoomFitWidth
+          className="h-full flex flex-col"
+          loader={
+            <span className="flex justify-center pt-20 text-muted-foreground text-[length:var(--font-placeholder)]">
+              Loading…
+            </span>
+          }
+        >
+          <PdfViewerInner
+            isPdfFile={isPdfFile}
+            isCompiling={isCompiling}
+            compileError={compileError}
+            persistKey={persistKey}
+            toolbarExtra={toolbarExtra}
+            pageLayers={pageLayers}
+            documentLayers={documentLayers}
+          />
+        </Root>
+      </div>
+    </div>
+  );
+}
+
+// ─── TeX / standalone .pdf tab preview ───
 
 export function PdfPreview() {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
@@ -560,30 +693,17 @@ export function PdfPreview() {
     return `${projectRoot}::${activeTab.fileId}`;
   }, [projectRoot, activeTab?.fileId]);
 
+  if (!source) {
+    return <div className="flex h-full flex-col bg-background" />;
+  }
+
   return (
-    <div className="flex h-full flex-col bg-background">
-      <div className="flex-1 overflow-hidden bg-background">
-        {source ? (
-          <Root
-            source={source}
-            documentOptions={PDFJS_DOCUMENT_OPTIONS}
-            isZoomFitWidth
-            className="h-full flex flex-col"
-            loader={
-              <span className="flex justify-center pt-20 text-muted-foreground text-[length:var(--font-placeholder)]">
-                Loading…
-              </span>
-            }
-          >
-            <PdfViewerInner
-              isPdfFile={isPdfFile}
-              isCompiling={isCompiling}
-              compileError={compileError}
-              persistKey={persistKey}
-            />
-          </Root>
-        ) : null}
-      </div>
-    </div>
+    <PdfDocumentView
+      source={source}
+      persistKey={persistKey}
+      isPdfFile={isPdfFile}
+      isCompiling={isCompiling}
+      compileError={compileError}
+    />
   );
 }

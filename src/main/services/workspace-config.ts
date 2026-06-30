@@ -158,3 +158,49 @@ export function buildWorkspaceSummary(dirs: WorkspaceFolder[]): string {
     })
     .join("\n");
 }
+
+export interface LiteratureProjectConfig {
+  zoteroCollectionId?: string;
+  zoteroCollectionName?: string;
+}
+
+export function readLiteratureProjectConfig(prismDir: string): LiteratureProjectConfig {
+  const settings = readProjectSettings(prismDir);
+  const literature = settings.literature as LiteratureProjectConfig | undefined;
+  if (!literature || typeof literature !== "object") return {};
+  return {
+    zoteroCollectionId:
+      typeof literature.zoteroCollectionId === "string" ? literature.zoteroCollectionId : undefined,
+    zoteroCollectionName:
+      typeof literature.zoteroCollectionName === "string" ? literature.zoteroCollectionName : undefined,
+  };
+}
+
+export function writeLiteratureProjectConfig(
+  prismDir: string,
+  patch: Partial<LiteratureProjectConfig> & {
+    zoteroCollectionId?: string | null;
+    zoteroCollectionName?: string | null;
+  },
+): LiteratureProjectConfig {
+  const settings = readProjectSettings(prismDir);
+  const current = readLiteratureProjectConfig(prismDir);
+  const next: LiteratureProjectConfig = { ...current };
+
+  if ("zoteroCollectionId" in patch) {
+    if (patch.zoteroCollectionId) next.zoteroCollectionId = patch.zoteroCollectionId;
+    else delete next.zoteroCollectionId;
+  }
+  if ("zoteroCollectionName" in patch) {
+    if (patch.zoteroCollectionName) next.zoteroCollectionName = patch.zoteroCollectionName;
+    else delete next.zoteroCollectionName;
+  }
+
+  if (Object.keys(next).length === 0) {
+    delete settings.literature;
+  } else {
+    settings.literature = next;
+  }
+  writeProjectSettings(prismDir, settings);
+  return next;
+}

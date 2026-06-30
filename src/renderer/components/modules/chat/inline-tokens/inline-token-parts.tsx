@@ -141,6 +141,28 @@ export function ComposerTokenChip({
     );
   }
 
+  if (part.type === "paper-snippet") {
+    return (
+      <InlineTokenChip
+        variant="code"
+        label={part.label}
+        title={`${part.title}\n\n${part.quotedText.slice(0, 200)}`}
+        asToken
+      />
+    );
+  }
+
+  if (part.type === "mention" && part.mentionType === "paper") {
+    return (
+      <InlineTokenChip
+        variant="file"
+        prefix="@"
+        label={part.label}
+        asToken
+      />
+    );
+  }
+
   return null;
 }
 

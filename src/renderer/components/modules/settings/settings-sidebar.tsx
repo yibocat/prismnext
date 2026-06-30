@@ -60,7 +60,7 @@ const SETTINGS_GROUPS = [
     items: [
       { id: "texworkspace", label: "TeX Workspace", icon: FileTextIcon },
       { id: "terminal", label: "Terminal", icon: TerminalIcon },
-      { id: "zotero", label: "Zotero", icon: BookOpenIcon },
+      { id: "literature", label: "Literature", icon: BookOpenIcon },
     ],
   },
 ] as const;

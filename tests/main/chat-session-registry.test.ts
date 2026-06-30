@@ -3,6 +3,7 @@ import {
   registerChatSession,
   resolveChatTabId,
   resolveChatSessionId,
+  getSessionProjectRoot,
   unregisterChatSession,
   _resetChatSessionRegistryForTests,
 } from "../../src/main/services/chat-session-registry";
@@ -13,9 +14,10 @@ describe("chat-session-registry", () => {
   });
 
   it("maps session id to chat tab id", () => {
-    registerChatSession("sess-1", "chat-tab-a");
+    registerChatSession("sess-1", "chat-tab-a", "/tmp/project");
     expect(resolveChatTabId("sess-1")).toBe("chat-tab-a");
     expect(resolveChatSessionId("chat-tab-a")).toBe("sess-1");
+    expect(getSessionProjectRoot("sess-1")).toBe("/tmp/project");
   });
 
   it("replaces previous session for the same tab", () => {

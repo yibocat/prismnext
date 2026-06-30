@@ -1,4 +1,4 @@
-import { Bot, FileType, LayoutTemplate, SettingsIcon } from "lucide-react";
+import { Bot, BookOpenIcon, FileType, LayoutTemplate, SettingsIcon } from "lucide-react";
 import { Kbd } from "@/components/ui/kbd";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -6,7 +6,7 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { resetSettingsEditors } from "@/stores/settings-panel-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { leftNavRegistry } from "./registry";
-import { closeTexWorkspace, isTexWorkspaceOpen } from "./panel-utils";
+import { closeTexWorkspace, closeLiteraturePanel, isLiteraturePanelOpen, isTexWorkspaceOpen, openLiteratureLibrary } from "./panel-utils";
 import type { LeftNavContext, LeftNavDefinition } from "./types";
 
 /**
@@ -59,8 +59,30 @@ const newAgentNav: LeftNavDefinition = {
     st.setLeftSidebarView("sessions");
     st.clearPendingRightAreaRestore();
     closeTexWorkspace(ctx);
+    closeLiteraturePanel(ctx);
   },
   trailing: <Kbd className="text-[length:var(--font-kbd)] h-4 min-w-4 px-0.5 bg-transparent">⌘N</Kbd>,
+};
+
+const literatureNav: LeftNavDefinition = {
+  id: "literature",
+  section: "primary",
+  label: "Library",
+  icon: BookOpenIcon,
+  order: 5,
+  toggleable: true,
+  isActive: () => isLiteraturePanelOpen() && !isTexWorkspaceOpen(),
+  activate: (ctx) => {
+    closeTexWorkspace(ctx);
+    openLiteratureLibrary(ctx);
+  },
+  deactivate: (ctx) => {
+    closeLiteraturePanel(ctx);
+  },
+  onToggleOff: (ctx) => {
+    closeLiteraturePanel(ctx);
+    useLayoutStore.getState().setLeftSidebarView("sessions");
+  },
 };
 
 const templatesNav: LeftNavDefinition = {
@@ -75,6 +97,7 @@ const templatesNav: LeftNavDefinition = {
   isActive: () => useLayoutStore.getState().leftSidebarView === "templates",
   activate: (ctx) => {
     closeTexWorkspace(ctx);
+    closeLiteraturePanel(ctx);
     useLayoutStore.getState().setLeftSidebarView("templates");
   },
 };
@@ -119,6 +142,7 @@ const settingsNav: LeftNavDefinition = {
   isActive: () => useLayoutStore.getState().leftSidebarView === "settings",
   activate: (ctx) => {
     closeTexWorkspace(ctx);
+    closeLiteraturePanel(ctx);
     useLayoutStore.getState().setLeftSidebarView("settings");
   },
   onToggleOff: () => {
@@ -135,6 +159,7 @@ const settingsNav: LeftNavDefinition = {
 /** 应用启动时注册所有左侧栏入口（在 App.tsx 与 registerAllModes 一并调用） */
 export function registerLeftNavItems(): void {
   leftNavRegistry.register(newAgentNav);
+  leftNavRegistry.register(literatureNav);
   leftNavRegistry.register(templatesNav);
   leftNavRegistry.register(texWorkspaceNav);
   leftNavRegistry.register(settingsNav);

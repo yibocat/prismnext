@@ -204,38 +204,45 @@ export function splitPartsAtPlainRange(
   from: number,
   to: number,
 ): { before: ComposerPart[]; after: ComposerPart[] } {
-  const [before, rest] = splitPartsAtPlainOffset(parts, from);
-  const [, after] = splitPartsAtPlainOffset(rest, Math.max(0, to - from));
-  return { before: mergeAdjacentText(before), after: mergeAdjacentText(after) };
-}
+  if (from >= to) {
+    return { before: mergeAdjacentText(parts), after: [] };
+  }
 
-function splitPartsAtPlainOffset(parts: ComposerPart[], offset: number): [ComposerPart[], ComposerPart[]] {
-  if (offset <= 0) return [[], parts];
-  let pos = 0;
   const before: ComposerPart[] = [];
   const after: ComposerPart[] = [];
+  let pos = 0;
+
   for (const part of parts) {
-    if (part.type === "text") {
-      const len = part.text.length;
-      if (pos + len <= offset) {
-        before.push(part);
-        pos += len;
-        continue;
-      }
-      if (pos >= offset) {
-        after.push(part);
-        continue;
-      }
-      const idx = offset - pos;
-      if (idx > 0) before.push({ type: "text", text: part.text.slice(0, idx) });
-      if (idx < len) after.push({ type: "text", text: part.text.slice(idx) });
-      pos = offset;
+    if (part.type !== "text") {
+      // Inline tokens never occupy plain-text width; never replace them.
+      if (pos >= to) after.push(part);
+      else before.push(part);
       continue;
     }
-    if (pos < offset) before.push(part);
-    else after.push(part);
+
+    const len = part.text.length;
+    const partStart = pos;
+    const partEnd = pos + len;
+
+    if (partEnd <= from) {
+      before.push(part);
+    } else if (partStart >= to) {
+      after.push(part);
+    } else {
+      const sliceFrom = Math.max(0, from - partStart);
+      const sliceTo = Math.min(len, to - partStart);
+      if (sliceFrom > 0) {
+        before.push({ type: "text", text: part.text.slice(0, sliceFrom) });
+      }
+      if (sliceTo < len) {
+        after.push({ type: "text", text: part.text.slice(sliceTo) });
+      }
+    }
+
+    pos += len;
   }
-  return [mergeAdjacentText(before), mergeAdjacentText(after)];
+
+  return { before: mergeAdjacentText(before), after: mergeAdjacentText(after) };
 }
 
 export function parseDraftJson(raw: string | undefined): ComposerPart[] {

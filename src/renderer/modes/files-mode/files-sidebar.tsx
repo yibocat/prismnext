@@ -4,7 +4,9 @@ import type { VirtuosoHandle } from "react-virtuoso";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
-import { DEFAULT_MANUSCRIPT_DIR, FOLDER_FUNCTION_LABELS, FOLDER_FUNCTION_ICONS, type FolderFunction } from "@/types/workspace";
+import { DEFAULT_MANUSCRIPT_DIR, FOLDER_FUNCTION_LABELS, folderWorkspaceFunction, findWorkspaceFolder, type FolderFunction } from "@/types/workspace";
+import { resolveFolderIconName } from "@/lib/workspace/folder-icons";
+import { WorkspaceFolderIcon } from "@/lib/workspace/workspace-folder-icon";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useGitStore } from "@/stores/git-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
@@ -142,6 +144,7 @@ export function FilesSidebar() {
   const setActiveFile = useDocumentStore((s) => s.setActiveFile);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const manuscriptConfig = useWorkspaceConfigStore((s) => s.manuscriptConfig);
+  const workspaceDirs = useWorkspaceConfigStore((s) => s.workspaceDirs);
   const manuscriptDir = manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR;
   const openFile = useRightPanelStore((s) => s.openFile);
   const openTexworkspaceFile = useRightPanelStore((s) => s.openTexworkspaceFile);
@@ -558,6 +561,8 @@ export function FilesSidebar() {
       if (item.type === "folder") {
         const isExpanded = expandedFolders.has(item.key);
         const isSelected = selectedFolder === item.key;
+        const wsFolder = findWorkspaceFolder(item.key, workspaceDirs);
+        const workspaceFunc = folderWorkspaceFunction(item.key, workspaceDirs);
         return (
           <FolderVirtRow
             item={item}
@@ -569,6 +574,9 @@ export function FilesSidebar() {
               handleSelectFolder(item.key);
             }}
             callbacks={treeCallbacks}
+            workspaceFunction={workspaceFunc}
+            folderIconName={wsFolder ? resolveFolderIconName(wsFolder) : null}
+            folderBadgeTitle={wsFolder ? FOLDER_FUNCTION_LABELS[wsFolder.function] : undefined}
           />
         );
       }
@@ -598,6 +606,7 @@ export function FilesSidebar() {
       handleSelectFile,
       handleEditingDone,
       treeCallbacks,
+      workspaceDirs,
     ],
   );
 
@@ -918,8 +927,19 @@ export function FilesSidebar() {
                   <>
                     <p className="text-sm">
                       This folder is configured as a{" "}
-                      <strong>
-                        {FOLDER_FUNCTION_ICONS[deleteDialog.workspaceFunc]}{" "}
+                      <strong className="inline-flex items-center gap-1.5">
+                        {deleteDialog ? (
+                          (() => {
+                            const ws = findWorkspaceFolder(deleteDialog.folderPath, workspaceDirs);
+                            if (!ws) return null;
+                            return (
+                              <WorkspaceFolderIcon
+                                name={resolveFolderIconName(ws)}
+                                className="size-3.5"
+                              />
+                            );
+                          })()
+                        ) : null}
                         {FOLDER_FUNCTION_LABELS[deleteDialog.workspaceFunc]}
                       </strong>{" "}
                       folder in your workspace settings. Deleting it will also

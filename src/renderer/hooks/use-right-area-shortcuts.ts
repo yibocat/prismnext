@@ -3,6 +3,7 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useGitStore } from "@/stores/git-store";
+import { useLiteratureReaderStore } from "@/stores/literature-reader-store";
 import { modeRegistry } from "@/lib/workspace/mode-registry";
 
 /** Right-panel keyboard shortcuts — scoped to `[data-right-area]`. Cmd+W is app-wide via menu IPC. */
@@ -22,6 +23,16 @@ export function useRightAreaShortcuts(enabled: boolean) {
       const focusedMode = useLayoutStore.getState().focusedMode;
 
       if (mod && e.key === "s" && !e.shiftKey && !e.altKey && activeTab) {
+        if (activeTab.kind === "literature" && activeTab.literaturePaperId) {
+          const notePath =
+            useLiteratureReaderStore.getState().activeNotePathByPaper[activeTab.literaturePaperId];
+          if (notePath && useDocumentStore.getState().isFileDirty(notePath)) {
+            e.preventDefault();
+            void useDocumentStore.getState().saveFile(notePath);
+          }
+          return;
+        }
+
         const fileId = activeTab.fileId;
         if (
           fileId &&

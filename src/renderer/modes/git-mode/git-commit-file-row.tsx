@@ -10,6 +10,8 @@ import {
   gitChangeRowShellClass,
   gitChangeRowTextClass,
   gitPanelExpandedRowInScrollerStickyClass,
+  gitPanelListRowClass,
+  gitPanelExpandedDiffClass,
 } from "./git-change-row-chrome";
 import { preserveGitCommitScroll } from "./git-changes-tree";
 import type { CommitFile } from "./git-utils";
@@ -74,13 +76,13 @@ export const GitCommitFileRow = memo(function GitCommitFileRow({
   const rowId = `git-commit-file-${encodeURIComponent(file.path)}`;
 
   return (
-    <div id={rowId} className="flex flex-col">
+    <div id={rowId} className={gitPanelListRowClass}>
       <div
         className={cn(
           gitChangeRowShellClass,
-          "cursor-pointer transition-colors",
+          "cursor-pointer",
           isExpanded && gitPanelExpandedRowInScrollerStickyClass,
-          isExpanded ? "bg-background" : "hover:bg-accent/50",
+          isExpanded && "bg-background",
         )}
         onClick={handleRowClick}
         role="button"
@@ -113,7 +115,7 @@ export const GitCommitFileRow = memo(function GitCommitFileRow({
       </div>
 
       {isExpanded && (
-        <div>
+        <div className={gitPanelExpandedDiffClass}>
           {loading ? (
             <div className="flex items-center justify-center h-24 text-xs text-muted-foreground">
               Loading diff...

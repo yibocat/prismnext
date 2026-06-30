@@ -23,9 +23,10 @@ import {
 import {
   FOLDER_FUNCTIONS,
   FOLDER_FUNCTION_LABELS,
-  FOLDER_FUNCTION_ICONS,
   type FolderFunction,
 } from "@/types/workspace";
+import { defaultFolderIcon } from "@/lib/workspace/folder-icons";
+import { WorkspaceFolderIcon } from "@/lib/workspace/workspace-folder-icon";
 import {
   FolderOpenIcon,
   ChevronRightIcon,
@@ -247,7 +248,10 @@ export function NewProjectDialog({ children, open: controlledOpen, onOpenChange 
                               value={fn}
                               disabled={fn === "manuscript" && hasManuscript}
                             >
-                              {FOLDER_FUNCTION_ICONS[fn]} {FOLDER_FUNCTION_LABELS[fn]}
+                              <span className="inline-flex items-center gap-1.5">
+                                <WorkspaceFolderIcon name={defaultFolderIcon(fn)} className="size-3.5" />
+                                {FOLDER_FUNCTION_LABELS[fn]}
+                              </span>
                             </SelectItem>
                           ))}
                         </SelectContent>

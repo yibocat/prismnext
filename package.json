@@ -1,20 +1,27 @@
 {
   "name": "prism-next",
-  "version": "0.4.5",
+  "version": "0.5.0",
   "description": "AI-powered LaTeX writing workspace",
   "main": "./out/main/index.js",
   "scripts": {
     "copy-pdfjs-assets": "node scripts/copy-pdfjs-assets.mjs",
-    "dev": "bash -c 'unset ELECTRON_RUN_AS_NODE && node scripts/copy-pdfjs-assets.mjs && exec electron-vite dev'",
+    "dev": "bash -c 'unset ELECTRON_RUN_AS_NODE && node scripts/copy-pdfjs-assets.mjs && node scripts/ensure-native-modules.mjs && exec electron-vite dev'",
     "build": "node scripts/copy-pdfjs-assets.mjs && electron-vite build",
-    "preview": "electron-vite preview",
+    "preview": "node scripts/ensure-native-modules.mjs && electron-vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "postinstall": "electron-rebuild -f -w node-pty"
+    "rebuild:native": "pnpm exec electron-rebuild -f -w node-pty",
+    "postinstall": "pnpm exec electron-rebuild -f -w node-pty"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.22.1",
     "@anaralabs/lector": "^3.12.5",
+    "@citation-js/core": "^0.7.21",
+    "@citation-js/plugin-bibtex": "^0.7.21",
+    "@citation-js/plugin-csl": "^0.7.22",
+    "@citation-js/plugin-doi": "^0.7.21",
+    "@citation-js/plugin-ris": "^0.7.21",
+    "@codemirror/autocomplete": "^6.20.3",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/lang-cpp": "^6.0.3",
     "@codemirror/lang-css": "^6.3.1",

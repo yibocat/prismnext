@@ -88,6 +88,8 @@ export function App() {
     const c = centerRef.current;
     if (!r) return;
     const st = useLayoutStore.getState();
+    // Maximized editor: RightArea already full width — do not shrink or restore center.
+    if (st.editorMaximized) return;
     if (st.leftSidebarView === "settings" && hasOpenSettingsEditor()) {
       expandSettingsDetailPanel({
         centerRef: c,
@@ -103,9 +105,8 @@ export function App() {
     } else if (r.isCollapsed()) {
       r.resize(width);
       c?.expand();
-    } else {
-      r.resize(width);
     }
+    // Already visible — preserve the user's split; do not force resize.
   }, [rightAreaExpandNonce, isMobile]);
 
   // Programmatic settings detail close (editor Cancel/Save, etc.)

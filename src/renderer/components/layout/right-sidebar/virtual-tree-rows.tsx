@@ -20,6 +20,8 @@ import { Icon } from "@iconify/react";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import type { FlatVisibleNode } from "@/lib/files/file-tree";
+import type { FolderFunction } from "@/types/workspace";
+import { WorkspaceFolderIcon } from "@/lib/workspace/workspace-folder-icon";
 
 // ─── Callbacks interface ───
 
@@ -53,6 +55,9 @@ export const FolderVirtRow = memo(function FolderVirtRow({
   isSelected,
   onToggle,
   callbacks,
+  workspaceFunction,
+  folderIconName,
+  folderBadgeTitle,
 }: {
   item: FlatVisibleNode;
   depth: number;
@@ -60,7 +65,12 @@ export const FolderVirtRow = memo(function FolderVirtRow({
   isSelected: boolean;
   onToggle: () => void;
   callbacks: VirtTreeCallbacks;
+  workspaceFunction?: FolderFunction | null;
+  folderIconName?: string | null;
+  folderBadgeTitle?: string;
 }) {
+  const showBadge = Boolean(folderIconName);
+
   return (
     <AppContextMenu>
       <AppContextMenuTrigger asChild>
@@ -81,6 +91,13 @@ export const FolderVirtRow = memo(function FolderVirtRow({
             <FolderIcon className="size-3 shrink-0" />
           )}
           <span className="truncate">{item.name}</span>
+          {showBadge && folderIconName ? (
+            <WorkspaceFolderIcon
+              name={folderIconName}
+              className="ml-auto size-2.5 opacity-60"
+              title={folderBadgeTitle ?? workspaceFunction ?? undefined}
+            />
+          ) : null}
         </div>
       </AppContextMenuTrigger>
       <AppContextMenuContent>

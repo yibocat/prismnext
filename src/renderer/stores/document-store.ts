@@ -314,6 +314,12 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       await workspaceStore.loadConfig(rootPath);
       if (generation !== openProjectGeneration) return;
 
+      // Preload literature library for @ mentions (fire-and-forget)
+      import("./literature-store").then(({ useLiteratureStore }) => {
+        if (generation !== openProjectGeneration) return;
+        void useLiteratureStore.getState().refresh(rootPath);
+      });
+
       // ── Smart expand: only expand folders on the path to the last active file ──
       const lastActiveFileId = getProjectLastActiveFileId(rootPath);
       if (lastActiveFileId) {
@@ -1353,7 +1359,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
     const newMap = new Map(state.openedContents);
     newMap.set(id, { content, isDirty: true });
-    set({ openedContents: newMap, dirtyVersion: state.dirtyVersion + 1 });
+    set({
+      openedContents: newMap,
+      dirtyVersion: state.dirtyVersion + 1,
+      contentVersion: state.contentVersion + 1,
+    });
 
     const rp = useRightPanelStore.getState();
     const previewTab = rp.tabs.find((t) => t.kind === "file" && t.fileId === id && t.isPreview);

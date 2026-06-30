@@ -23,6 +23,110 @@ export interface SynctexForwardResult {
   width: number;
 }
 
+export interface LiteraturePaper {
+  id: string;
+  bibkey: string;
+  title: string;
+  authors: string | null;
+  year: number | null;
+  abstract: string | null;
+  doi: string | null;
+  arxiv_id: string | null;
+  isbn: string | null;
+  venue: string | null;
+  type: string | null;
+  pdf_path: string | null;
+  pdf_sha: string | null;
+  origin: string | null;
+  metadata_source: string | null;
+  csl_json: string | null;
+  /** @deprecated Use `origin` instead */
+  source: string | null;
+  raw_bibtex: string | null;
+  zotero_key?: string | null;
+  zotero_version?: number | null;
+  zotero_attach_key?: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface LiteratureCollection {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  sort_order: number;
+  created_at: number;
+  updated_at: number;
+  paper_count?: number;
+  zotero_key?: string | null;
+  zotero_parent?: string | null;
+  zotero_version?: number | null;
+}
+
+export type LiteratureLibraryView =
+  | { kind: "all" }
+  | { kind: "reading-list" }
+  | { kind: "collection"; collectionId: string };
+
+export interface LiteratureAnnotation {
+  id: string;
+  paper_id: string;
+  kind: string;
+  page: number;
+  rects: string;
+  quoted_text: string | null;
+  color: string | null;
+  note: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export type ZoteroConnectionMode = "local" | "web" | "offline";
+
+export interface ZoteroStatus {
+  mode: ZoteroConnectionMode;
+  localReachable: boolean;
+  bbtInstalled: boolean;
+  bbtDebugBridge: boolean;
+  webReachable: boolean;
+  userId?: string;
+  error?: string;
+}
+
+export interface ZoteroCollection {
+  key: string;
+  name: string;
+  parentKey: string | null;
+  version: number;
+}
+
+export interface ZoteroProjectBinding {
+  zoteroCollectionId?: string;
+  zoteroCollectionName?: string;
+}
+
+export interface ZoteroSyncResult {
+  collectionsUpserted: number;
+  papersUpserted: number;
+  collectionKey: string;
+  collectionsPruned: number;
+  papersPruned: number;
+}
+
+export interface LiteratureStorageStats {
+  attachmentCount: number;
+  attachmentBytes: number;
+  referencedCount: number;
+  orphanCount: number;
+  orphanBytes: number;
+  legacyPdfCacheBytes: number;
+}
+
+export interface PruneOrphanAttachmentsResult {
+  deletedFiles: number;
+  freedBytes: number;
+}
+
 export interface BrowserBookmark {
   id: string;
   title: string;
@@ -235,6 +339,7 @@ export interface ElectronAPI {
     path: string | null;
   }>;
   shellShowItemInFolder: (absPath: string) => Promise<void>;
+  shellOpenExternal: (url: string) => Promise<void>;
   fsExists: (absPath: string) => Promise<boolean>;
   fsIsFile: (absPath: string) => Promise<boolean>;
   projectCreate: (rootPath: string, workspaceDirs?: import("./workspace").WorkspaceFolder[]) => Promise<void>;
@@ -287,6 +392,204 @@ export interface ElectronAPI {
     line: number,
   ) => Promise<SynctexForwardResult | null>;
   compileDetectTexlive: () => Promise<CompilerStatus>;
+
+  // Literature library
+  literatureList: (projectRoot: string) => Promise<LiteraturePaper[]>;
+  literatureGetPdfCacheStatus: (
+    projectRoot: string,
+  ) => Promise<Record<string, { cached: boolean; stale: boolean }>>;
+  literatureGetStorageStats: (projectRoot: string) => Promise<LiteratureStorageStats>;
+  literaturePruneOrphanAttachments: (projectRoot: string) => Promise<PruneOrphanAttachmentsResult>;
+  literatureSearch: (projectRoot: string, query: string, limit?: number) => Promise<LiteraturePaper[]>;
+  literatureGet: (projectRoot: string, paperId: string) => Promise<LiteraturePaper | null>;
+  literatureIngestPdf: (
+    projectRoot: string,
+    pdfPath: string,
+    opts?: { title?: string; doi?: string },
+  ) => Promise<{
+    paper: LiteraturePaper;
+    created: boolean;
+    duplicateReason?: "pdf" | "doi" | "arxiv";
+    identifiersFound?: boolean;
+    identifiers?: { doi?: string | null; arxivId?: string | null };
+    enriched?: boolean;
+    enrichError?: string;
+    pdfAttached?: boolean;
+    pdfAttachError?: string;
+  }>;
+  literatureCreateFromIdentifier: (
+    projectRoot: string,
+    ids: { doi?: string; arxivId?: string },
+  ) => Promise<{
+    paper: LiteraturePaper;
+    created: boolean;
+    duplicateReason?: "doi" | "arxiv";
+    pdfAttached?: boolean;
+    pdfAttachError?: string;
+  }>;
+  literatureFindExisting: (
+    projectRoot: string,
+    ids: { doi?: string | null; arxivId?: string | null },
+  ) => Promise<{ paperId: string; bibkey: string } | null>;
+  literatureStage: (
+    projectRoot: string,
+    args: {
+      doi?: string;
+      arxivId?: string;
+      sourceUrl?: string;
+      discoveredFrom?: "websearch" | "webfetch" | "user" | "agent";
+    },
+  ) => Promise<{
+    staged: boolean;
+    verified: boolean;
+    refId?: number;
+    citation?: {
+      title: string;
+      authors: string | null;
+      year: number | null;
+      venue: string | null;
+      type: string | null;
+      doi: string | null;
+      arxivId: string | null;
+      abstract: string | null;
+      cslJson: Record<string, unknown> | null;
+      sourceUrl: string | null;
+      catalogSource: string | null;
+      catalogVerified: boolean;
+      verifyError: string | null;
+      discoveredFrom: "websearch" | "webfetch" | "user" | "agent";
+      libraryPaperId: string | null;
+      libraryBibkey: string | null;
+    };
+    alreadyInLibrary?: boolean;
+    libraryBibkey?: string | null;
+    error?: string;
+    hint?: string;
+  }>;
+  literatureApplyMetadata: (projectRoot: string, paperId: string, metadata: Partial<LiteraturePaper>) => Promise<LiteraturePaper>;
+  literatureApplyIdentifiers: (
+    projectRoot: string,
+    paperId: string,
+    ids: { doi?: string | null; arxivId?: string | null },
+  ) => Promise<{ applied: boolean; paper?: LiteraturePaper; duplicatePaper?: LiteraturePaper }>;
+  literatureFetchAndApplyMetadata: (
+    projectRoot: string,
+    paperId: string,
+    opts?: { doi?: string; arxivId?: string },
+  ) => Promise<{
+    paper: LiteraturePaper;
+    enriched: boolean;
+    enrichError?: string;
+    pdfAttached?: boolean;
+    pdfAttachError?: string;
+  }>;
+  literatureDownloadPdf: (
+    projectRoot: string,
+    paperId: string,
+  ) => Promise<{
+    paper: LiteraturePaper;
+    attached: boolean;
+    attachError?: string;
+  }>;
+  literatureImportBibTeX: (projectRoot: string, bibContent: string, jsonContent?: string) => Promise<{
+    imported: number;
+    skipped: number;
+    importedPaperIds?: string[];
+    pdfsAttached?: number;
+  }>;
+  literatureGetAnnotations: (projectRoot: string, paperId: string) => Promise<LiteratureAnnotation[]>;
+  literatureSaveAnnotation: (projectRoot: string, annotation: Omit<LiteratureAnnotation, "created_at" | "updated_at"> & Partial<Pick<LiteratureAnnotation, "created_at" | "updated_at">>) => Promise<LiteratureAnnotation>;
+  literatureDeleteAnnotation: (projectRoot: string, annotationId: string) => Promise<{ ok: boolean }>;
+  literatureReadPdfBytes: (projectRoot: string, paperId: string) => Promise<{ pdfBytes: Uint8Array | null }>;
+  literatureEnsurePaperPdf: (
+    projectRoot: string,
+    paperId: string,
+  ) => Promise<{ pdfUrl: string | null }>;
+  onLiteraturePdfDownloadProgress: (
+    callback: (data: {
+      paperId: string;
+      phase: "resolving" | "downloading" | "caching" | "reading" | "opening" | "done";
+      receivedBytes?: number;
+      totalBytes?: number | null;
+    }) => void,
+  ) => () => void;
+  literatureCreatePaper: (projectRoot: string, metadata: Partial<LiteraturePaper>) => Promise<{
+    paper: LiteraturePaper;
+    created: boolean;
+    duplicateReason?: "doi" | "arxiv";
+  }>;
+  literatureUpdatePaper: (projectRoot: string, paperId: string, patch: Partial<LiteraturePaper>) => Promise<LiteraturePaper>;
+  literatureDeletePaper: (projectRoot: string, paperId: string) => Promise<{ ok: boolean }>;
+  literatureImportToLocal: (projectRoot: string, paperId: string) => Promise<{ ok: boolean }>;
+  literatureExportBib: (projectRoot: string, paperIds?: string[]) => Promise<{ content: string }>;
+  literatureFormatBibliography: (projectRoot: string, paperIds: string[], style?: string) => Promise<{ content: string }>;
+  literatureExportBibToFile: (
+    projectRoot: string,
+    paperIds?: string[],
+    defaultPath?: string,
+  ) => Promise<{ canceled: boolean; path: string | null }>;
+  literatureCite: (projectRoot: string, bibkey: string) => Promise<{ bibPath: string; appended: boolean }>;
+  literatureReadingList: (projectRoot: string) => Promise<LiteraturePaper[]>;
+  literatureListCollections: (projectRoot: string) => Promise<LiteratureCollection[]>;
+  literatureCreateCollection: (
+    projectRoot: string,
+    name: string,
+    parentId?: string | null,
+  ) => Promise<LiteratureCollection>;
+  literatureUpdateCollection: (
+    projectRoot: string,
+    collectionId: string,
+    name: string,
+  ) => Promise<LiteratureCollection>;
+  literatureDeleteCollection: (projectRoot: string, collectionId: string) => Promise<{ ok: boolean }>;
+  literatureListCollectionPaperIds: (projectRoot: string, collectionId: string) => Promise<string[]>;
+  literatureAddPapersToCollection: (
+    projectRoot: string,
+    collectionId: string,
+    paperIds: string[],
+  ) => Promise<{ added: number; skipped: number }>;
+  literatureRemovePapersFromCollection: (
+    projectRoot: string,
+    collectionId: string,
+    paperIds: string[],
+  ) => Promise<{ removed: number }>;
+  literatureImportFromProject: (targetRoot: string, sourceRoot: string, paperIds: string[], opts?: { includeAnnotations?: boolean; includePdf?: boolean }) => Promise<{ imported: number; skipped: number }>;
+  literaturePickPdf: () => Promise<{ path: string | null }>;
+  literaturePickBibTeX: () => Promise<{ paths: string[] }>;
+  literaturePickProjectRoot: () => Promise<{ path: string | null; error?: string }>;
+
+  zoteroProbe: () => Promise<ZoteroStatus>;
+  zoteroStatus: () => Promise<ZoteroStatus>;
+  zoteroListCollections: () => Promise<ZoteroCollection[]>;
+  zoteroGetProjectBinding: (projectRoot: string) => Promise<ZoteroProjectBinding>;
+  zoteroSetProjectBinding: (
+    projectRoot: string,
+    collectionId: string | null,
+    collectionName?: string | null,
+  ) => Promise<ZoteroProjectBinding & { detached?: { papers: number; collections: number } }>;
+  zoteroPullCollections: (projectRoot: string) => Promise<{
+    collectionsUpserted: number;
+    collectionsPruned: number;
+  }>;
+  zoteroPullCollection: (projectRoot: string) => Promise<ZoteroSyncResult>;
+  zoteroGetLastSync: (projectRoot: string) => Promise<{ lastSyncAt: number | null }>;
+
+  // Bibliographic catalog (global metadata resolution)
+  bibliographyResolve: (opts: { doi?: string; arxivId?: string }) => Promise<{
+    metadata: {
+      title: string;
+      authors: string | null;
+      year: number | null;
+      abstract: string | null;
+      doi: string | null;
+      arxiv_id: string | null;
+      venue: string | null;
+      type: string | null;
+      source: string;
+      pdfUrl?: string;
+    };
+    sourcesAttempted: string[];
+  }>;
 
   // OpenCode chat operations
   chatDispose: () => Promise<{ success: boolean }>;
@@ -499,6 +802,7 @@ export interface ElectronAPI {
     lastActiveFileId?: string | null;
     zoteroApiKey?: string;
     zoteroUserId?: string;
+    zoteroLastBBTDetected?: boolean;
     pdfDarkMode?: "off" | "on" | "follow";
     autoCreateMainTex?: boolean;
     defaultDocClass?: "article" | "report" | "book";

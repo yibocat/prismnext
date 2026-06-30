@@ -1,6 +1,5 @@
 import { useLayoutStore } from "@/stores/layout-store";
 import { SidebarProvider, Sidebar } from "@/components/ui/sidebar";
-import { DashboardSidebar } from "./right-sidebar/dashboard-sidebar";
 import { modeRegistry } from "@/lib/workspace/mode-registry";
 
 export { FilesSidebar } from "@/modes/files-mode/files-sidebar";
@@ -12,7 +11,9 @@ export function RightSidebar({ fullMode }: { fullMode?: boolean }) {
   const rightSidebarWidth = useLayoutStore((s) => s.rightSidebarWidth);
 
   const def = focusedMode !== "dashboard" ? modeRegistry.get(focusedMode) : undefined;
-  const Content = def?.Sidebar ?? DashboardSidebar;
+  if (!def?.Sidebar) return null;
+
+  const Content = def.Sidebar;
 
   return (
     <SidebarProvider

@@ -15,7 +15,7 @@ export type AppMode = string;
  * ModeDefinition entries in modeRegistry. The dashboard sentinel is the only
  * value not backed by a ModeDefinition — it represents "no mode active."
  */
-export type RightToolbarTab = "dashboard" | "files" | "git" | "browser" | "texworkspace" | "terminal";
+export type RightToolbarTab = "dashboard" | "files" | "git" | "browser" | "texworkspace" | "terminal" | "literature";
 export type TexworkspaceViewMode = "split" | "tex" | "pdf";
 
 export type TabType = "file" | "pdf";
@@ -87,8 +87,9 @@ interface LayoutState {
   /** User-resized width for Settings detail panel (split mode) — separate from workspace RightArea. */
   settingsDetailWidth: number;
   setSettingsDetailWidth: (width: number) => void;
-  /** Incremented to programmatically expand the RightArea panel (e.g. open Browser link). */
+  /** Incremented to programmatically expand the RightArea panel when collapsed (e.g. open Browser link). */
   rightAreaExpandNonce: number;
+  /** Expand RightArea only if collapsed; does not reset width when already open. */
   requestRightAreaExpand: () => void;
   /** Incremented to close the settings detail editor (collapse + clear slot). */
   settingsDetailCloseNonce: number;
@@ -140,6 +141,10 @@ interface LayoutState {
   /** Markdown preview width limit */
   mdWidthLimited: boolean;
   setMdWidthLimited: (limited: boolean) => void;
+
+  /** Persisted percent layout for WorkspaceSplit groups keyed by `{leftId}:{rightId}`. */
+  workspaceSplitLayouts: Record<string, Record<string, number>>;
+  setWorkspaceSplitLayout: (key: string, layout: Record<string, number>) => void;
 
   /** Per-mode tabs (flat list) */
   modeEditorTabs: Record<string, EditorTab[]>;
@@ -308,6 +313,12 @@ export const useLayoutStore = create<LayoutState>()(
       mdWidthLimited: true,
       setMdWidthLimited: (limited) => set({ mdWidthLimited: limited }),
 
+      workspaceSplitLayouts: {},
+      setWorkspaceSplitLayout: (key, layout) =>
+        set((s) => ({
+          workspaceSplitLayouts: { ...s.workspaceSplitLayouts, [key]: layout },
+        })),
+
       sessionSort: "updated",
       setSessionSort: (sessionSort) => set({ sessionSort }),
 
@@ -389,6 +400,7 @@ export const useLayoutStore = create<LayoutState>()(
         sessionSort: state.sessionSort,
         expandedFileTreeFolders: state.expandedFileTreeFolders,
         texworkspaceDefaultViewMode: state.texworkspaceDefaultViewMode,
+        workspaceSplitLayouts: state.workspaceSplitLayouts,
       }),
     },
   ),

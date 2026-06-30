@@ -16,6 +16,8 @@ import {
   gitChangeRowShellClass,
   gitChangeRowTextClass,
   gitPanelExpandedRowStickyClass,
+  gitPanelListRowClass,
+  gitPanelExpandedDiffClass,
 } from "./git-change-row-chrome";
 import { isGitChangeNewFile } from "./git-change-status";
 import { preserveGitChangesScroll } from "./git-changes-tree";
@@ -105,14 +107,13 @@ export const GitChangeFileRow = memo(function GitChangeFileRow({
   return (
     <div
       id={`git-change-${file.id}`}
-      className="flex flex-col"
+      className={gitPanelListRowClass}
     >
       <div
         className={cn(
           gitChangeRowShellClass,
-          "transition-colors",
           isExpanded && gitPanelExpandedRowStickyClass,
-          isExpanded ? "bg-background" : "hover:bg-accent/50",
+          isExpanded && "bg-background",
         )}
       >
         <div
@@ -175,7 +176,7 @@ export const GitChangeFileRow = memo(function GitChangeFileRow({
       </div>
 
       {isExpanded && (
-        <div>
+        <div className={gitPanelExpandedDiffClass}>
           {file.diffLoading ? (
             <div className="flex items-center justify-center h-24 text-xs text-muted-foreground">
               Loading diff...

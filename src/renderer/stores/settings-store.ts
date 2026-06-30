@@ -16,6 +16,7 @@ export interface AppSettings {
   pdfDarkMode?: "off" | "on" | "follow";
   zoteroApiKey?: string;
   zoteroUserId?: string;
+  zoteroLastBBTDetected?: boolean;
   /** Path to auto-reopen on next launch */
   lastProjectPath?: string | null;
   /** @deprecated Use lastActiveFileIdByProject */
@@ -87,7 +88,10 @@ const defaults: AppSettings = {
   defaultDocClass: "article",
   agentSystemPrompt: "",
   editorSyntaxTheme: "prism",
-  defaultWorkspaceDirs: [{ function: "manuscript", name: "manuscript", mainTex: "main.tex" }],
+  defaultWorkspaceDirs: [
+    { function: "manuscript", name: "manuscript", mainTex: "main.tex" },
+    { function: "notebook", name: "notes" },
+  ],
   permissionMode: DEFAULT_PERMISSION_MODE,
   agentTerminalMode: "pty",
   aiTerminalAutoOpen: true,

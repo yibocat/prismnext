@@ -352,7 +352,8 @@ export function CodeEditor() {
       langLoader()
         .then((langExtension) => {
           if (viewRef.current === view && langExtension) {
-            view.dispatch({ effects: languageCompartment.reconfigure(langExtension) });
+            const extensions = [langExtension];
+            view.dispatch({ effects: languageCompartment.reconfigure(extensions) });
           }
         })
         .catch((err) => {

@@ -61,12 +61,11 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
     if (isMobile && c) {
       r.resize(9999);
       c.collapse();
-    } else if (c?.isCollapsed()) {
+    } else if (r.isCollapsed()) {
       r.resize(width);
-      c.expand();
-    } else {
-      r.resize(width);
+      c?.expand();
     }
+    // Already open — keep current panel sizes.
   };
 
   // Hide center top bar only when stacked editor is open (list hidden, right chrome active).

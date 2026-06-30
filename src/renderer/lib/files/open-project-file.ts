@@ -50,11 +50,11 @@ export function resolveChatFilePath(rawPath: string, projectRoot: string): strin
 /** Expand RightArea and focus Files mode so chat file links are immediately visible. */
 export function ensureRightAreaVisibleForFiles(): void {
   const layout = useLayoutStore.getState();
-  if (layout.editorMaximized) {
-    layout.setEditorMaximized(false);
-  }
   layout.activateMode("files");
-  layout.requestRightAreaExpand();
+  // Maximize mode already gives RightArea full width with center collapsed — keep it.
+  if (!layout.editorMaximized) {
+    layout.requestRightAreaExpand();
+  }
 }
 
 /**

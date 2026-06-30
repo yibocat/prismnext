@@ -32,6 +32,7 @@ interface RightPanelState {
   activeTabId: string | null;
 
   ensureTab: (kind: RightTabKind) => string;
+  openLiteraturePaper: (paperId: string, title: string, view?: "grid" | "reader" | "notes") => string;
   openFile: (
     fileId: string,
     filePath: string,
@@ -70,9 +71,11 @@ interface RightPanelState {
   closeTabsOfKind: (kind: RightTabKind, options?: { onClosed?: () => void }) => void;
   /** Check if any tabs of a given kind exist */
   hasTabsOfKind: (kind: RightTabKind) => boolean;
+  /** Remove literature tabs opened for a deleted paper */
+  closeLiteraturePaperTabs: (paperId: string) => void;
   setActiveTab: (id: string) => void;
   setTabViewMode: (id: string, mode: string) => void;
-  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title" | "terminalSource" | "linkedChatTabId" | "linkedToolCallId" | "settingsSlot" | "settingsSlotKey">>) => void;
+  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title" | "terminalSource" | "linkedChatTabId" | "linkedToolCallId" | "settingsSlot" | "settingsSlotKey" | "literaturePaperId" | "literatureView">>) => void;
   moveTab: (fromIndex: number, toIndex: number) => void;
 }
 
@@ -98,6 +101,27 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     }
     const id = nextTabId();
     const tab: RightTab = { id, kind, title: modeRegistry.findByTabKind(kind)?.initialTitle ?? kind, isInitial: true };
+    set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
+    return id;
+  },
+
+  openLiteraturePaper: (paperId, title, view = "reader") => {
+    useLayoutStore.getState().activateMode("literature");
+    const { tabs } = get();
+    const existing = tabs.find((t) => t.kind === "literature" && t.literaturePaperId === paperId);
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return existing.id;
+    }
+    const id = nextTabId();
+    const tab: RightTab = {
+      id,
+      kind: "literature",
+      title: title.slice(0, 48),
+      isInitial: false,
+      literaturePaperId: paperId,
+      literatureView: view,
+    };
     set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
     return id;
   },
@@ -447,6 +471,19 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     }
 
     doCloseAll();
+  },
+
+  closeLiteraturePaperTabs: (paperId) => {
+    const removeIds = new Set(
+      get().tabs.filter((t) => t.kind === "literature" && t.literaturePaperId === paperId).map((t) => t.id),
+    );
+    if (removeIds.size === 0) return;
+    set((s) => {
+      const next = s.tabs.filter((t) => !removeIds.has(t.id));
+      const nextActive =
+        s.activeTabId && removeIds.has(s.activeTabId) ? (next[0]?.id ?? null) : s.activeTabId;
+      return { tabs: next, activeTabId: nextActive };
+    });
   },
 
   closeTabsOfKind: (kind, options) => {

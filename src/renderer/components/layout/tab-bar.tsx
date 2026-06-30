@@ -5,6 +5,7 @@ import { Icon } from "@iconify/react";
 import { getFileIconName } from "@/lib/files/file-icon-class";
 import { cn } from "@/lib/utils";
 import { tabDisplayTitle } from "@/lib/workspace/tab-lifecycle";
+import { literatureTabNotePath } from "@/lib/literature/literature-note-tab";
 import { useTerminalStore } from "@/stores/terminal-store";
 import {
   AppContextMenu,
@@ -52,7 +53,11 @@ function tabIcon(
   dirtyFileIds?: Set<string>,
   terminalStatus?: string,
 ) {
-  const isDirty = dirtyFileIds?.has(tab.fileId ?? "") || dirtyFileIds?.has(tab.filePath ?? "");
+  const litNotePath = tab.kind === "literature" ? literatureTabNotePath(tab) : null;
+  const isDirty =
+    dirtyFileIds?.has(tab.fileId ?? "")
+    || dirtyFileIds?.has(tab.filePath ?? "")
+    || (litNotePath ? dirtyFileIds?.has(litNotePath) : false);
   if (isDirty) {
     return <span title="Unsaved changes"><DotIcon className="mr-1 size-3.5 shrink-0 text-info" strokeWidth={4} /></span>;
   }

@@ -69,6 +69,11 @@ export const TOOL_PERMISSION_REGISTRY: Record<string, ToolPermissionEntry> = {
   task: { confirmUx: "none", rules: READ_ONLY },
   skill: { confirmUx: "none", rules: READ_ONLY },
   todowrite: { confirmUx: "none", rules: READ_ONLY },
+  "literature-search": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
+  "literature-read": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
+  "literature-stage": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
+  "literature-add": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
+  "literature-cite": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
 };
 
 export function getToolPermissionEntry(toolName: string): ToolPermissionEntry | undefined {

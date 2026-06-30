@@ -16,6 +16,8 @@ import {
   extractSessionTitle,
   isGenericSessionTitle,
 } from "@/lib/chat/session-title";
+import { scheduleCitationStagingBackfill } from "@/lib/literature/sync-citation-staging-from-messages";
+import { useCitationStagingStore } from "./citation-staging-store";
 
 // ─── Types ───
 
@@ -328,6 +330,17 @@ function projectActiveTab(tabs: TabState[], activeTabId: string) {
   };
 }
 
+function syncCitationStagingForTab(tab: TabState | undefined): void {
+  if (!tab?.sessionId) {
+    useCitationStagingStore.getState().setActiveSession(null);
+    return;
+  }
+  useCitationStagingStore.getState().setActiveSession(tab.sessionId);
+  if (tab.messages.length > 0) {
+    scheduleCitationStagingBackfill(tab.sessionId, tab.messages);
+  }
+}
+
 // ─── Store ───
 
 const initialTabId = nextTabId();
@@ -355,6 +368,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       ...projectActiveTab([...s.tabs, tab], id),
     }));
     syncCheckoutForTab(tab);
+    syncCitationStagingForTab(tab);
     return id;
   },
 
@@ -388,6 +402,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       ...projectActiveTab(hydratedTabs, newActiveId),
     });
     syncCheckoutForTab(hydratedTabs.find((t) => t.id === newActiveId));
+    syncCitationStagingForTab(hydratedTabs.find((t) => t.id === newActiveId));
 
       // Clean up agent session for this tab — cancel any running prompt
       if (closingTab.sessionId) {
@@ -411,6 +426,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       ...projectActiveTab(tabs, id),
     });
     syncCheckoutForTab(targetTab);
+    syncCitationStagingForTab(targetTab);
     void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
       useTerminalAiStore.getState().touchSessionViewed(id);
     });
@@ -806,6 +822,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         activeTabId: existingTab.id,
         ...projectActiveTab(nextTabs, existingTab.id),
       });
+      syncCitationStagingForTab(existingTab);
       void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
         useTerminalAiStore.getState().touchSessionViewed(existingTab.id);
       });
@@ -864,6 +881,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         useCheckpointStore.getState().initSession(tabId, sessionId);
       });
       hydrateSessionContext();
+      syncCitationStagingForTab(hydratedTab);
       void (async () => {
         try {
           const displays = await window.electronAPI.sessionGetUserDisplays(projectPath, sessionId);
@@ -933,6 +951,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       });
       void import("./checkpoint-store").then(({ useCheckpointStore }) => {
         useCheckpointStore.getState().initSession(tabId, sessionId);
+      });
+      syncCitationStagingForTab({
+        ...makeDefaultTab(tabId),
+        messages: filtered,
+        sessionId,
+        sessionCwd,
       });
     } catch (err: any) {
       set((s) => {

@@ -2,6 +2,7 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { FileCode2Icon, EyeIcon, AlignCenterIcon, RefreshCwIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LiteratureNoteLinkButton } from "./literature-note-link";
 
 export const MARKDOWN_TOOLBAR_BTN =
   "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0";
@@ -79,13 +80,18 @@ export function MarkdownToolbar() {
   const setTabViewMode = useRightPanelStore((s) => s.setTabViewMode);
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const viewMode = (activeTab?.viewMode ?? "preview") as "source" | "preview";
+  const filePath =
+    activeTab?.kind === "file" && activeTab.filePath ? activeTab.filePath : undefined;
 
   return (
-    <MarkdownToolbarControls
-      viewMode={viewMode}
-      onViewModeChange={(mode) => {
-        if (activeTabId) setTabViewMode(activeTabId, mode);
-      }}
-    />
+    <>
+      {filePath ? <LiteratureNoteLinkButton filePath={filePath} /> : null}
+      <MarkdownToolbarControls
+        viewMode={viewMode}
+        onViewModeChange={(mode) => {
+          if (activeTabId) setTabViewMode(activeTabId, mode);
+        }}
+      />
+    </>
   );
 }

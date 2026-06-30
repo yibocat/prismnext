@@ -14,6 +14,9 @@ import { registerSkillsHandlers } from "./skills";
 import { registerRulesHandlers } from "./rules";
 import { registerProfilesHandlers } from "./profiles";
 import { registerShellHandlers } from "./shell";
+import { registerLiteratureHandlers } from "./literature";
+import { registerBibliographyHandlers } from "./bibliography";
+import { registerZoteroHandlers } from "./zotero";
 
 export function registerIpcHandlers(): void {
   registerFsHandlers();
@@ -32,6 +35,9 @@ export function registerIpcHandlers(): void {
   registerRulesHandlers();
   registerProfilesHandlers();
   registerShellHandlers();
+  registerLiteratureHandlers();
+  registerBibliographyHandlers();
+  registerZoteroHandlers();
 }
 
 export { disposeChat };

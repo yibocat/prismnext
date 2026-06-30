@@ -7,6 +7,8 @@ import { useWorktreeStore } from "@/stores/worktree-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { usePermissionStore } from "@/stores/permission-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useCitationStagingStore } from "@/stores/citation-staging-store";
+import { parseStageToolResult } from "@/lib/literature/parse-stage-tool-result";
 import {
   resolvePermissionMode,
   extractPermissionToolName,
@@ -458,7 +460,7 @@ export function useOpenCodeEvents() {
             };
             chatStore._upsertLastMessage(tabId, msg);
 
-            // Track tool uses for change registration
+            // Track tool uses for change registration + result name lookup.
             if (
               block.type === "tool_use"
               && block.id
@@ -468,10 +470,11 @@ export function useOpenCodeEvents() {
                 (block.name as string)
                 || (block.kind === "execute" ? "bash" : "")
               ).toLowerCase();
+              const tabTools = pendingToolUsesRef.current.get(tabId) ||
+                pendingToolUsesRef.current.set(tabId, new Map()).get(tabId)!;
+              tabTools.set(block.id, { name: block.name || toolName, input: block.input });
+
               if (toolName === "bash" || toolName === "shell" || toolName === "terminal" || toolName === "execute") {
-                const tabTools = pendingToolUsesRef.current.get(tabId) ||
-                  pendingToolUsesRef.current.set(tabId, new Map()).get(tabId)!;
-                tabTools.set(block.id, { name: block.name || toolName, input: block.input });
                 handleBashToolUse(
                   tabId,
                   block.id,
@@ -480,10 +483,6 @@ export function useOpenCodeEvents() {
                 );
               }
               if (isDiskMutationTool(toolName)) {
-                const tabTools = pendingToolUsesRef.current.get(tabId) ||
-                  pendingToolUsesRef.current.set(tabId, new Map()).get(tabId)!;
-                tabTools.set(block.id, { name: block.name || toolName, input: block.input });
-
                 const filePaths = isPatchTool(toolName)
                   ? extractPatchTargetPaths(block.input)
                   : [
@@ -555,6 +554,24 @@ export function useOpenCodeEvents() {
                 ).toLowerCase();
                 if (toolName === "bash" || toolName === "shell" || toolName === "terminal" || toolName === "execute") {
                   handleBashToolResult(toolUseId, block.content, block.is_error);
+                }
+
+                // Capture literature-stage results into the citation staging store
+                // so chat [n] references and the Session citations panel stay in sync.
+                if (toolName === "literature-stage" && !block.is_error) {
+                  try {
+                    const stagePayload = parseStageToolResult(block.content);
+                    const sessionId =
+                      useChatStore.getState().tabs.find((t) => t.id === tabId)?.sessionId ?? null;
+                    if (stagePayload && sessionId) {
+                      useCitationStagingStore
+                        .getState()
+                        .upsertFromStageResult(sessionId, stagePayload);
+                      useCitationStagingStore.getState().setActiveSession(sessionId);
+                    }
+                  } catch (err) {
+                    log.warn("literature-stage capture failed", err);
+                  }
                 }
 
                 if (!block.is_error) {

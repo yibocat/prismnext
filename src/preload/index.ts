@@ -72,6 +72,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("dialog:saveJsonFile", { defaultPath }),
 	shellShowItemInFolder: (absPath: string) =>
 		ipcRenderer.invoke("shell:showItemInFolder", { absPath }),
+	shellOpenExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", { url }),
 	fsExists: (absPath: string) => ipcRenderer.invoke("fs:exists", { absPath }),
 	fsIsFile: (absPath: string) => ipcRenderer.invoke("fs:isFile", { absPath }),
 	projectCreate: (rootPath: string, workspaceDirs?: WorkspaceFolder[]) =>
@@ -119,6 +120,178 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	compileSynctexForward: (projectDir: string, file: string, line: number) =>
 		ipcRenderer.invoke("compile:synctexForward", { projectDir, file, line }),
 	compileDetectTexlive: () => ipcRenderer.invoke("compile:detectTexlive"),
+
+	// Literature library
+	literatureList: (projectRoot: string) => ipcRenderer.invoke("literature:list", { projectRoot }),
+	literatureGetPdfCacheStatus: (projectRoot: string) =>
+		ipcRenderer.invoke("literature:getPdfCacheStatus", { projectRoot }),
+	literatureGetStorageStats: (projectRoot: string) =>
+		ipcRenderer.invoke("literature:getStorageStats", { projectRoot }),
+	literaturePruneOrphanAttachments: (projectRoot: string) =>
+		ipcRenderer.invoke("literature:pruneOrphanAttachments", { projectRoot }),
+	literatureSearch: (projectRoot: string, query: string, limit?: number) =>
+		ipcRenderer.invoke("literature:search", { projectRoot, query, limit }),
+	literatureGet: (projectRoot: string, paperId: string) =>
+		ipcRenderer.invoke("literature:get", { projectRoot, paperId }),
+	literatureIngestPdf: (projectRoot: string, pdfPath: string, opts?: { title?: string; doi?: string }) =>
+		ipcRenderer.invoke("literature:ingestPdf", { projectRoot, pdfPath, ...opts }),
+	literatureCreateFromIdentifier: (
+		projectRoot: string,
+		ids: { doi?: string; arxivId?: string },
+	) => ipcRenderer.invoke("literature:createFromIdentifier", { projectRoot, ...ids }),
+	literatureFindExisting: (
+		projectRoot: string,
+		ids: { doi?: string | null; arxivId?: string | null },
+	) =>
+		ipcRenderer.invoke("literature:findExisting", {
+			projectRoot,
+			doi: ids.doi ?? null,
+			arxivId: ids.arxivId ?? null,
+		}),
+	literatureStage: (
+		projectRoot: string,
+		args: {
+			doi?: string;
+			arxivId?: string;
+			sourceUrl?: string;
+			discoveredFrom?: "websearch" | "webfetch" | "user" | "agent";
+		},
+	) => ipcRenderer.invoke("literature:stage", { projectRoot, ...args }),
+	literatureApplyMetadata: (projectRoot: string, paperId: string, metadata: Record<string, unknown>) =>
+		ipcRenderer.invoke("literature:applyMetadata", { projectRoot, paperId, metadata }),
+	literatureApplyIdentifiers: (
+		projectRoot: string,
+		paperId: string,
+		ids: { doi?: string | null; arxivId?: string | null },
+	) => ipcRenderer.invoke("literature:applyIdentifiers", { projectRoot, paperId, ...ids }),
+	literatureFetchAndApplyMetadata: (
+		projectRoot: string,
+		paperId: string,
+		opts?: { doi?: string; arxivId?: string },
+	) => ipcRenderer.invoke("literature:fetchAndApplyMetadata", { projectRoot, paperId, ...opts }),
+	literatureDownloadPdf: (projectRoot: string, paperId: string) =>
+		ipcRenderer.invoke("literature:downloadPdf", { projectRoot, paperId }),
+	literatureImportBibTeX: (projectRoot: string, bibContent: string, jsonContent?: string) =>
+		ipcRenderer.invoke("literature:importBibTeX", { projectRoot, bibContent, jsonContent }),
+	literatureGetAnnotations: (projectRoot: string, paperId: string) =>
+		ipcRenderer.invoke("literature:getAnnotations", { projectRoot, paperId }),
+	literatureSaveAnnotation: (projectRoot: string, annotation: Record<string, unknown>) =>
+		ipcRenderer.invoke("literature:saveAnnotation", { projectRoot, annotation }),
+	literatureDeleteAnnotation: (projectRoot: string, annotationId: string) =>
+		ipcRenderer.invoke("literature:deleteAnnotation", { projectRoot, annotationId }),
+	literatureReadPdfBytes: (projectRoot: string, paperId: string) =>
+		ipcRenderer.invoke("literature:readPdfBytes", { projectRoot, paperId }),
+	literatureEnsurePaperPdf: (projectRoot: string, paperId: string) =>
+		ipcRenderer.invoke("literature:ensurePaperPdf", { projectRoot, paperId }),
+	onLiteraturePdfDownloadProgress: (
+		callback: (data: {
+			paperId: string;
+			phase: "resolving" | "downloading" | "caching" | "reading" | "opening" | "done";
+			receivedBytes?: number;
+			totalBytes?: number | null;
+		}) => void,
+	) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			data: {
+				paperId: string;
+				phase: "resolving" | "downloading" | "caching" | "reading" | "opening" | "done";
+				receivedBytes?: number;
+				totalBytes?: number | null;
+			},
+		) => callback(data);
+		ipcRenderer.on("literature:pdfDownloadProgress", handler);
+		return () => ipcRenderer.removeListener("literature:pdfDownloadProgress", handler);
+	},
+	literatureCreatePaper: (projectRoot: string, metadata: Record<string, unknown>) =>
+		ipcRenderer.invoke("literature:createPaper", { projectRoot, metadata }),
+	literatureUpdatePaper: (projectRoot: string, paperId: string, patch: Record<string, unknown>) =>
+		ipcRenderer.invoke("literature:updatePaper", { projectRoot, paperId, patch }),
+	literatureDeletePaper: (projectRoot: string, paperId: string) =>
+		ipcRenderer.invoke("literature:deletePaper", { projectRoot, paperId }),
+	literatureImportToLocal: (projectRoot: string, paperId: string) =>
+		ipcRenderer.invoke("literature:importToLocal", { projectRoot, paperId }),
+	literatureExportBib: (projectRoot: string, paperIds?: string[]) =>
+		ipcRenderer.invoke("literature:exportBib", { projectRoot, paperIds }),
+	literatureFormatBibliography: (projectRoot: string, paperIds: string[], style?: string) =>
+		ipcRenderer.invoke("literature:formatBibliography", { projectRoot, paperIds, style }),
+	literatureExportBibToFile: (
+		projectRoot: string,
+		paperIds?: string[],
+		defaultPath?: string,
+	) => ipcRenderer.invoke("literature:exportBibToFile", { projectRoot, paperIds, defaultPath }),
+	literatureCite: (projectRoot: string, bibkey: string) =>
+		ipcRenderer.invoke("literature:cite", { projectRoot, bibkey }),
+	literatureReadingList: (projectRoot: string) =>
+		ipcRenderer.invoke("literature:readingList", { projectRoot }),
+	literatureListCollections: (projectRoot: string) =>
+		ipcRenderer.invoke("literature:listCollections", { projectRoot }),
+	literatureCreateCollection: (
+		projectRoot: string,
+		name: string,
+		parentId?: string | null,
+	) => ipcRenderer.invoke("literature:createCollection", { projectRoot, name, parentId }),
+	literatureUpdateCollection: (projectRoot: string, collectionId: string, name: string) =>
+		ipcRenderer.invoke("literature:updateCollection", { projectRoot, collectionId, name }),
+	literatureDeleteCollection: (projectRoot: string, collectionId: string) =>
+		ipcRenderer.invoke("literature:deleteCollection", { projectRoot, collectionId }),
+	literatureListCollectionPaperIds: (projectRoot: string, collectionId: string) =>
+		ipcRenderer.invoke("literature:listCollectionPaperIds", { projectRoot, collectionId }),
+	literatureAddPapersToCollection: (
+		projectRoot: string,
+		collectionId: string,
+		paperIds: string[],
+	) =>
+		ipcRenderer.invoke("literature:addPapersToCollection", {
+			projectRoot,
+			collectionId,
+			paperIds,
+		}),
+	literatureRemovePapersFromCollection: (
+		projectRoot: string,
+		collectionId: string,
+		paperIds: string[],
+	) =>
+		ipcRenderer.invoke("literature:removePapersFromCollection", {
+			projectRoot,
+			collectionId,
+			paperIds,
+		}),
+	literatureImportFromProject: (
+		targetRoot: string,
+		sourceRoot: string,
+		paperIds: string[],
+		opts?: { includeAnnotations?: boolean; includePdf?: boolean },
+	) => ipcRenderer.invoke("literature:importFromProject", { targetRoot, sourceRoot, paperIds, ...opts }),
+	literaturePickPdf: () => ipcRenderer.invoke("literature:pickPdf"),
+	literaturePickBibTeX: () => ipcRenderer.invoke("literature:pickBibTeX"),
+	literaturePickProjectRoot: () => ipcRenderer.invoke("literature:pickProjectRoot"),
+
+	zoteroProbe: () => ipcRenderer.invoke("zotero:probe"),
+	zoteroStatus: () => ipcRenderer.invoke("zotero:status"),
+	zoteroListCollections: () => ipcRenderer.invoke("zotero:listCollections"),
+	zoteroGetProjectBinding: (projectRoot: string) =>
+		ipcRenderer.invoke("zotero:getProjectBinding", { projectRoot }),
+	zoteroSetProjectBinding: (
+		projectRoot: string,
+		collectionId: string | null,
+		collectionName?: string | null,
+	) =>
+		ipcRenderer.invoke("zotero:setProjectBinding", {
+			projectRoot,
+			collectionId,
+			collectionName,
+		}),
+	zoteroPullCollections: (projectRoot: string) =>
+		ipcRenderer.invoke("zotero:pullCollections", { projectRoot }),
+	zoteroPullCollection: (projectRoot: string) =>
+		ipcRenderer.invoke("zotero:pullCollection", { projectRoot }),
+	zoteroGetLastSync: (projectRoot: string) =>
+		ipcRenderer.invoke("zotero:getLastSync", { projectRoot }),
+
+	// Bibliographic catalog (global — not library UI only)
+	bibliographyResolve: (opts: { doi?: string; arxivId?: string }) =>
+		ipcRenderer.invoke("bibliography:resolve", opts),
 
 	// OpenCode agent operations
 	chatDispose: () => ipcRenderer.invoke("chat:dispose"),

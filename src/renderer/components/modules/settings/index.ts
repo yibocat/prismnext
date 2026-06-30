@@ -8,7 +8,7 @@ export { GeneralSettings } from "./general-settings";
 export { AppearanceSettings } from "./appearance-settings";
 export { CompilerSettings } from "./compiler-settings";
 export { ModelSettings } from "./model-settings";
-export { ZoteroSettings } from "./zotero-settings";
+export { LiteratureSettings } from "./literature-settings";
 export { ShortcutsSettings } from "./shortcuts-settings";
 export { LogViewer } from "./log-viewer";
 export { BackupsSettings } from "./backups-settings";

@@ -10,6 +10,8 @@ import {
   DEFAULT_FUNCTION_DESCRIPTIONS,
   type WorkspaceFolder,
 } from "@/types/workspace";
+import { resolveFolderIconName } from "@/lib/workspace/folder-icons";
+import { WorkspaceFolderIcon } from "@/lib/workspace/workspace-folder-icon";
 import { appDefaultWorkspaceTemplate } from "@/lib/settings/workspace-template";
 import type { WorkspaceFolderScope } from "@/lib/settings/workspace-template";
 import { cn } from "@/lib/utils";
@@ -97,6 +99,11 @@ function FolderSummaryRow({
     <div className={ROW}>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
+          <WorkspaceFolderIcon
+            name={resolveFolderIconName(folder)}
+            className="size-3 shrink-0 text-muted-foreground/80"
+            title="Files tree badge"
+          />
           <span className={ROW_LABEL}>{folder.name}</span>
           <span className={BADGE}>{FOLDER_FUNCTION_LABELS[folder.function]}</span>
         </div>

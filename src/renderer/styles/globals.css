@@ -420,6 +420,15 @@
   display: none;
 }
 
+/* Literature PDF highlights: let wheel events pass through empty layer space */
+.literature-pdf-reader .colored-highlights-layer {
+  pointer-events: none;
+}
+.literature-pdf-reader .colored-highlight span,
+.literature-pdf-reader .colored-highlight button {
+  pointer-events: auto;
+}
+
 /* ── Shiki dual-theme support ── */
 /* Shiki v4 generates inline styles like color:var(--shiki-light,#D73A49).
    Inline styles always beat external CSS. To override them in dark mode,

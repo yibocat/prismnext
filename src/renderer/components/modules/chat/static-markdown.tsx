@@ -4,6 +4,8 @@ import type { Components } from "react-markdown";
 import "katex/dist/katex.min.css";
 import { REMARK_PLUGINS, REHYPE_PLUGINS, MARKDOWN_COMPONENTS, CHAT_MARKDOWN_TYPOGRAPHY, normalizeMathDelimiters } from "@/lib/markdown/markdown-config";
 import { ShikiCodeBlock } from "./shiki-code-block";
+import { useCitationStagingStore } from "@/stores/citation-staging-store";
+import { jumpToStagedCitation } from "@/lib/literature/jump-to-staged-citation";
 import { cn } from "@/lib/utils";
 import { openProjectFileFromChat } from "@/lib/files/open-project-file";
 import { useDocumentStore } from "@/stores/document-store";
@@ -44,41 +46,72 @@ function ChatWikilink({ target, children }: { target: string; children: React.Re
   );
 }
 
-const COMPONENTS: Components = {
-  ...MARKDOWN_COMPONENTS,
-  code: ShikiCodeBlock as any,
-  a: ({ href, children, ...props }: any) => {
-    if (href?.startsWith("wikilink:")) {
-      const target = href.slice("wikilink:".length).split("#")[0];
-      return <ChatWikilink target={target}>{children}</ChatWikilink>;
-    }
-    return (
-      <AppBrowserLink href={href}>
-        {children}
-      </AppBrowserLink>
-    );
-  },
-};
+/** Citation ref button rendered for `[n]` markers that match a staged citation. */
+function CitationRefLink({ n, sessionId }: { n: number; sessionId: string }) {
+  const hasRef = useCitationStagingStore((s) =>
+    (s.bySession[sessionId] ?? []).some((c) => c.refId === n),
+  );
+  if (!hasRef) {
+    // No matching staged citation — render as plain text, not clickable.
+    return <span>[{n}]</span>;
+  }
+  return (
+    <button
+      type="button"
+      className="mx-0.5 inline-flex items-center rounded-[3px] px-1 align-baseline font-medium text-primary bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer"
+      title={`Open citation [${n}] in Literature → Session citations`}
+      onClick={() => jumpToStagedCitation(sessionId, n)}
+    >
+      [{n}]
+    </button>
+  );
+}
 
-/**
- * Memoized react-markdown renderer for stable (committed) markdown blocks.
- * Renders ONCE and doesn't re-render on subsequent stream deltas.
- */
 export const StaticMarkdown = memo(function StaticMarkdown({
   content,
+  sessionId,
 }: {
   content: string;
+  sessionId?: string;
 }) {
   if (!content) return null;
 
   const normalized = useMemo(() => normalizeMathDelimiters(content), [content]);
+
+  const components = useMemo<Components>(() => {
+    const base: Components = {
+      ...MARKDOWN_COMPONENTS,
+      code: ShikiCodeBlock as any,
+      a: ({ href, children, ...props }: any) => {
+        if (href?.startsWith("wikilink:")) {
+          const target = href.slice("wikilink:".length).split("#")[0];
+          return <ChatWikilink target={target}>{children}</ChatWikilink>;
+        }
+        if (href?.startsWith("citation:")) {
+          const n = Number.parseInt(href.slice("citation:".length), 10);
+          if (Number.isFinite(n) && n > 0 && sessionId) {
+            return <CitationRefLink n={n} sessionId={sessionId} />;
+          }
+          // No session context — render the literal text the remark plugin emitted.
+          return <span>{children}</span>;
+        }
+        return (
+          <AppBrowserLink href={href}>
+            {children}
+          </AppBrowserLink>
+        );
+      },
+    };
+    return base;
+  }, [sessionId]);
 
   return (
     <div className={cn("text-[length:var(--font-chat-message)] text-foreground leading-normal min-w-0 max-w-full overflow-hidden", CHAT_MARKDOWN_TYPOGRAPHY)}>
       <ReactMarkdown
         remarkPlugins={REMARK_PLUGINS}
         rehypePlugins={REHYPE_PLUGINS}
-        components={COMPONENTS}
+        components={components}
+        urlTransform={(url) => url}
       >
         {normalized}
       </ReactMarkdown>

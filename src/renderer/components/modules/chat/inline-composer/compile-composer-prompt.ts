@@ -7,6 +7,51 @@ import { isExternalFileId, resolveExternalPath } from "@/lib/files/external-file
 import { mentionFileLabel } from "@/lib/files/mentionable-files";
 import { resolveSnippetFilePathFromStore } from "@/lib/files/snippet-file-path";
 import { formatUnifiedPatch } from "@/lib/git/diff-hunk-snippet";
+import { useLiteratureStore } from "@/stores/literature-store";
+import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
+import { resolveNotebookDir } from "@/types/workspace";
+import {
+  listPaperNotes,
+  resolvePaperForNote,
+} from "@/lib/literature/paper-notes";
+import {
+  buildPaperAgentContextBlock,
+  PAPER_AGENT_CONTEXT_FOOTER,
+  type PaperNoteAgentContext,
+} from "@/lib/literature/paper-agent-context";
+
+async function resolveProjectFileContent(
+  fileId: string | undefined,
+  relativePath: string,
+): Promise<string> {
+  if (fileId) {
+    const fromStore = useDocumentStore.getState().getContent(fileId);
+    if (fromStore) return fromStore;
+  }
+  const projectRoot = useDocumentStore.getState().projectRoot;
+  if (!projectRoot) return "";
+  try {
+    const abs = `${projectRoot}/${relativePath.replace(/^\//, "")}`;
+    const { content } = await window.electronAPI.fsRead(abs);
+    return content;
+  } catch {
+    return "";
+  }
+}
+
+async function buildNotebookContentMap(
+  files: ReturnType<typeof useDocumentStore.getState>["files"],
+  notebookDir: string,
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const prefix = `${notebookDir}/`;
+  for (const f of files) {
+    if (!f.relativePath.startsWith(prefix) || !f.relativePath.endsWith(".md")) continue;
+    const content = await resolveProjectFileContent(f.id, f.relativePath);
+    if (content) map.set(f.relativePath, content);
+  }
+  return map;
+}
 
 export interface ActionCommandRef {
   commandName: string;
@@ -107,6 +152,35 @@ export async function compileComposerPrompt(
     sections.push(["## Referenced files", "", ...fileBlocks].join("\n"));
   }
 
+  const linkedLiteratureFromNotes: string[] = [];
+  for (const fp of fileParts) {
+    if (!fp.filePath.toLowerCase().endsWith(".md")) continue;
+    let content = useDocumentStore.getState().getContent(fp.fileId);
+    if (!content && isExternalFileId(fp.fileId)) {
+      const abs = resolveExternalPath(fp.fileId);
+      if (abs) {
+        try {
+          const { content: disk } = await window.electronAPI.fsRead(abs);
+          content = disk;
+        } catch {
+          content = "";
+        }
+      }
+    }
+    if (!content) continue;
+    const linkedPaper = resolvePaperForNote(content, useLiteratureStore.getState().papers);
+    if (linkedPaper) {
+      linkedLiteratureFromNotes.push(
+        `- \`${fp.filePath}\` → @${linkedPaper.bibkey ?? linkedPaper.id}: **${linkedPaper.title}**`,
+      );
+    }
+  }
+  if (linkedLiteratureFromNotes.length > 0) {
+    sections.push(
+      ["## Notes linked to literature", "", ...linkedLiteratureFromNotes].join("\n"),
+    );
+  }
+
   const terminalParts = parts.filter(
     (p): p is Extract<ComposerPart, { type: "terminal-snippet" }> =>
       p.type === "terminal-snippet",
@@ -155,6 +229,63 @@ export async function compileComposerPrompt(
       blocks.push(`\`\`\`diff\n${body}\n\`\`\``);
     }
     sections.push(["## Git diff", "", ...blocks].join("\n"));
+  }
+
+  const paperParts = parts.filter(
+    (p): p is Extract<ComposerPart, { type: "paper-snippet" }> => p.type === "paper-snippet",
+  );
+  const paperMentions = parts.filter(
+    (p): p is Extract<ComposerPart, { type: "mention"; mentionType: "paper" }> =>
+      p.type === "mention" && p.mentionType === "paper",
+  );
+  if (paperParts.length > 0 || paperMentions.length > 0) {
+    const blocks: string[] = [];
+    const projectRoot = useDocumentStore.getState().projectRoot;
+    const workspaceDirs = useWorkspaceConfigStore.getState().workspaceDirs;
+    const files = useDocumentStore.getState().files;
+    const notebookDir = resolveNotebookDir(workspaceDirs);
+    const contentByPath = await buildNotebookContentMap(files, notebookDir);
+
+    for (const pp of paperParts) {
+      blocks.push(
+        `\`\`\`paper ${pp.bibkey}\n# ${pp.title} (p.${pp.page})\n${pp.quotedText.trim() || "(empty excerpt)"}\n\`\`\``,
+      );
+    }
+
+    for (const pm of paperMentions) {
+      let paper =
+        useLiteratureStore.getState().papers.find(
+          (p) => p.id === pm.paperId || (pm.bibkey && p.bibkey === pm.bibkey),
+        ) ?? null;
+
+      if (!paper && projectRoot && pm.paperId) {
+        try {
+          paper = await window.electronAPI.literatureGet(projectRoot, pm.paperId);
+        } catch {
+          paper = null;
+        }
+      }
+
+      if (paper) {
+        const noteFiles = listPaperNotes(paper, files, notebookDir, contentByPath);
+        const notes: PaperNoteAgentContext[] = [];
+        for (const note of noteFiles) {
+          const content =
+            contentByPath.get(note.relativePath) ??
+            (await resolveProjectFileContent(
+              files.find((f) => f.relativePath === note.relativePath)?.id,
+              note.relativePath,
+            ));
+          notes.push({ relativePath: note.relativePath, content });
+        }
+        blocks.push(buildPaperAgentContextBlock(paper, notes));
+      } else {
+        blocks.push(`### @${pm.bibkey}\n\n- **Cite key:** ${pm.bibkey}\n- (${pm.label})`);
+      }
+    }
+
+    blocks.push(PAPER_AGENT_CONTEXT_FOOTER);
+    sections.push(["## Literature context", "", ...blocks].join("\n"));
   }
 
   const aiExpansions: string[] = [];
@@ -228,6 +359,7 @@ export function shouldSendPromptToAgent(
     parts.some((p) => p.type === "terminal-snippet") ||
     parts.some((p) => p.type === "code-snippet") ||
     parts.some((p) => p.type === "git-diff-snippet") ||
+    parts.some((p) => p.type === "paper-snippet") ||
     parts.some((p) => p.type === "skill") ||
     parts.some((p) => p.type === "mcp") ||
     parts.some((p) => p.type === "text" && p.text.trim().length > 0);

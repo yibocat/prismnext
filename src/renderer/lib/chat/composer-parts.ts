@@ -86,6 +86,25 @@ export type ComposerPart =
       removedLineCount: number;
       addedLineCount: number;
       sourceTabId?: string;
+    }
+  | {
+      type: "paper-snippet";
+      id: string;
+      label: string;
+      bibkey: string;
+      title: string;
+      page: number;
+      quotedText: string;
+      annotationId?: string;
+      sourceTabId?: string;
+    }
+  | {
+      type: "mention";
+      mentionType: "paper";
+      id: string;
+      label: string;
+      bibkey: string;
+      paperId: string;
     };
 
 export type ComposerDraft = {
@@ -111,6 +130,7 @@ export function plainLabelForPart(part: ComposerPart): string {
   if (part.type === "terminal-snippet") return `[${part.label}]`;
   if (part.type === "code-snippet") return `[${part.label}]`;
   if (part.type === "git-diff-snippet") return `[${part.label}]`;
+  if (part.type === "paper-snippet") return `[${part.label}]`;
   if (part.type === "skill" || part.type === "mcp") return `/${part.label}`;
   return `/${part.label}`;
 }
@@ -146,6 +166,7 @@ export function partsToAgentText(parts: ComposerPart[]): string {
     if (part.type === "terminal-snippet") return `[terminal: ${part.label}]`;
     if (part.type === "code-snippet") return `[code: ${part.label}]`;
     if (part.type === "git-diff-snippet") return `[diff: ${part.label}]`;
+    if (part.type === "paper-snippet") return `[paper: ${part.label}]`;
     if (part.type === "skill") return `[skill: ${part.label}]`;
     if (part.type === "mcp") return `[mcp: ${part.label}]`;
     return plainLabelForPart(part);

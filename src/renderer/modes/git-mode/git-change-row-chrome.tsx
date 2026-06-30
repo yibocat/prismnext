@@ -11,7 +11,7 @@ export const gitChangeRowTextClass = "text-[length:var(--font-toolbar-tab)]";
 
 /** Main changes list row — same height band as right-area subtoolbar. */
 export const gitChangeRowShellClass =
-  "flex items-center gap-2 px-3 h-[var(--height-right-area-subtoolbar)] shrink-0";
+  "flex items-center gap-2 px-3 h-[var(--height-right-area-subtoolbar)] shrink-0 border-b border-border/60";
 
 /** Sticky list header — Changes scroll container. */
 export const gitPanelListHeaderShellClass =
@@ -29,7 +29,13 @@ export const gitPanelExpandedRowInScrollerStickyClass =
   "sticky top-0 z-10 border-b border-border/40 bg-background";
 
 /** Dividers between file rows in main panel lists. */
-export const gitPanelListBodyClass = "flex flex-col divide-y divide-border/60";
+export const gitPanelListBodyClass = "flex flex-col";
+
+/** One file row — shell + optional expanded diff (borders live on shell/diff, not here). */
+export const gitPanelListRowClass = "flex flex-col";
+
+/** Bottom edge when a file diff is expanded. */
+export const gitPanelExpandedDiffClass = "border-b border-border/60";
 
 export function GitChangeNewLabel() {
   return (

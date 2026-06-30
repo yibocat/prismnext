@@ -12,8 +12,11 @@ import { EditorView, keymap, placeholder as cmPlaceholder, drawSelection } from 
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import type { CommandDef } from "@commands/types";
 import type { AgentProfileInfo } from "@shared/agent-profiles";
+import { formatPaperMentionLabel } from "../../../../../shared/bibkey-utils";
 import type { ProjectFile } from "@/stores/document-store";
 import { mentionFileLabel } from "@/lib/files/mentionable-files";
+import type { LiteraturePaper } from "@/types/electron.d";
+import { useLiteratureStore } from "@/stores/literature-store";
 import type { ComposerPart } from "@/lib/chat/composer-parts";
 import {
   createTokenId,
@@ -224,6 +227,21 @@ function insertFromDropdown(
         q.from,
         q.to,
       );
+    } else if (opt.kind === "paper") {
+      const citeLabel = formatPaperMentionLabel(opt.paper.bibkey);
+      insertComposerToken(
+        view,
+        {
+          type: "mention",
+          mentionType: "paper",
+          id: createTokenId(),
+          label: citeLabel,
+          bibkey: opt.paper.bibkey,
+          paperId: opt.paper.id,
+        },
+        q.from,
+        q.to,
+      );
     } else {
       insertComposerToken(
         view,
@@ -295,6 +313,7 @@ function buildMentionOptions(
   query: string,
   profiles: AgentProfileInfo[],
   files: ProjectFile[],
+  papers: LiteraturePaper[] = [],
 ) {
   const q = query.toLowerCase();
   const profileOpts = profiles
@@ -307,11 +326,20 @@ function buildMentionOptions(
     )
     .slice(0, 6)
     .map((profile) => ({ kind: "profile" as const, profile }));
+  const paperOpts = papers
+    .filter(
+      (p) =>
+        p.bibkey.toLowerCase().includes(q) ||
+        p.title.toLowerCase().includes(q) ||
+        (p.authors?.toLowerCase().includes(q) ?? false),
+    )
+    .slice(0, 6)
+    .map((paper) => ({ kind: "paper" as const, paper }));
   const fileOpts = files
     .filter((f) => f.relativePath.toLowerCase().includes(q) || f.name.toLowerCase().includes(q))
     .slice(0, 6)
     .map((file) => ({ kind: "file" as const, file }));
-  return [...profileOpts, ...fileOpts];
+  return [...profileOpts, ...paperOpts, ...fileOpts];
 }
 
 export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, InlineComposerEditorProps>(
@@ -355,6 +383,9 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
     slashSkillsRef.current = slashSkills;
     const slashMcpsRef = useRef(slashMcps);
     slashMcpsRef.current = slashMcps;
+    const literaturePapers = useLiteratureStore((s) => s.papers);
+    const literaturePapersRef = useRef(literaturePapers);
+    literaturePapersRef.current = literaturePapers;
 
     /** Mouse hover disabled while using arrow keys — scrollIntoView can fake-enter row 0. */
     const pointerHoverEnabledRef = useRef(false);
@@ -412,8 +443,8 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
 
     const mentionOptions = useMemo(() => {
       if (!activeQuery || activeQuery.kind !== "mention") return [];
-      return buildMentionOptions(activeQuery.query, profiles, files);
-    }, [activeQuery, profiles, files]);
+      return buildMentionOptions(activeQuery.query, profiles, files, literaturePapers);
+    }, [activeQuery, profiles, files, literaturePapers]);
 
     const slashOptions = useMemo(() => {
       if (!activeQuery || activeQuery.kind !== "slash") return [];
@@ -491,6 +522,20 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       [insertAtQuery],
     );
 
+    const insertPaper = useCallback(
+      (paper: LiteraturePaper) => {
+        insertAtQuery({
+          type: "mention",
+          mentionType: "paper",
+          id: createTokenId(),
+          label: formatPaperMentionLabel(paper.bibkey),
+          bibkey: paper.bibkey,
+          paperId: paper.id,
+        });
+      },
+      [insertAtQuery],
+    );
+
     const insertSlashOption = useCallback(
       (option: SlashOption) => {
         if (option.kind === "command") {
@@ -539,7 +584,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         if (!q) return false;
         const mentions =
           q.kind === "mention"
-            ? buildMentionOptions(q.query, profilesRef.current, filesRef.current)
+            ? buildMentionOptions(q.query, profilesRef.current, filesRef.current, useLiteratureStore.getState().papers)
             : [];
         const slashOpts = q.kind === "slash" ? resolveSlashOptions(q.query) : [];
         const count = q.kind === "mention" ? mentions.length : slashOpts.length;
@@ -587,7 +632,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             if (!q) return false;
             const mentions =
               q.kind === "mention"
-                ? buildMentionOptions(q.query, profilesRef.current, filesRef.current)
+                ? buildMentionOptions(q.query, profilesRef.current, filesRef.current, useLiteratureStore.getState().papers)
                 : [];
             const slashOpts = q.kind === "slash" ? resolveSlashOptions(q.query) : [];
             const count = q.kind === "mention" ? mentions.length : slashOpts.length;
@@ -732,7 +777,8 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
           if (
             part.type !== "terminal-snippet" &&
             part.type !== "code-snippet" &&
-            part.type !== "git-diff-snippet"
+            part.type !== "git-diff-snippet" &&
+            part.type !== "paper-snippet"
           ) {
             return false;
           }
@@ -868,7 +914,8 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         if (
           part.type !== "terminal-snippet" &&
           part.type !== "code-snippet" &&
-          part.type !== "git-diff-snippet"
+          part.type !== "git-diff-snippet" &&
+          part.type !== "paper-snippet"
         ) {
           return false;
         }
@@ -910,6 +957,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             anchor={dropdownAnchor}
             onSelectProfile={insertProfile}
             onSelectFile={insertFile}
+            onSelectPaper={insertPaper}
             onHover={handleDropdownHover}
             onListPointerMove={enableDropdownPointerHover}
             canHoverItem={canHoverDropdownItem}

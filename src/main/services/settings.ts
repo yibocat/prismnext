@@ -10,6 +10,8 @@ export interface AppSettings {
   lastActiveFileId?: string | null;
   zoteroApiKey?: string;
   zoteroUserId?: string;
+  /** Last probe saw Better BibTeX on the local Zotero connector. */
+  zoteroLastBBTDetected?: boolean;
   /** Custom system prompt — replaces the built-in core persona (Layer 0) when set.
    *  Modules, AGENTS.md, and project rules still append below. */
   agentSystemPrompt?: string;

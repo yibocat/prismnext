@@ -21,6 +21,7 @@ interface TabToolbarProps {
   isExternal?: boolean;
   hideSpacer?: boolean;
   hideBreadcrumb?: boolean;
+  hideSidebarToggle?: boolean;
 }
 
 /** Turn a path into breadcrumb segments */
@@ -31,7 +32,16 @@ function pathSegments(filePath: string, isExternal?: boolean): string[] {
   return filePath.split("/").filter(Boolean);
 }
 
-export const TabToolbar = memo(function TabToolbar({ children, onToggleSidebar, filePath, projectName, isExternal, hideSpacer, hideBreadcrumb }: TabToolbarProps) {
+export const TabToolbar = memo(function TabToolbar({
+  children,
+  onToggleSidebar,
+  filePath,
+  projectName,
+  isExternal,
+  hideSpacer,
+  hideBreadcrumb,
+  hideSidebarToggle,
+}: TabToolbarProps) {
   const rightSidebarOpen = useLayoutStore((s) => s.rightSidebarOpen);
   const toggleRightSidebar = useLayoutStore((s) => s.toggleRightSidebar);
   const setFileTreeNavigatePath = useLayoutStore((s) => s.setFileTreeNavigatePath);
@@ -130,18 +140,19 @@ export const TabToolbar = memo(function TabToolbar({ children, onToggleSidebar, 
 
       {children && <div className="mx-1 h-4 w-px bg-border shrink-0" />}
 
-      {/* ─── Sidebar toggle ─── */}
-      <button
-        type="button"
-        className={cn(
-          "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0",
-          rightSidebarOpen && "bg-muted text-foreground",
-        )}
-        title="Toggle Right Sidebar"
-        onClick={() => toggle()}
-      >
-        <ListTreeIcon className="size-3.5" />
-      </button>
+      {!hideSidebarToggle ? (
+        <button
+          type="button"
+          className={cn(
+            "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0",
+            rightSidebarOpen && "bg-muted text-foreground",
+          )}
+          title="Toggle Right Sidebar"
+          onClick={() => toggle()}
+        >
+          <ListTreeIcon className="size-3.5" />
+        </button>
+      ) : null}
     </div>
   );
 });

@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, accessSync, constants, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, accessSync, constants, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { Readable, Writable } from "node:stream";
 import { app } from "electron";
@@ -733,6 +733,22 @@ export class AcpService {
       }
     } else {
       log.debug("Built-in tools already up-to-date");
+    }
+
+    const currentNames = new Set(files.map((f) => f.name));
+    for (const entry of readdirSync(toolsDir)) {
+      if (!entry.endsWith(".ts") || entry === "index.ts") continue;
+      const name = entry.replace(/\.ts$/, "");
+      if (currentNames.has(name)) continue;
+      const stalePath = join(toolsDir, entry);
+      try {
+        unlinkSync(stalePath);
+        synced++;
+        log.info(`Removed stale OpenCode tool file: ${entry}`);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(`Failed to remove stale tool "${entry}": ${message}`);
+      }
     }
   }
 

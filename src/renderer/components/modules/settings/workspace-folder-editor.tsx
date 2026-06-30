@@ -26,6 +26,7 @@ import {
   type FolderFunction,
   type WorkspaceFolder,
 } from "@/types/workspace";
+import { WorkspaceFolderIconPicker } from "./workspace-folder-icon-picker";
 import {
   applyTemplateFolderPatch,
   validateNewTemplateFolder,
@@ -35,6 +36,7 @@ import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import {
   SETTINGS_DETAIL_ACTIONS,
   SETTINGS_DETAIL_SECTION,
@@ -54,6 +56,7 @@ interface FormState {
   function: FolderFunction;
   name: string;
   description: string;
+  icon: string;
   mainTex: string;
   defaultDocClass: DocClass;
 }
@@ -63,6 +66,7 @@ function folderToForm(folder: WorkspaceFolder, defaultDocClass: DocClass): FormS
     function: folder.function,
     name: folder.name,
     description: folder.description ?? "",
+    icon: folder.icon ?? "",
     mainTex: folder.function === "manuscript" ? folder.mainTex : "main.tex",
     defaultDocClass,
   };
@@ -72,12 +76,13 @@ function defaultDescriptionForFunction(func: FolderFunction): string {
   return DEFAULT_FUNCTION_DESCRIPTIONS[func] ?? "";
 }
 
-function emptyForm(func: FolderFunction = "literature", defaultDocClass: DocClass = "article"): FormState {
+function emptyForm(func: FolderFunction = "notebook", defaultDocClass: DocClass = "article"): FormState {
   const folder = createDefaultFolder("", func);
   return {
     function: func,
     name: "",
     description: "",
+    icon: "",
     mainTex: folder.function === "manuscript" ? folder.mainTex : "main.tex",
     defaultDocClass,
   };
@@ -107,14 +112,14 @@ export function WorkspaceFolderEditor({
     slot.mode === "edit" && editIndex !== null ? sourceDirs[editIndex] : null;
 
   const [form, setForm] = useState<FormState>(() =>
-    existing ? folderToForm(existing, templateDocClass) : emptyForm("literature", templateDocClass),
+    existing ? folderToForm(existing, templateDocClass) : emptyForm("notebook", templateDocClass),
   );
 
   useEffect(() => {
     if (slot.mode === "edit" && existing) {
       setForm(folderToForm(existing, templateDocClass));
     } else if (slot.mode === "new") {
-      setForm(emptyForm("literature", templateDocClass));
+      setForm(emptyForm("notebook", templateDocClass));
     }
     setDeleteDialogOpen(false);
   }, [slot.mode, editIndex, slot.scope, existing?.name, existing?.function, templateDocClass]);
@@ -136,9 +141,11 @@ export function WorkspaceFolderEditor({
   const scopeLabel = slot.scope === "project" ? "This project" : "New project template";
 
   const patchFromForm = (): Partial<WorkspaceFolder> => {
+    const iconTrim = form.icon.trim();
     const patch: Partial<WorkspaceFolder> = {
       name: form.name.trim(),
       description: form.description.trim() || undefined,
+      icon: iconTrim || undefined,
     };
     if (slot.mode === "new") {
       patch.function = form.function;
@@ -160,6 +167,7 @@ export function WorkspaceFolderEditor({
         const idx = useWorkspaceConfigStore.getState().workspaceDirs.length - 1;
         const patch: Partial<WorkspaceFolder> = {};
         if (form.description.trim()) patch.description = form.description.trim();
+        if (form.icon.trim()) patch.icon = form.icon.trim();
         if (form.function === "manuscript") {
           (patch as { mainTex?: string }).mainTex = form.mainTex.trim() || "main.tex";
         }
@@ -188,6 +196,7 @@ export function WorkspaceFolderEditor({
         const entry = createDefaultFolder(form.name.trim(), form.function);
         let next: WorkspaceFolder = entry;
         if (form.description.trim()) next = { ...next, description: form.description.trim() };
+        if (form.icon.trim()) next = { ...next, icon: form.icon.trim() };
         if (next.function === "manuscript") {
           next = { ...next, mainTex: form.mainTex.trim() || "main.tex" };
           templateSettings.defaultDocClass = form.defaultDocClass;
@@ -252,6 +261,7 @@ export function WorkspaceFolderEditor({
                     ...f,
                     function: func,
                     mainTex: func === "manuscript" ? f.mainTex || "main.tex" : f.mainTex,
+                    icon: f.icon.trim() ? f.icon : "",
                   }));
                 }}
                 disabled={slot.mode === "edit"}
@@ -276,15 +286,22 @@ export function WorkspaceFolderEditor({
           <SettingsFormField
               label="Folder name"
               htmlFor="ws-folder-name"
-              description="Relative to the project root. Created on disk when saved."
+              description="Relative to the project root. Badge icon opens from the button on the left."
             >
-              <Input
-                id="ws-folder-name"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="e.g. literature"
-                className={SETTINGS_FORM_INPUT_MONO}
-              />
+              <div className="flex items-center gap-2">
+                <WorkspaceFolderIconPicker
+                  value={form.icon}
+                  folderFunction={form.function}
+                  onChange={(icon) => setForm((f) => ({ ...f, icon }))}
+                />
+                <Input
+                  id="ws-folder-name"
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="e.g. notes"
+                  className={cn(SETTINGS_FORM_INPUT_MONO, "flex-1 min-w-0")}
+                />
+              </div>
             </SettingsFormField>
 
             {form.function === "manuscript" ? (

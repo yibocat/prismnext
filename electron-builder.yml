@@ -3,6 +3,9 @@ productName: Prism Next
 directories:
   output: dist
 
+asarUnpack:
+  - "**/node_modules/node-pty/**"
+
 extraResources:
   - from: "bin/opencode/${os}-${arch}/"
     to: "opencode"

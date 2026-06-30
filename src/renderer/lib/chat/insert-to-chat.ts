@@ -10,7 +10,11 @@ import {
   getTerminalViewportText,
   type TerminalCommandBlock,
 } from "@/lib/terminal/buffer";
-import type { CodeSnippetRequest, ContextInsertRequest } from "@/lib/chat/context-insert";
+import type {
+  CodeSnippetRequest,
+  ContextInsertRequest,
+  PaperSnippetRequest,
+} from "@/lib/chat/context-insert";
 import type { GitDiffHunkSnippet } from "@/lib/git/diff-hunk-snippet";
 import { resolveSnippetFilePathFromStore } from "@/lib/files/snippet-file-path";
 import { offsetToLineCol } from "@/lib/editor/selection-anchor";
@@ -172,6 +176,24 @@ export function lineRangeFromSelection(
     startCol: start.col,
     endCol: end.col,
   };
+}
+
+/** Insert literature PDF excerpt into the active Chat composer. */
+export function insertPaperToChat(
+  req: Omit<PaperSnippetRequest, "kind"> & { quiet?: boolean },
+): boolean {
+  const { quiet, ...payload } = req;
+  if (!payload.quotedText.trim()) {
+    toast.info("Highlight text in the PDF first");
+    return false;
+  }
+  return insertContextToChat(
+    {
+      kind: "paper",
+      ...payload,
+    },
+    { quiet },
+  );
 }
 
 /** Insert terminal context into the active Chat composer. */

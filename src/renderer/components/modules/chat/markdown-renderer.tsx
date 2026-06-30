@@ -7,6 +7,7 @@ import { StreamingCodeFrame } from "./streaming-code-frame";
 interface MarkdownRendererProps {
   content: string;
   isAnimating?: boolean;
+  sessionId?: string;
 }
 
 /**
@@ -42,11 +43,12 @@ function getFenceInfo(pending: string): {
 export function MarkdownRenderer({
   content,
   isAnimating = false,
+  sessionId,
 }: MarkdownRendererProps) {
   if (!content) return null;
 
   if (!isAnimating) {
-    return <StaticMarkdown content={content} />;
+    return <StaticMarkdown content={content} sessionId={sessionId} />;
   }
 
   const { committed, pending } = useBlockSplitter(content);
@@ -56,7 +58,7 @@ export function MarkdownRenderer({
   if (fence.inFence) {
     return (
       <>
-        <StaticMarkdown content={committed} />
+        <StaticMarkdown content={committed} sessionId={sessionId} />
         <StreamingCodeFrame lang={fence.lang} code={fence.code} />
       </>
     );
@@ -65,7 +67,7 @@ export function MarkdownRenderer({
   // Normal text streaming
   return (
     <>
-      <StaticMarkdown content={committed} />
+      <StaticMarkdown content={committed} sessionId={sessionId} />
       <PendingLine content={pending} />
     </>
   );

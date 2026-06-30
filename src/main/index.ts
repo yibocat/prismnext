@@ -1,7 +1,8 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, protocol } from "electron";
 import { join } from "node:path";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { exec } from "node:child_process";
+import { registerLiteraturePdfProtocol } from "./services/literature-pdf-protocol";
 import { registerIpcHandlers } from "./ipc/index";
 import { setMainWindow, registerWindowHandlers } from "./ipc/window";
 import { installApplicationMenu } from "./menu";
@@ -9,9 +10,23 @@ import { disposeChat } from "./ipc/chat";
 import { destroyAllTerminalSessions } from "./ipc/terminal";
 import { destroyAllAiPty } from "./services/ai-pty";
 import { startTerminalBridge, stopTerminalBridge, setTerminalBridgeWindow } from "./services/terminal-bridge";
+import { startLiteratureBridge, stopLiteratureBridge } from "./services/literature-bridge";
 import { createLogger } from "./services/logger";
 
 const log = createLogger("main", "startup");
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "literature-pdf",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+]);
 
 const isMac = process.platform === "darwin";
 
@@ -119,6 +134,7 @@ function createWindow() {
     destroyAllAiPty();
     destroyAllTerminalSessions();
     stopTerminalBridge();
+    stopLiteratureBridge();
     setTerminalBridgeWindow(null);
     import("./ipc/log").then((m) => m.disposeLogger());
     mainWindow = null;
@@ -147,7 +163,9 @@ function createWindow() {
 registerIpcHandlers();
 
 app.whenReady().then(async () => {
+  registerLiteraturePdfProtocol();
   startTerminalBridge();
+  startLiteratureBridge();
   createWindow();
 
   // App-level ACP warm-up — spawn opencode once at startup.

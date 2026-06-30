@@ -18,7 +18,6 @@ import {
   AppearanceSettings,
   CompilerSettings,
   ModelSettings,
-  ZoteroSettings,
   BackupsSettings,
   AgentSettings,
   PromptsRulesSettings,
@@ -28,6 +27,7 @@ import {
   WorkspaceSettings,
   TerminalSettings,
   TexworkspaceSettings,
+  LiteratureSettings,
 } from "@/components/modules/settings";
 import { TemplateCenter } from "@/components/modules/templates/template-center";
 import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator, RestoreUndoBar } from "@/components/modules/chat";
@@ -136,6 +136,8 @@ export function LeftMainArea() {
   }
 
   if (leftSidebarView === "settings") {
+    const resolvedCategory =
+      settingsCategory === "zotero" ? "literature" : settingsCategory;
     const SettingsContent = {
       general: GeneralSettings,
       appearance: AppearanceSettings,
@@ -150,9 +152,9 @@ export function LeftMainArea() {
       compiler: CompilerSettings,
       texworkspace: TexworkspaceSettings,
       workspace: WorkspaceSettings,
-      zotero: ZoteroSettings,
+      literature: LiteratureSettings,
       backups: BackupsSettings,
-    }[settingsCategory] || GeneralSettings;
+    }[resolvedCategory] || GeneralSettings;
     return (
       <div className="flex h-full flex-col min-w-0" data-surface="content">
         <SettingsContent />

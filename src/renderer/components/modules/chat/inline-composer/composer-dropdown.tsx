@@ -1,11 +1,13 @@
 import { useEffect, useRef, type ReactNode } from "react";
-import { BotIcon, FileCodeIcon, FileIcon, FileTextIcon, ImageIcon, PlugIcon, PuzzleIcon } from "lucide-react";
+import { BotIcon, BookOpenIcon, FileCodeIcon, FileIcon, FileTextIcon, ImageIcon, PlugIcon, PuzzleIcon } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { appPopoverLabelClass, appPopoverListClass } from "@/components/ui/app-popover";
 import { appMenuItemClass } from "@/components/ui/app-menu";
 import { cn } from "@/lib/utils";
 import type { AgentProfileInfo } from "@shared/agent-profiles";
 import type { ProjectFile } from "@/stores/document-store";
+import type { LiteraturePaper } from "@/types/electron.d";
+import { formatPaperMentionLabel } from "../../../../../shared/bibkey-utils";
 import type { CommandDef } from "@commands/types";
 import type { CursorAnchor } from "./dropdown-position";
 import { preferredMenuSide } from "./dropdown-position";
@@ -15,6 +17,7 @@ export type { SlashCatalogMcp, SlashCatalogSkill };
 
 export type MentionOption =
   | { kind: "profile"; profile: AgentProfileInfo }
+  | { kind: "paper"; paper: LiteraturePaper }
   | { kind: "file"; file: ProjectFile };
 
 export type SlashOption =
@@ -253,6 +256,7 @@ export function MentionDropdown({
   open,
   onSelectProfile,
   onSelectFile,
+  onSelectPaper,
   onHover,
   onListPointerMove,
   canHoverItem,
@@ -263,6 +267,7 @@ export function MentionDropdown({
   open: boolean;
   onSelectProfile: (profile: AgentProfileInfo) => void;
   onSelectFile: (file: ProjectFile) => void;
+  onSelectPaper?: (paper: LiteraturePaper) => void;
   onHover: (index: number) => void;
   onListPointerMove?: () => void;
   canHoverItem?: () => boolean;
@@ -276,7 +281,7 @@ export function MentionDropdown({
     >
       {options.length === 0 ? (
         <div className="px-2 py-1.5 text-center text-[length:var(--font-chat-meta)] text-muted-foreground">
-          No agents or files found
+          No agents, papers, or files found
         </div>
       ) : (
         options.map((option, i) => {
@@ -284,6 +289,8 @@ export function MentionDropdown({
             option.kind === "profile" && (i === 0 || options[i - 1]?.kind !== "profile");
           const showFileHeader =
             option.kind === "file" && (i === 0 || options[i - 1]?.kind !== "file");
+          const showPaperHeader =
+            option.kind === "paper" && (i === 0 || options[i - 1]?.kind !== "paper");
 
           if (option.kind === "profile") {
             const { profile } = option;
@@ -305,6 +312,34 @@ export function MentionDropdown({
                 >
                   <BotIcon className="size-3 shrink-0 text-violet-600 dark:text-violet-400" />
                   <span className={cn(itemLabelClass, "font-medium")}>{profile.name}</span>
+                </button>
+              </div>
+            );
+          }
+
+          if (option.kind === "paper") {
+            const { paper } = option;
+            return (
+              <div key={`paper:${paper.id}`}>
+                {showPaperHeader && <div className={sectionLabelClass}>Literature</div>}
+                <button
+                  type="button"
+                  data-active={i === activeIndex}
+                  className={itemClass(i === activeIndex)}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onSelectPaper?.(paper);
+                  }}
+                  onMouseEnter={() => {
+                    if (canHoverItem && !canHoverItem()) return;
+                    onHover(i);
+                  }}
+                >
+                  <BookOpenIcon className="size-3 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <span className={cn(itemLabelClass, "shrink-0 font-mono font-medium")}>
+                    {formatPaperMentionLabel(paper.bibkey)}
+                  </span>
+                  <span className="truncate text-muted-foreground">{paper.title}</span>
                 </button>
               </div>
             );

@@ -10,7 +10,8 @@ export type RightTabKind =
   | "git-diff"
   | "texworkspace"
   | "terminal"
-  | "settings-editor";
+  | "settings-editor"
+  | "literature";
 
 /** Where a mode may appear in the app chrome. */
 export type ModeSurface = "workspace" | "settings" | "any";
@@ -40,6 +41,10 @@ export interface RightTab {
   settingsSlot?: SettingsPanelSlot;
   /** Serialized slot identity for tab dedupe */
   settingsSlotKey?: string;
+  /** Literature mode: opened paper id */
+  literaturePaperId?: string;
+  /** Literature mode: grid | reader | notes */
+  literatureView?: "grid" | "reader" | "notes";
 }
 
 // ── Mode Definition ──
@@ -61,8 +66,10 @@ export interface ModeDefinition {
   persistence: "persistent" | "transient";
   /** home / initial tab 默认标题 */
   initialTitle: string;
-  /** 侧边栏组件 */
-  Sidebar: ComponentType;
+  /** 侧边栏组件；省略则不显示 RightArea 模式侧栏 */
+  Sidebar?: ComponentType;
+  /** 为 true 时隐藏 RightArea 右侧模式侧栏（如文献库内联详情） */
+  hideRightSidebar?: boolean;
   /** 工具栏组件。接收 tab 作为 prop，可内部通过 hook 读取额外 store 数据。省略时隐藏工具栏。 */
   Toolbar?: ComponentType<{ tab: RightTab }>;
   /** 内容区组件。接收 tab + isActive */

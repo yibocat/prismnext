@@ -17,6 +17,7 @@ import {
   type UserDisplayContent,
 } from "../services/session-display-store";
 import { cancelAiCommandForSession } from "../services/ai-pty";
+import { setSessionProjectRoot } from "../services/chat-session-registry";
 
 const log = createLogger("chat-ipc", "agent");
 
@@ -296,6 +297,7 @@ export function registerChatHandlers(): void {
 
       const bridge = getMapper(win);
       bridge.registerSession(sessionId, tabId);
+      if (args.projectPath) setSessionProjectRoot(sessionId, args.projectPath);
       bridge.start();
 
       // Set thought level if specified via ACP session/set_config_option.

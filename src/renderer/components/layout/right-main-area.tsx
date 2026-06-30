@@ -1,29 +1,52 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useCompileStore } from "@/stores/compile-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
+import { useDocumentStore } from "@/stores/document-store";
+import { useLiteratureStore } from "@/stores/literature-store";
+import { useLiteratureReaderStore } from "@/stores/literature-reader-store";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { useTexworkspace } from "@/modes/texworkspace-mode/use-texworkspace";
-import { Group, Panel, Separator } from "react-resizable-panels";
 import { RightPane } from "@/components/layout/right-pane";
+import { WorkspaceSplit } from "@/components/layout/workspace-split";
 import { PdfPreview } from "@/components/modules/preview";
 import { CompileProblemsPanel } from "@/modes/texworkspace-mode/compile-problems-panel";
-
-const SEP = "w-px bg-border hover:bg-foreground/30 transition-colors outline-none relative after:absolute after:inset-y-0 after:-left-1 after:-right-1";
+import { LiteratureReader } from "@/modes/literature-mode/literature-reader";
+import { LiteratureNotesPane } from "@/modes/literature-mode/literature-notes-pane";
 
 interface RightMainAreaProps {
   tabs: RightTab[];
   activeTabId: string | null;
 }
 
+function mainWrapper(children: React.ReactNode) {
+  return (
+    <div className="flex flex-col h-full min-w-0">
+      <div className="relative flex-1 min-h-0">{children}</div>
+    </div>
+  );
+}
+
 export function RightMainArea({ tabs, activeTabId }: RightMainAreaProps) {
-  const { isActive, viewMode, switchToFile } = useTexworkspace();
+  const { isActive: texActive, viewMode: texViewMode, switchToFile } = useTexworkspace();
   const pdfRevision = useCompileStore((s) => s.pdfRevision);
   const problemsOpen = useLayoutStore((s) => s.texworkspaceProblemsOpen);
 
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const papers = useLiteratureStore((s) => s.papers);
+
+  const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
+  const literaturePaper =
+    activeTab?.kind === "literature" && activeTab.literaturePaperId
+      ? (papers.find((p) => p.id === activeTab.literaturePaperId) ?? null)
+      : null;
+  const literatureReaderActive = Boolean(literaturePaper && projectRoot);
+  const literatureNotesOpen = useLiteratureReaderStore(
+    (s) => (literaturePaper ? (s.notesPaneOpenByPaper[literaturePaper.id] ?? false) : false),
+  );
+
   const previewSlot = problemsOpen ? <CompileProblemsPanel /> : <PdfPreview />;
 
-  // Compile completion → switch to Texworkspace tab
   const lastRevision = useRef(pdfRevision);
   useEffect(() => {
     if (pdfRevision > 0 && pdfRevision !== lastRevision.current) {
@@ -36,35 +59,47 @@ export function RightMainArea({ tabs, activeTabId }: RightMainAreaProps) {
     }
   }, [pdfRevision, switchToFile]);
 
-  if (!isActive) {
-    return (
-      <div className="flex flex-col h-full min-w-0">
-        <div className="relative flex-1 min-h-0">
-          <RightPane tabs={tabs} activeTabId={activeTabId} />
-        </div>
-      </div>
+  if (activeTab?.kind === "literature" && activeTab.literaturePaperId && projectRoot && !literaturePaper) {
+    return mainWrapper(
+      <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+        Loading paper…
+      </div>,
     );
   }
 
-  const wrapper = (children: React.ReactNode) => (
-    <div className="flex flex-col h-full min-w-0">
-      <div className="relative flex-1 min-h-0">{children}</div>
-    </div>
-  );
+  if (literatureReaderActive && literaturePaper && projectRoot && activeTab) {
+    const reader = <LiteratureReader projectRoot={projectRoot} paper={literaturePaper} />;
+    const notes = (
+      <LiteratureNotesPane projectRoot={projectRoot} paper={literaturePaper} tab={activeTab} />
+    );
 
-  if (viewMode === "tex") return wrapper(<RightPane tabs={tabs} activeTabId={activeTabId} />);
-  if (viewMode === "pdf") return wrapper(previewSlot);
+    if (!literatureNotesOpen) return mainWrapper(reader);
 
-  // split — PDF/problems left, TeX right
-  return wrapper(
-    <Group orientation="horizontal" className="flex-1 min-h-0" resizeTargetMinimumSize={{ fine: 5, coarse: 5 }}>
-      <Panel id="pdf" minSize={150} defaultSize={60}>
-        {previewSlot}
-      </Panel>
-      <Separator id="sep-pdf" className={SEP} />
-      <Panel id="editor" minSize={150} defaultSize={40}>
-        <RightPane tabs={tabs} activeTabId={activeTabId} />
-      </Panel>
-    </Group>,
+    return mainWrapper(
+      <WorkspaceSplit
+        left={reader}
+        right={notes}
+        leftId="lit-pdf"
+        rightId="lit-notes"
+        defaultLeft={55}
+      />,
+    );
+  }
+
+  if (!texActive) {
+    return mainWrapper(<RightPane tabs={tabs} activeTabId={activeTabId} />);
+  }
+
+  if (texViewMode === "tex") return mainWrapper(<RightPane tabs={tabs} activeTabId={activeTabId} />);
+  if (texViewMode === "pdf") return mainWrapper(previewSlot);
+
+  return mainWrapper(
+    <WorkspaceSplit
+      left={previewSlot}
+      right={<RightPane tabs={tabs} activeTabId={activeTabId} />}
+      leftId="pdf"
+      rightId="editor"
+      defaultLeft={60}
+    />,
   );
 }

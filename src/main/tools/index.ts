@@ -132,6 +132,36 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     description: "Move or rename a file (Prism custom tool — replaces bash mv for single files)",
     category: "utility",
   },
+  {
+    name: "literature-search",
+    label: "Search Literature",
+    description: "Search papers in the project literature library",
+    category: "reference",
+  },
+  {
+    name: "literature-stage",
+    label: "Stage Citation",
+    description: "Verify DOI/arXiv via catalogs and stage as a session citation (no library write)",
+    category: "reference",
+  },
+  {
+    name: "literature-add",
+    label: "Add Paper",
+    description: "Add a paper to the library by verified DOI or arXiv ID (catalog lookup required)",
+    category: "reference",
+  },
+  {
+    name: "literature-read",
+    label: "Read Paper",
+    description: "Read library metadata, abstract, highlights, and PDF path (not PDF text) by bibkey",
+    category: "reference",
+  },
+  {
+    name: "literature-cite",
+    label: "Cite Paper",
+    description: "Add a library paper to the project .bib bibliography",
+    category: "reference",
+  },
 ];
 
 // ─── Tool file loading (used by AcpService.syncBuiltinTools) ──────
@@ -167,6 +197,7 @@ export function getBuiltinToolFiles(): ToolFile[] {
       // Skip the registry file itself and non-TypeScript files
       if (!entry.isFile()) continue;
       if (!entry.name.endsWith(".ts")) continue;
+      if (entry.name.startsWith("_")) continue;
       if (entry.name === "index.ts") continue;
 
       const name = entry.name.replace(/\.ts$/, "");

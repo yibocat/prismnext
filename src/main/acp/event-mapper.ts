@@ -2,6 +2,11 @@ import type { BrowserWindow } from "electron";
 import { AcpService } from "./service";
 import { createLogger } from "../services/logger";
 import { registerChatSession, unregisterChatSession, resolveChatTabId } from "../services/chat-session-registry";
+import {
+  inferToolNameFromInput,
+  inferToolNameFromOutput,
+  resolveLiteratureToolTitle,
+} from "./tool-name-infer";
 
 const log = createLogger("event-mapper", "agent");
 
@@ -290,7 +295,7 @@ export class EventMapper {
         ? (EventMapper.KIND_TO_TOOL[tc.kind] || tc.kind)
         : "";
 
-      const fromInput = this.inferToolName(
+      const fromInput = inferToolNameFromInput(
         tc.rawInput || tc.raw_input || tc.state?.input || tc.input,
       );
 
@@ -301,8 +306,11 @@ export class EventMapper {
         (typeof tc.tool === "string" ? tc.tool : "") ||
         "";
 
-      const titleLower = (tc.title || "").toLowerCase();
+      const titleLower = (tc.title || tc.state?.title || "").toLowerCase();
       if (!toolName && (titleLower === "delete" || titleLower === "move" || titleLower === "question" || titleLower === "bash")) {
+        toolName = titleLower;
+      }
+      if (!toolName && resolveLiteratureToolTitle(titleLower)) {
         toolName = titleLower;
       }
 
@@ -479,9 +487,17 @@ export class EventMapper {
       if (backfillInput && !backfillName && (tuTitleLower === "delete" || tuTitleLower === "move" || tuTitleLower === "question" || tuTitleLower === "bash")) {
         backfillName = tuTitleLower;
       }
+      if (backfillInput && !backfillName && resolveLiteratureToolTitle(tuTitleLower)) {
+        backfillName = tuTitleLower;
+      }
 
       if (backfillInput && !backfillName) {
-        backfillName = this.inferToolName(backfillInput) || null;
+        backfillName = inferToolNameFromInput(backfillInput) || null;
+      }
+
+      const outputInferred = inferToolNameFromOutput(rawResult);
+      if (outputInferred && (!backfillName || backfillName === "websearch")) {
+        backfillName = outputInferred;
       }
 
       if (backfillInput) {
@@ -687,98 +703,6 @@ export class EventMapper {
         data: { part: update },
       });
     }
-  }
-
-  /**
-   * Infer the OpenCode tool name from the shape of `raw_input`.
-   *
-   * The ACP spec marks `tool_name` as "non-standard backward-compat", so
-   * newer OpenCode versions may omit it entirely.  When that happens we
-   * inspect the input object to determine which built-in tool was called.
-   *
-   * Each tool has a distinctive parameter signature (OpenCode uses
-   * snake_case by convention):
-   *
-   *   read       → { file_path, offset?, limit? }
-   *   write      → { file_path, content }
-   *   edit       → { file_path, old_string, new_string, replace_all? }
-   *   bash       → { command, description?, workdir? }
-   *   grep       → { pattern, path?, include? }
-   *   glob       → { pattern, path? }  (no include/exclude → glob)
-   *   list       → { path? } or { directory? }
-   *   webfetch   → { url, format?, timeout? }
-   *   websearch  → { query, max_results? }
-   *   task       → { prompt, agent?, subagent_type?, task_id? }
-   *   skill      → { name }
-   *   todowrite  → { todos }
-   *   question   → { question, options? }
-   *   apply_patch→ { file_path?, content }  (content is a unified diff)
-   *   lsp_*      → { symbol?, uri?, position?, ... }  (varies by operation)
-   */
-  private inferToolName(input: any): string | null {
-    if (!input || typeof input !== "object") return null;
-    const keys = Object.keys(input);
-    const has = (k: string) => keys.includes(k);
-
-    // ── Unique single-key / signature pairs ──
-    if (has("command"))                                         return "bash";
-    if (has("url"))                                             return "webfetch";
-    if (has("query") && !has("pattern"))                        return "websearch";
-    if (has("todos"))                                           return "todowrite";
-    if (has("question"))                                        return "question";
-    if (has("prompt") && (has("subagent_type") || has("subagentType") || has("agent"))) return "task";
-    if (has("name") && keys.length <= 2)                        return "skill";
-
-    // ── file_path based ──
-    if (has("file_path") || has("filePath")) {
-      if (has("old_string") || has("new_string") || has("oldString") || has("newString"))
-        return "edit";
-      if (has("content") && !has("old_string") && !has("oldString"))
-        return "write";
-      if (has("description") && !has("offset") && !has("limit"))
-        return "delete";
-      // read = file_path with no mutation fields
-      if (!has("content") && !has("old_string") && !has("oldString"))
-        return "read";
-    }
-
-    // ── source_path based (move) ──
-    if (has("source_path") || has("sourcePath") || has("destination_path") || has("destinationPath")) {
-      return "move";
-    }
-
-    // ── pattern based ──
-    if (has("pattern")) {
-      // grep has include/exclude/glob filters; glob is bare pattern + optional path
-      if (has("include") || has("type") || has("glob"))
-        return "grep";
-      // glob: pattern with optional path, no grep-specific filters
-      if (keys.every((k) => k === "pattern" || k === "path"))
-        return "glob";
-      return "grep"; // default: assume grep for richer patterns
-    }
-
-    // ── path-only or directory ──
-    // OpenCode has no `list` tool; bare path/directory maps to `glob`.
-    if ((has("path") || has("directory")) && keys.length <= 2)
-      return "glob";
-
-    // ── patch ──
-    if (has("patch"))                                          return "apply_patch";
-
-    // ── task (bare prompt) ──
-    if (has("prompt") && keys.length <= 2)                      return "task";
-
-    // ── lsp operations ──
-    if (has("uri") || has("position") || has("symbol") || has("query")) {
-      if (has("references") || keys.some((k) => k.includes("reference")))
-        return "lsp_find_references";
-      if (has("definition") || keys.some((k) => k.includes("definition")))
-        return "lsp_goto_definition";
-      return "lsp"; // unknown lsp sub-operation
-    }
-
-    return null;
   }
 
   private extractToolResultContent(raw: any, toolName?: string): string | Record<string, unknown> {

@@ -10,12 +10,15 @@ import {
   draftToJson,
   TOKEN_OBJECT,
   collapseRedundantTokenSeparators,
+  docPosToPlainTextOffset,
 } from "../../src/renderer/components/modules/chat/inline-composer/serialize";
 import {
   atomicTokenBackspace,
   composerTokenTransactionFilter,
   insertComposerParts,
+  insertComposerToken,
   linkifyViewIfNeeded,
+  readPartsFromView,
   selectionAfterDocReplace,
   setTokenMapEffect,
   tokenMapStateField,
@@ -300,6 +303,78 @@ describe("inline composer serialize", () => {
         },
       ]),
     ).toBe(false);
+  });
+
+  it("maps doc positions without counting auto token separators as plain text", () => {
+    const mention: ComposerPart = {
+      type: "mention",
+      mentionType: "file",
+      id: createTokenId(),
+      label: "a.tex",
+      filePath: "a.tex",
+      fileId: "f1",
+    };
+    const { doc } = partsToDoc([mention, { type: "text", text: "@foo" }]);
+    // Doc: [token][sep]@foo — @ is at doc index 2, plain index 0
+    expect(docPosToPlainTextOffset(doc, 2)).toBe(0);
+    expect(docPosToPlainTextOffset(doc, 6)).toBe(4);
+  });
+
+  it("inserts a second mention after the first without dropping either", () => {
+    const first: ComposerPart = {
+      type: "mention",
+      mentionType: "file",
+      id: createTokenId(),
+      label: "a.tex",
+      filePath: "a.tex",
+      fileId: "f1",
+    };
+    const second: ComposerPart = {
+      type: "mention",
+      mentionType: "file",
+      id: createTokenId(),
+      label: "b.tex",
+      filePath: "b.tex",
+      fileId: "f2",
+    };
+    const { doc, tokenMap } = partsToDoc([first, { type: "text", text: "@foo" }]);
+    const view = createTokenTestView(doc, tokenMap);
+    const queryFrom = doc.indexOf("@");
+    const queryTo = queryFrom + "@foo".length;
+
+    insertComposerToken(view, second, queryFrom, queryTo);
+
+    const restored = readPartsFromView(view);
+    expect(view.state.doc.toString().split(TOKEN_OBJECT).length - 1).toBe(2);
+    expect(restored.filter((p) => p.type === "mention")).toHaveLength(2);
+    expect(restored.some((p) => p.type === "mention" && p.label === "a.tex")).toBe(true);
+    expect(restored.some((p) => p.type === "mention" && p.label === "b.tex")).toBe(true);
+  });
+
+  it("inserts a second slash command after the first", () => {
+    const first: ComposerPart = {
+      type: "command",
+      id: createTokenId(),
+      label: "setup",
+      commandName: "setup",
+      source: "builtin",
+    };
+    const second: ComposerPart = {
+      type: "command",
+      id: createTokenId(),
+      label: "git-status",
+      commandName: "git-status",
+      source: "builtin",
+    };
+    const { doc, tokenMap } = partsToDoc([first, { type: "text", text: " /git" }]);
+    const view = createTokenTestView(doc, tokenMap);
+    const queryFrom = doc.indexOf("/");
+    const queryTo = queryFrom + "/git".length;
+
+    insertComposerToken(view, second, queryFrom, queryTo);
+
+    const restored = readPartsFromView(view);
+    expect(restored.filter((p) => p.type === "command")).toHaveLength(2);
   });
 });
 

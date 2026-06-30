@@ -189,7 +189,8 @@ function RightAreaWorkspace({
   const showModeSidebar =
     rightSidebarOpen &&
     focusedMode !== "dashboard" &&
-    !isSettingsEditorTab;
+    !isSettingsEditorTab &&
+    !modeRegistry.get(focusedMode)?.hideRightSidebar;
 
   const closeSettingsPanel = () => {
     closeSettingsDetailPanel(centerRef.current, rightAreaRef.current);
@@ -806,7 +807,8 @@ function RightAreaWorkspace({
           projectName={activeTab.isExternal ? undefined : projectRoot?.split(/[/\\]/).pop()}
           isExternal={activeTab.isExternal}
           hideSpacer={!isEditorKind}
-          hideBreadcrumb={focusedMode === "texworkspace"}
+          hideBreadcrumb={focusedMode === "texworkspace" || focusedMode === "literature"}
+          hideSidebarToggle={modeRegistry.get(focusedMode)?.hideRightSidebar}
         >
           {activeTab && (() => {
             const def = modeRegistry.findByTabKind(activeTab.kind);

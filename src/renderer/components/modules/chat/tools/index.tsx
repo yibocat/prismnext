@@ -16,6 +16,7 @@ import { SkillWidget } from "./skill-widget";
 import { PatchWidget } from "./patch-widget";
 import { DeleteWidget } from "./delete-widget";
 import { MoveWidget } from "./move-widget";
+import { LiteratureToolWidget } from "./literature-tool-widget";
 import { LspWidget } from "./lsp-widget";
 import { GenericWidget } from "./generic-widget";
 
@@ -122,7 +123,58 @@ const CUSTOM_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
   question: AskUserQuestionWidget,
   delete: DeleteWidget,
   move: MoveWidget,
+  "literature-search": LiteratureToolWidget,
+  "literature-stage": LiteratureToolWidget,
+  "literature-add": LiteratureToolWidget,
+  "literature-read": LiteratureToolWidget,
+  "literature-cite": LiteratureToolWidget,
 };
+
+function parseToolResultContent(content: unknown): Record<string, unknown> | null {
+  if (!content) return null;
+  if (typeof content === "object" && !Array.isArray(content)) {
+    return content as Record<string, unknown>;
+  }
+  if (typeof content === "string") {
+    try {
+      const parsed = JSON.parse(content) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function isLiteratureSearchResult(content: unknown): boolean {
+  const payload = parseToolResultContent(content);
+  if (!payload) return false;
+  const data =
+    typeof payload.output === "string"
+      ? parseToolResultContent(payload.output) ?? payload
+      : payload;
+  const results = data.results;
+  if (!Array.isArray(results) || results.length === 0) return false;
+  const first = results[0];
+  return !!(
+    first
+    && typeof first === "object"
+    && !Array.isArray(first)
+    && typeof (first as Record<string, unknown>).bibkey === "string"
+  );
+}
+
+function resolveToolWidgetName(
+  toolUse: ContentBlock,
+  toolResult?: ContentBlock,
+): string {
+  const name = (toolUse.name || "").toLowerCase();
+  if (CUSTOM_TOOL_WIDGETS[name]) return name;
+  if (isLiteratureSearchResult(toolResult?.content)) return "literature-search";
+  return name;
+}
 
 // ─── ToolWidget Dispatcher ──────────────────────────────────────────
 
@@ -133,8 +185,10 @@ export const ToolWidget = memo(function ToolWidget({
   toolUse: ContentBlock;
   toolResult?: ContentBlock;
 }) {
-  const name = (toolUse.name || "").toLowerCase();
-  const displayName = toolUse.name || "";
+  const name = resolveToolWidgetName(toolUse, toolResult);
+  const displayName = name === (toolUse.name || "").toLowerCase()
+    ? (toolUse.name || "")
+    : name;
 
   // Resolve widget component
   let Widget: ToolWidgetComponent | null = null;
