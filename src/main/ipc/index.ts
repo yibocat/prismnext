@@ -15,6 +15,7 @@ import { registerRulesHandlers } from "./rules";
 import { registerProfilesHandlers } from "./profiles";
 import { registerShellHandlers } from "./shell";
 import { registerLiteratureHandlers } from "./literature";
+import { registerLiteratureExtractHandlers } from "./literature-extract";
 import { registerBibliographyHandlers } from "./bibliography";
 import { registerZoteroHandlers } from "./zotero";
 
@@ -36,6 +37,7 @@ export function registerIpcHandlers(): void {
   registerProfilesHandlers();
   registerShellHandlers();
   registerLiteratureHandlers();
+  registerLiteratureExtractHandlers();
   registerBibliographyHandlers();
   registerZoteroHandlers();
 }

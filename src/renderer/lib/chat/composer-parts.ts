@@ -97,6 +97,9 @@ export type ComposerPart =
       quotedText: string;
       annotationId?: string;
       sourceTabId?: string;
+      blockId?: string;
+      blockType?: import("../../../shared/paper-extract-block").ExtractBlockType;
+      extractSource?: "mineru";
     }
   | {
       type: "mention";

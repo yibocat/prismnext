@@ -1,7 +1,10 @@
 import { normalizeDoi, normalizeArxivId } from "../../doi-utils";
+import { openAlexWorkLookupUrl } from "../../openalex-lookup";
+import { normalizeAdsBibcode } from "../../catalog-identifier-utils";
 import { authorsJsonFromParts, formatCslPageRange, reconstructInvertedAbstract } from "../helpers";
 import type { BibliographicMetadata } from "../types";
 import type { BibliographicSource } from "./types";
+import { catalogFetch } from "../catalog-fetch";
 
 const CATALOG_HEADERS = {
   Accept: "application/json",
@@ -9,7 +12,7 @@ const CATALOG_HEADERS = {
 } as const;
 
 async function resolveOpenAlexUrl(url: string): Promise<BibliographicMetadata | null> {
-  const res = await fetch(url, { headers: CATALOG_HEADERS });
+  const res = await catalogFetch(url, { headers: CATALOG_HEADERS });
   if (res.status === 404) return null;
   if (res.status === 429 || res.status === 503) return null;
   if (!res.ok) throw new Error(`OpenAlex HTTP ${res.status}`);
@@ -70,15 +73,35 @@ async function resolveByDoi(rawDoi: string): Promise<BibliographicMetadata | nul
 async function resolveByArxiv(rawArxiv: string): Promise<BibliographicMetadata | null> {
   const id = normalizeArxivId(rawArxiv);
   if (!id) return null;
-  return resolveOpenAlexUrl(`https://api.openalex.org/works/https://arxiv.org/abs/${encodeURIComponent(id)}`);
+  const lookupUrl = openAlexWorkLookupUrl(null, id);
+  if (!lookupUrl) return null;
+  return resolveOpenAlexUrl(lookupUrl);
+}
+
+async function resolveByAdsBibcode(rawBibcode: string): Promise<BibliographicMetadata | null> {
+  const bibcode = normalizeAdsBibcode(rawBibcode);
+  if (!bibcode) return null;
+  const res = await catalogFetch(
+    `https://api.openalex.org/works?filter=ids.bibcode:${encodeURIComponent(bibcode)}&per_page=1`,
+    { headers: CATALOG_HEADERS },
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`OpenAlex HTTP ${res.status}`);
+  const data = (await res.json()) as { results?: Array<{ id?: string }> };
+  const workUrl = data.results?.[0]?.id;
+  if (!workUrl) return null;
+  return resolveOpenAlexUrl(workUrl);
 }
 
 export const openalexSource: BibliographicSource = {
   id: "openalex",
   label: "OpenAlex",
-  supports: { doi: true, arxiv: true },
+  supports: { doi: true, arxiv: true, adsBibcode: true },
   priority: 30,
   enabled: true,
   resolveByDoi,
   resolveByArxiv,
+  resolveByAdsBibcode,
 };
+
+export { resolveByAdsBibcode };

@@ -20,7 +20,7 @@
       "name": "Literature Scout",
       "description": "Explores external sources and summarizes findings for your manuscript.",
       "builtin": true,
-      "modules": ["citations"]
+      "modules": ["citations", "chat-citation-staging"]
     }
   ]
 }

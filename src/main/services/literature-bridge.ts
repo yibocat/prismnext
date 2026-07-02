@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFile
 import { join, basename } from "node:path";
 import { homedir } from "node:os";
 import { createLogger } from "./logger";
-import { getSessionProjectRoot } from "./chat-session-registry";
+import { getSessionProjectRoot, isSessionIntensiveBibkey } from "./chat-session-registry";
 import { normalizeArxivId, normalizeDoi } from "../../shared/doi-utils";
 import { createPaperFromCatalog } from "./literature-enrich";
 import {
@@ -14,11 +14,16 @@ import {
   findExistingByIdentifier,
   getAnnotations,
   getPaperByBibkey,
+  mapPaperForAgent,
+  mapPaperSearchHitForAgent,
   searchPapers,
   bibTeXEntryFromPaperRow,
 } from "./literature-service";
 import { publicationDetailsFromPaperRow, bibliographicToPaperPatch } from "../../shared/bibliographic-metadata/helpers";
 import { resolveBibliographicMetadata } from "../../shared/bibliographic-metadata";
+import { readPaperPdfContent } from "./paper-extract-read";
+import { getSettings } from "./settings";
+import { PAPER_EXTRACT_AGENT_UI_HINT } from "../../shared/paper-extract";
 import type { StagedCitationPayload, StageResult } from "../../shared/citation-staging";
 
 const log = createLogger("literature-bridge", "agent");
@@ -33,16 +38,20 @@ function libraryPdfRelativePath(pdfPath: string | null): string | null {
 }
 
 interface LiteratureBridgeRequest {
-  action: "read" | "search" | "cite" | "add" | "stage";
+  action: "read" | "read-pdf" | "search" | "cite" | "add" | "stage";
   sessionId?: string;
   projectRoot?: string;
   bibkey?: string;
   query?: string;
   limit?: number;
+  tag?: string;
   doi?: string;
   arxivId?: string;
   sourceUrl?: string;
   discoveredFrom?: StagedCitationPayload["discoveredFrom"];
+  pages?: string;
+  source?: "auto" | "mineru" | "pdfjs" | "html";
+  force?: boolean;
 }
 
 interface SessionStageRecord {
@@ -97,10 +106,9 @@ function handleRead(projectRoot: string, bibkey: string): Record<string, unknown
     color: a.color,
   }));
   const pdfRel = libraryPdfRelativePath(paper.pdf_path);
-  const { csl_json: _csl, ...paperFields } = paper;
   return {
     paper: {
-      ...paperFields,
+      ...mapPaperForAgent(paper),
       publication_details: publicationDetailsFromPaperRow(paper),
       pdf_library_path: pdfRel,
       pdf_content_included: false,
@@ -112,19 +120,20 @@ function handleRead(projectRoot: string, bibkey: string): Record<string, unknown
   };
 }
 
-function handleSearch(projectRoot: string, query: string, limit?: number): Record<string, unknown> {
-  const rows = searchPapers(projectRoot, query, limit ?? 20);
+function handleSearch(
+  projectRoot: string,
+  query: string,
+  limit?: number,
+  tag?: string,
+): Record<string, unknown> {
+  const rows = searchPapers(projectRoot, query, limit ?? 20, { tag: tag?.trim() || null });
   return {
-    results: rows.map((p) => ({
-      bibkey: p.bibkey,
-      title: p.title,
-      year: p.year,
-      authors: p.authors,
-      doi: p.doi,
-      abstract: p.abstract,
-      venue: p.venue,
-    })),
+    query: query.trim() || null,
+    tag: tag?.trim() || null,
+    results: rows.map((p) => mapPaperSearchHitForAgent(p)),
     count: rows.length,
+    hint:
+      "Project tags and AI summaries are included. Use tag= for exact tag filter; query searches title, abstract, authors, tags, and ai_summary.",
   };
 }
 
@@ -137,7 +146,8 @@ function handleCite(projectRoot: string, bibkey: string): Record<string, unknown
   }
 }
 
-async function handleStage(
+/** Stage a citation with session-scoped refId (shared by bridge + IPC). */
+export async function stageLiteratureCitation(
   projectRoot: string,
   sessionId: string,
   payload: {
@@ -298,6 +308,26 @@ async function handleAdd(
   }
 }
 
+function isStrictIntensivePdfGate(): boolean {
+  return getSettings().literatureStrictIntensivePdf !== false;
+}
+
+function intensiveReadPdfBlocked(
+  sessionId: string | undefined,
+  bibkey: string,
+): Record<string, unknown> | null {
+  if (!isStrictIntensivePdfGate()) return null;
+  if (isSessionIntensiveBibkey(sessionId, bibkey)) return null;
+  return {
+    error: `Paper "${bibkey}" is not in the intensive reading list for this chat session.`,
+    bibkey,
+    intensiveReadingRequired: true,
+    hint:
+      "Ask the user to enable **Intensive reading** for this paper in the chat composer (@ paper menu), " +
+      `then run ${PAPER_EXTRACT_AGENT_UI_HINT} if needed.`,
+  };
+}
+
 function dispatch(req: LiteratureBridgeRequest): Record<string, unknown> | Promise<Record<string, unknown>> {
   const projectRoot = resolveProjectRoot(req);
   if (!projectRoot) {
@@ -313,10 +343,33 @@ function dispatch(req: LiteratureBridgeRequest): Record<string, unknown> | Promi
       if (!bibkey) return { error: "Missing bibkey parameter." };
       return handleRead(projectRoot, bibkey);
     }
+    case "read-pdf": {
+      const bibkey = req.bibkey?.trim() ?? "";
+      if (!bibkey) return { error: "Missing bibkey parameter." };
+      const blocked = intensiveReadPdfBlocked(req.sessionId, bibkey);
+      if (blocked) return blocked;
+      const settings = getSettings();
+      const token = settings.mineruApiToken;
+      const tokenPresent = typeof token === "string" && token.trim().length > 0;
+      return readPaperPdfContent(
+        {
+          projectRoot,
+          bibkey,
+          pages: req.pages,
+          query: req.query,
+          source: req.source,
+          force: req.force,
+          initiatedBy: "agent",
+          waitTimeoutMs: 5 * 60_000,
+        },
+        tokenPresent,
+      );
+    }
     case "search": {
       const query = req.query?.trim() ?? "";
-      if (!query) return { error: "Missing query parameter." };
-      return handleSearch(projectRoot, query, req.limit);
+      const tag = req.tag?.trim() ?? "";
+      if (!query && !tag) return { error: "Provide query and/or tag parameter." };
+      return handleSearch(projectRoot, query, req.limit, tag);
     }
     case "cite": {
       const bibkey = req.bibkey?.trim() ?? "";
@@ -347,7 +400,7 @@ function dispatch(req: LiteratureBridgeRequest): Record<string, unknown> | Promi
           error: "Missing doi or arxivId parameter.",
         };
       }
-      return handleStage(projectRoot, sessionId, {
+      return stageLiteratureCitation(projectRoot, sessionId, {
         doi,
         arxivId,
         sourceUrl: req.sourceUrl,

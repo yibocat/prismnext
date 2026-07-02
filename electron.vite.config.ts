@@ -11,7 +11,7 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        external: ["electron", "node-pty"],
+        external: ["electron", "node-pty", "@napi-rs/canvas"],
       },
     },
   },

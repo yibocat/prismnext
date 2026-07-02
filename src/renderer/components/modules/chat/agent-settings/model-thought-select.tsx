@@ -1,18 +1,18 @@
-import { useMemo, useRef, useState, useEffect } from "react";
-import { useSettingsStore, type AppSettings } from "@/stores/settings-store";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSettingsStore } from "@/stores/settings-store";
 import {
   AppMenu,
   AppMenuCheckItem,
   AppMenuContent,
+  AppMenuItem,
   AppMenuLabel,
-  AppMenuSeparator,
-  AppMenuSub,
-  AppMenuSubContent,
-  AppMenuSubTrigger,
+  AppMenuSidePanel,
   AppMenuTrigger,
   appMenuFontClass,
+  appMenuInlineChevronTriggerClass,
+  appMenuItemClass,
+  appMenuNestedFocusHandlers,
 } from "@/components/ui/app-menu";
-import { DropdownMenuPortal } from "@/components/ui/dropdown-menu";
 import {
   getAllEnabledModels,
   getModel,
@@ -22,7 +22,7 @@ import {
   type ProviderConfig,
 } from "@/lib/providers";
 import { cn } from "@/lib/utils";
-import { ChevronDownIcon, SparklesIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronRightIcon, SparklesIcon } from "lucide-react";
 import { modelPreferenceKey } from "./model-keys";
 import { useModelMenuPlacement } from "./use-submenu-side";
 
@@ -51,12 +51,77 @@ export function getModelThoughtLevels(
   return levels.map((r: string) => ({ value: r, label: capitalize(r) }));
 }
 
+/** Reasoning depth side panel — same nested AppMenu + SidePanel pattern as @ paper options. */
+function ModelReasoningOptionsMenu({
+  open,
+  onOpenChange,
+  levels,
+  savedThought,
+  onSelectLevel,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  levels: Array<{ value: string; label: string }>;
+  savedThought?: string;
+  onSelectLevel: (levelValue: string | undefined) => void;
+}) {
+  return (
+    <AppMenu modal={false} open={open} onOpenChange={onOpenChange}>
+      <AppMenuTrigger asChild>
+        <button
+          type="button"
+          data-reasoning-menu-trigger
+          className={appMenuInlineChevronTriggerClass}
+          aria-label="Reasoning depth"
+          aria-expanded={open}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ChevronRightIcon className="size-3.5 opacity-70" />
+        </button>
+      </AppMenuTrigger>
+      <AppMenuSidePanel className="min-w-[8.5rem]">
+        <AppMenuLabel className="normal-case tracking-normal text-[length:var(--font-size-11)]">
+          Reasoning Depth
+        </AppMenuLabel>
+        <AppMenuCheckItem
+          selected={!savedThought}
+          onSelect={(e) => {
+            e.preventDefault();
+            onSelectLevel(undefined);
+            onOpenChange(false);
+          }}
+        >
+          Default
+        </AppMenuCheckItem>
+        {levels.map((level) => (
+          <AppMenuCheckItem
+            key={level.value}
+            selected={savedThought === level.value}
+            onSelect={(e) => {
+              e.preventDefault();
+              onSelectLevel(level.value);
+              onOpenChange(false);
+            }}
+          >
+            {level.label}
+          </AppMenuCheckItem>
+        ))}
+      </AppMenuSidePanel>
+    </AppMenu>
+  );
+}
+
 export function ModelThoughtSelect({ compact, presentation = "default" }: ModelThoughtSelectProps) {
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const { menuAlign, refreshPlacement } = useModelMenuPlacement(triggerRef);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [reasoningOpenKey, setReasoningOpenKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -121,27 +186,32 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
     });
   };
 
-  const handleSelectThought = (key: string, providerId: string, levelValue: string | undefined) => {
+  /** Reasoning depth pick — levelValue may be undefined (Default); must not fall back to saved level. */
+  const handleSelectModelWithThought = (
+    providerId: string,
+    modelId: string,
+    levelValue: string | undefined,
+  ) => {
+    const key = modelPreferenceKey(providerId, modelId);
     const next = { ...modelThoughtLevels };
     if (levelValue) next[key] = levelValue;
     else delete next[key];
 
-    const patch: Partial<AppSettings> = {
+    updateSettings({
+      aiProvider: providerId,
+      aiModel: modelId,
       aiModelThoughtLevels: next,
-    };
-
-    if (modelPreferenceKey(aiProvider, currentModelId) === key) {
-      patch.thoughtLevel = levelValue;
-    }
-
-    updateSettings(patch);
+      thoughtLevel: levelValue,
+    });
   };
 
   return (
     <AppMenu
+      modal={false}
       open={menuOpen}
       onOpenChange={(open) => {
         setMenuOpen(open);
+        if (!open) setReasoningOpenKey(null);
         if (open) refreshPlacement();
       }}
     >
@@ -174,14 +244,9 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
         side="top"
         sideOffset={6}
         collisionPadding={16}
-        className={cn(
-          "w-44 max-h-80 overflow-y-auto",
-          (compact || useCapsuleTrigger) && "max-w-[min(11rem,calc(100vw-2rem))]",
-        )}
+        className="min-w-[13rem] w-[min(20rem,calc(100vw-2rem))] max-h-80 overflow-y-auto"
+        {...appMenuNestedFocusHandlers}
       >
-        <AppMenuLabel>Select Model</AppMenuLabel>
-        <AppMenuSeparator />
-
         {isEmpty && (
           <p className={cn("px-2 py-3 text-center text-muted-foreground", appMenuFontClass)}>
             Enable models in Settings → AI&amp;APIs
@@ -206,66 +271,61 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
                 const currentModelThoughtLabel = savedThought
                   ? levels.find((l) => l.value === savedThought)?.label
                   : null;
+                const thoughtLabelNode = currentModelThoughtLabel ? (
+                  <span className="text-[length:var(--font-size-10)] text-muted-foreground/60">
+                    {currentModelThoughtLabel}
+                  </span>
+                ) : null;
 
                 return (
-                  <AppMenuSub key={key}>
-                    <AppMenuSubTrigger
-                      className={cn(isSelected && "font-medium")}
-                      onClick={() => handleSelectModel(provider.id, model.id)}
-                      trailing={
-                        currentModelThoughtLabel ? (
-                          <span className="text-[length:var(--font-size-10)] text-muted-foreground/60">
-                            {currentModelThoughtLabel}
-                          </span>
-                        ) : null
+                  <button
+                    key={key}
+                    type="button"
+                    className={cn(
+                      appMenuItemClass,
+                      "flex w-full items-center gap-1.5 text-left",
+                      "hover:bg-accent hover:text-accent-foreground",
+                      isSelected && "font-medium text-foreground",
+                    )}
+                    onMouseDown={(e) => {
+                      if ((e.target as HTMLElement).closest("[data-reasoning-menu-trigger]")) {
+                        return;
                       }
-                    >
-                      {model.name}
-                    </AppMenuSubTrigger>
-                    <DropdownMenuPortal>
-                      <AppMenuSubContent className="min-w-[7rem]">
-                        <AppMenuLabel className="normal-case tracking-normal text-[length:var(--font-size-11)]">
-                          Reasoning Depth
-                        </AppMenuLabel>
-                        <AppMenuSeparator />
-                        <AppMenuCheckItem
-                          selected={!savedThought}
-                          onSelect={(e) => {
-                            e.preventDefault();
-                            handleSelectThought(key, provider.id, undefined);
-                            handleSelectModel(provider.id, model.id, undefined);
-                          }}
-                        >
-                          Default
-                        </AppMenuCheckItem>
-                        {levels.map((level) => (
-                          <AppMenuCheckItem
-                            key={level.value}
-                            selected={savedThought === level.value}
-                            onSelect={(e) => {
-                              e.preventDefault();
-                              handleSelectThought(key, provider.id, level.value);
-                              handleSelectModel(provider.id, model.id, level.value);
-                            }}
-                          >
-                            {level.label}
-                          </AppMenuCheckItem>
-                        ))}
-                      </AppMenuSubContent>
-                    </DropdownMenuPortal>
-                  </AppMenuSub>
+                      e.preventDefault();
+                      handleSelectModel(provider.id, model.id);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{model.name}</span>
+                    <span className="flex shrink-0 items-center gap-1">
+                      {thoughtLabelNode}
+                      <ModelReasoningOptionsMenu
+                        open={reasoningOpenKey === key}
+                        onOpenChange={(open) => setReasoningOpenKey(open ? key : null)}
+                        levels={levels}
+                        savedThought={savedThought}
+                        onSelectLevel={(levelValue) => {
+                          handleSelectModelWithThought(provider.id, model.id, levelValue);
+                          setReasoningOpenKey(null);
+                          setMenuOpen(false);
+                        }}
+                      />
+                    </span>
+                  </button>
                 );
               }
 
               return (
-                <AppMenuCheckItem
+                <AppMenuItem
                   key={key}
-                  selected={isSelected}
-                  className={cn(isSelected && "font-medium")}
-                  onSelect={() => handleSelectModel(provider.id, model.id)}
+                  className={cn(isSelected && "font-medium text-foreground")}
+                  onSelect={() => {
+                    handleSelectModel(provider.id, model.id);
+                    setMenuOpen(false);
+                  }}
                 >
                   {model.name}
-                </AppMenuCheckItem>
+                </AppMenuItem>
               );
             })}
           </div>

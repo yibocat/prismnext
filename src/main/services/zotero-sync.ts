@@ -25,7 +25,7 @@ import {
   updateCollection,
   upsertZoteroCollectionRow,
   upsertZoteroPaperRow,
-  deletePaper,
+  resolveOrphanZoteroPaper,
   findProjectBibPath,
 } from "./literature-service";
 import { readLiteratureProjectConfig } from "./workspace-config";
@@ -88,13 +88,14 @@ export function pruneOrphanZoteroPapers(
     "SELECT paper_id, zotero_key FROM zotero_mirror",
   ).all() as Array<{ paper_id: string; zotero_key: string }>;
 
-  let pruned = 0;
+  let deleted = 0;
   for (const mirror of mirrors) {
     if (active.has(mirror.zotero_key)) continue;
-    deletePaper(projectRoot, mirror.paper_id);
-    pruned++;
+    if (resolveOrphanZoteroPaper(projectRoot, mirror.paper_id) === "deleted") {
+      deleted++;
+    }
   }
-  return pruned;
+  return deleted;
 }
 
 function prismDir(projectRoot: string): string {

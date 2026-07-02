@@ -153,4 +153,16 @@ export function registerSettingsHandlers(): void {
       }
     },
   );
+
+  ipcMain.handle("settings:getBuiltinTools", async () => {
+    const { BUILTIN_TOOLS } = await import("../tools/index");
+    const { buildOpencodeToolDescription } = await import("../tools/tool-description");
+    return BUILTIN_TOOLS.map((meta) => ({
+      name: meta.name,
+      label: meta.label,
+      description: meta.description,
+      category: meta.category,
+      schemaDescription: buildOpencodeToolDescription(meta),
+    }));
+  });
 }

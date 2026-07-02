@@ -2,10 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FileTextIcon,
   FolderOpenIcon,
-  HighlighterIcon,
   Loader2Icon,
-  NotebookPenIcon,
   PlusIcon,
+  RefreshCwIcon,
   Trash2Icon,
 } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
@@ -27,6 +26,14 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import type { LiteraturePaper } from "@/types/electron.d";
+import {
+  LiteratureSidebarCitationPanel,
+  useLiteratureCitationNetwork,
+} from "./literature-sidebar-citations";
+import {
+  LiteratureSidebarViewTabs,
+  type LiteratureReaderSidebarView,
+} from "./literature-sidebar-view-tabs";
 
 const headerBtn = cn(
   "flex size-5 items-center justify-center rounded text-muted-foreground",
@@ -35,8 +42,6 @@ const headerBtn = cn(
 
 const ROW_BASE =
   "flex min-h-7 w-full items-center gap-2 rounded-sm px-2 text-left text-[length:var(--font-size-12)] text-muted-foreground hover:bg-accent/60 hover:text-foreground transition-colors";
-
-type SidebarTab = "notes" | "annotations";
 
 function noteLabel(name: string): string {
   const base = name.replace(/\.md$/i, "");
@@ -114,12 +119,19 @@ export function LiteraturePaperWorkspaceSidebar({ paper }: { paper: LiteraturePa
   const requestFocusPage = useLiteratureReaderStore((s) => s.requestFocusPage);
   const requestDeleteAnnotation = useLiteratureReaderStore((s) => s.requestDeleteAnnotation);
 
-  const [tab, setTab] = useState<SidebarTab>("notes");
+  const [tab, setTab] = useState<LiteratureReaderSidebarView>("notes");
   const [creating, setCreating] = useState(false);
   const [annotations, setAnnotations] = useState<
     Awaited<ReturnType<typeof loadAnnotations>>
   >([]);
   const [loadingAnnotations, setLoadingAnnotations] = useState(false);
+
+  const citationTabActive = tab === "references" || tab === "citedBy";
+  const citationNetwork = useLiteratureCitationNetwork(
+    projectRoot,
+    paper,
+    citationTabActive,
+  );
 
   const notes = useMemo(
     () => listPaperNotes(paper, files, notebookDir),
@@ -128,7 +140,6 @@ export function LiteraturePaperWorkspaceSidebar({ paper }: { paper: LiteraturePa
 
   const notesFolder = paperNotesFolderPath(notebookDir, paper);
 
-  // Re-render note rows when dirty state changes
   void dirtyVersion;
 
   useEffect(() => {
@@ -186,48 +197,45 @@ export function LiteraturePaperWorkspaceSidebar({ paper }: { paper: LiteraturePa
 
   return (
     <>
-      <SidebarHeader className="gap-2 border-b border-border/50 px-2 py-2">
-        <p
-          className="truncate px-1 text-[length:var(--font-size-11)] font-medium text-muted-foreground/70"
-          title={paper.title}
-        >
-          {paper.bibkey ?? paper.title}
-        </p>
-        <div className="flex rounded-md border border-border/40 p-0.5 gap-px">
+      <SidebarHeader className="flex h-[var(--height-mode-selector)] shrink-0 flex-row items-center gap-2 px-3 min-w-0">
+        <LiteratureSidebarViewTabs
+          value={tab}
+          onValueChange={setTab}
+          referenceCount={citationNetwork.result?.references?.totalCount}
+          citedByCount={citationNetwork.result?.citedBy?.totalCount}
+        />
+        <div className="flex-1" />
+        {citationTabActive ? (
           <button
             type="button"
-            className={cn(
-              "flex flex-1 items-center justify-center gap-1 rounded-sm py-1 text-[length:var(--font-size-11)] transition-colors",
-              tab === "notes"
-                ? "bg-muted text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-            onClick={() => setTab("notes")}
+            className={headerBtn}
+            title="Refresh citations"
+            disabled={citationNetwork.loading || citationNetwork.refreshing}
+            onClick={() => void citationNetwork.refresh()}
           >
-            <NotebookPenIcon className="size-3" />
-            Notes
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "flex flex-1 items-center justify-center gap-1 rounded-sm py-1 text-[length:var(--font-size-11)] transition-colors",
-              tab === "annotations"
-                ? "bg-muted text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
+            {citationNetwork.refreshing ? (
+              <Loader2Icon className="size-3.5 animate-spin" />
+            ) : (
+              <RefreshCwIcon className="size-3.5" />
             )}
-            onClick={() => setTab("annotations")}
-          >
-            <HighlighterIcon className="size-3" />
-            Marks
           </button>
-        </div>
+        ) : null}
       </SidebarHeader>
 
-      <SidebarContent className="min-h-0 gap-0 px-1 py-1">
-        {tab === "notes" ? (
+      <SidebarContent className="min-h-0 gap-0 overflow-auto px-1 py-1">
+        {tab === "references" || tab === "citedBy" ? (
+          <LiteratureSidebarCitationPanel
+            paper={paper}
+            section={tab === "references" ? "references" : "citedBy"}
+            network={citationNetwork}
+          />
+        ) : tab === "notes" ? (
           <div className="flex min-h-0 flex-1 flex-col gap-1">
             <div className="flex items-center justify-between px-1 py-0.5">
-              <span className="text-[length:var(--font-size-11)] text-muted-foreground/60 truncate" title={notesFolder}>
+              <span
+                className="truncate text-[length:var(--font-size-11)] text-muted-foreground/60"
+                title={notesFolder}
+              >
                 {notesFolder.split("/").pop()}
               </span>
               <button

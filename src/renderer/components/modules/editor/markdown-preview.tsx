@@ -5,7 +5,12 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTabContext } from "@/lib/workspace/tab-context";
 import { MarkdownDocumentPreview } from "@/components/modules/shared/markdown-document-preview";
 import { AppBrowserLink } from "@/components/modules/shared/app-browser-link";
-import { MARKDOWN_COMPONENTS } from "@/lib/markdown/markdown-config";
+import {
+  MARKDOWN_COMPONENTS,
+  isScientificExtractPath,
+  markdownPreviewProfileForPath,
+} from "@/lib/markdown/markdown-config";
+import { ExtractMarkdownImage } from "@/lib/markdown/extract-markdown-images";
 
 const CONTAIN_STYLE: React.CSSProperties = {
   contain: "layout style paint",
@@ -60,8 +65,18 @@ export const MarkdownPreview = memo(function MarkdownPreview() {
     fileId ? s.openedContents.get(fileId) : undefined,
   );
   const content = entry?.content ?? "";
+  const filePath = tab.filePath ?? fileId ?? "";
+  const previewProfile = markdownPreviewProfileForPath(filePath);
 
-  const markdownComponents = useMemo(() => WIKILINK_COMPONENTS, []);
+  const markdownComponents = useMemo(() => {
+    if (!isScientificExtractPath(filePath)) return WIKILINK_COMPONENTS;
+    return {
+      ...WIKILINK_COMPONENTS,
+      img: ({ src, alt }: React.ComponentProps<"img">) => (
+        <ExtractMarkdownImage src={src} alt={alt} mdFilePath={filePath} />
+      ),
+    } satisfies Components;
+  }, [filePath]);
 
   if (!entry) {
     return (
@@ -79,6 +94,7 @@ export const MarkdownPreview = memo(function MarkdownPreview() {
   return (
     <MarkdownDocumentPreview
       content={content}
+      previewProfile={previewProfile}
       emptyMessage="Empty file"
       markdownComponents={markdownComponents}
     />

@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useCitationStagingStore } from "../../src/renderer/stores/citation-staging-store";
+import {
+  isCitationInLibrary,
+  useCitationStagingStore,
+} from "../../src/renderer/stores/citation-staging-store";
 import type { StageResult } from "../../src/shared/citation-staging";
 
 const SESSION = "chat-tab-1";
@@ -128,5 +131,97 @@ describe("citationStagingStore", () => {
     expect(useCitationStagingStore.getState().getCitationsForSession(SESSION)[0].id).toBe(id);
     useCitationStagingStore.getState().revealPanelForSession(SESSION);
     expect(useCitationStagingStore.getState().panelHiddenSessions[SESSION]).toBeUndefined();
+  });
+
+  it("unmarkByPaperIds clears stale library link so citation can be re-added", () => {
+    const id = useCitationStagingStore.getState().upsertFromStageResult(SESSION, verifiedResult());
+    useCitationStagingStore.getState().markAddedToLibrary(id, "p-deleted", "smith2024");
+    useCitationStagingStore.getState().unmarkByPaperIds(["p-deleted"]);
+    const c = useCitationStagingStore.getState().getCitationsForSession(SESSION)[0];
+    expect(c.addedToLibrary).toBe(false);
+    expect(c.libraryPaperId).toBeNull();
+  });
+
+  it("reconcileWithLibrary unmarks citations whose paper no longer exists", () => {
+    const id = useCitationStagingStore.getState().upsertFromStageResult(SESSION, verifiedResult());
+    useCitationStagingStore.getState().markAddedToLibrary(id, "p-gone", "smith2024");
+    useCitationStagingStore.getState().reconcileWithLibrary([
+      { id: "p-other", bibkey: "other2024", doi: "10.1038/other", arxiv_id: null },
+    ]);
+    const c = useCitationStagingStore.getState().getCitationsForSession(SESSION)[0];
+    expect(c.addedToLibrary).toBe(false);
+    expect(c.libraryPaperId).toBeNull();
+  });
+
+  it("reconcileWithLibrary links pending citations when library gains a matching entry", () => {
+    useCitationStagingStore.getState().upsertFromStageResult(SESSION, verifiedResult());
+    let c = useCitationStagingStore.getState().getCitationsForSession(SESSION)[0];
+    expect(c.addedToLibrary).toBe(false);
+
+    useCitationStagingStore.getState().reconcileWithLibrary([
+      {
+        id: "p-live",
+        bibkey: "smith2024",
+        doi: "10.1038/test.2024.001",
+        arxiv_id: null,
+      },
+    ]);
+
+    c = useCitationStagingStore.getState().getCitationsForSession(SESSION)[0];
+    expect(c.addedToLibrary).toBe(true);
+    expect(c.libraryPaperId).toBe("p-live");
+    expect(c.libraryBibkey).toBe("smith2024");
+  });
+
+  it("reconcileWithLibrary links across sessions", () => {
+    useCitationStagingStore.getState().upsertFromStageResult(SESSION, verifiedResult());
+    useCitationStagingStore.getState().upsertFromStageResult(
+      "session-b",
+      verifiedResult({ citation: { ...verifiedResult().citation!, doi: "10.1038/test.2024.001" } }),
+    );
+
+    useCitationStagingStore.getState().reconcileWithLibrary([
+      {
+        id: "p-shared",
+        bibkey: "shared2024",
+        doi: "10.1038/test.2024.001",
+        arxiv_id: null,
+      },
+    ]);
+
+    for (const sid of [SESSION, "session-b"]) {
+      const c = useCitationStagingStore.getState().getCitationsForSession(sid)[0];
+      expect(c.libraryPaperId).toBe("p-shared");
+      expect(c.addedToLibrary).toBe(true);
+    }
+  });
+
+  it("reconcileWithLibrary matches staged arxivId to library arxiv_id", () => {
+    useCitationStagingStore.getState().upsertFromStageResult(
+      SESSION,
+      verifiedResult({
+        citation: {
+          ...verifiedResult().citation!,
+          doi: null,
+          arxivId: "2301.00001",
+        },
+      }),
+    );
+
+    useCitationStagingStore.getState().reconcileWithLibrary([
+      { id: "p-arx", bibkey: "arxiv2023", doi: null, arxiv_id: "2301.00001" },
+    ]);
+
+    const c = useCitationStagingStore.getState().getCitationsForSession(SESSION)[0];
+    expect(c.libraryPaperId).toBe("p-arx");
+    expect(c.addedToLibrary).toBe(true);
+  });
+
+  it("isCitationInLibrary requires both flag and live library membership", () => {
+    const id = useCitationStagingStore.getState().upsertFromStageResult(SESSION, verifiedResult());
+    useCitationStagingStore.getState().markAddedToLibrary(id, "p-live", "smith2024");
+    const c = useCitationStagingStore.getState().getCitationsForSession(SESSION)[0];
+    expect(isCitationInLibrary(c, new Set(["p-live"]))).toBe(true);
+    expect(isCitationInLibrary(c, new Set())).toBe(false);
   });
 });

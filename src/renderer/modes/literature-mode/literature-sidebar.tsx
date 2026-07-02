@@ -5,12 +5,12 @@ import {
   FolderOpenIcon,
   FolderPlusIcon,
   LibraryIcon,
-  Link2Icon,
   Loader2Icon,
   PencilIcon,
   RefreshCwIcon,
   Trash2Icon,
   UserPlusIcon,
+  FileTextIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
@@ -37,7 +37,10 @@ import {
 } from "@/components/ui/app-context-menu";
 import type { LiteratureCollection, LiteratureLibraryView } from "@/types/electron.d";
 import { cn } from "@/lib/utils";
-import { ZoteroConnectDialog } from "./zotero-connect-dialog";
+import { useLiteratureExtractStore } from "@/stores/literature-extract-store";
+import { useSettingsStore } from "@/stores/settings-store";
+import type { PaperExtractSource } from "@/types/electron.d";
+import { EXTRACT_BATCH_MAX_PAPERS } from "../../../shared/paper-extract";
 import { LiteratureOrphanNotesSection } from "./literature-orphan-notes";
 import { LiteraturePaperWorkspaceSidebar } from "./literature-sidebar-paper";
 
@@ -131,6 +134,7 @@ function CollectionRow({
   onDelete,
   onAddSelected,
   onNewSubcollection,
+  onExtractAll,
 }: {
   collection: LiteratureCollection;
   active: boolean;
@@ -145,6 +149,7 @@ function CollectionRow({
   onDelete: () => void;
   onAddSelected: () => void;
   onNewSubcollection: () => void;
+  onExtractAll: () => void;
 }) {
   return (
     <AppContextMenu>
@@ -154,14 +159,13 @@ function CollectionRow({
           style={{ paddingLeft: INDENT(depth) }}
           onClick={onActivate}
         >
-          {hasChildren ? (
-            <ChevronRightIcon
-              className={cn(
-                "size-3 shrink-0 text-muted-foreground transition-transform",
-                isExpanded && "rotate-90",
-              )}
-            />
-          ) : null}
+          <ChevronRightIcon
+            className={cn(
+              "size-3 shrink-0 text-muted-foreground transition-transform",
+              !hasChildren && "invisible",
+              hasChildren && isExpanded && "rotate-90",
+            )}
+          />
           {writePending && isZoteroBound ? (
             <Loader2Icon className="size-3 shrink-0 animate-spin" />
           ) : isExpanded && hasChildren ? (
@@ -184,6 +188,10 @@ function CollectionRow({
         </div>
       </AppContextMenuTrigger>
       <AppContextMenuContent>
+        <AppContextMenuItem onSelect={onExtractAll}>
+          <FileTextIcon className="size-3.5" />
+          Extract all in collection
+        </AppContextMenuItem>
         {selectedCount > 0 ? (
           <AppContextMenuItem onSelect={onAddSelected}>
             <UserPlusIcon className="size-3.5" />
@@ -236,7 +244,6 @@ function LiteratureLibrarySidebar() {
   const libraryView = useLiteratureStore((s) => s.libraryView);
   const checkedPaperIds = useLiteratureStore((s) => s.checkedPaperIds);
   const boundCollectionId = useLiteratureStore((s) => s.boundCollectionId);
-  const boundCollectionName = useLiteratureStore((s) => s.boundCollectionName);
   const lastZoteroSyncAt = useLiteratureStore((s) => s.lastZoteroSyncAt);
   const pullingFromZotero = useLiteratureStore((s) => s.pullingFromZotero);
   const collectionWritePending = useLiteratureStore((s) => s.collectionWritePending);
@@ -249,7 +256,26 @@ function LiteratureLibrarySidebar() {
   const addPapersToCollection = useLiteratureStore((s) => s.addPapersToCollection);
   const removeCheckedFromCollection = useLiteratureStore((s) => s.removeCheckedFromCollection);
   const pullFromZotero = useLiteratureStore((s) => s.pullFromZotero);
-  const setBoundCollection = useLiteratureStore((s) => s.setBoundCollection);
+  const enqueueCollection = useLiteratureExtractStore((s) => s.enqueueCollection);
+  const settings = useSettingsStore((s) => s.settings);
+
+  const handleExtractCollection = useCallback(
+    async (collectionId: string) => {
+      if (!projectRoot) return;
+      const source =
+        (settings.literatureExtractEngineDefault as PaperExtractSource | undefined) ?? "pdfjs";
+      try {
+        const result = await enqueueCollection(projectRoot, collectionId, source);
+        const parts = [`Queued ${result.enqueued} paper${result.enqueued === 1 ? "" : "s"}`];
+        if (result.skipped > 0) parts.push(`${result.skipped} skipped (no PDF/HTML)`);
+        if (result.capped) parts.push(`capped at ${EXTRACT_BATCH_MAX_PAPERS}`);
+        toast.message(parts.join(" · "));
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Batch extract failed");
+      }
+    },
+    [enqueueCollection, projectRoot, settings.literatureExtractEngineDefault],
+  );
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createParentId, setCreateParentId] = useState<string | null>(null);
@@ -259,7 +285,6 @@ function LiteratureLibrarySidebar() {
   const [renameName, setRenameName] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<LiteratureCollection | null>(null);
-  const [zoteroDialogOpen, setZoteroDialogOpen] = useState(false);
   const [expandedCollectionIds, setExpandedCollectionIds] = useState<Set<string>>(new Set());
 
   const visibleCollections = useMemo(
@@ -379,12 +404,6 @@ function LiteratureLibrarySidebar() {
   const createParentLabel =
     createParentId != null ? collectionById.get(createParentId)?.name : null;
 
-  const zoteroTitle = boundCollectionId
-    ? boundCollectionName
-      ? `Zotero: ${boundCollectionName}`
-      : "Change Zotero collection"
-    : "Connect Zotero (optional)";
-
   return (
     <>
       <SidebarHeader className="flex h-[var(--height-mode-selector)] shrink-0 flex-row items-center justify-between px-3">
@@ -392,15 +411,6 @@ function LiteratureLibrarySidebar() {
           Library
         </span>
         <div className="flex items-center gap-0.5 shrink-0">
-          <button
-            type="button"
-            className={headerBtn}
-            title={zoteroTitle}
-            disabled={!projectRoot}
-            onClick={() => setZoteroDialogOpen(true)}
-          >
-            <Link2Icon className="size-3.5" />
-          </button>
           {boundCollectionId ? (
             <button
               type="button"
@@ -440,8 +450,10 @@ function LiteratureLibrarySidebar() {
       <SidebarContent className="gap-0 overflow-auto px-1.5 py-1">
         <div
           className={cn(ROW_BASE, "cursor-pointer", libraryView.kind === "all" && ROW_SELECTED)}
+          style={{ paddingLeft: INDENT(0) }}
           onClick={() => void selectView({ kind: "all" })}
         >
+          <ChevronRightIcon className="size-3 shrink-0 invisible" aria-hidden />
           <LibraryIcon className="size-3 shrink-0" />
           <span className="min-w-0 flex-1 truncate">All entries</span>
           <span className="shrink-0 tabular-nums text-[length:var(--font-hint)] text-muted-foreground/60">
@@ -486,12 +498,24 @@ function LiteratureLibrarySidebar() {
                 void addPapersToCollection(projectRoot, collection.id, checkedPaperIds);
               }}
               onNewSubcollection={() => openCreateDialog(collection.id)}
+              onExtractAll={() => void handleExtractCollection(collection.id)}
             />
           ))
         )}
 
-        {activeCollectionId && checkedPaperIds.length > 0 ? (
+        {activeCollectionId ? (
           <div className="mt-2 space-y-1 border-t border-border/60 pt-2 px-1">
+            <Button
+              size="xs"
+              variant="secondary"
+              className="w-full h-7"
+              onClick={() => void handleExtractCollection(activeCollectionId)}
+            >
+              <FileTextIcon className="size-3 mr-1" />
+              Extract all in collection
+            </Button>
+            {checkedPaperIds.length > 0 ? (
+              <>
             <Button
               size="xs"
               variant="secondary"
@@ -510,23 +534,13 @@ function LiteratureLibrarySidebar() {
             >
               Remove from collection
             </Button>
+              </>
+            ) : null}
           </div>
         ) : null}
 
         <LiteratureOrphanNotesSection />
       </SidebarContent>
-
-      {projectRoot ? (
-        <ZoteroConnectDialog
-          open={zoteroDialogOpen}
-          onOpenChange={setZoteroDialogOpen}
-          projectRoot={projectRoot}
-          currentCollectionId={boundCollectionId}
-          onBound={(collectionId, collectionName) => {
-            void setBoundCollection(projectRoot, collectionId, collectionName);
-          }}
-        />
-      ) : null}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-sm">

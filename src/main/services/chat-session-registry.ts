@@ -7,6 +7,8 @@ import { homedir } from "node:os";
 const sessionToTab = new Map<string, string>();
 const tabToSession = new Map<string, string>();
 const sessionToProjectRoot = new Map<string, string>();
+/** Bibkeys allowed for `literature-read-pdf` in this chat session. */
+const sessionIntensiveBibkeys = new Map<string, Set<string>>();
 
 function getBridgeRoot(): string {
   return process.env.PRISM_TERMINAL_BRIDGE_ROOT || join(homedir(), ".prism-terminal-bridge");
@@ -65,6 +67,31 @@ export function unregisterChatSession(sessionId: string): void {
   if (tabId) tabToSession.delete(tabId);
   sessionToTab.delete(sessionId);
   sessionToProjectRoot.delete(sessionId);
+  sessionIntensiveBibkeys.delete(sessionId);
+}
+
+/** Replace the intensive-reading bibkey allowlist for a chat session. */
+export function setSessionIntensiveBibkeys(sessionId: string, bibkeys: readonly string[]): void {
+  const id = sessionId.trim();
+  if (!id) return;
+  const normalized = [...new Set(bibkeys.map((k) => k.trim()).filter(Boolean))];
+  if (normalized.length === 0) {
+    sessionIntensiveBibkeys.delete(id);
+    return;
+  }
+  sessionIntensiveBibkeys.set(id, new Set(normalized));
+}
+
+export function getSessionIntensiveBibkeys(sessionId: string): readonly string[] {
+  const set = sessionIntensiveBibkeys.get(sessionId.trim());
+  return set ? [...set] : [];
+}
+
+export function isSessionIntensiveBibkey(sessionId: string | undefined, bibkey: string): boolean {
+  if (!sessionId?.trim() || !bibkey.trim()) return false;
+  const set = sessionIntensiveBibkeys.get(sessionId.trim());
+  if (!set || set.size === 0) return false;
+  return set.has(bibkey.trim());
 }
 
 /** @internal */
@@ -72,4 +99,5 @@ export function _resetChatSessionRegistryForTests(): void {
   sessionToTab.clear();
   tabToSession.clear();
   sessionToProjectRoot.clear();
+  sessionIntensiveBibkeys.clear();
 }

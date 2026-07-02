@@ -2,48 +2,53 @@ import { useMemo, useState, useRef, useCallback, useEffect, type RefObject } fro
 import {
   FileTextIcon,
   HardDriveIcon,
-  Trash2Icon,
-  FileDownIcon,
   PlusIcon,
 } from "lucide-react";
-import { toast } from "sonner";
-import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   formatLiteratureAuthorsShort,
+  formatLiteratureListDate,
   paperHasReadablePdf,
   sortLiteraturePapers,
   type LiteratureSortColumn,
   type LiteratureSortDirection,
 } from "./literature-format";
 import { LiteratureEntryPanel } from "./literature-entry-panel";
+import { LiteratureExtractBadge } from "./literature-extract-badge";
+import { useLiteratureExtractStore } from "@/stores/literature-extract-store";
+import { PAPER_EXTRACT_ACTION_LABEL } from "../../../shared/paper-extract";
 import {
   literatureListHeaderLabelClass,
   literatureListBodyClass,
   literatureListHeaderClass,
   literatureListRowClass,
   literaturePanelExpandedDetailClass,
-  literaturePanelExpandedRowStickyClass,
+  literatureRowPdfDropPendingClass,
+  literatureRowPdfDropReadyClass,
   literatureRowShellClass,
   literatureRowTextClass,
   LITERATURE_COL_CHECK,
+  LITERATURE_COL_EXTRACT,
   LITERATURE_COL_AUTHORS,
   LITERATURE_COL_TITLE,
   LITERATURE_COL_VENUE,
   LITERATURE_COL_VENUE_LABELS,
+  LITERATURE_COL_CREATED,
+  LITERATURE_COL_UPDATED,
   LITERATURE_COL_YEAR,
   literatureRowZoteroBadgeClass,
 } from "./literature-list-chrome";
 import { cn } from "@/lib/utils";
+import { useLiteratureListMarquee } from "@/lib/literature/literature-list-marquee";
+import { paperMatchesTagFilter } from "@/lib/literature/paper-tag-utils";
+import {
+  useLiteraturePdfAttach,
+  useLiteratureRowPdfDropSession,
+  useLiteratureRowPdfDropTarget,
+  type LiteratureRowPdfDropSession,
+} from "@/lib/literature/use-literature-pdf-attach";
+import { LiteraturePdfAttachConflictDialog } from "./literature-entry-pdf-attach";
 import type { LiteraturePaper } from "@/types/electron.d";
 
 /** Scroll expanded row flush under the sticky list header. */
@@ -58,81 +63,6 @@ function scrollLiteratureRowBelowHeader(
   const delta = rowTopInViewport - headerH;
   if (Math.abs(delta) < 0.5) return;
   scrollEl.scrollTop += delta;
-}
-
-/** Keep expanded row pinned under the list header when detail height changes. */
-function useExpandedDetailScrollAnchor(
-  expanded: boolean,
-  scrollContainerRef: RefObject<HTMLDivElement | null>,
-  listHeaderRef: RefObject<HTMLDivElement | null>,
-  rowShellRef: RefObject<HTMLDivElement | null>,
-  detailRef: RefObject<HTMLDivElement | null>,
-) {
-  useEffect(() => {
-    if (!expanded) return;
-    const scrollEl = scrollContainerRef.current;
-    const anchorEl = rowShellRef.current;
-    const detailEl = detailRef.current;
-    const headerEl = listHeaderRef.current;
-    if (!scrollEl || !anchorEl || !detailEl) return;
-
-    const headerH = headerEl?.offsetHeight ?? 0;
-
-    const ro = new ResizeObserver(() => {
-      const scrollTopBefore = scrollEl.scrollTop;
-      requestAnimationFrame(() => {
-        const rowTopInViewport =
-          anchorEl.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top;
-        const delta = rowTopInViewport - headerH;
-        if (Math.abs(delta) > 0.5) {
-          scrollEl.scrollTop = scrollTopBefore + delta;
-        }
-      });
-    });
-
-    ro.observe(detailEl);
-    return () => ro.disconnect();
-  }, [expanded, scrollContainerRef, listHeaderRef, rowShellRef, detailRef]);
-}
-
-/** Expanded detail panel fills the visible library scroll area (below list header + row). */
-function useExpandedDetailFillHeight(
-  expanded: boolean,
-  scrollContainerRef: RefObject<HTMLDivElement | null>,
-  listHeaderRef: RefObject<HTMLDivElement | null>,
-  rowShellRef: RefObject<HTMLDivElement | null>,
-  detailRef: RefObject<HTMLDivElement | null>,
-) {
-  useEffect(() => {
-    const detailEl = detailRef.current;
-    if (!expanded || !detailEl) {
-      if (detailEl) detailEl.style.minHeight = "";
-      return;
-    }
-
-    const scrollEl = scrollContainerRef.current;
-    const rowEl = rowShellRef.current;
-    const headerEl = listHeaderRef.current;
-    if (!scrollEl || !rowEl) return;
-
-    const apply = () => {
-      const headerH = headerEl?.offsetHeight ?? 0;
-      const rowH = rowEl.offsetHeight;
-      const minH = scrollEl.clientHeight - headerH - rowH;
-      detailEl.style.minHeight = `${Math.max(0, minH)}px`;
-    };
-
-    apply();
-    const ro = new ResizeObserver(apply);
-    ro.observe(scrollEl);
-    ro.observe(rowEl);
-    if (headerEl) ro.observe(headerEl);
-
-    return () => {
-      ro.disconnect();
-      detailEl.style.minHeight = "";
-    };
-  }, [expanded, scrollContainerRef, listHeaderRef, rowShellRef, detailRef]);
 }
 
 function SortHeaderButton({
@@ -183,7 +113,8 @@ function LibraryTableHeader({
   onToggleAll: () => void;
 }) {
   return (
-    <div ref={headerRef} className={literatureListHeaderClass}>
+    <div ref={headerRef} className={literatureListHeaderClass} data-literature-list-header>
+      <span className={LITERATURE_COL_EXTRACT} aria-hidden />
       <SortHeaderButton
         label="Year"
         active={sortColumn === "year"}
@@ -218,6 +149,20 @@ function LibraryTableHeader({
       >
         Labels
       </span>
+      <SortHeaderButton
+        label="Added"
+        active={sortColumn === "created_at"}
+        direction={sortDirection}
+        onClick={() => onSort("created_at")}
+        className={LITERATURE_COL_CREATED}
+      />
+      <SortHeaderButton
+        label="Updated"
+        active={sortColumn === "updated_at"}
+        direction={sortDirection}
+        onClick={() => onSort("updated_at")}
+        className={LITERATURE_COL_UPDATED}
+      />
       <span className={LITERATURE_COL_CHECK}>
         <input
           type="checkbox"
@@ -238,41 +183,34 @@ function LibraryTableRow({
   paper,
   expanded,
   checked,
+  pdfDragActive,
   scrollContainerRef,
   listHeaderRef,
+  rowPdfDropSession,
   onToggleExpand,
   onToggleCheck,
+  suppressRowClickRef,
 }: {
   paper: LiteraturePaper;
   expanded: boolean;
   checked: boolean;
+  pdfDragActive: boolean;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   listHeaderRef: RefObject<HTMLDivElement | null>;
+  rowPdfDropSession: LiteratureRowPdfDropSession;
   onToggleExpand: () => void;
   onToggleCheck: () => void;
+  suppressRowClickRef: RefObject<boolean>;
 }) {
   const openLiteraturePaper = useRightPanelStore((s) => s.openLiteraturePaper);
   const pdfCacheState = useLiteratureStore((s) => s.pdfCacheStatus[paper.id]);
+  const extractStates = useLiteratureExtractStore((s) => s.statesByPaper);
   const pdfCached = pdfCacheState?.cached ?? false;
   const pdfStale = pdfCacheState?.stale ?? false;
   const rowShellRef = useRef<HTMLDivElement>(null);
-  const detailRef = useRef<HTMLDivElement>(null);
-  const isZotero = Boolean(paper.zotero_key);
-
-  useExpandedDetailScrollAnchor(
-    expanded,
-    scrollContainerRef,
-    listHeaderRef,
-    rowShellRef,
-    detailRef,
-  );
-  useExpandedDetailFillHeight(
-    expanded,
-    scrollContainerRef,
-    listHeaderRef,
-    rowShellRef,
-    detailRef,
-  );
+  const isZotero = Boolean(paper.zotero_key) && paper.origin === "zotero";
+  const pdfAttach = useLiteraturePdfAttach(paper.id);
+  const rowPdfDrop = useLiteratureRowPdfDropTarget(paper, rowPdfDropSession, pdfAttach.attachPdfPath);
 
   useEffect(() => {
     if (!expanded) return;
@@ -292,12 +230,13 @@ function LibraryTableRow({
 
   const handleShellClick = useCallback(
     (e: React.MouseEvent) => {
+      if (suppressRowClickRef.current) return;
       const target = e.target as HTMLElement;
       if (target.closest('input[type="checkbox"]')) return;
       if (target.closest("[data-literature-pdf-open]")) return;
       handleRowClick();
     },
-    [handleRowClick],
+    [handleRowClick, suppressRowClickRef],
   );
 
   const handleOpenPdf = useCallback(
@@ -311,18 +250,45 @@ function LibraryTableRow({
 
   const hasPdf = paperHasReadablePdf(paper);
   const authorsShort = formatLiteratureAuthorsShort(paper.authors);
+  const rowDropHint =
+    pdfDragActive && rowPdfDrop.phase === "ready"
+      ? paper.pdf_path
+        ? "Drop to replace PDF"
+        : "Drop to attach PDF"
+      : pdfDragActive && rowPdfDrop.phase === "pending"
+        ? "Keep hovering to attach…"
+        : undefined;
 
   return (
-    <div className={literatureListRowClass}>
+    <div
+      className={cn(
+        literatureListRowClass,
+        "relative",
+        pdfDragActive && rowPdfDrop.phase === "pending" && literatureRowPdfDropPendingClass,
+        pdfDragActive && rowPdfDrop.phase === "ready" && literatureRowPdfDropReadyClass,
+      )}
+      {...rowPdfDrop.rowDropHandlers}
+      title={rowDropHint}
+    >
+      {rowDropHint ? (
+        <span className="pointer-events-none absolute right-2 top-1 z-10 max-w-[min(100%-1rem,14rem)] truncate rounded border border-primary/30 bg-background px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium text-primary shadow-sm">
+          {rowDropHint}
+        </span>
+      ) : null}
       <div
         ref={rowShellRef}
-        className={cn(
-          literatureRowShellClass,
-          literatureRowTextClass,
-          expanded && literaturePanelExpandedRowStickyClass,
-        )}
+        data-literature-row-shell
+        data-literature-row-id={paper.id}
+        className={cn(literatureRowShellClass, literatureRowTextClass)}
         onClick={handleShellClick}
       >
+        <span className={LITERATURE_COL_EXTRACT}>
+          <LiteratureExtractBadge
+            paperId={paper.id}
+            statesByPaper={extractStates}
+            visible
+          />
+        </span>
         <span className={cn(LITERATURE_COL_YEAR, "min-w-0")}>
           {paper.year ?? ""}
         </span>
@@ -384,7 +350,7 @@ function LibraryTableRow({
           {isZotero ? (
             <span
               className={literatureRowZoteroBadgeClass}
-              title="From Zotero — import to local to keep after disconnect"
+              title={`Synced from Zotero — PDF or ${PAPER_EXTRACT_ACTION_LABEL} keeps this entry in the project`}
             >
               Zotero
             </span>
@@ -408,6 +374,18 @@ function LibraryTableRow({
         >
           —
         </span>
+        <span
+          className={cn(LITERATURE_COL_CREATED, "min-w-0")}
+          title={formatLiteratureListDate(paper.created_at)}
+        >
+          {formatLiteratureListDate(paper.created_at)}
+        </span>
+        <span
+          className={cn(LITERATURE_COL_UPDATED, "min-w-0")}
+          title={formatLiteratureListDate(paper.updated_at)}
+        >
+          {formatLiteratureListDate(paper.updated_at)}
+        </span>
         <span className={LITERATURE_COL_CHECK}>
           <input
             type="checkbox"
@@ -420,16 +398,16 @@ function LibraryTableRow({
         </span>
       </div>
       {expanded ? (
-        <div ref={detailRef} className={literaturePanelExpandedDetailClass}>
-          <LiteratureEntryPanel paper={paper} fillHeight />
+        <div className={literaturePanelExpandedDetailClass}>
+          <LiteratureEntryPanel paper={paper} expandedInLibrary pdfAttach={pdfAttach} />
         </div>
       ) : null}
+      <LiteraturePdfAttachConflictDialog attach={pdfAttach} />
     </div>
   );
 }
 
-export function LiteratureLibrary() {
-  const projectRoot = useDocumentStore((s) => s.projectRoot);
+export function LiteratureLibrary({ pdfDragActive = false }: { pdfDragActive?: boolean }) {
   const papers = useLiteratureStore((s) => s.papers);
   const searchQuery = useLiteratureStore((s) => s.searchQuery);
   const searchResults = useLiteratureStore((s) => s.searchResults);
@@ -443,16 +421,28 @@ export function LiteratureLibrary() {
   const selectPaper = useLiteratureStore((s) => s.selectPaper);
   const togglePaperChecked = useLiteratureStore((s) => s.togglePaperChecked);
   const setCheckedPaperIds = useLiteratureStore((s) => s.setCheckedPaperIds);
-  const clearCheckedPapers = useLiteratureStore((s) => s.clearCheckedPapers);
-  const deletePapers = useLiteratureStore((s) => s.deletePapers);
-  const exportPapersBibTeX = useLiteratureStore((s) => s.exportPapersBibTeX);
+  const sortColumn = useLiteratureStore((s) => s.librarySortColumn);
+  const sortDirection = useLiteratureStore((s) => s.librarySortDirection);
+  const libraryTagFilter = useLiteratureStore((s) => s.libraryTagFilter);
+  const setLibrarySort = useLiteratureStore((s) => s.setLibrarySort);
 
-  const [sortColumn, setSortColumn] = useState<LiteratureSortColumn>("year");
-  const [sortDirection, setSortDirection] = useState<LiteratureSortDirection>("desc");
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
+  const listBodyRef = useRef<HTMLDivElement>(null);
+  const rowPdfDropSession = useLiteratureRowPdfDropSession();
+  const resetRowPdfDrop = rowPdfDropSession.reset;
+  const rowAttachActive = rowPdfDropSession.targetPaperId != null;
+
+  useEffect(() => {
+    if (!pdfDragActive) resetRowPdfDrop();
+  }, [pdfDragActive, resetRowPdfDrop]);
+
+  const { marqueeRect, suppressRowClickRef } = useLiteratureListMarquee({
+    scrollRef,
+    listBodyRef,
+    checkedPaperIds,
+    setCheckedPaperIds,
+  });
 
   const filteredPapers = useMemo(() => {
     const q = searchQuery.trim();
@@ -462,8 +452,11 @@ export function LiteratureLibrary() {
       const allowed = new Set(viewPaperIds);
       base = base.filter((p) => allowed.has(p.id));
     }
+    if (libraryTagFilter) {
+      base = base.filter((p) => paperMatchesTagFilter(p, libraryTagFilter));
+    }
     return base;
-  }, [papers, searchQuery, searchResults, viewPaperIds]);
+  }, [papers, searchQuery, searchResults, viewPaperIds, libraryTagFilter]);
 
   const viewLabel = useMemo(() => {
     if (libraryView.kind !== "collection") return null;
@@ -483,10 +476,9 @@ export function LiteratureLibrary() {
 
   const handleSort = (column: LiteratureSortColumn) => {
     if (sortColumn === column) {
-      setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
+      setLibrarySort(column, sortDirection === "asc" ? "desc" : "asc");
     } else {
-      setSortColumn(column);
-      setSortDirection(column === "year" ? "desc" : "asc");
+      setLibrarySort(column, column === "title" ? "asc" : "desc");
     }
   };
 
@@ -502,28 +494,6 @@ export function LiteratureLibrary() {
   const handleToggleExpand = (paperId: string) => {
     if (selectedPaperId === paperId) selectPaper(null);
     else selectPaper(paperId);
-  };
-
-  const handleBatchDelete = async () => {
-    if (!projectRoot || checkedPaperIds.length === 0) return;
-    setDeleting(true);
-    try {
-      await deletePapers(projectRoot, checkedPaperIds);
-      setDeleteOpen(false);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Delete failed");
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const handleBatchExport = async () => {
-    if (!projectRoot || checkedPaperIds.length === 0) return;
-    try {
-      await exportPapersBibTeX(projectRoot, checkedPaperIds);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Export failed");
-    }
   };
 
   if (loading && papers.length === 0) {
@@ -562,11 +532,13 @@ export function LiteratureLibrary() {
     return (
       <div className="flex flex-1 items-center justify-center px-6 text-center">
         <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
-          {searchQuery.trim().length >= 2
-            ? `No matches for “${searchQuery.trim()}”`
-            : viewLabel
-              ? `No entries in “${viewLabel}”`
-              : "No entries"}
+          {libraryTagFilter
+            ? `No entries tagged “${libraryTagFilter}”`
+            : searchQuery.trim().length >= 2
+              ? `No matches for “${searchQuery.trim()}”`
+              : viewLabel
+                ? `No entries in “${viewLabel}”`
+                : "No entries"}
         </p>
       </div>
     );
@@ -574,86 +546,60 @@ export function LiteratureLibrary() {
 
   return (
     <div className="flex flex-1 min-h-0 flex-col bg-background @container">
+      {marqueeRect ? (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed z-50 border border-primary/50 bg-primary/10"
+          style={{
+            left: marqueeRect.left,
+            top: marqueeRect.top,
+            width: marqueeRect.width,
+            height: marqueeRect.height,
+          }}
+        />
+      ) : null}
       <div
         ref={scrollRef}
-        className="flex-1 min-h-0 overflow-auto overflow-anchor-none"
+        className="relative flex-1 min-h-0 overflow-auto overflow-anchor-none"
       >
-        <LibraryTableHeader
-          headerRef={headerRef}
-          sortColumn={sortColumn}
-          sortDirection={sortDirection}
-          onSort={handleSort}
-          allChecked={allVisibleChecked}
-          indeterminate={indeterminate}
-          onToggleAll={handleToggleAll}
-        />
-        <div className={literatureListBodyClass}>
-          {visiblePapers.map((paper) => (
-            <LibraryTableRow
-              key={paper.id}
-              paper={paper}
-              expanded={selectedPaperId === paper.id}
-              checked={checkedPaperIds.includes(paper.id)}
-              onToggleExpand={() => handleToggleExpand(paper.id)}
-              onToggleCheck={() => togglePaperChecked(paper.id)}
-              scrollContainerRef={scrollRef}
-              listHeaderRef={headerRef}
-            />
-          ))}
+        {pdfDragActive && !rowAttachActive ? (
+          <span className="pointer-events-none absolute bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-md border border-primary/25 bg-background/95 px-3 py-1 text-[length:var(--font-size-11)] text-muted-foreground shadow-sm">
+            Drop PDFs to import · Hold on a row to attach
+          </span>
+        ) : null}
+        <div className="flex min-h-full flex-col">
+          <LibraryTableHeader
+            headerRef={headerRef}
+            sortColumn={sortColumn}
+            sortDirection={sortDirection}
+            onSort={handleSort}
+            allChecked={allVisibleChecked}
+            indeterminate={indeterminate}
+            onToggleAll={handleToggleAll}
+          />
+          <div
+            ref={listBodyRef}
+            className={cn(literatureListBodyClass, "flex-1")}
+            data-literature-list-body
+          >
+            {visiblePapers.map((paper) => (
+              <LibraryTableRow
+                key={paper.id}
+                paper={paper}
+                expanded={selectedPaperId === paper.id}
+                checked={checkedPaperIds.includes(paper.id)}
+                pdfDragActive={pdfDragActive}
+                rowPdfDropSession={rowPdfDropSession}
+                onToggleExpand={() => handleToggleExpand(paper.id)}
+                onToggleCheck={() => togglePaperChecked(paper.id)}
+                scrollContainerRef={scrollRef}
+                listHeaderRef={headerRef}
+                suppressRowClickRef={suppressRowClickRef}
+              />
+            ))}
+          </div>
         </div>
       </div>
-
-      {checkedPaperIds.length > 0 ? (
-        <div
-          className="shrink-0 flex items-center gap-2 border-t border-border bg-card px-3 py-1.5 text-[length:var(--font-menu-item)]"
-        >
-          <span className="text-muted-foreground tabular-nums">
-            {checkedPaperIds.length} selected
-          </span>
-          <Button size="xs" variant="ghost" className="h-6 px-1.5 @md:px-2" onClick={() => void handleBatchExport()} title="Export .bib">
-            <FileDownIcon className="size-3 @md:mr-1" />
-            <span className="hidden @md:inline">Export .bib</span>
-          </Button>
-          <Button
-            size="xs"
-            variant="ghost"
-            className="h-6 px-1.5 @md:px-2 text-muted-foreground hover:text-destructive"
-            onClick={() => setDeleteOpen(true)}
-            title="Delete selected"
-          >
-            <Trash2Icon className="size-3 @md:mr-1" />
-            <span className="hidden @md:inline">Delete</span>
-          </Button>
-          <span className="flex-1" />
-          <Button size="xs" variant="ghost" className="h-6" onClick={clearCheckedPapers}>
-            Clear
-          </Button>
-        </div>
-      ) : null}
-
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete {checkedPaperIds.length} entries?</DialogTitle>
-          </DialogHeader>
-          <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-            Selected papers will be removed from the library. PDF attachments are deleted when unused.
-          </p>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setDeleteOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => void handleBatchDelete()}
-              disabled={deleting}
-            >
-              {deleting ? "Deleting…" : "Delete"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

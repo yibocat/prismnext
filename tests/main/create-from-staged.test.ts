@@ -1,0 +1,164 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+vi.mock("../../src/main/services/settings", () => ({
+  getSettings: vi.fn(() => ({
+    literatureAutoExtractOnImport: false,
+    literatureExtractEngineDefault: "pdfjs",
+  })),
+  updateSettings: vi.fn(),
+}));
+vi.mock("../../src/main/services/literature-extract-automation", () => ({
+  onPaperPdfAttached: vi.fn(),
+  onPaperPdfChanged: vi.fn(),
+  maybeAutoEnqueueExtract: vi.fn(),
+}));
+
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
+import {
+  createPaperFromStagedCitation,
+  type StagedAddProgressCallback,
+} from "../../src/main/services/literature-enrich";
+import { getPaper, listPapers } from "../../src/main/services/literature-service";
+import * as bibliographic from "../../src/shared/bibliographic-metadata";
+
+const roots: string[] = [];
+
+function tempProject(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prism-staged-add-"));
+  fs.mkdirSync(path.join(dir, ".prismnext", "library"), { recursive: true });
+  roots.push(dir);
+  return dir;
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  for (const root of roots.splice(0)) {
+    try {
+      fs.rmSync(root, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  }
+});
+
+describe("createPaperFromStagedCitation", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = tempProject();
+  });
+
+  it("writes library row from staged snapshot without full catalog chain", async () => {
+    const resolveSpy = vi.spyOn(bibliographic, "resolveBibliographicMetadata");
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () =>
+      Response.json({}, { status: 404 }),
+    ) as typeof fetch;
+
+    const result = await createPaperFromStagedCitation(root, {
+      stagedId: "staged-1",
+      sessionId: "sess-1",
+      title: "Attention Is All You Need",
+      authors: '["Vaswani, A"]',
+      year: 2017,
+      venue: "NeurIPS",
+      type: "inproceedings",
+      doi: null,
+      arxivId: "1706.03762",
+      abstract: "Transformer architecture.",
+      cslJson: null,
+      catalogSource: "arxiv",
+      catalogVerified: true,
+    });
+
+    expect(result.created).toBe(true);
+    expect(result.paper.title).toBe("Attention Is All You Need");
+    expect(listPapers(root)).toHaveLength(1);
+    expect(resolveSpy).not.toHaveBeenCalled();
+
+    globalThis.fetch = originalFetch;
+  });
+
+  it("emits writing → downloading-pdf → done progress phases", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () =>
+      Response.json({}, { status: 404 }),
+    ) as typeof fetch;
+
+    const phases: string[] = [];
+    const onProgress: StagedAddProgressCallback = (info) => {
+      phases.push(info.phase);
+    };
+
+    await createPaperFromStagedCitation(
+      root,
+      {
+        stagedId: "staged-2",
+        title: "Test arXiv",
+        authors: null,
+        year: 2024,
+        venue: null,
+        type: "article",
+        doi: null,
+        arxivId: "2405.00133",
+        abstract: null,
+        cslJson: null,
+        catalogSource: "arxiv",
+        catalogVerified: true,
+      },
+      onProgress,
+    );
+
+    expect(phases[0]).toBe("writing");
+    expect(phases).toContain("downloading-pdf");
+    expect(phases[phases.length - 1]).toBe("done");
+
+    globalThis.fetch = originalFetch;
+  });
+
+  it("uses fast catalog lookup for DOI-only when no arXiv PDF URL", async () => {
+    const resolveSpy = vi
+      .spyOn(bibliographic, "resolveBibliographicMetadata")
+      .mockResolvedValue({
+        metadata: {
+          title: "OA Paper",
+          doi: "10.1000/oa.test",
+          pdfUrl: "https://example.com/paper.pdf",
+          source: "openalex",
+        },
+        sourcesAttempted: ["openalex"],
+      });
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () =>
+      new Response(Buffer.from("%PDF-1.4 test"), {
+        status: 200,
+        headers: { "Content-Type": "application/pdf", "Content-Length": "14" },
+      }),
+    ) as typeof fetch;
+
+    const result = await createPaperFromStagedCitation(root, {
+      stagedId: "staged-3",
+      title: "OA Paper",
+      authors: null,
+      year: 2024,
+      venue: "Journal",
+      type: "article",
+      doi: "10.1000/oa.test",
+      arxivId: null,
+      abstract: null,
+      cslJson: null,
+      catalogSource: "crossref",
+      catalogVerified: true,
+    });
+
+    expect(resolveSpy).toHaveBeenCalledTimes(1);
+    expect(resolveSpy).toHaveBeenCalledWith({ doi: "10.1000/oa.test" }, { fast: true });
+    expect(result.pdfAttached).toBe(true);
+    expect(getPaper(root, result.paper.id)?.pdf_path).toBeTruthy();
+
+    globalThis.fetch = originalFetch;
+  });
+});

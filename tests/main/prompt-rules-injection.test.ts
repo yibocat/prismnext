@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { promptManager } from "../../src/main/prompts";
 import type { PromptContext } from "../../src/main/prompts/types";
+import { TOOL_NAMES } from "../../src/shared/tool-names";
 
 describe("promptManager project rules injection split", () => {
   beforeEach(() => {
@@ -35,12 +36,34 @@ describe("promptManager project rules injection split", () => {
     expect(fp1).toBe(fp2);
   });
 
-  it("fingerprint changes when base prompt content changes", () => {
+  it("fingerprint ignores AGENTS.md changes (loaded via OpenCode instructions)", () => {
     const fp1 = promptManager.computePromptFingerprint(ctx);
     const fp2 = promptManager.computePromptFingerprint({
       ...ctx,
       agentsMdContent: "# Changed\n\nNew instructions.",
     });
-    expect(fp1).not.toBe(fp2);
+    expect(fp1).toBe(fp2);
+  });
+
+  it("fingerprint includes static module prompt content hash", () => {
+    const fp = promptManager.computePromptFingerprint(ctx);
+    expect(fp).toContain("citations=");
+  });
+
+  it("composeStableSystem excludes AGENTS.md, profile overlay, and project rules", () => {
+    const stable = promptManager.composeStableSystem({
+      ...ctx,
+      profileId: "review",
+      profileName: "Review",
+      profileInstructions: "Be thorough.",
+    });
+    expect(stable).not.toContain("Run pnpm test");
+    expect(stable).not.toContain("Use pnpm only.");
+    expect(stable).not.toContain("Active Agent Profile");
+    expect(stable).toContain("Citations & Bibliography");
+    expect(stable).toContain("Chat paper citations");
+    expect(stable).toContain(TOOL_NAMES.literatureStage);
+    expect(stable).not.toContain("Prism Tools Guide");
+    expect(stable).not.toContain("Reference & literature");
   });
 });

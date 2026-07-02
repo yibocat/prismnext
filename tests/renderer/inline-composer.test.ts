@@ -92,6 +92,12 @@ describe("composerNeedsExpandedLayout", () => {
     const parts: ComposerPart[] = [{ type: "text", text: "line one\nline two" }];
     expect(composerNeedsExpandedLayout(parts)).toBe(true);
   });
+
+  it("newline-only draft is empty for send but still needs expanded layout", () => {
+    const parts: ComposerPart[] = [{ type: "text", text: "\n" }];
+    expect(isComposerEmpty(parts)).toBe(true);
+    expect(composerNeedsExpandedLayout(parts)).toBe(true);
+  });
 });
 
 describe("inline composer query", () => {

@@ -13,6 +13,19 @@ function pickMergedTitle(primary: string, supplemental: string): string {
   return primary.length >= supplemental.length ? primary : supplemental;
 }
 
+/** Staging / session citations: treat shorter text as incomplete. */
+export const STAGING_ABSTRACT_MIN_LENGTH = 120;
+
+export function hasAdequateAbstract(abstract: string | null | undefined): boolean {
+  const trimmed = abstract?.trim();
+  return Boolean(trimmed && trimmed.length >= STAGING_ABSTRACT_MIN_LENGTH);
+}
+
+/** Fast staging path: only fetch extra catalogs when abstract is wholly missing. */
+export function hasAnyAbstract(abstract: string | null | undefined): boolean {
+  return Boolean(abstract?.trim());
+}
+
 function pickMergedAbstract(primary: string | null, supplemental: string | null): string | null {
   if (!primary) return supplemental;
   if (!supplemental) return primary;

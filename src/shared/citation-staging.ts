@@ -60,6 +60,41 @@ export interface StagedCitationPayload {
   libraryBibkey: string | null;
 }
 
+/** Progress phases while adding a staged citation to `library.db`. */
+export type StagedAddProgressPhase = "writing" | "downloading-pdf" | "done";
+
+/** IPC event payload for `literature:stagedAddProgress`. */
+export interface StagedAddProgressEvent {
+  stagedId: string;
+  sessionId?: string;
+  phase: StagedAddProgressPhase;
+  batchIndex?: number;
+  batchTotal?: number;
+  receivedBytes?: number;
+  totalBytes?: number | null;
+  pdfAttached?: boolean;
+  pdfSkipped?: boolean;
+}
+
+/** Bibliographic snapshot passed from renderer → main for add-to-library. */
+export interface StagedCitationImportInput {
+  stagedId: string;
+  sessionId?: string;
+  batchIndex?: number;
+  batchTotal?: number;
+  title: string;
+  authors: string | null;
+  year: number | null;
+  venue: string | null;
+  type: string | null;
+  doi: string | null;
+  arxivId: string | null;
+  abstract: string | null;
+  cslJson: Record<string, unknown> | null;
+  catalogSource: string | null;
+  catalogVerified: boolean;
+}
+
 /** Shape emitted by `literature:stage` / bridge `stage` action. */
 export interface StageResult {
   staged: boolean;

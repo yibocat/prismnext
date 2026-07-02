@@ -30,16 +30,25 @@ export class EventMapper {
 
   registerSession(sessionId: string, tabId: string): void {
     registerChatSession(sessionId, tabId);
-    // Clean up any previous session mapping for this tab (prevents stale routing)
     const prevSession = this.tabToSession.get(tabId);
+    const prevTab = this.sessionToTab.get(sessionId);
+    const unchanged = prevSession === sessionId && prevTab === tabId;
+    // Clean up any previous session mapping for this tab (prevents stale routing)
     if (prevSession && prevSession !== sessionId) {
       this.sessionToTab.delete(prevSession);
     }
+    // If this session was wrongly mapped to another tab, clear that back-reference.
+    if (prevTab && prevTab !== tabId) {
+      if (this.tabToSession.get(prevTab) === sessionId) {
+        this.tabToSession.delete(prevTab);
+      }
+    }
     this.sessionToTab.set(sessionId, tabId);
     this.tabToSession.set(tabId, sessionId);
-    // Clear accumulators for new session
-    this.accumText.clear();
-    this.accumThinking.clear();
+    if (!unchanged) {
+      this.accumText.clear();
+      this.accumThinking.clear();
+    }
   }
 
   unregisterSession(sessionId: string): void {
@@ -170,9 +179,6 @@ export class EventMapper {
     }
     const fromSession = this.resolveTabForSession(sessionId, params);
     if (fromSession) return fromSession;
-    if (this.tabToSession.size === 1) {
-      return [...this.tabToSession.keys()][0];
-    }
     return undefined;
   }
 
@@ -206,14 +212,8 @@ export class EventMapper {
       }
     }
 
-    // Single active chat tab: sub-agent sessions inherit that tab.
-    if (this.tabToSession.size === 1) {
-      const onlyTab = [...this.tabToSession.keys()][0];
-      registerChatSession(sessionId, onlyTab);
-      this.sessionToTab.set(sessionId, onlyTab);
-      return onlyTab;
-    }
-
+    // Sub-agent sessions inherit parent tab via parentSessionId above.
+    // Do NOT fall back to the sole registered tab — that misroutes other sessions.
     return undefined;
   }
 
@@ -503,8 +503,14 @@ export class EventMapper {
       if (backfillInput) {
         log.debug(`tool_call_update backfill: id=${updateId} inputKeys=${JSON.stringify(Object.keys(backfillInput))} name=${backfillName || "(unchanged)"}`);
         const backfillToolName = (backfillName || "").toLowerCase();
+        const tuStatus = String(tu.status || tu.state?.status || "").toLowerCase();
+        const isHistoricalReplay =
+          tuStatus === "completed"
+          || tuStatus === "failed"
+          || AcpService.getInstance().isSessionReplaySuppressed();
         if (
-          updateId
+          !isHistoricalReplay
+          && updateId
           && (
             backfillToolName === "bash"
             || backfillToolName === "shell"
@@ -527,7 +533,8 @@ export class EventMapper {
           });
         }
         if (
-          updateId
+          !isHistoricalReplay
+          && updateId
           && (backfillToolName === "delete" || backfillToolName === "move")
         ) {
           AcpService.getInstance().syncCustomToolPermissionFromToolCall({

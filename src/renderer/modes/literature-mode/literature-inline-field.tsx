@@ -25,6 +25,12 @@ function rowsForText(text: string, min: number, max: number): number {
   return Math.min(max, Math.max(min, lines));
 }
 
+export const literatureIdentifierValueClass =
+  "font-mono text-[length:var(--font-size-12)] text-foreground/90 break-all text-left";
+
+export const literatureMetadataLinkClass =
+  "rounded-[3px] px-1 -mx-1 text-left text-[length:var(--font-size-13)] text-foreground/90 break-all hover:underline underline-offset-2";
+
 interface MetadataRowProps {
   label: string;
   children: ReactNode;
@@ -61,6 +67,8 @@ interface InlineEditableFieldProps {
   maxRows?: number;
   inputMode?: "text" | "numeric";
   mono?: boolean;
+  /** Identifier rows: shrink to content width; copy buttons stay adjacent. */
+  inlineSize?: boolean;
 }
 
 export function InlineEditableField({
@@ -77,6 +85,7 @@ export function InlineEditableField({
   maxRows = 40,
   inputMode,
   mono,
+  inlineSize = false,
 }: InlineEditableFieldProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -146,10 +155,27 @@ export function InlineEditableField({
     void commit();
   };
 
+  const fieldBoxClass = cn(
+    "box-border rounded-[3px] px-1 py-0.5",
+    inlineSize ? "inline-block w-fit max-w-full min-w-0" : "w-full min-w-0",
+  );
+
+  const inlineInputSize = inlineSize
+    ? Math.min(Math.max((editing ? draft : value).length, placeholder?.length ?? 0, 12), 120)
+    : undefined;
+
   const editClass = cn(
-    "w-full min-w-0 bg-background/80 px-1 -mx-1 py-0.5 outline-none",
-    "ring-1 ring-ring/35 rounded-[3px]",
+    fieldBoxClass,
+    "border border-border/55 bg-background outline-none",
+    "focus-visible:border-ring/60",
     mono && "font-mono",
+    displayClassName,
+  );
+
+  const idleClass = cn(
+    fieldBoxClass,
+    "cursor-text border border-transparent",
+    "hover:border-border/55 transition-colors",
     displayClassName,
   );
 
@@ -198,6 +224,7 @@ export function InlineEditableField({
         ref={inputRef as React.RefObject<HTMLInputElement>}
         type="text"
         inputMode={inputMode}
+        size={inlineInputSize}
         className={editClass}
       />
     );
@@ -221,12 +248,7 @@ export function InlineEditableField({
           setEditing(true);
         }
       }}
-      className={cn(
-        "rounded-[3px] px-1 -mx-1 py-0.5 cursor-text",
-        "hover:ring-1 hover:ring-border/30 transition-shadow",
-        displayClassName,
-        isEmpty && "text-muted-foreground/45",
-      )}
+      className={cn(idleClass, isEmpty && "text-muted-foreground/45")}
     >
       {isEmpty ? EMPTY_MARK : value}
     </div>
@@ -330,7 +352,7 @@ interface MetadataIdValueProps {
 
 const COPY_FEEDBACK_MS = 1500;
 
-function CopyFeedbackButton({
+export function CopyFeedbackButton({
   onCopy,
   title,
   children,
@@ -394,8 +416,8 @@ export function MetadataIdValue({
   };
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-      <div className="min-w-0 w-fit max-w-full">
+    <div className="inline-flex max-w-full flex-wrap items-start gap-x-1.5 gap-y-0.5">
+      <div className="min-w-0 max-w-full">
         {editable ? (
           <InlineEditableField
             value={value}
@@ -403,22 +425,23 @@ export function MetadataIdValue({
             onSave={onSave}
             placeholder={placeholder}
             mono
-            displayClassName="font-mono text-[length:var(--font-size-12)] text-foreground/90"
+            inlineSize
+            displayClassName={literatureIdentifierValueClass}
           />
         ) : href && value.trim() ? (
           <button
             type="button"
-            className="rounded-[3px] px-1 -mx-1 font-mono text-[length:var(--font-size-12)] text-foreground/90 hover:underline underline-offset-2"
+            className={cn(
+              "rounded-[3px] px-1 -mx-1 hover:underline underline-offset-2",
+              literatureIdentifierValueClass,
+            )}
             onClick={() => openUrlInBrowser(href)}
-            title={href}
+            title={value}
           >
             {value}
           </button>
         ) : (
-          <span
-            className="font-mono text-[length:var(--font-size-12)] text-foreground/90"
-            title={value || undefined}
-          >
+          <span className={literatureIdentifierValueClass} title={value || undefined}>
             {value.trim() || EMPTY_MARK}
           </span>
         )}

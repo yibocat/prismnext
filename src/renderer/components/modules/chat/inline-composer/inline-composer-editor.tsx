@@ -14,9 +14,12 @@ import type { CommandDef } from "@commands/types";
 import type { AgentProfileInfo } from "@shared/agent-profiles";
 import { formatPaperMentionLabel } from "../../../../../shared/bibkey-utils";
 import type { ProjectFile } from "@/stores/document-store";
+import { useDocumentStore } from "@/stores/document-store";
 import { mentionFileLabel } from "@/lib/files/mentionable-files";
 import type { LiteraturePaper } from "@/types/electron.d";
 import { useLiteratureStore } from "@/stores/literature-store";
+import { useLiteratureExtractStore } from "@/stores/literature-extract-store";
+import { pickBestReadySource } from "../../../../../shared/paper-extract";
 import type { ComposerPart } from "@/lib/chat/composer-parts";
 import {
   createTokenId,
@@ -387,6 +390,33 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
     const literaturePapersRef = useRef(literaturePapers);
     literaturePapersRef.current = literaturePapers;
 
+    // ── Intensive reading state (per active chat tab) ──
+    const intensivePaperIds = useChatStore((s) => {
+      const tab = s.tabs.find((t) => t.id === s.activeTabId);
+      return tab?.intensivePaperIds ?? [];
+    });
+    const extractStatesByPaper = useLiteratureExtractStore((s) => s.statesByPaper);
+    const loadExtractStates = useLiteratureExtractStore((s) => s.loadStatesForPapers);
+
+    // Papers with a ready extract → intensive toggle enabled only for these.
+    const readyPaperIds = useMemo(() => {
+      const out = new Set<string>();
+      for (const paper of literaturePapers) {
+        const states = extractStatesByPaper[paper.id];
+        if (states && pickBestReadySource(states, "auto")) out.add(paper.id);
+      }
+      return out;
+    }, [literaturePapers, extractStatesByPaper]);
+
+    const handleToggleIntensive = useCallback(
+      (paperId: string, on: boolean) => {
+        const store = useChatStore.getState();
+        if (on) store.addIntensivePaper(store.activeTabId, paperId);
+        else store.removeIntensivePaper(store.activeTabId, paperId);
+      },
+      [],
+    );
+
     /** Mouse hover disabled while using arrow keys — scrollIntoView can fake-enter row 0. */
     const pointerHoverEnabledRef = useRef(false);
 
@@ -400,14 +430,19 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
 
     const canHoverDropdownItem = useCallback(() => pointerHoverEnabledRef.current, []);
 
-    const [editorFocused, setEditorFocused] = useState(false);
     const [activeQuery, setActiveQuery] = useState<ComposerQuery | null>(null);
     const [dropdownIndex, setDropdownIndex] = useState(0);
+    const [paperOptionsOpenIndex, setPaperOptionsOpenIndex] = useState<number | null>(null);
+    const [paperOptionsSubIndex, setPaperOptionsSubIndex] = useState(0);
     const [dropdownAnchor, setDropdownAnchor] = useState<CursorAnchor | null>(null);
 
     const activeQueryRef = useRef<ComposerQuery | null>(null);
     const dropdownIndexRef = useRef(dropdownIndex);
     dropdownIndexRef.current = dropdownIndex;
+    const paperOptionsOpenIndexRef = useRef(paperOptionsOpenIndex);
+    paperOptionsOpenIndexRef.current = paperOptionsOpenIndex;
+    const paperOptionsSubIndexRef = useRef(paperOptionsSubIndex);
+    paperOptionsSubIndexRef.current = paperOptionsSubIndex;
 
     const syncQuery = useCallback((view: EditorView) => {
       const query = syncComposerQueryState(view, setActiveQuery, setDropdownAnchor);
@@ -419,6 +454,8 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       activeQueryRef.current = null;
       setActiveQuery(null);
       setDropdownAnchor(null);
+      setPaperOptionsOpenIndex(null);
+      setPaperOptionsSubIndex(0);
     }, []);
 
     const maybeExpandCompactLayout = useCallback((view: EditorView) => {
@@ -438,13 +475,28 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       setDropdownIndex(index);
     }, []);
 
-    const showDropdown = editorFocused && activeQuery !== null;
+    const showDropdown = activeQuery !== null;
     const isEmpty = useMemo(() => isComposerEmpty(parts), [parts]);
 
     const mentionOptions = useMemo(() => {
       if (!activeQuery || activeQuery.kind !== "mention") return [];
       return buildMentionOptions(activeQuery.query, profiles, files, literaturePapers);
     }, [activeQuery, profiles, files, literaturePapers]);
+
+    // Best-effort: load extract states for papers shown in the mention menu so
+    // the 精读 toggle reflects readiness.
+    useEffect(() => {
+      if (!showDropdown || activeQuery?.kind !== "mention") return;
+      const projectRoot = useDocumentStore.getState().projectRoot;
+      if (!projectRoot) return;
+      const paperIds = mentionOptions
+        .filter((o) => o.kind === "paper")
+        .map((o) => (o.kind === "paper" ? o.paper.id : ""));
+      if (paperIds.length === 0) return;
+      const missing = paperIds.filter((id) => !extractStatesByPaper[id]);
+      if (missing.length === 0) return;
+      void loadExtractStates(projectRoot, missing);
+    }, [showDropdown, activeQuery, mentionOptions, extractStatesByPaper, loadExtractStates]);
 
     const slashOptions = useMemo(() => {
       if (!activeQuery || activeQuery.kind !== "slash") return [];
@@ -470,8 +522,15 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
 
     useEffect(() => {
       setDropdownIndex(0);
+      setPaperOptionsOpenIndex(null);
+      setPaperOptionsSubIndex(0);
       disableDropdownPointerHover();
     }, [activeQuery?.kind, activeQuery?.query, disableDropdownPointerHover]);
+
+    useEffect(() => {
+      setPaperOptionsOpenIndex(null);
+      setPaperOptionsSubIndex(0);
+    }, [dropdownIndex]);
 
     const emitChange = useCallback((view: EditorView) => {
       onChangeRef.current(readPartsFromView(view));
@@ -606,6 +665,9 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         {
           key: "Enter",
           run: (view) => {
+            if (paperOptionsOpenIndexRef.current !== null) {
+              return selectDropdownItem(view);
+            }
             if (selectDropdownItem(view)) return true;
             onEnterRef.current?.();
             return true;
@@ -626,8 +688,40 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
           run: (view) => selectDropdownItem(view),
         },
         {
+          key: "Space",
+          run: () => {
+            const optsIdx = paperOptionsOpenIndexRef.current;
+            if (optsIdx === null || paperOptionsSubIndexRef.current !== 1) return false;
+            const q = activeQueryRef.current;
+            if (!q || q.kind !== "mention") return false;
+            const mentions = buildMentionOptions(
+              q.query,
+              profilesRef.current,
+              filesRef.current,
+              useLiteratureStore.getState().papers,
+            );
+            const opt = mentions[optsIdx];
+            if (opt?.kind !== "paper") return false;
+            const ready = pickBestReadySource(
+              useLiteratureExtractStore.getState().statesByPaper[opt.paper.id],
+              "auto",
+            );
+            if (!ready) return true;
+            const tab = useChatStore.getState().tabs.find(
+              (t) => t.id === useChatStore.getState().activeTabId,
+            );
+            const on = tab?.intensivePaperIds?.includes(opt.paper.id) ?? false;
+            handleToggleIntensive(opt.paper.id, !on);
+            return true;
+          },
+        },
+        {
           key: "ArrowDown",
           run: () => {
+            if (paperOptionsOpenIndexRef.current !== null) {
+              setPaperOptionsSubIndex((i) => Math.min(i + 1, 1));
+              return true;
+            }
             const q = activeQueryRef.current;
             if (!q) return false;
             const mentions =
@@ -645,6 +739,10 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         {
           key: "ArrowUp",
           run: () => {
+            if (paperOptionsOpenIndexRef.current !== null) {
+              setPaperOptionsSubIndex((i) => Math.max(i - 1, 0));
+              return true;
+            }
             if (!activeQueryRef.current) return false;
             disableDropdownPointerHover();
             setDropdownIndex((i) => Math.max(i - 1, 0));
@@ -652,8 +750,42 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
           },
         },
         {
+          key: "ArrowRight",
+          run: () => {
+            const q = activeQueryRef.current;
+            if (!q || q.kind !== "mention") return false;
+            const mentions = buildMentionOptions(
+              q.query,
+              profilesRef.current,
+              filesRef.current,
+              useLiteratureStore.getState().papers,
+            );
+            const count = mentions.length;
+            if (count === 0) return false;
+            const idx = Math.min(dropdownIndexRef.current, count - 1);
+            if (mentions[idx]?.kind !== "paper") return false;
+            setPaperOptionsOpenIndex(idx);
+            setPaperOptionsSubIndex(0);
+            return true;
+          },
+        },
+        {
+          key: "ArrowLeft",
+          run: () => {
+            if (paperOptionsOpenIndexRef.current === null) return false;
+            setPaperOptionsOpenIndex(null);
+            setPaperOptionsSubIndex(0);
+            return true;
+          },
+        },
+        {
           key: "Escape",
           run: () => {
+            if (paperOptionsOpenIndexRef.current !== null) {
+              setPaperOptionsOpenIndex(null);
+              setPaperOptionsSubIndex(0);
+              return true;
+            }
             if (!activeQueryRef.current) return false;
             clearQuery();
             return true;
@@ -694,10 +826,9 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
               const v = update.view;
 
               if (update.focusChanged) {
-                setEditorFocused(v.hasFocus);
                 if (v.hasFocus) {
                   syncQuery(v);
-                } else {
+                } else if (!activeQueryRef.current) {
                   setDropdownAnchor(null);
                 }
               }
@@ -961,6 +1092,12 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             onHover={handleDropdownHover}
             onListPointerMove={enableDropdownPointerHover}
             canHoverItem={canHoverDropdownItem}
+            intensivePaperIds={intensivePaperIds}
+            readyPaperIds={readyPaperIds}
+            onToggleIntensive={handleToggleIntensive}
+            paperOptionsOpenIndex={paperOptionsOpenIndex}
+            onPaperOptionsOpenChange={setPaperOptionsOpenIndex}
+            paperOptionsSubIndex={paperOptionsSubIndex}
           />
         )}
         <div

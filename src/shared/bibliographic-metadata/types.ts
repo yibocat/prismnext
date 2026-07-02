@@ -7,11 +7,15 @@ export type BibliographicSource =
   | "semantic-scholar"
   | "arxiv"
   | "openreview"
+  | "pubmed"
   | "zotero";
 
 export interface BibliographicMetadataQuery {
   doi?: string;
   arxivId?: string;
+  isbn?: string;
+  pmid?: string;
+  adsBibcode?: string;
   title?: string;
 }
 

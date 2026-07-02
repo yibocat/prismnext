@@ -127,6 +127,7 @@ const CUSTOM_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
   "literature-stage": LiteratureToolWidget,
   "literature-add": LiteratureToolWidget,
   "literature-read": LiteratureToolWidget,
+  "literature-read-pdf": LiteratureToolWidget,
   "literature-cite": LiteratureToolWidget,
 };
 

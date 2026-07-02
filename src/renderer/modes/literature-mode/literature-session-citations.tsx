@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from "react";
-import { BookOpenIcon } from "lucide-react";
-import { useCitationStagingStore, EMPTY_STAGED_CITATIONS } from "@/stores/citation-staging-store";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { BookOpenIcon, Loader2Icon } from "lucide-react";
+import { useCitationStagingStore, EMPTY_STAGED_CITATIONS, isCitationInLibrary } from "@/stores/citation-staging-store";
 import { useChatStore } from "@/stores/chat-store";
+import { useLiteratureStore } from "@/stores/literature-store";
 import { StagedCitationEntryPanel } from "./literature-staged-entry-panel";
 import {
   literatureListHeaderClass,
@@ -18,10 +19,30 @@ import {
 } from "./literature-list-chrome";
 import { formatLiteratureAuthorsShort } from "./literature-format";
 import { cn } from "@/lib/utils";
-import type { StagedCitation } from "../../../shared/citation-staging";
+import type { StagedCitation, StagedAddProgressEvent } from "../../../shared/citation-staging";
+import { stagedAddProgressLabel } from "@/lib/literature/staged-add-progress-label";
 
-function StatusChip({ c }: { c: StagedCitation }) {
-  if (c.addedToLibrary) {
+function StatusChip({
+  c,
+  inLibrary,
+  progress,
+}: {
+  c: StagedCitation;
+  inLibrary: boolean;
+  progress?: StagedAddProgressEvent;
+}) {
+  if (progress && progress.phase !== "done") {
+    return (
+      <span
+        className="inline-flex max-w-[min(12rem,40vw)] shrink-0 items-center gap-1 rounded-full border border-amber-500/35 bg-amber-500/10 px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium text-amber-800 dark:text-amber-300"
+        title={stagedAddProgressLabel(progress)}
+      >
+        <Loader2Icon className="size-3 shrink-0 animate-spin" />
+        <span className="truncate">{stagedAddProgressLabel(progress)}</span>
+      </span>
+    );
+  }
+  if (inLibrary) {
     return (
       <span
         className="inline-flex shrink-0 items-center rounded-full border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium text-primary/80"
@@ -53,12 +74,16 @@ function StatusChip({ c }: { c: StagedCitation }) {
 
 function StagedRow({
   citation,
+  inLibrary,
   expanded,
   onToggle,
+  progress,
 }: {
   citation: StagedCitation;
+  inLibrary: boolean;
   expanded: boolean;
   onToggle: () => void;
+  progress?: StagedAddProgressEvent;
 }) {
   return (
     <div className={literatureListRowClass}>
@@ -91,12 +116,12 @@ function StagedRow({
           {citation.year ?? "—"}
         </span>
         <span className="ml-auto shrink-0 flex items-center gap-1.5">
-          <StatusChip c={citation} />
+          <StatusChip c={citation} inLibrary={inLibrary} progress={progress} />
         </span>
       </div>
       {expanded ? (
         <div className={literaturePanelExpandedDetailClass}>
-          <StagedCitationEntryPanel citation={citation} />
+          <StagedCitationEntryPanel citation={citation} inLibrary={inLibrary} />
         </div>
       ) : null}
     </div>
@@ -124,6 +149,9 @@ export function LiteratureSessionCitations({ highlightRefId, onHighlightConsumed
     if (s.panelHiddenSessions[chatSessionId]) return EMPTY_STAGED_CITATIONS;
     return s.bySession[chatSessionId] ?? EMPTY_STAGED_CITATIONS;
   });
+  const addProgressById = useCitationStagingStore((s) => s.addProgressById);
+  const papers = useLiteratureStore((s) => s.papers);
+  const libraryPaperIdSet = useMemo(() => new Set(papers.map((p) => p.id)), [papers]);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -133,10 +161,16 @@ export function LiteratureSessionCitations({ highlightRefId, onHighlightConsumed
   );
 
   // Auto-expand + scroll to highlighted row (jump from chat [n]).
+  const consumedHighlightRef = useRef<number | null>(null);
   useEffect(() => {
-    if (highlightRefId == null) return;
+    if (highlightRefId == null) {
+      consumedHighlightRef.current = null;
+      return;
+    }
+    if (consumedHighlightRef.current === highlightRefId) return;
     const target = jumpCitations.find((c) => c.refId === highlightRefId);
     if (!target) return;
+    consumedHighlightRef.current = highlightRefId;
     setExpandedId(target.id);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -193,7 +227,9 @@ export function LiteratureSessionCitations({ highlightRefId, onHighlightConsumed
             <StagedRow
               key={c.id}
               citation={c}
+              inLibrary={isCitationInLibrary(c, libraryPaperIdSet)}
               expanded={expandedId === c.id}
+              progress={addProgressById[c.id]}
               onToggle={() =>
                 setExpandedId((prev) => (prev === c.id ? null : c.id))
               }

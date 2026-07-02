@@ -2,12 +2,20 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { setSessionProjectRoot, _resetChatSessionRegistryForTests } from "../../src/main/services/chat-session-registry";
+import { setSessionProjectRoot, setSessionIntensiveBibkeys, _resetChatSessionRegistryForTests } from "../../src/main/services/chat-session-registry";
 import { processLiteratureBridgeOnceForTests } from "../../src/main/services/literature-bridge";
 import { createPaper } from "../../src/main/services/literature-service";
 
 vi.mock("../../src/main/services/literature-enrich", () => ({
   createPaperFromCatalog: vi.fn(),
+}));
+
+vi.mock("../../src/main/services/settings", () => ({
+  getSettings: vi.fn(() => ({ literatureStrictIntensivePdf: true, mineruApiToken: "" })),
+}));
+
+vi.mock("../../src/main/services/paper-extract-read", () => ({
+  readPaperPdfContent: vi.fn().mockResolvedValue({ markdown: "# Page 1\n\nHello" }),
 }));
 
 vi.mock("../../src/shared/bibliographic-metadata", () => ({
@@ -16,6 +24,7 @@ vi.mock("../../src/shared/bibliographic-metadata", () => ({
 
 import { createPaperFromCatalog } from "../../src/main/services/literature-enrich";
 import { resolveBibliographicMetadata } from "../../src/shared/bibliographic-metadata";
+import { readPaperPdfContent } from "../../src/main/services/paper-extract-read";
 import type { BibliographicMetadata } from "../../src/shared/bibliographic-metadata";
 
 const roots: string[] = [];
@@ -35,6 +44,8 @@ afterEach(() => {
   _resetChatSessionRegistryForTests();
   vi.mocked(createPaperFromCatalog).mockReset();
   vi.mocked(resolveBibliographicMetadata).mockReset();
+  vi.mocked(readPaperPdfContent).mockReset();
+  vi.mocked(readPaperPdfContent).mockResolvedValue({ markdown: "# Page 1\n\nHello" });
   for (const root of roots.splice(0)) {
     try { fs.rmSync(root, { recursive: true, force: true }); } catch {}
   }
@@ -386,6 +397,67 @@ describe("literature bridge", () => {
     expect(result.verified).toBe(false);
     expect(result.error).toMatch(/not found/i);
     expect(result.hint).toMatch(/websearch/i);
+
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  });
+
+  it("read-pdf: rejects bibkeys outside the session intensive list", async () => {
+    const projectRoot = tempProject();
+    const { paper } = createPaper(projectRoot, {
+      bibkey: "intensive_gate_key",
+      title: "Gate Test",
+    });
+    const sessionId = "test-bridge-read-pdf-gate";
+    setSessionProjectRoot(sessionId, projectRoot);
+
+    const requestId = "req-read-pdf-gate";
+    const dir = bridgeDir(sessionId);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, `${requestId}.request.json`),
+      JSON.stringify({ action: "read-pdf", bibkey: paper.bibkey, sessionId, force: true }),
+      "utf-8",
+    );
+
+    await processLiteratureBridgeOnceForTests();
+
+    const result = JSON.parse(
+      fs.readFileSync(path.join(dir, `${requestId}.result.json`), "utf-8"),
+    ) as { intensiveReadingRequired?: boolean; error?: string };
+    expect(result.intensiveReadingRequired).toBe(true);
+    expect(result.error).toMatch(/intensive reading/i);
+    expect(readPaperPdfContent).not.toHaveBeenCalled();
+
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  });
+
+  it("read-pdf: allows bibkeys on the session intensive list", async () => {
+    const projectRoot = tempProject();
+    const { paper } = createPaper(projectRoot, {
+      bibkey: "intensive_allowed_key",
+      title: "Allowed Test",
+    });
+    const sessionId = "test-bridge-read-pdf-allowed";
+    setSessionProjectRoot(sessionId, projectRoot);
+    setSessionIntensiveBibkeys(sessionId, [paper.bibkey]);
+
+    const requestId = "req-read-pdf-allowed";
+    const dir = bridgeDir(sessionId);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, `${requestId}.request.json`),
+      JSON.stringify({ action: "read-pdf", bibkey: paper.bibkey, sessionId }),
+      "utf-8",
+    );
+
+    await processLiteratureBridgeOnceForTests();
+
+    const result = JSON.parse(
+      fs.readFileSync(path.join(dir, `${requestId}.result.json`), "utf-8"),
+    ) as { markdown?: string; intensiveReadingRequired?: boolean };
+    expect(result.intensiveReadingRequired).toBeUndefined();
+    expect(readPaperPdfContent).toHaveBeenCalled();
+    expect(result.markdown).toContain("Hello");
 
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
   });

@@ -10,6 +10,7 @@ import { normalizeDoi } from "../../doi-utils";
 import { authorsJsonFromParts } from "../helpers";
 import type { BibliographicMetadata } from "../types";
 import type { BibliographicSource } from "./types";
+import { catalogFetch } from "../catalog-fetch";
 
 const DBLP_BASE = "https://dblp.org/search/publ/api";
 
@@ -64,7 +65,7 @@ async function searchDblp(query: string): Promise<BibliographicMetadata | null> 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 6000);
   try {
-    const res = await fetch(url, {
+    const res = await catalogFetch(url, {
       headers: { Accept: "application/json", "User-Agent": "Prism/1.0" },
       signal: ctrl.signal,
     });

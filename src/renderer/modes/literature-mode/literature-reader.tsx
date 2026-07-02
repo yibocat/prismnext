@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ColoredHighlightLayer,
   AnnotationsStoreProvider,
   useAnnotations,
   usePdf,
@@ -9,12 +8,19 @@ import {
 import type { ColoredHighlight } from "@anaralabs/lector";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useLiteratureReaderStore } from "@/stores/literature-reader-store";
+import { useLiteratureExtractStore } from "@/stores/literature-extract-store";
 import { dbAnnotationToLector, coloredHighlightToDb } from "@/lib/literature/highlight-sync";
 import { PdfDocumentView } from "@/components/modules/preview";
 import { Progress } from "@/components/ui/progress";
 import type { LiteraturePaper } from "@/types/electron.d";
+import type { PaperExtractBlock } from "../../../shared/paper-extract-block";
 import { paperHasReadablePdf } from "./literature-format";
-import { LiteratureSelectionToolbar } from "./literature-selection-toolbar";
+import { LiteratureBlockProvider } from "./literature-block-context";
+import { LiteratureBlockPageOverlay } from "./literature-block-overlay";
+import { LiteratureBlockPointerCapture } from "./literature-block-pointer";
+import { LiteratureBlockPickToggle } from "./literature-block-toolbar";
+import { LiteratureColoredHighlightsLayer } from "./literature-colored-highlights-layer";
+import { LiteraturePdfActionMenu } from "./literature-pdf-action-menu";
 
 interface LiteratureReaderProps {
   projectRoot: string;
@@ -77,7 +83,6 @@ function AnnotationDeleteListener() {
 
 function ReaderPageLayers({ projectRoot, paper }: LiteratureReaderProps) {
   const loadAnnotations = useLiteratureStore((s) => s.loadAnnotations);
-  const saveAnnotation = useLiteratureStore((s) => s.saveAnnotation);
   const { setAnnotations } = useAnnotations();
   const addColoredHighlight = usePdf((s) => s.addColoredHighlight);
 
@@ -103,6 +108,20 @@ function ReaderPageLayers({ projectRoot, paper }: LiteratureReaderProps) {
     });
   }, [projectRoot, paper.id, loadAnnotations, setAnnotations, addColoredHighlight]);
 
+  return (
+    <>
+      <LiteratureColoredHighlightsLayer />
+      <LiteratureBlockPageOverlay />
+      <HighlightDeleteSync projectRoot={projectRoot} paperId={paper.id} />
+      <AnnotationDeleteListener />
+    </>
+  );
+}
+
+/** Document-level layers: block pick + unified selection menu (needs usePdf + annotations). */
+function ReaderDocumentLayers({ projectRoot, paper }: LiteratureReaderProps) {
+  const saveAnnotation = useLiteratureStore((s) => s.saveAnnotation);
+
   const handleHighlight = useCallback(
     async (highlight: ColoredHighlight) => {
       await saveAnnotation(projectRoot, coloredHighlightToDb(paper.id, highlight));
@@ -122,9 +141,9 @@ function ReaderPageLayers({ projectRoot, paper }: LiteratureReaderProps) {
 
   return (
     <>
-      <ColoredHighlightLayer onHighlight={(h) => void handleHighlight(h)} />
-      <HighlightDeleteSync projectRoot={projectRoot} paperId={paper.id} />
-      <AnnotationDeleteListener />
+      <LiteratureBlockPointerCapture />
+      <LiteraturePdfActionMenu paper={paper} onHighlight={(h) => void handleHighlight(h)} />
+      <ReaderPageFocusListener />
     </>
   );
 }
@@ -150,10 +169,36 @@ export function LiteratureReader({ projectRoot, paper }: LiteratureReaderProps) 
   const [loadState, setLoadState] = useState<PdfLoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadingHint, setLoadingHint] = useState("Loading PDF…");
+  const [extractBlocks, setExtractBlocks] = useState<PaperExtractBlock[]>([]);
+  const [blocksHint, setBlocksHint] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<{
     receivedBytes: number;
     totalBytes: number | null;
   } | null>(null);
+
+  const mineruState = useLiteratureExtractStore((s) => s.statesByPaper[paper.id]?.mineru);
+  const mineruReady = mineruState?.status === "ready";
+
+  useEffect(() => {
+    if (!mineruReady) {
+      setExtractBlocks([]);
+      setBlocksHint(null);
+      return;
+    }
+    let cancelled = false;
+    void window.electronAPI.extractGetBlocks(projectRoot, paper.id, "mineru").then(({ blocks }) => {
+      if (cancelled) return;
+      setExtractBlocks(blocks ?? []);
+      setBlocksHint(
+        blocks?.length
+          ? null
+          : "Re-extract with MinerU for block-aligned PDF reading (Shift+Click a paragraph).",
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectRoot, paper.id, mineruReady, mineruState?.finishedAt]);
 
   useEffect(() => {
     let cancelled = false;
@@ -282,18 +327,23 @@ export function LiteratureReader({ projectRoot, paper }: LiteratureReaderProps) 
 
   return (
     <AnnotationsStoreProvider>
-      <PdfDocumentView
-        source={pdfSource}
-        persistKey={persistKey}
-        className="literature-pdf-reader"
-        pageLayers={<ReaderPageLayers projectRoot={projectRoot} paper={paper} />}
-        documentLayers={
-          <>
-            <LiteratureSelectionToolbar paper={paper} />
-            <ReaderPageFocusListener />
-          </>
-        }
-      />
+      <LiteratureBlockProvider blocks={extractBlocks}>
+        <div className="flex h-full min-h-0 flex-col">
+          {blocksHint ? (
+            <p className="shrink-0 border-b border-border bg-muted/30 px-3 py-1.5 text-[length:var(--font-size-11)] text-muted-foreground">
+              {blocksHint}
+            </p>
+          ) : null}
+          <PdfDocumentView
+            source={pdfSource}
+            persistKey={persistKey}
+            className="literature-pdf-reader min-h-0 flex-1"
+            toolbarExtra={<LiteratureBlockPickToggle />}
+            pageLayers={<ReaderPageLayers projectRoot={projectRoot} paper={paper} />}
+            documentLayers={<ReaderDocumentLayers projectRoot={projectRoot} paper={paper} />}
+          />
+        </div>
+      </LiteratureBlockProvider>
     </AnnotationsStoreProvider>
   );
 }

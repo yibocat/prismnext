@@ -17,8 +17,22 @@ import {
   resolveStoredBibkey,
   suggestBibkey,
 } from "../../shared/bibkey-utils";
-import { normalizeArxivId, normalizeDoi } from "../../shared/doi-utils";
+import { arxivIdFromDoi, normalizeArxivId, normalizeDoi, coerceStoredDoi } from "../../shared/doi-utils";
+import {
+  checkPdfMatchesEntry,
+  normalizeLiteratureIdentifiers,
+} from "../../shared/literature-pdf-identity";
+import { extractIdsFromPdfFile } from "../lib/extract-pdf-identifiers";
+import {
+  normalizePaperTagsWithCatalog,
+  parsePaperTagsJson,
+  paperTagKey,
+  isValidPaperTagKey,
+  normalizePaperTag,
+  serializePaperTagsJson,
+} from "../../shared/paper-tags";
 import { cslEntryFromPaperRow } from "../../shared/bibliographic-metadata/helpers";
+import { broadcastToRenderer } from "./literature-broadcast";
 import "@citation-js/plugin-bibtex";
 
 export interface PaperRow {
@@ -39,6 +53,14 @@ export interface PaperRow {
   metadata_source: string | null;
   raw_bibtex: string | null;
   csl_json: string | null;
+  /** JSON string array in DB — use `parsePaperTagsJson` for UI. */
+  tags: string | null;
+  ai_summary: string | null;
+  ai_metadata_at: number | null;
+  ai_metadata_sha: string | null;
+  /** Virtual — JOINed from paper_ai_metadata. */
+  ai_metadata_status: string | null;
+  ai_metadata_error: string | null;
   /** Virtual field — JOINed from zotero_mirror, not a papers column. */
   zotero_key: string | null;
   created_at: number;
@@ -75,6 +97,7 @@ export interface LibraryPaths {
   libraryDir: string;
   dbPath: string;
   attachmentsDir: string;
+  extractDir: string;
 }
 
 export type LibraryDb = DatabaseSync;
@@ -87,15 +110,24 @@ export function getLibraryPaths(projectRoot: string): LibraryPaths {
     libraryDir,
     dbPath: path.join(libraryDir, "library.db"),
     attachmentsDir: path.join(libraryDir, "attachments"),
+    extractDir: path.join(libraryDir, "extract"),
   };
 }
 
 function ensureLibraryDirs(paths: LibraryPaths): void {
   fs.mkdirSync(paths.attachmentsDir, { recursive: true });
+  fs.mkdirSync(paths.extractDir, { recursive: true });
 }
 
 /** Bump when schema changes. Dev phase: mismatch → wipe + recreate. */
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 10;
+
+const PAPER_SELECT = `
+  SELECT p.*, zm.zotero_key, am.status AS ai_metadata_status, am.error AS ai_metadata_error
+  FROM papers p
+  LEFT JOIN zotero_mirror zm ON zm.paper_id = p.id
+  LEFT JOIN paper_ai_metadata am ON am.paper_id = p.id
+`;
 
 function ensureMetaTable(db: LibraryDb): void {
   db.exec(`CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
@@ -115,16 +147,90 @@ function writeSchemaVersion(db: LibraryDb, version: number): void {
   );
 }
 
+/** Orphan merge needs a secondary signal beyond title+year (bibkey, authors, venue). */
+const ORPHAN_MERGE_MIN_SCORE = 40;
+/** When multiple candidates qualify, winner must lead by this margin. */
+const ORPHAN_MERGE_WIN_MARGIN = 20;
+
 /**
- * Dev phase: no migrations. If the DB schema doesn't match, wipe and recreate.
- * No users, no backward compat needed.
+ * Dev phase: incremental steps when possible; full wipe only when unknown/old.
  */
+function migrateLibraryDbIncremental(db: LibraryDb, fromVersion: number): void {
+  if (fromVersion < 7) {
+    db.exec("CREATE INDEX IF NOT EXISTS idx_papers_year ON papers(year);");
+    writeSchemaVersion(db, 7);
+  }
+  if (fromVersion < 8) {
+    const cols = db.prepare("PRAGMA table_info(papers)").all() as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === "tags")) {
+      db.exec("ALTER TABLE papers ADD COLUMN tags TEXT;");
+    }
+    writeSchemaVersion(db, 8);
+  }
+  if (fromVersion < 9) {
+    const cols = db.prepare("PRAGMA table_info(papers)").all() as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === "ai_summary")) {
+      db.exec("ALTER TABLE papers ADD COLUMN ai_summary TEXT;");
+    }
+    if (!cols.some((c) => c.name === "ai_metadata_at")) {
+      db.exec("ALTER TABLE papers ADD COLUMN ai_metadata_at INTEGER;");
+    }
+    if (!cols.some((c) => c.name === "ai_metadata_sha")) {
+      db.exec("ALTER TABLE papers ADD COLUMN ai_metadata_sha TEXT;");
+    }
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS paper_ai_metadata (
+        paper_id TEXT PRIMARY KEY REFERENCES papers(id) ON DELETE CASCADE,
+        status TEXT NOT NULL DEFAULT 'idle',
+        error TEXT,
+        model TEXT,
+        queued_at INTEGER,
+        finished_at INTEGER
+      );
+    `);
+    migrateTagsToCanonical(db);
+    writeSchemaVersion(db, 9);
+  }
+  if (fromVersion < 10) {
+    migrateFtsTagsAndSummary(db);
+    writeSchemaVersion(db, 10);
+  }
+}
+
+function migrateTagsToCanonical(db: LibraryDb): void {
+  const rows = db
+    .prepare("SELECT id, tags FROM papers WHERE tags IS NOT NULL AND tags != ''")
+    .all() as Array<{ id: string; tags: string }>;
+  const catalog: string[] = [];
+  const seenKeys = new Set<string>();
+  for (const row of rows) {
+    for (const raw of parsePaperTagsJson(row.tags)) {
+      const key = paperTagKey(raw);
+      if (!isValidPaperTagKey(key) || seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      const display = normalizePaperTag(raw);
+      if (display) catalog.push(display);
+    }
+  }
+  const update = db.prepare("UPDATE papers SET tags = ? WHERE id = ?");
+  for (const row of rows) {
+    const normalized = normalizePaperTagsWithCatalog(parsePaperTagsJson(row.tags), catalog);
+    update.run(serializePaperTagsJson(normalized), row.id);
+  }
+}
+
 function migrateLibraryDb(db: LibraryDb): void {
   const version = readSchemaVersion(db);
   if (version === CURRENT_SCHEMA_VERSION) return;
+  if (version > 0 && version < CURRENT_SCHEMA_VERSION) {
+    migrateLibraryDbIncremental(db, version);
+    if (readSchemaVersion(db) === CURRENT_SCHEMA_VERSION) return;
+  }
   // Schema drift — drop and rebuild (dev only, no user data to preserve)
   db.exec(`
     DROP TABLE IF EXISTS papers_fts;
+    DROP TABLE IF EXISTS paper_extracts;
+    DROP TABLE IF EXISTS paper_ai_metadata;
     DROP TABLE IF EXISTS annotations;
     DROP TABLE IF EXISTS collection_papers;
     DROP TABLE IF EXISTS reading_list;
@@ -159,11 +265,15 @@ function initSchema(db: LibraryDb): void {
       metadata_source TEXT,
       raw_bibtex TEXT,
       csl_json TEXT,
+      tags TEXT,
+      ai_summary TEXT,
+      ai_metadata_at INTEGER,
+      ai_metadata_sha TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
     CREATE VIRTUAL TABLE IF NOT EXISTS papers_fts USING fts5(
-      title, abstract, authors, content='papers', content_rowid='rowid'
+      title, abstract, authors, tags, ai_summary, content='papers', content_rowid='rowid'
     );
     CREATE TABLE IF NOT EXISTS annotations (
       id TEXT PRIMARY KEY,
@@ -209,6 +319,30 @@ function initSchema(db: LibraryDb): void {
     CREATE INDEX IF NOT EXISTS idx_zotero_mirror_key ON zotero_mirror(zotero_key);
     CREATE INDEX IF NOT EXISTS idx_papers_doi ON papers(doi) WHERE doi IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_papers_arxiv ON papers(arxiv_id) WHERE arxiv_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_papers_year ON papers(year);
+    CREATE TABLE IF NOT EXISTS paper_ai_metadata (
+      paper_id TEXT PRIMARY KEY REFERENCES papers(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'idle',
+      error TEXT,
+      model TEXT,
+      queued_at INTEGER,
+      finished_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS paper_extracts (
+      paper_id TEXT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
+      source TEXT NOT NULL,
+      status TEXT NOT NULL,
+      md_path TEXT,
+      pages INTEGER,
+      remote_job_id TEXT,
+      error TEXT,
+      retry_count INTEGER DEFAULT 0,
+      next_retry_at INTEGER,
+      queued_at INTEGER,
+      started_at INTEGER,
+      finished_at INTEGER,
+      PRIMARY KEY (paper_id, source)
+    );
   `);
 }
 
@@ -276,46 +410,88 @@ function uniqueBibkey(db: LibraryDb, preferred: string): string {
 
 function ftsDelete(db: LibraryDb, rowid: number): void {
   db.prepare(
-    "INSERT INTO papers_fts(papers_fts, rowid, title, abstract, authors) VALUES ('delete', ?, '', '', '')",
+    "INSERT INTO papers_fts(papers_fts, rowid, title, abstract, authors, tags, ai_summary) VALUES ('delete', ?, '', '', '', '', '')",
   ).run(rowid);
 }
 
-function ftsInsert(
-  db: LibraryDb,
-  rowid: number,
-  title: string,
-  abstract: string | null,
-  authors: string | null,
-): void {
-  db.prepare("INSERT INTO papers_fts(rowid, title, abstract, authors) VALUES (?, ?, ?, ?)").run(
-    rowid,
-    title,
-    abstract ?? "",
-    authors ?? "",
+const EXPECTED_FTS_COLUMNS = ["title", "abstract", "authors", "tags", "ai_summary"] as const;
+
+const FTS5_CREATE_SQL = `
+  CREATE VIRTUAL TABLE papers_fts USING fts5(
+    title, abstract, authors, tags, ai_summary, content='papers', content_rowid='rowid'
   );
+`;
+
+function ftsColumnNames(db: LibraryDb): Set<string> {
+  try {
+    const rows = db.prepare("PRAGMA table_info(papers_fts)").all() as Array<{ name: string }>;
+    return new Set(rows.map((r) => r.name));
+  } catch {
+    return new Set();
+  }
 }
 
-function ftsUpsert(
-  db: LibraryDb,
-  rowid: number,
-  title: string,
-  abstract: string | null,
-  authors: string | null,
-): void {
+function ftsSchemaNeedsUpgrade(db: LibraryDb): boolean {
+  const cols = ftsColumnNames(db);
+  if (cols.size === 0) return true;
+  return !EXPECTED_FTS_COLUMNS.every((name) => cols.has(name));
+}
+
+function reindexAllPapersInFts(db: LibraryDb): void {
+  const rows = db
+    .prepare("SELECT rowid, title, abstract, authors, tags, ai_summary FROM papers")
+    .all() as Array<PaperRow & { rowid: number }>;
+  for (const row of rows) {
+    ftsInsert(db, row.rowid, row);
+  }
+}
+
+function recreateFtsIndex(db: LibraryDb): void {
+  db.exec("DROP TABLE IF EXISTS papers_fts;");
+  db.exec(FTS5_CREATE_SQL);
+  reindexAllPapersInFts(db);
+}
+
+type FtsPaperSource = Pick<PaperRow, "title" | "abstract" | "authors" | "tags" | "ai_summary">;
+
+function ftsFieldsFromPaper(paper: FtsPaperSource): {
+  title: string;
+  abstract: string;
+  authors: string;
+  tags: string;
+  ai_summary: string;
+} {
+  return {
+    title: paper.title,
+    abstract: paper.abstract ?? "",
+    authors: paper.authors ?? "",
+    tags: parsePaperTagsJson(paper.tags).join(" "),
+    ai_summary: paper.ai_summary ?? "",
+  };
+}
+
+function ftsInsert(db: LibraryDb, rowid: number, paper: FtsPaperSource): void {
+  const fields = ftsFieldsFromPaper(paper);
+  db.prepare(
+    "INSERT INTO papers_fts(rowid, title, abstract, authors, tags, ai_summary) VALUES (?, ?, ?, ?, ?, ?)",
+  ).run(rowid, fields.title, fields.abstract, fields.authors, fields.tags, fields.ai_summary);
+}
+
+function ftsUpsert(db: LibraryDb, rowid: number, paper: FtsPaperSource): void {
   try {
     ftsDelete(db, rowid);
   } catch {
     // row may not exist in FTS index yet
   }
-  ftsInsert(db, rowid, title, abstract, authors);
+  ftsInsert(db, rowid, paper);
 }
 
 function isFtsCorruptError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
-  const e = err as { code?: string; errcode?: number; errstr?: string };
+  const e = err as { code?: string; errcode?: number; errstr?: string; message?: string };
   if (e.errcode === 11 || e.errcode === 267) return true;
   const code = e.code ?? "";
-  const msg = e.errstr ?? "";
+  const msg = e.errstr ?? e.message ?? "";
   return (
     code === "SQLITE_CORRUPT_VTAB" ||
     code === "SQLITE_CORRUPT" ||
@@ -324,27 +500,37 @@ function isFtsCorruptError(err: unknown): boolean {
   );
 }
 
+function isFtsSchemaError(err: unknown): boolean {
+  const msg = String(err instanceof Error ? err.message : err);
+  return msg.includes("no column named") || msg.includes("has no column");
+}
+
 function repairFtsIndex(db: LibraryDb): void {
+  if (ftsSchemaNeedsUpgrade(db)) {
+    recreateFtsIndex(db);
+    return;
+  }
   try {
     db.exec("INSERT INTO papers_fts(papers_fts) VALUES('rebuild')");
   } catch (err) {
     console.warn("[literature] FTS rebuild failed, recreating virtual table:", err);
-    db.exec(`
-      DROP TABLE IF EXISTS papers_fts;
-      CREATE VIRTUAL TABLE papers_fts USING fts5(
-        title, abstract, authors, content='papers', content_rowid='rowid'
-      );
-      INSERT INTO papers_fts(rowid, title, abstract, authors)
-      SELECT rowid, title, COALESCE(abstract, ''), COALESCE(authors, '') FROM papers;
-    `);
+    recreateFtsIndex(db);
   }
 }
 
+function migrateFtsTagsAndSummary(db: LibraryDb): void {
+  recreateFtsIndex(db);
+}
+
 function ensureFtsHealthy(db: LibraryDb): void {
+  if (ftsSchemaNeedsUpgrade(db)) {
+    recreateFtsIndex(db);
+    return;
+  }
   try {
     db.prepare("SELECT rowid FROM papers_fts LIMIT 1").get();
   } catch (err) {
-    if (isFtsCorruptError(err)) repairFtsIndex(db);
+    if (isFtsCorruptError(err) || isFtsSchemaError(err)) repairFtsIndex(db);
     else throw err;
   }
 }
@@ -366,13 +552,13 @@ function removeFromFts(db: LibraryDb, rowid: number): void {
   }
 }
 
-function syncFts(db: LibraryDb, rowid: number, title: string, abstract: string | null, authors: string | null): void {
+function syncFtsForPaper(db: LibraryDb, rowid: number, paper: FtsPaperSource): void {
   try {
-    ftsUpsert(db, rowid, title, abstract, authors);
+    ftsUpsert(db, rowid, paper);
   } catch (err) {
-    if (isFtsCorruptError(err)) {
+    if (isFtsCorruptError(err) || isFtsSchemaError(err)) {
       repairFtsIndex(db);
-      ftsUpsert(db, rowid, title, abstract, authors);
+      ftsUpsert(db, rowid, paper);
     } else {
       throw err;
     }
@@ -393,12 +579,26 @@ function findExistingPaper(
     const rows = db.prepare("SELECT * FROM papers WHERE doi IS NOT NULL").all() as PaperRow[];
     const row = rows.find((p) => normalizeDoi(p.doi) === normDoi && p.id !== excludeId);
     if (row) return row;
+    const arxivFromDoi = arxivIdFromDoi(normDoi);
+    if (arxivFromDoi) {
+      const arxivRows = db.prepare("SELECT * FROM papers WHERE arxiv_id IS NOT NULL").all() as PaperRow[];
+      const arxivRow = arxivRows.find(
+        (p) => normalizeArxivId(p.arxiv_id) === arxivFromDoi && p.id !== excludeId,
+      );
+      if (arxivRow) return arxivRow;
+    }
   }
   const normArxiv = normalizeArxivId(opts.arxivId ?? undefined);
   if (normArxiv) {
     const rows = db.prepare("SELECT * FROM papers WHERE arxiv_id IS NOT NULL").all() as PaperRow[];
     const row = rows.find((p) => normalizeArxivId(p.arxiv_id) === normArxiv && p.id !== excludeId);
     if (row) return row;
+    const doiRows = db.prepare("SELECT * FROM papers WHERE doi IS NOT NULL").all() as PaperRow[];
+    const doiRow = doiRows.find((p) => {
+      const fromDoi = arxivIdFromDoi(normalizeDoi(p.doi));
+      return fromDoi === normArxiv && p.id !== excludeId;
+    });
+    if (doiRow) return doiRow;
   }
   return undefined;
 }
@@ -414,6 +614,10 @@ export interface PaperUpdateInput {
   venue?: string | null;
   type?: string | null;
   isbn?: string | null;
+  tags?: string[] | null;
+  ai_summary?: string | null;
+  ai_metadata_at?: number | null;
+  ai_metadata_sha?: string | null;
 }
 
 export interface CreatePaperResult {
@@ -422,38 +626,142 @@ export interface CreatePaperResult {
   duplicateReason?: "pdf" | "doi" | "arxiv";
 }
 
+export function collectProjectTagDisplays(db: LibraryDb): string[] {
+  const rows = db
+    .prepare("SELECT tags FROM papers WHERE tags IS NOT NULL AND tags != ''")
+    .all() as Array<{ tags: string }>;
+  const catalog: string[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    for (const tag of parsePaperTagsJson(row.tags)) {
+      const key = paperTagKey(tag);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      catalog.push(tag);
+    }
+  }
+  return catalog;
+}
+
+export type PaperAiMetadataStatus =
+  | "idle"
+  | "queued"
+  | "running"
+  | "ready"
+  | "failed"
+  | "skipped";
+
+export function upsertPaperAiMetadata(
+  db: LibraryDb,
+  paperId: string,
+  patch: {
+    status: PaperAiMetadataStatus;
+    error?: string | null;
+    model?: string | null;
+    queued_at?: number | null;
+    finished_at?: number | null;
+  },
+): void {
+  db.prepare(
+    `INSERT INTO paper_ai_metadata (paper_id, status, error, model, queued_at, finished_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(paper_id) DO UPDATE SET
+       status = excluded.status,
+       error = excluded.error,
+       model = COALESCE(excluded.model, paper_ai_metadata.model),
+       queued_at = COALESCE(excluded.queued_at, paper_ai_metadata.queued_at),
+       finished_at = COALESCE(excluded.finished_at, paper_ai_metadata.finished_at)`,
+  ).run(
+    paperId,
+    patch.status,
+    patch.error ?? null,
+    patch.model ?? null,
+    patch.queued_at ?? null,
+    patch.finished_at ?? null,
+  );
+}
+
+export function mapPaperForRenderer(row: PaperRow) {
+  const {
+    tags: tagsJson,
+    ai_metadata_status: aiMetadataStatus,
+    ai_metadata_error: aiMetadataError,
+    ...rest
+  } = row;
+  return {
+    ...rest,
+    tags: parsePaperTagsJson(tagsJson),
+    source: rest.origin,
+    ai_metadata_status: (aiMetadataStatus as PaperAiMetadataStatus | null) ?? "idle",
+    ai_metadata_error: aiMetadataError,
+  };
+}
+
+const AGENT_SEARCH_SUMMARY_MAX = 320;
+
+/** Agent-facing paper payload — parsed tags, no raw csl_json blob. */
+export function mapPaperForAgent(row: PaperRow) {
+  const {
+    csl_json: _csl,
+    tags: tagsJson,
+    ai_metadata_status: _ams,
+    ai_metadata_error: _ame,
+    zotero_key: _zk,
+    ...rest
+  } = row;
+  return {
+    ...rest,
+    tags: parsePaperTagsJson(tagsJson),
+    ai_summary: row.ai_summary,
+  };
+}
+
+/** Compact search hit for agent tool output (truncates long AI summaries). */
+export function mapPaperSearchHitForAgent(row: PaperRow) {
+  const paper = mapPaperForAgent(row);
+  const summary = paper.ai_summary?.trim();
+  return {
+    bibkey: paper.bibkey,
+    title: paper.title,
+    year: paper.year,
+    authors: paper.authors,
+    doi: paper.doi,
+    arxiv_id: paper.arxiv_id,
+    abstract: paper.abstract,
+    venue: paper.venue,
+    tags: paper.tags,
+    ai_summary: summary
+      ? summary.length > AGENT_SEARCH_SUMMARY_MAX
+        ? `${summary.slice(0, AGENT_SEARCH_SUMMARY_MAX)}…`
+        : summary
+      : null,
+  };
+}
+
+export function filterPapersByTag(papers: PaperRow[], tag: string): PaperRow[] {
+  const key = paperTagKey(normalizePaperTag(tag) ?? tag);
+  if (!key) return [];
+  return papers.filter((p) => parsePaperTagsJson(p.tags).some((t) => paperTagKey(t) === key));
+}
+
+export interface SearchPapersOptions {
+  tag?: string | null;
+}
+
 export function listPapers(projectRoot: string): PaperRow[] {
   const db = openLibraryDb(projectRoot);
-  return db
-    .prepare(
-      `SELECT p.*, zm.zotero_key FROM papers p
-       LEFT JOIN zotero_mirror zm ON zm.paper_id = p.id
-       ORDER BY p.updated_at DESC`,
-    )
-    .all() as PaperRow[];
+  return db.prepare(`${PAPER_SELECT} ORDER BY p.updated_at DESC`).all() as PaperRow[];
 }
 
 export function getPaper(projectRoot: string, paperId: string): PaperRow | null {
   const db = openLibraryDb(projectRoot);
-  const row = db
-    .prepare(
-      `SELECT p.*, zm.zotero_key FROM papers p
-       LEFT JOIN zotero_mirror zm ON zm.paper_id = p.id
-       WHERE p.id = ?`,
-    )
-    .get(paperId) as PaperRow | undefined;
+  const row = db.prepare(`${PAPER_SELECT} WHERE p.id = ?`).get(paperId) as PaperRow | undefined;
   return row ?? null;
 }
 
 export function getPaperByBibkey(projectRoot: string, bibkey: string): PaperRow | null {
   const db = openLibraryDb(projectRoot);
-  const row = db
-    .prepare(
-      `SELECT p.*, zm.zotero_key FROM papers p
-       LEFT JOIN zotero_mirror zm ON zm.paper_id = p.id
-       WHERE p.bibkey = ?`,
-    )
-    .get(bibkey) as PaperRow | undefined;
+  const row = db.prepare(`${PAPER_SELECT} WHERE p.bibkey = ?`).get(bibkey) as PaperRow | undefined;
   return row ?? null;
 }
 
@@ -472,32 +780,58 @@ export function findExistingByIdentifier(
   return { paperId: row.id, bibkey: row.bibkey };
 }
 
-export function searchPapers(projectRoot: string, query: string, limit = 50): PaperRow[] {
-  const db = openLibraryDb(projectRoot);
+export function searchPapers(
+  projectRoot: string,
+  query: string,
+  limit = 50,
+  opts?: SearchPapersOptions,
+): PaperRow[] {
   const q = query.trim();
-  if (!q) return listPapers(projectRoot).slice(0, limit);
-  try {
-    const rows = db
-      .prepare(
-        `SELECT p.* FROM papers_fts fts
-         JOIN papers p ON p.rowid = fts.rowid
-         WHERE papers_fts MATCH ?
-         ORDER BY rank
-         LIMIT ?`,
-      )
-      .all(`${q}*`, limit) as PaperRow[];
-    if (rows.length > 0) return rows;
-  } catch {
-    // fallback to LIKE
+  const tagKey = opts?.tag?.trim()
+    ? paperTagKey(normalizePaperTag(opts.tag.trim()) ?? opts.tag.trim())
+    : null;
+
+  const fetchLimit = tagKey && q ? Math.max(limit * 4, 50) : limit;
+  let rows: PaperRow[] = [];
+
+  if (q) {
+    const db = openLibraryDb(projectRoot);
+    try {
+      rows = db
+        .prepare(
+          `SELECT p.*, zm.zotero_key, am.status AS ai_metadata_status, am.error AS ai_metadata_error
+           FROM papers_fts fts
+           JOIN papers p ON p.rowid = fts.rowid
+           LEFT JOIN zotero_mirror zm ON zm.paper_id = p.id
+           LEFT JOIN paper_ai_metadata am ON am.paper_id = p.id
+           WHERE papers_fts MATCH ?
+           ORDER BY rank
+           LIMIT ?`,
+        )
+        .all(`${q}*`, fetchLimit) as PaperRow[];
+    } catch {
+      // fallback to LIKE
+    }
+    if (rows.length === 0) {
+      const like = `%${q}%`;
+      rows = db
+        .prepare(
+          `${PAPER_SELECT}
+           WHERE p.title LIKE ? OR p.abstract LIKE ? OR p.authors LIKE ? OR p.bibkey LIKE ?
+              OR p.tags LIKE ? OR p.ai_summary LIKE ?
+           ORDER BY p.updated_at DESC LIMIT ?`,
+        )
+        .all(like, like, like, like, like, like, fetchLimit) as PaperRow[];
+    }
+  } else {
+    rows = listPapers(projectRoot);
   }
-  const like = `%${q}%`;
-  return db
-    .prepare(
-      `SELECT * FROM papers
-       WHERE title LIKE ? OR abstract LIKE ? OR authors LIKE ? OR bibkey LIKE ?
-       ORDER BY updated_at DESC LIMIT ?`,
-    )
-    .all(like, like, like, like, limit) as PaperRow[];
+
+  if (tagKey) {
+    rows = rows.filter((p) => parsePaperTagsJson(p.tags).some((t) => paperTagKey(t) === tagKey));
+  }
+
+  return rows.slice(0, limit);
 }
 
 /** Unified PDF storage — writes bytes to attachments/<sha16>.pdf, returns relative path + sha. */
@@ -519,6 +853,67 @@ function storePdfAttachment(projectRoot: string, sourcePath: string): { relative
   return storePdfBytes(projectRoot, buf);
 }
 
+export function paperHasReadyExtract(projectRoot: string, paperId: string): boolean {
+  const db = openLibraryDb(projectRoot);
+  const row = db
+    .prepare("SELECT 1 FROM paper_extracts WHERE paper_id = ? AND status = 'ready' LIMIT 1")
+    .get(paperId);
+  return Boolean(row);
+}
+
+/** Local PDF, ready extract, tags/summary, or explicit manual origin — survives Zotero orphan prune / disconnect. */
+export function isPaperLocallyMaterialized(projectRoot: string, paperId: string): boolean {
+  const paper = getPaper(projectRoot, paperId);
+  if (!paper) return false;
+  if (paper.origin === "manual") return true;
+  if (paper.pdf_path) return true;
+  if (paper.ai_summary?.trim()) return true;
+  if (parsePaperTagsJson(paper.tags).length > 0) return true;
+  return paperHasReadyExtract(projectRoot, paperId);
+}
+
+export type OrphanZoteroPaperResolution = "deleted" | "detached";
+
+/** Drop a Zotero mirror that left the bound collection — keep local work when materialized. */
+export function resolveOrphanZoteroPaper(
+  projectRoot: string,
+  paperId: string,
+): OrphanZoteroPaperResolution {
+  if (isPaperLocallyMaterialized(projectRoot, paperId)) {
+    detachZoteroMirror(projectRoot, paperId);
+    return "detached";
+  }
+  deletePaper(projectRoot, paperId);
+  return "deleted";
+}
+
+/**
+ * Promote a Zotero mirror to a project-local entry while keeping `zotero_mirror`
+ * so the next Zotero sync updates the same row (avoids duplicates).
+ * Mirror is removed only on disconnect (`detachAllZoteroMirrors`) or explicit detach.
+ */
+export function promoteZoteroPaperToProject(projectRoot: string, paperId: string): boolean {
+  const mirror = getZoteroMirrorByPaperId(projectRoot, paperId);
+  if (!mirror) return false;
+  const paper = getPaper(projectRoot, paperId);
+  if (!paper || paper.origin === "manual") return false;
+  const db = openLibraryDb(projectRoot);
+  db.prepare("UPDATE papers SET origin = 'manual', updated_at = ? WHERE id = ?").run(
+    Date.now(),
+    paperId,
+  );
+  broadcastToRenderer("literature:paperMaterialized", { projectRoot, paperId });
+  return true;
+}
+
+/**
+ * When a Zotero mirror gains local assets, promote to a project-local entry so
+ * PDF / extracted text / notes survive disconnect.
+ */
+export function materializeZoteroPaperIfLinked(projectRoot: string, paperId: string): boolean {
+  return promoteZoteroPaperToProject(projectRoot, paperId);
+}
+
 /** Attach downloaded or in-memory PDF bytes to a library entry (skip if already has PDF). */
 export function attachPdfBufferToPaper(projectRoot: string, paperId: string, buf: Buffer): PaperRow {
   const paper = getPaper(projectRoot, paperId);
@@ -534,7 +929,191 @@ export function attachPdfBufferToPaper(projectRoot: string, paperId: string, buf
     now,
     paperId,
   );
+  materializeZoteroPaperIfLinked(projectRoot, paperId);
   return getPaper(projectRoot, paperId)!;
+}
+
+/** Replace an entry's PDF (new sha) — triggers extract invalidation in caller. */
+export function replacePdfFromFile(
+  projectRoot: string,
+  paperId: string,
+  sourcePath: string,
+): { paper: PaperRow; replaced: boolean } {
+  const paper = getPaper(projectRoot, paperId);
+  if (!paper) throw new Error("Paper not found");
+
+  const buf = fs.readFileSync(sourcePath);
+  const sha = crypto.createHash("sha256").update(buf).digest("hex");
+  if (paper.pdf_sha === sha) {
+    return { paper, replaced: false };
+  }
+
+  const { relativePath, sha: storedSha } = storePdfBytes(projectRoot, buf);
+  const db = openLibraryDb(projectRoot);
+  const now = Date.now();
+  db.prepare("UPDATE papers SET pdf_path = ?, pdf_sha = ?, updated_at = ? WHERE id = ?").run(
+    relativePath,
+    storedSha,
+    now,
+    paperId,
+  );
+  return { paper: getPaper(projectRoot, paperId)!, replaced: true };
+}
+
+export type AttachLocalPdfConflict =
+  | {
+      kind: "sha_duplicate";
+      otherPaper: PaperRow;
+    }
+  | {
+      kind: "identifier_duplicate";
+      otherPaper: PaperRow;
+      doi: string | null;
+      arxivId: string | null;
+    }
+  | {
+      kind: "target_mismatch";
+      entryDoi: string | null;
+      entryArxivId: string | null;
+      pdfDoi: string | null;
+      pdfArxivId: string | null;
+    }
+  | {
+      kind: "target_unverified";
+      entryDoi: string | null;
+      entryArxivId: string | null;
+    };
+
+export interface AttachLocalPdfResult {
+  paper: PaperRow;
+  attached: boolean;
+  replaced: boolean;
+  conflict?: AttachLocalPdfConflict;
+  attachError?: string;
+}
+
+function assertPdfBuffer(buf: Buffer): void {
+  if (buf.length < 5 || buf.subarray(0, 4).toString("ascii") !== "%PDF") {
+    throw new Error("File is not a PDF");
+  }
+}
+
+/** Attach or replace a local PDF file on a specific library entry. */
+export function attachLocalPdfToPaper(
+  projectRoot: string,
+  paperId: string,
+  sourcePath: string,
+  opts?: { ignoreIdentifierConflict?: boolean },
+): AttachLocalPdfResult {
+  const paper = getPaper(projectRoot, paperId);
+  if (!paper) throw new Error("Paper not found");
+
+  let buf: Buffer;
+  try {
+    buf = fs.readFileSync(sourcePath);
+    assertPdfBuffer(buf);
+  } catch (err) {
+    return {
+      paper,
+      attached: false,
+      replaced: false,
+      attachError: err instanceof Error ? err.message : String(err),
+    };
+  }
+
+  const sha = crypto.createHash("sha256").update(buf).digest("hex");
+  const db = openLibraryDb(projectRoot);
+  const extracted = extractIdsFromPdfFile(sourcePath);
+  const normDoi = extracted.doi ? normalizeDoi(extracted.doi) : null;
+  const normArxiv = extracted.arxivId ? normalizeArxivId(extracted.arxivId) : null;
+  const entryIds = normalizeLiteratureIdentifiers(paper);
+
+  if (!opts?.ignoreIdentifierConflict) {
+    const identity = checkPdfMatchesEntry(paper, { doi: normDoi, arxivId: normArxiv });
+    if (identity === "mismatch") {
+      return {
+        paper,
+        attached: false,
+        replaced: false,
+        conflict: {
+          kind: "target_mismatch",
+          entryDoi: entryIds.doi,
+          entryArxivId: entryIds.arxivId,
+          pdfDoi: normDoi,
+          pdfArxivId: normArxiv,
+        },
+      };
+    }
+    if (identity === "unverified") {
+      return {
+        paper,
+        attached: false,
+        replaced: false,
+        conflict: {
+          kind: "target_unverified",
+          entryDoi: entryIds.doi,
+          entryArxivId: entryIds.arxivId,
+        },
+      };
+    }
+  }
+
+  const shaDup = findExistingPaper(db, { pdfSha: sha, excludeId: paperId });
+  if (shaDup) {
+    return { paper, attached: false, replaced: false, conflict: { kind: "sha_duplicate", otherPaper: shaDup } };
+  }
+
+  if (!opts?.ignoreIdentifierConflict && (normDoi || normArxiv)) {
+    const idDup = findExistingPaper(db, { doi: normDoi, arxivId: normArxiv, excludeId: paperId });
+    if (idDup) {
+      return {
+        paper,
+        attached: false,
+        replaced: false,
+        conflict: {
+          kind: "identifier_duplicate",
+          otherPaper: idDup,
+          doi: normDoi,
+          arxivId: normArxiv,
+        },
+      };
+    }
+  }
+
+  const hadPdf = Boolean(paper.pdf_path);
+  let resultPaper: PaperRow;
+  let attached = false;
+  let replaced = false;
+
+  try {
+    if (hadPdf) {
+      const replaceResult = replacePdfFromFile(projectRoot, paperId, sourcePath);
+      resultPaper = replaceResult.paper;
+      replaced = replaceResult.replaced;
+      attached = replaceResult.replaced;
+    } else {
+      resultPaper = attachPdfBufferToPaper(projectRoot, paperId, buf);
+      attached = Boolean(resultPaper.pdf_path && !hadPdf);
+    }
+  } catch (err) {
+    return {
+      paper,
+      attached: false,
+      replaced: false,
+      attachError: err instanceof Error ? err.message : String(err),
+    };
+  }
+
+  if (attached && !resultPaper.doi && !resultPaper.arxiv_id && (normDoi || normArxiv)) {
+    const applied = applyIdentifiers(projectRoot, paperId, { doi: normDoi, arxivId: normArxiv });
+    if (applied.paper) resultPaper = applied.paper;
+  }
+
+  return {
+    paper: getPaper(projectRoot, paperId) ?? resultPaper,
+    attached,
+    replaced,
+  };
 }
 
 export interface IngestPdfResult {
@@ -583,7 +1162,7 @@ export function ingestPdf(projectRoot: string, pdfPath: string, opts?: { title?:
 
   const { relativePath, sha: storedSha } = storePdfAttachment(projectRoot, pdfPath);
   // Do not store crude buffer DOI — renderer will extract via pdfjs and fetch metadata
-  const doi = opts?.doi ? normalizeDoi(opts.doi) : null;
+  const doi = opts?.doi ? coerceStoredDoi(opts.doi) : null;
   const baseTitle = opts?.title ?? path.basename(pdfPath, path.extname(pdfPath));
   const now = Date.now();
   const id = newId();
@@ -593,7 +1172,7 @@ export function ingestPdf(projectRoot: string, pdfPath: string, opts?: { title?:
      VALUES (?, ?, ?, NULL, NULL, NULL, ?, NULL, NULL, NULL, 'article', ?, ?, 'manual', NULL, ?, ?)`,
   ).run(id, bibkey, baseTitle, doi, relativePath, storedSha, now, now);
   const rowid = db.prepare("SELECT rowid FROM papers WHERE id = ?").get(id) as { rowid: number };
-  syncFts(db, rowid.rowid, baseTitle, null, null);
+  syncFtsForPaper(db, rowid.rowid, { title: baseTitle, abstract: null, authors: null, tags: null, ai_summary: null });
   const paper = getPaper(projectRoot, id)!;
   return { paper, created: true };
 }
@@ -601,7 +1180,7 @@ export function ingestPdf(projectRoot: string, pdfPath: string, opts?: { title?:
 /** Create a paper; returns existing row when DOI / arXiv already in library. */
 export function createPaper(projectRoot: string, meta: Partial<PaperRow>): CreatePaperResult {
   const db = openLibraryDb(projectRoot);
-  const normDoi = meta.doi ? normalizeDoi(meta.doi) : null;
+  const normDoi = meta.doi ? coerceStoredDoi(meta.doi) : null;
   const normArxiv = meta.arxiv_id ? normalizeArxivId(meta.arxiv_id) : null;
   const dup = findExistingPaper(db, { doi: normDoi, arxivId: normArxiv });
   if (dup) {
@@ -647,7 +1226,13 @@ export function createPaper(projectRoot: string, meta: Partial<PaperRow>): Creat
     now, now,
   );
   const rowid = db.prepare("SELECT rowid FROM papers WHERE id = ?").get(id) as { rowid: number };
-  syncFts(db, rowid.rowid, title, meta.abstract ?? null, meta.authors ?? null);
+  syncFtsForPaper(db, rowid.rowid, {
+    title,
+    abstract: meta.abstract ?? null,
+    authors: meta.authors ?? null,
+    tags: null,
+    ai_summary: null,
+  });
   return { paper: getPaper(projectRoot, id)!, created: true };
 }
 
@@ -682,7 +1267,7 @@ export function updatePaper(projectRoot: string, paperId: string, input: PaperUp
   const doi =
     input.doi !== undefined
       ? input.doi
-        ? normalizeDoi(input.doi)
+        ? coerceStoredDoi(input.doi)
         : null
       : existing.doi;
   const arxiv_id =
@@ -694,6 +1279,16 @@ export function updatePaper(projectRoot: string, paperId: string, input: PaperUp
   const venue = input.venue !== undefined ? input.venue : existing.venue;
   const type = input.type !== undefined ? input.type : existing.type;
   const isbn = input.isbn !== undefined ? input.isbn : existing.isbn;
+  const catalog = collectProjectTagDisplays(db);
+  const tags =
+    input.tags !== undefined
+      ? serializePaperTagsJson(normalizePaperTagsWithCatalog(input.tags ?? [], catalog))
+      : existing.tags;
+  const ai_summary = input.ai_summary !== undefined ? input.ai_summary : existing.ai_summary;
+  const ai_metadata_at =
+    input.ai_metadata_at !== undefined ? input.ai_metadata_at : existing.ai_metadata_at;
+  const ai_metadata_sha =
+    input.ai_metadata_sha !== undefined ? input.ai_metadata_sha : existing.ai_metadata_sha;
 
   const dup = findExistingPaper(db, { doi, arxivId: arxiv_id, excludeId: paperId });
   if (dup) {
@@ -705,7 +1300,9 @@ export function updatePaper(projectRoot: string, paperId: string, input: PaperUp
   db.prepare(
     `UPDATE papers SET
       title = ?, bibkey = ?, authors = ?, year = ?, abstract = ?,
-      doi = ?, arxiv_id = ?, venue = ?, type = ?, isbn = ?, raw_bibtex = ?, updated_at = ?
+      doi = ?, arxiv_id = ?, venue = ?, type = ?, isbn = ?, raw_bibtex = ?, tags = ?,
+      ai_summary = ?, ai_metadata_at = ?, ai_metadata_sha = ?,
+      updated_at = ?
      WHERE id = ?`,
   ).run(
     title,
@@ -719,13 +1316,17 @@ export function updatePaper(projectRoot: string, paperId: string, input: PaperUp
     type,
     isbn,
     raw_bibtex,
+    tags,
+    ai_summary,
+    ai_metadata_at,
+    ai_metadata_sha,
     now,
     paperId,
   );
 
   const updated = getPaper(projectRoot, paperId)!;
   const rowid = db.prepare("SELECT rowid FROM papers WHERE id = ?").get(paperId) as { rowid: number };
-  syncFts(db, rowid.rowid, updated.title, updated.abstract, updated.authors);
+  syncFtsForPaper(db, rowid.rowid, updated);
   return updated;
 }
 
@@ -771,6 +1372,11 @@ export function deletePaper(projectRoot: string, paperId: string): void {
       if (fs.existsSync(full)) fs.unlinkSync(full);
     }
   }
+
+  const extractPaperDir = path.join(paths.extractDir, paperId);
+  if (fs.existsSync(extractPaperDir)) {
+    fs.rmSync(extractPaperDir, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -778,8 +1384,8 @@ export function deletePaper(projectRoot: string, paperId: string): void {
  * Removes the zotero_mirror association and sets origin='manual'.
  * The paper (with metadata, annotations, cached PDF) survives disconnect.
  *
- * This is the "Import to local" action — only papers explicitly imported
- * this way survive a Zotero disconnect.
+ * Also invoked automatically when PDF is cached or text is extracted (see
+ * `materializeZoteroPaperIfLinked`). Manual "Keep in project" uses the same path.
  */
 export function detachZoteroMirror(projectRoot: string, paperId: string): void {
   const db = openLibraryDb(projectRoot);
@@ -794,25 +1400,21 @@ export function detachZoteroMirror(projectRoot: string, paperId: string): void {
 
 /**
  * Disconnect from Zotero:
- * - Delete papers that are still Zotero-linked (not imported to local)
+ * - Remove pure Zotero mirrors (no local work)
+ * - Detach (keep as local) entries that were materialized in this project
  * - Delete Zotero-mirrored collections
- * - Papers already imported to local (no zotero_mirror entry) are untouched
- *
- * "Import to local" = detachZoteroMirror (removes mirror, paper becomes local).
- * Only papers explicitly imported survive disconnect.
  */
 export function detachAllZoteroMirrors(projectRoot: string): { papers: number; collections: number } {
   const db = openLibraryDb(projectRoot);
-  // Find papers that are still Zotero-linked (not imported to local)
   const zoteroPaperIds = db.prepare(
     "SELECT paper_id FROM zotero_mirror",
   ).all() as Array<{ paper_id: string }>;
-  const paperIds = zoteroPaperIds.map((r) => r.paper_id);
 
   let deletedPapers = 0;
-  for (const paperId of paperIds) {
-    deletePaper(projectRoot, paperId);
-    deletedPapers++;
+  for (const { paper_id: paperId } of zoteroPaperIds) {
+    if (resolveOrphanZoteroPaper(projectRoot, paperId) === "deleted") {
+      deletedPapers++;
+    }
   }
 
   db.prepare("DELETE FROM zotero_mirror").run();
@@ -862,7 +1464,7 @@ export function applyMetadata(projectRoot: string, paperId: string, meta: Partia
   );
   const updated = getPaper(projectRoot, paperId)!;
   const rowid = db.prepare("SELECT rowid FROM papers WHERE id = ?").get(paperId) as { rowid: number };
-  syncFts(db, rowid.rowid, updated.title, updated.abstract, updated.authors);
+  syncFtsForPaper(db, rowid.rowid, updated);
   return updated;
 }
 
@@ -885,7 +1487,7 @@ export async function importBibTeX(
       skipped++;
       continue;
     }
-    const normDoi = entry.fields.doi ? normalizeDoi(entry.fields.doi) : null;
+    const normDoi = entry.fields.doi ? coerceStoredDoi(entry.fields.doi) : null;
     const normArxiv = normalizeArxivId(entry.fields.eprint ?? entry.fields.arxiv ?? undefined);
     const dup = findExistingPaper(db, { doi: normDoi, arxivId: normArxiv });
     if (dup) {
@@ -933,7 +1535,13 @@ export async function importBibTeX(
       now,
     );
     const rowid = db.prepare("SELECT rowid FROM papers WHERE id = ?").get(id) as { rowid: number };
-    syncFts(db, rowid.rowid, title, entry.fields.abstract ?? null, authorsFromBibField(entry.fields.author));
+    syncFtsForPaper(db, rowid.rowid, {
+      title,
+      abstract: entry.fields.abstract ?? null,
+      authors: authorsFromBibField(entry.fields.author),
+      tags: null,
+      ai_summary: null,
+    });
     importedPaperIds.push(id);
     imported++;
   }
@@ -1191,6 +1799,167 @@ export function upsertZoteroCollectionRow(
   return db.prepare("SELECT * FROM collections WHERE id = ?").get(input.key) as CollectionRow;
 }
 
+function normalizeTitleKey(title: string): string {
+  return title.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizeBibkeyKey(bibkey: string): string {
+  return bibkey.trim().toLowerCase();
+}
+
+function normalizeVenueKey(venue: string | null | undefined): string {
+  return (venue ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function parseAuthorLastNames(authors: string | null): string[] {
+  if (!authors?.trim()) return [];
+  try {
+    const parsed = JSON.parse(authors) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((entry) => {
+        if (typeof entry !== "string") return "";
+        const s = entry.trim().toLowerCase();
+        if (!s) return "";
+        if (s.includes(",")) return s.split(",")[0]!.trim();
+        const parts = s.split(/\s+/).filter(Boolean);
+        return parts[parts.length - 1] ?? "";
+      })
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function authorsOverlap(a: string | null, b: string | null): boolean {
+  const left = parseAuthorLastNames(a);
+  const right = parseAuthorLastNames(b);
+  if (left.length === 0 || right.length === 0) return false;
+  const set = new Set(left);
+  return right.some((name) => set.has(name));
+}
+
+/** Same item when Zotero bibkey differs slightly (e.g. manning2022 vs manning2022z). */
+function bibkeysLooselyMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  const shorter = a.length <= b.length ? a : b;
+  const longer = a.length <= b.length ? b : a;
+  if (longer.startsWith(shorter) && shorter.length >= 6) return true;
+  const baseA = a.replace(/_\d+$/, "");
+  const baseB = b.replace(/_\d+$/, "");
+  return baseA === baseB && baseA.length >= 6;
+}
+
+/** Confidence score for linking a Zotero sync row to a materialized orphan. */
+export function scoreOrphanMergeConfidence(
+  input: UpsertZoteroPaperInput,
+  candidate: PaperRow,
+): number {
+  let score = 0;
+  const inBib = normalizeBibkeyKey(input.bibkey);
+  const candBib = normalizeBibkeyKey(candidate.bibkey);
+  if (inBib && candBib && inBib === candBib) score += 100;
+  else if (inBib && candBib && bibkeysLooselyMatch(inBib, candBib)) score += 50;
+
+  if (authorsOverlap(input.authors, candidate.authors)) score += 40;
+
+  const inVenue = normalizeVenueKey(input.venue);
+  const candVenue = normalizeVenueKey(candidate.venue);
+  if (inVenue && inVenue === candVenue) score += 30;
+
+  return score;
+}
+
+const MATERIALIZED_ORPHANS_BY_YEAR_SQL = `
+  SELECT p.* FROM papers p
+  LEFT JOIN zotero_mirror zm ON zm.paper_id = p.id
+  WHERE zm.paper_id IS NULL
+    AND ((? IS NULL AND p.year IS NULL) OR p.year = ?)
+    AND (
+      p.origin = 'manual'
+      OR p.pdf_path IS NOT NULL
+      OR EXISTS (
+        SELECT 1 FROM paper_extracts pe
+        WHERE pe.paper_id = p.id AND pe.status = 'ready'
+        LIMIT 1
+      )
+    )
+`;
+
+function listMaterializedOrphansByYear(db: LibraryDb, year: number | null): PaperRow[] {
+  return db.prepare(MATERIALIZED_ORPHANS_BY_YEAR_SQL).all(year, year) as PaperRow[];
+}
+
+function pickOrphanMergeCandidate(
+  input: UpsertZoteroPaperInput,
+  candidates: PaperRow[],
+): PaperRow | undefined {
+  const titleKey = normalizeTitleKey(input.title.trim() || input.bibkey);
+  const scored = candidates
+    .filter((row) => normalizeTitleKey(row.title) === titleKey)
+    .map((row) => ({ row, score: scoreOrphanMergeConfidence(input, row) }))
+    .filter((entry) => entry.score >= ORPHAN_MERGE_MIN_SCORE)
+    .sort((a, b) => b.score - a.score);
+
+  if (scored.length === 0) return undefined;
+  if (scored.length === 1) return scored[0]!.row;
+  if (scored[0]!.score - scored[1]!.score >= ORPHAN_MERGE_WIN_MARGIN) return scored[0]!.row;
+  return undefined;
+}
+
+/** Zotero mirror row with no local PDF or ready extract — typical duplicate shell. */
+export function isEmptyZoteroShellPaper(projectRoot: string, paper: PaperRow): boolean {
+  if (paper.origin !== "zotero") return false;
+  if (paper.pdf_path) return false;
+  if (paperHasReadyExtract(projectRoot, paper.id)) return false;
+  return true;
+}
+
+/**
+ * Materialized paper that lost `zotero_mirror` (e.g. old auto-materialize bug).
+ * Indexed by year + SQL filters; merge only when confidence score is high enough.
+ */
+export function findOrphanMaterializedPaperForZoteroSync(
+  projectRoot: string,
+  input: UpsertZoteroPaperInput,
+  excludePaperId?: string,
+): PaperRow | undefined {
+  const db = openLibraryDb(projectRoot);
+  const titleKey = normalizeTitleKey(input.title.trim() || input.bibkey);
+
+  if (input.bibkey.trim()) {
+    const byBibkey = db
+      .prepare("SELECT * FROM papers WHERE bibkey = ?")
+      .get(input.bibkey.trim()) as PaperRow | undefined;
+    if (
+      byBibkey &&
+      byBibkey.id !== excludePaperId &&
+      !getZoteroMirrorByPaperId(projectRoot, byBibkey.id) &&
+      isPaperLocallyMaterialized(projectRoot, byBibkey.id) &&
+      normalizeTitleKey(byBibkey.title) === titleKey
+    ) {
+      return byBibkey;
+    }
+  }
+
+  const candidates = listMaterializedOrphansByYear(db, input.year).filter(
+    (row) => !excludePaperId || row.id !== excludePaperId,
+  );
+  return pickOrphanMergeCandidate(input, candidates);
+}
+
+/** Drop empty Zotero shell when a materialized orphan matches the same item. */
+export function reconcileZoteroShellWithOrphan(
+  projectRoot: string,
+  shellPaper: PaperRow,
+  input: UpsertZoteroPaperInput,
+): PaperRow | null {
+  const orphan = findOrphanMaterializedPaperForZoteroSync(projectRoot, input, shellPaper.id);
+  if (!orphan || !isEmptyZoteroShellPaper(projectRoot, shellPaper)) return null;
+  deletePaper(projectRoot, shellPaper.id);
+  return orphan;
+}
+
 export interface UpsertZoteroPaperInput {
   zoteroKey: string;
   zoteroVersion: number;
@@ -1211,7 +1980,7 @@ export interface UpsertZoteroPaperInput {
 export function upsertZoteroPaperRow(projectRoot: string, input: UpsertZoteroPaperInput): PaperRow {
   const db = openLibraryDb(projectRoot);
   const now = Date.now();
-  const normDoi = normalizeDoi(input.doi ?? undefined);
+  const normDoi = coerceStoredDoi(input.doi ?? undefined);
   const normArxiv = normalizeArxivId(input.arxivId ?? undefined);
   const title = input.title.trim() || input.bibkey;
 
@@ -1219,15 +1988,27 @@ export function upsertZoteroPaperRow(projectRoot: string, input: UpsertZoteroPap
   const mirrorRow = db
     .prepare("SELECT paper_id FROM zotero_mirror WHERE zotero_key = ?")
     .get(input.zoteroKey) as { paper_id: string } | undefined;
-  const existing = mirrorRow
+  let existing = mirrorRow
     ? (db.prepare("SELECT * FROM papers WHERE id = ?").get(mirrorRow.paper_id) as PaperRow | undefined)
     : undefined;
 
+  let orphanMatched: PaperRow | undefined;
+  if (existing) {
+    const reconciled = reconcileZoteroShellWithOrphan(projectRoot, existing, input);
+    if (reconciled) {
+      existing = undefined;
+      orphanMatched = reconciled;
+    }
+  } else {
+    orphanMatched = findOrphanMaterializedPaperForZoteroSync(projectRoot, input);
+  }
+
   // Identity merge: a manually-ingested paper with the same DOI/arXiv
   // should be upgraded to a Zotero mirror instead of duplicated.
-  const identityMatched = existing
-    ? null
-    : (findExistingPaper(db, { doi: normDoi, arxivId: normArxiv }) ?? null);
+  const identityMatched =
+    existing || orphanMatched
+      ? null
+      : (findExistingPaper(db, { doi: normDoi, arxivId: normArxiv }) ?? null);
 
   const upsertMirror = (paperId: string) => {
     db.prepare(
@@ -1235,8 +2016,8 @@ export function upsertZoteroPaperRow(projectRoot: string, input: UpsertZoteroPap
     ).run(paperId, input.zoteroKey, input.zoteroVersion, input.zoteroAttachKey);
   };
 
-  if (existing || identityMatched) {
-    const target = existing ?? identityMatched!;
+  if (existing || identityMatched || orphanMatched) {
+    const target = existing ?? identityMatched ?? orphanMatched!;
     const resolved = resolveStoredBibkey(
       target.bibkey,
       input.bibkey,
@@ -1249,6 +2030,10 @@ export function upsertZoteroPaperRow(projectRoot: string, input: UpsertZoteroPap
       bibkey !== target.bibkey
         ? patchRawBibtexKey(input.rawBibtex?.trim() || target.raw_bibtex, bibkey)
         : input.rawBibtex?.trim() || null;
+    const keepLocalOrigin =
+      target.origin === "manual" ||
+      Boolean(target.pdf_path) ||
+      paperHasReadyExtract(projectRoot, target.id);
     db.prepare(
       `UPDATE papers SET
         bibkey = ?,
@@ -1260,7 +2045,7 @@ export function upsertZoteroPaperRow(projectRoot: string, input: UpsertZoteroPap
         arxiv_id = ?,
         venue = ?,
         type = ?,
-        origin = 'zotero',
+        origin = ?,
         raw_bibtex = COALESCE(?, raw_bibtex),
         csl_json = COALESCE(?, csl_json),
         updated_at = ?
@@ -1275,6 +2060,7 @@ export function upsertZoteroPaperRow(projectRoot: string, input: UpsertZoteroPap
       normArxiv,
       input.venue,
       input.type,
+      keepLocalOrigin ? "manual" : "zotero",
       rawBibtex,
       input.cslJson?.trim() || null,
       now,
@@ -1289,7 +2075,7 @@ export function upsertZoteroPaperRow(projectRoot: string, input: UpsertZoteroPap
       )
       .get(target.id) as PaperRow;
     const rowid = db.prepare("SELECT rowid FROM papers WHERE id = ?").get(updated.id) as { rowid: number };
-    syncFts(db, rowid.rowid, updated.title, updated.abstract, updated.authors);
+    syncFtsForPaper(db, rowid.rowid, updated);
     return updated;
   }
 
@@ -1331,7 +2117,7 @@ export function upsertZoteroPaperRow(projectRoot: string, input: UpsertZoteroPap
     )
     .get(id) as PaperRow;
   const rowid = db.prepare("SELECT rowid FROM papers WHERE id = ?").get(id) as { rowid: number };
-  syncFts(db, rowid.rowid, row.title, row.abstract, row.authors);
+  syncFtsForPaper(db, rowid.rowid, row);
   return row;
 }
 
@@ -1637,7 +2423,7 @@ export function importFromProject(
       ).run(targetId, sourceMirror.zotero_key, sourceMirror.zotero_version, sourceMirror.zotero_attach_key);
     }
     const rowid = targetDb.prepare("SELECT rowid FROM papers WHERE id = ?").get(targetId) as { rowid: number };
-    syncFts(targetDb, rowid.rowid, row.title, row.abstract, row.authors);
+    syncFtsForPaper(targetDb, rowid.rowid, row);
 
     if (opts?.includeAnnotations !== false) {
       const anns = sourceDb

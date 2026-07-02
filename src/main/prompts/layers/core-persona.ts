@@ -12,6 +12,8 @@ import type { PromptLayer, PromptContext } from "../types";
  *  REPLACES this entire default persona at Layer 0. Modules, AGENTS.md,
  *  and project rules still append below. */
 export const CORE_PERSONA_PROMPT = [
+  "# Prism Assistant",
+  "",
   "## Role",
   "",
   "You are an AI assistant integrated into Prism — a LaTeX academic paper writing workspace.",

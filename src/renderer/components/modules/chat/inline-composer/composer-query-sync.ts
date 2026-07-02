@@ -15,7 +15,7 @@ export function anchorForComposerQuery(view: EditorView): CursorAnchor | null {
   return anchorFromCoords(coords);
 }
 
-/** Keep query state in sync with the document; dropdown visibility is gated on editor focus. */
+/** Keep query state in sync with the document. Anchor persists while @ or / query is active. */
 export function syncComposerQueryState(
   view: EditorView,
   setQuery: (query: ComposerQuery | null) => void,
@@ -23,7 +23,7 @@ export function syncComposerQueryState(
 ): ComposerQuery | null {
   const query = readComposerQuery(view);
   setQuery(query);
-  if (query && view.hasFocus) {
+  if (query) {
     setAnchor(anchorForComposerQuery(view));
   } else {
     setAnchor(null);

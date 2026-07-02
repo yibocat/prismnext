@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { app } from "electron";
+import { TOOL_NAMES } from "../../shared/tool-names";
 
 /**
  * # prism‑next Built‑in Custom Tools Registry
@@ -58,8 +59,8 @@ import { app } from "electron";
  *
  * ### Step 2 — Register metadata
  *
- * Add an entry to `BUILTIN_TOOLS` below. This is used by the renderer to
- * look up human-readable metadata for the tool Widget.
+ * Add an entry to `BUILTIN_TOOLS` below (including `usageHint` / `workflowRules`
+ * for prompt generation). Also add to `src/shared/tool-names.ts`.
  *
  * ### Step 3 — Create the Widget (renderer side)
  *
@@ -87,80 +88,141 @@ export interface BuiltinToolMeta {
   label: string;
   /** Short description shown in tool Widget header */
   description: string;
-  /** Category for grouping in UI: "compile" | "reference" | "project" | "utility" */
+  /** Category for grouping in UI and prompt guide */
   category: "compile" | "reference" | "project" | "utility";
+  /** When to use and what it returns (OpenCode tool description) */
+  usageHint?: string;
+  /** Prohibitions and best practices (OpenCode tool description) */
+  workflowRules?: string[];
 }
 
 /**
  * Registry of all prism‑next built-in custom tools.
  *
  * Add new tools here as they are created. The renderer uses this list
- * to look up metadata when rendering tool Widgets.
- *
- * Example entry:
- * ```
- * {
- *   name: "prism-compile",
- *   label: "Compile LaTeX",
- *   description: "Compile the current project with the configured LaTeX engine",
- *   category: "compile",
- * },
- * ```
+ * to look up metadata when rendering tool Widgets. OpenCode tool descriptions
+ * are built from this registry via `buildOpencodeToolDescription()`.
  */
 export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
   {
-    name: "question",
+    name: TOOL_NAMES.question,
     label: "Question",
     description: "Ask the user a question and pause until they respond (replaces built-in question tool)",
     category: "utility",
+    usageHint: "Use when you need a user decision or clarification before continuing.",
   },
   {
-    name: "bash",
+    name: TOOL_NAMES.bash,
     label: "Shell",
     description: "Execute shell commands via Prism terminal bridge (pty mode)",
     category: "utility",
+    usageHint: "Run shell commands in the project directory when file tools are insufficient.",
+    workflowRules: [
+      "Prefer dedicated file tools (move, delete) over bash for single-file operations.",
+    ],
   },
   {
-    name: "delete",
+    name: TOOL_NAMES.delete,
     label: "Delete",
     description: "Delete a file (Prism custom tool — replaces bash rm for single files)",
     category: "utility",
+    usageHint: "Delete a single file by path.",
+    workflowRules: ["Do not use bash rm when this tool applies."],
   },
   {
-    name: "move",
+    name: TOOL_NAMES.move,
     label: "Move",
     description: "Move or rename a file (Prism custom tool — replaces bash mv for single files)",
     category: "utility",
+    usageHint: "Move or rename a single file.",
+    workflowRules: ["Do not use bash mv when this tool applies."],
   },
   {
-    name: "literature-search",
+    name: TOOL_NAMES.literatureSearch,
     label: "Search Literature",
     description: "Search papers in the project literature library",
     category: "reference",
+    usageHint:
+      "Full-text search only within the local library (`.prismnext/library/library.db`). " +
+      "Use to find papers already added to the project. Does NOT search the web.",
   },
   {
-    name: "literature-stage",
+    name: TOOL_NAMES.literatureStage,
     label: "Stage Citation",
     description: "Verify DOI/arXiv via catalogs and stage as a session citation (no library write)",
     category: "reference",
+    usageHint:
+      "Verify a known DOI or arXiv ID via external catalogs (Crossref/arXiv/OpenAlex/…) " +
+      "and stage a session citation. Returns metadata + a `refId`. No library write. " +
+      "This is the DEFAULT for any paper you cite.",
+    workflowRules: [
+      "BINDING: Do not write any `[n]` markers or a paper recommendation list in text until " +
+        "every `literature-stage` call for this turn has returned a verified refId.",
+      "Do NOT use the Task tool or subagents to find, verify, or summarize external papers — " +
+        "call `websearch` and `literature-stage` yourself in this conversation.",
+      "Do not draft the reply first and stage later — websearch/discover identifiers, stage each " +
+        "paper, then write one final reply using the returned refIds.",
+      "For EVERY paper you mention, call this first with its exact DOI or arXiv ID, " +
+        "then reference the returned `refId` as `[n]` in your text.",
+      "Always use `[n]` markers (square brackets). Do NOT use markdown ordered lists " +
+        "or bare numbers to refer to staged citations.",
+      "Citation layout: one paper per line — `**Title** [n]` then a short summary. " +
+        "Never mix list numbers with citation refs (bad: `4. [3]`; good: `**Title** [3]`).",
+      "Never write the literal `[n]` placeholder — substitute the actual refId number.",
+      "If `verified: false`, do NOT write `[n]`; tell the user the identifier could not be verified.",
+      "Never invent DOIs — copy exact identifiers from websearch or the user message.",
+      `Do not call ${TOOL_NAMES.literatureAdd} unless the user explicitly asks to add the paper to the library.`,
+      "For topic discovery (e.g. recent papers), use websearch first, extract arXiv IDs/DOIs, " +
+        "then stage each one. Do not list a paper with `[n]` unless staging succeeded.",
+      "Reuse the same `[n]` when mentioning the same paper again in one reply.",
+    ],
   },
   {
-    name: "literature-add",
+    name: TOOL_NAMES.literatureAdd,
     label: "Add Paper",
     description: "Add a paper to the library by verified DOI or arXiv ID (catalog lookup required)",
     category: "reference",
+    usageHint: "Write a verified paper into the project library.",
+    workflowRules: [
+      'Use ONLY when the user explicitly says "add to library" / "加入文献库". Never auto-invoke.',
+    ],
   },
   {
-    name: "literature-read",
+    name: TOOL_NAMES.literatureRead,
     label: "Read Paper",
     description: "Read library metadata, abstract, highlights, and PDF path (not PDF text) by bibkey",
     category: "reference",
+    usageHint:
+      "Lookup by exact bibkey (Cite key in Literature panel). " +
+      "Returns metadata, abstract, publication_details, highlights, PDF path.",
+    workflowRules: [
+      "Do NOT substitute `task`, `websearch`, or `read` on library.db.",
+      "When the user @-mentions a library paper, metadata is already in the prompt — " +
+        "use this tool for highlights/annotations.",
+      `Do NOT use ${TOOL_NAMES.literatureReadPdf} unless the paper is in the intensive reading list.`,
+    ],
   },
   {
-    name: "literature-cite",
+    name: TOOL_NAMES.literatureReadPdf,
+    label: "Read Paper PDF",
+    description: "Read extracted PDF body text from library cache (MinerU/pdfjs/HTML)",
+    category: "reference",
+    usageHint:
+      "Read extracted PDF body text for a library paper by bibkey. " +
+      "Returns Markdown from `.prismnext/library/extract/`. Supports `pages=` and `query=`. " +
+      "Use ONLY for papers in the intensive reading list (see \"Intensive reading papers\" section).",
+    workflowRules: [
+      "If not extracted yet, call with `force=true` to start background extraction.",
+      "Cite page numbers as `p.X`.",
+      "Reserved for intensive reading mode — costs tokens to extract.",
+    ],
+  },
+  {
+    name: TOOL_NAMES.literatureCite,
     label: "Cite Paper",
     description: "Add a library paper to the project .bib bibliography",
     category: "reference",
+    usageHint: "Append a library paper's BibTeX entry to the project `.bib` file.",
   },
 ];
 
@@ -199,6 +261,7 @@ export function getBuiltinToolFiles(): ToolFile[] {
       if (!entry.name.endsWith(".ts")) continue;
       if (entry.name.startsWith("_")) continue;
       if (entry.name === "index.ts") continue;
+      if (entry.name === "tool-description.ts") continue;
 
       const name = entry.name.replace(/\.ts$/, "");
       const filePath = join(toolsDir, entry.name);

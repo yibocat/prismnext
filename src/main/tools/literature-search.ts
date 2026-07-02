@@ -69,17 +69,27 @@ async function bridgeCall(
 }
 
 export default tool({
-  description: "Search papers in the current project's literature library by title, authors, abstract, or bibkey.",
+  description:
+    "Search papers in the current project's literature library by title, authors, abstract, bibkey, user tags, or AI summary. Optional tag= filters to papers with that exact project tag (case-insensitive).",
   args: {
-    query: tool.schema.string().describe("Search query"),
+    query: tool.schema
+      .string()
+      .describe("Search query (optional if tag is set)")
+      .optional(),
+    tag: tool.schema
+      .string()
+      .describe("Exact project tag filter (case-insensitive), e.g. World Model")
+      .optional(),
     limit: tool.schema.number().describe("Max results (default 20)").optional(),
   },
   async execute(args, context) {
     const query = typeof args.query === "string" ? args.query.trim() : "";
-    if (!query) return toolOutput({ error: "Missing query parameter." });
+    const tag = typeof args.tag === "string" ? args.tag.trim() : "";
+    if (!query && !tag) return toolOutput({ error: "Provide query and/or tag parameter." });
     return bridgeCall(context as Record<string, unknown>, {
       action: "search",
       query,
+      tag,
       limit: args.limit,
     });
   },

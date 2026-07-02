@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.5.1 — 2026-07-02
+
+### PDF Extraction & Agent Reading
+
+- **PDF body extraction** pipeline: MinerU (cloud), pdf.js, and HTML fallbacks; queue with retry, progress IPC, and `.prismnext/library/extract/` storage
+- OpenCode tool **`literature-read-pdf`** — read extracted Markdown by bibkey with `pages=` / `query=` / `force=`; gated to **intensive reading list** in prompts
+- Reader **block overlay**: hover/select PDF blocks (MinerU layout), toolbar actions, colored highlights layer, excerpt → chat / notes
+- **`paper-extract`** shared types, slice utilities, and extract store; Settings → Literature controls for default engine and auto-extract on import
+
+### Chat Citations & Prompt Architecture
+
+- **`literature-stage`** workflow hardened: session-scoped staging, `[n]` citation refs, **Session citations** panel with staged metadata and **Add to library** (including progress phases)
+- **Prism Tools Guide** dynamic prompt module (`prism-tools`) + **`prompt-sync`** writes system instructions to OpenCode; tool registry as single source for agent-facing descriptions
+- **`chat-citation-staging`** and **`literature-intensive`** modules; citations module trimmed to pure LaTeX/BibTeX knowledge
+- Agent Tools panel in Settings (read-only view of registered OpenCode tool descriptions)
+- Faster staging catalog path: arXiv-first resolve, unified **`mainNetFetch`** (Electron `net.fetch`, system proxy) for Crossref / arXiv / OpenAlex; OpenAlex arXiv lookup via `10.48550/arxiv.*` DataCite DOI
+
+### Reader Sidebar & Citation Network
+
+- Git-style sidebar tabs: **Notes | Marks | Refs | Cited by**; paper header chrome simplified
+- **Citation network** via OpenAlex with Semantic Scholar fallback; paginated Refs / Cited-by lists, disk cache under `library/cache/citations/`, in-library vs **Open online** actions
+- Shared **`openalex-lookup`** URL builder; improved fetch error messages (Chinese) for network and rate-limit cases
+
+### Library UX & Metadata
+
+- **AI metadata** background queue (title/tags/summary heuristics + provider chat); **`literature-ai-metadata`** settings and entry-panel badges
+- **Canonical paper tags**: JSON storage, FTS indexing, tag filter dropdown, suggest input, agent-readable tag search on `literature-search`
+- PDF **attach / drag-drop / identity check** (DOI·arXiv·SHA); add-by-identifier dialog; batch selection actions; library subview prefs; marquee multi-select in list
+- **Intensive reading list** store + composer toolbar button; sync with chat session registry
+- Zotero **materialize** improvements — linked papers survive when PDF or extract lands locally; orphan shell cleanup on disconnect
+
+### Database & Reliability
+
+- FTS schema migration fix: rebuild `papers_fts` when `tags` / `ai_summary` columns missing (fixes **Add to library** after upgrade)
+- Bibliographic resolver: catalog **`catalogFetch`** injection, clearer staging failure diagnostics, arXiv retry on timeout/rate-limit
+
+### Architecture & Testing
+
+- Design/plan docs for PDF agent reading, AI metadata/tags, and citation network under `docs/superpowers/`
+- **`main-network.ts`** as canonical main-process HTTP route; pdfjs Node polyfills for main extract path
+- Vitest expansion: extract/MinerU, citation network, FTS migration, AI metadata, tags, staging, Zotero materialize, openalex-lookup, and renderer literature UX helpers
+
 ## 0.5.0 — 2026-07-01
 
 ### Literature Library & Reader

@@ -1,10 +1,9 @@
 import { useMemo, useState } from "react";
 import { Loader2Icon, ExternalLinkIcon, PlusCircleIcon, FolderOpenIcon } from "lucide-react";
 import { toast } from "sonner";
-import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useCitationStagingStore } from "@/stores/citation-staging-store";
 import { Button } from "@/components/ui/button";
-import { MetadataRow } from "./literature-inline-field";
+import { MetadataRow, literatureIdentifierValueClass, literatureMetadataLinkClass } from "./literature-inline-field";
 import {
   formatEntryType,
   formatLiteratureAuthors,
@@ -17,6 +16,13 @@ import {
 } from "./literature-list-chrome";
 import { cn } from "@/lib/utils";
 import { openUrlInBrowser } from "@/lib/browser-link";
+import { stagedAddProgressLabel } from "@/lib/literature/staged-add-progress-label";
+import {
+  openPaperInMainLibrary,
+  openPaperPdfReader,
+} from "@/lib/literature/open-paper-in-library";
+import { paperHasReadablePdf } from "./literature-format";
+import { useLiteratureStore } from "@/stores/literature-store";
 import type { StagedCitation } from "../../../shared/citation-staging";
 import type { LiteraturePaper } from "@/types/electron.d";
 
@@ -48,15 +54,31 @@ function stagedToPaperLike(c: StagedCitation): LiteraturePaper {
     zotero_key: null,
     zotero_version: null,
     zotero_attach_key: null,
+    tags: [],
     created_at: c.createdAt,
     updated_at: c.createdAt,
   };
 }
 
-export function StagedCitationEntryPanel({ citation }: { citation: StagedCitation }) {
+export function StagedCitationEntryPanel({
+  citation,
+  inLibrary,
+}: {
+  citation: StagedCitation;
+  inLibrary: boolean;
+}) {
   const addToLibrary = useCitationStagingStore((s) => s.addToLibrary);
-  const openLiteraturePaper = useRightPanelStore((s) => s.openLiteraturePaper);
+  const addProgress = useCitationStagingStore((s) => s.addProgressById[citation.id]);
+  const libraryPaper = useLiteratureStore((s) =>
+    citation.libraryPaperId
+      ? s.papers.find((p) => p.id === citation.libraryPaperId) ?? null
+      : null,
+  );
   const [adding, setAdding] = useState(false);
+  const isAdding = adding || (addProgress != null && addProgress.phase !== "done");
+  const progressLabel = addProgress ? stagedAddProgressLabel(addProgress) : null;
+  const hasPdf = inLibrary && libraryPaper != null && paperHasReadablePdf(libraryPaper);
+  const openTitle = libraryPaper?.title ?? citation.title;
 
   const paperLike = useMemo(() => stagedToPaperLike(citation), [citation]);
   const detailRows = useMemo(() => publicationDetailRows(paperLike), [paperLike]);
@@ -83,9 +105,13 @@ export function StagedCitationEntryPanel({ citation }: { citation: StagedCitatio
   };
 
   const handleOpenInLibrary = () => {
-    if (citation.libraryPaperId) {
-      openLiteraturePaper(citation.libraryPaperId, citation.title, "grid");
-    }
+    if (!citation.libraryPaperId) return;
+    openPaperInMainLibrary(citation.libraryPaperId);
+  };
+
+  const handleOpenPdf = () => {
+    if (!citation.libraryPaperId || !hasPdf) return;
+    openPaperPdfReader(citation.libraryPaperId, openTitle);
   };
 
   return (
@@ -122,7 +148,7 @@ export function StagedCitationEntryPanel({ citation }: { citation: StagedCitatio
                   Unverified
                 </span>
               ) : null}
-              {citation.addedToLibrary ? (
+              {inLibrary ? (
                 <span
                   className="inline-flex shrink-0 items-center rounded-full border border-primary/35 bg-primary/10 px-2 py-0.5 text-[length:var(--font-size-11)] text-primary/80"
                   title="Already in project library"
@@ -158,9 +184,9 @@ export function StagedCitationEntryPanel({ citation }: { citation: StagedCitatio
               {doiHref ? (
                 <button
                   type="button"
-                  className="max-w-full truncate rounded-[3px] px-1 -mx-1 text-left text-[length:var(--font-size-13)] text-foreground/90 hover:underline underline-offset-2"
+                  className={cn(literatureMetadataLinkClass, literatureIdentifierValueClass, "px-1 -mx-1")}
                   onClick={() => openUrlInBrowser(doiHref)}
-                  title={doiHref}
+                  title={citation.doi ?? undefined}
                 >
                   {citation.doi}
                 </button>
@@ -172,9 +198,9 @@ export function StagedCitationEntryPanel({ citation }: { citation: StagedCitatio
               {arxivHref ? (
                 <button
                   type="button"
-                  className="max-w-full truncate rounded-[3px] px-1 -mx-1 text-left text-[length:var(--font-size-13)] text-foreground/90 hover:underline underline-offset-2"
+                  className={cn(literatureMetadataLinkClass, literatureIdentifierValueClass, "px-1 -mx-1")}
                   onClick={() => openUrlInBrowser(arxivHref)}
-                  title={arxivHref}
+                  title={citation.arxivId ?? undefined}
                 >
                   {citation.arxivId}
                 </button>
@@ -186,7 +212,7 @@ export function StagedCitationEntryPanel({ citation }: { citation: StagedCitatio
               <MetadataRow label="Source">
                 <button
                   type="button"
-                  className="max-w-full truncate rounded-[3px] px-1 -mx-1 text-left text-[length:var(--font-size-13)] text-foreground/90 hover:underline underline-offset-2"
+                  className={cn(literatureMetadataLinkClass, "px-1 -mx-1 break-all")}
                   onClick={() => openUrlInBrowser(citation.sourceUrl!)}
                   title={citation.sourceUrl}
                 >
@@ -201,9 +227,9 @@ export function StagedCitationEntryPanel({ citation }: { citation: StagedCitatio
                 {row.href ? (
                   <button
                     type="button"
-                    className="max-w-full truncate rounded-[3px] px-1 -mx-1 text-left text-[length:var(--font-size-13)] text-foreground/90 hover:underline underline-offset-2"
+                    className={cn(literatureMetadataLinkClass, "px-1 -mx-1")}
                     onClick={() => openUrlInBrowser(row.href!)}
-                    title={row.href}
+                    title={row.value}
                   >
                     {row.value}
                   </button>
@@ -224,37 +250,53 @@ export function StagedCitationEntryPanel({ citation }: { citation: StagedCitatio
             ) : null}
           </div>
 
-          <div className="flex items-center gap-2 pt-1">
-            {citation.addedToLibrary ? (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={handleOpenInLibrary}
-                disabled={!citation.libraryPaperId}
-              >
-                <FolderOpenIcon className="size-3.5" />
-                Open in library
-              </Button>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            {inLibrary ? (
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleOpenInLibrary}
+                  disabled={!inLibrary || !citation.libraryPaperId}
+                  title="Show this entry in the main Library list"
+                >
+                  <FolderOpenIcon className="size-3.5" />
+                  Open in library
+                </Button>
+                {hasPdf ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleOpenPdf}
+                    title="Read the PDF (human)"
+                  >
+                    <ExternalLinkIcon className="size-3.5" />
+                    Open PDF
+                  </Button>
+                ) : null}
+              </>
             ) : (
               <button
                 type="button"
                 className={cn(literaturePrimaryActionShellClass)}
                 onClick={handleAdd}
-                disabled={adding || !citation.catalogVerified}
+                disabled={isAdding || !citation.catalogVerified}
                 title={
-                  !citation.catalogVerified
+                  progressLabel ??
+                  (!citation.catalogVerified
                     ? "Identifier not verified — cannot add"
-                    : "Add this paper to the project library"
+                    : "Add this paper to the project library")
                 }
               >
                 <span className={cn(literaturePrimaryActionBtnClass, "px-2.5")}>
-                  {adding ? (
+                  {isAdding ? (
                     <Loader2Icon className="size-3.5 animate-spin" />
                   ) : (
                     <PlusCircleIcon className="size-3.5" />
                   )}
-                  Add to library
+                  {isAdding && progressLabel ? progressLabel : "Add to library"}
                 </span>
               </button>
             )}

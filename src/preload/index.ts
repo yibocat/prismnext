@@ -1,10 +1,12 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { WorkspaceFolder } from "../renderer/types/workspace";
+import type { PaperExtractState, PaperExtractProgress } from "../shared/paper-extract";
 
 // Expose filesystem and dialog APIs to renderer
 contextBridge.exposeInMainWorld("electronAPI", {
 	// Platform info
 	platform: process.platform as "darwin" | "win32" | "linux",
+	getPathForFile: (file: File) => webUtils.getPathForFile(file),
 
 	// Filesystem operations
 	fsScan: (rootPath: string) => ipcRenderer.invoke("fs:scan", { rootPath }),
@@ -135,10 +137,44 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("literature:get", { projectRoot, paperId }),
 	literatureIngestPdf: (projectRoot: string, pdfPath: string, opts?: { title?: string; doi?: string }) =>
 		ipcRenderer.invoke("literature:ingestPdf", { projectRoot, pdfPath, ...opts }),
+	literatureReplacePdf: (projectRoot: string, paperId: string, pdfPath: string) =>
+		ipcRenderer.invoke("literature:replacePdf", { projectRoot, paperId, pdfPath }),
+	literatureAttachLocalPdf: (
+		projectRoot: string,
+		paperId: string,
+		pdfPath: string,
+		opts?: { ignoreIdentifierConflict?: boolean },
+	) =>
+		ipcRenderer.invoke("literature:attachLocalPdf", {
+			projectRoot,
+			paperId,
+			pdfPath,
+			ignoreIdentifierConflict: opts?.ignoreIdentifierConflict,
+		}),
 	literatureCreateFromIdentifier: (
 		projectRoot: string,
-		ids: { doi?: string; arxivId?: string },
+		ids: {
+			doi?: string;
+			arxivId?: string;
+			isbn?: string;
+			pmid?: string;
+			adsBibcode?: string;
+		},
 	) => ipcRenderer.invoke("literature:createFromIdentifier", { projectRoot, ...ids }),
+	literatureCreateFromStagedCitation: (
+		projectRoot: string,
+		citation: import("../shared/citation-staging").StagedCitationImportInput,
+	) => ipcRenderer.invoke("literature:createFromStagedCitation", { projectRoot, citation }),
+	onLiteratureStagedAddProgress: (
+		callback: (data: import("../shared/citation-staging").StagedAddProgressEvent) => void,
+	) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			data: import("../shared/citation-staging").StagedAddProgressEvent,
+		) => callback(data);
+		ipcRenderer.on("literature:stagedAddProgress", handler);
+		return () => ipcRenderer.removeListener("literature:stagedAddProgress", handler);
+	},
 	literatureFindExisting: (
 		projectRoot: string,
 		ids: { doi?: string | null; arxivId?: string | null },
@@ -151,6 +187,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	literatureStage: (
 		projectRoot: string,
 		args: {
+			sessionId: string;
 			doi?: string;
 			arxivId?: string;
 			sourceUrl?: string;
@@ -207,6 +244,40 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("literature:createPaper", { projectRoot, metadata }),
 	literatureUpdatePaper: (projectRoot: string, paperId: string, patch: Record<string, unknown>) =>
 		ipcRenderer.invoke("literature:updatePaper", { projectRoot, paperId, patch }),
+	literatureRegenerateAiMetadata: (projectRoot: string, paperId: string) =>
+		ipcRenderer.invoke("literature:regenerateAiMetadata", { projectRoot, paperId }),
+	literatureGetCitationNetwork: (
+		projectRoot: string,
+		paperId: string,
+		opts?: { refresh?: boolean },
+	) =>
+		ipcRenderer.invoke("literature:getCitationNetwork", {
+			projectRoot,
+			paperId,
+			refresh: opts?.refresh,
+		}),
+	literatureGetCitationNetworkPage: (
+		projectRoot: string,
+		paperId: string,
+		section: "references" | "citedBy",
+		cursor: string,
+		opts?: { refresh?: boolean },
+	) =>
+		ipcRenderer.invoke("literature:getCitationNetworkPage", {
+			projectRoot,
+			paperId,
+			section,
+			cursor,
+			refresh: opts?.refresh,
+		}),
+	onLiteratureAiMetadataChanged: (
+		callback: (payload: { projectRoot: string; paperId: string }) => void,
+	) => {
+		const handler = (_event: unknown, payload: { projectRoot: string; paperId: string }) =>
+			callback(payload);
+		ipcRenderer.on("literature:aiMetadataChanged", handler);
+		return () => ipcRenderer.removeListener("literature:aiMetadataChanged", handler);
+	},
 	literatureDeletePaper: (projectRoot: string, paperId: string) =>
 		ipcRenderer.invoke("literature:deletePaper", { projectRoot, paperId }),
 	literatureImportToLocal: (projectRoot: string, paperId: string) =>
@@ -266,6 +337,118 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	literaturePickPdf: () => ipcRenderer.invoke("literature:pickPdf"),
 	literaturePickBibTeX: () => ipcRenderer.invoke("literature:pickBibTeX"),
 	literaturePickProjectRoot: () => ipcRenderer.invoke("literature:pickProjectRoot"),
+
+	extractEnqueue: (
+		projectRoot: string,
+		paperId: string,
+		source: "mineru" | "pdfjs" | "html",
+		force?: boolean,
+	) => ipcRenderer.invoke("extract:enqueue", { projectRoot, paperId, source, force }),
+	extractRetry: (projectRoot: string, paperId: string, source: "mineru" | "pdfjs" | "html") =>
+		ipcRenderer.invoke("extract:retry", { projectRoot, paperId, source }),
+	extractEnqueueBatch: (
+		projectRoot: string,
+		paperIds: string[],
+		source: "mineru" | "pdfjs" | "html",
+		force?: boolean,
+	) => ipcRenderer.invoke("extract:enqueueBatch", { projectRoot, paperIds, source, force }),
+	extractEnqueueCollection: (
+		projectRoot: string,
+		collectionId: string,
+		source: "mineru" | "pdfjs" | "html",
+		force?: boolean,
+	) => ipcRenderer.invoke("extract:enqueueCollection", { projectRoot, collectionId, source, force }),
+	extractCancel: (projectRoot: string, paperId: string, source: "mineru" | "pdfjs" | "html") =>
+		ipcRenderer.invoke("extract:cancel", { projectRoot, paperId, source }),
+	extractList: (projectRoot: string, paperIds: string[]) =>
+		ipcRenderer.invoke("extract:list", { projectRoot, paperIds }),
+	extractGet: (projectRoot: string, paperId: string, source: "mineru" | "pdfjs" | "html") =>
+		ipcRenderer.invoke("extract:get", { projectRoot, paperId, source }),
+	extractGetBlocks: (
+		projectRoot: string,
+		paperId: string,
+		source?: "mineru" | "pdfjs" | "html",
+	) => ipcRenderer.invoke("extract:getBlocks", { projectRoot, paperId, source }),
+	extractOpenMd: (projectRoot: string, paperId: string, source: "mineru" | "pdfjs" | "html") =>
+		ipcRenderer.invoke("extract:openMd", { projectRoot, paperId, source }),
+	extractTestMineru: (token?: string) => ipcRenderer.invoke("extract:testMineru", { token }),
+	extractResume: (projectRoot: string) => ipcRenderer.invoke("extract:resume", { projectRoot }),
+	onExtractProgress: (
+		callback: (data: { projectRoot: string; progress: PaperExtractProgress }) => void,
+	) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			data: { projectRoot: string; progress: PaperExtractProgress },
+		) => callback(data);
+		ipcRenderer.on("extract:progress", handler);
+		return () => ipcRenderer.removeListener("extract:progress", handler);
+	},
+	onExtractProgressClear: (
+		callback: (data: {
+			projectRoot: string;
+			paperId: string;
+			source: "mineru" | "pdfjs" | "html";
+		}) => void,
+	) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			data: { projectRoot: string; paperId: string; source: "mineru" | "pdfjs" | "html" },
+		) => callback(data);
+		ipcRenderer.on("extract:progressClear", handler);
+		return () => ipcRenderer.removeListener("extract:progressClear", handler);
+	},
+	onExtractPdfCached: (
+		callback: (data: { projectRoot: string; paperId: string }) => void,
+	) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			data: { projectRoot: string; paperId: string },
+		) => callback(data);
+		ipcRenderer.on("extract:pdfCached", handler);
+		return () => ipcRenderer.removeListener("extract:pdfCached", handler);
+	},
+	onLiteraturePaperMaterialized: (
+		callback: (data: { projectRoot: string; paperId: string }) => void,
+	) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			data: { projectRoot: string; paperId: string },
+		) => callback(data);
+		ipcRenderer.on("literature:paperMaterialized", handler);
+		return () => ipcRenderer.removeListener("literature:paperMaterialized", handler);
+	},
+	onExtractStatusChanged: (
+		callback: (data: { projectRoot: string; state: PaperExtractState }) => void,
+	) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			data: { projectRoot: string; state: PaperExtractState },
+		) => callback(data);
+		ipcRenderer.on("extract:statusChanged", handler);
+		return () => ipcRenderer.removeListener("extract:statusChanged", handler);
+	},
+	onExtractAgentRequested: (
+		callback: (data: {
+			projectRoot: string;
+			paperId: string;
+			bibkey: string;
+			title: string;
+			source: "mineru" | "pdfjs" | "html";
+		}) => void,
+	) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			data: {
+				projectRoot: string;
+				paperId: string;
+				bibkey: string;
+				title: string;
+				source: "mineru" | "pdfjs" | "html";
+			},
+		) => callback(data);
+		ipcRenderer.on("extract:agentRequested", handler);
+		return () => ipcRenderer.removeListener("extract:agentRequested", handler);
+	},
 
 	zoteroProbe: () => ipcRenderer.invoke("zotero:probe"),
 	zoteroStatus: () => ipcRenderer.invoke("zotero:status"),
@@ -375,10 +558,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		mcpServerAllowlist?: string[];
 		skillIds?: string[];
 		userDisplayContent?: Record<string, unknown>[];
+		intensivePaperIds?: string[];
+		hasPaperSnippets?: boolean;
 	}) =>
 		ipcRenderer.invoke("chat:send", args),
 	chatCancel: (sessionId: string) =>
 		ipcRenderer.invoke("chat:cancel", { sessionId }),
+	chatRegisterTab: (args: { tabId: string; sessionId: string; projectPath?: string }) =>
+		ipcRenderer.invoke("chat:registerTab", args),
+	chatSyncIntensiveReading: (args: {
+		sessionId: string;
+		projectRoot: string;
+		paperIds?: string[];
+	}) => ipcRenderer.invoke("chat:syncIntensiveReading", args),
 	chatCompact: (sessionId: string, projectPath: string) =>
 		ipcRenderer.invoke("chat:compact", { sessionId, projectPath }),
 	chatAnswer: (sessionId: string, answer: string) =>
@@ -441,6 +633,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("settings:getModules"),
 	settingsSetModule: (key: string, enabled: boolean) =>
 		ipcRenderer.invoke("settings:setModule", { key, enabled }),
+	settingsGetBuiltinTools: () =>
+		ipcRenderer.invoke("settings:getBuiltinTools"),
 	settingsGetLayers: () =>
 		ipcRenderer.invoke("settings:getLayers"),
 	settingsSetLayer: (id: string, enabled: boolean) =>

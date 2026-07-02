@@ -2,6 +2,7 @@ import type { ComposerPart } from "@/lib/chat/composer-parts";
 import { GitCompareArrowsIcon } from "lucide-react";
 import { InlineTokenChip } from "./inline-token-chip";
 import { openUrlInBrowser } from "@/lib/browser-link";
+import { useChatStore } from "@/stores/chat-store";
 
 function GitDiffStatsSuffix({
   added,
@@ -142,28 +143,54 @@ export function ComposerTokenChip({
   }
 
   if (part.type === "paper-snippet") {
+    const blockLabel = part.blockType ? ` · ${part.blockType}` : "";
     return (
       <InlineTokenChip
         variant="code"
         label={part.label}
-        title={`${part.title}\n\n${part.quotedText.slice(0, 200)}`}
+        title={`${part.title} (p.${part.page}${blockLabel})\n\n${part.quotedText.slice(0, 200)}`}
         asToken
       />
     );
   }
 
   if (part.type === "mention" && part.mentionType === "paper") {
-    return (
-      <InlineTokenChip
-        variant="file"
-        prefix="@"
-        label={part.label}
-        asToken
-      />
-    );
+    return <PaperMentionChip part={part} />;
   }
 
   return null;
+}
+
+/** @ paper chip with an intensive-reading badge when the paper is in the
+ *  active tab's intensive reading list. Subscribes to chat-store so the badge
+ *  updates live when the user toggles intensive mode or × from the list. */
+function PaperMentionChip({
+  part,
+}: {
+  part: Extract<ComposerPart, { type: "mention"; mentionType: "paper" }>;
+}) {
+  const intensive = useChatStore((s) => {
+    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    return Boolean(tab?.intensivePaperIds.includes(part.paperId));
+  });
+  return (
+    <InlineTokenChip
+      variant="file"
+      prefix="@"
+      label={part.label}
+      asToken
+      suffix={
+        intensive ? (
+          <span
+            title="Intensive reading"
+            className="ml-0.5 inline-flex shrink-0 items-center rounded-sm bg-emerald-500/15 px-1 text-[9px] font-semibold uppercase leading-none tracking-wide text-emerald-700 dark:text-emerald-400"
+          >
+            Intensive
+          </span>
+        ) : null
+      }
+    />
+  );
 }
 
 /** Render structured composer / saved user message tokens. */

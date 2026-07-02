@@ -23,6 +23,59 @@ export interface SynctexForwardResult {
   width: number;
 }
 
+export interface SynctexForwardResult {
+  page: number;
+  x: number;
+  y: number;
+  height: number;
+  width: number;
+}
+
+export type PaperExtractSource = "mineru" | "pdfjs" | "html";
+export type PaperExtractStatus = "idle" | "queued" | "extracting" | "ready" | "failed";
+
+export interface PaperExtractState {
+  paperId: string;
+  source: PaperExtractSource;
+  status: PaperExtractStatus;
+  queuedAt?: number;
+  startedAt?: number;
+  finishedAt?: number;
+  error?: string;
+  mdPath?: string;
+  pages?: number;
+  remoteJobId?: string;
+  retryCount?: number;
+  nextRetryAt?: number;
+}
+
+export type ExtractProgressPhase =
+  | "queued"
+  | "resolving_pdf"
+  | "caching_pdf"
+  | "reading_pdf"
+  | "uploading"
+  | "cloud_extracting"
+  | "fetching_html"
+  | "writing";
+
+export interface PaperExtractProgress {
+  paperId: string;
+  source: PaperExtractSource;
+  phase: ExtractProgressPhase;
+  message: string;
+  percent?: number;
+  receivedBytes?: number;
+  totalBytes?: number | null;
+  queuePosition?: number;
+  queueTotal?: number;
+}
+
+export type PaperExtractStatesByPaper = Record<
+  string,
+  Partial<Record<PaperExtractSource, PaperExtractState>>
+>;
+
 export interface LiteraturePaper {
   id: string;
   bibkey: string;
@@ -46,8 +99,73 @@ export interface LiteraturePaper {
   zotero_key?: string | null;
   zotero_version?: number | null;
   zotero_attach_key?: string | null;
+  /** User-defined project tags (not synced to Zotero). */
+  tags: string[];
+  ai_summary?: string | null;
+  ai_metadata_at?: number | null;
+  ai_metadata_sha?: string | null;
+  ai_metadata_status?: "idle" | "queued" | "running" | "ready" | "failed" | "skipped";
+  ai_metadata_error?: string | null;
   created_at: number;
   updated_at: number;
+}
+
+export type PaperCitationEntry = {
+  openAlexId: string;
+  title: string;
+  authors: string | null;
+  year: number | null;
+  venue: string | null;
+  doi: string | null;
+  arxivId: string | null;
+  citedByCount: number | null;
+};
+
+export type PaperCitationSection = {
+  totalCount: number;
+  items: PaperCitationEntry[];
+  hasMore: boolean;
+  nextCursor: string | null;
+};
+
+export type PaperCitationNetworkResult = {
+  ok: boolean;
+  error?: string;
+  openAlexWorkId?: string;
+  references?: PaperCitationSection;
+  citedBy?: PaperCitationSection;
+  cachedAt?: number;
+  source: "openalex" | "semantic-scholar";
+  sourceNote?: string;
+};
+
+export type LiteratureAttachLocalPdfConflict =
+  | { kind: "sha_duplicate"; otherPaper: LiteraturePaper }
+  | {
+      kind: "identifier_duplicate";
+      otherPaper: LiteraturePaper;
+      doi?: string | null;
+      arxivId?: string | null;
+    }
+  | {
+      kind: "target_mismatch";
+      entryDoi?: string | null;
+      entryArxivId?: string | null;
+      pdfDoi?: string | null;
+      pdfArxivId?: string | null;
+    }
+  | {
+      kind: "target_unverified";
+      entryDoi?: string | null;
+      entryArxivId?: string | null;
+    };
+
+export interface LiteratureAttachLocalPdfResult {
+  paper: LiteraturePaper;
+  attached: boolean;
+  replaced: boolean;
+  conflict?: LiteratureAttachLocalPdfConflict;
+  attachError?: string;
 }
 
 export interface LiteratureCollection {
@@ -340,6 +458,8 @@ export interface ElectronAPI {
   }>;
   shellShowItemInFolder: (absPath: string) => Promise<void>;
   shellOpenExternal: (url: string) => Promise<void>;
+  /** Absolute path for a File from an OS drag-drop (Electron webUtils). */
+  getPathForFile: (file: File) => string;
   fsExists: (absPath: string) => Promise<boolean>;
   fsIsFile: (absPath: string) => Promise<boolean>;
   projectCreate: (rootPath: string, workspaceDirs?: import("./workspace").WorkspaceFolder[]) => Promise<void>;
@@ -417,9 +537,26 @@ export interface ElectronAPI {
     pdfAttached?: boolean;
     pdfAttachError?: string;
   }>;
+  literatureReplacePdf: (
+    projectRoot: string,
+    paperId: string,
+    pdfPath: string,
+  ) => Promise<{ paper: LiteraturePaper; replaced: boolean }>;
+  literatureAttachLocalPdf: (
+    projectRoot: string,
+    paperId: string,
+    pdfPath: string,
+    opts?: { ignoreIdentifierConflict?: boolean },
+  ) => Promise<LiteratureAttachLocalPdfResult>;
   literatureCreateFromIdentifier: (
     projectRoot: string,
-    ids: { doi?: string; arxivId?: string },
+    ids: {
+      doi?: string;
+      arxivId?: string;
+      isbn?: string;
+      pmid?: string;
+      adsBibcode?: string;
+    },
   ) => Promise<{
     paper: LiteraturePaper;
     created: boolean;
@@ -427,6 +564,19 @@ export interface ElectronAPI {
     pdfAttached?: boolean;
     pdfAttachError?: string;
   }>;
+  literatureCreateFromStagedCitation: (
+    projectRoot: string,
+    citation: import("../../shared/citation-staging").StagedCitationImportInput,
+  ) => Promise<{
+    paper: LiteraturePaper;
+    created: boolean;
+    duplicateReason?: "doi" | "arxiv";
+    pdfAttached?: boolean;
+    pdfAttachError?: string;
+  }>;
+  onLiteratureStagedAddProgress: (
+    callback: (data: import("../../shared/citation-staging").StagedAddProgressEvent) => void,
+  ) => () => void;
   literatureFindExisting: (
     projectRoot: string,
     ids: { doi?: string | null; arxivId?: string | null },
@@ -434,6 +584,7 @@ export interface ElectronAPI {
   literatureStage: (
     projectRoot: string,
     args: {
+      sessionId: string;
       doi?: string;
       arxivId?: string;
       sourceUrl?: string;
@@ -519,6 +670,22 @@ export interface ElectronAPI {
     duplicateReason?: "doi" | "arxiv";
   }>;
   literatureUpdatePaper: (projectRoot: string, paperId: string, patch: Partial<LiteraturePaper>) => Promise<LiteraturePaper>;
+  literatureRegenerateAiMetadata: (projectRoot: string, paperId: string) => Promise<{ ok: boolean }>;
+  literatureGetCitationNetwork: (
+    projectRoot: string,
+    paperId: string,
+    opts?: { refresh?: boolean },
+  ) => Promise<PaperCitationNetworkResult>;
+  literatureGetCitationNetworkPage: (
+    projectRoot: string,
+    paperId: string,
+    section: "references" | "citedBy",
+    cursor: string,
+    opts?: { refresh?: boolean },
+  ) => Promise<PaperCitationNetworkResult>;
+  onLiteratureAiMetadataChanged: (
+    callback: (payload: { projectRoot: string; paperId: string }) => void,
+  ) => () => void;
   literatureDeletePaper: (projectRoot: string, paperId: string) => Promise<{ ok: boolean }>;
   literatureImportToLocal: (projectRoot: string, paperId: string) => Promise<{ ok: boolean }>;
   literatureExportBib: (projectRoot: string, paperIds?: string[]) => Promise<{ content: string }>;
@@ -557,6 +724,87 @@ export interface ElectronAPI {
   literaturePickPdf: () => Promise<{ path: string | null }>;
   literaturePickBibTeX: () => Promise<{ paths: string[] }>;
   literaturePickProjectRoot: () => Promise<{ path: string | null; error?: string }>;
+
+  extractEnqueue: (
+    projectRoot: string,
+    paperId: string,
+    source: "mineru" | "pdfjs" | "html",
+    force?: boolean,
+  ) => Promise<{ ok: boolean }>;
+  extractRetry: (
+    projectRoot: string,
+    paperId: string,
+    source: "mineru" | "pdfjs" | "html",
+  ) => Promise<{ ok: boolean }>;
+  extractEnqueueBatch: (
+    projectRoot: string,
+    paperIds: string[],
+    source: "mineru" | "pdfjs" | "html",
+    force?: boolean,
+  ) => Promise<{ enqueued: number; skipped: number; capped: boolean }>;
+  extractEnqueueCollection: (
+    projectRoot: string,
+    collectionId: string,
+    source: "mineru" | "pdfjs" | "html",
+    force?: boolean,
+  ) => Promise<{ enqueued: number; skipped: number; capped: boolean }>;
+  extractCancel: (
+    projectRoot: string,
+    paperId: string,
+    source: "mineru" | "pdfjs" | "html",
+  ) => Promise<{ ok: boolean }>;
+  extractList: (
+    projectRoot: string,
+    paperIds: string[],
+  ) => Promise<PaperExtractStatesByPaper>;
+  extractGet: (
+    projectRoot: string,
+    paperId: string,
+    source: "mineru" | "pdfjs" | "html",
+  ) => Promise<{ state: PaperExtractState | null; markdown: string | null }>;
+  extractGetBlocks: (
+    projectRoot: string,
+    paperId: string,
+    source?: "mineru" | "pdfjs" | "html",
+  ) => Promise<{
+    state: PaperExtractState | null;
+    blocks: import("../../shared/paper-extract-block").PaperExtractBlock[] | null;
+  }>;
+  extractOpenMd: (
+    projectRoot: string,
+    paperId: string,
+    source: "mineru" | "pdfjs" | "html",
+  ) => Promise<{ relativePath: string | null }>;
+  extractTestMineru: (token?: string) => Promise<{ ok: true; message: string }>;
+  extractResume: (projectRoot: string) => Promise<{ ok: boolean }>;
+  onExtractProgress: (
+    callback: (data: { projectRoot: string; progress: PaperExtractProgress }) => void,
+  ) => () => void;
+  onExtractProgressClear: (
+    callback: (data: {
+      projectRoot: string;
+      paperId: string;
+      source: PaperExtractSource;
+    }) => void,
+  ) => () => void;
+  onExtractPdfCached: (
+    callback: (data: { projectRoot: string; paperId: string }) => void,
+  ) => () => void;
+  onLiteraturePaperMaterialized: (
+    callback: (data: { projectRoot: string; paperId: string }) => void,
+  ) => () => void;
+  onExtractStatusChanged: (
+    callback: (data: { projectRoot: string; state: PaperExtractState }) => void,
+  ) => () => void;
+  onExtractAgentRequested: (
+    callback: (data: {
+      projectRoot: string;
+      paperId: string;
+      bibkey: string;
+      title: string;
+      source: "mineru" | "pdfjs" | "html";
+    }) => void,
+  ) => () => void;
 
   zoteroProbe: () => Promise<ZoteroStatus>;
   zoteroStatus: () => Promise<ZoteroStatus>;
@@ -747,8 +995,16 @@ export interface ElectronAPI {
     mcpServerAllowlist?: string[];
     skillIds?: string[];
     userDisplayContent?: Record<string, unknown>[];
+    intensivePaperIds?: string[];
+    hasPaperSnippets?: boolean;
   }) => Promise<void>;
   chatCancel: (sessionId: string) => Promise<void>;
+  chatRegisterTab: (args: { tabId: string; sessionId: string; projectPath?: string }) => Promise<{ success: boolean }>;
+  chatSyncIntensiveReading: (args: {
+    sessionId: string;
+    projectRoot: string;
+    paperIds?: string[];
+  }) => Promise<{ success: boolean }>;
   chatCompact: (sessionId: string, projectPath: string) => Promise<void>;
   chatAnswer: (sessionId: string, answer: string) => Promise<void>;
   chatAnswerQuestion: (questionId: string, answer: string) => Promise<{ success: boolean; error?: string }>;
@@ -811,8 +1067,15 @@ export interface ElectronAPI {
     defaultWorkspaceDirs?: import("./workspace").WorkspaceFolder[];
   }>;
   settingsSet: (patch: Record<string, unknown>) => Promise<void>;
-  settingsGetModules: () => Promise<Array<{ key: string; label: string; description: string; enabled: boolean; source: string }>>;
+  settingsGetModules: () => Promise<Array<{ key: string; label: string; description: string; enabled: boolean; source: string; autoGenerated?: boolean }>>;
   settingsSetModule: (key: string, enabled: boolean) => Promise<void>;
+  settingsGetBuiltinTools: () => Promise<Array<{
+    name: string;
+    label: string;
+    description: string;
+    category: string;
+    schemaDescription: string;
+  }>>;
   settingsGetLayers: () => Promise<Array<{ id: string; priority: number; source: string; userToggleable: boolean; enabled: boolean }>>;
   settingsSetLayer: (id: string, enabled: boolean) => Promise<void>;
   settingsGetAgentProjectConfig: (projectPath: string) => Promise<{ contextComponents: Record<string, boolean> }>;

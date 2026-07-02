@@ -2,7 +2,13 @@ import { memo, useMemo, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
 import "katex/dist/katex.min.css";
-import { REMARK_PLUGINS, REHYPE_PLUGINS, MARKDOWN_COMPONENTS, CHAT_MARKDOWN_TYPOGRAPHY, normalizeMathDelimiters } from "@/lib/markdown/markdown-config";
+import {
+  MARKDOWN_COMPONENTS,
+  CHAT_MARKDOWN_TYPOGRAPHY,
+  prepareMarkdownMath,
+  remarkPluginsForSurface,
+  rehypePluginsForSurface,
+} from "@/lib/markdown/markdown-config";
 import { ShikiCodeBlock } from "./shiki-code-block";
 import { useCitationStagingStore } from "@/stores/citation-staging-store";
 import { jumpToStagedCitation } from "@/lib/literature/jump-to-staged-citation";
@@ -76,7 +82,9 @@ export const StaticMarkdown = memo(function StaticMarkdown({
 }) {
   if (!content) return null;
 
-  const normalized = useMemo(() => normalizeMathDelimiters(content), [content]);
+  const normalized = useMemo(() => prepareMarkdownMath(content), [content]);
+  const remarkPlugins = useMemo(() => remarkPluginsForSurface("chat"), []);
+  const rehypePlugins = useMemo(() => rehypePluginsForSurface("chat"), []);
 
   const components = useMemo<Components>(() => {
     const base: Components = {
@@ -108,8 +116,8 @@ export const StaticMarkdown = memo(function StaticMarkdown({
   return (
     <div className={cn("text-[length:var(--font-chat-message)] text-foreground leading-normal min-w-0 max-w-full overflow-hidden", CHAT_MARKDOWN_TYPOGRAPHY)}>
       <ReactMarkdown
-        remarkPlugins={REMARK_PLUGINS}
-        rehypePlugins={REHYPE_PLUGINS}
+        remarkPlugins={remarkPlugins}
+        rehypePlugins={rehypePlugins}
         components={components}
         urlTransform={(url) => url}
       >

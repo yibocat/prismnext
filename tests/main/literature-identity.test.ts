@@ -65,7 +65,7 @@ describe("literature identity + detach invariants", () => {
     // Should merge, not duplicate
     expect(listPapers(projectRoot)).toHaveLength(1);
     expect(merged.id).toBe(manual.id);
-    expect(merged.origin).toBe("zotero");
+    expect(merged.origin).toBe("manual");
 
     // zotero_mirror should have the association
     const mirror = getZoteroMirrorByPaperId(projectRoot, manual.id);
@@ -161,7 +161,7 @@ describe("literature identity + detach invariants", () => {
 
     expect(listPapers(projectRoot)).toHaveLength(1);
     expect(reMerged.id).toBe(zoteroPaper.id);
-    expect(reMerged.origin).toBe("zotero");
+    expect(reMerged.origin).toBe("manual");
 
     const mirror = getZoteroMirrorByPaperId(projectRoot, zoteroPaper.id);
     expect(mirror).not.toBeNull();

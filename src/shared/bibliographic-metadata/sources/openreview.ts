@@ -9,6 +9,7 @@ import { normalizeDoi } from "../../doi-utils";
 import { authorsJsonFromParts } from "../helpers";
 import type { BibliographicMetadata } from "../types";
 import type { BibliographicSource } from "./types";
+import { catalogFetch } from "../catalog-fetch";
 
 const OPENREVIEW_API = "https://api2.openreview.net/notes";
 
@@ -75,7 +76,7 @@ function metadataFromNote(note: OpenReviewNote): BibliographicMetadata | null {
 
 async function searchOpenReview(query: string): Promise<BibliographicMetadata | null> {
   const url = `${OPENREVIEW_API}?content.title=${encodeURIComponent(query)}&limit=5`;
-  const res = await fetch(url, {
+  const res = await catalogFetch(url, {
     headers: { Accept: "application/json", "User-Agent": "Prism/1.0" },
   });
   if (!res.ok) throw new Error(`OpenReview HTTP ${res.status}`);

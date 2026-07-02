@@ -1,4 +1,5 @@
 import { createTokenId, type ComposerPart } from "@/lib/chat/composer-parts";
+import type { ExtractBlockType } from "../../../shared/paper-extract-block";
 import {
   gitDiffSnippetLabel,
   gitDiffSnippetTooltip,
@@ -47,8 +48,13 @@ export interface PaperSnippetRequest {
   title: string;
   page: number;
   quotedText: string;
+  /** Library paper id — used to auto-enable intensive reading for MinerU excerpts. */
+  paperId?: string;
   annotationId?: string;
   sourceTabId?: string;
+  blockId?: string;
+  blockType?: ExtractBlockType;
+  extractSource?: "mineru";
 }
 
 export type ContextInsertRequest =
@@ -115,6 +121,9 @@ export function contextInsertToPart(req: ContextInsertRequest): ComposerPart {
       quotedText: req.quotedText,
       annotationId: req.annotationId,
       sourceTabId: req.sourceTabId,
+      blockId: req.blockId,
+      blockType: req.blockType,
+      extractSource: req.extractSource,
     };
   }
 

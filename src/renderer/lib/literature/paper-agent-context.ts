@@ -6,6 +6,7 @@ import {
 import { publicationDetailRows } from "@/modes/literature-mode/literature-csl-fields";
 import type { LiteraturePaper } from "@/types/electron.d";
 import { noteBodyWithoutFrontmatter } from "@/lib/literature/paper-notes";
+import { TOOL_NAMES } from "../../../shared/tool-names";
 
 export interface PaperNoteAgentContext {
   relativePath: string;
@@ -67,6 +68,19 @@ export function buildPaperAgentContextBlock(
   lines.push("**Abstract**");
   lines.push(paper.abstract?.trim() || "(none in library)");
 
+  const tags = paper.tags ?? [];
+  if (tags.length > 0) {
+    lines.push("");
+    lines.push("**Tags**");
+    lines.push(tags.join(", "));
+  }
+
+  if (paper.ai_summary?.trim()) {
+    lines.push("");
+    lines.push("**AI Summary**");
+    lines.push(paper.ai_summary.trim());
+  }
+
   if (notes.length > 0) {
     lines.push("");
     lines.push("**Reading notes (project files)**");
@@ -86,5 +100,10 @@ export function buildPaperAgentContextBlock(
 
 export const PAPER_AGENT_CONTEXT_FOOTER = [
   "",
-  "**Instructions:** Bibliographic metadata above is already loaded from the project literature library (`.prismnext/library/library.db`). For basic questions about this paper (title, authors, venue, abstract, reading notes), use this context first. Web search is still available when you need external or up-to-date information (related work, news, corrections, etc.). Use `literature-read` with the cite key for saved highlights and annotations. PDF full text is not included here.",
+  "**Instructions:** Bibliographic metadata above is already loaded from the project literature library (`.prismnext/library/library.db`). " +
+    "Tags and AI Summary are project-local (not from external catalogs). " +
+    `For other papers or tag-based discovery, use \`${TOOL_NAMES.literatureSearch}\` (optional \`tag=\`) or \`${TOOL_NAMES.literatureRead}\` with a cite key. ` +
+    `For highlights or annotations on this paper, use \`${TOOL_NAMES.literatureRead}\`. ` +
+    "Web search remains available for external information. " +
+    `Do NOT read the PDF body for this paper unless it is in the intensive reading list.`,
 ].join("\n");

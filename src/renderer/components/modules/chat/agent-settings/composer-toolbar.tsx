@@ -2,6 +2,7 @@ import { useRef, type ReactNode } from "react";
 import { ChatModeSelect } from "./chat-mode-select";
 import { ModelThoughtSelect } from "./model-thought-select";
 import { PermissionModeSelect } from "./permission-mode-select";
+import { IntensiveReadingListButton, useIntensiveReadingCount } from "../intensive-reading-list-button";
 import { useChatStore } from "@/stores/chat-store";
 import { useComposerCompact } from "./use-composer-compact";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ export function ComposerToolbar({ addMenu, sendControls }: ComposerToolbarProps)
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.chatMode ?? "agent",
   );
   const isExpertTeam = chatMode === "expert-team";
+  const intensiveCount = useIntensiveReadingCount();
 
   return (
     <div
@@ -37,6 +39,12 @@ export function ComposerToolbar({ addMenu, sendControls }: ComposerToolbarProps)
             <ModelThoughtSelect compact={compact} />
           </>
         )}
+        {intensiveCount > 0 ? (
+          <>
+            <ToolbarDivider />
+            <IntensiveReadingListButton compact={compact} variant="panel" />
+          </>
+        ) : null}
       </div>
 
       <div className="flex shrink-0 items-center gap-1">

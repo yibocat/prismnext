@@ -1,12 +1,35 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { StagedCitation, StagedCitationPayload, StageResult } from "../../shared/citation-staging";
+import type {
+  StagedCitation,
+  StagedCitationPayload,
+  StagedAddProgressEvent,
+  StageResult,
+} from "../../shared/citation-staging";
+import {
+  buildLibraryIdentityIndex,
+  findLibraryPaperInIdentityIndex,
+  type LibraryPaperLinkTarget,
+} from "../../shared/staged-citation-library-match";
 import { useLiteratureStore } from "./literature-store";
 import { useDocumentStore } from "./document-store";
 import { toast } from "sonner";
+import { formatPdfDownloadFailure } from "../../shared/pdf-download-messages";
 
 /** Stable empty list for zustand selectors (avoid `?? []` creating new refs). */
 export const EMPTY_STAGED_CITATIONS: StagedCitation[] = [];
+
+/** True when the staged citation still points at a paper in the current library list. */
+export function isCitationInLibrary(
+  citation: StagedCitation,
+  libraryPaperIds: ReadonlySet<string>,
+): boolean {
+  return Boolean(
+    citation.addedToLibrary &&
+      citation.libraryPaperId &&
+      libraryPaperIds.has(citation.libraryPaperId),
+  );
+}
 
 /**
  * Citation staging — AI-referenced papers held for user confirmation
@@ -25,6 +48,14 @@ interface CitationStagingState {
   backfillSuppressedSessions: Record<string, true>;
   /** Panel list hidden for session; citation data kept for chat [n] links. */
   panelHiddenSessions: Record<string, true>;
+  /** Live add-to-library progress keyed by staged citation id. */
+  addProgressById: Record<string, StagedAddProgressEvent>;
+  /** Batch add summary for toolbar / list chrome. */
+  batchAdd: { sessionId: string; total: number; completed: number; failed: number } | null;
+
+  setAddProgress: (event: StagedAddProgressEvent) => void;
+  clearAddProgress: (stagedId: string) => void;
+  setBatchAdd: (batch: CitationStagingState["batchAdd"]) => void;
 
   setActiveSession: (sessionId: string | null) => void;
 
@@ -58,13 +89,22 @@ interface CitationStagingState {
   getCitationsForSession: (sessionId: string) => StagedCitation[];
 
   /** Add a single staged citation to the project library (user-confirmed). */
-  addToLibrary: (id: string) => Promise<{ ok: boolean; bibkey?: string; error?: string }>;
+  addToLibrary: (
+    id: string,
+    batch?: { index: number; total: number },
+  ) => Promise<{ ok: boolean; bibkey?: string; error?: string }>;
 
   /** Add all pending citations in a session. Returns summary counts. */
   addAllToLibrary: (sessionId: string) => Promise<{ added: number; failed: number }>;
 
   /** Remove a single staged citation by id (user dismissed). */
   removeById: (id: string) => void;
+
+  /** Reset library-added state for staged citations whose library paper was deleted. */
+  unmarkByPaperIds: (paperIds: string[]) => void;
+
+  /** Drop stale links and backfill libraryPaperId from DOI/arXiv when papers exist in library.db. */
+  reconcileWithLibrary: (papers: LibraryPaperLinkTarget[]) => void;
 }
 
 function nextRefId(list: StagedCitation[]): number {
@@ -161,6 +201,81 @@ function mergeStageResultIntoList(
   return { list: [...list, citation], id };
 }
 
+function reconcileCitationListWithLibrary(
+  list: StagedCitation[],
+  papers: readonly LibraryPaperLinkTarget[],
+): { list: StagedCitation[]; changed: boolean } {
+  if (papers.length === 0) return { list, changed: false };
+
+  const idSet = new Set(papers.map((p) => p.id));
+  const index = buildLibraryIdentityIndex(papers);
+  let changed = false;
+
+  const nextList = list.map((c) => {
+    let citation = c;
+
+    if (citation.libraryPaperId && !idSet.has(citation.libraryPaperId)) {
+      changed = true;
+      citation = {
+        ...citation,
+        libraryPaperId: null,
+        libraryBibkey: null,
+        addedToLibrary: false,
+        addedAt: null,
+      };
+    }
+
+    if (!citation.catalogVerified || (!citation.doi && !citation.arxivId)) {
+      return citation;
+    }
+
+    const match = findLibraryPaperInIdentityIndex(citation, index);
+    if (!match) return citation;
+
+    if (
+      citation.libraryPaperId === match.id &&
+      citation.libraryBibkey === match.bibkey &&
+      citation.addedToLibrary
+    ) {
+      return citation;
+    }
+
+    changed = true;
+    return {
+      ...citation,
+      libraryPaperId: match.id,
+      libraryBibkey: match.bibkey,
+      addedToLibrary: true,
+      addedAt: citation.addedAt ?? Date.now(),
+    };
+  });
+
+  return { list: nextList, changed };
+}
+
+function stagedToImportInput(
+  target: StagedCitation,
+  batch?: { index: number; total: number },
+) {
+  return {
+    stagedId: target.id,
+    sessionId: target.sessionId,
+    batchIndex: batch?.index,
+    batchTotal: batch?.total,
+    title: target.title,
+    authors: target.authors,
+    year: target.year,
+    venue: target.venue,
+    type: target.type,
+    doi: target.doi,
+    arxivId: target.arxivId,
+    abstract: target.abstract,
+    cslJson: target.cslJson,
+    catalogSource: target.catalogSource,
+    catalogVerified: target.catalogVerified,
+  };
+}
+
 export const useCitationStagingStore = create<CitationStagingState>()(
   persist(
     (set, get) => ({
@@ -168,6 +283,28 @@ export const useCitationStagingStore = create<CitationStagingState>()(
       activeSessionId: null,
       backfillSuppressedSessions: {},
       panelHiddenSessions: {},
+      addProgressById: {},
+      batchAdd: null,
+
+      setAddProgress: (event) => {
+        set((s) => ({
+          addProgressById: {
+            ...s.addProgressById,
+            [event.stagedId]: event,
+          },
+        }));
+      },
+
+      clearAddProgress: (stagedId) => {
+        set((s) => {
+          if (!s.addProgressById[stagedId]) return s;
+          const addProgressById = { ...s.addProgressById };
+          delete addProgressById[stagedId];
+          return { addProgressById };
+        });
+      },
+
+      setBatchAdd: (batch) => set({ batchAdd: batch }),
 
       setActiveSession: (sessionId) => set({ activeSessionId: sessionId }),
 
@@ -178,12 +315,16 @@ export const useCitationStagingStore = create<CitationStagingState>()(
           const list = s.bySession[sessionId] ?? [];
           const { list: nextList, id } = mergeStageResultIntoList(list, sessionId, result);
           mergedId = id;
+          const { list: linkedList } = reconcileCitationListWithLibrary(
+            nextList,
+            useLiteratureStore.getState().papers,
+          );
           const nextSuppress = { ...s.backfillSuppressedSessions };
           delete nextSuppress[sessionId];
           const nextHidden = { ...s.panelHiddenSessions };
           delete nextHidden[sessionId];
           return {
-            bySession: { ...s.bySession, [sessionId]: nextList },
+            bySession: { ...s.bySession, [sessionId]: linkedList },
             backfillSuppressedSessions: nextSuppress,
             panelHiddenSessions: nextHidden,
             activeSessionId: sessionId,
@@ -194,6 +335,7 @@ export const useCitationStagingStore = create<CitationStagingState>()(
 
       mergeStageResultsBatch: (sessionId, results) => {
         if (results.length === 0) return;
+        const libraryPapers = useLiteratureStore.getState().papers;
         set((s) => {
           if (s.backfillSuppressedSessions[sessionId]) return s;
           let list = s.bySession[sessionId] ?? [];
@@ -206,8 +348,9 @@ export const useCitationStagingStore = create<CitationStagingState>()(
             }
           }
           if (!changed) return s;
+          const { list: linkedList } = reconcileCitationListWithLibrary(list, libraryPapers);
           return {
-            bySession: { ...s.bySession, [sessionId]: list },
+            bySession: { ...s.bySession, [sessionId]: linkedList },
             activeSessionId: sessionId,
           };
         });
@@ -271,6 +414,8 @@ export const useCitationStagingStore = create<CitationStagingState>()(
           activeSessionId: null,
           backfillSuppressedSessions: {},
           panelHiddenSessions: {},
+          addProgressById: {},
+          batchAdd: null,
         }),
 
       getCitationsForSession: (sessionId) => get().bySession[sessionId] ?? EMPTY_STAGED_CITATIONS,
@@ -285,7 +430,48 @@ export const useCitationStagingStore = create<CitationStagingState>()(
         });
       },
 
-      addToLibrary: async (id) => {
+      unmarkByPaperIds: (paperIds) => {
+        if (paperIds.length === 0) return;
+        const idSet = new Set(paperIds);
+        set((s) => {
+          let changed = false;
+          const bySession: Record<string, StagedCitation[]> = {};
+          for (const [sid, list] of Object.entries(s.bySession)) {
+            bySession[sid] = list.map((c) => {
+              if (c.libraryPaperId && idSet.has(c.libraryPaperId)) {
+                changed = true;
+                return {
+                  ...c,
+                  libraryPaperId: null,
+                  libraryBibkey: null,
+                  addedToLibrary: false,
+                  addedAt: null,
+                };
+              }
+              return c;
+            });
+          }
+          return changed ? { bySession } : s;
+        });
+      },
+
+      reconcileWithLibrary: (papers) => {
+        set((s) => {
+          let changed = false;
+          const bySession: Record<string, StagedCitation[]> = {};
+          for (const [sid, list] of Object.entries(s.bySession)) {
+            const { list: nextList, changed: sessionChanged } = reconcileCitationListWithLibrary(
+              list,
+              papers,
+            );
+            bySession[sid] = nextList;
+            if (sessionChanged) changed = true;
+          }
+          return changed ? { bySession } : s;
+        });
+      },
+
+      addToLibrary: async (id, batch) => {
         const projectRoot = useDocumentStore.getState().projectRoot;
         if (!projectRoot) {
           return { ok: false, error: "No project open" };
@@ -299,42 +485,82 @@ export const useCitationStagingStore = create<CitationStagingState>()(
         if (!target.doi && !target.arxivId) {
           return { ok: false, error: "No DOI or arXiv ID" };
         }
-        if (target.addedToLibrary && target.libraryPaperId) {
-          return { ok: true, bibkey: target.libraryBibkey ?? undefined };
+        if (!target.catalogVerified) {
+          return { ok: false, error: "Citation not verified" };
         }
+        if (target.addedToLibrary && target.libraryPaperId) {
+          const linkedPaperId = target.libraryPaperId;
+          const stillInLibrary = useLiteratureStore
+            .getState()
+            .papers.some((p) => p.id === linkedPaperId);
+          if (stillInLibrary) {
+            return { ok: true, bibkey: target.libraryBibkey ?? undefined };
+          }
+          get().unmarkByPaperIds([linkedPaperId]);
+          target = { ...target, addedToLibrary: false, libraryPaperId: null, libraryBibkey: null };
+        }
+
+        get().setAddProgress({
+          stagedId: id,
+          sessionId: target.sessionId,
+          phase: "writing",
+          batchIndex: batch?.index,
+          batchTotal: batch?.total,
+        });
+
         try {
-          const result = await window.electronAPI.literatureCreateFromIdentifier(projectRoot, {
-            doi: target.doi ?? undefined,
-            arxivId: target.arxivId ?? undefined,
-          });
+          const result = await window.electronAPI.literatureCreateFromStagedCitation(
+            projectRoot,
+            stagedToImportInput(target, batch),
+          );
           get().markAddedToLibrary(id, result.paper.id, result.paper.bibkey);
-          // Refresh the formal library so the new entry shows up.
           void useLiteratureStore.getState().bootstrapLiterature(projectRoot);
+          if (result.pdfAttachError && result.pdfAttached !== true) {
+            const { title, description } = formatPdfDownloadFailure(result.pdfAttachError);
+            toast.error(title, description ? { description } : undefined);
+          }
           return { ok: true, bibkey: result.paper.bibkey };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           return { ok: false, error: message };
+        } finally {
+          get().clearAddProgress(id);
         }
       },
 
       addAllToLibrary: async (sessionId) => {
         const list = get().bySession[sessionId] ?? [];
         const pending = list.filter((c) => !c.addedToLibrary);
+        const total = pending.length;
+        if (total === 0) return { added: 0, failed: 0 };
+
+        get().setBatchAdd({ sessionId, total, completed: 0, failed: 0 });
         let added = 0;
         let failed = 0;
-        for (const c of pending) {
-          const r = await get().addToLibrary(c.id);
-          if (r.ok) {
-            added++;
-          } else {
-            failed++;
-            toast.error(`Failed to add "${c.title}": ${r.error ?? "unknown error"}`);
+        try {
+          for (let i = 0; i < pending.length; i++) {
+            const c = pending[i]!;
+            const r = await get().addToLibrary(c.id, { index: i + 1, total });
+            if (r.ok) {
+              added++;
+            } else {
+              failed++;
+              toast.error(`Failed to add "${c.title}": ${r.error ?? "unknown error"}`);
+            }
+            get().setBatchAdd({
+              sessionId,
+              total,
+              completed: added + failed,
+              failed,
+            });
           }
+          if (added > 0) {
+            toast.success(`Added ${added} paper${added > 1 ? "s" : ""} to library`);
+          }
+          return { added, failed };
+        } finally {
+          get().setBatchAdd(null);
         }
-        if (added > 0) {
-          toast.success(`Added ${added} paper${added > 1 ? "s" : ""} to library`);
-        }
-        return { added, failed };
       },
     }),
     {
@@ -344,3 +570,9 @@ export const useCitationStagingStore = create<CitationStagingState>()(
     },
   ),
 );
+
+if (typeof window !== "undefined" && window.electronAPI?.onLiteratureStagedAddProgress) {
+  window.electronAPI.onLiteratureStagedAddProgress((event) => {
+    useCitationStagingStore.getState().setAddProgress(event);
+  });
+}

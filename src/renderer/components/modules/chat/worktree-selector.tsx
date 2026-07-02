@@ -31,7 +31,7 @@ export const CHAT_PANEL_TOOLBAR_BUTTON_PRIMARY =
   "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border-0 bg-transparent px-2.5 text-[length:var(--font-chat-meta)] text-primary transition-colors hover:bg-primary/10 hover:text-primary";
 
 /** Capsule AiBar only — dedicated pill, not Appearance border radius. */
-const CAPSULE_TOOLBAR_PILL =
+export const CAPSULE_TOOLBAR_PILL =
   "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-border px-2.5 text-[length:var(--font-chat-meta)] transition-colors";
 
 interface WorktreeSelectorProps {

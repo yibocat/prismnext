@@ -1,21 +1,21 @@
 import { useState } from "react";
-import { Trash2Icon, Loader2Icon } from "lucide-react";
+import { Loader2Icon, NotebookPenIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { resolveNotebookDir } from "@/types/workspace";
 import { listPaperNotes, type PaperNoteFile } from "@/lib/literature/paper-notes";
-import { openPaperNote } from "@/lib/literature/create-paper-note";
-import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
+import { createNewPaperNote, openPaperNote } from "@/lib/literature/create-paper-note";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
 import { cn } from "@/lib/utils";
+import { PAPER_EXTRACT_ACTION_LABEL } from "../../../shared/paper-extract";
 import type { LiteraturePaper } from "@/types/electron.d";
 
-/** Match {@link literature-entry-panel} section labels. */
 const NOTES_SECTION_LABEL =
   "text-[length:var(--font-size-11)] font-medium tracking-wide text-muted-foreground/60";
 
-/** Min card width; column count follows panel width smoothly (1–5 cols). */
 const NOTES_GRID_CLASS =
   "grid min-w-0 gap-2 grid-cols-[repeat(auto-fill,minmax(max(9rem,calc((100%-2rem)/5)),1fr))]";
 
@@ -84,16 +84,30 @@ function NoteCard({
 export function LiteraturePaperNotesSection({
   paper,
   isZoteroPaper = false,
+  showSectionDivider = false,
 }: {
   paper: LiteraturePaper;
   isZoteroPaper?: boolean;
+  showSectionDivider?: boolean;
 }) {
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
   const files = useDocumentStore((s) => s.files);
   const deleteFile = useDocumentStore((s) => s.deleteFile);
   const workspaceDirs = useWorkspaceConfigStore((s) => s.workspaceDirs);
   const notebookDir = resolveNotebookDir(workspaceDirs);
   const notes = listPaperNotes(paper, files, notebookDir);
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
+  const [creatingNote, setCreatingNote] = useState(false);
+
+  const handleNewNote = async () => {
+    if (!projectRoot) return;
+    setCreatingNote(true);
+    try {
+      await createNewPaperNote(paper);
+    } finally {
+      setCreatingNote(false);
+    }
+  };
 
   const handleDelete = async (note: PaperNoteFile) => {
     if (!window.confirm(`Delete note "${note.name}"? This cannot be undone.`)) return;
@@ -109,23 +123,46 @@ export function LiteraturePaperNotesSection({
   };
 
   return (
-    <div className="space-y-2">
-      <h3 className={NOTES_SECTION_LABEL}>
-        Notes{notes.length > 0 ? ` (${notes.length})` : ""}
-      </h3>
+    <div
+      className={cn(
+        "flex flex-col gap-2",
+        showSectionDivider && "border-t border-border/40 pt-3",
+      )}
+    >
+      <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1">
+        <h3 className={NOTES_SECTION_LABEL}>
+          Notes{notes.length > 0 ? ` (${notes.length})` : ""}
+        </h3>
+        <Button
+          type="button"
+          size="xs"
+          variant="ghost"
+          title="New note"
+          className="h-6 px-1.5 text-[length:var(--font-menu-item)] text-muted-foreground hover:text-foreground"
+          disabled={creatingNote || !projectRoot}
+          onClick={() => void handleNewNote()}
+        >
+          {creatingNote ? (
+            <Loader2Icon className="size-3 animate-spin" />
+          ) : (
+            <NotebookPenIcon className="size-3" />
+          )}
+          <span className="ml-1">New note</span>
+        </Button>
+      </div>
+
       {isZoteroPaper ? (
-        <p className={cn(SETTINGS_ROW_DESC, "mt-0 text-[length:var(--font-size-12)]")}>
-          Notes are saved in project files. Use{" "}
-          <span className="text-foreground/85">Import to local</span> on this entry to keep literature
-          links after disconnecting Zotero.
+        <p className={cn(SETTINGS_ROW_DESC, "mt-0 shrink-0 text-[length:var(--font-size-12)]")}>
+          Notes are saved in project files. {PAPER_EXTRACT_ACTION_LABEL}, open PDF, or{" "}
+          <span className="text-foreground/85">Keep in project</span> keeps this entry after
+          disconnecting Zotero.
         </p>
       ) : null}
+
       {notes.length === 0 ? (
-        <p className={cn(SETTINGS_ROW_DESC, "mt-0")}>
-          No reading notes yet. Use <span className="text-foreground/80">New note</span> to add one.
-        </p>
+        <p className={cn(SETTINGS_ROW_DESC, "mt-0 shrink-0")}>No reading notes yet.</p>
       ) : (
-        <div className={NOTES_GRID_CLASS}>
+        <div className={cn(NOTES_GRID_CLASS, showSectionDivider && "pr-0.5")}>
           {notes.map((note) => (
             <NoteCard
               key={note.relativePath}

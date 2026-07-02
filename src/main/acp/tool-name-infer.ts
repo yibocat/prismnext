@@ -7,7 +7,10 @@ export function inferToolNameFromInput(input: unknown): string | null {
 
   if (has("command")) return "bash";
   if (has("url")) return "webfetch";
-  if (has("bibkey") && !has("file_path") && !has("filePath")) return "literature-read";
+  if (has("bibkey") && !has("file_path") && !has("filePath")) {
+    if (has("pages") || has("force") || has("source")) return "literature-read-pdf";
+    return "literature-read";
+  }
 
   // DOI/arXiv without bibkey: prefer the safer literature-stage (no library write)
   // as the fallback inference. literature-add is reserved for explicit user intent
@@ -17,10 +20,12 @@ export function inferToolNameFromInput(input: unknown): string | null {
   }
 
   if (has("query") && !has("pattern")) {
-    if (has("max_results") || has("maxResults")) return "websearch";
-    if (has("limit")) return "literature-search";
-    // literature-search only requires `query`; do not default to websearch.
-    return null;
+  if (has("max_results") || has("maxResults")) return "websearch";
+  if (has("limit")) return "literature-search";
+  // websearch is the most common tool with a bare `query` parameter.
+  // literature-search typically also sends `limit`; without it, default to
+  // websearch to avoid mislabeling as "task" via KIND_TO_TOOL["other"].
+  return "websearch";
   }
 
   if (has("todos")) return "todowrite";
@@ -105,6 +110,6 @@ export function inferToolNameFromOutput(raw: unknown): string | null {
 
 export function resolveLiteratureToolTitle(title: string): string | null {
   const lower = title.toLowerCase();
-  const match = lower.match(/^literature-(read|search|cite|add|stage)$/);
+  const match = lower.match(/^literature-(read-pdf|read|search|cite|add|stage)$/);
   return match ? lower : null;
 }

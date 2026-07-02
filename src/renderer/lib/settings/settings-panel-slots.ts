@@ -24,6 +24,7 @@ export type SettingsPanelSlot =
   | { kind: "agent-profile"; mode: "edit"; profileId: string; title?: string }
   | { kind: "agent-profile"; mode: "customize-builtin"; profileId: string; title?: string }
   | { kind: "prompt-markdown"; doc: "system-prompt" | "agents-md" | "assembled" }
+  | { kind: "agent-tools" }
   | { kind: "rule-markdown"; mode: "new" }
   | { kind: "rule-markdown"; mode: "edit"; ruleId: string; title?: string }
   | { kind: "custom-command"; mode: "new" }
@@ -72,6 +73,8 @@ export function settingsPanelSlotTitle(slot: SettingsPanelSlot | null): string |
       if (slot.doc === "agents-md") return "AGENTS.md";
       return "Prompt preview";
     }
+    case "agent-tools":
+      return "Agent tools";
     case "rule-markdown": {
       if (slot.mode === "new") return "New rule";
       return slot.title ?? slot.ruleId;

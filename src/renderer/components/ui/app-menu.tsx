@@ -1,7 +1,10 @@
 /**
  * Compact app-wide menu primitives — toolbar / panel dropdowns.
- * Built on shadcn DropdownMenu; denser than default, no decorative icons.
- * Typography: --font-menu-item (scales with Settings → UI Font via rem).
+ * Built on shadcn DropdownMenu; denser than default.
+ * Typography: --font-menu-item (compact, rem-scaled with UI Font size) + font-sans (Appearance UI Font family).
+ *
+ * Icons: pass via `leading` (preferred) or as the first child — label row is flex
+ * so SVGs stay beside text (Tailwind preflight sets svg display:block).
  */
 import * as React from "react";
 import { CheckIcon } from "lucide-react";
@@ -23,8 +26,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-/** Menu text — matches layout token for dropdown / context menus. */
-export const appMenuFontClass = "text-[length:var(--font-menu-item)]";
+/** Menu text — UI Font family; size via --font-menu-item (scales with Appearance uiFontSize). */
+export const appMenuFontClass = "font-sans text-[length:var(--font-menu-item)]";
+
+export const appMenuInlineChevronTriggerClass =
+  "inline-flex shrink-0 items-center border-0 bg-transparent p-0 text-muted-foreground/70 outline-none";
 
 /** Shared panel chrome — outer padding + hairline row gap, not flush to border. */
 export const appMenuPanelClass = cn(
@@ -39,6 +45,12 @@ export const appMenuItemClass = cn(
   "focus:bg-accent focus:text-accent-foreground",
 );
 
+/** Label row — icons must sit in a flex row (Tailwind preflight sets svg display:block). */
+const appMenuItemLabelClass = cn(
+  "flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden",
+  "[&>svg]:shrink-0 [&>svg]:opacity-70",
+);
+
 export const appMenuInputClass = cn(
   "flex-1 bg-transparent outline-none placeholder:text-muted-foreground/50",
   appMenuFontClass,
@@ -49,12 +61,24 @@ export const appMenuLabelClass = cn(
   "text-[length:var(--font-size-10)] uppercase tracking-wide",
 );
 
+/** Elevated z-index when AppMenu opens beside another overlay (e.g. composer @ popover). */
+export const appMenuNestedZClass = "z-[100]";
+
+/** Defaults for AppMenu nested inside another floating panel — no focus steal, stays on top. */
+export const appMenuNestedFocusHandlers = {
+  onOpenAutoFocus: (e: Event) => e.preventDefault(),
+  onCloseAutoFocus: (e: Event) => e.preventDefault(),
+  onMouseDown: (e: React.MouseEvent) => e.preventDefault(),
+} as const;
+
 function AppMenuContent({
   className,
   collisionPadding = 10,
   sideOffset = 3,
   ...props
-}: React.ComponentProps<typeof DropdownMenuContent>) {
+}: React.ComponentProps<typeof DropdownMenuContent> & {
+  onOpenAutoFocus?: (event: Event) => void;
+}) {
   return (
     <DropdownMenuContent
       sideOffset={sideOffset}
@@ -63,6 +87,40 @@ function AppMenuContent({
       {...props}
     />
   );
+}
+
+/** Side submenu beside a parent row — for nested overlays (composer @ paper options). */
+function AppMenuSidePanel({
+  className,
+  side = "right",
+  align = "start",
+  sideOffset = 4,
+  collisionPadding = 12,
+  ...props
+}: React.ComponentProps<typeof AppMenuContent>) {
+  return (
+    <AppMenuContent
+      side={side}
+      align={align}
+      sideOffset={sideOffset}
+      collisionPadding={collisionPadding}
+      className={cn(appMenuNestedZClass, "min-w-[10.5rem]", className)}
+      {...appMenuNestedFocusHandlers}
+      {...props}
+    />
+  );
+}
+
+function AppMenuItemLabel({ children }: { children: React.ReactNode }) {
+  if (children == null || children === false) return null;
+  if (typeof children === "string" || typeof children === "number") {
+    return (
+      <span className={appMenuItemLabelClass}>
+        <span className="min-w-0 truncate">{children}</span>
+      </span>
+    );
+  }
+  return <span className={appMenuItemLabelClass}>{children}</span>;
 }
 
 function AppMenuItem({
@@ -107,7 +165,7 @@ function AppMenuItem({
       {...props}
     >
       {leading}
-      <span className="min-w-0 flex-1 truncate">{children}</span>
+      <AppMenuItemLabel>{children}</AppMenuItemLabel>
       {trailing ? <span className="shrink-0">{trailing}</span> : null}
     </DropdownMenuItem>
   );
@@ -158,12 +216,17 @@ function AppMenuSwitchRow({
   onCheckedChange,
   title,
   disabled,
+  className,
+  enterToggles = true,
 }: {
   label: string;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
   title?: string;
   disabled?: boolean;
+  className?: string;
+  /** When false, only Space toggles (Enter passes through — e.g. composer confirms parent row). */
+  enterToggles?: boolean;
 }) {
   return (
     <div
@@ -173,10 +236,11 @@ function AppMenuSwitchRow({
         "flex items-center justify-between gap-2 rounded-sm px-2 py-1",
         appMenuFontClass,
         disabled && "pointer-events-none opacity-50",
+        className,
       )}
       onPointerDown={(e) => e.stopPropagation()}
       onKeyDown={(e) => {
-        if (e.key === " " || e.key === "Enter") {
+        if (e.key === " " || (enterToggles && e.key === "Enter")) {
           e.preventDefault();
           if (!disabled) onCheckedChange(!checked);
         }
@@ -251,7 +315,7 @@ function AppMenuSubTrigger({
 }) {
   return (
     <DropdownMenuSubTrigger
-      className={cn(appMenuItemClass, "[&>svg:last-child]:size-3", className)}
+      className={cn(appMenuItemClass, "min-h-7 [&>svg:last-child]:size-3.5", className)}
       {...props}
     >
       <span className="min-w-0 flex-1 truncate">{children}</span>
@@ -262,6 +326,7 @@ function AppMenuSubTrigger({
 
 export {
   AppMenuContent,
+  AppMenuSidePanel,
   AppMenuItem,
   AppMenuDestructiveItem,
   AppMenuLabel,

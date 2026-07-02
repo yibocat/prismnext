@@ -3,6 +3,7 @@ import {
   parseAuthorsInput,
   formatLiteratureAuthors,
   formatLiteratureAuthorsShort,
+  formatLiteratureListDate,
   formatEntryType,
   formatPaperProvenance,
   paperHasReadablePdf,
@@ -48,6 +49,24 @@ describe("literature-format", () => {
     expect(sorted[0].year).toBe(2024);
   });
 
+  it("sorts by updated_at with title tie-break", () => {
+    const sorted = sortLiteraturePapers(
+      [
+        { id: "a", bibkey: "a", title: "B", updated_at: 100 } as never,
+        { id: "b", bibkey: "b", title: "A", updated_at: 200 } as never,
+      ],
+      "updated_at",
+      "desc",
+    );
+    expect(sorted[0].id).toBe("b");
+  });
+
+  it("formats list dates as YYYY-MM-DD", () => {
+    expect(formatLiteratureListDate(0)).toBe("—");
+    expect(formatLiteratureListDate(undefined)).toBe("—");
+    expect(formatLiteratureListDate(new Date(2024, 6, 2).getTime())).toBe("2024-07-02");
+  });
+
   it("formats entry type labels", () => {
     expect(formatEntryType("inproceedings")).toBe("Conference paper");
     expect(formatEntryType("unknown-type")).toBe("unknown-type");
@@ -74,6 +93,7 @@ describe("literature-format", () => {
       csl_json: null,
       source: null,
       raw_bibtex: null,
+      tags: [],
       created_at: 0,
       updated_at: 0,
     };

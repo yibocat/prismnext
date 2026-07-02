@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   normalizeDoi,
+  coerceStoredDoi,
   normalizeArxivId,
   extractDoisFromText,
   extractArxivFromText,
@@ -31,6 +32,15 @@ describe("doi-utils", () => {
   it("rejects invalid DOI", () => {
     expect(normalizeDoi("not-a-doi")).toBeNull();
     expect(normalizeDoi("10.1234/")).toBeNull();
+  });
+
+  it("coerceStoredDoi keeps cleaned raw value when strict normalize fails or clips", () => {
+    expect(coerceStoredDoi("https://doi.org/10.1145/3292500.3330701")).toBe(
+      "10.1145/3292500.3330701",
+    );
+    expect(coerceStoredDoi("doi: 10.1000/example-with-unusual+suffix")).toBe(
+      "10.1000/example-with-unusual+suffix",
+    );
   });
 
   it("extracts first DOI from noisy text", () => {

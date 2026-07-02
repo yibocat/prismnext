@@ -6,6 +6,7 @@ import { shellDisplayName } from "@/lib/terminal/shell-label";
 import { useTerminalAiStore } from "./terminal-ai-store";
 import { modeRegistry, type RightTabKind, type RightTab } from "@/lib/workspace/mode-registry";
 import { getTabCloseConfirmation, getBatchTabCloseConfirmation } from "@/lib/workspace/tab-close-confirmation";
+import { buildInitialTabShell, getLiteratureTabCloseAction } from "@/lib/workspace/tab-lifecycle";
 import { useTabCloseConfirmStore } from "@/stores/tab-close-confirm-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
@@ -548,6 +549,21 @@ function performCloseTab(
   const closingTab = state.tabs.find((t) => t.id === id);
   if (!closingTab) return;
 
+  const literatureCloseAction = getLiteratureTabCloseAction(closingTab, state.tabs);
+  if (literatureCloseAction === "deactivate-mode") {
+    deactivateModeByTabKind(closingTab.kind);
+    return;
+  }
+  if (literatureCloseAction === "remove-and-ensure-home") {
+    useRightPanelStore.setState((s) => ({
+      tabs: s.tabs.filter((t) => t.id !== id),
+      activeTabId: null,
+    }));
+    const homeId = useRightPanelStore.getState().ensureTab("literature");
+    useRightPanelStore.setState({ activeTabId: homeId });
+    return;
+  }
+
   const sameKind = state.tabs.filter((t) => t.kind === closingTab.kind);
   const isLastOfKind = sameKind.length === 1;
   const def = modeRegistry.findByTabKind(closingTab.kind);
@@ -561,17 +577,10 @@ function performCloseTab(
     useRightPanelStore.setState((s) => ({
       tabs: s.tabs.map((t) =>
         t.id === id
-          ? {
-              ...t,
-              title: modeRegistry.findByTabKind(t.kind)?.initialTitle ?? t.kind,
-              isInitial: true,
-              isPreview: undefined,
-              isExternal: undefined,
-              filePath: undefined,
-              fileId: undefined,
-              url: undefined,
-              viewMode: undefined,
-            }
+          ? buildInitialTabShell(
+              t,
+              modeRegistry.findByTabKind(t.kind)?.initialTitle ?? t.kind,
+            )
           : t,
       ),
     }));

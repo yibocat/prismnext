@@ -59,6 +59,20 @@ describe("buildPaperAgentContextBlock", () => {
     expect(block).toContain("**Publisher:** Nature Publishing");
   });
 
+  it("includes tags and ai_summary when present", () => {
+    const block = buildPaperAgentContextBlock(
+      samplePaper({
+        tags: ["World Model", "To Read"],
+        ai_summary: "A concise agent-oriented summary.",
+      }),
+      [],
+    );
+    expect(block).toContain("**Tags**");
+    expect(block).toContain("World Model, To Read");
+    expect(block).toContain("**AI Summary**");
+    expect(block).toContain("concise agent-oriented summary");
+  });
+
   it("includes bibliographic fields, abstract, notes, and pdf path", () => {
     const block = buildPaperAgentContextBlock(samplePaper(), [
       {

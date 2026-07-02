@@ -253,7 +253,7 @@
     color-scheme: light;
   }
   body {
-    @apply h-full text-foreground;
+    @apply h-full font-sans text-foreground;
     /* bg-background removed — body is semi-transparent for desktop glass */
   }
   /* Glass body — CSS vars from theme generator. Falls back to solid background. */

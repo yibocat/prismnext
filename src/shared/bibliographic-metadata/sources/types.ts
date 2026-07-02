@@ -14,6 +14,9 @@ export interface BibliographicSource {
     doi?: boolean;
     arxiv?: boolean;
     title?: boolean;
+    isbn?: boolean;
+    pmid?: boolean;
+    adsBibcode?: boolean;
   };
   /** Lower runs first in the chain. */
   priority: number;
@@ -22,6 +25,9 @@ export interface BibliographicSource {
   resolveByDoi?(doi: string): Promise<BibliographicMetadata | null>;
   resolveByArxiv?(arxivId: string): Promise<BibliographicMetadata | null>;
   resolveByTitle?(title: string): Promise<BibliographicMetadata | null>;
+  resolveByIsbn?(isbn: string): Promise<BibliographicMetadata | null>;
+  resolveByPmid?(pmid: string): Promise<BibliographicMetadata | null>;
+  resolveByAdsBibcode?(bibcode: string): Promise<BibliographicMetadata | null>;
 }
 
 export interface BibliographicResolveResult {

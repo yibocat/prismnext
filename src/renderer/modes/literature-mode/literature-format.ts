@@ -110,9 +110,9 @@ export function parseAuthorsInput(text: string): string | null {
   return filtered.length ? JSON.stringify(filtered) : null;
 }
 
-/** Paper mirrored from Zotero (metadata owned by Zotero). */
+/** Paper mirrored from Zotero (metadata owned by Zotero until promoted to project-local). */
 export function isZoteroSyncedPaper(paper: LiteraturePaper): boolean {
-  return Boolean(paper.zotero_key);
+  return Boolean(paper.zotero_key) && paper.origin === "zotero";
 }
 
 export function zoteroSelectItemUrl(itemKey: string): string {
@@ -196,8 +196,18 @@ export function formatPaperProvenance(paper: LiteraturePaper): PaperProvenance {
   };
 }
 
-export type LiteratureSortColumn = "year" | "title";
+export type LiteratureSortColumn = "year" | "title" | "created_at" | "updated_at";
 export type LiteratureSortDirection = "asc" | "desc";
+
+/** Compact date for library list columns (ms epoch). */
+export function formatLiteratureListDate(ms: number | null | undefined): string {
+  if (!ms || ms <= 0) return "—";
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 /** Local `pdf_path` or Zotero item (PDF bytes resolved when opening reader). */
 export function paperHasReadablePdf(paper: LiteraturePaper): boolean {
@@ -211,6 +221,12 @@ export function sortLiteraturePapers(
 ): LiteraturePaper[] {
   const dir = direction === "asc" ? 1 : -1;
   return [...papers].sort((a, b) => {
+    if (column === "created_at" || column === "updated_at") {
+      const av = a[column] ?? 0;
+      const bv = b[column] ?? 0;
+      if (av !== bv) return (av - bv) * dir;
+      return a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
+    }
     if (column === "year") {
       const ay = a.year ?? -1;
       const by = b.year ?? -1;

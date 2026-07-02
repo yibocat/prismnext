@@ -9,7 +9,19 @@ import {
   resolveBibliographicMetadata,
 } from "../../shared/bibliographic-metadata";
 import { normalizeArxivId, normalizeDoi, arxivIdFromDoi } from "../../shared/doi-utils";
-import { arxivPdfUrl, downloadPdfBytes } from "../lib/download-pdf";
+import {
+  normalizeAdsBibcode,
+  normalizeIsbn,
+  normalizePmid,
+} from "../../shared/catalog-identifier-utils";
+import { arxivPdfUrl, downloadPdfBytes, type PdfDownloadProgress } from "../lib/download-pdf";
+import * as fs from "node:fs";
+import {
+  joinPdfAttachAttempts,
+  PDF_ATTACH_NO_OA_URL,
+  PDF_ATTACH_PAYWALL_FALLBACK,
+} from "../../shared/pdf-download-messages";
+import type { StagedCitationImportInput, StagedAddProgressPhase } from "../../shared/citation-staging";
 import { extractIdsFromPdfFile } from "../lib/extract-pdf-identifiers";
 import type { PaperRow } from "./literature-service";
 import {
@@ -23,6 +35,11 @@ import {
   type CreatePaperResult,
   type IngestPdfResult,
 } from "./literature-service";
+import {
+  onPaperPdfAttached,
+  onPaperPdfChanged,
+} from "./literature-extract-automation";
+import { maybeEnqueueAiMetadataAfterMetadata } from "./literature-ai-metadata-queue";
 
 export interface EnrichPaperResult {
   paper: PaperRow;
@@ -72,11 +89,53 @@ function catalogPdfUrl(metadata: BibliographicMetadata, paper?: PaperRow): strin
   return arxivPdfUrl(arxivId);
 }
 
+export type StagedAddProgressCallback = (info: {
+  phase: StagedAddProgressPhase;
+  receivedBytes?: number;
+  totalBytes?: number | null;
+  pdfAttached?: boolean;
+  pdfSkipped?: boolean;
+}) => void;
+
+function serializeCslJson(cslJson: StagedCitationImportInput["cslJson"]): string | null {
+  if (!cslJson) return null;
+  return JSON.stringify(cslJson);
+}
+
+function resolvePdfAttachError(
+  attach: PdfAttachResult,
+  pdfUrl: string | null | undefined,
+): string | undefined {
+  if (attach.attached) return undefined;
+  if (attach.paper.pdf_path) return undefined;
+  if (attach.attachError?.trim()) return attach.attachError.trim();
+  if (pdfUrl?.trim()) return "PDF download failed for an unknown reason.";
+  return PDF_ATTACH_NO_OA_URL;
+}
+
+/** Resolve an open PDF URL for staged import — arXiv first, then fast catalog for OA links. */
+async function resolvePdfUrlForStaged(input: {
+  doi?: string;
+  arxivId?: string;
+}): Promise<string | null> {
+  const arxivId = input.arxivId ?? arxivIdFromDoi(input.doi) ?? null;
+  const arxivUrl = arxivPdfUrl(arxivId);
+  if (arxivUrl) return arxivUrl;
+  if (!input.doi) return null;
+  try {
+    const { metadata } = await resolveBibliographicMetadata({ doi: input.doi }, { fast: true });
+    return catalogPdfUrl(metadata);
+  } catch {
+    return null;
+  }
+}
+
 /** Download open PDF URL and attach to entry when none is stored yet. */
 export async function tryAttachPdfFromUrl(
   projectRoot: string,
   paperId: string,
   pdfUrl: string | null | undefined,
+  onDownloadProgress?: (info: PdfDownloadProgress) => void,
 ): Promise<PdfAttachResult> {
   const paper = getPaper(projectRoot, paperId);
   if (!paper) throw new Error("Paper not found");
@@ -84,8 +143,11 @@ export async function tryAttachPdfFromUrl(
   if (!pdfUrl?.trim()) return { paper, attached: false };
 
   try {
-    const buf = await downloadPdfBytes(pdfUrl);
+    const buf = await downloadPdfBytes(pdfUrl, onDownloadProgress);
     const updated = attachPdfBufferToPaper(projectRoot, paperId, buf);
+    if (updated.pdf_path && !paper.pdf_path) {
+      onPaperPdfAttached(projectRoot, paperId, "download");
+    }
     return { paper: updated, attached: true };
   } catch (err) {
     return {
@@ -120,16 +182,21 @@ export async function enrichPaperFromCatalog(
     (withoutExtras as Partial<PaperRow> & { metadata_source?: string | null }).metadata_source =
       result.metadata.source;
     const updated = applyMetadata(projectRoot, paperId, withoutExtras);
+    const pdfUrl = catalogPdfUrl(result.metadata, updated);
     const attach = await tryAttachPdfFromUrl(
       projectRoot,
       paperId,
-      catalogPdfUrl(result.metadata, updated),
+      pdfUrl,
     );
+    if (attach.attached) {
+      onPaperPdfAttached(projectRoot, paperId, "download");
+    }
+    maybeEnqueueAiMetadataAfterMetadata(projectRoot, attach.paper.id);
     return {
       paper: attach.paper,
       enriched: true,
       pdfAttached: attach.attached,
-      pdfAttachError: attach.attachError,
+      pdfAttachError: resolvePdfAttachError(attach, pdfUrl),
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -137,16 +204,108 @@ export async function enrichPaperFromCatalog(
   }
 }
 
-/** Catalog lookup → create or merge by DOI/arXiv. Sources only — no Zotero shortcut. */
+/**
+ * Add a session-staged citation to the library using its verified snapshot —
+ * skips the full multi-source catalog chain used by `createPaperFromCatalog`.
+ */
+export async function createPaperFromStagedCitation(
+  projectRoot: string,
+  input: StagedCitationImportInput,
+  onProgress?: StagedAddProgressCallback,
+): Promise<CreatePaperFromCatalogResult> {
+  const doi = input.doi ? normalizeDoi(input.doi) : undefined;
+  const arxivId = input.arxivId ? normalizeArxivId(input.arxivId) : undefined;
+  if (!doi && !arxivId) throw new Error("Provide a DOI or arXiv ID");
+  if (!input.catalogVerified) {
+    throw new Error("Citation is not verified — cannot add to library");
+  }
+
+  onProgress?.({ phase: "writing" });
+
+  const createResult = createPaper(projectRoot, {
+    title: input.title.trim() || "Untitled",
+    authors: input.authors,
+    year: input.year,
+    abstract: input.abstract,
+    doi: doi ?? null,
+    arxiv_id: arxivId ?? null,
+    venue: input.venue,
+    type: input.type,
+    origin: "catalog",
+    metadata_source: input.catalogSource,
+    csl_json: serializeCslJson(input.cslJson),
+  });
+
+  const pdfUrl = await resolvePdfUrlForStaged({ doi, arxivId });
+  let attach: PdfAttachResult;
+
+  if (pdfUrl && !createResult.paper.pdf_path) {
+    onProgress?.({ phase: "downloading-pdf" });
+    attach = await tryAttachPdfFromUrl(
+      projectRoot,
+      createResult.paper.id,
+      pdfUrl,
+      (info) => onProgress?.({ phase: "downloading-pdf", ...info }),
+    );
+  } else {
+    attach = { paper: createResult.paper, attached: false };
+  }
+
+  if (attach.attached) {
+    onPaperPdfAttached(projectRoot, attach.paper.id, "import");
+  }
+
+  onProgress?.({
+    phase: "done",
+    pdfAttached: attach.attached,
+    pdfSkipped: !pdfUrl,
+  });
+
+  maybeEnqueueAiMetadataAfterMetadata(projectRoot, attach.paper.id);
+
+  return {
+    ...createResult,
+    paper: attach.paper,
+    pdfAttached: attach.attached,
+    pdfAttachError: resolvePdfAttachError(attach, pdfUrl),
+  };
+}
+
+/** Catalog lookup → create or merge by identifier. Sources only — no Zotero shortcut. */
 export async function createPaperFromCatalog(
   projectRoot: string,
-  query: { doi?: string; arxivId?: string },
+  query: {
+    doi?: string;
+    arxivId?: string;
+    isbn?: string;
+    pmid?: string;
+    adsBibcode?: string;
+  },
+  onPdfProgress?: (
+    paperId: string,
+    info: {
+      phase: "resolving" | "downloading";
+      receivedBytes?: number;
+      totalBytes?: number | null;
+    },
+  ) => void,
 ): Promise<CreatePaperFromCatalogResult> {
   const doi = query.doi ? normalizeDoi(query.doi) : undefined;
   const arxivId = query.arxivId ? normalizeArxivId(query.arxivId) : undefined;
-  if (!doi && !arxivId) throw new Error("Provide a DOI or arXiv ID");
+  const isbn = query.isbn ? normalizeIsbn(query.isbn) : undefined;
+  const pmid = query.pmid ? normalizePmid(query.pmid) : undefined;
+  const adsBibcode = query.adsBibcode ? normalizeAdsBibcode(query.adsBibcode) : undefined;
+  if (!doi && !arxivId && !isbn && !pmid && !adsBibcode) {
+    throw new Error("Provide a DOI, arXiv ID, ISBN, PMID, or ADS bibcode");
+  }
 
-  const { metadata } = await resolveBibliographicMetadata({ doi, arxivId });
+  const { metadata } = await resolveBibliographicMetadata({
+    doi,
+    arxivId,
+    isbn,
+    pmid,
+    adsBibcode,
+  });
   const patch = bibliographicToPaperPatch(metadata) as Partial<PaperRow>;
   const createResult = createPaper(projectRoot, {
     title: patch.title as string,
@@ -162,17 +321,35 @@ export async function createPaperFromCatalog(
     csl_json: bibliographicToCslJson(metadata),
   });
 
+  const pdfUrl = catalogPdfUrl(metadata, createResult.paper);
+  if (pdfUrl && !createResult.paper.pdf_path && onPdfProgress) {
+    onPdfProgress(createResult.paper.id, { phase: "resolving" });
+  }
+
   const attach = await tryAttachPdfFromUrl(
     projectRoot,
     createResult.paper.id,
-    catalogPdfUrl(metadata, createResult.paper),
+    pdfUrl,
+    onPdfProgress
+      ? (info) =>
+          onPdfProgress(createResult.paper.id, {
+            phase: "downloading",
+            receivedBytes: info.receivedBytes,
+            totalBytes: info.totalBytes,
+          })
+      : undefined,
   );
+  if (attach.attached) {
+    onPaperPdfAttached(projectRoot, attach.paper.id, "import");
+  }
+
+  maybeEnqueueAiMetadataAfterMetadata(projectRoot, attach.paper.id);
 
   return {
     ...createResult,
     paper: attach.paper,
     pdfAttached: attach.attached,
-    pdfAttachError: attach.attachError,
+    pdfAttachError: resolvePdfAttachError(attach, pdfUrl),
   };
 }
 
@@ -186,6 +363,10 @@ export async function ingestPdfWithEnrich(
   opts?: { title?: string; doi?: string },
 ): Promise<IngestPdfEnrichResult> {
   const ingest: IngestPdfResult = ingestPdf(projectRoot, pdfPath, opts);
+
+  if (ingest.created && ingest.paper.pdf_path) {
+    onPaperPdfAttached(projectRoot, ingest.paper.id, "import");
+  }
 
   if (!ingest.created) {
     return {
@@ -219,8 +400,18 @@ export async function ingestPdfWithEnrich(
   });
 
   if (applied.duplicatePaper) {
+    const duplicate = applied.duplicatePaper;
+    if (!duplicate.pdf_path) {
+      try {
+        const buf = fs.readFileSync(pdfPath);
+        attachPdfBufferToPaper(projectRoot, duplicate.id, buf);
+        onPaperPdfAttached(projectRoot, duplicate.id, "import");
+      } catch {
+        // Keep merge path even if attach fails — metadata enrich may still help.
+      }
+    }
     await deletePaper(projectRoot, paper.id);
-    const enrich = await enrichPaperFromCatalog(projectRoot, applied.duplicatePaper.id);
+    const enrich = await enrichPaperFromCatalog(projectRoot, duplicate.id);
     return {
       paper: enrich.paper,
       created: false,
@@ -281,10 +472,16 @@ export async function enrichImportedPapers(
       const result = await enrichPaperFromCatalog(projectRoot, paperId);
       if (result.enriched) enriched++;
       else enrichFailed++;
-      if (result.pdfAttached) pdfsAttached++;
+      if (result.pdfAttached) {
+        pdfsAttached++;
+        onPaperPdfAttached(projectRoot, paperId, "import");
+      }
     } else if (!paper.pdf_path) {
       const attach = await tryAttachPdfFromUrl(projectRoot, paperId, arxivPdfUrl(paper.arxiv_id));
-      if (attach.attached) pdfsAttached++;
+      if (attach.attached) {
+        pdfsAttached++;
+        onPaperPdfAttached(projectRoot, paperId, "import");
+      }
     }
   }
 
@@ -295,6 +492,7 @@ export async function enrichImportedPapers(
 export async function downloadPdfForPaper(
   projectRoot: string,
   paperId: string,
+  onDownloadProgress?: (info: PdfDownloadProgress) => void,
 ): Promise<PdfAttachResult> {
   const paper = getPaper(projectRoot, paperId);
   if (!paper) throw new Error("Paper not found");
@@ -306,42 +504,84 @@ export async function downloadPdfForPaper(
   const arxivId =
     normalizeArxivId(paper.arxiv_id) ?? arxivIdFromDoi(paper.doi) ?? undefined;
   if (!doi && !arxivId) {
-    throw new Error("Add a DOI or arXiv ID first");
+    return { paper, attached: false, attachError: "Add a DOI or arXiv ID first" };
   }
 
   let arxivAttachError: string | undefined;
   const triedArxivUrl = arxivPdfUrl(arxivId);
   if (triedArxivUrl) {
-    const attach = await tryAttachPdfFromUrl(projectRoot, paperId, triedArxivUrl);
+    const attach = await tryAttachPdfFromUrl(
+      projectRoot,
+      paperId,
+      triedArxivUrl,
+      onDownloadProgress,
+    );
     if (attach.attached) return attach;
     arxivAttachError = attach.attachError;
   }
 
-  const { metadata } = await resolveBibliographicMetadata({ doi, arxivId });
+  let metadata;
+  try {
+    ({ metadata } = await resolveBibliographicMetadata({ doi, arxivId }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      paper,
+      attached: false,
+      attachError:
+        joinPdfAttachAttempts([
+          arxivAttachError && triedArxivUrl ? `arXiv: ${arxivAttachError}` : undefined,
+          `Catalog lookup: ${message}`,
+        ]) ?? message,
+    };
+  }
+
   const discoveredArxiv =
     normalizeArxivId(metadata.arxiv_id) ?? arxivIdFromDoi(metadata.doi) ?? arxivId;
   const retryArxivUrl = arxivPdfUrl(discoveredArxiv);
   if (retryArxivUrl && retryArxivUrl !== triedArxivUrl) {
-    const attach = await tryAttachPdfFromUrl(projectRoot, paperId, retryArxivUrl);
+    const attach = await tryAttachPdfFromUrl(
+      projectRoot,
+      paperId,
+      retryArxivUrl,
+      onDownloadProgress,
+    );
     if (attach.attached) return attach;
     if (!arxivAttachError) arxivAttachError = attach.attachError;
   }
 
   const catalogUrl = catalogPdfUrl(metadata, paper);
   if (!catalogUrl) {
-    if (arxivAttachError || triedArxivUrl || retryArxivUrl) {
-      throw new Error(
-        arxivAttachError ?? "arXiv PDF download failed. Try again later or import a PDF manually.",
-      );
-    }
-    throw new Error(
-      "No open-access PDF found for this entry. Publisher paywalled PDFs cannot be auto-downloaded — import a PDF file manually.",
-    );
+    return {
+      paper,
+      attached: false,
+      attachError:
+        joinPdfAttachAttempts([
+          arxivAttachError && (triedArxivUrl || retryArxivUrl)
+            ? `arXiv: ${arxivAttachError}`
+            : undefined,
+        ]) ?? PDF_ATTACH_PAYWALL_FALLBACK,
+    };
   }
 
-  const attach = await tryAttachPdfFromUrl(projectRoot, paperId, catalogUrl);
+  const attach = await tryAttachPdfFromUrl(
+    projectRoot,
+    paperId,
+    catalogUrl,
+    onDownloadProgress,
+  );
   if (!attach.attached) {
-    throw new Error(attach.attachError ?? "PDF download failed");
+    return {
+      paper: attach.paper,
+      attached: false,
+      attachError:
+        joinPdfAttachAttempts([
+          arxivAttachError && (triedArxivUrl || retryArxivUrl)
+            ? `arXiv: ${arxivAttachError}`
+            : undefined,
+          attach.attachError ? `Open-access link: ${attach.attachError}` : undefined,
+        ]) ?? attach.attachError ?? "PDF download failed",
+    };
   }
   return attach;
 }

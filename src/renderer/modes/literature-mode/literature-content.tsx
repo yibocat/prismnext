@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
+import { useLiteraturePdfDrop } from "@/lib/literature/use-literature-pdf-drop";
 import { LiteratureLibrary } from "./literature-library";
 import { LiteratureSessionCitations } from "./literature-session-citations";
 import { BETTER_BIBTEX_URL } from "./literature-format";
 import { cn } from "@/lib/utils";
+import { literatureLibraryPdfDropZoneClass } from "./literature-list-chrome";
 
 function LiteratureBbtBanner() {
   const zoteroStatus = useLiteratureStore((s) => s.zoteroStatus);
@@ -48,6 +50,10 @@ export function LiteratureContent({ tab, isActive }: { tab: RightTab; isActive: 
   const pendingCitationJumpRefId = useLiteratureStore((s) => s.pendingCitationJumpRefId);
   const clearPendingCitationJump = useLiteratureStore((s) => s.clearPendingCitationJump);
   const [highlightRefId, setHighlightRefId] = useState<number | null>(null);
+  const consumeHighlight = useCallback(() => setHighlightRefId(null), []);
+  const { dragActive, zoneRef, dropHandlers } = useLiteraturePdfDrop(
+    subview === "library" ? projectRoot : null,
+  );
 
   const paper = useMemo(
     () =>
@@ -79,14 +85,22 @@ export function LiteratureContent({ tab, isActive }: { tab: RightTab; isActive: 
   }
 
   return (
-    <div className={cn("flex h-full min-h-0 flex-col", !isActive && "hidden")}>
+    <div
+      ref={zoneRef}
+      className={cn(
+        "relative flex h-full min-h-0 flex-col rounded-sm",
+        dragActive && literatureLibraryPdfDropZoneClass,
+        !isActive && "hidden",
+      )}
+      {...dropHandlers}
+    >
       <LiteratureBbtBanner />
       {subview === "library" ? (
-        <LiteratureLibrary />
+        <LiteratureLibrary pdfDragActive={dragActive} />
       ) : (
         <LiteratureSessionCitations
           highlightRefId={highlightRefId}
-          onHighlightConsumed={() => setHighlightRefId(null)}
+          onHighlightConsumed={consumeHighlight}
         />
       )}
     </div>

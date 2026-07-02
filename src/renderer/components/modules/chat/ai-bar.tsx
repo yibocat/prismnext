@@ -12,6 +12,7 @@ import { isComposerEmpty } from "@/lib/chat/composer-parts";
 import { loadDraftParts } from "./inline-composer";
 import { XIcon } from "lucide-react";
 import { WorktreeSelector } from "./worktree-selector";
+import { IntensiveReadingListButton } from "./intensive-reading-list-button";
 import { cn } from "@/lib/utils";
 
 /** Capsule AiBar toolbar — dedicated pill radius (not Appearance). */
@@ -120,12 +121,17 @@ export function AiBar() {
     }
   }, [draftParts, phase]);
 
-  // Shrink back to compact capsule when expanded content is cleared
+  // Shrink back to compact capsule when expanded content is cleared.
+  // Whitespace/newline-only drafts count as "empty" for send but still need expanded layout.
   useEffect(() => {
-    if (phase === "expanded" && draftEmpty) {
+    if (
+      phase === "expanded" &&
+      draftEmpty &&
+      !composerNeedsExpandedLayout(draftParts)
+    ) {
       collapseToInput();
     }
-  }, [phase, draftEmpty, collapseToInput]);
+  }, [phase, draftEmpty, draftParts, collapseToInput]);
 
   // Click outside → idle when compact capsule is empty
   useEffect(() => {
@@ -160,7 +166,7 @@ export function AiBar() {
   const toolbar = !isPanelOpen && (
     <div
       className={cn(
-        "flex items-center pointer-events-auto transition-all duration-200 ease-out",
+        "flex items-center gap-1 pointer-events-auto transition-all duration-200 ease-out",
         isComposerVisible
           ? "h-7 mb-2 opacity-100 translate-y-0"
           : "h-0 mb-0 opacity-0 -translate-y-1 overflow-hidden",
@@ -189,6 +195,7 @@ export function AiBar() {
         </button>
       )}
       <WorktreeSelector variant="capsule" />
+      <IntensiveReadingListButton compact variant="capsule" />
     </div>
   );
 

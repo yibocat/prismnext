@@ -418,6 +418,9 @@ export function useOpenCodeEvents() {
 
       switch (type) {
         case "message.part.updated": {
+          if (!tab.isStreaming) {
+            break;
+          }
           const part = data.part || data;
           const block = convertPartToBlock(part);
 
@@ -604,10 +607,13 @@ export function useOpenCodeEvents() {
 
                   const toolName = (pendingTool.name as string).toLowerCase();
                   if (
-                    toolName === "bash"
-                    || toolName === "shell"
-                    || toolName === "terminal"
-                    || toolName === "execute"
+                    !isFinalToolResult
+                    && (
+                      toolName === "bash"
+                      || toolName === "shell"
+                      || toolName === "terminal"
+                      || toolName === "execute"
+                    )
                   ) {
                     handleBashToolUse(
                       tabId,

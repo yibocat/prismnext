@@ -16,6 +16,7 @@ import { McpPasteJsonPanel } from "./mcp-paste-json-panel";
 import { McpServerEditorPanel } from "./mcp-server-editor-panel";
 import { SkillMarkdownPanel } from "./skill-markdown-panel";
 import { SkillLibraryPanel } from "./skill-library-panel";
+import { AgentToolsPanel } from "./agent-tools-panel";
 import { ShortcutsSettings } from "./shortcuts-settings";
 import { LogViewer } from "./log-viewer";
 
@@ -58,6 +59,8 @@ export function renderSettingsPanelSlot(slot: SettingsPanelSlot): ReactNode {
       return <SkillMarkdownPanel slot={slot} />;
     case "skill-library":
       return <SkillLibraryPanel />;
+    case "agent-tools":
+      return <AgentToolsPanel />;
     case "shortcuts":
       return <ShortcutsSettings />;
     case "logs":

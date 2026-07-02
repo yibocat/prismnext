@@ -69,6 +69,8 @@ export interface CompiledComposerPrompt {
   mcpServerNames: string[];
   /** Skill ids explicitly requested via composer `/` tokens. */
   skillIds: string[];
+  /** PDF paper excerpt chips attached this turn (block pick → Chat). */
+  paperSnippetCount: number;
 }
 
 export async function compileComposerPrompt(
@@ -247,8 +249,9 @@ export async function compileComposerPrompt(
     const contentByPath = await buildNotebookContentMap(files, notebookDir);
 
     for (const pp of paperParts) {
+      const blockHint = pp.blockType ? `, block: ${pp.blockType}` : "";
       blocks.push(
-        `\`\`\`paper ${pp.bibkey}\n# ${pp.title} (p.${pp.page})\n${pp.quotedText.trim() || "(empty excerpt)"}\n\`\`\``,
+        `\`\`\`paper ${pp.bibkey}\n# ${pp.title} (p.${pp.page}${blockHint})\n${pp.quotedText.trim() || "(empty excerpt)"}\n\`\`\``,
       );
     }
 
@@ -332,6 +335,8 @@ export async function compileComposerPrompt(
 
   const promptText = sections.filter(Boolean).join("\n\n");
 
+  const paperSnippetCount = parts.filter((p) => p.type === "paper-snippet").length;
+
   return {
     displayBlocks,
     promptText,
@@ -340,6 +345,7 @@ export async function compileComposerPrompt(
     aiCommandNames,
     mcpServerNames: [...new Set(mcpServerNames)],
     skillIds: [...new Set(skillIds)],
+    paperSnippetCount,
   };
 }
 

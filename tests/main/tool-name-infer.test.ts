@@ -10,8 +10,8 @@ describe("inferToolNameFromInput", () => {
     expect(inferToolNameFromInput({ query: "Choquet", limit: 20 })).toBe("literature-search");
   });
 
-  it("does not map bare query to websearch (literature-search limit is optional)", () => {
-    expect(inferToolNameFromInput({ query: "Choquet integral" })).toBeNull();
+  it("maps bare query to websearch (KIND_TO_TOOL[other]=task would mislabel it otherwise)", () => {
+    expect(inferToolNameFromInput({ query: "Choquet integral" })).toBe("websearch");
   });
 
   it("maps websearch when max_results is present", () => {

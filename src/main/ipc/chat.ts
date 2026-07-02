@@ -17,9 +17,42 @@ import {
   type UserDisplayContent,
 } from "../services/session-display-store";
 import { cancelAiCommandForSession } from "../services/ai-pty";
-import { setSessionProjectRoot } from "../services/chat-session-registry";
+import { setSessionProjectRoot, setSessionIntensiveBibkeys } from "../services/chat-session-registry";
+import { getPaper } from "../services/literature-service";
+import {
+  buildIntensiveReadingInstruction,
+  type IntensivePaper,
+} from "../prompts/modules/literature-intensive";
 
 const log = createLogger("chat-ipc", "agent");
+
+/**
+ * Resolve intensive paper IDs to {bibkey, title} for the per-turn instruction.
+ * Skips IDs that no longer exist in the library (e.g. deleted mid-session).
+ */
+function resolveIntensivePapers(
+  projectRoot: string,
+  paperIds: string[] | undefined,
+): IntensivePaper[] {
+  if (!paperIds?.length) return [];
+  const out: IntensivePaper[] = [];
+  for (const id of paperIds) {
+    const paper = getPaper(projectRoot, id);
+    if (paper?.bibkey) {
+      out.push({ bibkey: paper.bibkey, title: paper.title ?? "" });
+    }
+  }
+  return out;
+}
+
+function syncIntensiveBibkeysForSession(
+  projectRoot: string,
+  sessionId: string,
+  paperIds: string[] | undefined,
+): void {
+  const bibkeys = resolveIntensivePapers(projectRoot, paperIds).map((p) => p.bibkey);
+  setSessionIntensiveBibkeys(sessionId, bibkeys);
+}
 
 /** Full SQLite snapshot before session:truncateToTurn — used by session:undoTruncate. */
 const sessionTruncationBackups = new Map<string, SessionMessageBackup>();
@@ -32,11 +65,10 @@ interface SessionContextData {
   breakdown: Record<string, number>;
   schema: { key: string; label: string; color: string; description?: string; order?: number }[];
   updatedAt: number;
-  /** The first user message in this session has a system-prompt content block
-   *  that should be stripped from displayed history. Set on session creation. */
-  hasSystemPromptBlock?: boolean;
-  /** Fingerprint of prompt config when this session last received a system prompt. */
+  /** Fingerprint of stable system file content (OpenCode instructions). */
   promptFingerprint?: string;
+  /** @deprecated Legacy flag — stable system no longer uses user content blocks. */
+  hasSystemPromptBlock?: boolean;
 }
 
 function contextStorePath(projectRoot: string): string {
@@ -112,6 +144,21 @@ function getMapper(win: BrowserWindow): EventMapper {
   return mapper;
 }
 
+/** Register sessionId ↔ tabId so ACP stream events route to the correct chat tab. */
+function registerTabSession(
+  win: BrowserWindow,
+  tabId: string,
+  sessionId: string,
+  projectPath?: string,
+): void {
+  const bridge = getMapper(win);
+  bridge.registerSession(sessionId, tabId);
+  if (projectPath?.trim()) {
+    setSessionProjectRoot(sessionId, projectPath.trim());
+  }
+  bridge.start();
+}
+
 /**
  * Ensure the OpenCode ACP process is running. Auto-reconnects if needed.
  * extraEnv (API keys etc.) is passed through to opencode on first init;
@@ -134,6 +181,36 @@ export function registerChatHandlers(): void {
     mappers.clear();
     return { success: true };
   });
+
+  // ─── Register tab ↔ session mapping (sidebar load, tab restore) ───
+  ipcMain.handle(
+    "chat:registerTab",
+    async (
+      event,
+      args: { tabId: string; sessionId: string; projectPath?: string },
+    ) => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (!win || !args.tabId || !args.sessionId) {
+        return { success: false };
+      }
+      registerTabSession(win, args.tabId, args.sessionId, args.projectPath);
+      return { success: true };
+    },
+  );
+
+  ipcMain.handle(
+    "chat:syncIntensiveReading",
+    async (
+      _event,
+      args: { sessionId: string; projectRoot: string; paperIds?: string[] },
+    ) => {
+      if (!args.sessionId?.trim() || !args.projectRoot?.trim()) {
+        return { success: false };
+      }
+      syncIntensiveBibkeysForSession(args.projectRoot, args.sessionId.trim(), args.paperIds);
+      return { success: true };
+    },
+  );
 
   // ─── Send Prompt ───
   ipcMain.handle(
@@ -159,6 +236,11 @@ export function registerChatHandlers(): void {
         skillIds?: string[];
         /** UI display blocks for this user turn (inline tokens); not sent to the model. */
         userDisplayContent?: Record<string, unknown>[];
+        /** Per-tab intensive reading paper IDs — resolved to bibkeys and injected
+         *  as a per-turn instruction reminding the agent to use literature-read-pdf. */
+        intensivePaperIds?: string[];
+        /** Composer includes ```paper …``` excerpt block(s) this turn. */
+        hasPaperSnippets?: boolean;
       },
     ) => {
       const tabId = args.tabId || "default";
@@ -196,7 +278,17 @@ export function registerChatHandlers(): void {
         resolveProfileId,
         getProfileRuntimeFilters,
       } = await import("../services/profiles-sync");
-      const userPrompt = args.prompt;
+      // Per-turn intensive reading instruction. Appended to the user prompt so
+      // the agent is reminded every turn (independent of @-mention presence).
+      const intensivePapers = args.projectPath
+        ? resolveIntensivePapers(args.projectPath, args.intensivePaperIds)
+        : [];
+      const intensiveInstruction = buildIntensiveReadingInstruction(intensivePapers, {
+        hasPaperSnippets: args.hasPaperSnippets,
+      });
+      const userPrompt = intensiveInstruction
+        ? `${args.prompt}\n\n${intensiveInstruction}`
+        : args.prompt;
 
       const profileId = args.projectPath && args.profileId
         ? resolveProfileId(args.projectPath, args.profileId) ?? undefined
@@ -252,11 +344,14 @@ export function registerChatHandlers(): void {
         profileId,
       });
       const assembledPrompt = promptManager.compose(promptCtx);
-      const baseSystemPrompt = promptManager.composeBase(promptCtx);
+      const profileOverlayPrompt = promptManager.composeProfileOverlay(promptCtx);
       const projectRulesPrompt = promptManager.composeProjectRules(promptCtx);
       const currentFingerprint = promptManager.computePromptFingerprint(promptCtx);
       if (assembledPrompt) {
-        log.info(`System prompt assembled: ${assembledPrompt.length} chars (base ${baseSystemPrompt.length}, rules ${projectRulesPrompt.length})`);
+        log.info(
+          `System prompt assembled: ${assembledPrompt.length} chars ` +
+          `(stable via OpenCode instructions, rules ${projectRulesPrompt.length}, profile ${profileOverlayPrompt.length})`,
+        );
       } else {
         log.warn("Assembled prompt is EMPTY — agent will use OpenCode defaults only");
         // Notify renderer so UI can show a warning
@@ -266,8 +361,9 @@ export function registerChatHandlers(): void {
       }
 
       // Create or reuse session.
-      // isFirstTurn: inject base system prompt (no project rules) on turn 1
-      // or when base config changed. Project rules inject every turn separately.
+      // Stable system layers sync to `.prismnext/agent/_prism-system.md` and load
+      // via OpenCode `instructions` (true system[]). Profile overlay and project
+      // rules inject every turn as user content blocks.
       let sessionId = args.sessionId;
       let isFirstTurn = false;
       const existingSessionId = args.sessionId;
@@ -296,9 +392,10 @@ export function registerChatHandlers(): void {
       }
 
       const bridge = getMapper(win);
-      bridge.registerSession(sessionId, tabId);
-      if (args.projectPath) setSessionProjectRoot(sessionId, args.projectPath);
-      bridge.start();
+      registerTabSession(win, tabId, sessionId, args.projectPath);
+      if (args.projectPath && sessionId) {
+        syncIntensiveBibkeysForSession(args.projectPath, sessionId, args.intensivePaperIds);
+      }
 
       // Set thought level if specified via ACP session/set_config_option.
       if (thoughtLevel) {
@@ -327,18 +424,37 @@ export function registerChatHandlers(): void {
         && priorContext?.promptFingerprint
         && priorContext.promptFingerprint !== currentFingerprint,
       );
-      // First turn of a new session, or prompt config changed since last injection.
-      const injectSystemPrompt = isFirstTurn || promptStale;
 
-      log.info(`Sending prompt: sessionId=${sessionId} tabId=${tabId} promptLen=${userPrompt.length} injectSystem=${injectSystemPrompt}`);
+      if (args.projectPath) {
+        const { syncProjectPromptFile } = await import("../services/prompt-sync");
+        const needsPromptSync = isFirstTurn || promptStale || !priorContext?.promptFingerprint;
+        if (needsPromptSync) {
+          syncProjectPromptFile(args.projectPath, promptCtx);
+        }
+        const { instructionsChanged } = service.applyProjectPromptIntegration(args.projectPath);
+        if (instructionsChanged) {
+          try {
+            await service.reloadAfterSkillsIntegration();
+          } catch (err: any) {
+            log.warn(`OpenCode reload after prompt integration failed: ${err.message}`);
+          }
+        }
+      }
+
+      log.info(
+        `Sending prompt: sessionId=${sessionId} tabId=${tabId} promptLen=${userPrompt.length} ` +
+        `promptSync=${isFirstTurn || promptStale}`,
+      );
+      if (!isFirstTurn && args.projectPath) {
+        await service.ensureSessionHydrated(sessionId, cwd, args.projectPath);
+      }
       let usage = null;
       try {
         const result = await service.sendPrompt(sessionId, userPrompt, {
           model: modelId,
           provider,
-          systemPrompt: baseSystemPrompt || undefined,
+          profileOverlayPrompt: profileOverlayPrompt || undefined,
           projectRulesPrompt: projectRulesPrompt || undefined,
-          injectSystemPrompt,
         });
         if (args.userDisplayContent?.length && args.projectPath && sessionId) {
           appendUserDisplay(args.projectPath, sessionId, args.userDisplayContent);
@@ -470,10 +586,8 @@ export function registerChatHandlers(): void {
         breakdown: fullBreakdown,
         schema: CONTEXT_CATEGORY_SCHEMA,
         updatedAt: Date.now(),
-        hasSystemPromptBlock: injectSystemPrompt,
-        promptFingerprint: injectSystemPrompt
-          ? currentFingerprint
-          : (priorContext?.promptFingerprint ?? currentFingerprint),
+        hasSystemPromptBlock: false,
+        promptFingerprint: currentFingerprint,
       });
 
       win.webContents.send("chat:complete", {
@@ -614,9 +728,8 @@ export function registerChatHandlers(): void {
       const cwd = args.cwd || args.projectPath || "";
       const messages = await service.getMessages(args.sessionId, cwd, args.projectPath);
 
-      if (service.getConnection()) {
-        service.initSession(args.sessionId, cwd, args.projectPath).catch(() => {});
-      }
+      // UI history only — read SQLite. Do NOT session/load here: OpenCode replays
+      // completed tool_call_update events and would re-trigger bash permission gates.
 
       return messages;
     },

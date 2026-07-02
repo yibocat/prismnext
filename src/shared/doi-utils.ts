@@ -36,6 +36,21 @@ export function normalizeDoi(raw: string | null | undefined): string | null {
   return core;
 }
 
+/** Prefer normalized DOI; keep a cleaned raw value when normalization would drop data. */
+export function coerceStoredDoi(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  let cleaned = raw.trim().replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "").replace(/^doi:\s*/i, "");
+  cleaned = cleaned.replace(/\s+/g, "");
+  cleaned = cleaned.replace(/[.,;:)\]}>'"\s]+$/g, "");
+  if (!cleaned) return null;
+  const normalized = normalizeDoi(raw);
+  if (!normalized) return cleaned;
+  if (cleaned.length > normalized.length && cleaned.toLowerCase().startsWith(normalized.toLowerCase())) {
+    return cleaned;
+  }
+  return normalized;
+}
+
 /** Find DOIs in text; normalized, deduped, order preserved. */
 export function extractDoisFromText(text: string): string[] {
   // (?<![0-9.]) allows matching after "doi.org/" (slash is OK; dot-digit prefix is not)
@@ -57,6 +72,13 @@ export function normalizeArxivId(raw: string | null | undefined): string | null 
   if (!raw) return null;
   const m = raw.replace(/^arxiv:/i, "").trim().match(/^(\d{4}\.\d{4,5}(?:v\d+)?)/i);
   return m ? m[1] : null;
+}
+
+/** Canonical DataCite DOI assigned to arXiv preprints (OpenAlex/Crossref lookup). */
+export function arxivDoiFromArxivId(rawArxiv: string | null | undefined): string | null {
+  const id = normalizeArxivId(rawArxiv);
+  if (!id) return null;
+  return `10.48550/arxiv.${id.replace(/v\d+$/i, "")}`;
 }
 
 /** arXiv-assigned DOI (10.48550/arXiv.…) → new-style arXiv ID. */

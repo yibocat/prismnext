@@ -12,6 +12,7 @@ import {
   deleteCollection,
   deletePaper,
   detachZoteroMirror,
+  promoteZoteroPaperToProject,
   exportBibTeX,
   formatBibliography,
   fetchAndApplyMetadata,
@@ -31,7 +32,12 @@ import {
   updateCollection,
   updatePaper,
   findExistingByIdentifier,
+  replacePdfFromFile,
+  attachLocalPdfToPaper,
+  mapPaperForRenderer,
+  type PaperRow,
 } from "../services/literature-service";
+import { onPaperPdfAttached, onPaperPdfChanged } from "../services/literature-extract-automation";
 import { resolvePaperPdfBytes, ensurePaperPdfAbsPath } from "../services/literature-pdf-resolve";
 import { toLiteraturePdfUrl } from "../services/literature-pdf-protocol";
 import { getPdfCacheStatesForPapers, getLiteratureStorageStats, pruneOrphanPdfAttachments } from "../services/literature-pdf-cache";
@@ -43,14 +49,26 @@ import {
 } from "../services/zotero-sync";
 import {
   createPaperFromCatalog,
+  createPaperFromStagedCitation,
   downloadPdfForPaper,
   ingestPdfWithEnrich,
 } from "../services/literature-enrich";
 import { exportZoteroBibliography } from "../services/zotero-sync";
-import { resolveBibliographicMetadata } from "../../shared/bibliographic-metadata";
-import { bibliographicToPaperPatch } from "../../shared/bibliographic-metadata/helpers";
-import type { StagedCitationPayload, StageResult } from "../../shared/citation-staging";
-import { normalizeArxivId, normalizeDoi } from "../../shared/doi-utils";
+import type { StagedCitationImportInput, StagedCitationPayload, StageResult } from "../../shared/citation-staging";
+import { stageLiteratureCitation } from "../services/literature-bridge";
+import {
+  getPaperCitationNetwork,
+  getPaperCitationNetworkPage,
+} from "../services/literature-citation-network";
+import type { PaperCitationSectionKind } from "../../shared/paper-citation-network";
+
+function mapPaperRow(row: PaperRow | null) {
+  return row ? mapPaperForRenderer(row) : null;
+}
+
+function mapPaperPayload<T extends { paper: PaperRow }>(result: T) {
+  return { ...result, paper: mapPaperForRenderer(result.paper) };
+}
 
 async function bibliographyExportContent(
   projectRoot: string,
@@ -74,7 +92,7 @@ async function bibliographyExportContent(
 
 export function registerLiteratureHandlers(): void {
   ipcMain.handle("literature:list", async (_event, args: { projectRoot: string }) => {
-    return listPapers(args.projectRoot);
+    return listPapers(args.projectRoot).map(mapPaperForRenderer);
   });
 
   ipcMain.handle("literature:getPdfCacheStatus", async (_event, args: { projectRoot: string }) => {
@@ -91,21 +109,152 @@ export function registerLiteratureHandlers(): void {
   });
 
   ipcMain.handle("literature:search", async (_event, args: { projectRoot: string; query: string; limit?: number }) => {
-    return searchPapers(args.projectRoot, args.query, args.limit);
+    return searchPapers(args.projectRoot, args.query, args.limit).map(mapPaperForRenderer);
   });
 
   ipcMain.handle("literature:get", async (_event, args: { projectRoot: string; paperId: string }) => {
-    return getPaper(args.projectRoot, args.paperId);
+    return mapPaperRow(getPaper(args.projectRoot, args.paperId));
   });
 
   ipcMain.handle("literature:ingestPdf", async (_event, args: { projectRoot: string; pdfPath: string; title?: string; doi?: string }) => {
-    return ingestPdfWithEnrich(args.projectRoot, args.pdfPath, { title: args.title, doi: args.doi });
+    return mapPaperPayload(await ingestPdfWithEnrich(args.projectRoot, args.pdfPath, { title: args.title, doi: args.doi }));
   });
 
   ipcMain.handle(
+    "literature:replacePdf",
+    async (_event, args: { projectRoot: string; paperId: string; pdfPath: string }) => {
+      const { paper, replaced } = replacePdfFromFile(args.projectRoot, args.paperId, args.pdfPath);
+      if (replaced) {
+        onPaperPdfChanged(args.projectRoot, args.paperId, "replace");
+      }
+      return { paper: mapPaperForRenderer(paper), replaced };
+    },
+  );
+
+  ipcMain.handle(
+    "literature:attachLocalPdf",
+    async (
+      _event,
+      args: {
+        projectRoot: string;
+        paperId: string;
+        pdfPath: string;
+        ignoreIdentifierConflict?: boolean;
+      },
+    ) => {
+      const hadPdf = Boolean(getPaper(args.projectRoot, args.paperId)?.pdf_path);
+      const result = attachLocalPdfToPaper(args.projectRoot, args.paperId, args.pdfPath, {
+        ignoreIdentifierConflict: args.ignoreIdentifierConflict,
+      });
+
+      if (result.attached) {
+        if (hadPdf && result.replaced) {
+          onPaperPdfChanged(args.projectRoot, args.paperId, "replace");
+        } else if (!hadPdf) {
+          onPaperPdfAttached(args.projectRoot, args.paperId, "import");
+        }
+      }
+
+      const conflict = result.conflict
+        ? result.conflict.kind === "sha_duplicate" || result.conflict.kind === "identifier_duplicate"
+          ? {
+              kind: result.conflict.kind,
+              otherPaper: mapPaperForRenderer(result.conflict.otherPaper),
+              doi:
+                result.conflict.kind === "identifier_duplicate" ? result.conflict.doi : undefined,
+              arxivId:
+                result.conflict.kind === "identifier_duplicate"
+                  ? result.conflict.arxivId
+                  : undefined,
+            }
+          : result.conflict.kind === "target_mismatch"
+            ? {
+                kind: result.conflict.kind,
+                entryDoi: result.conflict.entryDoi,
+                entryArxivId: result.conflict.entryArxivId,
+                pdfDoi: result.conflict.pdfDoi,
+                pdfArxivId: result.conflict.pdfArxivId,
+              }
+            : {
+                kind: result.conflict.kind,
+                entryDoi: result.conflict.entryDoi,
+                entryArxivId: result.conflict.entryArxivId,
+              }
+        : undefined;
+
+      return {
+        paper: mapPaperForRenderer(result.paper),
+        attached: result.attached,
+        replaced: result.replaced,
+        conflict,
+        attachError: result.attachError,
+      };
+    },
+  );
+
+  ipcMain.handle(
     "literature:createFromIdentifier",
-    async (_event, args: { projectRoot: string; doi?: string; arxivId?: string }) => {
-      return createPaperFromCatalog(args.projectRoot, { doi: args.doi, arxivId: args.arxivId });
+    async (
+      event,
+      args: {
+        projectRoot: string;
+        doi?: string;
+        arxivId?: string;
+        isbn?: string;
+        pmid?: string;
+        adsBibcode?: string;
+      },
+    ) => {
+      let activePaperId: string | undefined;
+      const result = await createPaperFromCatalog(
+        args.projectRoot,
+        {
+          doi: args.doi,
+          arxivId: args.arxivId,
+          isbn: args.isbn,
+          pmid: args.pmid,
+          adsBibcode: args.adsBibcode,
+        },
+        (paperId, info) => {
+          activePaperId = paperId;
+          event.sender.send("literature:pdfDownloadProgress", {
+            paperId,
+            ...info,
+          });
+        },
+      );
+      if (activePaperId) {
+        event.sender.send("literature:pdfDownloadProgress", {
+          paperId: activePaperId,
+          phase: "done",
+        });
+      }
+      return mapPaperPayload(result);
+    },
+  );
+
+  ipcMain.handle(
+    "literature:createFromStagedCitation",
+    async (
+      event,
+      args: { projectRoot: string; citation: StagedCitationImportInput },
+    ) => {
+      const send = (payload: {
+        phase: "writing" | "downloading-pdf" | "done";
+        receivedBytes?: number;
+        totalBytes?: number | null;
+        pdfAttached?: boolean;
+        pdfSkipped?: boolean;
+      }) => {
+        event.sender.send("literature:stagedAddProgress", {
+          stagedId: args.citation.stagedId,
+          sessionId: args.citation.sessionId,
+          batchIndex: args.citation.batchIndex,
+          batchTotal: args.citation.batchTotal,
+          ...payload,
+        });
+      };
+      return mapPaperPayload(await createPaperFromStagedCitation(args.projectRoot, args.citation, send));
     },
   );
 
@@ -124,90 +273,36 @@ export function registerLiteratureHandlers(): void {
       _event,
       args: {
         projectRoot: string;
+        sessionId: string;
         doi?: string;
         arxivId?: string;
         sourceUrl?: string;
         discoveredFrom?: StagedCitationPayload["discoveredFrom"];
       },
     ): Promise<StageResult> => {
-      const normDoi = args.doi?.trim() ? normalizeDoi(args.doi.trim()) : null;
-      const normArxiv = args.arxivId?.trim() ? normalizeArxivId(args.arxivId.trim()) : null;
-      if (!normDoi && !normArxiv) {
+      const sessionId = args.sessionId?.trim();
+      if (!sessionId) {
         return {
           staged: false,
           verified: false,
-          error: "Invalid or missing DOI/arXiv ID.",
-          hint: "Use an exact DOI or arXiv ID from websearch or the user. Do not invent identifiers.",
+          error: "Missing sessionId for stage action.",
         };
       }
-      if (normDoi && normArxiv) {
-        return { staged: false, verified: false, error: "Provide only one of doi or arxivId." };
-      }
-      try {
-        const { metadata } = await resolveBibliographicMetadata(
-          {
-            doi: normDoi ?? undefined,
-            arxivId: normArxiv ?? undefined,
-          },
-          { fast: true },
-        );
-        if (!metadata.title?.trim()) {
-          return {
-            staged: false,
-            verified: false,
-            error: "Catalog returned no verifiable title.",
-            hint: "Confirm the identifier with websearch or the user.",
-          };
-        }
-        const patch = bibliographicToPaperPatch(metadata);
-        const existing = findExistingByIdentifier(args.projectRoot, {
-          doi: normDoi,
-          arxivId: normArxiv,
-        });
-        const payload: StagedCitationPayload = {
-          title: (patch.title as string) ?? metadata.title,
-          authors: (patch.authors as string | null) ?? null,
-          year: (patch.year as number | null) ?? null,
-          venue: (patch.venue as string | null) ?? null,
-          type: (patch.type as string | null) ?? null,
-          doi: (patch.doi as string | null) ?? null,
-          arxivId: (patch.arxiv_id as string | null) ?? null,
-          abstract: (patch.abstract as string | null) ?? null,
-          cslJson: null,
-          sourceUrl: args.sourceUrl ?? null,
-          catalogSource: metadata.source ?? null,
-          catalogVerified: true,
-          verifyError: null,
-          discoveredFrom: args.discoveredFrom ?? "agent",
-          libraryPaperId: existing?.paperId ?? null,
-          libraryBibkey: existing?.bibkey ?? null,
-        };
-        return {
-          staged: true,
-          verified: true,
-          citation: payload,
-          alreadyInLibrary: Boolean(existing),
-          libraryBibkey: existing?.bibkey ?? null,
-          hint: existing
-            ? "Already in library. Cite as [n]."
-            : "Cite as [n] in your reply. User will confirm before adding to library.",
-        };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return {
-          staged: false,
-          verified: false,
-          error: message,
-          hint: "Identifier not found in external catalogs. Confirm with websearch or ask the user — do not guess.",
-        };
-      }
+      return stageLiteratureCitation(args.projectRoot, sessionId, {
+        doi: args.doi,
+        arxivId: args.arxivId,
+        sourceUrl: args.sourceUrl,
+        discoveredFrom: args.discoveredFrom,
+      });
     },
   );
 
   ipcMain.handle(
     "literature:applyMetadata",
     async (_event, args: { projectRoot: string; paperId: string; metadata: Record<string, unknown> }) => {
-      return applyMetadata(args.projectRoot, args.paperId, args.metadata as Parameters<typeof applyMetadata>[2]);
+      return mapPaperForRenderer(
+        applyMetadata(args.projectRoot, args.paperId, args.metadata as Parameters<typeof applyMetadata>[2]),
+      );
     },
   );
 
@@ -273,7 +368,8 @@ export function registerLiteratureHandlers(): void {
   });
 
   ipcMain.handle("literature:createPaper", async (_event, args: { projectRoot: string; metadata: Record<string, unknown> }) => {
-    return createPaper(args.projectRoot, args.metadata as Parameters<typeof createPaper>[1]);
+    const result = createPaper(args.projectRoot, args.metadata as Parameters<typeof createPaper>[1]);
+    return mapPaperPayload(result);
   });
 
   ipcMain.handle(
@@ -282,7 +378,12 @@ export function registerLiteratureHandlers(): void {
       _event,
       args: { projectRoot: string; paperId: string; doi?: string | null; arxivId?: string | null },
     ) => {
-      return applyIdentifiers(args.projectRoot, args.paperId, { doi: args.doi, arxivId: args.arxivId });
+      const result = applyIdentifiers(args.projectRoot, args.paperId, { doi: args.doi, arxivId: args.arxivId });
+      return {
+        ...result,
+        paper: result.paper ? mapPaperForRenderer(result.paper) : undefined,
+        duplicatePaper: result.duplicatePaper ? mapPaperForRenderer(result.duplicatePaper) : undefined,
+      };
     },
   );
 
@@ -292,21 +393,55 @@ export function registerLiteratureHandlers(): void {
       _event,
       args: { projectRoot: string; paperId: string; doi?: string; arxivId?: string },
     ) => {
-      return fetchAndApplyMetadata(args.projectRoot, args.paperId, { doi: args.doi, arxivId: args.arxivId });
+      const result = await fetchAndApplyMetadata(args.projectRoot, args.paperId, {
+        doi: args.doi,
+        arxivId: args.arxivId,
+      });
+      return mapPaperPayload(result);
     },
   );
 
   ipcMain.handle(
     "literature:downloadPdf",
-    async (_event, args: { projectRoot: string; paperId: string }) => {
-      return downloadPdfForPaper(args.projectRoot, args.paperId);
+    async (event, args: { projectRoot: string; paperId: string }) => {
+      const send = (payload: {
+        phase: "resolving" | "downloading" | "done";
+        receivedBytes?: number;
+        totalBytes?: number | null;
+      }) => {
+        event.sender.send("literature:pdfDownloadProgress", {
+          paperId: args.paperId,
+          ...payload,
+        });
+      };
+      send({ phase: "resolving" });
+      const result = await downloadPdfForPaper(args.projectRoot, args.paperId, (info) => {
+        send({
+          phase: "downloading",
+          receivedBytes: info.receivedBytes,
+          totalBytes: info.totalBytes,
+        });
+      });
+      send({ phase: "done" });
+      return mapPaperPayload(result);
     },
   );
 
   ipcMain.handle(
     "literature:updatePaper",
     async (_event, args: { projectRoot: string; paperId: string; patch: Record<string, unknown> }) => {
-      return updatePaper(args.projectRoot, args.paperId, args.patch as Parameters<typeof updatePaper>[2]);
+      return mapPaperForRenderer(
+        updatePaper(args.projectRoot, args.paperId, args.patch as Parameters<typeof updatePaper>[2]),
+      );
+    },
+  );
+
+  ipcMain.handle(
+    "literature:regenerateAiMetadata",
+    async (_event, args: { projectRoot: string; paperId: string }) => {
+      const { enqueueAiMetadata } = await import("../services/literature-ai-metadata-queue");
+      enqueueAiMetadata(args.projectRoot, args.paperId, { force: true });
+      return { ok: true };
     },
   );
 
@@ -316,7 +451,7 @@ export function registerLiteratureHandlers(): void {
   });
 
   ipcMain.handle("literature:importToLocal", async (_event, args: { projectRoot: string; paperId: string }) => {
-    detachZoteroMirror(args.projectRoot, args.paperId);
+    promoteZoteroPaperToProject(args.projectRoot, args.paperId);
     return { ok: true };
   });
 
@@ -357,7 +492,7 @@ export function registerLiteratureHandlers(): void {
   });
 
   ipcMain.handle("literature:readingList", async (_event, args: { projectRoot: string }) => {
-    return listReadingList(args.projectRoot);
+    return listReadingList(args.projectRoot).map(mapPaperForRenderer);
   });
 
   ipcMain.handle("literature:listCollections", async (_event, args: { projectRoot: string }) => {
@@ -467,4 +602,38 @@ export function registerLiteratureHandlers(): void {
     if (!fs.existsSync(libraryDb)) return { path: null, error: "No library.db in selected project" };
     return { path: result.filePaths[0] };
   });
+
+  ipcMain.handle(
+    "literature:getCitationNetwork",
+    async (
+      _event,
+      args: { projectRoot: string; paperId: string; refresh?: boolean },
+    ) => {
+      return getPaperCitationNetwork(args.projectRoot, args.paperId, {
+        refresh: args.refresh,
+      });
+    },
+  );
+
+  ipcMain.handle(
+    "literature:getCitationNetworkPage",
+    async (
+      _event,
+      args: {
+        projectRoot: string;
+        paperId: string;
+        section: PaperCitationSectionKind;
+        cursor: string;
+        refresh?: boolean;
+      },
+    ) => {
+      return getPaperCitationNetworkPage(
+        args.projectRoot,
+        args.paperId,
+        args.section,
+        args.cursor,
+        { refresh: args.refresh },
+      );
+    },
+  );
 }

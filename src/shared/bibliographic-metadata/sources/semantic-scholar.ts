@@ -2,6 +2,7 @@ import { normalizeDoi, normalizeArxivId } from "../../doi-utils";
 import { authorsJsonFromParts, normalizeCslPageRange } from "../helpers";
 import type { BibliographicMetadata } from "../types";
 import type { BibliographicSource } from "./types";
+import { catalogFetch } from "../catalog-fetch";
 
 const CATALOG_HEADERS = {
   Accept: "application/json",
@@ -12,7 +13,7 @@ async function resolveByDoi(rawDoi: string): Promise<BibliographicMetadata | nul
   const doi = normalizeDoi(rawDoi);
   if (!doi) return null;
   const fields = "title,authors,year,abstract,venue,externalIds,journal,openAccessPdf";
-  const res = await fetch(
+  const res = await catalogFetch(
     `https://api.semanticscholar.org/graph/v1/paper/DOI:${encodeURIComponent(doi)}?fields=${fields}`,
     { headers: CATALOG_HEADERS },
   );

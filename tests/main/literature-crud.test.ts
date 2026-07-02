@@ -11,6 +11,7 @@ import {
   importBibTeX,
   listPapers,
   updatePaper,
+  mapPaperForRenderer,
 } from "../../src/main/services/literature-service";
 import { bibliographicToCslJson } from "../../src/shared/bibliographic-metadata/helpers";
 
@@ -53,6 +54,12 @@ describe("literature CRUD", () => {
     expect(withType.type).toBe("inproceedings");
     expect(withType.isbn).toBe("978-0-123456-78-9");
     expect(getPaper(projectRoot, created.paper.id)?.type).toBe("inproceedings");
+
+    const tagged = updatePaper(projectRoot, created.paper.id, {
+      tags: ["To Read", "World Model", "to read"],
+    });
+    expect(tagged.tags).toEqual(JSON.stringify(["To Read", "World Model"]));
+    expect(mapPaperForRenderer(tagged).tags).toEqual(["To Read", "World Model"]);
 
     deletePaper(projectRoot, created.paper.id);
     expect(listPapers(projectRoot).length).toBe(0);

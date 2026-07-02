@@ -11,11 +11,16 @@ import { useSettingsStore } from "./settings-store";
 import { truncateChatMessagesToTurn, applyUserDisplaySnapshots, isToolResultUserMessage } from "@/components/modules/chat/chat-turns";
 import { mapOpenCodePartToBlocks } from "@/lib/chat/message-parts";
 import { hydrateSessionMessages } from "@/lib/chat/session-message-hydrate";
+import { contentBlocks } from "@/components/modules/chat/tools/tool-result-map";
 import {
   deriveSessionTitleForSend,
   extractSessionTitle,
   isGenericSessionTitle,
 } from "@/lib/chat/session-title";
+import {
+  persistAndSyncIntensiveReading,
+  resolveIntensivePaperIdsForSession,
+} from "@/lib/literature/sync-intensive-reading";
 import { scheduleCitationStagingBackfill } from "@/lib/literature/sync-citation-staging-from-messages";
 import { useCitationStagingStore } from "./citation-staging-store";
 
@@ -124,6 +129,10 @@ interface TabState {
   isLoadingSession: boolean;
   /** OpenCode session directory — worktree path or project root. */
   sessionCwd: string | null;
+  /** Papers in intensive reading mode for this tab. Each send prompts the agent
+   *  to use literature-read-pdf on these bibkeys. Managed separately from @ chips:
+   *  removing a paper here does NOT remove the @ chip in the composer. */
+  intensivePaperIds: string[];
 }
 
 export type ChatExecutionMode = "agent" | "expert-team";
@@ -152,6 +161,7 @@ function makeDefaultTab(id: string): TabState {
     chatMode: "agent",
     isLoadingSession: false,
     sessionCwd: null,
+    intensivePaperIds: [],
   };
 }
 
@@ -204,13 +214,25 @@ interface ChatState {
   setActiveProfile: (tabId: string, profileId: string | null) => void;
   setChatMode: (tabId: string, mode: ChatExecutionMode) => void;
 
+  // Intensive reading list (per-tab)
+  /** Add a paper to this tab's intensive reading list (idempotent). */
+  addIntensivePaper: (tabId: string, paperId: string) => void;
+  /** Remove a paper from this tab's intensive reading list (leaves @ chips alone). */
+  removeIntensivePaper: (tabId: string, paperId: string) => void;
+  /** Clear all intensive papers for this tab (list empty = intensive mode off). */
+  clearIntensivePapers: (tabId: string) => void;
+
   // Chat actions
   sendPrompt: (
     userPrompt: string,
     userContent?: ContentBlock[],
     skipUserMessage?: boolean,
     profileId?: string | null,
-    composerExtras?: { mcpServerAllowlist?: string[]; skillIds?: string[] },
+    composerExtras?: {
+      mcpServerAllowlist?: string[];
+      skillIds?: string[];
+      hasPaperSnippets?: boolean;
+    },
   ) => Promise<void>;
   cancelExecution: () => Promise<void>;
   newSession: () => void;
@@ -339,6 +361,26 @@ function syncCitationStagingForTab(tab: TabState | undefined): void {
   if (tab.messages.length > 0) {
     scheduleCitationStagingBackfill(tab.sessionId, tab.messages);
   }
+}
+
+/** Tell main process which chat tab owns an OpenCode session (stream routing). */
+function syncTabSessionMapping(tabId: string, sessionId: string): void {
+  const projectPath = useDocumentStore.getState().projectRoot || undefined;
+  void window.electronAPI.chatRegisterTab({ tabId, sessionId, projectPath });
+}
+
+/** Commit in-flight streaming only during an active turn; discard stale orphans. */
+function finalizeStreamingForMutation(tab: TabState): Pick<TabState, "messages" | "streamingMessage"> {
+  if (!tab.streamingMessage) {
+    return { messages: tab.messages, streamingMessage: null };
+  }
+  if (tab.isStreaming) {
+    return {
+      messages: [...tab.messages, tab.streamingMessage],
+      streamingMessage: null,
+    };
+  }
+  return { messages: tab.messages, streamingMessage: null };
 }
 
 // ─── Store ───
@@ -480,6 +522,41 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }));
   },
 
+  addIntensivePaper: (tabId: string, paperId: string) => {
+    if (!paperId) return;
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId && !t.intensivePaperIds.includes(paperId)
+          ? { ...t, intensivePaperIds: [...t.intensivePaperIds, paperId] }
+          : t,
+      ),
+    }));
+    const tab = get().tabs.find((t) => t.id === tabId);
+    persistAndSyncIntensiveReading(tab?.sessionId, tab?.intensivePaperIds ?? []);
+  },
+
+  removeIntensivePaper: (tabId: string, paperId: string) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId
+          ? { ...t, intensivePaperIds: t.intensivePaperIds.filter((id) => id !== paperId) }
+          : t,
+      ),
+    }));
+    const tab = get().tabs.find((t) => t.id === tabId);
+    persistAndSyncIntensiveReading(tab?.sessionId, tab?.intensivePaperIds ?? []);
+  },
+
+  clearIntensivePapers: (tabId: string) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId ? { ...t, intensivePaperIds: [] } : t,
+      ),
+    }));
+    const tab = get().tabs.find((t) => t.id === tabId);
+    persistAndSyncIntensiveReading(tab?.sessionId, []);
+  },
+
   // ─── Chat Actions ───
 
   sendPrompt: async (
@@ -487,7 +564,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     userContent?: ContentBlock[],
     skipUserMessage?: boolean,
     profileIdOverride?: string | null,
-    composerExtras?: { mcpServerAllowlist?: string[]; skillIds?: string[] },
+    composerExtras?: {
+      mcpServerAllowlist?: string[];
+      skillIds?: string[];
+      hasPaperSnippets?: boolean;
+    },
   ) => {
     const docState = useDocumentStore.getState();
     const projectPath = docState.projectRoot || "";
@@ -507,13 +588,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set((s) => {
       const tabs = s.tabs.map((t) => {
         if (t.id !== tabId) return t;
-        const base = t.streamingMessage
-          ? { ...t, messages: [...t.messages, t.streamingMessage], streamingMessage: null as ChatStreamMessage | null }
-          : t;
+        const finalized = finalizeStreamingForMutation(t);
+        const snapshot = { ...t, ...finalized };
         return {
-          ...base,
-          title: deriveSessionTitleForSend(base, userPrompt, userContent, userMessage),
-          messages: userMessage ? [...base.messages, userMessage] : base.messages,
+          ...snapshot,
+          title: deriveSessionTitleForSend(snapshot, userPrompt, userContent, userMessage),
+          messages: userMessage ? [...finalized.messages, userMessage] : finalized.messages,
           isStreaming: true,
           error: null,
         };
@@ -627,6 +707,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         userDisplayContent: userContent?.length
           ? (userContent as unknown as Record<string, unknown>[])
           : undefined,
+        intensivePaperIds: tabBeforePrompt?.intensivePaperIds?.length
+          ? tabBeforePrompt.intensivePaperIds
+          : undefined,
+        hasPaperSnippets: composerExtras?.hasPaperSnippets,
       });
     } catch (err: any) {
       set((s) => {
@@ -822,6 +906,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         activeTabId: existingTab.id,
         ...projectActiveTab(nextTabs, existingTab.id),
       });
+      syncTabSessionMapping(existingTab.id, sessionId);
+      persistAndSyncIntensiveReading(sessionId, existingTab.intensivePaperIds);
       syncCitationStagingForTab(existingTab);
       void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
         useTerminalAiStore.getState().touchSessionViewed(existingTab.id);
@@ -861,6 +947,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     };
 
     const cached = _msgCache.get(sessionId);
+    const storedIntensiveIds = resolveIntensivePaperIdsForSession(sessionId, []);
     if (cached) {
       // Sync hydrate from cache — avoids empty-tab flash on repeat opens.
       const title = extractSessionTitle(cached) || "New Chat";
@@ -871,12 +958,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         sessionCwd,
         title,
         isLoadingSession: false,
+        intensivePaperIds: storedIntensiveIds,
       };
       set((s) => ({
         tabs: [...s.tabs, hydratedTab],
         activeTabId: tabId,
         ...projectActiveTab([...s.tabs, hydratedTab], tabId),
       }));
+      syncTabSessionMapping(tabId, sessionId);
+      persistAndSyncIntensiveReading(sessionId, storedIntensiveIds);
       void import("./checkpoint-store").then(({ useCheckpointStore }) => {
         useCheckpointStore.getState().initSession(tabId, sessionId);
       });
@@ -908,12 +998,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       sessionId,
       sessionCwd,
       isLoadingSession: true,
+      intensivePaperIds: storedIntensiveIds,
     };
     set((s) => ({
       tabs: [...s.tabs, loadingTab],
       activeTabId: tabId,
       ...projectActiveTab([...s.tabs, loadingTab], tabId),
     }));
+    syncTabSessionMapping(tabId, sessionId);
+    persistAndSyncIntensiveReading(sessionId, storedIntensiveIds);
 
     try {
       const raw: any[] = await window.electronAPI.sessionLoad(sessionId, projectPath, sessionCwd);
@@ -949,6 +1042,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         );
         return { tabs, activeTabId: tabId, ...projectActiveTab(tabs, tabId) };
       });
+      syncTabSessionMapping(tabId, sessionId);
+      persistAndSyncIntensiveReading(sessionId, storedIntensiveIds);
       void import("./checkpoint-store").then(({ useCheckpointStore }) => {
         useCheckpointStore.getState().initSession(tabId, sessionId);
       });
@@ -957,6 +1052,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         messages: filtered,
         sessionId,
         sessionCwd,
+        intensivePaperIds: storedIntensiveIds,
       });
     } catch (err: any) {
       set((s) => {
@@ -986,8 +1082,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       let meta = tab.messageMeta;
 
       // Commit streaming message before appending non-assistant event
-      if (tab.streamingMessage) {
-        msgs = [...msgs, tab.streamingMessage];
+      const finalized = finalizeStreamingForMutation(tab);
+      if (finalized.messages.length > tab.messages.length) {
+        msgs = finalized.messages;
       }
 
       // Attach completion/token meta when a result arrives right after assistant
@@ -1029,7 +1126,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }
 
       const newTabs = [...s.tabs];
-      newTabs[tabIdx] = { ...tab, messages: msgs, messageMeta: meta, streamingMessage: null, title };
+      newTabs[tabIdx] = { ...tab, messages: msgs, messageMeta: meta, streamingMessage: finalized.streamingMessage, title };
       return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
     });
   },
@@ -1118,13 +1215,22 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   _setSessionId: (tabId: string, sessionId: string) => {
     const sessionCwd = captureSessionCwd();
+    const prior = get().tabs.find((t) => t.id === tabId);
+    const intensivePaperIds = resolveIntensivePaperIdsForSession(
+      sessionId,
+      prior?.intensivePaperIds ?? [],
+    );
     set((s) => {
       const tabs = s.tabs.map((t) =>
-        t.id === tabId ? { ...t, sessionId, sessionCwd: sessionCwd ?? t.sessionCwd } : t,
+        t.id === tabId
+          ? { ...t, sessionId, sessionCwd: sessionCwd ?? t.sessionCwd, intensivePaperIds }
+          : t,
       );
       const activeTab = tabs.find((t) => t.id === s.activeTabId);
       return { tabs, sessionId: activeTab?.sessionId ?? null };
     });
+    syncTabSessionMapping(tabId, sessionId);
+    persistAndSyncIntensiveReading(sessionId, intensivePaperIds);
     void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
       useTerminalAiStore.getState().migrateSessionMirrorLog(tabId, sessionId);
     });
@@ -1140,15 +1246,21 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set((s) => {
       const tabs = s.tabs.map((t) => {
         if (t.id !== tabId) return t;
-        if (!isStreaming && t.streamingMessage) {
-          return {
-            ...t,
-            isStreaming: false,
-            messages: [...t.messages, t.streamingMessage],
-            streamingMessage: null,
-          };
+        if (!isStreaming) {
+          if (t.isStreaming && t.streamingMessage) {
+            return {
+              ...t,
+              isStreaming: false,
+              messages: [...t.messages, t.streamingMessage],
+              streamingMessage: null,
+            };
+          }
+          if (t.streamingMessage) {
+            return { ...t, isStreaming: false, streamingMessage: null };
+          }
+          return { ...t, isStreaming: false };
         }
-        return { ...t, isStreaming };
+        return { ...t, isStreaming: true };
       });
       // Recalculate ALL projected fields via projectActiveTab so that
       // contextTokens picks up usage from the newly committed assistant message.

@@ -4,12 +4,155 @@ import { AppBrowserLink } from "@/components/modules/shared/app-browser-link";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import rehypeRaw from "rehype-raw";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { remarkWikilinks } from "./remark-wikilinks";
 import { remarkCitationRefs } from "./remark-citation-refs";
 import { cn } from "@/lib/utils";
 
-export const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkWikilinks, remarkCitationRefs];
-export const REHYPE_PLUGINS = [rehypeKatex];
+export const KATEX_RENDER_OPTIONS = {
+  strict: "ignore" as const,
+  throwOnError: false,
+  trust: true,
+  errorColor: "var(--foreground)",
+};
+
+/** @deprecated alias */
+export const KATEX_DOCUMENT_OPTIONS = KATEX_RENDER_OPTIONS;
+
+const CUSTOM_MARKDOWN_LINK_PROTOCOLS = ["citation", "wikilink"] as const;
+
+const SCIENTIFIC_HTML_SCHEMA = {
+  ...defaultSchema,
+  protocols: {
+    ...defaultSchema.protocols,
+    href: [
+      ...(defaultSchema.protocols?.href ?? []),
+      ...CUSTOM_MARKDOWN_LINK_PROTOCOLS,
+    ],
+  },
+  tagNames: [
+    ...(defaultSchema.tagNames ?? []),
+    "table",
+    "thead",
+    "tbody",
+    "tfoot",
+    "tr",
+    "th",
+    "td",
+    "caption",
+    "colgroup",
+    "col",
+    "span",
+    "div",
+    "br",
+    "sup",
+    "sub",
+    "img",
+    "figure",
+    "figcaption",
+  ],
+  attributes: {
+    ...defaultSchema.attributes,
+    "*": [
+      ...((defaultSchema.attributes as Record<string, string[] | undefined>)["*"] ?? []),
+      "className",
+      "class",
+      "style",
+      "colspan",
+      "rowspan",
+      "align",
+      "valign",
+    ],
+    td: ["colspan", "rowspan", "style", "align"],
+    th: ["colspan", "rowspan", "style", "align"],
+    img: ["src", "alt", "width", "height", "style"],
+  },
+};
+
+function rehypeKatexWithOptions(): [typeof rehypeKatex, typeof KATEX_RENDER_OPTIONS] {
+  return [rehypeKatex, KATEX_RENDER_OPTIONS];
+}
+
+/**
+ * Shared rehype stack for every Markdown surface (Chat, file preview, settings, …):
+ * sanitized raw HTML (embedded tables) + KaTeX with relaxed error handling.
+ */
+export const MARKDOWN_REHYPE_PLUGINS = [
+  rehypeRaw,
+  [rehypeSanitize, SCIENTIFIC_HTML_SCHEMA] as [typeof rehypeSanitize, typeof SCIENTIFIC_HTML_SCHEMA],
+  rehypeKatexWithOptions(),
+];
+
+/** remark-math + GFM + wikilinks — base for all surfaces. */
+export const MARKDOWN_REMARK_BASE = [remarkGfm, remarkMath, remarkWikilinks];
+
+/** Chat only: turn staged `[n]` into citation links. */
+export const MARKDOWN_REMARK_CHAT = [...MARKDOWN_REMARK_BASE, remarkCitationRefs];
+
+/** @deprecated use MARKDOWN_REMARK_CHAT */
+export const REMARK_PLUGINS = MARKDOWN_REMARK_CHAT;
+/** @deprecated use MARKDOWN_REHYPE_PLUGINS */
+export const REHYPE_PLUGINS = MARKDOWN_REHYPE_PLUGINS;
+
+/** File / extract preview — no citation-ref hijacking of `[1]` in paper bodies. */
+export const DOCUMENT_REMARK_PLUGINS = MARKDOWN_REMARK_BASE;
+export const DOCUMENT_REHYPE_PLUGINS = MARKDOWN_REHYPE_PLUGINS;
+
+/** @deprecated identical to document stack after unified rehype */
+export const SCIENTIFIC_REMARK_PLUGINS = DOCUMENT_REMARK_PLUGINS;
+export const SCIENTIFIC_REHYPE_PLUGINS = DOCUMENT_REHYPE_PLUGINS;
+
+export type MarkdownPreviewProfile = "default" | "scientific";
+
+export type MarkdownRenderSurface = "chat" | "document";
+
+export function remarkPluginsForSurface(surface: MarkdownRenderSurface) {
+  return surface === "chat" ? MARKDOWN_REMARK_CHAT : MARKDOWN_REMARK_BASE;
+}
+
+export function rehypePluginsForSurface(_surface: MarkdownRenderSurface) {
+  return MARKDOWN_REHYPE_PLUGINS;
+}
+
+export function isScientificExtractPath(filePath: string | undefined): boolean {
+  if (!filePath) return false;
+  const norm = filePath.replace(/\\/g, "/").toLowerCase();
+  return norm.includes(".prismnext/library/extract/") && norm.endsWith(".md");
+}
+
+export function markdownPreviewProfileForPath(filePath: string | undefined): MarkdownPreviewProfile {
+  return isScientificExtractPath(filePath) ? "scientific" : "default";
+}
+
+export function remarkPluginsForProfile(profile: MarkdownPreviewProfile) {
+  return profile === "scientific" ? SCIENTIFIC_REMARK_PLUGINS : DOCUMENT_REMARK_PLUGINS;
+}
+
+export function rehypePluginsForProfile(_profile: MarkdownPreviewProfile) {
+  return MARKDOWN_REHYPE_PLUGINS;
+}
+
+/**
+ * App-wide Markdown math preprocessing — used by Chat, file preview, and tool output.
+ * Normalizes delimiters (`\[...\]`, bare `\\begin...\\end`) then strips KaTeX-hostile macros.
+ */
+export function prepareMarkdownMath(text: string): string {
+  return scrubLatexForKatex(normalizeMathDelimiters(text));
+}
+
+/** @deprecated use prepareMarkdownMath */
+export const scrubScientificLatex = scrubLatexForKatex;
+
+export function prepareDocumentMarkdown(body: string, _profile: MarkdownPreviewProfile): string {
+  return prepareMarkdownMath(body);
+}
+
+/** KaTeX display/error styling — shared by chat + document typography. */
+export const MARKDOWN_KATEX_TYPOGRAPHY = cn(
+  "[&_.katex-display]:my-3 [&_.katex]:text-[1em]",
+  "[&_.katex-error]:text-foreground [&_.katex-error]:bg-muted/60 [&_.katex-error]:rounded [&_.katex-error]:px-1 [&_.katex-error]:font-mono [&_.katex-error]:text-[0.88em]",
+);
 
 /** Typography for file/document markdown preview — follows Appearance → Editor font. */
 export const DOCUMENT_MARKDOWN_TYPOGRAPHY = cn(
@@ -27,7 +170,7 @@ export const DOCUMENT_MARKDOWN_TYPOGRAPHY = cn(
   "[&_th]:text-[0.85em] [&_th]:font-medium [&_th]:text-muted-foreground",
   "[&_td]:text-[0.92em]",
   "[&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:bg-muted [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:py-0.5 [&_code:not(pre_code)]:font-mono [&_code:not(pre_code)]:text-[0.92em]",
-  "[&_.katex-display]:my-3 [&_.katex]:text-[1em]",
+  MARKDOWN_KATEX_TYPOGRAPHY,
   "[&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border [&_pre]:p-4 [&_pre]:overflow-x-auto [&_pre]:text-[0.92em] [&_pre]:font-mono",
 );
 
@@ -86,35 +229,47 @@ function wrapBeginEndBlocks(text: string): string {
   return result.join("\n");
 }
 
+/** Strip LaTeX constructs KaTeX cannot render (publisher exports, paper quotes in Chat, …). */
+export function scrubLatexForKatex(text: string): string {
+  return text
+    .replace(/\\label\{[^}]*\}/g, "")
+    .replace(/\\tag\*?\{[^}]*\}/g, "")
+    .replace(/\\tag\b/g, "")
+    .replace(/\\(?:eqref|ref|pageref)\{[^}]*\}/g, "")
+    .replace(/\\(?:cite|citep|citet|parencite|textcite)\{[^}]*\}/g, "")
+    .replace(/\\begin\{\\(\w+\*?)\}/g, "\\begin{$1}");
+}
+
+function stashSegments(text: string, pattern: RegExp, stash: string[]): string {
+  return text.replace(pattern, (match) => {
+    stash.push(match);
+    return `\x00S${stash.length - 1}\x00`;
+  });
+}
+
+function restoreSegments(text: string, stash: string[]): string {
+  return text.replace(/\x00S(\d+)\x00/g, (_, index) => stash[Number.parseInt(index, 10)] ?? "");
+}
+
 /**
  * Convert LaTeX delimiters to dollar-sign format.
  * \(...\) → $...$ and \[...\] → $$...$$
- * Must NOT touch content inside code blocks (``` or `).
+ * Protects code/math blocks before wrapping bare \\begin...\\end.
  */
 export function normalizeMathDelimiters(text: string): string {
-  // Protect code blocks
-  const blocks: string[] = [];
+  const stash: string[] = [];
   let working = text;
-  working = working.replace(/```[\s\S]*?```/g, (m) => {
-    blocks.push(m);
-    return `\x00B${blocks.length - 1}\x00`;
-  });
-  working = working.replace(/`[^`\n]+`/g, (m) => {
-    blocks.push(m);
-    return `\x00B${blocks.length - 1}\x00`;
-  });
 
-  // Convert LaTeX delimiters to dollar-sign format
+  working = stashSegments(working, /```[\s\S]*?```/g, stash);
+  working = stashSegments(working, /`[^`\n]+`/g, stash);
+  // Display math already delimited — must not double-wrap with $$ inside.
+  working = stashSegments(working, /\$\$[\s\S]*?\$\$/g, stash);
+
   working = working.replace(/\\\[([\s\S]*?)\\\]/g, (_, m) => `$$\n${m.trim()}\n$$`);
   working = working.replace(/\\\(([\s\S]*?)\\\)/g, (_, m) => `$${m}$`);
 
-  // Restore code blocks
-  working = working.replace(/\x00B(\d+)\x00/g, (_, i) => blocks[parseInt(i)] || "");
-
-  // Wrap bare \begin{env}...\end{env} with $$ markers
   working = wrapBeginEndBlocks(working);
-
-  return working;
+  return restoreSegments(working, stash);
 }
 
 // Shared custom components for react-markdown (tables, links).
@@ -136,7 +291,7 @@ export const CHAT_MARKDOWN_TYPOGRAPHY = cn(
   "[&_th]:text-[0.85em] [&_th]:font-medium [&_th]:text-muted-foreground",
   "[&_td]:text-[0.92em]",
   "[&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:bg-muted [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:py-0.5 [&_code:not(pre_code)]:font-mono [&_code:not(pre_code)]:text-[length:var(--font-code)]",
-  "[&_.katex-display]:my-3 [&_.katex]:text-[1em]",
+  MARKDOWN_KATEX_TYPOGRAPHY,
 );
 
 export const MARKDOWN_COMPONENTS: Components = {

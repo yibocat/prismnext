@@ -8,6 +8,7 @@ import type {
   ZoteroStatus,
 } from "@/types/electron.d";
 import { useRightPanelStore } from "@/stores/right-panel-store";
+import { useCitationStagingStore } from "@/stores/citation-staging-store";
 import { extractIdsFromPdf } from "@/lib/literature/extract-doi";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { resolveNotebookDir } from "@/types/workspace";
@@ -16,6 +17,19 @@ import {
   patchNoteLinkFrontmatter,
   persistNoteContent,
 } from "@/lib/literature/recover-paper-from-note";
+import {
+  applyLiteratureUiPrefs,
+  persistLiteratureUiPrefs,
+  reconcileLibraryViewWithCollections,
+} from "@/lib/literature/library-ui-prefs";
+import { collectProjectTags } from "@/lib/literature/paper-tag-utils";
+import { paperTagKey } from "../../shared/paper-tags";
+import { formatPdfDownloadFailure } from "../../shared/pdf-download-messages";
+import { useDocumentStore } from "@/stores/document-store";
+import type {
+  LiteratureSortColumn,
+  LiteratureSortDirection,
+} from "@/modes/literature-mode/literature-format";
 
 export type LiteraturePaperPatch = Partial<
   Pick<
@@ -30,6 +44,7 @@ export type LiteraturePaperPatch = Partial<
     | "venue"
     | "type"
     | "isbn"
+    | "tags"
   >
 >;
 
@@ -42,6 +57,10 @@ interface LiteratureState {
   loading: boolean;
   error: string | null;
   libraryView: LiteratureLibraryView;
+  librarySortColumn: LiteratureSortColumn;
+  librarySortDirection: LiteratureSortDirection;
+  /** Filter library list by user tag (null = all). */
+  libraryTagFilter: string | null;
   /** Sub-tab inside Literature mode: library list vs session citations. */
   librarySubview: "library" | "session-citations";
   /** Set by chat [n] click — consumed by LiteratureContent to scroll/highlight a row. */
@@ -66,6 +85,25 @@ interface LiteratureState {
     page: number;
     quotedText: string;
   } | null;
+  /** Background PDF imports in flight (toolbar indicator only). */
+  pdfImportBusyCount: number;
+  /** PDFs waiting in the import queue (not yet started). */
+  pdfImportQueuedCount: number;
+  /** Per-paper PDF download progress (catalog / arXiv fetch). */
+  pdfDownloadProgress: Record<
+    string,
+    {
+      phase: "resolving" | "downloading" | "done";
+      receivedBytes?: number;
+      totalBytes?: number | null;
+    }
+  >;
+  setPdfDownloadProgress: (payload: {
+    paperId: string;
+    phase: "resolving" | "downloading" | "caching" | "reading" | "opening" | "done";
+    receivedBytes?: number;
+    totalBytes?: number | null;
+  }) => void;
   setReaderExcerpt: (
     excerpt: LiteratureState["readerExcerpt"],
   ) => void;
@@ -85,6 +123,8 @@ interface LiteratureState {
   pullZoteroCollections: (projectRoot: string) => Promise<void>;
 
   setLibraryView: (view: LiteratureLibraryView) => void;
+  setLibrarySort: (column: LiteratureSortColumn, direction: LiteratureSortDirection) => void;
+  setLibraryTagFilter: (projectRoot: string, tag: string | null) => Promise<void>;
   setLibrarySubview: (view: "library" | "session-citations") => void;
   setPendingCitationJump: (refId: number | null) => void;
   clearPendingCitationJump: () => void;
@@ -121,11 +161,31 @@ interface LiteratureState {
   deletePapers: (projectRoot: string, paperIds: string[]) => Promise<void>;
   importToLocal: (projectRoot: string, paperId: string) => Promise<void>;
   exportPapersBibTeX: (projectRoot: string, paperIds: string[]) => Promise<boolean>;
-  ingestPdf: (projectRoot: string, pdfPath: string) => Promise<LiteraturePaper>;
-  addByDoi: (projectRoot: string, doi: string) => Promise<LiteraturePaper | null>;
-  addByArxiv: (projectRoot: string, arxivId: string) => Promise<LiteraturePaper | null>;
+  ingestPdf: (
+    projectRoot: string,
+    pdfPath: string,
+    opts?: { quiet?: boolean },
+  ) => Promise<LiteraturePaper>;
+  /** Queue PDF paths for background import — does not block the UI. */
+  enqueuePdfImports: (projectRoot: string, pdfPaths: string[]) => void;
+  addByIdentifier: (
+    projectRoot: string,
+    ids: {
+      doi?: string;
+      arxivId?: string;
+      isbn?: string;
+      pmid?: string;
+      adsBibcode?: string;
+    },
+  ) => Promise<LiteraturePaper | null>;
   fetchMetadata: (projectRoot: string, paperId: string) => Promise<LiteraturePaper>;
   downloadPdf: (projectRoot: string, paperId: string) => Promise<LiteraturePaper>;
+  attachLocalPdf: (
+    projectRoot: string,
+    paperId: string,
+    pdfPath: string,
+    opts?: { ignoreIdentifierConflict?: boolean },
+  ) => Promise<import("@/types/electron.d").LiteratureAttachLocalPdfResult>;
   importBibTeX: (projectRoot: string, bibContent: string, jsonContent?: string) => Promise<void>;
   /** Recreate a library entry from an unlinked reading note and refresh frontmatter. */
   recoverPaperFromNote: (
@@ -151,6 +211,21 @@ function toastPdfAttached(pdfAttached?: boolean): void {
   if (pdfAttached) toast.success("PDF downloaded and attached");
 }
 
+function toastPdfDownloadFailure(raw?: string | null): void {
+  if (!raw?.trim()) return;
+  const { title, description } = formatPdfDownloadFailure(raw);
+  if (title === "PDF already attached") return;
+  toast.error(title, description ? { description } : undefined);
+}
+
+function toastPdfDownloadResult(pdfAttached?: boolean, pdfAttachError?: string | null): void {
+  if (pdfAttached) {
+    toastPdfAttached(true);
+    return;
+  }
+  toastPdfDownloadFailure(pdfAttachError);
+}
+
 async function withCollectionWritePending<T>(
   set: (partial: Partial<LiteratureState>) => void,
   fn: () => Promise<T>,
@@ -163,6 +238,9 @@ async function withCollectionWritePending<T>(
   }
 }
 
+/** Serializes drag/menu PDF imports so enrich/scan steps do not overlap. */
+let pdfImportSerial = Promise.resolve();
+
 export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   papers: [],
   selectedPaperId: null,
@@ -172,6 +250,9 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   loading: false,
   error: null,
   libraryView: { kind: "all" },
+  librarySortColumn: "year",
+  librarySortDirection: "desc",
+  libraryTagFilter: null,
   librarySubview: "library",
   pendingCitationJumpRefId: null,
   collections: [],
@@ -186,6 +267,30 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   bbtBannerDismissed: false,
   zoteroAutoPullDoneForRoot: null,
   readerExcerpt: null,
+  pdfImportBusyCount: 0,
+  pdfImportQueuedCount: 0,
+  pdfDownloadProgress: {},
+  setPdfDownloadProgress: (payload) => {
+    if (payload.phase === "done") {
+      set((state) => {
+        const next = { ...state.pdfDownloadProgress };
+        delete next[payload.paperId];
+        return { pdfDownloadProgress: next };
+      });
+      return;
+    }
+    const phase = payload.phase === "downloading" ? "downloading" : "resolving";
+    set((state) => ({
+      pdfDownloadProgress: {
+        ...state.pdfDownloadProgress,
+        [payload.paperId]: {
+          phase,
+          receivedBytes: payload.receivedBytes,
+          totalBytes: payload.totalBytes,
+        },
+      },
+    }));
+  },
   setReaderExcerpt: (excerpt) => set({ readerExcerpt: excerpt }),
 
   dismissBbtBanner: () => set({ bbtBannerDismissed: true }),
@@ -207,8 +312,10 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   },
 
   bootstrapLiterature: async (projectRoot) => {
+    applyLiteratureUiPrefs(projectRoot);
     if (get().libraryView.kind === "reading-list") {
       set({ libraryView: { kind: "all" }, viewPaperIds: null });
+      void persistLiteratureUiPrefs(projectRoot, { libraryView: { kind: "all" } });
     }
     void get().probeZotero();
     await get().loadProjectBinding(projectRoot);
@@ -240,17 +347,16 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
       boundCollectionName: binding.zoteroCollectionName ?? null,
       zoteroAutoPullDoneForRoot: null,
     });
-    if (binding.zoteroCollectionId) {
-      set({ libraryView: { kind: "collection", collectionId: binding.zoteroCollectionId } });
-    } else {
+    if (!binding.zoteroCollectionId) {
       // Disconnected — refresh local list + collections (Zotero mirrors detached → manual)
       set({ libraryView: { kind: "all" } });
+      void persistLiteratureUiPrefs(projectRoot, { libraryView: { kind: "all" } });
       await get().refreshCollections(projectRoot);
       await get().refresh(projectRoot);
       if (binding.detached) {
         const { papers, collections } = binding.detached;
         if (papers > 0 || collections > 0) {
-          toast.success(`Disconnected from Zotero — removed ${papers} Zotero entries and ${collections} collections. Local entries kept.`);
+          toast.success(`Disconnected from Zotero — removed ${papers} unused Zotero mirrors and ${collections} collections. Kept entries stay in the library.`);
         } else {
           toast.success("Disconnected from Zotero.");
         }
@@ -265,10 +371,6 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
       const result = await window.electronAPI.zoteroPullCollection(projectRoot);
       const { lastSyncAt } = await window.electronAPI.zoteroGetLastSync(projectRoot);
       set({ lastZoteroSyncAt: lastSyncAt });
-      const boundId = get().boundCollectionId;
-      if (boundId) {
-        set({ libraryView: { kind: "collection", collectionId: boundId } });
-      }
       await get().refresh(projectRoot);
       if (!silent) {
         const pruneNote =
@@ -307,6 +409,24 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
 
   setLibraryView: (view) => {
     set({ libraryView: view });
+    const projectRoot = useDocumentStore.getState().projectRoot;
+    if (projectRoot) void persistLiteratureUiPrefs(projectRoot, { libraryView: view });
+  },
+
+  setLibrarySort: (column, direction) => {
+    set({ librarySortColumn: column, librarySortDirection: direction });
+    const projectRoot = useDocumentStore.getState().projectRoot;
+    if (projectRoot) {
+      void persistLiteratureUiPrefs(projectRoot, {
+        sortColumn: column,
+        sortDirection: direction,
+      });
+    }
+  },
+
+  setLibraryTagFilter: async (projectRoot, tag) => {
+    set({ libraryTagFilter: tag });
+    await persistLiteratureUiPrefs(projectRoot, { libraryTagFilter: tag });
   },
 
   setLibrarySubview: (view) => {
@@ -324,6 +444,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   refreshCollections: async (projectRoot) => {
     const collections = await window.electronAPI.literatureListCollections(projectRoot);
     set({ collections });
+    reconcileLibraryViewWithCollections(projectRoot, collections);
   },
 
   loadViewPaperIds: async (projectRoot) => {
@@ -443,7 +564,18 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const papers = await window.electronAPI.literatureList(projectRoot);
-      set({ papers, loading: false });
+      useCitationStagingStore.getState().reconcileWithLibrary(papers);
+      let libraryTagFilter = get().libraryTagFilter;
+      if (libraryTagFilter) {
+        const stillExists = collectProjectTags(papers).some(
+          (e) => paperTagKey(e.tag) === paperTagKey(libraryTagFilter!),
+        );
+        if (!stillExists) {
+          libraryTagFilter = null;
+          void persistLiteratureUiPrefs(projectRoot, { libraryTagFilter: null });
+        }
+      }
+      set({ papers, loading: false, libraryTagFilter });
       await get().refreshPdfCacheStatus(projectRoot);
       await get().refreshCollections(projectRoot);
       await get().loadViewPaperIds(projectRoot);
@@ -506,6 +638,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   deletePaper: async (projectRoot, paperId) => {
     await window.electronAPI.literatureDeletePaper(projectRoot, paperId);
     useRightPanelStore.getState().closeLiteraturePaperTabs(paperId);
+    useCitationStagingStore.getState().unmarkByPaperIds([paperId]);
     const { selectedPaperId, checkedPaperIds } = get();
     if (selectedPaperId === paperId) {
       set({ selectedPaperId: null });
@@ -520,7 +653,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   importToLocal: async (projectRoot, paperId) => {
     await window.electronAPI.literatureImportToLocal(projectRoot, paperId);
     await get().refresh(projectRoot);
-    toast.success("Imported to local library — survives Zotero disconnect.");
+    toast.success("Kept in project library.");
   },
 
   recoverPaperFromNote: async (projectRoot, relativePath, content) => {
@@ -569,6 +702,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
       await window.electronAPI.literatureDeletePaper(projectRoot, paperId);
       useRightPanelStore.getState().closeLiteraturePaperTabs(paperId);
     }
+    useCitationStagingStore.getState().unmarkByPaperIds(paperIds);
     const { selectedPaperId } = get();
     if (selectedPaperId && paperIds.includes(selectedPaperId)) {
       set({ selectedPaperId: null });
@@ -590,93 +724,138 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
     return true;
   },
 
-  ingestPdf: async (projectRoot, pdfPath) => {
-    const result = await window.electronAPI.literatureIngestPdf(projectRoot, pdfPath);
+  ingestPdf: async (projectRoot, pdfPath, opts) => {
+    const quiet = opts?.quiet ?? false;
+    set({ pdfImportBusyCount: get().pdfImportBusyCount + 1 });
     const fileName = pdfPath.split(/[/\\]/).pop() ?? "";
+    try {
+      const result = await window.electronAPI.literatureIngestPdf(projectRoot, pdfPath);
 
-    if (!result.created && result.duplicateReason === "pdf") {
-      await get().refresh(projectRoot);
-      get().selectPaper(result.paper.id);
-      toast.info("This PDF is already in the library");
-      return result.paper;
-    }
+      if (!result.created && result.duplicateReason === "pdf") {
+        await get().refresh(projectRoot);
+        if (!quiet) {
+          get().selectPaper(result.paper.id);
+          toast.info("This PDF is already in the library");
+        }
+        return result.paper;
+      }
 
-    let paper = result.paper;
-    let identifiersFound = result.identifiersFound ?? false;
-    let identifiers = result.identifiers;
-    let enriched = result.enriched ?? false;
-    let enrichError = result.enrichError;
-    let pdfAttached = result.pdfAttached ?? false;
+      let paper = result.paper;
+      let identifiersFound = result.identifiersFound ?? false;
+      let identifiers = result.identifiers;
+      let enriched = result.enriched ?? false;
+      let enrichError = result.enrichError;
+      let pdfAttached = result.pdfAttached ?? false;
 
-    if (result.created && !identifiersFound) {
-      try {
-        const { pdfBytes } = await window.electronAPI.literatureReadPdfBytes(projectRoot, paper.id);
-        if (pdfBytes) {
-          const ids = await extractIdsFromPdf(pdfBytes, fileName);
-          if (ids.doi || ids.arxivId) {
-            const applied = await window.electronAPI.literatureApplyIdentifiers(projectRoot, paper.id, {
-              doi: ids.doi,
-              arxivId: ids.arxivId,
-            });
-            if (applied.duplicatePaper) {
-              await window.electronAPI.literatureDeletePaper(projectRoot, paper.id);
-              useRightPanelStore.getState().closeLiteraturePaperTabs(paper.id);
-              paper = applied.duplicatePaper;
-              identifiersFound = true;
-              identifiers = ids;
-            } else if (applied.applied && applied.paper) {
-              paper = applied.paper;
-              identifiersFound = true;
-              identifiers = ids;
-              try {
-                const fetchResult = await window.electronAPI.literatureFetchAndApplyMetadata(
-                  projectRoot,
-                  paper.id,
-                );
-                paper = fetchResult.paper;
-                enriched = true;
-                if (fetchResult.pdfAttached) pdfAttached = true;
-              } catch (err) {
-                enrichError = err instanceof Error ? err.message : String(err);
+      if (result.created && !identifiersFound) {
+        try {
+          const { pdfBytes } = await window.electronAPI.literatureReadPdfBytes(projectRoot, paper.id);
+          if (pdfBytes) {
+            const ids = await extractIdsFromPdf(pdfBytes, fileName);
+            if (ids.doi || ids.arxivId) {
+              const applied = await window.electronAPI.literatureApplyIdentifiers(projectRoot, paper.id, {
+                doi: ids.doi,
+                arxivId: ids.arxivId,
+              });
+              if (applied.duplicatePaper) {
+                await window.electronAPI.literatureDeletePaper(projectRoot, paper.id);
+                useRightPanelStore.getState().closeLiteraturePaperTabs(paper.id);
+                useCitationStagingStore.getState().unmarkByPaperIds([paper.id]);
+                paper = applied.duplicatePaper;
+                identifiersFound = true;
+                identifiers = ids;
+              } else if (applied.applied && applied.paper) {
+                paper = applied.paper;
+                identifiersFound = true;
+                identifiers = ids;
+                try {
+                  const fetchResult = await window.electronAPI.literatureFetchAndApplyMetadata(
+                    projectRoot,
+                    paper.id,
+                  );
+                  paper = fetchResult.paper;
+                  enriched = true;
+                  if (fetchResult.pdfAttached) pdfAttached = true;
+                } catch (err) {
+                  enrichError = err instanceof Error ? err.message : String(err);
+                }
               }
             }
           }
+        } catch (err) {
+          console.warn("[literature] renderer PDF identifier fallback failed:", err);
         }
-      } catch (err) {
-        console.warn("[literature] renderer PDF identifier fallback failed:", err);
       }
+
+      await get().refresh(projectRoot);
+      if (!quiet) {
+        get().selectPaper(paper.id);
+      }
+
+      if (!quiet) {
+        if (identifiersFound && identifiers) {
+          const label = identifiers.doi
+            ? `DOI ${identifiers.doi}`
+            : identifiers.arxivId
+              ? `arXiv ${identifiers.arxivId}`
+              : null;
+          if (label) toast.success(`Found ${label}`);
+        } else if (result.created) {
+          toast.info("No DOI/arXiv in PDF. Add manually, then use Fetch metadata.");
+        }
+
+        if (enrichError) {
+          toast.error(enrichError);
+        } else if (enriched && result.created) {
+          toast.success("Metadata updated");
+        }
+
+        toastPdfAttached(pdfAttached);
+      } else if (enrichError) {
+        toast.error(enrichError);
+      }
+
+      return get().papers.find((p) => p.id === paper.id) ?? paper;
+    } finally {
+      set({ pdfImportBusyCount: Math.max(0, get().pdfImportBusyCount - 1) });
     }
-
-    await get().refresh(projectRoot);
-    get().selectPaper(paper.id);
-
-    if (identifiersFound && identifiers) {
-      const label = identifiers.doi
-        ? `DOI ${identifiers.doi}`
-        : identifiers.arxivId
-          ? `arXiv ${identifiers.arxivId}`
-          : null;
-      if (label) toast.success(`Found ${label}`);
-    } else if (result.created) {
-      toast.info("No DOI/arXiv in PDF. Add manually, then use Fetch metadata.");
-    }
-
-    if (enrichError) {
-      toast.error(enrichError);
-    } else if (enriched && result.created) {
-      toast.success("Metadata updated");
-    }
-
-    toastPdfAttached(pdfAttached);
-
-    return get().papers.find((p) => p.id === paper.id) ?? paper;
   },
 
-  addByDoi: async (projectRoot, doi) => {
-    const clean = doi.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "").trim();
-    if (!clean) return null;
-    const { paper, created, duplicateReason, pdfAttached } =
-      await window.electronAPI.literatureCreateFromIdentifier(projectRoot, { doi: clean });
+  enqueuePdfImports: (projectRoot, pdfPaths) => {
+    if (!pdfPaths.length) return;
+    const batch = pdfPaths.length > 1;
+    set({ pdfImportQueuedCount: get().pdfImportQueuedCount + pdfPaths.length });
+
+    pdfImportSerial = pdfImportSerial
+      .then(async () => {
+        let succeeded = 0;
+        let failed = 0;
+        for (const pdfPath of pdfPaths) {
+          set({ pdfImportQueuedCount: Math.max(0, get().pdfImportQueuedCount - 1) });
+          try {
+            await get().ingestPdf(projectRoot, pdfPath, { quiet: batch });
+            succeeded += 1;
+          } catch (err) {
+            failed += 1;
+            const name = pdfPath.split(/[/\\]/).pop() ?? pdfPath;
+            toast.error(err instanceof Error ? err.message : `Failed to import ${name}`);
+          }
+        }
+        if (batch) {
+          if (failed === 0) {
+            toast.success(`Imported ${succeeded} PDF${succeeded === 1 ? "" : "s"}`);
+          } else {
+            toast.info(`Imported ${succeeded} of ${pdfPaths.length} PDFs (${failed} failed)`);
+          }
+        }
+      })
+      .catch(() => {});
+  },
+
+  addByIdentifier: async (projectRoot, ids) => {
+    if (!ids.doi && !ids.arxivId && !ids.isbn && !ids.pmid && !ids.adsBibcode) return null;
+    const { paper, created, duplicateReason, pdfAttached, pdfAttachError } =
+      await window.electronAPI.literatureCreateFromIdentifier(projectRoot, ids);
     await get().refresh(projectRoot);
     get().selectPaper(paper.id);
     if (!created) {
@@ -684,23 +863,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
     } else {
       toast.success(`Added: ${paper.title}`);
     }
-    toastPdfAttached(pdfAttached);
-    return paper;
-  },
-
-  addByArxiv: async (projectRoot, arxivId) => {
-    const clean = arxivId.replace(/^arxiv:/i, "").trim();
-    if (!clean) return null;
-    const { paper, created, duplicateReason, pdfAttached } =
-      await window.electronAPI.literatureCreateFromIdentifier(projectRoot, { arxivId: clean });
-    await get().refresh(projectRoot);
-    get().selectPaper(paper.id);
-    if (!created) {
-      toast.info(duplicateIdentifierMessage(duplicateReason));
-    } else {
-      toast.success(`Added: ${paper.title}`);
-    }
-    toastPdfAttached(pdfAttached);
+    toastPdfDownloadResult(pdfAttached, pdfAttachError);
     return paper;
   },
 
@@ -708,16 +871,26 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
     const result = await window.electronAPI.literatureFetchAndApplyMetadata(projectRoot, paperId);
     await get().refresh(projectRoot);
     toast.success("Metadata updated");
-    toastPdfAttached(result.pdfAttached);
+    toastPdfDownloadResult(result.pdfAttached, result.pdfAttachError);
     return result.paper;
   },
 
   downloadPdf: async (projectRoot, paperId) => {
     const result = await window.electronAPI.literatureDownloadPdf(projectRoot, paperId);
     await get().refresh(projectRoot);
-    if (result.attached) toastPdfAttached(true);
-    else if (result.attachError) throw new Error(result.attachError);
+    toastPdfDownloadResult(result.attached, result.attachError);
     return result.paper;
+  },
+
+  attachLocalPdf: async (projectRoot, paperId, pdfPath, opts) => {
+    const result = await window.electronAPI.literatureAttachLocalPdf(
+      projectRoot,
+      paperId,
+      pdfPath,
+      opts,
+    );
+    await get().refresh(projectRoot);
+    return result;
   },
 
   importBibTeX: async (projectRoot, bibContent, jsonContent) => {
@@ -751,3 +924,9 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
     await window.electronAPI.literatureDeleteAnnotation(projectRoot, annotationId);
   },
 }));
+
+if (typeof window !== "undefined" && window.electronAPI?.onLiteraturePdfDownloadProgress) {
+  window.electronAPI.onLiteraturePdfDownloadProgress((data) => {
+    useLiteratureStore.getState().setPdfDownloadProgress(data);
+  });
+}

@@ -154,7 +154,10 @@ export class PromptComposer {
     ctx: PromptContext,
     options?: { excludeLayerIds?: string[] },
   ): string {
-    const excludeRules = options?.excludeLayerIds?.includes("custom-rules") ?? false;
+    const exclude = new Set(options?.excludeLayerIds ?? []);
+    const excludeRules = exclude.has("custom-rules");
+    const excludeAgentsMd = exclude.has("agents-md");
+    const excludeProfile = exclude.has("profile-overlay");
     // Stable hash: sort keys to avoid ordering differences.
     // Content fields use djb2 hash so equivalent content always matches
     // regardless of surrounding whitespace or encoding differences.
@@ -163,7 +166,11 @@ export class PromptComposer {
       wd: ctx.workspaceDirs
         ? ctx.workspaceDirs.map((d) => `${d.name}:${d.function}:${(d as any).description ?? ""}`).sort()
         : [],
-      amd: ctx.agentsMdContent ? djb2Hash(ctx.agentsMdContent) : "0",
+      amd: excludeAgentsMd
+        ? "0"
+        : ctx.agentsMdContent
+          ? djb2Hash(ctx.agentsMdContent)
+          : "0",
       ucp: ctx.userCustomPrompt ? djb2Hash(ctx.userCustomPrompt) : "0",
       acr: excludeRules
         ? "0"
@@ -171,10 +178,14 @@ export class PromptComposer {
           ? djb2Hash(ctx.customRules.map((r) => `${r.name}:${r.content}`).join("|"))
           : "0",
       acrs: excludeRules ? "0" : ctx.customRules?.length ? String(ctx.customRules.length) : "0",
-      pid: ctx.profileId ?? "",
-      pin: ctx.profileInstructions ? djb2Hash(ctx.profileInstructions) : "0",
-      pm: ctx.profileModules?.join(",") ?? "",
-      prf: ctx.profileRules?.join(",") ?? "",
+      pid: excludeProfile ? "" : (ctx.profileId ?? ""),
+      pin: excludeProfile
+        ? "0"
+        : ctx.profileInstructions
+          ? djb2Hash(ctx.profileInstructions)
+          : "0",
+      pm: excludeProfile ? "" : (ctx.profileModules?.join(",") ?? ""),
+      prf: excludeProfile ? "" : (ctx.profileRules?.join(",") ?? ""),
       en: this.layers.map((l) => `${l.id}=${l.enabled ? 1 : 0}`).join(","),
     };
     return JSON.stringify(normalized);

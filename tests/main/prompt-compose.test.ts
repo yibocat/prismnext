@@ -11,6 +11,7 @@ describe("promptManager.compose", () => {
 
   it("includes default core persona when no custom prompt", () => {
     const composed = promptManager.compose({});
+    expect(composed).toContain("# Prism Assistant");
     expect(composed).toContain("## Role");
     expect(composed).toContain(CORE_PERSONA_PROMPT.slice(0, 40));
     expect(composed.length).toBeGreaterThan(200);
@@ -29,7 +30,7 @@ describe("promptManager.compose", () => {
       customRules: [{ name: "Tests", content: "Run pnpm test before finishing." }],
     };
     const composed = promptManager.compose(ctx);
-    expect(composed).toContain("## Project Instructions (AGENTS.md)");
+    expect(composed).toContain("# Project");
     expect(composed).toContain("Use pnpm only.");
     expect(composed).toContain("## Tests");
     expect(composed).toContain("Run pnpm test before finishing.");

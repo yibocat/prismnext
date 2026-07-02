@@ -1,13 +1,33 @@
 import { useEffect, useRef, type ReactNode } from "react";
-import { BotIcon, BookOpenIcon, FileCodeIcon, FileIcon, FileTextIcon, ImageIcon, PlugIcon, PuzzleIcon } from "lucide-react";
+import {
+  BotIcon,
+  BookOpenIcon,
+  ChevronRightIcon,
+  FileCodeIcon,
+  FileIcon,
+  FileTextIcon,
+  ImageIcon,
+  PlugIcon,
+  PuzzleIcon,
+} from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { appPopoverLabelClass, appPopoverListClass } from "@/components/ui/app-popover";
-import { appMenuItemClass } from "@/components/ui/app-menu";
+import {
+  AppMenu,
+  AppMenuItem,
+  AppMenuLabel,
+  AppMenuSidePanel,
+  AppMenuSwitchRow,
+  AppMenuTrigger,
+  appMenuFontClass,
+  appMenuInlineChevronTriggerClass,
+} from "@/components/ui/app-menu";
 import { cn } from "@/lib/utils";
 import type { AgentProfileInfo } from "@shared/agent-profiles";
 import type { ProjectFile } from "@/stores/document-store";
 import type { LiteraturePaper } from "@/types/electron.d";
 import { formatPaperMentionLabel } from "../../../../../shared/bibkey-utils";
+import { PAPER_EXTRACT_ACTION_HINT_FIRST } from "../../../../../shared/paper-extract";
 import type { CommandDef } from "@commands/types";
 import type { CursorAnchor } from "./dropdown-position";
 import { preferredMenuSide } from "./dropdown-position";
@@ -77,8 +97,7 @@ export function buildSlashOptions(
 
 const itemClass = (active: boolean) =>
   cn(
-    appMenuItemClass,
-    "flex w-full items-center text-left",
+    "flex w-full cursor-pointer items-center gap-1.5 rounded-sm px-2 py-1 text-left text-[length:var(--font-menu-item)]",
     active ? "bg-accent text-accent-foreground" : "hover:bg-muted",
   );
 
@@ -104,6 +123,7 @@ function ComposerQueryPopover({
   anchor,
   activeIndex,
   onListPointerMove,
+  className,
   children,
 }: {
   open: boolean;
@@ -111,6 +131,7 @@ function ComposerQueryPopover({
   activeIndex: number;
   /** Re-enable mouse hover after keyboard scroll (avoids stale cursor hitting row 0). */
   onListPointerMove?: () => void;
+  className?: string;
   children: ReactNode;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
@@ -146,19 +167,87 @@ function ComposerQueryPopover({
         align="start"
         sideOffset={4}
         collisionPadding={12}
-        className={COMPOSER_POPOVER_CLASS}
+        className={className ?? COMPOSER_POPOVER_CLASS}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onCloseAutoFocus={(e) => e.preventDefault()}
         onMouseDown={(e) => e.preventDefault()}
       >
-        <div
-          ref={listRef}
-          onPointerMove={onListPointerMove}
-        >
+        <div ref={listRef} onPointerMove={onListPointerMove}>
           {children}
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+function PaperMentionOptionsMenu({
+  open,
+  onOpenChange,
+  paper,
+  intensiveOn,
+  ready,
+  subFocusIndex,
+  onSelectPaper,
+  onToggle,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  paper: LiteraturePaper;
+  intensiveOn: boolean;
+  ready: boolean;
+  subFocusIndex: number;
+  onSelectPaper: () => void;
+  onToggle: (on: boolean) => void;
+}) {
+  return (
+    <AppMenu modal={false} open={open} onOpenChange={onOpenChange}>
+      <AppMenuTrigger asChild>
+        <button
+          type="button"
+          className={appMenuInlineChevronTriggerClass}
+          aria-label="Paper options"
+          aria-expanded={open}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ChevronRightIcon className="size-3.5 opacity-70" />
+        </button>
+      </AppMenuTrigger>
+      <AppMenuSidePanel>
+        <AppMenuLabel className="normal-case tracking-normal text-[length:var(--font-size-11)]">
+          Options
+        </AppMenuLabel>
+        <AppMenuItem
+          className={cn(subFocusIndex === 0 && "bg-accent text-accent-foreground")}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            onSelectPaper();
+          }}
+        >
+          <span className="min-w-0 flex-1 truncate font-medium">{paper.title}</span>
+          <span className="shrink-0 font-mono text-[length:var(--font-path)] text-muted-foreground">
+            {formatPaperMentionLabel(paper.bibkey)}
+          </span>
+        </AppMenuItem>
+        <AppMenuSwitchRow
+          label="Intensive reading"
+          checked={intensiveOn}
+          disabled={!ready}
+          enterToggles={false}
+          className={cn(subFocusIndex === 1 && "bg-accent text-accent-foreground")}
+          onCheckedChange={onToggle}
+          title={!ready ? PAPER_EXTRACT_ACTION_HINT_FIRST : undefined}
+        />
+        {!ready ? (
+          <p className={cn("px-2 pb-1 text-muted-foreground", appMenuFontClass)}>
+            {PAPER_EXTRACT_ACTION_HINT_FIRST}
+          </p>
+        ) : null}
+      </AppMenuSidePanel>
+    </AppMenu>
   );
 }
 
@@ -260,6 +349,12 @@ export function MentionDropdown({
   onHover,
   onListPointerMove,
   canHoverItem,
+  intensivePaperIds,
+  readyPaperIds,
+  onToggleIntensive,
+  paperOptionsOpenIndex,
+  onPaperOptionsOpenChange,
+  paperOptionsSubIndex,
 }: {
   options: MentionOption[];
   activeIndex: number;
@@ -271,6 +366,12 @@ export function MentionDropdown({
   onHover: (index: number) => void;
   onListPointerMove?: () => void;
   canHoverItem?: () => boolean;
+  intensivePaperIds?: string[];
+  readyPaperIds?: Set<string>;
+  onToggleIntensive?: (paperId: string, on: boolean) => void;
+  paperOptionsOpenIndex?: number | null;
+  onPaperOptionsOpenChange?: (index: number | null) => void;
+  paperOptionsSubIndex?: number;
 }) {
   return (
     <ComposerQueryPopover
@@ -291,6 +392,7 @@ export function MentionDropdown({
             option.kind === "file" && (i === 0 || options[i - 1]?.kind !== "file");
           const showPaperHeader =
             option.kind === "paper" && (i === 0 || options[i - 1]?.kind !== "paper");
+          const active = i === activeIndex;
 
           if (option.kind === "profile") {
             const { profile } = option;
@@ -299,16 +401,16 @@ export function MentionDropdown({
                 {showProfileHeader && <div className={sectionLabelClass}>Agents</div>}
                 <button
                   type="button"
-                  data-active={i === activeIndex}
-                  className={itemClass(i === activeIndex)}
+                  data-active={active ? "true" : undefined}
+                  className={itemClass(active)}
                   onMouseDown={(e) => {
                     e.preventDefault();
                     onSelectProfile(profile);
                   }}
                   onMouseEnter={() => {
-                  if (canHoverItem && !canHoverItem()) return;
-                  onHover(i);
-                }}
+                    if (canHoverItem && !canHoverItem()) return;
+                    onHover(i);
+                  }}
                 >
                   <BotIcon className="size-3 shrink-0 text-violet-600 dark:text-violet-400" />
                   <span className={cn(itemLabelClass, "font-medium")}>{profile.name}</span>
@@ -319,13 +421,16 @@ export function MentionDropdown({
 
           if (option.kind === "paper") {
             const { paper } = option;
+            const intensiveOn = intensivePaperIds?.includes(paper.id) ?? false;
+            const ready = readyPaperIds?.has(paper.id) ?? false;
+
             return (
               <div key={`paper:${paper.id}`}>
                 {showPaperHeader && <div className={sectionLabelClass}>Literature</div>}
                 <button
                   type="button"
-                  data-active={i === activeIndex}
-                  className={itemClass(i === activeIndex)}
+                  data-active={active ? "true" : undefined}
+                  className={itemClass(active)}
                   onMouseDown={(e) => {
                     e.preventDefault();
                     onSelectPaper?.(paper);
@@ -336,10 +441,33 @@ export function MentionDropdown({
                   }}
                 >
                   <BookOpenIcon className="size-3 shrink-0 text-amber-600 dark:text-amber-400" />
-                  <span className={cn(itemLabelClass, "shrink-0 font-mono font-medium")}>
+                  <span className={cn(itemLabelClass, "font-medium")}>{paper.title}</span>
+                  <span className={cn(itemMetaClass, "font-mono")}>
                     {formatPaperMentionLabel(paper.bibkey)}
                   </span>
-                  <span className="truncate text-muted-foreground">{paper.title}</span>
+                  {intensiveOn ? (
+                    <span className="shrink-0 text-[length:var(--font-size-10)] text-amber-600 dark:text-amber-400">
+                      Intensive
+                    </span>
+                  ) : null}
+                  {onToggleIntensive ? (
+                    <span className="ml-auto flex shrink-0 items-center">
+                      <PaperMentionOptionsMenu
+                        open={paperOptionsOpenIndex === i}
+                        onOpenChange={(next) =>
+                          onPaperOptionsOpenChange?.(next ? i : null)
+                        }
+                        paper={paper}
+                        subFocusIndex={
+                          paperOptionsOpenIndex === i ? (paperOptionsSubIndex ?? 0) : 0
+                        }
+                        intensiveOn={intensiveOn}
+                        ready={ready}
+                        onSelectPaper={() => onSelectPaper?.(paper)}
+                        onToggle={(on) => onToggleIntensive(paper.id, on)}
+                      />
+                    </span>
+                  ) : null}
                 </button>
               </div>
             );
@@ -355,8 +483,8 @@ export function MentionDropdown({
               {showFileHeader && <div className={sectionLabelClass}>Files</div>}
               <button
                 type="button"
-                data-active={i === activeIndex}
-                className={itemClass(i === activeIndex)}
+                data-active={active ? "true" : undefined}
+                className={itemClass(active)}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   onSelectFile(file);
@@ -368,7 +496,7 @@ export function MentionDropdown({
               >
                 {getFileIcon(file)}
                 <span className={itemLabelClass}>{fileName}</span>
-                {dirPath && <span className={itemMetaClass}>{dirPath}</span>}
+                {dirPath ? <span className={itemMetaClass}>{dirPath}</span> : null}
               </button>
             </div>
           );

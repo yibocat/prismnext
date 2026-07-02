@@ -1,7 +1,9 @@
 import { normalizeDoi, arxivIdFromDoi } from "../../doi-utils";
+import { normalizeIsbn } from "../../catalog-identifier-utils";
 import { authorsJsonFromParts, normalizeCslPageRange, stripHtml } from "../helpers";
 import type { BibliographicMetadata } from "../types";
 import type { BibliographicSource } from "./types";
+import { catalogFetch } from "../catalog-fetch";
 
 const CATALOG_HEADERS = {
   Accept: "application/json",
@@ -42,7 +44,7 @@ function crossrefStringField(value: string | number | undefined | null): string 
 async function resolveByDoi(rawDoi: string): Promise<BibliographicMetadata | null> {
   const doi = normalizeDoi(rawDoi);
   if (!doi) return null;
-  const res = await fetch(`https://api.crossref.org/works/${encodeURIComponent(doi)}`, {
+  const res = await catalogFetch(`https://api.crossref.org/works/${encodeURIComponent(doi)}`, {
     headers: CATALOG_HEADERS,
   });
   if (res.status === 404) return null;
@@ -99,11 +101,30 @@ async function resolveByDoi(rawDoi: string): Promise<BibliographicMetadata | nul
   };
 }
 
+async function resolveByIsbn(rawIsbn: string): Promise<BibliographicMetadata | null> {
+  const isbn = normalizeIsbn(rawIsbn);
+  if (!isbn) return null;
+  const res = await catalogFetch(
+    `https://api.crossref.org/works?filter=isbn:${encodeURIComponent(isbn)}&rows=1`,
+    { headers: CATALOG_HEADERS },
+  );
+  if (!res.ok) throw new Error(`Crossref HTTP ${res.status}`);
+  const data = (await res.json()) as {
+    message?: { items?: Array<{ DOI?: string }> };
+  };
+  const doiRaw = data.message?.items?.[0]?.DOI;
+  if (!doiRaw) return null;
+  return resolveByDoi(doiRaw);
+}
+
 export const crossrefSource: BibliographicSource = {
   id: "crossref",
   label: "Crossref",
-  supports: { doi: true },
+  supports: { doi: true, isbn: true },
   priority: 10,
   enabled: true,
   resolveByDoi,
+  resolveByIsbn,
 };
+
+export { resolveByDoi, resolveByIsbn };

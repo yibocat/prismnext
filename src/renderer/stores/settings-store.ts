@@ -5,6 +5,7 @@ import {
   DEFAULT_PERMISSION_MODE,
   type PermissionMode,
 } from "@shared/permission-modes";
+import type { LiteratureUiPrefs } from "@/lib/literature/library-ui-prefs";
 
 const log = createLogger("settings-store");
 
@@ -29,6 +30,8 @@ export interface AppSettings {
   archivedSessionIdsByProject?: Record<string, string[]>;
   /** Pinned chat session ids per project root */
   pinnedSessionIdsByProject?: Record<string, string[]>;
+  /** Literature library sidebar view + list sort per project root */
+  literatureUiByProject?: Record<string, LiteratureUiPrefs>;
   /** @deprecated Global list — do not read; use recentOpenedFilesByProject */
   recentOpenedFiles?: Array<{ id: string; name: string; lastOpened: number }>;
   /** Auto-create main.tex template on new project creation */
@@ -78,6 +81,17 @@ export interface AppSettings {
   aiTerminalShowSessionIndicator?: boolean;
   /** User-added custom API providers */
   aiCustomProviders?: { id: string; name: string; baseUrl: string }[];
+  /** MinerU cloud API token for precision PDF extraction */
+  mineruApiToken?: string;
+  /** Default extract engine: pdfjs (local) | mineru (cloud) */
+  literatureExtractEngineDefault?: "pdfjs" | "mineru";
+  /** Auto-extract PDF on library import (default off) */
+  literatureAutoExtractOnImport?: boolean;
+  /** When true (default), literature-read-pdf only works for intensive-reading papers. */
+  literatureStrictIntensivePdf?: boolean;
+  /** After PDF extract, auto-generate AI summary + keywords (uses tokens). */
+  literatureAutoAiMetadata?: boolean;
+  literatureAiMetadataModel?: string;
 }
 
 const defaults: AppSettings = {

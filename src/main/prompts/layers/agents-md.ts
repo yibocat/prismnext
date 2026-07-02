@@ -13,10 +13,7 @@ export function createAgentsMdLayer(): PromptLayer {
     isStatic: false,
     build: (ctx: PromptContext) => {
       const content = ctx.agentsMdContent?.trim();
-      if (content) {
-        return "## Project Instructions (AGENTS.md)\n\n" + content;
-      }
-      return "";
+      return content ?? "";
     },
   };
 }

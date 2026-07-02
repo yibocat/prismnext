@@ -48,11 +48,8 @@ const newAgentNav: LeftNavDefinition = {
   label: "New Agent",
   icon: Bot,
   order: 0,
-  centerView: "sessions",
-  isActive: () => {
-    const st = useLayoutStore.getState();
-    return st.leftSidebarView === "sessions" && !isTexWorkspaceOpen();
-  },
+  /** Action only — not a persistent nav destination; never show selected state. */
+  isActive: () => false,
   activate: (ctx) => {
     useChatStore.getState().newSession();
     const st = useLayoutStore.getState();

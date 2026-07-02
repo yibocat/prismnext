@@ -7,11 +7,12 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { splitMarkdownFrontmatter } from "@/lib/markdown/frontmatter";
 import { cn } from "@/lib/utils";
 import {
-  REMARK_PLUGINS,
-  REHYPE_PLUGINS,
   MARKDOWN_COMPONENTS,
   DOCUMENT_MARKDOWN_TYPOGRAPHY,
-  normalizeMathDelimiters,
+  prepareDocumentMarkdown,
+  remarkPluginsForProfile,
+  rehypePluginsForProfile,
+  type MarkdownPreviewProfile,
 } from "@/lib/markdown/markdown-config";
 import { AppBrowserLink } from "@/components/modules/shared/app-browser-link";
 import { MarkdownFrontmatterCard } from "./markdown-frontmatter-card";
@@ -36,6 +37,8 @@ export interface MarkdownDocumentPreviewProps {
   content: string;
   className?: string;
   variant?: MarkdownDocumentPreviewVariant;
+  /** Extract paths skip citation-ref plugin so paper `[1]` stays literal; math/rehype stack is identical. */
+  previewProfile?: MarkdownPreviewProfile;
   emptyMessage?: string;
   loadingMessage?: string;
   markdownComponents?: Components;
@@ -48,6 +51,7 @@ export const MarkdownDocumentPreview = memo(function MarkdownDocumentPreview({
   content,
   className,
   variant = "default",
+  previewProfile = "default",
   emptyMessage = "Nothing to preview yet.",
   loadingMessage = "Loading preview…",
   markdownComponents = DEFAULT_LINK_COMPONENTS,
@@ -56,8 +60,16 @@ export const MarkdownDocumentPreview = memo(function MarkdownDocumentPreview({
 }: MarkdownDocumentPreviewProps) {
   const split = useMemo(() => splitMarkdownFrontmatter(content), [content]);
   const bodyNormalized = useMemo(
-    () => normalizeMathDelimiters(split.body),
-    [split.body],
+    () => prepareDocumentMarkdown(split.body, previewProfile),
+    [split.body, previewProfile],
+  );
+  const remarkPlugins = useMemo(
+    () => remarkPluginsForProfile(previewProfile),
+    [previewProfile],
+  );
+  const rehypePlugins = useMemo(
+    () => rehypePluginsForProfile(previewProfile),
+    [previewProfile],
   );
   const mdWidthLimited = useLayoutStore((s) => s.mdWidthLimited);
   const [painted, setPainted] = useState(false);
@@ -113,8 +125,8 @@ export const MarkdownDocumentPreview = memo(function MarkdownDocumentPreview({
             )}
             <div className={DOCUMENT_MARKDOWN_TYPOGRAPHY}>
               <ReactMarkdown
-                remarkPlugins={REMARK_PLUGINS}
-                rehypePlugins={REHYPE_PLUGINS}
+                remarkPlugins={remarkPlugins}
+                rehypePlugins={rehypePlugins}
                 components={markdownComponents}
               >
                 {bodyNormalized}

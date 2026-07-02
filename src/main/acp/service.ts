@@ -8,7 +8,11 @@ import {
   ndJsonStream,
 } from "@agentclientprotocol/sdk";
 import { createLogger } from "../services/logger";
-import { getBuiltinToolFiles } from "../tools";
+import { getBuiltinToolFiles, BUILTIN_TOOLS } from "../tools";
+import {
+  buildOpencodeToolDescription,
+  patchToolDescription,
+} from "../tools/tool-description";
 import { buildPermissionOutcome, type PermissionResponse } from "./permission";
 import { resolveChatTabId } from "../services/chat-session-registry";
 import { mcpJsonToAcpServers, type AcpMcpServer } from "./mcp-transform";
@@ -23,6 +27,10 @@ import {
 import { getSettings } from "../services/settings";
 import { sanitizeSkillPermissionMap, skillPermissionNeedsRepair } from "../services/skills-sync";
 import { buildEnabledToolsConfig } from "../services/opencode-tools-config";
+import {
+  mergeOpencodeInstructions,
+  PRISM_OPENCODE_INSTRUCTIONS,
+} from "../services/prompt-sync";
 import { messageIdsAfterTurn } from "../../shared/chat-turns";
 import {
   approveCustomToolJob,
@@ -134,6 +142,15 @@ export class AcpService {
    *  These are filtered from the sidebar session list. Persisted to disk
    *  so filtering survives app restarts. */
   private subAgentSessions = new Set<string>();
+  /** Suppress bash/custom permission side effects while OpenCode session/load replays history. */
+  private sessionReplaySuppress = 0;
+  /** Sessions already hydrated in this OpenCode process (session/load done once). */
+  private opencodeHydratedSessions = new Set<string>();
+
+  /** True while session/load is replaying stored tool updates — skip live bash gates. */
+  isSessionReplaySuppressed(): boolean {
+    return this.sessionReplaySuppress > 0;
+  }
 
   static getInstance(): AcpService {
     if (!AcpService.instance) {
@@ -287,6 +304,10 @@ export class AcpService {
         requestPermission: async (params) => {
           const permissionId = params.id || params.permissionId || `perm-${Date.now()}`;
           const options = Array.isArray(params.options) ? params.options : [];
+          if (this.sessionReplaySuppress > 0) {
+            log.debug(`permission:replay-suppressed id=${permissionId}`);
+            return buildPermissionOutcome(options, false);
+          }
           const settings = getSettings() as Record<string, unknown>;
           const mode = resolvePermissionMode(settings.permissionMode as string | undefined);
           const toolName = extractPermissionToolName(params as Record<string, unknown>);
@@ -433,6 +454,7 @@ export class AcpService {
       log.info(`OpenCode process exited (pid=${currentPid} code=${code} signal=${signal})`);
       this.conn = null;
       this.proc = null;
+      this.opencodeHydratedSessions.clear();
 
       const wasUnexpected = code !== 0 && code !== null;
       if (!wasUnexpected) {
@@ -645,6 +667,55 @@ export class AcpService {
     return primaryPath;
   }
 
+  /**
+   * Merge Prism instruction paths into app-level OpenCode config.
+   * OpenCode reads `instructions` at process start — restart when paths change.
+   */
+  applyProjectPromptIntegration(_projectRoot: string): {
+    configPath: string;
+    instructionsChanged: boolean;
+  } {
+    const primaryPath = join(this.getServerDataDir(), "config", "opencode", "opencode.json");
+    let instructionsChanged = false;
+
+    for (const p of this.getOpencodeConfigPaths()) {
+      try {
+        let config: Record<string, unknown> = {};
+        if (existsSync(p)) {
+          try {
+            config = JSON.parse(readFileSync(p, "utf-8")) as Record<string, unknown>;
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            log.warn(`Skipping invalid OpenCode config ${p}: ${message}`);
+            continue;
+          }
+        }
+
+        if (!config.$schema) {
+          config.$schema = "https://opencode.ai/config.json";
+        }
+
+        const merged = mergeOpencodeInstructions(config);
+        if (merged.changed) {
+          instructionsChanged = true;
+        }
+
+        mkdirSync(dirname(p), { recursive: true });
+        writeFileSync(p, JSON.stringify(merged.config, null, 2), "utf-8");
+        log.info("Applied project prompt integration", {
+          configPath: p,
+          instructions: PRISM_OPENCODE_INSTRUCTIONS,
+          changed: merged.changed,
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(`Failed to apply project prompt integration to ${p}: ${message}`);
+      }
+    }
+
+    return { configPath: primaryPath, instructionsChanged };
+  }
+
   /** Restart OpenCode so skills.paths / permission.skill changes are picked up. */
   async reloadAfterSkillsIntegration(): Promise<void> {
     if (!this.conn) return;
@@ -701,6 +772,8 @@ export class AcpService {
     const { getSettings } = await import("../services/settings");
     const agentTerminalMode = (getSettings().agentTerminalMode as string) || "pty";
 
+    const metaByName = new Map(BUILTIN_TOOLS.map((t) => [t.name, t]));
+
     for (const { name, content } of files) {
       const dest = join(toolsDir, `${name}.ts`);
 
@@ -712,14 +785,19 @@ export class AcpService {
         continue;
       }
 
+      const meta = metaByName.get(name);
+      const syncedContent = meta
+        ? patchToolDescription(content, buildOpencodeToolDescription(meta))
+        : content;
+
       try {
         // Write tool file (idempotent — only overwrites if content differs)
         if (existsSync(dest)) {
           const existing = readFileSync(dest, "utf-8");
-          if (existing === content) continue; // unchanged
+          if (existing === syncedContent) continue; // unchanged
         }
         mkdirSync(dirname(dest), { recursive: true });
-        writeFileSync(dest, content, "utf-8");
+        writeFileSync(dest, syncedContent, "utf-8");
         synced++;
       } catch (err: any) {
         log.warn(`Failed to sync tool "${name}": ${err.message}`);
@@ -944,6 +1022,7 @@ export class AcpService {
         threshold: 0.85,
         prune: true,
       },
+      instructions: [...PRISM_OPENCODE_INSTRUCTIONS],
     };
 
     const configStr = JSON.stringify(defaultConfig, null, 2);
@@ -1036,6 +1115,7 @@ export class AcpService {
 
     const sessionId = (result as any)?.sessionId || (result as any)?.id;
     if (!sessionId) throw new Error("session/new did not return a sessionId");
+    this.opencodeHydratedSessions.add(sessionId);
 
     // Set the model via standard ACP session/set_model
     if (model) {
@@ -1299,12 +1379,24 @@ export class AcpService {
     if (!this.conn) return;
     const root = projectRoot || cwd;
     const { mcpServers } = this.loadProjectAgentConfig(root);
-    await this.withNotificationCollector(
-      () => {}, // discard — just need the side effect of initializing session state
-      () => this.conn!.extMethod("session/load", { sessionId, cwd, mcpServers }),
-    ).catch((err: any) => {
+    this.sessionReplaySuppress++;
+    try {
+      await this.withNotificationCollector(
+        () => {}, // discard — just need the side effect of initializing session state
+        () => this.conn!.extMethod("session/load", { sessionId, cwd, mcpServers }),
+      );
+      this.opencodeHydratedSessions.add(sessionId);
+    } catch (err: any) {
       log.debug(`session/load failed for ${sessionId}: ${err.message}`);
-    });
+    } finally {
+      this.sessionReplaySuppress = Math.max(0, this.sessionReplaySuppress - 1);
+    }
+  }
+
+  /** Hydrate OpenCode in-memory session state once before the first prompt after restart. */
+  async ensureSessionHydrated(sessionId: string, cwd: string, projectRoot?: string): Promise<void> {
+    if (!this.conn || this.opencodeHydratedSessions.has(sessionId)) return;
+    await this.initSession(sessionId, cwd, projectRoot);
   }
 
   /** Reload MCP tool definitions for an existing session (composer `/` MCP tokens). */
@@ -1323,7 +1415,14 @@ export class AcpService {
     });
     await this.withNotificationCollector(
       () => {},
-      () => this.conn!.extMethod("session/load", { sessionId, cwd, mcpServers }),
+      async () => {
+        this.sessionReplaySuppress++;
+        try {
+          await this.conn!.extMethod("session/load", { sessionId, cwd, mcpServers });
+        } finally {
+          this.sessionReplaySuppress = Math.max(0, this.sessionReplaySuppress - 1);
+        }
+      },
     ).catch((err: any) => {
       log.warn(`session/load (MCP reload) failed for ${sessionId}: ${err.message}`);
     });
@@ -1569,30 +1668,24 @@ export class AcpService {
     opts?: {
       model?: string;
       provider?: string;
-      systemPrompt?: string;
+      /** Active agent profile — per-tab; injected every turn when non-empty. */
+      profileOverlayPrompt?: string;
       /** Project rules — read fresh each turn; always injected when non-empty. */
       projectRulesPrompt?: string;
-      /** When true, prepend base system prompt (excludes rules) as first content block. */
-      injectSystemPrompt?: boolean;
     },
   ): Promise<{ usage?: any }> {
     if (!this.conn) throw new Error("AcpService not initialized");
 
     const content: Array<{ type: "text"; text: string; _meta?: Record<string, unknown> }> = [];
 
-    // Inject assembled prompt as the first user-message content block.
-    // OpenCode ACP does not expose per-session `system` on the wire — Prism layers
-    // must ride along as message content. Tagged with _meta for UI stripping.
-    // Base system prompt — session-scoped (first turn or stale base config).
-    if (opts?.injectSystemPrompt && opts?.systemPrompt) {
+    const profile = opts?.profileOverlayPrompt?.trim();
+    if (profile) {
       content.push({
         type: "text",
-        text: opts.systemPrompt,
-        _meta: { prism: "system-prompt" },
+        text: profile,
+        _meta: { prism: "profile-overlay" },
       });
-      log.info(`System prompt injected: ${opts.systemPrompt.length} chars`);
-    } else if (!opts?.injectSystemPrompt) {
-      log.debug("Base system prompt not injected this turn (already in session context)");
+      log.info(`Profile overlay injected: ${profile.length} chars`);
     }
 
     // Project rules — every turn, fresh from RULE.md on disk.
@@ -1781,6 +1874,10 @@ export class AcpService {
     command: string;
     cwd?: string;
   }): void {
+    if (this.sessionReplaySuppress > 0) {
+      log.debug(`permission:bash-tool-call replay-suppressed toolCallId=${args.toolCallId}`);
+      return;
+    }
     const { toolCallId, sessionId, tabId, command } = args;
     if (!toolCallId || !isRunnableBashCommand(command)) {
       log.debug(`permission:bash-tool-call waiting-for-command toolCallId=${toolCallId || "(none)"} command=${JSON.stringify(command)}`);
@@ -1850,6 +1947,10 @@ export class AcpService {
     toolName: string;
     input?: Record<string, unknown>;
   }): void {
+    if (this.sessionReplaySuppress > 0) {
+      log.debug(`permission:custom-tool-call replay-suppressed toolCallId=${args.toolCallId}`);
+      return;
+    }
     const { toolCallId, sessionId, tabId, toolName, input } = args;
     const normalized = toolName.toLowerCase();
     if (!toolCallId || !CUSTOM_GATED_TOOLS.has(normalized)) return;

@@ -311,7 +311,7 @@ describe("zotero-sync", () => {
     expect(collections[0]?.parent_id).toBeNull();
   });
 
-  it("detaches zotero papers removed from bound collection (preserves row)", async () => {
+  it("prunes non-materialized zotero papers removed from bound collection", async () => {
     const projectRoot = tempProject();
     roots.push(projectRoot);
     const prismDir = path.join(projectRoot, ".prismnext");

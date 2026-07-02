@@ -70,7 +70,7 @@ async function bridgeCall(
 
 export default tool({
   description:
-    "Read a paper from the project literature library by bibkey (Cite key in Literature panel). Returns metadata, abstract, publication_details, highlights, PDF path. Uses .prismnext/library/library.db.",
+    "Read a paper from the project literature library by bibkey (Cite key). Returns metadata, abstract, user tags, AI summary, publication_details, highlights, PDF path. Uses .prismnext/library/library.db.",
   args: {
     bibkey: tool.schema.string().describe("Exact cite key / bibkey from the Literature library"),
   },

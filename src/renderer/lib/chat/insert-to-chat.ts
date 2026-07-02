@@ -4,6 +4,7 @@ import { useComposerInsertStore } from "@/stores/composer-insert-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useTerminalAiStore } from "@/stores/terminal-ai-store";
 import { useTerminalStore } from "@/stores/terminal-store";
+import { useChatStore } from "@/stores/chat-store";
 import { terminalSelectionRegistry } from "@/lib/terminal/selection-registry";
 import {
   getLastCommandBlockFromBuffer,
@@ -178,6 +179,15 @@ export function lineRangeFromSelection(
   };
 }
 
+/** MinerU PDF block excerpts imply intensive reading for the source paper. */
+function ensureIntensiveReadingForPaper(paperId: string): boolean {
+  const chat = useChatStore.getState();
+  const tab = chat.tabs.find((t) => t.id === chat.activeTabId);
+  if (!tab || tab.intensivePaperIds.includes(paperId)) return false;
+  chat.addIntensivePaper(tab.id, paperId);
+  return true;
+}
+
 /** Insert literature PDF excerpt into the active Chat composer. */
 export function insertPaperToChat(
   req: Omit<PaperSnippetRequest, "kind"> & { quiet?: boolean },
@@ -187,13 +197,28 @@ export function insertPaperToChat(
     toast.info("Highlight text in the PDF first");
     return false;
   }
-  return insertContextToChat(
+
+  const newlyIntensive =
+    payload.extractSource === "mineru" && payload.paperId
+      ? ensureIntensiveReadingForPaper(payload.paperId)
+      : false;
+
+  const ok = insertContextToChat(
     {
       kind: "paper",
       ...payload,
     },
-    { quiet },
+    { quiet: true },
   );
+
+  if (ok && !quiet) {
+    toast.success(
+      newlyIntensive
+        ? "Added to Chat — intensive reading enabled for this paper"
+        : "Added to Chat",
+    );
+  }
+  return ok;
 }
 
 /** Insert terminal context into the active Chat composer. */

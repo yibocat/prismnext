@@ -2,6 +2,7 @@ import { normalizeDoi } from "../../doi-utils";
 import { authorsJsonFromParts } from "../helpers";
 import type { BibliographicMetadata } from "../types";
 import type { BibliographicSource } from "./types";
+import { catalogFetch } from "../catalog-fetch";
 
 const CATALOG_HEADERS = {
   Accept: "application/json",
@@ -11,7 +12,7 @@ const CATALOG_HEADERS = {
 async function resolveByDoi(rawDoi: string): Promise<BibliographicMetadata | null> {
   const doi = normalizeDoi(rawDoi);
   if (!doi) return null;
-  const res = await fetch(`https://api.datacite.org/dois/${encodeURIComponent(doi)}`, {
+  const res = await catalogFetch(`https://api.datacite.org/dois/${encodeURIComponent(doi)}`, {
     headers: { ...CATALOG_HEADERS, Accept: "application/vnd.api+json" },
   });
   if (res.status === 404) return null;

@@ -40,6 +40,13 @@ export interface AppSettings {
   /** Show AI terminal status in session title hover card. */
   aiTerminalShowSessionIndicator?: boolean;
 
+  /** When true (default), agent PDF body reads require intensive-reading list membership. */
+  literatureStrictIntensivePdf?: boolean;
+  /** After PDF extract, auto-generate AI summary + keywords (uses tokens). */
+  literatureAutoAiMetadata?: boolean;
+  /** Optional override model for literature AI metadata (`provider/model`). */
+  literatureAiMetadataModel?: string;
+
   // Renderer-side dynamic keys
   // the catch-all `raw` loop in getSettings(). Listed here for documentation.
   [key: string]: unknown;
@@ -84,7 +91,7 @@ function decryptIfAvailable(value: string): string {
   return value;
 }
 
-const SENSITIVE_KEYS = ["zoteroApiKey", "zoteroUserId", "aiApiKeys"] as const;
+const SENSITIVE_KEYS = ["zoteroApiKey", "zoteroUserId", "aiApiKeys", "mineruApiToken"] as const;
 
 function isSensitiveKey(key: string): boolean {
   return (SENSITIVE_KEYS as readonly string[]).includes(key);
@@ -118,6 +125,11 @@ export function getSettings(): AppSettings {
     settings.zoteroUserId = decryptIfAvailable(encryptedUserId);
   }
 
+  const encryptedMineru = store.get("mineruApiToken") as string | undefined;
+  if (encryptedMineru) {
+    settings.mineruApiToken = decryptIfAvailable(encryptedMineru);
+  }
+
   const encryptedAiKeys = store.get("aiApiKeys") as string | undefined;
   if (encryptedAiKeys) {
     try {
@@ -140,6 +152,8 @@ export function getSettings(): AppSettings {
     result.zoteroApiKey = settings.zoteroApiKey;
   if (settings.zoteroUserId !== undefined)
     result.zoteroUserId = settings.zoteroUserId;
+  if (settings.mineruApiToken !== undefined)
+    result.mineruApiToken = settings.mineruApiToken;
   if (settings.aiApiKeys !== undefined)
     result.aiApiKeys = settings.aiApiKeys;
   return result as AppSettings;

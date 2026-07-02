@@ -5,7 +5,6 @@ import {
   AppMenuCheckItem,
   AppMenuContent,
   AppMenuLabel,
-  AppMenuSeparator,
   AppMenuTrigger,
   appMenuFontClass,
 } from "@/components/ui/app-menu";
@@ -73,10 +72,7 @@ export function ModelSelect() {
           <ChevronDownIcon className="size-3 shrink-0" />
         </button>
       </AppMenuTrigger>
-      <AppMenuContent align="start" className="w-56">
-        <AppMenuLabel>Select Model</AppMenuLabel>
-        <AppMenuSeparator />
-
+      <AppMenuContent align="start" className="min-w-[13rem] w-[min(20rem,calc(100vw-2rem))] max-h-72 overflow-y-auto">
         {isEmpty && (
           <p className={cn("px-2 py-3 text-center text-muted-foreground", appMenuFontClass)}>
             Enable models in Settings → AI&amp;APIs

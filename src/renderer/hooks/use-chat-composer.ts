@@ -282,6 +282,7 @@ export function useChatComposer() {
       sendPrompt(promptToSend, compiled.displayBlocks, true, compiled.selectedProfileId, {
         mcpServerAllowlist: compiled.mcpServerNames,
         skillIds: compiled.skillIds,
+        hasPaperSnippets: compiled.paperSnippetCount > 0,
       });
     } else if (compiled.displayBlocks.length > 0) {
       const projectPath = useDocumentStore.getState().projectRoot;

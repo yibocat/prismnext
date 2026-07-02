@@ -11,6 +11,7 @@ import { destroyAllTerminalSessions } from "./ipc/terminal";
 import { destroyAllAiPty } from "./services/ai-pty";
 import { startTerminalBridge, stopTerminalBridge, setTerminalBridgeWindow } from "./services/terminal-bridge";
 import { startLiteratureBridge, stopLiteratureBridge } from "./services/literature-bridge";
+import { installMainProcessNetwork } from "./lib/main-network";
 import { createLogger } from "./services/logger";
 
 const log = createLogger("main", "startup");
@@ -164,6 +165,7 @@ registerIpcHandlers();
 
 app.whenReady().then(async () => {
   registerLiteraturePdfProtocol();
+  installMainProcessNetwork();
   startTerminalBridge();
   startLiteratureBridge();
   createWindow();
