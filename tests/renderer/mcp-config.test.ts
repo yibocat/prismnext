@@ -121,9 +121,9 @@ describe("mcp-config", () => {
   });
 
   it("builds preset entry with env and path", () => {
-    const fs = MCP_PRESETS.find((p) => p.id === "filesystem")!;
-    const entry = presetToEntry(fs, { __path__: "/tmp" });
+    const git = MCP_PRESETS.find((p) => p.id === "git")!;
+    const entry = presetToEntry(git, { __path__: "/tmp" });
     expect(entry?.command).toContain("/tmp");
-    expect(findPresetForEntry(entry!)).toBe(fs);
+    expect(findPresetForEntry(entry!)).toBe(git);
   });
 });

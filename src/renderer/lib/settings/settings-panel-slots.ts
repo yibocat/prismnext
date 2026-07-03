@@ -20,11 +20,17 @@ export type SettingsPanelSlot =
   | { kind: "ai-provider"; mode: "new" }
   | { kind: "ai-provider"; mode: "edit"; providerId: string }
   | { kind: "ai-provider"; mode: "builtin-key"; providerId: string }
-  | { kind: "agent-profile"; mode: "new" }
-  | { kind: "agent-profile"; mode: "edit"; profileId: string; title?: string }
-  | { kind: "agent-profile"; mode: "customize-builtin"; profileId: string; title?: string }
-  | { kind: "prompt-markdown"; doc: "system-prompt" | "agents-md" | "assembled" }
+  | { kind: "agent-expert"; mode: "new" }
+  | { kind: "agent-expert"; mode: "edit"; expertId: string; title?: string }
+  | { kind: "agent-expert"; mode: "customize-builtin"; expertId: string; title?: string }
+  | { kind: "agent-orchestrator"; mode: "new" }
+  | { kind: "agent-orchestrator"; mode: "edit"; orchestratorId: string; title?: string }
+  | { kind: "agent-orchestrator"; mode: "customize-builtin"; orchestratorId: string; title?: string }
+  | { kind: "prompt-markdown"; doc: "system-prompt" | "agents-md" }
+  | { kind: "prompt-stack-preview" }
   | { kind: "agent-tools" }
+  | { kind: "knowledge-modules" }
+  | { kind: "builtin-commands" }
   | { kind: "rule-markdown"; mode: "new" }
   | { kind: "rule-markdown"; mode: "edit"; ruleId: string; title?: string }
   | { kind: "custom-command"; mode: "new" }
@@ -64,17 +70,26 @@ export function settingsPanelSlotTitle(slot: SettingsPanelSlot | null): string |
         .settings.aiCustomProviders?.find((cp) => cp.id === slot.providerId);
       return custom?.name ?? "Provider";
     }
-    case "agent-profile": {
-      if (slot.mode === "new") return "New profile";
-      return slot.title ?? "Profile";
+    case "agent-expert": {
+      if (slot.mode === "new") return "New expert";
+      return slot.title ?? "Expert";
+    }
+    case "agent-orchestrator": {
+      if (slot.mode === "new") return "New orchestrator";
+      return slot.title ?? "Orchestrator";
     }
     case "prompt-markdown": {
       if (slot.doc === "system-prompt") return "System prompt";
-      if (slot.doc === "agents-md") return "AGENTS.md";
-      return "Prompt preview";
+      return "AGENTS.md";
     }
+    case "prompt-stack-preview":
+      return "Prompt stack preview";
     case "agent-tools":
       return "Agent tools";
+    case "knowledge-modules":
+      return "Knowledge modules";
+    case "builtin-commands":
+      return "Built-in commands";
     case "rule-markdown": {
       if (slot.mode === "new") return "New rule";
       return slot.title ?? slot.ruleId;
@@ -96,7 +111,7 @@ export function settingsPanelSlotTitle(slot: SettingsPanelSlot | null): string |
       return slot.title ?? slot.skillId;
     }
     case "skill-library":
-      return "Skill library";
+      return "Install skills";
     case "shortcuts":
       return "Shortcuts";
     case "logs":

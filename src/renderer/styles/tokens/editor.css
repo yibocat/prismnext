@@ -15,7 +15,7 @@
 
   /* ── Font tokens ── */
   /* --font-editor / --font-editor-size are set by theme-generator (Appearance → Editor) */
-  /* Markdown file preview (DOCUMENT_MARKDOWN_TYPOGRAPHY) uses the same editor tokens. */
+  /* Markdown file preview (DOCUMENT_MARKDOWN_TYPOGRAPHY) uses editor font + leading-relaxed. */
   --editor-line-height: 1.4;  /* uniform across all themes; overrides community themes' 1.6 */
   --font-tab-label:     var(--font-size-12);  /* editor tab labels */
   --font-file-tree:     var(--font-size-12);  /* file tree nodes */

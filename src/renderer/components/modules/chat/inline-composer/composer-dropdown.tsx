@@ -23,7 +23,7 @@ import {
   appMenuInlineChevronTriggerClass,
 } from "@/components/ui/app-menu";
 import { cn } from "@/lib/utils";
-import type { AgentProfileInfo } from "@shared/agent-profiles";
+import type { ExpertInfo } from "@shared/agent-experts";
 import type { ProjectFile } from "@/stores/document-store";
 import type { LiteraturePaper } from "@/types/electron.d";
 import { formatPaperMentionLabel } from "../../../../../shared/bibkey-utils";
@@ -36,7 +36,7 @@ import type { SlashCatalogMcp, SlashCatalogSkill } from "@/lib/chat/slash-catalo
 export type { SlashCatalogMcp, SlashCatalogSkill };
 
 export type MentionOption =
-  | { kind: "profile"; profile: AgentProfileInfo }
+  | { kind: "expert"; expert: ExpertInfo }
   | { kind: "paper"; paper: LiteraturePaper }
   | { kind: "file"; file: ProjectFile };
 
@@ -343,7 +343,7 @@ export function MentionDropdown({
   activeIndex,
   anchor,
   open,
-  onSelectProfile,
+  onSelectExpert,
   onSelectFile,
   onSelectPaper,
   onHover,
@@ -355,12 +355,13 @@ export function MentionDropdown({
   paperOptionsOpenIndex,
   onPaperOptionsOpenChange,
   paperOptionsSubIndex,
+  expertSectionLabel = "Experts",
 }: {
   options: MentionOption[];
   activeIndex: number;
   anchor: CursorAnchor | null;
   open: boolean;
-  onSelectProfile: (profile: AgentProfileInfo) => void;
+  onSelectExpert: (expert: ExpertInfo) => void;
   onSelectFile: (file: ProjectFile) => void;
   onSelectPaper?: (paper: LiteraturePaper) => void;
   onHover: (index: number) => void;
@@ -372,6 +373,8 @@ export function MentionDropdown({
   paperOptionsOpenIndex?: number | null;
   onPaperOptionsOpenChange?: (index: number | null) => void;
   paperOptionsSubIndex?: number;
+  /** Section header for @ expert rows. */
+  expertSectionLabel?: string;
 }) {
   return (
     <ComposerQueryPopover
@@ -386,26 +389,26 @@ export function MentionDropdown({
         </div>
       ) : (
         options.map((option, i) => {
-          const showProfileHeader =
-            option.kind === "profile" && (i === 0 || options[i - 1]?.kind !== "profile");
+          const showExpertHeader =
+            option.kind === "expert" && (i === 0 || options[i - 1]?.kind !== "expert");
           const showFileHeader =
             option.kind === "file" && (i === 0 || options[i - 1]?.kind !== "file");
           const showPaperHeader =
             option.kind === "paper" && (i === 0 || options[i - 1]?.kind !== "paper");
           const active = i === activeIndex;
 
-          if (option.kind === "profile") {
-            const { profile } = option;
+          if (option.kind === "expert") {
+            const { expert } = option;
             return (
-              <div key={`profile:${profile.id}`}>
-                {showProfileHeader && <div className={sectionLabelClass}>Agents</div>}
+              <div key={`expert:${expert.id}`}>
+                {showExpertHeader && <div className={sectionLabelClass}>{expertSectionLabel}</div>}
                 <button
                   type="button"
                   data-active={active ? "true" : undefined}
                   className={itemClass(active)}
                   onMouseDown={(e) => {
                     e.preventDefault();
-                    onSelectProfile(profile);
+                    onSelectExpert(expert);
                   }}
                   onMouseEnter={() => {
                     if (canHoverItem && !canHoverItem()) return;
@@ -413,7 +416,7 @@ export function MentionDropdown({
                   }}
                 >
                   <BotIcon className="size-3 shrink-0 text-violet-600 dark:text-violet-400" />
-                  <span className={cn(itemLabelClass, "font-medium")}>{profile.name}</span>
+                  <span className={cn(itemLabelClass, "font-medium")}>{expert.name}</span>
                 </button>
               </div>
             );

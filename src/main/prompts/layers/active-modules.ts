@@ -1,22 +1,23 @@
 // prism-next/src/main/prompts/layers/active-modules.ts
 
 import type { PromptLayer, PromptContext } from "../types";
-import { resolveActiveModules } from "../resolve-active-modules";
+import { resolveStableSystemModules } from "../resolve-active-modules";
 import { createLogger } from "../../services/logger";
 
 const log = createLogger("active-modules", "agent");
 
-/** Layer 1: Collects and joins all enabled module prompts. */
+/** Layer 2: Baseline modules for global `_prism-system.md` (workspace only).
+ *  Profile-scoped modules inject via Orchestrator / Expert agent.md when selected. */
 export function createActiveModulesLayer(): PromptLayer {
   return {
     id: "active-modules",
     priority: 2,
     source: "app",
-    userToggleable: true,
-    enabled: true, // the LAYER is enabled; individual modules toggle inside
+    userToggleable: false,
+    enabled: true,
     isStatic: false,
     build: (ctx: PromptContext) => {
-      const enabled = resolveActiveModules(ctx);
+      const enabled = resolveStableSystemModules();
       if (enabled.length === 0) return "";
 
       const parts: string[] = [];

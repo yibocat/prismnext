@@ -11,7 +11,7 @@ import { Compartment, EditorState, EditorSelection, Prec } from "@codemirror/sta
 import { EditorView, keymap, placeholder as cmPlaceholder, drawSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import type { CommandDef } from "@commands/types";
-import type { AgentProfileInfo } from "@shared/agent-profiles";
+import type { ExpertInfo } from "@shared/agent-experts";
 import { formatPaperMentionLabel } from "../../../../../shared/bibkey-utils";
 import type { ProjectFile } from "@/stores/document-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -20,7 +20,7 @@ import type { LiteraturePaper } from "@/types/electron.d";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useLiteratureExtractStore } from "@/stores/literature-extract-store";
 import { pickBestReadySource } from "../../../../../shared/paper-extract";
-import type { ComposerPart } from "@/lib/chat/composer-parts";
+import { type ComposerPart, COMPOSER_PLACEHOLDER } from "@/lib/chat/composer-parts";
 import {
   createTokenId,
   insertedTextTriggersLinkify,
@@ -195,7 +195,7 @@ export interface InlineComposerEditorProps {
   onChange: (parts: ComposerPart[]) => void;
   placeholder?: string;
   disabled?: boolean;
-  profiles: AgentProfileInfo[];
+  experts: ExpertInfo[];
   files: ProjectFile[];
   searchCommands: (query: string) => CommandDef[];
   slashSkills: SlashCatalogSkill[];
@@ -217,15 +217,15 @@ function insertFromDropdown(
   if (q.kind === "mention") {
     const opt = mentionOptions[index];
     if (!opt) return;
-    if (opt.kind === "profile") {
+    if (opt.kind === "expert") {
       insertComposerToken(
         view,
         {
           type: "mention",
-          mentionType: "profile",
+          mentionType: "expert",
           id: createTokenId(),
-          label: opt.profile.name,
-          profileId: opt.profile.id,
+          label: opt.expert.name,
+          expertId: opt.expert.id,
         },
         q.from,
         q.to,
@@ -314,12 +314,12 @@ function insertFromDropdown(
 
 function buildMentionOptions(
   query: string,
-  profiles: AgentProfileInfo[],
+  experts: ExpertInfo[],
   files: ProjectFile[],
   papers: LiteraturePaper[] = [],
 ) {
   const q = query.toLowerCase();
-  const profileOpts = profiles
+  const expertOpts = experts
     .filter(
       (p) =>
         p.enabled &&
@@ -328,7 +328,7 @@ function buildMentionOptions(
           p.description.toLowerCase().includes(q)),
     )
     .slice(0, 6)
-    .map((profile) => ({ kind: "profile" as const, profile }));
+    .map((expert) => ({ kind: "expert" as const, expert }));
   const paperOpts = papers
     .filter(
       (p) =>
@@ -342,7 +342,7 @@ function buildMentionOptions(
     .filter((f) => f.relativePath.toLowerCase().includes(q) || f.name.toLowerCase().includes(q))
     .slice(0, 6)
     .map((file) => ({ kind: "file" as const, file }));
-  return [...profileOpts, ...paperOpts, ...fileOpts];
+  return [...expertOpts, ...paperOpts, ...fileOpts];
 }
 
 export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, InlineComposerEditorProps>(
@@ -350,9 +350,9 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
     {
       parts,
       onChange,
-      placeholder = "@ agent or file, / for commands",
+      placeholder = COMPOSER_PLACEHOLDER,
       disabled = false,
-      profiles,
+      experts,
       files,
       searchCommands,
       slashSkills,
@@ -376,8 +376,8 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
     onEnterRef.current = onEnter;
     const onLayoutExpandRef = useRef(onLayoutExpand);
     onLayoutExpandRef.current = onLayoutExpand;
-    const profilesRef = useRef(profiles);
-    profilesRef.current = profiles;
+    const expertsRef = useRef(experts);
+    expertsRef.current = experts;
     const filesRef = useRef(files);
     filesRef.current = files;
     const searchCommandsRef = useRef(searchCommands);
@@ -395,6 +395,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       const tab = s.tabs.find((t) => t.id === s.activeTabId);
       return tab?.intensivePaperIds ?? [];
     });
+    const mentionExpertSectionLabel = "Experts";
     const extractStatesByPaper = useLiteratureExtractStore((s) => s.statesByPaper);
     const loadExtractStates = useLiteratureExtractStore((s) => s.loadStatesForPapers);
 
@@ -480,8 +481,8 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
 
     const mentionOptions = useMemo(() => {
       if (!activeQuery || activeQuery.kind !== "mention") return [];
-      return buildMentionOptions(activeQuery.query, profiles, files, literaturePapers);
-    }, [activeQuery, profiles, files, literaturePapers]);
+      return buildMentionOptions(activeQuery.query, experts, files, literaturePapers);
+    }, [activeQuery, experts, files, literaturePapers]);
 
     // Best-effort: load extract states for papers shown in the mention menu so
     // the 精读 toggle reflects readiness.
@@ -553,14 +554,14 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       [closeDropdown, emitChange],
     );
 
-    const insertProfile = useCallback(
-      (profile: AgentProfileInfo) => {
+    const insertExpert = useCallback(
+      (expert: ExpertInfo) => {
         insertAtQuery({
           type: "mention",
-          mentionType: "profile",
+          mentionType: "expert",
           id: createTokenId(),
-          label: profile.name,
-          profileId: profile.id,
+          label: expert.name,
+          expertId: expert.id,
         });
       },
       [insertAtQuery],
@@ -643,7 +644,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         if (!q) return false;
         const mentions =
           q.kind === "mention"
-            ? buildMentionOptions(q.query, profilesRef.current, filesRef.current, useLiteratureStore.getState().papers)
+            ? buildMentionOptions(q.query, expertsRef.current, filesRef.current, useLiteratureStore.getState().papers)
             : [];
         const slashOpts = q.kind === "slash" ? resolveSlashOptions(q.query) : [];
         const count = q.kind === "mention" ? mentions.length : slashOpts.length;
@@ -696,7 +697,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             if (!q || q.kind !== "mention") return false;
             const mentions = buildMentionOptions(
               q.query,
-              profilesRef.current,
+              expertsRef.current,
               filesRef.current,
               useLiteratureStore.getState().papers,
             );
@@ -726,7 +727,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             if (!q) return false;
             const mentions =
               q.kind === "mention"
-                ? buildMentionOptions(q.query, profilesRef.current, filesRef.current, useLiteratureStore.getState().papers)
+                ? buildMentionOptions(q.query, expertsRef.current, filesRef.current, useLiteratureStore.getState().papers)
                 : [];
             const slashOpts = q.kind === "slash" ? resolveSlashOptions(q.query) : [];
             const count = q.kind === "mention" ? mentions.length : slashOpts.length;
@@ -756,7 +757,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             if (!q || q.kind !== "mention") return false;
             const mentions = buildMentionOptions(
               q.query,
-              profilesRef.current,
+              expertsRef.current,
               filesRef.current,
               useLiteratureStore.getState().papers,
             );
@@ -1086,7 +1087,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             options={mentionOptions}
             activeIndex={clampedDropdownIndex}
             anchor={dropdownAnchor}
-            onSelectProfile={insertProfile}
+            onSelectExpert={insertExpert}
             onSelectFile={insertFile}
             onSelectPaper={insertPaper}
             onHover={handleDropdownHover}
@@ -1098,6 +1099,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             paperOptionsOpenIndex={paperOptionsOpenIndex}
             onPaperOptionsOpenChange={setPaperOptionsOpenIndex}
             paperOptionsSubIndex={paperOptionsSubIndex}
+            expertSectionLabel={mentionExpertSectionLabel}
           />
         )}
         <div

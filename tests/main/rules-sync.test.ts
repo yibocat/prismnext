@@ -134,4 +134,46 @@ Glob body
     expect(promptRules[0].name).toBe("active");
     expect(promptRules[0].content).toContain("Active body");
   });
+
+  it("getPromptProjectRules filters by allowlist name or id", () => {
+    root = mkdtempSync(join(tmpdir(), "prism-rules-"));
+    installProjectRule(
+      root,
+      "style-a",
+      `---
+name: Style A
+description: A
+apply: always
+enabled: true
+---
+Body A
+`,
+    );
+    installProjectRule(
+      root,
+      "style-b",
+      `---
+name: Style B
+description: B
+apply: always
+enabled: true
+---
+Body B
+`,
+    );
+
+    const all = getPromptProjectRules(root);
+    expect(all).toHaveLength(2);
+
+    const scoped = getPromptProjectRules(root, { allowlist: ["Style A"] });
+    expect(scoped).toHaveLength(1);
+    expect(scoped[0].name).toBe("Style A");
+
+    const byId = getPromptProjectRules(root, { allowlist: ["style-b"] });
+    expect(byId).toHaveLength(1);
+    expect(byId[0].content).toContain("Body B");
+
+    expect(getPromptProjectRules(root, { allowlist: [] })).toHaveLength(2);
+    expect(getPromptProjectRules(root, { allowlist: ["missing"] })).toHaveLength(0);
+  });
 });

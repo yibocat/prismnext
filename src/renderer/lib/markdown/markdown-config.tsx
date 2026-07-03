@@ -8,6 +8,7 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { remarkWikilinks } from "./remark-wikilinks";
 import { remarkCitationRefs } from "./remark-citation-refs";
+import { remarkLibraryCiteRefs } from "./remark-library-cite-refs";
 import { cn } from "@/lib/utils";
 
 export const KATEX_RENDER_OPTIONS = {
@@ -20,7 +21,7 @@ export const KATEX_RENDER_OPTIONS = {
 /** @deprecated alias */
 export const KATEX_DOCUMENT_OPTIONS = KATEX_RENDER_OPTIONS;
 
-const CUSTOM_MARKDOWN_LINK_PROTOCOLS = ["citation", "wikilink"] as const;
+const CUSTOM_MARKDOWN_LINK_PROTOCOLS = ["citation", "wikilink", "library-cite"] as const;
 
 const SCIENTIFIC_HTML_SCHEMA = {
   ...defaultSchema,
@@ -86,9 +87,14 @@ export const MARKDOWN_REHYPE_PLUGINS = [
 
 /** remark-math + GFM + wikilinks — base for all surfaces. */
 export const MARKDOWN_REMARK_BASE = [remarkGfm, remarkMath, remarkWikilinks];
+export { remarkCitationRefs };
 
-/** Chat only: turn staged `[n]` into citation links. */
-export const MARKDOWN_REMARK_CHAT = [...MARKDOWN_REMARK_BASE, remarkCitationRefs];
+/** Chat only: staged `[n]` + library `[@bibkey]` citation links. */
+export const MARKDOWN_REMARK_CHAT = [
+  ...MARKDOWN_REMARK_BASE,
+  remarkCitationRefs,
+  remarkLibraryCiteRefs,
+];
 
 /** @deprecated use MARKDOWN_REMARK_CHAT */
 export const REMARK_PLUGINS = MARKDOWN_REMARK_CHAT;
@@ -156,22 +162,22 @@ export const MARKDOWN_KATEX_TYPOGRAPHY = cn(
 
 /** Typography for file/document markdown preview — follows Appearance → Editor font. */
 export const DOCUMENT_MARKDOWN_TYPOGRAPHY = cn(
-  "font-[family-name:var(--font-editor)] text-[length:var(--font-editor-size)] leading-[var(--editor-line-height)] text-foreground",
+  "font-[family-name:var(--font-editor)] text-[length:var(--font-editor-size)] leading-relaxed text-foreground",
   "[&_h1]:text-[1.25em] [&_h1]:font-semibold [&_h1]:mt-6 [&_h1]:mb-2",
   "[&_h2]:text-[1.125em] [&_h2]:font-semibold [&_h2]:mt-5 [&_h2]:mb-1",
   "[&_h3]:text-[1.05em] [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1",
   "[&_h4]:text-[1em] [&_h4]:font-semibold [&_h4]:mt-3 [&_h4]:mb-1",
-  "[&_p]:my-1",
+  "[&_p]:my-1 [&_p]:leading-relaxed",
   "[&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-6",
   "[&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-6",
-  "[&_li]:my-0.5",
+  "[&_li]:my-0.5 [&_li]:leading-relaxed",
   "[&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_blockquote]:my-2 [&_blockquote]:text-muted-foreground",
   "[&_hr]:my-4 [&_hr]:border-border",
-  "[&_th]:text-[0.85em] [&_th]:font-medium [&_th]:text-muted-foreground",
-  "[&_td]:text-[0.92em]",
-  "[&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:bg-muted [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:py-0.5 [&_code:not(pre_code)]:font-mono [&_code:not(pre_code)]:text-[0.92em]",
+  "[&_th]:text-[0.92em] [&_th]:font-medium [&_th]:text-muted-foreground",
+  "[&_td]:text-[1em]",
+  "[&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:bg-muted [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:py-0.5 [&_code:not(pre_code)]:font-mono [&_code:not(pre_code)]:text-[0.95em]",
   MARKDOWN_KATEX_TYPOGRAPHY,
-  "[&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border [&_pre]:p-4 [&_pre]:overflow-x-auto [&_pre]:text-[0.92em] [&_pre]:font-mono",
+  "[&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border [&_pre]:p-4 [&_pre]:overflow-x-auto [&_pre]:text-[0.95em] [&_pre]:font-mono",
 );
 
 /**
@@ -281,15 +287,15 @@ export const CHAT_MARKDOWN_TYPOGRAPHY = cn(
   "[&_h2]:text-[1.1em] [&_h2]:font-semibold [&_h2]:mt-5 [&_h2]:mb-1",
   "[&_h3]:text-[1.05em] [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1",
   "[&_h4]:text-[1em] [&_h4]:font-semibold [&_h4]:mt-3 [&_h4]:mb-1",
-  "[&_p]:my-1 [&_p]:leading-normal",
+  "[&_p]:my-1 [&_p]:leading-relaxed",
   "[&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-6",
   "[&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-6",
-  "[&_li]:my-0.5 [&_li]:leading-normal",
+  "[&_li]:my-0.5 [&_li]:leading-relaxed",
   "[&_a:not([data-inline-token])]:text-primary [&_a:not([data-inline-token])]:underline",
   "[&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_blockquote]:my-2 [&_blockquote]:text-muted-foreground",
   "[&_hr]:my-4 [&_hr]:border-border",
-  "[&_th]:text-[0.85em] [&_th]:font-medium [&_th]:text-muted-foreground",
-  "[&_td]:text-[0.92em]",
+  "[&_th]:text-[0.92em] [&_th]:font-medium [&_th]:text-muted-foreground",
+  "[&_td]:text-[1em]",
   "[&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:bg-muted [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:py-0.5 [&_code:not(pre_code)]:font-mono [&_code:not(pre_code)]:text-[length:var(--font-code)]",
   MARKDOWN_KATEX_TYPOGRAPHY,
 );
@@ -306,12 +312,12 @@ export const MARKDOWN_COMPONENTS: Components = {
     <thead className="border-b border-border">{children}</thead>
   ),
   th: ({ children }) => (
-    <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
+    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">
       {children}
     </th>
   ),
   td: ({ children }) => (
-    <td className="px-4 py-2.5 text-sm">{children}</td>
+    <td className="px-4 py-2.5">{children}</td>
   ),
   tr: ({ children }) => (
     <tr className="border-b border-border last:border-0">{children}</tr>

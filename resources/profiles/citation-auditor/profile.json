@@ -1,8 +1,0 @@
-{
-  "id": "citation-auditor",
-  "name": "Citation Auditor",
-  "description": "Focused review of citations, bib entries, and reference consistency.",
-  "builtin": true,
-  "skills": ["academic-citations"],
-  "modules": ["citations"]
-}

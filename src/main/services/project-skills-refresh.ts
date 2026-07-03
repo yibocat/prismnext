@@ -1,6 +1,7 @@
 import { BrowserWindow } from "electron";
 import {
   isSkillsIntegrationPath,
+  isSkillsManifestPath,
   projectRootFromAgentPath,
   syncProjectSkillsIntegration,
 } from "./skills-sync";
@@ -65,7 +66,12 @@ export function scheduleSkillsRefreshFromPaths(
   paths: string[] | undefined,
 ): void {
   if (!paths?.length) return;
-  if (!paths.some((p) => isSkillsIntegrationPath(p, projectRoot))) return;
+  const relevant = paths.filter((p) => isSkillsIntegrationPath(p, projectRoot));
+  if (!relevant.length) return;
+  // Manifest-only edits (enable/disable toggles) are synced by agent:setSkillEnabled IPC.
+  if (relevant.every((p) => isSkillsManifestPath(p, projectRoot))) {
+    return;
+  }
   scheduleSkillsRefresh(projectRoot);
 }
 

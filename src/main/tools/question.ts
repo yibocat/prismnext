@@ -8,7 +8,7 @@
  * ## How it works
  *
  * 1. AI calls prism-question({ question, options })
- * 2. Tool writes the question to `<homedir>/.prism-questions/<id>.json`
+ * 2. Tool writes the question to `<userData>/opencode-server/bridges/questions/<id>.json`
  * 3. Tool polls for `<id>.answer.json` (200 ms interval)
  * 4. prism‑next's renderer shows AskUserQuestionWidget
  * 5. User selects an option → IPC handler writes the answer file
@@ -20,14 +20,14 @@
  *
  * ## File locations
  *
- *   Questions: ~/.prism-questions/<id>.json
- *   Answers:   ~/.prism-questions/<id>.answer.json
+ *   Questions: <userData>/opencode-server/bridges/questions/<id>.json
+ *   Answers:   <userData>/opencode-server/bridges/questions/<id>.answer.json
  */
 
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
 import * as path from "path";
-import * as os from "os";
+import { questionsBridgeRoot } from "./bridge-paths";
 
 /** Single-tick async sleep — avoids burning CPU while polling. */
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -61,7 +61,7 @@ export default tool({
     // file without needing a separate discovery mechanism.  Only one
     // question can be active per session at a time.
     const sessionId = context.sessionID || "unknown";
-    const qDir = path.join(os.homedir(), ".prism-questions");
+    const qDir = questionsBridgeRoot();
     fs.mkdirSync(qDir, { recursive: true });
 
     const qFile = path.join(qDir, `${sessionId}.json`);

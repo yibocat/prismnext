@@ -187,29 +187,31 @@ export function ToolsMcpSettings() {
                           </div>
                           <p className={ROW_DESC}>{serverSummary(entry)}</p>
                         </div>
-                        <Switch
-                          checked={entry.enabled}
-                          onCheckedChange={(v) => void handleToggleEnabled(entry.name, v)}
-                          disabled={saving}
-                        />
-                        {configurable ? (
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            className="shrink-0"
+                        <div className="flex items-center gap-2 shrink-0">
+                          {configurable ? (
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              className="shrink-0"
+                              disabled={saving}
+                              onClick={() => openConfigure(entry)}
+                            >
+                              {configuring ? "Editing…" : "Configure"}
+                            </Button>
+                          ) : null}
+                          <Switch
+                            checked={entry.enabled}
+                            onCheckedChange={(v) => void handleToggleEnabled(entry.name, v)}
+                            aria-label={`Enable ${entry.name}`}
+                          />
+                          <InlineDeleteButton
+                            itemId={entry.name}
+                            pending={deleteConfirm.isPending(entry.name)}
                             disabled={saving}
-                            onClick={() => openConfigure(entry)}
-                          >
-                            {configuring ? "Editing…" : "Configure"}
-                          </Button>
-                        ) : null}
-                        <InlineDeleteButton
-                          itemId={entry.name}
-                          pending={deleteConfirm.isPending(entry.name)}
-                          disabled={saving}
-                          onRequest={() => deleteConfirm.setPendingId(entry.name)}
-                          onConfirm={() => void handleDelete(entry.name)}
-                        />
+                            onRequest={() => deleteConfirm.setPendingId(entry.name)}
+                            onConfirm={() => void handleDelete(entry.name)}
+                          />
+                        </div>
                       </div>
                     );
                   })

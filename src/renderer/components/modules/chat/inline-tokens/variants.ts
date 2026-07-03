@@ -9,4 +9,5 @@ export type InlineTokenVariant =
   | "terminal"
   | "code"
   | "code-git"
-  | "git-diff";
+  | "git-diff"
+  | "literature";

@@ -1,15 +1,20 @@
-import { describe, expect, it } from "vitest";
 import {
   normalizeRegistryIndexUrl,
   parseRegistryIndex,
   resolveArtifactUrl,
   skillNameToFolderId,
+  installRegistrySkill,
 } from "../../src/main/services/skills-registry";
 import {
   findLibraryCardByRegistryUrl,
   libraryCardForRegistryUrl,
+  REMOTE_SKILL_LIBRARY_PRESETS,
   SKILL_LIBRARY_CARDS,
-} from "../../src/renderer/lib/agent/skill-libraries";
+} from "../../src/shared/skill-libraries";
+import { mkdtempSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 describe("skills-registry", () => {
   it("normalizes hostname to well-known index.json", () => {
@@ -62,6 +67,7 @@ describe("skills-registry", () => {
     });
     expect(skills[0].url).toBe("https://registry.test/local-pack/SKILL.md");
     expect(skills[0].type).toBe("skill-md");
+    expect(skills[0].files).toEqual(["SKILL.md", "README.md"]);
   });
 
   it("detects archive type from extension", () => {
@@ -83,19 +89,57 @@ describe("skills-registry", () => {
   it("maps skill name to folder id", () => {
     expect(skillNameToFolderId("My-Skill")).toBe("my-skill");
   });
+
+  it("installs multi-file skill-md packages from registry index", async () => {
+    const root = mkdtempSync(join(tmpdir(), "prism-skill-install-"));
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      const href = String(url);
+      if (href.endsWith("/local-pack/SKILL.md")) {
+        return new Response("---\nname: local-pack\ndescription: Pack\n---\n# Pack\n");
+      }
+      if (href.endsWith("/local-pack/README.md")) {
+        return new Response("# Notes\n");
+      }
+      return new Response("", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      await installRegistrySkill(
+        root,
+        {
+          name: "local-pack",
+          description: "Pack",
+          type: "skill-md",
+          url: "https://registry.test/local-pack/SKILL.md",
+          files: ["SKILL.md", "README.md"],
+        },
+        "https://registry.test/index.json",
+      );
+
+      const skillDir = join(root, ".prismnext/agent/skills/local-pack");
+      expect(existsSync(join(skillDir, "SKILL.md"))).toBe(true);
+      expect(existsSync(join(skillDir, "README.md"))).toBe(true);
+      expect(readFileSync(join(skillDir, "README.md"), "utf-8")).toContain("# Notes");
+    } finally {
+      vi.unstubAllGlobals();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("skill-libraries", () => {
   it("includes built-in remote cards", () => {
     expect(SKILL_LIBRARY_CARDS.some((c) => c.id === "prism-curated")).toBe(true);
-    expect(SKILL_LIBRARY_CARDS.some((c) => c.id === "agentskills")).toBe(true);
+    expect(SKILL_LIBRARY_CARDS.some((c) => c.id === "cloudflare-docs")).toBe(true);
+    expect(REMOTE_SKILL_LIBRARY_PRESETS.length).toBeGreaterThan(0);
   });
 
   it("finds card by registry URL", () => {
     const card = findLibraryCardByRegistryUrl(
-      "https://agentskills.io/.well-known/agent-skills/index.json",
+      "https://developers.cloudflare.com/.well-known/agent-skills/index.json",
     );
-    expect(card?.id).toBe("agentskills");
+    expect(card?.id).toBe("cloudflare-docs");
   });
 
   it("creates custom card for unknown registry URL", () => {

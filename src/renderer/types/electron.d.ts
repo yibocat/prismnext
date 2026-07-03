@@ -848,6 +848,9 @@ export interface ElectronAPI {
     description: string;
     skillDirRel: string;
     enabled: boolean;
+    installOrigin?:
+      | { adapter: "github"; repo: string; ref: string; path: string }
+      | { adapter: "discovery"; indexUrl: string };
   }>>;
   agentListRules: (projectPath: string) => Promise<Array<{
     id: string;
@@ -863,8 +866,11 @@ export interface ElectronAPI {
   agentListSkillRegistries: (projectPath: string) => Promise<string[]>;
   agentListSkillLibrarySources: (projectPath: string) => Promise<Array<{
     id: string;
-    kind: "bundled" | "remote";
+    kind: "bundled" | "remote" | "github";
     url?: string;
+    repo?: string;
+    ref?: string;
+    subPath?: string;
     connected: boolean;
     name: string;
     description: string;
@@ -873,20 +879,82 @@ export interface ElectronAPI {
   agentAddSkillLibrarySource: (projectPath: string, registryUrl: string) => Promise<{
     sources: Array<{
       id: string;
-      kind: "bundled" | "remote";
+      kind: "bundled" | "remote" | "github";
       url?: string;
+      repo?: string;
+      ref?: string;
+      subPath?: string;
       connected: boolean;
       name: string;
       description: string;
       removable: boolean;
     }>;
     indexUrl: string;
+    skillCount: number;
+    sourceKind: "github" | "registry";
+  }>;
+  agentFetchSkillLibraryCatalog: (
+    projectPath: string,
+    sourceId: string,
+  ) => Promise<
+    Array<{
+      key: string;
+      skillId: string;
+      name: string;
+      description: string;
+      sourceId: string;
+      sourceLabel: string;
+      sourceKind: "bundled" | "remote" | "github";
+      category?: "academic" | "general";
+      registrySkillName?: string;
+      artifactUrl?: string;
+      artifactType?: "skill-md" | "archive" | "unknown";
+      artifactFiles?: string[];
+      indexUrl?: string;
+      githubPackageId?: string;
+    }>
+  >;
+  agentInstallLibraryCatalogItem: (
+    projectPath: string,
+    item: {
+      key: string;
+      skillId: string;
+      name: string;
+      description: string;
+      sourceId: string;
+      sourceLabel: string;
+      sourceKind: "bundled" | "remote" | "github";
+      category?: "academic" | "general";
+      registrySkillName?: string;
+      artifactUrl?: string;
+      artifactType?: "skill-md" | "archive" | "unknown";
+      artifactFiles?: string[];
+      indexUrl?: string;
+      githubPackageId?: string;
+    },
+  ) => Promise<{
+    skillsCount: number;
+    configPath: string;
+    registryUrls: string[];
+    installedIds: string[];
+  }>;
+  agentInstallAllFromLibrarySource: (
+    projectPath: string,
+    sourceId: string,
+  ) => Promise<{
+    skillsCount: number;
+    configPath: string;
+    registryUrls: string[];
+    installedIds: string[];
   }>;
   agentRemoveSkillLibrarySource: (projectPath: string, sourceId: string) => Promise<{
     sources: Array<{
       id: string;
-      kind: "bundled" | "remote";
+      kind: "bundled" | "remote" | "github";
       url?: string;
+      repo?: string;
+      ref?: string;
+      subPath?: string;
       connected: boolean;
       name: string;
       description: string;
@@ -900,8 +968,11 @@ export interface ElectronAPI {
   ) => Promise<{
     sources: Array<{
       id: string;
-      kind: "bundled" | "remote";
+      kind: "bundled" | "remote" | "github";
       url?: string;
+      repo?: string;
+      ref?: string;
+      subPath?: string;
       connected: boolean;
       name: string;
       description: string;
@@ -925,61 +996,175 @@ export interface ElectronAPI {
       type: "skill-md" | "archive" | "unknown";
       url: string;
       digest?: string;
+      files?: string[];
     }>;
   }>;
-  agentConnectSkillRegistry: (projectPath: string, registryUrl: string) => Promise<{ registryUrls: string[]; indexUrl: string }>;
+  agentConnectSkillRegistry: (projectPath: string, registryUrl: string) => Promise<{
+    registryUrls: string[];
+    indexUrl: string;
+    skillCount: number;
+  }>;
   agentDisconnectSkillRegistry: (projectPath: string, registryUrl: string) => Promise<{ registryUrls: string[] }>;
-  agentSetSkillEnabled: (projectPath: string, skillId: string, enabled: boolean) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
+  agentSetSkillEnabled: (
+    projectPath: string,
+    skillId: string,
+    enabled: boolean,
+  ) => Promise<{
+    skillsCount: number;
+    configPath: string;
+    registryUrls: string[];
+    skills: Array<{
+      id: string;
+      name: string;
+      description: string;
+      skillDirRel: string;
+      enabled: boolean;
+      installOrigin?:
+        | { adapter: "github"; repo: string; ref: string; path: string }
+        | { adapter: "discovery"; indexUrl: string };
+    }>;
+  }>;
   agentInstallSkill: (projectPath: string, skillId: string, content: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
-  agentInstallSkillFromRegistry: (projectPath: string, skillName: string, artifactUrl: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
+  agentInstallSkillFromRegistry: (
+    projectPath: string,
+    skillName: string,
+    artifactUrl: string,
+    options?: {
+      artifactType?: "skill-md" | "archive" | "unknown";
+      files?: string[];
+      indexUrl: string;
+    },
+  ) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
+  agentAnalyzeSkillSource: (input: string) => Promise<{
+    adapter: "github" | "discovery" | "direct-url" | "bundled";
+    label: string;
+    cacheKey: string;
+    origin:
+      | { adapter: "github"; repo: string; ref: string; path: string }
+      | { adapter: "discovery"; indexUrl: string };
+    packages: Array<{
+      id: string;
+      name: string;
+      description: string;
+      path: string;
+      hasRequirements: boolean;
+      artifactUrl?: string;
+      artifactType?: "skill-md" | "archive" | "unknown";
+      artifactFiles?: string[];
+      indexUrl?: string;
+    }>;
+    sharedBundle?: {
+      id: string;
+      label: string;
+      path: string;
+    };
+    warnings: string[];
+  }>;
+  agentInstallSkillPackages: (
+    projectPath: string,
+    selection: {
+      cacheKey: string;
+      packageIds: string[];
+      includeShared: boolean;
+      origin:
+        | { adapter: "github"; repo: string; ref: string; path: string }
+        | { adapter: "discovery"; indexUrl: string };
+    },
+  ) => Promise<{
+    skillsCount: number;
+    configPath: string;
+    registryUrls: string[];
+    installedIds: string[];
+  }>;
+  agentReinstallSkill: (
+    projectPath: string,
+    skillId: string,
+  ) => Promise<{
+    skillsCount: number;
+    configPath: string;
+    registryUrls: string[];
+    installedIds: string[];
+  }>;
+  agentCheckSkillUpdates: (projectPath: string) => Promise<
+    Array<{
+      skillId: string;
+      status: "current" | "update_available" | "source_missing" | "unknown";
+      updateAvailable: boolean;
+      installedVersion?: string;
+      remoteVersion?: string;
+      message?: string;
+    }>
+  >;
   agentDeleteSkill: (projectPath: string, skillId: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
-  agentListProfiles: (projectPath: string) => Promise<import("@shared/agent-profiles").AgentProfileInfo[]>;
-  agentListDisabledBuiltinProfiles: (projectPath: string) => Promise<import("@shared/agent-profiles").AgentProfileInfo[]>;
-  agentRestoreBuiltinProfiles: (
+  expertsList: (projectPath: string) => Promise<import("@shared/agent-experts").ExpertInfo[]>;
+  orchestratorsList: (projectPath: string) => Promise<import("@shared/agent-experts").OrchestratorInfo[]>;
+  expertsGetManifest: (projectPath: string) => Promise<import("@shared/agent-experts").ExpertsManifest>;
+  orchestratorsGetManifest: (projectPath: string) => Promise<import("@shared/agent-experts").OrchestratorsManifest>;
+  expertsGetDetail: (
     projectPath: string,
-    profileIds?: string[],
+    expertId: string,
+  ) => Promise<(import("@shared/agent-experts").ExpertInfo & { instructions: string }) | null>;
+  expertsSetBuiltinEnabled: (
+    projectPath: string,
+    expertId: string,
+    enabled: boolean,
+  ) => Promise<{ manifest: import("@shared/agent-experts").ExpertsManifest; experts: import("@shared/agent-experts").ExpertInfo[] }>;
+  expertsSaveCustom: (
+    projectPath: string,
+    payload: import("@shared/agent-experts").SaveCustomExpertPayload,
+  ) => Promise<{ expert: import("@shared/agent-experts").ExpertInfo; experts: import("@shared/agent-experts").ExpertInfo[] }>;
+  expertsSaveBuiltinOverride: (
+    projectPath: string,
+    payload: import("@shared/agent-experts").SaveBuiltinExpertOverridePayload,
+  ) => Promise<{ expert: import("@shared/agent-experts").ExpertInfo; experts: import("@shared/agent-experts").ExpertInfo[] }>;
+  expertsDeleteCustom: (
+    projectPath: string,
+    expertId: string,
+  ) => Promise<{ experts: import("@shared/agent-experts").ExpertInfo[] }>;
+  orchestratorsSetDefault: (
+    projectPath: string,
+    orchestratorId: string,
   ) => Promise<{
-    manifest: import("@shared/agent-profiles").ProfilesManifest;
-    profiles: import("@shared/agent-profiles").AgentProfileInfo[];
+    manifest: import("@shared/agent-experts").OrchestratorsManifest;
+    orchestrators: import("@shared/agent-experts").OrchestratorInfo[];
   }>;
-  agentResetBuiltinProfilesToDefaults: (projectPath: string) => Promise<{
-    manifest: import("@shared/agent-profiles").ProfilesManifest;
-    profiles: import("@shared/agent-profiles").AgentProfileInfo[];
-  }>;
-  agentGetProfilesManifest: (projectPath: string) => Promise<import("@shared/agent-profiles").ProfilesManifest>;
-  agentSetBuiltinProfileEnabled: (projectPath: string, profileId: string, enabled: boolean) => Promise<{
-    manifest: import("@shared/agent-profiles").ProfilesManifest;
-    profiles: import("@shared/agent-profiles").AgentProfileInfo[];
-  }>;
-  agentGetProfileEditorOptions: (projectPath: string) => Promise<import("@shared/agent-profiles").ProfileEditorOptions>;
-  agentGetProfileDetail: (
+  orchestratorsSaveBuiltinOverride: (
     projectPath: string,
-    profileId: string,
-  ) => Promise<(import("@shared/agent-profiles").AgentProfileInfo & { instructions: string }) | null>;
-  agentSaveCustomProfile: (
-    projectPath: string,
-    payload: import("@shared/agent-profiles").SaveCustomProfilePayload,
+    payload: import("@shared/agent-experts").SaveBuiltinOrchestratorOverridePayload,
   ) => Promise<{
-    profile: import("@shared/agent-profiles").AgentProfileInfo;
-    profiles: import("@shared/agent-profiles").AgentProfileInfo[];
+    orchestrator: import("@shared/agent-experts").OrchestratorInfo;
+    orchestrators: import("@shared/agent-experts").OrchestratorInfo[];
   }>;
-  agentSaveBuiltinProfileOverride: (
+  orchestratorsResetBuiltinOverride: (
     projectPath: string,
-    payload: import("@shared/agent-profiles").SaveBuiltinProfileOverridePayload,
+    orchestratorId: string,
   ) => Promise<{
-    profile: import("@shared/agent-profiles").AgentProfileInfo;
-    profiles: import("@shared/agent-profiles").AgentProfileInfo[];
+    orchestrator: import("@shared/agent-experts").OrchestratorInfo;
+    orchestrators: import("@shared/agent-experts").OrchestratorInfo[];
   }>;
-  agentResetBuiltinProfileOverride: (
+  orchestratorsGetDetail: (
     projectPath: string,
-    profileId: string,
+    orchestratorId: string,
+  ) => Promise<(import("@shared/agent-experts").OrchestratorInfo & { instructions: string }) | null>;
+  orchestratorsSaveCustom: (
+    projectPath: string,
+    payload: import("@shared/agent-experts").SaveCustomOrchestratorPayload,
   ) => Promise<{
-    profile: import("@shared/agent-profiles").AgentProfileInfo;
-    profiles: import("@shared/agent-profiles").AgentProfileInfo[];
+    orchestrator: import("@shared/agent-experts").OrchestratorInfo;
+    orchestrators: import("@shared/agent-experts").OrchestratorInfo[];
   }>;
-  agentDeleteCustomProfile: (projectPath: string, profileId: string) => Promise<{
-    profiles: import("@shared/agent-profiles").AgentProfileInfo[];
-  }>;
+  orchestratorsDeleteCustom: (
+    projectPath: string,
+    orchestratorId: string,
+  ) => Promise<{ orchestrators: import("@shared/agent-experts").OrchestratorInfo[] }>;
+  expertsGetEditorOptions: (projectPath: string) => Promise<import("@shared/agent-editor-options").AgentEditorOptions>;
+  expertsResetBuiltinOverride: (
+    projectPath: string,
+    expertId: string,
+  ) => Promise<{ expert: import("@shared/agent-experts").ExpertInfo; experts: import("@shared/agent-experts").ExpertInfo[] }>;
+  expertsResetBuiltinsToDefaults: (
+    projectPath: string,
+  ) => Promise<{ manifest: import("@shared/agent-experts").ExpertsManifest; experts: import("@shared/agent-experts").ExpertInfo[] }>;
   chatSend: (args: {
     projectPath: string;
     worktreePath?: string;
@@ -991,12 +1176,13 @@ export interface ElectronAPI {
     model?: string;
     provider?: string;
     thoughtLevel?: string;
-    profileId?: string | null;
     mcpServerAllowlist?: string[];
     skillIds?: string[];
     userDisplayContent?: Record<string, unknown>[];
     intensivePaperIds?: string[];
     hasPaperSnippets?: boolean;
+    orchestratorId?: string | null;
+    selectedExpertIds?: string[];
   }) => Promise<void>;
   chatCancel: (sessionId: string) => Promise<void>;
   chatRegisterTab: (args: { tabId: string; sessionId: string; projectPath?: string }) => Promise<{ success: boolean }>;
@@ -1067,8 +1253,28 @@ export interface ElectronAPI {
     defaultWorkspaceDirs?: import("./workspace").WorkspaceFolder[];
   }>;
   settingsSet: (patch: Record<string, unknown>) => Promise<void>;
-  settingsGetModules: () => Promise<Array<{ key: string; label: string; description: string; enabled: boolean; source: string; autoGenerated?: boolean }>>;
-  settingsSetModule: (key: string, enabled: boolean) => Promise<void>;
+  settingsGetKnowledgeModules: (projectRoot?: string) => Promise<Array<{
+    key: string;
+    label: string;
+    description: string;
+    source: string;
+    autoGenerated?: boolean;
+    profileOnly?: boolean;
+    selectableInProfile: boolean;
+    injectPath: string;
+    contentPreview: string;
+  }>>;
+  settingsGetModules: (projectRoot?: string) => Promise<Array<{
+    key: string;
+    label: string;
+    description: string;
+    source: string;
+    autoGenerated?: boolean;
+    profileOnly?: boolean;
+    selectableInProfile: boolean;
+    injectPath: string;
+    contentPreview: string;
+  }>>;
   settingsGetBuiltinTools: () => Promise<Array<{
     name: string;
     label: string;
@@ -1081,6 +1287,23 @@ export interface ElectronAPI {
   settingsGetAgentProjectConfig: (projectPath: string) => Promise<{ contextComponents: Record<string, boolean> }>;
   settingsSetAgentProjectConfig: (projectPath: string, config: { contextComponents: Record<string, boolean> }) => Promise<void>;
   settingsGetAssembledPrompt: (projectRoot?: string, userCustomPrompt?: string) => Promise<string>;
+  settingsGetPromptStackPreview: (
+    projectRoot?: string,
+    userCustomPrompt?: string,
+    orchestratorId?: string | null,
+  ) => Promise<{
+    orchestratorId?: string;
+    orchestratorName?: string;
+    markdown: string;
+    sections: Array<{
+      id: string;
+      label: string;
+      injectPath: string;
+      fileHint?: string;
+      charCount: number;
+      content: string;
+    }>;
+  }>;
   settingsComputePromptFingerprint: (projectRoot?: string) => Promise<string>;
   settingsGetDefaultPersona: () => Promise<string>;
 

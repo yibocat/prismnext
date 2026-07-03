@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
-import { BotIcon, PlusIcon, RotateCcwIcon } from "lucide-react";
+import { BotIcon, PlusIcon, RotateCcwIcon, UsersIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
-import type { AgentProfileInfo } from "@shared/agent-profiles";
+import type { ExpertInfo, OrchestratorInfo } from "@shared/agent-experts";
 
 const CATEGORY_HEADER =
   "text-[length:var(--font-size-12)] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2";
@@ -18,25 +19,34 @@ const ROW_LABEL = "text-[length:var(--font-size-13)] font-medium";
 const ROW_DESC = "text-[length:var(--font-size-12)] text-muted-foreground mt-0.5 line-clamp-2";
 const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
-const BUILTIN_RESET_ID = "builtin-profiles-reset";
+const BUILTIN_EXPERTS_RESET_ID = "builtin-experts-reset";
 
-function bundleSummary(profile: AgentProfileInfo): string {
+function expertBundleSummary(expert: ExpertInfo): string {
   const parts: string[] = [];
-  if (profile.model) parts.push("custom model");
-  if (profile.modules?.length) {
-    parts.push(`${profile.effectiveModules.length} active modules`);
-  }
-  if (profile.skills?.length) parts.push(`${profile.skills.length} skills`);
-  if (profile.mcpServers?.length) parts.push(`${profile.mcpServers.length} MCP`);
-  if (profile.rules?.length) parts.push(`${profile.rules.length} rules`);
-  return parts.length > 0 ? parts.join(" · ") : "All project capabilities";
+  if (expert.model) parts.push("custom model");
+  if (expert.effectiveModules?.length) parts.push(`${expert.effectiveModules.length} active modules`);
+  if (expert.skills?.length) parts.push(`${expert.skills.length} skills`);
+  if (expert.mcpServers?.length) parts.push(`${expert.mcpServers.length} MCP`);
+  return parts.length > 0 ? parts.join(" · ") : "Standard subagent preset";
 }
 
-function sortProfiles(profiles: AgentProfileInfo[]): AgentProfileInfo[] {
-  return [...profiles].sort((a, b) => {
+function orchestratorBundleSummary(orchestrator: OrchestratorInfo): string {
+  const parts: string[] = [];
+  if (orchestrator.model) parts.push("custom model");
+  if (orchestrator.allowedExperts?.length) parts.push(`${orchestrator.allowedExperts.length} allowed experts`);
+  if (orchestrator.effectiveModules?.length) parts.push(`${orchestrator.effectiveModules.length} modules`);
+  return parts.length > 0 ? parts.join(" · ") : "Research orchestrator";
+}
+
+function sortExperts(experts: ExpertInfo[]): ExpertInfo[] {
+  return [...experts].sort((a, b) => {
     if (a.builtin !== b.builtin) return a.builtin ? -1 : 1;
     return a.name.localeCompare(b.name);
   });
+}
+
+function sortOrchestrators(orchestrators: OrchestratorInfo[]): OrchestratorInfo[] {
+  return [...orchestrators].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function builtinsDifferFromManifest(manifest: {
@@ -50,248 +60,347 @@ function builtinsDifferFromManifest(manifest: {
 
 export function AgentSettings() {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-
-  const [profiles, setProfiles] = useState<AgentProfileInfo[]>([]);
-  const [builtinsModified, setBuiltinsModified] = useState(false);
+  const [experts, setExperts] = useState<ExpertInfo[]>([]);
+  const [orchestrators, setOrchestrators] = useState<OrchestratorInfo[]>([]);
+  const [defaultOrchestratorId, setDefaultOrchestratorId] = useState("research-prism");
+  const [expertsBuiltinsModified, setExpertsBuiltinsModified] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-
   const rowDeleteConfirm = useInlineDeleteConfirm();
-  const builtinResetConfirm = useInlineDeleteConfirm();
+  const expertResetConfirm = useInlineDeleteConfirm();
 
-  const loadProfiles = useCallback(async () => {
+  const loadAll = useCallback(async (options?: { silent?: boolean }) => {
     if (!projectRoot) {
-      setProfiles([]);
-      setBuiltinsModified(false);
+      setExperts([]);
+      setOrchestrators([]);
+      setDefaultOrchestratorId("research-prism");
+      setExpertsBuiltinsModified(false);
       return;
     }
-    setLoading(true);
+    if (!options?.silent) setLoading(true);
     try {
-      const [list, manifest] = await Promise.all([
-        window.electronAPI.agentListProfiles(projectRoot),
-        window.electronAPI.agentGetProfilesManifest(projectRoot),
+      const [expertList, expertManifest, orchestratorList, orchestratorManifest] = await Promise.all([
+        window.electronAPI.expertsList(projectRoot),
+        window.electronAPI.expertsGetManifest(projectRoot),
+        window.electronAPI.orchestratorsList(projectRoot),
+        window.electronAPI.orchestratorsGetManifest(projectRoot),
       ]);
-      setProfiles(sortProfiles(list));
-      setBuiltinsModified(builtinsDifferFromManifest(manifest));
+      setExperts(sortExperts(expertList));
+      setOrchestrators(sortOrchestrators(orchestratorList));
+      setDefaultOrchestratorId(orchestratorManifest.defaultOrchestratorId ?? "research-prism");
+      setExpertsBuiltinsModified(builtinsDifferFromManifest(expertManifest));
     } catch {
-      setProfiles([]);
-      setBuiltinsModified(false);
+      setExperts([]);
+      setOrchestrators([]);
+      setExpertsBuiltinsModified(false);
     } finally {
-      setLoading(false);
+      if (!options?.silent) setLoading(false);
     }
   }, [projectRoot]);
 
   useEffect(() => {
-    void loadProfiles();
-  }, [loadProfiles]);
+    void loadAll();
+  }, [loadAll]);
 
-  useOnSettingsEditorKindsClosed(["agent-profile"], () => {
-    void loadProfiles();
+  useOnSettingsEditorKindsClosed(["agent-expert", "agent-orchestrator"], () => {
+    void loadAll({ silent: true });
   });
 
-  const openNewProfile = () => {
+  const openOrchestrator = (orchestrator: OrchestratorInfo) => {
     rowDeleteConfirm.clearPending();
-    openSettingsPanel({ kind: "agent-profile", mode: "new" });
+    openSettingsPanel(
+      orchestrator.builtin
+        ? {
+            kind: "agent-orchestrator",
+            mode: "customize-builtin",
+            orchestratorId: orchestrator.id,
+            title: orchestrator.name,
+          }
+        : {
+            kind: "agent-orchestrator",
+            mode: "edit",
+            orchestratorId: orchestrator.id,
+            title: orchestrator.name,
+          },
+    );
   };
-
-  const openProfile = (profile: AgentProfileInfo) => {
-    rowDeleteConfirm.clearPending();
-    if (profile.builtin) {
-      openSettingsPanel({
-        kind: "agent-profile",
-        mode: "customize-builtin",
-        profileId: profile.id,
-        title: profile.name,
-      });
-    } else {
-      openSettingsPanel({
-        kind: "agent-profile",
-        mode: "edit",
-        profileId: profile.id,
-        title: profile.name,
-      });
-    }
-  };
-
-  const removeBuiltinProfile = async (profileId: string) => {
-    if (!projectRoot) return;
-    setSaving(true);
-    try {
-      const result = await window.electronAPI.agentSetBuiltinProfileEnabled(
-        projectRoot,
-        profileId,
-        false,
-      );
-      setProfiles(sortProfiles(result.profiles));
-      setBuiltinsModified(builtinsDifferFromManifest(result.manifest));
-      rowDeleteConfirm.clearPending();
-      toast.success("Built-in profile removed.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const resetBuiltinsToDefaults = async () => {
-    if (!projectRoot) return;
-    setSaving(true);
-    try {
-      await window.electronAPI.agentResetBuiltinProfilesToDefaults(projectRoot);
-      await loadProfiles();
-      builtinResetConfirm.clearPending();
-      toast.success("Built-in profiles restored to defaults.");
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to reset built-in profiles.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const renderProfileRow = (profile: AgentProfileInfo) => (
-    <div key={profile.id} className={ROW}>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={ROW_LABEL}>{profile.name}</span>
-          {profile.builtin && (
-            <span className={cn(BADGE, "bg-muted text-muted-foreground")}>Built-in</span>
-          )}
-        </div>
-        <p className={ROW_DESC}>{profile.description}</p>
-        <p className="text-[length:var(--font-size-11)] text-muted-foreground/70 mt-0.5">
-          {bundleSummary(profile)}
-        </p>
-      </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <Button
-          variant="ghost"
-          size="xs"
-          className="shrink-0"
-          disabled={saving}
-          onClick={() => openProfile(profile)}
-        >
-          {profile.builtin ? "Customize" : "Edit"}
-        </Button>
-        {profile.builtin ? (
-          <InlineDeleteButton
-            itemId={profile.id}
-            pending={rowDeleteConfirm.isPending(profile.id)}
-            disabled={saving}
-            onRequest={() => rowDeleteConfirm.setPendingId(profile.id)}
-            onConfirm={() => void removeBuiltinProfile(profile.id)}
-          />
-        ) : (
-          <InlineDeleteButton
-            itemId={profile.id}
-            pending={rowDeleteConfirm.isPending(profile.id)}
-            disabled={saving}
-            onRequest={() => rowDeleteConfirm.setPendingId(profile.id)}
-            onConfirm={() => {
-              void (async () => {
-                if (!projectRoot) return;
-                setSaving(true);
-                try {
-                  await window.electronAPI.agentDeleteCustomProfile(projectRoot, profile.id);
-                  await loadProfiles();
-                  rowDeleteConfirm.clearPending();
-                  toast.success("Profile deleted.");
-                } catch (err: unknown) {
-                  toast.error(err instanceof Error ? err.message : "Failed to delete profile.");
-                } finally {
-                  setSaving(false);
-                }
-              })();
-            }}
-          />
-        )}
-      </div>
-    </div>
-  );
 
   return (
     <div className="flex-1 overflow-auto">
-      <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-[length:var(--font-dialog-title)] font-semibold">Agent</h2>
-            <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-              Presets bundle instructions, skills, MCP, rules, and modules for specialized roles —
-              like teammates with different expertise.
-            </p>
-          </div>
-          {projectRoot && (
-            <Button variant="outline" size="xs" className="shrink-0" onClick={openNewProfile} disabled={saving}>
-              <PlusIcon className="size-3 mr-1" />
-              New profile
-            </Button>
-          )}
+      <div className="max-w-3xl mx-auto px-8 py-8 space-y-8">
+        <div>
+          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">Agent</h2>
+          <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
+            Orchestrators run the main chat session and delegate to experts via OpenCode Task.
+            @ mention experts in the composer to request specific specialists for a turn.
+          </p>
         </div>
 
         {!projectRoot ? (
           <div className={cn(CARD, "!divide-y-0")}>
             <div className="flex flex-col items-center gap-3 py-10 text-center">
               <BotIcon className="size-8 text-muted-foreground/30" />
-              <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-                Open a project to manage agent profiles.
-              </p>
+              <p className="text-[length:var(--font-size-13)] text-muted-foreground">Open a project to manage agents.</p>
             </div>
           </div>
         ) : (
           <>
-            <p className="text-[length:var(--font-size-12)] text-muted-foreground -mt-2">
-              In chat, @ mention a preset to bring that role into the conversation. Built-in presets
-              can be removed or customized per project; use Reset to restore all built-ins to app
-              defaults without affecting your custom presets in{" "}
-              <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">
-                .prismnext/agent/profiles/custom/
-              </code>
-              .
-            </p>
-
-            <div>
+            <section>
               <div className="flex items-center justify-between gap-3 mb-2">
-                <p className={cn(CATEGORY_HEADER, "mb-0")}>Profiles</p>
-                {builtinResetConfirm.isPending(BUILTIN_RESET_ID) ? (
-                  <Button
-                    variant="destructive"
-                    size="xs"
-                    className="shrink-0"
-                    disabled={saving}
-                    data-inline-delete-confirm={BUILTIN_RESET_ID}
-                    onClick={() => void resetBuiltinsToDefaults()}
-                  >
-                    Confirm reset
-                  </Button>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    className="shrink-0 text-muted-foreground"
-                    disabled={saving || !builtinsModified}
-                    title="Restore all built-in profiles to app defaults"
-                    onClick={() => builtinResetConfirm.setPendingId(BUILTIN_RESET_ID)}
-                  >
-                    <RotateCcwIcon className="size-3 mr-1" />
-                    Reset
-                  </Button>
-                )}
+                <p className={cn(CATEGORY_HEADER, "mb-0")}>Orchestrators</p>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => openSettingsPanel({ kind: "agent-orchestrator", mode: "new" })}
+                  disabled={saving}
+                >
+                  <PlusIcon className="size-3 mr-1" />
+                  New orchestrator
+                </Button>
               </div>
               <div className={CARD}>
                 {loading ? (
                   <div className="py-3 text-[length:var(--font-size-12)] text-muted-foreground">Loading…</div>
-                ) : profiles.length === 0 ? (
-                  <div className="flex flex-col items-center gap-3 py-10 text-center">
-                    <BotIcon className="size-8 text-muted-foreground/30" />
-                    <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-                      No profiles yet.
-                    </p>
-                    <p className="text-[length:var(--font-size-12)] text-muted-foreground/80">
-                      Create a custom preset or reset built-in profiles above.
-                    </p>
-                  </div>
                 ) : (
-                  profiles.map(renderProfileRow)
+                  orchestrators.map((orchestrator) => {
+                    const isDefault = orchestrator.id === defaultOrchestratorId;
+                    return (
+                      <div key={orchestrator.id} className={ROW}>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={ROW_LABEL}>{orchestrator.name}</span>
+                            {orchestrator.builtin ? (
+                              <span className={cn(BADGE, "bg-muted text-muted-foreground")}>Built-in</span>
+                            ) : null}
+                            {isDefault ? (
+                              <span className={cn(BADGE, "bg-primary/10 text-primary")}>Default</span>
+                            ) : null}
+                          </div>
+                          <p className={ROW_DESC}>{orchestrator.description}</p>
+                          <p className="text-[length:var(--font-size-11)] text-muted-foreground/70 mt-0.5">
+                            {orchestratorBundleSummary(orchestrator)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {!isDefault ? (
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              disabled={saving}
+                              onClick={() => {
+                                void (async () => {
+                                  if (!projectRoot) return;
+                                  setSaving(true);
+                                  try {
+                                    const result = await window.electronAPI.orchestratorsSetDefault(
+                                      projectRoot,
+                                      orchestrator.id,
+                                    );
+                                    setDefaultOrchestratorId(
+                                      result.manifest.defaultOrchestratorId ?? orchestrator.id,
+                                    );
+                                    toast.success("Default orchestrator updated.");
+                                  } finally {
+                                    setSaving(false);
+                                  }
+                                })();
+                              }}
+                            >
+                              Set default
+                            </Button>
+                          ) : null}
+                          <Button variant="ghost" size="xs" disabled={saving} onClick={() => openOrchestrator(orchestrator)}>
+                            {orchestrator.builtin ? "Customize" : "Edit"}
+                          </Button>
+                          {!orchestrator.builtin ? (
+                            <InlineDeleteButton
+                              itemId={`orch:${orchestrator.id}`}
+                              pending={rowDeleteConfirm.isPending(`orch:${orchestrator.id}`)}
+                              disabled={saving}
+                              onRequest={() => rowDeleteConfirm.setPendingId(`orch:${orchestrator.id}`)}
+                              onConfirm={() => {
+                                void (async () => {
+                                  if (!projectRoot) return;
+                                  setSaving(true);
+                                  try {
+                                    await window.electronAPI.orchestratorsDeleteCustom(
+                                      projectRoot,
+                                      orchestrator.id,
+                                    );
+                                    await loadAll();
+                                    toast.success("Orchestrator deleted.");
+                                  } catch (err: unknown) {
+                                    toast.error(err instanceof Error ? err.message : "Failed to delete.");
+                                  } finally {
+                                    setSaving(false);
+                                  }
+                                })();
+                              }}
+                            />
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
-            </div>
+            </section>
+
+            <section>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <p className={cn(CATEGORY_HEADER, "mb-0")}>Experts</p>
+                <div className="flex items-center gap-2">
+                  {expertResetConfirm.isPending(BUILTIN_EXPERTS_RESET_ID) ? (
+                    <Button variant="destructive" size="xs" disabled={saving} onClick={() => {
+                      void (async () => {
+                        if (!projectRoot) return;
+                        setSaving(true);
+                        try {
+                          const { manifest, experts: nextExperts } =
+                            await window.electronAPI.expertsResetBuiltinsToDefaults(projectRoot);
+                          setExperts(sortExperts(nextExperts));
+                          setExpertsBuiltinsModified(builtinsDifferFromManifest(manifest));
+                          expertResetConfirm.clearPending();
+                        } finally {
+                          setSaving(false);
+                        }
+                      })();
+                    }}>
+                      Confirm reset
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      className="text-muted-foreground"
+                      disabled={saving || !expertsBuiltinsModified}
+                      onClick={() => expertResetConfirm.setPendingId(BUILTIN_EXPERTS_RESET_ID)}
+                    >
+                      <RotateCcwIcon className="size-3 mr-1" />
+                      Reset
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => openSettingsPanel({ kind: "agent-expert", mode: "new" })}
+                    disabled={saving}
+                  >
+                    <PlusIcon className="size-3 mr-1" />
+                    New expert
+                  </Button>
+                </div>
+              </div>
+              <div className={CARD}>
+                {loading ? (
+                  <div className="py-3 text-[length:var(--font-size-12)] text-muted-foreground">Loading…</div>
+                ) : experts.length === 0 ? (
+                  <div className="flex flex-col items-center gap-3 py-10 text-center">
+                    <UsersIcon className="size-8 text-muted-foreground/30" />
+                    <p className="text-[length:var(--font-size-13)] text-muted-foreground">No experts yet.</p>
+                  </div>
+                ) : (
+                  experts.map((expert) => (
+                    <div key={expert.id} className={ROW}>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={ROW_LABEL}>{expert.name}</span>
+                          {expert.builtin ? (
+                            <span className={cn(BADGE, "bg-muted text-muted-foreground")}>Built-in</span>
+                          ) : null}
+                        </div>
+                        <p className={ROW_DESC}>{expert.description}</p>
+                        <p className="text-[length:var(--font-size-11)] text-muted-foreground/70 mt-0.5">
+                          {expertBundleSummary(expert)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {expert.builtin ? (
+                          <Switch
+                            checked={expert.enabled}
+                            onCheckedChange={(enabled) => {
+                              void (async () => {
+                                if (!projectRoot) return;
+                                const prevExperts = experts;
+                                setExperts((current) =>
+                                  sortExperts(
+                                    current.map((e) =>
+                                      e.id === expert.id ? { ...e, enabled } : e,
+                                    ),
+                                  ),
+                                );
+                                try {
+                                  const { manifest, experts: nextExperts } =
+                                    await window.electronAPI.expertsSetBuiltinEnabled(
+                                      projectRoot,
+                                      expert.id,
+                                      enabled,
+                                    );
+                                  setExperts(sortExperts(nextExperts));
+                                  setExpertsBuiltinsModified(builtinsDifferFromManifest(manifest));
+                                } catch (err: unknown) {
+                                  setExperts(prevExperts);
+                                  toast.error(
+                                    err instanceof Error ? err.message : "Failed to update expert.",
+                                  );
+                                }
+                              })();
+                            }}
+                            aria-label={`Enable ${expert.name}`}
+                          />
+                        ) : null}
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => {
+                            openSettingsPanel(
+                              expert.builtin
+                                ? {
+                                    kind: "agent-expert",
+                                    mode: "customize-builtin",
+                                    expertId: expert.id,
+                                    title: expert.name,
+                                  }
+                                : {
+                                    kind: "agent-expert",
+                                    mode: "edit",
+                                    expertId: expert.id,
+                                    title: expert.name,
+                                  },
+                            );
+                          }}
+                        >
+                          {expert.builtin ? "Customize" : "Edit"}
+                        </Button>
+                        {!expert.builtin ? (
+                          <InlineDeleteButton
+                            itemId={`exp:${expert.id}`}
+                            pending={rowDeleteConfirm.isPending(`exp:${expert.id}`)}
+                            disabled={saving}
+                            onRequest={() => rowDeleteConfirm.setPendingId(`exp:${expert.id}`)}
+                            onConfirm={() => {
+                              void (async () => {
+                                if (!projectRoot) return;
+                                setSaving(true);
+                                try {
+                                  await window.electronAPI.expertsDeleteCustom(projectRoot, expert.id);
+                                  await loadAll();
+                                  toast.success("Expert deleted.");
+                                } catch (err: unknown) {
+                                  toast.error(err instanceof Error ? err.message : "Failed to delete.");
+                                } finally {
+                                  setSaving(false);
+                                }
+                              })();
+                            }}
+                          />
+                        ) : null}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
           </>
         )}
       </div>

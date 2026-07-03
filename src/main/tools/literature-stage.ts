@@ -9,10 +9,10 @@
  */
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
+import { literatureBridgeRoot } from "./bridge-paths";
 
-const BRIDGE_ROOT = path.join(os.homedir(), ".prism-literature-bridge");
+const BRIDGE_ROOT = literatureBridgeRoot();
 const TIMEOUT_MS = 90_000;
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

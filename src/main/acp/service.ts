@@ -8,7 +8,7 @@ import {
   ndJsonStream,
 } from "@agentclientprotocol/sdk";
 import { createLogger } from "../services/logger";
-import { getBuiltinToolFiles, BUILTIN_TOOLS } from "../tools";
+import { getBuiltinToolFiles, BUILTIN_TOOLS, readBridgePathsSource } from "../tools";
 import {
   buildOpencodeToolDescription,
   patchToolDescription,
@@ -177,6 +177,45 @@ export class AcpService {
     return join(this.getServerDataDir(), "opencode", "opencode.db");
   }
 
+  private sessionParentCache = new Map<string, string | null>();
+
+  /** OpenCode session.parent_id (or null for root orchestrator sessions). Cached. */
+  getSessionParentId(sessionId: string): string | null {
+    const id = sessionId?.trim();
+    if (!id) return null;
+    if (this.sessionParentCache.has(id)) {
+      return this.sessionParentCache.get(id) ?? null;
+    }
+    let parent: string | null = null;
+    try {
+      const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
+      const db = new DatabaseSync(this.getDbPath(), { readonly: true });
+      try {
+        const row = db
+          .prepare("SELECT parent_id FROM session WHERE id = ?")
+          .get(id) as { parent_id?: string | null } | undefined;
+        parent = row?.parent_id?.trim() || null;
+      } finally {
+        db.close();
+      }
+    } catch {
+      parent = null;
+    }
+    this.sessionParentCache.set(id, parent);
+    return parent;
+  }
+
+  /** Parent orchestrator session for citation staging when tools run in a Task sub-session. */
+  resolveCitationStagingSessionId(sessionId: string): string {
+    const parent = this.getSessionParentId(sessionId);
+    return parent || sessionId;
+  }
+
+  /** @internal */
+  clearSessionParentCacheForTests(): void {
+    this.sessionParentCache.clear();
+  }
+
   // ─── Lifecycle ──────────────────────────────────────────────
 
   /**
@@ -249,11 +288,13 @@ export class AcpService {
       : ["/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
     const safePath = [...systemPaths, process.env.PATH].filter(Boolean).join(delim);
 
+    const { getPrismBridgeEnv } = await import("../services/prism-bridge-paths");
     const env = {
       ...process.env,
       PATH: safePath,
       ...this.lastExtraEnv,
       ...extraEnv,
+      ...getPrismBridgeEnv(),
       XDG_DATA_HOME: serverDir,
       XDG_CONFIG_HOME: join(serverDir, "config"),
       XDG_CACHE_HOME: join(serverDir, "cache"),
@@ -609,6 +650,14 @@ export class AcpService {
       mcpServers: mcpServers.length,
       mcpNames: mcpServers.map((s) => s.name),
     });
+    void import("../services/project-experts-refresh")
+      .then(({ refreshProjectExpertsIntegration }) =>
+        refreshProjectExpertsIntegration(projectRoot),
+      )
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(`Experts integration refresh failed during prewarm: ${message}`);
+      });
   }
 
   /**
@@ -724,6 +773,14 @@ export class AcpService {
     await this.initialize();
   }
 
+  /** Restart OpenCode so synced expert/orchestrator agent definitions are picked up. */
+  async reloadAfterExpertsIntegration(): Promise<void> {
+    if (!this.conn) return;
+    log.info("Restarting OpenCode to apply experts integration");
+    await this.shutdown();
+    await this.initialize();
+  }
+
   /**
    * Sync prism-next's built-in custom tools to the directory OpenCode scans.
    *
@@ -761,6 +818,16 @@ export class AcpService {
     // OpenCode resolves tools at $XDG_CONFIG_HOME/opencode/tools/
     const toolsDir = join(serverDir, "config", "opencode", "tools");
     mkdirSync(toolsDir, { recursive: true });
+
+    const bridgeContent = readBridgePathsSource();
+    if (bridgeContent) {
+      const bridgeDest = join(toolsDir, "bridge-paths.ts");
+      if (!existsSync(bridgeDest) || readFileSync(bridgeDest, "utf-8") !== bridgeContent) {
+        writeFileSync(bridgeDest, bridgeContent, "utf-8");
+      }
+    } else {
+      log.error("bridge-paths.ts missing from tools source — custom OpenCode tools will fail to load");
+    }
 
     const files = getBuiltinToolFiles();
     if (files.length === 0) {
@@ -814,6 +881,8 @@ export class AcpService {
     }
 
     const currentNames = new Set(files.map((f) => f.name));
+    // Shared import helper — not in getBuiltinToolFiles() but must not be treated as stale.
+    if (bridgeContent) currentNames.add("bridge-paths");
     for (const entry of readdirSync(toolsDir)) {
       if (!entry.endsWith(".ts") || entry === "index.ts") continue;
       const name = entry.replace(/\.ts$/, "");
@@ -1092,7 +1161,7 @@ export class AcpService {
     cwd: string,
     model?: string,
     projectRoot?: string,
-    options?: { mcpServerAllowlist?: string[] },
+    options?: { mcpServerAllowlist?: string[]; agentId?: string },
   ): Promise<SessionInfo> {
     if (!this.conn) throw new Error("AcpService not initialized");
 
@@ -1101,6 +1170,9 @@ export class AcpService {
     const { mcpServers, additionalDirectories } = this.loadProjectAgentConfig(root, options);
 
     const params: any = { cwd, mcpServers };
+    if (options?.agentId) {
+      params.agent = options.agentId;
+    }
     if (additionalDirectories.length > 0) {
       params.additionalDirectories = additionalDirectories;
     }
@@ -1484,6 +1556,10 @@ export class AcpService {
     log.info(`Marked sub-agent session: ${sessionId}`);
   }
 
+  isSubAgentSession(sessionId: string): boolean {
+    return this.subAgentSessions.has(sessionId);
+  }
+
   /** Persist sub-agent session IDs to disk for survival across restarts. */
   private subAgentSessionsPath(): string {
     return join(this.getServerDataDir(), "prism-subagent-sessions.json");
@@ -1620,6 +1696,62 @@ export class AcpService {
     });
   }
 
+  /**
+   * Update a completed tool part's `state.output` in OpenCode SQLite.
+   * Used after Task completion to inject Session citations into the stored result.
+   */
+  async patchSessionToolOutput(
+    sessionId: string,
+    toolCallId: string,
+    output: string,
+  ): Promise<boolean> {
+    const sid = sessionId?.trim();
+    const callId = toolCallId?.trim();
+    const text = output?.trim();
+    if (!sid || !callId || !text) return false;
+
+    const { writeToolOutputIntoPartData } = await import("../services/session-citations-context");
+
+    try {
+      return await this.withDb((db) => {
+        const rows = db.prepare(
+          `SELECT id, data FROM part WHERE session_id = ? ORDER BY time_created`,
+        ).all(sid) as Array<{ id: string; data: string }>;
+
+        for (const row of rows) {
+          let parsed: Record<string, unknown>;
+          try {
+            parsed = JSON.parse(row.data || "{}") as Record<string, unknown>;
+          } catch {
+            continue;
+          }
+          if (parsed.type !== "tool") continue;
+          const partCallId = String(parsed.callID || parsed.id || "");
+          if (partCallId !== callId) continue;
+
+          if (!writeToolOutputIntoPartData(parsed, text)) return true;
+
+          const now = Date.now();
+          db.prepare("UPDATE part SET data = ?, time_updated = ? WHERE id = ?").run(
+            JSON.stringify(parsed),
+            now,
+            row.id,
+          );
+          db.prepare("UPDATE session SET time_updated = ? WHERE id = ?").run(now, sid);
+          return true;
+        }
+        return false;
+      });
+    } catch (err) {
+      log.warn(
+        `patchSessionToolOutput failed session=${sid} tool=${callId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return false;
+    }
+  }
+
   async restoreSessionFromBackup(backup: SessionMessageBackup): Promise<void> {
     const { sessionId } = backup;
     await this.withDb((db) => {
@@ -1668,8 +1800,6 @@ export class AcpService {
     opts?: {
       model?: string;
       provider?: string;
-      /** Active agent profile — per-tab; injected every turn when non-empty. */
-      profileOverlayPrompt?: string;
       /** Project rules — read fresh each turn; always injected when non-empty. */
       projectRulesPrompt?: string;
     },
@@ -1678,17 +1808,6 @@ export class AcpService {
 
     const content: Array<{ type: "text"; text: string; _meta?: Record<string, unknown> }> = [];
 
-    const profile = opts?.profileOverlayPrompt?.trim();
-    if (profile) {
-      content.push({
-        type: "text",
-        text: profile,
-        _meta: { prism: "profile-overlay" },
-      });
-      log.info(`Profile overlay injected: ${profile.length} chars`);
-    }
-
-    // Project rules — every turn, fresh from RULE.md on disk.
     const rules = opts?.projectRulesPrompt?.trim();
     if (rules) {
       content.push({

@@ -22,7 +22,9 @@ import { getPaper } from "../services/literature-service";
 import {
   buildIntensiveReadingInstruction,
   type IntensivePaper,
-} from "../prompts/modules/literature-intensive";
+} from "../prompts/per-turn/intensive-reading";
+import { buildSessionCitationsTurnAppendix } from "../services/session-citations-context";
+import { getQuestionsBridgeRoot } from "../services/prism-bridge-paths";
 
 const log = createLogger("chat-ipc", "agent");
 
@@ -228,8 +230,6 @@ export function registerChatHandlers(): void {
         apiKey?: string;
         baseUrl?: string;
         thoughtLevel?: string;
-        /** Per-tab agent profile id */
-        profileId?: string | null;
         /** Composer `/` MCP tokens — limit tools for this turn. */
         mcpServerAllowlist?: string[];
         /** Composer `/` skill tokens — ensure these skills are enabled. */
@@ -241,6 +241,8 @@ export function registerChatHandlers(): void {
         intensivePaperIds?: string[];
         /** Composer includes ```paper …``` excerpt block(s) this turn. */
         hasPaperSnippets?: boolean;
+        orchestratorId?: string | null;
+        selectedExpertIds?: string[];
       },
     ) => {
       const tabId = args.tabId || "default";
@@ -274,51 +276,72 @@ export function registerChatHandlers(): void {
       }
 
       // ── Assemble system prompt (Prism layers) ──
-      const {
-        resolveProfileId,
-        getProfileRuntimeFilters,
-      } = await import("../services/profiles-sync");
-      // Per-turn intensive reading instruction. Appended to the user prompt so
-      // the agent is reminded every turn (independent of @-mention presence).
       const intensivePapers = args.projectPath
         ? resolveIntensivePapers(args.projectPath, args.intensivePaperIds)
         : [];
       const intensiveInstruction = buildIntensiveReadingInstruction(intensivePapers, {
         hasPaperSnippets: args.hasPaperSnippets,
       });
-      const userPrompt = intensiveInstruction
+      let userPrompt = intensiveInstruction
         ? `${args.prompt}\n\n${intensiveInstruction}`
         : args.prompt;
-
-      const profileId = args.projectPath && args.profileId
-        ? resolveProfileId(args.projectPath, args.profileId) ?? undefined
-        : undefined;
 
       let provider = args.provider || "anthropic";
       let modelId = args.model;
       let thoughtLevel = args.thoughtLevel;
+      let orchestratorId: string | undefined;
 
-      if (profileId && args.projectPath) {
-        const { getAgentProfile } = await import("../services/profiles-sync");
-        const profile = getAgentProfile(args.projectPath, profileId);
-        if (profile?.model) {
-          const slash = profile.model.indexOf("/");
+      if (args.projectPath) {
+        const {
+          resolveOrchestratorId,
+          getOrchestrator,
+          getExpert,
+          getOrchestratorRuntimeFilters,
+        } = await import("../services/experts-sync");
+        const { refreshProjectExpertsIntegration } = await import("../services/project-experts-refresh");
+        try {
+          await refreshProjectExpertsIntegration(args.projectPath);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          log.error(`Experts integration refresh failed: ${message}`);
+          win.webContents.send("chat:complete", {
+            tabId,
+            sessionId: args.sessionId || "",
+            success: false,
+            error: `Expert configuration could not be synced: ${message}`,
+          });
+          return;
+        }
+
+        orchestratorId = resolveOrchestratorId(args.projectPath, args.orchestratorId);
+        const orchestrator = getOrchestrator(args.projectPath, orchestratorId);
+        if (orchestrator?.model) {
+          const slash = orchestrator.model.indexOf("/");
           if (slash > 0) {
-            provider = profile.model.slice(0, slash);
-            modelId = profile.model.slice(slash + 1);
+            provider = orchestrator.model.slice(0, slash);
+            modelId = orchestrator.model.slice(slash + 1);
           }
         }
-        if (profile?.thoughtLevel) thoughtLevel = profile.thoughtLevel;
-      }
+        if (orchestrator?.thoughtLevel) thoughtLevel = orchestrator.thoughtLevel;
 
-      if (args.projectPath && profileId) {
-        const filters = getProfileRuntimeFilters(args.projectPath, profileId);
-        const profileSkills = filters?.skills;
+        const expertIds = args.selectedExpertIds?.filter(Boolean) ?? [];
+        if (expertIds.length > 0) {
+          const { buildExpertTeamPreamble } = await import("../../shared/expert-team-preamble");
+          const entries = expertIds
+            .map((id) => getExpert(args.projectPath!, id))
+            .filter((e): e is NonNullable<typeof e> => !!e?.enabled)
+            .map((e) => ({ id: e.id, name: e.name, description: e.description }));
+          const preamble = buildExpertTeamPreamble(entries);
+          if (preamble) userPrompt = `${userPrompt}\n\n${preamble}`;
+        }
+
+        const filters = getOrchestratorRuntimeFilters(args.projectPath, orchestratorId);
+        const orchestratorSkills = filters?.skills;
         const composerSkills = args.skillIds?.filter(Boolean) ?? [];
         const skillAllowlist =
           composerSkills.length > 0
-            ? [...new Set([...(profileSkills ?? []), ...composerSkills])]
-            : profileSkills;
+            ? [...new Set([...(orchestratorSkills ?? []), ...composerSkills])]
+            : orchestratorSkills;
         const { refreshProjectSkillsIntegration } = await import("../services/project-skills-refresh");
         await refreshProjectSkillsIntegration(args.projectPath, {
           profileSkillAllowlist: skillAllowlist,
@@ -330,40 +353,45 @@ export function registerChatHandlers(): void {
         });
       }
 
-      const profileMcpAllowlist =
-        profileId && args.projectPath
-          ? getProfileRuntimeFilters(args.projectPath, profileId)?.mcpServers
+      const orchestratorMcpAllowlist =
+        orchestratorId && args.projectPath
+          ? (await import("../services/experts-sync")).getOrchestratorRuntimeFilters(
+              args.projectPath,
+              orchestratorId,
+            )?.mcpServers
           : undefined;
       const composerMcps = args.mcpServerAllowlist?.filter(Boolean) ?? [];
       const mcpServerAllowlist =
         composerMcps.length > 0
-          ? [...new Set([...(profileMcpAllowlist ?? []), ...composerMcps])]
-          : profileMcpAllowlist;
+          ? [...new Set([...(orchestratorMcpAllowlist ?? []), ...composerMcps])]
+          : orchestratorMcpAllowlist;
+
+      const orchestratorRuleAllowlist =
+        orchestratorId && args.projectPath
+          ? (await import("../services/experts-sync")).getOrchestratorRuntimeFilters(
+              args.projectPath,
+              orchestratorId,
+            )?.rules
+          : undefined;
 
       const promptCtx = await buildPromptContext(args.projectPath, {
-        profileId,
+        ruleAllowlist: orchestratorRuleAllowlist,
       });
       const assembledPrompt = promptManager.compose(promptCtx);
-      const profileOverlayPrompt = promptManager.composeProfileOverlay(promptCtx);
       const projectRulesPrompt = promptManager.composeProjectRules(promptCtx);
       const currentFingerprint = promptManager.computePromptFingerprint(promptCtx);
       if (assembledPrompt) {
         log.info(
           `System prompt assembled: ${assembledPrompt.length} chars ` +
-          `(stable via OpenCode instructions, rules ${projectRulesPrompt.length}, profile ${profileOverlayPrompt.length})`,
+          `(stable via OpenCode instructions, rules ${projectRulesPrompt.length})`,
         );
       } else {
         log.warn("Assembled prompt is EMPTY — agent will use OpenCode defaults only");
-        // Notify renderer so UI can show a warning
         win.webContents.send("chat:stream", {
           tabId, type: "system.promptEmpty", data: {},
         });
       }
 
-      // Create or reuse session.
-      // Stable system layers sync to `.prismnext/agent/_prism-system.md` and load
-      // via OpenCode `instructions` (true system[]). Profile overlay and project
-      // rules inject every turn as user content blocks.
       let sessionId = args.sessionId;
       let isFirstTurn = false;
       const existingSessionId = args.sessionId;
@@ -378,6 +406,7 @@ export function registerChatHandlers(): void {
           args.projectPath,
           {
             mcpServerAllowlist: mcpServerAllowlist?.length ? mcpServerAllowlist : undefined,
+            agentId: orchestratorId,
           },
         );
         sessionId = session.id;
@@ -404,6 +433,19 @@ export function registerChatHandlers(): void {
         } catch (err: any) {
           log.debug(`setConfigOption thought_level not supported by this OpenCode version: ${err.message}`);
         }
+      }
+
+      if (orchestratorId) {
+        try {
+          await service.setConfigOption(sessionId, "agent", orchestratorId);
+        } catch (err: any) {
+          log.debug(`setConfigOption agent not supported by this OpenCode version: ${err.message}`);
+        }
+      }
+
+      const citationsAppendix = buildSessionCitationsTurnAppendix(sessionId);
+      if (citationsAppendix) {
+        userPrompt = `${userPrompt}\n\n${citationsAppendix}`;
       }
 
       // ── Compute context breakdown for the ring indicator ──
@@ -453,7 +495,6 @@ export function registerChatHandlers(): void {
         const result = await service.sendPrompt(sessionId, userPrompt, {
           model: modelId,
           provider,
-          profileOverlayPrompt: profileOverlayPrompt || undefined,
           projectRulesPrompt: projectRulesPrompt || undefined,
         });
         if (args.userDisplayContent?.length && args.projectPath && sessionId) {
@@ -608,16 +649,13 @@ export function registerChatHandlers(): void {
   );
 
   // ─── Answer prism‑question (file‑bridge, not ACP) ───
-  // The prism‑question custom tool polls ~/.prism‑questions/<id>.answer.json.
+  // The prism‑question custom tool polls `<userData>/opencode-server/bridges/questions/<id>.answer.json`.
   // This handler writes the user's answer to that file so the blocking tool
   // can read it and return, unblocking the AI conversation.
   ipcMain.handle(
     "chat:answerQuestion",
     async (_event, args: { questionId: string; answer: string }) => {
-      const os = await import("node:os");
-      const fs = await import("node:fs");
-      const path = await import("node:path");
-      const aDir = path.join(os.homedir(), ".prism-questions");
+      const aDir = getQuestionsBridgeRoot();
       const aFile = path.join(aDir, `${args.questionId}.answer.json`);
       try {
         fs.mkdirSync(aDir, { recursive: true });

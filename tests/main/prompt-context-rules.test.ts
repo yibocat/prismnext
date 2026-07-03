@@ -36,4 +36,38 @@ Run pnpm test before finishing.
       { name: "tests", content: "Run pnpm test before finishing." },
     ]);
   });
+
+  it("scopes rules to orchestrator allowlist when provided", async () => {
+    root = mkdtempSync(join(tmpdir(), "prism-ctx-rules-"));
+    installProjectRule(
+      root,
+      "rule-a",
+      `---
+name: Rule A
+description: A
+apply: always
+enabled: true
+---
+Content A
+`,
+    );
+    installProjectRule(
+      root,
+      "rule-b",
+      `---
+name: Rule B
+description: B
+apply: always
+enabled: true
+---
+Content B
+`,
+    );
+
+    const scoped = await buildPromptContext(root, { ruleAllowlist: ["Rule A"] });
+    expect(scoped.customRules).toEqual([{ name: "Rule A", content: "Content A" }]);
+
+    const all = await buildPromptContext(root);
+    expect(all.customRules?.map((r) => r.name).sort()).toEqual(["Rule A", "Rule B"]);
+  });
 });

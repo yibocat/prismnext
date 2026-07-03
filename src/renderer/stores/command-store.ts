@@ -93,8 +93,16 @@ export const useCommandStore = create<CommandState>()((set, get) => ({
   },
 
   toggleCommand: async (id, enabled) => {
-    const updated = await window.electronAPI.commandsToggle(id, enabled);
-    set({ commands: updated });
+    const prev = get().commands;
+    set({
+      commands: prev.map((cmd) => (cmd.id === id ? { ...cmd, enabled } : cmd)),
+    });
+    try {
+      const updated = await window.electronAPI.commandsToggle(id, enabled);
+      set({ commands: updated });
+    } catch {
+      set({ commands: prev });
+    }
   },
 
   reloadCommands: async () => {

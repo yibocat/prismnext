@@ -1,5 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { libraryCardForRegistryUrl, PRISM_CURATED_LIBRARY } from "../../shared/skill-libraries";
+import type { SkillInstallRecord } from "../../shared/skill-install-types";
+import { parseGitHubInput, scanGitHubRepository } from "./skill-install-github";
+import { validateRegistryIndex } from "./skills-registry";
 
 export const PRISM_SKILLS_REL = ".prismnext/agent/skills";
 export const SKILLS_MANIFEST_REL = ".prismnext/agent/skills-manifest.json";
@@ -59,15 +63,30 @@ export function isSkillsIntegrationPath(absPath: string, projectRoot: string): b
   return false;
 }
 
+/** True when the path is the project's skills manifest (not a skill folder). */
+export function isSkillsManifestPath(absPath: string, projectRoot: string): boolean {
+  const root = normalizeOpencodeConfigPath(normalizeProjectRoot(projectRoot)).replace(/\/$/, "");
+  const normalized = normalizeOpencodeConfigPath(absPath);
+  const rootLower = root.toLowerCase();
+  const normLower = normalized.toLowerCase();
+  if (!normLower.startsWith(rootLower + "/") && normLower !== rootLower) return false;
+  const rel = normalized.slice(root.length).replace(/^\//, "");
+  return rel === SKILLS_MANIFEST_REL.replace(/\\/g, "/");
+}
+
 export const PRISM_CURATED_SOURCE_ID = "prism-curated";
 
-export type SkillLibrarySourceKind = "bundled" | "remote";
+export type SkillLibrarySourceKind = "bundled" | "remote" | "github";
 
 export interface SkillLibrarySource {
   id: string;
   kind: SkillLibrarySourceKind;
-  /** Normalized index.json URL for remote sources. */
+  /** Normalized index.json URL for registry (`remote`) sources. */
   url?: string;
+  /** GitHub `owner/repo` for `github` sources. */
+  repo?: string;
+  ref?: string;
+  subPath?: string;
   /** When true, skills from this source appear in Skill library UI. */
   connected: boolean;
 }
@@ -77,6 +96,7 @@ export interface SkillsManifest {
   /** @deprecated migrated to `sources` on read */
   registryUrls?: string[];
   sources?: SkillLibrarySource[];
+  installs?: SkillInstallRecord[];
 }
 
 export interface SkillLibrarySourceInfo extends SkillLibrarySource {
@@ -91,6 +111,7 @@ export interface InstalledSkillInfo {
   description: string;
   skillDirRel: string;
   enabled: boolean;
+  installOrigin?: import("../../shared/skill-install-types").SkillInstallOrigin;
 }
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
@@ -113,16 +134,17 @@ function parseSkillMd(content: string): { name: string; description: string } {
 export function readSkillsManifest(projectRoot: string): SkillsManifest {
   const path = join(projectRoot, SKILLS_MANIFEST_REL);
   if (!existsSync(path)) {
-    return { disabled: [], sources: defaultLibrarySources() };
+    return { disabled: [], sources: defaultLibrarySources(), installs: [] };
   }
   try {
     const parsed = JSON.parse(readFileSync(path, "utf-8")) as SkillsManifest;
     return {
       disabled: Array.isArray(parsed.disabled) ? parsed.disabled : [],
       sources: normalizeLibrarySources(parsed),
+      installs: Array.isArray(parsed.installs) ? parsed.installs : [],
     };
   } catch {
-    return { disabled: [], sources: defaultLibrarySources() };
+    return { disabled: [], sources: defaultLibrarySources(), installs: [] };
   }
 }
 
@@ -134,20 +156,27 @@ function sourceIdForUrl(url: string): string {
   return `remote:${url}`;
 }
 
+function sourceIdForGitHub(repo: string, ref: string): string {
+  return `github:${repo}@${ref}`;
+}
+
 function displayNameForSource(source: SkillLibrarySource): { name: string; description: string } {
   if (source.kind === "bundled") {
     return {
-      name: "Prism Curated",
-      description: "Skills bundled with the app — install copies into your project",
+      name: PRISM_CURATED_LIBRARY.name,
+      description: PRISM_CURATED_LIBRARY.description,
     };
   }
-  const url = source.url ?? "";
-  try {
-    const hostname = new URL(url).hostname;
-    return { name: hostname, description: "Remote skill registry" };
-  } catch {
-    return { name: url || "Remote registry", description: "Remote skill registry" };
+  if (source.kind === "github") {
+    const repo = source.repo ?? "GitHub";
+    const ref = source.ref ?? "main";
+    return {
+      name: repo.split("/").pop() ?? repo,
+      description: `GitHub · ${repo} · ${ref}`,
+    };
   }
+  const card = libraryCardForRegistryUrl(source.url ?? "");
+  return { name: card.name, description: card.description };
 }
 
 export function normalizeLibrarySources(manifest: SkillsManifest): SkillLibrarySource[] {
@@ -158,6 +187,9 @@ export function normalizeLibrarySources(manifest: SkillsManifest): SkillLibraryS
       id: s.id,
       kind: s.kind,
       url: s.url,
+      repo: s.repo,
+      ref: s.ref,
+      subPath: s.subPath,
       connected: s.connected !== false,
     }));
   } else if (Array.isArray(manifest.registryUrls)) {
@@ -206,7 +238,25 @@ function persistSources(projectRoot: string, manifest: SkillsManifest, sources: 
   writeSkillsManifest(projectRoot, {
     disabled: manifest.disabled ?? [],
     sources,
+    installs: manifest.installs ?? [],
   });
+}
+
+export function recordSkillInstalls(projectRoot: string, entries: SkillInstallRecord[]): void {
+  const manifest = readSkillsManifest(projectRoot);
+  const installs = [...(manifest.installs ?? [])];
+  for (const entry of entries) {
+    const index = installs.findIndex((item) => item.skillId === entry.skillId);
+    if (index >= 0) installs[index] = entry;
+    else installs.push(entry);
+  }
+  writeSkillsManifest(projectRoot, { ...manifest, installs });
+}
+
+export function removeSkillInstallRecord(projectRoot: string, skillId: string): void {
+  const manifest = readSkillsManifest(projectRoot);
+  const installs = (manifest.installs ?? []).filter((item) => item.skillId !== skillId);
+  writeSkillsManifest(projectRoot, { ...manifest, installs });
 }
 
 export function writeSkillsManifest(projectRoot: string, manifest: SkillsManifest): void {
@@ -221,6 +271,9 @@ export function listProjectSkills(projectRoot: string): InstalledSkillInfo[] {
 
   const manifest = readSkillsManifest(projectRoot);
   const disabled = new Set(manifest.disabled ?? []);
+  const installBySkillId = new Map(
+    (manifest.installs ?? []).map((item) => [item.skillId, item.origin]),
+  );
   const results: InstalledSkillInfo[] = [];
 
   for (const entry of readdirSync(skillsRoot, { withFileTypes: true })) {
@@ -243,6 +296,7 @@ export function listProjectSkills(projectRoot: string): InstalledSkillInfo[] {
       description: meta.description || "",
       skillDirRel: `${PRISM_SKILLS_REL}/${id}`,
       enabled: !disabled.has(id),
+      installOrigin: installBySkillId.get(id),
     });
   }
 
@@ -383,10 +437,70 @@ export function syncProjectSkillsIntegration(
   };
 }
 
-export function addSkillLibrarySource(projectRoot: string, registryUrl: string): SkillLibrarySourceInfo[] {
+export async function addSkillLibrarySource(
+  projectRoot: string,
+  input: string,
+): Promise<{
+  sources: SkillLibrarySourceInfo[];
+  sourceKind: "github" | "registry";
+  packageCount: number;
+  indexUrl?: string;
+}> {
+  return addLibrarySourceFromInput(projectRoot, input);
+}
+
+export async function addLibrarySourceFromInput(
+  projectRoot: string,
+  input: string,
+): Promise<{
+  sources: SkillLibrarySourceInfo[];
+  sourceKind: "github" | "registry";
+  packageCount: number;
+  indexUrl?: string;
+}> {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    throw new Error("Enter a GitHub repository URL or registry hostname.");
+  }
+
+  const parsed = parseGitHubInput(trimmed);
+  if (parsed) {
+    const repo = `${parsed.owner}/${parsed.repo}`;
+    const ref = parsed.ref || "main";
+    const { packages } = await scanGitHubRepository(parsed);
+    const manifest = readSkillsManifest(projectRoot);
+    const sources = [...(manifest.sources ?? defaultLibrarySources())];
+    const id = sourceIdForGitHub(repo, ref);
+    const existing = sources.find((s) => s.id === id);
+    if (existing) {
+      existing.connected = true;
+      existing.repo = repo;
+      existing.ref = ref;
+      existing.subPath = parsed.subPath;
+      existing.kind = "github";
+    } else {
+      sources.push({
+        id,
+        kind: "github",
+        repo,
+        ref,
+        subPath: parsed.subPath,
+        connected: true,
+      });
+    }
+    persistSources(projectRoot, manifest, sources);
+    syncProjectSkillsIntegration(projectRoot);
+    return {
+      sources: listLibrarySources(projectRoot),
+      sourceKind: "github",
+      packageCount: packages.length,
+    };
+  }
+
+  const validation = await validateRegistryIndex(trimmed);
   const manifest = readSkillsManifest(projectRoot);
   const sources = [...(manifest.sources ?? defaultLibrarySources())];
-  const url = registryUrl.trim();
+  const url = validation.indexUrl;
   const existing = sources.find((s) => s.kind === "remote" && s.url === url);
   if (existing) {
     existing.connected = true;
@@ -400,7 +514,12 @@ export function addSkillLibrarySource(projectRoot: string, registryUrl: string):
   }
   persistSources(projectRoot, manifest, sources);
   syncProjectSkillsIntegration(projectRoot);
-  return listLibrarySources(projectRoot);
+  return {
+    sources: listLibrarySources(projectRoot),
+    sourceKind: "registry",
+    packageCount: validation.skillCount,
+    indexUrl: url,
+  };
 }
 
 export function removeSkillLibrarySource(projectRoot: string, sourceId: string): SkillLibrarySourceInfo[] {
@@ -432,9 +551,10 @@ export function setSkillLibrarySourceConnected(
 }
 
 /** @deprecated use addSkillLibrarySource */
-export function connectSkillRegistry(projectRoot: string, registryUrl: string): string[] {
+export async function connectSkillRegistry(projectRoot: string, registryUrl: string): Promise<string[]> {
+  const result = await addSkillLibrarySource(projectRoot, registryUrl);
   return activeRemoteRegistryUrls(
-    addSkillLibrarySource(projectRoot, registryUrl).map(({ id, kind, url, connected }) => ({
+    result.sources.map(({ id, kind, url, connected }) => ({
       id,
       kind,
       url,

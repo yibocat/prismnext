@@ -174,6 +174,6 @@ export async function readPaperPdfContent(
     pages: args.pages,
     markdown: text,
     truncated,
-    hint: "Cite as p.X when quoting. Use pages= for narrower ranges.",
+    hint: "When citing in chat, use [@bibkey] with this exact bibkey; add p.X when quoting specific pages. Use pages= for narrower ranges.",
   };
 }

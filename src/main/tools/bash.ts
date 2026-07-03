@@ -9,10 +9,10 @@
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
 import * as path from "path";
-import * as os from "os";
+import { terminalBridgeRoot } from "./bridge-paths";
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const BRIDGE_ROOT = path.join(os.homedir(), ".prism-terminal-bridge");
+const BRIDGE_ROOT = terminalBridgeRoot();
 const ACTIVE_TOOL_FILE = ".active-tool.json";
 
 function extractToolCallId(context: Record<string, unknown>): string | undefined {

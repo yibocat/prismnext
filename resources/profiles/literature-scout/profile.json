@@ -1,7 +1,0 @@
-{
-  "id": "literature-scout",
-  "name": "Literature Scout",
-  "description": "Explores external sources and summarizes findings for your manuscript.",
-  "builtin": true,
-  "modules": ["citations", "chat-citation-staging"]
-}

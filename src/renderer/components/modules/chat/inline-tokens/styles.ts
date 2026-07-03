@@ -97,6 +97,14 @@ const VARIANT_CLASS: Record<InlineTokenVariant, string> = {
     "[&_svg]:text-rose-700 dark:[&_svg]:text-rose-300",
     "font-mono font-medium",
   ),
+  literature: tint(
+    "bg-indigo-500/12 dark:bg-indigo-500/15",
+    "text-indigo-950 dark:text-indigo-50",
+    "border-indigo-500/28",
+    "[&_svg]:text-indigo-700 dark:[&_svg]:text-indigo-300",
+    "font-mono font-medium cursor-pointer",
+    "hover:bg-indigo-500/18 hover:border-indigo-500/40",
+  ),
 };
 
 export function inlineTokenClassName(

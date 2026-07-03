@@ -1,5 +1,9 @@
 # Agent Profiles Implementation Plan
 
+> **Follow-up work:** Expert team + OpenCode subagent redesign →  
+> `docs/superpowers/specs/2026-07-03-expert-team-subagents-design.md` and  
+> `docs/superpowers/plans/2026-07-03-expert-team-subagents-plan.md`
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Introduce Agent Profiles that bundle prompt/instruction packs for main chat sessions and OpenCode subagents, with UI in Settings → Agent and chat composer selectors.

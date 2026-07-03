@@ -6,12 +6,19 @@ import {
   MARKDOWN_COMPONENTS,
   CHAT_MARKDOWN_TYPOGRAPHY,
   prepareMarkdownMath,
-  remarkPluginsForSurface,
+  MARKDOWN_REMARK_BASE,
   rehypePluginsForSurface,
 } from "@/lib/markdown/markdown-config";
+import { remarkCitationRefs } from "@/lib/markdown/remark-citation-refs";
+import { remarkLibraryCiteRefs } from "@/lib/markdown/remark-library-cite-refs";
+import { useLiteratureStore } from "@/stores/literature-store";
 import { ShikiCodeBlock } from "./shiki-code-block";
 import { useCitationStagingStore } from "@/stores/citation-staging-store";
 import { jumpToStagedCitation } from "@/lib/literature/jump-to-staged-citation";
+import {
+  decodeLibraryCiteHref,
+  LibraryCitationInline,
+} from "./library-citation-inline";
 import { cn } from "@/lib/utils";
 import { openProjectFileFromChat } from "@/lib/files/open-project-file";
 import { useDocumentStore } from "@/stores/document-store";
@@ -83,7 +90,21 @@ export const StaticMarkdown = memo(function StaticMarkdown({
   if (!content) return null;
 
   const normalized = useMemo(() => prepareMarkdownMath(content), [content]);
-  const remarkPlugins = useMemo(() => remarkPluginsForSurface("chat"), []);
+  const bibkeyFingerprint = useLiteratureStore((s) =>
+    s.papers.map((p) => p.bibkey).join("\u0000"),
+  );
+  const knownBibkeySet = useMemo(() => {
+    if (!bibkeyFingerprint) return new Set<string>();
+    return new Set(bibkeyFingerprint.split("\u0000"));
+  }, [bibkeyFingerprint]);
+  const remarkPlugins = useMemo(
+    () => [
+      ...MARKDOWN_REMARK_BASE,
+      remarkCitationRefs,
+      [remarkLibraryCiteRefs, { knownBibkeys: knownBibkeySet }] as const,
+    ],
+    [knownBibkeySet],
+  );
   const rehypePlugins = useMemo(() => rehypePluginsForSurface("chat"), []);
 
   const components = useMemo<Components>(() => {
@@ -103,6 +124,10 @@ export const StaticMarkdown = memo(function StaticMarkdown({
           // No session context — render the literal text the remark plugin emitted.
           return <span>{children}</span>;
         }
+        const libraryBibkey = href ? decodeLibraryCiteHref(href) : null;
+        if (libraryBibkey) {
+          return <LibraryCitationInline bibkey={libraryBibkey} />;
+        }
         return (
           <AppBrowserLink href={href}>
             {children}
@@ -114,7 +139,7 @@ export const StaticMarkdown = memo(function StaticMarkdown({
   }, [sessionId]);
 
   return (
-    <div className={cn("text-[length:var(--font-chat-message)] text-foreground leading-normal min-w-0 max-w-full overflow-hidden", CHAT_MARKDOWN_TYPOGRAPHY)}>
+    <div className={cn("text-[length:var(--font-chat-message)] text-foreground leading-relaxed min-w-0 max-w-full overflow-hidden", CHAT_MARKDOWN_TYPOGRAPHY)}>
       <ReactMarkdown
         remarkPlugins={remarkPlugins}
         rehypePlugins={rehypePlugins}

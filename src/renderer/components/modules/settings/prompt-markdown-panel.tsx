@@ -14,14 +14,12 @@ type PromptMarkdownSlot = Extract<SettingsPanelSlot, { kind: "prompt-markdown" }
 export function PromptMarkdownPanel({ slot }: { slot: PromptMarkdownSlot }) {
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const agentSystemPrompt = useSettingsStore((s) => s.settings.agentSystemPrompt) ?? "";
   const updateSettings = useSettingsStore((s) => s.updateSettings);
 
   const [content, setContent] = useState("");
   const [savedContent, setSavedContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<"source" | "preview">("preview");
 
   const agentsMdPath = projectRoot
@@ -60,32 +58,16 @@ export function PromptMarkdownPanel({ slot }: { slot: PromptMarkdownSlot }) {
             setContent("");
             setSavedContent("");
           }
-        } else {
-          const text = await window.electronAPI.settingsGetAssembledPrompt(
-            projectRoot ?? undefined,
-            agentSystemPrompt || undefined,
-          );
-          setContent(text);
-          setSavedContent(text);
         }
       } catch {
         toast.error("Failed to load content.");
-        if (slot.doc !== "assembled") closePanel();
+        closePanel();
       } finally {
         if (!silent) setLoading(false);
       }
     },
-    [slot.doc, agentSystemPrompt, projectRoot, agentsMdPath, closePanel],
+    [slot.doc, projectRoot, agentsMdPath, closePanel],
   );
-
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await loadContent({ silent: true });
-    } finally {
-      setRefreshing(false);
-    }
-  }, [loadContent]);
 
   useEffect(() => {
     void loadContent();
@@ -125,10 +107,9 @@ export function PromptMarkdownPanel({ slot }: { slot: PromptMarkdownSlot }) {
     setViewMode("preview");
   };
 
-  const readOnly = slot.doc === "assembled";
   const isCustomSystemPrompt = slot.doc === "system-prompt" && savedContent.trim().length > 0;
 
-  if (loading && slot.doc !== "assembled") {
+  if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center text-[length:var(--font-size-12)] text-muted-foreground">
         Loading…
@@ -148,26 +129,19 @@ export function PromptMarkdownPanel({ slot }: { slot: PromptMarkdownSlot }) {
     <div className="flex h-full min-h-0 flex-col">
       <SettingsMarkdownToolbar
         viewMode={viewMode}
-        onViewModeChange={readOnly ? undefined : setViewMode}
-        readOnly={readOnly}
-        onRefresh={readOnly ? () => void handleRefresh() : undefined}
-        refreshing={refreshing}
-        actions={
-          readOnly
-            ? undefined
-            : {
-                onSave: () => void handleSave(),
-                onCancel: closePanel,
-                saving,
-                onResetToDefault:
-                  slot.doc === "system-prompt" ? () => void handleResetToDefault() : undefined,
-                resetDisabled: !isCustomSystemPrompt,
-              }
-        }
+        onViewModeChange={setViewMode}
+        actions={{
+          onSave: () => void handleSave(),
+          onCancel: closePanel,
+          saving,
+          onResetToDefault:
+            slot.doc === "system-prompt" ? () => void handleResetToDefault() : undefined,
+          resetDisabled: !isCustomSystemPrompt,
+        }}
       />
 
       <div className="flex-1 min-h-0">
-        {viewMode === "source" && !readOnly ? (
+        {viewMode === "source" ? (
           <SettingsMarkdownEditor value={content} onChange={setContent} className="h-full" />
         ) : (
           <MarkdownContentPreview content={content} className="h-full" />

@@ -62,7 +62,8 @@ export interface ActionCommandRef {
 export interface CompiledComposerPrompt {
   displayBlocks: ContentBlock[];
   promptText: string;
-  selectedProfileId: string | null;
+  /** All @expert chip ids in order. */
+  selectedExpertIds: string[];
   actionCommands: ActionCommandRef[];
   aiCommandNames: string[];
   /** MCP servers explicitly requested via composer `/` tokens. */
@@ -83,11 +84,13 @@ export async function compileComposerPrompt(
   const aiCommandNames: string[] = [];
   const mcpServerNames: string[] = [];
   const skillIds: string[] = [];
-  let selectedProfileId: string | null = null;
+  const selectedExpertIds: string[] = [];
 
   for (const part of parts) {
-    if (part.type === "mention" && part.mentionType === "profile") {
-      selectedProfileId = part.profileId;
+    if (part.type === "mention" && part.mentionType === "expert") {
+      if (!selectedExpertIds.includes(part.expertId)) {
+        selectedExpertIds.push(part.expertId);
+      }
     }
     if (part.type === "command") {
       if (part.action) {
@@ -340,7 +343,7 @@ export async function compileComposerPrompt(
   return {
     displayBlocks,
     promptText,
-    selectedProfileId,
+    selectedExpertIds,
     actionCommands,
     aiCommandNames,
     mcpServerNames: [...new Set(mcpServerNames)],

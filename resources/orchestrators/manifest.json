@@ -1,0 +1,16 @@
+{
+  "orchestrators": [
+    {
+      "id": "research-prism",
+      "name": "Research Prism",
+      "description": "Primary research orchestrator — coordinates literature, analysis, writing, and project tools across the workspace.",
+      "builtin": true,
+      "allowedExperts": ["citation-auditor", "library-scout", "literature-scout"],
+      "modules": [
+        "chat-citation-staging",
+        "literature-library",
+        "task-delegation"
+      ]
+    }
+  ]
+}

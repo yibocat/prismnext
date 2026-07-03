@@ -47,11 +47,14 @@ export const useMcpServersStore = create<McpServersState>()((set, get) => ({
   },
 
   persist: async (projectRoot, next) => {
-    set({ saving: true });
+    const prev = get().servers;
+    set({ servers: next, projectRoot, saving: true });
     try {
       await window.electronAPI.fsWrite(mcpPathFor(projectRoot), serializeMcpConfig(next));
       await window.electronAPI.chatPrewarm(projectRoot);
-      set({ servers: next, projectRoot });
+    } catch {
+      set({ servers: prev });
+      throw new Error("Failed to save MCP configuration");
     } finally {
       set({ saving: false });
     }

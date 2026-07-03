@@ -1,4 +1,6 @@
-/** Structured inline tokens embedded in chat composer and user messages. */
+/** Default AI Chat composer hint — @ mentions and / slash tokens. */
+export const COMPOSER_PLACEHOLDER =
+  "@ expert, file, or paper · / commands, skills, MCP";
 
 import {
   isBrowsableUrl,
@@ -20,10 +22,10 @@ export type ComposerPart =
     }
   | {
       type: "mention";
-      mentionType: "profile";
+      mentionType: "expert";
       id: string;
       label: string;
-      profileId: string;
+      expertId: string;
     }
   | {
       type: "command";

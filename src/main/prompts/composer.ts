@@ -157,7 +157,6 @@ export class PromptComposer {
     const exclude = new Set(options?.excludeLayerIds ?? []);
     const excludeRules = exclude.has("custom-rules");
     const excludeAgentsMd = exclude.has("agents-md");
-    const excludeProfile = exclude.has("profile-overlay");
     // Stable hash: sort keys to avoid ordering differences.
     // Content fields use djb2 hash so equivalent content always matches
     // regardless of surrounding whitespace or encoding differences.
@@ -178,14 +177,6 @@ export class PromptComposer {
           ? djb2Hash(ctx.customRules.map((r) => `${r.name}:${r.content}`).join("|"))
           : "0",
       acrs: excludeRules ? "0" : ctx.customRules?.length ? String(ctx.customRules.length) : "0",
-      pid: excludeProfile ? "" : (ctx.profileId ?? ""),
-      pin: excludeProfile
-        ? "0"
-        : ctx.profileInstructions
-          ? djb2Hash(ctx.profileInstructions)
-          : "0",
-      pm: excludeProfile ? "" : (ctx.profileModules?.join(",") ?? ""),
-      prf: excludeProfile ? "" : (ctx.profileRules?.join(",") ?? ""),
       en: this.layers.map((l) => `${l.id}=${l.enabled ? 1 : 0}`).join(","),
     };
     return JSON.stringify(normalized);

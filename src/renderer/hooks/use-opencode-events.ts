@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useChatStore, type ChatStreamMessage } from "@/stores/chat-store";
+import { useChatStore, type ChatStreamMessage, type ContentBlock } from "@/stores/chat-store";
 
 import { useDocumentStore } from "@/stores/document-store";
 import { useChangesStore } from "@/stores/changes-store";
@@ -8,7 +8,11 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { usePermissionStore } from "@/stores/permission-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useCitationStagingStore } from "@/stores/citation-staging-store";
-import { parseStageToolResult } from "@/lib/literature/parse-stage-tool-result";
+import {
+  captureLiteratureStageForSession,
+  captureLiteratureStageFromToolResult,
+} from "@/lib/literature/sync-citation-staging-from-messages";
+import { enrichTaskToolResultFromStore } from "@/lib/literature/format-session-citations-context";
 import {
   resolvePermissionMode,
   extractPermissionToolName,
@@ -417,6 +421,66 @@ export function useOpenCodeEvents() {
       if (!tab) return;
 
       switch (type) {
+        case "subAgent.linked": {
+          const taskToolUseId = String(data.taskToolUseId || "");
+          if (!taskToolUseId) break;
+          chatStore._linkSubAgentRun(tabId, taskToolUseId, {
+            expertId: String(data.expertId || "general"),
+            prompt: String(data.prompt || ""),
+            subSessionId: data.subSessionId ? String(data.subSessionId) : undefined,
+          });
+          break;
+        }
+
+        case "subAgent.activity": {
+          const taskToolUseId = String(data.taskToolUseId || "");
+          const block = data.block as ContentBlock | undefined;
+          if (!taskToolUseId || !block) break;
+          chatStore._upsertSubAgentActivity(tabId, taskToolUseId, block);
+          if (block.type === "tool_result" && !block.is_error) {
+            const tab = useChatStore.getState().tabs.find((t) => t.id === tabId);
+            const sessionId = tab?.sessionId;
+            const run = tab?.subAgentRuns?.[taskToolUseId];
+            if (sessionId && run?.blocks.length) {
+              const toolName = (
+                (block as ContentBlock & { name?: string }).name
+                || run.blocks.find(
+                  (b) => b.type === "tool_use" && b.id === block.tool_use_id,
+                )?.name
+                || ""
+              ).toLowerCase();
+              if (toolName === "literature-stage") {
+                captureLiteratureStageForSession(sessionId, run.blocks);
+              }
+            }
+          }
+          break;
+        }
+
+        case "subAgent.completed": {
+          const taskToolUseId = String(data.taskToolUseId || "");
+          if (!taskToolUseId) break;
+          chatStore._completeSubAgentRun(
+            tabId,
+            taskToolUseId,
+            data.status === "error" ? "error" : "done",
+          );
+          break;
+        }
+
+        case "citation.staged": {
+          const sessionId = String(data.sessionId || "");
+          const result = data.result;
+          if (sessionId && result && typeof result === "object") {
+            useCitationStagingStore.getState().upsertFromStageResult(
+              sessionId,
+              result as import("@shared/citation-staging").StageResult,
+            );
+            useCitationStagingStore.getState().setActiveSession(sessionId);
+          }
+          break;
+        }
+
         case "message.part.updated": {
           if (!tab.isStreaming) {
             break;
@@ -538,7 +602,7 @@ export function useOpenCodeEvents() {
             // Store tool_result blocks and process backfills.
             // Each tool_result becomes a hidden result-type message — picked up
             // by toolResultMap in chat-messages.tsx for Widget matching.
-            for (const block of toolResultBlocks) {
+            for (let block of toolResultBlocks) {
               const toolUseId = block.tool_use_id || "";
               const status = (block.status || "").toLowerCase();
               const isFinalToolResult = !status || status === "completed" || status === "failed";
@@ -562,18 +626,29 @@ export function useOpenCodeEvents() {
                 // Capture literature-stage results into the citation staging store
                 // so chat [n] references and the Session citations panel stay in sync.
                 if (toolName === "literature-stage" && !block.is_error) {
-                  try {
-                    const stagePayload = parseStageToolResult(block.content);
-                    const sessionId =
-                      useChatStore.getState().tabs.find((t) => t.id === tabId)?.sessionId ?? null;
-                    if (stagePayload && sessionId) {
-                      useCitationStagingStore
-                        .getState()
-                        .upsertFromStageResult(sessionId, stagePayload);
-                      useCitationStagingStore.getState().setActiveSession(sessionId);
+                  const sessionId =
+                    useChatStore.getState().tabs.find((t) => t.id === tabId)?.sessionId ?? null;
+                  if (sessionId) {
+                    captureLiteratureStageFromToolResult(sessionId, block.content);
+                  }
+                }
+
+                if (toolName === "task" && !block.is_error) {
+                  const sessionId =
+                    useChatStore.getState().tabs.find((t) => t.id === tabId)?.sessionId ?? null;
+                  if (sessionId) {
+                    const citations =
+                      useCitationStagingStore.getState().getCitationsForSession(sessionId);
+                    if (citations.length > 0) {
+                      block = {
+                        ...block,
+                        content: enrichTaskToolResultFromStore(
+                          sessionId,
+                          citations,
+                          block.content,
+                        ),
+                      };
                     }
-                  } catch (err) {
-                    log.warn("literature-stage capture failed", err);
                   }
                 }
 

@@ -1,13 +1,13 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync } from "node:fs";
 import { join, basename } from "node:path";
-import { homedir } from "node:os";
 import { createLogger } from "./logger";
 import { runAiBashFromBridgeRequest } from "./ai-bash-runner";
+import { getTerminalBridgeRoot } from "./prism-bridge-paths";
 
 const log = createLogger("terminal-bridge", "agent");
 
 function getBridgeRoot(): string {
-  return process.env.PRISM_TERMINAL_BRIDGE_ROOT || join(homedir(), ".prism-terminal-bridge");
+  return getTerminalBridgeRoot();
 }
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -74,7 +74,7 @@ async function pollBridge(): Promise<void> {
   );
 }
 
-/** Start polling ~/.prism-terminal-bridge for bash tool requests (pty mode). */
+/** Start polling the terminal bridge for bash tool requests (pty mode). */
 export function startTerminalBridge(): void {
   if (pollTimer) return;
   mkdirSync(getBridgeRoot(), { recursive: true });

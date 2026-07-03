@@ -1,16 +1,55 @@
-import { useState, memo } from "react";
+import { useState, memo, useMemo } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
+import { useChatStore } from "@/stores/chat-store";
 import { BotIcon } from "lucide-react";
 import { ToolCard, param } from "./shared";
+import { AssistantBlockList } from "../assistant-block-list";
+import { buildToolResultMapFromBlocks } from "./tool-result-map";
 
-/** Sub-agent type labels and descriptions from OpenCode */
-const AGENT_META: Record<string, { label: string; desc: string }> = {
+/** OpenCode built-in subagent types */
+const OPENCODE_AGENT_META: Record<string, { label: string; desc: string }> = {
   general: { label: "General", desc: "Complex multi-step research and tasks" },
   explore: { label: "Explore", desc: "Fast read-only codebase search" },
   scout: { label: "Scout", desc: "External docs and dependency research" },
   plan: { label: "Plan", desc: "Read-only analysis and planning" },
   build: { label: "Build", desc: "Full development with all tools" },
 };
+
+/** Prism synced expert ids */
+const PRISM_EXPERT_META: Record<string, { label: string; desc: string }> = {
+  "research-prism": {
+    label: "Research Prism",
+    desc: "Primary research orchestrator",
+  },
+  "citation-auditor": {
+    label: "Citation Auditor",
+    desc: "Citation and bibliography consistency review",
+  },
+  "literature-scout": {
+    label: "Literature Scout",
+    desc: "External literature search and staged citations",
+  },
+  "library-scout": {
+    label: "Library Scout",
+    desc: "Search papers already in the project library",
+  },
+};
+
+function humanizeAgentId(id: string): string {
+  return id
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function resolveAgentMeta(agentType: string): { label: string; desc: string } {
+  return (
+    PRISM_EXPERT_META[agentType]
+    ?? OPENCODE_AGENT_META[agentType]
+    ?? { label: humanizeAgentId(agentType) || "Sub-agent", desc: "" }
+  );
+}
 
 export const TaskWidget = memo(function TaskWidget({
   toolUse,
@@ -22,21 +61,46 @@ export const TaskWidget = memo(function TaskWidget({
   toolName: string;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const isLoading = !toolResult;
-  const isError = toolResult?.is_error;
+  const toolUseId = toolUse.id || "";
+  const subAgentRun = useChatStore(
+    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.subAgentRuns?.[toolUseId] ?? null,
+  );
+  const parentSessionId = useChatStore(
+    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.sessionId ?? "",
+  );
 
-  const prompt = param(toolUse.input, "prompt") || param(toolUse.input, "description") || "";
-  const agentType = (param(toolUse.input, "agent") || param(toolUse.input, "subagent_type") || "general")
+  const isLoading = !toolResult && subAgentRun?.status !== "done" && subAgentRun?.status !== "error";
+  const isError = toolResult?.is_error || subAgentRun?.status === "error";
+
+  const prompt =
+    param(toolUse.input, "prompt")
+    || param(toolUse.input, "description")
+    || subAgentRun?.prompt
+    || "";
+  const agentType = (
+    param(toolUse.input, "agent")
+    || param(toolUse.input, "subagent_type")
+    || subAgentRun?.expertId
+    || "general"
+  )
     .replace(/^@/, "")
     .toLowerCase();
   const taskId = param(toolUse.input, "task_id", "taskId") || "";
-  const meta = AGENT_META[agentType] || { label: agentType || "Sub-agent", desc: "" };
+  const meta = resolveAgentMeta(agentType);
   const isResuming = !!taskId;
 
-  // During initial display (before backfill), agentType may default to
-  // "general" since rawInput is empty.  After backfill, the real
-  // subagent_type (e.g. "explore") is patched in.
   const hasRealInput = !!(prompt || agentType !== "general");
+  const activityBlocks = subAgentRun?.blocks ?? [];
+  const activityStreaming = subAgentRun?.status === "running";
+  const activityToolResultMap = useMemo(
+    () => buildToolResultMapFromBlocks(activityBlocks, { isStreaming: activityStreaming }),
+    [activityBlocks, activityStreaming],
+  );
+  const hasExpandableContent =
+    !!prompt
+    || activityBlocks.length > 0
+    || !!toolResult?.content
+    || isLoading;
 
   const label = isResuming
     ? "Task (resume)"
@@ -58,31 +122,67 @@ export const TaskWidget = memo(function TaskWidget({
       onToggle={() => setExpanded(!expanded)}
       isLoading={isLoading}
       isError={!!isError}
-      hasContent={!!toolResult?.content}
-      bodyClassName="font-mono whitespace-pre-wrap text-muted-foreground max-h-80 overflow-y-auto"
+      hasContent={hasExpandableContent}
+      bodyClassName="max-h-96 overflow-y-auto"
     >
       {() => (
         <>
           <div className="text-[length:var(--font-chat-meta)] text-muted-foreground/70 mb-1">
             {meta.desc}
+            {subAgentRun?.status === "running" ? (
+              <span className="ml-2 text-primary">· Expert running</span>
+            ) : null}
             {isResuming && <span className="ml-2">· {taskId}</span>}
           </div>
-          {prompt && (
+          {prompt ? (
             <div className="bg-muted/50 rounded px-2 py-1.5 mt-1 text-foreground/80">
-              {prompt.slice(0, 500)}
-              {prompt.length > 500 && "…"}
+              <p className="text-[length:var(--font-size-11)] uppercase tracking-wide text-muted-foreground mb-1">
+                Delegation prompt
+              </p>
+              {prompt.slice(0, 800)}
+              {prompt.length > 800 && "…"}
             </div>
-          )}
-          <div className="mt-2 pt-2 border-t border-border/50">
-            {(() => {
-              const raw = (typeof toolResult?.content === "string"
-                ? toolResult.content
-                : JSON.stringify(toolResult?.content ?? "", null, 2)) || "";
-              return raw.length > 2000
-                ? raw.slice(0, 2000) + `\n\n··· ${raw.length - 2000} more chars`
-                : raw;
-            })()}
-          </div>
+          ) : null}
+
+          {activityBlocks.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              <p className="text-[length:var(--font-size-11)] uppercase tracking-wide text-muted-foreground">
+                Expert activity
+              </p>
+              <div className="min-w-0 max-w-full overflow-hidden">
+                <AssistantBlockList
+                  blocks={activityBlocks}
+                  toolResultMap={activityToolResultMap}
+                  msgIndex={0}
+                  isStreamingMsg={activityStreaming}
+                  sessionId={parentSessionId}
+                />
+              </div>
+            </div>
+          ) : isLoading ? (
+            <p className="mt-2 text-[length:var(--font-size-12)] text-muted-foreground">
+              Waiting for expert session…
+            </p>
+          ) : null}
+
+          {toolResult?.content ? (
+            <div className="mt-2 pt-2 border-t border-border/50">
+              <p className="text-[length:var(--font-size-11)] uppercase tracking-wide text-muted-foreground mb-1">
+                Task result
+              </p>
+              <pre className="font-mono whitespace-pre-wrap text-muted-foreground text-[length:var(--font-size-12)]">
+                {(() => {
+                  const raw =
+                    (typeof toolResult.content === "string"
+                      ? toolResult.content
+                      : JSON.stringify(toolResult.content ?? "", null, 2)) || "";
+                  return raw.length > 2000
+                    ? raw.slice(0, 2000) + `\n\n··· ${raw.length - 2000} more chars`
+                    : raw;
+                })()}
+              </pre>
+            </div>
+          ) : null}
         </>
       )}
     </ToolCard>

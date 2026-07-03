@@ -6,8 +6,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import type { BrowserWindow } from "electron";
+import { getTerminalBridgeRoot } from "./prism-bridge-paths";
 import { runAiCommand } from "./ai-pty";
 import { resolveChatTabId } from "./chat-session-registry";
 import { createLogger } from "./logger";
@@ -47,7 +47,7 @@ export interface RunAiBashJobResult {
 }
 
 function getBridgeRoot(): string {
-  return process.env.PRISM_TERMINAL_BRIDGE_ROOT || join(homedir(), ".prism-terminal-bridge");
+  return getTerminalBridgeRoot();
 }
 
 let mainWindow: BrowserWindow | null = null;

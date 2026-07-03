@@ -493,6 +493,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("agent:listSkillLibrarySources", { projectPath }),
 	agentAddSkillLibrarySource: (projectPath: string, registryUrl: string) =>
 		ipcRenderer.invoke("agent:addSkillLibrarySource", { projectPath, registryUrl }),
+	agentFetchSkillLibraryCatalog: (projectPath: string, sourceId: string) =>
+		ipcRenderer.invoke("agent:fetchSkillLibraryCatalog", { projectPath, sourceId }),
+	agentInstallLibraryCatalogItem: (
+		projectPath: string,
+		item: import("../../shared/skill-library-types").LibraryCatalogItem,
+	) => ipcRenderer.invoke("agent:installLibraryCatalogItem", { projectPath, item }),
+	agentInstallAllFromLibrarySource: (projectPath: string, sourceId: string) =>
+		ipcRenderer.invoke("agent:installAllFromLibrarySource", { projectPath, sourceId }),
 	agentRemoveSkillLibrarySource: (projectPath: string, sourceId: string) =>
 		ipcRenderer.invoke("agent:removeSkillLibrarySource", { projectPath, sourceId }),
 	agentSetSkillLibrarySourceConnected: (projectPath: string, sourceId: string, connected: boolean) =>
@@ -511,38 +519,87 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("agent:setSkillEnabled", { projectPath, skillId, enabled }),
 	agentInstallSkill: (projectPath: string, skillId: string, content: string) =>
 		ipcRenderer.invoke("agent:installSkill", { projectPath, skillId, content }),
-	agentInstallSkillFromRegistry: (projectPath: string, skillName: string, artifactUrl: string) =>
-		ipcRenderer.invoke("agent:installSkillFromRegistry", { projectPath, skillName, artifactUrl }),
+	agentInstallSkillFromRegistry: (
+		projectPath: string,
+		skillName: string,
+		artifactUrl: string,
+		options?: {
+			artifactType?: "skill-md" | "archive" | "unknown";
+			files?: string[];
+			indexUrl: string;
+		},
+	) =>
+		ipcRenderer.invoke("agent:installSkillFromRegistry", {
+			projectPath,
+			skillName,
+			artifactUrl,
+			artifactType: options?.artifactType,
+			files: options?.files,
+			indexUrl: options?.indexUrl ?? "",
+		}),
+	agentAnalyzeSkillSource: (input: string) =>
+		ipcRenderer.invoke("agent:analyzeSkillSource", { input }),
+	agentInstallSkillPackages: (
+		projectPath: string,
+		selection: {
+			cacheKey: string;
+			packageIds: string[];
+			includeShared: boolean;
+			origin:
+				| { adapter: "github"; repo: string; ref: string; path: string }
+				| { adapter: "discovery"; indexUrl: string };
+		},
+	) => ipcRenderer.invoke("agent:installSkillPackages", { projectPath, selection }),
+	agentReinstallSkill: (projectPath: string, skillId: string) =>
+		ipcRenderer.invoke("agent:reinstallSkill", { projectPath, skillId }),
+	agentCheckSkillUpdates: (projectPath: string) =>
+		ipcRenderer.invoke("agent:checkSkillUpdates", { projectPath }),
 	agentDeleteSkill: (projectPath: string, skillId: string) =>
 		ipcRenderer.invoke("agent:deleteSkill", { projectPath, skillId }),
-	agentListProfiles: (projectPath: string) =>
-		ipcRenderer.invoke("agent:listProfiles", { projectPath }),
-	agentListDisabledBuiltinProfiles: (projectPath: string) =>
-		ipcRenderer.invoke("agent:listDisabledBuiltinProfiles", { projectPath }),
-	agentRestoreBuiltinProfiles: (projectPath: string, profileIds?: string[]) =>
-		ipcRenderer.invoke("agent:restoreBuiltinProfiles", { projectPath, profileIds }),
-	agentResetBuiltinProfilesToDefaults: (projectPath: string) =>
-		ipcRenderer.invoke("agent:resetBuiltinProfilesToDefaults", { projectPath }),
-	agentGetProfilesManifest: (projectPath: string) =>
-		ipcRenderer.invoke("agent:getProfilesManifest", { projectPath }),
-	agentSetBuiltinProfileEnabled: (projectPath: string, profileId: string, enabled: boolean) =>
-		ipcRenderer.invoke("agent:setBuiltinProfileEnabled", { projectPath, profileId, enabled }),
-	agentGetProfileEditorOptions: (projectPath: string) =>
-		ipcRenderer.invoke("agent:getProfileEditorOptions", { projectPath }),
-	agentGetProfileDetail: (projectPath: string, profileId: string) =>
-		ipcRenderer.invoke("agent:getProfileDetail", { projectPath, profileId }),
-	agentSaveCustomProfile: (
+	expertsList: (projectPath: string) =>
+		ipcRenderer.invoke("experts:list", { projectPath }),
+	orchestratorsList: (projectPath: string) =>
+		ipcRenderer.invoke("orchestrators:list", { projectPath }),
+	expertsGetManifest: (projectPath: string) =>
+		ipcRenderer.invoke("experts:getManifest", { projectPath }),
+	orchestratorsGetManifest: (projectPath: string) =>
+		ipcRenderer.invoke("orchestrators:getManifest", { projectPath }),
+	expertsGetDetail: (projectPath: string, expertId: string) =>
+		ipcRenderer.invoke("experts:getDetail", { projectPath, expertId }),
+	expertsSetBuiltinEnabled: (projectPath: string, expertId: string, enabled: boolean) =>
+		ipcRenderer.invoke("experts:setBuiltinEnabled", { projectPath, expertId, enabled }),
+	expertsSaveCustom: (
 		projectPath: string,
-		payload: import("@shared/agent-profiles").SaveCustomProfilePayload,
-	) => ipcRenderer.invoke("agent:saveCustomProfile", { projectPath, payload }),
-	agentSaveBuiltinProfileOverride: (
+		payload: import("@shared/agent-experts").SaveCustomExpertPayload,
+	) => ipcRenderer.invoke("experts:saveCustom", { projectPath, payload }),
+	expertsSaveBuiltinOverride: (
 		projectPath: string,
-		payload: import("@shared/agent-profiles").SaveBuiltinProfileOverridePayload,
-	) => ipcRenderer.invoke("agent:saveBuiltinProfileOverride", { projectPath, payload }),
-	agentResetBuiltinProfileOverride: (projectPath: string, profileId: string) =>
-		ipcRenderer.invoke("agent:resetBuiltinProfileOverride", { projectPath, profileId }),
-	agentDeleteCustomProfile: (projectPath: string, profileId: string) =>
-		ipcRenderer.invoke("agent:deleteCustomProfile", { projectPath, profileId }),
+		payload: import("@shared/agent-experts").SaveBuiltinExpertOverridePayload,
+	) => ipcRenderer.invoke("experts:saveBuiltinOverride", { projectPath, payload }),
+	expertsDeleteCustom: (projectPath: string, expertId: string) =>
+		ipcRenderer.invoke("experts:deleteCustom", { projectPath, expertId }),
+	orchestratorsSetDefault: (projectPath: string, orchestratorId: string) =>
+		ipcRenderer.invoke("orchestrators:setDefault", { projectPath, orchestratorId }),
+	orchestratorsSaveBuiltinOverride: (
+		projectPath: string,
+		payload: import("@shared/agent-experts").SaveBuiltinOrchestratorOverridePayload,
+	) => ipcRenderer.invoke("orchestrators:saveBuiltinOverride", { projectPath, payload }),
+	orchestratorsResetBuiltinOverride: (projectPath: string, orchestratorId: string) =>
+		ipcRenderer.invoke("orchestrators:resetBuiltinOverride", { projectPath, orchestratorId }),
+	orchestratorsGetDetail: (projectPath: string, orchestratorId: string) =>
+		ipcRenderer.invoke("orchestrators:getDetail", { projectPath, orchestratorId }),
+	orchestratorsSaveCustom: (
+		projectPath: string,
+		payload: import("@shared/agent-experts").SaveCustomOrchestratorPayload,
+	) => ipcRenderer.invoke("orchestrators:saveCustom", { projectPath, payload }),
+	orchestratorsDeleteCustom: (projectPath: string, orchestratorId: string) =>
+		ipcRenderer.invoke("orchestrators:deleteCustom", { projectPath, orchestratorId }),
+	expertsGetEditorOptions: (projectPath: string) =>
+		ipcRenderer.invoke("experts:getEditorOptions", { projectPath }),
+	expertsResetBuiltinOverride: (projectPath: string, expertId: string) =>
+		ipcRenderer.invoke("experts:resetBuiltinOverride", { projectPath, expertId }),
+	expertsResetBuiltinsToDefaults: (projectPath: string) =>
+		ipcRenderer.invoke("experts:resetBuiltinsToDefaults", { projectPath }),
 	chatSend: (args: {
 		projectPath: string;
 		worktreePath?: string;
@@ -554,12 +611,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		model?: string;
 		provider?: string;
 		thoughtLevel?: string;
-		profileId?: string | null;
 		mcpServerAllowlist?: string[];
 		skillIds?: string[];
 		userDisplayContent?: Record<string, unknown>[];
 		intensivePaperIds?: string[];
 		hasPaperSnippets?: boolean;
+		orchestratorId?: string | null;
+		selectedExpertIds?: string[];
 	}) =>
 		ipcRenderer.invoke("chat:send", args),
 	chatCancel: (sessionId: string) =>
@@ -625,14 +683,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("settings:setAgentProjectConfig", { projectPath, config }),
 	settingsGetAssembledPrompt: (projectRoot?: string, userCustomPrompt?: string) =>
 		ipcRenderer.invoke("settings:getAssembledPrompt", { projectRoot, userCustomPrompt }),
+	settingsGetPromptStackPreview: (
+		projectRoot?: string,
+		userCustomPrompt?: string,
+		orchestratorId?: string | null,
+	) =>
+		ipcRenderer.invoke("settings:getPromptStackPreview", {
+			projectRoot,
+			userCustomPrompt,
+			orchestratorId,
+		}),
 	settingsComputePromptFingerprint: (projectRoot?: string) =>
 		ipcRenderer.invoke("settings:computePromptFingerprint", { projectRoot }),
 	settingsGetDefaultPersona: () =>
 		ipcRenderer.invoke("settings:getDefaultPersona"),
-	settingsGetModules: () =>
-		ipcRenderer.invoke("settings:getModules"),
-	settingsSetModule: (key: string, enabled: boolean) =>
-		ipcRenderer.invoke("settings:setModule", { key, enabled }),
+	settingsGetKnowledgeModules: (projectRoot?: string) =>
+		ipcRenderer.invoke("settings:getKnowledgeModules", { projectRoot }),
+	settingsGetModules: (projectRoot?: string) =>
+		ipcRenderer.invoke("settings:getModules", { projectRoot }),
 	settingsGetBuiltinTools: () =>
 		ipcRenderer.invoke("settings:getBuiltinTools"),
 	settingsGetLayers: () =>

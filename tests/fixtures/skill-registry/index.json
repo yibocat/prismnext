@@ -1,0 +1,16 @@
+{
+  "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+  "skills": [
+    {
+      "name": "demo-multi-file",
+      "description": "Local fixture — skill-md with SKILL.md + notes.md",
+      "files": ["SKILL.md", "notes.md"]
+    },
+    {
+      "name": "demo-archive",
+      "description": "Local fixture — archive install (.tar.gz)",
+      "type": "archive",
+      "url": "demo-archive.tar.gz"
+    }
+  ]
+}

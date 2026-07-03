@@ -1,7 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { promptManager } from "../../src/main/prompts";
 import type { PromptContext } from "../../src/main/prompts/types";
-import { TOOL_NAMES } from "../../src/shared/tool-names";
 
 describe("promptManager project rules injection split", () => {
   beforeEach(() => {
@@ -47,23 +46,17 @@ describe("promptManager project rules injection split", () => {
 
   it("fingerprint includes static module prompt content hash", () => {
     const fp = promptManager.computePromptFingerprint(ctx);
-    expect(fp).toContain("citations=");
+    expect(fp).toContain("chat-citation-staging=");
+    expect(fp).toContain("literature-library=");
   });
 
-  it("composeStableSystem excludes AGENTS.md, profile overlay, and project rules", () => {
-    const stable = promptManager.composeStableSystem({
-      ...ctx,
-      profileId: "review",
-      profileName: "Review",
-      profileInstructions: "Be thorough.",
-    });
+  it("composeStableSystem excludes AGENTS.md, project rules, and profile-only modules", () => {
+    const stable = promptManager.composeStableSystem(ctx);
     expect(stable).not.toContain("Run pnpm test");
     expect(stable).not.toContain("Use pnpm only.");
     expect(stable).not.toContain("Active Agent Profile");
-    expect(stable).toContain("Citations & Bibliography");
-    expect(stable).toContain("Chat paper citations");
-    expect(stable).toContain(TOOL_NAMES.literatureStage);
-    expect(stable).not.toContain("Prism Tools Guide");
-    expect(stable).not.toContain("Reference & literature");
+    expect(stable).not.toContain("Chat paper citations");
+    expect(stable).not.toContain("Citations & Bibliography");
+    expect(stable).toContain("Prism Assistant");
   });
 });

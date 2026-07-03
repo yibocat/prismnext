@@ -1,5 +1,10 @@
 # Agent Profiles Design
 
+> **Superseded (subagent sync):** OpenCode subagent integration and Expert team mode are redesigned in  
+> `2026-07-03-expert-team-subagents-design.md`. This document remains as historical context for the  
+> original Profile overlay model (Agent mode persona). The `.opencode/agents/` sync path described  
+> below was never implemented and is **not** the target architecture.
+
 **Goal:** Bundle prompts, skills, MCP, modules, and rules into named **Profiles** — selectable for the main chat session and delegatable as subagents in conversation.
 
 ## Concepts

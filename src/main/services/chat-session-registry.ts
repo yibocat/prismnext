@@ -2,7 +2,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { homedir } from "node:os";
+import { getTerminalBridgeRoot } from "./prism-bridge-paths";
 
 const sessionToTab = new Map<string, string>();
 const tabToSession = new Map<string, string>();
@@ -11,7 +11,7 @@ const sessionToProjectRoot = new Map<string, string>();
 const sessionIntensiveBibkeys = new Map<string, Set<string>>();
 
 function getBridgeRoot(): string {
-  return process.env.PRISM_TERMINAL_BRIDGE_ROOT || join(homedir(), ".prism-terminal-bridge");
+  return getTerminalBridgeRoot();
 }
 
 function persistSessionMapping(sessionId: string, tabId: string, projectRoot?: string): void {

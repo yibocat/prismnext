@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { getMentionableFiles } from "@/lib/files/mentionable-files";
 import { pickComposerAttachments } from "@/lib/chat/composer-attach-file";
-import { isComposerEmpty, type ComposerPart } from "@/lib/chat/composer-parts";
+import { isComposerEmpty, type ComposerPart, COMPOSER_PLACEHOLDER } from "@/lib/chat/composer-parts";
 import { loadSlashCatalog } from "@/lib/chat/slash-catalog";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -12,7 +12,7 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useCommandStore } from "@/stores/command-store";
 import { actionRegistry } from "@/actions/registry";
 import "@/actions/builtin-actions";
-import type { AgentProfileInfo } from "@shared/agent-profiles";
+import type { ExpertInfo } from "@shared/agent-experts";
 import {
   compileComposerPrompt,
   shouldSendPromptToAgent,
@@ -54,9 +54,6 @@ export function useChatComposer() {
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.draft,
   );
   const composerInsertNonce = useComposerInsertStore((s) => s.nonce);
-  const chatMode = useChatStore(
-    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.chatMode ?? "agent",
-  );
 
   const commands = useCommandStore((s) => s.commands);
   const searchCommands = useCommandStore((s) => s.searchCommands);
@@ -73,7 +70,7 @@ export function useChatComposer() {
   const activeFileId = useDocumentStore((s) => s.activeFileId);
   const selectionRange = useDocumentStore((s) => s.selectionRange);
 
-  const [profiles, setProfiles] = useState<AgentProfileInfo[]>([]);
+  const [experts, setExperts] = useState<ExpertInfo[]>([]);
   const [slashSkills, setSlashSkills] = useState<{ id: string; name: string; enabled: boolean }[]>([]);
   const [slashMcps, setSlashMcps] = useState<{ name: string }[]>([]);
   const [pinnedContexts, setPinnedContexts] = useState<PinnedContext[]>([]);
@@ -95,12 +92,20 @@ export function useChatComposer() {
 
   useEffect(() => {
     if (!projectRoot) {
-      setProfiles([]);
+      setExperts([]);
       setSlashSkills([]);
       setSlashMcps([]);
       return;
     }
-    void window.electronAPI.agentListProfiles(projectRoot).then(setProfiles).catch(() => setProfiles([]));
+    const loadMentions = async () => {
+      try {
+        const expertList = await window.electronAPI.expertsList(projectRoot);
+        setExperts(expertList.filter((e) => e.enabled));
+      } catch {
+        setExperts([]);
+      }
+    };
+    void loadMentions();
     void refreshSlashCatalog();
   }, [projectRoot, refreshSlashCatalog]);
 
@@ -279,10 +284,12 @@ export function useChatComposer() {
           `User request: ${compiled.promptText}`,
         ].join("\n");
       }
-      sendPrompt(promptToSend, compiled.displayBlocks, true, compiled.selectedProfileId, {
+      sendPrompt(promptToSend, compiled.displayBlocks, true, {
         mcpServerAllowlist: compiled.mcpServerNames,
         skillIds: compiled.skillIds,
         hasPaperSnippets: compiled.paperSnippetCount > 0,
+        selectedExpertIds: compiled.selectedExpertIds,
+        orchestratorId: store.tabs.find((t) => t.id === tabId)?.orchestratorId ?? null,
       });
     } else if (compiled.displayBlocks.length > 0) {
       const projectPath = useDocumentStore.getState().projectRoot;
@@ -301,16 +308,13 @@ export function useChatComposer() {
     editorRef.current?.focus();
   }, [draftParts, isStreaming, sendPrompt, commands, expandCommand, setDraftParts]);
 
-  const placeholder =
-    chatMode === "expert-team"
-      ? "@ experts to collaborate — model per expert preset"
-      : "@ agent or file, / for commands, skills & MCPs";
+  const placeholder = COMPOSER_PLACEHOLDER;
 
   return {
     editorRef,
     draftParts,
     setDraftParts,
-    profiles,
+    experts,
     mentionableFiles,
     searchCommands,
     slashSkills,

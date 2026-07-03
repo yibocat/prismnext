@@ -1,5 +1,7 @@
 # Prompt System Redesign
 
+> **Historical — injection paths:** Layer architecture remains valid; current runtime wiring and Agent/Orchestrator profile split are documented in **`2026-07-03-agent-prompt-stack-design.md`**.
+
 **Date:** 2026-06-19
 **Status:** Design approved — ready for implementation planning
 **Project:** prism-next

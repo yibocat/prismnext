@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { describe, expect, it, afterEach } from "vitest";
+import { describe, expect, it, afterEach, vi } from "vitest";
 import {
   listProjectSkills,
   readSkillsManifest,
@@ -27,8 +27,31 @@ describe("skills-sync", () => {
   let root: string;
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     if (root) rmSync(root, { recursive: true, force: true });
   });
+
+  function mockRegistryFetch(indexUrl: string, skillCount = 1) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === indexUrl || url.includes("index.json")) {
+          return new Response(
+            JSON.stringify({
+              skills: Array.from({ length: skillCount }, (_, i) => ({
+                name: `skill-${i + 1}`,
+                description: "Test skill",
+                type: "skill-md",
+                url: "/skill.md",
+              })),
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response("", { status: 404 });
+      }),
+    );
+  }
 
   it("lists skills from subdirectories with SKILL.md", () => {
     root = mkdtempSync(join(tmpdir(), "prism-skills-"));
@@ -146,13 +169,24 @@ description: ${id}
     expect(sources.some((s) => s.id === PRISM_CURATED_SOURCE_ID && s.kind === "bundled")).toBe(true);
   });
 
-  it("does not write library registry URLs to skills patch", () => {
+  it("does not write library registry URLs to skills patch", async () => {
     root = mkdtempSync(join(tmpdir(), "prism-skills-"));
     const registryUrl = "https://agentskills.io/.well-known/agent-skills/index.json";
-    addSkillLibrarySource(root, registryUrl);
+    mockRegistryFetch(registryUrl);
+    await addSkillLibrarySource(root, registryUrl);
     const result = syncProjectSkillsIntegration(root);
     expect(result.registryUrls).toEqual([]);
     expect(listLibrarySources(root).some((s) => s.url === registryUrl)).toBe(true);
+  });
+
+  it("uses preset display names for known registry URLs in manifest", async () => {
+    root = mkdtempSync(join(tmpdir(), "prism-skills-"));
+    const registryUrl = "https://developers.cloudflare.com/.well-known/agent-skills/index.json";
+    mockRegistryFetch(registryUrl, 2);
+    await addSkillLibrarySource(root, registryUrl);
+    const source = listLibrarySources(root).find((s) => s.url === registryUrl);
+    expect(source?.name).toBe("Cloudflare Docs");
+    expect(source?.description).toContain("Cloudflare");
   });
 
   it("removes project-root and nested OpenCode/agent artifact dirs", () => {
@@ -204,10 +238,11 @@ description: ${id}
     expect(existsSync(join(root, ".opencode"))).toBe(false);
   });
 
-  it("remove deletes remote source from manifest", () => {
+  it("remove deletes remote source from manifest", async () => {
     root = mkdtempSync(join(tmpdir(), "prism-skills-"));
     const registryUrl = "https://example.com/.well-known/agent-skills/index.json";
-    addSkillLibrarySource(root, registryUrl);
+    mockRegistryFetch(registryUrl);
+    await addSkillLibrarySource(root, registryUrl);
     const source = listLibrarySources(root).find((s) => s.url === registryUrl)!;
     removeSkillLibrarySource(root, source.id);
     expect(listLibrarySources(root).some((s) => s.url === registryUrl)).toBe(false);
@@ -217,6 +252,14 @@ description: ${id}
     root = mkdtempSync(join(tmpdir(), "prism-skills-"));
     expect(() => removeSkillLibrarySource(root, PRISM_CURATED_SOURCE_ID)).toThrow(/cannot be removed/i);
     expect(listLibrarySources(root).some((s) => s.id === PRISM_CURATED_SOURCE_ID)).toBe(true);
+  });
+
+  it("allows disconnecting and reconnecting bundled prism-curated source", () => {
+    root = mkdtempSync(join(tmpdir(), "prism-skills-"));
+    let sources = setSkillLibrarySourceConnected(root, PRISM_CURATED_SOURCE_ID, false);
+    expect(sources.find((s) => s.id === PRISM_CURATED_SOURCE_ID)?.connected).toBe(false);
+    sources = setSkillLibrarySourceConnected(root, PRISM_CURATED_SOURCE_ID, true);
+    expect(sources.find((s) => s.id === PRISM_CURATED_SOURCE_ID)?.connected).toBe(true);
   });
 
   it("migrates legacy registryUrls to sources", () => {

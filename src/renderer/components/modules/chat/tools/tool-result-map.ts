@@ -108,3 +108,31 @@ export function buildToolResultMap(
 
   return map;
 }
+
+/** Same as buildToolResultMap but for a flat activity block list (e.g. subAgent runs). */
+export function buildToolResultMapFromBlocks(
+  blocks: ContentBlock[],
+  options?: { isStreaming?: boolean },
+): Map<string, ContentBlock> {
+  const map = new Map<string, ContentBlock>();
+  const toolUseIds = new Set<string>();
+
+  for (const block of blocks) {
+    if (block.type === "tool_use" && block.id) {
+      toolUseIds.add(block.id);
+    }
+    if (block.type === "tool_result" && block.tool_use_id) {
+      map.set(block.tool_use_id, block);
+    }
+  }
+
+  if (!options?.isStreaming) {
+    for (const id of toolUseIds) {
+      if (!map.has(id)) {
+        map.set(id, createOrphanToolResult(id));
+      }
+    }
+  }
+
+  return map;
+}

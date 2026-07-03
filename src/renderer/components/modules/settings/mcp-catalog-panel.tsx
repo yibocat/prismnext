@@ -17,6 +17,7 @@ import {
 import { McpPresetFieldInputs } from "./mcp-preset-field-inputs";
 import { cn } from "@/lib/utils";
 import {
+  SETTINGS_CATEGORY_HEADER,
   SETTINGS_DETAIL_SHELL,
   SETTINGS_ROW_DESC,
 } from "./settings-tokens";
@@ -59,6 +60,15 @@ export function McpCatalogPanel() {
         MCP_CATEGORY_LABELS[p.category].toLowerCase().includes(q),
     );
   }, [catalogSearch]);
+
+  const recommendedPresets = useMemo(
+    () => filteredPresets.filter((p) => p.recommended),
+    [filteredPresets],
+  );
+  const morePresets = useMemo(
+    () => filteredPresets.filter((p) => !p.recommended),
+    [filteredPresets],
+  );
 
   const startInstall = (preset: McpPreset) => {
     setInstallPresetId(preset.id);
@@ -110,11 +120,81 @@ export function McpCatalogPanel() {
     );
   }
 
+  const renderPreset = (preset: McpPreset) => {
+    const installed = installedNames.has(preset.id);
+    const installing = installPresetId === preset.id;
+    return (
+      <div key={preset.id}>
+        <div className={ROW}>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={ROW_LABEL}>{preset.name}</span>
+              <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
+                {MCP_CATEGORY_LABELS[preset.category]}
+              </span>
+              {preset.recommended ? (
+                <span className={cn(BADGE, "bg-primary/10 text-primary normal-case tracking-normal")}>
+                  Recommended
+                </span>
+              ) : null}
+            </div>
+            <p className={ROW_DESC}>{preset.description}</p>
+          </div>
+          {installed ? (
+            <span className={cn(BADGE, "bg-primary/10 text-primary")}>Installed</span>
+          ) : (
+            <Button
+              variant="outline"
+              size="xs"
+              disabled={saving}
+              onClick={() => void oneClickInstall(preset)}
+            >
+              Install
+            </Button>
+          )}
+        </div>
+        {installing && !installed && (
+          <div className="px-4 pb-3 border-t border-border/50">
+            <McpPresetFieldInputs
+              preset={preset}
+              values={installValues}
+              onChange={(key, value) => setInstallValues((v) => ({ ...v, [key]: value }))}
+            />
+            <div className="flex gap-2 mt-3">
+              <Button
+                size="xs"
+                disabled={saving || !presetFieldsValid(preset, installValues)}
+                onClick={() => void confirmInstall(preset)}
+              >
+                {saving ? <Loader2Icon className="size-3 animate-spin mr-1" /> : null}
+                Add to project
+              </Button>
+              <Button variant="ghost" size="xs" onClick={cancelInstall} disabled={saving}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderPresetSection = (title: string, presets: McpPreset[]) => {
+    if (presets.length === 0) return null;
+    return (
+      <section className="space-y-2">
+        <h3 className={SETTINGS_CATEGORY_HEADER}>{title}</h3>
+        <div className={CARD}>{presets.map(renderPreset)}</div>
+      </section>
+    );
+  };
+
   return (
     <div className="flex-1 overflow-auto">
       <div className={SETTINGS_DETAIL_SHELL}>
         <p className={SETTINGS_ROW_DESC}>
-          One-click install common MCP servers. Requires npx on your machine.
+          Curated MCP servers for research workflows. Requires npx on your machine. Literature search
+          and citations stay in Prism built-in tools — use MCP for web, repos, and data stores.
         </p>
         <div className="relative">
           <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
@@ -126,69 +206,16 @@ export function McpCatalogPanel() {
             onChange={(e) => setCatalogSearch(e.target.value)}
           />
         </div>
-        <div className={cn(CARD, "max-h-[calc(100vh-14rem)] overflow-y-auto")}>
-          {filteredPresets.length === 0 ? (
-            <div className="py-8 text-center text-[length:var(--font-size-12)] text-muted-foreground">
-              No matches.
-            </div>
-          ) : (
-            filteredPresets.map((preset) => {
-              const installed = installedNames.has(preset.id);
-              const installing = installPresetId === preset.id;
-              return (
-                <div key={preset.id}>
-                  <div className={ROW}>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={ROW_LABEL}>{preset.name}</span>
-                        <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
-                          {MCP_CATEGORY_LABELS[preset.category]}
-                        </span>
-                      </div>
-                      <p className={ROW_DESC}>{preset.description}</p>
-                    </div>
-                    {installed ? (
-                      <span className={cn(BADGE, "bg-primary/10 text-primary")}>Installed</span>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="xs"
-                        disabled={saving}
-                        onClick={() => void oneClickInstall(preset)}
-                      >
-                        Install
-                      </Button>
-                    )}
-                  </div>
-                  {installing && !installed && (
-                    <div className="px-4 pb-3 border-t border-border/50">
-                      <McpPresetFieldInputs
-                        preset={preset}
-                        values={installValues}
-                        onChange={(key, value) =>
-                          setInstallValues((v) => ({ ...v, [key]: value }))
-                        }
-                      />
-                      <div className="flex gap-2 mt-3">
-                        <Button
-                          size="xs"
-                          disabled={saving || !presetFieldsValid(preset, installValues)}
-                          onClick={() => void confirmInstall(preset)}
-                        >
-                          {saving ? <Loader2Icon className="size-3 animate-spin mr-1" /> : null}
-                          Add to project
-                        </Button>
-                        <Button variant="ghost" size="xs" onClick={cancelInstall} disabled={saving}>
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
+        {filteredPresets.length === 0 ? (
+          <div className={cn(CARD, "py-8 text-center text-[length:var(--font-size-12)] text-muted-foreground")}>
+            No matches.
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {renderPresetSection("Recommended", recommendedPresets)}
+            {renderPresetSection("More", morePresets)}
+          </div>
+        )}
         <div className="flex gap-2">
           <Button variant="ghost" size="xs" onClick={closePanel}>
             Close

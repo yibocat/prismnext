@@ -1,10 +1,13 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { setSessionProjectRoot, setSessionIntensiveBibkeys, _resetChatSessionRegistryForTests } from "../../src/main/services/chat-session-registry";
-import { processLiteratureBridgeOnceForTests } from "../../src/main/services/literature-bridge";
-import { createPaper } from "../../src/main/services/literature-service";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("electron", () => ({
+  app: {
+    getPath: () => path.join(os.tmpdir(), "prism-lit-bridge-userdata"),
+  },
+}));
 
 vi.mock("../../src/main/services/literature-enrich", () => ({
   createPaperFromCatalog: vi.fn(),
@@ -26,8 +29,17 @@ import { createPaperFromCatalog } from "../../src/main/services/literature-enric
 import { resolveBibliographicMetadata } from "../../src/shared/bibliographic-metadata";
 import { readPaperPdfContent } from "../../src/main/services/paper-extract-read";
 import type { BibliographicMetadata } from "../../src/shared/bibliographic-metadata";
+import { setSessionProjectRoot, setSessionIntensiveBibkeys, _resetChatSessionRegistryForTests } from "../../src/main/services/chat-session-registry";
+import { processLiteratureBridgeOnceForTests } from "../../src/main/services/literature-bridge";
+import { createPaper } from "../../src/main/services/literature-service";
+import { getLiteratureBridgeRoot } from "../../src/main/services/prism-bridge-paths";
 
 const roots: string[] = [];
+const bridgeRoot = path.join(os.tmpdir(), "prism-literature-bridge-test");
+
+beforeEach(() => {
+  process.env.PRISM_LITERATURE_BRIDGE_ROOT = bridgeRoot;
+});
 
 function tempProject(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prism-lit-bridge-"));
@@ -37,10 +49,11 @@ function tempProject(): string {
 }
 
 function bridgeDir(sessionId: string): string {
-  return path.join(os.homedir(), ".prism-literature-bridge", sessionId);
+  return path.join(getLiteratureBridgeRoot(), sessionId);
 }
 
 afterEach(() => {
+  delete process.env.PRISM_LITERATURE_BRIDGE_ROOT;
   _resetChatSessionRegistryForTests();
   vi.mocked(createPaperFromCatalog).mockReset();
   vi.mocked(resolveBibliographicMetadata).mockReset();
@@ -49,6 +62,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) {
     try { fs.rmSync(root, { recursive: true, force: true }); } catch {}
   }
+  try { fs.rmSync(bridgeRoot, { recursive: true, force: true }); } catch {}
 });
 
 describe("literature bridge", () => {
@@ -458,6 +472,65 @@ describe("literature bridge", () => {
     expect(result.intensiveReadingRequired).toBeUndefined();
     expect(readPaperPdfContent).toHaveBeenCalled();
     expect(result.markdown).toContain("Hello");
+
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  });
+
+  it("search: lists all papers when query is empty", async () => {
+    const projectRoot = tempProject();
+    createPaper(projectRoot, { bibkey: "alpha2024", title: "Alpha Paper" });
+    createPaper(projectRoot, { bibkey: "beta2024", title: "Beta Paper" });
+
+    const sessionId = "test-bridge-search-all";
+    setSessionProjectRoot(sessionId, projectRoot);
+
+    const requestId = "req-search-all";
+    const dir = bridgeDir(sessionId);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, `${requestId}.request.json`),
+      JSON.stringify({ action: "search", sessionId }),
+      "utf-8",
+    );
+
+    await processLiteratureBridgeOnceForTests();
+
+    const result = JSON.parse(
+      fs.readFileSync(path.join(dir, `${requestId}.result.json`), "utf-8"),
+    ) as { count?: number; results?: Array<{ bibkey?: string }> };
+    expect(result.count).toBe(2);
+    expect(result.results?.map((r) => r.bibkey).sort()).toEqual(["alpha2024", "beta2024"]);
+
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  });
+
+  it("search: resolves worktree cwd to main project library", async () => {
+    const projectRoot = tempProject();
+    createPaper(projectRoot, { bibkey: "main_lib_key", title: "Main Library Paper" });
+    const worktreePath = path.join(projectRoot, ".prismnext", "worktrees", "feature-a");
+    fs.mkdirSync(worktreePath, { recursive: true });
+
+    const sessionId = "test-bridge-search-worktree";
+    const requestId = "req-search-worktree";
+    const dir = bridgeDir(sessionId);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, `${requestId}.request.json`),
+      JSON.stringify({
+        action: "search",
+        sessionId,
+        projectRoot: worktreePath,
+      }),
+      "utf-8",
+    );
+
+    await processLiteratureBridgeOnceForTests();
+
+    const result = JSON.parse(
+      fs.readFileSync(path.join(dir, `${requestId}.result.json`), "utf-8"),
+    ) as { count?: number; results?: Array<{ bibkey?: string }> };
+    expect(result.count).toBe(1);
+    expect(result.results?.[0]?.bibkey).toBe("main_lib_key");
 
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
   });

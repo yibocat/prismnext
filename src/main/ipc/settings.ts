@@ -50,11 +50,40 @@ export function registerSettingsHandlers(): void {
   ipcMain.handle(
     "settings:getAssembledPrompt",
     async (_event, args?: { projectRoot?: string; userCustomPrompt?: string }) => {
-      const ctx = await buildPromptContext(args?.projectRoot);
-      if (args?.userCustomPrompt !== undefined) {
-        ctx.userCustomPrompt = args.userCustomPrompt;
-      }
-      return promptManager.compose(ctx);
+      const { buildPromptStackPreview, formatPromptStackPreviewMarkdown } = await import(
+        "../prompts/stack-preview",
+      );
+      const preview = await buildPromptStackPreview({
+        projectRoot: args?.projectRoot,
+        userCustomPrompt: args?.userCustomPrompt,
+      });
+      return formatPromptStackPreviewMarkdown(preview);
+    },
+  );
+
+  ipcMain.handle(
+    "settings:getPromptStackPreview",
+    async (_event, args?: { projectRoot?: string; userCustomPrompt?: string; orchestratorId?: string | null }) => {
+      const { buildPromptStackPreview, formatPromptStackPreviewMarkdown } = await import(
+        "../prompts/stack-preview",
+      );
+      const preview = await buildPromptStackPreview({
+        projectRoot: args?.projectRoot,
+        userCustomPrompt: args?.userCustomPrompt,
+        orchestratorId: args?.orchestratorId,
+      });
+      return {
+        ...preview,
+        markdown: formatPromptStackPreviewMarkdown(preview),
+        sections: preview.sections.map((s) => ({
+          id: s.id,
+          label: s.label,
+          injectPath: s.injectPath,
+          fileHint: s.fileHint,
+          charCount: s.content.length,
+          content: s.content,
+        })),
+      };
     },
   );
 
@@ -135,22 +164,21 @@ export function registerSettingsHandlers(): void {
     },
   );
 
-  // ── Prompt Modules ──
-
-  ipcMain.handle("settings:getModules", async () => {
-    return promptManager.getModules();
-  });
+  // ── Prompt Modules (read-only catalog) ──
 
   ipcMain.handle(
-    "settings:setModule",
-    async (_event, args: { key: string; enabled: boolean }) => {
-      promptManager.setModuleEnabled(args.key, args.enabled);
-      // Persist to electron-store
-      if (promptManager.needsModulePersist) {
-        updateSettings({
-          promptModules: promptManager.dumpModuleStates(),
-        } as any);
-      }
+    "settings:getKnowledgeModules",
+    async (_event, args?: { projectRoot?: string }) => {
+      const ctx = args?.projectRoot ? await buildPromptContext(args.projectRoot) : {};
+      return promptManager.getKnowledgeModuleCatalog(ctx);
+    },
+  );
+
+  ipcMain.handle(
+    "settings:getModules",
+    async (_event, args?: { projectRoot?: string }) => {
+      const ctx = args?.projectRoot ? await buildPromptContext(args.projectRoot) : {};
+      return promptManager.getKnowledgeModuleCatalog(ctx);
     },
   );
 

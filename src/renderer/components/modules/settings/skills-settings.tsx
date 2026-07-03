@@ -6,6 +6,7 @@ import {
   FolderOpenIcon,
   LibraryIcon,
   SquareArrowOutUpRightIcon,
+  RefreshCwIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
@@ -33,6 +34,18 @@ interface InstalledSkill {
   description: string;
   skillDirRel: string;
   enabled: boolean;
+  installOrigin?:
+    | { adapter: "github"; repo: string; ref: string; path: string }
+    | { adapter: "discovery"; indexUrl: string };
+}
+
+interface SkillUpdateRow {
+  skillId: string;
+  status: "current" | "update_available" | "source_missing" | "unknown";
+  updateAvailable: boolean;
+  installedVersion?: string;
+  remoteVersion?: string;
+  message?: string;
 }
 
 export function SkillsSettings() {
@@ -42,10 +55,12 @@ export function SkillsSettings() {
   const [skills, setSkills] = useState<InstalledSkill[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [updatesBySkillId, setUpdatesBySkillId] = useState<Record<string, SkillUpdateRow>>({});
   const deleteConfirm = useInlineDeleteConfirm();
 
-  const loadSkills = useCallback(async () => {
-    setLoaded(false);
+  const loadSkills = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setLoaded(false);
     try {
       if (!projectRoot) {
         setSkills([]);
@@ -61,19 +76,76 @@ export function SkillsSettings() {
   }, [projectRoot]);
 
   useEffect(() => {
-    void loadSkills();
+    void loadSkills({ silent: skillsRefreshTick > 0 });
   }, [loadSkills, skillsRefreshTick]);
 
   const toggleEnabled = async (skillId: string, enabled: boolean) => {
     if (!projectRoot) return;
     deleteConfirm.clearPending();
+    setSkills((current) =>
+      current.map((s) => (s.id === skillId ? { ...s, enabled } : s)),
+    );
+    try {
+      const result = await window.electronAPI.agentSetSkillEnabled(
+        projectRoot,
+        skillId,
+        enabled,
+      );
+      if (result.skills) {
+        setSkills(result.skills);
+      }
+    } catch {
+      setSkills((current) =>
+        current.map((s) => (s.id === skillId ? { ...s, enabled: !enabled } : s)),
+      );
+      toast.error("Failed to update skill.");
+    }
+  };
+
+  const reinstallSkill = async (skill: InstalledSkill) => {
+    if (!projectRoot || !skill.installOrigin) return;
+    deleteConfirm.clearPending();
     setSaving(true);
     try {
-      await window.electronAPI.agentSetSkillEnabled(projectRoot, skillId, enabled);
+      await window.electronAPI.agentReinstallSkill(projectRoot, skill.id);
       await window.electronAPI.chatPrewarm(projectRoot);
       await loadSkills();
+      setUpdatesBySkillId((prev) => {
+        const next = { ...prev };
+        delete next[skill.id];
+        return next;
+      });
+      toast.success(`Reinstalled "${skill.name}" — start a new chat to use it.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Reinstall failed.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const checkForUpdates = async () => {
+    if (!projectRoot) return;
+    deleteConfirm.clearPending();
+    setCheckingUpdates(true);
+    try {
+      const updates = await window.electronAPI.agentCheckSkillUpdates(projectRoot);
+      const next: Record<string, SkillUpdateRow> = {};
+      for (const row of updates) {
+        next[row.skillId] = row;
+      }
+      setUpdatesBySkillId(next);
+      const available = updates.filter((row) => row.updateAvailable).length;
+      if (available > 0) {
+        toast.info(`${available} skill${available === 1 ? "" : "s"} have updates available.`);
+      } else if (updates.length > 0) {
+        toast.success("All tracked skills are up to date.");
+      } else {
+        toast.message("No install sources recorded — install from URL to enable update checks.");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Update check failed.");
+    } finally {
+      setCheckingUpdates(false);
     }
   };
 
@@ -154,9 +226,18 @@ export function SkillsSettings() {
               <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
                 <p className={cn(CATEGORY_HEADER, "mb-0")}>Installed</p>
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    disabled={checkingUpdates || saving || skills.every((s) => !s.installOrigin)}
+                    onClick={() => void checkForUpdates()}
+                  >
+                    <RefreshCwIcon className={cn("size-3 mr-1", checkingUpdates && "animate-spin")} />
+                    Check updates
+                  </Button>
                   <Button variant="outline" size="xs" onClick={openSkillLibrary}>
                     <LibraryIcon className="size-3 mr-1" />
-                    Browse library
+                    Install skills
                   </Button>
                   <Button variant="outline" size="xs" onClick={openCreateSkill}>
                     <PlusIcon className="size-3 mr-1" />
@@ -177,12 +258,12 @@ export function SkillsSettings() {
                       No skills installed yet.
                     </p>
                     <p className="text-[length:var(--font-size-12)] text-muted-foreground/80">
-                      Browse the skill library or create your own SKILL.md.
+                      Install from GitHub or publisher registries, or create your own SKILL.md.
                     </p>
                     <div className="flex flex-wrap items-center justify-center gap-2">
                       <Button variant="outline" size="xs" onClick={openSkillLibrary}>
                         <LibraryIcon className="size-3 mr-1" />
-                        Browse library
+                        Install skills
                       </Button>
                       <Button variant="outline" size="xs" onClick={openCreateSkill}>
                         <FileTextIcon className="size-3 mr-1" />
@@ -191,7 +272,10 @@ export function SkillsSettings() {
                     </div>
                   </div>
                 ) : (
-                  skills.map((skill) => (
+                  skills.map((skill) => {
+                    const update = updatesBySkillId[skill.id];
+                    const hasUpdate = update?.updateAvailable === true;
+                    return (
                     <div key={skill.id} className={ROW}>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -201,14 +285,33 @@ export function SkillsSettings() {
                               off
                             </span>
                           )}
+                          {hasUpdate && (
+                            <span className={cn(BADGE, "bg-amber-500/15 text-amber-700 dark:text-amber-400")}>
+                              update
+                            </span>
+                          )}
                         </div>
-                        <p className={ROW_DESC}>{skill.description || skill.id}</p>
+                        <p className={ROW_DESC}>
+                          {hasUpdate && update?.message
+                            ? update.message
+                            : skill.description || skill.id}
+                        </p>
                       </div>
                       <Switch
                         checked={skill.enabled}
                         onCheckedChange={(v) => void toggleEnabled(skill.id, v)}
-                        disabled={saving}
                       />
+                      {skill.installOrigin && (
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          className="h-7 px-2 shrink-0 text-[length:var(--font-size-11)]"
+                          disabled={saving}
+                          onClick={() => void reinstallSkill(skill)}
+                        >
+                          {hasUpdate ? "Update" : "Reinstall"}
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -227,7 +330,8 @@ export function SkillsSettings() {
                         onConfirm={() => void deleteSkill(skill.id)}
                       />
                     </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>

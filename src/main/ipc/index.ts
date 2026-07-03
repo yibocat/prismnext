@@ -12,7 +12,7 @@ import { registerWorkspaceHandlers } from "./workspace";
 import { registerCommandsHandlers } from "./commands";
 import { registerSkillsHandlers } from "./skills";
 import { registerRulesHandlers } from "./rules";
-import { registerProfilesHandlers } from "./profiles";
+import { registerExpertsHandlers } from "./experts";
 import { registerShellHandlers } from "./shell";
 import { registerLiteratureHandlers } from "./literature";
 import { registerLiteratureExtractHandlers } from "./literature-extract";
@@ -34,7 +34,7 @@ export function registerIpcHandlers(): void {
   registerCommandsHandlers();
   registerSkillsHandlers();
   registerRulesHandlers();
-  registerProfilesHandlers();
+  registerExpertsHandlers();
   registerShellHandlers();
   registerLiteratureHandlers();
   registerLiteratureExtractHandlers();

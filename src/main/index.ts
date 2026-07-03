@@ -185,10 +185,6 @@ app.whenReady().then(async () => {
       const { promptManager } = await import("./prompts");
       promptManager.initialize();
 
-      // Restore module toggle states from persisted settings
-      if ((settings as any).promptModules) {
-        promptManager.loadModuleStates((settings as any).promptModules as Record<string, boolean>);
-      }
       // Restore layer toggle states from persisted settings
       if ((settings as any).promptLayers) {
         promptManager.loadLayerStates((settings as any).promptLayers as Record<string, boolean>);

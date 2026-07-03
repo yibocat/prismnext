@@ -1,12 +1,17 @@
 import type { BrowserWindow } from "electron";
 import { AcpService } from "./service";
 import { createLogger } from "../services/logger";
-import { registerChatSession, unregisterChatSession, resolveChatTabId } from "../services/chat-session-registry";
+import { registerChatSession, unregisterChatSession, resolveChatTabId, getSessionProjectRoot } from "../services/chat-session-registry";
 import {
   inferToolNameFromInput,
   inferToolNameFromOutput,
   resolveLiteratureToolTitle,
 } from "./tool-name-infer";
+import {
+  buildTaskDelegationStagingPreface,
+  enrichTaskToolResultContent,
+  syncEnrichedTaskToolResultToOpenCode,
+} from "../services/session-citations-context";
 
 const log = createLogger("event-mapper", "agent");
 
@@ -23,6 +28,13 @@ export class EventMapper {
   private sessionToTab = new Map<string, string>();
   private tabToSession = new Map<string, string>();
   private unregisterNotification: (() => void) | null = null;
+  /** Parent tab → queued Task tool invocations awaiting a subagent session link. */
+  private pendingTasksByTab = new Map<
+    string,
+    Array<{ toolUseId: string; expertId: string; prompt: string }>
+  >();
+  /** Subagent OpenCode session → parent Task tool_use id. */
+  private subSessionToTaskTool = new Map<string, string>();
 
   constructor(win: BrowserWindow) {
     this.win = win;
@@ -118,6 +130,25 @@ export class EventMapper {
       return;
     }
 
+    // ── Suppress historical replay during session/load ───────────
+    // When OpenCode re-hydrates a session after restart (ensureSessionHydrated
+    // → session/load), it replays ALL stored session/update notifications
+    // (tool_call, tool_call_update, agent_message_chunk, agent_thought_chunk,
+    // session/status, session/todo, session/plan). The renderer already has
+    // the full history from the SQLite session:load read — forwarding these
+    // replayed events as live chat:stream would re-render every historical
+    // tool call and reply under the user's new message.
+    // session/permission is already guarded inside the requestPermission
+    // callback (returns early when sessionReplaySuppress > 0), so it never
+    // emits during replay and is intentionally NOT suppressed here.
+    if (
+      method !== "session/permission"
+      && AcpService.getInstance().isSessionReplaySuppressed()
+    ) {
+      log.debug(`replay-suppressed: ${method} tabId=${tabId} sessionId=${sessionId ?? "(none)"}`);
+      return;
+    }
+
     switch (method) {
       case "session/update":
         this.mapSessionUpdate(tabId, sessionId!, params);
@@ -202,12 +233,24 @@ export class EventMapper {
       params?.parentSessionId
       ?? params?.parent_session_id
       ?? params?.session?.parentId
-      ?? params?.session?.parentSessionId;
+      ?? params?.session?.parentSessionId
+      ?? AcpService.getInstance().getSessionParentId(sessionId)
+      ?? undefined;
     if (typeof parentId === "string" && parentId) {
       const parentTab = this.resolveTabForSession(parentId, params);
       if (parentTab) {
-        registerChatSession(sessionId, parentTab);
-        this.sessionToTab.set(sessionId, parentTab);
+        if (!this.subSessionToTaskTool.has(sessionId)) {
+          this.linkSubAgentSession(parentTab, sessionId);
+        }
+        if (!this.sessionToTab.has(sessionId)) {
+          registerChatSession(
+            sessionId,
+            parentTab,
+            getSessionProjectRoot(parentId),
+          );
+          this.sessionToTab.set(sessionId, parentTab);
+          AcpService.getInstance().markSubAgentSession(sessionId);
+        }
         return parentTab;
       }
     }
@@ -253,6 +296,93 @@ export class EventMapper {
     switch_mode: "mode_change",
     other:       "task",
   };
+
+  private trackTaskToolUse(tabId: string, toolUseId: string, toolInput: any): void {
+    if (!toolUseId) return;
+    const expertId = String(
+      toolInput?.subagent_type || toolInput?.subagentType || toolInput?.agent || "general",
+    )
+      .replace(/^@/, "")
+      .toLowerCase();
+    const rawPrompt = String(toolInput?.prompt || toolInput?.description || "");
+    const parentSessionId = this.tabToSession.get(tabId);
+    const stagingPreface = parentSessionId
+      ? buildTaskDelegationStagingPreface(parentSessionId)
+      : "";
+    const prompt = stagingPreface ? `${stagingPreface}${rawPrompt}` : rawPrompt;
+    const queue = this.pendingTasksByTab.get(tabId) ?? [];
+    queue.push({ toolUseId, expertId, prompt });
+    this.pendingTasksByTab.set(tabId, queue);
+    this.win.webContents.send("chat:stream", {
+      tabId,
+      type: "subAgent.linked",
+      data: { taskToolUseId: toolUseId, expertId, prompt, rawPrompt, hasStagingPreface: !!stagingPreface },
+    });
+  }
+
+  private linkSubAgentSession(parentTabId: string, subSessionId: string): void {
+    const queue = this.pendingTasksByTab.get(parentTabId);
+    if (!queue?.length) return;
+    const pending = queue.shift()!;
+    if (queue.length === 0) this.pendingTasksByTab.delete(parentTabId);
+    else this.pendingTasksByTab.set(parentTabId, queue);
+    this.subSessionToTaskTool.set(subSessionId, pending.toolUseId);
+    this.sessionToTab.set(subSessionId, parentTabId);
+    const parentSessionId = this.tabToSession.get(parentTabId);
+    registerChatSession(
+      subSessionId,
+      parentTabId,
+      parentSessionId ? getSessionProjectRoot(parentSessionId) : undefined,
+    );
+    AcpService.getInstance().markSubAgentSession(subSessionId);
+    this.win.webContents.send("chat:stream", {
+      tabId: parentTabId,
+      type: "subAgent.linked",
+      data: {
+        taskToolUseId: pending.toolUseId,
+        expertId: pending.expertId,
+        prompt: pending.prompt,
+        subSessionId,
+      },
+    });
+  }
+
+  /** Link sub-session to pending Task when parent_id is known but link not yet established. */
+  private ensureSubAgentTaskLink(tabId: string, subSessionId: string): string | undefined {
+    const existing = this.subSessionToTaskTool.get(subSessionId);
+    if (existing) return existing;
+    const parentSessionId = AcpService.getInstance().getSessionParentId(subSessionId);
+    if (!parentSessionId) return undefined;
+    const parentTab = this.resolveTabForSession(parentSessionId);
+    if (parentTab !== tabId) return undefined;
+    if (!this.pendingTasksByTab.get(tabId)?.length) return undefined;
+    this.linkSubAgentSession(tabId, subSessionId);
+    return this.subSessionToTaskTool.get(subSessionId);
+  }
+
+  private emitSubAgentActivity(
+    tabId: string,
+    sessionId: string,
+    block: Record<string, unknown>,
+  ): void {
+    const taskToolUseId =
+      this.subSessionToTaskTool.get(sessionId)
+      ?? this.ensureSubAgentTaskLink(tabId, sessionId);
+    if (!taskToolUseId) return;
+    this.win.webContents.send("chat:stream", {
+      tabId,
+      type: "subAgent.activity",
+      data: { taskToolUseId, block },
+    });
+  }
+
+  private completeSubAgentTask(tabId: string, taskToolUseId: string, isError: boolean): void {
+    this.win.webContents.send("chat:stream", {
+      tabId,
+      type: "subAgent.completed",
+      data: { taskToolUseId, status: isError ? "error" : "done" },
+    });
+  }
 
   private mapSessionUpdate(tabId: string, sessionId: string, params: any): void {
     // The ACP SDK's sessionUpdate callback delivers a JSON-RPC notification's
@@ -427,6 +557,33 @@ export class EventMapper {
           line: loc.line || loc.startLine,
         }));
 
+      if (AcpService.getInstance().isSubAgentSession(sessionId)) {
+        this.emitSubAgentActivity(tabId, sessionId, {
+          type: "tool_use",
+          id: toolId,
+          name: toolName,
+          input: toolInput,
+          title: tc.title || tc.state?.title || "",
+          status: tc.status || tc.state?.status || "pending",
+        });
+        return;
+      }
+
+      const normalizedToolName = toolName.toLowerCase();
+      const looksLikeTask =
+        normalizedToolName === "task"
+        || (
+          tc.kind === "other"
+          && (
+            toolInput?.subagent_type
+            || toolInput?.subagentType
+            || toolInput?.agent
+          )
+        );
+      if (toolId && looksLikeTask) {
+        this.trackTaskToolUse(tabId, toolId, toolInput);
+      }
+
       this.win.webContents.send("chat:stream", {
         tabId,
         type: "message.part.updated",
@@ -548,7 +705,61 @@ export class EventMapper {
       }
 
       const toolNameHint = backfillName || tu.tool_name || tu.toolName || "";
-      const resultContent = this.extractToolResultContent(rawResult, toolNameHint);
+      let resultContent = this.extractToolResultContent(rawResult, toolNameHint);
+      const tuStatus = String(tu.status || tu.state?.status || "").toLowerCase();
+      const isError = tuStatus === "failed" || tu.state?.status === "failed";
+      const normalizedToolHint = (backfillName || toolNameHint || "").toLowerCase();
+      const parentSessionId = this.tabToSession.get(tabId);
+      let enrichedTaskForOpenCode = false;
+      if (
+        parentSessionId
+        && normalizedToolHint === "task"
+        && (tuStatus === "completed" || tuStatus === "failed")
+        && !isError
+      ) {
+        const rawTaskResult = resultContent;
+        resultContent = enrichTaskToolResultContent(parentSessionId, resultContent);
+        enrichedTaskForOpenCode = resultContent !== rawTaskResult;
+      }
+
+      if (AcpService.getInstance().isSubAgentSession(sessionId)) {
+        this.emitSubAgentActivity(tabId, sessionId, {
+          type: "tool_result",
+          tool_use_id: updateId,
+          content: resultContent,
+          is_error: isError,
+          status: tu.status || tu.state?.status || "completed",
+          name: toolNameHint,
+        });
+        return;
+      }
+
+      if (
+        (backfillName || toolNameHint).toLowerCase() === "task"
+        && updateId
+        && (tuStatus === "completed" || tuStatus === "failed")
+      ) {
+        this.completeSubAgentTask(tabId, updateId, isError);
+      }
+
+      if (
+        enrichedTaskForOpenCode
+        && parentSessionId
+        && updateId
+        && !AcpService.getInstance().isSessionReplaySuppressed()
+      ) {
+        void syncEnrichedTaskToolResultToOpenCode(
+          parentSessionId,
+          updateId,
+          this.extractToolResultContent(rawResult, toolNameHint),
+        ).catch((err) => {
+          log.warn(
+            `Task result OpenCode sync failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        });
+      }
 
       // Single message.updated event — tool_result + optional backfill
       this.win.webContents.send("chat:stream", {
@@ -586,6 +797,19 @@ export class EventMapper {
     }
 
     if (content && content.type === "text" && content.text) {
+      if (AcpService.getInstance().isSubAgentSession(sessionId)) {
+        const activityType =
+          chunkType === "agent_thought_chunk" || chunkType === "thought_message_chunk"
+            ? "thinking"
+            : "text";
+        this.emitSubAgentActivity(tabId, sessionId, {
+          type: activityType,
+          text: content.text,
+          thinking: activityType === "thinking" ? content.text : undefined,
+        });
+        return;
+      }
+
       // ── Thinking chunks (agent_thought_chunk OR thought_message_chunk) ──
       if (chunkType === "agent_thought_chunk" || chunkType === "thought_message_chunk") {
         const key = msgId || `${sessionId}-thinking`;

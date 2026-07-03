@@ -38,6 +38,10 @@ export function openPaperInMainLibrary(paperId: string): void {
 export function openPaperPdfReader(paperId: string, title: string): void {
   const paper = useLiteratureStore.getState().papers.find((p) => p.id === paperId);
   if (!paper || !paperHasReadablePdf(paper)) return;
-  useLayoutStore.getState().activateMode("literature");
+  const layout = useLayoutStore.getState();
+  layout.activateMode("literature");
+  if (!layout.editorMaximized && !layout.rightAreaExpanded) {
+    layout.requestRightAreaExpand();
+  }
   useRightPanelStore.getState().openLiteraturePaper(paperId, title, "reader");
 }

@@ -17,7 +17,6 @@ import { ModelThoughtSelect } from "./agent-settings/model-thought-select";
 import { PermissionGatePanel, usePermissionGateOpen } from "./permission-gate-panel";
 import { InlineComposerEditor } from "./inline-composer";
 import { useChatComposer } from "@/hooks/use-chat-composer";
-import { useChatStore } from "@/stores/chat-store";
 
 export type ChatComposerVariant = "panel" | "capsule-compact" | "capsule-expanded";
 
@@ -38,10 +37,7 @@ export function ChatComposerCore({
 }: ChatComposerCoreProps) {
   const permissionGateOpen = usePermissionGateOpen();
   const composer = useChatComposer();
-  const chatMode = useChatStore(
-    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.chatMode ?? "agent",
-  );
-  const isExpertTeam = chatMode === "expert-team";
+  const isExpertTeam = true;
 
   const isCapsule = variant === "capsule-compact" || variant === "capsule-expanded";
   const isCompact = variant === "capsule-compact";
@@ -129,7 +125,7 @@ export function ChatComposerCore({
       ref={composer.editorRef}
       parts={composer.draftParts}
       onChange={composer.setDraftParts}
-      profiles={composer.profiles}
+      experts={composer.experts}
       files={composer.mentionableFiles}
       searchCommands={composer.searchCommands}
       slashSkills={composer.slashSkills}

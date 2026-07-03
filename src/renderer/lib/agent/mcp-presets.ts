@@ -22,6 +22,8 @@ export interface McpPreset {
   url?: string;
   docsUrl?: string;
   fields?: McpPresetField[];
+  /** Shown first in Settings → MCP catalog (research / writing workflow). */
+  recommended?: boolean;
 }
 
 export const MCP_CATEGORY_LABELS: Record<McpPresetCategory, string> = {
@@ -31,13 +33,43 @@ export const MCP_CATEGORY_LABELS: Record<McpPresetCategory, string> = {
   productivity: "Productivity",
 };
 
+/** Curated catalog — prefer official @modelcontextprotocol servers with clear research value. */
 export const MCP_PRESETS: McpPreset[] = [
+  {
+    id: "fetch",
+    name: "Fetch",
+    description: "Fetch web pages and convert to markdown",
+    category: "search",
+    type: "local",
+    recommended: true,
+    command: ["npx", "-y", "@modelcontextprotocol/server-fetch"],
+    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch",
+  },
+  {
+    id: "brave-search",
+    name: "Brave Search",
+    description: "Web search via Brave Search API",
+    category: "search",
+    type: "local",
+    recommended: true,
+    command: ["npx", "-y", "@modelcontextprotocol/server-brave-search"],
+    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/brave-search",
+    fields: [
+      {
+        key: "BRAVE_API_KEY",
+        label: "Brave Search API key",
+        secret: true,
+        required: true,
+      },
+    ],
+  },
   {
     id: "github",
     name: "GitHub",
     description: "Issues, pull requests, and repository context",
     category: "dev",
     type: "local",
+    recommended: true,
     command: ["npx", "-y", "@modelcontextprotocol/server-github"],
     docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/github",
     fields: [
@@ -51,46 +83,21 @@ export const MCP_PRESETS: McpPreset[] = [
     ],
   },
   {
-    id: "filesystem",
-    name: "Filesystem",
-    description: "Read and write files in allowed directories",
+    id: "git",
+    name: "Git",
+    description: "Read and search a local git repository",
     category: "dev",
     type: "local",
-    command: ["npx", "-y", "@modelcontextprotocol/server-filesystem"],
-    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
+    recommended: true,
+    command: ["npx", "-y", "@modelcontextprotocol/server-git"],
+    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/git",
     fields: [
       {
         key: "__path__",
-        label: "Allowed directory path",
+        label: "Repository path",
         required: true,
         appendToCommand: true,
-        placeholder: "/path/to/folder",
-      },
-    ],
-  },
-  {
-    id: "fetch",
-    name: "Fetch",
-    description: "Fetch web pages and convert to markdown",
-    category: "search",
-    type: "local",
-    command: ["npx", "-y", "@modelcontextprotocol/server-fetch"],
-    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch",
-  },
-  {
-    id: "brave-search",
-    name: "Brave Search",
-    description: "Web search via Brave Search API",
-    category: "search",
-    type: "local",
-    command: ["npx", "-y", "@modelcontextprotocol/server-brave-search"],
-    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/brave-search",
-    fields: [
-      {
-        key: "BRAVE_API_KEY",
-        label: "Brave Search API key",
-        secret: true,
-        required: true,
+        placeholder: "/path/to/repo",
       },
     ],
   },
@@ -100,26 +107,9 @@ export const MCP_PRESETS: McpPreset[] = [
     description: "Persistent key-value memory across sessions",
     category: "productivity",
     type: "local",
+    recommended: true,
     command: ["npx", "-y", "@modelcontextprotocol/server-memory"],
     docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/memory",
-  },
-  {
-    id: "sequential-thinking",
-    name: "Sequential Thinking",
-    description: "Structured step-by-step reasoning tool",
-    category: "productivity",
-    type: "local",
-    command: ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"],
-    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking",
-  },
-  {
-    id: "puppeteer",
-    name: "Puppeteer",
-    description: "Browser automation for scraping and testing",
-    category: "dev",
-    type: "local",
-    command: ["npx", "-y", "@modelcontextprotocol/server-puppeteer"],
-    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/puppeteer",
   },
   {
     id: "sqlite",
@@ -127,6 +117,7 @@ export const MCP_PRESETS: McpPreset[] = [
     description: "Query a local SQLite database file",
     category: "data",
     type: "local",
+    recommended: true,
     command: ["npx", "-y", "@modelcontextprotocol/server-sqlite"],
     docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/sqlite",
     fields: [
@@ -155,70 +146,6 @@ export const MCP_PRESETS: McpPreset[] = [
         appendToCommand: true,
         placeholder: "postgresql://user:pass@localhost:5432/db",
         secret: true,
-      },
-    ],
-  },
-  {
-    id: "slack",
-    name: "Slack",
-    description: "Read channels and post messages",
-    category: "productivity",
-    type: "local",
-    command: ["npx", "-y", "@modelcontextprotocol/server-slack"],
-    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/slack",
-    fields: [
-      {
-        key: "SLACK_BOT_TOKEN",
-        label: "Slack bot token",
-        secret: true,
-        required: true,
-        placeholder: "xoxb-…",
-      },
-      {
-        key: "SLACK_TEAM_ID",
-        label: "Slack team ID",
-        required: true,
-        placeholder: "T…",
-      },
-    ],
-  },
-  {
-    id: "sentry",
-    name: "Sentry",
-    description: "Inspect Sentry issues and events",
-    category: "dev",
-    type: "local",
-    command: ["npx", "-y", "@modelcontextprotocol/server-sentry"],
-    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/sentry",
-    fields: [
-      {
-        key: "SENTRY_AUTH_TOKEN",
-        label: "Sentry auth token",
-        secret: true,
-        required: true,
-      },
-      {
-        key: "SENTRY_ORG",
-        label: "Sentry organization slug",
-        required: true,
-      },
-    ],
-  },
-  {
-    id: "git",
-    name: "Git",
-    description: "Read and search local git repositories",
-    category: "dev",
-    type: "local",
-    command: ["npx", "-y", "@modelcontextprotocol/server-git"],
-    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/git",
-    fields: [
-      {
-        key: "__path__",
-        label: "Repository path",
-        required: true,
-        appendToCommand: true,
-        placeholder: "/path/to/repo",
       },
     ],
   },

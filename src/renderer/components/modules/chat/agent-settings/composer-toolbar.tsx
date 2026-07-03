@@ -1,9 +1,7 @@
 import { useRef, type ReactNode } from "react";
-import { ChatModeSelect } from "./chat-mode-select";
 import { ModelThoughtSelect } from "./model-thought-select";
 import { PermissionModeSelect } from "./permission-mode-select";
 import { IntensiveReadingListButton, useIntensiveReadingCount } from "../intensive-reading-list-button";
-import { useChatStore } from "@/stores/chat-store";
 import { useComposerCompact } from "./use-composer-compact";
 import { cn } from "@/lib/utils";
 
@@ -19,10 +17,6 @@ interface ComposerToolbarProps {
 export function ComposerToolbar({ addMenu, sendControls }: ComposerToolbarProps) {
   const toolbarRef = useRef<HTMLDivElement>(null);
   const compact = useComposerCompact(toolbarRef);
-  const chatMode = useChatStore(
-    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.chatMode ?? "agent",
-  );
-  const isExpertTeam = chatMode === "expert-team";
   const intensiveCount = useIntensiveReadingCount();
 
   return (
@@ -32,13 +26,7 @@ export function ComposerToolbar({ addMenu, sendControls }: ComposerToolbarProps)
     >
       <div className={cn("flex min-w-0 flex-1 items-center gap-0.5")}>
         {addMenu}
-        <ChatModeSelect compact={compact} />
-        {!isExpertTeam && (
-          <>
-            <ToolbarDivider />
-            <ModelThoughtSelect compact={compact} />
-          </>
-        )}
+        <ModelThoughtSelect compact={compact} />
         {intensiveCount > 0 ? (
           <>
             <ToolbarDivider />

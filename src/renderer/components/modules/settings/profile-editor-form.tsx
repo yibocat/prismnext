@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ChevronDownIcon } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,7 @@ import {
 import { useSettingsStore } from "@/stores/settings-store";
 import { getAllEnabledModels, getModel, getProvider } from "@/lib/providers";
 import { cn } from "@/lib/utils";
-import type { ProfileEditorOptions } from "@shared/agent-profiles";
+import type { AgentEditorOptions } from "@shared/agent-editor-options";
 import {
   SETTINGS_CATEGORY_HEADER,
   SETTINGS_DETAIL_SECTION,
@@ -34,6 +35,53 @@ const SELECTABLE_ROW =
 const CARD_TITLE = "text-[length:var(--font-size-13)] font-medium leading-snug";
 const CARD_DESC = "text-[length:var(--font-size-12)] text-muted-foreground mt-1 line-clamp-2";
 const SELECT_LIST_PAGE_SIZE = 12;
+const CARD_GRID_PAGE_SIZE = 8;
+
+function selectionSummary(selected: number, total: number, emptyLabel: string): string {
+  if (total === 0) return "None available";
+  if (selected === 0) return emptyLabel;
+  return `${selected} selected`;
+}
+
+export function CollapsibleFormSection({
+  title,
+  summary,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  summary?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div className="rounded-lg border border-border overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-muted/40 transition-colors"
+      >
+        <span className="min-w-0">
+          <span className="block text-[length:var(--font-size-13)] font-medium">{title}</span>
+          {summary ? (
+            <span className="block text-[length:var(--font-size-11)] text-muted-foreground mt-0.5 truncate">
+              {summary}
+            </span>
+          ) : null}
+        </span>
+        <ChevronDownIcon
+          className={cn(
+            "size-4 shrink-0 text-muted-foreground transition-transform duration-200",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open ? <div className="border-t border-border/60 px-3 py-3">{children}</div> : null}
+    </div>
+  );
+}
 
 export interface ProfileFormState {
   id?: string;
@@ -224,6 +272,66 @@ function PaginatedSelectableList({
   );
 }
 
+function PaginatedSelectableCardGrid({
+  items,
+  selectedIds,
+  disabled,
+  onToggle,
+  pageSize = CARD_GRID_PAGE_SIZE,
+}: {
+  items: { id: string; title: string; description?: string }[];
+  selectedIds: string[];
+  disabled?: boolean;
+  onToggle: (id: string) => void;
+  pageSize?: number;
+}) {
+  const [visibleCount, setVisibleCount] = useState(pageSize);
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const itemsKey = items.map((item) => item.id).join("\0");
+
+  useEffect(() => {
+    setVisibleCount(pageSize);
+  }, [itemsKey, pageSize]);
+
+  const orderedItems = useMemo(() => {
+    const selected = items.filter((item) => selectedSet.has(item.id));
+    const rest = items.filter((item) => !selectedSet.has(item.id));
+    return [...selected, ...rest];
+  }, [items, selectedSet]);
+
+  const visibleItems = orderedItems.slice(0, visibleCount);
+  const remaining = orderedItems.length - visibleItems.length;
+
+  return (
+    <div className="space-y-2">
+      <div className={CARD_GRID}>
+        {visibleItems.map((item) => (
+          <SelectableCard
+            key={item.id}
+            title={item.title}
+            description={item.description}
+            selected={selectedSet.has(item.id)}
+            disabled={disabled}
+            onToggle={() => onToggle(item.id)}
+          />
+        ))}
+      </div>
+      {remaining > 0 ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          className="w-full text-muted-foreground"
+          disabled={disabled}
+          onClick={() => setVisibleCount((count) => count + pageSize)}
+        >
+          Load more ({remaining} remaining)
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 export function ProfileEditorForm({
   form,
   onFormChange,
@@ -233,7 +341,7 @@ export function ProfileEditorForm({
 }: {
   form: ProfileFormState;
   onFormChange: (next: ProfileFormState) => void;
-  editorOptions: ProfileEditorOptions | null;
+  editorOptions: AgentEditorOptions | null;
   builtinCustomize?: boolean;
   saving?: boolean;
 }) {
@@ -366,7 +474,8 @@ export function ProfileEditorForm({
       <div>
         <h3 className={SETTINGS_CATEGORY_HEADER}>Instructions</h3>
         <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
-          Additional system guidance for this expert — layered on top of project prompts.
+          Role and delegation strategy only — citation formats and Task tables live in Knowledge
+          modules synced below.
         </p>
         <Textarea
           value={form.instructions}
@@ -379,47 +488,57 @@ export function ProfileEditorForm({
       </div>
 
       {editorOptions ? (
-        <>
-          <div>
-            <h3 className={SETTINGS_CATEGORY_HEADER}>Knowledge modules</h3>
-            <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
-              Scope for this expert. Only modules enabled in Prompts &amp; Rules are shown.
-            </p>
-            {(() => {
-              const availableModules = editorOptions.modules.filter((m) => m.globallyEnabled);
-              if (availableModules.length === 0) {
-                return (
+        <div className="space-y-2">
+          {(() => {
+            const profileModules = editorOptions.modules;
+            return (
+              <CollapsibleFormSection
+                title="Knowledge modules"
+                summary={selectionSummary(
+                  form.modules.length,
+                  profileModules.length,
+                  "None selected",
+                )}
+                defaultOpen={form.modules.length > 0}
+              >
+                <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
+                  Built-in workflow guides — select which ones to inline into this agent&apos;s
+                  synced <code className="text-[11px]">agent.md</code>. Workspace folders always
+                  inject via global <code className="text-[11px]">_prism-system.md</code>.
+                </p>
+                {profileModules.length === 0 ? (
                   <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-                    No knowledge modules enabled. Turn them on in Settings → Prompts &amp; Rules.
+                    No profile modules available.
                   </p>
-                );
-              }
-              return (
-                <div className={CARD_GRID}>
-                  {availableModules.map((mod) => {
-                    const selected = form.modules.includes(mod.key);
-                    return (
-                      <SelectableCard
-                        key={mod.key}
-                        title={mod.label}
-                        description={mod.description}
-                        selected={selected}
-                        disabled={saving}
-                        onToggle={() =>
-                          patch({
-                            modules: toggleItem(form.modules, mod.key, !selected),
-                          })
-                        }
-                      />
-                    );
-                  })}
-                </div>
-              );
-            })()}
-          </div>
+                ) : (
+                  <PaginatedSelectableCardGrid
+                    items={profileModules.map((mod) => ({
+                      id: mod.key,
+                      title: mod.label,
+                      description: mod.description,
+                    }))}
+                    selectedIds={form.modules}
+                    disabled={saving}
+                    onToggle={(id) =>
+                      patch({
+                        modules: toggleItem(form.modules, id, !form.modules.includes(id)),
+                      })
+                    }
+                  />
+                )}
+              </CollapsibleFormSection>
+            );
+          })()}
 
-          <div>
-            <h3 className={SETTINGS_CATEGORY_HEADER}>Skills</h3>
+          <CollapsibleFormSection
+            title="Skills"
+            summary={selectionSummary(
+              form.skills.length,
+              editorOptions.skills.length,
+              "All installed skills",
+            )}
+            defaultOpen={form.skills.length > 0}
+          >
             <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
               Empty = all installed skills. Select to restrict.
             </p>
@@ -443,10 +562,17 @@ export function ProfileEditorForm({
                 }
               />
             )}
-          </div>
+          </CollapsibleFormSection>
 
-          <div>
-            <h3 className={SETTINGS_CATEGORY_HEADER}>MCP servers</h3>
+          <CollapsibleFormSection
+            title="MCP servers"
+            summary={selectionSummary(
+              form.mcpServers.length,
+              editorOptions.mcpServers.length,
+              "All configured servers",
+            )}
+            defaultOpen={form.mcpServers.length > 0}
+          >
             <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
               Empty = all configured servers. Select to restrict.
             </p>
@@ -475,12 +601,21 @@ export function ProfileEditorForm({
                 ))}
               </div>
             )}
-          </div>
+          </CollapsibleFormSection>
 
-          <div>
-            <h3 className={SETTINGS_CATEGORY_HEADER}>Rules</h3>
+          <CollapsibleFormSection
+            title="Rules"
+            summary={selectionSummary(
+              form.rules.length,
+              editorOptions.rules.length,
+              "All enabled rules",
+            )}
+            defaultOpen={form.rules.length > 0}
+          >
             <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
-              Subset of project rules to append for this expert. Empty = all enabled rules.
+              Subset of enabled project rules injected each chat turn. Empty = all enabled rules
+              with <code className="text-[11px]">apply: always</code>. Non-empty = only selected
+              names (Orchestrator main session only).
             </p>
             {editorOptions.rules.length === 0 ? (
               <p className="text-[length:var(--font-size-12)] text-muted-foreground">
@@ -507,8 +642,8 @@ export function ProfileEditorForm({
                 ))}
               </div>
             )}
-          </div>
-        </>
+          </CollapsibleFormSection>
+        </div>
       ) : null}
     </div>
   );

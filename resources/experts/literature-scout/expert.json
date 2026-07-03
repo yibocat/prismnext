@@ -1,0 +1,12 @@
+{
+  "id": "literature-scout",
+  "name": "Literature Scout",
+  "description": "External literature search, staging, and manuscript-ready summaries.",
+  "builtin": true,
+  "modules": ["chat-citation-staging"],
+  "permission": {
+    "edit": "deny",
+    "bash": "deny",
+    "task": { "*": "deny" }
+  }
+}

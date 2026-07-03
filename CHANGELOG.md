@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.5.2 — 2026-07-04
+
+### Expert Team (OpenCode Subagents)
+
+- Replace **Agent mode profiles** with **Orchestrators** + **Experts**: bundled Research Prism orchestrator and citation / literature / library scout experts; custom experts and orchestrators with permission presets
+- Experts sync to app-level OpenCode agents under `userData/opencode-server/`; orchestrator delegates to subagents via OpenCode **Task**; **Task** tool widget in chat with subagent dispatch UI
+- Composer **@Expert** mentions (multi-select in Expert team mode); `@` dropdown section labeled **Experts**; per-tab orchestrator selection removed from composer toolbar
+- Settings → **Agent**: orchestrator/expert CRUD, built-in enable toggles, reset-to-defaults; one-shot migration from legacy `profiles-manifest.json` / `profiles/custom/`
+- Disabled built-in experts stay visible in the list (`enabled: false`) instead of disappearing; optimistic Switch toggles without full-list Loading flicker
+
+### Prompt Stack & Modules
+
+- Four-layer prompt model: `_prism-system`, `AGENTS.md`, project rules (per-turn), orchestrator `agent.md`; **Preview stack** settings panel with expandable per-layer cards (replaces flat assembled markdown)
+- Per-turn injection for intensive-reading context; new **task-delegation** module for orchestrator Task guidance
+- Retire profile overlay and legacy domain modules (academic-writing, citations, figures-tables, math-equations); literature-library and chat-citation-staging modules updated for expert-team flow
+
+### Skill Library & Install
+
+- Unified **Skill Library** settings panel: Prism Curated catalog, remote registries, GitHub `owner/repo` sources, connect/disconnect, install single or all packages
+- Install pipeline: GitHub tree scan, publisher registry discovery, archive extract (`tar` / `extract-zip`), content digest, update checks, and reinstall from recorded origin
+- Skill enable/disable uses lighter OpenCode config sync (no full reload storm); manifest-only filesystem changes skip redundant scheduled refresh; Skills settings silent background reload on integration events
+
+### Chat Citations & Library Context
+
+- Clickable **library paper citations** in chat markdown (`remark-library-cite-refs`); inline citation chips open papers in Literature mode
+- Session citations context injected into orchestrator/expert prompts; **expert-team preamble** for multi-agent turns; library-task context for project library handoffs
+- Assistant message block-list rendering refactor; static markdown and citation-staging sync hardened for library cite markers
+
+### Settings & UX
+
+- Switch component: `duration-200 ease-in-out` thumb/track animation; optimistic toggles for MCP servers, built-in slash commands, agent experts, and project skills
+- Built-in slash commands panel; knowledge modules panel; shared settings JSON toolbar; commands/MCP/skills settings layout polish
+
+### Architecture & Testing
+
+- Remove profiles IPC/sync; add experts IPC, `experts-sync`, bundled experts/orchestrators, `project-experts-refresh`, `agent-editor-options`
+- Prism bridge path helpers shared across custom OpenCode tools; literature tools and bash permission bridge aligned with expert runtime filters
+- Design/plan docs for expert team, prompt stack, and skill library under `docs/superpowers/`
+- Vitest expansion: experts-sync, skill-install (GitHub/digest/updates), prompt-stack-preview, task-delegation, session-citations, library-cite refs, compile-composer experts, and related renderer smoke tests
+
 ## 0.5.1 — 2026-07-02
 
 ### PDF Extraction & Agent Reading

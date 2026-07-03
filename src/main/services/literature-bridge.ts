@@ -1,12 +1,14 @@
 /**
- * Polls ~/.prism-literature-bridge for OpenCode literature tool requests.
+ * Polls the literature file bridge for OpenCode literature tool requests.
  * Executes via literature-service in Electron main (Node sqlite) — not OpenCode Bun.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join, basename } from "node:path";
-import { homedir } from "node:os";
 import { createLogger } from "./logger";
-import { getSessionProjectRoot, isSessionIntensiveBibkey } from "./chat-session-registry";
+import { getLiteratureBridgeRoot } from "./prism-bridge-paths";
+import { getSessionProjectRoot, isSessionIntensiveBibkey, resolveChatTabId } from "./chat-session-registry";
+import { AcpService } from "../acp/service";
+import { emitChatStream } from "./chat-stream-notify";
 import { normalizeArxivId, normalizeDoi } from "../../shared/doi-utils";
 import { createPaperFromCatalog } from "./literature-enrich";
 import {
@@ -17,6 +19,7 @@ import {
   mapPaperForAgent,
   mapPaperSearchHitForAgent,
   searchPapers,
+  resolveLibraryProjectRoot,
   bibTeXEntryFromPaperRow,
 } from "./literature-service";
 import { publicationDetailsFromPaperRow, bibliographicToPaperPatch } from "../../shared/bibliographic-metadata/helpers";
@@ -25,11 +28,16 @@ import { readPaperPdfContent } from "./paper-extract-read";
 import { getSettings } from "./settings";
 import { PAPER_EXTRACT_AGENT_UI_HINT } from "../../shared/paper-extract";
 import type { StagedCitationPayload, StageResult } from "../../shared/citation-staging";
+import {
+  hitsFromLiteratureReadResult,
+  hitsFromLiteratureSearchResult,
+  recordLibraryTaskHitsFromToolSession,
+} from "./library-task-context";
 
 const log = createLogger("literature-bridge", "agent");
 
 function bridgeRoot(): string {
-  return process.env.PRISM_LITERATURE_BRIDGE_ROOT || join(homedir(), ".prism-literature-bridge");
+  return getLiteratureBridgeRoot();
 }
 
 function libraryPdfRelativePath(pdfPath: string | null): string | null {
@@ -58,6 +66,9 @@ interface SessionStageRecord {
   refId: number;
   doi: string | null;
   arxivId: string | null;
+  title?: string;
+  year?: number | null;
+  summary?: string | null;
 }
 
 function sessionStagingPath(sessionId: string): string {
@@ -86,7 +97,8 @@ function writeSessionStaging(sessionId: string, records: SessionStageRecord[]): 
 
 function resolveProjectRoot(req: LiteratureBridgeRequest): string {
   const fromSession = req.sessionId ? getSessionProjectRoot(req.sessionId) : undefined;
-  return fromSession || req.projectRoot?.trim() || "";
+  const raw = fromSession || req.projectRoot?.trim() || "";
+  return raw ? resolveLibraryProjectRoot(raw) : "";
 }
 
 function handleRead(projectRoot: string, bibkey: string): Record<string, unknown> {
@@ -133,7 +145,9 @@ function handleSearch(
     results: rows.map((p) => mapPaperSearchHitForAgent(p)),
     count: rows.length,
     hint:
-      "Project tags and AI summaries are included. Use tag= for exact tag filter; query searches title, abstract, authors, tags, and ai_summary.",
+      query.trim()
+        ? "Project tags and AI summaries are included. Use tag= for exact tag filter; query searches title, abstract, authors, tags, and ai_summary."
+        : "Listed all papers in the project library (empty query). Cite library papers in chat as [@bibkey].",
   };
 }
 
@@ -144,6 +158,13 @@ function handleCite(projectRoot: string, bibkey: string): Record<string, unknown
     const message = err instanceof Error ? err.message : String(err);
     return { error: message, bibkey };
   }
+}
+
+function notifyRendererCitationStaged(stagingSessionId: string, result: StageResult): void {
+  if (!result.staged || !result.verified || !result.citation) return;
+  const tabId = resolveChatTabId(stagingSessionId);
+  if (!tabId) return;
+  emitChatStream(tabId, "citation.staged", { sessionId: stagingSessionId, result });
 }
 
 /** Stage a citation with session-scoped refId (shared by bridge + IPC). */
@@ -157,6 +178,7 @@ export async function stageLiteratureCitation(
     discoveredFrom?: StagedCitationPayload["discoveredFrom"];
   },
 ): Promise<StageResult> {
+  const stagingSessionId = AcpService.getInstance().resolveCitationStagingSessionId(sessionId);
   const normDoi = payload.doi?.trim() ? normalizeDoi(payload.doi.trim()) : null;
   const normArxiv = payload.arxivId?.trim() ? normalizeArxivId(payload.arxivId.trim()) : null;
 
@@ -173,7 +195,7 @@ export async function stageLiteratureCitation(
   }
 
   // Reuse existing refId if this session already staged the same identifier.
-  const records = readSessionStaging(sessionId);
+  const records = readSessionStaging(stagingSessionId);
   const matched = records.find(
     (r) =>
       (normDoi && r.doi?.toLowerCase() === normDoi.toLowerCase()) ||
@@ -220,11 +242,23 @@ export async function stageLiteratureCitation(
     let refId = matched?.refId ?? 0;
     if (!matched) {
       refId = records.reduce((max, r) => (r.refId > max ? r.refId : max), 0) + 1;
-      records.push({ refId, doi: normDoi, arxivId: normArxiv });
-      writeSessionStaging(sessionId, records);
+      records.push({
+        refId,
+        doi: normDoi,
+        arxivId: normArxiv,
+        title: citationPayload.title,
+        year: citationPayload.year,
+        summary: citationPayload.abstract?.slice(0, 240) ?? null,
+      });
+      writeSessionStaging(stagingSessionId, records);
+    } else if (matched && citationPayload.title) {
+      matched.title = citationPayload.title;
+      matched.year = citationPayload.year;
+      matched.summary = citationPayload.abstract?.slice(0, 240) ?? matched.summary ?? null;
+      writeSessionStaging(stagingSessionId, records);
     }
 
-    return {
+    const stageResult: StageResult = {
       staged: true,
       verified: true,
       refId,
@@ -235,6 +269,8 @@ export async function stageLiteratureCitation(
         ? "Already in library. Cite as [n]."
         : "Cite as [n] in your reply. User will confirm before adding to library.",
     };
+    notifyRendererCitationStaged(stagingSessionId, stageResult);
+    return stageResult;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     log.warn("literature stage failed", { doi: normDoi, arxivId: normArxiv, error: message });
@@ -368,7 +404,6 @@ function dispatch(req: LiteratureBridgeRequest): Record<string, unknown> | Promi
     case "search": {
       const query = req.query?.trim() ?? "";
       const tag = req.tag?.trim() ?? "";
-      if (!query && !tag) return { error: "Provide query and/or tag parameter." };
       return handleSearch(projectRoot, query, req.limit, tag);
     }
     case "cite": {
@@ -412,6 +447,25 @@ function dispatch(req: LiteratureBridgeRequest): Record<string, unknown> | Promi
   }
 }
 
+function recordLibraryTaskHitsFromBridgeResult(
+  sessionId: string | undefined,
+  action: LiteratureBridgeRequest["action"],
+  result: Record<string, unknown>,
+): void {
+  if (!sessionId?.trim() || result.error) return;
+  if (action === "search") {
+    recordLibraryTaskHitsFromToolSession(
+      sessionId,
+      hitsFromLiteratureSearchResult(result),
+    );
+  } else if (action === "read") {
+    recordLibraryTaskHitsFromToolSession(
+      sessionId,
+      hitsFromLiteratureReadResult(result),
+    );
+  }
+}
+
 async function processSessionDir(sessionDir: string): Promise<void> {
   if (!existsSync(sessionDir)) return;
 
@@ -435,6 +489,7 @@ async function processSessionDir(sessionDir: string): Promise<void> {
       const raw = readFileSync(reqPath, "utf-8");
       const req = JSON.parse(raw) as LiteratureBridgeRequest;
       const result = await Promise.resolve(dispatch(req));
+      recordLibraryTaskHitsFromBridgeResult(req.sessionId, req.action, result);
       writeFileSync(resPath, JSON.stringify(result), "utf-8");
       try { unlinkSync(reqPath); } catch {}
     } catch (err) {

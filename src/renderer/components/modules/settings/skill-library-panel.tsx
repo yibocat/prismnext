@@ -5,12 +5,9 @@ import { Button } from "@/components/ui/button";
 import { useDocumentStore } from "@/stores/document-store";
 import { openUrlInBrowser } from "@/lib/browser-link";
 import { bumpSkillsRefresh } from "@/lib/settings/skills-refresh";
-import {
-  SKILL_CATEGORY_LABELS,
-  type BundledSkillInfo,
-  type SkillCategory,
-} from "@/lib/agent/skill-categories";
-import { PRISM_CURATED_LIBRARY } from "@/lib/agent/skill-libraries";
+import { SKILL_CATEGORY_LABELS } from "@/lib/agent/skill-categories";
+import { GITHUB_SKILL_PRESETS } from "@/lib/agent/skill-libraries";
+import type { LibraryCatalogItem } from "../../../../shared/skill-library-types";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
 import { cn } from "@/lib/utils";
@@ -20,7 +17,6 @@ import {
   SETTINGS_ROW_DESC,
 } from "./settings-tokens";
 
-const PRISM_CURATED_SOURCE_ID = PRISM_CURATED_LIBRARY.id;
 const LIBRARY_PAGE_SIZE = 40;
 
 const CARD = "rounded-lg border border-border divide-y divide-border";
@@ -34,42 +30,17 @@ const INPUT =
 
 interface LibrarySource {
   id: string;
-  kind: "bundled" | "remote";
+  kind: "bundled" | "remote" | "github";
   url?: string;
+  repo?: string;
+  ref?: string;
   connected: boolean;
   name: string;
   description: string;
   removable: boolean;
 }
 
-interface CatalogSkillItem {
-  key: string;
-  id: string;
-  name: string;
-  description: string;
-  sourceLabel: string;
-  sourceKind: "bundled" | "remote";
-  category?: SkillCategory;
-  artifactUrl?: string;
-  artifactType?: string;
-}
-
-function buildBundledCatalogItems(
-  bundled: BundledSkillInfo[],
-  source: LibrarySource,
-): CatalogSkillItem[] {
-  return bundled.map((skill) => ({
-    key: `bundled:${skill.id}`,
-    id: skill.id,
-    name: skill.name,
-    description: skill.description,
-    sourceLabel: source.name,
-    sourceKind: "bundled" as const,
-    category: skill.category,
-  }));
-}
-
-function filterCatalogItems(items: CatalogSkillItem[], query: string): CatalogSkillItem[] {
+function filterCatalogItems(items: LibraryCatalogItem[], query: string): LibraryCatalogItem[] {
   const q = query.trim().toLowerCase();
   if (!q) return items;
   return items.filter(
@@ -85,25 +56,23 @@ export function SkillLibraryPanel() {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
   const [installedIds, setInstalledIds] = useState<Set<string>>(new Set());
-  const [bundledSkills, setBundledSkills] = useState<BundledSkillInfo[]>([]);
-  const [catalogItems, setCatalogItems] = useState<CatalogSkillItem[]>([]);
-  const [catalogTailLoading, setCatalogTailLoading] = useState(false);
+  const [catalogItems, setCatalogItems] = useState<LibraryCatalogItem[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const [visibleCount, setVisibleCount] = useState(LIBRARY_PAGE_SIZE);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const scrollRootRef = useRef<HTMLDivElement>(null);
   const librarySentinelRef = useRef<HTMLDivElement>(null);
-  const loadedRemoteIdsRef = useRef<Set<string>>(new Set());
-  const fetchingRemotesRef = useRef(false);
+  const loadedSourceIdsRef = useRef<Set<string>>(new Set());
 
   const [librarySearch, setLibrarySearch] = useState("");
   const [librarySources, setLibrarySources] = useState<LibrarySource[]>([]);
-  const [addLibraryUrl, setAddLibraryUrl] = useState("");
-  const [addLibraryError, setAddLibraryError] = useState<string | null>(null);
+  const [addSourceUrl, setAddSourceUrl] = useState("");
+  const [addSourceError, setAddSourceError] = useState<string | null>(null);
   const sourceRemoveConfirm = useInlineDeleteConfirm();
 
-  const connectedLibrarySources = useMemo(
+  const connectedSources = useMemo(
     () => librarySources.filter((s) => s.connected),
     [librarySources],
   );
@@ -118,122 +87,67 @@ export function SkillLibraryPanel() {
     [filteredCatalogItems, visibleCount],
   );
 
-  const hasMoreRemotesToFetch = useMemo(
-    () =>
-      connectedLibrarySources.some(
-        (s) => s.kind === "remote" && s.url && !loadedRemoteIdsRef.current.has(s.id),
-      ),
-    [connectedLibrarySources, catalogItems],
-  );
-
-  const hasMoreLibraryItems =
-    visibleCount < filteredCatalogItems.length || hasMoreRemotesToFetch;
-
-  const resetLibraryCatalog = useCallback(() => {
-    const items: CatalogSkillItem[] = [];
-    const bundledSource = connectedLibrarySources.find(
-      (s) => s.id === PRISM_CURATED_SOURCE_ID,
-    );
-    if (bundledSource) {
-      items.push(...buildBundledCatalogItems(bundledSkills, bundledSource));
-    }
-    loadedRemoteIdsRef.current = new Set();
-    fetchingRemotesRef.current = false;
-    setCatalogItems(items);
-    setVisibleCount(LIBRARY_PAGE_SIZE);
-    setCatalogTailLoading(false);
-  }, [bundledSkills, connectedLibrarySources]);
-
-  const fetchNextRemoteBatch = useCallback(async (): Promise<boolean> => {
-    const nextSource = connectedLibrarySources.find(
-      (s) => s.kind === "remote" && s.url && !loadedRemoteIdsRef.current.has(s.id),
-    );
-    if (!nextSource?.url) return false;
-
-    loadedRemoteIdsRef.current.add(nextSource.id);
-    try {
-      const { skills: remoteSkills } =
-        await window.electronAPI.agentFetchSkillRegistry(nextSource.url);
-      const batch = remoteSkills.map((skill) => ({
-        key: `remote:${nextSource.id}:${skill.name}`,
-        id: skill.name.trim().toLowerCase(),
-        name: skill.name,
-        description: skill.description || skill.name,
-        sourceLabel: nextSource.name,
-        sourceKind: "remote" as const,
-        artifactUrl: skill.url,
-        artifactType: skill.type,
-      }));
-      setCatalogItems((prev) => [...prev, ...batch]);
-      return true;
-    } catch {
-      toast.error(`Failed to load skills from "${nextSource.name}".`);
-      return false;
-    }
-  }, [connectedLibrarySources]);
-
-  const loadMoreLibraryItems = useCallback(async () => {
-    if (visibleCount < filteredCatalogItems.length) {
-      setVisibleCount((count) => count + LIBRARY_PAGE_SIZE);
-      return;
-    }
-
-    const hasRemotes = connectedLibrarySources.some(
-      (s) => s.kind === "remote" && s.url && !loadedRemoteIdsRef.current.has(s.id),
-    );
-    if (!hasRemotes || fetchingRemotesRef.current) return;
-
-    fetchingRemotesRef.current = true;
-    setCatalogTailLoading(true);
-    try {
-      const loaded = await fetchNextRemoteBatch();
-      if (loaded) {
-        setVisibleCount((count) => count + LIBRARY_PAGE_SIZE);
-      }
-    } finally {
-      fetchingRemotesRef.current = false;
-      setCatalogTailLoading(false);
-    }
-  }, [connectedLibrarySources, fetchNextRemoteBatch, filteredCatalogItems.length, visibleCount]);
+  const hasMoreLibraryItems = visibleCount < filteredCatalogItems.length;
 
   const loadPanelData = useCallback(async () => {
     setLoaded(false);
+    loadedSourceIdsRef.current = new Set();
+    setCatalogItems([]);
     try {
-      const bundledPromise = window.electronAPI.agentListBundledSkills();
       if (!projectRoot) {
-        setBundledSkills(await bundledPromise);
         setInstalledIds(new Set());
         setLibrarySources([]);
         return;
       }
-      const [list, sources, bundled] = await Promise.all([
+      const [list, sources] = await Promise.all([
         window.electronAPI.agentListSkills(projectRoot),
         window.electronAPI.agentListSkillLibrarySources(projectRoot),
-        bundledPromise,
       ]);
       setInstalledIds(new Set(list.map((s) => s.id)));
       setLibrarySources(sources);
-      setBundledSkills(bundled);
     } catch {
       setInstalledIds(new Set());
       setLibrarySources([]);
-      setBundledSkills([]);
     } finally {
       setLoaded(true);
     }
   }, [projectRoot]);
 
+  const reloadAllCatalogs = useCallback(async () => {
+    if (!projectRoot) return;
+    loadedSourceIdsRef.current = new Set();
+    setCatalogItems([]);
+    setCatalogLoading(true);
+    try {
+      for (const source of connectedSources) {
+        loadedSourceIdsRef.current.add(source.id);
+        const batch = await window.electronAPI.agentFetchSkillLibraryCatalog(
+          projectRoot,
+          source.id,
+        );
+        setCatalogItems((prev) => [...prev, ...batch]);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load library.");
+    } finally {
+      setCatalogLoading(false);
+    }
+  }, [connectedSources, projectRoot]);
+
   useEffect(() => {
     void loadPanelData();
   }, [loadPanelData]);
 
+  const connectedSourceKey = connectedSources.map((s) => s.id).join(",");
+
   useEffect(() => {
-    resetLibraryCatalog();
-  }, [resetLibraryCatalog]);
+    if (!loaded || !projectRoot) return;
+    void reloadAllCatalogs();
+  }, [loaded, projectRoot, connectedSourceKey, reloadAllCatalogs]);
 
   useEffect(() => {
     setVisibleCount(LIBRARY_PAGE_SIZE);
-  }, [librarySearch]);
+  }, [librarySearch, catalogItems.length]);
 
   useEffect(() => {
     const root = scrollRootRef.current;
@@ -243,7 +157,7 @@ export function SkillLibraryPanel() {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
-          void loadMoreLibraryItems();
+          setVisibleCount((count) => count + LIBRARY_PAGE_SIZE);
         }
       },
       { root, rootMargin: "240px", threshold: 0 },
@@ -251,40 +165,16 @@ export function SkillLibraryPanel() {
 
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [
-    catalogItems.length,
-    catalogTailLoading,
-    hasMoreLibraryItems,
-    loadMoreLibraryItems,
-    visibleCatalogItems.length,
-  ]);
+  }, [hasMoreLibraryItems, visibleCatalogItems.length]);
 
-  const installCatalogSkill = async (item: CatalogSkillItem) => {
-    if (!projectRoot) return;
-    if (installedIds.has(item.id)) return;
-
-    if (item.sourceKind === "remote") {
-      if (item.artifactType === "archive") {
-        toast.error("Archive skills are not supported yet — only SKILL.md installs.");
-        return;
-      }
-      if (!item.artifactUrl) return;
-    }
-
+  const installCatalogItem = async (item: LibraryCatalogItem) => {
+    if (!projectRoot || installedIds.has(item.skillId)) return;
     setSaving(true);
     try {
-      if (item.sourceKind === "bundled") {
-        await window.electronAPI.agentInstallBundledSkill(projectRoot, item.id);
-      } else {
-        await window.electronAPI.agentInstallSkillFromRegistry(
-          projectRoot,
-          item.name,
-          item.artifactUrl!,
-        );
-      }
+      const result = await window.electronAPI.agentInstallLibraryCatalogItem(projectRoot, item);
       await window.electronAPI.chatPrewarm(projectRoot);
       bumpSkillsRefresh();
-      setInstalledIds((prev) => new Set([...prev, item.id]));
+      setInstalledIds((prev) => new Set([...prev, ...result.installedIds]));
       toast.success(`Installed "${item.name}" — start a new chat to use it.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Install failed.");
@@ -293,18 +183,43 @@ export function SkillLibraryPanel() {
     }
   };
 
-  const addLibrarySource = async (registryUrl: string) => {
+  const installAllFromSource = async (source: LibrarySource) => {
+    if (!projectRoot || source.kind !== "github") return;
+    setSaving(true);
+    try {
+      const result = await window.electronAPI.agentInstallAllFromLibrarySource(
+        projectRoot,
+        source.id,
+      );
+      await window.electronAPI.chatPrewarm(projectRoot);
+      bumpSkillsRefresh();
+      setInstalledIds((prev) => new Set([...prev, ...result.installedIds]));
+      toast.success(
+        `Installed ${result.installedIds.length} skills from "${source.name}" — start a new chat tab.`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Install all failed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addLibrarySource = async (input: string) => {
     if (!projectRoot) return;
     setSaving(true);
-    setAddLibraryError(null);
+    setAddSourceError(null);
     try {
-      const result = await window.electronAPI.agentAddSkillLibrarySource(projectRoot, registryUrl);
+      const result = await window.electronAPI.agentAddSkillLibrarySource(projectRoot, input);
       setLibrarySources(result.sources);
-      setAddLibraryUrl("");
+      setAddSourceUrl("");
       await window.electronAPI.chatPrewarm(projectRoot);
-      toast.success("Skill library source added.");
+      const label =
+        result.sourceKind === "github"
+          ? `GitHub source added (${result.skillCount} skills)`
+          : `Registry added (${result.skillCount} skills)`;
+      toast.success(label);
     } catch (err) {
-      setAddLibraryError(err instanceof Error ? err.message : "Invalid registry URL.");
+      setAddSourceError(err instanceof Error ? err.message : "Could not add source.");
     } finally {
       setSaving(false);
     }
@@ -321,8 +236,11 @@ export function SkillLibraryPanel() {
         connected,
       );
       setLibrarySources(result.sources);
+      if (!connected) {
+        loadedSourceIdsRef.current.delete(source.id);
+        setCatalogItems((prev) => prev.filter((item) => item.sourceId !== source.id));
+      }
       await window.electronAPI.chatPrewarm(projectRoot);
-      toast.success(connected ? `"${source.name}" connected.` : `"${source.name}" disconnected.`);
     } finally {
       setSaving(false);
     }
@@ -338,6 +256,8 @@ export function SkillLibraryPanel() {
         source.id,
       );
       setLibrarySources(result.sources);
+      loadedSourceIdsRef.current.delete(source.id);
+      setCatalogItems((prev) => prev.filter((item) => item.sourceId !== source.id));
       await window.electronAPI.chatPrewarm(projectRoot);
       toast.success(`Removed "${source.name}".`);
     } catch (err) {
@@ -345,15 +265,6 @@ export function SkillLibraryPanel() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleAddLibrary = async () => {
-    const url = addLibraryUrl.trim();
-    if (!url) {
-      setAddLibraryError("Enter a registry URL or site hostname.");
-      return;
-    }
-    await addLibrarySource(url);
   };
 
   if (!projectRoot) {
@@ -368,8 +279,8 @@ export function SkillLibraryPanel() {
     <div ref={scrollRootRef} className="flex-1 min-h-0 overflow-auto">
       <div className={SETTINGS_DETAIL_SHELL}>
         <p className={SETTINGS_ROW_DESC}>
-          Connect registry sources, then install skills into your project. Installed skills appear
-          on the main Skills page.
+          Add sources to your library, then install skills one at a time below. Installed skills
+          appear on the main Skills page — start a new chat tab to use them.
         </p>
 
         <div className="space-y-3">
@@ -378,28 +289,48 @@ export function SkillLibraryPanel() {
             <input
               type="url"
               className={cn(INPUT, "flex-1")}
-              placeholder="https://example.com/.well-known/agent-skills/index.json"
-              value={addLibraryUrl}
+              placeholder="GitHub repo or registry (e.g. github.com/owner/repo, developers.cloudflare.com)"
+              value={addSourceUrl}
               onChange={(e) => {
-                setAddLibraryUrl(e.target.value);
-                setAddLibraryError(null);
+                setAddSourceUrl(e.target.value);
+                setAddSourceError(null);
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter") void handleAddLibrary();
+                if (e.key === "Enter") void addLibrarySource(addSourceUrl);
               }}
             />
-            <Button size="xs" disabled={saving} onClick={() => void handleAddLibrary()}>
+            <Button
+              size="xs"
+              disabled={saving || !addSourceUrl.trim()}
+              onClick={() => void addLibrarySource(addSourceUrl)}
+            >
               Add source
             </Button>
           </div>
-          {addLibraryError && (
-            <p className="text-[length:var(--font-size-12)] text-destructive">{addLibraryError}</p>
+          {addSourceError && (
+            <p className="text-[length:var(--font-size-12)] text-destructive">{addSourceError}</p>
           )}
 
+          <div className="flex flex-wrap gap-2">
+            {GITHUB_SKILL_PRESETS.map((preset) => (
+              <Button
+                key={preset.id}
+                variant="outline"
+                size="xs"
+                className="h-7 text-[length:var(--font-size-11)]"
+                disabled={saving}
+                onClick={() => void addLibrarySource(preset.repoUrl)}
+              >
+                Add {preset.name}
+              </Button>
+            ))}
+          </div>
+
           <div className={cn(CARD, "!px-0")}>
-            {librarySources.length === 0 ? (
-              <div className="py-6 text-center text-[length:var(--font-size-12)] text-muted-foreground">
-                No sources yet.
+            {!loaded ? (
+              <div className="flex items-center gap-2 px-4 py-4 text-[length:var(--font-size-12)] text-muted-foreground">
+                <Loader2Icon className="size-3.5 animate-spin" />
+                Loading sources…
               </div>
             ) : (
               librarySources.map((source) => (
@@ -408,6 +339,22 @@ export function SkillLibraryPanel() {
                     <div className="flex flex-wrap items-center gap-2">
                       <LibraryIcon className="size-3.5 shrink-0 text-muted-foreground" />
                       <span className={ROW_LABEL}>{source.name}</span>
+                      <span
+                        className={cn(
+                          BADGE,
+                          source.kind === "bundled"
+                            ? "bg-muted text-muted-foreground normal-case tracking-normal"
+                            : source.kind === "github"
+                              ? "bg-muted/60 text-muted-foreground/80 normal-case tracking-normal"
+                              : "bg-muted/60 text-muted-foreground/80 normal-case tracking-normal",
+                        )}
+                      >
+                        {source.kind === "bundled"
+                          ? "Built-in"
+                          : source.kind === "github"
+                            ? "GitHub"
+                            : "Registry"}
+                      </span>
                       <span
                         className={cn(
                           BADGE,
@@ -425,8 +372,23 @@ export function SkillLibraryPanel() {
                         {source.url}
                       </p>
                     )}
+                    {source.repo && (
+                      <p className="text-[length:var(--font-size-11)] font-mono text-muted-foreground/70 mt-0.5 truncate">
+                        {source.repo}@{source.ref ?? "main"}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    {source.kind === "github" && source.connected && (
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        disabled={saving}
+                        onClick={() => void installAllFromSource(source)}
+                      >
+                        Install all
+                      </Button>
+                    )}
                     {source.connected ? (
                       <Button
                         variant="outline"
@@ -469,7 +431,7 @@ export function SkillLibraryPanel() {
         </div>
 
         <div className="space-y-3">
-          <p className={SETTINGS_CATEGORY_HEADER}>Browse skills</p>
+          <p className={SETTINGS_CATEGORY_HEADER}>Browse library</p>
           <div className="relative">
             <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
             <input
@@ -481,22 +443,22 @@ export function SkillLibraryPanel() {
             />
           </div>
 
-          {!loaded ? (
+          {!loaded || catalogLoading ? (
             <div className="flex items-center gap-2 text-[length:var(--font-size-12)] text-muted-foreground py-4">
               <Loader2Icon className="size-3.5 animate-spin" />
-              Loading…
+              Loading library…
             </div>
-          ) : connectedLibrarySources.length === 0 ? (
+          ) : connectedSources.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border py-10 text-center">
               <p className="text-[length:var(--font-size-13)] text-muted-foreground">
                 Connect a library source above to browse skills.
               </p>
             </div>
-          ) : visibleCatalogItems.length === 0 && !catalogTailLoading ? (
+          ) : visibleCatalogItems.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border py-10 text-center">
               <p className="text-[length:var(--font-size-13)] text-muted-foreground">
                 {librarySearch.trim()
-                  ? "No loaded skills match your search."
+                  ? "No skills match your search."
                   : "No skills available yet."}
               </p>
             </div>
@@ -504,17 +466,14 @@ export function SkillLibraryPanel() {
             <div className="@container space-y-2">
               <div className="grid grid-cols-1 @md:grid-cols-2 gap-2.5">
                 {visibleCatalogItems.map((item) => {
-                  const installed = installedIds.has(item.id);
-                  const isArchive = item.artifactType === "archive";
+                  const installed = installedIds.has(item.skillId);
                   return (
                     <div
                       key={item.key}
                       className="flex flex-col gap-1.5 rounded-md border border-border/70 px-3 py-2.5 hover:border-border transition-colors"
                     >
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span
-                          className="text-[length:var(--font-size-13)] font-medium leading-snug break-words"
-                        >
+                        <span className="text-[length:var(--font-size-13)] font-medium leading-snug break-words">
                           {item.name}
                         </span>
                         {item.category && (
@@ -561,22 +520,13 @@ export function SkillLibraryPanel() {
                             >
                               Installed
                             </span>
-                          ) : isArchive ? (
-                            <span
-                              className={cn(
-                                BADGE,
-                                "bg-muted text-muted-foreground normal-case tracking-normal shrink-0",
-                              )}
-                            >
-                              N/A
-                            </span>
                           ) : (
                             <Button
                               variant="outline"
                               size="xs"
                               className="h-6 px-2.5 shrink-0 text-[length:var(--font-size-11)]"
                               disabled={saving}
-                              onClick={() => void installCatalogSkill(item)}
+                              onClick={() => void installCatalogItem(item)}
                             >
                               Install
                             </Button>
@@ -591,14 +541,7 @@ export function SkillLibraryPanel() {
                 <div
                   ref={librarySentinelRef}
                   className="min-h-8 py-1 text-center text-[length:var(--font-size-12)] text-muted-foreground"
-                >
-                  {catalogTailLoading ? (
-                    <span className="inline-flex items-center gap-2">
-                      <Loader2Icon className="size-3.5 animate-spin" />
-                      Loading more skills…
-                    </span>
-                  ) : null}
-                </div>
+                />
               )}
             </div>
           )}

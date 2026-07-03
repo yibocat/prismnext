@@ -104,8 +104,27 @@ export type LibraryDb = DatabaseSync;
 
 const dbCache = new Map<string, LibraryDb>();
 
+/**
+ * Literature library.db lives under the main project root, not an isolated
+ * worktree checkout. Map session cwd / OpenCode directory back to the project
+ * root when it points at `.prismnext/worktrees/<name>`.
+ */
+export function resolveLibraryProjectRoot(candidate: string): string {
+  const trimmed = candidate?.trim();
+  if (!trimmed) return "";
+  const resolved = path.resolve(trimmed);
+  const norm = resolved.replace(/\\/g, "/");
+  const marker = "/.prismnext/worktrees/";
+  const idx = norm.indexOf(marker);
+  if (idx >= 0) {
+    return norm.slice(0, idx);
+  }
+  return resolved;
+}
+
 export function getLibraryPaths(projectRoot: string): LibraryPaths {
-  const libraryDir = path.join(projectRoot, ".prismnext", "library");
+  const root = resolveLibraryProjectRoot(projectRoot);
+  const libraryDir = path.join(root, ".prismnext", "library");
   return {
     libraryDir,
     dbPath: path.join(libraryDir, "library.db"),

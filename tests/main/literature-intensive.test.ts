@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildIntensiveReadingInstruction } from "../../src/main/prompts/modules/literature-intensive";
+import { buildIntensiveReadingInstruction } from "../../src/main/prompts/per-turn/intensive-reading";
 import { PAPER_EXTRACT_ACTION_LABEL } from "../../src/shared/paper-extract";
 import { TOOL_NAMES } from "../../src/shared/tool-names";
 
@@ -24,6 +24,8 @@ describe("buildIntensiveReadingInstruction", () => {
     ]);
     expect(out).toContain(TOOL_NAMES.literatureReadPdf);
     expect(out).toContain("p.X");
+    expect(out).toContain("[@bibkey]");
+    expect(out).toContain("[@Vaswani2017]");
     expect(out).toContain(PAPER_EXTRACT_ACTION_LABEL);
     expect(out).toContain("Evidence priority");
     expect(out).not.toContain("you MUST use");

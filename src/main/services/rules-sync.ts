@@ -107,12 +107,29 @@ export function listProjectRules(projectRoot: string): ProjectRuleInfo[] {
   return results.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Rules injected into the system prompt (apply: always, enabled). */
+export interface GetPromptProjectRulesOptions {
+  /** Rule frontmatter `name` or directory id. When set and non-empty, only matching rules inject. */
+  allowlist?: string[];
+}
+
+function ruleMatchesAllowlist(
+  ruleName: string,
+  ruleId: string,
+  allowlist: Set<string>,
+): boolean {
+  return allowlist.has(ruleName) || allowlist.has(ruleId);
+}
+
+/** Rules injected into the chat turn (apply: always, enabled). */
 export function getPromptProjectRules(
   projectRoot: string,
+  options?: GetPromptProjectRulesOptions,
 ): Array<{ name: string; content: string }> {
   const rulesRoot = join(projectRoot, PRISM_RULES_REL);
   if (!existsSync(rulesRoot)) return [];
+
+  const allowlist = options?.allowlist?.filter(Boolean);
+  const allowed = allowlist?.length ? new Set(allowlist) : null;
 
   const results: Array<{ name: string; content: string }> = [];
 
@@ -128,6 +145,7 @@ export function getPromptProjectRules(
     const name = meta.name.trim() || entry.name;
     const content = meta.body.trim();
     if (!content) continue;
+    if (allowed && !ruleMatchesAllowlist(name, entry.name, allowed)) continue;
 
     results.push({ name, content });
   }

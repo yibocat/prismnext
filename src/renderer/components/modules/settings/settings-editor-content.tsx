@@ -6,8 +6,10 @@ import {
 } from "@/lib/settings/settings-panel-slots";
 import { WorkspaceFolderEditor } from "./workspace-folder-editor";
 import { ProviderEditorPanel } from "./provider-editor-panel";
-import { ProfileEditorPanel } from "./profile-editor-panel";
+import { ExpertEditorPanel } from "./expert-editor-panel";
+import { OrchestratorEditorPanel } from "./orchestrator-editor-panel";
 import { PromptMarkdownPanel } from "./prompt-markdown-panel";
+import { PromptStackPreviewPanel } from "./prompt-stack-preview-panel";
 import { RuleMarkdownPanel } from "./rule-markdown-panel";
 import { CustomCommandEditorPanel } from "./custom-command-editor-panel";
 import { McpJsonEditorPanel } from "./mcp-json-editor-panel";
@@ -17,6 +19,8 @@ import { McpServerEditorPanel } from "./mcp-server-editor-panel";
 import { SkillMarkdownPanel } from "./skill-markdown-panel";
 import { SkillLibraryPanel } from "./skill-library-panel";
 import { AgentToolsPanel } from "./agent-tools-panel";
+import { KnowledgeModulesPanel } from "./knowledge-modules-panel";
+import { BuiltinCommandsPanel } from "./builtin-commands-panel";
 import { ShortcutsSettings } from "./shortcuts-settings";
 import { LogViewer } from "./log-viewer";
 
@@ -39,10 +43,14 @@ export function renderSettingsPanelSlot(slot: SettingsPanelSlot): ReactNode {
       return <WorkspaceFolderEditor slot={slot} />;
     case "ai-provider":
       return <ProviderEditorPanel slot={slot} />;
-    case "agent-profile":
-      return <ProfileEditorPanel slot={slot} />;
+    case "agent-expert":
+      return <ExpertEditorPanel slot={slot} />;
+    case "agent-orchestrator":
+      return <OrchestratorEditorPanel slot={slot} />;
     case "prompt-markdown":
       return <PromptMarkdownPanel slot={slot} />;
+    case "prompt-stack-preview":
+      return <PromptStackPreviewPanel />;
     case "rule-markdown":
       return <RuleMarkdownPanel slot={slot} />;
     case "custom-command":
@@ -61,6 +69,10 @@ export function renderSettingsPanelSlot(slot: SettingsPanelSlot): ReactNode {
       return <SkillLibraryPanel />;
     case "agent-tools":
       return <AgentToolsPanel />;
+    case "knowledge-modules":
+      return <KnowledgeModulesPanel />;
+    case "builtin-commands":
+      return <BuiltinCommandsPanel />;
     case "shortcuts":
       return <ShortcutsSettings />;
     case "logs":
@@ -71,6 +83,7 @@ export function renderSettingsPanelSlot(slot: SettingsPanelSlot): ReactNode {
 export function settingsSlotBodyClassName(slot: SettingsPanelSlot): string {
   if (
     slot.kind === "prompt-markdown" ||
+    slot.kind === "prompt-stack-preview" ||
     slot.kind === "mcp-json" ||
     slot.kind === "skill-markdown" ||
     slot.kind === "rule-markdown" ||

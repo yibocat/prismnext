@@ -1,0 +1,40 @@
+{
+  "experts": [
+    {
+      "id": "citation-auditor",
+      "name": "Citation Auditor",
+      "description": "Focused review of citations, bib entries, and reference consistency.",
+      "builtin": true,
+      "skills": ["academic-citations"],
+      "permission": {
+        "edit": "deny",
+        "bash": "deny",
+        "task": { "*": "deny" }
+      }
+    },
+    {
+      "id": "literature-scout",
+      "name": "Literature Scout",
+      "description": "External literature search, staging, and manuscript-ready summaries.",
+      "builtin": true,
+      "modules": ["chat-citation-staging"],
+      "permission": {
+        "edit": "deny",
+        "bash": "deny",
+        "task": { "*": "deny" }
+      }
+    },
+    {
+      "id": "library-scout",
+      "name": "Library Scout",
+      "description": "Search and summarize papers already in the project literature library.",
+      "builtin": true,
+      "modules": ["literature-library"],
+      "permission": {
+        "edit": "deny",
+        "bash": "deny",
+        "task": { "*": "deny" }
+      }
+    }
+  ]
+}

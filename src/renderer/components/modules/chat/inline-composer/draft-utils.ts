@@ -6,18 +6,35 @@ export interface ComposerTabDraft {
   input: string;
   parts?: ComposerPart[];
   chips?: { id: string; commandName: string; action?: string; source: string }[];
+  /** @deprecated legacy expert/profile chip — migrated on load */
   profileChip?: { id: string; profileId: string; profileName: string } | null;
+}
+
+function normalizeLegacyMention(part: ComposerPart): ComposerPart {
+  if (part.type !== "mention") return part;
+  if (part.mentionType === "expert") return part;
+  const legacy = part as ComposerPart & { mentionType: "profile"; profileId: string };
+  if (legacy.mentionType === "profile") {
+    return {
+      type: "mention",
+      mentionType: "expert",
+      id: legacy.id,
+      label: legacy.label,
+      expertId: legacy.profileId,
+    };
+  }
+  return part;
 }
 
 /** Restore composer parts from tab draft (inline JSON or legacy chips). */
 export function loadDraftParts(draft?: ComposerTabDraft): ComposerPart[] {
   if (draft?.parts && draft.parts.length > 0) {
-    return mergeAdjacentText(draft.parts);
+    return mergeAdjacentText(draft.parts.map(normalizeLegacyMention));
   }
 
   const hasLegacyChips = (draft?.chips?.length ?? 0) > 0 || !!draft?.profileChip;
   if (!hasLegacyChips) {
-    return parseDraftJson(draft?.input);
+    return parseDraftJson(draft?.input).map(normalizeLegacyMention);
   }
 
   const parts: ComposerPart[] = [];
@@ -25,10 +42,10 @@ export function loadDraftParts(draft?: ComposerTabDraft): ComposerPart[] {
   if (draft?.profileChip) {
     parts.push({
       type: "mention",
-      mentionType: "profile",
+      mentionType: "expert",
       id: draft.profileChip.id || createTokenId(),
       label: draft.profileChip.profileName,
-      profileId: draft.profileChip.profileId,
+      expertId: draft.profileChip.profileId,
     });
   }
 

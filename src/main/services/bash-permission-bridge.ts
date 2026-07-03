@@ -1,12 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { homedir } from "node:os";
+import { getTerminalBridgeRoot } from "./prism-bridge-paths";
 import { registerBashJobIntent, runAiBashJob } from "./ai-bash-runner";
 
 export type BashPermissionStatus = "approved" | "denied";
 
 export function getBridgeRoot(): string {
-  return process.env.PRISM_TERMINAL_BRIDGE_ROOT || join(homedir(), ".prism-terminal-bridge");
+  return getTerminalBridgeRoot();
 }
 
 export function bashPermissionPath(sessionId: string, toolCallId: string): string {

@@ -3,10 +3,10 @@
  */
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
+import { literatureBridgeRoot } from "./bridge-paths";
 
-const BRIDGE_ROOT = path.join(os.homedir(), ".prism-literature-bridge");
+const BRIDGE_ROOT = literatureBridgeRoot();
 const TIMEOUT_MS = 360_000;
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -70,7 +70,8 @@ async function bridgeCall(
 
 export default tool({
   description:
-    "Read extracted body text of a library paper PDF by bibkey. Uses cached MinerU/pdfjs/HTML extracts under .prismnext/library/extract/. Set force=true to start extraction if missing (may upload PDF to MinerU cloud).",
+    "Read extracted body text of a library paper PDF by bibkey. Uses cached MinerU/pdfjs/HTML extracts under .prismnext/library/extract/. Set force=true to start extraction if missing (may upload PDF to MinerU cloud). " +
+    "Intensive reading list only. When citing content from this tool in your chat reply, use [@bibkey] with the exact bibkey and page numbers as p.X.",
   args: {
     bibkey: tool.schema.string().describe("Exact cite key / bibkey from the Literature library"),
     pages: tool.schema

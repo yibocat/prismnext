@@ -2,7 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState, memo, useCallback, useMem
 import { cn } from "@/lib/utils";
 import { useChatStore, type ChatStreamMessage, type ContentBlock } from "@/stores/chat-store";
 import { MarkdownRenderer } from "./markdown-renderer";
-import { ToolWidget, ThinkingWidget } from "./tools";
+import { AssistantBlockList } from "./assistant-block-list";
+export { AssistantBlockList } from "./assistant-block-list";
+import "./tools/task-widget-register";
 import { TurnFooter, extractTurnCopyText } from "./turn-footer";
 import { InlineRichText, InlineTokenChip } from "./inline-tokens";
 import { partsToPlainText, type ComposerPart } from "@/lib/chat/composer-parts";
@@ -14,6 +16,8 @@ import {
 } from "@/lib/chat/active-turn-scroll";
 import { isToolResultUserMessage } from "./chat-turns";
 import { buildToolResultMap, contentBlocks } from "./tools/tool-result-map";
+import { useDocumentStore } from "@/stores/document-store";
+import { useLiteratureStore } from "@/stores/literature-store";
 import {
   AlertCircleIcon,
   CopyIcon,
@@ -190,46 +194,16 @@ const AssistantMessage = memo(function AssistantMessage({
 }) {
   const blocks = contentBlocks(msg.message?.content);
 
-  // Thinking is complete once the assistant emits text or tool_use blocks.
-  // The thinking timer should stop — it measures thinking time, not the
-  // total response time (which is shown separately as "Completed in Xs").
-  const thinkingComplete = blocks.some(
-    (b) => b.type === "text" || b.type === "tool_use",
-  );
-
   return (
     <div className="group w-full min-w-0 max-w-full overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-200">
       <div className="min-w-0 flex-1">
-          {blocks.map((block, i) => {
-            if (block.type === "thinking" && block.thinking) {
-              return (
-                <ThinkingWidget
-                  key={i}
-                  thinking={block.thinking}
-                  duration={(block as any).duration}
-                  persistKey={sessionId ? `${sessionId}:${msgIndex}:${i}` : undefined}
-                  isStreamingMsg={isStreamingMsg && !thinkingComplete}
-                  isProgress={(block as any)._progress === true}
-                />
-              );
-            }
-            if (block.type === "text" && block.text) {
-              return (
-                <div key={i} className="min-w-0 max-w-full overflow-hidden text-[length:var(--font-chat-message)]">
-                  <MarkdownRenderer
-                    content={block.text}
-                    isAnimating={isStreamingMsg}
-                    sessionId={sessionId}
-                  />
-                </div>
-              );
-            }
-            if (block.type === "tool_use") {
-              const result = toolResultMap.get(block.id || "");
-              return <ToolWidget key={i} toolUse={block} toolResult={result} />;
-            }
-            return null;
-          })}
+        <AssistantBlockList
+          blocks={blocks}
+          toolResultMap={toolResultMap}
+          msgIndex={msgIndex}
+          isStreamingMsg={isStreamingMsg}
+          sessionId={sessionId}
+        />
       </div>
     </div>
   );
@@ -310,6 +284,8 @@ function ActionStatusCard({ msg }: { msg: ChatStreamMessage }) {
 
 // ─── Chat Messages ───
 
+const chatLiteratureWarmupRoots = new Set<string>();
+
 export const ChatMessages = memo(function ChatMessages() {
   const messages = useChatStore((s) => s.messages);
   const streamingMessage = useChatStore((s) => s.streamingMessage);
@@ -317,6 +293,15 @@ export const ChatMessages = memo(function ChatMessages() {
   const isLoadingSession = useChatStore((s) => s.isLoadingSession);
   const activeTabId = useChatStore((s) => s.activeTabId);
   const chatSessionId = useChatStore((s) => s.sessionId);
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
+
+  useEffect(() => {
+    if (!projectRoot) return;
+    const { papers, refresh } = useLiteratureStore.getState();
+    if (papers.length > 0 || chatLiteratureWarmupRoots.has(projectRoot)) return;
+    chatLiteratureWarmupRoots.add(projectRoot);
+    void refresh(projectRoot);
+  }, [projectRoot]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastTurnRef = useRef<HTMLElement>(null);

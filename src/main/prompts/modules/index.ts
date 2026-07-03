@@ -1,21 +1,17 @@
 // prism-next/src/main/prompts/modules/index.ts
 
 import type { PromptModule, PromptContext } from "../types";
-import { ACADEMIC_WRITING_PROMPT } from "./academic-writing";
-import { CITATIONS_PROMPT } from "./citations";
 import { CHAT_CITATION_STAGING_PROMPT } from "./chat-citation-staging";
 import { LITERATURE_LIBRARY_PROMPT } from "./literature-library";
-import { FIGURES_TABLES_PROMPT } from "./figures-tables";
-import { MATH_EQUATIONS_PROMPT } from "./math-equations";
+import { TASK_DELEGATION_PROMPT } from "./task-delegation";
 import { buildWorkspacePrompt } from "./workspace-folders";
 
 /** All available prompt modules.
  *
- *  Academic modules are enabled by default so built-in agent profiles work
- *  out of the box. Users can turn them off in Settings → Prompts & Rules;
- *  profiles that depend on disabled modules become unavailable until re-enabled.
+ * Global `_prism-system.md` injects only `workspace-folders` (always on).
+ * Profile modules (`profileOnly`) are attached per Orchestrator/Expert in the agent editor.
  *
- *  `workspace-folders` generates folder descriptions from the project workspace config.
+ * Per-turn user sidecars (e.g. intensive reading) live in `prompts/per-turn/` — not here.
  */
 export const ALL_MODULES: PromptModule[] = [
   {
@@ -31,27 +27,12 @@ export const ALL_MODULES: PromptModule[] = [
       ctx.workspaceDirs ? buildWorkspacePrompt(ctx.workspaceDirs) : "",
   },
   {
-    key: "academic-writing",
-    label: "Academic Writing",
-    description: "Sectioning, abstracts, cross-references, footnotes, hyperref.",
-    enabled: true,
-    source: "app",
-    prompt: ACADEMIC_WRITING_PROMPT,
-  },
-  {
-    key: "citations",
-    label: "Citations & Bibliography",
-    description: "BibTeX, BibLaTeX, cite commands, bibliography management.",
-    enabled: true,
-    source: "app",
-    prompt: CITATIONS_PROMPT,
-  },
-  {
     key: "chat-citation-staging",
     label: "Chat Paper Citations",
     description:
-      "Binding workflow for external papers in chat: literature-stage first, cite as [n]. Not a tool catalog.",
+      "External papers in chat: literature-stage first, cite as [n]. Library papers use the Literature Library module.",
     enabled: true,
+    profileOnly: true,
     source: "app",
     prompt: CHAT_CITATION_STAGING_PROMPT,
   },
@@ -59,25 +40,20 @@ export const ALL_MODULES: PromptModule[] = [
     key: "literature-library",
     label: "Literature Library (tags & search)",
     description:
-      "How to find project library papers by user tags, AI summaries, literature-search, and literature-read.",
+      "Project library papers: search/read in `.prismnext/library/`, cite as [@bibkey]. External papers use Chat Paper Citations.",
     enabled: true,
+    profileOnly: true,
     source: "app",
     prompt: LITERATURE_LIBRARY_PROMPT,
   },
   {
-    key: "figures-tables",
-    label: "Figures & Tables",
-    description: "Floats, captions, booktabs, subcaption, graphicx.",
+    key: "task-delegation",
+    label: "Task Delegation (orchestrator)",
+    description:
+      "Generic orchestrator Task discipline — when/how to delegate, synthesis, allowlist. Expert roster from Available experts; domain formats in other modules.",
     enabled: true,
+    profileOnly: true,
     source: "app",
-    prompt: FIGURES_TABLES_PROMPT,
-  },
-  {
-    key: "math-equations",
-    label: "Math & Equations",
-    description: "AMS packages, align, matrices, theorem environments.",
-    enabled: true,
-    source: "app",
-    prompt: MATH_EQUATIONS_PROMPT,
+    prompt: TASK_DELEGATION_PROMPT,
   },
 ];

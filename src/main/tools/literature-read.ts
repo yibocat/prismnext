@@ -4,10 +4,10 @@
  */
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
+import { literatureBridgeRoot } from "./bridge-paths";
 
-const BRIDGE_ROOT = path.join(os.homedir(), ".prism-literature-bridge");
+const BRIDGE_ROOT = literatureBridgeRoot();
 const TIMEOUT_MS = 30_000;
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -70,7 +70,8 @@ async function bridgeCall(
 
 export default tool({
   description:
-    "Read a paper from the project literature library by bibkey (Cite key). Returns metadata, abstract, user tags, AI summary, publication_details, highlights, PDF path. Uses .prismnext/library/library.db.",
+    "Read a paper from the project literature library by bibkey (Cite key). Returns metadata, abstract, user tags, AI summary, publication_details, highlights, PDF path. Uses .prismnext/library/library.db. " +
+    "When citing this paper in your chat reply, use the inline marker [@bibkey] with the exact bibkey you read.",
   args: {
     bibkey: tool.schema.string().describe("Exact cite key / bibkey from the Literature library"),
   },

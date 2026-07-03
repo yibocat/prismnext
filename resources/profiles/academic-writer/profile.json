@@ -1,7 +1,0 @@
-{
-  "id": "academic-writer",
-  "name": "Academic Writer",
-  "description": "Default LaTeX manuscript writing assistant for ResearchPrism projects.",
-  "builtin": true,
-  "modules": ["academic-writing", "citations", "math-equations", "figures-tables"]
-}

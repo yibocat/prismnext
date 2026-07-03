@@ -22,11 +22,11 @@
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
 import * as path from "path";
-import * as os from "os";
 import { execSync } from "child_process";
+import { terminalBridgeRoot } from "./bridge-paths";
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const BRIDGE_ROOT = path.join(os.homedir(), ".prism-terminal-bridge");
+const BRIDGE_ROOT = terminalBridgeRoot();
 const ACTIVE_TOOL_FILE = ".active-tool.json";
 const PERMISSION_TIMEOUT_MS = 120_000;
 

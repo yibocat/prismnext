@@ -1,59 +1,44 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { ALL_MODULES } from "../../src/main/prompts/modules";
-import { resolveActiveModules, resolveActiveModuleKeys } from "../../src/main/prompts/resolve-active-modules";
+import { describe, it, expect } from "vitest";
+import {
+  composeProfileModulePrompts,
+  resolveActiveModuleKeys,
+  resolveProfileSelectableModules,
+  resolveStableSystemModules,
+} from "../../src/main/prompts/resolve-active-modules";
+import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/literature-library";
 
-function setModuleEnabled(key: string, enabled: boolean): void {
-  const mod = ALL_MODULES.find((m) => m.key === key);
-  if (mod) mod.enabled = enabled;
-}
-
-describe("resolveActiveModules", () => {
-  const snapshot = ALL_MODULES.map((m) => ({ key: m.key, enabled: m.enabled }));
-
-  afterEach(() => {
-    for (const { key, enabled } of snapshot) {
-      setModuleEnabled(key, enabled);
-    }
-  });
-
-  beforeEach(() => {
-    setModuleEnabled("workspace-folders", true);
-    setModuleEnabled("academic-writing", false);
-    setModuleEnabled("citations", false);
-    setModuleEnabled("figures-tables", false);
-    setModuleEnabled("math-equations", false);
-  });
-
-  it("returns all globally enabled modules when profile has no scope", () => {
-    setModuleEnabled("citations", true);
-    const keys = resolveActiveModuleKeys({});
-    expect(keys).toEqual(["workspace-folders", "citations"]);
-  });
-
-  it("intersects profile scope with global toggles", () => {
-    setModuleEnabled("citations", false);
-    const keys = resolveActiveModuleKeys({ profileModules: ["citations", "academic-writing"] });
+describe("resolve-active-modules", () => {
+  it("stable system modules are workspace-only", () => {
+    const keys = resolveStableSystemModules().map((m) => m.key);
     expect(keys).toEqual(["workspace-folders"]);
   });
 
-  it("includes profile-selected modules that are globally on", () => {
-    setModuleEnabled("citations", true);
-    setModuleEnabled("academic-writing", true);
+  it("profile-selectable modules exclude workspace", () => {
+    const keys = resolveProfileSelectableModules().map((m) => m.key);
+    expect(keys).toContain("chat-citation-staging");
+    expect(keys).toContain("literature-library");
+    expect(keys).toContain("task-delegation");
+    expect(keys).not.toContain("workspace-folders");
+  });
+
+  it("composeProfileModulePrompts inlines only profile-selected modules", () => {
+    const text = composeProfileModulePrompts(["literature-library"], {});
+    expect(text).toContain(LITERATURE_LIBRARY_PROMPT.split("\n")[0]);
+    expect(text).not.toContain("## Chat paper citations");
+  });
+
+  it("resolveActiveModuleKeys always includes workspace plus profile picks", () => {
+    expect(resolveActiveModuleKeys({})).toEqual(["workspace-folders"]);
+    expect(resolveActiveModuleKeys({ profileModules: ["literature-library", "bogus"] })).toEqual([
+      "literature-library",
+      "workspace-folders",
+    ]);
+  });
+
+  it("does not require global module toggles for profile selection", () => {
     const keys = resolveActiveModuleKeys({
-      profileModules: ["citations", "academic-writing"],
+      profileModules: ["chat-citation-staging", "literature-library"],
     });
-    expect(keys).toEqual(["workspace-folders", "academic-writing", "citations"]);
-  });
-
-  it("always considers workspace-folders in profile scope but respects global off", () => {
-    setModuleEnabled("workspace-folders", false);
-    const keys = resolveActiveModuleKeys({ profileModules: ["citations"] });
-    expect(keys).toEqual([]);
-  });
-
-  it("returns module objects with keys matching resolveActiveModuleKeys", () => {
-    setModuleEnabled("citations", true);
-    const modules = resolveActiveModules({ profileModules: ["citations"] });
-    expect(modules.map((m) => m.key)).toEqual(resolveActiveModuleKeys({ profileModules: ["citations"] }));
+    expect(keys).toEqual(["chat-citation-staging", "literature-library", "workspace-folders"]);
   });
 });

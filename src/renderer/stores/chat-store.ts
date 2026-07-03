@@ -91,8 +91,6 @@ interface TabDraft {
   parts?: ComposerPart[];
   /** @deprecated legacy command chips */
   chips?: { id: string; commandName: string; action?: string; source: string }[];
-  /** @deprecated legacy profile chip */
-  profileChip?: { id: string; profileId: string; profileName: string } | null;
 }
 
 interface TabState {
@@ -121,10 +119,8 @@ interface TabState {
   categorySchema: { key: string; label: string; color: string; description?: string; order?: number }[] | null;
   /** True when live prompt config differs from this session's injected fingerprint. */
   promptStale: boolean;
-  /** Agent profile for this tab (null = project default). */
-  activeProfileId: string | null;
-  /** Chat execution mode for this tab. */
-  chatMode: ChatExecutionMode;
+  /** Expert team orchestrator id (null → project default). */
+  orchestratorId: string | null;
   /** True while session history is being loaded from disk (avoids homepage flash). */
   isLoadingSession: boolean;
   /** OpenCode session directory — worktree path or project root. */
@@ -133,9 +129,17 @@ interface TabState {
    *  to use literature-read-pdf on these bibkeys. Managed separately from @ chips:
    *  removing a paper here does NOT remove the @ chip in the composer. */
   intensivePaperIds: string[];
+  /** Live activity for OpenCode Task / subagent runs keyed by parent task tool_use id. */
+  subAgentRuns: Record<string, SubAgentRun>;
 }
 
-export type ChatExecutionMode = "agent" | "expert-team";
+export interface SubAgentRun {
+  expertId: string;
+  prompt: string;
+  status: "running" | "done" | "error";
+  subSessionId?: string;
+  blocks: ContentBlock[];
+}
 
 let _nextTabId = 1;
 function nextTabId(): string {
@@ -157,11 +161,11 @@ function makeDefaultTab(id: string): TabState {
     contextBreakdown: null,
     categorySchema: null,
     promptStale: false,
-    activeProfileId: null,
-    chatMode: "agent",
+    orchestratorId: null,
     isLoadingSession: false,
     sessionCwd: null,
     intensivePaperIds: [],
+    subAgentRuns: {},
   };
 }
 
@@ -211,8 +215,6 @@ interface ChatState {
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   saveDraft: (tabId: string, draft: TabDraft) => void;
-  setActiveProfile: (tabId: string, profileId: string | null) => void;
-  setChatMode: (tabId: string, mode: ChatExecutionMode) => void;
 
   // Intensive reading list (per-tab)
   /** Add a paper to this tab's intensive reading list (idempotent). */
@@ -227,11 +229,12 @@ interface ChatState {
     userPrompt: string,
     userContent?: ContentBlock[],
     skipUserMessage?: boolean,
-    profileId?: string | null,
     composerExtras?: {
       mcpServerAllowlist?: string[];
       skillIds?: string[];
       hasPaperSnippets?: boolean;
+      selectedExpertIds?: string[];
+      orchestratorId?: string | null;
     },
   ) => Promise<void>;
   cancelExecution: () => Promise<void>;
@@ -261,6 +264,13 @@ interface ChatState {
   _patchToolInput: (tabId: string, toolUseId: string, input: any, name?: string) => void;
   /** Inject a synthetic tool_result when permission is denied/timed out. */
   _injectToolResult: (tabId: string, toolUseId: string, content: string, isError?: boolean) => void;
+  _linkSubAgentRun: (
+    tabId: string,
+    taskToolUseId: string,
+    data: { expertId: string; prompt: string; subSessionId?: string },
+  ) => void;
+  _upsertSubAgentActivity: (tabId: string, taskToolUseId: string, block: ContentBlock) => void;
+  _completeSubAgentRun: (tabId: string, taskToolUseId: string, status: "done" | "error") => void;
 }
 
 /**
@@ -358,9 +368,49 @@ function syncCitationStagingForTab(tab: TabState | undefined): void {
     return;
   }
   useCitationStagingStore.getState().setActiveSession(tab.sessionId);
-  if (tab.messages.length > 0) {
-    scheduleCitationStagingBackfill(tab.sessionId, tab.messages);
+  const hasSubAgentBlocks = Object.values(tab.subAgentRuns ?? {}).some((r) => r.blocks.length > 0);
+  if (tab.messages.length > 0 || hasSubAgentBlocks) {
+    scheduleCitationStagingBackfill(tab.sessionId, tab.messages, tab.subAgentRuns);
   }
+}
+
+/** Merge sub-agent activity blocks (tool_use by id, tool_result by tool_use_id). */
+function upsertSubAgentBlock(blocks: ContentBlock[], incoming: ContentBlock): ContentBlock[] {
+  if (incoming.type === "tool_use" && incoming.id) {
+    const idx = blocks.findIndex((b) => b.type === "tool_use" && b.id === incoming.id);
+    if (idx >= 0) {
+      const next = [...blocks];
+      next[idx] = { ...next[idx], ...incoming };
+      return next;
+    }
+    return [...blocks, incoming];
+  }
+  if (incoming.type === "tool_result" && incoming.tool_use_id) {
+    const idx = blocks.findIndex(
+      (b) => b.type === "tool_result" && b.tool_use_id === incoming.tool_use_id,
+    );
+    if (idx >= 0) {
+      const next = [...blocks];
+      next[idx] = incoming;
+      return next;
+    }
+    return [...blocks, incoming];
+  }
+  if (incoming.type === "text" && incoming.text) {
+    const last = blocks[blocks.length - 1];
+    if (last?.type === "text") {
+      return [...blocks.slice(0, -1), { ...last, text: incoming.text }];
+    }
+    return [...blocks, incoming];
+  }
+  if (incoming.type === "thinking") {
+    const last = blocks[blocks.length - 1];
+    if (last?.type === "thinking") {
+      return [...blocks.slice(0, -1), { ...last, ...incoming }];
+    }
+    return [...blocks, incoming];
+  }
+  return [...blocks, incoming];
 }
 
 /** Tell main process which chat tab owns an OpenCode session (stream routing). */
@@ -506,22 +556,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }));
   },
 
-  setActiveProfile: (tabId: string, profileId: string | null) => {
-    set((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === tabId ? { ...t, activeProfileId: profileId } : t,
-      ),
-    }));
-  },
-
-  setChatMode: (tabId: string, mode: ChatExecutionMode) => {
-    set((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === tabId ? { ...t, chatMode: mode } : t,
-      ),
-    }));
-  },
-
   addIntensivePaper: (tabId: string, paperId: string) => {
     if (!paperId) return;
     set((s) => ({
@@ -563,11 +597,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     userPrompt: string,
     userContent?: ContentBlock[],
     skipUserMessage?: boolean,
-    profileIdOverride?: string | null,
     composerExtras?: {
       mcpServerAllowlist?: string[];
       skillIds?: string[];
       hasPaperSnippets?: boolean;
+      selectedExpertIds?: string[];
+      orchestratorId?: string | null;
     },
   ) => {
     const docState = useDocumentStore.getState();
@@ -669,27 +704,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       let model = persistedSettings.aiModel ?? undefined;
       let thoughtLevel = persistedSettings.thoughtLevel || undefined;
 
-      const effectiveProfileId = profileIdOverride ?? activeTab?.activeProfileId ?? null;
-
-      if (effectiveProfileId && projectPath) {
-        try {
-          const detail = await window.electronAPI.agentGetProfileDetail(
-            projectPath,
-            effectiveProfileId,
-          );
-          if (detail?.model) {
-            const slash = detail.model.indexOf("/");
-            if (slash > 0) {
-              provider = detail.model.slice(0, slash);
-              model = detail.model.slice(slash + 1);
-            }
-          }
-          if (detail?.thoughtLevel) thoughtLevel = detail.thoughtLevel;
-        } catch {
-          // use session defaults
-        }
-      }
-
       await window.electronAPI.chatSend({
         projectPath,
         worktreePath: worktreePath || undefined,
@@ -701,7 +715,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         model,
         provider,
         thoughtLevel,
-        profileId: effectiveProfileId ?? undefined,
+        orchestratorId: composerExtras?.orchestratorId ?? activeTab?.orchestratorId ?? undefined,
+        selectedExpertIds: composerExtras?.selectedExpertIds,
         mcpServerAllowlist: composerExtras?.mcpServerAllowlist,
         skillIds: composerExtras?.skillIds,
         userDisplayContent: userContent?.length
@@ -1392,6 +1407,65 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       };
       return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
     });
+  },
+
+  _linkSubAgentRun: (tabId, taskToolUseId, data) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId
+          ? {
+              ...t,
+              subAgentRuns: {
+                ...t.subAgentRuns,
+                [taskToolUseId]: {
+                  expertId: data.expertId,
+                  prompt: data.prompt,
+                  status: "running",
+                  subSessionId: data.subSessionId,
+                  blocks: t.subAgentRuns[taskToolUseId]?.blocks ?? [],
+                },
+              },
+            }
+          : t,
+      ),
+    }));
+  },
+
+  _upsertSubAgentActivity: (tabId, taskToolUseId, block) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const prev = t.subAgentRuns[taskToolUseId];
+        if (!prev) return t;
+        return {
+          ...t,
+          subAgentRuns: {
+            ...t.subAgentRuns,
+            [taskToolUseId]: {
+              ...prev,
+              blocks: upsertSubAgentBlock(prev.blocks, block),
+            },
+          },
+        };
+      }),
+    }));
+  },
+
+  _completeSubAgentRun: (tabId, taskToolUseId, status) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const prev = t.subAgentRuns[taskToolUseId];
+        if (!prev) return t;
+        return {
+          ...t,
+          subAgentRuns: {
+            ...t.subAgentRuns,
+            [taskToolUseId]: { ...prev, status },
+          },
+        };
+      }),
+    }));
   },
 }));
 

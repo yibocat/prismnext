@@ -7,7 +7,7 @@ export function SlashCommandsSettings() {
         <div>
           <h2 className="text-[length:var(--font-dialog-title)] font-semibold">Commands</h2>
           <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-            Built-in and per-project slash commands for the chat composer.
+            Built-in slash shortcuts and per-project custom commands for the chat composer.
           </p>
         </div>
 

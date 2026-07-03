@@ -61,10 +61,9 @@ const defaults: AppSettings = {
   agentSystemPrompt: "",
   promptModules: {
     "workspace-folders": true,
-    "academic-writing": true,
-    "citations": true,
-    "figures-tables": true,
-    "math-equations": true,
+    "chat-citation-staging": true,
+    "literature-library": true,
+    "task-delegation": true,
   },
 };
 

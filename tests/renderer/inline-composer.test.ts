@@ -82,7 +82,7 @@ describe("compact overflow", () => {
 describe("composerNeedsExpandedLayout", () => {
   it("ignores @ and / tokens on a single line", () => {
     const parts: ComposerPart[] = [
-      { type: "mention", mentionType: "profile", id: "1", label: "Agent", profileId: "a" },
+      { type: "mention", mentionType: "expert", id: "1", label: "Agent", expertId: "a" },
       { type: "text", text: " hello" },
     ];
     expect(composerNeedsExpandedLayout(parts)).toBe(false);
@@ -157,10 +157,10 @@ describe("inline composer serialize", () => {
       { type: "text", text: " then " },
       {
         type: "mention",
-        mentionType: "profile",
+        mentionType: "expert",
         id: profileId,
         label: "Reviewer",
-        profileId: "p1",
+        expertId: "p1",
       },
     ]);
 
@@ -216,10 +216,10 @@ describe("inline composer serialize", () => {
     const profileId = createTokenId();
     const mention: ComposerPart = {
       type: "mention",
-      mentionType: "profile",
+      mentionType: "expert",
       id: profileId,
       label: "Agent",
-      profileId: "p1",
+      expertId: "p1",
     };
     const view = createTokenTestView("", new Map());
 
@@ -291,7 +291,7 @@ describe("inline composer serialize", () => {
       profileChip: { id: "p1", profileId: "prof-1", profileName: "Writer" },
     });
     expect(legacy.some((p) => p.type === "command")).toBe(true);
-    expect(legacy.some((p) => p.type === "mention" && p.mentionType === "profile")).toBe(true);
+    expect(legacy.some((p) => p.type === "mention" && p.mentionType === "expert")).toBe(true);
     expect(legacy.some((p) => p.type === "text" && p.text === "legacy text")).toBe(true);
   });
 

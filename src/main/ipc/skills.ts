@@ -15,12 +15,18 @@ import {
   type InstalledSkillInfo,
   type SkillLibrarySourceInfo,
 } from "../services/skills-sync";
-import { refreshProjectSkillsIntegrationWithReload } from "../services/project-skills-refresh";
+import {
+  fetchLibraryCatalog,
+  installAllFromLibrarySource,
+  installLibraryCatalogItem,
+} from "../services/skill-library-catalog";
+import { refreshProjectSkillsIntegration } from "../services/project-skills-refresh";
+import { analyzeSkillSource, checkSkillUpdates, installSkillPackages, reinstallSkill } from "../services/skill-install";
 import {
   fetchRegistryIndex,
-  fetchSkillMarkdown,
-  normalizeRegistryIndexUrl,
-  skillNameToFolderId,
+  installRegistrySkill,
+  validateRegistryIndex,
+  type RegistrySkillEntry,
 } from "../services/skills-registry";
 import {
   listBundledSkills,
@@ -54,9 +60,13 @@ export function registerSkillsHandlers(): void {
   ipcMain.handle(
     "agent:addSkillLibrarySource",
     async (_event, args: { projectPath: string; registryUrl: string }) => {
-      const indexUrl = normalizeRegistryIndexUrl(args.registryUrl);
-      const sources = addSkillLibrarySource(args.projectPath, indexUrl);
-      return { sources, indexUrl };
+      const result = await addSkillLibrarySource(args.projectPath, args.registryUrl);
+      return {
+        sources: result.sources,
+        indexUrl: result.indexUrl ?? "",
+        skillCount: result.packageCount,
+        sourceKind: result.sourceKind,
+      };
     },
   );
 
@@ -105,13 +115,13 @@ export function registerSkillsHandlers(): void {
   ipcMain.handle(
     "agent:connectSkillRegistry",
     async (_event, args: { projectPath: string; registryUrl: string }) => {
-      const indexUrl = normalizeRegistryIndexUrl(args.registryUrl);
-      const sources = addSkillLibrarySource(args.projectPath, indexUrl);
+      const result = await addSkillLibrarySource(args.projectPath, args.registryUrl);
       return {
         registryUrls: activeRemoteRegistryUrls(
-          sources.map(({ id, kind, url, connected }) => ({ id, kind, url, connected })),
+          result.sources.map(({ id, kind, url, connected }) => ({ id, kind, url, connected })),
         ),
-        indexUrl,
+        indexUrl: result.indexUrl ?? "",
+        skillCount: result.packageCount,
       };
     },
   );
@@ -145,7 +155,11 @@ export function registerSkillsHandlers(): void {
         disabled.add(args.skillId);
       }
       writeSkillsManifest(args.projectPath, { ...manifest, disabled: Array.from(disabled) });
-      return refreshProjectSkills(args.projectPath);
+      const integration = await refreshProjectSkillsIntegration(args.projectPath);
+      return {
+        ...integration,
+        skills: listProjectSkills(args.projectPath),
+      };
     },
   );
 
@@ -166,14 +180,93 @@ export function registerSkillsHandlers(): void {
     "agent:installSkillFromRegistry",
     async (
       _event,
-      args: { projectPath: string; skillName: string; artifactUrl: string },
+      args: {
+        projectPath: string;
+        skillName: string;
+        artifactUrl: string;
+        artifactType?: RegistrySkillEntry["type"];
+        files?: string[];
+        indexUrl: string;
+      },
     ) => {
-      const content = await fetchSkillMarkdown(args.artifactUrl);
-      const skillId = skillNameToFolderId(args.skillName);
-      const skillDir = join(args.projectPath, PRISM_SKILLS_REL, skillId);
-      mkdirSync(skillDir, { recursive: true });
-      writeFileSync(join(skillDir, "SKILL.md"), content, "utf-8");
+      const entry: RegistrySkillEntry = {
+        name: args.skillName,
+        description: "",
+        type: args.artifactType ?? "skill-md",
+        url: args.artifactUrl,
+        files: args.files,
+      };
+      await installRegistrySkill(args.projectPath, entry, args.indexUrl);
       return refreshProjectSkills(args.projectPath);
+    },
+  );
+
+  ipcMain.handle(
+    "agent:analyzeSkillSource",
+    async (_event, args: { input: string }) => {
+      return analyzeSkillSource(args.input);
+    },
+  );
+
+  ipcMain.handle(
+    "agent:installSkillPackages",
+    async (
+      _event,
+      args: {
+        projectPath: string;
+        selection: import("../../shared/skill-install-types").SkillPackageInstallSelection;
+      },
+    ) => {
+      const { installedIds } = await installSkillPackages(args.projectPath, args.selection);
+      const refresh = await refreshProjectSkills(args.projectPath);
+      return { ...refresh, installedIds };
+    },
+  );
+
+  ipcMain.handle(
+    "agent:reinstallSkill",
+    async (_event, args: { projectPath: string; skillId: string }) => {
+      const { installedIds } = await reinstallSkill(args.projectPath, args.skillId);
+      const refresh = await refreshProjectSkills(args.projectPath);
+      return { ...refresh, installedIds };
+    },
+  );
+
+  ipcMain.handle(
+    "agent:checkSkillUpdates",
+    async (_event, args: { projectPath: string }) => {
+      return checkSkillUpdates(args.projectPath);
+    },
+  );
+
+  ipcMain.handle(
+    "agent:fetchSkillLibraryCatalog",
+    async (_event, args: { projectPath: string; sourceId: string }) => {
+      return fetchLibraryCatalog(args.projectPath, args.sourceId);
+    },
+  );
+
+  ipcMain.handle(
+    "agent:installLibraryCatalogItem",
+    async (
+      _event,
+      args: {
+        projectPath: string;
+        item: import("../../shared/skill-library-types").LibraryCatalogItem;
+      },
+    ) => {
+      const { installedIds } = await installLibraryCatalogItem(args.projectPath, args.item);
+      const refresh = await refreshProjectSkills(args.projectPath);
+      return { ...refresh, installedIds };
+    },
+  );
+
+  ipcMain.handle(
+    "agent:installAllFromLibrarySource",
+    async (_event, args: { projectPath: string; sourceId: string }) => {
+      const { installedIds } = await installAllFromLibrarySource(args.projectPath, args.sourceId);
+      const refresh = await refreshProjectSkills(args.projectPath);
+      return { ...refresh, installedIds };
     },
   );
 
@@ -186,7 +279,8 @@ export function registerSkillsHandlers(): void {
       }
       const manifest = readSkillsManifest(args.projectPath);
       const disabled = (manifest.disabled ?? []).filter((id) => id !== args.skillId);
-      writeSkillsManifest(args.projectPath, { ...manifest, disabled });
+      const installs = (manifest.installs ?? []).filter((item) => item.skillId !== args.skillId);
+      writeSkillsManifest(args.projectPath, { ...manifest, disabled, installs });
       return refreshProjectSkills(args.projectPath);
     },
   );

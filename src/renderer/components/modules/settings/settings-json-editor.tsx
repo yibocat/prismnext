@@ -22,6 +22,8 @@ interface SettingsJsonEditorProps {
   value: string;
   onChange?: (value: string) => void;
   readOnly?: boolean;
+  /** `field` = bounded resizable box (settings forms); `default` = taller block editor */
+  variant?: "default" | "field";
   className?: string;
 }
 
@@ -29,6 +31,7 @@ export function SettingsJsonEditor({
   value,
   onChange,
   readOnly = false,
+  variant = "default",
   className,
 }: SettingsJsonEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -58,7 +61,7 @@ export function SettingsJsonEditor({
         highlightSpecialChars(),
         history(),
         drawSelection(),
-        highlightActiveLine(),
+        ...(variant === "default" ? [highlightActiveLine()] : []),
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
         languageCompartment.of([]),
         editorChromeTheme,
@@ -134,7 +137,10 @@ export function SettingsJsonEditor({
     <div
       ref={containerRef}
       className={cn(
-        "rounded-md border border-border overflow-hidden min-h-[16rem] [&_.cm-editor]:min-h-[16rem] [&_.cm-scroller]:min-h-[16rem]",
+        "border border-border",
+        variant === "field"
+          ? "h-[14rem] min-h-[14rem] max-h-[28rem] resize-y overflow-hidden rounded-md [&_.cm-editor]:h-full [&_.cm-scroller]:h-full"
+          : "overflow-hidden rounded-md min-h-[16rem] [&_.cm-editor]:min-h-[16rem] [&_.cm-scroller]:min-h-[16rem]",
         className,
       )}
     />

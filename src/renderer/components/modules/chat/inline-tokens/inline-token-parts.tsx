@@ -40,7 +40,7 @@ export function ComposerTokenChip({
     );
   }
 
-  if (part.type === "mention" && part.mentionType === "profile") {
+  if (part.type === "mention" && part.mentionType === "expert") {
     return (
       <InlineTokenChip
         variant="profile"

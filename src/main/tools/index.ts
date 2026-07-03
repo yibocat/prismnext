@@ -213,7 +213,7 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "Use ONLY for papers in the intensive reading list (see \"Intensive reading papers\" section).",
     workflowRules: [
       "If not extracted yet, call with `force=true` to start background extraction.",
-      "Cite page numbers as `p.X`.",
+      "When quoting PDF content in chat, cite as `[@bibkey]` (exact cite key) plus page numbers as `p.X`.",
       "Reserved for intensive reading mode — costs tokens to extract.",
     ],
   },
@@ -233,6 +233,24 @@ export interface ToolFile {
   content: string;
 }
 
+/** Dev: `src/main/tools/`; packaged: `main/tools/` under app path. */
+export function getToolsSourceDir(): string {
+  return app.isPackaged
+    ? join(app.getAppPath(), "main", "tools")
+    : join(app.getAppPath(), "src", "main", "tools");
+}
+
+/** Shared helper copied alongside tools — not an OpenCode tool itself. */
+export function readBridgePathsSource(): string | null {
+  const path = join(getToolsSourceDir(), "bridge-paths.ts");
+  if (!existsSync(path)) return null;
+  try {
+    return readFileSync(path, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Collect all built-in tool files from the source directory.
  *
@@ -244,9 +262,7 @@ export interface ToolFile {
  * (without extension) becomes the tool name.
  */
 export function getBuiltinToolFiles(): ToolFile[] {
-  const toolsDir = app.isPackaged
-    ? join(app.getAppPath(), "main", "tools")
-    : join(app.getAppPath(), "src", "main", "tools");
+  const toolsDir = getToolsSourceDir();
 
   if (!existsSync(toolsDir)) {
     return [];
@@ -262,6 +278,7 @@ export function getBuiltinToolFiles(): ToolFile[] {
       if (entry.name.startsWith("_")) continue;
       if (entry.name === "index.ts") continue;
       if (entry.name === "tool-description.ts") continue;
+      if (entry.name === "bridge-paths.ts") continue;
 
       const name = entry.name.replace(/\.ts$/, "");
       const filePath = join(toolsDir, entry.name);
