@@ -11,6 +11,8 @@ const LABELS: Record<string, string> = {
   "literature-stage": "Stage citation",
   "literature-add": "Add paper to library",
   "literature-cite": "Add paper to .bib",
+  "literature-cite-check": "Library cite check",
+  "literature-export-bib": "Export library to .bib",
 };
 
 function parseToolJson(content: unknown): Record<string, unknown> | null {
@@ -137,6 +139,58 @@ function LiteratureResultSummary({
     return (
       <p className="text-[length:var(--font-chat-meta)] text-muted-foreground">
         {data.results.length} result{data.results.length === 1 ? "" : "s"}
+      </p>
+    );
+  }
+
+  if (toolName === "literature-cite-check") {
+    const missing = Array.isArray(data.missingKeys) ? data.missingKeys : [];
+    const unused = Array.isArray(data.unusedKeys) ? data.unusedKeys : [];
+    const bibFallback = Array.isArray(data.bibFallback) ? data.bibFallback : [];
+    const importable = bibFallback.filter(
+      (e) => typeof e === "object" && e && (e as { canImportFromBib?: boolean }).canImportFromBib,
+    ).length;
+    const ok = missing.length === 0;
+    return (
+      <div className="space-y-1 text-[length:var(--font-chat-meta)]">
+        <p className="flex items-center gap-1.5">
+          {ok ? (
+            <CheckCircle2Icon className="size-3.5 shrink-0 text-emerald-600" />
+          ) : (
+            <XCircleIcon className="size-3.5 shrink-0 text-amber-600" />
+          )}
+          <span className="text-foreground">
+            Library: {missing.length} missing · {unused.length} unused in .tex
+          </span>
+        </p>
+        {importable > 0 ? (
+          <p className="text-muted-foreground">
+            {importable} missing key{importable === 1 ? "" : "s"} found in manuscript .bib
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (toolName === "literature-export-bib") {
+    const appended = Array.isArray(data.appended) ? data.appended : [];
+    const skipped = Array.isArray(data.skipped) ? data.skipped : [];
+    return (
+      <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
+        <p>
+          {appended.length} appended · {skipped.length} already in .bib
+        </p>
+        {typeof data.bibPath === "string" ? (
+          <p className="truncate">Bib: {data.bibPath}</p>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (toolName === "literature-cite" && typeof data.bibPath === "string") {
+    return (
+      <p className="text-[length:var(--font-chat-meta)] text-muted-foreground">
+        {data.appended === false ? "Already in .bib" : "Appended to .bib"} · {data.bibPath}
       </p>
     );
   }

@@ -11,6 +11,7 @@ import { destroyAllTerminalSessions } from "./ipc/terminal";
 import { destroyAllAiPty } from "./services/ai-pty";
 import { startTerminalBridge, stopTerminalBridge, setTerminalBridgeWindow } from "./services/terminal-bridge";
 import { startLiteratureBridge, stopLiteratureBridge } from "./services/literature-bridge";
+import { startLatexBridge, stopLatexBridge } from "./services/latex-bridge";
 import { installMainProcessNetwork } from "./lib/main-network";
 import { createLogger } from "./services/logger";
 
@@ -136,6 +137,7 @@ function createWindow() {
     destroyAllTerminalSessions();
     stopTerminalBridge();
     stopLiteratureBridge();
+    stopLatexBridge();
     setTerminalBridgeWindow(null);
     import("./ipc/log").then((m) => m.disposeLogger());
     mainWindow = null;
@@ -168,6 +170,7 @@ app.whenReady().then(async () => {
   installMainProcessNetwork();
   startTerminalBridge();
   startLiteratureBridge();
+  startLatexBridge();
   createWindow();
 
   // App-level ACP warm-up — spawn opencode once at startup.

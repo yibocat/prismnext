@@ -22,6 +22,7 @@ import { useAppCloseTab } from "@/hooks/use-app-close-tab";
 import { useTerminalAiStream } from "@/hooks/use-terminal-ai-stream";
 import { useAiTerminalSweep } from "@/hooks/use-ai-terminal-sweep";
 import { useSkillsIntegrationEvents } from "@/hooks/use-skills-integration-events";
+import { useAgentCompilePreview } from "@/hooks/use-agent-compile-preview";
 
 import { ContentTopBar } from "@/components/layout/content-top-bar";
 import {
@@ -76,6 +77,7 @@ export function App() {
   useTerminalAiStream();
   useAiTerminalSweep();
   useSkillsIntegrationEvents();
+  useAgentCompilePreview();
 
   const rightAreaExpandNonce = useLayoutStore((s) => s.rightAreaExpandNonce);
   const settingsDetailCloseNonce = useLayoutStore((s) => s.settingsDetailCloseNonce);

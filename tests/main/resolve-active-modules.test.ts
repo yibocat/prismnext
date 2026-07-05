@@ -16,6 +16,7 @@ describe("resolve-active-modules", () => {
   it("profile-selectable modules exclude workspace", () => {
     const keys = resolveProfileSelectableModules().map((m) => m.key);
     expect(keys).toContain("chat-citation-staging");
+    expect(keys).toContain("citation-audit");
     expect(keys).toContain("literature-library");
     expect(keys).toContain("task-delegation");
     expect(keys).not.toContain("workspace-folders");

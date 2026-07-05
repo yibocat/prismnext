@@ -82,6 +82,8 @@ interface DocumentState {
   closeProject: () => Promise<void>;
   /** Open a file for editing — loads content from disk if not already cached */
   openFile: (id: string) => Promise<void>;
+  /** Seed opened content without reading disk (after atomic create+write). */
+  seedOpenedFile: (id: string, content: string) => void;
   /** Register metadata for a hidden `.prismnext/` file not in the file tree scan */
   ensureLazyProjectFileMeta: (relativePath: string) => Promise<boolean>;
   /** Open a file outside the project root */
@@ -417,6 +419,12 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     } catch {
       set({ activeFileId: id });
     }
+  },
+
+  seedOpenedFile: (id: string, content: string) => {
+    const newMap = new Map(get().openedContents);
+    newMap.set(id, { content, isDirty: false });
+    set({ openedContents: newMap, activeFileId: id });
   },
 
   ensureLazyProjectFileMeta: async (relativePath: string): Promise<boolean> => {

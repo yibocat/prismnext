@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import type { PromptContext } from "../prompts/types";
 import {
   type ExpertDefinition,
   type ExpertInfo,
@@ -36,6 +37,9 @@ import { resolveActiveModuleKeys, composeProfileModulePrompts } from "../prompts
 import type { PromptContext } from "../prompts/types";
 import { getAgentEditorOptions } from "./agent-editor-options";
 import type { AgentEditorOptions } from "./agent-editor-options";
+import { buildTaskPermissionBlock } from "./task-orchestrator-gate";
+
+export { buildTaskPermissionBlock } from "./task-orchestrator-gate";
 
 export const EXPERTS_MANIFEST_REL = ".prismnext/agent/experts-manifest.json";
 export const ORCHESTRATORS_MANIFEST_REL = ".prismnext/agent/orchestrators-manifest.json";
@@ -218,7 +222,7 @@ function applyOrchestratorOverride(
   return {
     ...orchestrator,
     allowedExperts: override.allowedExperts !== undefined
-      ? override.allowedExperts.length ? override.allowedExperts : undefined
+      ? override.allowedExperts
       : orchestrator.allowedExperts,
     skills: override.skills !== undefined
       ? override.skills.length ? override.skills : undefined
@@ -470,14 +474,6 @@ function serializeFrontmatter(fields: Record<string, unknown>): string {
   return lines.join("\n");
 }
 
-export function buildTaskPermissionBlock(allowedExpertIds: string[]): Record<string, string> {
-  const rules: Record<string, string> = { "*": "deny" };
-  for (const id of allowedExpertIds) {
-    rules[id] = "allow";
-  }
-  return rules;
-}
-
 export interface AllowedExpertRef {
   id: string;
   name: string;
@@ -497,7 +493,7 @@ export function appendAllowedExpertsSection(
       "---",
       "## Available experts (via Task)",
       "",
-      "No experts are currently allowed for this orchestrator. Enable experts and update the allowlist in project Agent settings.",
+      "No experts are currently allowed for this orchestrator. Prefer direct project tools for citation/bib checks; delegate other work via Task only when appropriate.",
     ].join("\n");
   }
 
@@ -521,7 +517,7 @@ function resolveAllowedExpertIds(
   enabledExpertIds: string[],
 ): string[] {
   const enabled = new Set(enabledExpertIds);
-  if (orchestrator.allowedExperts?.length) {
+  if (orchestrator.allowedExperts !== undefined) {
     return orchestrator.allowedExperts.filter((id) => enabled.has(id));
   }
   return enabledExpertIds;
@@ -550,9 +546,18 @@ function mergePermissions(
   return merged;
 }
 
+function orchestratorContentHash(md: string): string {
+  let hash = 5381;
+  for (let i = 0; i < md.length; i++) {
+    hash = ((hash << 5) + hash) + md.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 export function renderExpertAgentMarkdown(
   def: ExpertDefinition,
   instructionsBody: string,
+  promptCtx: PromptContext = {},
 ): string {
   const frontmatter: Record<string, unknown> = {
     description: def.description,
@@ -563,7 +568,7 @@ export function renderExpertAgentMarkdown(
   if (def.permission && Object.keys(def.permission).length) {
     frontmatter.permission = def.permission;
   }
-  const body = appendCapabilityRefs(def, instructionsBody);
+  const body = appendCapabilityRefs(def, instructionsBody, promptCtx);
   return `${serializeFrontmatter(frontmatter)}\n\n${body}\n`;
 }
 
@@ -571,6 +576,7 @@ export function renderOrchestratorAgentMarkdown(
   def: OrchestratorDefinition,
   instructionsBody: string,
   allowedExperts: AllowedExpertRef[],
+  promptCtx: PromptContext = {},
 ): string {
   const taskRules = buildTaskPermissionBlock(allowedExperts.map((e) => e.id));
   const permission = mergePermissions(def.permission, { task: taskRules });
@@ -582,7 +588,7 @@ export function renderOrchestratorAgentMarkdown(
   if (def.model) frontmatter.model = def.model;
   if (def.temperature !== undefined) frontmatter.temperature = def.temperature;
   const bodyWithExperts = appendAllowedExpertsSection(instructionsBody, allowedExperts);
-  const body = appendCapabilityRefs(def, bodyWithExperts);
+  const body = appendCapabilityRefs(def, bodyWithExperts, promptCtx);
   return `${serializeFrontmatter(frontmatter)}\n\n${body}\n`;
 }
 
@@ -627,9 +633,10 @@ export function clearSyncedAgentFiles(agentsDir: string, agentFiles: string[]): 
 
 export function syncProjectExpertsToOpencode(
   projectRoot: string,
-  options?: { agentsDir?: string; syncStatePath?: string },
-): { agentFiles: string[]; orchestratorId: string } {
+  options?: { agentsDir?: string; syncStatePath?: string; promptCtx?: PromptContext },
+): { agentFiles: string[]; orchestratorId: string; orchestratorContentHash: string } {
   const agentsDir = options?.agentsDir ?? getOpencodeAgentsDir();
+  const promptCtx: PromptContext = { projectRoot, ...options?.promptCtx };
   mkdirSync(agentsDir, { recursive: true });
 
   const orchestratorId = resolveOrchestratorId(projectRoot, null);
@@ -650,7 +657,7 @@ export function syncProjectExpertsToOpencode(
 
   for (const expert of enabledExperts) {
     const instructions = readExpertInstructions(projectRoot, expert);
-    const md = renderExpertAgentMarkdown(expert, instructions);
+    const md = renderExpertAgentMarkdown(expert, instructions, promptCtx);
     const filename = `${expert.id}.md`;
     writeFileSync(join(agentsDir, filename), md, "utf-8");
     agentFiles.push(filename);
@@ -661,7 +668,9 @@ export function syncProjectExpertsToOpencode(
     orchestrator,
     orchestratorInstructions,
     allowedExpertRefs,
+    promptCtx,
   );
+  const orchestratorHash = orchestratorContentHash(orchestratorMd);
   const orchestratorFilename = `${orchestrator.id}.md`;
   writeFileSync(join(agentsDir, orchestratorFilename), orchestratorMd, "utf-8");
   agentFiles.push(orchestratorFilename);
@@ -675,7 +684,7 @@ export function syncProjectExpertsToOpencode(
       .filter((e): e is ExpertInfo => !!e)
       .map((e) => ({ id: e.id, name: e.name, description: e.description }));
     const extraInstructions = readOrchestratorInstructions(projectRoot, extra);
-    const extraMd = renderOrchestratorAgentMarkdown(extra, extraInstructions, extraAllowedRefs);
+    const extraMd = renderOrchestratorAgentMarkdown(extra, extraInstructions, extraAllowedRefs, promptCtx);
     const extraFilename = `${extra.id}.md`;
     writeFileSync(join(agentsDir, extraFilename), extraMd, "utf-8");
     agentFiles.push(extraFilename);
@@ -686,6 +695,7 @@ export function syncProjectExpertsToOpencode(
     syncedAt: Date.now(),
     agentFiles,
     orchestratorId,
+    orchestratorContentHash: orchestratorHash,
   };
 
   if (options?.syncStatePath) {
@@ -695,7 +705,7 @@ export function syncProjectExpertsToOpencode(
     writePrismExpertsSyncState(state);
   }
 
-  return { agentFiles, orchestratorId };
+  return { agentFiles, orchestratorId, orchestratorContentHash: orchestratorHash };
 }
 
 function slugifyId(name: string): string {
@@ -786,7 +796,7 @@ export function saveCustomOrchestrator(
     description: payload.description.trim(),
     builtin: false,
     removable: true,
-    allowedExperts: payload.allowedExperts?.length
+    allowedExperts: payload.allowedExperts !== undefined
       ? payload.allowedExperts
       : enabledExpertIds,
     model: payload.model?.trim() || undefined,

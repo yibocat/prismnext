@@ -11,13 +11,17 @@ import { AcpService } from "../acp/service";
 import { emitChatStream } from "./chat-stream-notify";
 import { normalizeArxivId, normalizeDoi } from "../../shared/doi-utils";
 import { createPaperFromCatalog } from "./literature-enrich";
+import { getCitationHealth } from "./citation-health";
+import { recordCiteAuditLibraryCheck } from "./session-cite-audit-context";
 import {
   citePaperInProject,
+  citeCheckLiterature,
   findExistingByIdentifier,
   getAnnotations,
   getPaperByBibkey,
   mapPaperForAgent,
   mapPaperSearchHitForAgent,
+  mergeLibraryIntoProjectBib,
   searchPapers,
   resolveLibraryProjectRoot,
   bibTeXEntryFromPaperRow,
@@ -46,10 +50,14 @@ function libraryPdfRelativePath(pdfPath: string | null): string | null {
 }
 
 interface LiteratureBridgeRequest {
-  action: "read" | "read-pdf" | "search" | "cite" | "add" | "stage";
+  action: "read" | "read-pdf" | "search" | "cite" | "add" | "stage" | "cite-check" | "export-bib";
   sessionId?: string;
   projectRoot?: string;
   bibkey?: string;
+  bibkeys?: string[];
+  paperIds?: string[];
+  all?: boolean;
+  onlyCitedInTex?: boolean;
   query?: string;
   limit?: number;
   tag?: string;
@@ -149,6 +157,48 @@ function handleSearch(
         ? "Project tags and AI summaries are included. Use tag= for exact tag filter; query searches title, abstract, authors, tags, and ai_summary."
         : "Listed all papers in the project library (empty query). Cite library papers in chat as [@bibkey].",
   };
+}
+
+function handleCiteCheck(projectRoot: string): Record<string, unknown> {
+  try {
+    const health = getCitationHealth(projectRoot);
+    return {
+      ...health.libraryCheck,
+      bibFallback: health.bibFallback,
+      bibPath: health.bibCheck.bibPath,
+      hint:
+        "Compares \\cite keys in project .tex files against literature library bibkeys. " +
+        "bibFallback lists missing keys with metadata parsed from references.bib (no guessing). " +
+        "Use literature-export-bib to sync library→.bib, or import missing keys into library from .bib via UI/IPC.",
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { error: message };
+  }
+}
+
+function handleExportBib(
+  projectRoot: string,
+  req: LiteratureBridgeRequest,
+): Record<string, unknown> {
+  try {
+    const result = mergeLibraryIntoProjectBib(projectRoot, {
+      bibkeys: req.bibkeys,
+      paperIds: req.paperIds,
+      all: req.all,
+      onlyCitedInTex: req.onlyCitedInTex !== false,
+    });
+    return {
+      ...result,
+      hint:
+        result.appended.length > 0
+          ? "Run latex-bib-check to verify .tex ↔ .bib ↔ library alignment."
+          : "No new entries appended — keys may already exist in the project .bib.",
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { error: message };
+  }
 }
 
 function handleCite(projectRoot: string, bibkey: string): Record<string, unknown> {
@@ -411,6 +461,10 @@ function dispatch(req: LiteratureBridgeRequest): Record<string, unknown> | Promi
       if (!bibkey) return { error: "Missing bibkey parameter." };
       return handleCite(projectRoot, bibkey);
     }
+    case "cite-check":
+      return handleCiteCheck(projectRoot);
+    case "export-bib":
+      return handleExportBib(projectRoot, req);
     case "add": {
       const doi = req.doi?.trim();
       const arxivId = req.arxivId?.trim();
@@ -453,7 +507,9 @@ function recordLibraryTaskHitsFromBridgeResult(
   result: Record<string, unknown>,
 ): void {
   if (!sessionId?.trim() || result.error) return;
-  if (action === "search") {
+  if (action === "cite-check") {
+    recordCiteAuditLibraryCheck(sessionId, result);
+  } else if (action === "search") {
     recordLibraryTaskHitsFromToolSession(
       sessionId,
       hitsFromLiteratureSearchResult(result),

@@ -24,6 +24,7 @@ import {
   type IntensivePaper,
 } from "../prompts/per-turn/intensive-reading";
 import { buildSessionCitationsTurnAppendix } from "../services/session-citations-context";
+import { buildSessionCiteAuditTurnAppendix } from "../services/session-cite-audit-context";
 import { getQuestionsBridgeRoot } from "../services/prism-bridge-paths";
 
 const log = createLogger("chat-ipc", "agent");
@@ -290,6 +291,7 @@ export function registerChatHandlers(): void {
       let modelId = args.model;
       let thoughtLevel = args.thoughtLevel;
       let orchestratorId: string | undefined;
+      let promptCtx = await buildPromptContext(args.projectPath);
 
       if (args.projectPath) {
         const {
@@ -298,9 +300,30 @@ export function registerChatHandlers(): void {
           getExpert,
           getOrchestratorRuntimeFilters,
         } = await import("../services/experts-sync");
+
+        orchestratorId = resolveOrchestratorId(args.projectPath, args.orchestratorId);
+        const orchestrator = getOrchestrator(args.projectPath, orchestratorId);
+        if (orchestrator?.model) {
+          const slash = orchestrator.model.indexOf("/");
+          if (slash > 0) {
+            provider = orchestrator.model.slice(0, slash);
+            modelId = orchestrator.model.slice(slash + 1);
+          }
+        }
+        if (orchestrator?.thoughtLevel) thoughtLevel = orchestrator.thoughtLevel;
+
+        const orchestratorRuleAllowlist = getOrchestratorRuntimeFilters(
+          args.projectPath,
+          orchestratorId,
+        )?.rules;
+
+        promptCtx = await buildPromptContext(args.projectPath, {
+          ruleAllowlist: orchestratorRuleAllowlist,
+        });
+
         const { refreshProjectExpertsIntegration } = await import("../services/project-experts-refresh");
         try {
-          await refreshProjectExpertsIntegration(args.projectPath);
+          await refreshProjectExpertsIntegration(args.projectPath, { promptCtx });
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
           log.error(`Experts integration refresh failed: ${message}`);
@@ -313,16 +336,8 @@ export function registerChatHandlers(): void {
           return;
         }
 
-        orchestratorId = resolveOrchestratorId(args.projectPath, args.orchestratorId);
-        const orchestrator = getOrchestrator(args.projectPath, orchestratorId);
-        if (orchestrator?.model) {
-          const slash = orchestrator.model.indexOf("/");
-          if (slash > 0) {
-            provider = orchestrator.model.slice(0, slash);
-            modelId = orchestrator.model.slice(slash + 1);
-          }
-        }
-        if (orchestrator?.thoughtLevel) thoughtLevel = orchestrator.thoughtLevel;
+        // Experts sync is write-only; re-ensure ACP after any concurrent reload paths.
+        await ensureConnected(extraEnv);
 
         const expertIds = args.selectedExpertIds?.filter(Boolean) ?? [];
         if (expertIds.length > 0) {
@@ -366,17 +381,6 @@ export function registerChatHandlers(): void {
           ? [...new Set([...(orchestratorMcpAllowlist ?? []), ...composerMcps])]
           : orchestratorMcpAllowlist;
 
-      const orchestratorRuleAllowlist =
-        orchestratorId && args.projectPath
-          ? (await import("../services/experts-sync")).getOrchestratorRuntimeFilters(
-              args.projectPath,
-              orchestratorId,
-            )?.rules
-          : undefined;
-
-      const promptCtx = await buildPromptContext(args.projectPath, {
-        ruleAllowlist: orchestratorRuleAllowlist,
-      });
       const assembledPrompt = promptManager.compose(promptCtx);
       const projectRulesPrompt = promptManager.composeProjectRules(promptCtx);
       const currentFingerprint = promptManager.computePromptFingerprint(promptCtx);
@@ -444,8 +448,10 @@ export function registerChatHandlers(): void {
       }
 
       const citationsAppendix = buildSessionCitationsTurnAppendix(sessionId);
-      if (citationsAppendix) {
-        userPrompt = `${userPrompt}\n\n${citationsAppendix}`;
+      const citeAuditAppendix = buildSessionCiteAuditTurnAppendix(sessionId);
+      const turnContextAppendix = [citationsAppendix, citeAuditAppendix].filter(Boolean).join("\n\n");
+      if (turnContextAppendix) {
+        userPrompt = `${userPrompt}\n\n${turnContextAppendix}`;
       }
 
       // ── Compute context breakdown for the ring indicator ──
@@ -487,6 +493,7 @@ export function registerChatHandlers(): void {
         `Sending prompt: sessionId=${sessionId} tabId=${tabId} promptLen=${userPrompt.length} ` +
         `promptSync=${isFirstTurn || promptStale}`,
       );
+      getMapper(win).clearTurnAccumulators();
       if (!isFirstTurn && args.projectPath) {
         await service.ensureSessionHydrated(sessionId, cwd, args.projectPath);
       }

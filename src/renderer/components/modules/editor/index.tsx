@@ -15,7 +15,7 @@ import { diffDisplayTheme, diffDisplayThemeExtra, contentMetricsTheme } from "@/
 import { useSettingsStore } from "@/stores/settings-store";
 import type { EditorSyntaxThemeId } from "@/lib/editor-themes/types";
 import { DEFAULT_SYNTAX_THEME } from "@/lib/editor-themes/types";
-import { latex } from "codemirror-lang-latex";
+import { prismLatex } from "@/lib/tex/prism-latex-language";
 import { unifiedMergeView, getChunks } from "@codemirror/merge";
 import { Transaction } from "@codemirror/state";
 import { useTheme } from "next-themes";
@@ -274,7 +274,7 @@ export function LatexEditor() {
             },
           },
         ]),
-        latex(),
+        prismLatex(),
         editorChromeTheme,
         contentMetricsTheme,
         diffDisplayTheme,

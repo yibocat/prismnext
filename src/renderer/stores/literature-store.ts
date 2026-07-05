@@ -161,6 +161,17 @@ interface LiteratureState {
   deletePapers: (projectRoot: string, paperIds: string[]) => Promise<void>;
   importToLocal: (projectRoot: string, paperId: string) => Promise<void>;
   exportPapersBibTeX: (projectRoot: string, paperIds: string[]) => Promise<boolean>;
+  citePaperToManuscript: (projectRoot: string, bibkey: string) => Promise<{ bibPath: string; appended: boolean }>;
+  fetchCitationHealth: (projectRoot: string) => Promise<import("@/types/electron.d").CitationHealthReport>;
+  syncCitedLibraryToManuscriptBib: (projectRoot: string) => Promise<import("@/types/electron.d").MergeIntoManuscriptBibResult>;
+  syncLibraryPapersToManuscriptBib: (
+    projectRoot: string,
+    bibkeys: string[],
+  ) => Promise<import("@/types/electron.d").MergeIntoManuscriptBibResult>;
+  importMissingFromManuscriptBib: (
+    projectRoot: string,
+    bibkeys?: string[],
+  ) => Promise<import("@/types/electron.d").ImportFromManuscriptBibResult>;
   ingestPdf: (
     projectRoot: string,
     pdfPath: string,
@@ -722,6 +733,61 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
     if (canceled || !path) return false;
     toast.success(`Exported to ${path.split(/[/\\]/).pop() ?? "file"}`);
     return true;
+  },
+
+  citePaperToManuscript: async (projectRoot, bibkey) => {
+    const result = await window.electronAPI.literatureCite(projectRoot, bibkey);
+    toast.success(
+      result.appended
+        ? `Added @${bibkey} to manuscript .bib`
+        : `@${bibkey} already in manuscript .bib`,
+    );
+    return result;
+  },
+
+  fetchCitationHealth: async (projectRoot) => {
+    return window.electronAPI.literatureCitationHealth(projectRoot);
+  },
+
+  syncCitedLibraryToManuscriptBib: async (projectRoot) => {
+    const result = await window.electronAPI.literatureMergeIntoProjectBib(projectRoot, {
+      onlyCitedInTex: true,
+    });
+    if (result.appended.length > 0) {
+      toast.success(
+        `Added ${result.appended.length} entr${result.appended.length === 1 ? "y" : "ies"} to manuscript .bib`,
+      );
+    } else {
+      toast.info("Manuscript .bib already contains cited library entries");
+    }
+    return result;
+  },
+
+  syncLibraryPapersToManuscriptBib: async (projectRoot, bibkeys) => {
+    const result = await window.electronAPI.literatureMergeIntoProjectBib(projectRoot, { bibkeys });
+    if (result.appended.length > 0) {
+      toast.success(
+        `Added ${result.appended.length} entr${result.appended.length === 1 ? "y" : "ies"} to manuscript .bib`,
+      );
+    } else {
+      toast.info("Selected entries already in manuscript .bib");
+    }
+    return result;
+  },
+
+  importMissingFromManuscriptBib: async (projectRoot, bibkeys) => {
+    const result = await window.electronAPI.literatureImportFromProjectBib(projectRoot, bibkeys);
+    await get().refresh(projectRoot);
+    if (result.imported > 0) {
+      toast.success(
+        `Imported ${result.imported} entr${result.imported === 1 ? "y" : "ies"} from manuscript .bib into library`,
+      );
+    } else if (result.notInBib.length > 0) {
+      toast.error(`${result.notInBib.length} key(s) not found in manuscript .bib`);
+    } else {
+      toast.info("No new entries to import from manuscript .bib");
+    }
+    return result;
   },
 
   ingestPdf: async (projectRoot, pdfPath, opts) => {

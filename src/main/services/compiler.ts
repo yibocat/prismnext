@@ -1,14 +1,22 @@
 import { spawn, execSync, spawnSync } from "node:child_process";
 import { readFile, mkdir, rm } from "node:fs/promises";
 import { join, dirname, basename, extname } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { syncTexSourceToBuildDir } from "../lib/bib-path-resolve";
+
+import { createLogger } from "./logger";
+
+const log = createLogger("compiler");
 
 const MAX_CONCURRENT = 3;
 const COMPILE_TIMEOUT_MS = 60000;
 
 interface BuildInfo {
   workDir: string;
+  /** Project-relative main file (e.g. manuscript/main.tex) */
   mainFileName: string;
+  /** Source tree mirrored into workDir (e.g. manuscript) */
+  sourceDirRel: string;
 }
 
 interface CompileResult {
@@ -124,14 +132,14 @@ export function detectTexEngine(content: string): TexEngine | null {
 
 /**
  * Detect bibliography tool from content.
+ * biblatex defaults to biber; respect explicit backend=bibtex.
  */
 export function detectBibTool(content: string): BibTool {
-  for (const line of lines(content)) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("%")) continue;
-    if (trimmed.includes("\\usepackage") && trimmed.includes("biblatex")) {
-      return "biber";
-    }
+  const flat = content.replace(/\s+/g, " ");
+  if (flat.includes("biblatex")) {
+    if (/backend\s*=\s*bibtex/i.test(flat)) return "bibtex";
+    if (/backend\s*=\s*biber/i.test(flat)) return "biber";
+    return "biber";
   }
   for (const line of lines(content)) {
     const trimmed = line.trim();
@@ -266,6 +274,46 @@ function runWithTimeout(
   });
 }
 
+function logTail(log: string): string {
+  const idx = log.lastIndexOf("Output written on");
+  return idx >= 0 ? log.slice(idx) : log;
+}
+
+/** True when in-text \\cite{} keys are still missing from the .bbl. */
+function logHasUndefinedCitations(log: string): boolean {
+  return /Citation '[^']+' undefined/i.test(logTail(log));
+}
+
+function logNeedsBibliographyRerun(log: string): boolean {
+  const tail = logTail(log);
+  return /Rerun to get (cross-references|bibliography)/i.test(tail)
+    || /Citation '[^']+' undefined/i.test(tail);
+}
+
+function logNeedsBibtexRerun(log: string): boolean {
+  return /Please \(re\)run BibTeX/i.test(log);
+}
+
+function logNeedsBiberRerun(log: string): boolean {
+  return /Please \(re\)run Biber/i.test(log);
+}
+
+function bibliographyLooksResolved(
+  buildDir: string,
+  mainStem: string,
+  logContent: string,
+): boolean {
+  if (logHasUndefinedCitations(logContent)) return false;
+  const bblPath = join(buildDir, `${mainStem}.bbl`);
+  if (!existsSync(bblPath)) return false;
+  try {
+    const bbl = readFileSync(bblPath, "utf-8");
+    return /\\entry\{/.test(bbl);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Compile with Tectonic. Compiles in `cwd` and outputs artifacts to `outDir`.
  *
@@ -305,7 +353,7 @@ async function compileWithTectonic(
 
 /**
  * Compile with TeXLive (xelatex/pdflatex/lualatex).
- * Compiles in `cwd` and outputs artifacts to `outDir`.
+ * Expects `cwd === outDir` with sources already synced into the build dir.
  */
 async function compileWithTexlive(
   cwd: string,
@@ -324,37 +372,97 @@ async function compileWithTexlive(
   const bibTool = detectBibTool(texContent);
   const mainStem = basename(mainFile, extname(mainFile));
 
-  console.log(`[texlive] backend: ${engine} (${enginePath})`);
+  console.log(`[texlive] backend: ${engine} (${enginePath}) bibTool=${bibTool ?? "none"}`);
 
-  const commonArgs = [
-    "-synctex=1",
-    "-interaction=nonstopmode",
-    "-output-directory",
-    outDir,
-  ];
+  const commonArgs = ["-synctex=1", "-interaction=nonstopmode"];
+  const logPath = join(outDir, `${mainStem}.log`);
+
+  let logContent = "";
+
+  const runLatex = () =>
+    runWithTimeout(enginePath, [...commonArgs, mainFile], cwd, env, COMPILE_TIMEOUT_MS);
+
+  const readCompileLog = async (): Promise<string> => {
+    try {
+      return await readFile(logPath, "utf-8");
+    } catch {
+      return "";
+    }
+  };
 
   // Pass 1
-  await runWithTimeout(enginePath, [...commonArgs, mainFile], cwd, env, COMPILE_TIMEOUT_MS);
+  await runLatex();
 
-  // Bib pass (if needed) — aux files are in outDir
-  if (bibTool === "biber") {
-    const biberPath = await findTexliveBinary("biber");
-    if (biberPath) {
-      await runWithTimeout(biberPath, [mainStem], outDir, env, COMPILE_TIMEOUT_MS);
-    }
-  } else if (bibTool === "bibtex") {
-    const bibtexPath = await findTexliveBinary("bibtex");
-    if (bibtexPath) {
-      await runWithTimeout(bibtexPath, [`${mainStem}.aux`], outDir, env, COMPILE_TIMEOUT_MS);
-    }
-  }
-
-  // Pass 2
-  await runWithTimeout(enginePath, [...commonArgs, mainFile], cwd, env, COMPILE_TIMEOUT_MS);
-
-  // Pass 3 (if bib was used)
   if (bibTool) {
-    await runWithTimeout(enginePath, [...commonArgs, mainFile], cwd, env, COMPILE_TIMEOUT_MS);
+    const runBibtex = async (): Promise<void> => {
+      const bibtexPath = await findTexliveBinary("bibtex");
+      if (!bibtexPath) {
+        throw new Error("bibtex not found. Install TeX Live bibtex.");
+      }
+      const bibtexResult = await runWithTimeout(
+        bibtexPath,
+        [mainStem],
+        outDir,
+        env,
+        COMPILE_TIMEOUT_MS,
+      );
+      if (bibtexResult.exitCode !== 0) {
+        logContent += `\n\n=== bibtex failed (exit ${bibtexResult.exitCode}) ===\n`
+          + `${bibtexResult.stdout}\n${bibtexResult.stderr}`.trim();
+      }
+    };
+
+    const runBiber = async (): Promise<void> => {
+      const biberPath = await findTexliveBinary("biber");
+      if (!biberPath) {
+        throw new Error("biber not found. Install TeX Live biber.");
+      }
+      const biberResult = await runWithTimeout(
+        biberPath,
+        [mainStem],
+        outDir,
+        env,
+        COMPILE_TIMEOUT_MS,
+      );
+      if (biberResult.exitCode !== 0) {
+        logContent += `\n\n=== biber failed (exit ${biberResult.exitCode}) ===\n`
+          + `${biberResult.stdout}\n${biberResult.stderr}`.trim();
+      }
+    };
+
+    const runBib = bibTool === "biber" ? runBiber : runBibtex;
+
+    try {
+      // biblatex+backend=bibtex often needs two bibtex passes before citations settle.
+      const initialBibPasses = bibTool === "bibtex" ? 2 : 1;
+      for (let i = 0; i < initialBibPasses; i++) {
+        await runBib();
+        await runLatex();
+      }
+      await runLatex();
+
+      for (let round = 0; round < 6; round++) {
+        const passLog = await readCompileLog();
+        const rerunBib =
+          bibTool === "bibtex" ? logNeedsBibtexRerun(passLog) : logNeedsBiberRerun(passLog);
+        const rerunLatex = logNeedsBibliographyRerun(passLog);
+        if (!rerunBib && !rerunLatex) break;
+
+        if (rerunBib) {
+          log.info(`Extra ${bibTool} pass ${round + 1}`);
+          await runBib();
+        }
+        if (rerunBib || rerunLatex) {
+          log.info(`Extra LaTeX pass ${round + 1} — bibliography/cross-refs`);
+          await runLatex();
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { success: false, logContent: message };
+    }
+  } else {
+    await runLatex();
   }
 
   // Fallback: if xelatex produced .xdv but no .pdf, run xdvipdfmx manually
@@ -375,12 +483,16 @@ async function compileWithTexlive(
   }
 
   // Read log from outDir
-  const logPath = join(outDir, `${mainStem}.log`);
-  let logContent = "";
   try {
-    logContent = await readFile(logPath, "utf-8");
+    const engineLog = await readFile(logPath, "utf-8");
+    logContent = logContent ? `${engineLog}\n${logContent}` : engineLog;
   } catch {
     // ignore
+  }
+
+  const bblPath = join(outDir, `${mainStem}.bbl`);
+  if (bibTool && !existsSync(bblPath)) {
+    logContent += "\n\n=== bibliography ===\n.bbl file was not generated — bibtex/biber did not produce output.";
   }
 
   return {
@@ -392,9 +504,8 @@ async function compileWithTexlive(
 /**
  * Main compilation entry point.
  *
- * Compiles in the project root directory (so LaTeX can access all files via
- * relative paths naturally) and outputs build artifacts to `.prismnext/compile/`.
- * No file copying — the project is compiled in-place.
+ * Syncs the main .tex directory into `.prismnext/compile/`, compiles there
+ * (source + aux + PDF colocated), then returns the PDF bytes for preview.
  */
 export async function compileLatex(
   projectDir: string,
@@ -452,24 +563,38 @@ export async function compileLatex(
     const content = await readFile(mainFilePath, "utf-8");
     const engine = detectTexEngine(content) || "xelatex";
 
-    // Determine backend — compile in projectDir, output to buildDir
+    const { buildMain, sourceDirRel } = await syncTexSourceToBuildDir(projectDir, mainFile, buildDir);
+    console.log(`[compiler] synced ${sourceDirRel || "."} → ${buildDir}, compiling ${buildMain}`);
+
+    // Compile inside buildDir — sources, aux, and PDF share one directory.
     let result: { success: boolean; logContent: string };
     if (useTexlive) {
-      result = await compileWithTexlive(projectDir, mainFile, engine, content, buildDir);
+      result = await compileWithTexlive(buildDir, buildMain, engine, content, buildDir);
     } else {
       const tectonicPath = await findTexliveBinary("tectonic");
       if (tectonicPath) {
         console.log("[compiler] Using Tectonic:", tectonicPath);
-        result = await compileWithTectonic(projectDir, mainFile, buildDir, tectonicPath);
+        result = await compileWithTectonic(buildDir, buildMain, buildDir, tectonicPath);
       } else {
         console.log("[compiler] Tectonic not found, falling back to TeXLive");
-        result = await compileWithTexlive(projectDir, mainFile, engine, content, buildDir);
+        result = await compileWithTexlive(buildDir, buildMain, engine, content, buildDir);
       }
     }
 
     if (result.success) {
+      const bibTool = detectBibTool(content);
+      if (bibTool && !bibliographyLooksResolved(buildDir, mainStem, result.logContent ?? "")) {
+        return {
+          success: false,
+          error:
+            "Citations unresolved — keys in \\cite{...} may be missing from references.bib. "
+            + "See compile log (Problems).",
+          logContent: result.logContent,
+          buildDir,
+        };
+      }
       const pdfBytes = await readFile(pdfPath);
-      lastBuilds.set(projectDir, { workDir: buildDir, mainFileName: mainFile });
+      lastBuilds.set(projectDir, { workDir: buildDir, mainFileName: mainFile, sourceDirRel });
       return {
         success: true,
         pdfBytes,
@@ -478,9 +603,12 @@ export async function compileLatex(
       };
     } else {
       const error = extractErrorLines(result.logContent);
+      const citeUndefined = logHasUndefinedCitations(result.logContent ?? "");
       return {
         success: false,
-        error,
+        error: citeUndefined
+          ? (error || "Citations unresolved — check manuscript/references.bib keys match \\cite{...} and recompile.")
+          : (error || "Compilation failed"),
         logContent: result.logContent,
         buildDir,
       };
@@ -760,6 +888,19 @@ function parseSynctexNode(
   };
 }
 
+/** Map a SyncTeX path from the build dir back to the project source tree. */
+function mapSynctexPathToSource(build: BuildInfo, file: string): string {
+  let normalized = file.replace(/\\/g, "/");
+  if (normalized.startsWith(build.workDir.replace(/\\/g, "/"))) {
+    normalized = normalized.slice(build.workDir.length).replace(/^[/\\]+/, "");
+  }
+  if (normalized.startsWith("./")) normalized = normalized.slice(2);
+  if (build.sourceDirRel && !normalized.startsWith(`${build.sourceDirRel}/`)) {
+    normalized = `${build.sourceDirRel}/${normalized}`.replace(/\\/g, "/");
+  }
+  return normalized;
+}
+
 /**
  * Perform SyncTeX reverse search.
  */
@@ -803,18 +944,7 @@ export async function synctexEdit(
 
     if (!closest) return null;
 
-    // Normalize file path: strip build directory prefix
-    let file = closest.file;
-    if (file.startsWith(build.workDir)) {
-      file = file.slice(build.workDir.length);
-      if (file.startsWith("/") || file.startsWith("\\")) {
-        file = file.slice(1);
-      }
-    }
-    if (file.startsWith("./") || file.startsWith(".\\")) {
-      file = file.slice(2);
-    }
-
+    const file = mapSynctexPathToSource(build, closest.file);
     return { ...closest, file };
   } catch {
     return null;
@@ -838,11 +968,17 @@ export async function synctexForward(
     if (!entry) return null;
 
     const normalizedSource = sourceFile.replace(/\\/g, "/");
+    const sourceBase = basename(normalizedSource);
 
-    // Find matching input tags
+    // Find matching input tags (build dir paths vs project-relative editor paths)
     const matchingTags = new Set<number>();
     for (const [tag, filePath] of entry.inputs) {
-      if (filePath.includes(normalizedSource)) {
+      const fp = filePath.replace(/\\/g, "/");
+      if (
+        fp.includes(normalizedSource)
+        || fp.endsWith(`/${sourceBase}`)
+        || basename(fp) === sourceBase
+      ) {
         matchingTags.add(tag);
       }
     }

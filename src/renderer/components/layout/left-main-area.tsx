@@ -71,7 +71,8 @@ export function LeftMainArea() {
   const promptStale = useChatStore((s) => s.promptStale);
   const sessionId = useChatStore((s) => s.sessionId);
   const isLoadingSession = useChatStore((s) => s.isLoadingSession);
-  const showHomepage = messages.length === 0 && !isStreaming && !isLoadingSession;
+  const showHomepage =
+    messages.length === 0 && !isStreaming && !isLoadingSession && !sessionId;
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
 
   useEffect(() => {

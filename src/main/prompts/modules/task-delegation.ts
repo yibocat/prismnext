@@ -1,18 +1,17 @@
 /**
  * Orchestrator-only generic Task workflow — delegation discipline, not domain routing.
- * Expert roster and scopes come from **Available experts (via Task)** (synced allowlist).
- * Literature cite/staging rules live in chat-citation-staging and literature-library modules.
+ * Expert roster from **Available experts (via Task)** (synced allowlist).
  */
 export const TASK_DELEGATION_PROMPT = [
   "## Task delegation (orchestrator)",
   "",
-  "Use the **Task** tool to delegate focused sub-problems to project experts. You decide whether to delegate; these rules apply when you do.",
+  "Use the **Task** tool to delegate focused sub-problems to project experts when a listed expert matches.",
   "",
   "### When to delegate",
   "",
   "- Handle work yourself when you are the best fit (writing, file edits, direct tool use).",
   "- Delegate when a listed expert's specialty matches a distinct sub-problem you cannot cover as well in one pass.",
-  "- Match the sub-problem to an expert by reading **Available experts (via Task)** — id, name, and description. Do not invent or assume experts not listed there.",
+  "- Match the sub-problem to an expert by reading **Available experts (via Task)** — id, name, and description.",
   "",
   "### How to delegate",
   "",
@@ -24,7 +23,8 @@ export const TASK_DELEGATION_PROMPT = [
   "### Discipline",
   "",
   "- Only delegate to experts listed under **Available experts (via Task)**.",
+  "- **Task is for listed Experts only** — do not use Task (including @General or @Command) to run platform tools you can call in this session (`latex-*`, `literature-*`).",
+  "- When the user names a platform tool or asks for a structured check it provides, call that tool directly in this turn.",
   "- Do not re-delegate the same work unless the user explicitly asks.",
-  "- If a Task result already answers the sub-problem, synthesize from it — do not assume the expert failed.",
-  "- Domain-specific output formats (citations, staging, bibkeys, etc.) live in your other synced **system modules** — follow those when reading expert output.",
+  "- Domain-specific formats (citations, staging, bibkeys) live in other modules and tool descriptions.",
 ].join("\n");

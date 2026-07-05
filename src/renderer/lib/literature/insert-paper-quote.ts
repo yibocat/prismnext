@@ -5,7 +5,10 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { resolveNotebookDir } from "@/types/workspace";
 import { listPaperNotes } from "@/lib/literature/paper-notes";
-import { createNewPaperNote } from "@/lib/literature/create-paper-note";
+import {
+  buildPaperNoteTemplate,
+  createNewPaperNote,
+} from "@/lib/literature/create-paper-note";
 import type { LiteraturePaper } from "@/types/electron.d";
 
 /** Markdown blockquote + page citation for a PDF excerpt. */
@@ -49,17 +52,51 @@ export function insertQuoteIntoNoteContent(noteContent: string, quoteBlock: stri
   return `${before}\n\n${quote}\n${suffix}`;
 }
 
-async function resolveNotePathForPaper(paper: LiteraturePaper): Promise<string | null> {
+async function resolveNotePathForPaper(
+  paper: LiteraturePaper,
+  quoteBlock: string,
+): Promise<{ notePath: string; content: string } | null> {
   const reader = useLiteratureReaderStore.getState();
   const stored = reader.activeNotePathByPaper[paper.id];
-  if (stored) return stored;
-
   const doc = useDocumentStore.getState();
   const notebookDir = resolveNotebookDir(useWorkspaceConfigStore.getState().workspaceDirs);
   const notes = listPaperNotes(paper, doc.files, notebookDir);
-  if (notes.length > 0) return notes[notes.length - 1]!.relativePath;
 
-  return createNewPaperNote(paper, { activateFilesMode: false });
+  if (stored) {
+    const content = doc.openedContents.has(stored)
+      ? doc.getContent(stored)
+      : (await window.electronAPI.fsRead(
+          doc.fileMetadata.get(stored)?.absolutePath ?? "",
+        ).catch(() => ({ content: "" }))).content;
+    return {
+      notePath: stored,
+      content: insertQuoteIntoNoteContent(content, quoteBlock),
+    };
+  }
+
+  if (notes.length > 0) {
+    const notePath = notes[notes.length - 1]!.relativePath;
+    const meta = doc.fileMetadata.get(notePath);
+    const content = doc.openedContents.has(notePath)
+      ? doc.getContent(notePath)
+      : meta
+        ? (await window.electronAPI.fsRead(meta.absolutePath).catch(() => ({ content: "" }))).content
+        : "";
+    return {
+      notePath,
+      content: insertQuoteIntoNoteContent(content, quoteBlock),
+    };
+  }
+
+  const template = buildPaperNoteTemplate(paper);
+  const content = insertQuoteIntoNoteContent(template, quoteBlock);
+  const notePath = await createNewPaperNote(paper, {
+    activateFilesMode: false,
+    initialContent: content,
+    silent: true,
+  });
+  if (!notePath) return null;
+  return { notePath, content };
 }
 
 /** Open notes pane and append a PDF quote to the active (or new) reading note. */
@@ -78,8 +115,17 @@ export async function insertPaperQuoteIntoNote(
   const quoteBlock = formatPaperQuoteMarkdown(text, page, bibkey);
   if (!quoteBlock) return false;
 
-  const notePath = await resolveNotePathForPaper(paper);
-  if (!notePath) return false;
+  const resolved = await resolveNotePathForPaper(paper, quoteBlock);
+  if (!resolved) return false;
+
+  const { notePath, content } = resolved;
+  const doc = useDocumentStore.getState();
+
+  // Persist before opening UI so NotesPane cannot race and overwrite with template-only disk.
+  const meta = doc.fileMetadata.get(notePath);
+  if (meta) {
+    await window.electronAPI.fsWrite(meta.absolutePath, content);
+  }
 
   const reader = useLiteratureReaderStore.getState();
   reader.setNotesPaneOpen(paper.id, true);
@@ -92,15 +138,7 @@ export async function insertPaperQuoteIntoNote(
     useRightPanelStore.getState().setTabViewMode(litTab.id, "source");
   }
 
-  const doc = useDocumentStore.getState();
-  if (!doc.openedContents.has(notePath)) {
-    await doc.openFile(notePath);
-  } else {
-    doc.setActiveFile(notePath);
-  }
-
-  const current = doc.getContent(notePath);
-  doc.setContent(notePath, insertQuoteIntoNoteContent(current, quoteBlock));
+  doc.seedOpenedFile(notePath, content);
 
   toast.success("Quote inserted into note");
   return true;

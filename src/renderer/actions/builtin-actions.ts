@@ -39,11 +39,23 @@
 
 import { actionRegistry } from "./registry";
 import { compileCurrentDocument } from "@/stores/compile-store";
+import { formatCitationHealthReport } from "../../shared/format-citation-health-report";
 
 // ── compile-document ──
 actionRegistry.register("compile-document", async () => {
   await compileCurrentDocument();
   return "Compilation completed.";
+});
+
+// ── bib-check ──
+actionRegistry.register("bib-check", async () => {
+  const { useDocumentStore } = await import("@/stores/document-store");
+  const projectRoot = useDocumentStore.getState().projectRoot;
+  if (!projectRoot) {
+    throw new Error("Open a project first.");
+  }
+  const report = await window.electronAPI.literatureCitationHealth(projectRoot);
+  return formatCitationHealthReport(report);
 });
 
 // ── setup-agents-md ──

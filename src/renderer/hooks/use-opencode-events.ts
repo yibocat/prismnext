@@ -28,33 +28,6 @@ import { refreshGitStatusNow } from "@/lib/git/checkout-context";
 
 const log = createLogger("opencode-events");
 
-interface ContentBlock {
-  type: "text" | "tool_use" | "tool_result" | "thinking";
-  text?: string;
-  id?: string;
-  name?: string;
-  input?: any;
-  tool_use_id?: string;
-  content?: any;
-  is_error?: boolean;
-  thinking?: string;
-  duration?: number;
-  signature?: string;
-  _progress?: boolean;
-  /** OpenCode tool_call: human-readable description of what the tool is doing */
-  title?: string;
-  /** OpenCode tool_call: tool category (fs, terminal, search, network, workflow) */
-  kind?: string;
-  /** OpenCode tool_call / tool_call_update: execution status */
-  status?: string;
-  /** OpenCode tool_call: affected file locations */
-  locations?: Array<{ file: string; line?: number }>;
-  /** Internal: real tool input delivered via tool_call_update for backfill */
-  _backfillInput?: any;
-  /** Internal: corrected tool name from backfill (when initial kind was ambiguous) */
-  _backfillName?: string | null;
-}
-
 export function useOpenCodeEvents() {
   const pendingToolUsesRef = useRef(new Map<string, Map<string, { name: string; input: any }>>());
   const hasTexChangesRef = useRef(new Map<string, boolean>());
@@ -525,7 +498,7 @@ export function useOpenCodeEvents() {
               type: "assistant",
               message: { content: [block] },
             };
-            chatStore._upsertLastMessage(tabId, msg);
+            chatStore._upsertLastMessage(tabId, msg, data.messageId ? String(data.messageId) : undefined);
 
             // Track tool uses for change registration + result name lookup.
             if (

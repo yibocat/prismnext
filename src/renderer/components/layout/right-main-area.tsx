@@ -1,4 +1,5 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import { useCompileStore } from "@/stores/compile-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
@@ -6,6 +7,7 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useLiteratureReaderStore } from "@/stores/literature-reader-store";
 import type { RightTab } from "@/lib/workspace/mode-registry";
+import type { LiteraturePaper } from "@/types/electron.d";
 import { useTexworkspace } from "@/modes/texworkspace-mode/use-texworkspace";
 import { RightPane } from "@/components/layout/right-pane";
 import { WorkspaceSplit } from "@/components/layout/workspace-split";
@@ -27,6 +29,46 @@ function mainWrapper(children: React.ReactNode) {
   );
 }
 
+function LiteratureReaderShell({
+  projectRoot,
+  paper,
+  tab,
+  notesOpen,
+}: {
+  projectRoot: string;
+  paper: LiteraturePaper;
+  tab: RightTab;
+  notesOpen: boolean;
+}) {
+  return (
+    <WorkspaceSplit
+      left={<LiteratureReader projectRoot={projectRoot} paper={paper} />}
+      right={<LiteratureNotesPane projectRoot={projectRoot} paper={paper} tab={tab} />}
+      leftId="lit-pdf"
+      rightId="lit-notes"
+      defaultLeft={55}
+      layoutKey={`literature:reader-notes:${paper.id}`}
+      rightCollapsed={!notesOpen}
+    />
+  );
+}
+
+function withLiteratureKeepAlive(
+  content: ReactNode,
+  shells: ReactNode | null,
+  readerVisible: boolean,
+): ReactNode {
+  if (!shells) return content;
+  return (
+    <div className="relative h-full min-h-0">
+      {shells}
+      {!readerVisible ? (
+        <div className="relative z-0 h-full min-h-0">{content}</div>
+      ) : null}
+    </div>
+  );
+}
+
 export function RightMainArea({ tabs, activeTabId }: RightMainAreaProps) {
   const { isActive: texActive, viewMode: texViewMode, switchToFile } = useTexworkspace();
   const pdfRevision = useCompileStore((s) => s.pdfRevision);
@@ -34,16 +76,55 @@ export function RightMainArea({ tabs, activeTabId }: RightMainAreaProps) {
 
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const papers = useLiteratureStore((s) => s.papers);
+  const notesPaneOpenByPaper = useLiteratureReaderStore((s) => s.notesPaneOpenByPaper);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
-  const literaturePaper =
-    activeTab?.kind === "literature" && activeTab.literaturePaperId
-      ? (papers.find((p) => p.id === activeTab.literaturePaperId) ?? null)
-      : null;
-  const literatureReaderActive = Boolean(literaturePaper && projectRoot);
-  const literatureNotesOpen = useLiteratureReaderStore(
-    (s) => (literaturePaper ? (s.notesPaneOpenByPaper[literaturePaper.id] ?? false) : false),
+  const activePaperId =
+    activeTab?.kind === "literature" ? (activeTab.literaturePaperId ?? null) : null;
+  const literaturePaper = activePaperId
+    ? (papers.find((p) => p.id === activePaperId) ?? null)
+    : null;
+
+  const openLiteraturePaperTabs = useMemo(
+    () =>
+      tabs.filter(
+        (t): t is RightTab & { literaturePaperId: string } =>
+          t.kind === "literature" && Boolean(t.literaturePaperId),
+      ),
+    [tabs],
   );
+
+  const showLiteratureReader = Boolean(
+    activeTab?.kind === "literature" && literaturePaper && projectRoot && activeTab,
+  );
+
+  const literatureShells =
+    projectRoot && openLiteraturePaperTabs.length > 0 ? (
+      <>
+        {openLiteraturePaperTabs.map((litTab) => {
+          const paper = papers.find((p) => p.id === litTab.literaturePaperId);
+          if (!paper) return null;
+          const isVisible = showLiteratureReader && litTab.literaturePaperId === activePaperId;
+          return (
+            <div
+              key={paper.id}
+              className={cn(
+                "absolute inset-0 z-10",
+                !isVisible && "invisible pointer-events-none",
+              )}
+              aria-hidden={!isVisible}
+            >
+              <LiteratureReaderShell
+                projectRoot={projectRoot}
+                paper={paper}
+                tab={litTab}
+                notesOpen={notesPaneOpenByPaper[paper.id] ?? false}
+              />
+            </div>
+          );
+        })}
+      </>
+    ) : null;
 
   const previewSlot = problemsOpen ? <CompileProblemsPanel /> : <PdfPreview />;
 
@@ -67,39 +148,53 @@ export function RightMainArea({ tabs, activeTabId }: RightMainAreaProps) {
     );
   }
 
-  if (literatureReaderActive && literaturePaper && projectRoot && activeTab) {
-    const reader = <LiteratureReader projectRoot={projectRoot} paper={literaturePaper} />;
-    const notes = (
-      <LiteratureNotesPane projectRoot={projectRoot} paper={literaturePaper} tab={activeTab} />
-    );
-
-    if (!literatureNotesOpen) return mainWrapper(reader);
-
+  if (activeTab?.kind === "literature" && projectRoot && activeTab) {
     return mainWrapper(
-      <WorkspaceSplit
-        left={reader}
-        right={notes}
-        leftId="lit-pdf"
-        rightId="lit-notes"
-        defaultLeft={55}
-      />,
+      withLiteratureKeepAlive(
+        <RightPane tabs={tabs} activeTabId={activeTabId} />,
+        literatureShells,
+        showLiteratureReader,
+      ),
     );
   }
 
   if (!texActive) {
-    return mainWrapper(<RightPane tabs={tabs} activeTabId={activeTabId} />);
+    return mainWrapper(
+      withLiteratureKeepAlive(
+        <RightPane tabs={tabs} activeTabId={activeTabId} />,
+        literatureShells,
+        false,
+      ),
+    );
   }
 
-  if (texViewMode === "tex") return mainWrapper(<RightPane tabs={tabs} activeTabId={activeTabId} />);
-  if (texViewMode === "pdf") return mainWrapper(previewSlot);
+  if (texViewMode === "tex") {
+    return mainWrapper(
+      withLiteratureKeepAlive(
+        <RightPane tabs={tabs} activeTabId={activeTabId} />,
+        literatureShells,
+        false,
+      ),
+    );
+  }
+
+  if (texViewMode === "pdf") {
+    return mainWrapper(
+      withLiteratureKeepAlive(previewSlot, literatureShells, false),
+    );
+  }
 
   return mainWrapper(
-    <WorkspaceSplit
-      left={previewSlot}
-      right={<RightPane tabs={tabs} activeTabId={activeTabId} />}
-      leftId="pdf"
-      rightId="editor"
-      defaultLeft={60}
-    />,
+    withLiteratureKeepAlive(
+      <WorkspaceSplit
+        left={previewSlot}
+        right={<RightPane tabs={tabs} activeTabId={activeTabId} />}
+        leftId="pdf"
+        rightId="editor"
+        defaultLeft={60}
+      />,
+      literatureShells,
+      false,
+    ),
   );
 }

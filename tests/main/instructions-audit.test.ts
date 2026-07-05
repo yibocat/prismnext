@@ -10,6 +10,7 @@ import {
   readBundledOrchestratorInstructions,
 } from "../../src/main/services/bundled-orchestrators";
 import { CHAT_CITATION_STAGING_PROMPT } from "../../src/main/prompts/modules/chat-citation-staging";
+import { CITATION_AUDIT_PROMPT } from "../../src/main/prompts/modules/citation-audit";
 import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/literature-library";
 import { TASK_DELEGATION_PROMPT } from "../../src/main/prompts/modules/task-delegation";
 
@@ -71,6 +72,9 @@ describe("builtin instructions audit (Phase 1.3)", () => {
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("Orchestrator after external literature Tasks");
     expect(TASK_DELEGATION_PROMPT).toContain("Available experts (via Task)");
     expect(TASK_DELEGATION_PROMPT).not.toContain("@library-scout");
+    expect(CITATION_AUDIT_PROMPT).toContain("### Workflow (binding)");
+    expect(CITATION_AUDIT_PROMPT).toContain("literature-cite-check");
+    expect(CITATION_AUDIT_PROMPT).toContain("latex-bib-check");
   });
 
   it("no instructions.md under bundled resources duplicates removed academic modules", () => {

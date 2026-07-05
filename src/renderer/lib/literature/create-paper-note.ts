@@ -79,9 +79,16 @@ export async function openPaperNoteInFiles(relativePath: string, name: string): 
  */
 export async function createNewPaperNote(
   paper: LiteraturePaper,
-  options?: { activateFilesMode?: boolean },
+  options?: {
+    activateFilesMode?: boolean;
+    /** When set, written instead of the default template (e.g. template + first quote). */
+    initialContent?: string;
+    /** Suppress success toast when caller handles UX (e.g. quote insert). */
+    silent?: boolean;
+  },
 ): Promise<string | null> {
   const activateFilesMode = options?.activateFilesMode ?? false;
+  const silent = options?.silent ?? false;
   const doc = useDocumentStore.getState();
   const checkoutRoot = doc.checkoutRoot;
   if (!checkoutRoot) {
@@ -122,14 +129,16 @@ export async function createNewPaperNote(
   const filename = nextPaperNoteFilename(namesInFolder);
   const relativePath = `${paperDir}/${filename}`;
 
-  const content = buildPaperNoteTemplate(paper);
+  const content = options?.initialContent ?? buildPaperNoteTemplate(paper);
   try {
     await window.electronAPI.fsCreate(checkoutRoot, relativePath, content);
     await doc.reloadMetadataFromDisk(true);
     if (activateFilesMode) {
       await openPaperNote(relativePath, filename);
     }
-    toast.success("Note created");
+    if (!silent) {
+      toast.success("Note created");
+    }
     return relativePath;
   } catch (err) {
     toast.error(err instanceof Error ? err.message : "Failed to create note");

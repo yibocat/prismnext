@@ -3,6 +3,7 @@ import * as path from "node:path";
 import {
   enrichBlocksWithLayoutJson,
   finalizeExtractBlocks,
+  blocksNeedLayoutUpgrade,
 } from "./mineru-blocks";
 import type {
   PaperExtractSource,
@@ -176,7 +177,9 @@ export function readExtractBlocks(
     if (fs.existsSync(middleAbs)) {
       try {
         const middle = JSON.parse(fs.readFileSync(middleAbs, "utf-8"));
-        return finalizeExtractBlocks(enrichBlocksWithLayoutJson(parsed, { middle }));
+        if (blocksNeedLayoutUpgrade(parsed)) {
+          return finalizeExtractBlocks(enrichBlocksWithLayoutJson(parsed, { middle }));
+        }
       } catch {
         /* fall through */
       }

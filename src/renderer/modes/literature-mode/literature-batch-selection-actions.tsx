@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileDownIcon, FileTextIcon, Trash2Icon } from "lucide-react";
+import { FileDownIcon, FileTextIcon, BookMarkedIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
@@ -26,6 +26,8 @@ export function useLiteratureBatchSelectionActions() {
   const clearCheckedPapers = useLiteratureStore((s) => s.clearCheckedPapers);
   const deletePapers = useLiteratureStore((s) => s.deletePapers);
   const exportPapersBibTeX = useLiteratureStore((s) => s.exportPapersBibTeX);
+  const syncLibraryPapersToManuscriptBib = useLiteratureStore((s) => s.syncLibraryPapersToManuscriptBib);
+  const papers = useLiteratureStore((s) => s.papers);
   const enqueueBatch = useLiteratureExtractStore((s) => s.enqueueBatch);
   const settings = useSettingsStore((s) => s.settings);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -53,6 +55,22 @@ export function useLiteratureBatchSelectionActions() {
     }
   };
 
+  const handleBatchAddToManuscriptBib = async () => {
+    if (!projectRoot || checkedPaperIds.length === 0) return;
+    const bibkeys = checkedPaperIds
+      .map((id) => papers.find((p) => p.id === id)?.bibkey?.trim())
+      .filter((k): k is string => Boolean(k));
+    if (bibkeys.length === 0) {
+      toast.error("Selected entries have no cite keys");
+      return;
+    }
+    try {
+      await syncLibraryPapersToManuscriptBib(projectRoot, bibkeys);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Sync to manuscript .bib failed");
+    }
+  };
+
   const handleBatchExtract = async () => {
     if (!projectRoot || checkedPaperIds.length === 0) return;
     const source =
@@ -76,6 +94,7 @@ export function useLiteratureBatchSelectionActions() {
     deleting,
     handleBatchDelete,
     handleBatchExport,
+    handleBatchAddToManuscriptBib,
     handleBatchExtract,
   };
 }
@@ -94,6 +113,7 @@ export function LiteratureBatchSelectionActions({
     deleting,
     handleBatchDelete,
     handleBatchExport,
+    handleBatchAddToManuscriptBib,
     handleBatchExtract,
   } = actions;
 
@@ -126,8 +146,18 @@ export function LiteratureBatchSelectionActions({
         size="xs"
         variant="ghost"
         className={batchToolbarBtnClass(compact)}
+        onClick={() => void handleBatchAddToManuscriptBib()}
+        title="Add selected to manuscript references.bib"
+      >
+        <BookMarkedIcon className={cn("size-3.5 shrink-0", !compact && "mr-1")} />
+        {!compact ? <span>To .bib</span> : null}
+      </Button>
+      <Button
+        size="xs"
+        variant="ghost"
+        className={batchToolbarBtnClass(compact)}
         onClick={() => void handleBatchExport()}
-        title="Export .bib"
+        title="Export .bib to file"
       >
         <FileDownIcon className={cn("size-3.5 shrink-0", !compact && "mr-1")} />
         {!compact ? <span>Export .bib</span> : null}

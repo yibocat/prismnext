@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { PlusIcon, Loader2Icon, NotebookPenIcon, PlusCircleIcon, Trash2Icon, LoaderCircleIcon, XIcon } from "lucide-react";
+import { PlusIcon, Loader2Icon, NotebookPenIcon, PlusCircleIcon, Trash2Icon, LoaderCircleIcon, XIcon, BookMarkedIcon } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useLiteratureReaderStore } from "@/stores/literature-reader-store";
@@ -36,6 +36,7 @@ import { LiteratureAddByIdentifierButton } from "./literature-add-by-identifier"
 import { LiteratureTagFilterDropdown } from "./literature-tag-filter-dropdown";
 import { ZoteroConnectDialog } from "./zotero-connect-dialog";
 import { LiteratureReaderExtractToolbar } from "./literature-agent-text";
+import { LiteratureCitationHealthDialog } from "./literature-citation-health-dialog";
 import { stagedAddProgressLabel } from "@/lib/literature/staged-add-progress-label";
 import { cn } from "@/lib/utils";
 import type { LiteraturePaper } from "@/types/electron.d";
@@ -214,6 +215,7 @@ function LiteratureLibraryToolbar() {
 
   const [busy, setBusy] = useState(false);
   const [newDialog, setNewDialog] = useState(false);
+  const [citationHealthOpen, setCitationHealthOpen] = useState(false);
   const [zoteroDialogOpen, setZoteroDialogOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -365,6 +367,15 @@ function LiteratureLibraryToolbar() {
           </>
         ) : (
           <>
+            <button
+              type="button"
+              className={cn(toolbarBtn, "shrink-0 size-6 justify-center px-0")}
+              title="Manuscript citation health (.tex ↔ .bib ↔ library)"
+              disabled={!projectRoot}
+              onClick={() => setCitationHealthOpen(true)}
+            >
+              <BookMarkedIcon className="size-3.5" />
+            </button>
             <LiteratureBatchSelectionActions actions={batchActions} compact={compact} />
             <LiteratureAddByIdentifierButton projectRoot={projectRoot} disabled={busy} />
             <AppMenu>
@@ -461,6 +472,11 @@ function LiteratureLibraryToolbar() {
           }}
         />
       ) : null}
+
+      <LiteratureCitationHealthDialog
+        open={citationHealthOpen}
+        onOpenChange={setCitationHealthOpen}
+      />
     </>
   );
 }

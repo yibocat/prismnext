@@ -60,6 +60,26 @@ describe("citationStagingStore", () => {
     expect(list.find((c) => c.id === id2)?.refId).toBe(2);
   });
 
+  it("avoids duplicate refIds when model reuses an occupied refId", () => {
+    const { upsertFromStageResult, getCitationsForSession } = useCitationStagingStore.getState();
+    upsertFromStageResult(SESSION, verifiedResult({ refId: 1 }));
+    const secondId = upsertFromStageResult(
+      SESSION,
+      verifiedResult({
+        refId: 1,
+        citation: {
+          ...verifiedResult().citation!,
+          title: "Another Paper",
+          doi: "10.1038/test.2024.003",
+        },
+      }),
+    );
+    const list = getCitationsForSession(SESSION);
+    expect(list).toHaveLength(2);
+    expect(new Set(list.map((c) => c.refId)).size).toBe(2);
+    expect(list.find((c) => c.id === secondId)?.refId).toBe(2);
+  });
+
   it("reuses refId when same DOI is staged again", () => {
     const { upsertFromStageResult, getCitationsForSession } = useCitationStagingStore.getState();
     upsertFromStageResult(SESSION, verifiedResult());

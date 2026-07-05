@@ -24,6 +24,10 @@ export function literatureBridgeRoot(): string {
   return process.env.PRISM_LITERATURE_BRIDGE_ROOT || path.join(bridgeRoot(), "literature");
 }
 
+export function latexBridgeRoot(): string {
+  return process.env.PRISM_LATEX_BRIDGE_ROOT || path.join(bridgeRoot(), "latex");
+}
+
 export function questionsBridgeRoot(): string {
   return process.env.PRISM_QUESTIONS_BRIDGE_ROOT || path.join(bridgeRoot(), "questions");
 }

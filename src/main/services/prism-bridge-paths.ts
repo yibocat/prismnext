@@ -27,6 +27,10 @@ export function getLiteratureBridgeRoot(): string {
   return process.env.PRISM_LITERATURE_BRIDGE_ROOT || join(getPrismBridgeRoot(), "literature");
 }
 
+export function getLatexBridgeRoot(): string {
+  return process.env.PRISM_LATEX_BRIDGE_ROOT || join(getPrismBridgeRoot(), "latex");
+}
+
 export function getQuestionsBridgeRoot(): string {
   return process.env.PRISM_QUESTIONS_BRIDGE_ROOT || join(getPrismBridgeRoot(), "questions");
 }
@@ -37,6 +41,7 @@ export function getPrismBridgeEnv(): Record<string, string> {
     PRISM_BRIDGE_ROOT: getPrismBridgeRoot(),
     PRISM_TERMINAL_BRIDGE_ROOT: getTerminalBridgeRoot(),
     PRISM_LITERATURE_BRIDGE_ROOT: getLiteratureBridgeRoot(),
+    PRISM_LATEX_BRIDGE_ROOT: getLatexBridgeRoot(),
     PRISM_QUESTIONS_BRIDGE_ROOT: getQuestionsBridgeRoot(),
   };
 }

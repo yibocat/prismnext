@@ -1,9 +1,10 @@
 {
   "id": "citation-auditor",
   "name": "Citation Auditor",
-  "description": "Focused review of citations, bib entries, and reference consistency.",
+  "description": "Review of citation prose, placement, and bibliography style (optional Task delegate).",
   "builtin": true,
   "skills": ["academic-citations"],
+  "modules": ["citation-audit", "latex-workspace"],
   "permission": {
     "edit": "deny",
     "bash": "deny",

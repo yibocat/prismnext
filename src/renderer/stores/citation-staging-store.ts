@@ -111,6 +111,14 @@ function nextRefId(list: StagedCitation[]): number {
   return list.reduce((max, c) => (c.refId > max ? c.refId : max), 0) + 1;
 }
 
+/** Prefer model-provided refId when unused; otherwise allocate next sequential id. */
+function allocateRefId(list: StagedCitation[], preferred?: number | null): number {
+  if (preferred != null && preferred > 0 && !list.some((c) => c.refId === preferred)) {
+    return preferred;
+  }
+  return nextRefId(list);
+}
+
 function findExistingStaged(
   list: StagedCitation[],
   ids: { doi?: string | null; arxivId?: string | null },
@@ -195,7 +203,7 @@ function mergeStageResultIntoList(
       id: updated.id,
     };
   }
-  const refId = result.refId && result.refId > 0 ? result.refId : nextRefId(list);
+  const refId = allocateRefId(list, result.refId);
   const id = newId();
   const citation = payloadToCitation(result.citation, refId, sessionId, id);
   return { list: [...list, citation], id };

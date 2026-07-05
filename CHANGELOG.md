@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.5.3 — 2026-07-05
+
+### LaTeX Agent Tools
+
+- New **`latex-root`** / **`latex-compile`** / **`latex-bib-check`** tools for agent-driven LaTeX root resolution, compilation with structured errors, and `.tex` ↔ `.bib` key audit
+- New **`literature-cite-check`** / **`literature-export-bib`** tools for `.tex` ↔ library.db citation compliance and library-to-`.bib` sync
+- Dedicated **LaTeX tool widgets** in chat for compile result summaries, engine/bib tool info, and missing/unused/duplicate key reports
+
+### Compilation Pipeline Rewrite
+
+- **Build-dir architecture**: manuscript sources synced to `.prismnext/compile/` before compilation — `.tex`, `.bib`, figures, and class files colocated for correct LaTeX path resolution
+- **Bibliography staging**: declared `.bib` files copied into the build dir, fixing biber/bibtex resolution when aux/bcf files live in a separate output directory
+- **Intelligent multi-pass compilation**: auto-detects unresolved bibliography and runs extra bibtex/biber + LaTeX passes; terminates once cross-references and bibliography entries converge
+- **Undefined citation detection**: compile reports `"Citations unresolved"` when `\cite{...}` keys missing from `.bib` instead of a generic failure message
+- **SyncTeX path mapping**: build-dir output paths mapped back to project source tree
+
+### Bibliography Resolution & LaTeX Root
+
+- **`bib-path-resolve.ts`**: resolve `\addbibresource` / `\bibliography` paths relative to main `.tex`; construct `BIBINPUTS` for bibtex/biber
+- **`latex-root.ts`**: resolve main `.tex` with 6-level fallback (workspace config → `% !TEX root` → documentclass → `main.tex` → first `.tex`); walk project recursively
+
+### Citation Health System
+
+- Unified **`.tex` ↔ `.bib` ↔ library.db** audit with `getCitationHealth`; import missing keys from `.bib` into library, or sync library entries into manuscript `.bib`
+- **Citation Health dialog** in Literature mode with status rows, importable-entry listing, and import/sync action buttons
+- **Session citation audit context**: tool results persisted per chat session as JSON snapshots; injected as `## Session citation audit (this chat)` turn appendix — agents reuse cached results rather than re-scanning
+
+### Task Orchestrator Gate
+
+- **`task-orchestrator-gate`** blocks orchestrator from delegating builtin platform tools (`latex-bib-check`, `literature-cite-check`, etc.) via Task; enforced at both event-mapper and permission layers
+- Denied tasks emit clear error instructing the orchestrator to call tools directly in the conversation
+
+### Prompt Modules
+
+- New **citation-audit** and **latex-workspace** binding rule modules; updated **literature-library** (library-first `.bib` policy) and **task-delegation** (no Task for platform tools)
+
+### IPC & Event System
+
+- New IPC handlers: `literature:citationHealth`, `literature:mergeIntoProjectBib`, `literature:importFromProjectBib`
+- New `compile:agentComplete` broadcast event with preload bridge for agent-driven PDF preview updates
+- Event mapper stability: `messageId` on `message.part.updated`, `clearTurnAccumulators` per-turn reset
+
+### Literature & MinerU
+
+- **`mergeLibraryIntoProjectBib`** syncs library papers to manuscript `.bib`; **`findProjectBibPath`** respects workspace config
+- MinerU blocks: IoU-based content_list matching replaces sequential index pairing; `blocksNeedLayoutUpgrade` heuristic
+- PDF selection rect extraction for precise block quoting
+
+### LaTeX Language Support
+
+- Custom `prism-latex-language.ts` with syntax highlighting, command completion, environment folding, and citation key support in CodeMirror
+
+### Architecture & Testing
+
+- Design/plan docs under `docs/superpowers/` for latex agent tools and platform capabilities
+- 21 new test files covering all new services and tools; expanded coverage on existing tests
+- 101 files changed, 6074 insertions(+), 350 deletions(-)
+
 ## 0.5.2 — 2026-07-04
 
 ### Expert Team (OpenCode Subagents)

@@ -1,5 +1,5 @@
-import { useCallback, useMemo, type ReactNode } from "react";
-import { Group, Panel, Separator } from "react-resizable-panels";
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { Group, Panel, Separator, type PanelImperativeHandle } from "react-resizable-panels";
 import { useLayoutStore } from "@/stores/layout-store";
 
 export const WORKSPACE_SPLIT_SEPARATOR_CLASS =
@@ -16,6 +16,8 @@ export interface WorkspaceSplitProps {
   defaultLeft?: number;
   /** Key for persisting layout in layout-store (defaults to `{leftId}:{rightId}`). */
   layoutKey?: string;
+  /** When true, right panel is collapsed (0 width) — children stay mounted. */
+  rightCollapsed?: boolean;
 }
 
 /** Horizontal resizable split — shared by TeX workspace and literature reader. */
@@ -26,10 +28,12 @@ export function WorkspaceSplit({
   rightId = "right",
   defaultLeft = 60,
   layoutKey,
+  rightCollapsed = false,
 }: WorkspaceSplitProps) {
   const key = layoutKey ?? `${leftId}:${rightId}`;
   const savedLayout = useLayoutStore((s) => s.workspaceSplitLayouts[key]);
   const setWorkspaceSplitLayout = useLayoutStore((s) => s.setWorkspaceSplitLayout);
+  const rightPanelRef = useRef<PanelImperativeHandle>(null);
 
   const defaultLayout = useMemo(() => {
     const leftSize = savedLayout?.[leftId];
@@ -37,14 +41,28 @@ export function WorkspaceSplit({
     if (leftSize != null && rightSize != null) {
       return { [leftId]: leftSize, [rightId]: rightSize };
     }
+    if (rightCollapsed) {
+      return { [leftId]: 100, [rightId]: 0 };
+    }
     return { [leftId]: defaultLeft, [rightId]: 100 - defaultLeft };
-  }, [savedLayout, leftId, rightId, defaultLeft]);
+  }, [savedLayout, leftId, rightId, defaultLeft, rightCollapsed]);
+
+  useEffect(() => {
+    const panel = rightPanelRef.current;
+    if (!panel) return;
+    if (rightCollapsed) {
+      panel.collapse();
+    } else {
+      panel.expand();
+    }
+  }, [rightCollapsed]);
 
   const handleLayoutChanged = useCallback(
     (layout: Record<string, number>) => {
+      if (rightCollapsed) return;
       setWorkspaceSplitLayout(key, layout);
     },
-    [key, setWorkspaceSplitLayout],
+    [key, setWorkspaceSplitLayout, rightCollapsed],
   );
 
   return (
@@ -58,8 +76,18 @@ export function WorkspaceSplit({
       <Panel id={leftId} minSize={150} defaultSize={defaultLayout[leftId]}>
         {left}
       </Panel>
-      <Separator id={`sep-${leftId}`} className={WORKSPACE_SPLIT_SEPARATOR_CLASS} />
-      <Panel id={rightId} minSize={150} defaultSize={defaultLayout[rightId]}>
+      <Separator
+        id={`sep-${leftId}`}
+        className={rightCollapsed ? "hidden" : WORKSPACE_SPLIT_SEPARATOR_CLASS}
+      />
+      <Panel
+        id={rightId}
+        panelRef={rightPanelRef}
+        collapsible
+        collapsedSize={0}
+        minSize={150}
+        defaultSize={defaultLayout[rightId]}
+      >
         {right}
       </Panel>
     </Group>

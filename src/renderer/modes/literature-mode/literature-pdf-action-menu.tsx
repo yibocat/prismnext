@@ -28,6 +28,10 @@ import {
   type PdfTextExcerpt,
 } from "./literature-pdf-excerpt";
 import { LITERATURE_PDF_HIGHLIGHT_COLORS } from "./literature-pdf-highlight-colors";
+import {
+  preciseSelectionHighlights,
+  preciseSelectionText,
+} from "@/lib/literature/literature-pdf-selection-rects";
 
 const menuPanelClass = cn(appPopoverListClass, "min-w-[11rem] pointer-events-auto");
 const menuItemClass = cn(appMenuItemClass, "w-full text-left hover:bg-accent");
@@ -121,6 +125,7 @@ function ActionMenuPanel({
 }) {
   const { getDimension } = useSelectionDimensions();
   const addColoredHighlight = usePdf((s) => s.addColoredHighlight);
+  const zoom = usePdf((s) => s.zoom);
   const {
     blocks,
     hasBlocks,
@@ -217,13 +222,29 @@ function ActionMenuPanel({
     }
 
     const dim = getDimension();
-    if (!dim?.highlights[0]) return;
+    const preciseRects = preciseSelectionHighlights(zoom);
+    const preciseText = preciseSelectionText();
+    if (!preciseRects?.length) {
+      if (!dim?.highlights[0]) return;
+      const highlight: ColoredHighlight = {
+        uuid: crypto.randomUUID(),
+        pageNumber: dim.highlights[0].pageNumber,
+        color,
+        rectangles: dim.highlights,
+        text: dim.text,
+      };
+      addColoredHighlight(highlight);
+      onHighlight?.(highlight);
+      dismissAll();
+      return;
+    }
+
     const highlight: ColoredHighlight = {
       uuid: crypto.randomUUID(),
-      pageNumber: dim.highlights[0].pageNumber,
+      pageNumber: preciseRects[0]!.pageNumber,
       color,
-      rectangles: dim.highlights,
-      text: dim.text,
+      rectangles: preciseRects,
+      text: preciseText ?? dim?.text ?? "",
     };
     addColoredHighlight(highlight);
     onHighlight?.(highlight);

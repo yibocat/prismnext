@@ -7,6 +7,10 @@ import {
   buildLibraryTaskHitsAppendix,
   LIBRARY_TASK_APPENDIX_MARKER,
 } from "./library-task-context";
+import {
+  buildSessionCiteAuditTurnAppendix,
+  CITE_AUDIT_APPENDIX_MARKER,
+} from "./session-cite-audit-context";
 
 export interface SessionCitationRecord {
   refId: number;
@@ -91,6 +95,11 @@ export function enrichTaskToolResultContent(sessionId: string, content: unknown)
   if (!enriched.includes(APPENDIX_MARKER)) {
     const appendix = buildSessionCitationsTurnAppendix(sessionId);
     if (appendix) enriched = `${enriched}\n\n${appendix}`;
+  }
+
+  if (!enriched.includes(CITE_AUDIT_APPENDIX_MARKER)) {
+    const citeAuditAppendix = buildSessionCiteAuditTurnAppendix(sessionId);
+    if (citeAuditAppendix) enriched = `${enriched}\n\n${citeAuditAppendix}`;
   }
 
   return enriched;

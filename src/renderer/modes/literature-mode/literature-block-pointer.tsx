@@ -51,7 +51,8 @@ export function LiteratureBlockPointerCapture() {
         return;
       }
       const hit = hitTestBlock(blocks, info.pageIdx, info.x, info.y);
-      setHoveredBlockId((prev) => (prev === (hit?.id ?? null) ? prev : hit?.id ?? null));
+      const nextId = hit?.id ?? null;
+      setHoveredBlockId(nextId);
     };
     const onMouseLeave = () => setHoveredBlockId(null);
 
@@ -80,6 +81,21 @@ export function LiteratureBlockPointerCapture() {
       }
     };
 
+    const onContextMenu = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("[data-block-action-menu], [data-annotation-tooltip], [data-excerpt-session-bar]")) {
+        return;
+      }
+      const info = pageInfoFromPoint(e.clientX, e.clientY);
+      if (!info) return;
+      const hit = hitTestBlock(blocks, info.pageIdx, info.x, info.y);
+      if (!hit) return;
+      e.preventDefault();
+      e.stopPropagation();
+      clearTextSelection();
+      toggleBlockSelection(hit, e.shiftKey);
+    };
+
     const attach = () => {
       if (attached) return;
       root = findLiteraturePdfScrollRoot(viewportRef);
@@ -88,6 +104,7 @@ export function LiteratureBlockPointerCapture() {
         return;
       }
       attached = true;
+      root.addEventListener("contextmenu", onContextMenu, true);
       root.addEventListener("mousedown", onMouseDown, true);
       root.addEventListener("mousemove", onMouseMove, { passive: true });
       root.addEventListener("mouseleave", onMouseLeave);
@@ -99,6 +116,7 @@ export function LiteratureBlockPointerCapture() {
     return () => {
       cancelAnimationFrame(raf);
       if (root && attached) {
+        root.removeEventListener("contextmenu", onContextMenu, true);
         root.removeEventListener("mousedown", onMouseDown, true);
         root.removeEventListener("mousemove", onMouseMove);
         root.removeEventListener("mouseleave", onMouseLeave);

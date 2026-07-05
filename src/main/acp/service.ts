@@ -24,6 +24,10 @@ import {
   resolvePermissionAction,
   type PermissionMode,
 } from "../services/permission-modes";
+import {
+  extractTaskSubagentType,
+  shouldDenyOrchestratorBuiltinTask,
+} from "../services/task-orchestrator-gate";
 import { getSettings } from "../services/settings";
 import { sanitizeSkillPermissionMap, skillPermissionNeedsRepair } from "../services/skills-sync";
 import { buildEnabledToolsConfig } from "../services/opencode-tools-config";
@@ -352,10 +356,25 @@ export class AcpService {
           const settings = getSettings() as Record<string, unknown>;
           const mode = resolvePermissionMode(settings.permissionMode as string | undefined);
           const toolName = extractPermissionToolName(params as Record<string, unknown>);
-          const action = resolvePermissionAction(mode, toolName);
           const sessionId =
             (params as { sessionId?: string }).sessionId
             || (params as { session?: { id?: string } }).session?.id;
+
+          if (
+            toolName === "task"
+            && sessionId
+            && !this.isSubAgentSession(sessionId)
+          ) {
+            const subagent = extractTaskSubagentType(params as Record<string, unknown>);
+            if (shouldDenyOrchestratorBuiltinTask(subagent)) {
+              log.info(
+                `permission:task-builtin-deny sessionId=${sessionId} subagent=${subagent ?? "(none)"}`,
+              );
+              return buildPermissionOutcome(options, false);
+            }
+          }
+
+          const action = resolvePermissionAction(mode, toolName);
           const tabId = sessionId ? resolveChatTabId(sessionId) : undefined;
           const toolCallId =
             (params as { toolCallId?: string }).toolCallId

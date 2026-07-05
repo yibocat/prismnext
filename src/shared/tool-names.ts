@@ -13,6 +13,11 @@ export const TOOL_NAMES = {
   literatureRead: "literature-read",
   literatureReadPdf: "literature-read-pdf",
   literatureCite: "literature-cite",
+  literatureCiteCheck: "literature-cite-check",
+  literatureExportBib: "literature-export-bib",
+  latexRoot: "latex-root",
+  latexCompile: "latex-compile",
+  latexBibCheck: "latex-bib-check",
 } as const;
 
 export type ToolNameKey = keyof typeof TOOL_NAMES;

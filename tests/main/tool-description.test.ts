@@ -35,6 +35,15 @@ describe("buildOpencodeToolDescription", () => {
     };
     expect(buildOpencodeToolDescription(custom)).toContain("CUSTOM-RULE-XYZ");
   });
+
+  it("cite-check tools steer away from read/glob in OpenCode description only", () => {
+    const cite = BUILTIN_TOOLS.find((t) => t.name === TOOL_NAMES.literatureCiteCheck)!;
+    const bib = BUILTIN_TOOLS.find((t) => t.name === TOOL_NAMES.latexBibCheck)!;
+    expect(buildOpencodeToolDescription(cite)).toMatch(/read\/glob/i);
+    expect(buildOpencodeToolDescription(cite)).toContain("missingKeys");
+    expect(buildOpencodeToolDescription(bib)).toMatch(/read\/glob/i);
+    expect(buildOpencodeToolDescription(bib)).toContain("duplicateKeys");
+  });
 });
 
 describe("patchToolDescription", () => {

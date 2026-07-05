@@ -16,6 +16,7 @@ import {
   useSearch,
   usePdfJump,
   usePdf,
+  usePDFLinkService,
   calculateHighlightRects,
 } from "@anaralabs/lector";
 import type { SearchResult } from "@anaralabs/lector";
@@ -63,45 +64,83 @@ const FIT_ZOOM_MODES: PdfZoomMode[] = ["fit-width", "fit-height", "fit-page", "a
 const outlineItemClass =
   "cursor-pointer text-muted-foreground hover:text-foreground transition-colors [&_a]:block [&_a]:truncate [&_a]:py-0.5 [&_a]:px-2 [&_a[data-level='0']]:pl-2 [&_a[data-level='1']]:pl-5 [&_a[data-level='2']]:pl-8 [&_a[data-level='3']]:pl-11 [&_a[data-level='4']]:pl-14";
 
-/** Route PDF annotation / text-layer links to in-app Browser (not Electron pop-out windows). */
-function PdfExternalLinkCapture() {
+/** Wire Lector LinkService page jumps to the active PDF viewport. */
+function PdfLinkNavigationBridge() {
+  const linkService = usePDFLinkService();
+  const { jumpToPage } = usePdfJump();
+
+  useEffect(() => {
+    linkService.registerPageNavigationCallback((pageNumber: number) => {
+      jumpToPage(pageNumber, { align: "start", behavior: "auto" });
+    });
+    return () => linkService.unregisterPageNavigationCallback();
+  }, [linkService, jumpToPage]);
+
+  return null;
+}
+
+/** Route PDF links: external → in-app browser; internal → in-document jump. */
+function PdfLinkCapture() {
   const viewportRef = usePdf((s) => s.viewportRef);
   const pdfDocumentProxy = usePdf((s) => s.pdfDocumentProxy);
+  const linkService = usePDFLinkService();
+  const { jumpToPage } = usePdfJump();
 
   useEffect(() => {
     const root = viewportRef.current;
     if (!root || !pdfDocumentProxy) return;
 
-    const resolvePdfLink = (anchor: HTMLAnchorElement): string | null => {
+    const resolveExternalUrl = (anchor: HTMLAnchorElement): string | null => {
       const href = anchor.getAttribute("href")?.trim() ?? "";
-      if (!href || href === "#") return null;
-      if (href.startsWith("#")) return null;
+      if (!href || href === "#" || href.startsWith("#")) return null;
       const normalized = normalizeBrowserUrl(href);
       return isBrowsableUrl(normalized) ? normalized : null;
     };
 
-    const handleLinkActivate = (e: MouseEvent, newTab: boolean) => {
+    const handleLinkActivate = async (e: MouseEvent, newTab: boolean) => {
       const target = e.target;
       if (!target || !(target instanceof Element)) return;
       const anchor = target.closest("a");
       if (!anchor?.closest(".annotationLayer, .textLayer")) return;
 
-      const url = resolvePdfLink(anchor);
-      if (!url) return;
+      const href = anchor.getAttribute("href")?.trim() ?? "";
+      if (!href || href === "#") return;
+
+      const external = resolveExternalUrl(anchor);
+      if (external) {
+        e.preventDefault();
+        e.stopPropagation();
+        openUrlInBrowser(external, { newTab });
+        return;
+      }
+
+      if (!href.startsWith("#")) return;
 
       e.preventDefault();
       e.stopPropagation();
-      openUrlInBrowser(url, { newTab });
+
+      if (href.startsWith("#page=")) {
+        const page = Number.parseInt(href.slice("#page=".length), 10);
+        if (!Number.isNaN(page)) {
+          jumpToPage(page, { align: "start", behavior: "auto" });
+        }
+        return;
+      }
+
+      const dest = href.slice(1);
+      if (dest) {
+        await linkService.goToDestination(dest);
+      }
     };
 
     const onClickCapture = (e: MouseEvent) => {
       if (e.button !== 0) return;
-      handleLinkActivate(e, e.metaKey || e.ctrlKey);
+      void handleLinkActivate(e, e.metaKey || e.ctrlKey);
     };
 
     const onAuxClickCapture = (e: MouseEvent) => {
       if (e.button !== 1) return;
-      handleLinkActivate(e, true);
+      void handleLinkActivate(e, true);
     };
 
     root.addEventListener("click", onClickCapture, true);
@@ -110,7 +149,7 @@ function PdfExternalLinkCapture() {
       root.removeEventListener("click", onClickCapture, true);
       root.removeEventListener("auxclick", onAuxClickCapture, true);
     };
-  }, [viewportRef, pdfDocumentProxy]);
+  }, [viewportRef, pdfDocumentProxy, jumpToPage, linkService]);
 
   return null;
 }
@@ -310,39 +349,6 @@ export function PdfViewerInner({
   const pdfDocumentProxy = usePdf((s) => s.pdfDocumentProxy);
   const { jumpToPage } = usePdfJump();
 
-  // ─── Cross-session page position persistence ───
-  const pageRestoredRef = useRef(false);
-  const currentPageRef = useRef(currentPage);
-  currentPageRef.current = currentPage;
-
-  // Restore saved page position once the PDF has loaded
-  useEffect(() => {
-    if (!pdfDocumentProxy || !persistKey || pageRestoredRef.current) return;
-    pageRestoredRef.current = true;
-    const saved = loadViewerPosition(persistKey);
-    if (saved?.pdfPage && saved.pdfPage > 0 && saved.pdfPage <= (pdfDocumentProxy.numPages ?? Infinity)) {
-      jumpToPage(saved.pdfPage, { align: "start", behavior: "auto" });
-    }
-  }, [pdfDocumentProxy, persistKey]);
-
-  // Save current page position periodically, and on unmount
-  useEffect(() => {
-    if (!persistKey) return;
-    const timer = setInterval(() => {
-      if (currentPageRef.current > 0) {
-        saveViewerPosition(persistKey, { pdfPage: currentPageRef.current });
-      }
-    }, 3000);
-    return () => {
-      clearInterval(timer);
-      // Save immediately on unmount (tab close / view switch) so we don't
-      // lose the last position if the interval hasn't fired yet
-      if (currentPageRef.current > 0) {
-        saveViewerPosition(persistKey, { pdfPage: currentPageRef.current });
-      }
-    };
-  }, [persistKey]);
-
   const panelOpen = sidePanel !== null;
   const zoom = usePdf((s) => s.zoom);
   const updateZoom = usePdf((s) => s.updateZoom);
@@ -355,6 +361,45 @@ export function PdfViewerInner({
   const totalPages = usePdf((s) => s.pdfDocumentProxy?.numPages ?? 0);
   const [zoomMode, setZoomMode] = useState<PdfZoomMode>("fit-width");
   const zoomModeRef = useRef<PdfZoomMode>("fit-width");
+
+  // ─── Cross-session page + scroll persistence ───
+  const pageRestoredRef = useRef(false);
+  const currentPageRef = useRef(currentPage);
+  currentPageRef.current = currentPage;
+
+  useEffect(() => {
+    if (!pdfDocumentProxy || !persistKey || pageRestoredRef.current) return;
+    pageRestoredRef.current = true;
+    const saved = loadViewerPosition(persistKey);
+    if (saved?.pdfPage && saved.pdfPage > 0 && saved.pdfPage <= (pdfDocumentProxy.numPages ?? Infinity)) {
+      jumpToPage(saved.pdfPage, { align: "start", behavior: "auto" });
+      if (saved.pdfScrollOffset != null && viewportRef.current) {
+        requestAnimationFrame(() => {
+          if (viewportRef.current) {
+            viewportRef.current.scrollTop = saved.pdfScrollOffset!;
+          }
+        });
+      }
+    }
+  }, [pdfDocumentProxy, persistKey, jumpToPage, viewportRef]);
+
+  useEffect(() => {
+    if (!persistKey) return;
+    const saveNow = () => {
+      const scrollTop = viewportRef.current?.scrollTop;
+      if (currentPageRef.current > 0) {
+        saveViewerPosition(persistKey, {
+          pdfPage: currentPageRef.current,
+          ...(scrollTop != null ? { pdfScrollOffset: scrollTop } : {}),
+        });
+      }
+    };
+    const timer = setInterval(saveNow, 3000);
+    return () => {
+      clearInterval(timer);
+      saveNow();
+    };
+  }, [persistKey, viewportRef]);
 
   const zoomStore = useMemo(
     () => ({ viewportRef, viewports, zoomOptions, currentPage, updateZoom, zoomFitWidth }),
@@ -411,7 +456,8 @@ export function PdfViewerInner({
         <span className="hidden" aria-hidden />
       </Search>
       <PdfScrollClamp />
-      <PdfExternalLinkCapture />
+      <PdfLinkNavigationBridge />
+      <PdfLinkCapture />
       {/* Toolbar */}
       <div className="flex h-[var(--height-right-area-subtoolbar)] shrink-0 items-center gap-0.5 border-b border-border bg-card px-2 text-[length:var(--font-toolbar-label)]">
         {/* Left: side panel toggles */}

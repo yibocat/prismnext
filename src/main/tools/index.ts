@@ -224,6 +224,84 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     category: "reference",
     usageHint: "Append a library paper's BibTeX entry to the project `.bib` file.",
   },
+  {
+    name: TOOL_NAMES.literatureCiteCheck,
+    label: "Library Cite Check",
+    description:
+      "Structured audit: every \\cite key in project .tex vs literature library.db bibkeys.",
+    category: "reference",
+    usageHint:
+      "Prefer this over read/glob/grep on .tex or .bib when checking citation compliance, missing papers, " +
+      "or whether cited keys exist in the library. Scans all project .tex automatically (no args). " +
+      "Returns JSON: citeKeysInTex, missingKeys, unusedKeys, bibFallback (entries importable from manuscript .bib).",
+    workflowRules: [
+      "BINDING: Do not report .tex ↔ library citation compliance from read/glob/grep — call this tool and use its JSON.",
+      "Do NOT use the Task tool or subagents to run this audit — call this tool in the current conversation.",
+      "When the user asks to check citations or names this tool, invoke it directly — do not delegate.",
+      "One call replaces manually listing \\cite keys and cross-checking library.db.",
+      "For .tex vs references.bib file alignment, also call latex-bib-check before writing your audit summary.",
+      "Do not write the compliance report until this tool and latex-bib-check have returned for this turn.",
+    ],
+  },
+  {
+    name: TOOL_NAMES.literatureExportBib,
+    label: "Export Library to .bib",
+    description: "Append literature library BibTeX entries into project references.bib",
+    category: "reference",
+    usageHint:
+      "Default: append library entries for keys cited in .tex (skip keys already in .bib). " +
+      "Use `all=true` for entire library; or pass explicit `bibkeys`.",
+    workflowRules: [
+      "Skips bibkeys already present in the project .bib by default.",
+    ],
+  },
+  {
+    name: TOOL_NAMES.latexRoot,
+    label: "LaTeX Root",
+    description: "Resolve LaTeX main file, engine, bib tool, and build directory",
+    category: "compile",
+    usageHint:
+      "Call before editing or compiling when unsure which .tex is the document root. " +
+      "Returns mainFile, engine, bibTool, buildDir (`.prismnext/compile`).",
+    workflowRules: [
+      "Prefer the workspace-configured manuscript folder and mainTex when present.",
+      "Follow `% !TEX root` chains on disk — do not guess paths.",
+    ],
+  },
+  {
+    name: TOOL_NAMES.latexCompile,
+    label: "LaTeX Compile",
+    description: "Compile the project LaTeX document and return structured errors",
+    category: "compile",
+    usageHint:
+      "Compile after substantive .tex or .bib edits. Returns success, pdfPath under `.prismnext/compile/`, " +
+      "errorSummary, structured errors, and logTail — not raw PDF bytes.",
+    workflowRules: [
+      "Run `latex-root` first when main file is unknown.",
+      "On failure, read errors/logTail before retrying — fix root cause, do not loop blindly.",
+      "User can also compile via UI (Cmd+Enter) or `/compile` — this tool is for agent verification.",
+    ],
+  },
+  {
+    name: TOOL_NAMES.latexBibCheck,
+    label: "Bib Check",
+    description:
+      "Structured audit: \\cite keys in .tex vs project .bib (and library.db when includeLibraryCheck).",
+    category: "compile",
+    usageHint:
+      "Prefer this over read/glob on main.tex and references.bib when checking bibliography consistency, " +
+      "missing or duplicate bibkeys, or reference format issues. Auto-detects main .tex and .bib paths. " +
+      "Returns JSON: missingKeys, unusedKeys, duplicateKeys, bibPath, libraryCheck.",
+    workflowRules: [
+      "BINDING: Do not report .tex ↔ .bib alignment from read/glob/grep — call this tool and use its JSON.",
+      "Do NOT use the Task tool or subagents to run this audit — call this tool in the current conversation.",
+      "When the user asks to check bibliography or names this tool, invoke it directly — do not delegate.",
+      "includeLibraryCheck defaults to true.",
+      "One call replaces manually diffing .tex cites against the .bib file.",
+      "For library.db-only gaps, also call literature-cite-check before writing your audit summary.",
+      "Do not write the compliance report until this tool and literature-cite-check have returned for this turn.",
+    ],
+  },
 ];
 
 // ─── Tool file loading (used by AcpService.syncBuiltinTools) ──────

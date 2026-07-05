@@ -6,6 +6,7 @@
       "description": "Focused review of citations, bib entries, and reference consistency.",
       "builtin": true,
       "skills": ["academic-citations"],
+      "modules": ["citation-audit", "latex-workspace"],
       "permission": {
         "edit": "deny",
         "bash": "deny",

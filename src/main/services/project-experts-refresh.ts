@@ -1,5 +1,6 @@
 import { BrowserWindow } from "electron";
 import { AcpService } from "../acp/service";
+import type { PromptContext } from "../prompts/types";
 import {
   clearSyncedAgentFiles,
   getOpencodeAgentsDir,
@@ -18,27 +19,41 @@ export function notifyExpertsIntegrationChanged(projectPath: string): void {
   }
 }
 
-/** Sync project experts to app-level OpenCode agents directory. */
+export interface RefreshProjectExpertsOptions {
+  /** Workspace dirs and rules context for profile module builds (latex-workspace, etc.). */
+  promptCtx?: PromptContext;
+}
+
+/** Sync project experts to app-level OpenCode agents directory (write only — no OpenCode restart). */
 export async function refreshProjectExpertsIntegration(
   projectRoot: string,
-): Promise<{ agentFiles: string[]; orchestratorId: string }> {
+  options?: RefreshProjectExpertsOptions,
+): Promise<{ agentFiles: string[]; orchestratorId: string; orchestratorContentHash: string }> {
   const agentsDir = getOpencodeAgentsDir();
   const prev = readPrismExpertsSyncState();
   if (prev?.agentFiles?.length) {
     clearSyncedAgentFiles(agentsDir, prev.agentFiles);
   }
-  const result = syncProjectExpertsToOpencode(projectRoot, { agentsDir });
+  const result = syncProjectExpertsToOpencode(projectRoot, {
+    agentsDir,
+    promptCtx: options?.promptCtx,
+  });
   notifyExpertsIntegrationChanged(projectRoot);
   return result;
 }
 
-/** Sync experts then restart OpenCode so new agent definitions are loaded. */
+/** Sync experts then restart OpenCode when orchestrator agent.md content changed. */
 export async function refreshProjectExpertsIntegrationWithReload(
   projectRoot: string,
-): Promise<{ agentFiles: string[]; orchestratorId: string }> {
-  const result = await refreshProjectExpertsIntegration(projectRoot);
+  options?: RefreshProjectExpertsOptions,
+): Promise<{ agentFiles: string[]; orchestratorId: string; orchestratorContentHash: string }> {
+  const prev = readPrismExpertsSyncState();
+  const result = await refreshProjectExpertsIntegration(projectRoot, options);
+  const hashChanged =
+    !prev?.orchestratorContentHash
+    || prev.orchestratorContentHash !== result.orchestratorContentHash;
   const acp = AcpService.getInstance();
-  if (acp.getConnection()) {
+  if (hashChanged && acp.getConnection()) {
     await acp.reloadAfterExpertsIntegration();
   }
   return result;

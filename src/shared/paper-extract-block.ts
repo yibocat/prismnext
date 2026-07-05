@@ -73,6 +73,30 @@ function bboxArea(bbox: [number, number, number, number]): number {
   return Math.max(0, bbox[2] - bbox[0]) * Math.max(0, bbox[3] - bbox[1]);
 }
 
+/** Intersection-over-union for two normalized bboxes (0–1 page space). */
+export function bboxIntersectionOverUnion(
+  a: [number, number, number, number],
+  b: [number, number, number, number],
+): number {
+  const x0 = Math.max(a[0], b[0]);
+  const y0 = Math.max(a[1], b[1]);
+  const x1 = Math.min(a[2], b[2]);
+  const y1 = Math.min(a[3], b[3]);
+  const inter = Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
+  if (inter <= 0) return 0;
+  const union = bboxArea(a) + bboxArea(b) - inter;
+  return union > 0 ? inter / union : 0;
+}
+
+/** True when block regions are specific layout slices (not whole-page placeholders). */
+export function blockLayoutLooksPrecise(block: PaperExtractBlock): boolean {
+  for (const region of blockRegions(block)) {
+    const area = bboxArea(region.bbox);
+    if (area > 1e-6 && area < 0.92) return true;
+  }
+  return false;
+}
+
 /** Split a bbox that spills below/above the 0–1 page band into per-page segments. */
 export function splitBboxAcrossPages(
   pageIdx: number,

@@ -4,6 +4,9 @@ import {
   normalizeBbox,
   splitBboxAcrossPages,
   withBlockRegions,
+  bboxIntersectionOverUnion,
+  blockLayoutLooksPrecise,
+  blockRegions,
   type ExtractBlockType,
   type PaperExtractBlock,
 } from "../../shared/paper-extract-block";
@@ -326,6 +329,73 @@ function typesCompatible(leafType: ExtractBlockType, contentType: ExtractBlockTy
   return false;
 }
 
+const MIN_BBOX_IOU = 0.12;
+
+function entryPageIdx(entry: Record<string, unknown>): number {
+  return Number(entry.page_idx ?? entry.pageIndex ?? 0);
+}
+
+function entryBboxNorm(entry: Record<string, unknown>): [number, number, number, number] | null {
+  return normalizeBbox(entry.bbox);
+}
+
+/** Match a content_list row to a preproc leaf by page + bbox overlap (not array index). */
+function findBestContentEntryIndex(
+  entries: Record<string, unknown>[],
+  leaf: PreprocLeaf,
+  used: Set<number>,
+): number | null {
+  let bestIdx: number | null = null;
+  let bestIou = MIN_BBOX_IOU;
+
+  for (let j = 0; j < entries.length; j++) {
+    if (used.has(j)) continue;
+    const entry = entries[j]!;
+    if (entryPageIdx(entry) !== leaf.pageIdx) continue;
+    const bbox = entryBboxNorm(entry);
+    if (!bbox) continue;
+    const iou = bboxIntersectionOverUnion(leaf.bbox, bbox);
+    if (iou > bestIou) {
+      bestIou = iou;
+      bestIdx = j;
+    }
+  }
+
+  if (bestIdx !== null) return bestIdx;
+
+  // Reading-order fallback: first unused entry on the same page with compatible type.
+  for (let j = 0; j < entries.length; j++) {
+    if (used.has(j)) continue;
+    const entry = entries[j]!;
+    if (entryPageIdx(entry) !== leaf.pageIdx) continue;
+    const parsed = blockToMarkdown(entry, []);
+    if (typesCompatible(leaf.type, parsed.type)) return j;
+  }
+
+  return null;
+}
+
+function bestBlockForLeaf(
+  blocks: PaperExtractBlock[],
+  leaf: PreprocLeaf,
+  usedBlockIds: Set<string>,
+): { block: PaperExtractBlock; iou: number } | null {
+  let best: { block: PaperExtractBlock; iou: number } | null = null;
+  for (const block of blocks) {
+    if (usedBlockIds.has(block.id)) continue;
+    let blockIou = 0;
+    for (const region of blockRegions(block)) {
+      if (region.pageIdx !== leaf.pageIdx) continue;
+      blockIou = Math.max(blockIou, bboxIntersectionOverUnion(region.bbox, leaf.bbox));
+    }
+    if (blockIou < MIN_BBOX_IOU) continue;
+    if (!best || blockIou > best.iou) {
+      best = { block, iou: blockIou };
+    }
+  }
+  return best;
+}
+
 function leafToBlock(
   leaf: PreprocLeaf,
   markdown: string,
@@ -358,35 +428,24 @@ export function buildBlocksFromMiddleJson(
 
   const entries = contentListEntries(contentList);
   const blocks: PaperExtractBlock[] = [];
-  let entryIdx = 0;
+  const usedEntries = new Set<number>();
 
   for (let i = 0; i < leaves.length; i++) {
     const leaf = leaves[i]!;
-    while (
-      entryIdx < entries.length &&
-      Number(entries[entryIdx]!.page_idx ?? entries[entryIdx]!.pageIndex ?? 0) < leaf.pageIdx
-    ) {
-      entryIdx += 1;
-    }
 
     let markdown = leaf.text;
     let textPreview = leaf.text.slice(0, 120);
     let type = leaf.type;
 
-    if (entryIdx < entries.length) {
+    const entryIdx = findBestContentEntryIndex(entries, leaf, usedEntries);
+    if (entryIdx !== null) {
+      usedEntries.add(entryIdx);
       const entry = entries[entryIdx]!;
-      const entryPage = Number(entry.page_idx ?? entry.pageIndex ?? leaf.pageIdx);
       const parsed = blockToMarkdown(entry, images);
-      if (entryPage === leaf.pageIdx && typesCompatible(leaf.type, parsed.type)) {
+      if (typesCompatible(leaf.type, parsed.type) || leaf.text.length === 0) {
         markdown = parsed.markdown;
         textPreview = parsed.textPreview;
         type = parsed.type;
-        entryIdx += 1;
-      } else if (entryPage === leaf.pageIdx && leaf.text.length === 0) {
-        markdown = parsed.markdown;
-        textPreview = parsed.textPreview;
-        type = parsed.type;
-        entryIdx += 1;
       }
     }
 
@@ -397,7 +456,7 @@ export function buildBlocksFromMiddleJson(
   return blocks;
 }
 
-/** Replace geometry on cached blocks using middle.json — keeps stored markdown. */
+/** Replace geometry on cached blocks using middle.json — keeps matched markdown. */
 export function reapplyGeometryFromMiddle(
   blocks: PaperExtractBlock[],
   middle: unknown,
@@ -405,12 +464,26 @@ export function reapplyGeometryFromMiddle(
   const leaves = collectPreprocLeaves(middle);
   if (leaves.length === 0) return blocks;
 
+  const usedBlockIds = new Set<string>();
   const result: PaperExtractBlock[] = [];
+
   for (let i = 0; i < leaves.length; i++) {
     const leaf = leaves[i]!;
-    const src = blocks[i];
-    const markdown = src?.markdown?.trim() ? src.markdown : leaf.text;
-    if (!markdown.trim()) continue;
+    const match = bestBlockForLeaf(blocks, leaf, usedBlockIds);
+
+    let src: PaperExtractBlock | undefined;
+    if (match) {
+      src = match.block;
+      usedBlockIds.add(src.id);
+    } else if (blocks.length === leaves.length) {
+      // Legacy 1:1 extracts — index pairing when bboxes are too coarse for IoU.
+      src = blocks[i];
+      if (src) usedBlockIds.add(src.id);
+    }
+
+    const markdown = src?.markdown?.trim() ? src.markdown : leaf.text.trim();
+    if (!markdown) continue;
+
     result.push(
       leafToBlock(
         leaf,
@@ -420,7 +493,8 @@ export function reapplyGeometryFromMiddle(
       ),
     );
   }
-  return result;
+
+  return result.length > 0 ? result : blocks;
 }
 
 function buildBlocksFromModelJson(
@@ -479,6 +553,12 @@ export function enrichBlocksWithLayoutJson(
     return reapplyGeometryFromMiddle(blocks, layout.middle);
   }
   return blocks;
+}
+
+/** Only upgrade coarse content_list blocks — skip when layout is already precise. */
+export function blocksNeedLayoutUpgrade(blocks: PaperExtractBlock[]): boolean {
+  if (blocks.length === 0) return true;
+  return blocks.some((b) => !blockLayoutLooksPrecise(b));
 }
 
 /** MinerU pipeline: preproc block geometry + content_list markdown. */

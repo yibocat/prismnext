@@ -11,7 +11,10 @@ interface LiteratureReaderState {
   annotationDeleteId: string | null;
   /** Notes split pane open per paper (default off — PDF only). */
   notesPaneOpenByPaper: Record<string, boolean>;
+  /** Last opened paper tab — keeps PDF mounted when switching to Library home. */
+  lastActivePaperId: string | null;
   setActiveNote: (paperId: string, relativePath: string | null) => void;
+  setLastActivePaper: (paperId: string | null) => void;
   requestFocusPage: (page: number) => void;
   requestDeleteAnnotation: (annotationId: string) => void;
   setNotesPaneOpen: (paperId: string, open: boolean) => void;
@@ -26,7 +29,10 @@ export const useLiteratureReaderStore = create<LiteratureReaderState>()(
       readerFocusPage: null,
       annotationDeleteNonce: 0,
       annotationDeleteId: null,
+      lastActivePaperId: null,
       notesPaneOpenByPaper: {},
+
+      setLastActivePaper: (paperId) => set({ lastActivePaperId: paperId }),
 
       setActiveNote: (paperId, relativePath) =>
         set((s) => ({

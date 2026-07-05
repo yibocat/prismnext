@@ -11,6 +11,11 @@ import {
   type BibEntry,
 } from "../lib/bibtex-parse";
 import {
+  intendedBibliographyPath,
+  resolveBibliographyFromMain,
+  resolveMainTexRelativePath,
+} from "../lib/bib-path-resolve";
+import {
   isOpaqueBibkey,
   patchRawBibtexKey,
   resolveIncomingBibkey,
@@ -2349,7 +2354,28 @@ export function citeCheckLiterature(projectRoot: string, paperIds?: string[]): C
 }
 
 export function findProjectBibPath(projectRoot: string): string {
+  const mainRel = resolveMainTexRelativePath(projectRoot);
+  if (mainRel) {
+    try {
+      const texPath = path.join(projectRoot, mainRel);
+      const tex = fs.readFileSync(texPath, "utf-8");
+      const resolved = resolveBibliographyFromMain(projectRoot, mainRel, tex);
+      if (resolved.resolvedPath) {
+        return path.join(projectRoot, resolved.resolvedPath);
+      }
+      const declared = resolved.declaredInMain[0];
+      if (declared) {
+        return intendedBibliographyPath(projectRoot, mainRel, declared);
+      }
+    } catch {
+      // fall through to legacy candidates
+    }
+    const manuscriptBib = path.join(projectRoot, path.dirname(mainRel), "references.bib");
+    if (fs.existsSync(manuscriptBib)) return manuscriptBib;
+  }
+
   const candidates = [
+    path.join(projectRoot, "manuscript", "references.bib"),
     path.join(projectRoot, "references.bib"),
     path.join(projectRoot, "bibliography.bib"),
     path.join(projectRoot, ".prismnext", "library", "references.bib"),
@@ -2357,21 +2383,120 @@ export function findProjectBibPath(projectRoot: string): string {
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;
   }
-  return candidates[0];
+  if (mainRel) {
+    return intendedBibliographyPath(projectRoot, mainRel, "references.bib");
+  }
+  return candidates[1];
+}
+
+function bibKeyPresentInContent(bibContent: string, bibkey: string): boolean {
+  return bibContent.includes(`{${bibkey},`) || bibContent.includes(`{${bibkey}}`);
+}
+
+function appendPaperEntryToBibFile(
+  bibPath: string,
+  bibkey: string,
+  entry: string,
+): { appended: boolean } {
+  fs.mkdirSync(path.dirname(bibPath), { recursive: true });
+  const existing = fs.existsSync(bibPath) ? fs.readFileSync(bibPath, "utf-8") : "";
+  if (bibKeyPresentInContent(existing, bibkey)) {
+    return { appended: false };
+  }
+  const prefix =
+    existing && !existing.endsWith("\n") ? "\n\n" : existing ? "\n" : "";
+  fs.appendFileSync(bibPath, prefix + entry + "\n");
+  return { appended: true };
+}
+
+export interface MergeLibraryBibResult {
+  bibPath: string;
+  appended: string[];
+  skipped: string[];
+  notFound: string[];
+  papersProcessed: number;
+}
+
+/** Append library paper BibTeX entries into the project manuscript .bib. */
+export function mergeLibraryIntoProjectBib(
+  projectRoot: string,
+  options?: {
+    bibkeys?: string[];
+    paperIds?: string[];
+    /** Merge entire library (ignores onlyCitedInTex unless bibkeys/paperIds set). */
+    all?: boolean;
+    /** When no bibkeys/paperIds/all: merge library rows for keys cited in .tex. */
+    onlyCitedInTex?: boolean;
+  },
+): MergeLibraryBibResult {
+  const bibPath = findProjectBibPath(projectRoot);
+  let papers: PaperRow[] = [];
+
+  if (options?.paperIds?.length) {
+    const db = openLibraryDb(projectRoot);
+    const placeholders = options.paperIds.map(() => "?").join(",");
+    papers = db
+      .prepare(`SELECT * FROM papers WHERE id IN (${placeholders})`)
+      .all(...options.paperIds) as PaperRow[];
+  } else if (options?.bibkeys?.length) {
+    for (const key of options.bibkeys) {
+      const trimmed = key.trim();
+      if (!trimmed) continue;
+      const paper = getPaperByBibkey(projectRoot, trimmed);
+      if (paper) papers.push(paper);
+    }
+  } else if (options?.all) {
+    papers = listPapers(projectRoot);
+  } else if (options?.onlyCitedInTex !== false) {
+    const cited = citeCheckLiterature(projectRoot).citeKeysInTex;
+    for (const key of cited) {
+      const paper = getPaperByBibkey(projectRoot, key);
+      if (paper) papers.push(paper);
+    }
+  }
+
+  const notFound =
+    options?.bibkeys
+      ?.map((k) => k.trim())
+      .filter((k) => k && !papers.some((p) => p.bibkey === k)) ?? [];
+
+  const appended: string[] = [];
+  const skipped: string[] = [];
+
+  for (const paper of papers) {
+    const entry = bibTeXEntryFromPaperRow(paper);
+    const { appended: didAppend } = appendPaperEntryToBibFile(
+      bibPath,
+      paper.bibkey,
+      entry,
+    );
+    if (didAppend) {
+      appended.push(paper.bibkey);
+      addToReadingList(projectRoot, paper.id);
+    } else {
+      skipped.push(paper.bibkey);
+    }
+  }
+
+  return {
+    bibPath,
+    appended,
+    skipped,
+    notFound,
+    papersProcessed: papers.length,
+  };
 }
 
 export function citePaperInProject(projectRoot: string, bibkey: string): { bibPath: string; appended: boolean } {
   const paper = getPaperByBibkey(projectRoot, bibkey);
   if (!paper) throw new Error(`Unknown bibkey: ${bibkey}`);
   const bibPath = findProjectBibPath(projectRoot);
-  fs.mkdirSync(path.dirname(bibPath), { recursive: true });
-  const existing = fs.existsSync(bibPath) ? fs.readFileSync(bibPath, "utf-8") : "";
-  if (existing.includes(`{${bibkey},`) || existing.includes(`{${bibkey}}`)) {
+  const entry = bibTeXEntryFromPaperRow(paper);
+  const { appended } = appendPaperEntryToBibFile(bibPath, bibkey, entry);
+  if (!appended) {
     addToReadingList(projectRoot, paper.id);
     return { bibPath, appended: false };
   }
-  const entry = bibTeXEntryFromPaperRow(paper);
-  fs.appendFileSync(bibPath, (existing && !existing.endsWith("\n") ? "\n\n" : existing ? "\n" : "") + entry + "\n");
   addToReadingList(projectRoot, paper.id);
   return { bibPath, appended: true };
 }

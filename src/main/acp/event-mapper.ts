@@ -12,6 +12,11 @@ import {
   enrichTaskToolResultContent,
   syncEnrichedTaskToolResultToOpenCode,
 } from "../services/session-citations-context";
+import { buildTaskDelegationCiteAuditPreface } from "../services/session-cite-audit-context";
+import {
+  normalizeTaskSubagentId,
+  shouldDenyOrchestratorBuiltinTask,
+} from "../services/task-orchestrator-gate";
 
 const log = createLogger("event-mapper", "agent");
 
@@ -89,6 +94,12 @@ export class EventMapper {
     // Release all session ↔ tab mappings to prevent leaks
     this.sessionToTab.clear();
     this.tabToSession.clear();
+    this.accumText.clear();
+    this.accumThinking.clear();
+  }
+
+  /** Clear per-turn text/thinking accumulators before a new user prompt. */
+  clearTurnAccumulators(): void {
     this.accumText.clear();
     this.accumThinking.clear();
   }
@@ -299,16 +310,24 @@ export class EventMapper {
 
   private trackTaskToolUse(tabId: string, toolUseId: string, toolInput: any): void {
     if (!toolUseId) return;
-    const expertId = String(
-      toolInput?.subagent_type || toolInput?.subagentType || toolInput?.agent || "general",
-    )
-      .replace(/^@/, "")
-      .toLowerCase();
+    const expertId =
+      normalizeTaskSubagentId(
+        toolInput?.subagent_type || toolInput?.subagentType || toolInput?.agent,
+      ) || "general";
+    if (shouldDenyOrchestratorBuiltinTask(expertId)) {
+      log.warn(`task-orchestrator-gate: skip Task @${expertId} tab=${tabId} toolUse=${toolUseId}`);
+      return;
+    }
     const rawPrompt = String(toolInput?.prompt || toolInput?.description || "");
     const parentSessionId = this.tabToSession.get(tabId);
-    const stagingPreface = parentSessionId
-      ? buildTaskDelegationStagingPreface(parentSessionId)
-      : "";
+    const prefaceParts: string[] = [];
+    if (parentSessionId) {
+      const stagingPreface = buildTaskDelegationStagingPreface(parentSessionId);
+      if (stagingPreface) prefaceParts.push(stagingPreface);
+      const citeAuditPreface = buildTaskDelegationCiteAuditPreface(parentSessionId);
+      if (citeAuditPreface) prefaceParts.push(citeAuditPreface);
+    }
+    const stagingPreface = prefaceParts.join("\n");
     const prompt = stagingPreface ? `${stagingPreface}${rawPrompt}` : rawPrompt;
     const queue = this.pendingTasksByTab.get(tabId) ?? [];
     queue.push({ toolUseId, expertId, prompt });
@@ -317,6 +336,42 @@ export class EventMapper {
       tabId,
       type: "subAgent.linked",
       data: { taskToolUseId: toolUseId, expertId, prompt, rawPrompt, hasStagingPreface: !!stagingPreface },
+    });
+  }
+
+  private emitOrchestratorBuiltinTaskDenied(
+    tabId: string,
+    msgId: string,
+    toolId: string,
+    toolInput: Record<string, unknown>,
+    subagentId: string,
+  ): void {
+    const message =
+      `Task delegation to @${subagentId} is disabled on the orchestrator. ` +
+      "Call platform tools directly in this conversation (e.g. latex-bib-check, literature-cite-check).";
+    this.win.webContents.send("chat:stream", {
+      tabId,
+      type: "message.part.updated",
+      data: {
+        messageId: msgId,
+        part: {
+          type: "tool",
+          id: toolId,
+          name: "task",
+          input: toolInput,
+          status: "failed",
+        },
+      },
+    });
+    this.win.webContents.send("chat:stream", {
+      tabId,
+      type: "tool_result",
+      data: {
+        messageId: msgId,
+        tool_use_id: toolId,
+        content: message,
+        is_error: true,
+      },
     });
   }
 
@@ -581,6 +636,23 @@ export class EventMapper {
           )
         );
       if (toolId && looksLikeTask) {
+        const subagentId =
+          normalizeTaskSubagentId(
+            toolInput?.subagent_type || toolInput?.subagentType || toolInput?.agent,
+          ) || "general";
+        if (shouldDenyOrchestratorBuiltinTask(subagentId)) {
+          log.warn(
+            `task-orchestrator-gate: blocked Task @${subagentId} tab=${tabId} toolUse=${toolId}`,
+          );
+          this.emitOrchestratorBuiltinTaskDenied(
+            tabId,
+            msgId,
+            toolId,
+            toolInput,
+            subagentId,
+          );
+          return;
+        }
         this.trackTaskToolUse(tabId, toolId, toolInput);
       }
 
@@ -588,6 +660,7 @@ export class EventMapper {
         tabId,
         type: "message.part.updated",
         data: {
+          messageId: msgId,
           part: {
             type: "tool",
             id: toolId,
@@ -821,6 +894,7 @@ export class EventMapper {
           tabId,
           type: "message.part.updated",
           data: {
+            messageId: msgId,
             part: { type: "thinking", thinking: full },
             delta,
           },
@@ -840,6 +914,7 @@ export class EventMapper {
           tabId,
           type: "message.part.updated",
           data: {
+            messageId: msgId,
             part: { type: "text", text: full },
             delta,
           },
@@ -850,6 +925,7 @@ export class EventMapper {
           tabId,
           type: "message.part.updated",
           data: {
+            messageId: msgId,
             part: { type: "text", text: content.text },
             delta: content.text,
           },
@@ -903,7 +979,7 @@ export class EventMapper {
         this.win.webContents.send("chat:stream", {
           tabId,
           type: "message.part.updated",
-          data: { part: { type: "thinking", thinking: full }, delta },
+          data: { messageId: msgId, part: { type: "thinking", thinking: full }, delta },
         });
       }
       if (typeof update.agent_message_chunk === "string" && update.agent_message_chunk) {
@@ -915,7 +991,7 @@ export class EventMapper {
         this.win.webContents.send("chat:stream", {
           tabId,
           type: "message.part.updated",
-          data: { part: { type: "text", text: full }, delta },
+          data: { messageId: msgId, part: { type: "text", text: full }, delta },
         });
       }
     } else {

@@ -187,6 +187,53 @@ describe("reapplyGeometryFromMiddle", () => {
     expect(fixed[0]!.regions).toHaveLength(1);
     expect(fixed[0]!.regions![0]!.bbox[2]).toBeLessThan(0.7);
   });
+
+  it("matches markdown to leaves by bbox overlap, not array index", () => {
+    const stored: PaperExtractBlock[] = [
+      {
+        id: "b0",
+        index: 0,
+        type: "text",
+        pageIdx: 0,
+        bbox: [0.7, 0.1, 0.9, 0.2],
+        markdown: "Right column text",
+        regions: [{ pageIdx: 0, bbox: [0.7, 0.1, 0.9, 0.2] }],
+      },
+      {
+        id: "b1",
+        index: 1,
+        type: "text",
+        pageIdx: 0,
+        bbox: [0.1, 0.1, 0.4, 0.2],
+        markdown: "Left column text",
+        regions: [{ pageIdx: 0, bbox: [0.1, 0.1, 0.4, 0.2] }],
+      },
+    ];
+    const middle = {
+      pdf_info: [
+        {
+          page_idx: 0,
+          page_size: [612, 792],
+          preproc_blocks: [
+            {
+              type: "text",
+              bbox: [62, 100, 250, 200],
+              lines: [{ spans: [{ content: "left" }] }],
+            },
+            {
+              type: "text",
+              bbox: [430, 100, 560, 200],
+              lines: [{ spans: [{ content: "right" }] }],
+            },
+          ],
+        },
+      ],
+    };
+    const fixed = reapplyGeometryFromMiddle(stored, middle);
+    expect(fixed).toHaveLength(2);
+    expect(fixed[0]!.markdown).toBe("Left column text");
+    expect(fixed[1]!.markdown).toBe("Right column text");
+  });
 });
 
 describe("enrichBlocksWithMiddleJson", () => {

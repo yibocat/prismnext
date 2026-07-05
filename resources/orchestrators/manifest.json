@@ -8,8 +8,10 @@
       "allowedExperts": ["citation-auditor", "library-scout", "literature-scout"],
       "modules": [
         "chat-citation-staging",
+        "citation-audit",
         "literature-library",
-        "task-delegation"
+        "task-delegation",
+        "latex-workspace"
       ]
     }
   ]

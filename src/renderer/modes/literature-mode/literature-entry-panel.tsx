@@ -118,6 +118,7 @@ export function LiteratureEntryPanel({
   const importToLocal = useLiteratureStore((s) => s.importToLocal);
   const fetchMetadata = useLiteratureStore((s) => s.fetchMetadata);
   const downloadPdf = useLiteratureStore((s) => s.downloadPdf);
+  const citePaperToManuscript = useLiteratureStore((s) => s.citePaperToManuscript);
   const pdfDownloadProgress = useLiteratureStore((s) => s.pdfDownloadProgress[paper.id]);
   const openLiteraturePaper = useRightPanelStore((s) => s.openLiteraturePaper);
   const internalPdfAttach = useLiteraturePdfAttach(paper.id);
@@ -135,6 +136,7 @@ export function LiteratureEntryPanel({
   const arxivHref = paper.arxiv_id ? `https://arxiv.org/abs/${paper.arxiv_id}` : undefined;
 
   const [fetching, setFetching] = useState(false);
+  const [citingToBib, setCitingToBib] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -216,6 +218,18 @@ export function LiteratureEntryPanel({
     void window.electronAPI.literatureRegenerateAiMetadata(projectRoot, paper.id);
   }, [paper.id, projectRoot, settings]);
 
+  const handleAddToManuscriptBib = async () => {
+    if (!projectRoot || !paper.bibkey?.trim() || citingToBib) return;
+    setCitingToBib(true);
+    try {
+      await citePaperToManuscript(projectRoot, paper.bibkey.trim());
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not add to manuscript .bib");
+    } finally {
+      setCitingToBib(false);
+    }
+  };
+
   const fieldId = (name: string) => `lit-${paper.id}-${name}`;
 
   const entryMainContent = (
@@ -280,6 +294,14 @@ export function LiteratureEntryPanel({
                 </Button>
               </AppMenuTrigger>
               <AppMenuContent align="end">
+                {paper.bibkey?.trim() ? (
+                  <AppMenuItem
+                    onSelect={() => void handleAddToManuscriptBib()}
+                    disabled={citingToBib}
+                  >
+                    {citingToBib ? "Adding to manuscript .bib…" : "Add to manuscript .bib"}
+                  </AppMenuItem>
+                ) : null}
                 {!isZoteroPaper ? (
                   <AppMenuItem
                     onSelect={() => void handleFetch()}

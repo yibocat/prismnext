@@ -125,4 +125,14 @@ export const BUILTIN_COMMANDS: CommandDef[] = [
     order: 100,
     enabled: true,
   },
+  {
+    id: "builtin:bib-check",
+    name: "bib-check",
+    description: "Check .tex ↔ .bib ↔ library.db citation health (local IPC — no AI)",
+    source: "builtin",
+    template: "",
+    action: "bib-check",
+    order: 101,
+    enabled: true,
+  },
 ];

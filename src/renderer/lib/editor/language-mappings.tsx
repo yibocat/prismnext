@@ -30,27 +30,27 @@ const LANGUAGE_MAP: LanguageMap = {
   // ── LaTeX ──────────────────────────────────────────────
   ".tex": {
     name: "LaTeX",
-    load: () => import("codemirror-lang-latex").then((m) => m.latex()),
+    load: () => import("@/lib/tex/prism-latex-language").then((m) => m.prismLatex()),
     icon: FileTextIcon,
   },
   ".ltx": {
     name: "LaTeX",
-    load: () => import("codemirror-lang-latex").then((m) => m.latex()),
+    load: () => import("@/lib/tex/prism-latex-language").then((m) => m.prismLatex()),
     icon: FileTextIcon,
   },
   ".sty": {
     name: "TeX Style",
-    load: () => import("codemirror-lang-latex").then((m) => m.latex()),
+    load: () => import("@/lib/tex/prism-latex-language").then((m) => m.prismLatex()),
     icon: FileCodeIcon,
   },
   ".cls": {
     name: "TeX Class",
-    load: () => import("codemirror-lang-latex").then((m) => m.latex()),
+    load: () => import("@/lib/tex/prism-latex-language").then((m) => m.prismLatex()),
     icon: FileCodeIcon,
   },
   ".bst": {
     name: "BibTeX Style",
-    load: () => import("codemirror-lang-latex").then((m) => m.latex()),
+    load: () => import("@/lib/tex/prism-latex-language").then((m) => m.prismLatex()),
     icon: FileCodeIcon,
   },
 

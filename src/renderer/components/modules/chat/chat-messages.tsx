@@ -578,13 +578,7 @@ export const ChatMessages = memo(function ChatMessages() {
   }
 
   if (displayMessages.length === 0 && !isStreaming) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-4">
-        <p className="text-[length:var(--font-chat-meta)] text-muted-foreground">
-          No messages yet — start a conversation below
-        </p>
-      </div>
-    );
+    return <div className="flex flex-1 min-h-0" aria-hidden />;
   }
 
   // ── Render ──

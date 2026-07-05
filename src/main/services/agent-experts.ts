@@ -60,6 +60,8 @@ export interface PrismExpertsSyncState {
   syncedAt: number;
   agentFiles: string[];
   orchestratorId: string;
+  /** Hash of primary orchestrator agent.md — reload OpenCode when this changes. */
+  orchestratorContentHash?: string;
 }
 
 export interface ExpertRuntimeFilters {

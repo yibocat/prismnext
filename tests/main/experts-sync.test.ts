@@ -15,6 +15,8 @@ import {
   deleteCustomExpert,
   setBuiltinExpertEnabled,
   resetAllBuiltinExpertsToDefaults,
+  saveBuiltinOrchestratorOverride,
+  appendAllowedExpertsSection,
 } from "../../src/main/services/experts-sync";
 import { readBundledOrchestratorInstructions } from "../../src/main/services/bundled-orchestrators";
 
@@ -85,8 +87,23 @@ describe("experts-sync", () => {
   it("buildTaskPermissionBlock denies by default", () => {
     const rules = buildTaskPermissionBlock(["literature-scout"]);
     expect(rules["*"]).toBe("deny");
+    expect(rules.general).toBe("deny");
     expect(rules["literature-scout"]).toBe("allow");
     expect(rules["citation-auditor"]).toBeUndefined();
+  });
+
+  it("empty allowedExperts override yields no task allows and explicit prompt", () => {
+    saveBuiltinOrchestratorOverride(root, {
+      orchestratorId: "research-prism",
+      allowedExperts: [],
+    });
+    const sync = syncProjectExpertsToOpencode(root, { agentsDir, syncStatePath });
+    const orchestratorMd = readFileSync(join(agentsDir, "research-prism.md"), "utf-8");
+    expect(orchestratorMd).toContain("No experts are currently allowed");
+    expect(orchestratorMd).not.toContain("citation-auditor: allow");
+    expect(sync.agentFiles).toContain("research-prism.md");
+    const section = appendAllowedExpertsSection("body", []);
+    expect(section).toContain("No experts are currently allowed");
   });
 
   it("lists bundled experts and orchestrators", () => {

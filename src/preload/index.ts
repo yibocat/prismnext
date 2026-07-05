@@ -122,6 +122,30 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	compileSynctexForward: (projectDir: string, file: string, line: number) =>
 		ipcRenderer.invoke("compile:synctexForward", { projectDir, file, line }),
 	compileDetectTexlive: () => ipcRenderer.invoke("compile:detectTexlive"),
+	onCompileAgentComplete: (
+		callback: (data: {
+			projectDir: string;
+			success: boolean;
+			mainFile?: string;
+			pdfBytes?: ArrayBuffer;
+			error?: string;
+			logTail?: string;
+		}) => void,
+	) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			data: {
+				projectDir: string;
+				success: boolean;
+				mainFile?: string;
+				pdfBytes?: ArrayBuffer;
+				error?: string;
+				logTail?: string;
+			},
+		) => callback(data);
+		ipcRenderer.on("compile:agentComplete", handler);
+		return () => ipcRenderer.removeListener("compile:agentComplete", handler);
+	},
 
 	// Literature library
 	literatureList: (projectRoot: string) => ipcRenderer.invoke("literature:list", { projectRoot }),
@@ -293,6 +317,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	) => ipcRenderer.invoke("literature:exportBibToFile", { projectRoot, paperIds, defaultPath }),
 	literatureCite: (projectRoot: string, bibkey: string) =>
 		ipcRenderer.invoke("literature:cite", { projectRoot, bibkey }),
+	literatureCitationHealth: (projectRoot: string) =>
+		ipcRenderer.invoke("literature:citationHealth", { projectRoot }),
+	literatureMergeIntoProjectBib: (
+		projectRoot: string,
+		options?: { bibkeys?: string[]; all?: boolean; onlyCitedInTex?: boolean },
+	) => ipcRenderer.invoke("literature:mergeIntoProjectBib", { projectRoot, ...options }),
+	literatureImportFromProjectBib: (projectRoot: string, bibkeys?: string[]) =>
+		ipcRenderer.invoke("literature:importFromProjectBib", { projectRoot, bibkeys }),
 	literatureReadingList: (projectRoot: string) =>
 		ipcRenderer.invoke("literature:readingList", { projectRoot }),
 	literatureListCollections: (projectRoot: string) =>

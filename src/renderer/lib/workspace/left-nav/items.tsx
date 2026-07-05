@@ -56,7 +56,6 @@ const newAgentNav: LeftNavDefinition = {
     st.setLeftSidebarView("sessions");
     st.clearPendingRightAreaRestore();
     closeTexWorkspace(ctx);
-    closeLiteraturePanel(ctx);
   },
   trailing: <Kbd className="text-[length:var(--font-kbd)] h-4 min-w-4 px-0.5 bg-transparent">⌘N</Kbd>,
 };

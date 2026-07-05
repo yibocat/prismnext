@@ -76,6 +76,55 @@ export type PaperExtractStatesByPaper = Record<
   Partial<Record<PaperExtractSource, PaperExtractState>>
 >;
 
+export interface BibFallbackEntry {
+  bibkey: string;
+  title: string | null;
+  doi: string | null;
+  arxivId: string | null;
+  canImportFromBib: boolean;
+}
+
+export interface CitationHealthLibraryCheck {
+  texFilesScanned: number;
+  citeKeysInTex: string[];
+  knownKeys: string[];
+  missingKeys: string[];
+  unusedKeys: string[];
+}
+
+export interface CitationHealthBibCheck {
+  texFilesScanned: number;
+  bibPath: string | null;
+  citeKeysInTex: string[];
+  keysInBib: string[];
+  missingKeys: string[];
+  unusedKeys: string[];
+  duplicateKeys: string[];
+  libraryCheck?: CitationHealthLibraryCheck;
+}
+
+export interface CitationHealthReport {
+  bibCheck: CitationHealthBibCheck;
+  libraryCheck: CitationHealthLibraryCheck;
+  bibFallback: BibFallbackEntry[];
+  bibKeysNotInLibrary: string[];
+}
+
+export interface MergeIntoManuscriptBibResult {
+  bibPath: string;
+  appended: string[];
+  skipped: string[];
+  notFound: string[];
+  papersProcessed: number;
+}
+
+export interface ImportFromManuscriptBibResult {
+  imported: number;
+  skipped: number;
+  notInBib: string[];
+  importedPaperIds: string[];
+}
+
 export interface LiteraturePaper {
   id: string;
   bibkey: string;
@@ -512,6 +561,16 @@ export interface ElectronAPI {
     line: number,
   ) => Promise<SynctexForwardResult | null>;
   compileDetectTexlive: () => Promise<CompilerStatus>;
+  onCompileAgentComplete: (
+    callback: (data: {
+      projectDir: string;
+      success: boolean;
+      mainFile?: string;
+      pdfBytes?: ArrayBuffer;
+      error?: string;
+      logTail?: string;
+    }) => void,
+  ) => () => void;
 
   // Literature library
   literatureList: (projectRoot: string) => Promise<LiteraturePaper[]>;
@@ -696,6 +755,15 @@ export interface ElectronAPI {
     defaultPath?: string,
   ) => Promise<{ canceled: boolean; path: string | null }>;
   literatureCite: (projectRoot: string, bibkey: string) => Promise<{ bibPath: string; appended: boolean }>;
+  literatureCitationHealth: (projectRoot: string) => Promise<CitationHealthReport>;
+  literatureMergeIntoProjectBib: (
+    projectRoot: string,
+    options?: { bibkeys?: string[]; all?: boolean; onlyCitedInTex?: boolean },
+  ) => Promise<MergeIntoManuscriptBibResult>;
+  literatureImportFromProjectBib: (
+    projectRoot: string,
+    bibkeys?: string[],
+  ) => Promise<ImportFromManuscriptBibResult>;
   literatureReadingList: (projectRoot: string) => Promise<LiteraturePaper[]>;
   literatureListCollections: (projectRoot: string) => Promise<LiteratureCollection[]>;
   literatureCreateCollection: (

@@ -37,6 +37,11 @@ import {
   mapPaperForRenderer,
   type PaperRow,
 } from "../services/literature-service";
+import {
+  getCitationHealth,
+  importProjectBibKeysIntoLibrary,
+  syncLibraryToManuscriptBib,
+} from "../services/citation-health";
 import { onPaperPdfAttached, onPaperPdfChanged } from "../services/literature-extract-automation";
 import { resolvePaperPdfBytes, ensurePaperPdfAbsPath } from "../services/literature-pdf-resolve";
 import { toLiteraturePdfUrl } from "../services/literature-pdf-protocol";
@@ -490,6 +495,36 @@ export function registerLiteratureHandlers(): void {
   ipcMain.handle("literature:cite", async (_event, args: { projectRoot: string; bibkey: string }) => {
     return citePaperInProject(args.projectRoot, args.bibkey);
   });
+
+  ipcMain.handle("literature:citationHealth", async (_event, args: { projectRoot: string }) => {
+    return getCitationHealth(args.projectRoot);
+  });
+
+  ipcMain.handle(
+    "literature:mergeIntoProjectBib",
+    async (
+      _event,
+      args: {
+        projectRoot: string;
+        bibkeys?: string[];
+        all?: boolean;
+        onlyCitedInTex?: boolean;
+      },
+    ) => {
+      return syncLibraryToManuscriptBib(args.projectRoot, {
+        bibkeys: args.bibkeys,
+        all: args.all,
+        onlyCitedInTex: args.onlyCitedInTex,
+      });
+    },
+  );
+
+  ipcMain.handle(
+    "literature:importFromProjectBib",
+    async (_event, args: { projectRoot: string; bibkeys?: string[] }) => {
+      return importProjectBibKeysIntoLibrary(args.projectRoot, args.bibkeys);
+    },
+  );
 
   ipcMain.handle("literature:readingList", async (_event, args: { projectRoot: string }) => {
     return listReadingList(args.projectRoot).map(mapPaperForRenderer);

@@ -2,16 +2,18 @@
 
 import type { PromptModule, PromptContext } from "../types";
 import { CHAT_CITATION_STAGING_PROMPT } from "./chat-citation-staging";
+import { CITATION_AUDIT_PROMPT } from "./citation-audit";
 import { LITERATURE_LIBRARY_PROMPT } from "./literature-library";
 import { TASK_DELEGATION_PROMPT } from "./task-delegation";
+import { buildLatexWorkspacePrompt } from "./latex-workspace";
 import { buildWorkspacePrompt } from "./workspace-folders";
 
 /** All available prompt modules.
  *
- * Global `_prism-system.md` injects only `workspace-folders` (always on).
- * Profile modules (`profileOnly`) are attached per Orchestrator/Expert in the agent editor.
+ * Global `_prism-system.md` injects only `workspace-folders`.
+ * Profile modules attach per Orchestrator/Expert in the agent editor.
  *
- * Per-turn user sidecars (e.g. intensive reading) live in `prompts/per-turn/` — not here.
+ * Per-tool behavior → OpenCode tool `description` in tools/index.ts only.
  */
 export const ALL_MODULES: PromptModule[] = [
   {
@@ -37,6 +39,16 @@ export const ALL_MODULES: PromptModule[] = [
     prompt: CHAT_CITATION_STAGING_PROMPT,
   },
   {
+    key: "citation-audit",
+    label: "Citation & Bibliography Audit",
+    description:
+      "Manuscript .tex ↔ .bib ↔ library compliance via latex-bib-check and literature-cite-check — not read/glob scans.",
+    enabled: true,
+    profileOnly: true,
+    source: "app",
+    prompt: CITATION_AUDIT_PROMPT,
+  },
+  {
     key: "literature-library",
     label: "Literature Library (tags & search)",
     description:
@@ -50,10 +62,20 @@ export const ALL_MODULES: PromptModule[] = [
     key: "task-delegation",
     label: "Task Delegation (orchestrator)",
     description:
-      "Generic orchestrator Task discipline — when/how to delegate, synthesis, allowlist. Expert roster from Available experts; domain formats in other modules.",
+      "Generic orchestrator Task discipline — when/how to delegate, synthesis, allowlist.",
     enabled: true,
     profileOnly: true,
     source: "app",
     prompt: TASK_DELEGATION_PROMPT,
+  },
+  {
+    key: "latex-workspace",
+    label: "LaTeX Workspace (compile chain)",
+    description:
+      "Build dir, latex-root/compile/bib-check tool chain; manuscript folder from Workspace settings.",
+    enabled: true,
+    profileOnly: true,
+    source: "app",
+    build: buildLatexWorkspacePrompt,
   },
 ];

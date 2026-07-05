@@ -15,6 +15,7 @@ import { PatchWidget } from "./patch-widget";
 import { DeleteWidget } from "./delete-widget";
 import { MoveWidget } from "./move-widget";
 import { LiteratureToolWidget } from "./literature-tool-widget";
+import { LatexToolWidget } from "./latex-tool-widget";
 import { LspWidget } from "./lsp-widget";
 import { GenericWidget } from "./generic-widget";
 
@@ -60,6 +61,11 @@ const CUSTOM_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
   "literature-read": LiteratureToolWidget,
   "literature-read-pdf": LiteratureToolWidget,
   "literature-cite": LiteratureToolWidget,
+  "literature-cite-check": LiteratureToolWidget,
+  "literature-export-bib": LiteratureToolWidget,
+  "latex-root": LatexToolWidget,
+  "latex-compile": LatexToolWidget,
+  "latex-bib-check": LatexToolWidget,
 };
 
 function parseToolResultContent(content: unknown): Record<string, unknown> | null {

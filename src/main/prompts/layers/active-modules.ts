@@ -6,8 +6,7 @@ import { createLogger } from "../../services/logger";
 
 const log = createLogger("active-modules", "agent");
 
-/** Layer 2: Baseline modules for global `_prism-system.md` (workspace only).
- *  Profile-scoped modules inject via Orchestrator / Expert agent.md when selected. */
+/** Layer 2: Baseline modules for global `_prism-system.md` (workspace-folders only). */
 export function createActiveModulesLayer(): PromptLayer {
   return {
     id: "active-modules",

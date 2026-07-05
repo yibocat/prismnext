@@ -75,6 +75,11 @@ export const TOOL_PERMISSION_REGISTRY: Record<string, ToolPermissionEntry> = {
   "literature-stage": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "literature-add": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
   "literature-cite": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
+  "literature-cite-check": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
+  "literature-export-bib": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
+  "latex-root": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
+  "latex-compile": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
+  "latex-bib-check": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
 };
 
 export function getToolPermissionEntry(toolName: string): ToolPermissionEntry | undefined {
