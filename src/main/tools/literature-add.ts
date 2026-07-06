@@ -84,10 +84,15 @@ export default tool({
       .string()
       .describe("Exact arXiv ID (e.g. 2312.00726). Mutually exclusive with doi.")
       .optional(),
+    collection: tool.schema
+      .string()
+      .describe("Optional collection name — add the new paper to this collection (must already exist; create it in the Literature panel first).")
+      .optional(),
   },
   async execute(args, context) {
     const doi = typeof args.doi === "string" ? args.doi.trim() : "";
     const arxivId = typeof args.arxivId === "string" ? args.arxivId.trim() : "";
+    const collection = typeof args.collection === "string" ? args.collection.trim() : "";
     if (!doi && !arxivId) {
       return toolOutput({
         error: "Provide exactly one of doi or arxivId.",
@@ -103,6 +108,7 @@ export default tool({
       action: "add",
       doi: doi || undefined,
       arxivId: arxivId || undefined,
+      collection: collection || undefined,
     });
   },
 });

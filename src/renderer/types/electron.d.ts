@@ -4,6 +4,22 @@ export interface TexliveStatus {
   version: string | null;
 }
 
+/** Manifest entry — fields mirror electron-builder's latest.yml. */
+export interface UpdateVersionInfo {
+  version: string;
+  path: string;
+  releaseNotes?: string;
+  pubDate?: string;
+}
+
+/** Result of comparing the installed version against the manifest. */
+export type UpdateCheckResult =
+  | { status: "up-to-date"; currentVersion: string }
+  | { status: "available"; currentVersion: string; latest: UpdateVersionInfo }
+  | { status: "ignored"; currentVersion: string; latest: UpdateVersionInfo }
+  | { status: "error"; currentVersion: string; error: string }
+  | { status: "no-source"; currentVersion: string };
+
 export interface CompilerStatus {
   texlive: TexliveStatus;
   tectonic: boolean;
@@ -512,6 +528,14 @@ export interface ElectronAPI {
   fsExists: (absPath: string) => Promise<boolean>;
   fsIsFile: (absPath: string) => Promise<boolean>;
   projectCreate: (rootPath: string, workspaceDirs?: import("./workspace").WorkspaceFolder[]) => Promise<void>;
+  /** Fetch the update manifest and compare against the installed version. */
+  updateCheck: () => Promise<UpdateCheckResult>;
+  /** Last check result without re-hitting the network. */
+  updateStatus: () => Promise<UpdateCheckResult | null>;
+  /** Suppress a version from surfacing as an update. Returns the new status. */
+  updateIgnore: (version: string) => Promise<UpdateCheckResult | null>;
+  /** Clear the ignored-version flag. Returns the new status. */
+  updateUnignore: () => Promise<UpdateCheckResult | null>;
   projectEnsure: (rootPath: string) => Promise<{ success: boolean }>;
   projectScaffoldAgentsMd: (rootPath: string) => Promise<{
     agentsMdPath: string;
@@ -1266,6 +1290,7 @@ export interface ElectronAPI {
   chatStatus: () => Promise<{ available: boolean; version: string }>;
   sessionList: (projectPath?: string) => Promise<Array<{ id: string; title: string; lastModified: number; createdAt: number; directory?: string }>>;
   sessionLoad: (sessionId: string, projectPath?: string, cwd?: string) => Promise<any[]>;
+  sessionLoadWindow: (sessionId: string, projectPath: string | undefined, cwd: string | undefined, offset: number, limit: number) => Promise<{ messages: any[]; totalMessages: number }>;
   sessionGetDirectory: (sessionId: string) => Promise<string | null>;
   sessionReassignDirectory: (fromDirectory: string, toDirectory: string) => Promise<number>;
   sessionDelete: (sessionId: string, projectPath?: string) => Promise<{ success: boolean; error?: string }>;

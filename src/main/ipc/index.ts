@@ -18,6 +18,7 @@ import { registerLiteratureHandlers } from "./literature";
 import { registerLiteratureExtractHandlers } from "./literature-extract";
 import { registerBibliographyHandlers } from "./bibliography";
 import { registerZoteroHandlers } from "./zotero";
+import { registerUpdateHandlers } from "./update";
 
 export function registerIpcHandlers(): void {
   registerFsHandlers();
@@ -40,6 +41,7 @@ export function registerIpcHandlers(): void {
   registerLiteratureExtractHandlers();
   registerBibliographyHandlers();
   registerZoteroHandlers();
+  registerUpdateHandlers();
 }
 
 export { disposeChat };

@@ -1,6 +1,6 @@
 {
   "name": "prism-next",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "AI-powered LaTeX writing workspace",
   "main": "./out/main/index.js",
   "scripts": {
@@ -10,6 +10,9 @@
     "preview": "node scripts/ensure-native-modules.mjs && electron-vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
+    "typecheck:renderer": "tsc --noEmit",
+    "typecheck:main": "tsc --noEmit -p tsconfig.node.json",
     "rebuild:native": "pnpm exec electron-rebuild -f -w node-pty",
     "postinstall": "pnpm exec electron-rebuild -f -w node-pty"
   },

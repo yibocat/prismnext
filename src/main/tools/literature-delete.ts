@@ -1,12 +1,12 @@
 /**
- * latex-bib-check — Compare \\cite keys in .tex files against project .bib entries.
+ * literature-delete — Delete a paper from the project library by bibkey.
  */
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
 import * as path from "path";
-import { latexBridgeRoot } from "./bridge-paths";
+import { literatureBridgeRoot } from "./bridge-paths";
 
-const BRIDGE_ROOT = latexBridgeRoot();
+const BRIDGE_ROOT = literatureBridgeRoot();
 const TIMEOUT_MS = 30_000;
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -24,7 +24,7 @@ function requestIdFrom(context: Record<string, unknown>): string {
   for (const v of [c.toolCallId, c.tool_call_id, c.callID]) {
     if (typeof v === "string" && v.trim()) return v.trim();
   }
-  return `latex-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `lit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 async function bridgeCall(
@@ -64,36 +64,17 @@ async function bridgeCall(
     }
   }
   try { fs.unlinkSync(reqPath); } catch {}
-  return toolOutput({ error: "LaTeX bridge timed out. Restart Prism and try a new chat tab." });
+  return toolOutput({ error: "Literature bridge timed out. Restart Prism and try a new chat tab." });
 }
 
 export default tool({
-  description:
-    "Structured audit: \\cite keys in .tex vs project .bib (and library.db by default). " +
-    "Prefer over read/glob on main.tex and references.bib; returns missing, unused, duplicate keys as JSON.",
+  description: "Delete a paper from the project literature library by bibkey.",
   args: {
-    mainFile: tool.schema
-      .string()
-      .describe("Optional main .tex for bib resolution; auto-detect when omitted")
-      .optional(),
-    bibPath: tool.schema
-      .string()
-      .describe("Optional .bib path relative to project; infer from \\addbibresource when omitted")
-      .optional(),
-    includeLibraryCheck: tool.schema
-      .boolean()
-      .describe("Also compare \\cite keys vs literature library.db (default true)")
-      .optional(),
+    bibkey: tool.schema.string().describe("BibTeX citation key of the library paper to delete"),
   },
   async execute(args, context) {
-    const mainFile = typeof args.mainFile === "string" ? args.mainFile.trim() : undefined;
-    const bibPath = typeof args.bibPath === "string" ? args.bibPath.trim() : undefined;
-    const includeLibraryCheck = args.includeLibraryCheck !== false;
-    return bridgeCall(context as Record<string, unknown>, {
-      action: "bib-check",
-      includeLibraryCheck,
-      ...(mainFile ? { mainFile } : {}),
-      ...(bibPath ? { bibPath } : {}),
-    });
+    const bibkey = typeof args.bibkey === "string" ? args.bibkey.trim() : "";
+    if (!bibkey) return toolOutput({ error: "Missing bibkey parameter." });
+    return bridgeCall(context as Record<string, unknown>, { action: "delete", bibkey });
   },
 });

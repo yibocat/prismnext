@@ -84,6 +84,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("project:scaffoldAgentsMd", { rootPath }),
 	projectCheck: (rootPath: string) => ipcRenderer.invoke("project:check", { rootPath }),
 
+		// Update checker — manifest is a local path or HTTPS url to version.json.
+		updateCheck: () => ipcRenderer.invoke("update:check"),
+		updateStatus: () => ipcRenderer.invoke("update:status"),
+		updateIgnore: (version: string) => ipcRenderer.invoke("update:ignore", { version }),
+		updateUnignore: () => ipcRenderer.invoke("update:unignore"),
+
 	// Window operations
 	windowSetTitle: (title: string) =>
 		ipcRenderer.invoke("window:setTitle", { title }),
@@ -529,7 +535,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("agent:fetchSkillLibraryCatalog", { projectPath, sourceId }),
 	agentInstallLibraryCatalogItem: (
 		projectPath: string,
-		item: import("../../shared/skill-library-types").LibraryCatalogItem,
+		item: import("../shared/skill-library-types").LibraryCatalogItem,
 	) => ipcRenderer.invoke("agent:installLibraryCatalogItem", { projectPath, item }),
 	agentInstallAllFromLibrarySource: (projectPath: string, sourceId: string) =>
 		ipcRenderer.invoke("agent:installAllFromLibrarySource", { projectPath, sourceId }),
@@ -673,6 +679,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	sessionList: (projectPath?: string) => ipcRenderer.invoke("session:list", { projectPath }),
 	sessionLoad: (sessionId: string, projectPath?: string, cwd?: string) =>
 		ipcRenderer.invoke("session:load", { sessionId, projectPath, cwd }),
+	sessionLoadWindow: (sessionId: string, projectPath: string | undefined, cwd: string | undefined, offset: number, limit: number) =>
+		ipcRenderer.invoke("session:loadWindow", { sessionId, projectPath, cwd, offset, limit }),
 	sessionGetDirectory: (sessionId: string) =>
 		ipcRenderer.invoke("session:getDirectory", { sessionId }),
 	sessionReassignDirectory: (fromDirectory: string, toDirectory: string) =>

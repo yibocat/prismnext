@@ -6,6 +6,7 @@ import {
   inferToolNameFromInput,
   inferToolNameFromOutput,
   resolveLiteratureToolTitle,
+  resolvePrismToolTitle,
 } from "./tool-name-infer";
 import {
   buildTaskDelegationStagingPreface,
@@ -40,6 +41,17 @@ export class EventMapper {
   >();
   /** Subagent OpenCode session → parent Task tool_use id. */
   private subSessionToTaskTool = new Map<string, string>();
+  /** Task tool_use id → link watchdog timer. Prevents the parent turn from
+   *  hanging forever when a subagent session never links back to a chat tab
+   *  (e.g. OpenCode didn't write parent_id, or the child session/update
+   *  notifications arrive before the SQLite session row commits). On fire,
+   *  emits a visible error to the renderer so the user isn't left staring at a
+   *  "Waiting for expert session…" spinner. */
+  private taskLinkTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Grace period for a subagent session to link back to its parent tab.
+   *  Generous because OpenCode may take time to spawn the child and commit its
+   *  session row; the watchdog only fires when linking genuinely fails. */
+  private static readonly TASK_LINK_TIMEOUT_MS = 90_000;
 
   constructor(win: BrowserWindow) {
     this.win = win;
@@ -136,6 +148,19 @@ export class EventMapper {
           permissionId: params?.id || params?.permissionId,
           toolCallId: params?.toolCallId || params?.tool_call_id,
           toolName: params?.toolName || params?.tool_name,
+        });
+      } else if (sessionId && method === "session/update") {
+        // A subagent session/update that couldn't be mapped to a parent tab —
+        // its activity (text/thinking/tool_use) is silently dropped from the
+        // UI. This is the symptom of the "Task hangs invisibly" bug: OpenCode
+        // spawned the expert, but we can't tell which chat tab owns it. Log
+        // loudly so it's diagnosable.
+        const pendingTabs = Array.from(this.pendingTasksByTab.keys());
+        log.warn(`session/update dropped — no chat tab mapping`, {
+          sessionId,
+          method,
+          pendingTaskTabs: pendingTabs,
+          hasParentId: !!AcpService.getInstance().getSessionParentId(sessionId),
         });
       }
       return;
@@ -268,6 +293,38 @@ export class EventMapper {
 
     // Sub-agent sessions inherit parent tab via parentSessionId above.
     // Do NOT fall back to the sole registered tab — that misroutes other sessions.
+
+    // Last-resort heuristic: if we still can't resolve the tab AND there is
+    // exactly ONE chat tab with a pending Task (i.e. an expert subagent was
+    // just dispatched and hasn't linked yet), attribute this unmapped session
+    // to that tab. This recovers the common failure mode where OpenCode didn't
+    // write parent_id (or the row isn't committed yet) so the child session's
+    // activity would otherwise be silently dropped — the "Task hangs invisibly"
+    // bug. Safe because top-level chat sessions are registered before they
+    // emit, so an unmapped session here is almost certainly a subagent.
+    const pendingTabs = Array.from(this.pendingTasksByTab.keys());
+    if (pendingTabs.length === 1) {
+      const soleTab = pendingTabs[0];
+      log.info(
+        `resolveTabForSession: heuristic — attributing unmapped session ${sessionId} ` +
+          `to sole pending-task tab ${soleTab}`,
+      );
+      if (!this.subSessionToTaskTool.has(sessionId)) {
+        this.linkSubAgentSession(soleTab, sessionId);
+      }
+      if (!this.sessionToTab.has(sessionId)) {
+        const parentSessionId = this.tabToSession.get(soleTab);
+        registerChatSession(
+          sessionId,
+          soleTab,
+          parentSessionId ? getSessionProjectRoot(parentSessionId) : undefined,
+        );
+        this.sessionToTab.set(sessionId, soleTab);
+        AcpService.getInstance().markSubAgentSession(sessionId);
+      }
+      return soleTab;
+    }
+
     return undefined;
   }
 
@@ -295,6 +352,13 @@ export class EventMapper {
   // We map each to its corresponding OpenCode built-in tool for Widget routing.
   // "other" defaults to "task" as the most common case; backfill corrects
   // the name for todowrite, question, skill etc. when real input arrives.
+  //
+  // IMPORTANT: OpenCode dispatches the Task tool (subagent delegation) with
+  // `kind: "think"` and `title: "task"` — NOT `kind: "other"`. Without an
+  // explicit Task check, such calls fall through to KIND_TO_TOOL["think"]=
+  // "todowrite" and are never recognized as Task delegations, so the subagent
+  // is neither tracked nor rendered (the "Task hangs invisibly" bug). The
+  // `title === "task"` signal is authoritative for Task dispatch.
   private static readonly KIND_TO_TOOL: Record<string, string> = {
     read:        "read",
     edit:        "edit",
@@ -310,11 +374,19 @@ export class EventMapper {
 
   private trackTaskToolUse(tabId: string, toolUseId: string, toolInput: any): void {
     if (!toolUseId) return;
+    // On the live tool_call event, OpenCode sends Task dispatches with
+    // kind:"think" and an EMPTY rawInput — the subagent_type is only visible to
+    // the permission layer (which already allowed it). Without an input we
+    // cannot know the expert id yet, so we track with a placeholder and let the
+    // gate deny only when we CAN see the type AND it's a built-in. This avoids
+    // wrongly denying a Task whose expert id is simply not yet visible.
+    const explicitSubagent =
+      toolInput?.subagent_type || toolInput?.subagentType || toolInput?.agent;
     const expertId =
-      normalizeTaskSubagentId(
-        toolInput?.subagent_type || toolInput?.subagentType || toolInput?.agent,
-      ) || "general";
-    if (shouldDenyOrchestratorBuiltinTask(expertId)) {
+      normalizeTaskSubagentId(explicitSubagent) || "expert";
+    const inputIsEmpty = !toolInput
+      || (typeof toolInput === "object" && Object.keys(toolInput).length === 0);
+    if (!inputIsEmpty && shouldDenyOrchestratorBuiltinTask(expertId)) {
       log.warn(`task-orchestrator-gate: skip Task @${expertId} tab=${tabId} toolUse=${toolUseId}`);
       return;
     }
@@ -332,6 +404,7 @@ export class EventMapper {
     const queue = this.pendingTasksByTab.get(tabId) ?? [];
     queue.push({ toolUseId, expertId, prompt });
     this.pendingTasksByTab.set(tabId, queue);
+    this.startTaskLinkWatchdog(tabId, toolUseId, expertId);
     this.win.webContents.send("chat:stream", {
       tabId,
       type: "subAgent.linked",
@@ -348,7 +421,7 @@ export class EventMapper {
   ): void {
     const message =
       `Task delegation to @${subagentId} is disabled on the orchestrator. ` +
-      "Call platform tools directly in this conversation (e.g. latex-bib-check, literature-cite-check).";
+      "Call platform tools directly in this conversation (e.g. citation-health, literature-search).";
     this.win.webContents.send("chat:stream", {
       tabId,
       type: "message.part.updated",
@@ -381,6 +454,9 @@ export class EventMapper {
     const pending = queue.shift()!;
     if (queue.length === 0) this.pendingTasksByTab.delete(parentTabId);
     else this.pendingTasksByTab.set(parentTabId, queue);
+    // Linked successfully — the subagent is now running and will complete on
+    // its own. Clear the link watchdog so it doesn't fire a false timeout.
+    this.clearTaskLinkWatchdog(pending.toolUseId);
     this.subSessionToTaskTool.set(subSessionId, pending.toolUseId);
     this.sessionToTab.set(subSessionId, parentTabId);
     const parentSessionId = this.tabToSession.get(parentTabId);
@@ -432,10 +508,62 @@ export class EventMapper {
   }
 
   private completeSubAgentTask(tabId: string, taskToolUseId: string, isError: boolean): void {
+    // The subagent finished (success or error) — no need for the link watchdog.
+    this.clearTaskLinkWatchdog(taskToolUseId);
     this.win.webContents.send("chat:stream", {
       tabId,
       type: "subAgent.completed",
       data: { taskToolUseId, status: isError ? "error" : "done" },
+    });
+  }
+
+  /** Start (or restart) the link watchdog for a Task tool_use. */
+  private startTaskLinkWatchdog(tabId: string, toolUseId: string, expertId: string): void {
+    this.clearTaskLinkWatchdog(toolUseId);
+    const timer = setTimeout(() => {
+      this.taskLinkTimeouts.delete(toolUseId);
+      this.handleTaskLinkTimeout(tabId, toolUseId, expertId);
+    }, EventMapper.TASK_LINK_TIMEOUT_MS);
+    timer.unref?.();
+    this.taskLinkTimeouts.set(toolUseId, timer);
+  }
+
+  /** Clear the link watchdog (subagent linked or task completed). */
+  private clearTaskLinkWatchdog(toolUseId: string): void {
+    const timer = this.taskLinkTimeouts.get(toolUseId);
+    if (timer) {
+      clearTimeout(timer);
+      this.taskLinkTimeouts.delete(toolUseId);
+    }
+  }
+
+  /** Watchdog fired: the subagent session never linked back to a chat tab. Emit
+   *  a visible error so the Task widget stops spinning and the user knows to
+   *  cancel/retry. This updates the RENDERER only — it does not unblock OpenCode
+   *  (the parent orchestrator may still be waiting for the Task result). The
+   *  user can click Stop to abort the turn. */
+  private handleTaskLinkTimeout(tabId: string, toolUseId: string, expertId: string): void {
+    const queue = this.pendingTasksByTab.get(tabId);
+    if (!queue) return; // already linked/completed
+    const idx = queue.findIndex((t) => t.toolUseId === toolUseId);
+    if (idx === -1) return; // already linked/completed
+    queue.splice(idx, 1);
+    if (queue.length === 0) this.pendingTasksByTab.delete(tabId);
+    else this.pendingTasksByTab.set(tabId, queue);
+
+    const secs = EventMapper.TASK_LINK_TIMEOUT_MS / 1000;
+    log.warn(
+      `task-link-timeout: expert=@${expertId} toolUse=${toolUseId} tab=${tabId} ` +
+        `— subagent session did not link within ${secs}s`,
+    );
+    this.win.webContents.send("chat:stream", {
+      tabId,
+      type: "subAgent.completed",
+      data: {
+        taskToolUseId: toolUseId,
+        status: "error",
+        error: `Expert @${expertId} did not start within ${secs}s — its session could not be linked to this chat. The parent turn may be stuck; click Stop to cancel and retry, or run the task inline with platform tools.`,
+      },
     });
   }
 
@@ -492,19 +620,35 @@ export class EventMapper {
         "";
 
       const titleLower = (tc.title || tc.state?.title || "").toLowerCase();
-      if (!toolName && (titleLower === "delete" || titleLower === "move" || titleLower === "question" || titleLower === "bash")) {
-        toolName = titleLower;
+      // Task tool dispatch (subagent delegation): OpenCode sends these with
+      // `title: "task"` (often kind: "think", input empty on the tool_call
+      // event). `title === "task"` is the authoritative signal — recognize it
+      // BEFORE the kind fallback so it isn't mislabeled as "todowrite".
+      const isTaskTitle = titleLower === "task";
+      if (!toolName && isTaskTitle) {
+        toolName = "task";
       }
-      if (!toolName && resolveLiteratureToolTitle(titleLower)) {
-        toolName = titleLower;
+      if (!toolName) {
+        const prismTitle = resolvePrismToolTitle(titleLower);
+        if (prismTitle) toolName = prismTitle;
       }
 
       if (!toolName) {
-        toolName =
-          fromInput ||
-          fromKind ||
-          (typeof tc.kind === "string" ? tc.kind : "") ||
-          "";
+        // kind "other" is the default for custom Prism tools (citation-health,
+        // etc.) AND real task calls. Real task calls carry prompt+subagent_type
+        // in input, caught by fromInput above. For other "other" calls, prefer
+        // the raw title over KIND_TO_TOOL["other"]="task" — defaulting to
+        // "task" mislabels custom tools as task@general during live streaming
+        // (the persisted JSONL keeps the real name, so the bug only shows live
+        // and disappears on reload/project-switch).
+        if (fromInput) {
+          toolName = fromInput;
+        } else if (tc.kind === "other") {
+          const rawTitle = (tc.title || tc.state?.title || "").trim().toLowerCase();
+          toolName = rawTitle || "other";
+        } else {
+          toolName = fromKind || (typeof tc.kind === "string" ? tc.kind : "") || "";
+        }
       }
 
       // ── Tool ID ──────────────────────────────────────────────
@@ -625,8 +769,14 @@ export class EventMapper {
       }
 
       const normalizedToolName = toolName.toLowerCase();
+      // A Task dispatch is recognized by toolName "task" (set when title==="task"
+      // above) OR kind "other" + subagent_type in input. The title-based path is
+      // essential because OpenCode sends Task calls with kind:"think" and an
+      // EMPTY rawInput on the tool_call event (the subagent_type is only visible
+      // to the permission layer), so the input-shape check below would miss it.
       const looksLikeTask =
         normalizedToolName === "task"
+        || isTaskTitle
         || (
           tc.kind === "other"
           && (
@@ -636,11 +786,19 @@ export class EventMapper {
           )
         );
       if (toolId && looksLikeTask) {
-        const subagentId =
-          normalizeTaskSubagentId(
-            toolInput?.subagent_type || toolInput?.subagentType || toolInput?.agent,
-          ) || "general";
-        if (shouldDenyOrchestratorBuiltinTask(subagentId)) {
+        // subagent_type may be absent on the tool_call event (kind:"think",
+        // empty input). Defer identification: track the Task with a placeholder,
+        // and resolve the real expert id when the subagent session links or its
+        // tool_call_update (<task id="ses_..." state="completed">) arrives.
+        const explicitSubagent =
+          toolInput?.subagent_type || toolInput?.subagentType || toolInput?.agent;
+        const subagentId = normalizeTaskSubagentId(explicitSubagent) || "expert";
+        const inputIsEmpty = !toolInput
+          || (typeof toolInput === "object" && Object.keys(toolInput).length === 0);
+        // Only enforce the built-in deny gate when we can actually see the
+        // subagent type. An empty input means the type isn't on this event
+        // (the permission layer already vetted it) — don't false-deny.
+        if (!inputIsEmpty && shouldDenyOrchestratorBuiltinTask(subagentId)) {
           log.warn(
             `task-orchestrator-gate: blocked Task @${subagentId} tab=${tabId} toolUse=${toolId}`,
           );
@@ -695,6 +853,9 @@ export class EventMapper {
       // Quick sanity log — if this never appears, the `tu` detection is broken
       console.log(`[event-mapper] tool_call_update HIT: sessionUpdate=${chunkType} hasToolCallUpdate=${!!update.tool_call_update} hasToolCallUpdateCamel=${!!update.toolCallUpdate}`);
       const updateId = tu.toolCallId || tu.tool_call_id || tu.callID || tu.id || "";
+      // DIAG: capture the full status/title/kind of the tool_call_update so we can
+      // see exactly what OpenCode sends and why the renderer may reject it.
+      log.info(`tool_call_update IN: id=${updateId} title=${tu.title || tu.state?.title || "(none)"} kind=${tu.kind || "(none)"} status=${tu.status || tu.state?.status || "(none)"} hasRawOutput=${!!(tu.rawOutput || tu.raw_output)} hasContent=${!!(tu.content && tu.content.length)}`);
 
       // Extract human-readable text from the tool result.
       const rawResult: any =
@@ -714,6 +875,15 @@ export class EventMapper {
         : null;
 
       const tuTitleLower = (tu.title || "").toLowerCase();
+      // Task tool result: OpenCode sends the tool_call_update for a Task
+      // delegation with `title: "task"` (matching the tool_call). Recognize it
+      // here so the result is attributed to "task" and completeSubAgentTask fires
+      // — without this, a Task whose tool_call was titled "task" but whose
+      // rawInput doesn't trigger inferToolNameFromInput would never complete,
+      // leaving the parent turn waiting (the "Task hangs" bug).
+      if (tuTitleLower === "task") {
+        backfillName = "task";
+      }
       if (backfillInput && !backfillName && (tuTitleLower === "delete" || tuTitleLower === "move" || tuTitleLower === "question" || tuTitleLower === "bash")) {
         backfillName = tuTitleLower;
       }
@@ -733,10 +903,17 @@ export class EventMapper {
       if (backfillInput) {
         log.debug(`tool_call_update backfill: id=${updateId} inputKeys=${JSON.stringify(Object.keys(backfillInput))} name=${backfillName || "(unchanged)"}`);
         const backfillToolName = (backfillName || "").toLowerCase();
-        const tuStatus = String(tu.status || tu.state?.status || "").toLowerCase();
+        const tuStatusLocal = String(tu.status || tu.state?.status || "").toLowerCase();
+        const isTerminalStatus =
+          tuStatusLocal === "completed"
+          || tuStatusLocal === "success"
+          || tuStatusLocal === "finished"
+          || tuStatusLocal === "done"
+          || tuStatusLocal === "failed"
+          || tuStatusLocal === "cancelled"
+          || tuStatusLocal === "canceled";
         const isHistoricalReplay =
-          tuStatus === "completed"
-          || tuStatus === "failed"
+          isTerminalStatus
           || AcpService.getInstance().isSessionReplaySuppressed();
         if (
           !isHistoricalReplay
@@ -780,14 +957,25 @@ export class EventMapper {
       const toolNameHint = backfillName || tu.tool_name || tu.toolName || "";
       let resultContent = this.extractToolResultContent(rawResult, toolNameHint);
       const tuStatus = String(tu.status || tu.state?.status || "").toLowerCase();
+      // OpenCode emits terminal success as `completed`/`success`/`finished`
+      // (synonyms). Treat all of them as "completed" for the completion checks
+      // below — otherwise a Task result with status `success` would never fire
+      // completeSubAgentTask, leaving the subagent widget spinning until the
+      // 90s watchdog ("Task hangs" bug).
+      const isTerminalSuccess =
+        tuStatus === "completed"
+        || tuStatus === "success"
+        || tuStatus === "finished"
+        || tuStatus === "done";
       const isError = tuStatus === "failed" || tu.state?.status === "failed";
+      const isTerminal = isTerminalSuccess || isError || tuStatus === "cancelled" || tuStatus === "canceled" || tuStatus === "aborted" || tuStatus === "error" || tuStatus === "timeout" || tuStatus === "timed_out";
       const normalizedToolHint = (backfillName || toolNameHint || "").toLowerCase();
       const parentSessionId = this.tabToSession.get(tabId);
       let enrichedTaskForOpenCode = false;
       if (
         parentSessionId
         && normalizedToolHint === "task"
-        && (tuStatus === "completed" || tuStatus === "failed")
+        && isTerminal
         && !isError
       ) {
         const rawTaskResult = resultContent;
@@ -795,7 +983,9 @@ export class EventMapper {
         enrichedTaskForOpenCode = resultContent !== rawTaskResult;
       }
 
-      if (AcpService.getInstance().isSubAgentSession(sessionId)) {
+      const _isSubAgent = AcpService.getInstance().isSubAgentSession(sessionId);
+      log.info(`tool_call_update BRANCH: id=${updateId} sessionId=${sessionId} tabId=${tabId} isSubAgentSession=${_isSubAgent} hint=${(backfillName || toolNameHint || "(none)")} isTerminal=${isTerminal}`);
+      if (_isSubAgent) {
         this.emitSubAgentActivity(tabId, sessionId, {
           type: "tool_result",
           tool_use_id: updateId,
@@ -810,7 +1000,7 @@ export class EventMapper {
       if (
         (backfillName || toolNameHint).toLowerCase() === "task"
         && updateId
-        && (tuStatus === "completed" || tuStatus === "failed")
+        && isTerminal
       ) {
         this.completeSubAgentTask(tabId, updateId, isError);
       }
@@ -834,7 +1024,19 @@ export class EventMapper {
         });
       }
 
-      // Single message.updated event — tool_result + optional backfill
+      // Single message.updated event — tool_result + optional backfill.
+      // Normalize the status sent downstream: OpenCode emits terminal success as
+      // `completed` / `success` / `finished` (synonyms). Downstream widgets and
+      // the renderer's isFinalToolResult historically only accepted `completed`/
+      // `failed`, so a `success`/`finished` result was DROPPED — the tool spun
+      // forever and was orphan-synthesized as "No result received". Map all
+      // success synonyms to `completed` here.
+      const _rawSentStatus = tu.status || tu.state?.status || "";
+      const _sentStatus = /success|finished|done/i.test(_rawSentStatus)
+        ? "completed"
+        : (_rawSentStatus || "completed");
+      const _sentIsError = _rawSentStatus.toLowerCase() === "failed" || tu.state?.status === "failed";
+      log.info(`tool_call_update OUT: id=${updateId} hint=${(backfillName || toolNameHint || "(none)")} rawStatus=${_rawSentStatus || "(none)"} sentStatus=${_sentStatus} sentIsError=${_sentIsError} contentLen=${typeof resultContent === "string" ? resultContent.length : -1} tabId=${tabId} isSubAgentSession=${AcpService.getInstance().isSubAgentSession(sessionId)}`);
       this.win.webContents.send("chat:stream", {
         tabId,
         type: "message.updated",
@@ -844,8 +1046,8 @@ export class EventMapper {
               type: "tool_result",
               tool_use_id: updateId,
               content: resultContent,
-              is_error: tu.status === "failed" || tu.state?.status === "failed",
-              status: tu.status || tu.state?.status || "completed",
+              is_error: _sentIsError,
+              status: _sentStatus,
               _backfillInput: backfillInput,
               _backfillName: backfillName,
             }],

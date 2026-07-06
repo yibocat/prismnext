@@ -506,6 +506,15 @@ export function ProfileEditorForm({
                   synced <code className="text-[11px]">agent.md</code>. Workspace folders always
                   inject via global <code className="text-[11px]">_prism-system.md</code>.
                 </p>
+                <p className={cn(SETTINGS_ROW_DESC, "mb-3 text-muted-foreground")}>
+                  <strong>Modules carry the tool-scheduling discipline.</strong> A subagent only
+                  knows how to use a tool (e.g. <code className="text-[11px]">citation-health</code>)
+                  if the module that teaches it is assembled here. Write
+                  <em> Instructions</em> as role/responsibility prose only — do not hardcode tool
+                  call sequences there. Example: a citation reviewer needs the
+                  <code className="text-[11px]"> Citation &amp; Bibliography Audit</code> module
+                  assembled, or it will not know about <code className="text-[11px]">citation-health</code>.
+                </p>
                 {profileModules.length === 0 ? (
                   <p className="text-[length:var(--font-size-12)] text-muted-foreground">
                     No profile modules available.

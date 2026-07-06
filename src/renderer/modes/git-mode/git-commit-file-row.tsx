@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, memo } from "react";
 import { ChevronRightIcon } from "lucide-react";
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify/react/offline";
 import { useGitStore } from "@/stores/git-store";
 import { cn } from "@/lib/utils";
 import { GitDiffView } from "./git-diff-view";

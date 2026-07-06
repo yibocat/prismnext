@@ -8,7 +8,7 @@
     "skipLibCheck": true,
     "paths": {
       "@/*": ["./src/renderer/*"],
-      "@shared/*": ["./src/main/services/*"],
+      "@shared/*": ["./src/main/services/*", "./src/shared/*"],
       "@commands/*": ["./src/main/commands/*"]
     }
   },

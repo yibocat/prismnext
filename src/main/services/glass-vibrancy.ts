@@ -22,7 +22,12 @@ export function setVibrancyForTheme(
       : mode === "dark";
 
   if (process.platform === "darwin") {
-    win.setVibrancy(isDark ? "dark" : "light");
+    // Electron 35's setVibrancy only accepts material types (titlebar, content,
+    // under-window, …), not the old "dark"/"light" values — those were removed
+    // and silently ignored, so the vibrancy effect never applied. "under-window"
+    // is the standard translucent material that automatically adapts to the
+    // system light/dark appearance, matching the original dark/light intent.
+    win.setVibrancy("under-window");
   } else if (process.platform === "win32") {
     win.setBackgroundMaterial(isDark ? "acrylic" : "mica");
   }

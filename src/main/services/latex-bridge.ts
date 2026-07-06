@@ -6,24 +6,17 @@ import { join, basename } from "node:path";
 import { createLogger } from "./logger";
 import { getLatexBridgeRoot } from "./prism-bridge-paths";
 import { getSessionProjectRoot } from "./chat-session-registry";
-import {
-  checkBibConsistency,
-  compileForAgent,
-} from "./latex-service";
+import { compileForAgent } from "./latex-service";
 import { resolveLatexRoot } from "../lib/latex-root";
-import { recordCiteAuditBibCheck } from "./session-cite-audit-context";
 
 const log = createLogger("latex-bridge", "agent");
 
 interface LatexBridgeRequest {
-  action: "root" | "compile" | "bib-check";
+  action: "root" | "compile";
   sessionId?: string;
   projectRoot?: string;
   mainFile?: string;
-  bibPath?: string;
   useTexlive?: boolean;
-  /** Default true — also compare \\cite keys vs literature library.db */
-  includeLibraryCheck?: boolean;
 }
 
 function bridgeRoot(): string {
@@ -35,7 +28,7 @@ function resolveProjectRoot(req: LatexBridgeRequest): string {
   return (fromSession || req.projectRoot?.trim() || "").replace(/\\/g, "/");
 }
 
-function dispatch(req: LatexBridgeRequest): Record<string, unknown> | Promise<Record<string, unknown>> {
+function dispatch(req: LatexBridgeRequest): unknown | Promise<unknown> {
   const projectRoot = resolveProjectRoot(req);
   if (!projectRoot) {
     return {
@@ -62,12 +55,6 @@ function dispatch(req: LatexBridgeRequest): Record<string, unknown> | Promise<Re
     }
     case "compile":
       return compileForAgent(projectRoot, req.mainFile, req.useTexlive === true);
-    case "bib-check":
-      return checkBibConsistency(projectRoot, {
-        mainFile: req.mainFile,
-        bibPath: req.bibPath,
-        includeLibraryCheck: req.includeLibraryCheck !== false,
-      });
     default:
       return { error: `Unknown latex bridge action: ${String((req as { action?: string }).action)}` };
   }
@@ -99,9 +86,6 @@ async function processSessionDir(sessionDir: string): Promise<void> {
       const raw = readFileSync(reqPath, "utf-8");
       const req = JSON.parse(raw) as LatexBridgeRequest;
       const result = await Promise.resolve(dispatch(req));
-      if (req.action === "bib-check" && !result.error) {
-        recordCiteAuditBibCheck(req.sessionId, result);
-      }
       writeFileSync(resPath, JSON.stringify(result), "utf-8");
       try { unlinkSync(reqPath); } catch {}
     } catch (err) {

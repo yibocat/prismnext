@@ -236,7 +236,7 @@ export async function createPaperFromStagedCitation(
     csl_json: serializeCslJson(input.cslJson),
   });
 
-  const pdfUrl = await resolvePdfUrlForStaged({ doi, arxivId });
+  const pdfUrl = await resolvePdfUrlForStaged({ doi: doi ?? undefined, arxivId: arxivId ?? undefined });
   let attach: PdfAttachResult;
 
   if (pdfUrl && !createResult.paper.pdf_path) {
@@ -300,11 +300,11 @@ export async function createPaperFromCatalog(
   }
 
   const { metadata } = await resolveBibliographicMetadata({
-    doi,
-    arxivId,
-    isbn,
-    pmid,
-    adsBibcode,
+    doi: doi ?? undefined,
+    arxivId: arxivId ?? undefined,
+    isbn: isbn ?? undefined,
+    pmid: pmid ?? undefined,
+    adsBibcode: adsBibcode ?? undefined,
   });
   const patch = bibliographicToPaperPatch(metadata) as Partial<PaperRow>;
   const createResult = createPaper(projectRoot, {

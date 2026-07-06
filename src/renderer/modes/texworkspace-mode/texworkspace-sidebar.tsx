@@ -55,7 +55,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getFileIconName } from "@/lib/files/file-icon-class";
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify/react/offline";
 
 // ─── Constants ───
 

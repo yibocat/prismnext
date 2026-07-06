@@ -1,6 +1,5 @@
-import { memo, useMemo, useCallback } from "react";
-import ReactMarkdown from "react-markdown";
-import type { Components } from "react-markdown";
+import { memo, useMemo, useCallback, type ComponentProps } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
 import "katex/dist/katex.min.css";
 import {
   MARKDOWN_COMPONENTS,
@@ -97,7 +96,7 @@ export const StaticMarkdown = memo(function StaticMarkdown({
     if (!bibkeyFingerprint) return new Set<string>();
     return new Set(bibkeyFingerprint.split("\u0000"));
   }, [bibkeyFingerprint]);
-  const remarkPlugins = useMemo(
+  const remarkPlugins = useMemo<ComponentProps<typeof ReactMarkdown>["remarkPlugins"]>(
     () => [
       ...MARKDOWN_REMARK_BASE,
       remarkCitationRefs,

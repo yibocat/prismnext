@@ -86,7 +86,7 @@ export default tool({
   },
   async execute(args, context) {
     const bibkeys = Array.isArray(args.bibkeys)
-      ? args.bibkeys.map((k) => String(k).trim()).filter(Boolean)
+      ? args.bibkeys.map((k: unknown) => String(k).trim()).filter(Boolean)
       : undefined;
     const all = args.all === true;
     const onlyCitedInTex = args.onlyCitedInTex !== false;

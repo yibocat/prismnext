@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, memo } from "react";
 import { ChevronRightIcon, Undo2Icon } from "lucide-react";
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify/react/offline";
 import { useGitStore, type GitFileItem } from "@/stores/git-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";

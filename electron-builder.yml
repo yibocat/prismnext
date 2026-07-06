@@ -7,7 +7,7 @@ asarUnpack:
   - "**/node_modules/node-pty/**"
 
 extraResources:
-  - from: "bin/opencode/${os}-${arch}/"
+  - from: "bin/opencode/darwin-${arch}/"
     to: "opencode"
     filter:
       - "opencode*"

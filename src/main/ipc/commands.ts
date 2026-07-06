@@ -9,6 +9,7 @@ import type {
   UpdateCommandPayload,
 } from "../commands/types";
 import type { CommandImportConflictStrategy } from "../commands/export-import";
+import { assertUnderHome } from "../services/active-project-roots";
 
 const engine = CommandEngine.getInstance();
 
@@ -130,6 +131,7 @@ export function registerCommandsHandlers(): void {
     "commands:writeExportFile",
     async (_event, args: { filePath: string; projectRoot: string }) => {
       ensureProjectRoot(args.projectRoot);
+      assertUnderHome(args.filePath, "commands:writeExportFile");
       const pack = commandRegistry.exportPack();
       writeFileSync(args.filePath, JSON.stringify(pack, null, 2), "utf-8");
     },
@@ -138,6 +140,7 @@ export function registerCommandsHandlers(): void {
   ipcMain.handle(
     "commands:readImportFile",
     async (_event, args: { filePath: string }) => {
+      assertUnderHome(args.filePath, "commands:readImportFile");
       const raw = readFileSync(args.filePath, "utf-8");
       return JSON.parse(raw) as unknown;
     },

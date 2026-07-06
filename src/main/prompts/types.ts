@@ -10,6 +10,8 @@ export interface PromptContext {
   userCustomPrompt?: string;
   /** User-created custom rules (enabled only) */
   customRules?: Array<{ name: string; content: string }>;
+  /** Module keys enabled for the current agent profile (e.g. ["citations"]). */
+  profileModules?: string[];
 }
 
 /** A single layer in the prompt stack. */

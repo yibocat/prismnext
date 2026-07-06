@@ -1,0 +1,6 @@
+{
+  "version": "0.5.4",
+  "path": "https://example.com/Prism Next-0.5.4-arm64.dmg",
+  "releaseNotes": "Sample manifest for self-testing the update checker.\n\n- Point Settings → About → Update source at this file.\n- Version 0.5.4 is higher than the installed 0.5.3, so a prompt should appear.",
+  "pubDate": "2026-07-06T12:00:00.000Z"
+}

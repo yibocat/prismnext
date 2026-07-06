@@ -464,7 +464,7 @@ function ftsSchemaNeedsUpgrade(db: LibraryDb): boolean {
 function reindexAllPapersInFts(db: LibraryDb): void {
   const rows = db
     .prepare("SELECT rowid, title, abstract, authors, tags, ai_summary FROM papers")
-    .all() as Array<PaperRow & { rowid: number }>;
+    .all() as unknown as Array<PaperRow & { rowid: number }>;
   for (const row of rows) {
     ftsInsert(db, row.rowid, row);
   }
@@ -595,17 +595,17 @@ function findExistingPaper(
 ): PaperRow | undefined {
   const { excludeId } = opts;
   if (opts.pdfSha) {
-    const row = db.prepare("SELECT * FROM papers WHERE pdf_sha = ?").get(opts.pdfSha) as PaperRow | undefined;
+    const row = db.prepare("SELECT * FROM papers WHERE pdf_sha = ?").get(opts.pdfSha) as unknown as PaperRow | undefined;
     if (row && row.id !== excludeId) return row;
   }
   const normDoi = normalizeDoi(opts.doi ?? undefined);
   if (normDoi) {
-    const rows = db.prepare("SELECT * FROM papers WHERE doi IS NOT NULL").all() as PaperRow[];
+    const rows = db.prepare("SELECT * FROM papers WHERE doi IS NOT NULL").all() as unknown as PaperRow[];
     const row = rows.find((p) => normalizeDoi(p.doi) === normDoi && p.id !== excludeId);
     if (row) return row;
     const arxivFromDoi = arxivIdFromDoi(normDoi);
     if (arxivFromDoi) {
-      const arxivRows = db.prepare("SELECT * FROM papers WHERE arxiv_id IS NOT NULL").all() as PaperRow[];
+      const arxivRows = db.prepare("SELECT * FROM papers WHERE arxiv_id IS NOT NULL").all() as unknown as PaperRow[];
       const arxivRow = arxivRows.find(
         (p) => normalizeArxivId(p.arxiv_id) === arxivFromDoi && p.id !== excludeId,
       );
@@ -614,10 +614,10 @@ function findExistingPaper(
   }
   const normArxiv = normalizeArxivId(opts.arxivId ?? undefined);
   if (normArxiv) {
-    const rows = db.prepare("SELECT * FROM papers WHERE arxiv_id IS NOT NULL").all() as PaperRow[];
+    const rows = db.prepare("SELECT * FROM papers WHERE arxiv_id IS NOT NULL").all() as unknown as PaperRow[];
     const row = rows.find((p) => normalizeArxivId(p.arxiv_id) === normArxiv && p.id !== excludeId);
     if (row) return row;
-    const doiRows = db.prepare("SELECT * FROM papers WHERE doi IS NOT NULL").all() as PaperRow[];
+    const doiRows = db.prepare("SELECT * FROM papers WHERE doi IS NOT NULL").all() as unknown as PaperRow[];
     const doiRow = doiRows.find((p) => {
       const fromDoi = arxivIdFromDoi(normalizeDoi(p.doi));
       return fromDoi === normArxiv && p.id !== excludeId;
@@ -770,22 +770,24 @@ export function filterPapersByTag(papers: PaperRow[], tag: string): PaperRow[] {
 
 export interface SearchPapersOptions {
   tag?: string | null;
+  /** Collection name (case-insensitive) — restrict results to papers in this collection. */
+  collection?: string | null;
 }
 
 export function listPapers(projectRoot: string): PaperRow[] {
   const db = openLibraryDb(projectRoot);
-  return db.prepare(`${PAPER_SELECT} ORDER BY p.updated_at DESC`).all() as PaperRow[];
+  return db.prepare(`${PAPER_SELECT} ORDER BY p.updated_at DESC`).all() as unknown as PaperRow[];
 }
 
 export function getPaper(projectRoot: string, paperId: string): PaperRow | null {
   const db = openLibraryDb(projectRoot);
-  const row = db.prepare(`${PAPER_SELECT} WHERE p.id = ?`).get(paperId) as PaperRow | undefined;
+  const row = db.prepare(`${PAPER_SELECT} WHERE p.id = ?`).get(paperId) as unknown as PaperRow | undefined;
   return row ?? null;
 }
 
 export function getPaperByBibkey(projectRoot: string, bibkey: string): PaperRow | null {
   const db = openLibraryDb(projectRoot);
-  const row = db.prepare(`${PAPER_SELECT} WHERE p.bibkey = ?`).get(bibkey) as PaperRow | undefined;
+  const row = db.prepare(`${PAPER_SELECT} WHERE p.bibkey = ?`).get(bibkey) as unknown as PaperRow | undefined;
   return row ?? null;
 }
 
@@ -832,7 +834,7 @@ export function searchPapers(
            ORDER BY rank
            LIMIT ?`,
         )
-        .all(`${q}*`, fetchLimit) as PaperRow[];
+        .all(`${q}*`, fetchLimit) as unknown as PaperRow[];
     } catch {
       // fallback to LIKE
     }
@@ -845,7 +847,7 @@ export function searchPapers(
               OR p.tags LIKE ? OR p.ai_summary LIKE ?
            ORDER BY p.updated_at DESC LIMIT ?`,
         )
-        .all(like, like, like, like, like, like, fetchLimit) as PaperRow[];
+        .all(like, like, like, like, like, like, fetchLimit) as unknown as PaperRow[];
     }
   } else {
     rows = listPapers(projectRoot);
@@ -853,6 +855,15 @@ export function searchPapers(
 
   if (tagKey) {
     rows = rows.filter((p) => parsePaperTagsJson(p.tags).some((t) => paperTagKey(t) === tagKey));
+  }
+
+  const collectionName = opts?.collection?.trim();
+  if (collectionName) {
+    const cols = listCollections(projectRoot);
+    const col = cols.find((c) => c.name.toLowerCase() === collectionName.toLowerCase());
+    if (!col) return [];
+    const collectionPaperIds = new Set(listCollectionPaperIds(projectRoot, col.id));
+    rows = rows.filter((p) => collectionPaperIds.has(p.id));
   }
 
   return rows.slice(0, limit);
@@ -1161,7 +1172,7 @@ export function applyIdentifiers(
   const normDoi = ids.doi ? normalizeDoi(ids.doi) : null;
   const normArxiv = ids.arxivId ? normalizeArxivId(ids.arxivId) : null;
   if (!normDoi && !normArxiv) {
-    return { applied: false, paper: getPaper(projectRoot, paperId) };
+    return { applied: false, paper: getPaper(projectRoot, paperId) ?? undefined };
   }
 
   const dup = findExistingPaper(db, { doi: normDoi, arxivId: normArxiv, excludeId: paperId });
@@ -1181,7 +1192,7 @@ export function ingestPdf(projectRoot: string, pdfPath: string, opts?: { title?:
   const db = openLibraryDb(projectRoot);
   const buf = fs.readFileSync(pdfPath);
   const sha = crypto.createHash("sha256").update(buf).digest("hex");
-  const existing = db.prepare("SELECT * FROM papers WHERE pdf_sha = ?").get(sha) as PaperRow | undefined;
+  const existing = db.prepare("SELECT * FROM papers WHERE pdf_sha = ?").get(sha) as unknown as PaperRow | undefined;
   if (existing) return { paper: existing, created: false, duplicateReason: "pdf" };
 
   const { relativePath, sha: storedSha } = storePdfAttachment(projectRoot, pdfPath);
@@ -1448,7 +1459,7 @@ export function detachAllZoteroMirrors(projectRoot: string): { papers: number; c
     "DELETE FROM collections WHERE zotero_key IS NOT NULL",
   ).run();
 
-  return { papers: deletedPapers, collections: colRes.changes };
+  return { papers: deletedPapers, collections: Number(colRes.changes) };
 }
 
 export function applyMetadata(projectRoot: string, paperId: string, meta: Partial<PaperRow>): PaperRow {
@@ -1584,7 +1595,7 @@ export function getAnnotations(projectRoot: string, paperId: string): Annotation
   const db = openLibraryDb(projectRoot);
   return db
     .prepare("SELECT * FROM annotations WHERE paper_id = ? ORDER BY page, created_at")
-    .all(paperId) as AnnotationRow[];
+    .all(paperId) as unknown as AnnotationRow[];
 }
 
 export function saveAnnotation(
@@ -1617,7 +1628,7 @@ export function saveAnnotation(
     created,
     now,
   );
-  return db.prepare("SELECT * FROM annotations WHERE id = ?").get(annotation.id) as AnnotationRow;
+  return db.prepare("SELECT * FROM annotations WHERE id = ?").get(annotation.id) as unknown as AnnotationRow;
 }
 
 export function deleteAnnotation(projectRoot: string, annotationId: string): void {
@@ -1653,7 +1664,7 @@ export function listReadingList(projectRoot: string): PaperRow[] {
        JOIN papers p ON p.id = rl.paper_id
        ORDER BY rl.added_at DESC`,
     )
-    .all() as PaperRow[];
+    .all() as unknown as PaperRow[];
 }
 
 export function listCollections(projectRoot: string): CollectionRow[] {
@@ -1666,7 +1677,7 @@ export function listCollections(projectRoot: string): CollectionRow[] {
        GROUP BY c.id
        ORDER BY c.sort_order ASC, c.name ASC`,
     )
-    .all() as CollectionRow[];
+    .all() as unknown as CollectionRow[];
 }
 
 export function getCollectionRow(projectRoot: string, collectionId: string): CollectionRow {
@@ -1701,7 +1712,7 @@ export function createCollection(
     `INSERT INTO collections (id, name, parent_id, sort_order, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
   ).run(id, trimmed, parentId ?? null, maxOrder.n + 1, now, now);
-  return db.prepare("SELECT * FROM collections WHERE id = ?").get(id) as CollectionRow;
+  return db.prepare("SELECT * FROM collections WHERE id = ?").get(id) as unknown as CollectionRow;
 }
 
 export function updateCollection(
@@ -1718,7 +1729,7 @@ export function updateCollection(
   if (!name) throw new Error("Collection name is required");
   const now = Date.now();
   db.prepare("UPDATE collections SET name = ?, updated_at = ? WHERE id = ?").run(name, now, collectionId);
-  return db.prepare("SELECT * FROM collections WHERE id = ?").get(collectionId) as CollectionRow;
+  return db.prepare("SELECT * FROM collections WHERE id = ?").get(collectionId) as unknown as CollectionRow;
 }
 
 export function deleteCollection(projectRoot: string, collectionId: string): void {
@@ -1789,7 +1800,7 @@ export function upsertZoteroCollectionRow(
 
   const existing = db
     .prepare("SELECT * FROM collections WHERE zotero_key = ? OR id = ?")
-    .get(input.key, input.key) as CollectionRow | undefined;
+    .get(input.key, input.key) as unknown as CollectionRow | undefined;
 
   if (existing) {
     db.prepare(
@@ -1802,7 +1813,7 @@ export function upsertZoteroCollectionRow(
         updated_at = ?
        WHERE id = ?`,
     ).run(input.name, parentId, input.key, input.parentKey, input.version, now, existing.id);
-    return db.prepare("SELECT * FROM collections WHERE id = ?").get(existing.id) as CollectionRow;
+    return db.prepare("SELECT * FROM collections WHERE id = ?").get(existing.id) as unknown as CollectionRow;
   }
 
   db.prepare(
@@ -1820,7 +1831,7 @@ export function upsertZoteroCollectionRow(
     now,
     now,
   );
-  return db.prepare("SELECT * FROM collections WHERE id = ?").get(input.key) as CollectionRow;
+  return db.prepare("SELECT * FROM collections WHERE id = ?").get(input.key) as unknown as CollectionRow;
 }
 
 function normalizeTitleKey(title: string): string {
@@ -1911,7 +1922,7 @@ const MATERIALIZED_ORPHANS_BY_YEAR_SQL = `
 `;
 
 function listMaterializedOrphansByYear(db: LibraryDb, year: number | null): PaperRow[] {
-  return db.prepare(MATERIALIZED_ORPHANS_BY_YEAR_SQL).all(year, year) as PaperRow[];
+  return db.prepare(MATERIALIZED_ORPHANS_BY_YEAR_SQL).all(year, year) as unknown as PaperRow[];
 }
 
 function pickOrphanMergeCandidate(
@@ -1954,7 +1965,7 @@ export function findOrphanMaterializedPaperForZoteroSync(
   if (input.bibkey.trim()) {
     const byBibkey = db
       .prepare("SELECT * FROM papers WHERE bibkey = ?")
-      .get(input.bibkey.trim()) as PaperRow | undefined;
+      .get(input.bibkey.trim()) as unknown as PaperRow | undefined;
     if (
       byBibkey &&
       byBibkey.id !== excludePaperId &&
@@ -2097,7 +2108,7 @@ export function upsertZoteroPaperRow(projectRoot: string, input: UpsertZoteroPap
          LEFT JOIN zotero_mirror zm ON zm.paper_id = p.id
          WHERE p.id = ?`,
       )
-      .get(target.id) as PaperRow;
+      .get(target.id) as unknown as PaperRow;
     const rowid = db.prepare("SELECT rowid FROM papers WHERE id = ?").get(updated.id) as { rowid: number };
     syncFtsForPaper(db, rowid.rowid, updated);
     return updated;
@@ -2139,7 +2150,7 @@ export function upsertZoteroPaperRow(projectRoot: string, input: UpsertZoteroPap
        LEFT JOIN zotero_mirror zm ON zm.paper_id = p.id
        WHERE p.id = ?`,
     )
-    .get(id) as PaperRow;
+    .get(id) as unknown as PaperRow;
   const rowid = db.prepare("SELECT rowid FROM papers WHERE id = ?").get(id) as { rowid: number };
   syncFtsForPaper(db, rowid.rowid, row);
   return row;
@@ -2165,7 +2176,7 @@ export function getPaperByZoteroKey(projectRoot: string, zoteroKey: string): Pap
        LEFT JOIN zotero_mirror zm ON zm.paper_id = p.id
        WHERE p.id = ?`,
     )
-    .get(mirror.paper_id) as PaperRow | null;
+    .get(mirror.paper_id) as unknown as PaperRow | null;
 }
 
 export function addPapersToCollection(
@@ -2203,7 +2214,7 @@ export function removePapersFromCollection(
       `DELETE FROM collection_papers WHERE collection_id = ? AND paper_id IN (${placeholders})`,
     )
     .run(collectionId, ...paperIds);
-  return result.changes;
+  return Number(result.changes);
 }
 
 export function exportBibTeX(projectRoot: string, paperIds?: string[]): string {
@@ -2211,7 +2222,7 @@ export function exportBibTeX(projectRoot: string, paperIds?: string[]): string {
   let rows: PaperRow[];
   if (paperIds?.length) {
     const placeholders = paperIds.map(() => "?").join(",");
-    rows = db.prepare(`SELECT * FROM papers WHERE id IN (${placeholders})`).all(...paperIds) as PaperRow[];
+    rows = db.prepare(`SELECT * FROM papers WHERE id IN (${placeholders})`).all(...paperIds) as unknown as PaperRow[];
   } else {
     rows = listPapers(projectRoot);
   }
@@ -2324,7 +2335,7 @@ export function citeCheckLiterature(projectRoot: string, paperIds?: string[]): C
     const placeholders = paperIds.map(() => "?").join(",");
     papers = db
       .prepare(`SELECT * FROM papers WHERE id IN (${placeholders})`)
-      .all(...paperIds) as PaperRow[];
+      .all(...paperIds) as unknown as PaperRow[];
   } else {
     papers = listPapers(projectRoot);
   }
@@ -2437,7 +2448,7 @@ export function mergeLibraryIntoProjectBib(
     const placeholders = options.paperIds.map(() => "?").join(",");
     papers = db
       .prepare(`SELECT * FROM papers WHERE id IN (${placeholders})`)
-      .all(...options.paperIds) as PaperRow[];
+      .all(...options.paperIds) as unknown as PaperRow[];
   } else if (options?.bibkeys?.length) {
     for (const key of options.bibkeys) {
       const trimmed = key.trim();
@@ -2516,7 +2527,7 @@ export function importFromProject(
   const now = Date.now();
 
   for (const paperId of paperIds) {
-    const row = sourceDb.prepare("SELECT * FROM papers WHERE id = ?").get(paperId) as PaperRow | undefined;
+    const row = sourceDb.prepare("SELECT * FROM papers WHERE id = ?").get(paperId) as unknown as PaperRow | undefined;
     if (!row) continue;
     if (targetDb.prepare("SELECT 1 FROM papers WHERE bibkey = ?").get(row.bibkey)) {
       skipped++;
@@ -2572,7 +2583,7 @@ export function importFromProject(
     if (opts?.includeAnnotations !== false) {
       const anns = sourceDb
         .prepare("SELECT * FROM annotations WHERE paper_id = ?")
-        .all(paperId) as AnnotationRow[];
+        .all(paperId) as unknown as AnnotationRow[];
       for (const ann of anns) {
         targetDb.prepare(
           `INSERT INTO annotations (id, paper_id, kind, page, rects, quoted_text, color, note, created_at, updated_at)

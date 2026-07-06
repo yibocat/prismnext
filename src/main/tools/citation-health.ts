@@ -1,6 +1,6 @@
 /**
- * literature-cite — Append library paper BibTeX to project .bib via Prism main-process bridge.
- * Return shape matches question.ts: `{ output: string }`.
+ * citation-health — Unified audit: \\cite keys in .tex ↔ project .bib ↔ literature library.db.
+ * Returns the full CitationHealthReport in one call (replaces latex-bib-check + literature-cite-check).
  */
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
@@ -25,7 +25,7 @@ function requestIdFrom(context: Record<string, unknown>): string {
   for (const v of [c.toolCallId, c.tool_call_id, c.callID]) {
     if (typeof v === "string" && v.trim()) return v.trim();
   }
-  return `lit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `health-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 async function bridgeCall(
@@ -69,13 +69,20 @@ async function bridgeCall(
 }
 
 export default tool({
-  description: "Ensure a library paper is cited in the project bibliography (.bib file) by bibkey.",
+  description:
+    "Unified citation health audit: every \\cite key in .tex ↔ project .bib ↔ literature library.db in one call. " +
+    "Returns missingKeys, unusedKeys, duplicateKeys, bibFallback, bibKeysNotInLibrary as JSON.",
   args: {
-    bibkey: tool.schema.string().describe("BibTeX citation key to add to the project .bib"),
+    verify: tool.schema
+      .boolean()
+      .describe(
+        "Verify each .bib-only gap entry against external catalogs (Crossref/arXiv/OpenAlex/S2) " +
+          "to flag fabricated/untraceable references. Default true.",
+      )
+      .optional(),
   },
   async execute(args, context) {
-    const bibkey = typeof args.bibkey === "string" ? args.bibkey.trim() : "";
-    if (!bibkey) return toolOutput({ error: "Missing bibkey parameter." });
-    return bridgeCall(context as Record<string, unknown>, { action: "cite", bibkey });
+    const verify = args.verify !== false;
+    return bridgeCall(context as Record<string, unknown>, { action: "citation-health", verify });
   },
 });

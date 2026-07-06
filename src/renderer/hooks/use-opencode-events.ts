@@ -19,6 +19,7 @@ import {
 } from "@shared/permission-modes";
 import { schedulePermissionTimeout, clearPermissionTimer } from "@/stores/permission-actions";
 import { handleBashToolUse, handleBashToolResult, handleBashPermissionDenied, isBashToolName } from "@/lib/terminal/ai-bridge";
+import { isFinalToolStatus, normalizeToolStatus } from "@/components/modules/chat/tools/tool-result-map";
 import { shouldTrackProposedChange, isDiskMutationTool, isFileWriteTool, isPatchTool, extractPatchTargetPaths } from "@/components/modules/chat/tools/tool-meta";
 import { useCheckpointStore, resolveRelativeToolPath } from "@/stores/checkpoint-store";
 import { compileCurrentDocument, pauseAutoCompileForAi, resumeAutoCompileAfterAi } from "@/stores/compile-store";
@@ -577,14 +578,23 @@ export function useOpenCodeEvents() {
             // by toolResultMap in chat-messages.tsx for Widget matching.
             for (let block of toolResultBlocks) {
               const toolUseId = block.tool_use_id || "";
-              const status = (block.status || "").toLowerCase();
-              const isFinalToolResult = !status || status === "completed" || status === "failed";
+              // OpenCode emits terminal success as `completed`, `success`, or
+              // `finished` (synonyms in the ACP binary). Treat ANY non-active
+              // status as final — the prior check only accepted `completed`/
+              // `failed` and DROPPED `success`/`finished` results, leaving tools
+              // spinning until orphan-synthesized as "No result received".
+              const isFinalToolResult = isFinalToolStatus(block.status);
+              // Normalize success synonyms → "completed" so downstream widgets
+              // (which check `status === "completed"`) match correctly.
+              if (isFinalToolResult && block.status) {
+                block.status = normalizeToolStatus(block.status);
+              }
+              console.log(`[opencode-events] tool_result RX: toolUseId=${toolUseId} status=${(block.status || "").toLowerCase() || "(none)"} isFinal=${isFinalToolResult} isError=${block.is_error} contentLen=${typeof block.content === "string" ? block.content.length : -1} ${isFinalToolResult ? "" : "→ DROPPED (not final)"}`);
               if (isFinalToolResult) {
                 const resultMsg: ChatStreamMessage = {
                   type: "result",
                   message: { content: [block] },
                 };
-                console.log(`[opencode-events] storing tool_result: tool_use_id=${toolUseId} status=${status || "(none)"} contentLen=${typeof block.content === "string" ? block.content.length : JSON.stringify(block.content || "").length} isError=${block.is_error}`);
                 chatStore._appendMessage(tabId, resultMsg);
 
                 const toolName = (

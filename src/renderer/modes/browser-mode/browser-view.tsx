@@ -275,7 +275,13 @@ export function BrowserView() {
         src={url}
         className="flex-1"
         style={{ width: "100%", height: "100%" }}
-        {...{ webpreferences: "contextIsolation=yes" } as React.HTMLAttributes<HTMLElement>}
+        {...{
+          webpreferences: "contextIsolation=yes",
+          // Isolate browser cookies/storage from the renderer's default session
+          // (and from any CSP set on default session). Must match BROWSER_PARTITION
+          // in src/main/ipc/browser.ts.
+          partition: "persist:browser",
+        } as React.HTMLAttributes<HTMLElement>}
       />
 
       {linkMenu && (

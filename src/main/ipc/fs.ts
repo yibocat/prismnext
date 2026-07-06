@@ -5,24 +5,35 @@ import { buildAgentsMdScaffold } from "../services/agents-md-scaffold";
 import { createLogger } from "../services/logger";
 import type { WorkspaceFolder } from "../../renderer/types/workspace";
 import { writeWorkspaceDirs, createConfiguredFolders, validateWorkspaceDirs } from "../services/workspace-config";
+import type { Dirent } from "node:fs";
 import {
   assertSafeRelativePath,
   assertSafeRelativePaths,
   parseBackupLabelIds,
 } from "../lib/template-path";
+import {
+  registerProjectRoot,
+  clearRoots,
+  isPathUnderHome,
+  assertContained,
+  assertUnderHome,
+} from "../services/active-project-roots";
 
 const log = createLogger("template-ipc");
 
 export function registerFsHandlers(): void {
   ipcMain.handle("fs:scan", async (_event, args: { rootPath: string }) => {
+    registerProjectRoot(args.rootPath); // best-effort: register active project root for path containment
     return fs.scanProjectFolder(args.rootPath);
   });
 
   ipcMain.handle("fs:scanMetadata", async (_event, args: { rootPath: string }) => {
+    registerProjectRoot(args.rootPath);
     return fs.scanMetadata(args.rootPath);
   });
 
   ipcMain.handle("fs:read", async (_event, args: { absPath: string }) => {
+    assertUnderHome(args.absPath, "fs:read");
     try {
       const content = await fs.readTexFileContent(args.absPath);
       return { content };
@@ -41,6 +52,7 @@ export function registerFsHandlers(): void {
     const results: Record<string, string> = {};
     await Promise.all(
       args.absPaths.map(async (absPath) => {
+        if (!isPathUnderHome(absPath)) return; // skip paths outside home (security)
         try {
           results[absPath] = await fs.readTexFileContent(absPath);
         } catch {
@@ -52,6 +64,7 @@ export function registerFsHandlers(): void {
   });
 
   ipcMain.handle("fs:readImage", async (_event, args: { absPath: string }) => {
+    assertUnderHome(args.absPath, "fs:readImage");
     const dataUrl = await fs.readImageAsDataUrl(args.absPath);
     return { dataUrl };
   });
@@ -59,6 +72,7 @@ export function registerFsHandlers(): void {
   ipcMain.handle(
     "fs:write",
     async (_event, args: { absPath: string; content: string }) => {
+      assertContained(args.absPath, "fs:write");
       await fs.writeTexFileContent(args.absPath, args.content);
       const { scheduleSkillsRefreshFromAgentPath } = await import("../services/project-skills-refresh");
       scheduleSkillsRefreshFromAgentPath(args.absPath);
@@ -71,6 +85,8 @@ export function registerFsHandlers(): void {
       _event,
       args: { rootPath: string; relativePath: string; content: string },
     ) => {
+      assertSafeRelativePath(args.relativePath);
+      assertContained(args.rootPath, "fs:create");
       const absPath = await fs.createFileOnDisk(
         args.rootPath,
         args.relativePath,
@@ -83,6 +99,7 @@ export function registerFsHandlers(): void {
   );
 
   ipcMain.handle("fs:delete", async (_event, args: { absPath: string }) => {
+    assertContained(args.absPath, "fs:delete");
     await fs.deleteFileFromDisk(args.absPath);
     const { scheduleSkillsRefreshFromAgentPath } = await import("../services/project-skills-refresh");
     scheduleSkillsRefreshFromAgentPath(args.absPath);
@@ -91,6 +108,7 @@ export function registerFsHandlers(): void {
   ipcMain.handle(
     "fs:deleteFolder",
     async (_event, args: { absPath: string }) => {
+      assertContained(args.absPath, "fs:deleteFolder");
       await fs.deleteFolderFromDisk(args.absPath);
       const { scheduleSkillsRefreshFromAgentPath } = await import("../services/project-skills-refresh");
       scheduleSkillsRefreshFromAgentPath(args.absPath);
@@ -100,6 +118,8 @@ export function registerFsHandlers(): void {
   ipcMain.handle(
     "fs:rename",
     async (_event, args: { oldPath: string; newPath: string }) => {
+      assertContained(args.oldPath, "fs:rename");
+      assertContained(args.newPath, "fs:rename");
       await fs.renameFileOnDisk(args.oldPath, args.newPath);
       const { scheduleSkillsRefreshFromAgentPath } = await import("../services/project-skills-refresh");
       scheduleSkillsRefreshFromAgentPath(args.oldPath);
@@ -108,12 +128,16 @@ export function registerFsHandlers(): void {
   );
 
   ipcMain.handle("fs:mkdir", async (_event, args: { absPath: string }) => {
+    assertContained(args.absPath, "fs:mkdir");
     await fs.createDirectory(args.absPath);
   });
 
   // ─── File watcher ───
 
   ipcMain.handle("fs:watch-start", async (_event, args: { rootPath: string }) => {
+    // Project switch: reset path-containment roots to the newly opened project.
+    clearRoots();
+    registerProjectRoot(args.rootPath);
     await startWatching(args.rootPath);
   });
 
@@ -206,11 +230,13 @@ export function registerFsHandlers(): void {
   // ─── Path check ───
 
   ipcMain.handle("fs:exists", async (_event, args: { absPath: string }) => {
+    if (!isPathUnderHome(args.absPath)) return false;
     const { existsSync } = require("node:fs");
     return existsSync(args.absPath);
   });
 
   ipcMain.handle("fs:isFile", async (_event, args: { absPath: string }) => {
+    if (!isPathUnderHome(args.absPath)) return false;
     const { existsSync, statSync } = require("node:fs");
     try {
       return existsSync(args.absPath) && statSync(args.absPath).isFile();
@@ -836,7 +862,7 @@ export function registerFsHandlers(): void {
       const backupsDir = join(args.rootPath, ".prismnext", "backups");
       if (!existsSync(backupsDir)) return [];
 
-      const entries = readdirSync(backupsDir, { withFileTypes: true })
+      const entries = (readdirSync(backupsDir, { withFileTypes: true }) as Dirent[])
         .filter((d) => d.isDirectory())
         .map((d) => {
           const manifestPath = join(backupsDir, d.name, "manifest.json");

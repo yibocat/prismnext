@@ -30,6 +30,7 @@ import {
   PuzzleIcon,
   PlugIcon,
   SlashIcon,
+  InfoIcon,
 } from "lucide-react";
 
 const SECTION_LABEL =
@@ -42,6 +43,7 @@ const SETTINGS_GROUPS = [
       { id: "general", label: "General", icon: Settings2Icon },
       { id: "appearance", label: "Appearance", icon: PaletteIcon },
       { id: "workspace", label: "Workspace", icon: LayoutGridIcon },
+      { id: "about", label: "About", icon: InfoIcon },
     ],
   },
   {

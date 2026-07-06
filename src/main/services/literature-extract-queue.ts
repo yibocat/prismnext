@@ -30,7 +30,7 @@ import { getZoteroMirrorByPaperId } from "./literature-service";
 import { backfillPaperAbstractFromExtract } from "./literature-ai-metadata-heuristics";
 import { maybeEnqueueAiMetadata } from "./literature-ai-metadata-queue";
 
-const log = createLogger("literature-extract", "main");
+const log = createLogger("literature-extract", "general");
 
 interface QueueJob {
   projectRoot: string;

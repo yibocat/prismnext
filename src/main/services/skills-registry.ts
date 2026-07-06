@@ -39,7 +39,9 @@ interface RawIndexSkill {
 
 function normalizeFiles(files: unknown): string[] | undefined {
   if (!Array.isArray(files)) return undefined;
-  const normalized = files.filter((file): file is string => typeof file === "string" && file.trim());
+  const normalized = files.filter(
+    (file): file is string => typeof file === "string" && Boolean(file.trim()),
+  );
   return normalized.length > 0 ? normalized : undefined;
 }
 

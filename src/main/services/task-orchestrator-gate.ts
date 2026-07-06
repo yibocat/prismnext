@@ -52,11 +52,19 @@ export function isOpencodeBuiltinTaskSubagent(subagentId: string): boolean {
   return BUILTIN_SET.has(subagentId.toLowerCase());
 }
 
-/** Deny Task → OpenCode built-in subagent on primary orchestrator sessions. */
+/**
+ * Deny Task → OpenCode built-in subagent on primary orchestrator sessions.
+ *
+ * `subagentId` is null/empty when the agent calls `task({ prompt })` WITHOUT an
+ * explicit `subagent_type`. OpenCode then spawns the DEFAULT subagent (`general`),
+ * which is a built-in — so a missing id MUST be treated as `general` and denied.
+ * Without this, the orchestrator bypasses the gate entirely by omitting the
+ * subagent type (the null-hole that let agents use @general instead of tools).
+ */
 export function shouldDenyOrchestratorBuiltinTask(
   subagentId: string | null | undefined,
 ): boolean {
-  if (!subagentId) return false;
+  if (!subagentId) return true; // missing subagent_type → OpenCode default = `general` → deny
   return isOpencodeBuiltinTaskSubagent(subagentId);
 }
 

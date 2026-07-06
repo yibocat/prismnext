@@ -28,6 +28,7 @@ import {
   TerminalSettings,
   TexworkspaceSettings,
   LiteratureSettings,
+  AboutSettings,
 } from "@/components/modules/settings";
 import { TemplateCenter } from "@/components/modules/templates/template-center";
 import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator, RestoreUndoBar } from "@/components/modules/chat";
@@ -155,6 +156,7 @@ export function LeftMainArea() {
       workspace: WorkspaceSettings,
       literature: LiteratureSettings,
       backups: BackupsSettings,
+      about: AboutSettings,
     }[resolvedCategory] || GeneralSettings;
     return (
       <div className="flex h-full flex-col min-w-0" data-surface="content">

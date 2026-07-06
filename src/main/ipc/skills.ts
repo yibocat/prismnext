@@ -20,7 +20,7 @@ import {
   installAllFromLibrarySource,
   installLibraryCatalogItem,
 } from "../services/skill-library-catalog";
-import { refreshProjectSkillsIntegration } from "../services/project-skills-refresh";
+import { refreshProjectSkillsIntegration, refreshProjectSkillsIntegrationWithReload } from "../services/project-skills-refresh";
 import { analyzeSkillSource, checkSkillUpdates, installSkillPackages, reinstallSkill } from "../services/skill-install";
 import {
   fetchRegistryIndex,

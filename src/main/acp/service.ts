@@ -150,6 +150,23 @@ export class AcpService {
   private sessionReplaySuppress = 0;
   /** Sessions already hydrated in this OpenCode process (session/load done once). */
   private opencodeHydratedSessions = new Set<string>();
+  /** Phase 1B: one-shot redirect note injected into the next chat:send after a
+   *  builtin-Task delegation is denied on the orchestrator, so the agent is
+   *  nudged toward platform tools (citation-health, literature-*) instead of
+   *  retrying Task. ACP permission rejections can't carry a reason string, so
+   *  we surface it on the next turn. */
+  private pendingTaskDenialRedirect = new Map<string, string>();
+
+  /** Phase 1B: consume (and clear) the pending task-denial redirect for a session. */
+  consumePendingTaskDenial(sessionId: string | undefined | null): string | null {
+    if (!sessionId) return null;
+    const note = this.pendingTaskDenialRedirect.get(sessionId);
+    if (note) {
+      this.pendingTaskDenialRedirect.delete(sessionId);
+      return note;
+    }
+    return null;
+  }
 
   /** True while session/load is replaying stored tool updates — skip live bash gates. */
   isSessionReplaySuppressed(): boolean {
@@ -193,7 +210,7 @@ export class AcpService {
     let parent: string | null = null;
     try {
       const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
-      const db = new DatabaseSync(this.getDbPath(), { readonly: true });
+      const db = new DatabaseSync(this.getDbPath(), { readOnly: true });
       try {
         const row = db
           .prepare("SELECT parent_id FROM session WHERE id = ?")
@@ -347,7 +364,12 @@ export class AcpService {
     this.conn = new ClientSideConnection(
       () => ({
         requestPermission: async (params) => {
-          const permissionId = params.id || params.permissionId || `perm-${Date.now()}`;
+          // ACP's RequestPermissionRequest carries no client-facing id — the
+          // permission id is generated here (the agent provides sessionId +
+          // toolCall, not a permission id). Earlier code read `params.id` /
+          // `params.permissionId`, which don't exist on the schema and were
+          // always undefined.
+          const permissionId = `perm-${Date.now()}`;
           const options = Array.isArray(params.options) ? params.options : [];
           if (this.sessionReplaySuppress > 0) {
             log.debug(`permission:replay-suppressed id=${permissionId}`);
@@ -369,6 +391,15 @@ export class AcpService {
             if (shouldDenyOrchestratorBuiltinTask(subagent)) {
               log.info(
                 `permission:task-builtin-deny sessionId=${sessionId} subagent=${subagent ?? "(none)"}`,
+              );
+              // Phase 1B: stash a redirect note for the next chat:send — the LLM
+              // only gets a generic permission rejection, so we re-surface the
+              // guidance ("use platform tools directly") on the next turn.
+              this.pendingTaskDenialRedirect.set(
+                sessionId,
+                `A Task delegation to @${subagent ?? "general"} was blocked on the orchestrator. ` +
+                  "Call platform tools directly in this conversation (e.g. citation-health, literature-search) " +
+                  "— do not delegate via Task.",
               );
               return buildPermissionOutcome(options, false);
             }
@@ -1566,6 +1597,58 @@ export class AcpService {
     return messages;
   }
 
+
+  /** Load a window of messages from the tail of a session.
+   *  offset = how many messages to skip from the tail (0 = most recent).
+   *  limit = max messages to return.
+   *  Returns parsed messages in chronological order (oldest first). */
+  async getMessagesWindow(
+    sessionId: string,
+    cwd: string,
+    projectRoot: string | undefined,
+    offset: number,
+    limit: number,
+  ): Promise<{ messages: any[]; totalMessages: number }> {
+    const result = await this.withDb((db) => {
+      // Count total messages
+      const countRow = db.prepare(
+        `SELECT COUNT(*) as cnt FROM message WHERE session_id = ?`,
+      ).get(sessionId) as { cnt: number };
+      const totalMessages = countRow.cnt;
+
+      if (totalMessages === 0) return { messages: [], totalMessages: 0 };
+
+      // Window from the tail: skip oldest rows, take `limit` most recent
+      const sqlOffset = Math.max(0, totalMessages - offset - limit);
+      const msgRows = db.prepare(
+        `SELECT id, data FROM message WHERE session_id = ?
+         ORDER BY time_created
+         LIMIT ? OFFSET ?`,
+      ).all(sessionId, limit, sqlOffset) as Array<{ id: string; data: string }>;
+
+      if (msgRows.length === 0) return { messages: [], totalMessages };
+
+      const messages: any[] = [];
+      for (const m of msgRows) {
+        const msgData = JSON.parse(m.data || "{}");
+        const partRows = db.prepare(
+          `SELECT id, data FROM part WHERE message_id = ? ORDER BY time_created`,
+        ).all(m.id) as Array<{ id: string; data: string }>;
+        const parts = partRows
+          .map((p) => JSON.parse(p.data || "{}"))
+          .filter((p: any) =>
+            p.type !== "step-start"
+            && p.type !== "step-finish"
+            && p.type !== "patch",
+          );
+        messages.push({ info: { role: msgData.role || "user" }, parts });
+      }
+      return { messages, totalMessages };
+    }, { readonly: true });
+
+    return result;
+  }
+
   /** Mark a session as a sub-agent session (created by the task tool).
    *  Sub-agent sessions are hidden from the sidebar session list. */
   markSubAgentSession(sessionId: string): void {
@@ -1635,7 +1718,7 @@ export class AcpService {
   ): Promise<T> {
     const { DatabaseSync } = await import("node:sqlite");
     const dbPath = this.getDbPath();
-    const db = new DatabaseSync(dbPath, { readonly: opts?.readonly ?? false });
+    const db = new DatabaseSync(dbPath, { readOnly: opts?.readonly ?? false });
     try {
       return fn(db);
     } finally {

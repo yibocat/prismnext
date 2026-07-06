@@ -56,7 +56,15 @@ export interface ContentBlock {
   status?: string;
   /** OpenCode tool_call: affected file locations */
   locations?: Array<{ file: string; line?: number }>;
+  /** Internal: backfilled tool_call input received in the tool_call_update
+   *  (OpenCode sends empty rawInput on the initial tool_call, real params
+   *  arrive later in tool_call_update). Set by event-mapper, consumed by
+   *  use-opencode-events to patch the tool_use block. */
+  _backfillInput?: Record<string, unknown> | null;
+  /** Internal: backfilled tool name (matches _backfillInput). */
+  _backfillName?: string | null;
 }
+
 
 export interface ChatStreamMessage {
   type: "system" | "assistant" | "user" | "result" | "action-status";
@@ -82,6 +90,10 @@ export interface ChatStreamMessage {
   contextBreakdown?: Record<string, number> | null;
   /** Persisted category schema from result message (for JSONL replay) */
   categorySchema?: { key: string; label: string; color: string; description?: string; order?: number }[] | null;
+  /** True when the assistant turn was interrupted by the user (cancel/stop).
+   *  The partial reply is still committed to `messages` (rather than discarded)
+   *  so the user keeps what streamed so far; this flag marks it as incomplete. */
+  stopped?: boolean;
 }
 
 interface TabDraft {
@@ -752,15 +764,31 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       if (sessionId) {
         await window.electronAPI.chatCancel(sessionId);
       }
-      set((s) => {
-        const tabs = s.tabs.map((t) =>
-          t.id === tabId ? { ...t, isStreaming: false } : t,
-        );
-        return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
-      });
     } catch (err: any) {
       console.error("[chat] Cancel failed:", err);
     }
+    // Commit any partial assistant reply BEFORE clearing isStreaming. Otherwise
+    // the later `chat:complete` → `_setStreaming(false)` call would treat the
+    // leftover `streamingMessage` as an orphan (isStreaming already false) and
+    // discard it — losing everything that streamed so far. Mark the committed
+    // message `stopped: true` so the UI can show it was interrupted.
+    set((s) => {
+      const tabs = s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        if (t.streamingMessage) {
+          const committed: ChatStreamMessage = { ...t.streamingMessage, stopped: true };
+          return {
+            ...t,
+            isStreaming: false,
+            messages: [...t.messages, committed],
+            streamingMessage: null,
+            streamingPartMessageId: null,
+          };
+        }
+        return { ...t, isStreaming: false };
+      });
+      return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+    });
   },
 
   newSession: () => {
@@ -822,9 +850,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const tabs = s.tabs.map((t) => {
         if (t.id !== tabId) return t;
         const messages = truncateChatMessagesToTurn(t.messages, turnIndex);
+        // Truncation = this is now the complete dataset
         if (t.sessionId) {
-          const cache = _msgCache;
-          cache?.set(t.sessionId, messages);
+          _msgCache.set(t.sessionId, messages);
         }
         return {
           ...t,
@@ -842,11 +870,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set((s) => {
       const tabs = s.tabs.map((t) => {
         if (t.id !== tabId) return t;
+        // Restored messages = complete dataset
         if (t.sessionId) {
-          const cache = _msgCache;
-          cache?.set(t.sessionId, messages);
+          _msgCache.set(t.sessionId, messages);
         }
-        return { ...t, messages, streamingMessage: null, isStreaming: false, error: null };
+        return {
+          ...t,
+          messages,
+          streamingMessage: null,
+          isStreaming: false,
+          error: null,
+        };
       });
       return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
     });
@@ -863,7 +897,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set((s) => {
       const tabs = s.tabs.map((t) =>
         t.id === tabId
-          ? { ...t, messages: filtered, streamingMessage: null, isStreaming: false, error: null }
+          ? {
+              ...t,
+              messages: filtered,
+              streamingMessage: null,
+              isStreaming: false,
+              error: null,
+            }
           : t,
       );
       return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
@@ -1033,9 +1073,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     persistAndSyncIntensiveReading(sessionId, storedIntensiveIds);
 
     try {
-      const raw: any[] = await window.electronAPI.sessionLoad(sessionId, projectPath, sessionCwd);
+      // Load all messages from the session.
+      const raw: any[] = await window.electronAPI.sessionLoad(
+        sessionId, projectPath, sessionCwd,
+      );
       const filtered = await hydrateSessionMessages(raw, projectPath, sessionId);
-
       _msgCache.set(sessionId, filtered);
 
       const title = extractSessionTitle(filtered) || "New Chat";
@@ -1150,7 +1192,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }
 
       const newTabs = [...s.tabs];
-      newTabs[tabIdx] = { ...tab, messages: msgs, messageMeta: meta, streamingMessage: finalized.streamingMessage, title };
+      newTabs[tabIdx] = {
+        ...tab,
+        messages: msgs,
+        messageMeta: meta,
+        streamingMessage: finalized.streamingMessage,
+        title,
+      };
       return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
     });
   },
@@ -1204,6 +1252,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
       if (oldHasProgressThinking && newHasRealContent) {
         const newTabs = [...s.tabs];
+        const newMsgCount = baseTab.messages.length + 1;
         newTabs[tabIdx] = {
           ...baseTab,
           messages: [...baseTab.messages, prev],

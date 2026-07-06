@@ -6,7 +6,6 @@ import { ToolCard, param } from "./shared";
 const LABELS: Record<string, string> = {
   "latex-root": "LaTeX root",
   "latex-compile": "LaTeX compile",
-  "latex-bib-check": "Bib check",
 };
 
 function parseToolJson(content: unknown): Record<string, unknown> | null {
@@ -97,44 +96,6 @@ function LatexResultSummary({
         ) : null}
         {!ok && typeof data.errorSummary === "string" && data.errorSummary ? (
           <p className="text-destructive/90 whitespace-pre-wrap">{data.errorSummary}</p>
-        ) : null}
-      </div>
-    );
-  }
-
-  if (toolName === "latex-bib-check") {
-    const missing = Array.isArray(data.missingKeys) ? data.missingKeys : [];
-    const unused = Array.isArray(data.unusedKeys) ? data.unusedKeys : [];
-    const dupes = Array.isArray(data.duplicateKeys) ? data.duplicateKeys : [];
-    const libraryCheck =
-      data.libraryCheck && typeof data.libraryCheck === "object"
-        ? (data.libraryCheck as Record<string, unknown>)
-        : null;
-    const libMissing = Array.isArray(libraryCheck?.missingKeys)
-      ? (libraryCheck!.missingKeys as string[])
-      : [];
-    const ok = missing.length === 0 && dupes.length === 0 && libMissing.length === 0;
-    return (
-      <div className="space-y-1 text-[length:var(--font-chat-meta)]">
-        <p className="flex items-center gap-1.5">
-          {ok ? (
-            <CheckCircle2Icon className="size-3.5 shrink-0 text-emerald-600" />
-          ) : (
-            <XCircleIcon className="size-3.5 shrink-0 text-amber-600" />
-          )}
-          <span className="text-foreground">
-            .bib: {missing.length} missing · {unused.length} unused · {dupes.length} duplicate
-          </span>
-        </p>
-        {libMissing.length > 0 ? (
-          <p className="text-muted-foreground">
-            Library: {libMissing.length} cited key{libMissing.length === 1 ? "" : "s"} not in library
-          </p>
-        ) : libraryCheck ? (
-          <p className="text-muted-foreground">Library: all cited keys found</p>
-        ) : null}
-        {typeof data.bibPath === "string" ? (
-          <p className="text-muted-foreground truncate">Bib: {data.bibPath}</p>
         ) : null}
       </div>
     );

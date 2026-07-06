@@ -20,6 +20,7 @@ import {
   getExpertEditorOptions,
 } from "../services/experts-sync";
 import { scheduleExpertsRefresh } from "../services/project-experts-refresh";
+import { DEFAULT_ORCHESTRATOR_ID } from "../services/agent-experts";
 import type {
   ExpertInfo,
   ExpertsManifest,
@@ -29,7 +30,6 @@ import type {
   SaveBuiltinOrchestratorOverridePayload,
   SaveCustomExpertPayload,
   SaveCustomOrchestratorPayload,
-  DEFAULT_ORCHESTRATOR_ID,
 } from "../services/agent-experts";
 
 export function registerExpertsHandlers(): void {

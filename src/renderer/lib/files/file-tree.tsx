@@ -1,5 +1,5 @@
 import type { ProjectFile } from "@/stores/document-store";
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify/react/offline";
 import { getFileIconName } from "./file-icon-class";
 
 export interface TreeNode {

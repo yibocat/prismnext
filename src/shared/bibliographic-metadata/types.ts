@@ -52,5 +52,7 @@ export interface BibliographicMetadata {
 
 export interface BibliographicResolveResult {
   metadata: BibliographicMetadata;
-  sourcesAttempted: BibliographicSource[];
+  /** IDs of the sources that were attempted (e.g. "openalex", "arxiv").
+   *  Not `BibliographicSource[]` — these are string IDs, not source objects. */
+  sourcesAttempted: string[];
 }

@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, memo } from "react";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { XIcon, DotIcon, FoldersIcon, Terminal as TerminalIcon, SparklesIcon } from "lucide-react";
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify/react/offline";
 import { getFileIconName } from "@/lib/files/file-icon-class";
 import { cn } from "@/lib/utils";
 import { tabDisplayTitle } from "@/lib/workspace/tab-lifecycle";

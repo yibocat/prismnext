@@ -23,7 +23,7 @@ export const TASK_DELEGATION_PROMPT = [
   "### Discipline",
   "",
   "- Only delegate to experts listed under **Available experts (via Task)**.",
-  "- **Task is for listed Experts only** — do not use Task (including @General or @Command) to run platform tools you can call in this session (`latex-*`, `literature-*`).",
+  "- **Task is for listed Experts only** — do not use Task (including @General or @Command) to run platform tools you can call in this session (`latex-*`, `literature-*`, `citation-health`).",
   "- When the user names a platform tool or asks for a structured check it provides, call that tool directly in this turn.",
   "- Do not re-delegate the same work unless the user explicitly asks.",
   "- Domain-specific formats (citations, staging, bibkeys) live in other modules and tool descriptions.",

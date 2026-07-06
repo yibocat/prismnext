@@ -1,7 +1,5 @@
 import { useState, useCallback, useRef, memo } from "react";
 import {
-  FolderIcon,
-  FolderOpenIcon,
   ChevronRightIcon,
 } from "lucide-react";
 import {
@@ -15,8 +13,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { getFileIcon } from "@/lib/files/file-tree";
-import { getFileIconName } from "@/lib/files/file-icon-class";
-import { Icon } from "@iconify/react";
+import { getFileIconName, getFolderIconName, getFolderOpenIconName } from "@/lib/files/file-icon-class";
+import { Icon } from "@iconify/react/offline";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import type { FlatVisibleNode } from "@/lib/files/file-tree";
@@ -85,11 +83,10 @@ export const FolderVirtRow = memo(function FolderVirtRow({
               isExpanded && "rotate-90",
             )}
           />
-          {isExpanded ? (
-            <FolderOpenIcon className="size-3 shrink-0" />
-          ) : (
-            <FolderIcon className="size-3 shrink-0" />
-          )}
+          <Icon
+            icon={isExpanded ? getFolderOpenIconName(workspaceFunction) : getFolderIconName(workspaceFunction)}
+            className="size-3.5 shrink-0"
+          />
           <span className="truncate">{item.name}</span>
           {showBadge && folderIconName ? (
             <WorkspaceFolderIcon
@@ -262,7 +259,7 @@ export const InlineEditRow = memo(function InlineEditRow({
       {type === "file" && iconName ? (
         <Icon icon={iconName} className="size-3.5 shrink-0" />
       ) : (
-        <FolderIcon className="size-3 shrink-0 text-muted-foreground" />
+        <Icon icon={getFolderIconName()} className="size-3 shrink-0 text-muted-foreground" />
       )}
       <Input
         autoFocus

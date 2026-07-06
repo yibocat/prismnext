@@ -4,7 +4,7 @@ import { runAiMetadataForPaper } from "./literature-ai-metadata";
 import { broadcastToRenderer } from "./literature-broadcast";
 import { createLogger } from "./logger";
 
-const log = createLogger("literature-ai-metadata-queue", "main");
+const log = createLogger("literature-ai-metadata-queue", "general");
 
 const MAX_CONCURRENT = 2;
 const pending: Array<{ projectRoot: string; paperId: string; force: boolean }> = [];

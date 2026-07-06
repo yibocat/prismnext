@@ -87,3 +87,37 @@ export function getFileIconName(filename: string): string {
   const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
   return ICON_MAP[ext] ?? ICON_MAP[""];
 }
+
+// ─── Folder icon mapping (material-icon-theme) ───
+
+import type { FolderFunction } from "@/types/workspace";
+
+const FOLDER_ICON_MAP: Record<FolderFunction, string> = {
+  manuscript: "folder-docs",
+  experiment: "folder-molecule",
+  literature: "folder-bibliography",
+  notebook: "folder-content",
+  custom: "folder-custom",
+} as const;
+
+const DEFAULT_FOLDER = "folder-other";
+
+const FOLDER_ICON_PREFIX = "material-icon-theme";
+
+/**
+ * Get the full Iconify icon name for a folder, based on its workspace function.
+ * Returns "material-icon-theme:folder-xxx" or "material-icon-theme:folder-other".
+ */
+export function getFolderIconName(func?: FolderFunction | null): string {
+  const name = (func && FOLDER_ICON_MAP[func]) ?? DEFAULT_FOLDER;
+  return `${FOLDER_ICON_PREFIX}:${name}`;
+}
+
+/**
+ * Get the expanded/open variant of a folder icon name.
+ * Converts "material-icon-theme:folder-docs" → "material-icon-theme:folder-docs-open".
+ */
+export function getFolderOpenIconName(func?: FolderFunction | null): string {
+  const name = (func && FOLDER_ICON_MAP[func]) ?? DEFAULT_FOLDER;
+  return `${FOLDER_ICON_PREFIX}:${name}-open`;
+}

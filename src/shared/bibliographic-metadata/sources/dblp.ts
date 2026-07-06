@@ -34,10 +34,12 @@ interface DblpResponse {
   };
 }
 
-function parseAuthors(authors: DblpHit["info"]["authors"]): string | null {
+type DblpAuthors = NonNullable<NonNullable<DblpHit["info"]>["authors"]>;
+
+function parseAuthors(authors: DblpAuthors | undefined): string | null {
   if (!authors?.author) return null;
   const list = Array.isArray(authors.author) ? authors.author : [authors.author];
-  return authorsJsonFromParts(list.map((a) => ({ name: a.text ?? "" })));
+  return authorsJsonFromParts(list.map((a: { text?: string }) => ({ name: a.text ?? "" })));
 }
 
 function metadataFromHit(info: DblpHit["info"]): BibliographicMetadata | null {

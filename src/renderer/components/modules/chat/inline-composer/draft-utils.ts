@@ -13,14 +13,16 @@ export interface ComposerTabDraft {
 function normalizeLegacyMention(part: ComposerPart): ComposerPart {
   if (part.type !== "mention") return part;
   if (part.mentionType === "expert") return part;
-  const legacy = part as ComposerPart & { mentionType: "profile"; profileId: string };
+  // Legacy "profile" mentions (now "expert") are no longer in the ComposerPart
+  // union — cast through unknown to read the legacy shape for migration.
+  const legacy = part as unknown as { mentionType: string; id?: string; label?: string; profileId?: string };
   if (legacy.mentionType === "profile") {
     return {
       type: "mention",
       mentionType: "expert",
-      id: legacy.id,
-      label: legacy.label,
-      expertId: legacy.profileId,
+      id: legacy.id || createTokenId(),
+      label: legacy.label || "Profile",
+      expertId: legacy.profileId || "",
     };
   }
   return part;

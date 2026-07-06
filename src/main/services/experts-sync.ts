@@ -34,7 +34,6 @@ import {
   readBundledOrchestratorInstructions,
 } from "./bundled-orchestrators";
 import { resolveActiveModuleKeys, composeProfileModulePrompts } from "../prompts/resolve-active-modules";
-import type { PromptContext } from "../prompts/types";
 import { getAgentEditorOptions } from "./agent-editor-options";
 import type { AgentEditorOptions } from "./agent-editor-options";
 import { buildTaskPermissionBlock } from "./task-orchestrator-gate";

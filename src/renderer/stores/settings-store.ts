@@ -92,6 +92,11 @@ export interface AppSettings {
   /** After PDF extract, auto-generate AI summary + keywords (uses tokens). */
   literatureAutoAiMetadata?: boolean;
   literatureAiMetadataModel?: string;
+
+  /** Update-check source — local file path or HTTPS url to version.json. */
+  updateSource?: string;
+  /** A version the user dismissed; suppressed from "available" until unignored. */
+  ignoredUpdateVersion?: string;
 }
 
 const defaults: AppSettings = {

@@ -31,8 +31,48 @@ const ERROR_TOOL_STATUSES = new Set([
   "timed_out",
 ]);
 
+/** Statuses OpenCode emits that mean "the tool finished successfully". The ACP
+ *  binary uses several synonyms interchangeably (`completed`, `success`,
+ *  `finished`); treating only `completed` as final caused the renderer to DROP
+ *  tool_results whose status was `success`/`finished` — leaving the tool
+ *  spinning forever, then orphan-synthesized as "No result received". */
+const SUCCESS_TOOL_STATUSES = new Set([
+  "completed",
+  "success",
+  "finished",
+  "done",
+]);
+
+/** Is a status a terminal (final) result — success or error? Any non-active
+ *  status is terminal. Used to decide whether to store a tool_result. */
+export function isFinalToolStatus(status: string | undefined | null): boolean {
+  const normalized = (status || "").toLowerCase();
+  if (!normalized) return true; // empty status = treat as final (matches prior behavior)
+  return !isActiveToolStatus(normalized);
+}
+
+/** Normalize a terminal success status to `completed` for internal use + display. */
+export function normalizeToolStatus(status: string | undefined | null): string {
+  const normalized = (status || "").toLowerCase();
+  if (SUCCESS_TOOL_STATUSES.has(normalized)) return "completed";
+  return normalized;
+}
+
 export function isActiveToolStatus(status: string | undefined | null): boolean {
   return ACTIVE_TOOL_STATUSES.has((status || "").toLowerCase());
+}
+
+/** Map an error status (no output) to a legible label. Avoids labeling every
+ *  error as "Permission denied" — a cancelled or timed-out tool is not a denial.
+ *  The real permission-deny path injects its own "Permission denied" result via
+ *  `finalizePermissionDeny`/`_injectToolResult`, so this only runs when
+ *  OpenCode stored an error status with no output. */
+function errorLabelForStatus(normalized: string): string {
+  if (normalized === "denied" || normalized === "rejected") return "Permission denied";
+  if (normalized === "timeout" || normalized === "timed_out") return "Permission timed out";
+  if (normalized === "cancelled" || normalized === "canceled") return "Cancelled";
+  if (normalized === "aborted") return "Aborted";
+  return "Tool failed";
 }
 
 /** Build a tool_result block from OpenCode's embedded tool part state. */
@@ -52,7 +92,7 @@ export function createToolResultFromState(
 
   let content: string;
   if (output == null) {
-    content = isError ? "Permission denied" : "";
+    content = isError ? errorLabelForStatus(normalized) : "";
   } else {
     content = typeof output === "string" ? output : JSON.stringify(output);
   }
@@ -65,11 +105,18 @@ export function createToolResultFromState(
   };
 }
 
+/** Synthesize a tool_result for an orphan `tool_use` (no matching result). This
+ *  is the renderer-side fallback when a turn ends without the tool returning a
+ *  result — usually a lost `tool_call_update` over IPC (see tool-name-infer.ts)
+ *  or a turn interrupted mid-tool. Use a NEUTRAL label, NOT "Permission denied":
+ *  we don't know *why* the result is missing, and the real deny path injects its
+ *  own "Permission denied" content. Mislabeled orphans caused the "live = failed
+ *  / reloaded = success" discrepancy. */
 export function createOrphanToolResult(toolUseId: string): ContentBlock {
   return {
     type: "tool_result",
     tool_use_id: toolUseId,
-    content: "Permission denied",
+    content: "No result received",
     is_error: true,
   };
 }

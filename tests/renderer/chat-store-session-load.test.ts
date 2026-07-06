@@ -33,6 +33,7 @@ vi.stubGlobal("window", {
     sessionGetDirectory: vi.fn().mockResolvedValue(null),
     sessionGetContext: vi.fn().mockResolvedValue(null),
     sessionGetUserDisplays: vi.fn().mockResolvedValue([]),
+    chatRegisterTab: vi.fn().mockResolvedValue({ success: true }),
   },
 });
 
@@ -98,7 +99,7 @@ describe("chat-store session loading", () => {
       {
         type: "tool_result",
         tool_use_id: "call-denied",
-        content: "Permission denied",
+        content: "Cancelled",
         is_error: true,
       },
     ]);

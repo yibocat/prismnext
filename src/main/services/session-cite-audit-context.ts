@@ -6,19 +6,16 @@ export const CITE_AUDIT_APPENDIX_MARKER = "## Session citation audit (this chat)
 
 export interface SessionCiteAuditSnapshot {
   updatedAt: string;
-  libraryCheck?: {
+  health?: {
+    bibPath?: string | null;
     citeKeysInTex?: string[];
-    missingKeys?: string[];
-    unusedKeys?: string[];
-    bibPath?: string | null;
-    bibFallbackCount?: number;
-  };
-  bibCheck?: {
-    bibPath?: string | null;
-    missingKeys?: string[];
-    unusedKeys?: string[];
+    missingInBib?: string[];
+    unusedInBib?: string[];
     duplicateKeys?: string[];
-    libraryMissingKeys?: string[];
+    missingInLibrary?: string[];
+    unusedInLibrary?: string[];
+    bibFallbackCount?: number;
+    bibKeysNotInLibrary?: string[];
   };
 }
 
@@ -62,58 +59,46 @@ function mergeSnapshot(
   return {
     ...prev,
     ...patch,
-    libraryCheck: patch.libraryCheck
-      ? { ...prev.libraryCheck, ...patch.libraryCheck }
-      : prev.libraryCheck,
-    bibCheck: patch.bibCheck ? { ...prev.bibCheck, ...patch.bibCheck } : prev.bibCheck,
+    health: patch.health ? { ...prev.health, ...patch.health } : prev.health,
     updatedAt: new Date().toISOString(),
   };
 }
 
-/** Persist literature-cite-check JSON for per-turn agent context. */
-export function recordCiteAuditLibraryCheck(
+/**
+ * Persist a `citation-health` tool result (full CitationHealthReport) for per-turn agent context.
+ * `result` shape: { bibCheck, libraryCheck, bibFallback, bibKeysNotInLibrary } | { error }
+ */
+export function recordCiteAuditHealth(
   sessionId: string | undefined,
   result: Record<string, unknown>,
 ): void {
   const id = sessionId?.trim();
   if (!id || result.error) return;
 
-  const bibFallback = result.bibFallback;
-  const bibFallbackCount = Array.isArray(bibFallback) ? bibFallback.length : undefined;
-
-  const libraryCheck = {
-    citeKeysInTex: readStringArray(result.citeKeysInTex),
-    missingKeys: readStringArray(result.missingKeys),
-    unusedKeys: readStringArray(result.unusedKeys),
-    bibPath: typeof result.bibPath === "string" ? result.bibPath : null,
-    bibFallbackCount,
-  };
-
-  writeSnapshot(id, mergeSnapshot(id, { libraryCheck }));
-}
-
-/** Persist latex-bib-check JSON for per-turn agent context. */
-export function recordCiteAuditBibCheck(
-  sessionId: string | undefined,
-  result: Record<string, unknown>,
-): void {
-  const id = sessionId?.trim();
-  if (!id || result.error) return;
-
+  const bibCheck =
+    result.bibCheck && typeof result.bibCheck === "object" && !Array.isArray(result.bibCheck)
+      ? (result.bibCheck as Record<string, unknown>)
+      : null;
   const libraryCheck =
     result.libraryCheck && typeof result.libraryCheck === "object" && !Array.isArray(result.libraryCheck)
       ? (result.libraryCheck as Record<string, unknown>)
       : null;
+  const bibFallback = Array.isArray(result.bibFallback) ? result.bibFallback : [];
+  const bibKeysNotInLibrary = readStringArray(result.bibKeysNotInLibrary);
 
-  const bibCheck = {
-    bibPath: typeof result.bibPath === "string" ? result.bibPath : null,
-    missingKeys: readStringArray(result.missingKeys),
-    unusedKeys: readStringArray(result.unusedKeys),
-    duplicateKeys: readStringArray(result.duplicateKeys),
-    libraryMissingKeys: libraryCheck ? readStringArray(libraryCheck.missingKeys) : undefined,
+  const health: NonNullable<SessionCiteAuditSnapshot["health"]> = {
+    bibPath: typeof bibCheck?.bibPath === "string" ? bibCheck.bibPath : null,
+    citeKeysInTex: readStringArray(bibCheck?.citeKeysInTex ?? libraryCheck?.citeKeysInTex),
+    missingInBib: readStringArray(bibCheck?.missingKeys),
+    unusedInBib: readStringArray(bibCheck?.unusedKeys),
+    duplicateKeys: readStringArray(bibCheck?.duplicateKeys),
+    missingInLibrary: readStringArray(libraryCheck?.missingKeys),
+    unusedInLibrary: readStringArray(libraryCheck?.unusedKeys),
+    bibFallbackCount: bibFallback.length,
+    bibKeysNotInLibrary,
   };
 
-  writeSnapshot(id, mergeSnapshot(id, { bibCheck }));
+  writeSnapshot(id, mergeSnapshot(id, { health }));
 }
 
 function formatKeyList(keys: string[] | undefined, max = 12): string {
@@ -123,42 +108,31 @@ function formatKeyList(keys: string[] | undefined, max = 12): string {
 }
 
 export function formatSessionCiteAuditMarkdown(snapshot: SessionCiteAuditSnapshot | null): string {
-  if (!snapshot?.libraryCheck && !snapshot?.bibCheck) return "";
+  if (!snapshot?.health) return "";
 
+  const h = snapshot.health;
   const lines = [
     CITE_AUDIT_APPENDIX_MARKER,
     "",
     "Structured audit results from this chat session. **Reuse for follow-up** — do not re-run audit tools unless",
     "`.tex`/`.bib` changed or the user asks for a fresh check.",
     "",
+    "### citation-health",
   ];
 
-  if (snapshot.bibCheck) {
-    lines.push("### latex-bib-check");
-    if (snapshot.bibCheck.bibPath) lines.push(`- bib: \`${snapshot.bibCheck.bibPath}\``);
-    lines.push(`- missing in .bib: ${formatKeyList(snapshot.bibCheck.missingKeys)}`);
-    lines.push(`- unused in .tex: ${formatKeyList(snapshot.bibCheck.unusedKeys)}`);
-    lines.push(`- duplicate keys: ${formatKeyList(snapshot.bibCheck.duplicateKeys)}`);
-    if (snapshot.bibCheck.libraryMissingKeys?.length) {
-      lines.push(
-        `- missing in library.db: ${formatKeyList(snapshot.bibCheck.libraryMissingKeys)}`,
-      );
-    }
-    lines.push("");
+  if (h.bibPath) lines.push(`- manuscript .bib: \`${h.bibPath}\``);
+  lines.push(`- cite keys in .tex: ${formatKeyList(h.citeKeysInTex)}`);
+  lines.push(`- missing in .bib: ${formatKeyList(h.missingInBib)}`);
+  lines.push(`- unused in .tex: ${formatKeyList(h.unusedInBib)}`);
+  lines.push(`- duplicate keys: ${formatKeyList(h.duplicateKeys)}`);
+  lines.push(`- missing in library: ${formatKeyList(h.missingInLibrary)}`);
+  if (h.bibFallbackCount != null && h.bibFallbackCount > 0) {
+    lines.push(`- bibFallback entries (importable from .bib): ${h.bibFallbackCount}`);
   }
-
-  if (snapshot.libraryCheck) {
-    lines.push("### literature-cite-check");
-    if (snapshot.libraryCheck.bibPath) {
-      lines.push(`- manuscript .bib: \`${snapshot.libraryCheck.bibPath}\``);
-    }
-    lines.push(`- cite keys in .tex: ${formatKeyList(snapshot.libraryCheck.citeKeysInTex)}`);
-    lines.push(`- missing in library: ${formatKeyList(snapshot.libraryCheck.missingKeys)}`);
-    lines.push(`- unused library keys: ${formatKeyList(snapshot.libraryCheck.unusedKeys)}`);
-    if (snapshot.libraryCheck.bibFallbackCount != null) {
-      lines.push(`- bibFallback entries (importable from .bib): ${snapshot.libraryCheck.bibFallbackCount}`);
-    }
+  if (h.bibKeysNotInLibrary?.length) {
+    lines.push(`- .bib keys not in library (policy): ${formatKeyList(h.bibKeysNotInLibrary)}`);
   }
+  lines.push("");
 
   return lines.join("\n").trimEnd();
 }

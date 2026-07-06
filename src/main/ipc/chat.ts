@@ -489,6 +489,15 @@ export function registerChatHandlers(): void {
         }
       }
 
+      // Phase 1B: if the previous turn denied a builtin-Task delegation on the
+      // orchestrator, prepend a one-shot redirect note so the LLM is nudged
+      // toward platform tools instead of retrying Task. ACP permission
+      // rejections can't carry a reason, so we surface it on the next turn.
+      const denialRedirect = service.consumePendingTaskDenial(sessionId);
+      if (denialRedirect) {
+        userPrompt = `${userPrompt}\n\n---\n**System note:** ${denialRedirect}\n---`;
+      }
+
       log.info(
         `Sending prompt: sessionId=${sessionId} tabId=${tabId} promptLen=${userPrompt.length} ` +
         `promptSync=${isFirstTurn || promptStale}`,
@@ -779,6 +788,38 @@ export function registerChatHandlers(): void {
       return messages;
     },
   );
+
+  ipcMain.handle(
+    "session:loadWindow",
+    async (
+      _event,
+      args: {
+        sessionId: string;
+        projectPath?: string;
+        cwd?: string;
+        offset: number;
+        limit: number;
+      },
+    ) => {
+      const service = getService();
+      if (!service.getConnection()) {
+        try {
+          await service.initialize();
+        } catch (err: any) {
+          throw new Error(`Cannot load session: OpenCode is not available — ${err.message}`);
+        }
+      }
+      const cwd = args.cwd || args.projectPath || "";
+      return await service.getMessagesWindow(
+        args.sessionId,
+        cwd,
+        args.projectPath,
+        args.offset,
+        args.limit,
+      );
+    },
+  );
+
 
   ipcMain.handle("session:getDirectory", async (_event, args: { sessionId: string }) => {
     const service = getService();

@@ -30,4 +30,13 @@ describe("task-orchestrator-gate", () => {
     expect(shouldDenyOrchestratorBuiltinTask("general")).toBe(true);
     expect(shouldDenyOrchestratorBuiltinTask("citation-auditor")).toBe(false);
   });
+
+  it("shouldDenyOrchestratorBuiltinTask denies null/empty subagent (the null-hole fix)", () => {
+    // OpenCode defaults to `general` when subagent_type is omitted — a missing id
+    // MUST be treated as a built-in and denied, or the orchestrator bypasses the
+    // gate by calling task({ prompt }) with no subagent_type.
+    expect(shouldDenyOrchestratorBuiltinTask(null)).toBe(true);
+    expect(shouldDenyOrchestratorBuiltinTask(undefined)).toBe(true);
+    expect(shouldDenyOrchestratorBuiltinTask("")).toBe(true);
+  });
 });

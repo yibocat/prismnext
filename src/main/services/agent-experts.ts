@@ -20,6 +20,9 @@ export interface OrchestratorDefinition {
   name: string;
   description: string;
   builtin?: boolean;
+  /** Present and true on user-created orchestrators — marks them as deletable
+   *  in the UI (built-in orchestrators cannot be removed, only disabled). */
+  removable?: boolean;
   model?: string;
   thoughtLevel?: string;
   temperature?: number;

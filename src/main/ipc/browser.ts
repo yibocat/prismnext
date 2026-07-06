@@ -4,6 +4,15 @@ import * as path from "path";
 
 const BROWSER_DIR = ".prismnext/browser";
 
+/**
+ * Partition used by the in-app browser `<webview>` (see browser-view.tsx).
+ * Isolates browser cookies/storage/cache from the renderer's default session so
+ * that (a) clearing browser data doesn't wipe app session state, and (b) any
+ * CSP / permission policy on the default session doesn't leak to web content.
+ * `persist:` keeps login state across restarts.
+ */
+const BROWSER_PARTITION = "persist:browser";
+
 interface Bookmark {
   id: string;
   title: string;
@@ -107,7 +116,7 @@ export function registerBrowserHandlers(): void {
 
   ipcMain.handle("browser:clearCookies", async () => {
     try {
-      await session.defaultSession.clearStorageData({ storages: ["cookies"] });
+      await session.fromPartition(BROWSER_PARTITION).clearStorageData({ storages: ["cookies"] });
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err?.message ?? "Unknown error" };
@@ -116,9 +125,10 @@ export function registerBrowserHandlers(): void {
 
   ipcMain.handle("browser:clearCache", async () => {
     try {
-      await session.defaultSession.clearCache();
+      const browserSession = session.fromPartition(BROWSER_PARTITION);
+      await browserSession.clearCache();
       // Also clear localStorage / service worker caches for all origins
-      await session.defaultSession.clearStorageData({
+      await browserSession.clearStorageData({
         storages: ["localstorage", "serviceworkers", "cachestorage", "indexdb", "websql"],
       });
       return { success: true };

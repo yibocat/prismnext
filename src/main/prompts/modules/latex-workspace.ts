@@ -40,16 +40,15 @@ export function buildLatexWorkspacePrompt(ctx: PromptContext): string {
     "",
     "### Agent compile chain (binding)",
     "",
-    `- Run \`${TOOL_NAMES.latexRoot}\`, \`${TOOL_NAMES.latexCompile}\`, and \`${TOOL_NAMES.latexBibCheck}\` **in this conversation** — do **not** wrap them in Task or sub-agents.`,
+    `- Run \`${TOOL_NAMES.latexRoot}\` and \`${TOOL_NAMES.latexCompile}\` **in this conversation** — do **not** wrap them in Task or sub-agents.`,
     `1. \`${TOOL_NAMES.latexRoot}\` — resolve main .tex, engine, bib tool, and manuscript folder when unsure.`,
     `2. Edit .tex / .bib under the configured manuscript folder with read/write/edit tools.`,
     `3. \`${TOOL_NAMES.latexCompile}\` — verify the document builds; read structured errors on failure.`,
-    `4. \`${TOOL_NAMES.latexBibCheck}\` — .tex vs project .bib (includes library.db check by default).`,
     "",
     "### Notes",
     "",
     "- User can compile via UI (Cmd+Enter) or `/compile` — agent tools mirror that pipeline for verification.",
-    `- \`${TOOL_NAMES.literatureCite}\` writes **library** papers into the project .bib; \`${TOOL_NAMES.latexBibCheck}\` validates **manuscript** .tex ↔ .bib (+ library by default).`,
+    `- \`${TOOL_NAMES.literatureExportBib}\` writes **library** papers into the project .bib; \`${TOOL_NAMES.citationHealth}\` validates **manuscript** .tex ↔ .bib ↔ library.`,
     "- Do not delete `.prismnext/compile/` manually — it is the incremental build cache.",
   ].join("\n");
 }

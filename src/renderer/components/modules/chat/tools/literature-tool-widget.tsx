@@ -10,9 +10,9 @@ const LABELS: Record<string, string> = {
   "literature-search": "Search literature library",
   "literature-stage": "Stage citation",
   "literature-add": "Add paper to library",
-  "literature-cite": "Add paper to .bib",
-  "literature-cite-check": "Library cite check",
   "literature-export-bib": "Export library to .bib",
+  "literature-delete": "Delete paper from library",
+  "citation-health": "Citation health audit",
 };
 
 function parseToolJson(content: unknown): Record<string, unknown> | null {
@@ -135,6 +135,23 @@ function LiteratureResultSummary({
     );
   }
 
+  if (toolName === "literature-delete" && data.success) {
+    const bibkey = typeof data.bibkey === "string" ? data.bibkey : "";
+    const title = typeof data.title === "string" ? data.title : "";
+    return (
+      <p className="text-[length:var(--font-chat-meta)] text-muted-foreground">
+        {bibkey ? (
+          <>
+            Deleted <span className="font-mono">{bibkey}</span>
+            {title ? ` — ${title}` : ""}
+          </>
+        ) : (
+          "Paper removed from library."
+        )}
+      </p>
+    );
+  }
+
   if (toolName === "literature-search" && Array.isArray(data.results)) {
     return (
       <p className="text-[length:var(--font-chat-meta)] text-muted-foreground">
@@ -143,14 +160,26 @@ function LiteratureResultSummary({
     );
   }
 
-  if (toolName === "literature-cite-check") {
-    const missing = Array.isArray(data.missingKeys) ? data.missingKeys : [];
-    const unused = Array.isArray(data.unusedKeys) ? data.unusedKeys : [];
+  if (toolName === "citation-health") {
+    const bibCheck =
+      data.bibCheck && typeof data.bibCheck === "object"
+        ? (data.bibCheck as Record<string, unknown>)
+        : null;
+    const libraryCheck =
+      data.libraryCheck && typeof data.libraryCheck === "object"
+        ? (data.libraryCheck as Record<string, unknown>)
+        : null;
+    const bibMissing = Array.isArray(bibCheck?.missingKeys) ? (bibCheck!.missingKeys as string[]) : [];
+    const bibUnused = Array.isArray(bibCheck?.unusedKeys) ? (bibCheck!.unusedKeys as string[]) : [];
+    const dupes = Array.isArray(bibCheck?.duplicateKeys) ? (bibCheck!.duplicateKeys as string[]) : [];
+    const libMissing = Array.isArray(libraryCheck?.missingKeys) ? (libraryCheck!.missingKeys as string[]) : [];
+    const libUnused = Array.isArray(libraryCheck?.unusedKeys) ? (libraryCheck!.unusedKeys as string[]) : [];
     const bibFallback = Array.isArray(data.bibFallback) ? data.bibFallback : [];
     const importable = bibFallback.filter(
       (e) => typeof e === "object" && e && (e as { canImportFromBib?: boolean }).canImportFromBib,
     ).length;
-    const ok = missing.length === 0;
+    const notInLib = Array.isArray(data.bibKeysNotInLibrary) ? (data.bibKeysNotInLibrary as string[]) : [];
+    const ok = bibMissing.length === 0 && dupes.length === 0 && libMissing.length === 0;
     return (
       <div className="space-y-1 text-[length:var(--font-chat-meta)]">
         <p className="flex items-center gap-1.5">
@@ -160,13 +189,35 @@ function LiteratureResultSummary({
             <XCircleIcon className="size-3.5 shrink-0 text-amber-600" />
           )}
           <span className="text-foreground">
-            Library: {missing.length} missing · {unused.length} unused in .tex
+            .bib: {bibMissing.length} missing · {bibUnused.length} unused · {dupes.length} duplicate
           </span>
+        </p>
+        <p className="text-muted-foreground">
+          Library: {libMissing.length} missing · {libUnused.length} unused
         </p>
         {importable > 0 ? (
           <p className="text-muted-foreground">
             {importable} missing key{importable === 1 ? "" : "s"} found in manuscript .bib
           </p>
+        ) : null}
+        {(() => {
+          const unverified = bibFallback.filter(
+            (e) => typeof e === "object" && e && (e as { verified?: boolean }).verified === false,
+          ).length;
+          if (unverified === 0) return null;
+          return (
+            <p className="text-destructive">
+              {unverified} unverified ref{unverified === 1 ? "" : "s"} (suspected fabrication)
+            </p>
+          );
+        })()}
+        {notInLib.length > 0 ? (
+          <p className="text-muted-foreground">
+            {notInLib.length} .bib key{notInLib.length === 1 ? "" : "s"} not in library
+          </p>
+        ) : null}
+        {typeof bibCheck?.bibPath === "string" ? (
+          <p className="text-muted-foreground truncate">Bib: {bibCheck.bibPath}</p>
         ) : null}
       </div>
     );
@@ -184,14 +235,6 @@ function LiteratureResultSummary({
           <p className="truncate">Bib: {data.bibPath}</p>
         ) : null}
       </div>
-    );
-  }
-
-  if (toolName === "literature-cite" && typeof data.bibPath === "string") {
-    return (
-      <p className="text-[length:var(--font-chat-meta)] text-muted-foreground">
-        {data.appended === false ? "Already in .bib" : "Appended to .bib"} · {data.bibPath}
-      </p>
     );
   }
 

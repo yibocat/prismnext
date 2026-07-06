@@ -26,6 +26,7 @@ import {
   ZapIcon,
   Loader2Icon,
   CircleCheckIcon,
+  SquareIcon,
 } from "lucide-react";
 
 // ─── Copy Button ───
@@ -205,6 +206,12 @@ const AssistantMessage = memo(function AssistantMessage({
           sessionId={sessionId}
         />
       </div>
+      {msg.stopped && (
+        <div className="mt-1 flex items-center gap-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
+          <SquareIcon className="size-3 shrink-0 fill-current" />
+          <span>已停止</span>
+        </div>
+      )}
     </div>
   );
 });
@@ -467,6 +474,12 @@ export const ChatMessages = memo(function ChatMessages() {
     ? committed.idxMap.get(turns[turns.length - 1].userMessage!) ?? turns.length
     : turns.length;
 
+  // Track the last user message OBJECT so we can distinguish between:
+  //  - a genuinely new message appended at the tail (should reset auto-scroll)
+  //  - idxMap indices shifting due to history prepend (should NOT reset auto-scroll)
+  const lastTurnUserMsg = turns[turns.length - 1]?.userMessage ?? null;
+  const prevLastUserMsgRef = useRef<ChatStreamMessage | null>(null);
+
   /** Apply runway + pin once session content is mounted (fixes cold-start race). */
   const applyRunwayAndPin = useCallback(() => {
     const container = scrollRef.current;
@@ -523,9 +536,17 @@ export const ChatMessages = memo(function ChatMessages() {
   }, [isStreaming]);
 
   useLayoutEffect(() => {
-    shouldAutoScrollRef.current = true;
-    setIsActiveTurnMode(true);
-  }, [lastTurnUserKey]);
+    // Only reset auto-scroll when a genuinely NEW user message appears at the
+    // tail (new turn), not when idxMap indices shift due to history prepend.
+    const msg = lastTurnUserMsg;
+    const isNewUserMsg = msg !== null && msg !== prevLastUserMsgRef.current;
+    prevLastUserMsgRef.current = msg;
+
+    if (isNewUserMsg) {
+      shouldAutoScrollRef.current = true;
+      setIsActiveTurnMode(true);
+    }
+  }, [lastTurnUserMsg, lastTurnUserKey]);
 
   // Session / tab content just mounted after loading spinner — pin before paint settles.
   useLayoutEffect(() => {

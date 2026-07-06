@@ -113,3 +113,23 @@ export function resolveLiteratureToolTitle(title: string): string | null {
   const match = lower.match(/^literature-(read-pdf|read|search|cite|add|stage)$/);
   return match ? lower : null;
 }
+
+/**
+ * All Prism custom tool names — used to recover the tool name from the ACP
+ * `title` field when `kind` is "other" (the default for custom tools). Without
+ * this, custom tools like `citation-health` fall through to
+ * `KIND_TO_TOOL["other"] = "task"` and render as task@general during LIVE
+ * streaming. The persisted JSONL keeps the real name, so the bug only shows
+ * live and disappears on reload/project-switch.
+ */
+const PRISM_TOOL_NAMES = new Set([
+  "question", "bash", "delete", "move",
+  "literature-search", "literature-stage", "literature-add",
+  "literature-read", "literature-read-pdf", "literature-export-bib",
+  "literature-delete", "citation-health", "latex-root", "latex-compile",
+]);
+
+export function resolvePrismToolTitle(title: string): string | null {
+  const lower = title.toLowerCase().trim();
+  return PRISM_TOOL_NAMES.has(lower) ? lower : null;
+}

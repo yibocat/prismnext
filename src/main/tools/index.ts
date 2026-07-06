@@ -144,7 +144,8 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     category: "reference",
     usageHint:
       "Full-text search only within the local library (`.prismnext/library/library.db`). " +
-      "Use to find papers already added to the project. Does NOT search the web.",
+      "Use to find papers already added to the project. Does NOT search the web. " +
+      "Optional collection= filters by collection name; the response always includes a `collections` roster (id, name, paperCount).",
   },
   {
     name: TOOL_NAMES.literatureStage,
@@ -182,9 +183,23 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     label: "Add Paper",
     description: "Add a paper to the library by verified DOI or arXiv ID (catalog lookup required)",
     category: "reference",
-    usageHint: "Write a verified paper into the project library.",
+    usageHint: "Write a verified paper into the project library. Optional collection= adds the new paper to a named collection (must already exist).",
     workflowRules: [
       'Use ONLY when the user explicitly says "add to library" / "加入文献库". Never auto-invoke.',
+    ],
+  },
+  {
+    name: TOOL_NAMES.literatureDelete,
+    label: "Delete Paper",
+    description: "Delete a paper from the project literature library by bibkey",
+    category: "reference",
+    usageHint:
+      "Remove a paper from `.prismnext/library/library.db` by exact bibkey. " +
+      "Also cleans up its PDF cache and annotations.",
+    workflowRules: [
+      'Use ONLY when the user explicitly says "delete" / "remove" / "删除" a paper. Never auto-invoke.',
+      "Destructive — confirm the bibkey with the user before calling if there is any ambiguity.",
+      "Prefer confirming the paper via literature-read first when unsure which paper to remove.",
     ],
   },
   {
@@ -218,29 +233,24 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     ],
   },
   {
-    name: TOOL_NAMES.literatureCite,
-    label: "Cite Paper",
-    description: "Add a library paper to the project .bib bibliography",
-    category: "reference",
-    usageHint: "Append a library paper's BibTeX entry to the project `.bib` file.",
-  },
-  {
-    name: TOOL_NAMES.literatureCiteCheck,
-    label: "Library Cite Check",
+    name: TOOL_NAMES.citationHealth,
+    label: "Citation Health",
     description:
-      "Structured audit: every \\cite key in project .tex vs literature library.db bibkeys.",
+      "Unified citation health audit: every \\cite key in .tex ↔ project .bib ↔ literature library.db in one call.",
     category: "reference",
     usageHint:
-      "Prefer this over read/glob/grep on .tex or .bib when checking citation compliance, missing papers, " +
-      "or whether cited keys exist in the library. Scans all project .tex automatically (no args). " +
-      "Returns JSON: citeKeysInTex, missingKeys, unusedKeys, bibFallback (entries importable from manuscript .bib).",
+      "Single source of truth for citation compliance — replaces separate bib-check and library-check calls. " +
+      "Scans all project .tex automatically. Returns JSON: bibCheck (missingKeys, unusedKeys, duplicateKeys, bibPath), " +
+      "libraryCheck (missingKeys, unusedKeys), bibFallback (entries importable from manuscript .bib; each entry has " +
+      "verified=true/false when verify=true — true means DOI/arXiv resolved in catalogs = traceable, false = unverifiable/fabricated), " +
+      "bibKeysNotInLibrary. verify defaults true.",
     workflowRules: [
-      "BINDING: Do not report .tex ↔ library citation compliance from read/glob/grep — call this tool and use its JSON.",
-      "Do NOT use the Task tool or subagents to run this audit — call this tool in the current conversation.",
-      "When the user asks to check citations or names this tool, invoke it directly — do not delegate.",
-      "One call replaces manually listing \\cite keys and cross-checking library.db.",
-      "For .tex vs references.bib file alignment, also call latex-bib-check before writing your audit summary.",
-      "Do not write the compliance report until this tool and latex-bib-check have returned for this turn.",
+      "BINDING: call this tool directly in this conversation — never via the Task tool or subagents, never substitute read/glob/grep on .tex or .bib.",
+      "When the user asks to check citations, bibliography, or references, invoke this tool directly — do not delegate.",
+      "One call returns the full .tex ↔ .bib ↔ library picture — do not also call latex-bib-check or literature-cite-check (removed).",
+      "Do not write the compliance report until this tool has returned for this turn.",
+      "When verify=true, bibFallback.verified flags fabricated/untraceable references — report unverified entries as suspected fabrication, and do NOT recommend importing them unless the user confirms the identifier.",
+      "Reuse the Session citation audit snapshot if present below — do not re-run unless .tex/.bib changed or the user asks for a fresh check.",
     ],
   },
   {
@@ -280,26 +290,6 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "Run `latex-root` first when main file is unknown.",
       "On failure, read errors/logTail before retrying — fix root cause, do not loop blindly.",
       "User can also compile via UI (Cmd+Enter) or `/compile` — this tool is for agent verification.",
-    ],
-  },
-  {
-    name: TOOL_NAMES.latexBibCheck,
-    label: "Bib Check",
-    description:
-      "Structured audit: \\cite keys in .tex vs project .bib (and library.db when includeLibraryCheck).",
-    category: "compile",
-    usageHint:
-      "Prefer this over read/glob on main.tex and references.bib when checking bibliography consistency, " +
-      "missing or duplicate bibkeys, or reference format issues. Auto-detects main .tex and .bib paths. " +
-      "Returns JSON: missingKeys, unusedKeys, duplicateKeys, bibPath, libraryCheck.",
-    workflowRules: [
-      "BINDING: Do not report .tex ↔ .bib alignment from read/glob/grep — call this tool and use its JSON.",
-      "Do NOT use the Task tool or subagents to run this audit — call this tool in the current conversation.",
-      "When the user asks to check bibliography or names this tool, invoke it directly — do not delegate.",
-      "includeLibraryCheck defaults to true.",
-      "One call replaces manually diffing .tex cites against the .bib file.",
-      "For library.db-only gaps, also call literature-cite-check before writing your audit summary.",
-      "Do not write the compliance report until this tool and literature-cite-check have returned for this turn.",
     ],
   },
 ];

@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useMemo } from "react";
 import {
   ChevronRightIcon,
-  FolderIcon,
-  FolderOpenIcon,
 } from "lucide-react";
-import { Icon } from "@iconify/react";
+import { Icon } from "@iconify/react/offline";
 import { useGitStore, type GitFileItem } from "@/stores/git-store";
 import { cn } from "@/lib/utils";
-import { getFileIconName } from "@/lib/files/file-icon-class";
+import { getFileIconName, getFolderIconName, getFolderOpenIconName } from "@/lib/files/file-icon-class";
 import {
   collectGitChangeFolderPaths,
   flattenGitChangesTree,
@@ -87,11 +85,10 @@ export function GitChangesTreeSidebar({ files }: GitChangesTreeSidebarProps) {
                   isOpen && "rotate-90",
                 )}
               />
-              {isOpen ? (
-                <FolderOpenIcon className="size-3.5 shrink-0 opacity-70" />
-              ) : (
-                <FolderIcon className="size-3.5 shrink-0 opacity-70" />
-              )}
+              <Icon
+                icon={isOpen ? getFolderOpenIconName() : getFolderIconName()}
+                className="size-3.5 shrink-0 opacity-70"
+              />
               <span className="truncate">{row.name}</span>
             </button>
           );

@@ -191,12 +191,12 @@ export default tool({
       return { output: "Permission timed out waiting for user approval", exit: 1 };
     }
 
-    const src = path.isAbsolute(args.source_path)
-      ? args.source_path
-      : path.resolve(cwd, args.source_path);
-    const dst = path.isAbsolute(args.destination_path)
-      ? args.destination_path
-      : path.resolve(cwd, args.destination_path);
+    const src = path.isAbsolute(String(args.source_path))
+      ? String(args.source_path)
+      : path.resolve(cwd, String(args.source_path));
+    const dst = path.isAbsolute(String(args.destination_path))
+      ? String(args.destination_path)
+      : path.resolve(cwd, String(args.destination_path));
 
     if (!fs.existsSync(src)) {
       return { output: `Source not found: ${args.source_path}`, exit: 1 };

@@ -1,0 +1,214 @@
+import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
+
+// electron-store fails to construct without a projectName option; stub it so
+// transitive imports of settings.ts don't blow up at import time.
+vi.mock("electron-store", () => ({
+  default: class {
+    constructor() {}
+    get() { return undefined; }
+    set() {}
+    store = {};
+  },
+}));
+
+// AcpService stub: track markSubAgentSession + isSubAgentSession so mapSessionUpdate
+// can run without a real OpenCode process.
+const acpStub = {
+  markSubAgentSession: vi.fn(),
+  isSubAgentSession: vi.fn().mockReturnValue(false),
+  isSessionReplaySuppressed: vi.fn().mockReturnValue(false),
+  getSessionParentId: vi.fn().mockReturnValue(null),
+  resolveCitationStagingSessionId: vi.fn().mockReturnValue(null),
+};
+vi.mock("../../src/main/acp/service", () => ({
+  AcpService: { getInstance: () => acpStub },
+}));
+
+import { EventMapper } from "../../src/main/acp/event-mapper";
+
+function makeMockWin() {
+  const send = vi.fn();
+  return {
+    win: { webContents: { send } } as any,
+    send,
+  };
+}
+
+describe("EventMapper Task link watchdog", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("fires subAgent.completed(error) when a tracked Task never links", () => {
+    const { win, send } = makeMockWin();
+    const mapper = new EventMapper(win);
+    const tabId = "tab-1";
+    const toolUseId = "tooluse-1";
+    (mapper as any).pendingTasksByTab.set(tabId, [
+      { toolUseId, expertId: "citation-auditor", prompt: "audit my cites" },
+    ]);
+
+    (mapper as any).startTaskLinkWatchdog(tabId, toolUseId, "citation-auditor");
+
+    // Not fired yet.
+    expect(send).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(89_999);
+    expect(send).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1); // cross the 90s threshold
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith("chat:stream", {
+      tabId,
+      type: "subAgent.completed",
+      data: expect.objectContaining({
+        taskToolUseId: toolUseId,
+        status: "error",
+        error: expect.stringContaining("citation-auditor"),
+      }),
+    });
+    // Pending task consumed.
+    expect((mapper as any).pendingTasksByTab.get(tabId)).toBeUndefined();
+  });
+
+  it("does NOT fire when cleared by link before timeout", () => {
+    const { win, send } = makeMockWin();
+    const mapper = new EventMapper(win);
+    const tabId = "tab-2";
+    const toolUseId = "tooluse-2";
+    (mapper as any).pendingTasksByTab.set(tabId, [
+      { toolUseId, expertId: "literature-scout", prompt: "find papers" },
+    ]);
+    (mapper as any).startTaskLinkWatchdog(tabId, toolUseId, "literature-scout");
+
+    // Simulate a successful link before timeout: linkSubAgentSession clears the
+    // watchdog. We call the private clearer directly to isolate watchdog behavior.
+    (mapper as any).clearTaskLinkWatchdog(toolUseId);
+
+    vi.advanceTimersByTime(120_000);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("handleTaskLinkTimeout is a no-op if the task already linked/completed", () => {
+    const { win, send } = makeMockWin();
+    const mapper = new EventMapper(win);
+    // No pending task for this tab — already consumed.
+    (mapper as any).handleTaskLinkTimeout("tab-3", "tooluse-3", "library-scout");
+    expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe("EventMapper Task dispatch recognition (kind:think, title:task)", () => {
+  // Regression: OpenCode dispatches the Task tool (subagent delegation) as a
+  // tool_call with kind:"think" and title:"task" and an EMPTY rawInput. Before
+  // the fix, this fell through to KIND_TO_TOOL["think"]="todowrite", so the
+  // subagent was never tracked (Q2: invisible hang) and the later tool_call_update
+  // carrying <task_result> couldn't complete it (Q1: "No result received" live).
+  it("recognizes title:task + kind:think + empty input as a Task (not todowrite) and tracks it", () => {
+    const { win, send } = makeMockWin();
+    const mapper = new EventMapper(win);
+    const tabId = "tab-task";
+    // Simulate the tab<->session mapping that registerSession would set up.
+    (mapper as any).tabToSession.set(tabId, "ses-parent");
+    (mapper as any).sessionToTab.set("ses-parent", tabId);
+
+    // Real-shaped ACP tool_call event captured from prism-next.log.
+    const toolCallParams = {
+      sessionId: "ses-parent",
+      update: {
+        sessionUpdate: "tool_call",
+        messageId: "msg-1",
+        tool_call: {
+          kind: "think",
+          title: "task",
+          toolCallId: "call_00_taskdispatch",
+          rawInput: {},
+          status: "pending",
+          locations: [],
+        },
+      },
+    };
+
+    (mapper as any).mapSessionUpdate(tabId, "ses-parent", toolCallParams);
+
+    // The tool_call should have been emitted with name "task" (NOT "todowrite").
+    const partUpdate = send.mock.calls.find(
+      (c) => c[0] === "chat:stream" && c[1]?.type === "message.part.updated",
+    );
+    expect(partUpdate).toBeTruthy();
+    expect(partUpdate![1].data.part.name).toBe("task");
+
+    // And a pending subAgent.linked must have been emitted (trackTaskToolUse ran).
+    const linked = send.mock.calls.find(
+      (c) => c[0] === "chat:stream" && c[1]?.type === "subAgent.linked",
+    );
+    expect(linked).toBeTruthy();
+    expect(linked![1].data.taskToolUseId).toBe("call_00_taskdispatch");
+
+    // And the link watchdog must be armed.
+    expect((mapper as any).taskLinkTimeouts.has("call_00_taskdispatch")).toBe(true);
+
+    // CRUCIALLY: no deny was emitted (empty input must not false-trigger the
+    // built-in deny gate).
+    const denied = send.mock.calls.find(
+      (c) => c[0] === "chat:stream" && c[1]?.type === "tool_result" && c[1]?.data?.is_error,
+    );
+    expect(denied).toBeUndefined();
+  });
+
+  it("completes the Task when its tool_call_update carries <task_result> with title:task", () => {
+    const { win, send } = makeMockWin();
+    const mapper = new EventMapper(win);
+    const tabId = "tab-task2";
+    (mapper as any).tabToSession.set(tabId, "ses-parent2");
+    (mapper as any).sessionToTab.set("ses-parent2", tabId);
+
+    // First the tool_call (tracked).
+    (mapper as any).mapSessionUpdate(tabId, "ses-parent2", {
+      sessionId: "ses-parent2",
+      update: {
+        sessionUpdate: "tool_call",
+        messageId: "msg-2",
+        tool_call: {
+          kind: "think",
+          title: "task",
+          toolCallId: "call_task2",
+          rawInput: {},
+          status: "pending",
+          locations: [],
+        },
+      },
+    });
+
+    // Then the tool_call_update with the <task_result> content + title:task.
+    (mapper as any).mapSessionUpdate(tabId, "ses-parent2", {
+      sessionId: "ses-parent2",
+      update: {
+        sessionUpdate: "tool_call_update",
+        messageId: "msg-2",
+        tool_call_update: {
+          toolCallId: "call_task2",
+          title: "task",
+          kind: "think",
+          status: "completed",
+          rawInput: {},
+          rawOutput: '<task id="ses_child" state="completed"><task_result>done</task_result></task>',
+          content: [],
+          locations: [],
+        },
+      },
+    });
+
+    // completeSubAgentTask should have emitted subAgent.completed.
+    const completed = send.mock.calls.find(
+      (c) => c[0] === "chat:stream" && c[1]?.type === "subAgent.completed",
+    );
+    expect(completed).toBeTruthy();
+    expect(completed![1].data.taskToolUseId).toBe("call_task2");
+    expect(completed![1].data.status).toBe("done");
+    // Watchdog cleared after completion.
+    expect((mapper as any).taskLinkTimeouts.has("call_task2")).toBe(false);
+  });
+});

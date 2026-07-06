@@ -42,7 +42,7 @@ export const ALL_MODULES: PromptModule[] = [
     key: "citation-audit",
     label: "Citation & Bibliography Audit",
     description:
-      "Manuscript .tex ↔ .bib ↔ library compliance via latex-bib-check and literature-cite-check — not read/glob scans.",
+      "Manuscript .tex ↔ .bib ↔ library compliance via citation-health — not read/glob scans.",
     enabled: true,
     profileOnly: true,
     source: "app",
@@ -72,7 +72,7 @@ export const ALL_MODULES: PromptModule[] = [
     key: "latex-workspace",
     label: "LaTeX Workspace (compile chain)",
     description:
-      "Build dir, latex-root/compile/bib-check tool chain; manuscript folder from Workspace settings.",
+      "Build dir, latex-root/compile tool chain; manuscript folder from Workspace settings.",
     enabled: true,
     profileOnly: true,
     source: "app",

@@ -74,12 +74,15 @@ export const TOOL_PERMISSION_REGISTRY: Record<string, ToolPermissionEntry> = {
   "literature-read-pdf": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "literature-stage": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "literature-add": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
-  "literature-cite": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
-  "literature-cite-check": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
+  "literature-delete": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: DESTRUCTIVE },
+  "citation-health": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "literature-export-bib": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
   "latex-root": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
-  "latex-compile": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
-  "latex-bib-check": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
+  // latex-compile spawns tectonic/latexmk child processes (via compiler.ts),
+  // so it must follow SHELL rules — prompt in ask/auto, deny in readonly.
+  // Previously misclassified as READ_ONLY, which auto-allowed compilation
+  // (including subprocess spawn) even in read-only mode.
+  "latex-compile": { permissionGroup: "shell", confirmUx: "none", rules: SHELL },
 };
 
 export function getToolPermissionEntry(toolName: string): ToolPermissionEntry | undefined {

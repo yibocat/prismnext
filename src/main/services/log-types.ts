@@ -10,6 +10,8 @@ export type LogCategory =
   | "compile"
   | "fs"
   | "ipc"
+  | "crash"
+  | "security"
   | "general";
 
 export interface LogEntry {

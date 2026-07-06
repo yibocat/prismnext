@@ -102,8 +102,7 @@ const VARIANT_CLASS: Record<InlineTokenVariant, string> = {
     "text-indigo-950 dark:text-indigo-50",
     "border-indigo-500/28",
     "[&_svg]:text-indigo-700 dark:[&_svg]:text-indigo-300",
-    "font-mono font-medium cursor-pointer",
-    "hover:bg-indigo-500/18 hover:border-indigo-500/40",
+    "font-mono font-medium cursor-pointer hover:bg-indigo-500/18 hover:border-indigo-500/40",
   ),
 };
 

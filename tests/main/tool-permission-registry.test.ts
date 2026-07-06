@@ -1,0 +1,116 @@
+import { describe, it, expect } from "vitest";
+import {
+  TOOL_PERMISSION_REGISTRY,
+  getToolPermissionEntry,
+  buildPermissionRulesForMode,
+} from "../../src/main/services/tool-permission-registry";
+import {
+  resolvePermissionAction,
+  getPermissionRuleForTool,
+} from "../../src/main/services/permission-modes";
+
+// Rule shape constants (mirror the ones in tool-permission-registry.ts so the
+// test pins classifications independently of the constant names).
+const READ_ONLY = { ask: "allow", auto: "allow", readonly: "allow" };
+const SHELL = { ask: "ask", auto: "ask", readonly: "deny" };
+const FILE_MUTATION = { ask: "ask", auto: "allow", readonly: "deny" };
+const DESTRUCTIVE = { ask: "ask", auto: "ask", readonly: "deny" };
+
+describe("tool permission registry — classifications", () => {
+  it("classifies latex-compile as SHELL (spawns tectonic/latexmk subprocesses)", () => {
+    // Regression guard: previously misclassified as READ_ONLY, which auto-allowed
+    // compilation — including child-process spawn — in read-only mode.
+    const entry = TOOL_PERMISSION_REGISTRY["latex-compile"];
+    expect(entry).toBeDefined();
+    expect(entry.permissionGroup).toBe("shell");
+    expect(entry.rules).toEqual(SHELL);
+  });
+
+  it("classifies bash as SHELL", () => {
+    expect(TOOL_PERMISSION_REGISTRY["bash"].permissionGroup).toBe("shell");
+    expect(TOOL_PERMISSION_REGISTRY["bash"].rules).toEqual(SHELL);
+  });
+
+  it("classifies read-only tools as READ_ONLY", () => {
+    const readOnly = [
+      "read",
+      "grep",
+      "glob",
+      "webfetch",
+      "websearch",
+      "question",
+      "task",
+      "skill",
+      "todowrite",
+      "literature-search",
+      "literature-read",
+      "literature-read-pdf",
+      "literature-stage",
+      "citation-health",
+      "latex-root",
+    ];
+    for (const tool of readOnly) {
+      const entry = TOOL_PERMISSION_REGISTRY[tool];
+      expect(entry, `expected ${tool} in registry`).toBeDefined();
+      expect(entry.rules).toEqual(READ_ONLY);
+    }
+  });
+
+  it("classifies destructive tools as DESTRUCTIVE (deny in readonly, ask otherwise)", () => {
+    const destructive = ["delete", "move", "literature-delete"];
+    for (const tool of destructive) {
+      const entry = TOOL_PERMISSION_REGISTRY[tool];
+      expect(entry, `expected ${tool} in registry`).toBeDefined();
+      expect(entry.permissionGroup).toBe("file_write");
+      expect(entry.rules).toEqual(DESTRUCTIVE);
+    }
+  });
+
+  it("classifies file-mutation tools as FILE_MUTATION (allow in auto, deny in readonly)", () => {
+    // edit/write/literature-add/literature-export-bib are group "file_write";
+    // apply_patch is group "patch" (same FILE_MUTATION rules, different confirmUx).
+    const fileWrite = ["edit", "write", "literature-add", "literature-export-bib"];
+    for (const tool of fileWrite) {
+      const entry = TOOL_PERMISSION_REGISTRY[tool];
+      expect(entry, `expected ${tool} in registry`).toBeDefined();
+      expect(entry.permissionGroup).toBe("file_write");
+      expect(entry.rules).toEqual(FILE_MUTATION);
+    }
+    const patch = TOOL_PERMISSION_REGISTRY["apply_patch"];
+    expect(patch.permissionGroup).toBe("patch");
+    expect(patch.rules).toEqual(FILE_MUTATION);
+  });
+});
+
+describe("tool permission registry — resolution", () => {
+  it("resolves latex-compile rules per mode (the A1 fix)", () => {
+    expect(getPermissionRuleForTool("ask", "latex-compile")).toBe("ask");
+    expect(getPermissionRuleForTool("auto", "latex-compile")).toBe("ask");
+    expect(getPermissionRuleForTool("readonly", "latex-compile")).toBe("deny");
+  });
+
+  it("resolves latex-compile actions: prompt in ask/auto, deny in readonly", () => {
+    expect(resolvePermissionAction("ask", "latex-compile")).toBe("prompt");
+    expect(resolvePermissionAction("auto", "latex-compile")).toBe("prompt");
+    expect(resolvePermissionAction("readonly", "latex-compile")).toBe("deny");
+  });
+
+  it("emits latex-compile rule in buildPermissionRulesForMode for every mode", () => {
+    expect(buildPermissionRulesForMode("ask")["latex-compile"]).toBe("ask");
+    expect(buildPermissionRulesForMode("auto")["latex-compile"]).toBe("ask");
+    expect(buildPermissionRulesForMode("readonly")["latex-compile"]).toBe("deny");
+  });
+
+  it("getToolPermissionEntry falls back for write*/edit*/apply_patch*/lsp-* prefixes", () => {
+    expect(getToolPermissionEntry("write123")?.permissionGroup).toBe("file_write");
+    expect(getToolPermissionEntry("editXYZ")?.permissionGroup).toBe("file_write");
+    expect(getToolPermissionEntry("apply_patch_foo")?.permissionGroup).toBe("patch");
+    const lsp = getToolPermissionEntry("lsp-go-to-definition");
+    expect(lsp?.permissionGroup).toBe("read");
+    expect(lsp?.rules.readonly).toBe("allow");
+  });
+
+  it("returns undefined for unknown tools without a matching prefix", () => {
+    expect(getToolPermissionEntry("totally-unknown-tool")).toBeUndefined();
+  });
+});

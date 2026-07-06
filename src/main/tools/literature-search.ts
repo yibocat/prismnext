@@ -70,7 +70,9 @@ async function bridgeCall(
 
 export default tool({
   description:
-    "Search papers in the current project's literature library by title, authors, abstract, bibkey, user tags, or AI summary. Omit query (and tag) to list all library papers. Optional tag= filters to papers with that exact project tag (case-insensitive).",
+    "Search papers in the current project's literature library by title, authors, abstract, bibkey, user tags, or AI summary. " +
+    "Omit query (and tag) to list all library papers. Optional tag= filters to papers with that exact project tag (case-insensitive); " +
+    "collection= filters to papers in a named collection. The response always includes a `collections` roster (id, name, paperCount).",
   args: {
     query: tool.schema
       .string()
@@ -80,15 +82,21 @@ export default tool({
       .string()
       .describe("Exact project tag filter (case-insensitive), e.g. World Model")
       .optional(),
+    collection: tool.schema
+      .string()
+      .describe("Collection name filter (case-insensitive) — only return papers in this collection")
+      .optional(),
     limit: tool.schema.number().describe("Max results (default 20)").optional(),
   },
   async execute(args, context) {
     const query = typeof args.query === "string" ? args.query.trim() : "";
     const tag = typeof args.tag === "string" ? args.tag.trim() : "";
+    const collection = typeof args.collection === "string" ? args.collection.trim() : "";
     return bridgeCall(context as Record<string, unknown>, {
       action: "search",
       query,
       tag,
+      collection: collection || undefined,
       limit: args.limit,
     });
   },

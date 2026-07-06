@@ -184,13 +184,18 @@ function readCache(projectRoot: string, paperId: string): CitationCacheFile | nu
       return parsed as S2CacheFile;
     }
     if ((parsed.source === "openalex" || !parsed.source) && parsed.openAlexWorkId) {
+      // Narrow to the openalex variant — Partial<CitationCacheFile> is a union
+      // of Partial<OpenAlexCitationCache> | Partial<S2CacheFile>, and
+      // referencedWorkIds only exists on the openalex member, so accessing it
+      // on the un-narrowed union is a type error.
+      const openalexParsed = parsed as Partial<OpenAlexCitationCache>;
       return {
         source: "openalex",
         paperId: parsed.paperId!,
         openAlexWorkId: parsed.openAlexWorkId,
-        referencedWorksCount: parsed.referencedWorksCount ?? 0,
-        citedByCount: parsed.citedByCount ?? 0,
-        referencedWorkIds: parsed.referencedWorkIds ?? [],
+        referencedWorksCount: openalexParsed.referencedWorksCount ?? 0,
+        citedByCount: openalexParsed.citedByCount ?? 0,
+        referencedWorkIds: openalexParsed.referencedWorkIds ?? [],
         fetchedAt: parsed.fetchedAt!,
       };
     }

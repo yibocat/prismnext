@@ -59,3 +59,53 @@ export function isFollowingStreamTurn(
   }
   return container.scrollTop >= tailScrollTop - 80;
 }
+
+/**
+ * Scroll anchor for preserving the viewport when content is prepended to the
+ * container (e.g. loading earlier messages). The topmost visible child is
+ * captured as the sentinel; restoring re-pins the viewport to that same child
+ * after the DOM has shifted.
+ */
+export interface SentinelsScrollAnchor {
+  /** Distance from the sentinel's top to the container's viewport top at capture. */
+  sentinelViewportOffset: number;
+  /** The element to re-anchor to (null if the container had no children). */
+  sentinel: Element | null;
+  /** Fallback: scrollTop at capture, used if the sentinel is gone on restore. */
+  scrollTop: number;
+}
+
+/** Capture the current scroll anchor so it can be restored after a prepend. */
+export function captureSentinelScrollAnchor(container: HTMLElement): SentinelsScrollAnchor {
+  const containerTop = container.getBoundingClientRect().top;
+  const scrollTop = container.scrollTop;
+  let sentinel: Element | null = null;
+  for (const child of Array.from(container.children)) {
+    // First child whose bottom is at or below the viewport top = topmost visible.
+    if ((child as HTMLElement).getBoundingClientRect().bottom >= containerTop) {
+      sentinel = child;
+      break;
+    }
+  }
+  const sentinelViewportOffset = sentinel
+    ? (sentinel as HTMLElement).getBoundingClientRect().top - containerTop
+    : 0;
+  return { sentinelViewportOffset, sentinel, scrollTop };
+}
+
+/** Restore the viewport to the captured sentinel after the DOM has shifted. */
+export function restoreSentinelScrollAnchor(
+  container: HTMLElement,
+  anchor: SentinelsScrollAnchor,
+): void {
+  if (!anchor) return;
+  if (anchor.sentinel && container.contains(anchor.sentinel)) {
+    const containerTop = container.getBoundingClientRect().top;
+    const newOffset =
+      (anchor.sentinel as HTMLElement).getBoundingClientRect().top - containerTop;
+    container.scrollTop += newOffset - anchor.sentinelViewportOffset;
+    return;
+  }
+  // Fallback: best-effort — keep the previous scrollTop.
+  container.scrollTop = anchor.scrollTop;
+}

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol } from "electron";
+import { app, BrowserWindow, protocol, session } from "electron";
 import { join } from "node:path";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { exec } from "node:child_process";
@@ -13,9 +13,16 @@ import { startTerminalBridge, stopTerminalBridge, setTerminalBridgeWindow } from
 import { startLiteratureBridge, stopLiteratureBridge } from "./services/literature-bridge";
 import { startLatexBridge, stopLatexBridge } from "./services/latex-bridge";
 import { installMainProcessNetwork } from "./lib/main-network";
+import { registerCrashHandlers } from "./lib/crash-handler";
+import { installCsp } from "./lib/csp";
 import { createLogger } from "./services/logger";
 
 const log = createLogger("main", "startup");
+
+// Register crash handlers as early as possible — before any startup code that
+// could throw an uncaughtException. Makes main-process crashes visible in the
+// Log Viewer and durable in <userData>/logs/crashes.log.
+registerCrashHandlers();
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -168,6 +175,9 @@ registerIpcHandlers();
 app.whenReady().then(async () => {
   registerLiteraturePdfProtocol();
   installMainProcessNetwork();
+  // Inject CSP on the default session (renderer only — browser webviews use a
+  // separate persist:browser partition). Must run before createWindow().
+  installCsp(session.defaultSession);
   startTerminalBridge();
   startLiteratureBridge();
   startLatexBridge();

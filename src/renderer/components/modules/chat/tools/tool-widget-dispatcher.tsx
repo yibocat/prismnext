@@ -60,12 +60,11 @@ const CUSTOM_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
   "literature-add": LiteratureToolWidget,
   "literature-read": LiteratureToolWidget,
   "literature-read-pdf": LiteratureToolWidget,
-  "literature-cite": LiteratureToolWidget,
-  "literature-cite-check": LiteratureToolWidget,
   "literature-export-bib": LiteratureToolWidget,
+  "literature-delete": LiteratureToolWidget,
+  "citation-health": LiteratureToolWidget,
   "latex-root": LatexToolWidget,
   "latex-compile": LatexToolWidget,
-  "latex-bib-check": LatexToolWidget,
 };
 
 function parseToolResultContent(content: unknown): Record<string, unknown> | null {

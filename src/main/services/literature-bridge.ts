@@ -12,13 +12,15 @@ import { emitChatStream } from "./chat-stream-notify";
 import { normalizeArxivId, normalizeDoi } from "../../shared/doi-utils";
 import { createPaperFromCatalog } from "./literature-enrich";
 import { getCitationHealth } from "./citation-health";
-import { recordCiteAuditLibraryCheck } from "./session-cite-audit-context";
+import { recordCiteAuditHealth } from "./session-cite-audit-context";
 import {
-  citePaperInProject,
+  addPapersToCollection,
   citeCheckLiterature,
+  deletePaper,
   findExistingByIdentifier,
   getAnnotations,
   getPaperByBibkey,
+  listCollections,
   mapPaperForAgent,
   mapPaperSearchHitForAgent,
   mergeLibraryIntoProjectBib,
@@ -50,9 +52,10 @@ function libraryPdfRelativePath(pdfPath: string | null): string | null {
 }
 
 interface LiteratureBridgeRequest {
-  action: "read" | "read-pdf" | "search" | "cite" | "add" | "stage" | "cite-check" | "export-bib";
+  action: "read" | "read-pdf" | "search" | "add" | "stage" | "delete" | "citation-health" | "export-bib";
   sessionId?: string;
   projectRoot?: string;
+  verify?: boolean;
   bibkey?: string;
   bibkeys?: string[];
   paperIds?: string[];
@@ -61,6 +64,7 @@ interface LiteratureBridgeRequest {
   query?: string;
   limit?: number;
   tag?: string;
+  collection?: string;
   doi?: string;
   arxivId?: string;
   sourceUrl?: string;
@@ -145,35 +149,99 @@ function handleSearch(
   query: string,
   limit?: number,
   tag?: string,
+  collection?: string,
 ): Record<string, unknown> {
-  const rows = searchPapers(projectRoot, query, limit ?? 20, { tag: tag?.trim() || null });
+  const rows = searchPapers(projectRoot, query, limit ?? 20, {
+    tag: tag?.trim() || null,
+    collection: collection?.trim() || null,
+  });
+  const collections = listCollections(projectRoot).map((c) => {
+    const row = c as { id?: string; name?: string; paper_count?: number };
+    return { id: row.id ?? "", name: row.name ?? "", paperCount: row.paper_count ?? 0 };
+  });
   return {
     query: query.trim() || null,
     tag: tag?.trim() || null,
+    collection: collection?.trim() || null,
     results: rows.map((p) => mapPaperSearchHitForAgent(p)),
     count: rows.length,
+    collections,
     hint:
       query.trim()
-        ? "Project tags and AI summaries are included. Use tag= for exact tag filter; query searches title, abstract, authors, tags, and ai_summary."
-        : "Listed all papers in the project library (empty query). Cite library papers in chat as [@bibkey].",
+        ? "Project tags and AI summaries are included. Use tag= for exact tag filter, collection= to filter by collection name; query searches title, abstract, authors, tags, and ai_summary."
+        : "Listed all papers in the project library (empty query). Cite library papers in chat as [@bibkey]. Use collection= to filter by collection; see `collections` below for the roster.",
   };
 }
 
-function handleCiteCheck(projectRoot: string): Record<string, unknown> {
+async function handleCitationHealth(
+  projectRoot: string,
+  verify: boolean,
+): Promise<Record<string, unknown>> {
   try {
     const health = getCitationHealth(projectRoot);
+    if (verify) {
+      // Verify each .bib-only gap entry's DOI/arXiv against external catalogs
+      // so the agent can flag fabricated/untraceable references. Library papers
+      // are already verified at import time; only .bib-only gaps need this.
+      await Promise.all(
+        health.bibFallback.map(async (entry) => {
+          if (!entry.doi && !entry.arxivId) {
+            entry.verified = false;
+            entry.verifyError = "No DOI/arXiv in .bib — cannot verify against catalogs.";
+            return;
+          }
+          try {
+            const { metadata } = await resolveBibliographicMetadata(
+              { doi: entry.doi ?? undefined, arxivId: entry.arxivId ?? undefined },
+              { fast: true },
+            );
+            entry.verified = Boolean(metadata.title?.trim());
+            entry.verifyError = entry.verified
+              ? undefined
+              : "Identifier did not resolve to a verifiable title in catalogs.";
+          } catch (err) {
+            entry.verified = false;
+            entry.verifyError = err instanceof Error ? err.message : String(err);
+          }
+        }),
+      );
+    }
     return {
-      ...health.libraryCheck,
-      bibFallback: health.bibFallback,
-      bibPath: health.bibCheck.bibPath,
+      ...health,
       hint:
-        "Compares \\cite keys in project .tex files against literature library bibkeys. " +
-        "bibFallback lists missing keys with metadata parsed from references.bib (no guessing). " +
+        "Unified citation health: .tex ↔ .bib ↔ library.db. bibCheck covers .tex vs .bib (+ library by default); " +
+        "libraryCheck covers .tex vs library.db; bibFallback lists missing keys with metadata parsed from references.bib " +
+        "(verified=true means DOI/arXiv resolved in catalogs = traceable; verified=false = unverifiable/fabricated); " +
+        "bibKeysNotInLibrary lists .bib keys not in the library (library-first policy). " +
         "Use literature-export-bib to sync library→.bib, or import missing keys into library from .bib via UI/IPC.",
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { error: message };
+  }
+}
+
+function handleDelete(projectRoot: string, bibkey: string): Record<string, unknown> {
+  try {
+    const paper = getPaperByBibkey(projectRoot, bibkey);
+    if (!paper) {
+      return {
+        error: `Paper not found in library: ${bibkey}`,
+        bibkey,
+        hint: "Copy the exact Cite key from the Literature panel (case-sensitive).",
+      };
+    }
+    deletePaper(projectRoot, paper.id);
+    return {
+      success: true,
+      bibkey,
+      paperId: paper.id,
+      title: paper.title,
+      hint: "Paper removed from library.db. PDF cache cleaned up if no other paper shares it.",
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { error: message, bibkey };
   }
 }
 
@@ -192,21 +260,12 @@ function handleExportBib(
       ...result,
       hint:
         result.appended.length > 0
-          ? "Run latex-bib-check to verify .tex ↔ .bib ↔ library alignment."
+          ? "Run citation-health to verify .tex ↔ .bib ↔ library alignment."
           : "No new entries appended — keys may already exist in the project .bib.",
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { error: message };
-  }
-}
-
-function handleCite(projectRoot: string, bibkey: string): Record<string, unknown> {
-  try {
-    return citePaperInProject(projectRoot, bibkey);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { error: message, bibkey };
   }
 }
 
@@ -337,6 +396,7 @@ async function handleAdd(
   projectRoot: string,
   doi?: string,
   arxivId?: string,
+  collection?: string,
 ): Promise<Record<string, unknown>> {
   const normDoi = doi?.trim() ? normalizeDoi(doi.trim()) : null;
   const normArxiv = arxivId?.trim() ? normalizeArxivId(arxivId.trim()) : null;
@@ -367,6 +427,36 @@ async function handleAdd(
     }
 
     const { csl_json: _csl, ...paperFields } = paper;
+
+    // Optional: add the new (or existing) paper to a named collection.
+    // Collections must already exist — the agent does not create them.
+    let collectionAdded: { name: string; added: boolean; error?: string } | null = null;
+    const collectionName = collection?.trim();
+    if (collectionName) {
+      const cols = listCollections(projectRoot);
+      const col = cols.find(
+        (c) => (c as { name?: string }).name?.toLowerCase() === collectionName.toLowerCase(),
+      );
+      if (!col) {
+        collectionAdded = {
+          name: collectionName,
+          added: false,
+          error: "Collection not found — create it in the Literature panel first.",
+        };
+      } else {
+        try {
+          const n = addPapersToCollection(projectRoot, (col as { id: string }).id, [paper.id]);
+          collectionAdded = { name: (col as { name: string }).name, added: n > 0 };
+        } catch (err) {
+          collectionAdded = {
+            name: collectionName,
+            added: false,
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+      }
+    }
+
     return {
       success: true,
       verified: true,
@@ -379,9 +469,14 @@ async function handleAdd(
       },
       pdfAttached: result.pdfAttached ?? false,
       pdfAttachError: result.pdfAttachError ?? null,
-      hint: result.created
-        ? "Paper added to library. Use @ mention or literature-read for context."
-        : "Paper already in library (same DOI/arXiv). Metadata refreshed.",
+      collectionAdded,
+      hint: collectionAdded?.error
+        ? `Paper added to library, but collection "${collectionAdded.name}" was not found. Create it in the Literature panel first.`
+        : result.created
+          ? collectionAdded?.added
+            ? `Paper added to library and to collection "${collectionAdded.name}".`
+            : "Paper added to library. Use @ mention or literature-read for context."
+          : "Paper already in library (same DOI/arXiv). Metadata refreshed.",
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -414,7 +509,7 @@ function intensiveReadPdfBlocked(
   };
 }
 
-function dispatch(req: LiteratureBridgeRequest): Record<string, unknown> | Promise<Record<string, unknown>> {
+function dispatch(req: LiteratureBridgeRequest): unknown | Promise<unknown> {
   const projectRoot = resolveProjectRoot(req);
   if (!projectRoot) {
     return {
@@ -454,22 +549,23 @@ function dispatch(req: LiteratureBridgeRequest): Record<string, unknown> | Promi
     case "search": {
       const query = req.query?.trim() ?? "";
       const tag = req.tag?.trim() ?? "";
-      return handleSearch(projectRoot, query, req.limit, tag);
+      const collection = req.collection?.trim() ?? "";
+      return handleSearch(projectRoot, query, req.limit, tag, collection);
     }
-    case "cite": {
+    case "citation-health":
+      return handleCitationHealth(projectRoot, req.verify !== false);
+    case "delete": {
       const bibkey = req.bibkey?.trim() ?? "";
       if (!bibkey) return { error: "Missing bibkey parameter." };
-      return handleCite(projectRoot, bibkey);
+      return handleDelete(projectRoot, bibkey);
     }
-    case "cite-check":
-      return handleCiteCheck(projectRoot);
     case "export-bib":
       return handleExportBib(projectRoot, req);
     case "add": {
       const doi = req.doi?.trim();
       const arxivId = req.arxivId?.trim();
       if (!doi && !arxivId) return { error: "Missing doi or arxivId parameter." };
-      return handleAdd(projectRoot, doi, arxivId);
+      return handleAdd(projectRoot, doi, arxivId, req.collection?.trim() || undefined);
     }
     case "stage": {
       const sessionId = req.sessionId?.trim() ?? "";
@@ -507,8 +603,8 @@ function recordLibraryTaskHitsFromBridgeResult(
   result: Record<string, unknown>,
 ): void {
   if (!sessionId?.trim() || result.error) return;
-  if (action === "cite-check") {
-    recordCiteAuditLibraryCheck(sessionId, result);
+  if (action === "citation-health") {
+    recordCiteAuditHealth(sessionId, result);
   } else if (action === "search") {
     recordLibraryTaskHitsFromToolSession(
       sessionId,
@@ -544,7 +640,7 @@ async function processSessionDir(sessionDir: string): Promise<void> {
     try {
       const raw = readFileSync(reqPath, "utf-8");
       const req = JSON.parse(raw) as LiteratureBridgeRequest;
-      const result = await Promise.resolve(dispatch(req));
+      const result = await Promise.resolve(dispatch(req)) as Record<string, unknown>;
       recordLibraryTaskHitsFromBridgeResult(req.sessionId, req.action, result);
       writeFileSync(resPath, JSON.stringify(result), "utf-8");
       try { unlinkSync(reqPath); } catch {}

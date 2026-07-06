@@ -73,8 +73,7 @@ describe("builtin instructions audit (Phase 1.3)", () => {
     expect(TASK_DELEGATION_PROMPT).toContain("Available experts (via Task)");
     expect(TASK_DELEGATION_PROMPT).not.toContain("@library-scout");
     expect(CITATION_AUDIT_PROMPT).toContain("### Workflow (binding)");
-    expect(CITATION_AUDIT_PROMPT).toContain("literature-cite-check");
-    expect(CITATION_AUDIT_PROMPT).toContain("latex-bib-check");
+    expect(CITATION_AUDIT_PROMPT).toContain("citation-health");
   });
 
   it("no instructions.md under bundled resources duplicates removed academic modules", () => {

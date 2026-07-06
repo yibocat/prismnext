@@ -180,9 +180,9 @@ export default tool({
       return { output: "Permission timed out waiting for user approval", exit: 1 };
     }
 
-    const filePath = path.isAbsolute(args.file_path)
-      ? args.file_path
-      : path.resolve(cwd, args.file_path);
+    const filePath = path.isAbsolute(String(args.file_path))
+      ? String(args.file_path)
+      : path.resolve(cwd, String(args.file_path));
 
     if (!fs.existsSync(filePath)) {
       return { output: `File not found: ${args.file_path}`, exit: 1 };

@@ -70,7 +70,7 @@ export function listPaperExtractStates(
     .prepare(
       `SELECT * FROM paper_extracts WHERE paper_id IN (${placeholders})`,
     )
-    .all(...paperIds) as ExtractRow[];
+    .all(...paperIds) as unknown as ExtractRow[];
 
   const out: PaperExtractStatesByPaper = {};
   for (const row of rows) {
@@ -139,7 +139,7 @@ export function listQueuedOrExtracting(
     .prepare(
       `SELECT * FROM paper_extracts WHERE status IN ('queued', 'extracting') ORDER BY queued_at ASC`,
     )
-    .all() as ExtractRow[];
+    .all() as unknown as ExtractRow[];
   return rows.map(rowToState);
 }
 
@@ -329,7 +329,7 @@ export function listExtractsDueForRetry(projectRoot: string): PaperExtractState[
          AND next_retry_at <= ?
        ORDER BY next_retry_at ASC`,
     )
-    .all(now) as ExtractRow[];
+    .all(now) as unknown as ExtractRow[];
   return rows.map(rowToState);
 }
 
@@ -342,6 +342,6 @@ export function listFailedWithScheduledRetry(projectRoot: string): PaperExtractS
          AND next_retry_at IS NOT NULL
        ORDER BY next_retry_at ASC`,
     )
-    .all() as ExtractRow[];
+    .all() as unknown as ExtractRow[];
   return rows.map(rowToState);
 }
