@@ -30,6 +30,18 @@ describe("inferToolNameFromInput", () => {
   it("maps literature-stage from arxivId", () => {
     expect(inferToolNameFromInput({ arxivId: "2312.00726" })).toBe("literature-stage");
   });
+
+  it("maps experiment-run (id + command) and does NOT mislabel as bash", () => {
+    expect(inferToolNameFromInput({ id: "exp-20260708-lr-a3f2", command: "python train.py" })).toBe("experiment-run");
+    expect(
+      inferToolNameFromInput({ id: "exp-x", command: "echo hi", artifacts: ["results/loss.png"], notes: "baseline" }),
+    ).toBe("experiment-run");
+  });
+
+  it("still maps bare command (no id) to bash", () => {
+    expect(inferToolNameFromInput({ command: "ls -la" })).toBe("bash");
+    expect(inferToolNameFromInput({ command: "make build", description: "build", workdir: "." })).toBe("bash");
+  });
 });
 
 describe("inferToolNameFromOutput", () => {

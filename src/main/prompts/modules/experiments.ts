@@ -1,7 +1,7 @@
 import { TOOL_NAMES } from "../../../shared/tool-names";
 
 /**
- * Experiments workflow — split storage: registry under `.prismnext/experiments/`,
+ * Experiments workflow - split storage: registry under `.prismnext/experiments/`,
  * clean workspace lab under the Workspace Experiment folder.
  */
 export const EXPERIMENTS_PROMPT = [
@@ -12,26 +12,26 @@ export const EXPERIMENTS_PROMPT = [
   "",
   "### Storage (binding)",
   "",
-  "- **Registry** (Platform): `.prismnext/experiments/<id>/` holds `meta.json` + `runs.jsonl` only — use experiment tools, not generic read/write/edit.",
-  "- **Workspace lab** (user-facing): `<experiment-dir>/<id>/` is a **clean working folder** — no prescribed subdirs. Organize code, data, env, and outputs however fits the task (Python, R, Julia, shell, notebooks, etc.).",
+  "- **Registry** (Platform): `.prismnext/experiments/<id>/` holds `meta.json` + `runs.jsonl` only - use experiment tools, not generic read/write/edit.",
+  "- **Workspace lab** (user-facing): `<experiment-dir>/<id>/` is a **clean working folder** - no prescribed subdirs. Organize code, data, env, and outputs however fits the task (Python, R, Julia, shell, notebooks, etc.).",
   "- `meta.workspacePath` points from the registry entry to that workspace folder.",
   "- Do **not** put `meta.json` or `runs.jsonl` in the workspace folder.",
   "",
   "### Workflow (binding)",
   "",
   `- Before creating an experiment, call \`${TOOL_NAMES.researchBriefRead}\` and confirm which hypothesis / research question it tests.`,
-  `- Call \`${TOOL_NAMES.experimentLog}\` action=list first — if it returns \`no_experiment_folder\`, STOP: ask the user to add an Experiment folder in Settings → Workspace (function: Experiment).`,
+  `- Call \`${TOOL_NAMES.experimentLog}\` action=list first - if it returns \`no_experiment_folder\`, STOP: ask the user to add an Experiment folder in Settings -> Workspace (function: Experiment).`,
   `- Open a new experiment with \`${TOOL_NAMES.experimentLog}\` action=create, passing \`briefLinks\` (sections + hypothesis excerpt).`,
-  `- Use read/write/edit/bash freely inside \`meta.workspacePath\` — you decide structure, dependencies, and how to run things.`,
-  `- Prefer \`${TOOL_NAMES.experimentRun}\` when you want a command executed in the workspace cwd **and** a structured run line appended to the registry — pass \`artifacts\` and \`notes\` when you know what mattered.`,
-  `- Optional: \`${TOOL_NAMES.experimentLog}\` action=detect_env for a best-effort snapshot (python/R/git/venv if present) — not required for non-Python workflows.`,
-  `- If you use raw \`bash\` and still want a run record, call \`${TOOL_NAMES.experimentLog}\` action=append_run with the fields you consider relevant.`,
-  "- Do not delegate experiment reads/writes/runs via Task — run experiment tools in this orchestrator conversation.",
+  `- Use read/write/edit inside \`meta.workspacePath\` to scaffold code, data, and env. Use \`bash\` only for setup or throwaway probing (inspect a file, test a CLI flag) - **never** to run an experiment command.`,
+  `- **For any experiment command** (training, eval, ablation, analysis script, reproducing a result, comparing metrics) you MUST use \`${TOOL_NAMES.experimentRun}\`, NOT raw \`bash\`. \`${TOOL_NAMES.experimentRun}\` executes in the workspace cwd AND appends a structured run line to \`runs.jsonl\` (pass \`artifacts\` + \`notes\` when you know what mattered). Raw \`bash\` does NOT write to the registry - using it for an experiment run breaks the log: the human Experiments mode runs table and the methodology-auditor will not see the run, and the UI and Chat will look disconnected.`,
+  `- Optional: \`${TOOL_NAMES.experimentLog}\` action=detect_env for a best-effort snapshot (python/R/git/venv if present) - not required for non-Python workflows.`,
+  `- If you ever do run a real experiment command via raw \`bash\` (you forgot, or \`${TOOL_NAMES.experimentRun}\` is unavailable), you MUST immediately call \`${TOOL_NAMES.experimentLog}\` action=append_run with the command, exitCode, output, and artifacts - otherwise the run is lost from the registry. But prefer \`${TOOL_NAMES.experimentRun}\` from the start.`,
+  "- Do not delegate experiment reads/writes/runs via Task - run experiment tools in this orchestrator conversation.",
   "",
   "### Task expert handoff (experiments)",
   "",
   `- Delegate to \`methodology-auditor\` with a **snapshot**: \`meta.json\` + recent runs from \`${TOOL_NAMES.experimentLog}\` action=read, plus the relevant brief excerpt.`,
-  "- The auditor is **diagnostic only** — it does not write the log or run commands.",
+  "- The auditor is **diagnostic only** - it does not write the log or run commands.",
   "- Do not have the auditor re-read files via bash/cat; the snapshot you provide is the source of truth for that Task.",
   "",
   "### Human UI (binding)",
@@ -41,6 +41,6 @@ export const EXPERIMENTS_PROMPT = [
   "",
   "### Boundary with research design",
   "",
-  "- While the design is still open, stay in research-design + research-design-coach — do not create experiments for an unfrozen design.",
+  "- While the design is still open, stay in research-design + research-design-coach - do not create experiments for an unfrozen design.",
   "- Once frozen in the brief, create an experiment and begin runs. If a run surfaces a design flaw, update the brief before more runs.",
 ].join("\n");

@@ -9,6 +9,8 @@ export interface RunAiCommandArgs {
   requestId: string;
   toolCallId?: string;
   onChunk: (chunk: string) => void;
+  /** Extra env vars merged into the PTY child process. */
+  envExtra?: Record<string, string>;
 }
 
 export interface RunAiCommandResult {
@@ -72,7 +74,7 @@ export function cancelAiCommandForChat(chatTabId: string): void {
 }
 
 export function runAiCommand(args: RunAiCommandArgs): Promise<RunAiCommandResult> {
-  const { command, cwd, sessionId, chatTabId, requestId, onChunk } = args;
+  const { command, cwd, sessionId, chatTabId, requestId, onChunk, envExtra } = args;
   const trimmed = command.trim();
   if (!trimmed) {
     const message = "Prism AI bash: empty command";
@@ -103,6 +105,7 @@ export function runAiCommand(args: RunAiCommandArgs): Promise<RunAiCommandResult
         env: {
           ...process.env,
           TERM: "xterm-256color",
+          ...envExtra,
         } as { [key: string]: string },
       });
     } catch (err) {

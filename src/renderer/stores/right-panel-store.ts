@@ -79,7 +79,7 @@ interface RightPanelState {
   closeLiteraturePaperTabs: (paperId: string) => void;
   setActiveTab: (id: string) => void;
   setTabViewMode: (id: string, mode: string) => void;
-  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title" | "terminalSource" | "terminalCwd" | "linkedChatTabId" | "linkedToolCallId" | "settingsSlot" | "settingsSlotKey" | "literaturePaperId" | "literatureView">>) => void;
+  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title" | "terminalSource" | "terminalCwd" | "linkedChatTabId" | "linkedToolCallId" | "settingsSlot" | "settingsSlotKey" | "literaturePaperId" | "literatureView" | "experimentId" | "experimentsView">>) => void;
   moveTab: (fromIndex: number, toIndex: number) => void;
 }
 

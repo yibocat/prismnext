@@ -14,6 +14,7 @@ import {
 import { resolveExperimentDir } from "../../src/main/services/workspace-config";
 import {
   EXPERIMENT_REGISTRY_REL,
+  experimentEnvDisplayRows,
   slugBaseFromTitle,
 } from "../../src/shared/experiment-log";
 
@@ -182,5 +183,52 @@ describe("resolveExperimentDir (workspace integration)", () => {
     if ("error" in result) return;
     expect(result.rel).toBe("analysis");
     expect(result.abs).toBe(join(root, "analysis"));
+  });
+});
+
+describe("experimentEnvDisplayRows", () => {
+  it("always includes python, platform, and venv rows", () => {
+    const rows = experimentEnvDisplayRows({
+      python: null,
+      pythonVersion: null,
+      rscript: null,
+      rVersion: null,
+      platform: "darwin",
+      gitCommit: null,
+      venvPath: null,
+    });
+    expect(rows.map((r) => r.label)).toEqual(["Python", "Platform", "Venv"]);
+  });
+
+  it("adds R and Git only when detected", () => {
+    const rows = experimentEnvDisplayRows({
+      python: "/usr/bin/python3",
+      pythonVersion: "3.13.0",
+      rscript: "/usr/local/bin/Rscript",
+      rVersion: "4.4.0",
+      platform: "darwin",
+      gitCommit: "abc1234",
+      venvPath: ".venv",
+    });
+    expect(rows.map((r) => r.label)).toEqual([
+      "Python",
+      "Platform",
+      "Venv",
+      "R",
+      "Git",
+    ]);
+  });
+});
+
+describe("tailBytes", () => {
+  it("truncates using TextEncoder when Buffer is unavailable", async () => {
+    const originalBuffer = globalThis.Buffer;
+    // @ts-expect-error test shim
+    delete globalThis.Buffer;
+    const { tailBytes: tailBytesFresh } = await import("../../src/shared/experiment-log");
+    const long = "a".repeat(5000);
+    const out = tailBytesFresh(long, 100);
+    expect(new TextEncoder().encode(out).length).toBeLessThanOrEqual(100);
+    globalThis.Buffer = originalBuffer;
   });
 });

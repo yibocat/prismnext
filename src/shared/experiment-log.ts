@@ -123,9 +123,20 @@ export function slugBaseFromTitle(title: string): string {
 /** Truncate a string to its last `maxBytes` bytes (UTF-8 safe, tail-biased). */
 export function tailBytes(input: string, maxBytes: number): string {
   if (!input) return "";
-  const buf = Buffer.from(input, "utf-8");
-  if (buf.length <= maxBytes) return input;
-  const sliced = buf.subarray(buf.length - maxBytes).toString("utf-8");
+  let bytes: Uint8Array;
+  if (typeof Buffer !== "undefined") {
+    const buf = Buffer.from(input, "utf-8");
+    if (buf.length <= maxBytes) return input;
+    bytes = buf.subarray(buf.length - maxBytes);
+  } else {
+    const encoded = new TextEncoder().encode(input);
+    if (encoded.length <= maxBytes) return input;
+    bytes = encoded.subarray(encoded.length - maxBytes);
+  }
+  const sliced =
+    typeof Buffer !== "undefined"
+      ? (bytes as Buffer).toString("utf-8")
+      : new TextDecoder().decode(bytes);
   const firstNl = sliced.indexOf("\n");
   return firstNl > 0 ? sliced.slice(firstNl + 1) : sliced;
 }
@@ -135,4 +146,70 @@ export function stripAnsi(input: string): string {
   if (!input) return "";
   // eslint-disable-next-line no-control-regex
   return input.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "");
+}
+
+/** One row for the Environment section in the detail UI. */
+export interface ExperimentEnvDisplayRow {
+  label: string;
+  /** Shown in the UI (may combine path + version). */
+  display: string | null;
+  /** Copied to clipboard when the value is copyable; null = not copyable. */
+  copyText: string | null;
+  placeholder: string;
+}
+
+/**
+ * Rows to render for `detect_env` in the Experiments detail view.
+ *
+ * Schema is fixed (`ExperimentEnv`); presentation is dynamic:
+ * - Platform + Python + Venv always listed (best-effort probes).
+ * - R and Git appear only when detected (optional runtimes / repo).
+ */
+export function experimentEnvDisplayRows(
+  env: ExperimentEnv | null,
+): ExperimentEnvDisplayRow[] {
+  if (!env) return [];
+
+  const rows: ExperimentEnvDisplayRow[] = [
+    {
+      label: "Python",
+      display: env.python
+        ? [env.python, env.pythonVersion].filter(Boolean).join(" · ")
+        : null,
+      copyText: env.python,
+      placeholder: "not detected",
+    },
+    {
+      label: "Platform",
+      display: env.platform || null,
+      copyText: env.platform || null,
+      placeholder: "unknown",
+    },
+    {
+      label: "Venv",
+      display: env.venvPath,
+      copyText: env.venvPath,
+      placeholder: "no .venv",
+    },
+  ];
+
+  if (env.rscript) {
+    rows.push({
+      label: "R",
+      display: [env.rscript, env.rVersion].filter(Boolean).join(" · "),
+      copyText: env.rscript,
+      placeholder: "",
+    });
+  }
+
+  if (env.gitCommit) {
+    rows.push({
+      label: "Git",
+      display: env.gitCommit,
+      copyText: env.gitCommit,
+      placeholder: "",
+    });
+  }
+
+  return rows;
 }

@@ -1,7 +1,7 @@
 import { memo, useState } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { FlaskConicalIcon } from "lucide-react";
-import { ToolCard, param } from "./shared";
+import { ToolCard, Field } from "./shared";
 
 const LABELS: Record<string, string> = {
   "experiment-log": "Experiment log",
@@ -71,7 +71,7 @@ function ExperimentSummary({
     return (
       <p className="text-[length:var(--font-chat-meta)] text-destructive">
         {data.error}
-        {typeof data.hint === "string" ? ` — ${data.hint}` : ""}
+        {typeof data.hint === "string" ? ` - ${data.hint}` : ""}
       </p>
     );
   }
@@ -79,7 +79,7 @@ function ExperimentSummary({
     return (
       <p className="text-[length:var(--font-chat-meta)] text-destructive">
         {typeof data.error === "string" ? data.error : "Experiment operation failed"}
-        {typeof data.hint === "string" ? ` — ${data.hint}` : ""}
+        {typeof data.hint === "string" ? ` - ${data.hint}` : ""}
       </p>
     );
   }
@@ -92,8 +92,8 @@ function ExperimentSummary({
       const experiments = Array.isArray(data.experiments) ? data.experiments : [];
       return (
         <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
-          {param("experiment root", String(data.experimentRoot ?? ""))}
-          {param("experiments", String(experiments.length))}
+          <Field label="experiment root" value={String(data.experimentRoot ?? "")} />
+          <Field label="experiments" value={String(experiments.length)} />
         </div>
       );
     }
@@ -101,9 +101,9 @@ function ExperimentSummary({
       const meta = data.meta as Record<string, unknown> | undefined;
       return (
         <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
-          {param("id", String(data.id ?? meta?.id ?? ""))}
-          {param("path", String(data.path ?? ""))}
-          {param("title", String(meta?.title ?? ""))}
+          <Field label="id" value={String(data.id ?? meta?.id ?? "")} />
+          <Field label="path" value={String(data.path ?? "")} />
+          <Field label="title" value={String(meta?.title ?? "")} />
         </div>
       );
     }
@@ -113,9 +113,9 @@ function ExperimentSummary({
       const lastRun = runs[runs.length - 1] as Record<string, unknown> | undefined;
       return (
         <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
-          {param("title", String(meta?.title ?? data.id ?? ""))}
-          {param("runs", String(runs.length))}
-          {lastRun ? param("last exit", String(lastRun.exitCode ?? "")) : null}
+          <Field label="title" value={String(meta?.title ?? data.id ?? "")} />
+          <Field label="runs" value={String(runs.length)} />
+          {lastRun ? <Field label="last exit" value={String(lastRun.exitCode ?? "")} /> : null}
         </div>
       );
     }
@@ -123,8 +123,8 @@ function ExperimentSummary({
       const run = data.run as Record<string, unknown> | undefined;
       return (
         <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
-          {param("run id", String(run?.runId ?? ""))}
-          {param("exit", String(run?.exitCode ?? ""))}
+          <Field label="run id" value={String(run?.runId ?? "")} />
+          <Field label="exit" value={String(run?.exitCode ?? "")} />
         </div>
       );
     }
@@ -137,12 +137,19 @@ function ExperimentSummary({
       if (env.venvPath) bits.push("venv");
       return (
         <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
-          {param("workspace", String(data.workspacePath ?? data.experimentPath ?? ""))}
-          {param("env", bits.join(" · ") || "none")}
+          <Field label="workspace" value={String(data.workspacePath ?? data.experimentPath ?? "")} />
+          <Field label="env" value={bits.join(" · ") || "none"} />
         </div>
       );
     }
-    return null;
+    // Unknown action - compact fallback so the card is never empty.
+    return (
+      <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
+        <Field label="ok" value={String(data.ok ?? "")} />
+        <Field label="id" value={String(data.id ?? "")} />
+        {typeof data.error === "string" ? <Field label="error" value={data.error} /> : null}
+      </div>
+    );
   }
 
   // experiment-run
@@ -156,9 +163,9 @@ function ExperimentSummary({
   const artifacts = asStringArray(run?.artifacts ?? data.artifacts);
   return (
     <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
-      {run ? param("run id", String(run.runId ?? "")) : null}
-      {param("exit", exitLabel)}
-      {artifacts.length ? param("artifacts", artifacts.join(", ")) : null}
+      {run ? <Field label="run id" value={String(run.runId ?? "")} /> : null}
+      <Field label="exit" value={exitLabel} />
+      {artifacts.length ? <Field label="artifacts" value={artifacts.join(", ")} /> : null}
     </div>
   );
 }
@@ -185,6 +192,21 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
       ? LABELS["experiment-run"]
       : `${LABELS["experiment-log"] ?? toolName} · ${ACTION_LABELS[action] ?? action}`;
 
+  // Fallback: if structured parsing failed but we have raw content, show it so
+  // the widget is never empty AND the actual content shape is visible.
+  const rawFallback =
+    !data && resultContent
+      ? typeof resultContent === "string"
+        ? resultContent
+        : (() => {
+            try {
+              return JSON.stringify(resultContent, null, 2);
+            } catch {
+              return String(resultContent);
+            }
+          })()
+      : "";
+
   return (
     <ToolCard
       toolName={toolName}
@@ -194,9 +216,17 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
       onToggle={() => setExpanded(!expanded)}
       isLoading={isLoading}
       isError={isError}
-      hasContent={!!data}
+      hasContent={!!data || !!rawFallback}
     >
-      {() => (data ? <ExperimentSummary toolName={toolName} toolUse={toolUse} data={data} /> : null)}
+      {() =>
+        data ? (
+          <ExperimentSummary toolName={toolName} toolUse={toolUse} data={data} />
+        ) : rawFallback ? (
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-muted/40 p-2 text-[length:var(--font-size-12)] text-muted-foreground">
+            {rawFallback}
+          </pre>
+        ) : null
+      }
     </ToolCard>
   );
 });

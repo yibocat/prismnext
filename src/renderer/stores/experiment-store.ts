@@ -20,8 +20,10 @@ import type {
   ExperimentRunEntry,
   ExperimentSummary,
 } from "../../shared/experiment-log";
+import { RUN_OUTPUT_TAIL_BYTES, stripAnsi, tailBytes } from "../../shared/experiment-log";
 import { useLayoutStore } from "@/stores/layout-store";
 import { navigateFileTreeToPath } from "@/lib/files/navigate-file-tree";
+import { useRightPanelStore } from "@/stores/right-panel-store";
 
 /** Result payload broadcast by main on `experiment:runComplete`. */
 export interface ExperimentRunResultPayload {
@@ -47,11 +49,20 @@ export interface ExperimentPaths {
   workspaceRel: string;
 }
 
+/** Event argument shape for the `onExperimentRunOutput` subscription. */
+export interface ExperimentRunOutputEvent {
+  id: string;
+  runId: string;
+  chunk: string;
+}
+
 /** In-flight UI run state — mirrors the executor's started state. */
 export interface ExperimentRunInFlight {
   id: string;
   runId: string;
   command: string;
+  /** Rolling PTY output (tail-truncated to match persisted run output). */
+  liveOutput: string;
 }
 
 interface ExperimentDetail {
@@ -65,6 +76,8 @@ export interface ExperimentState {
   detail: ExperimentDetail | null;
   env: ExperimentEnv | null;
   runInFlight: ExperimentRunInFlight | null;
+  /** Output chunks that arrived before runInFlight was set (keyed by runId). */
+  runOutputBuffer: Record<string, string>;
   loading: boolean;
   error: string | null;
 
@@ -79,6 +92,8 @@ export interface ExperimentState {
     projectRoot: string,
     id: string,
   ) => Promise<ExperimentDetail | null>;
+  /** Leave detail view and return to the experiment card grid. */
+  clearSelection: () => void;
   /**
    * Kick off a run via the IPC. Returns the assigned `runId` on success.
    * Run completion is delivered via the `onExperimentRunComplete`
@@ -97,6 +112,8 @@ export interface ExperimentState {
    * Always clears the matching in-flight marker.
    */
   handleRunComplete: (data: ExperimentRunCompleteEvent) => void;
+  /** Append a live PTY chunk to the matching in-flight run. */
+  handleRunOutput: (data: ExperimentRunOutputEvent) => void;
   /** Cancel an in-flight run via IPC. */
   cancelRun: (projectRoot: string, id: string, runId: string) => Promise<void>;
   /** Resolve the on-disk paths for an experiment (used by Files/Terminal buttons). */
@@ -125,6 +142,7 @@ const INITIAL_STATE = {
   detail: null as ExperimentDetail | null,
   env: null as ExperimentEnv | null,
   runInFlight: null as ExperimentRunInFlight | null,
+  runOutputBuffer: {} as Record<string, string>,
   loading: false,
   error: null as string | null,
 };
@@ -147,6 +165,19 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
         experiments: [],
         loading: false,
         error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  },
+
+  clearSelection: () => {
+    set({ selectedId: null, detail: null, env: null });
+    const rp = useRightPanelStore.getState();
+    const activeTab = rp.tabs.find((t) => t.id === rp.activeTabId);
+    if (activeTab?.kind === "experiments") {
+      rp.updateTab(activeTab.id, {
+        experimentId: undefined,
+        experimentsView: "list",
+        title: "Experiments",
       });
     }
   },
@@ -195,8 +226,16 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
         set({ error: res.error });
         return null;
       }
+      const buffered = get().runOutputBuffer[res.runId] ?? "";
+      const { [res.runId]: _removed, ...restBuffer } = get().runOutputBuffer;
       set({
-        runInFlight: { id, runId: res.runId, command },
+        runInFlight: {
+          id,
+          runId: res.runId,
+          command,
+          liveOutput: tailBytes(buffered, RUN_OUTPUT_TAIL_BYTES),
+        },
+        runOutputBuffer: restBuffer,
         error: null,
       });
       return res.runId;
@@ -236,6 +275,36 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
         };
       }
       return { runInFlight: nextInflight };
+    });
+  },
+
+  handleRunOutput: (data) => {
+    set((state) => {
+      if (!data.chunk) return state;
+
+      const inflight = state.runInFlight;
+      if (
+        inflight &&
+        inflight.id === data.id &&
+        inflight.runId === data.runId
+      ) {
+        const next = stripAnsi(inflight.liveOutput + data.chunk);
+        return {
+          runInFlight: {
+            ...inflight,
+            liveOutput: tailBytes(next, RUN_OUTPUT_TAIL_BYTES),
+          },
+        };
+      }
+
+      // Buffer early chunks until runCommand sets runInFlight.
+      const prev = state.runOutputBuffer[data.runId] ?? "";
+      return {
+        runOutputBuffer: {
+          ...state.runOutputBuffer,
+          [data.runId]: tailBytes(stripAnsi(prev + data.chunk), RUN_OUTPUT_TAIL_BYTES),
+        },
+      };
     });
   },
 
@@ -294,5 +363,10 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
 if (typeof window !== "undefined" && window.electronAPI?.onExperimentRunComplete) {
   window.electronAPI.onExperimentRunComplete((data) => {
     useExperimentStore.getState().handleRunComplete(data);
+  });
+}
+if (typeof window !== "undefined" && window.electronAPI?.onExperimentRunOutput) {
+  window.electronAPI.onExperimentRunOutput((data) => {
+    useExperimentStore.getState().handleRunOutput(data);
   });
 }

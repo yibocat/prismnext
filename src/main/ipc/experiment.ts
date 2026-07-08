@@ -140,6 +140,13 @@ export function registerExperimentHandlers(): void {
       artifacts: args.artifacts,
       notes: args.notes,
       runId,
+      onOutputChunk: (chunk) => {
+        try {
+          sender.send("experiment:runOutput", { id, runId, chunk });
+        } catch {
+          // Window may have closed.
+        }
+      },
       onComplete: (result: ExperimentRunResult) => {
         try {
           sender.send("experiment:runComplete", { id, runId, result });

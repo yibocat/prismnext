@@ -219,6 +219,11 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
     expect(payload.result.run!.exitCode).toBe(0);
     expect(payload.result.run!.stdoutTail).toContain("run-complete-ok");
 
+    const outputEvents = sent.filter((s) => s.channel === "experiment:runOutput");
+    expect(outputEvents.length).toBeGreaterThan(0);
+    const combined = outputEvents.map((e) => (e.payload as { chunk: string }).chunk).join("");
+    expect(combined).toContain("run-complete-ok");
+
     const runsPath = join(root, ".prismnext", "experiments", created.id, "runs.jsonl");
     const raw = readFileSync(runsPath, "utf-8").trim();
     expect(raw.split("\n").length).toBe(1);

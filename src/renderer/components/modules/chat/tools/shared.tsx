@@ -160,6 +160,21 @@ export function param(
 }
 
 /** "file_path" → "filePath", "old_string" → "oldString" */
+/** DISPLAY helper: render a "label value" row for a tool widget. Returns null
+ *  for empty values so the row collapses. NOTE: `param` EXTRACTS a value from
+ *  an input object (`param(input, key)`); `Field` DISPLAYS a label+value row.
+ *  Don't confuse them - several widgets once called `param(label, value)` and
+ *  rendered nothing because `param` returns undefined for non-object input. */
+export function Field({ label, value }: { label: string; value: string }): ReactNode {
+  if (!value) return null;
+  return (
+    <div className="flex min-w-0 gap-1.5">
+      <span className="shrink-0 opacity-70">{label}</span>
+      <span className="truncate">{value}</span>
+    </div>
+  );
+}
+
 function snakeToCamel(s: string): string {
   return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 }

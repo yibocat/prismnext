@@ -8,7 +8,7 @@
  *  - Both can be used at once; either is optional.
  */
 import { existsSync, writeFileSync } from "node:fs";
-import { runAiCommand, cancelAiCommandForSession } from "./ai-pty";
+import { runAiCommand } from "./ai-pty";
 import {
   appendRun,
   detectEnv,
@@ -17,10 +17,10 @@ import {
   type ExperimentStorageContext,
 } from "./experiment-log-service";
 import type { ExperimentEnv, ExperimentRunEntry } from "../../shared/experiment-log";
+import { stripAnsi } from "../../shared/experiment-log";
 import { createLogger } from "./logger";
 
 const log = createLogger("experiment-run-executor", "agent");
-const RUN_TIMEOUT_MS = 10 * 60 * 1000;
 
 /** Result reported via `onComplete` (UI track) and/or the bridge `.result.json` (agent track). */
 export interface ExperimentRunResult {
@@ -46,6 +46,8 @@ export interface KickoffExperimentRunArgs {
   resPath?: string;
   /** UI completion callback — fires after the run finishes (or fails). */
   onComplete?: (result: ExperimentRunResult) => void;
+  /** Live PTY output chunks (UI stream). */
+  onOutputChunk?: (chunk: string) => void;
 }
 
 export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
@@ -70,7 +72,9 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
   const cwd = island;
   const workspacePath = `${ctx.workspaceRel}/${id}`;
 
-  runWithTimeout(
+  // Defer PTY spawn so the IPC handler returns runId before output chunks
+  // reach the renderer (avoids losing early chunks before runInFlight is set).
+  setImmediate(() => {
     runAiCommand({
       command,
       cwd,
@@ -78,63 +82,70 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
       chatTabId: "experiment",
       requestId: runId,
       toolCallId: runId,
-      onChunk: () => {},
-    }),
-    RUN_TIMEOUT_MS,
-    () => cancelAiCommandForSession(sessionId),
-  )
-    .then((ptyResult) => {
-      const finishedAt = new Date().toISOString();
-      const append = appendRun(ctx, id, {
-        runId,
-        startedAt,
-        finishedAt,
-        command,
-        cwd: workspacePath,
-        exitCode: ptyResult.exitCode,
-        stdoutTail: ptyResult.output,
-        stderrTail: "",
-        artifacts: args.artifacts ?? [],
-        env,
-        notes: args.notes,
-      });
-      if (!append.ok) {
-        reportResult(args, { ok: false, error: append.error });
-        return;
-      }
-      const run: ExperimentRunEntry = append.run;
-      reportResult(args, {
-        ok: true,
-        run,
-        exitCode: run.exitCode,
-        stdoutTail: run.stdoutTail,
-        stderrTail: run.stderrTail,
-      });
+      envExtra: { PYTHONUNBUFFERED: "1" },
+      onChunk: (chunk) => {
+        if (args.onOutputChunk) {
+          try {
+            args.onOutputChunk(stripAnsi(chunk));
+          } catch {
+            // ignore callback errors
+          }
+        }
+      },
     })
-    .catch((err: unknown) => {
-      const finishedAt = new Date().toISOString();
-      const message = err instanceof Error ? err.message : String(err);
-      log.warn("experiment-run failed", { id, runId, error: message });
-      const append = appendRun(ctx, id, {
-        runId,
-        startedAt,
-        finishedAt,
-        command,
-        cwd: workspacePath,
-        exitCode: 124,
-        stdoutTail: message,
-        stderrTail: "Prism experiment-run: command failed or timed out.",
-        artifacts: args.artifacts ?? [],
-        env,
-        notes: args.notes,
+      .then((ptyResult) => {
+        const finishedAt = new Date().toISOString();
+        const append = appendRun(ctx, id, {
+          runId,
+          startedAt,
+          finishedAt,
+          command,
+          cwd: workspacePath,
+          exitCode: ptyResult.exitCode,
+          stdoutTail: ptyResult.output,
+          stderrTail: "",
+          artifacts: args.artifacts ?? [],
+          env,
+          notes: args.notes,
+        });
+        if (!append.ok) {
+          reportResult(args, { ok: false, error: append.error });
+          return;
+        }
+        const run: ExperimentRunEntry = append.run;
+        reportResult(args, {
+          ok: true,
+          run,
+          exitCode: run.exitCode,
+          stdoutTail: run.stdoutTail,
+          stderrTail: run.stderrTail,
+        });
+      })
+      .catch((err: unknown) => {
+        const finishedAt = new Date().toISOString();
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn("experiment-run failed", { id, runId, error: message });
+        const append = appendRun(ctx, id, {
+          runId,
+          startedAt,
+          finishedAt,
+          command,
+          cwd: workspacePath,
+          exitCode: 124,
+          stdoutTail: message,
+          stderrTail: "Prism experiment-run: command failed to execute.",
+          artifacts: args.artifacts ?? [],
+          env,
+          notes: args.notes,
+        });
+        const run: ExperimentRunEntry | null = append.ok ? append.run : null;
+        reportResult(args, {
+          ok: false,
+          error: message,
+          run: run ?? undefined,
+        });
       });
-      const run: ExperimentRunEntry | null = append.ok ? append.run : null;
-      reportResult(args, {
-        ok: false,
-        error: message,
-        run: run ?? undefined,
-      });
-    });
+  });
 }
 
 function reportResult(args: KickoffExperimentRunArgs, data: ExperimentRunResult): void {

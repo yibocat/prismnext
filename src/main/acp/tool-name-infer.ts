@@ -5,6 +5,12 @@ export function inferToolNameFromInput(input: unknown): string | null {
   const has = (k: string) => keys.includes(k);
   const obj = input as Record<string, unknown>;
 
+  // experiment-run input is {id, command, artifacts?, notes?} - has `command`
+  // like bash, but also `id` (the experiment slug). Distinguish BEFORE bash, or
+  // the live tool-call display mislabels experiment-run as "bash" (the persisted
+  // tool_name is correct, so reload shows the right name -> "live=bash /
+  // reloaded=experiment-run" bug). bash has no `id` field.
+  if (has("command") && has("id")) return "experiment-run";
   if (has("command")) return "bash";
   if (has("url")) return "webfetch";
   if (has("bibkey") && !has("file_path") && !has("filePath")) {

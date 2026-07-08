@@ -1,111 +1,219 @@
 /**
- * experiments-detail — Detail view for the Experiments mode (Sprint 0.7).
- *
- * Composes the read-only detail surface:
- *   1. Brief strip  — inline hypothesis / RQ / section pills
- *                    (graceful collapse when `briefLinks` is empty)
- *   2. Meta header  — title · tags · created · workspacePath
- *   3. Env card     — `detect_env` snapshot with a [Refresh] action
- *   4. Run panel   — command input + Run / Cancel (Task 6)
- *   5. Runs table   — expandable single output tail + artifacts
- *
- * The contract with `experiments-content.tsx` is preserved: the parent
- * guarantees `detail.meta.id === selectedId` and passes a possibly-null
- * `env`. Refresh just re-selects the current id (the store reloads detail
- * + env), which is the cheapest way to honor the env card's [Refresh] button
- * without adding a new store action.
+ * experiments-detail — Detail view for the Experiments mode.
  */
 
-import { useCallback } from "react";
-import {
-  CalendarIcon,
-  FolderOpenIcon,
-  Loader2Icon,
-  RefreshCwIcon,
-  TagIcon,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { CheckIcon, ChevronDownIcon, CopyIcon, Loader2Icon, RefreshCwIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
 import { cn } from "@/lib/utils";
 import { useDocumentStore } from "@/stores/document-store";
 import { useExperimentStore } from "@/stores/experiment-store";
-import type {
-  ExperimentEnv,
-  ExperimentMeta,
+import { literatureDetailBadgeClass } from "@/modes/literature-mode/literature-list-chrome";
+import {
+  experimentEnvDisplayRows,
+  type ExperimentEnv,
+  type ExperimentMeta,
+  type ExperimentRunEntry,
 } from "../../../shared/experiment-log";
 import { ExperimentsBriefStrip } from "./experiments-brief-strip";
+import {
+  experimentsDetailTitleClass,
+  experimentsMetadataLabelClass,
+  experimentsMetadataRowClass,
+  experimentsPathCompactClass,
+  experimentsSectionHeaderRowClass,
+  experimentsSectionLabelClass,
+  experimentsSubsectionLabelClass,
+  experimentsUiValueClass,
+  formatExperimentRelativeTime,
+} from "./experiments-detail-chrome";
 import { ExperimentsRunPanel } from "./experiments-run-panel";
 import { ExperimentsRunsTable } from "./experiments-runs-table";
 
-export interface ExperimentsDetailProps {
-  meta: ExperimentMeta;
-  env: ExperimentEnv | null;
-  /** Optional env reload — defaults to a no-op when parent passes nothing. */
-  envReloading?: boolean;
-}
+const COPY_FEEDBACK_MS = 1500;
 
-function formatDate(iso: string): string {
+function formatDateTime(iso: string): string {
   if (!iso) return "—";
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return iso;
   return new Date(t).toLocaleString();
 }
 
-function EnvRow({
+function formatRelative(iso: string): string {
+  if (!iso) return "";
+  return formatExperimentRelativeTime(iso);
+}
+
+function ExperimentsMetadataRow({
   label,
-  value,
-  placeholder,
+  children,
 }: {
   label: string;
-  value: string | null | undefined;
-  placeholder?: string;
+  children: ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <span className="text-[length:var(--font-hint)] uppercase tracking-wide text-muted-foreground/60">
-        {label}
-      </span>
-      <span
-        className={cn(
-          "truncate font-mono text-[length:var(--font-size-12)]",
-          value ? "text-foreground/90" : "text-muted-foreground/55",
-        )}
-        title={value ?? undefined}
-      >
-        {value || placeholder || "—"}
-      </span>
+    <div className={experimentsMetadataRowClass}>
+      <span className={experimentsMetadataLabelClass}>{label}</span>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }
 
-function EnvCard({
+function CopyableText({
+  text,
+  copyText,
+  className,
+}: {
+  text: string;
+  copyText?: string;
+  className?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<number | null>(null);
+  const payload = copyText ?? text;
+
+  useEffect(
+    () => () => {
+      if (timerRef.current != null) window.clearTimeout(timerRef.current);
+    },
+    [],
+  );
+
+  const handleCopy = () => {
+    void navigator.clipboard.writeText(payload).then(() => {
+      setCopied(true);
+      if (timerRef.current != null) window.clearTimeout(timerRef.current);
+      timerRef.current = window.setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
+    });
+  };
+
+  const valueClass = experimentsUiValueClass;
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className={cn(
+        "group inline-flex max-w-full items-baseline gap-1.5 text-left transition-colors",
+        valueClass,
+        "rounded-[3px] hover:text-foreground",
+        className,
+      )}
+      title={copied ? "Copied" : `Click to copy: ${payload}`}
+    >
+      <span className="min-w-0 break-all">{text}</span>
+      {copied ? (
+        <CheckIcon className="size-3 shrink-0 self-center text-success" aria-label="Copied" />
+      ) : (
+        <CopyIcon
+          className="size-3 shrink-0 self-center text-muted-foreground/45 opacity-0 transition-opacity group-hover:opacity-100"
+          aria-hidden
+        />
+      )}
+    </button>
+  );
+}
+
+function StaticValue({
+  value,
+  placeholder = "—",
+}: {
+  value: string | null | undefined;
+  placeholder?: string;
+}) {
+  const shown = value?.trim();
+  return (
+    <span
+      className={cn(
+        shown
+          ? "text-[length:var(--font-size-13)] text-foreground/90"
+          : "text-[length:var(--font-size-13)] text-muted-foreground/60",
+      )}
+    >
+      {shown || placeholder}
+    </span>
+  );
+}
+
+function OverviewSection({
   meta,
+  runCount,
+  lastRunAt,
+  lastExitCode,
+}: {
+  meta: ExperimentMeta;
+  runCount: number;
+  lastRunAt: string | null;
+  lastExitCode: number | null;
+}) {
+  return (
+    <section className="min-w-0 space-y-2">
+      <div className={experimentsSectionHeaderRowClass}>
+        <h3 className={experimentsSectionLabelClass}>Overview</h3>
+      </div>
+      <div className="space-y-0">
+        <ExperimentsMetadataRow label="ID">
+          <CopyableText text={meta.id} />
+        </ExperimentsMetadataRow>
+        <ExperimentsMetadataRow label="Created">
+          <StaticValue
+            value={`${formatDateTime(meta.createdAt)} (${formatRelative(meta.createdAt)})`}
+          />
+        </ExperimentsMetadataRow>
+        <ExperimentsMetadataRow label="Runs">
+          <span className="text-[length:var(--font-size-13)] text-foreground/90 tabular-nums">
+            {runCount}
+            {lastRunAt ? (
+              <span className="ml-1.5 text-[length:var(--font-size-12)] text-muted-foreground/80">
+                · last {formatRelative(lastRunAt)}
+                {lastExitCode === 0 || lastExitCode == null ? "" : ` · exit ${lastExitCode}`}
+              </span>
+            ) : null}
+          </span>
+        </ExperimentsMetadataRow>
+        <ExperimentsMetadataRow label="Lab path">
+          <CopyableText text={meta.workspacePath} />
+        </ExperimentsMetadataRow>
+        {meta.tags && meta.tags.length > 0 ? (
+          <ExperimentsMetadataRow label="Tags">
+            <div className="flex flex-wrap gap-1.5">
+              {meta.tags.map((tag) => (
+                <span key={tag} className={literatureDetailBadgeClass}>
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </ExperimentsMetadataRow>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function EnvironmentSection({
   env,
   reloading,
   onRefresh,
 }: {
-  meta: ExperimentMeta;
   env: ExperimentEnv | null;
   reloading: boolean;
   onRefresh: () => void;
 }) {
+  const rows = experimentEnvDisplayRows(env);
+
   return (
-    <section
-      aria-label="Environment"
-      className="rounded-md border border-border/60 bg-card/40"
-    >
-      <header className="flex items-center justify-between border-b border-border/40 px-3 py-1.5">
-        <span className="text-[length:var(--font-hint)] font-medium uppercase tracking-wide text-muted-foreground/70">
-          Environment (detect_env)
-        </span>
+    <section className="min-w-0 space-y-2">
+      <div className={experimentsSectionHeaderRowClass}>
+        <h3 className={experimentsSectionLabelClass}>Environment</h3>
         <Button
           type="button"
-          size="sm"
+          size="xs"
           variant="ghost"
-          className="h-6 gap-1 px-2 text-[length:var(--font-size-11)]"
+          className="h-6 gap-1 px-2 text-muted-foreground hover:text-foreground"
           onClick={onRefresh}
           disabled={reloading}
-          title="Re-detect environment"
+          title="Re-detect runtime environment"
         >
           {reloading ? (
             <Loader2Icon className="size-3 animate-spin" aria-hidden />
@@ -114,55 +222,68 @@ function EnvCard({
           )}
           Refresh
         </Button>
-      </header>
-      {env ? (
-        <div className="grid grid-cols-2 gap-x-3 gap-y-2 px-3 py-2 sm:grid-cols-3">
-          <EnvRow
-            label="Python"
-            value={env.python}
-            placeholder={env.pythonVersion ? `python ${env.pythonVersion}` : undefined}
-          />
-          <EnvRow
-            label="Python ver."
-            value={env.pythonVersion}
-          />
-          <EnvRow label="Rscript" value={env.rscript} placeholder="no R" />
-          <EnvRow label="R ver." value={env.rVersion} />
-          <EnvRow label="Platform" value={env.platform} />
-          <EnvRow
-            label="Git commit"
-            value={env.gitCommit}
-            placeholder="not a repo"
-          />
-          <EnvRow
-            label="Venv"
-            value={env.venvPath}
-            placeholder="no .venv"
-          />
-        </div>
-      ) : (
-        <div className="flex items-center justify-between gap-3 px-3 py-3 text-[length:var(--font-size-12)] text-muted-foreground/70">
-          <span>Environment not detected yet.</span>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-6 gap-1 px-2 text-[length:var(--font-size-11)]"
-            onClick={onRefresh}
-            disabled={reloading}
-          >
-            {reloading ? (
-              <Loader2Icon className="size-3 animate-spin" aria-hidden />
+      </div>
+
+      {!env ? (
+        <p className={SETTINGS_ROW_DESC}>
+          Not detected yet. Refresh probes Python, optional R, git, and venv in the lab
+          folder (language-agnostic experiments may show only Platform).
+        </p>
+      ) : null}
+
+      <div className="space-y-0">
+        {rows.map((row) => (
+          <ExperimentsMetadataRow key={row.label} label={row.label}>
+            {row.copyText ? (
+              <CopyableText
+                text={row.display?.trim() || row.placeholder}
+                copyText={row.copyText}
+              />
             ) : (
-              <RefreshCwIcon className="size-3" aria-hidden />
+              <StaticValue value={row.display} placeholder={row.placeholder} />
             )}
-            Detect
-          </Button>
-        </div>
-      )}
-      {/* Suppress unused-var lint when meta is referenced by future enhancements. */}
-      <span className="sr-only">{meta.id}</span>
+          </ExperimentsMetadataRow>
+        ))}
+      </div>
     </section>
+  );
+}
+
+function HistorySection({
+  runCount,
+  runs,
+  workspacePath,
+}: {
+  runCount: number;
+  runs: ExperimentRunEntry[];
+  workspacePath: string;
+}) {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 text-left"
+        aria-expanded={open}
+      >
+        <ChevronDownIcon
+          className={cn(
+            "size-3 shrink-0 text-muted-foreground/60 transition-transform",
+            open ? "rotate-0" : "-rotate-90",
+          )}
+          aria-hidden
+        />
+        <span className={experimentsSubsectionLabelClass}>
+          History
+          <span className="ml-1.5 tabular-nums text-muted-foreground/65">({runCount})</span>
+        </span>
+      </button>
+      {open ? (
+        <ExperimentsRunsTable runs={runs} workspacePath={workspacePath} />
+      ) : null}
+    </div>
   );
 }
 
@@ -170,77 +291,72 @@ export function ExperimentsDetail({
   meta,
   env,
   envReloading,
-}: ExperimentsDetailProps) {
+}: {
+  meta: ExperimentMeta;
+  env: ExperimentEnv | null;
+  envReloading?: boolean;
+}) {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const selectedId = useExperimentStore((s) => s.selectedId);
-  const runs = useExperimentStore((s) => s.detail?.runs);
+  const runs = useExperimentStore((s) => s.detail?.runs ?? []);
   const selectExperiment = useExperimentStore((s) => s.selectExperiment);
 
-  // Re-selecting the same id triggers `selectExperiment` to reload both
-  // detail and env. The store guards against flicker (same id) and we get
-  // a fresh env snapshot without adding a dedicated `refreshEnv` action.
   const handleRefreshEnv = useCallback(() => {
     if (!projectRoot || !selectedId) return;
     void selectExperiment(projectRoot, selectedId);
   }, [projectRoot, selectedId, selectExperiment]);
 
+  const runCount = runs.length;
+  const lastRun = runCount > 0 ? runs[runCount - 1] : null;
+
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 overflow-auto p-4">
-      <ExperimentsBriefStrip briefLinks={meta.briefLinks} />
+    <div className="@container flex h-full min-h-0 flex-col overflow-auto px-6 py-5 @md:px-8 @md:py-6">
+      <div className="space-y-6">
+        <header className="space-y-3">
+          <h2 className={experimentsDetailTitleClass}>{meta.title}</h2>
+          <ExperimentsBriefStrip briefLinks={meta.briefLinks} />
+        </header>
 
-      <header className="space-y-1.5">
-        <h2 className="text-[length:var(--font-size-14)] font-medium text-foreground">
-          {meta.title}
-        </h2>
-
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--font-size-12)] text-muted-foreground/80">
-          <span className="inline-flex items-center gap-1" title="Created at">
-            <CalendarIcon className="size-3" aria-hidden />
-            <span>{formatDate(meta.createdAt)}</span>
-          </span>
-          <span
-            className="inline-flex min-w-0 items-center gap-1"
-            title={meta.workspacePath}
-          >
-            <FolderOpenIcon className="size-3 shrink-0" aria-hidden />
-            <span className="truncate font-mono">{meta.workspacePath}</span>
-          </span>
+        <div className="grid grid-cols-1 items-start gap-6 border-t border-border/40 pt-4 @md:grid-cols-2 @md:gap-8">
+          <OverviewSection
+            meta={meta}
+            runCount={runCount}
+            lastRunAt={lastRun?.finishedAt ?? null}
+            lastExitCode={lastRun?.exitCode ?? null}
+          />
+          <EnvironmentSection
+            env={env}
+            reloading={Boolean(envReloading)}
+            onRefresh={handleRefreshEnv}
+          />
         </div>
 
-        {meta.tags && meta.tags.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-1">
-            <TagIcon
-              className="size-3 text-muted-foreground/60"
-              aria-hidden
-            />
-            {meta.tags.map((tag) => (
-              <Badge
-                key={tag}
-                variant="outline"
-                className="text-[length:var(--font-hint)] font-normal"
-              >
-                {tag}
-              </Badge>
-            ))}
+        <section className="space-y-4 border-t border-border/40 pt-4">
+          <div className={cn(experimentsSectionHeaderRowClass, "items-baseline")}>
+            <h3 className={experimentsSectionLabelClass}>Execution</h3>
+            {meta.workspacePath ? (
+              <div className="flex min-w-0 max-w-[55%] items-baseline justify-end gap-1.5">
+                <span className="shrink-0 text-[length:var(--font-path)] text-muted-foreground/60">
+                  cwd
+                </span>
+                <CopyableText
+                  text={meta.workspacePath}
+                  className={cn(
+                    experimentsPathCompactClass,
+                    "min-w-0 text-muted-foreground/75",
+                  )}
+                />
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </header>
 
-      <EnvCard
-        meta={meta}
-        env={env}
-        reloading={Boolean(envReloading)}
-        onRefresh={handleRefreshEnv}
-      />
+          <ExperimentsRunPanel />
 
-      <ExperimentsRunPanel />
-
-      <section className="space-y-1.5">
-        <h3 className="text-[length:var(--font-hint)] font-medium uppercase tracking-wide text-muted-foreground/70">
-          Runs
-        </h3>
-        <ExperimentsRunsTable runs={runs ?? []} workspacePath={meta.workspacePath} />
-      </section>
+          <div className="space-y-2">
+            <HistorySection runCount={runCount} workspacePath={meta.workspacePath} runs={runs} />
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

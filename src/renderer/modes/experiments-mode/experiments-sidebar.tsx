@@ -43,7 +43,7 @@ function ExperimentRow({
     >
       <FlaskConicalIcon className="size-3 shrink-0" />
       <span className="min-w-0 flex-1 truncate">{title}</span>
-      <span className="shrink-0 tabular-nums text-[length:var(--font-hint)] text-muted-foreground/60">
+      <span className="shrink-0 tabular-nums text-[length:var(--font-size-11)] text-muted-foreground/60">
         {runCount}
       </span>
     </div>
@@ -76,7 +76,7 @@ export function ExperimentsSidebar() {
         {loading ? (
           <Loader2Icon className="size-3.5 shrink-0 animate-spin text-muted-foreground/60" />
         ) : (
-          <span className="shrink-0 tabular-nums text-[length:var(--font-hint)] text-muted-foreground/60">
+          <span className="shrink-0 tabular-nums text-[length:var(--font-size-11)] text-muted-foreground/60">
             {experiments.length}
           </span>
         )}
@@ -84,7 +84,7 @@ export function ExperimentsSidebar() {
 
       <SidebarContent className="gap-0 overflow-auto px-1.5 py-1">
         {sorted.length === 0 ? (
-          <p className="px-2 py-2 text-[length:var(--font-hint)] text-muted-foreground/60">
+          <p className="px-2 py-2 text-[length:var(--font-size-11)] text-muted-foreground/60">
             {projectRoot
               ? "No experiments in this project yet."
               : "Open a project to view experiments."}

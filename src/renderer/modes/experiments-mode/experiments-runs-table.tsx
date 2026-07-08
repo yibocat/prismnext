@@ -1,283 +1,382 @@
 /**
- * experiments-runs-table — Runs timeline for the Experiments mode detail
- * view (Sprint 0.7, Task 5).
+ * experiments-runs-table — Run history for the Experiments detail view.
  *
- * Read-only table over `ExperimentRunEntry[]`. Columns:
- *   time · command (truncated) · exitCode (color-coded) · env summary
- *
- * Each row is expandable to reveal:
- *   - the **single** "output" tail (`stdoutTail` only; `stderrTail` is
- *     ALWAYS empty in the current executor because node-pty merges
- *     stderr into stdout — see plan §FAQ / D2. We deliberately do NOT
- *     render a separate stderr column, and the field is intentionally
- *     ignored in the type, to prevent misleading UI.)
- *   - artifact paths, each rendered as a clickable button. Click is
- *     wired to `navigateFileTreeToPath` + `openFile` on the resolved
- *     project-relative path. Full file-tree reveal is left to Task 7
- *     (the click handler delegates to a best-effort open that gracefully
- *     no-ops if the path is outside the scanned tree).
- *
- * Mirrors the literature-mode visual language: small monospace tabular
- * numerics, chevron for expand, shadcn/ui where applicable.
+ * Accordion rows (one expanded at a time) + paginated newest-first list.
  */
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ChevronLeftIcon,
   ChevronRightIcon,
   CircleCheckIcon,
   CircleXIcon,
-  ExternalLinkIcon,
-  TerminalIcon,
+  CopyIcon,
+  FileIcon,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
+import { CopyFeedbackButton } from "@/modes/literature-mode/literature-inline-field";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useRightPanelStore } from "@/stores/right-panel-store";
 import { navigateFileTreeToPath } from "@/lib/files/navigate-file-tree";
 import type {
   ExperimentEnv,
   ExperimentRunEntry,
 } from "../../../shared/experiment-log";
+import {
+  experimentsCodeClass,
+  experimentsRunExpandedClass,
+  experimentsRunRowTextClass,
+  experimentsRunsListHeaderLabelClass,
+  experimentsRunsListHeaderShellClass,
+  experimentsRunsTableShellClass,
+} from "./experiments-detail-chrome";
 
 export interface ExperimentsRunsTableProps {
   runs: ExperimentRunEntry[];
-  /** Project-relative workspace path (meta.workspacePath) - used to resolve
-   *  island-relative artifact paths for file-tree reveal + editor open. */
   workspacePath?: string;
 }
 
-const TABLE_HEAD =
-  "sticky top-0 z-10 grid grid-cols-[6.5rem_1fr_3.25rem_5.5rem] items-center gap-2 border-b border-border/60 bg-background/95 px-2 py-1 text-[length:var(--font-hint)] font-medium uppercase tracking-wide text-muted-foreground/70 backdrop-blur-sm";
+const PAGE_SIZE = 10;
 
-function envSummary(env: ExperimentEnv): string {
-  const py = env.pythonVersion ? `py ${env.pythonVersion}` : "no python";
-  const r = env.rVersion ? `R ${env.rVersion}` : null;
-  return r ? `${py} · ${r}` : py;
-}
+/** Shared column template for header + data rows. */
+const HISTORY_GRID_CLASS =
+  "grid grid-cols-[0.75rem_0.75rem_minmax(0,1.2fr)_minmax(6rem,0.9fr)_2rem_4.25rem] gap-x-2";
 
 function formatTime(iso: string): string {
   if (!iso) return "—";
   const t = Date.parse(iso);
   if (Number.isNaN(t)) return iso;
-  const d = new Date(t);
-  // Compact locale-friendly timestamp; matches the literature-mode convention.
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
+  const diffMs = Date.now() - t;
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  return new Date(t).toLocaleDateString();
 }
 
-function truncate(text: string, max: number): string {
-  const t = text.replace(/\s+/g, " ").trim();
-  if (t.length <= max) return t;
-  return `${t.slice(0, Math.max(0, max - 1))}…`;
+function formatDuration(startedAt: string, finishedAt: string): string | null {
+  const start = Date.parse(startedAt);
+  const end = Date.parse(finishedAt);
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return null;
+  const sec = Math.round((end - start) / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  const rem = sec % 60;
+  return rem > 0 ? `${min}m ${rem}s` : `${min}m`;
 }
 
-/** Single clickable artifact row — opens the file in the editor + reveals
- *  it in the Files sidebar tree. Falls back silently on paths the file
- *  scanner hasn't seen yet (e.g. freshly created artifacts). */
-function ArtifactRow({ path, workspacePath }: { path: string; workspacePath?: string }) {
-  const [opened, setOpened] = useState<"idle" | "ok" | "missing">("idle");
-  const openFile = useDocumentStore((s) => s.openFile);
+function envSummary(env: ExperimentEnv): string {
+  const bits: string[] = [];
+  if (env.pythonVersion) bits.push(`py ${env.pythonVersion}`);
+  else if (env.python) bits.push("py");
+  else bits.push("no python");
+  if (env.rVersion) bits.push(`R ${env.rVersion}`);
+  else if (env.rscript) bits.push("R");
+  if (env.gitCommit) bits.push(`git ${env.gitCommit}`);
+  if (env.venvPath) bits.push("venv");
+  return bits.join(" · ");
+}
 
-  // Artifacts are stored relative to the workspace island (per schema);
-  // join with meta.workspacePath to get a project-relative path for the
-  // file tree + editor. If the path already starts with the workspace
-  // prefix (already project-relative), use it as-is.
+function ArtifactChip({
+  path,
+  workspacePath,
+}: {
+  path: string;
+  workspacePath?: string;
+}) {
   const fullPath =
-    workspacePath && !path.startsWith(workspacePath) ? `${workspacePath}/${path}` : path;
+    workspacePath && !path.startsWith(workspacePath)
+      ? `${workspacePath}/${path}`
+      : path;
+  const name = path.split("/").pop() ?? path;
 
-  const handleClick = async () => {
+  const handleClick = () => {
     if (!fullPath) return;
-    // Ensure Files mode is the right-panel surface so the click has a
-    // visible target. activateMode is a no-op if already on Files.
+    const fileName = fullPath.split("/").pop() ?? fullPath;
     useLayoutStore.getState().activateMode("files");
-    // Reveal in sidebar (best-effort — non-scanned paths simply won't match).
     navigateFileTreeToPath(fullPath);
-    try {
-      await openFile(fullPath);
-      setOpened("ok");
-    } catch {
-      setOpened("missing");
-    }
+    useDocumentStore.getState().setActiveFile(fullPath);
+    useRightPanelStore.getState().openFile(fullPath, fullPath, fileName, { pin: true });
   };
 
-  const name = path.split("/").pop() ?? path;
   return (
     <button
       type="button"
-      onClick={() => void handleClick()}
-      className={cn(
-        "group flex w-full items-center gap-1.5 rounded-sm px-1.5 py-1 text-left",
-        "text-[length:var(--font-size-12)] text-foreground/80",
-        "hover:bg-accent/60 hover:text-foreground",
-      )}
-      title={path}
+      onClick={handleClick}
+      className="inline-flex h-6 items-center gap-1 rounded-md border border-border/55 bg-background px-2 text-[length:var(--font-menu-item)] text-foreground/90 transition-colors hover:bg-accent hover:text-foreground"
+      title={fullPath}
     >
-      <ExternalLinkIcon
-        className="size-3 shrink-0 text-muted-foreground/60 group-hover:text-foreground/80"
-        aria-hidden
-      />
-      <span className="min-w-0 flex-1 truncate">
-        <span className="font-medium">{name}</span>
-        {path !== name ? (
-          <span className="ml-1.5 truncate text-muted-foreground/60">
-            {path}
-          </span>
-        ) : null}
-      </span>
-      {opened === "missing" ? (
-        <span className="shrink-0 text-[length:var(--font-hint)] text-muted-foreground/60">
-          not in tree
-        </span>
-      ) : null}
+      <FileIcon className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
+      <span className="max-w-[14rem] truncate">{name}</span>
     </button>
   );
 }
 
-function RunRow({ run, workspacePath }: { run: ExperimentRunEntry; workspacePath?: string }) {
-  const [open, setOpen] = useState(false);
+function RunRow({
+  run,
+  workspacePath,
+  open,
+  onToggle,
+}: {
+  run: ExperimentRunEntry;
+  workspacePath?: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
   const exit = run.exitCode;
   const ExitIcon = exit === 0 ? CircleCheckIcon : CircleXIcon;
   const exitClass =
-    exit === 0
-      ? "text-emerald-600 dark:text-emerald-400"
-      : "text-destructive";
-  const summary = envSummary(run.env);
-  const hasTail = run.stdoutTail && run.stdoutTail.trim().length > 0;
+    exit === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive";
+  const hasTail = Boolean(run.stdoutTail?.trim());
   const hasArtifacts = run.artifacts.length > 0;
-  const expandable = hasTail || hasArtifacts;
+  const hasNote = Boolean(run.notes?.trim());
+  const expandable = hasTail || hasArtifacts || hasNote;
+  const duration = formatDuration(run.startedAt, run.finishedAt);
+  const noteText = hasNote ? run.notes!.trim() : "";
 
   return (
-    <li
-      className={cn(
-        "border-b border-border/40 last:border-b-0",
-        open && "bg-muted/30",
-      )}
-    >
+    <li className="flex flex-col">
       <button
         type="button"
-        onClick={() => expandable && setOpen((v) => !v)}
+        onClick={() => expandable && onToggle()}
         disabled={!expandable}
         aria-expanded={open}
         className={cn(
-          "grid w-full grid-cols-[6.5rem_1fr_3.25rem_5.5rem] items-center gap-2 px-2 py-1.5 text-left",
-          "text-[length:var(--font-size-12)]",
-          expandable && "hover:bg-accent/40",
+          HISTORY_GRID_CLASS,
+          "w-full items-center px-3",
+          "h-[var(--height-right-area-subtoolbar)] shrink-0 min-w-0 border-b border-border/60 text-left",
+          experimentsRunRowTextClass,
+          expandable && "cursor-pointer hover:bg-accent/40",
           !expandable && "cursor-default",
+          open && "bg-muted/30",
         )}
       >
         <ChevronRightIcon
           className={cn(
-            "col-start-1 size-3 shrink-0 text-muted-foreground/60 transition-transform",
+            "size-3 shrink-0 text-muted-foreground/60 transition-transform",
             open && "rotate-90",
             !expandable && "opacity-0",
           )}
           aria-hidden
         />
+        <ExitIcon className={cn("size-3 shrink-0", exitClass)} aria-hidden />
+        <span className={cn("min-w-0 truncate text-foreground/90", experimentsCodeClass)} title={run.command}>
+          {run.command}
+        </span>
+        <span
+          className={cn(
+            "min-w-0 truncate",
+            hasNote ? "text-foreground/75" : "text-muted-foreground/25",
+          )}
+          title={noteText || "No note"}
+        >
+          {hasNote ? noteText : "—"}
+        </span>
+        <span
+          className={cn("text-right tabular-nums", exitClass)}
+          title={`exit code ${exit}`}
+        >
+          {exit}
+        </span>
         <time
           dateTime={run.finishedAt}
-          className="col-start-1 row-start-1 col-span-1 -ml-0 tabular-nums text-muted-foreground/80"
+          className="text-right tabular-nums text-muted-foreground/70"
           title={run.finishedAt}
         >
           {formatTime(run.finishedAt)}
         </time>
-        <span
-          className="col-start-2 row-start-1 truncate font-mono text-foreground/90"
-          title={run.command}
-        >
-          {truncate(run.command, 140)}
-        </span>
-        <span
-          className={cn(
-            "col-start-3 row-start-1 flex items-center gap-1 tabular-nums",
-            exitClass,
-          )}
-          title={`exit code ${exit}`}
-        >
-          <ExitIcon className="size-3" aria-hidden />
-          <span>{exit}</span>
-        </span>
-        <span
-          className="col-start-4 row-start-1 truncate text-muted-foreground/70"
-          title={summary}
-        >
-          {summary || "—"}
-        </span>
       </button>
 
       {open ? (
-        <div className="space-y-2 px-3 pb-2 pt-0.5">
+        <div className={experimentsRunExpandedClass}>
+          {hasNote ? (
+            <p className="text-[length:var(--font-size-13)] text-foreground/85">
+              <span className="font-medium text-muted-foreground">Note</span>
+              {" — "}
+              {noteText}
+            </p>
+          ) : null}
+
           {hasTail ? (
-            <pre
-              className={cn(
-                "max-h-64 overflow-auto rounded-sm border border-border/60 bg-background/80",
-                "px-2 py-1.5 font-mono text-[length:var(--font-size-11)] text-foreground/85",
-                "whitespace-pre-wrap break-words",
-              )}
-            >
-              {run.stdoutTail}
-            </pre>
+            <div>
+              <div className="mb-1 text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/60">
+                Output
+              </div>
+              <div className="relative">
+                <pre
+                  className={cn(
+                    "max-h-64 overflow-auto rounded-sm border border-border/60 bg-background/80",
+                    "px-2 py-1.5 pr-8 text-foreground/85",
+                    experimentsCodeClass,
+                    "whitespace-pre-wrap break-words",
+                  )}
+                >
+                  {run.stdoutTail}
+                </pre>
+                <CopyFeedbackButton
+                  onCopy={() => navigator.clipboard.writeText(run.stdoutTail)}
+                  title="Copy output"
+                  className="absolute top-1.5 right-1.5 rounded bg-background/90 p-0.5 text-muted-foreground/60 shadow-sm hover:bg-muted hover:text-foreground"
+                >
+                  <CopyIcon className="size-3" aria-hidden />
+                </CopyFeedbackButton>
+              </div>
+            </div>
           ) : null}
 
           {hasArtifacts ? (
             <div>
-              <div className="mb-1 flex items-center gap-1 text-[length:var(--font-hint)] uppercase tracking-wide text-muted-foreground/70">
-                <TerminalIcon className="size-3" aria-hidden />
-                Artifacts ({run.artifacts.length})
+              <div className="mb-1.5 text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/60">
+                Artifacts
               </div>
-              <ul className="space-y-0.5">
+              <div className="flex flex-wrap gap-1.5">
                 {run.artifacts.map((artifact) => (
-                  <li key={artifact}>
-                    <ArtifactRow path={artifact} workspacePath={workspacePath} />
-                  </li>
+                  <ArtifactChip
+                    key={artifact}
+                    path={artifact}
+                    workspacePath={workspacePath}
+                  />
                 ))}
-              </ul>
+              </div>
             </div>
           ) : null}
 
-          {run.notes && run.notes.trim() ? (
-            <p className="text-[length:var(--font-hint)] text-muted-foreground/70">
-              <span className="font-medium text-foreground/70">note:</span>{" "}
-              {run.notes}
-            </p>
-          ) : null}
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[length:var(--font-size-11)] text-muted-foreground/55">
+            <span className="text-[length:var(--font-path)]">{run.runId}</span>
+            {duration ? <span>{duration}</span> : null}
+            <span>{envSummary(run.env)}</span>
+          </div>
         </div>
       ) : null}
     </li>
   );
 }
 
-export function ExperimentsRunsTable({ runs, workspacePath }: ExperimentsRunsTableProps) {
+export function ExperimentsRunsTable({
+  runs,
+  workspacePath,
+}: ExperimentsRunsTableProps) {
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+
+  const ordered = useMemo(() => [...runs].reverse(), [runs]);
+  const totalPages = Math.max(1, Math.ceil(ordered.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setPage(0);
+    setExpandedRunId(null);
+  }, [runs.length, workspacePath]);
+
+  useEffect(() => {
+    if (page > totalPages - 1) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [page, totalPages]);
+
+  const pageRuns = useMemo(() => {
+    const start = page * PAGE_SIZE;
+    return ordered.slice(start, start + PAGE_SIZE);
+  }, [ordered, page]);
+
+  const rangeStart = ordered.length === 0 ? 0 : page * PAGE_SIZE + 1;
+  const rangeEnd = Math.min((page + 1) * PAGE_SIZE, ordered.length);
+
   if (runs.length === 0) {
     return (
-      <div className="rounded-md border border-dashed border-border/60 px-3 py-6 text-center text-[length:var(--font-size-12)] text-muted-foreground/60">
-        No runs yet. Use the run panel above to execute a command in this
-        experiment.
+      <div className="rounded-md border border-dashed border-border/60 px-4 py-8 text-center">
+        <p className={SETTINGS_ROW_DESC}>No runs yet.</p>
+        <p className="mt-1 text-[length:var(--font-size-11)] text-muted-foreground/50">
+          Enter a command above and click Run.
+        </p>
       </div>
     );
   }
 
+  const handleToggle = (runId: string) => {
+    setExpandedRunId((current) => (current === runId ? null : runId));
+  };
+
   return (
-    <div className="overflow-hidden rounded-md border border-border/60">
-      <div className={TABLE_HEAD} role="row">
-        <span role="columnheader" className="pl-5">
-          Time
-        </span>
-        <span role="columnheader">
+    <div className={experimentsRunsTableShellClass}>
+      <div
+        className={cn(
+          HISTORY_GRID_CLASS,
+          experimentsRunsListHeaderShellClass,
+          "items-center",
+        )}
+        role="row"
+      >
+        <span aria-hidden />
+        <span aria-hidden />
+        <span className={experimentsRunsListHeaderLabelClass} role="columnheader">
           Command
         </span>
-        <span role="columnheader">Exit</span>
-        <span role="columnheader">Env</span>
+        <span className={experimentsRunsListHeaderLabelClass} role="columnheader">
+          Note
+        </span>
+        <span className={cn(experimentsRunsListHeaderLabelClass, "text-right")} role="columnheader">
+          Exit
+        </span>
+        <span className={cn(experimentsRunsListHeaderLabelClass, "text-right")} role="columnheader">
+          Time
+        </span>
       </div>
-      <ul className="divide-y divide-border/40">
-        {runs.map((run) => (
-          <RunRow key={run.runId} run={run} workspacePath={workspacePath} />
+      <ul>
+        {pageRuns.map((run) => (
+          <RunRow
+            key={run.runId}
+            run={run}
+            workspacePath={workspacePath}
+            open={expandedRunId === run.runId}
+            onToggle={() => handleToggle(run.runId)}
+          />
         ))}
       </ul>
+      {totalPages > 1 ? (
+        <div
+          className={cn(
+            "flex items-center justify-between gap-2 border-t border-border/60 px-3 py-1.5",
+            "bg-muted/15 text-[length:var(--font-size-11)] text-muted-foreground",
+          )}
+        >
+          <span className="tabular-nums">
+            {rangeStart}–{rangeEnd} of {ordered.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              className="h-6 gap-0.5 px-1.5"
+              disabled={page <= 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              title="Previous page"
+            >
+              <ChevronLeftIcon className="size-3" aria-hidden />
+              Prev
+            </Button>
+            <span className="min-w-[4.5rem] text-center tabular-nums">
+              {page + 1} / {totalPages}
+            </span>
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              className="h-6 gap-0.5 px-1.5"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              title="Next page"
+            >
+              Next
+              <ChevronRightIcon className="size-3" aria-hidden />
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

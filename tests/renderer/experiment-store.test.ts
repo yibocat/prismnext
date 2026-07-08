@@ -23,6 +23,8 @@ type RunCompleteHandler = (data: {
 }) => void;
 
 const runCompleteHandlers: RunCompleteHandler[] = [];
+type RunOutputHandler = (data: { id: string; runId: string; chunk: string }) => void;
+const runOutputHandlers: RunOutputHandler[] = [];
 
 const electronAPI = {
   experimentList: vi.fn(),
@@ -36,6 +38,13 @@ const electronAPI = {
     return () => {
       const idx = runCompleteHandlers.indexOf(cb);
       if (idx >= 0) runCompleteHandlers.splice(idx, 1);
+    };
+  }),
+  onExperimentRunOutput: vi.fn((cb: RunOutputHandler) => {
+    runOutputHandlers.push(cb);
+    return () => {
+      const idx = runOutputHandlers.indexOf(cb);
+      if (idx >= 0) runOutputHandlers.splice(idx, 1);
     };
   }),
 };
@@ -63,6 +72,7 @@ function makeSummary(overrides: Partial<ExperimentSummary> = {}): ExperimentSumm
 beforeEach(() => {
   vi.clearAllMocks();
   runCompleteHandlers.length = 0;
+  runOutputHandlers.length = 0;
   useExperimentStore.getState().reset();
 });
 
@@ -211,6 +221,36 @@ describe("experiment-store", () => {
     });
   });
 
+  describe("clearSelection", () => {
+    it("clears selectedId, detail, and env", async () => {
+      electronAPI.experimentRead.mockResolvedValueOnce({
+        ok: true,
+        meta: {
+          id: "exp-a",
+          title: "A",
+          createdAt: "2026-07-07T00:00:00Z",
+          workspacePath: "experiment/exp-a",
+        },
+        runs: [],
+        experimentRoot: "experiment",
+        registryRoot: ".prismnext/experiments",
+      });
+      electronAPI.experimentDetectEnv.mockResolvedValueOnce({
+        ok: true,
+        env: { python: "/usr/bin/python3", pythonVersion: "3.11.0", rscript: null, rVersion: null, platform: "darwin", gitCommit: null, venvPath: null },
+        workspacePath: "experiment/exp-a",
+      });
+
+      await useExperimentStore.getState().selectExperiment(PROJECT, "exp-a");
+      useExperimentStore.getState().clearSelection();
+
+      const state = useExperimentStore.getState();
+      expect(state.selectedId).toBeNull();
+      expect(state.detail).toBeNull();
+      expect(state.env).toBeNull();
+    });
+  });
+
   describe("runCommand", () => {
     it("sets runInFlight on ok:true and returns runId", async () => {
       electronAPI.experimentRun.mockResolvedValueOnce({
@@ -229,6 +269,7 @@ describe("experiment-store", () => {
         id: "exp-a",
         runId: "run-20260708-100000-abcd",
         command: ".venv/bin/python train.py",
+        liveOutput: "",
       });
       expect(state.error).toBeNull();
     });
@@ -285,6 +326,7 @@ describe("experiment-store", () => {
           id: "exp-a",
           runId: "run-1",
           command: "echo hi",
+          liveOutput: "",
         },
       });
 
@@ -337,6 +379,7 @@ describe("experiment-store", () => {
           id: "exp-b",
           runId: "run-2",
           command: "echo other",
+          liveOutput: "",
         },
       });
 
@@ -391,6 +434,7 @@ describe("experiment-store", () => {
           id: "exp-a",
           runId: "run-1",
           command: "false",
+          liveOutput: "",
         },
       });
 
@@ -423,6 +467,7 @@ describe("experiment-store", () => {
           id: "exp-a",
           runId: "run-timeout",
           command: "sleep 9999",
+          liveOutput: "",
         },
       });
 
@@ -461,6 +506,72 @@ describe("experiment-store", () => {
     });
   });
 
+  describe("handleRunOutput", () => {
+    it("appends chunks to liveOutput for the matching in-flight run", () => {
+      useExperimentStore.setState({
+        runInFlight: {
+          id: "exp-a",
+          runId: "run-1",
+          command: "python train.py",
+          liveOutput: "",
+        },
+      });
+
+      useExperimentStore.getState().handleRunOutput({
+        id: "exp-a",
+        runId: "run-1",
+        chunk: "epoch 1\n",
+      });
+
+      expect(useExperimentStore.getState().runInFlight?.liveOutput).toBe("epoch 1\n");
+    });
+
+    it("buffers chunks that arrive before runInFlight is set", () => {
+      useExperimentStore.getState().handleRunOutput({
+        id: "exp-a",
+        runId: "run-early",
+        chunk: "early line\n",
+      });
+
+      expect(useExperimentStore.getState().runOutputBuffer["run-early"]).toBe("early line\n");
+    });
+
+    it("merges buffered output when runCommand succeeds", async () => {
+      useExperimentStore.setState({
+        runOutputBuffer: { "run-early": "early line\n" },
+      });
+      electronAPI.experimentRun.mockResolvedValueOnce({
+        ok: true,
+        runId: "run-early",
+        status: "started",
+      });
+
+      await useExperimentStore.getState().runCommand(PROJECT, "exp-a", "echo hi");
+
+      expect(useExperimentStore.getState().runInFlight?.liveOutput).toBe("early line\n");
+      expect(useExperimentStore.getState().runOutputBuffer["run-early"]).toBeUndefined();
+    });
+
+    it("ignores chunks for a different runId", () => {
+      useExperimentStore.setState({
+        runInFlight: {
+          id: "exp-a",
+          runId: "run-1",
+          command: "python train.py",
+          liveOutput: "keep",
+        },
+      });
+
+      useExperimentStore.getState().handleRunOutput({
+        id: "exp-a",
+        runId: "run-other",
+        chunk: "nope",
+      });
+
+      expect(useExperimentStore.getState().runInFlight?.liveOutput).toBe("keep");
+    });
+  });
+
   describe("cancelRun", () => {
     it("calls experimentCancelRun and clears runInFlight", async () => {
       useExperimentStore.setState({
@@ -468,6 +579,7 @@ describe("experiment-store", () => {
           id: "exp-a",
           runId: "run-1",
           command: "sleep 999",
+          liveOutput: "",
         },
       });
       electronAPI.experimentCancelRun.mockResolvedValueOnce({ ok: true });
@@ -488,6 +600,7 @@ describe("experiment-store", () => {
           id: "exp-a",
           runId: "run-1",
           command: "sleep 999",
+          liveOutput: "",
         },
       });
       electronAPI.experimentCancelRun.mockRejectedValueOnce(new Error("IPC down"));
@@ -560,6 +673,7 @@ describe("experiment-store", () => {
             id: "exp-a",
             runId: "run-x",
             command: "echo wired",
+            liveOutput: "",
           },
         });
 

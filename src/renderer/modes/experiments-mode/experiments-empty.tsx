@@ -12,7 +12,7 @@
 import { useLayoutStore } from "@/stores/layout-store";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { Button } from "@/components/ui/button";
-import { FlaskConicalIcon, FolderPlusIcon, MessageSquareIcon } from "lucide-react";
+import { FlaskConicalIcon, FolderPlusIcon } from "lucide-react";
 
 /**
  * No experiment folder configured. Offer a button that opens the Settings
@@ -39,8 +39,8 @@ export function ExperimentsNoFolderEmpty() {
 
 /**
  * Folder is configured but the registry is empty. P0 copy only — no
- * composer pre-fill (P1). The "Focus chat" button just brings the chat
- * panel into view; we deliberately do not push a prompt.
+ * composer pre-fill (P1). No "Focus chat" button - an earlier version
+ * deactivated the Experiments mode on click (looked like the panel broke).
  */
 export function ExperimentsEmptyListEmpty() {
   return (
@@ -54,7 +54,6 @@ export function ExperimentsEmptyListEmpty() {
           Ask the Agent in chat to create one. The Agent reads your research
           brief, scaffolds a registry entry, and links the lab folder.
         </p>
-        <FocusChatButton />
       </div>
     </div>
   );
@@ -78,26 +77,6 @@ function OpenWorkspaceSettingsButton() {
     >
       <FolderPlusIcon className="size-3.5" />
       Add folder in Settings
-    </Button>
-  );
-}
-
-function FocusChatButton() {
-  return (
-    <Button
-      size="sm"
-      variant="secondary"
-      className="mt-1"
-      onClick={() => {
-        const st = useLayoutStore.getState();
-        // Collapse the RightArea and restore the chat-centered view. The
-        // composer is not pre-filled (P1).
-        st.deactivateMode("experiments");
-        st.setLeftSidebarView("sessions");
-      }}
-    >
-      <MessageSquareIcon className="size-3.5" />
-      Focus chat
     </Button>
   );
 }

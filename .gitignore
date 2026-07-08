@@ -11,8 +11,9 @@ src/renderer/public/pdfjs-dist/
 bin/opencode/
 .cursor/
 
-# Internal audit & review notes
+# Internal Document
 docs/audit/
+docs/internal/
 
 .pnpm-store/
 .vscode/

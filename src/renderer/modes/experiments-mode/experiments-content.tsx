@@ -2,32 +2,69 @@
  * experiments-content — Content area for the Experiments RightArea mode
  * (Sprint 0.7).
  *
- * Routes the four primary states for the mode:
+ * Routes the primary states for the mode:
  *   1. No project              — centered muted copy (mirrors literature).
  *   2. No Experiment folder    — `ExperimentsNoFolderEmpty` (settings link).
- *   3. Empty registry list     — `ExperimentsEmptyListEmpty` (focus chat).
- *   4. List with selection     — `ExperimentsDetail` stub (Task 5+ will
- *                                replace with brief strip + env + run panel
- *                                + runs table).
+ *   3. Empty registry list     — `ExperimentsEmptyListEmpty`.
+ *   4. Browse                  — `ExperimentsGrid` (card gallery, sidebar collapsed).
+ *   5. Detail                  — `ExperimentsDetail` (sidebar open for quick switch).
  *
  * Bootstrap (refresh list on project change) is keyed on `projectRoot` per
  * the literature-mode split: heavy IPC work lives here, NOT in onActivate.
- *
- * Per plan §D1: the detail lives in this Content component, not in a
- * `LiteratureReaderShell`-style keep-alive shell. We deliberately do NOT
- * touch `right-main-area.tsx`.
  */
 
 import { useEffect } from "react";
+import { Loader2Icon } from "lucide-react";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { useDocumentStore } from "@/stores/document-store";
 import { useExperimentStore } from "@/stores/experiment-store";
+import { useLayoutStore } from "@/stores/layout-store";
+import { useRightPanelStore } from "@/stores/right-panel-store";
 import { cn } from "@/lib/utils";
 import { ExperimentsDetail } from "./experiments-detail";
+import { ExperimentsGrid } from "./experiments-grid";
 import {
   ExperimentsEmptyListEmpty,
   ExperimentsNoFolderEmpty,
 } from "./experiments-empty";
+
+function useExperimentsSidebarLayout(selectedId: string | null, isActive: boolean) {
+  useEffect(() => {
+    if (!isActive) return;
+    const st = useLayoutStore.getState();
+    if (selectedId) {
+      st.setRightSidebarOpen(true);
+    } else {
+      st.setRightSidebarOpen(false);
+    }
+  }, [selectedId, isActive]);
+}
+
+function useExperimentsTabSync(
+  tab: RightTab,
+  selectedId: string | null,
+  experiments: { id: string; title: string }[],
+) {
+  const updateTab = useRightPanelStore((s) => s.updateTab);
+
+  useEffect(() => {
+    if (tab.kind !== "experiments") return;
+    if (selectedId) {
+      const exp = experiments.find((e) => e.id === selectedId);
+      updateTab(tab.id, {
+        experimentId: selectedId,
+        experimentsView: "detail",
+        title: exp?.title.slice(0, 48) ?? tab.title,
+      });
+      return;
+    }
+    updateTab(tab.id, {
+      experimentId: undefined,
+      experimentsView: "list",
+      title: "Experiments",
+    });
+  }, [tab.id, tab.kind, tab.title, selectedId, experiments, updateTab]);
+}
 
 export function ExperimentsContent({
   tab,
@@ -44,15 +81,23 @@ export function ExperimentsContent({
   const detail = useExperimentStore((s) => s.detail);
   const env = useExperimentStore((s) => s.env);
   const loading = useExperimentStore((s) => s.loading);
+  const selectExperiment = useExperimentStore((s) => s.selectExperiment);
 
-  // Bootstrap: refresh the list whenever the project changes. Mirrors the
-  // literature-mode Content pattern (`useEffect(…, [projectRoot, …])`).
+  useExperimentsSidebarLayout(selectedId, isActive);
+  useExperimentsTabSync(tab, selectedId, experiments);
+
   useEffect(() => {
     if (!projectRoot) return;
     void refreshList(projectRoot);
   }, [projectRoot, refreshList]);
 
-  // 1. No project — centered muted copy.
+  // Deep link: tab carries experimentId (e.g. future /experiment open <id>).
+  useEffect(() => {
+    if (!projectRoot || !tab.experimentId || !isActive) return;
+    if (useExperimentStore.getState().selectedId === tab.experimentId) return;
+    void selectExperiment(projectRoot, tab.experimentId);
+  }, [projectRoot, tab.experimentId, isActive, selectExperiment]);
+
   if (!projectRoot) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
@@ -61,35 +106,34 @@ export function ExperimentsContent({
     );
   }
 
-  // 2. No experiment folder configured (specific error code from service).
   if (error === "no_experiment_folder") {
     return <ExperimentsNoFolderEmpty />;
   }
 
-  // 3. Folder configured but empty list (and not still loading).
   if (!loading && experiments.length === 0 && !detail) {
     return <ExperimentsEmptyListEmpty />;
   }
 
-  // 4. List non-empty + selection: show detail. The detail panel renders
-  //    inside the Content component (no reader shell — see plan §D1).
-  if (selectedId && detail && detail.meta.id === selectedId) {
+  const shellClass = cn("h-full min-h-0", !isActive && "hidden");
+
+  if (selectedId) {
+    if (detail && detail.meta.id === selectedId) {
+      return (
+        <div className={shellClass}>
+          <ExperimentsDetail meta={detail.meta} env={env} />
+        </div>
+      );
+    }
     return (
-      <div className={cn("h-full min-h-0", !isActive && "hidden")}>
-        <ExperimentsDetail meta={detail.meta} env={env} />
+      <div className={cn(shellClass, "flex h-full items-center justify-center")}>
+        <Loader2Icon className="size-5 animate-spin text-muted-foreground/60" aria-label="Loading experiment" />
       </div>
     );
   }
 
-  // 4b. List non-empty but nothing selected — prompt the user to pick one.
   return (
-    <div
-      className={cn(
-        "flex h-full items-center justify-center px-6 text-muted-foreground text-sm",
-        !isActive && "hidden",
-      )}
-    >
-      Select an experiment from the list.
+    <div className={shellClass}>
+      <ExperimentsGrid />
     </div>
   );
 }

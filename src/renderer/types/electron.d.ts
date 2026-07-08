@@ -620,6 +620,9 @@ export interface ElectronAPI {
       };
     }) => void,
   ) => () => void;
+  onExperimentRunOutput: (
+    callback: (data: { id: string; runId: string; chunk: string }) => void,
+  ) => () => void;
 
   // Platform
   platform: "darwin" | "win32" | "linux";

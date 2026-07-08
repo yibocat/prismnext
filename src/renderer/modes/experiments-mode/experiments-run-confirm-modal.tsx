@@ -37,9 +37,12 @@ import {
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { experimentsCodeClass, experimentsUiValueClass } from "./experiments-detail-chrome";
 
-/** Keep in sync with main `PERMISSION_TIMEOUT_MS` / `permission-actions.ts`. */
-const PERMISSION_UI_TIMEOUT_MS = 120_000;
+/** Auto-deny after 15s - shorter than the agent's 120s `PERMISSION_TIMEOUT_MS`
+ *  (permission-actions.ts) because this modal confirms a command the user just
+ *  typed in the run panel - a quick re-read, not a fresh agent tool call. */
+const PERMISSION_UI_TIMEOUT_MS = 15_000;
 
 export interface ExperimentsRunConfirmModalProps {
   open: boolean;
@@ -137,8 +140,7 @@ export function ExperimentsRunConfirmModal({
             <div className="space-y-2">
               <p className="text-[length:var(--font-size-13)] text-foreground/85">
                 This will execute a shell command in the experiment lab
-                directory. The run is recorded in{" "}
-                <span className="font-mono">runs.jsonl</span> with the
+                directory. The run is recorded in runs.jsonl with the
                 current environment snapshot.
               </p>
             </div>
@@ -147,27 +149,27 @@ export function ExperimentsRunConfirmModal({
 
         <div className="space-y-2 text-[length:var(--font-size-12)]">
           <div className="space-y-1">
-            <div className="text-[length:var(--font-hint)] font-medium uppercase tracking-wide text-muted-foreground/70">
+            <div className="text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/70">
               Command
             </div>
             <pre
               className={cn(
                 "max-h-40 overflow-auto rounded-md border border-border/60 bg-muted/40",
-                "px-2 py-1.5 font-mono text-[length:var(--font-size-12)] text-foreground/90",
-                "whitespace-pre-wrap break-words",
+                "px-2 py-1.5 whitespace-pre-wrap break-words",
+                experimentsCodeClass,
               )}
             >
               {command || "(empty)"}
             </pre>
           </div>
           <div className="space-y-1">
-            <div className="text-[length:var(--font-hint)] font-medium uppercase tracking-wide text-muted-foreground/70">
+            <div className="text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/70">
               Working directory
             </div>
             <div
               className={cn(
                 "truncate rounded-md border border-border/60 bg-muted/30 px-2 py-1",
-                "font-mono text-[length:var(--font-size-12)] text-foreground/80",
+                experimentsUiValueClass,
               )}
               title={cwd}
             >
@@ -250,7 +252,7 @@ function CountdownProgress({ active }: { active: boolean }) {
         aria-label="Auto-deny countdown"
         className="h-1"
       />
-      <p className="text-[length:var(--font-hint)] text-muted-foreground/60">
+      <p className="text-[length:var(--font-size-11)] text-muted-foreground/60">
         Auto-deny in {remaining}s
       </p>
     </div>

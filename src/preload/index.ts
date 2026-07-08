@@ -147,6 +147,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("experiment:runComplete", handler);
 		return () => ipcRenderer.removeListener("experiment:runComplete", handler);
 	},
+	onExperimentRunOutput: (
+		callback: (data: { id: string; runId: string; chunk: string }) => void,
+	) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			data: { id: string; runId: string; chunk: string },
+		) => callback(data);
+		ipcRenderer.on("experiment:runOutput", handler);
+		return () => ipcRenderer.removeListener("experiment:runOutput", handler);
+	},
 
 		// Update checker — manifest is a local path or HTTPS url to version.json.
 		updateCheck: () => ipcRenderer.invoke("update:check"),

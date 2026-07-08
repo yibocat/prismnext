@@ -1,7 +1,7 @@
 import { memo, useState } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { FileTextIcon } from "lucide-react";
-import { ToolCard, param } from "./shared";
+import { ToolCard, Field } from "./shared";
 
 const LABELS: Record<string, string> = {
   "research-brief-read": "Research brief",
@@ -66,8 +66,8 @@ function BriefSummary({
         : 0;
     return (
       <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
-        {param("path", String(data.path ?? ".prismnext/research/brief.md"))}
-        {param("sections filled", String(count))}
+        <Field label="path" value={String(data.path ?? ".prismnext/research/brief.md")} />
+        <Field label="sections filled" value={String(count)} />
       </div>
     );
   }
@@ -82,8 +82,8 @@ function BriefSummary({
     }
     return (
       <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
-        {param("section", String(data.section ?? ""))}
-        {data.append === true ? param("mode", "append") : param("mode", "replace")}
+        <Field label="section" value={String(data.section ?? "")} />
+        {data.append === true ? <Field label="mode" value="append" /> : <Field label="mode" value="replace" />}
       </div>
     );
   }

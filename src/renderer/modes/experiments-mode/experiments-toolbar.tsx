@@ -10,13 +10,14 @@
  */
 
 import { useCallback } from "react";
-import { FolderOpenIcon, Loader2Icon, RefreshCwIcon } from "lucide-react";
+import { ArrowLeftIcon, FolderOpenIcon, Loader2Icon, RefreshCwIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { Button } from "@/components/ui/button";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { cn } from "@/lib/utils";
+import { experimentsPathCompactClass, experimentsToolbarContextClass } from "./experiments-detail-chrome";
 
 const toolbarBtn = cn(
   "flex items-center gap-1.5 h-6 px-2 rounded text-[length:var(--font-menu-item)]",
@@ -29,6 +30,10 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
   const loading = useExperimentStore((s) => s.loading);
   const openLabInFiles = useExperimentStore((s) => s.openLabInFiles);
   const selectedId = useExperimentStore((s) => s.selectedId);
+  const clearSelection = useExperimentStore((s) => s.clearSelection);
+  const experimentCount = useExperimentStore((s) => s.experiments.length);
+  const workspacePath = useExperimentStore((s) => s.detail?.meta.workspacePath);
+  const inDetail = Boolean(selectedId);
 
   const handleRefresh = useCallback(() => {
     if (!projectRoot) return;
@@ -51,6 +56,32 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
 
   return (
     <div className="flex flex-1 items-center min-h-8 min-w-0 overflow-hidden gap-1">
+      {inDetail ? (
+        <button
+          type="button"
+          className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          title="Back to experiments"
+          onClick={clearSelection}
+        >
+          <ArrowLeftIcon className="size-3.5" aria-hidden />
+        </button>
+      ) : null}
+      {inDetail && workspacePath ? (
+        <span
+          className={cn(
+            "mr-auto inline-flex min-w-0 items-center gap-1 truncate",
+            experimentsToolbarContextClass,
+          )}
+          title={workspacePath}
+        >
+          <FolderOpenIcon className="size-3 shrink-0 text-muted-foreground/80" aria-hidden />
+          <span className={experimentsPathCompactClass}>{workspacePath}</span>
+        </span>
+      ) : (
+        <span className={cn("mr-auto truncate", experimentsToolbarContextClass)}>
+          {experimentCount > 0 ? `${experimentCount} experiments` : "Experiments"}
+        </span>
+      )}
       <button
         type="button"
         className={cn(toolbarBtn, "shrink-0")}
@@ -71,7 +102,7 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
         variant="ghost"
         className="h-6 shrink-0 px-2 text-muted-foreground hover:text-foreground"
         title="Open the experiment's lab folder in Files"
-        disabled={!projectRoot || !(selectedId ?? tab.experimentId)}
+        disabled={!projectRoot || !inDetail || !(selectedId ?? tab.experimentId)}
         onClick={() => void handleOpenLab()}
       >
         <FolderOpenIcon className="size-3.5" />
