@@ -27,6 +27,7 @@ import {
   createExperiment,
   detectEnvForIsland,
   listExperiments,
+  NO_EXPERIMENT_FOLDER_HINT,
   readExperiment,
   resolveExperimentCtx,
   type ExperimentStorageContext,
@@ -83,7 +84,7 @@ function notConfigured(): Record<string, unknown> {
   return {
     ok: false,
     error: "no_experiment_folder",
-    hint: "Add an Experiment folder in Settings → Workspace (function: Experiment) before creating or running experiments.",
+    hint: NO_EXPERIMENT_FOLDER_HINT,
   };
 }
 
