@@ -17,6 +17,10 @@ export const TOOL_NAMES = {
   citationHealth: "citation-health",
   latexRoot: "latex-root",
   latexCompile: "latex-compile",
+  researchBriefRead: "research-brief-read",
+  researchBriefUpdate: "research-brief-update",
+  experimentLog: "experiment-log",
+  experimentRun: "experiment-run",
 } as const;
 
 export type ToolNameKey = keyof typeof TOOL_NAMES;

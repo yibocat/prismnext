@@ -16,6 +16,8 @@ import { DeleteWidget } from "./delete-widget";
 import { MoveWidget } from "./move-widget";
 import { LiteratureToolWidget } from "./literature-tool-widget";
 import { LatexToolWidget } from "./latex-tool-widget";
+import { ResearchBriefToolWidget } from "./research-brief-tool-widget";
+import { ExperimentToolWidget } from "./experiment-tool-widget";
 import { LspWidget } from "./lsp-widget";
 import { GenericWidget } from "./generic-widget";
 
@@ -65,6 +67,10 @@ const CUSTOM_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
   "citation-health": LiteratureToolWidget,
   "latex-root": LatexToolWidget,
   "latex-compile": LatexToolWidget,
+  "research-brief-read": ResearchBriefToolWidget,
+  "research-brief-update": ResearchBriefToolWidget,
+  "experiment-log": ExperimentToolWidget,
+  "experiment-run": ExperimentToolWidget,
 };
 
 function parseToolResultContent(content: unknown): Record<string, unknown> | null {

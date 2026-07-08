@@ -14,7 +14,7 @@ import {
   AppSelectValue,
 } from "@/components/ui/app-select";
 import { useSettingsStore } from "@/stores/settings-store";
-import { getAllEnabledModels, getModel, getProvider } from "@/lib/providers";
+import { getAllEnabledModels, getModel, resolveProviderConfig, type CustomProviderEntry, type ModelConfig } from "@/lib/providers";
 import { cn } from "@/lib/utils";
 import type { AgentEditorOptions } from "@shared/agent-editor-options";
 import {
@@ -128,9 +128,15 @@ function toggleItem(list: string[], item: string, on: boolean): string[] {
   return list.filter((v) => v !== item);
 }
 
-function getThoughtLevelsForModel(providerId: string, modelId: string) {
-  const model = modelId ? getModel(providerId, modelId) : undefined;
-  const levels = model?.reasoning ?? getProvider(providerId)?.reasoning;
+function getThoughtLevelsForModel(
+  providerId: string,
+  modelId: string,
+  customModels?: Record<string, ModelConfig[]>,
+  customProviders?: CustomProviderEntry[],
+) {
+  const model = modelId ? getModel(providerId, modelId, customModels, customProviders) : undefined;
+  const provider = resolveProviderConfig(providerId, customProviders);
+  const levels = model?.reasoning ?? provider?.reasoning;
   const resolved = levels ?? ["low", "medium", "high"];
   return resolved.map((value) => ({
     value,
@@ -347,8 +353,13 @@ export function ProfileEditorForm({
 }) {
   const settings = useSettingsStore((s) => s.settings);
   const enabledModels = useMemo(
-    () => getAllEnabledModels(settings.aiEnabledModels, settings.aiCustomModelsData),
-    [settings.aiEnabledModels, settings.aiCustomModelsData],
+    () =>
+      getAllEnabledModels(
+        settings.aiEnabledModels,
+        settings.aiCustomModelsData,
+        settings.aiCustomProviders,
+      ),
+    [settings.aiEnabledModels, settings.aiCustomModelsData, settings.aiCustomProviders],
   );
 
   const modelGroups = useMemo(() => {
@@ -365,7 +376,12 @@ export function ProfileEditorForm({
     form.modelProvider && form.modelId ? `${form.modelProvider}::${form.modelId}` : "";
 
   const thoughtLevels = form.modelProvider
-    ? getThoughtLevelsForModel(form.modelProvider, form.modelId)
+    ? getThoughtLevelsForModel(
+        form.modelProvider,
+        form.modelId,
+        settings.aiCustomModelsData,
+        settings.aiCustomProviders,
+      )
     : [];
 
   const patch = (partial: Partial<ProfileFormState>) => onFormChange({ ...form, ...partial });
@@ -418,7 +434,12 @@ export function ProfileEditorForm({
                 return;
               }
               const [providerId, modelId] = v.split("::");
-              const levels = getThoughtLevelsForModel(providerId, modelId);
+              const levels = getThoughtLevelsForModel(
+                providerId,
+                modelId,
+                settings.aiCustomModelsData,
+                settings.aiCustomProviders,
+              );
               patch({
                 modelProvider: providerId,
                 modelId,

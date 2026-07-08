@@ -83,6 +83,13 @@ export const TOOL_PERMISSION_REGISTRY: Record<string, ToolPermissionEntry> = {
   // Previously misclassified as READ_ONLY, which auto-allowed compilation
   // (including subprocess spawn) even in read-only mode.
   "latex-compile": { permissionGroup: "shell", confirmUx: "none", rules: SHELL },
+  "research-brief-read": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
+  "research-brief-update": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
+  "experiment-log": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
+  // experiment-run spawns a PTY (subprocess) — must follow SHELL rules:
+  // prompt in ask/auto, deny in readonly. append_run + create handle their
+  // own file writes via the read/write side of the bridge.
+  "experiment-run": { permissionGroup: "shell", confirmUx: "command", rules: SHELL },
 };
 
 export function getToolPermissionEntry(toolName: string): ToolPermissionEntry | undefined {

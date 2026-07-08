@@ -37,6 +37,12 @@ export function buildWorkspacePrompt(dirs: WorkspaceFolder[]): string {
     "## Project Structure\n\n" +
     "The project has the following functional folders. " +
     "Use this structure to organize files and understand the project layout:\n\n" +
-    lines.join("\n")
+    lines.join("\n") +
+    (dirs.some((d) => d.function === "experiment")
+      ? ""
+      : "\n\n- No `experiment/` folder is configured in Workspace settings. " +
+        "Experiment islands and run logs are unavailable until the user adds an Experiment folder " +
+        "(Settings → Workspace → Add folder → function: Experiment). Do not create experiment " +
+        "structure in the manuscript folder or project root.")
   );
 }

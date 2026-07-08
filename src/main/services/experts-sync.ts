@@ -553,6 +553,92 @@ function orchestratorContentHash(md: string): string {
   return (hash >>> 0).toString(36);
 }
 
+export interface ProjectExpertsAgentEntry {
+  filename: string;
+  content: string;
+}
+
+export interface ProjectExpertsAgentPlan {
+  agentEntries: ProjectExpertsAgentEntry[];
+  agentFiles: string[];
+  orchestratorId: string;
+  orchestratorContentHash: string;
+  syncContentHash: string;
+}
+
+function computeSyncContentHash(entries: ProjectExpertsAgentEntry[]): string {
+  const sorted = [...entries].sort((a, b) => a.filename.localeCompare(b.filename));
+  const payload = sorted.map((e) => `${e.filename}\0${e.content}`).join("\x1e");
+  return orchestratorContentHash(payload);
+}
+
+/** Build agent.md payloads without writing — used to skip redundant sync on chat send. */
+export function buildProjectExpertsAgentPlan(
+  projectRoot: string,
+  options?: { promptCtx?: PromptContext },
+): ProjectExpertsAgentPlan {
+  const promptCtx: PromptContext = { projectRoot, ...options?.promptCtx };
+
+  const orchestratorId = resolveOrchestratorId(projectRoot, null);
+  const orchestrator = getOrchestrator(projectRoot, orchestratorId);
+  if (!orchestrator?.enabled) {
+    throw new Error(`Orchestrator not found or disabled: ${orchestratorId}`);
+  }
+
+  const enabledExperts = listExperts(projectRoot).filter((e) => e.enabled);
+  const enabledExpertIds = enabledExperts.map((e) => e.id);
+  const allowedExpertIds = resolveAllowedExpertIds(orchestrator, enabledExpertIds);
+  const allowedExpertRefs = allowedExpertIds
+    .map((id) => enabledExperts.find((e) => e.id === id))
+    .filter((e): e is ExpertInfo => !!e)
+    .map((e) => ({ id: e.id, name: e.name, description: e.description }));
+
+  const agentEntries: ProjectExpertsAgentEntry[] = [];
+
+  for (const expert of enabledExperts) {
+    const instructions = readExpertInstructions(projectRoot, expert);
+    agentEntries.push({
+      filename: `${expert.id}.md`,
+      content: renderExpertAgentMarkdown(expert, instructions, promptCtx),
+    });
+  }
+
+  const orchestratorInstructions = readOrchestratorInstructions(projectRoot, orchestrator);
+  const orchestratorMd = renderOrchestratorAgentMarkdown(
+    orchestrator,
+    orchestratorInstructions,
+    allowedExpertRefs,
+    promptCtx,
+  );
+  agentEntries.push({
+    filename: `${orchestrator.id}.md`,
+    content: orchestratorMd,
+  });
+
+  for (const extra of listOrchestrators(projectRoot).filter(
+    (o) => o.enabled && o.id !== orchestratorId,
+  )) {
+    const extraAllowed = resolveAllowedExpertIds(extra, enabledExpertIds);
+    const extraAllowedRefs = extraAllowed
+      .map((id) => enabledExperts.find((e) => e.id === id))
+      .filter((e): e is ExpertInfo => !!e)
+      .map((e) => ({ id: e.id, name: e.name, description: e.description }));
+    const extraInstructions = readOrchestratorInstructions(projectRoot, extra);
+    agentEntries.push({
+      filename: `${extra.id}.md`,
+      content: renderOrchestratorAgentMarkdown(extra, extraInstructions, extraAllowedRefs, promptCtx),
+    });
+  }
+
+  return {
+    agentEntries,
+    agentFiles: agentEntries.map((e) => e.filename),
+    orchestratorId,
+    orchestratorContentHash: orchestratorContentHash(orchestratorMd),
+    syncContentHash: computeSyncContentHash(agentEntries),
+  };
+}
+
 export function renderExpertAgentMarkdown(
   def: ExpertDefinition,
   instructionsBody: string,
@@ -633,68 +719,22 @@ export function clearSyncedAgentFiles(agentsDir: string, agentFiles: string[]): 
 export function syncProjectExpertsToOpencode(
   projectRoot: string,
   options?: { agentsDir?: string; syncStatePath?: string; promptCtx?: PromptContext },
-): { agentFiles: string[]; orchestratorId: string; orchestratorContentHash: string } {
+): { agentFiles: string[]; orchestratorId: string; orchestratorContentHash: string; syncContentHash: string } {
   const agentsDir = options?.agentsDir ?? getOpencodeAgentsDir();
-  const promptCtx: PromptContext = { projectRoot, ...options?.promptCtx };
   mkdirSync(agentsDir, { recursive: true });
 
-  const orchestratorId = resolveOrchestratorId(projectRoot, null);
-  const orchestrator = getOrchestrator(projectRoot, orchestratorId);
-  if (!orchestrator?.enabled) {
-    throw new Error(`Orchestrator not found or disabled: ${orchestratorId}`);
-  }
-
-  const enabledExperts = listExperts(projectRoot).filter((e) => e.enabled);
-  const enabledExpertIds = enabledExperts.map((e) => e.id);
-  const allowedExpertIds = resolveAllowedExpertIds(orchestrator, enabledExpertIds);
-  const allowedExpertRefs = allowedExpertIds
-    .map((id) => enabledExperts.find((e) => e.id === id))
-    .filter((e): e is ExpertInfo => !!e)
-    .map((e) => ({ id: e.id, name: e.name, description: e.description }));
-
-  const agentFiles: string[] = [];
-
-  for (const expert of enabledExperts) {
-    const instructions = readExpertInstructions(projectRoot, expert);
-    const md = renderExpertAgentMarkdown(expert, instructions, promptCtx);
-    const filename = `${expert.id}.md`;
-    writeFileSync(join(agentsDir, filename), md, "utf-8");
-    agentFiles.push(filename);
-  }
-
-  const orchestratorInstructions = readOrchestratorInstructions(projectRoot, orchestrator);
-  const orchestratorMd = renderOrchestratorAgentMarkdown(
-    orchestrator,
-    orchestratorInstructions,
-    allowedExpertRefs,
-    promptCtx,
-  );
-  const orchestratorHash = orchestratorContentHash(orchestratorMd);
-  const orchestratorFilename = `${orchestrator.id}.md`;
-  writeFileSync(join(agentsDir, orchestratorFilename), orchestratorMd, "utf-8");
-  agentFiles.push(orchestratorFilename);
-
-  for (const extra of listOrchestrators(projectRoot).filter(
-    (o) => o.enabled && o.id !== orchestratorId,
-  )) {
-    const extraAllowed = resolveAllowedExpertIds(extra, enabledExpertIds);
-    const extraAllowedRefs = extraAllowed
-      .map((id) => enabledExperts.find((e) => e.id === id))
-      .filter((e): e is ExpertInfo => !!e)
-      .map((e) => ({ id: e.id, name: e.name, description: e.description }));
-    const extraInstructions = readOrchestratorInstructions(projectRoot, extra);
-    const extraMd = renderOrchestratorAgentMarkdown(extra, extraInstructions, extraAllowedRefs, promptCtx);
-    const extraFilename = `${extra.id}.md`;
-    writeFileSync(join(agentsDir, extraFilename), extraMd, "utf-8");
-    agentFiles.push(extraFilename);
+  const plan = buildProjectExpertsAgentPlan(projectRoot, options);
+  for (const entry of plan.agentEntries) {
+    writeFileSync(join(agentsDir, entry.filename), entry.content, "utf-8");
   }
 
   const state: PrismExpertsSyncState = {
     projectRoot,
     syncedAt: Date.now(),
-    agentFiles,
-    orchestratorId,
-    orchestratorContentHash: orchestratorHash,
+    agentFiles: plan.agentFiles,
+    orchestratorId: plan.orchestratorId,
+    orchestratorContentHash: plan.orchestratorContentHash,
+    syncContentHash: plan.syncContentHash,
   };
 
   if (options?.syncStatePath) {
@@ -704,7 +744,12 @@ export function syncProjectExpertsToOpencode(
     writePrismExpertsSyncState(state);
   }
 
-  return { agentFiles, orchestratorId, orchestratorContentHash: orchestratorHash };
+  return {
+    agentFiles: plan.agentFiles,
+    orchestratorId: plan.orchestratorId,
+    orchestratorContentHash: plan.orchestratorContentHash,
+    syncContentHash: plan.syncContentHash,
+  };
 }
 
 function slugifyId(name: string): string {

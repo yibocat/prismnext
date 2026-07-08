@@ -84,6 +84,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("project:scaffoldAgentsMd", { rootPath }),
 	projectCheck: (rootPath: string) => ipcRenderer.invoke("project:check", { rootPath }),
 
+	researchBriefEnsure: (projectRoot: string) =>
+		ipcRenderer.invoke("researchBrief:ensure", { projectRoot }),
+	researchBriefRead: (projectRoot: string) =>
+		ipcRenderer.invoke("researchBrief:read", { projectRoot }),
+	researchBriefGetPath: (projectRoot: string) =>
+		ipcRenderer.invoke("researchBrief:getPath", { projectRoot }),
+	researchBriefUpdateSection: (args: {
+		projectRoot: string;
+		section: string;
+		content: string;
+		append?: boolean;
+	}) => ipcRenderer.invoke("researchBrief:updateSection", args),
+
 		// Update checker — manifest is a local path or HTTPS url to version.json.
 		updateCheck: () => ipcRenderer.invoke("update:check"),
 		updateStatus: () => ipcRenderer.invoke("update:status"),

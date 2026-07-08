@@ -1,0 +1,11 @@
+{
+  "id": "methodology-auditor",
+  "name": "Methodology Auditor",
+  "description": "Audits experimental design, statistical validity, and reproducibility — outputs a risk list, not rewrites.",
+  "builtin": true,
+  "permission": {
+    "edit": "deny",
+    "bash": "deny",
+    "task": { "*": "deny" }
+  }
+}

@@ -3,6 +3,7 @@ import {
   normalizeMathDelimiters,
   prepareMarkdownMath,
   scrubLatexForKatex,
+  unwrapHtmlMathBlocks,
   isScientificExtractPath,
 } from "../../src/renderer/lib/markdown/markdown-config";
 
@@ -32,6 +33,49 @@ describe("normalizeMathDelimiters", () => {
     const out = normalizeMathDelimiters(input);
     expect(out).toMatch(/\$\$\s*\\begin\{equation\}/);
     expect(out).toMatch(/\\end\{equation\}\s*\$\$/);
+  });
+});
+
+describe("unwrapHtmlMathBlocks", () => {
+  it("strips <p> wrapper but keeps \\[...\\] delimiters", () => {
+    const input = [
+      "Before",
+      "",
+      "<p>",
+      "\\[",
+      "h_t = f(x_t, h_{t-1})",
+      "\\]",
+      "</p>",
+      "",
+      "After",
+    ].join("\n");
+    const out = unwrapHtmlMathBlocks(input);
+    expect(out).toContain("\\[\nh_t = f(x_t, h_{t-1})\n\\]");
+    expect(out).not.toContain("<p>");
+    expect(out).not.toContain("</p>");
+  });
+
+  it("preserves markdown structure through prepareMarkdownMath", () => {
+    const input = [
+      "# Transformer 详解",
+      "",
+      "## 1. Section",
+      "",
+      "inline \\( x_1 \\) text",
+      "",
+      "<p>\\[ E=mc^2 \\]</p>",
+      "",
+      "| 问题 | 原因 |",
+      "|------|------|",
+      "| **并行** | 串行 |",
+    ].join("\n");
+    const out = prepareMarkdownMath(input);
+    expect(out).toContain("# Transformer 详解");
+    expect(out).toContain("## 1. Section");
+    expect(out).toContain("| 问题 | 原因 |");
+    expect(out).not.toContain("<p>");
+    expect(out).toMatch(/\$\$/);
+    expect(out).toMatch(/\$ x_1 \$/);
   });
 });
 

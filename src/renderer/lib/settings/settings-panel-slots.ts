@@ -28,6 +28,7 @@ export type SettingsPanelSlot =
   | { kind: "agent-orchestrator"; mode: "customize-builtin"; orchestratorId: string; title?: string }
   | { kind: "prompt-markdown"; doc: "system-prompt" | "agents-md" }
   | { kind: "prompt-stack-preview" }
+  | { kind: "research-brief" }
   | { kind: "agent-tools" }
   | { kind: "knowledge-modules" }
   | { kind: "builtin-commands" }
@@ -84,6 +85,8 @@ export function settingsPanelSlotTitle(slot: SettingsPanelSlot | null): string |
     }
     case "prompt-stack-preview":
       return "Prompt stack preview";
+    case "research-brief":
+      return "Research brief";
     case "agent-tools":
       return "Agent tools";
     case "knowledge-modules":

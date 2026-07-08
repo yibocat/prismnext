@@ -720,7 +720,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const persistedSettings = useSettingsStore.getState().settings;
       let provider = persistedSettings.aiProvider || "anthropic";
       let model = persistedSettings.aiModel ?? undefined;
-      let thoughtLevel = persistedSettings.thoughtLevel || undefined;
+      const modelKey =
+        model && provider ? `${provider}/${model}` : "";
+      let thoughtLevel =
+        (modelKey && persistedSettings.aiModelThoughtLevels?.[modelKey]) ||
+        persistedSettings.thoughtLevel ||
+        undefined;
 
       await window.electronAPI.chatSend({
         projectPath,

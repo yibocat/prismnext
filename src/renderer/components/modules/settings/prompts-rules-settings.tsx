@@ -309,6 +309,35 @@ export function PromptsRulesSettings() {
                 </div>
               ) : null}
             </div>
+
+            <div className={PROMPT_ROW}>
+              <div className={PROMPT_ROW_BODY}>
+                <p className={ROW_LABEL}>Research brief</p>
+                {!projectRoot ? (
+                  <p className={ROW_DESC}>Open a project to edit the living research design brief.</p>
+                ) : (
+                  <>
+                    <p className={ROW_DESC}>
+                      Structured research question, hypotheses, contribution, and scope at{" "}
+                      <code className="text-[length:var(--font-size-11)]">.prismnext/research/brief.md</code>
+                      — agents use <code className="text-[length:var(--font-size-11)]">research-brief-read/update</code>.
+                    </p>
+                  </>
+                )}
+              </div>
+              {projectRoot ? (
+                <div className={PROMPT_ROW_ACTIONS}>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="shrink-0"
+                    onClick={() => openSettingsPanel({ kind: "research-brief" })}
+                  >
+                    Edit brief
+                  </Button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
 

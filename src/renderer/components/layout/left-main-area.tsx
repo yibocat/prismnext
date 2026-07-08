@@ -87,6 +87,7 @@ export function LeftMainArea() {
   const aiModel = useSettingsStore((s) => s.settings.aiModel);
   const aiEnabledModels = useSettingsStore((s) => s.settings.aiEnabledModels);
   const aiCustomModelsData = useSettingsStore((s) => s.settings.aiCustomModelsData);
+  const aiCustomProviders = useSettingsStore((s) => s.settings.aiCustomProviders);
   const contextTotal = useMemo(() => {
     if (!aiModel) return DEFAULT_CONTEXT_WINDOW;
     const custom = aiCustomModelsData
@@ -94,12 +95,12 @@ export function LeftMainArea() {
           Object.entries(aiCustomModelsData).map(([k, v]) => [k, v as any]),
         )
       : undefined;
-    const allModels = getAllEnabledModels(aiEnabledModels, custom);
+    const allModels = getAllEnabledModels(aiEnabledModels, custom, aiCustomProviders);
     const found = allModels.find(
       (m) => m.provider.id === aiProvider && m.model.id === aiModel,
     );
     return parseContextWindow(found?.model.contextWindow);
-  }, [aiProvider, aiModel, aiEnabledModels, aiCustomModelsData]);
+  }, [aiProvider, aiModel, aiEnabledModels, aiCustomModelsData, aiCustomProviders]);
 
   // Branch + worktree label for chat view bottom bar
   const isGitRepo = useGitStore((s) => s.isGitRepo);

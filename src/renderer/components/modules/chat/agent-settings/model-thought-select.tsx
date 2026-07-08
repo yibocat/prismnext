@@ -18,6 +18,7 @@ import {
   getModel,
   getProvider,
   getPreset,
+  resolveProviderConfig,
   type ModelConfig,
   type ProviderConfig,
 } from "@/lib/providers";
@@ -135,12 +136,13 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
   const aiModel = settings.aiModel;
   const enabledModels = settings.aiEnabledModels;
   const customModels = settings.aiCustomModelsData;
+  const customProviders = settings.aiCustomProviders;
   const modelThoughtLevels = settings.aiModelThoughtLevels ?? {};
 
-  const currentProvider = getProvider(aiProvider);
+  const currentProvider = resolveProviderConfig(aiProvider, customProviders);
   const currentModelId = aiModel ?? currentProvider?.defaultModel ?? "";
   const currentModel = currentProvider
-    ? getModel(aiProvider, currentModelId)
+    ? getModel(aiProvider, currentModelId, customModels, customProviders)
     : undefined;
   const currentKey = modelPreferenceKey(aiProvider, currentModelId);
   const currentThought = modelThoughtLevels[currentKey] ?? settings.thoughtLevel;
@@ -158,8 +160,8 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
       : displayName;
 
   const visible = useMemo(
-    () => getAllEnabledModels(enabledModels, customModels),
-    [enabledModels, customModels],
+    () => getAllEnabledModels(enabledModels, customModels, customProviders),
+    [enabledModels, customModels, customProviders],
   );
 
   const grouped = useMemo(() => {

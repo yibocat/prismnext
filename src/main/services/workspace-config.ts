@@ -5,6 +5,7 @@ import {
   FOLDER_FUNCTION_ICONS,
   FOLDER_FUNCTION_LABELS,
   DEFAULT_FUNCTION_DESCRIPTIONS,
+  findExperimentConfig,
 } from "../../renderer/types/workspace";
 
 interface ProjectSettings {
@@ -203,4 +204,24 @@ export function writeLiteratureProjectConfig(
   }
   writeProjectSettings(prismDir, settings);
   return next;
+}
+
+/**
+ * Resolve the Workspace-configured experiment folder.
+ *
+ * Experiment is opt-in (not in `defaultWorkspaceDirs`), so absence is the
+ * expected state and MUST propagate as `{ error: "not_configured" }` — callers
+ * (experiment-log / experiment-run) return a `no_experiment_folder` error and
+ * the `experiments` module guides the user to add an Experiment folder in
+ * Workspace settings. Never auto-creates a folder.
+ */
+export function resolveExperimentDir(
+  projectRoot: string,
+  prismDir: string,
+): { rel: string; abs: string } | { error: "not_configured" } {
+  const dirs = readWorkspaceDirs(prismDir);
+  const exp = findExperimentConfig(dirs);
+  if (!exp) return { error: "not_configured" };
+  const root = projectRoot.replace(/\\/g, "/");
+  return { rel: exp.dir, abs: path.join(root, exp.dir) };
 }

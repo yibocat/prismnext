@@ -21,17 +21,25 @@ const PRISM_EXPERT_META: Record<string, { label: string; desc: string }> = {
     label: "Research Prism",
     desc: "Primary research orchestrator",
   },
-  "citation-auditor": {
-    label: "Citation Auditor",
-    desc: "Citation and bibliography consistency review",
+  "literature-synthesizer": {
+    label: "Literature Synthesizer",
+    desc: "Cross-paper synthesis by theme — gaps, disagreements, confidence",
   },
-  "literature-scout": {
-    label: "Literature Scout",
-    desc: "External literature search and staged citations",
+  "research-design-coach": {
+    label: "Research Design Coach",
+    desc: "Pressure-tests research questions, hypotheses, and contribution",
   },
-  "library-scout": {
-    label: "Library Scout",
-    desc: "Search papers already in the project library",
+  "methodology-auditor": {
+    label: "Methodology Auditor",
+    desc: "Audits experimental design, statistical validity, reproducibility",
+  },
+  "structure-diagnostician": {
+    label: "Structure Diagnostician",
+    desc: "Diagnoses manuscript structure and argument chain",
+  },
+  "peer-reviewer": {
+    label: "Peer Reviewer",
+    desc: "Simulates an independent reviewer with a decision recommendation",
   },
 };
 

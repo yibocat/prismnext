@@ -6,11 +6,13 @@ import {
   resolveStableSystemModules,
 } from "../../src/main/prompts/resolve-active-modules";
 import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/literature-library";
+import { EXPERIMENTS_PROMPT } from "../../src/main/prompts/modules/experiments";
 
 describe("resolve-active-modules", () => {
-  it("stable system modules are workspace-only", () => {
+  it("stable system modules include workspace and cognitive baselines", () => {
     const keys = resolveStableSystemModules().map((m) => m.key);
-    expect(keys).toEqual(["workspace-folders"]);
+    // workspace-folders (project structure) + cognitive baselines (always-on for every agent)
+    expect(keys).toEqual(["workspace-folders", "research-reasoning", "reply-depth"]);
   });
 
   it("profile-selectable modules exclude workspace", () => {
@@ -19,6 +21,7 @@ describe("resolve-active-modules", () => {
     expect(keys).toContain("citation-audit");
     expect(keys).toContain("literature-library");
     expect(keys).toContain("task-delegation");
+    expect(keys).toContain("experiments");
     expect(keys).not.toContain("workspace-folders");
   });
 
@@ -28,10 +31,22 @@ describe("resolve-active-modules", () => {
     expect(text).not.toContain("## Chat paper citations");
   });
 
-  it("resolveActiveModuleKeys always includes workspace plus profile picks", () => {
-    expect(resolveActiveModuleKeys({})).toEqual(["workspace-folders"]);
+  it("composeProfileModulePrompts inlines the experiments module", () => {
+    const text = composeProfileModulePrompts(["experiments"], {});
+    expect(text).toContain(EXPERIMENTS_PROMPT.split("\n")[0]);
+    expect(text).toContain("experiment-log");
+  });
+
+  it("resolveActiveModuleKeys includes global baselines plus profile picks", () => {
+    expect(resolveActiveModuleKeys({})).toEqual([
+      "reply-depth",
+      "research-reasoning",
+      "workspace-folders",
+    ]);
     expect(resolveActiveModuleKeys({ profileModules: ["literature-library", "bogus"] })).toEqual([
       "literature-library",
+      "reply-depth",
+      "research-reasoning",
       "workspace-folders",
     ]);
   });
@@ -40,6 +55,12 @@ describe("resolve-active-modules", () => {
     const keys = resolveActiveModuleKeys({
       profileModules: ["chat-citation-staging", "literature-library"],
     });
-    expect(keys).toEqual(["chat-citation-staging", "literature-library", "workspace-folders"]);
+    expect(keys).toEqual([
+      "chat-citation-staging",
+      "literature-library",
+      "reply-depth",
+      "research-reasoning",
+      "workspace-folders",
+    ]);
   });
 });

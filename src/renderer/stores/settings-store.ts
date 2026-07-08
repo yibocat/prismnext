@@ -6,6 +6,12 @@ import {
   type PermissionMode,
 } from "@shared/permission-modes";
 import type { LiteratureUiPrefs } from "@/lib/literature/library-ui-prefs";
+import {
+  migrateOpenCodeEnabledModelIds,
+  normalizeOpenCodeModelId,
+  OPENCODE_GO_PROVIDER_ID,
+  OPENCODE_ZEN_PROVIDER_ID,
+} from "../../shared/opencode-provider";
 
 const log = createLogger("settings-store");
 
@@ -202,6 +208,34 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
             })
             .catch(() => {});
           log.info("Migrated global recent/lastActive → per-project maps", { legacyProject });
+        }
+      }
+
+      for (const catalogId of [OPENCODE_GO_PROVIDER_ID, OPENCODE_ZEN_PROVIDER_ID] as const) {
+        if (r.aiEnabledModels?.[catalogId]) {
+          const raw = r.aiEnabledModels[catalogId] as string[];
+          const migrated = migrateOpenCodeEnabledModelIds(catalogId, raw);
+          const changed =
+            migrated.length !== raw.length || migrated.some((id, i) => id !== raw[i]);
+          if (changed) {
+            r.aiEnabledModels = { ...r.aiEnabledModels, [catalogId]: migrated };
+            window.electronAPI
+              .settingsSet({ aiEnabledModels: r.aiEnabledModels })
+              .catch(() => {});
+            log.info(`Migrated ${catalogId} aiEnabledModels to canonical IDs`);
+          }
+        }
+        if (r.aiProvider === catalogId && typeof r.aiModel === "string") {
+          const normalized = normalizeOpenCodeModelId(catalogId, r.aiModel);
+          if (normalized !== r.aiModel) {
+            const previous = r.aiModel;
+            r.aiModel = normalized;
+            window.electronAPI.settingsSet({ aiModel: normalized }).catch(() => {});
+            log.info(`Migrated aiModel to canonical ${catalogId} id`, {
+              from: previous,
+              to: normalized,
+            });
+          }
         }
       }
 

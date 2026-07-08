@@ -718,8 +718,9 @@ export class AcpService {
   applyProjectSkillsIntegration(
     projectRoot: string,
     patch: { skillsPaths: string[]; skillPermissions: Record<string, string> },
-  ): string {
+  ): { configPath: string; changed: boolean } {
     const primaryPath = join(this.getServerDataDir(), "config", "opencode", "opencode.json");
+    let anyChanged = false;
     for (const p of this.getOpencodeConfigPaths()) {
       try {
         let config: Record<string, unknown> = {};
@@ -743,16 +744,28 @@ export class AcpService {
           paths: patch.skillsPaths,
         };
         delete nextSkills.urls;
-        config.skills = nextSkills;
 
         const existingPermission = (config.permission as Record<string, unknown> | undefined) ?? {};
-        config.permission = {
+        const nextPermission = {
           ...existingPermission,
           skill: sanitizeSkillPermissionMap(existingPermission.skill, patch.skillPermissions),
         };
 
+        const nextConfig: Record<string, unknown> = {
+          ...config,
+          skills: nextSkills,
+          permission: nextPermission,
+        };
+
+        const prevSerialized = JSON.stringify(config, null, 2);
+        const nextSerialized = JSON.stringify(nextConfig, null, 2);
+        if (prevSerialized === nextSerialized) {
+          continue;
+        }
+        anyChanged = true;
+
         mkdirSync(dirname(p), { recursive: true });
-        writeFileSync(p, JSON.stringify(config, null, 2), "utf-8");
+        writeFileSync(p, nextSerialized, "utf-8");
         log.info("Applied project skills integration", {
           projectRoot,
           configPath: p,
@@ -763,7 +776,7 @@ export class AcpService {
         log.warn(`Failed to apply project skills to ${p}: ${message}`);
       }
     }
-    return primaryPath;
+    return { configPath: primaryPath, changed: anyChanged };
   }
 
   /**
@@ -797,15 +810,14 @@ export class AcpService {
         const merged = mergeOpencodeInstructions(config);
         if (merged.changed) {
           instructionsChanged = true;
+          mkdirSync(dirname(p), { recursive: true });
+          writeFileSync(p, JSON.stringify(merged.config, null, 2), "utf-8");
+          log.info("Applied project prompt integration", {
+            configPath: p,
+            instructions: PRISM_OPENCODE_INSTRUCTIONS,
+            changed: true,
+          });
         }
-
-        mkdirSync(dirname(p), { recursive: true });
-        writeFileSync(p, JSON.stringify(merged.config, null, 2), "utf-8");
-        log.info("Applied project prompt integration", {
-          configPath: p,
-          instructions: PRISM_OPENCODE_INSTRUCTIONS,
-          changed: merged.changed,
-        });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         log.warn(`Failed to apply project prompt integration to ${p}: ${message}`);
@@ -2314,7 +2326,15 @@ export class AcpService {
     if (!this.conn) throw new Error("AcpService not initialized");
 
     // Built-in providers don't need explicit registration
-    const BUILTIN = new Set(["anthropic", "openai", "google", "openrouter"]);
+    const BUILTIN = new Set([
+      "anthropic",
+      "openai",
+      "google",
+      "openrouter",
+      "opencode-go",
+      "opencode-zen",
+      "opencode",
+    ]);
     if (BUILTIN.has(provider.toLowerCase())) return { success: true };
 
     const apiKey = credentials.apiKey;

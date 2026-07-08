@@ -44,6 +44,27 @@ export function followActiveTurnTail(
   });
 }
 
+/**
+ * Scroll so the end of the turn is visible — used when streaming completes or
+ * when the user taps "scroll to latest". Unlike pinActiveTurnTop, this keeps
+ * the viewport at the reply tail, not the user message header.
+ */
+export function scrollToTurnEnd(
+  container: HTMLElement,
+  turn: HTMLElement,
+  smooth = false,
+): void {
+  const turnTop = getTurnScrollTop(container, turn);
+  const turnHeight = turn.offsetHeight;
+  const viewH = container.clientHeight;
+  const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+  const target = Math.min(Math.max(0, turnTop + turnHeight - viewH), maxScroll);
+  container.scrollTo({
+    top: target,
+    behavior: smooth ? "smooth" : "instant",
+  });
+}
+
 /** Whether scroll position counts as following during an active stream. */
 export function isFollowingStreamTurn(
   container: HTMLElement,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,6 @@ import {
   Loader2Icon,
   PlusIcon,
   XIcon,
-  CheckIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -33,6 +32,8 @@ import {
   PROVIDER_PRESETS,
   CUSTOM_PRESET,
   getPreset,
+  buildCustomModelEntry,
+  modelIdTaken,
 } from "@/lib/providers";
 import type { ModelConfig } from "@/lib/providers";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
@@ -236,6 +237,23 @@ function CustomProviderEditorPanel({
   const isEditing = !!existing;
 
   const allPresets = [...PROVIDER_PRESETS, CUSTOM_PRESET];
+  const addedPresetIds = useMemo(
+    () => new Set(customProviders.map((cp) => cp.id)),
+    [customProviders],
+  );
+  const isPresetAlreadyAdded = (id: string) =>
+    id !== CUSTOM_PRESET.id && addedPresetIds.has(id);
+
+  const pickInitialPresetId = useCallback(
+    (forExisting?: typeof existing) => {
+      if (forExisting) {
+        return getPreset(forExisting.id)?.id || CUSTOM_PRESET.id;
+      }
+      const firstAvailable = PROVIDER_PRESETS.find((p) => !addedPresetIds.has(p.id));
+      return firstAvailable?.id ?? CUSTOM_PRESET.id;
+    },
+    [addedPresetIds],
+  );
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [presetId, setPresetId] = useState(PROVIDER_PRESETS[0].id);
@@ -246,6 +264,9 @@ function CustomProviderEditorPanel({
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
   const [customModels, setCustomModels] = useState<ModelConfig[]>([]);
   const [newModelId, setNewModelId] = useState("");
+  const [newModelName, setNewModelName] = useState("");
+  const [newModelContext, setNewModelContext] = useState("");
+  const [addModelError, setAddModelError] = useState<string | null>(null);
   const [addingModel, setAddingModel] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -254,9 +275,7 @@ function CustomProviderEditorPanel({
   const [apiKeyError, setApiKeyError] = useState(false);
 
   useEffect(() => {
-    const initialPresetId = existing
-      ? getPreset(existing.id)?.id || "__custom__"
-      : PROVIDER_PRESETS[0].id;
+    const initialPresetId = pickInitialPresetId(existing);
     const preset = getPreset(initialPresetId);
     const presetModels = preset?.models || [];
     const existingCustomModels = (settings.aiCustomModelsData?.[editProviderId || ""] ||
@@ -273,6 +292,9 @@ function CustomProviderEditorPanel({
     setApiKey(existing ? aiApiKeys[existing.id] || "" : "");
     setShowKey(false);
     setNewModelId("");
+    setNewModelName("");
+    setNewModelContext("");
+    setAddModelError(null);
     setAddingModel(false);
     setSaving(false);
     setTesting(false);
@@ -298,7 +320,7 @@ function CustomProviderEditorPanel({
       setSelectedModels(new Set(presetModels.map((m) => m.id)));
       setCustomModels([]);
     }
-  }, [slot.mode, editProviderId, existing?.name, existing?.id]);
+  }, [slot.mode, editProviderId, existing?.name, existing?.id, pickInitialPresetId]);
 
   const currentPreset = getPreset(presetId);
   const presetModels = currentPreset?.models || [];
@@ -310,6 +332,7 @@ function CustomProviderEditorPanel({
       : presetId;
 
   const handlePresetChange = (newPresetId: string) => {
+    if (isPresetAlreadyAdded(newPresetId)) return;
     setPresetId(newPresetId);
     const preset = getPreset(newPresetId);
     if (preset && preset.id !== "__custom__") {
@@ -335,12 +358,31 @@ function CustomProviderEditorPanel({
   };
 
   const handleAddCustomModel = () => {
-    if (!newModelId.trim()) return;
     const mid = newModelId.trim();
-    setCustomModels([...customModels, { id: mid, name: mid, contextWindow: "" }]);
+    if (!mid) {
+      setAddModelError("Model ID is required.");
+      return;
+    }
+    if (modelIdTaken(mid, presetModels, customModels)) {
+      setAddModelError("This model ID is already listed.");
+      return;
+    }
+    const entry = buildCustomModelEntry(mid, newModelName, newModelContext);
+    setCustomModels([...customModels, entry]);
     setSelectedModels(new Set([...selectedModels, mid]));
     setNewModelId("");
+    setNewModelName("");
+    setNewModelContext("");
+    setAddModelError(null);
     setAddingModel(false);
+  };
+
+  const openAddModelForm = () => {
+    setNewModelId("");
+    setNewModelName("");
+    setNewModelContext("");
+    setAddModelError(null);
+    setAddingModel(true);
   };
 
   const handleRemoveCustomModel = (modelId: string) => {
@@ -423,6 +465,11 @@ function CustomProviderEditorPanel({
     }
     setApiKeyError(false);
     setSaveError(null);
+
+    if (!isEditing && isPresetAlreadyAdded(presetId)) {
+      setSaveError("This provider is already added — use Configure on the existing entry.");
+      return;
+    }
 
     const effectiveName = name || currentPreset?.name || "Custom Provider";
     const effectiveBaseUrl = baseUrl || currentPreset?.defaultBaseUrl || "";
@@ -531,11 +578,21 @@ function CustomProviderEditorPanel({
                   <AppSelectValue />
                 </AppSelectTrigger>
                 <AppSelectContent>
-                  {allPresets.map((p) => (
-                    <AppSelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </AppSelectItem>
-                  ))}
+                  {allPresets.map((p) => {
+                    const alreadyAdded = isPresetAlreadyAdded(p.id);
+                    return (
+                      <AppSelectItem key={p.id} value={p.id} disabled={alreadyAdded}>
+                        <span className="flex w-full items-center justify-between gap-2">
+                          <span>{p.name}</span>
+                          {alreadyAdded ? (
+                            <span className="text-[length:var(--font-size-10)] font-normal text-muted-foreground">
+                              Added
+                            </span>
+                          ) : null}
+                        </span>
+                      </AppSelectItem>
+                    );
+                  })}
                 </AppSelectContent>
               </AppSelect>
             </SettingsFormField>
@@ -662,9 +719,19 @@ function CustomProviderEditorPanel({
                     checked={selectedModels.has(m.id)}
                     onCheckedChange={() => toggleModel(m.id)}
                   />
-                  <span className="flex-1 min-w-0 text-[length:var(--font-size-12)] font-mono truncate">
-                    {m.id}
-                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[length:var(--font-size-12)] truncate">{m.name}</p>
+                    {m.name !== m.id ? (
+                      <p className="text-[length:var(--font-size-11)] font-mono text-muted-foreground/70 truncate mt-0.5">
+                        {m.id}
+                      </p>
+                    ) : null}
+                  </div>
+                  {m.contextWindow ? (
+                    <span className="text-[length:var(--font-size-11)] text-muted-foreground shrink-0">
+                      {m.contextWindow}
+                    </span>
+                  ) : null}
                   <button
                     type="button"
                     className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-0.5 rounded hover:bg-muted"
@@ -679,30 +746,58 @@ function CustomProviderEditorPanel({
               ))}
 
               {addingModel ? (
-                <div className="flex items-center gap-1.5 px-2 py-2">
+                <div className="space-y-2 border-t border-border/60 px-2 py-2">
                   <Input
-                    className={cn(SETTINGS_FORM_INPUT_MONO, "flex-1")}
-                    placeholder="model-id"
+                    className={cn(SETTINGS_FORM_INPUT_MONO, "w-full")}
+                    placeholder="Model ID (required)"
                     value={newModelId}
-                    onChange={(e) => setNewModelId(e.target.value)}
+                    onChange={(e) => {
+                      setNewModelId(e.target.value);
+                      setAddModelError(null);
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") handleAddCustomModel();
                       if (e.key === "Escape") setAddingModel(false);
                     }}
                     autoFocus
                   />
-                  <Button variant="ghost" size="icon-xs" onClick={handleAddCustomModel}>
-                    <CheckIcon className="size-3" />
-                  </Button>
-                  <Button variant="ghost" size="icon-xs" onClick={() => setAddingModel(false)}>
-                    <XIcon className="size-3" />
-                  </Button>
+                  <Input
+                    className={cn(SETTINGS_FORM_INPUT, "w-full")}
+                    placeholder="Display name (optional)"
+                    value={newModelName}
+                    onChange={(e) => setNewModelName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleAddCustomModel();
+                      if (e.key === "Escape") setAddingModel(false);
+                    }}
+                  />
+                  <Input
+                    className={cn(SETTINGS_FORM_INPUT, "w-full")}
+                    placeholder="Context e.g. 200K, 1M (optional)"
+                    value={newModelContext}
+                    onChange={(e) => setNewModelContext(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleAddCustomModel();
+                      if (e.key === "Escape") setAddingModel(false);
+                    }}
+                  />
+                  {addModelError ? (
+                    <p className="text-[length:var(--font-size-11)] text-destructive">{addModelError}</p>
+                  ) : null}
+                  <div className="flex items-center gap-1.5">
+                    <Button variant="outline" size="xs" onClick={handleAddCustomModel}>
+                      Add
+                    </Button>
+                    <Button variant="ghost" size="xs" onClick={() => setAddingModel(false)}>
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <button
                   type="button"
                   className="flex w-full items-center gap-1.5 px-3 py-2 text-[length:var(--font-size-12)] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
-                  onClick={() => setAddingModel(true)}
+                  onClick={openAddModelForm}
                 >
                   <PlusIcon className="size-3" />
                   Add model…

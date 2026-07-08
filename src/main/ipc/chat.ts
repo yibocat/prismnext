@@ -23,6 +23,12 @@ import {
   buildIntensiveReadingInstruction,
   type IntensivePaper,
 } from "../prompts/per-turn/intensive-reading";
+import {
+  formatOpenCodeModelRef,
+  isOpenCodeCatalogProvider,
+  normalizeOpenCodeModelId,
+  providerApiKeyEnvVar,
+} from "../../shared/opencode-provider";
 import { buildSessionCitationsTurnAppendix } from "../services/session-citations-context";
 import { buildSessionCiteAuditTurnAppendix } from "../services/session-cite-audit-context";
 import { getQuestionsBridgeRoot } from "../services/prism-bridge-paths";
@@ -118,14 +124,6 @@ function loadSessionContext(
   } catch {
     return null;
   }
-}
-
-/** Map provider IDs to the env var names OpenCode expects. */
-function providerEnvKey(provider: string): string {
-  const overrides: Record<string, string> = {
-    google: "GOOGLE_GENERATIVE_AI_API_KEY",
-  };
-  return overrides[provider.toLowerCase()] || `${provider.toUpperCase()}_API_KEY`;
 }
 
 const mappers = new Map<number, EventMapper>();
@@ -256,11 +254,10 @@ export function registerChatHandlers(): void {
       // Build env vars for API keys — passed to opencode process on first init
       const extraEnv: Record<string, string> = {};
       if (args.apiKey) {
-        const envKey = providerEnvKey(args.provider || "anthropic");
-        extraEnv[envKey] = args.apiKey;
+        extraEnv[providerApiKeyEnvVar(args.provider || "anthropic")] = args.apiKey;
       }
-      if (args.baseUrl) {
-        const provider = (args.provider || "anthropic").toUpperCase();
+      if (args.baseUrl && !isOpenCodeCatalogProvider(args.provider || "")) {
+        const provider = (args.provider || "anthropic").replace(/-/g, "_").toUpperCase();
         extraEnv[`${provider}_BASE_URL`] = args.baseUrl;
       }
 
@@ -288,7 +285,7 @@ export function registerChatHandlers(): void {
         : args.prompt;
 
       let provider = args.provider || "anthropic";
-      let modelId = args.model;
+      let modelId = args.model ? normalizeOpenCodeModelId(provider, args.model) : args.model;
       let thoughtLevel = args.thoughtLevel;
       let orchestratorId: string | undefined;
       let promptCtx = await buildPromptContext(args.projectPath);
@@ -321,9 +318,12 @@ export function registerChatHandlers(): void {
           ruleAllowlist: orchestratorRuleAllowlist,
         });
 
-        const { refreshProjectExpertsIntegration } = await import("../services/project-experts-refresh");
+        const { ensureProjectChatPrewarm } = await import("../services/project-chat-prewarm");
+        await ensureProjectChatPrewarm(args.projectPath);
+
+        const { refreshProjectExpertsIntegrationIfNeeded } = await import("../services/project-experts-refresh");
         try {
-          await refreshProjectExpertsIntegration(args.projectPath, { promptCtx });
+          await refreshProjectExpertsIntegrationIfNeeded(args.projectPath, { promptCtx });
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
           log.error(`Experts integration refresh failed: ${message}`);
@@ -357,13 +357,13 @@ export function registerChatHandlers(): void {
           composerSkills.length > 0
             ? [...new Set([...(orchestratorSkills ?? []), ...composerSkills])]
             : orchestratorSkills;
-        const { refreshProjectSkillsIntegration } = await import("../services/project-skills-refresh");
-        await refreshProjectSkillsIntegration(args.projectPath, {
+        const { refreshProjectSkillsIntegrationIfNeeded } = await import("../services/project-skills-refresh");
+        await refreshProjectSkillsIntegrationIfNeeded(args.projectPath, {
           profileSkillAllowlist: skillAllowlist,
         });
       } else if (args.projectPath && args.skillIds?.length) {
-        const { refreshProjectSkillsIntegration } = await import("../services/project-skills-refresh");
-        await refreshProjectSkillsIntegration(args.projectPath, {
+        const { refreshProjectSkillsIntegrationIfNeeded } = await import("../services/project-skills-refresh");
+        await refreshProjectSkillsIntegrationIfNeeded(args.projectPath, {
           profileSkillAllowlist: args.skillIds,
         });
       }
@@ -402,7 +402,7 @@ export function registerChatHandlers(): void {
       if (!sessionId) {
         isFirstTurn = true;
         const model = modelId && provider
-          ? `${provider}/${modelId}`
+          ? formatOpenCodeModelRef(provider, modelId)
           : modelId || undefined;
         const session = await service.createSession(
           cwd,
@@ -509,7 +509,7 @@ export function registerChatHandlers(): void {
       let usage = null;
       try {
         const result = await service.sendPrompt(sessionId, userPrompt, {
-          model: modelId,
+          model: modelId ? formatOpenCodeModelRef(provider, modelId) : undefined,
           provider,
           projectRulesPrompt: projectRulesPrompt || undefined,
         });
@@ -722,9 +722,8 @@ export function registerChatHandlers(): void {
       try {
         await ensureConnected();
         if (args.projectPath) {
-          const { refreshProjectSkillsIntegrationWithReload } = await import("../services/project-skills-refresh");
-          await refreshProjectSkillsIntegrationWithReload(args.projectPath);
-          // Set project root for command registry (scan user commands)
+          const { ensureProjectChatPrewarm } = await import("../services/project-chat-prewarm");
+          await ensureProjectChatPrewarm(args.projectPath);
           const { commandRegistry } = await import("../commands/registry");
           commandRegistry.setProjectRoot(args.projectPath);
           commandRegistry.reload();

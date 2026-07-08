@@ -1,8 +1,6 @@
 import { ALL_MODULES } from "./modules";
 import type { PromptContext, PromptModule } from "./types";
 
-const WORKSPACE_MODULE = "workspace-folders";
-
 function buildModulePromptText(mod: PromptModule, ctx: PromptContext): string {
   if (mod.build) return mod.build(ctx);
   if (mod.prompt) return mod.prompt;
@@ -46,14 +44,14 @@ export function composeProfileModulePrompts(
 export function resolveActiveModuleKeys(
   ctx: Pick<PromptContext, "profileModules">,
 ): string[] {
-  const keys = [WORKSPACE_MODULE];
+  const keys = resolveStableSystemModules().map((m) => m.key);
   if (ctx.profileModules?.length) {
     const allowed = new Set(ctx.profileModules);
     for (const mod of ALL_MODULES) {
       if (mod.profileOnly && allowed.has(mod.key)) keys.push(mod.key);
     }
   }
-  return keys.sort((a, b) => a.localeCompare(b));
+  return [...new Set(keys)].sort((a, b) => a.localeCompare(b));
 }
 
 /** @deprecated alias — stable system layer uses resolveStableSystemModules directly. */

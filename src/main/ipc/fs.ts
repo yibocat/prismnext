@@ -431,6 +431,9 @@ export function registerFsHandlers(): void {
     const { refreshProjectSkillsIntegration } = await import("../services/project-skills-refresh");
     await refreshProjectSkillsIntegration(args.rootPath);
 
+    const { ensureResearchBrief } = await import("../services/research-brief-service");
+    ensureResearchBrief(args.rootPath);
+
     // .gitignore — only create if missing
     const gitignorePath = join(prismDir, ".gitignore");
     if (!existsSync(gitignorePath)) {

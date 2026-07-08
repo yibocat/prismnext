@@ -21,6 +21,7 @@ import { SkillLibraryPanel } from "./skill-library-panel";
 import { AgentToolsPanel } from "./agent-tools-panel";
 import { KnowledgeModulesPanel } from "./knowledge-modules-panel";
 import { BuiltinCommandsPanel } from "./builtin-commands-panel";
+import { ResearchBriefPanel } from "./research-brief-panel";
 import { ShortcutsSettings } from "./shortcuts-settings";
 import { LogViewer } from "./log-viewer";
 
@@ -51,6 +52,8 @@ export function renderSettingsPanelSlot(slot: SettingsPanelSlot): ReactNode {
       return <PromptMarkdownPanel slot={slot} />;
     case "prompt-stack-preview":
       return <PromptStackPreviewPanel />;
+    case "research-brief":
+      return <ResearchBriefPanel />;
     case "rule-markdown":
       return <RuleMarkdownPanel slot={slot} />;
     case "custom-command":

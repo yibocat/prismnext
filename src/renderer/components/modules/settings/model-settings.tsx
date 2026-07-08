@@ -10,10 +10,9 @@ import {
   PlusIcon,
   Settings2Icon,
   XIcon,
-  CheckIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ALL_PROVIDERS, type ProviderConfig, type ModelConfig } from "@/lib/providers";
+import { ALL_PROVIDERS, resolveProviderConfig, buildCustomModelEntry, modelIdTaken, type ProviderConfig, type ModelConfig } from "@/lib/providers";
 import {
   SETTINGS_CARD,
   SETTINGS_CATEGORY_HEADER,
@@ -124,12 +123,14 @@ export function ModelSettings() {
               {customProviders.map((provider) => (
                 <ModelProviderCard
                   key={provider.id}
-                  provider={{
-                    id: provider.id,
-                    name: provider.name,
-                    defaultBaseUrl: provider.baseUrl,
-                    models: [],
-                  }}
+                  provider={
+                    resolveProviderConfig(provider.id, customProviders) ?? {
+                      id: provider.id,
+                      name: provider.name,
+                      defaultBaseUrl: provider.baseUrl,
+                      models: [],
+                    }
+                  }
                   isCustom
                   onConfigure={() => openEditProvider(provider.id)}
                 />
@@ -167,11 +168,17 @@ function ModelProviderCard({
   const [expanded, setExpanded] = useState(false);
   const [addingModel, setAddingModel] = useState(false);
   const [newModelId, setNewModelId] = useState("");
+  const [newModelName, setNewModelName] = useState("");
+  const [newModelContext, setNewModelContext] = useState("");
+  const [addModelError, setAddModelError] = useState<string | null>(null);
 
   const registryModels = provider.models || [];
   const customModelIds = customModelsData.map((m) => m.id);
+  const enabledOrphanIds = (enabledModels || []).filter(
+    (id) => !registryModels.some((m) => m.id === id) && !customModelIds.includes(id),
+  );
   const allModelIds = [
-    ...new Set([...registryModels.map((m) => m.id), ...customModelIds]),
+    ...new Set([...registryModels.map((m) => m.id), ...customModelIds, ...enabledOrphanIds]),
   ];
 
   const connectionStatus: ConnectionStatus = !apiKey
@@ -211,9 +218,16 @@ function ModelProviderCard({
   };
 
   const handleAddModel = () => {
-    if (!newModelId.trim()) return;
     const modelId = newModelId.trim();
-    const newCustom: ModelConfig = { id: modelId, name: modelId, contextWindow: "Unknown" };
+    if (!modelId) {
+      setAddModelError("Model ID is required.");
+      return;
+    }
+    if (modelIdTaken(modelId, registryModels, customModelsData)) {
+      setAddModelError("This model ID is already listed.");
+      return;
+    }
+    const newCustom = buildCustomModelEntry(modelId, newModelName, newModelContext);
     updateSettings({
       aiCustomModelsData: {
         ...settings.aiCustomModelsData,
@@ -225,7 +239,18 @@ function ModelProviderCard({
       },
     });
     setNewModelId("");
+    setNewModelName("");
+    setNewModelContext("");
+    setAddModelError(null);
     setAddingModel(false);
+  };
+
+  const openAddModelForm = () => {
+    setNewModelId("");
+    setNewModelName("");
+    setNewModelContext("");
+    setAddModelError(null);
+    setAddingModel(true);
   };
 
   const openConfigure = () => {
@@ -383,30 +408,58 @@ function ModelProviderCard({
 
               {provider.id === "openrouter" ? (
                 addingModel ? (
-                  <div className={cn(MODEL_ROW, "border-t border-border/60")}>
+                  <div className="space-y-2 border-t border-border/60 px-3 py-3">
                     <Input
-                      className="!h-7 !text-[length:var(--font-size-12)] font-mono flex-1"
-                      placeholder="provider/model-id"
+                      className="!h-7 !text-[length:var(--font-size-12)] font-mono w-full"
+                      placeholder="Model ID e.g. provider/model-id"
                       value={newModelId}
-                      onChange={(e) => setNewModelId(e.target.value)}
+                      onChange={(e) => {
+                        setNewModelId(e.target.value);
+                        setAddModelError(null);
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") handleAddModel();
                         if (e.key === "Escape") setAddingModel(false);
                       }}
                       autoFocus
                     />
-                    <Button variant="ghost" size="icon-xs" onClick={handleAddModel}>
-                      <CheckIcon className="size-3" />
-                    </Button>
-                    <Button variant="ghost" size="icon-xs" onClick={() => setAddingModel(false)}>
-                      <XIcon className="size-3" />
-                    </Button>
+                    <Input
+                      className="!h-7 !text-[length:var(--font-size-12)] w-full"
+                      placeholder="Display name (optional)"
+                      value={newModelName}
+                      onChange={(e) => setNewModelName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleAddModel();
+                        if (e.key === "Escape") setAddingModel(false);
+                      }}
+                    />
+                    <Input
+                      className="!h-7 !text-[length:var(--font-size-12)] w-full"
+                      placeholder="Context e.g. 200K (optional)"
+                      value={newModelContext}
+                      onChange={(e) => setNewModelContext(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleAddModel();
+                        if (e.key === "Escape") setAddingModel(false);
+                      }}
+                    />
+                    {addModelError ? (
+                      <p className="text-[length:var(--font-size-11)] text-destructive">{addModelError}</p>
+                    ) : null}
+                    <div className="flex items-center gap-1.5">
+                      <Button variant="outline" size="xs" onClick={handleAddModel}>
+                        Add
+                      </Button>
+                      <Button variant="ghost" size="xs" onClick={() => setAddingModel(false)}>
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <button
                     type="button"
                     className={cn(MODEL_ROW, "w-full border-t border-border/60 text-left")}
-                    onClick={() => setAddingModel(true)}
+                    onClick={openAddModelForm}
                   >
                     <span className="flex items-center gap-1.5 text-[length:var(--font-size-12)] text-muted-foreground hover:text-foreground transition-colors">
                       <PlusIcon className="size-3" />

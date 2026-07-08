@@ -1,0 +1,11 @@
+{
+  "id": "research-design-coach",
+  "name": "Research Design Coach",
+  "description": "Pressure-tests research questions, hypotheses, and contribution before work is committed.",
+  "builtin": true,
+  "permission": {
+    "edit": "deny",
+    "bash": "deny",
+    "task": { "*": "deny" }
+  }
+}

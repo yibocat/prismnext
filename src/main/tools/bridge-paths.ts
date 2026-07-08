@@ -31,3 +31,11 @@ export function latexBridgeRoot(): string {
 export function questionsBridgeRoot(): string {
   return process.env.PRISM_QUESTIONS_BRIDGE_ROOT || path.join(bridgeRoot(), "questions");
 }
+
+export function researchBriefBridgeRoot(): string {
+  return process.env.PRISM_RESEARCH_BRIEF_BRIDGE_ROOT || path.join(bridgeRoot(), "research-brief");
+}
+
+export function experimentLogBridgeRoot(): string {
+  return process.env.PRISM_EXPERIMENT_LOG_BRIDGE_ROOT || path.join(bridgeRoot(), "experiment-log");
+}

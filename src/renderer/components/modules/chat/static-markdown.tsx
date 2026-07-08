@@ -4,7 +4,7 @@ import "katex/dist/katex.min.css";
 import {
   MARKDOWN_COMPONENTS,
   CHAT_MARKDOWN_TYPOGRAPHY,
-  prepareMarkdownMath,
+  prepareMarkdownForChat,
   MARKDOWN_REMARK_BASE,
   rehypePluginsForSurface,
 } from "@/lib/markdown/markdown-config";
@@ -88,7 +88,7 @@ export const StaticMarkdown = memo(function StaticMarkdown({
 }) {
   if (!content) return null;
 
-  const normalized = useMemo(() => prepareMarkdownMath(content), [content]);
+  const normalized = useMemo(() => prepareMarkdownForChat(content), [content]);
   const bibkeyFingerprint = useLiteratureStore((s) =>
     s.papers.map((p) => p.bibkey).join("\u0000"),
   );

@@ -149,6 +149,25 @@ export function resolveNotebookDir(dirs: WorkspaceFolder[]): string {
   return findNotebookConfig(dirs)?.dir ?? DEFAULT_NOTEBOOK_DIR;
 }
 
+/** Extracted from workspaceDirs — the single experiment config, or null if none configured. */
+export interface ExperimentConfig {
+  dir: string;
+}
+
+/**
+ * Find the first experiment entry in workspaceDirs.
+ *
+ * Experiment is opt-in: `defaultWorkspaceDirs()` does NOT include it, so
+ * absence is the expected state for most projects and must propagate as null
+ * (do not fall back to a default name). Callers surface "not configured" to
+ * the agent rather than auto-creating a folder.
+ */
+export function findExperimentConfig(dirs: WorkspaceFolder[]): ExperimentConfig | null {
+  const e = dirs.find((d): d is ExperimentFolder => d.function === "experiment");
+  if (!e) return null;
+  return { dir: e.name };
+}
+
 /** Top-level folder name → workspace function, if configured. */
 export function folderWorkspaceFunction(
   folderPath: string,

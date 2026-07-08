@@ -1,36 +1,58 @@
 {
   "experts": [
     {
-      "id": "citation-auditor",
-      "name": "Citation Auditor",
-      "description": "Focused review of citations, bib entries, and reference consistency.",
-      "builtin": true,
-      "skills": ["academic-citations"],
-      "modules": [],
-      "permission": {
-        "edit": "deny",
-        "bash": "deny",
-        "task": { "*": "deny" }
-      }
-    },
-    {
-      "id": "literature-scout",
-      "name": "Literature Scout",
-      "description": "External literature search, staging, and manuscript-ready summaries.",
-      "builtin": true,
-      "modules": ["chat-citation-staging"],
-      "permission": {
-        "edit": "deny",
-        "bash": "deny",
-        "task": { "*": "deny" }
-      }
-    },
-    {
-      "id": "library-scout",
-      "name": "Library Scout",
-      "description": "Search and summarize papers already in the project literature library.",
+      "id": "literature-synthesizer",
+      "name": "Literature Synthesizer",
+      "description": "Cross-paper synthesis by theme — gaps, disagreements, confidence — not a paper-by-paper list.",
       "builtin": true,
       "modules": ["literature-library"],
+      "skills": ["literature-review"],
+      "permission": {
+        "edit": "deny",
+        "bash": "deny",
+        "task": { "*": "deny" }
+      }
+    },
+    {
+      "id": "research-design-coach",
+      "name": "Research Design Coach",
+      "description": "Pressure-tests research questions, hypotheses, and contribution before work is committed.",
+      "builtin": true,
+      "permission": {
+        "edit": "deny",
+        "bash": "deny",
+        "task": { "*": "deny" }
+      }
+    },
+    {
+      "id": "methodology-auditor",
+      "name": "Methodology Auditor",
+      "description": "Audits experimental design, statistical validity, and reproducibility — outputs a risk list, not rewrites.",
+      "builtin": true,
+      "permission": {
+        "edit": "deny",
+        "bash": "deny",
+        "task": { "*": "deny" }
+      }
+    },
+    {
+      "id": "structure-diagnostician",
+      "name": "Structure Diagnostician",
+      "description": "Diagnoses manuscript structure and argument chain — priority diagnosis, not a rewrite.",
+      "builtin": true,
+      "skills": ["paper-structure"],
+      "permission": {
+        "edit": "deny",
+        "bash": "deny",
+        "task": { "*": "deny" }
+      }
+    },
+    {
+      "id": "peer-reviewer",
+      "name": "Peer Reviewer",
+      "description": "Simulates an independent reviewer — strengths, weaknesses, decision recommendation; includes citation prose review.",
+      "builtin": true,
+      "skills": ["peer-review-response", "academic-citations"],
       "permission": {
         "edit": "deny",
         "bash": "deny",

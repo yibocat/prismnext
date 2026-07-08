@@ -5,12 +5,18 @@ import { CHAT_CITATION_STAGING_PROMPT } from "./chat-citation-staging";
 import { CITATION_AUDIT_PROMPT } from "./citation-audit";
 import { LITERATURE_LIBRARY_PROMPT } from "./literature-library";
 import { TASK_DELEGATION_PROMPT } from "./task-delegation";
+import { RESEARCH_REASONING_PROMPT } from "./research-reasoning";
+import { REPLY_DEPTH_PROMPT } from "./reply-depth";
+import { PROACTIVE_SCHEDULING_PROMPT } from "./proactive-scheduling";
+import { RESEARCH_DESIGN_PROMPT } from "./research-design";
+import { EXPERIMENTS_PROMPT } from "./experiments";
 import { buildLatexWorkspacePrompt } from "./latex-workspace";
 import { buildWorkspacePrompt } from "./workspace-folders";
 
 /** All available prompt modules.
  *
- * Global `_prism-system.md` injects only `workspace-folders`.
+ * Global `_prism-system.md` injects all modules with `profileOnly: false`
+ * (workspace-folders, research-reasoning, reply-depth).
  * Profile modules attach per Orchestrator/Expert in the agent editor.
  *
  * Per-tool behavior → OpenCode tool `description` in tools/index.ts only.
@@ -77,5 +83,55 @@ export const ALL_MODULES: PromptModule[] = [
     profileOnly: true,
     source: "app",
     build: buildLatexWorkspacePrompt,
+  },
+  {
+    key: "research-reasoning",
+    label: "Scholarly Reasoning (synthesis & critique)",
+    description:
+      "Cross-paper synthesis, steelman/rebut, confidence calibration for research questions. Global baseline for all agents.",
+    enabled: true,
+    profileOnly: false,
+    source: "app",
+    prompt: RESEARCH_REASONING_PROMPT,
+  },
+  {
+    key: "reply-depth",
+    label: "Reply Depth & Structure",
+    description:
+      "Calibrate reply length/structure to request type — thorough for research, short for tool/status. Judgment-based, not quotas. Global baseline for all agents.",
+    enabled: true,
+    profileOnly: false,
+    source: "app",
+    prompt: REPLY_DEPTH_PROMPT,
+  },
+  {
+    key: "proactive-scheduling",
+    label: "Proactive Scheduling (orchestrator)",
+    description:
+      "Orchestrator decides which capabilities a task needs and acts — tool & delegation judgment, not scripted sequences.",
+    enabled: true,
+    profileOnly: true,
+    source: "app",
+    prompt: PROACTIVE_SCHEDULING_PROMPT,
+  },
+  {
+    key: "research-design",
+    label: "Research Design (brief)",
+    description:
+      "Project research brief at .prismnext/research/brief.md — read/update workflow and research-design-coach handoff.",
+    enabled: true,
+    profileOnly: true,
+    source: "app",
+    prompt: RESEARCH_DESIGN_PROMPT,
+  },
+  {
+    key: "experiments",
+    label: "Experiments (log & runs)",
+    description:
+      "Experiment islands under the Workspace Experiment folder — create/read, run+log discipline, methodology-auditor handoff.",
+    enabled: true,
+    profileOnly: true,
+    source: "app",
+    prompt: EXPERIMENTS_PROMPT,
   },
 ];

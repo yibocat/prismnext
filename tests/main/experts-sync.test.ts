@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import {
   renderExpertAgentMarkdown,
   renderOrchestratorAgentMarkdown,
+  buildProjectExpertsAgentPlan,
   syncProjectExpertsToOpencode,
   clearSyncedAgentFiles,
   listExperts,
@@ -40,8 +41,8 @@ describe("experts-sync", () => {
   it("renders subagent markdown with mode and description", () => {
     const md = renderExpertAgentMarkdown(
       {
-        id: "library-scout",
-        name: "Library Scout",
+        id: "literature-synthesizer",
+        name: "Literature Synthesizer",
         description: "Search library",
         modules: ["literature-library"],
         permission: { edit: "deny", task: { "*": "deny" } },
@@ -61,35 +62,35 @@ describe("experts-sync", () => {
         id: "research-prism",
         name: "Research Prism",
         description: "Orchestrator",
-        allowedExperts: ["citation-auditor", "literature-scout"],
+        allowedExperts: ["peer-reviewer", "research-design-coach"],
       },
       "You orchestrate.",
       [
         {
-          id: "citation-auditor",
-          name: "Citation Auditor",
+          id: "peer-reviewer",
+          name: "Peer Reviewer",
           description: "Audit citations",
         },
         {
-          id: "literature-scout",
-          name: "Literature Scout",
+          id: "research-design-coach",
+          name: "Research Design Coach",
           description: "Search literature",
         },
       ],
     );
     expect(md).toContain("mode: primary");
-    expect(md).toContain("citation-auditor: allow");
+    expect(md).toContain("peer-reviewer: allow");
     expect(md).toContain('*: deny');
     expect(md).toContain("## Available experts (via Task)");
-    expect(md).toContain("`citation-auditor` — Citation Auditor:");
+    expect(md).toContain("`peer-reviewer` — Peer Reviewer:");
   });
 
   it("buildTaskPermissionBlock denies by default", () => {
-    const rules = buildTaskPermissionBlock(["literature-scout"]);
+    const rules = buildTaskPermissionBlock(["research-design-coach"]);
     expect(rules["*"]).toBe("deny");
     expect(rules.general).toBe("deny");
-    expect(rules["literature-scout"]).toBe("allow");
-    expect(rules["citation-auditor"]).toBeUndefined();
+    expect(rules["research-design-coach"]).toBe("allow");
+    expect(rules["peer-reviewer"]).toBeUndefined();
   });
 
   it("empty allowedExperts override yields no task allows and explicit prompt", () => {
@@ -100,7 +101,7 @@ describe("experts-sync", () => {
     const sync = syncProjectExpertsToOpencode(root, { agentsDir, syncStatePath });
     const orchestratorMd = readFileSync(join(agentsDir, "research-prism.md"), "utf-8");
     expect(orchestratorMd).toContain("No experts are currently allowed");
-    expect(orchestratorMd).not.toContain("citation-auditor: allow");
+    expect(orchestratorMd).not.toContain("peer-reviewer: allow");
     expect(sync.agentFiles).toContain("research-prism.md");
     const section = appendAllowedExpertsSection("body", []);
     expect(section).toContain("No experts are currently allowed");
@@ -108,29 +109,29 @@ describe("experts-sync", () => {
 
   it("lists bundled experts and orchestrators", () => {
     const experts = listExperts(root);
-    expect(experts.some((e) => e.id === "citation-auditor")).toBe(true);
-    expect(experts.some((e) => e.id === "literature-scout")).toBe(true);
+    expect(experts.some((e) => e.id === "peer-reviewer")).toBe(true);
+    expect(experts.some((e) => e.id === "research-design-coach")).toBe(true);
     const orchestrators = listOrchestrators(root);
     expect(orchestrators.some((o) => o.id === "research-prism")).toBe(true);
   });
 
   it("keeps disabled built-in experts in list with enabled false", () => {
-    setBuiltinExpertEnabled(root, "citation-auditor", false);
+    setBuiltinExpertEnabled(root, "peer-reviewer", false);
     const experts = listExperts(root);
-    const disabled = experts.find((e) => e.id === "citation-auditor");
+    const disabled = experts.find((e) => e.id === "peer-reviewer");
     expect(disabled).toBeTruthy();
     expect(disabled?.enabled).toBe(false);
-    expect(experts.some((e) => e.id === "literature-scout" && e.enabled)).toBe(true);
+    expect(experts.some((e) => e.id === "research-design-coach" && e.enabled)).toBe(true);
 
     const sync = syncProjectExpertsToOpencode(root, { agentsDir, syncStatePath });
-    expect(sync.agentFiles).not.toContain("citation-auditor.md");
-    expect(sync.agentFiles).toContain("literature-scout.md");
+    expect(sync.agentFiles).not.toContain("peer-reviewer.md");
+    expect(sync.agentFiles).toContain("research-design-coach.md");
   });
 
   it("resetAllBuiltinExpertsToDefaults re-enables disabled built-ins", () => {
-    setBuiltinExpertEnabled(root, "citation-auditor", false);
+    setBuiltinExpertEnabled(root, "peer-reviewer", false);
     resetAllBuiltinExpertsToDefaults(root);
-    const expert = listExperts(root).find((e) => e.id === "citation-auditor");
+    const expert = listExperts(root).find((e) => e.id === "peer-reviewer");
     expect(expert?.enabled).toBe(true);
   });
 
@@ -138,29 +139,37 @@ describe("experts-sync", () => {
     expect(resolveOrchestratorId(root, null)).toBe("research-prism");
   });
 
+  it("buildProjectExpertsAgentPlan produces stable syncContentHash", () => {
+    const first = buildProjectExpertsAgentPlan(root);
+    const second = buildProjectExpertsAgentPlan(root);
+    expect(first.syncContentHash).toBe(second.syncContentHash);
+    expect(first.agentFiles.length).toBeGreaterThan(0);
+  });
+
   it("syncs project experts to agents directory", () => {
     const result = syncProjectExpertsToOpencode(root, { agentsDir, syncStatePath });
     expect(result.orchestratorId).toBe("research-prism");
-    expect(result.agentFiles).toContain("citation-auditor.md");
-    expect(result.agentFiles).toContain("literature-scout.md");
-    expect(result.agentFiles).toContain("library-scout.md");
+    expect(result.agentFiles).toContain("peer-reviewer.md");
+    expect(result.agentFiles).toContain("research-design-coach.md");
+    expect(result.agentFiles).toContain("literature-synthesizer.md");
     expect(result.agentFiles).toContain("research-prism.md");
-    expect(existsSync(join(agentsDir, "citation-auditor.md"))).toBe(true);
+    expect(existsSync(join(agentsDir, "peer-reviewer.md"))).toBe(true);
     const orchestratorMd = readFileSync(join(agentsDir, "research-prism.md"), "utf-8");
     expect(orchestratorMd).toContain("mode: primary");
     expect(orchestratorMd).toContain("## Available experts (via Task)");
-    expect(orchestratorMd).toContain("citation-auditor");
+    expect(orchestratorMd).toContain("peer-reviewer");
     expect(orchestratorMd).toContain("## Task delegation (orchestrator)");
     expect(orchestratorMd).toContain("## Chat paper citations");
     const bundledInstructions = readBundledOrchestratorInstructions("research-prism") ?? "";
     expect(orchestratorMd).toContain(bundledInstructions.trim());
     expect(bundledInstructions).not.toContain("## Chat paper citations");
-    const libraryScoutMd = readFileSync(join(agentsDir, "library-scout.md"), "utf-8");
-    expect(libraryScoutMd).toContain("## Project literature library");
-    expect(libraryScoutMd).toContain("Task expert handoff (library papers)");
+    const synthesizerMd = readFileSync(join(agentsDir, "literature-synthesizer.md"), "utf-8");
+    expect(synthesizerMd).toContain("## Project literature library");
+    expect(synthesizerMd).toContain("Task expert handoff (library papers)");
     const state = JSON.parse(readFileSync(syncStatePath, "utf-8"));
     expect(state.projectRoot).toBe(root);
     expect(state.agentFiles).toEqual(result.agentFiles);
+    expect(state.syncContentHash).toBe(result.syncContentHash);
   });
 
   it("clears previously synced agent files", () => {
@@ -206,7 +215,7 @@ describe("experts-sync", () => {
         instructions: "B instructions.",
       });
       syncProjectExpertsToOpencode(rootB, { agentsDir, syncStatePath });
-      expect(existsSync(join(agentsDir, "citation-auditor.md"))).toBe(true);
+      expect(existsSync(join(agentsDir, "peer-reviewer.md"))).toBe(true);
       expect(
         listExperts(rootB).some((e) => e.name === "Project B Expert"),
       ).toBe(true);

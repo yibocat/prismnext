@@ -1,0 +1,13 @@
+{
+  "id": "literature-synthesizer",
+  "name": "Literature Synthesizer",
+  "description": "Cross-paper synthesis by theme — gaps, disagreements, confidence — not a paper-by-paper list.",
+  "builtin": true,
+  "modules": ["literature-library"],
+  "skills": ["literature-review"],
+  "permission": {
+    "edit": "deny",
+    "bash": "deny",
+    "task": { "*": "deny" }
+  }
+}

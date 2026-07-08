@@ -10,9 +10,9 @@ import {
 } from "@/components/ui/app-menu";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
-  getProvider,
   getModel,
   getAllEnabledModels,
+  resolveProviderConfig,
   type ProviderConfig,
   type ModelConfig,
 } from "@/lib/providers";
@@ -27,18 +27,19 @@ export function ModelSelect() {
   const aiModel = settings.aiModel;
   const enabledModels = settings.aiEnabledModels;
   const customModels = settings.aiCustomModelsData;
+  const customProviders = settings.aiCustomProviders;
 
-  const currentProvider = getProvider(aiProvider);
+  const currentProvider = resolveProviderConfig(aiProvider, customProviders);
   const currentModelId = aiModel ?? currentProvider?.defaultModel ?? "";
   const currentModel = currentProvider
-    ? getModel(aiProvider, currentModelId)
+    ? getModel(aiProvider, currentModelId, customModels, customProviders)
     : undefined;
 
   const displayName = currentModel?.name || currentProvider?.name || "Select Model";
 
   const visible = useMemo(
-    () => getAllEnabledModels(enabledModels, customModels),
-    [enabledModels, customModels],
+    () => getAllEnabledModels(enabledModels, customModels, customProviders),
+    [enabledModels, customModels, customProviders],
   );
 
   const grouped = useMemo(() => {

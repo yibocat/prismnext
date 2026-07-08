@@ -292,6 +292,67 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "User can also compile via UI (Cmd+Enter) or `/compile` — this tool is for agent verification.",
     ],
   },
+  {
+    name: TOOL_NAMES.researchBriefRead,
+    label: "Research Brief (read)",
+    description: "Read the project research design brief (.prismnext/research/brief.md)",
+    category: "project",
+    usageHint:
+      "Returns parsed sections: research question, hypotheses, contribution, scope, assumptions, open questions, etc. " +
+      "Creates the template file if missing.",
+    workflowRules: [
+      "Call before research-design discussions or delegating to research-design-coach.",
+      "Do not use generic read on brief.md — use this tool.",
+    ],
+  },
+  {
+    name: TOOL_NAMES.researchBriefUpdate,
+    label: "Research Brief (update)",
+    description: "Update one section of the project research brief",
+    category: "project",
+    usageHint: "Patch a single canonical section by name. Use append=true to append instead of replace.",
+    workflowRules: [
+      "One section per call — do not rewrite the whole brief.",
+      "Do not use generic edit/write on brief.md — use this tool only.",
+      "research-design-coach does not write the brief — orchestrator applies updates after user confirmation.",
+    ],
+  },
+  {
+    name: TOOL_NAMES.experimentLog,
+    label: "Experiment Log",
+    description:
+      "Experiment island CRUD + run reading (list / create / read / append_run / detect_env). " +
+      "Registry: `.prismnext/experiments/<id>/` (meta.json + runs.jsonl). " +
+      "Workspace lab: `<experiment-dir>/<id>/` (clean folder — agent-owned layout).",
+    category: "project",
+    usageHint:
+      "action=create opens a new experiment (registry + empty workspace folder); action=list lists experiments; " +
+      "action=read returns meta + recent runs; action=append_run logs a run you describe; " +
+      "action=detect_env returns optional python/R/git/venv snapshot. Requires a configured Experiment folder.",
+    workflowRules: [
+      "Do NOT use generic read/write/edit on `.prismnext/experiments/**/meta.json` or runs.jsonl — use this tool only.",
+      "Do not write meta.json or runs.jsonl under the Workspace experiment folder — registry only.",
+      "Before create, call research-brief-read and pass briefLinks (sections + hypothesis excerpt).",
+      "Workspace layout inside `<experiment-dir>/<id>/` is agent-owned — no prescribed scripts/results dirs.",
+      "If no_experiment_folder is returned, ask the user to add an Experiment folder in Settings → Workspace.",
+      "Do not delegate experiment reads/writes via Task — run this tool in the orchestrator conversation.",
+    ],
+  },
+  {
+    name: TOOL_NAMES.experimentRun,
+    label: "Experiment Run",
+    description:
+      "Run a shell command in the experiment workspace cwd and append a structured run record to the registry.",
+    category: "project",
+    usageHint:
+      "Run a command in an existing experiment workspace. Captures stdout/stderr tail + exit code, " +
+      "optionally records artifacts/notes you pass, appends one runs.jsonl line. Returns { ok, run, exitCode, stdoutTail }.",
+    workflowRules: [
+      "The experiment must already exist — call experiment-log action=create first.",
+      "Use when you want execution plus structured logging in one step.",
+      "Workspace layout and env setup are your choice — pass artifacts/notes when they matter.",
+    ],
+  },
 ];
 
 // ─── Tool file loading (used by AcpService.syncBuiltinTools) ──────

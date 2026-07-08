@@ -29,7 +29,7 @@ const PROJECT_OPENCODE_ARTIFACT_DIRS = [
 
 const OPENCODE_GITIGNORE_LINES = [".opencode/", ".agents/"];
 
-function normalizeProjectRoot(projectRoot: string): string {
+export function normalizeProjectRoot(projectRoot: string): string {
   return basename(projectRoot) === ".prismnext" ? dirname(projectRoot) : projectRoot;
 }
 

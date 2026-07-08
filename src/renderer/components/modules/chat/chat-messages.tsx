@@ -13,6 +13,7 @@ import {
   getTurnScrollTop,
   isFollowingStreamTurn,
   pinActiveTurnTop,
+  scrollToTurnEnd,
 } from "@/lib/chat/active-turn-scroll";
 import { isToolResultUserMessage } from "./chat-turns";
 import { buildToolResultMap, contentBlocks } from "./tools/tool-result-map";
@@ -313,6 +314,10 @@ export const ChatMessages = memo(function ChatMessages() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastTurnRef = useRef<HTMLElement>(null);
   const shouldAutoScrollRef = useRef(true);
+  const wasStreamingRef = useRef(false);
+  const isStreamingRef = useRef(isStreaming);
+  isStreamingRef.current = isStreaming;
+  const streamScrollRafRef = useRef<number | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [viewportHeight, setViewportHeight] = useState(0);
   const [isActiveTurnMode, setIsActiveTurnMode] = useState(true);
@@ -333,22 +338,23 @@ export const ChatMessages = memo(function ChatMessages() {
     setShowScrollButton(false);
   }, []);
 
+  const scrollToLatest = useCallback((smooth = false) => {
+    const container = scrollRef.current;
+    const turn = lastTurnRef.current;
+    if (!container || !turn) return;
+    scrollToTurnEnd(container, turn, smooth);
+    setShowScrollButton(false);
+  }, []);
+
   const returnToActiveTurn = useCallback((smooth = false) => {
     shouldAutoScrollRef.current = true;
     setIsActiveTurnMode(true);
-    pinToActiveTurn(smooth);
-  }, [pinToActiveTurn]);
-
-  const syncViewportHeight = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return 0;
-    const next = el.clientHeight;
-    if (next > 0) {
-      el.style.setProperty("--chat-runway-h", `${next}px`);
+    if (isStreamingRef.current) {
+      followStreamTail(smooth);
+    } else {
+      scrollToLatest(smooth);
     }
-    setViewportHeight((prev) => (prev === next ? prev : next));
-    return next;
-  }, []);
+  }, [followStreamTail, scrollToLatest]);
 
   // ── Stable computations (committed messages only) ──
   // These O(n) scans only re-run when committed messages change,
@@ -480,55 +486,58 @@ export const ChatMessages = memo(function ChatMessages() {
   const lastTurnUserMsg = turns[turns.length - 1]?.userMessage ?? null;
   const prevLastUserMsgRef = useRef<ChatStreamMessage | null>(null);
 
-  /** Apply runway + pin once session content is mounted (fixes cold-start race). */
-  const applyRunwayAndPin = useCallback(() => {
-    const container = scrollRef.current;
-    const turn = lastTurnRef.current;
-    if (!container || !turn) return false;
-
-    const h = syncViewportHeight();
-    if (h <= 0) return false;
-
-    void turn.offsetHeight;
-    pinToActiveTurn(false);
-    return true;
-  }, [pinToActiveTurn, syncViewportHeight]);
+  /** Sync runway CSS var only — no scroll (avoids fighting stream tail follow). */
+  const syncRunwayMinHeight = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return 0;
+    const next = el.clientHeight;
+    if (next > 0) {
+      el.style.setProperty("--chat-runway-h", `${next}px`);
+    }
+    setViewportHeight((prev) => (prev === next ? prev : next));
+    return next;
+  }, []);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    syncViewportHeight();
+    syncRunwayMinHeight();
     const ro = new ResizeObserver(() => {
-      syncViewportHeight();
+      syncRunwayMinHeight();
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [syncViewportHeight]);
+  }, [syncRunwayMinHeight]);
 
-  // ── Active Turn Scroll: newest user message starts at viewport top ──
+  // ── Scroll: pin user message on new turn; follow tail while streaming ──
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const handleScroll = () => {
       const turn = lastTurnRef.current;
-      let activeTurnMode = true;
+      let following = true;
 
-      if (isStreaming && turn) {
-        activeTurnMode = isFollowingStreamTurn(el, turn);
-      } else if (turn) {
-        const turnTop = getTurnScrollTop(el, turn);
-        const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
-        // Reading history means the viewport is above the newest turn.
-        // Scrolling within the newest turn is still active-turn mode.
-        // If maxScroll cannot reach turnTop yet, keep active mode so the
-        // latest turn runway can be applied instead of self-disabling.
-        activeTurnMode = el.scrollTop >= turnTop - 20 || maxScroll < turnTop - 20;
+      if (turn) {
+        if (isStreaming) {
+          following = isFollowingStreamTurn(el, turn);
+        } else {
+          const turnTop = getTurnScrollTop(el, turn);
+          const turnHeight = turn.offsetHeight;
+          const viewH = el.clientHeight;
+          const tailScrollTop = turnTop + turnHeight - viewH;
+          const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
+          if (turnHeight <= viewH) {
+            following = el.scrollTop >= turnTop - 20 || maxScroll < turnTop - 20;
+          } else {
+            following = el.scrollTop >= tailScrollTop - 80;
+          }
+        }
       }
 
-      shouldAutoScrollRef.current = activeTurnMode;
-      setIsActiveTurnMode(activeTurnMode);
-      setShowScrollButton(!activeTurnMode && el.scrollHeight > el.clientHeight + 100);
+      shouldAutoScrollRef.current = following;
+      setIsActiveTurnMode(following);
+      setShowScrollButton(!following && el.scrollHeight > el.clientHeight + 100);
     };
     handleScroll();
     el.addEventListener("scroll", handleScroll, { passive: true });
@@ -536,8 +545,6 @@ export const ChatMessages = memo(function ChatMessages() {
   }, [isStreaming]);
 
   useLayoutEffect(() => {
-    // Only reset auto-scroll when a genuinely NEW user message appears at the
-    // tail (new turn), not when idxMap indices shift due to history prepend.
     const msg = lastTurnUserMsg;
     const isNewUserMsg = msg !== null && msg !== prevLastUserMsgRef.current;
     prevLastUserMsgRef.current = msg;
@@ -545,44 +552,49 @@ export const ChatMessages = memo(function ChatMessages() {
     if (isNewUserMsg) {
       shouldAutoScrollRef.current = true;
       setIsActiveTurnMode(true);
+      syncRunwayMinHeight();
+      requestAnimationFrame(() => pinToActiveTurn(false));
     }
-  }, [lastTurnUserMsg, lastTurnUserKey]);
+  }, [lastTurnUserMsg, lastTurnUserKey, pinToActiveTurn, syncRunwayMinHeight]);
 
-  // Session / tab content just mounted after loading spinner — pin before paint settles.
   useLayoutEffect(() => {
     if (isLoadingSession || turns.length === 0) return;
-
-    shouldAutoScrollRef.current = true;
-    setIsActiveTurnMode(true);
-
-    if (!applyRunwayAndPin()) return;
-
-    const id = requestAnimationFrame(() => {
-      applyRunwayAndPin();
+    syncRunwayMinHeight();
+    requestAnimationFrame(() => {
+      if (shouldAutoScrollRef.current) {
+        if (isStreaming) followStreamTail(false);
+        else scrollToLatest(false);
+      }
     });
-    return () => cancelAnimationFrame(id);
-  }, [isLoadingSession, turns.length, lastTurnUserKey, activeTabId, applyRunwayAndPin]);
+  }, [isLoadingSession, turns.length, activeTabId, isStreaming, followStreamTail, scrollToLatest, syncRunwayMinHeight]);
 
-  useEffect(() => {
-    if (isStreaming) {
-      shouldAutoScrollRef.current = true;
-      setIsActiveTurnMode(true);
-    }
-  }, [isStreaming, activeTabId]);
-
-  // Pin after layout: minHeight on last turn + viewport known.
   useLayoutEffect(() => {
-    if (!isActiveTurnMode && !isStreaming) return;
+    const wasStreaming = wasStreamingRef.current;
+    wasStreamingRef.current = isStreaming;
+    if (wasStreaming && !isStreaming && shouldAutoScrollRef.current) {
+      syncRunwayMinHeight();
+      requestAnimationFrame(() => scrollToLatest(false));
+    }
+  }, [isStreaming, scrollToLatest, syncRunwayMinHeight]);
 
-    if (!applyRunwayAndPin()) return;
-
-    const id = requestAnimationFrame(() => applyRunwayAndPin());
-    return () => cancelAnimationFrame(id);
-  }, [lastTurnUserKey, isStreaming, isActiveTurnMode, viewportHeight, applyRunwayAndPin]);
+  useLayoutEffect(() => {
+    if (!isStreaming || !shouldAutoScrollRef.current) return;
+    followStreamTail(false);
+  }, [viewportHeight, isStreaming, followStreamTail]);
 
   useEffect(() => {
-    if (!shouldAutoScrollRef.current || !isStreaming) return;
-    followStreamTail(false);
+    if (!isStreaming || !shouldAutoScrollRef.current) return;
+    if (streamScrollRafRef.current != null) return;
+    streamScrollRafRef.current = requestAnimationFrame(() => {
+      streamScrollRafRef.current = null;
+      if (shouldAutoScrollRef.current) followStreamTail(false);
+    });
+    return () => {
+      if (streamScrollRafRef.current != null) {
+        cancelAnimationFrame(streamScrollRafRef.current);
+        streamScrollRafRef.current = null;
+      }
+    };
   }, [displayMessages, isStreaming, followStreamTail]);
 
   // ── Loading / empty state ──

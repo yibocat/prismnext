@@ -12,10 +12,13 @@ import { destroyAllAiPty } from "./services/ai-pty";
 import { startTerminalBridge, stopTerminalBridge, setTerminalBridgeWindow } from "./services/terminal-bridge";
 import { startLiteratureBridge, stopLiteratureBridge } from "./services/literature-bridge";
 import { startLatexBridge, stopLatexBridge } from "./services/latex-bridge";
+import { startResearchBriefBridge, stopResearchBriefBridge } from "./services/research-brief-bridge";
+import { startExperimentLogBridge, stopExperimentLogBridge } from "./services/experiment-log-bridge";
 import { installMainProcessNetwork } from "./lib/main-network";
 import { registerCrashHandlers } from "./lib/crash-handler";
 import { installCsp } from "./lib/csp";
 import { createLogger } from "./services/logger";
+import { providerApiKeyEnvVar } from "../shared/opencode-provider";
 
 const log = createLogger("main", "startup");
 
@@ -145,6 +148,8 @@ function createWindow() {
     stopTerminalBridge();
     stopLiteratureBridge();
     stopLatexBridge();
+    stopResearchBriefBridge();
+    stopExperimentLogBridge();
     setTerminalBridgeWindow(null);
     import("./ipc/log").then((m) => m.disposeLogger());
     mainWindow = null;
@@ -181,6 +186,8 @@ app.whenReady().then(async () => {
   startTerminalBridge();
   startLiteratureBridge();
   startLatexBridge();
+  startResearchBriefBridge();
+  startExperimentLogBridge();
   createWindow();
 
   // App-level ACP warm-up — spawn opencode once at startup.
@@ -217,14 +224,9 @@ app.whenReady().then(async () => {
     const extraEnv: Record<string, string> = {};
     for (const [provider, apiKey] of Object.entries(aiApiKeys)) {
       if (!apiKey) continue;
-      // OpenCode expects specific env var names per provider
-      const envKey = (() => {
-        if (provider === "google") return "GOOGLE_GENERATIVE_AI_API_KEY";
-        return `${provider.toUpperCase()}_API_KEY`;
-      })();
-      extraEnv[envKey] = apiKey;
-      if (aiBaseUrls[provider]) {
-        extraEnv[`${provider.toUpperCase()}_BASE_URL`] = aiBaseUrls[provider];
+      extraEnv[providerApiKeyEnvVar(provider)] = apiKey;
+      if (aiBaseUrls[provider] && provider !== "opencode-go" && provider !== "opencode-zen") {
+        extraEnv[`${provider.replace(/-/g, "_").toUpperCase()}_BASE_URL`] = aiBaseUrls[provider];
       }
     }
 

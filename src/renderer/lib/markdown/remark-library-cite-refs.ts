@@ -22,9 +22,11 @@ const BARE_AT_CITE_RE = new RegExp(`(?<!\\[)@(${BIBKEY_BODY})`, "g");
 
 /** Task / expert @mentions — never treat as library bibkeys. */
 const RESERVED_AT_MENTIONS = new Set([
-  "literature-scout",
-  "library-scout",
-  "citation-auditor",
+  "literature-synthesizer",
+  "research-design-coach",
+  "methodology-auditor",
+  "structure-diagnostician",
+  "peer-reviewer",
   "research-prism",
   "general",
   "explore",

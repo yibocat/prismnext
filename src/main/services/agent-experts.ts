@@ -65,6 +65,8 @@ export interface PrismExpertsSyncState {
   orchestratorId: string;
   /** Hash of primary orchestrator agent.md — reload OpenCode when this changes. */
   orchestratorContentHash?: string;
+  /** Fingerprint of all synced agent.md bodies — skip rewrite when unchanged. */
+  syncContentHash?: string;
 }
 
 export interface ExpertRuntimeFilters {

@@ -9,6 +9,7 @@ import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { remarkWikilinks } from "./remark-wikilinks";
 import { remarkCitationRefs } from "./remark-citation-refs";
 import { remarkLibraryCiteRefs } from "./remark-library-cite-refs";
+import { normalizeSingleLineCodeFences } from "./streaming-code-fence";
 import { cn } from "@/lib/utils";
 
 export const KATEX_RENDER_OPTIONS = {
@@ -140,11 +141,29 @@ export function rehypePluginsForProfile(_profile: MarkdownPreviewProfile) {
 }
 
 /**
- * App-wide Markdown math preprocessing — used by Chat, file preview, and tool output.
+ * AI models sometimes wrap math in HTML `<p>...</p>`. remark-math only sees
+ * `\(...\)` / `\[...\]` / `$...$` — not math inside raw HTML. Strip the `<p>`
+ * wrapper only; leave delimiters for normalizeMathDelimiters.
+ */
+export function unwrapHtmlMathBlocks(text: string): string {
+  return text
+    .replace(/<p>\s*(\\[\[][\s\S]*?\\[\]])\s*<\/p>/gi, (_, math: string) => math.trim())
+    .replace(/<p>\s*(\\\([\s\S]*?\\\))\s*<\/p>/gi, (_, math: string) => math.trim());
+}
+
+/**
+ * App-wide Markdown math preprocessing — used by file preview and tool output.
  * Normalizes delimiters (`\[...\]`, bare `\\begin...\\end`) then strips KaTeX-hostile macros.
  */
 export function prepareMarkdownMath(text: string): string {
-  return scrubLatexForKatex(normalizeMathDelimiters(text));
+  return scrubLatexForKatex(
+    normalizeMathDelimiters(unwrapHtmlMathBlocks(text)),
+  );
+}
+
+/** Chat streaming path: math prep + single-line ``` fence normalization. */
+export function prepareMarkdownForChat(text: string): string {
+  return prepareMarkdownMath(normalizeSingleLineCodeFences(text));
 }
 
 /** @deprecated use prepareMarkdownMath */
@@ -268,8 +287,14 @@ export function normalizeMathDelimiters(text: string): string {
 
   working = stashSegments(working, /```[\s\S]*?```/g, stash);
   working = stashSegments(working, /`[^`\n]+`/g, stash);
-  // Display math already delimited — must not double-wrap with $$ inside.
-  working = stashSegments(working, /\$\$[\s\S]*?\$\$/g, stash);
+  // remark-math requires $$ on their own lines for multi-line display math.
+  // Rewrite then stash so wrapBeginEndBlocks does not double-wrap inner \begin...\end.
+  working = working.replace(/\$\$([\s\S]*?)\$\$/g, (_, inner) => {
+    const body = inner.trim();
+    const normalized = `\n$$\n${body}\n$$\n`;
+    stash.push(normalized);
+    return `\x00S${stash.length - 1}\x00`;
+  });
 
   working = working.replace(/\\\[([\s\S]*?)\\\]/g, (_, m) => `$$\n${m.trim()}\n$$`);
   working = working.replace(/\\\(([\s\S]*?)\\\)/g, (_, m) => `$${m}$`);

@@ -87,7 +87,12 @@ function AppSelectContent({
 }
 
 function AppSelectItem({ className, ...props }: React.ComponentProps<typeof SelectItem>) {
-  return <SelectItem className={cn(appSelectItemClass, className)} {...props} />;
+  return (
+    <SelectItem
+      className={cn(appSelectItemClass, props.disabled && "opacity-50", className)}
+      {...props}
+    />
+  );
 }
 
 export {

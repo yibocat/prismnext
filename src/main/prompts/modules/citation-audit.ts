@@ -35,5 +35,5 @@ export const CITATION_AUDIT_PROMPT = [
   "",
   `- \`${TOOL_NAMES.citationHealth}\` records to the **parent chat session**, not the Task sub-agent session id.`,
   "- If the Task prompt includes **Session citation audit (this chat)**, synthesize from that table — do not assume the audit failed.",
-  "- When delegating `@citation-auditor` for prose/style review after an audit, cite the audit snapshot; the expert should not re-scan with read/glob.",
+  "- If you delegate prose/style review of the citations after an audit, delegate to `peer-reviewer` with the audit snapshot — instruct it not to re-scan with read/glob.",
 ].join("\n");

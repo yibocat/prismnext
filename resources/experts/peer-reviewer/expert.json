@@ -1,0 +1,12 @@
+{
+  "id": "peer-reviewer",
+  "name": "Peer Reviewer",
+  "description": "Simulates an independent reviewer — strengths, weaknesses, decision recommendation; includes citation prose review.",
+  "builtin": true,
+  "skills": ["peer-review-response", "academic-citations"],
+  "permission": {
+    "edit": "deny",
+    "bash": "deny",
+    "task": { "*": "deny" }
+  }
+}

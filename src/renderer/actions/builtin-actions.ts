@@ -58,6 +58,21 @@ actionRegistry.register("bib-check", async () => {
   return formatCitationHealthReport(report);
 });
 
+// ── ensure-research-brief ──
+actionRegistry.register("ensure-research-brief", async () => {
+  const { useDocumentStore } = await import("@/stores/document-store");
+  const projectRoot = useDocumentStore.getState().projectRoot;
+  if (!projectRoot) {
+    throw new Error("Open a project first.");
+  }
+  const result = await window.electronAPI.researchBriefEnsure(projectRoot);
+  const verb = result.created ? "Created" : "Loaded";
+  return (
+    `${verb} ${result.path}. ` +
+    "Edit in Settings → Prompts & Rules → Research brief, or let the agent update sections via research-brief-update."
+  );
+});
+
 // ── setup-agents-md ──
 actionRegistry.register("setup-agents-md", async () => {
   const { useDocumentStore } = await import("@/stores/document-store");

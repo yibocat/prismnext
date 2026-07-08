@@ -1,6 +1,6 @@
 {
   "name": "prism-next",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "description": "AI-powered LaTeX writing workspace",
   "main": "./out/main/index.js",
   "scripts": {

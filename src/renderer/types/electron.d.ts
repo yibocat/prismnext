@@ -546,6 +546,23 @@ export interface ElectronAPI {
   }>;
   projectCheck: (rootPath: string) => Promise<{ missing: string[] }>;
 
+  researchBriefEnsure: (projectRoot: string) => Promise<{ success: boolean; created: boolean; path: string }>;
+  researchBriefRead: (projectRoot: string) => Promise<{
+    path: string;
+    exists: boolean;
+    raw: string;
+    sections: Record<string, string>;
+    sectionNames: readonly string[];
+    lastModified: string | null;
+  }>;
+  researchBriefGetPath: (projectRoot: string) => Promise<{ relativePath: string; absolutePath: string }>;
+  researchBriefUpdateSection: (args: {
+    projectRoot: string;
+    section: string;
+    content: string;
+    append?: boolean;
+  }) => Promise<{ path: string; section: string; append: boolean; ok: boolean; error?: string; lastModified: string | null }>;
+
   // Platform
   platform: "darwin" | "win32" | "linux";
 

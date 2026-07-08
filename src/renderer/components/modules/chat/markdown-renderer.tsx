@@ -3,30 +3,12 @@ import { useBlockSplitter } from "./use-block-splitter";
 import { StaticMarkdown } from "./static-markdown";
 import { PendingLine } from "./pending-line";
 import { StreamingCodeFrame } from "./streaming-code-frame";
+import { parsePendingCodeFence } from "@/lib/markdown/streaming-code-fence";
 
 interface MarkdownRendererProps {
   content: string;
   isAnimating?: boolean;
   sessionId?: string;
-}
-
-/**
- * Extract fence info from pending text.
- * When inside a code fence, pending starts with ``` at position 0.
- * Returns the language and the code content without the opening markers.
- */
-function getFenceInfo(pending: string): {
-  inFence: boolean;
-  lang: string;
-  code: string;
-} {
-  if (!pending.startsWith("```")) {
-    return { inFence: false, lang: "", code: pending };
-  }
-  const newlineIdx = pending.indexOf("\n");
-  const lang = newlineIdx > 0 ? pending.slice(3, newlineIdx).trim() : "";
-  const code = newlineIdx >= 0 ? pending.slice(newlineIdx + 1) : "";
-  return { inFence: true, lang, code };
 }
 
 /**
@@ -52,7 +34,7 @@ export function MarkdownRenderer({
   }
 
   const { committed, pending } = useBlockSplitter(content);
-  const fence = getFenceInfo(pending);
+  const fence = parsePendingCodeFence(pending);
 
   // Inside a code fence — show the frame with streaming code inside
   if (fence.inFence) {

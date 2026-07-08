@@ -24,8 +24,8 @@ export const StreamingCodeFrame = memo(function StreamingCodeFrame({
       </div>
 
       {/* Code area — plain monospace, no syntax highlighting */}
-      <div className="max-w-full overflow-x-auto">
-        <pre className="!bg-transparent !p-4 !m-0 font-mono text-[length:var(--font-code)] whitespace-pre-wrap break-all">
+      <div className="max-w-full overflow-x-auto bg-muted/20">
+        <pre className="!bg-transparent !p-4 !m-0 font-mono text-[length:var(--font-code)] whitespace-pre-wrap break-words">
           <code>
             {code}
             <span className="inline-block w-[0.6em] h-[1.1em] bg-primary align-text-bottom animate-pulse rounded-[1px]" />
