@@ -21,6 +21,7 @@ import type {
   ExperimentSummary,
 } from "../../shared/experiment-log";
 import { useLayoutStore } from "@/stores/layout-store";
+import { navigateFileTreeToPath } from "@/lib/files/navigate-file-tree";
 
 /** Result payload broadcast by main on `experiment:runComplete`. */
 export interface ExperimentRunResultPayload {
@@ -275,11 +276,9 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   openLabInFiles: async (projectRoot, id) => {
     const paths = await get().getPaths(projectRoot, id);
     if (!paths) return null;
-    // Switch to Files mode so the user lands in the file tree. The mode
-    // is responsible for expanding + revealing the lab subfolder; we
-    // deliberately do not call document-store.openProject here because
-    // the user is already in the same project root.
+    // Switch to Files mode + reveal the lab subfolder in the file tree.
     useLayoutStore.getState().activateMode("files");
+    navigateFileTreeToPath(paths.workspaceRel);
     return paths;
   },
 

@@ -4,6 +4,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { useDocumentStore } from "@/stores/document-store";
 import { useTerminalTheme } from "@/hooks/use-terminal-theme";
 import { useTerminalStore } from "@/stores/terminal-store";
+import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTabContext } from "@/lib/workspace/tab-context";
 import {
   resolveTerminalRoot,
@@ -36,6 +37,11 @@ export function TerminalView({ tabId }: TerminalViewProps) {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const checkoutRoot = useDocumentStore((s) => s.checkoutRoot);
   const terminalRoot = resolveTerminalRoot(checkoutRoot, projectRoot);
+  // Sprint 0.7 "Open terminal in lab": a tab carrying `terminalCwd` spawns
+  // the PTY there instead of the project-wide terminalRoot. Plain user/AI
+  // terminals leave it undefined and fall back to terminalRoot (unchanged).
+  const terminalCwd = useRightPanelStore((s) => s.tabs.find((t) => t.id === tabId)?.terminalCwd);
+  const spawnCwd = terminalCwd ?? terminalRoot;
   const xtermTheme = useTerminalTheme();
   const setSessionCommand = useTerminalStore((s) => s.setSessionCommand);
   const restartNonce = useTerminalStore((s) => s.restartNonce[tabId] ?? 0);
@@ -47,7 +53,7 @@ export function TerminalView({ tabId }: TerminalViewProps) {
   // ─── Initialize terminal ───
 
   useEffect(() => {
-    if (!terminalRoot || !projectRoot || !containerRef.current) return;
+    if (!spawnCwd || !projectRoot || !containerRef.current) return;
 
     const gen = ++_globalGen;
     const sessionId = `${tabId}:${gen}:${restartNonce}`;
@@ -92,7 +98,7 @@ export function TerminalView({ tabId }: TerminalViewProps) {
         sessionId,
         tabId,
         projectRoot,
-        cwd: terminalRoot,
+        cwd: spawnCwd,
       })
       .then(({ shell, cwd, pid }) => {
         if (disposed) return;
@@ -220,7 +226,7 @@ export function TerminalView({ tabId }: TerminalViewProps) {
       termRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [projectRoot, terminalRoot, tabId, restartNonce, setSessionCommand]);
+  }, [projectRoot, terminalRoot, spawnCwd, tabId, restartNonce, setSessionCommand]);
 
   // ─── Focus when tab becomes active ───
 

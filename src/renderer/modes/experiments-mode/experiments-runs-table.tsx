@@ -40,6 +40,9 @@ import type {
 
 export interface ExperimentsRunsTableProps {
   runs: ExperimentRunEntry[];
+  /** Project-relative workspace path (meta.workspacePath) - used to resolve
+   *  island-relative artifact paths for file-tree reveal + editor open. */
+  workspacePath?: string;
 }
 
 const TABLE_HEAD =
@@ -76,19 +79,26 @@ function truncate(text: string, max: number): string {
 /** Single clickable artifact row — opens the file in the editor + reveals
  *  it in the Files sidebar tree. Falls back silently on paths the file
  *  scanner hasn't seen yet (e.g. freshly created artifacts). */
-function ArtifactRow({ path }: { path: string }) {
+function ArtifactRow({ path, workspacePath }: { path: string; workspacePath?: string }) {
   const [opened, setOpened] = useState<"idle" | "ok" | "missing">("idle");
   const openFile = useDocumentStore((s) => s.openFile);
 
+  // Artifacts are stored relative to the workspace island (per schema);
+  // join with meta.workspacePath to get a project-relative path for the
+  // file tree + editor. If the path already starts with the workspace
+  // prefix (already project-relative), use it as-is.
+  const fullPath =
+    workspacePath && !path.startsWith(workspacePath) ? `${workspacePath}/${path}` : path;
+
   const handleClick = async () => {
-    if (!path) return;
+    if (!fullPath) return;
     // Ensure Files mode is the right-panel surface so the click has a
     // visible target. activateMode is a no-op if already on Files.
     useLayoutStore.getState().activateMode("files");
     // Reveal in sidebar (best-effort — non-scanned paths simply won't match).
-    navigateFileTreeToPath(path);
+    navigateFileTreeToPath(fullPath);
     try {
-      await openFile(path);
+      await openFile(fullPath);
       setOpened("ok");
     } catch {
       setOpened("missing");
@@ -128,7 +138,7 @@ function ArtifactRow({ path }: { path: string }) {
   );
 }
 
-function RunRow({ run }: { run: ExperimentRunEntry }) {
+function RunRow({ run, workspacePath }: { run: ExperimentRunEntry; workspacePath?: string }) {
   const [open, setOpen] = useState(false);
   const exit = run.exitCode;
   const ExitIcon = exit === 0 ? CircleCheckIcon : CircleXIcon;
@@ -222,7 +232,7 @@ function RunRow({ run }: { run: ExperimentRunEntry }) {
               <ul className="space-y-0.5">
                 {run.artifacts.map((artifact) => (
                   <li key={artifact}>
-                    <ArtifactRow path={artifact} />
+                    <ArtifactRow path={artifact} workspacePath={workspacePath} />
                   </li>
                 ))}
               </ul>
@@ -241,7 +251,7 @@ function RunRow({ run }: { run: ExperimentRunEntry }) {
   );
 }
 
-export function ExperimentsRunsTable({ runs }: ExperimentsRunsTableProps) {
+export function ExperimentsRunsTable({ runs, workspacePath }: ExperimentsRunsTableProps) {
   if (runs.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-border/60 px-3 py-6 text-center text-[length:var(--font-size-12)] text-muted-foreground/60">
@@ -265,7 +275,7 @@ export function ExperimentsRunsTable({ runs }: ExperimentsRunsTableProps) {
       </div>
       <ul className="divide-y divide-border/40">
         {runs.map((run) => (
-          <RunRow key={run.runId} run={run} />
+          <RunRow key={run.runId} run={run} workspacePath={workspacePath} />
         ))}
       </ul>
     </div>

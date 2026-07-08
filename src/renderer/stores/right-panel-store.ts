@@ -34,6 +34,9 @@ interface RightPanelState {
 
   ensureTab: (kind: RightTabKind) => string;
   openLiteraturePaper: (paperId: string, title: string, view?: "grid" | "reader" | "notes") => string;
+  /** Create/activate a terminal tab whose PTY spawns at `cwd` (Sprint 0.7
+   *  "Open terminal in lab" - lands the shell in an experiment island). */
+  openTerminalAtCwd: (cwd: string, title?: string) => string;
   openFile: (
     fileId: string,
     filePath: string,
@@ -76,7 +79,7 @@ interface RightPanelState {
   closeLiteraturePaperTabs: (paperId: string) => void;
   setActiveTab: (id: string) => void;
   setTabViewMode: (id: string, mode: string) => void;
-  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title" | "terminalSource" | "linkedChatTabId" | "linkedToolCallId" | "settingsSlot" | "settingsSlotKey" | "literaturePaperId" | "literatureView">>) => void;
+  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title" | "terminalSource" | "terminalCwd" | "linkedChatTabId" | "linkedToolCallId" | "settingsSlot" | "settingsSlotKey" | "literaturePaperId" | "literatureView">>) => void;
   moveTab: (fromIndex: number, toIndex: number) => void;
 }
 
@@ -122,6 +125,28 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       isInitial: false,
       literaturePaperId: paperId,
       literatureView: view,
+    };
+    set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
+    return id;
+  },
+
+  openTerminalAtCwd: (cwd, title) => {
+    useLayoutStore.getState().activateMode("terminal");
+    const { tabs } = get();
+    // Reuse an existing terminal tab spawned at the same cwd.
+    const existing = tabs.find((t) => t.kind === "terminal" && t.terminalCwd === cwd);
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return existing.id;
+    }
+    const id = nextTabId();
+    const tab: RightTab = {
+      id,
+      kind: "terminal",
+      title: (title ?? "Terminal").slice(0, 48),
+      isInitial: false,
+      terminalCwd: cwd,
+      terminalSource: "user",
     };
     set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
     return id;

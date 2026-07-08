@@ -34,6 +34,11 @@ export interface RightTab {
   viewMode?: string;
   /** User shell vs AI agent mirror terminal */
   terminalSource?: "user" | "ai";
+  /** Optional cwd override for the terminal PTY. When set, TerminalView
+   *  spawns at this path instead of resolveTerminalRoot(...) - used by
+   *  Sprint 0.7 "Open terminal in lab" to land in an experiment island.
+   *  Plain user/AI terminals leave it undefined. */
+  terminalCwd?: string;
   /** Chat tab that owns this AI terminal */
   linkedChatTabId?: string;
   /** Latest bash tool call mirrored in this tab */

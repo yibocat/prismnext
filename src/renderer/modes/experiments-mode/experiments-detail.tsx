@@ -239,7 +239,7 @@ export function ExperimentsDetail({
         <h3 className="text-[length:var(--font-hint)] font-medium uppercase tracking-wide text-muted-foreground/70">
           Runs
         </h3>
-        <ExperimentsRunsTable runs={runs ?? []} />
+        <ExperimentsRunsTable runs={runs ?? []} workspacePath={meta.workspacePath} />
       </section>
     </div>
   );

@@ -47,6 +47,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useDocumentStore } from "@/stores/document-store";
 import { useExperimentStore } from "@/stores/experiment-store";
+import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { shouldShowPermissionGate } from "@/components/modules/chat/permission-gate-panel";
 import { resolvePermissionMode } from "@shared/permission-modes";
@@ -60,6 +61,7 @@ export function ExperimentsRunPanel() {
   const runInFlight = useExperimentStore((s) => s.runInFlight);
   const runCommand = useExperimentStore((s) => s.runCommand);
   const cancelRun = useExperimentStore((s) => s.cancelRun);
+  const getPaths = useExperimentStore((s) => s.getPaths);
 
   // Permission mode — feeds the gate predicate and the readonly check.
   const permissionMode = useSettingsStore((s) => s.settings.permissionMode);
@@ -122,6 +124,16 @@ export function ExperimentsRunPanel() {
     if (lastCommand == null) return;
     setCommand(lastCommand);
   }, [lastCommand]);
+
+  const handleOpenTerminal = useCallback(async () => {
+    if (!projectRoot || !selectedId) return;
+    const paths = await getPaths(projectRoot, selectedId);
+    if (!paths) return;
+    // Create/activate a terminal tab spawned at the lab folder. The
+    // terminalCwd override makes TerminalView land in the island.
+    const leaf = paths.workspaceRel.split("/").pop() ?? paths.workspaceRel;
+    useRightPanelStore.getState().openTerminalAtCwd(paths.workspaceAbs, `Lab: ${leaf}`);
+  }, [projectRoot, selectedId, getPaths]);
 
   const isInFlightForCurrent = Boolean(
     runInFlight && selectedId && runInFlight.id === selectedId,
@@ -228,6 +240,22 @@ export function ExperimentsRunPanel() {
             >
               <HistoryIcon className="size-3" aria-hidden />
               Reuse last command
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => void handleOpenTerminal()}
+              disabled={!projectRoot || !selectedId}
+              className="h-7 gap-1 px-2 text-[length:var(--font-size-12)]"
+              title={
+                !projectRoot || !selectedId
+                  ? "Select an experiment to open a terminal in its lab folder."
+                  : "Open a terminal in the experiment's lab folder"
+              }
+            >
+              <TerminalIcon className="size-3" aria-hidden />
+              Open terminal
             </Button>
           </div>
           {isInFlightForCurrent && runInFlight ? (
