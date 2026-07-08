@@ -36,15 +36,18 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
   }, [projectRoot, refreshList]);
 
   const handleOpenLab = useCallback(async () => {
-    if (!projectRoot || !selectedId) return;
-    const paths = await openLabInFiles(projectRoot, selectedId);
+    // Prefer the tab's experimentId (Task 5 wires it on selection); fall back
+    // to the store's selectedId so the button works in Task 4 already.
+    const id = selectedId ?? tab.experimentId;
+    if (!projectRoot || !id) return;
+    const paths = await openLabInFiles(projectRoot, id);
     if (!paths) {
       toast.error("Could not resolve experiment paths.");
     }
     // Task 7 will additionally call navigateFileTreeToPath(paths.workspaceRel)
     // from a component layer hook. The store-level action is intentionally
     // minimal: it switches to Files mode and returns the paths.
-  }, [projectRoot, selectedId, openLabInFiles]);
+  }, [projectRoot, selectedId, tab.experimentId, openLabInFiles]);
 
   return (
     <div className="flex flex-1 items-center min-h-8 min-w-0 overflow-hidden gap-1">
@@ -68,7 +71,7 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
         variant="ghost"
         className="h-6 shrink-0 px-2 text-muted-foreground hover:text-foreground"
         title="Open the experiment's lab folder in Files"
-        disabled={!projectRoot || !selectedId || !tab.experimentId}
+        disabled={!projectRoot || !(selectedId ?? tab.experimentId)}
         onClick={() => void handleOpenLab()}
       >
         <FolderOpenIcon className="size-3.5" />
