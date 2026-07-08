@@ -6,7 +6,7 @@
  *                    (graceful collapse when `briefLinks` is empty)
  *   2. Meta header  — title · tags · created · workspacePath
  *   3. Env card     — `detect_env` snapshot with a [Refresh] action
- *   4. Run-panel placeholder (Task 6 fills in the command input + Run button)
+ *   4. Run panel   — command input + Run / Cancel (Task 6)
  *   5. Runs table   — expandable single output tail + artifacts
  *
  * The contract with `experiments-content.tsx` is preserved: the parent
@@ -34,6 +34,7 @@ import type {
   ExperimentMeta,
 } from "../../../shared/experiment-log";
 import { ExperimentsBriefStrip } from "./experiments-brief-strip";
+import { ExperimentsRunPanel } from "./experiments-run-panel";
 import { ExperimentsRunsTable } from "./experiments-runs-table";
 
 export interface ExperimentsDetailProps {
@@ -165,32 +166,6 @@ function EnvCard({
   );
 }
 
-function RunPanelPlaceholder() {
-  return (
-    <section
-      aria-label="Run panel placeholder"
-      data-run-panel-placeholder="true"
-      className={cn(
-        "rounded-md border border-dashed border-border/60 bg-muted/20",
-        "px-3 py-3 text-[length:var(--font-size-12)] text-muted-foreground/65",
-      )}
-    >
-      <div className="flex items-center justify-between">
-        <span className="font-medium uppercase tracking-wide text-[length:var(--font-hint)] text-muted-foreground/70">
-          Run panel
-        </span>
-        <span className="text-[length:var(--font-hint)] text-muted-foreground/55">
-          Task 6
-        </span>
-      </div>
-      <p className="mt-1">
-        Command input + Run button + cancel live here. The data wiring
-        (env snapshot, runs.jsonl append, permission modal) is owned by Task 6.
-      </p>
-    </section>
-  );
-}
-
 export function ExperimentsDetail({
   meta,
   env,
@@ -258,7 +233,7 @@ export function ExperimentsDetail({
         onRefresh={handleRefreshEnv}
       />
 
-      <RunPanelPlaceholder />
+      <ExperimentsRunPanel />
 
       <section className="space-y-1.5">
         <h3 className="text-[length:var(--font-hint)] font-medium uppercase tracking-wide text-muted-foreground/70">
