@@ -18,6 +18,7 @@
 | Sprint 0.5 `/bib-check` | ❌ P1 | ✅ 已实现 |
 | Sprint 0.2 研究 brief | 下一项 | ✅ **已完成 2026-07-07** — 见 `plans/2026-07-07-sprint-0.2-research-brief.md` |
 | Sprint 0.3 实验日志 | 待做 | ✅ **已完成 2026-07-08** — 见 `plans/2026-07-07-sprint-0.3-experiment-log.md` |
+| Sprint 0.7 Experiments mode UI | P1 Settings 实验面板 | 📋 **Planning 2026-07-08** — 见 `plans/2026-07-08-sprint-0.4-experiments-mode.md`（sprint 0.7） |
 | Expert roster | 3 scout/auditor 型 | **5 认知型 expert** + orchestrator 重构 |
 | Prompt modules | 6 个 | **+5**（`citation-audit`、`proactive-scheduling`、`research-reasoning`、`reply-depth`、`research-design`） |
 | `core-persona` | LaTeX 写作助手 | **全科研闭环** agent 身份 |
@@ -109,7 +110,7 @@ Agent 侧能力必须按这条链补全；缺一环则 Academic Plugin 只能是
 | 可复现 / 环境记录 | ❌ | `experiment-run` env 探测 | `experiments` | — | ✅ | P1: pip freeze / `reproducibility` module |
 | 数据统计报告 | ❌ | ❌ | ❌ | skill 文字 | 🟡 | **P1** skill `data-analysis-report` 同步 |
 
-**本段结论：** Sprint 0.3 ✅ **实验段 Platform P0 已闭环**。`experiment-log` 提供 list/create/read/append_run/detect_env；`experiment-run` 封装「env 探测 → bash → append JSONL」一步完成；`experiments` module 绑定 orchestrator workflow；`methodology-auditor` instructions 增「以 structured run log 为事实依据」。剩余 P1 为 `results-snapshot`、`reproducibility` module、`data-analysis-report` skill 同步。
+**本段结论：** Sprint 0.3 ✅ **实验段 Platform P0 已闭环**。`experiment-log` 提供 list/create/read/append_run/detect_env；`experiment-run` 封装「env 探测 → bash → append JSONL」一步完成；`experiments` module 绑定 orchestrator workflow；`methodology-auditor` instructions 增「以 structured run log 为事实依据」。剩余 P1 为 `results-snapshot`、`reproducibility` module、`data-analysis-report` skill 同步。**人类 UI 侧（Experiments RightArea mode）见 Sprint 0.7。**
 
 ---
 
@@ -285,6 +286,24 @@ Task 委派：✅ `task-delegation` module + `task-orchestrator-gate`（deny Ope
 
 > **注：** 0.6 不在原 Phase 0 迭代表中，但与「Platform 就绪后再写厚 Experts」原则存在张力——Expert 已先行；Sprint 0.2 已补齐 design-coach，**Sprint 0.3 需尽快补齐 methodology-auditor**。
 
+### Sprint 0.7 — Experiments RightArea Mode（P1）📋 **Planning 2026-07-08**
+
+> Sprint 编号 0.7 避让已完成的 Sprint 0.4（文献 Agent 补缝）。plan 文件名 `plans/2026-07-08-sprint-0.4-experiments-mode.md` 为历史命名，标题已改 0.7。
+
+为实验段提供 **Right Area 专用 Experiments mode**（非 Settings 子面板）：人类浏览 registry / runs / brief 摘录、UI 触发 `experiment-run` 等价执行。与 Sprint 0.3 Agent 平台层**共用同一 service**，不新增存储。
+
+| # | 交付 | 类型 | 状态 |
+|---|------|------|------|
+| 0.7a | `experiment:*` IPC（list/read/detectEnv/getPaths/run/cancelRun）+ `resolveExperimentCtx` 共享 helper | IPC | 📋 |
+| 0.7b | executor refactor（`resPath` optional + `onComplete`） | Service | 📋 |
+| 0.7c | `experiment-store` + `experiments-mode`（list-in-Content，非 reader 壳） | Renderer | 📋 |
+| 0.7d | Brief strip + Runs 表（单 output 列）+ Run panel（mode 内 modal confirm） | UI | 📋 |
+| 0.7e | Open lab in Files / Terminal | UI | 📋 |
+
+**P0 不含** `create`/`updateMeta`/New 表单（挪 P1.3/1.5）。**Plan:** `docs/superpowers/plans/2026-07-08-sprint-0.4-experiments-mode.md`（源码核查修订版）
+
+**验收：** UI Run 与 Agent `experiment-run` 写同一 `runs.jsonl`；methodology-auditor 事实依据不破。
+
 ---
 
 ## 6. Phase 0 完成后的「Platform 就绪」标准
@@ -367,7 +386,7 @@ Phase D    Extensions 页面 + Academic Plugin Pack 一键安装
 
 1. **手动验收 Sprint 0.3**（experiment 文件夹配置 → create → experiment-run → methodology-auditor handoff → Python 岛隔离）
 2. **Phase A** — `literature-review` skill 与 Platform Tools 绑定验收；`data-analysis-report` skill 显式引用 `experiment-log` / `experiment-run` workflow
-3. P1 补缝：0.4b annotate、SyncTeX tool、FINER/gap skill 加厚、`results-snapshot` tool、`reproducibility` module、`/experiment` command、Settings 实验面板
+3. P1 补缝：0.4b annotate、SyncTeX tool、FINER/gap skill 加厚、`results-snapshot` tool、`reproducibility` module、`/experiment` command、~~Settings 实验面板~~ → **Experiments RightArea mode（Sprint 0.7，见 plans/2026-07-08-sprint-0.4-experiments-mode.md）**
 4. 启动 **Phase A** 全量 skill 产品化
 
 ---
@@ -380,3 +399,4 @@ Phase D    Extensions 页面 + Academic Plugin Pack 一键安装
 | 2026-07-07 | 全文对照代码库刷新；Expert/Prompt 重构入账 Sprint 0.6；`citation-health` 取代 bib-check 系列；Sprint 0.5a ✅；明确 0.2/0.3 仍为 P0 阻塞 |
 | 2026-07-07 | Sprint 0.2 ✅；§3.2/§4/§6/§9 明细表对齐；下一项改为 Sprint 0.3 |
 | 2026-07-08 | Sprint 0.3 ✅ — `experiment-log`/`experiment-run` tool + `experiments` module + methodology-auditor log 说明；§3.3/§4/§5/§6/§9 对齐；Phase 0 Platform P0 全段闭环 |
+| 2026-07-08 | Sprint 0.7 Experiments RightArea mode 进入 Planning（源码核查修订 plan；§3.3/§9「Settings 实验面板」→ RightArea mode；sprint 编号 0.7 避让 0.4 literature） |
