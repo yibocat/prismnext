@@ -18,7 +18,7 @@
 | Sprint 0.5 `/bib-check` | ❌ P1 | ✅ 已实现 |
 | Sprint 0.2 研究 brief | 下一项 | ✅ **已完成 2026-07-07** — 见 `plans/2026-07-07-sprint-0.2-research-brief.md` |
 | Sprint 0.3 实验日志 | 待做 | ✅ **已完成 2026-07-08** — 见 `plans/2026-07-07-sprint-0.3-experiment-log.md` |
-| Sprint 0.7 Experiments mode UI | P1 Settings 实验面板 | 📋 **Planning 2026-07-08** — 见 `plans/2026-07-08-sprint-0.4-experiments-mode.md`（sprint 0.7） |
+| Sprint 0.7 Experiments mode UI | P1 Settings 实验面板 | ✅ **Implemented 2026-07-08** — 见 `plans/2026-07-08-sprint-0.4-experiments-mode.md`（sprint 0.7） |
 | Expert roster | 3 scout/auditor 型 | **5 认知型 expert** + orchestrator 重构 |
 | Prompt modules | 6 个 | **+5**（`citation-audit`、`proactive-scheduling`、`research-reasoning`、`reply-depth`、`research-design`） |
 | `core-persona` | LaTeX 写作助手 | **全科研闭环** agent 身份 |
@@ -286,7 +286,7 @@ Task 委派：✅ `task-delegation` module + `task-orchestrator-gate`（deny Ope
 
 > **注：** 0.6 不在原 Phase 0 迭代表中，但与「Platform 就绪后再写厚 Experts」原则存在张力——Expert 已先行；Sprint 0.2 已补齐 design-coach，**Sprint 0.3 需尽快补齐 methodology-auditor**。
 
-### Sprint 0.7 — Experiments RightArea Mode（P1）📋 **Planning 2026-07-08**
+### Sprint 0.7 — Experiments RightArea Mode（P1）✅ **Implemented 2026-07-08**
 
 > Sprint 编号 0.7 避让已完成的 Sprint 0.4（文献 Agent 补缝）。plan 文件名 `plans/2026-07-08-sprint-0.4-experiments-mode.md` 为历史命名，标题已改 0.7。
 
@@ -400,3 +400,4 @@ Phase D    Extensions 页面 + Academic Plugin Pack 一键安装
 | 2026-07-07 | Sprint 0.2 ✅；§3.2/§4/§6/§9 明细表对齐；下一项改为 Sprint 0.3 |
 | 2026-07-08 | Sprint 0.3 ✅ — `experiment-log`/`experiment-run` tool + `experiments` module + methodology-auditor log 说明；§3.3/§4/§5/§6/§9 对齐；Phase 0 Platform P0 全段闭环 |
 | 2026-07-08 | Sprint 0.7 Experiments RightArea mode 进入 Planning（源码核查修订 plan；§3.3/§9「Settings 实验面板」→ RightArea mode；sprint 编号 0.7 避让 0.4 literature） |
+| 2026-07-08 | Sprint 0.7 ✅ Implemented - Task 1–8 完成（experiment:* IPC + executor onComplete refactor + resolveExperimentCtx + store + mode shell + detail/brief/runs + run panel/permission modal + terminal/files 集成）；本地 commit 未 push，待手动验收 + final review |
