@@ -219,7 +219,10 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       // experiment — the run is already persisted in runs.jsonl on disk
       // and a future refresh will pick it up for any other id.
       if (
-        data.result.ok &&
+        // Append any run entry (success OR failure) - the executor's .catch
+        // path (timeout/PTY error) writes a run with exitCode 124 to disk
+        // and sends {ok:false, run}; the user must see it without a manual
+        // refresh (plan §experiment:run 异步语义 step 4 - auto-append all runs).
         data.result.run &&
         state.selectedId === data.id &&
         state.detail

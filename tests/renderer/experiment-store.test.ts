@@ -403,6 +403,62 @@ describe("experiment-store", () => {
       expect(useExperimentStore.getState().runInFlight).toBeNull();
       expect(useExperimentStore.getState().detail?.runs).toHaveLength(0);
     });
+
+    it("appends a failed run (ok:false with run entry) to detail.runs - .catch path", () => {
+      // The executor's .catch path (timeout / PTY error) writes a run with
+      // exitCode 124 to disk and sends { ok:false, run } - the UI must show
+      // it without a manual refresh (plan mandates auto-append for all runs).
+      useExperimentStore.setState({
+        selectedId: "exp-a",
+        detail: {
+          meta: {
+            id: "exp-a",
+            title: "A",
+            createdAt: "2026-07-07T00:00:00Z",
+            workspacePath: "experiment/exp-a",
+          },
+          runs: [],
+        },
+        runInFlight: {
+          id: "exp-a",
+          runId: "run-timeout",
+          command: "sleep 9999",
+        },
+      });
+
+      const failedRun = {
+        runId: "run-timeout",
+        startedAt: "2026-07-08T10:00:00Z",
+        finishedAt: "2026-07-08T10:10:00Z",
+        command: "sleep 9999",
+        cwd: "experiment/exp-a",
+        exitCode: 124,
+        stdoutTail: "Prism experiment-run: command failed or timed out.",
+        stderrTail: "",
+        artifacts: [],
+        env: {
+          python: null,
+          pythonVersion: null,
+          rscript: null,
+          rVersion: null,
+          platform: "darwin",
+          gitCommit: null,
+          venvPath: null,
+        },
+      };
+
+      useExperimentStore.getState().handleRunComplete({
+        id: "exp-a",
+        runId: "run-timeout",
+        result: { ok: false, error: "timeout", run: failedRun },
+      });
+
+      const state = useExperimentStore.getState();
+      expect(state.runInFlight).toBeNull();
+      expect(state.detail?.runs).toHaveLength(1);
+      expect(state.detail?.runs[0].runId).toBe("run-timeout");
+      expect(state.detail?.runs[0].exitCode).toBe(124);
+    });
   });
 
   describe("cancelRun", () => {
