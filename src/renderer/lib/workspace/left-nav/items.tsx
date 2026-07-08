@@ -1,4 +1,4 @@
-import { Bot, BookOpenIcon, FileType, LayoutTemplate, SettingsIcon } from "lucide-react";
+import { Bot, BookOpenIcon, FileType, FlaskConical, LayoutTemplate, SettingsIcon } from "lucide-react";
 import { Kbd } from "@/components/ui/kbd";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -6,7 +6,16 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { resetSettingsEditors } from "@/stores/settings-panel-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { leftNavRegistry } from "./registry";
-import { closeTexWorkspace, closeLiteraturePanel, isLiteraturePanelOpen, isTexWorkspaceOpen, openLiteratureLibrary } from "./panel-utils";
+import {
+  closeExperimentsPanel,
+  closeLiteraturePanel,
+  closeTexWorkspace,
+  isExperimentsPanelOpen,
+  isLiteraturePanelOpen,
+  isTexWorkspaceOpen,
+  openExperimentsPanel,
+  openLiteratureLibrary,
+} from "./panel-utils";
 import type { LeftNavContext, LeftNavDefinition } from "./types";
 
 /**
@@ -77,6 +86,27 @@ const literatureNav: LeftNavDefinition = {
   },
   onToggleOff: (ctx) => {
     closeLiteraturePanel(ctx);
+    useLayoutStore.getState().setLeftSidebarView("sessions");
+  },
+};
+
+const experimentsNav: LeftNavDefinition = {
+  id: "experiments",
+  section: "primary",
+  label: "Experiments",
+  icon: FlaskConical,
+  order: 7,
+  toggleable: true,
+  isActive: () => isExperimentsPanelOpen() && !isTexWorkspaceOpen(),
+  activate: (ctx) => {
+    closeTexWorkspace(ctx);
+    openExperimentsPanel(ctx);
+  },
+  deactivate: (ctx) => {
+    closeExperimentsPanel(ctx);
+  },
+  onToggleOff: (ctx) => {
+    closeExperimentsPanel(ctx);
     useLayoutStore.getState().setLeftSidebarView("sessions");
   },
 };
@@ -156,6 +186,7 @@ const settingsNav: LeftNavDefinition = {
 export function registerLeftNavItems(): void {
   leftNavRegistry.register(newAgentNav);
   leftNavRegistry.register(literatureNav);
+  leftNavRegistry.register(experimentsNav);
   leftNavRegistry.register(templatesNav);
   leftNavRegistry.register(texWorkspaceNav);
   leftNavRegistry.register(settingsNav);

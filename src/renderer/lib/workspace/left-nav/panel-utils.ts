@@ -85,3 +85,49 @@ export function closeLiteraturePanel(ctx: LeftNavContext, onClosed?: () => void)
   st.deactivateMode("literature");
   finishLiteratureClose(ctx, onClosed);
 }
+
+function finishExperimentsClose(ctx: LeftNavContext, onClosed?: () => void): void {
+  ctx.panelRefs.centerRef?.current?.expand();
+  ctx.panelRefs.rightAreaRef?.current?.collapse();
+  onClosed?.();
+}
+
+export function isExperimentsPanelOpen(): boolean {
+  const st = useLayoutStore.getState();
+  const rps = useRightPanelStore.getState();
+  return (
+    rps.tabs.some((t) => t.kind === "experiments") &&
+    st.rightAreaExpanded &&
+    st.focusedMode === "experiments" &&
+    st.editorMaximized
+  );
+}
+
+/** Open Experiments mode full-width in RightArea (same maximize pattern as Literature / TeX). */
+export function openExperimentsPanel(ctx: LeftNavContext): void {
+  const st = useLayoutStore.getState();
+  const rps = useRightPanelStore.getState();
+  const r = ctx.panelRefs.rightAreaRef?.current;
+  const c = ctx.panelRefs.centerRef?.current;
+  if (!r || !c) return;
+
+  rps.ensureTab("experiments");
+  st.setLeftSidebarView("sessions");
+  st.activateMode("experiments");
+  st.setEditorMaximized(true);
+  if (r.isCollapsed()) r.expand();
+  c.collapse();
+  r.resize(9999);
+}
+
+/** Exit maximized Experiments and restore chat-centered layout (tabs kept). */
+export function closeExperimentsPanel(ctx: LeftNavContext, onClosed?: () => void): void {
+  const st = useLayoutStore.getState();
+  st.setEditorMaximized(false);
+  if (st.focusedMode !== "experiments") {
+    finishExperimentsClose(ctx, onClosed);
+    return;
+  }
+  st.deactivateMode("experiments");
+  finishExperimentsClose(ctx, onClosed);
+}

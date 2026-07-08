@@ -11,7 +11,8 @@ export type RightTabKind =
   | "texworkspace"
   | "terminal"
   | "settings-editor"
-  | "literature";
+  | "literature"
+  | "experiments";
 
 /** Where a mode may appear in the app chrome. */
 export type ModeSurface = "workspace" | "settings" | "any";
@@ -45,6 +46,10 @@ export interface RightTab {
   literaturePaperId?: string;
   /** Literature mode: grid | reader | notes */
   literatureView?: "grid" | "reader" | "notes";
+  /** Experiments mode: selected experiment slug */
+  experimentId?: string;
+  /** Experiments mode: list | detail (P0 = list always, detail inlined) */
+  experimentsView?: "list" | "detail";
 }
 
 // ── Mode Definition ──
