@@ -20,6 +20,7 @@ import { registerBibliographyHandlers } from "./bibliography";
 import { registerZoteroHandlers } from "./zotero";
 import { registerUpdateHandlers } from "./update";
 import { registerResearchBriefHandlers } from "./research-brief";
+import { registerExperimentHandlers } from "./experiment";
 
 export function registerIpcHandlers(): void {
   registerFsHandlers();
@@ -44,6 +45,7 @@ export function registerIpcHandlers(): void {
   registerZoteroHandlers();
   registerUpdateHandlers();
   registerResearchBriefHandlers();
+  registerExperimentHandlers();
 }
 
 export { disposeChat };

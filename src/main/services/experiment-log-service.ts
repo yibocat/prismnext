@@ -16,6 +16,7 @@ import {
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
+import { resolveExperimentDir } from "./workspace-config";
 import {
   EXPERIMENT_META_FILENAME,
   EXPERIMENT_REGISTRY_REL,
@@ -32,6 +33,26 @@ import {
   type ExperimentRunInput,
   type ExperimentSummary,
 } from "../../shared/experiment-log";
+
+/** Hint surfaced to UI / agent when the project has no Workspace Experiment folder configured. */
+export const NO_EXPERIMENT_FOLDER_HINT =
+  "Add an Experiment folder in Settings → Workspace (function: Experiment) before creating or running experiments.";
+
+/**
+ * Resolve the experiment storage context for a project, or surface a
+ * `no_experiment_folder` error. Shared by the file-bridge and the UI IPC
+ * (Sprint 0.7 D5) so the error shape stays identical.
+ */
+export function resolveExperimentCtx(
+  projectRoot: string,
+): ExperimentStorageContext | { ok: false; error: "no_experiment_folder"; hint: string } {
+  const prismDir = join(projectRoot, ".prismnext");
+  const resolved = resolveExperimentDir(projectRoot, prismDir);
+  if ("error" in resolved) {
+    return { ok: false, error: "no_experiment_folder", hint: NO_EXPERIMENT_FOLDER_HINT };
+  }
+  return buildExperimentStorageContext(projectRoot, resolved.rel);
+}
 
 const IS_WIN = process.platform === "win32";
 

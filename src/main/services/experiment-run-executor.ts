@@ -1,6 +1,11 @@
 /**
  * experiment-run executor — runs a shell command in the workspace experiment island,
  * appends run record to `.prismnext/experiments/<id>/runs.jsonl`.
+ *
+ * Two completion sinks (Sprint 0.7):
+ *  - Bridge caller passes `resPath` (legacy file-bridge contract; unchanged).
+ *  - UI IPC caller passes `onComplete(result)` (Sprint 0.7).
+ *  - Both can be used at once; either is optional.
  */
 import { existsSync, writeFileSync } from "node:fs";
 import { runAiCommand, cancelAiCommandForSession } from "./ai-pty";
@@ -17,30 +22,49 @@ import { createLogger } from "./logger";
 const log = createLogger("experiment-run-executor", "agent");
 const RUN_TIMEOUT_MS = 10 * 60 * 1000;
 
+/** Result reported via `onComplete` (UI track) and/or the bridge `.result.json` (agent track). */
+export interface ExperimentRunResult {
+  ok: boolean;
+  /** Present when the run completed and was appended to runs.jsonl. */
+  run?: ExperimentRunEntry;
+  exitCode?: number;
+  stdoutTail?: string;
+  stderrTail?: string;
+  /** Failure reason (validation, PTY error, timeout). */
+  error?: string;
+}
+
 export interface KickoffExperimentRunArgs {
   ctx: ExperimentStorageContext;
   id: string;
   command: string;
   artifacts?: string[];
   notes?: string;
-  resPath: string;
+  /** Optional caller-supplied runId; if omitted, the executor generates one. */
+  runId?: string;
+  /** Legacy file-bridge completion sink — optional in Sprint 0.7. */
+  resPath?: string;
+  /** UI completion callback — fires after the run finishes (or fails). */
+  onComplete?: (result: ExperimentRunResult) => void;
 }
 
 export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
-  const { ctx, id, command, resPath } = args;
+  const { ctx, id, command, resPath, onComplete } = args;
   const island = workspaceIslandPathForId(ctx, id);
 
   if (!island || !existsSync(island)) {
-    writeResult(resPath, { ok: false, error: "experiment_not_found" });
+    // Defer to nextTick so the caller (IPC handler) can return its immediate
+    // response first; otherwise the sync callback would race the handler.
+    queueMicrotask(() => reportResult(args, { ok: false, error: "experiment_not_found" }));
     return;
   }
   if (!command.trim()) {
-    writeResult(resPath, { ok: false, error: "missing_command" });
+    queueMicrotask(() => reportResult(args, { ok: false, error: "missing_command" }));
     return;
   }
 
   const env: ExperimentEnv = detectEnv(island);
-  const runId = generateRunId();
+  const runId = args.runId ?? generateRunId();
   const startedAt = new Date().toISOString();
   const sessionId = `experiment:${id}:${runId}`;
   const cwd = island;
@@ -75,11 +99,11 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
         notes: args.notes,
       });
       if (!append.ok) {
-        writeResult(resPath, { ok: false, error: append.error });
+        reportResult(args, { ok: false, error: append.error });
         return;
       }
       const run: ExperimentRunEntry = append.run;
-      writeResult(resPath, {
+      reportResult(args, {
         ok: true,
         run,
         exitCode: run.exitCode,
@@ -105,22 +129,33 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
         notes: args.notes,
       });
       const run: ExperimentRunEntry | null = append.ok ? append.run : null;
-      writeResult(resPath, {
+      reportResult(args, {
         ok: false,
         error: message,
-        run,
+        run: run ?? undefined,
       });
     });
 }
 
-function writeResult(resPath: string, data: Record<string, unknown>): void {
-  try {
-    writeFileSync(resPath, JSON.stringify(data), "utf-8");
-  } catch (err) {
-    log.warn("experiment-run failed to write result", {
-      resPath,
-      error: err instanceof Error ? err.message : String(err),
-    });
+function reportResult(args: KickoffExperimentRunArgs, data: ExperimentRunResult): void {
+  if (args.resPath) {
+    try {
+      writeFileSync(args.resPath, JSON.stringify(data), "utf-8");
+    } catch (err) {
+      log.warn("experiment-run failed to write result", {
+        resPath: args.resPath,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  if (args.onComplete) {
+    try {
+      args.onComplete(data);
+    } catch (err) {
+      log.warn("experiment-run onComplete callback threw", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 }
 

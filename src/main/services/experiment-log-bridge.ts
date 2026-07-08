@@ -22,14 +22,13 @@ import { join, basename } from "node:path";
 import { createLogger } from "./logger";
 import { getExperimentLogBridgeRoot } from "./prism-bridge-paths";
 import { getSessionProjectRoot } from "./chat-session-registry";
-import { resolveExperimentDir } from "./workspace-config";
 import {
   appendRun,
-  buildExperimentStorageContext,
   createExperiment,
   detectEnvForIsland,
   listExperiments,
   readExperiment,
+  resolveExperimentCtx,
   type ExperimentStorageContext,
 } from "./experiment-log-service";
 import { EXPERIMENT_REGISTRY_REL } from "../../shared/experiment-log";
@@ -88,17 +87,6 @@ function notConfigured(): Record<string, unknown> {
   };
 }
 
-function resolveExperimentRoot(
-  projectRoot: string,
-): { ok: true; rel: string; abs: string } | { ok: false; error: string; hint: string } {
-  const prismDir = join(projectRoot, ".prismnext");
-  const resolved = resolveExperimentDir(projectRoot, prismDir);
-  if ("error" in resolved) {
-    return { ok: false, error: "no_experiment_folder", hint: "Add an Experiment folder in Settings → Workspace (function: Experiment)." };
-  }
-  return { ok: true, rel: resolved.rel, abs: resolved.abs };
-}
-
 /**
  * Dispatch a SYNC experiment-log action. Returns the result to write to the
  * result file, OR `null` for experiment-run (the executor writes the result
@@ -112,10 +100,9 @@ function dispatch(req: ExperimentLogBridgeRequest, resPath: string): Record<stri
       hint: "Open a project in Prism and start a new chat tab from that project.",
     };
   }
-  const root = resolveExperimentRoot(projectRoot);
-  if (!root.ok) return notConfigured();
-
-  const ctx = buildExperimentStorageContext(projectRoot, root.rel);
+  const ctxResult = resolveExperimentCtx(projectRoot);
+  if ("ok" in ctxResult && ctxResult.ok === false) return notConfigured();
+  const ctx: ExperimentStorageContext = ctxResult as ExperimentStorageContext;
 
   // ── experiment-run: async, fire-and-forget ──
   if (req.tool === "experiment-run") {
