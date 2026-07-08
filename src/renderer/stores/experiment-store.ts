@@ -137,12 +137,13 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
     try {
       const res = await window.electronAPI.experimentList(projectRoot);
       if (!res.ok) {
-        set({ loading: false, error: res.error });
+        set({ experiments: [], loading: false, error: res.error });
         return;
       }
       set({ experiments: res.experiments, loading: false, error: null });
     } catch (err) {
       set({
+        experiments: [],
         loading: false,
         error: err instanceof Error ? err.message : String(err),
       });

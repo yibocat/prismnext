@@ -89,7 +89,14 @@ describe("experiment-store", () => {
       expect(state.loading).toBe(false);
     });
 
-    it("sets error on ok:false", async () => {
+    it("sets error on ok:false and clears stale experiments", async () => {
+      // Pre-seed a stale list to verify refreshList clears it on failure
+      // (brief: "clears/empties experiments appropriately, don't leave stale list").
+      useExperimentStore.setState({
+        experiments: [
+          { id: "exp-stale", title: "Stale", workspacePath: "experiment/exp-stale", runCount: 1, lastRunAt: "2026-07-01T00:00:00Z" },
+        ],
+      });
       electronAPI.experimentList.mockResolvedValueOnce({
         ok: false,
         error: "no_experiment_folder",
@@ -104,13 +111,20 @@ describe("experiment-store", () => {
       expect(state.loading).toBe(false);
     });
 
-    it("captures thrown errors", async () => {
+    it("captures thrown errors and clears stale experiments", async () => {
+      useExperimentStore.setState({
+        experiments: [
+          { id: "exp-stale", title: "Stale", workspacePath: "experiment/exp-stale", runCount: 1, lastRunAt: "2026-07-01T00:00:00Z" },
+        ],
+      });
       electronAPI.experimentList.mockRejectedValueOnce(new Error("IPC blew up"));
 
       await useExperimentStore.getState().refreshList(PROJECT);
 
-      expect(useExperimentStore.getState().error).toBe("IPC blew up");
-      expect(useExperimentStore.getState().loading).toBe(false);
+      const state = useExperimentStore.getState();
+      expect(state.experiments).toEqual([]);
+      expect(state.error).toBe("IPC blew up");
+      expect(state.loading).toBe(false);
     });
   });
 
