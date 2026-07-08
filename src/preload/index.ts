@@ -97,6 +97,57 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		append?: boolean;
 	}) => ipcRenderer.invoke("researchBrief:updateSection", args),
 
+	// Experiments (Sprint 0.7 — Experiments RightArea mode)
+	experimentList: (projectRoot: string) =>
+		ipcRenderer.invoke("experiment:list", { projectRoot }),
+	experimentRead: (args: { projectRoot: string; id: string; runsLimit?: number }) =>
+		ipcRenderer.invoke("experiment:read", args),
+	experimentDetectEnv: (args: { projectRoot: string; id: string }) =>
+		ipcRenderer.invoke("experiment:detectEnv", args),
+	experimentGetPaths: (args: { projectRoot: string; id: string }) =>
+		ipcRenderer.invoke("experiment:getPaths", args),
+	experimentRun: (args: {
+		projectRoot: string;
+		id: string;
+		command: string;
+		artifacts?: string[];
+		notes?: string;
+	}) => ipcRenderer.invoke("experiment:run", args),
+	experimentCancelRun: (args: { projectRoot: string; id: string; runId: string }) =>
+		ipcRenderer.invoke("experiment:cancelRun", args),
+	onExperimentRunComplete: (
+		callback: (data: {
+			id: string;
+			runId: string;
+			result: {
+				ok: boolean;
+				run?: import("../shared/experiment-log").ExperimentRunEntry;
+				exitCode?: number;
+				stdoutTail?: string;
+				stderrTail?: string;
+				error?: string;
+			};
+		}) => void,
+	) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			data: {
+				id: string;
+				runId: string;
+				result: {
+					ok: boolean;
+					run?: import("../shared/experiment-log").ExperimentRunEntry;
+					exitCode?: number;
+					stdoutTail?: string;
+					stderrTail?: string;
+					error?: string;
+				};
+			},
+		) => callback(data);
+		ipcRenderer.on("experiment:runComplete", handler);
+		return () => ipcRenderer.removeListener("experiment:runComplete", handler);
+	},
+
 		// Update checker — manifest is a local path or HTTPS url to version.json.
 		updateCheck: () => ipcRenderer.invoke("update:check"),
 		updateStatus: () => ipcRenderer.invoke("update:status"),

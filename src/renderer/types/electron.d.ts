@@ -563,6 +563,64 @@ export interface ElectronAPI {
     append?: boolean;
   }) => Promise<{ path: string; section: string; append: boolean; ok: boolean; error?: string; lastModified: string | null }>;
 
+  // Experiments (Sprint 0.7 — Experiments RightArea mode)
+  experimentList: (projectRoot: string) => Promise<
+    | {
+        ok: true;
+        experimentRoot: string;
+        registryRoot: string;
+        experiments: import("../../shared/experiment-log").ExperimentSummary[];
+      }
+    | { ok: false; error: string; hint?: string }
+  >;
+  experimentRead: (args: { projectRoot: string; id: string; runsLimit?: number }) => Promise<
+    | {
+        ok: true;
+        meta: import("../../shared/experiment-log").ExperimentMeta;
+        runs: import("../../shared/experiment-log").ExperimentRunEntry[];
+        experimentRoot: string;
+        registryRoot: string;
+      }
+    | { ok: false; error: string; hint?: string }
+  >;
+  experimentDetectEnv: (args: { projectRoot: string; id: string }) => Promise<
+    | {
+        ok: true;
+        env: import("../../shared/experiment-log").ExperimentEnv;
+        workspacePath: string;
+      }
+    | { ok: false; error: string; hint?: string }
+  >;
+  experimentGetPaths: (args: { projectRoot: string; id: string }) => Promise<
+    | { ok: true; registryPath: string; workspaceAbs: string; workspaceRel: string }
+    | { ok: false; error: string; hint?: string }
+  >;
+  experimentRun: (args: {
+    projectRoot: string;
+    id: string;
+    command: string;
+    artifacts?: string[];
+    notes?: string;
+  }) => Promise<
+    | { ok: true; runId: string; status: "started" }
+    | { ok: false; error: string; hint?: string }
+  >;
+  experimentCancelRun: (args: { projectRoot: string; id: string; runId: string }) => Promise<{ ok: true }>;
+  onExperimentRunComplete: (
+    callback: (data: {
+      id: string;
+      runId: string;
+      result: {
+        ok: boolean;
+        run?: import("../../shared/experiment-log").ExperimentRunEntry;
+        exitCode?: number;
+        stdoutTail?: string;
+        stderrTail?: string;
+        error?: string;
+      };
+    }) => void,
+  ) => () => void;
+
   // Platform
   platform: "darwin" | "win32" | "linux";
 
