@@ -29,13 +29,21 @@ import {
   ArrowLeftIcon,
 } from "lucide-react";
 import {
+  clampSidebarDragPreviewWidth,
+  clampSidebarWidth,
   computeEffectiveSidebarWidth,
   shouldAutoCloseSplitSidebar,
   shouldExitFullMode,
   canAutoOpenSplitSidebar,
   RIGHT_AREA_SPLIT_THRESHOLD,
 } from "@/lib/workspace/right-area-sidebar-layout";
-import { SIDEBAR_RIGHT_MIN, SIDEBAR_RIGHT_MAX } from "@/styles/constants";
+import { SIDEBAR_RIGHT_MIN } from "@/styles/constants";
+import { PANEL_COLLAPSE_THRESHOLD_PX, MODE_SIDEBAR_SASH_CLASS } from "@/lib/workspace/layout-constants";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  closeRightArea,
+  toggleRightAreaMaximize,
+} from "@/lib/workspace/right-area-layout";
 import {
   AppMenu,
   AppMenuContent,
@@ -109,11 +117,9 @@ function SidebarDragHandle({
 
   return (
     <div
-      className="w-px bg-border hover:bg-foreground/30 transition-colors cursor-col-resize shrink-0 relative group"
+      className={MODE_SIDEBAR_SASH_CLASS}
       onMouseDown={handleMouseDown}
-    >
-      <div className="absolute inset-y-0 -left-1 -right-1" />
-    </div>
+    />
   );
 }
 
@@ -137,6 +143,7 @@ function RightAreaWorkspace({
   rightAreaRef,
 }: RightAreaProps) {
   const { platform, isMaximized, isFullscreen } = useWindowState();
+  const isMobile = useIsMobile();
   const isMac = platform === "darwin";
 
   const sidebarFullyCollapsed = useLayoutStore((s) => s.sidebarFullyCollapsed);
@@ -186,8 +193,7 @@ function RightAreaWorkspace({
     activeTab &&
     focusedMode !== "dashboard" &&
     !isSettingsEditorTab;
-  const showModeSidebar =
-    rightSidebarOpen &&
+  const modeSidebarEligible =
     focusedMode !== "dashboard" &&
     !isSettingsEditorTab &&
     !modeRegistry.get(focusedMode)?.hideRightSidebar;
@@ -290,10 +296,14 @@ function RightAreaWorkspace({
   // Same pattern as App.tsx Panel onResize:
   //   - Only save width when >= 30px (preserve last real width on collapse)
   //   - Close sidebar when width drops below 30px
-  const COLLAPSE_THRESHOLD = 30;
+  const COLLAPSE_THRESHOLD = PANEL_COLLAPSE_THRESHOLD_PX;
 
   const isDraggingSidebar = useRef(false);
   const [sidebarDragActive, setSidebarDragActive] = useState(false);
+  const [sidebarDragPreviewWidth, setSidebarDragPreviewWidth] = useState(0);
+  /** Raw drag width (unclamped) — used for collapse detection and commit. */
+  const sidebarDragRawWidthRef = useRef(0);
+  const sidebarDragStartWidthRef = useRef(0);
   const containerElRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [sidebarFullMode, setSidebarFullMode] = useState(false);
@@ -303,24 +313,49 @@ function RightAreaWorkspace({
   }, [sidebarFullMode]);
 
   const getSidebarDragStartWidth = useCallback(() => {
-    const preferred = useLayoutStore.getState().rightSidebarWidth;
+    const st = useLayoutStore.getState();
+    if (!st.rightSidebarOpen && !sidebarFullModeRef.current) return 0;
+    const preferred = st.rightSidebarWidth;
     if (sidebarFullModeRef.current) return preferred;
     const cw = containerElRef.current?.clientWidth ?? 0;
     if (cw <= 0) return preferred;
     return computeEffectiveSidebarWidth(cw, preferred);
   }, []);
 
-  const handleSidebarResize = useCallback((width: number) => {
+  const handleSidebarResize = useCallback((rawWidth: number) => {
+    sidebarDragRawWidthRef.current = rawWidth;
+    const dragging = isDraggingSidebar.current;
+    const previewWidth = dragging
+      ? clampSidebarDragPreviewWidth(rawWidth, sidebarDragStartWidthRef.current)
+      : rawWidth;
+    setSidebarDragPreviewWidth(previewWidth);
     const st = useLayoutStore.getState();
-    if (width >= COLLAPSE_THRESHOLD) {
-      const clamped = Math.max(SIDEBAR_RIGHT_MIN, Math.min(SIDEBAR_RIGHT_MAX, width));
-      st.setRightSidebarWidth(clamped);
+
+    if (rawWidth >= COLLAPSE_THRESHOLD) {
       if (!st.rightSidebarOpen) st.setRightSidebarOpen(true);
       if (sidebarFullModeRef.current) setSidebarFullMode(false);
+      if (!dragging) {
+        st.setRightSidebarWidth(clampSidebarWidth(rawWidth));
+      }
     } else if (st.rightSidebarOpen) {
       st.setRightSidebarOpen(false);
     }
   }, []);
+
+  const handleSidebarDragChange = useCallback((dragging: boolean) => {
+    setSidebarDragActive(dragging);
+    if (dragging) {
+      sidebarDragStartWidthRef.current = getSidebarDragStartWidth();
+    } else {
+      const rawWidth = sidebarDragRawWidthRef.current;
+      if (rawWidth >= COLLAPSE_THRESHOLD) {
+        useLayoutStore.getState().setRightSidebarWidth(clampSidebarWidth(rawWidth));
+      }
+      setSidebarDragPreviewWidth(0);
+      sidebarDragRawWidthRef.current = 0;
+      sidebarDragStartWidthRef.current = 0;
+    }
+  }, [getSidebarDragStartWidth]);
 
   const sidebarElRef = useRef<HTMLDivElement>(null);
 
@@ -336,7 +371,7 @@ function RightAreaWorkspace({
       if (actualWidth <= 0) return;
       const st = useLayoutStore.getState();
       if (actualWidth >= COLLAPSE_THRESHOLD) {
-        st.setRightSidebarWidth(Math.max(SIDEBAR_RIGHT_MIN, actualWidth));
+        st.setRightSidebarWidth(clampSidebarWidth(actualWidth));
         if (!st.rightSidebarOpen) st.setRightSidebarOpen(true);
       } else if (st.rightSidebarOpen) {
         st.setRightSidebarOpen(false);
@@ -475,10 +510,31 @@ function RightAreaWorkspace({
 
   const sidebarFull = rightSidebarOpen && sidebarFullMode;
 
-  const effectiveSidebarWidth = useMemo(() => {
-    if (sidebarFull || containerWidth <= 0) return rightSidebarWidth;
-    return computeEffectiveSidebarWidth(containerWidth, rightSidebarWidth);
-  }, [sidebarFull, rightSidebarWidth, containerWidth]);
+  const sidebarPanelVisible =
+    rightSidebarOpen ||
+    (sidebarDragActive && sidebarDragPreviewWidth >= COLLAPSE_THRESHOLD);
+
+  const sidebarPanelWidth = useMemo(() => {
+    const dragging = sidebarDragActive && sidebarDragPreviewWidth > 0;
+    const preferred = dragging
+      ? sidebarDragPreviewWidth
+      : rightSidebarOpen
+        ? rightSidebarWidth
+        : 0;
+
+    if (preferred <= 0) return 0;
+    if (sidebarFull || containerWidth <= 0) return preferred;
+
+    const widthFloor = dragging ? COLLAPSE_THRESHOLD : SIDEBAR_RIGHT_MIN;
+    return computeEffectiveSidebarWidth(containerWidth, preferred, undefined, widthFloor);
+  }, [
+    sidebarFull,
+    sidebarDragActive,
+    rightSidebarOpen,
+    rightSidebarWidth,
+    sidebarDragPreviewWidth,
+    containerWidth,
+  ]);
 
   // ── Tab overflow detection ──
   const tabBarContainerRef = useRef<HTMLDivElement>(null);
@@ -756,19 +812,14 @@ function RightAreaWorkspace({
         <button
           type="button"
           className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title={editorMaximized ? "Restore Editor" : "Maximize Editor"}
+          title={editorMaximized ? "Restore panel" : "Maximize panel"}
           onClick={() => {
-            const c = centerRef.current;
-            const r = rightAreaRef.current;
-            if (!c || !r) return;
-            if (c.isCollapsed()) {
-              r.resize(useLayoutStore.getState().rightAreaWidth || 500);
-              c.expand();
-            } else {
-              useLayoutStore.getState().setRightAreaWidth(r.getSize().inPixels);
-              c.collapse();
-              r.resize(9999);
-            }
+            toggleRightAreaMaximize({
+              centerRef: centerRef.current,
+              rightAreaRef: rightAreaRef.current,
+              leftSidebarRef: leftSidebarRef.current,
+              isMobile,
+            });
           }}
         >
           {editorMaximized ? <MinimizeIcon className="size-3.5" /> : <MaximizeIcon className="size-3.5" />}
@@ -783,15 +834,10 @@ function RightAreaWorkspace({
           )}
           title="Close Panel"
           onClick={() => {
-            const r = rightAreaRef.current;
-            const c = centerRef.current;
-            if (!r || !c) return;
-            // Only save the width if not maximized — otherwise keep the last normal width
-            if (!useLayoutStore.getState().editorMaximized) {
-              useLayoutStore.getState().setRightAreaWidth(r.getSize().inPixels);
-            }
-            r.collapse();
-            c.resize(9999);
+            closeRightArea({
+              centerRef: centerRef.current,
+              rightAreaRef: rightAreaRef.current,
+            });
           }}
         >
           <PanelRight className="size-3.5" />
@@ -826,23 +872,25 @@ function RightAreaWorkspace({
           </div>
         )}
 
-        {showModeSidebar && (
+        {modeSidebarEligible && (
           <>
             {!sidebarFull && (
               <SidebarDragHandle
                 onResize={handleSidebarResize}
                 getStartWidth={getSidebarDragStartWidth}
                 isDraggingRef={isDraggingSidebar}
-                onDragChange={setSidebarDragActive}
+                onDragChange={handleSidebarDragChange}
               />
             )}
-            <div
-              ref={sidebarElRef}
-              className="shrink-0 overflow-hidden"
-              style={{ width: sidebarFull ? "100%" : effectiveSidebarWidth }}
-            >
-              <RightSidebar fullMode={sidebarFull} />
-            </div>
+            {sidebarPanelVisible && (
+              <div
+                ref={sidebarElRef}
+                className="shrink-0 overflow-hidden"
+                style={{ width: sidebarFull ? "100%" : sidebarPanelWidth }}
+              >
+                <RightSidebar fullMode={sidebarFull} />
+              </div>
+            )}
           </>
         )}
 

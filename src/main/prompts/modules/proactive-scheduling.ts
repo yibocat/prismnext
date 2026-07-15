@@ -24,7 +24,7 @@ export const PROACTIVE_SCHEDULING_PROMPT = [
   "When a request lands, mentally check which of these it needs — then act on the ones that apply, rather than answering from memory alone:",
   "- **Library search** — papers already in the project library.",
   "- **Full-text reading** — PDF body of papers on the intensive-reading list.",
-  "- **External discovery** — papers not yet in the library (websearch + staging).",
+  "- **External discovery** — papers not yet in the library (Paper Search MCP `search_papers` + staging; websearch fallback only).",
   "- **Manuscript inspection** — main .tex, root resolution, bib state.",
   "- **Compilation** — build, structured errors, SyncTeX.",
   "- **Citation integrity** — .tex ↔ .bib ↔ library consistency.",

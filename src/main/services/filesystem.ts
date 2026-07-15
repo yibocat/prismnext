@@ -332,6 +332,12 @@ export async function readImageAsDataUrl(absolutePath: string): Promise<string> 
   return `data:${mime};base64,${base64}`;
 }
 
+/** Raw file bytes for binary viewers (PDF preview — same path as compile cache). */
+export async function readFileBytes(absolutePath: string): Promise<Uint8Array> {
+  const data = await readFile(absolutePath);
+  return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+}
+
 export async function writeTexFileContent(
   absolutePath: string,
   content: string,

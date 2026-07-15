@@ -446,6 +446,8 @@ export interface ElectronAPI {
   fsRead: (absPath: string) => Promise<{ content: string }>;
   fsReadBatch: (absPaths: string[]) => Promise<{ results: Record<string, string> }>;
   fsReadImage: (absPath: string) => Promise<{ dataUrl: string }>;
+  /** Binary file bytes (PDF preview). Prefer over data-URL for local PDFs. */
+  fsReadBytes: (absPath: string) => Promise<{ bytes: ArrayBuffer }>;
   fsWrite: (absPath: string, content: string) => Promise<void>;
   fsCreate: (
     rootPath: string,
@@ -601,11 +603,21 @@ export interface ElectronAPI {
     command: string;
     artifacts?: string[];
     notes?: string;
+    chatSessionId?: string | null;
   }) => Promise<
     | { ok: true; runId: string; status: "started" }
     | { ok: false; error: string; hint?: string }
   >;
   experimentCancelRun: (args: { projectRoot: string; id: string; runId: string }) => Promise<{ ok: true }>;
+  /** Registry changed (create/run/append) or Agent requested UI focus. */
+  onExperimentChanged: (
+    callback: (data: {
+      projectRoot: string;
+      id?: string;
+      reason: string;
+      focus?: boolean;
+    }) => void,
+  ) => () => void;
   onExperimentRunComplete: (
     callback: (data: {
       id: string;
@@ -623,6 +635,22 @@ export interface ElectronAPI {
   onExperimentRunOutput: (
     callback: (data: { id: string; runId: string; chunk: string }) => void,
   ) => () => void;
+
+  // Provenance - trace a claimed artifact / run back to its generating command.
+  provenanceGetForArtifact: (
+    projectRoot: string,
+    artifactPath: string,
+  ) => Promise<
+    | {
+        run: import("../../shared/provenance").ProvenanceRunRecorded;
+        linkMethod: import("../../shared/provenance").ProvenanceLinkMethod;
+      }
+    | null
+  >;
+  provenanceGetForRun: (
+    projectRoot: string,
+    runId: string,
+  ) => Promise<import("../../shared/provenance").ProvenanceRunRecorded | null>;
 
   // Platform
   platform: "darwin" | "win32" | "linux";
@@ -749,7 +777,7 @@ export interface ElectronAPI {
       doi?: string;
       arxivId?: string;
       sourceUrl?: string;
-      discoveredFrom?: "websearch" | "webfetch" | "user" | "agent";
+      discoveredFrom?: "paper-search-mcp" | "websearch" | "webfetch" | "user" | "agent";
     },
   ) => Promise<{
     staged: boolean;
@@ -769,7 +797,7 @@ export interface ElectronAPI {
       catalogSource: string | null;
       catalogVerified: boolean;
       verifyError: string | null;
-      discoveredFrom: "websearch" | "webfetch" | "user" | "agent";
+      discoveredFrom: "paper-search-mcp" | "websearch" | "webfetch" | "user" | "agent";
       libraryPaperId: string | null;
       libraryBibkey: string | null;
     };
@@ -1012,6 +1040,29 @@ export interface ElectronAPI {
   // OpenCode chat operations
   chatDispose: () => Promise<{ success: boolean }>;
   chatPrewarm: (projectPath: string) => Promise<{ sessionId: string | null }>;
+  mcpEnsure: (projectPath: string) => Promise<{
+    ok: boolean;
+    health: {
+      status: "ready" | "degraded";
+      mode: "npx";
+      detail: string;
+    };
+  }>;
+  mcpApply: (projectPath: string) => Promise<{
+    ok: boolean;
+    reloadedSessions: number;
+    error?: string;
+    health?: {
+      status: "ready" | "degraded";
+      mode: "npx";
+      detail: string;
+    };
+  }>;
+  mcpPaperSearchHealth: () => Promise<{
+    status: "ready" | "degraded";
+    mode: "npx";
+    detail: string;
+  }>;
   agentListSkills: (projectPath: string) => Promise<Array<{
     id: string;
     name: string;

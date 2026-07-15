@@ -2,6 +2,8 @@ import type { LeftNavContext } from "./types";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useLiteratureStore } from "@/stores/literature-store";
+import { RESIZE_FILL_PX } from "@/lib/workspace/layout-constants";
+import { runWithProgrammaticCenterResize } from "@/lib/workspace/layout-resize-guard";
 
 export function isTexWorkspaceOpen(): boolean {
   const st = useLayoutStore.getState();
@@ -14,6 +16,9 @@ export function isTexWorkspaceOpen(): boolean {
 }
 
 function finishTexClose(ctx: LeftNavContext, onClosed?: () => void): void {
+  const st = useLayoutStore.getState();
+  st.setEditorMaximized(false);
+  st.setRightAreaExpanded(false);
   ctx.panelRefs.centerRef?.current?.expand();
   ctx.panelRefs.rightAreaRef?.current?.collapse();
   onClosed?.();
@@ -40,6 +45,9 @@ export function closeTexWorkspace(ctx: LeftNavContext, onClosed?: () => void): v
 }
 
 function finishLiteratureClose(ctx: LeftNavContext, onClosed?: () => void): void {
+  const st = useLayoutStore.getState();
+  st.setEditorMaximized(false);
+  st.setRightAreaExpanded(false);
   ctx.panelRefs.centerRef?.current?.expand();
   ctx.panelRefs.rightAreaRef?.current?.collapse();
   onClosed?.();
@@ -68,10 +76,13 @@ export function openLiteratureLibrary(ctx: LeftNavContext): void {
   rps.ensureTab("literature");
   st.setLeftSidebarView("sessions");
   st.activateMode("literature");
+  st.setRightAreaExpanded(true);
   st.setEditorMaximized(true);
-  if (r.isCollapsed()) r.expand();
-  c.collapse();
-  r.resize(9999);
+  runWithProgrammaticCenterResize(() => {
+    if (r.isCollapsed()) r.expand();
+    c.collapse();
+    r.resize(RESIZE_FILL_PX);
+  });
 }
 
 /** Exit maximized Literature and restore chat-centered layout (tabs kept). */
@@ -87,6 +98,9 @@ export function closeLiteraturePanel(ctx: LeftNavContext, onClosed?: () => void)
 }
 
 function finishExperimentsClose(ctx: LeftNavContext, onClosed?: () => void): void {
+  const st = useLayoutStore.getState();
+  st.setEditorMaximized(false);
+  st.setRightAreaExpanded(false);
   ctx.panelRefs.centerRef?.current?.expand();
   ctx.panelRefs.rightAreaRef?.current?.collapse();
   onClosed?.();
@@ -114,10 +128,13 @@ export function openExperimentsPanel(ctx: LeftNavContext): void {
   rps.ensureTab("experiments");
   st.setLeftSidebarView("sessions");
   st.activateMode("experiments");
+  st.setRightAreaExpanded(true);
   st.setEditorMaximized(true);
-  if (r.isCollapsed()) r.expand();
-  c.collapse();
-  r.resize(9999);
+  runWithProgrammaticCenterResize(() => {
+    if (r.isCollapsed()) r.expand();
+    c.collapse();
+    r.resize(RESIZE_FILL_PX);
+  });
 }
 
 /** Exit maximized Experiments and restore chat-centered layout (tabs kept). */

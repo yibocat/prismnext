@@ -139,3 +139,17 @@ export function resolvePrismToolTitle(title: string): string | null {
   const lower = title.toLowerCase().trim();
   return PRISM_TOOL_NAMES.has(lower) ? lower : null;
 }
+
+/**
+ * OpenCode MCP tools are titled `{serverId}_{toolName}`
+ * (e.g. `paper-search-mcp_search_arxiv`). Prefer this over input-shape
+ * inference: paper-search MCP also sends `query` / `max_results`, which
+ * would otherwise be mislabeled as `websearch` during live streaming.
+ */
+export function resolveMcpToolTitle(title: string): string | null {
+  const lower = title.toLowerCase().trim();
+  if (!lower) return null;
+  // server slug (alnum/hyphen) + `_` + tool slug (alnum/underscore/hyphen)
+  if (!/^[a-z0-9][a-z0-9-]*_[a-z0-9][a-z0-9_-]*$/.test(lower)) return null;
+  return lower;
+}

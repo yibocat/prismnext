@@ -67,6 +67,34 @@ describe("contextInsertToPart", () => {
     expect(part.title).toBe("含 2 行删除 + 1 行新增");
     expect(part.layout).toBe("unified");
   });
+
+  it("builds experiment-run part carrying command + artifact context", () => {
+    const part = contextInsertToPart({
+      kind: "experiment-run",
+      runId: "run-20260707-120000-a1b2",
+      experimentId: "exp-test",
+      command: "python train.py --lr 0.001",
+      exitCode: 0,
+      startedAt: "2026-07-07T12:00:00.000Z",
+      finishedAt: "2026-07-07T12:00:05.000Z",
+      artifactPath: "experiment/exp-test/plot.png",
+      linkMethod: "explicit",
+      artifacts: ["experiment/exp-test/plot.png", "experiment/exp-test/metrics.csv"],
+      env: { python: "/usr/bin/python3", pythonVersion: "3.12", platform: "darwin", gitCommit: "abc1234" },
+      chatSessionId: "ses_x",
+      workspacePath: "experiment/exp-test",
+    });
+    expect(part.type).toBe("experiment-run");
+    if (part.type !== "experiment-run") return;
+    expect(part.runId).toBe("run-20260707-120000-a1b2");
+    expect(part.command).toBe("python train.py --lr 0.001");
+    expect(part.exitCode).toBe(0);
+    expect(part.artifactPath).toBe("experiment/exp-test/plot.png");
+    expect(part.linkMethod).toBe("explicit");
+    expect(part.artifacts).toHaveLength(2);
+    expect(part.chatSessionId).toBe("ses_x");
+    expect(part.label).toContain("run:");
+  });
 });
 
 describe("codeSnippetLabel", () => {

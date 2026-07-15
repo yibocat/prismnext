@@ -142,7 +142,7 @@ export function ExperimentsRunPanel() {
           aria-label="Command"
           value={command}
           onChange={(e) => setCommand(e.target.value)}
-          placeholder=".venv/bin/python train.py --epochs 50"
+          placeholder="python train.py --epochs 50"
           spellCheck={false}
           disabled={isInFlightForCurrent}
           rows={isInFlightForCurrent ? 2 : 3}

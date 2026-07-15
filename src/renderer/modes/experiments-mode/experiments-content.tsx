@@ -6,8 +6,11 @@
  *   1. No project              — centered muted copy (mirrors literature).
  *   2. No Experiment folder    — `ExperimentsNoFolderEmpty` (settings link).
  *   3. Empty registry list     — `ExperimentsEmptyListEmpty`.
- *   4. Browse                  — `ExperimentsGrid` (card gallery, sidebar collapsed).
- *   5. Detail                  — `ExperimentsDetail` (sidebar open for quick switch).
+ *   4. Browse                  — `ExperimentsGrid` (card gallery).
+ *   5. Detail                  — `ExperimentsDetail`.
+ *
+ * Mode sidebar open/close uses the shared RightArea path (`rightSidebarOpen`,
+ * TabToolbar toggle, drag handle) — same as Files / Git / Literature.
  *
  * Bootstrap (refresh list on project change) is keyed on `projectRoot` per
  * the literature-mode split: heavy IPC work lives here, NOT in onActivate.
@@ -18,7 +21,6 @@ import { Loader2Icon } from "lucide-react";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { useDocumentStore } from "@/stores/document-store";
 import { useExperimentStore } from "@/stores/experiment-store";
-import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { cn } from "@/lib/utils";
 import { ExperimentsDetail } from "./experiments-detail";
@@ -27,18 +29,6 @@ import {
   ExperimentsEmptyListEmpty,
   ExperimentsNoFolderEmpty,
 } from "./experiments-empty";
-
-function useExperimentsSidebarLayout(selectedId: string | null, isActive: boolean) {
-  useEffect(() => {
-    if (!isActive) return;
-    const st = useLayoutStore.getState();
-    if (selectedId) {
-      st.setRightSidebarOpen(true);
-    } else {
-      st.setRightSidebarOpen(false);
-    }
-  }, [selectedId, isActive]);
-}
 
 function useExperimentsTabSync(
   tab: RightTab,
@@ -83,7 +73,6 @@ export function ExperimentsContent({
   const loading = useExperimentStore((s) => s.loading);
   const selectExperiment = useExperimentStore((s) => s.selectExperiment);
 
-  useExperimentsSidebarLayout(selectedId, isActive);
   useExperimentsTabSync(tab, selectedId, experiments);
 
   useEffect(() => {

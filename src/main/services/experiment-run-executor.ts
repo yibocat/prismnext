@@ -8,17 +8,23 @@
  *  - Both can be used at once; either is optional.
  */
 import { existsSync, writeFileSync } from "node:fs";
+import { dirname, resolve as pathResolve } from "node:path";
 import { runAiCommand } from "./ai-pty";
 import {
   appendRun,
   detectEnv,
+  ensureExperimentPythonVenv,
+  gateExperimentPythonExecution,
   generateRunId,
   workspaceIslandPathForId,
   type ExperimentStorageContext,
+  type ExperimentVenvRunner,
 } from "./experiment-log-service";
+import { isPythonRelatedCommand } from "../../shared/experiment-log";
 import type { ExperimentEnv, ExperimentRunEntry } from "../../shared/experiment-log";
 import { stripAnsi } from "../../shared/experiment-log";
 import { createLogger } from "./logger";
+import { broadcastExperimentChanged } from "./experiment-ui-events";
 
 const log = createLogger("experiment-run-executor", "agent");
 
@@ -48,10 +54,28 @@ export interface KickoffExperimentRunArgs {
   onComplete?: (result: ExperimentRunResult) => void;
   /** Live PTY output chunks (UI stream). */
   onOutputChunk?: (chunk: string) => void;
+  /**
+   * OpenCode chat session that triggered the run (best-effort provenance link).
+   * NOT the PTY session id built below - kept separate to avoid collision.
+   */
+  chatSessionId?: string | null;
+  /** Default true — ensure shared Experiment workspace `.venv` before detect/run. */
+  ensureVenv?: boolean;
+  venvRunner?: ExperimentVenvRunner;
+}
+
+function detectIslandEnv(
+  ctx: KickoffExperimentRunArgs["ctx"],
+  island: string,
+): ExperimentEnv {
+  return detectEnv(island, {
+    workspaceAbs: ctx.workspaceAbs,
+    workspaceRel: ctx.workspaceRel,
+  });
 }
 
 export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
-  const { ctx, id, command, resPath, onComplete } = args;
+  const { ctx, id, command } = args;
   const island = workspaceIslandPathForId(ctx, id);
 
   if (!island || !existsSync(island)) {
@@ -65,7 +89,42 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
     return;
   }
 
-  const env: ExperimentEnv = detectEnv(island);
+  // Hard gate: Python under Experiment uses the shared workspace `.venv`.
+  if (isPythonRelatedCommand(command) && args.ensureVenv !== false) {
+    const gate = gateExperimentPythonExecution({
+      projectRoot: ctx.projectRoot,
+      cwd: island,
+      command,
+      ensureOpts: { runner: args.venvRunner },
+    });
+    if (gate.action === "block") {
+      queueMicrotask(() => reportResult(args, { ok: false, error: gate.error }));
+      return;
+    }
+    if (gate.action === "apply") {
+      const env = detectIslandEnv(ctx, island);
+      kickoffWithEnv(args, island, env, gate.envExtra);
+      return;
+    }
+  } else if (args.ensureVenv !== false) {
+    // Non-Python: best-effort ensure so later Python runs share the workspace venv.
+    ensureExperimentPythonVenv(ctx.workspaceAbs, {
+      runner: args.venvRunner,
+      workspaceRel: ctx.workspaceRel,
+    });
+  }
+
+  const env = detectIslandEnv(ctx, island);
+  kickoffWithEnv(args, island, env, buildPythonEnvExtra(env));
+}
+
+function kickoffWithEnv(
+  args: KickoffExperimentRunArgs,
+  island: string,
+  env: ExperimentEnv,
+  envExtra: Record<string, string>,
+): void {
+  const { ctx, id, command } = args;
   const runId = args.runId ?? generateRunId();
   const startedAt = new Date().toISOString();
   const sessionId = `experiment:${id}:${runId}`;
@@ -82,7 +141,7 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
       chatTabId: "experiment",
       requestId: runId,
       toolCallId: runId,
-      envExtra: { PYTHONUNBUFFERED: "1" },
+      envExtra,
       onChunk: (chunk) => {
         if (args.onOutputChunk) {
           try {
@@ -107,7 +166,7 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
           artifacts: args.artifacts ?? [],
           env,
           notes: args.notes,
-        });
+        }, { chatSessionId: args.chatSessionId ?? null });
         if (!append.ok) {
           reportResult(args, { ok: false, error: append.error });
           return;
@@ -137,7 +196,7 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
           artifacts: args.artifacts ?? [],
           env,
           notes: args.notes,
-        });
+        }, { chatSessionId: args.chatSessionId ?? null });
         const run: ExperimentRunEntry | null = append.ok ? append.run : null;
         reportResult(args, {
           ok: false,
@@ -159,6 +218,12 @@ function reportResult(args: KickoffExperimentRunArgs, data: ExperimentRunResult)
       });
     }
   }
+  // Notify UI to refresh registry (Agent + Human UI share this path).
+  broadcastExperimentChanged({
+    projectRoot: args.ctx.projectRoot,
+    id: args.id,
+    reason: "run_complete",
+  });
   if (args.onComplete) {
     try {
       args.onComplete(data);
@@ -168,6 +233,33 @@ function reportResult(args: KickoffExperimentRunArgs, data: ExperimentRunResult)
       });
     }
   }
+}
+
+/**
+ * Build PTY env vars so the run uses the detected python interpreter:
+ *  - If `env.python` points at the shared Experiment workspace venv, prepend its
+ *    `bin` dir to PATH (so `python` / `pip` resolve to the venv).
+ *  - Set `VIRTUAL_ENV` to the venv root so `pip` / `python` / `uv pip` self-identify it.
+ *  - Always set `PYTHONUNBUFFERED=1` for streaming output.
+ *
+ * When ensure failed and no venv is present, PATH is left alone (system python).
+ */
+export function buildPythonEnvExtra(env: ExperimentEnv): Record<string, string> {
+  const extra: Record<string, string> = { PYTHONUNBUFFERED: "1" };
+  if (env.python && env.venvPath) {
+    // env.python is `<experiment-dir>/.venv/bin/python` (posix) or
+    // `…/Scripts/python.exe` (windows). dirname gives the bin dir.
+    const venvBin = dirname(env.python);
+    const venvRoot = pathResolve(venvBin, "..");
+    const currentPath = process.env.PATH ?? "";
+    extra.PATH = currentPath ? `${venvBin}${pathDelimiter()}${currentPath}` : venvBin;
+    extra.VIRTUAL_ENV = venvRoot;
+  }
+  return extra;
+}
+
+function pathDelimiter(): string {
+  return process.platform === "win32" ? ";" : ":";
 }
 
 function runWithTimeout<T>(

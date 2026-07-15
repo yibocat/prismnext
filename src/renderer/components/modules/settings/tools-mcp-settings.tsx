@@ -1,8 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   PlugIcon,
   FileJsonIcon,
   PlusIcon,
+  RefreshCwIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
@@ -17,8 +18,12 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
-import { serverIsConfigurable } from "@/lib/agent/mcp-presets";
+import { isBuiltinMcpServer, serverIsConfigurable } from "@/lib/agent/mcp-presets";
 import type { McpServerEntry } from "@/lib/agent/mcp-config";
+
+type PaperSearchHealth = Awaited<
+  ReturnType<typeof window.electronAPI.mcpPaperSearchHealth>
+>;
 
 const CATEGORY_HEADER =
   "text-[length:var(--font-size-12)] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2";
@@ -46,10 +51,45 @@ export function ToolsMcpSettings() {
 
   const openMcpServerSlot = useSettingsEditorSlotOfKind("mcp-server");
   const deleteConfirm = useInlineDeleteConfirm();
+  const [applying, setApplying] = useState(false);
+  const [paperHealth, setPaperHealth] = useState<PaperSearchHealth | null>(null);
 
   useEffect(() => {
     void load(projectRoot);
   }, [projectRoot, load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.electronAPI.mcpPaperSearchHealth().then((h) => {
+      if (!cancelled) setPaperHealth(h);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectRoot, loaded, servers]);
+
+  const handleApplyMcp = async () => {
+    if (!projectRoot) return;
+    setApplying(true);
+    try {
+      const result = await window.electronAPI.mcpApply(projectRoot);
+      if (result.health) setPaperHealth(result.health);
+      await load(projectRoot);
+      if (!result.ok) {
+        toast.error(result.error || "Failed to apply MCP configuration.");
+        return;
+      }
+      toast.success(
+        result.reloadedSessions > 0
+          ? `MCP applied to ${result.reloadedSessions} open chat${result.reloadedSessions === 1 ? "" : "s"}.`
+          : "MCP configuration applied (no open chat sessions yet).",
+      );
+    } catch {
+      toast.error("Failed to apply MCP configuration.");
+    } finally {
+      setApplying(false);
+    }
+  };
 
   useOnSettingsEditorKindsClosed(
     ["mcp-json", "mcp-catalog", "mcp-paste-json", "mcp-server"],
@@ -144,13 +184,28 @@ export function ToolsMcpSettings() {
               <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">
                 .prismnext/agent/mcp.json
               </code>
-              . New chat tabs pick up changes.
+              . Use{" "}
+              <span className="font-medium text-foreground">Apply to chats</span>{" "}
+              after Configure changes so open sessions reload MCP tools.
             </p>
 
             <div>
               <div className="flex items-center justify-between gap-3 mb-2">
                 <p className={cn(CATEGORY_HEADER, "mb-0")}>Installed</p>
-                {renderAddButtons("shrink-0")}
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    disabled={saving || applying}
+                    onClick={() => void handleApplyMcp()}
+                  >
+                    <RefreshCwIcon
+                      className={cn("size-3 mr-1", applying && "animate-spin")}
+                    />
+                    Apply to chats
+                  </Button>
+                  {renderAddButtons()}
+                </div>
               </div>
               <div className={CARD}>
                 {!loaded ? (
@@ -166,55 +221,92 @@ export function ToolsMcpSettings() {
                     {renderAddButtons()}
                   </div>
                 ) : (
-                  servers.map((entry) => {
-                    const configurable = serverIsConfigurable(entry);
-                    const configuring =
-                      openMcpServerSlot?.serverName === entry.name;
+                  [...servers]
+                    .sort(
+                      (a, b) =>
+                        Number(isBuiltinMcpServer(b.name)) -
+                        Number(isBuiltinMcpServer(a.name)),
+                    )
+                    .map((entry) => {
+                      const configurable = serverIsConfigurable(entry);
+                      const configuring =
+                        openMcpServerSlot?.serverName === entry.name;
+                      const builtin = isBuiltinMcpServer(entry.name);
 
-                    return (
-                      <div key={entry.name} className={ROW}>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className={cn(ROW_LABEL, "font-mono")}>{entry.name}</span>
-                            <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
-                              {entry.type}
-                            </span>
-                            {!entry.enabled && (
-                              <span className={cn(BADGE, "bg-muted/60 text-muted-foreground/70")}>
-                                off
-                              </span>
-                            )}
+                      return (
+                        <div key={entry.name} className={ROW}>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={cn(ROW_LABEL, "font-mono")}>{entry.name}</span>
+                              {builtin ? (
+                                <span
+                                  className={cn(
+                                    BADGE,
+                                    "bg-primary/10 text-primary normal-case tracking-normal",
+                                  )}
+                                >
+                                  Built-in
+                                </span>
+                              ) : (
+                                <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
+                                  {entry.type}
+                                </span>
+                              )}
+                              {!entry.enabled && !builtin && (
+                                <span
+                                  className={cn(
+                                    BADGE,
+                                    "bg-muted/60 text-muted-foreground/70",
+                                  )}
+                                >
+                                  off
+                                </span>
+                              )}
+                            </div>
+                            <p className={ROW_DESC}>
+                              {builtin
+                                ? paperHealth?.detail
+                                  ?? "Default academic discovery — always on for this project."
+                                : serverSummary(entry)}
+                            </p>
                           </div>
-                          <p className={ROW_DESC}>{serverSummary(entry)}</p>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {configurable ? (
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                className="shrink-0"
+                                disabled={saving}
+                                onClick={() => openConfigure(entry)}
+                              >
+                                {configuring ? "Editing…" : "Configure"}
+                              </Button>
+                            ) : null}
+                            <Switch
+                              checked={builtin ? true : entry.enabled}
+                              disabled={builtin || saving}
+                              onCheckedChange={(v) =>
+                                void handleToggleEnabled(entry.name, v)
+                              }
+                              aria-label={
+                                builtin
+                                  ? `${entry.name} is built-in and always enabled`
+                                  : `Enable ${entry.name}`
+                              }
+                            />
+                            {!builtin ? (
+                              <InlineDeleteButton
+                                itemId={entry.name}
+                                pending={deleteConfirm.isPending(entry.name)}
+                                disabled={saving}
+                                onRequest={() => deleteConfirm.setPendingId(entry.name)}
+                                onConfirm={() => void handleDelete(entry.name)}
+                              />
+                            ) : null}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {configurable ? (
-                            <Button
-                              variant="ghost"
-                              size="xs"
-                              className="shrink-0"
-                              disabled={saving}
-                              onClick={() => openConfigure(entry)}
-                            >
-                              {configuring ? "Editing…" : "Configure"}
-                            </Button>
-                          ) : null}
-                          <Switch
-                            checked={entry.enabled}
-                            onCheckedChange={(v) => void handleToggleEnabled(entry.name, v)}
-                            aria-label={`Enable ${entry.name}`}
-                          />
-                          <InlineDeleteButton
-                            itemId={entry.name}
-                            pending={deleteConfirm.isPending(entry.name)}
-                            disabled={saving}
-                            onRequest={() => deleteConfirm.setPendingId(entry.name)}
-                            onConfirm={() => void handleDelete(entry.name)}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })
+                      );
+                    })
                 )}
               </div>
             </div>

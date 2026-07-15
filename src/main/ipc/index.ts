@@ -21,11 +21,14 @@ import { registerZoteroHandlers } from "./zotero";
 import { registerUpdateHandlers } from "./update";
 import { registerResearchBriefHandlers } from "./research-brief";
 import { registerExperimentHandlers } from "./experiment";
+import { registerProvenanceHandlers } from "./provenance";
+import { registerMcpHandlers } from "./mcp";
 
 export function registerIpcHandlers(): void {
   registerFsHandlers();
   registerCompileHandlers();
   registerChatHandlers();
+  registerMcpHandlers();
   registerSettingsHandlers();
   registerBrowserHandlers();
   registerTerminalHandlers();
@@ -46,6 +49,7 @@ export function registerIpcHandlers(): void {
   registerUpdateHandlers();
   registerResearchBriefHandlers();
   registerExperimentHandlers();
+  registerProvenanceHandlers();
 }
 
 export { disposeChat };

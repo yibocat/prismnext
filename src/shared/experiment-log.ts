@@ -23,7 +23,10 @@ export const EXPERIMENT_REGISTRY_REL = ".prismnext/experiments";
 export const EXPERIMENT_META_FILENAME = "meta.json";
 export const EXPERIMENT_RUNS_FILENAME = "runs.jsonl";
 
-/** Conventional Python venv dir name — used only by optional `detect_env` probe, not enforced. */
+/**
+ * Shared Python venv directory name under the Workspace Experiment folder
+ * (e.g. `labs/.venv`) — one venv for all islands, not per-island.
+ */
 export const EXPERIMENT_VENV_DIR = ".venv";
 
 /** Max characters kept from stdout / stderr when recording a run. */
@@ -52,7 +55,7 @@ export interface ExperimentMeta {
 
 /** Best-effort runtime snapshot (optional; returned by `detect_env` / auto-filled on runs). */
 export interface ExperimentEnv {
-  /** Resolved python interpreter, if any (prefers island `.venv/bin/python` when present). */
+  /** Resolved python interpreter, if any (prefers shared workspace `.venv/bin/python`). */
   python: string | null;
   pythonVersion: string | null;
   /** Resolved Rscript path, if R is available. */
@@ -61,7 +64,10 @@ export interface ExperimentEnv {
   platform: string;
   /** Short git commit hash at run time, or null if not a repo / git missing. */
   gitCommit: string | null;
-  /** Relative venv dir if a `.venv/` exists in the workspace folder, else null. */
+  /**
+   * Project-relative path to the shared Experiment workspace venv
+   * (e.g. `labs/.venv`), or null when missing.
+   */
   venvPath: string | null;
 }
 
@@ -78,6 +84,10 @@ export interface ExperimentRunEntry {
   artifacts: string[];
   env: ExperimentEnv;
   notes?: string;
+  /** OpenCode chat tab that triggered the run (optional; old lines omit it). */
+  chatSessionId?: string | null;
+  /** Links into `provenance.jsonl` run_recorded event (optional; old lines omit it). */
+  provenanceEventId?: string | null;
 }
 
 /** Summary entry returned by `list` (no run bodies). */
@@ -212,4 +222,116 @@ export function experimentEnvDisplayRows(
   }
 
   return rows;
+}
+
+/**
+ * Whether a shell command looks like it invokes Python / pip / uv for package or script work.
+ * Used to hard-gate execution inside the Workspace Experiment folder.
+ */
+export function isPythonRelatedCommand(command: string): boolean {
+  const raw = (command || "").trim();
+  if (!raw) return false;
+  if (/\buv\s+(pip|run|sync|add|remove|lock|venv|python|tree)\b/i.test(raw)) return true;
+  const segments = raw.split(/(?:&&|\|\||;|\n)/);
+  for (const segment of segments) {
+    let s = segment.trim();
+    if (!s) continue;
+    // Strip leading env assignments: FOO=1 BAR=2 python ...
+    s = s.replace(/^(?:\w+=(?:'[^']*'|"[^"]*"|\S+)\s+)+/, "");
+    if (/^(?:[\w.+@/-]*\/)?python(?:\d+(?:\.\d+)*)?(?:\s|$)/i.test(s)) return true;
+    if (/^(?:[\w.+@/-]*\/)?pip(?:\d+)?(?:\s|$)/i.test(s)) return true;
+  }
+  return false;
+}
+
+/** Installs that would target the host/system interpreter — always forbidden via bash. */
+export function isForbiddenSystemPythonInstall(command: string): boolean {
+  const raw = (command || "").trim();
+  if (!raw) return false;
+  if (/\buv\s+pip\b[\s\S]*--system\b/i.test(raw)) return true;
+  // Bare pip / pip3 / python -m pip → host/system site-packages (Prism forbids this).
+  if (isBarePipInstallCommand(raw)) return true;
+  return false;
+}
+
+/**
+ * `pip install` / `pip3 install` / `python -m pip install` (not `uv pip`).
+ * These almost always hit the system interpreter when run from project root.
+ */
+export function isBarePipInstallCommand(command: string): boolean {
+  const segments = (command || "").split(/(?:&&|\|\||;|\n|\|)/);
+  for (const segment of segments) {
+    const s = stripLeadingEnvAssignments(segment);
+    if (!s) continue;
+    // Explicitly allow only when the segment starts with `uv pip`
+    if (/^uv\s+pip\b/i.test(s)) continue;
+    if (/^(?:[\w.+@/-]*\/)?pip(?:\d+)?\s+install\b/i.test(s)) return true;
+    if (/^(?:[\w.+@/-]*\/)?python(?:\d+(?:\.\d+)*)?\s+-m\s+pip\s+install\b/i.test(s)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function stripLeadingEnvAssignments(segment: string): string {
+  return segment.replace(/^(?:\w+=(?:'[^']*'|"[^"]*"|\S+)\s+)+/, "").trim();
+}
+
+/** Package/venv setup segments allowed via bash inside Experiment islands. */
+function isPythonSetupSegment(segment: string): boolean {
+  const s = stripLeadingEnvAssignments(segment);
+  if (!s) return false;
+  // Only uv pip / uv venv — never bare pip3 (system Python).
+  if (/^uv\s+pip\s+(install|sync|uninstall|list|show|freeze)\b/i.test(s)) return true;
+  if (/^uv\s+(venv|add|remove|lock|tree)\b/i.test(s)) return true;
+  if (/^(?:[\w.+@/-]*\/)?python(?:\d+(?:\.\d+)*)?\s+-m\s+venv\b/i.test(s)) return true;
+  return false;
+}
+
+function isPythonScriptSegment(segment: string): boolean {
+  const s = stripLeadingEnvAssignments(segment);
+  if (!s) return false;
+  if (/^uv\s+run\b/i.test(s)) return true;
+  if (/^uv\s+python\b/i.test(s)) return true;
+  // python / python3 … but not `python -m venv`
+  if (/^(?:[\w.+@/-]*\/)?python(?:\d+(?:\.\d+)*)?(?:\s|$)/i.test(s)) {
+    if (/\s+-m\s+venv\b/i.test(s)) return false;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * True when the command only sets up the shared Experiment workspace env
+ * (uv pip / venv), with no script execution.
+ * `cd labs && uv pip install matplotlib` → true.
+ */
+export function isExperimentPythonSetupCommand(command: string): boolean {
+  if (!isPythonRelatedCommand(command)) return false;
+  const segments = (command || "").split(/(?:&&|\|\||;|\n)/);
+  let sawSetup = false;
+  for (const segment of segments) {
+    const s = stripLeadingEnvAssignments(segment);
+    if (!s) continue;
+    if (isPythonSetupSegment(s)) {
+      sawSetup = true;
+      continue;
+    }
+    if (isPythonScriptSegment(s) || /^(?:[\w.+@/-]*\/)?pip(?:\d+)?(?:\s|$)/i.test(s)) {
+      // bare pip without install verb, or script — not setup-only
+      if (isPythonScriptSegment(s)) return false;
+      if (/^(?:[\w.+@/-]*\/)?pip(?:\d+)?\s+/i.test(s) && !isPythonSetupSegment(s)) {
+        return false;
+      }
+    }
+  }
+  return sawSetup;
+}
+
+/**
+ * True when the command runs Python / uv run (not just env setup).
+ * These must use experiment-run inside Experiment islands — bash is blocked.
+ */
+export function isExperimentPythonScriptCommand(command: string): boolean {
+  return isPythonRelatedCommand(command) && !isExperimentPythonSetupCommand(command);
 }

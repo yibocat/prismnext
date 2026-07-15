@@ -5,6 +5,7 @@ import type { RefObject } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLayoutStore } from "@/stores/layout-store";
 import { cn } from "@/lib/utils";
+import { openRightArea, closeRightArea } from "@/lib/workspace/right-area-layout";
 import {
   PanelRight,
   SunIcon,
@@ -108,19 +109,18 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
         title={rightAreaExpanded ? "Collapse Right Area" : "Expand Right Area"}
         onClick={() => {
           const r = rightAreaRef.current;
-          const c = centerRef.current;
-          if (!r || !c) return;
+          if (!r) return;
           if (r.isCollapsed()) {
-            if (isMobile) {
-              r.resize(9999);
-              c.collapse();
-            } else {
-              if (c.isCollapsed()) c.expand();
-              r.resize(useLayoutStore.getState().rightAreaWidth);
-            }
+            openRightArea({
+              centerRef: centerRef.current,
+              rightAreaRef: r,
+              isMobile,
+            });
           } else {
-            r.collapse();
-            c.resize(9999);
+            closeRightArea({
+              centerRef: centerRef.current,
+              rightAreaRef: r,
+            });
           }
         }}
       >

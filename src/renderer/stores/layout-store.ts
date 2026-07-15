@@ -108,6 +108,10 @@ interface LayoutState {
   setRightSidebarWidth: (width: number) => void;
   toggleEditorMaximized: () => void;
   setEditorMaximized: (maximized: boolean) => void;
+  /** Incremented to drive a panel-resize effect (center/right) when the right
+   *  area unmaximizes, so the visual layout follows the boolean change. */
+  rightAreaUnmaxNonce: number;
+  unmaximizeRightArea: () => void;
 
   pinnedSessionIds: string[];
   pinnedExpanded: boolean;
@@ -272,6 +276,20 @@ export const useLayoutStore = create<LayoutState>()(
       toggleEditorMaximized: () => set((s) => ({ editorMaximized: !s.editorMaximized })),
       setEditorMaximized: (maximized) =>
         set((s) => (s.editorMaximized === maximized ? s : { editorMaximized: maximized })),
+      /**
+       * Switch the right area from "maximized" (workspace full-screen) back to
+       * "split" so the center Chat panel is visible. If `editorMaximized` is
+       * already false, this is a no-op. The actual panel resize is driven by
+       * the non-reactive effect in `unmaximizeRightAreaPanel` (App.tsx),
+       * which mirrors the boolean change into the react-resizable-panels
+       * imperative handle so the visual layout follows the state.
+       */
+      rightAreaUnmaxNonce: 0,
+      unmaximizeRightArea: () =>
+        set((s) => {
+          if (!s.editorMaximized) return s;
+          return { editorMaximized: false, rightAreaUnmaxNonce: s.rightAreaUnmaxNonce + 1 };
+        }),
 
       pinnedSessionIds: [],
       pinnedExpanded: true,

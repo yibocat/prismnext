@@ -7,6 +7,7 @@ import {
   RIGHT_AREA_DEFAULT,
   RIGHT_AREA_MIN,
 } from "@/styles/constants";
+import { RESIZE_FILL_PX } from "@/lib/workspace/layout-constants";
 import {
   canSplitSettingsDetail,
   measureCenterRightWidthPx,
@@ -86,7 +87,7 @@ export function collapseSettingsDetailPanel(
   st.setSettingsDetailStacked(false);
   st.setRightAreaExpanded(false);
   r.collapse();
-  c?.resize(9999);
+  c?.resize(RESIZE_FILL_PX);
 }
 
 /** Close settings editor tabs and collapse the detail pane. */

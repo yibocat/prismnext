@@ -3,6 +3,7 @@ import {
   inferToolNameFromInput,
   inferToolNameFromOutput,
   resolveLiteratureToolTitle,
+  resolveMcpToolTitle,
   resolvePrismToolTitle,
 } from "../../src/main/acp/tool-name-infer";
 
@@ -135,5 +136,26 @@ describe("resolvePrismToolTitle", () => {
     expect(resolvePrismToolTitle("unknown-tool")).toBeNull();
     expect(resolvePrismToolTitle("")).toBeNull();
     expect(resolvePrismToolTitle("websearch")).toBeNull();
+  });
+});
+
+describe("resolveMcpToolTitle", () => {
+  it("accepts OpenCode MCP titles ({server}_{tool})", () => {
+    expect(resolveMcpToolTitle("paper-search-mcp_search_papers")).toBe(
+      "paper-search-mcp_search_papers",
+    );
+    expect(resolveMcpToolTitle("paper-search-mcp_search_arxiv")).toBe(
+      "paper-search-mcp_search_arxiv",
+    );
+    expect(resolveMcpToolTitle("  PAPER-SEARCH-MCP_search_crossref  ")).toBe(
+      "paper-search-mcp_search_crossref",
+    );
+  });
+
+  it("rejects bare builtins and human-readable titles", () => {
+    expect(resolveMcpToolTitle("websearch")).toBeNull();
+    expect(resolveMcpToolTitle("literature-search")).toBeNull();
+    expect(resolveMcpToolTitle("Exa Web Search: choquet")).toBeNull();
+    expect(resolveMcpToolTitle("")).toBeNull();
   });
 });

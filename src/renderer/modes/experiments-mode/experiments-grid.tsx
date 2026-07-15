@@ -1,8 +1,8 @@
 /**
  * experiments-grid — Card browse view for the Experiments mode (Sprint 0.7).
  *
- * Shown when no experiment is selected. Sidebar stays collapsed so cards
- * use the full Content width; detail view opens the sidebar for quick switch.
+ * Shown when no experiment is selected. Sidebar visibility is controlled by
+ * the shared RightArea mode sidebar (toggle / drag), not by browse vs detail.
  */
 
 import { useMemo } from "react";

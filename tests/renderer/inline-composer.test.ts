@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { render, screen } from "@testing-library/react";
+import React from "react";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { detectQueryAtCursor } from "../../src/renderer/components/modules/chat/inline-composer/query";
 import { buildSlashOptions } from "../../src/renderer/components/modules/chat/inline-composer/composer-dropdown";
+import { buildMentionOptions } from "../../src/renderer/components/modules/chat/inline-composer/inline-composer-editor";
+import { ComposerTokenChip } from "../../src/renderer/components/modules/chat/inline-tokens/inline-token-parts";
 import { createTokenId, partsToPlainText, partsToAgentText, isComposerEmpty, mergeAdjacentText, parseTextToComposerParts, parseTextWithLinks, hasLinkParts } from "../../src/renderer/lib/chat/composer-parts";
 import {
   partsToDoc,
@@ -432,5 +436,109 @@ describe("parseTextToComposerParts", () => {
     if (link?.type !== "link") return;
     expect(partsToPlainText([link])).toBe(link.label);
     expect(partsToAgentText([link])).toBe(link.url);
+  });
+});
+
+describe("partsToAgentText for experiment-run", () => {
+  it("flattens run + artifact into multi-line context for the agent", () => {
+    const text = partsToAgentText([
+      {
+        type: "experiment-run",
+        id: "tok-x",
+        label: "run:run-20260707-120000-a1b2",
+        runId: "run-20260707-120000-a1b2",
+        experimentId: "exp-test",
+        command: "python train.py",
+        exitCode: 0,
+        startedAt: "2026-07-07T12:00:00.000Z",
+        finishedAt: "2026-07-07T12:00:05.000Z",
+        artifactPath: "experiment/exp-test/plot.png",
+        linkMethod: "explicit",
+        artifacts: ["experiment/exp-test/plot.png"],
+        env: { python: "/usr/bin/python3", pythonVersion: "3.12", platform: "darwin", gitCommit: "abc" },
+        chatSessionId: "ses_x",
+        workspacePath: "experiment/exp-test",
+      },
+    ]);
+    // The agent prompt must include command, exit, artifact - not just the chip label.
+    expect(text).toContain("experiment-run: run:run-20260707-120000-a1b2");
+    expect(text).toContain("`python train.py`");
+    expect(text).toContain("exit: 0");
+    expect(text).toContain("experiment/exp-test/plot.png");
+    expect(text).toContain("(explicit)");
+  });
+});
+
+describe("buildMentionOptions for experiment", () => {
+  it("filters and returns experiment options for matching query", () => {
+    const experiments = [
+      { id: "exp-lr", title: "LR Ablation", workspacePath: "experiment/exp-lr", runCount: 3, lastRunAt: "2026-07-07T12:00:00.000Z" },
+      { id: "exp-batch", title: "Batch Size Study", workspacePath: "experiment/exp-batch", runCount: 0, lastRunAt: null },
+      { id: "exp-other", title: "Unrelated", workspacePath: "experiment/exp-other", runCount: 1, lastRunAt: "2026-07-01T00:00:00.000Z" },
+    ];
+    const options = buildMentionOptions("lr", [], [], [], experiments);
+    expect(options).toHaveLength(1);
+    expect(options[0]?.kind).toBe("experiment");
+    if (options[0]?.kind === "experiment") {
+      expect(options[0].experiment.id).toBe("exp-lr");
+      expect(options[0].experiment.title).toBe("LR Ablation");
+    }
+  });
+
+  it("matches against workspacePath and id in addition to title", () => {
+    const experiments = [
+      { id: "exp-a", title: "Alpha", workspacePath: "experiment/exp-a", runCount: 0, lastRunAt: null },
+      { id: "exp-batch", title: "Beta", workspacePath: "experiment/exp-batch", runCount: 0, lastRunAt: null },
+    ];
+    const byWorkspace = buildMentionOptions("batch", [], [], [], experiments);
+    expect(byWorkspace).toHaveLength(1);
+    expect(byWorkspace[0]?.kind).toBe("experiment");
+    if (byWorkspace[0]?.kind === "experiment") {
+      expect(byWorkspace[0].experiment.id).toBe("exp-batch");
+    }
+    // empty query returns the full list (subject to slice cap)
+    const all = buildMentionOptions("", [], [], [], experiments);
+    expect(all).toHaveLength(2);
+  });
+});
+
+describe("partsToAgentText for mention experiment", () => {
+  it("renders @-prefixed label for experiment mention chips", () => {
+    const text = partsToAgentText([
+      {
+        type: "mention",
+        mentionType: "experiment",
+        id: "tok-e",
+        label: "LR Ablation",
+        experimentId: "exp-lr",
+      },
+      { type: "text", text: " 看看这个实验的最近几条 run" },
+    ]);
+    expect(text).toContain("@LR Ablation");
+    expect(text).toContain("看看这个实验的最近几条 run");
+  });
+});
+
+describe("ComposerTokenChip for experiment mention", () => {
+  it("renders a chip with the experiment label and icon (does not return null)", () => {
+    const { container } = render(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      React.createElement(ComposerTokenChip as any, {
+        part: {
+          type: "mention",
+          mentionType: "experiment",
+          id: "tok-exp",
+          label: "LR Ablation",
+          experimentId: "exp-lr",
+        },
+      }),
+    );
+    // The chip's root <span> must carry the inline-token marker (no `return null`).
+    const chip = container.querySelector("[data-inline-token]");
+    expect(chip).toBeTruthy();
+    // And it must surface the experiment id in its title for hover-tooltip.
+    expect(chip?.getAttribute("title")).toContain("exp-lr");
+    // The label appears as text content (possibly truncated by max-w, hence a substring match).
+    expect(chip?.textContent).toContain("LR Ablation");
   });
 });

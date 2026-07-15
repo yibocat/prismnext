@@ -22,8 +22,18 @@ import type {
 } from "../../shared/experiment-log";
 import { RUN_OUTPUT_TAIL_BYTES, stripAnsi, tailBytes } from "../../shared/experiment-log";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useChatStore } from "@/stores/chat-store";
 import { navigateFileTreeToPath } from "@/lib/files/navigate-file-tree";
 import { useRightPanelStore } from "@/stores/right-panel-store";
+// Side-effect: subscribe to experiment:changed (auto-refresh + Agent open).
+import "@/modes/experiments-mode/open-experiment";
+
+/**
+ * Max runs loaded per experiment detail. The service default is 20 (tail-newest);
+ * we raise it here so the paginated runs history (PAGE_SIZE = 10 in the table)
+ * can show more than 2 pages instead of silently hiding older runs.
+ */
+const RUNS_LOAD_LIMIT = 200;
 
 /** Result payload broadcast by main on `experiment:runComplete`. */
 export interface ExperimentRunResultPayload {
@@ -187,7 +197,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
     set({ selectedId: id, error: null });
     try {
       const [readRes, envRes] = await Promise.all([
-        window.electronAPI.experimentRead({ projectRoot, id }),
+        window.electronAPI.experimentRead({ projectRoot, id, runsLimit: RUNS_LOAD_LIMIT }),
         window.electronAPI.experimentDetectEnv({ projectRoot, id }),
       ]);
       if (!readRes.ok) {
@@ -215,12 +225,14 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   runCommand: async (projectRoot, id, command, artifacts, notes) => {
     if (!projectRoot || !id || !command) return null;
     try {
+      const chatSessionId = useChatStore.getState().sessionId ?? null;
       const res = await window.electronAPI.experimentRun({
         projectRoot,
         id,
         command,
         artifacts,
         notes,
+        chatSessionId,
       });
       if (!res.ok) {
         set({ error: res.error });

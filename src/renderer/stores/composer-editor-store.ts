@@ -34,7 +34,8 @@ function applyPendingInsert(handle: InlineComposerEditorHandle | null): boolean 
     part.type !== "terminal-snippet" &&
     part.type !== "code-snippet" &&
     part.type !== "git-diff-snippet" &&
-    part.type !== "paper-snippet"
+    part.type !== "paper-snippet" &&
+    part.type !== "experiment-run"
   ) {
     insertStore.consumeInsert();
     return true;

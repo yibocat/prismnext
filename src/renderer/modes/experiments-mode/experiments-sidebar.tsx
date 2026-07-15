@@ -1,10 +1,8 @@
 /**
  * experiments-sidebar — Experiment list sidebar (Sprint 0.7).
  *
- * Mirrors the literature-mode sidebar's dispatch pattern: the sidebar is
- * always present (the mode has no detail keep-alive shell, see plan §D1),
- * and clicking a row selects the experiment in the experiment store. The
- * detail panel then renders inside the Content component.
+ * Registered as `experimentsMode.Sidebar` — rendered by `RightSidebar` in
+ * `right-area.tsx` (shared mode sidebar shell: drag resize, toggle, overlay).
  *
  * P0 scope: simple list, no search, no sort, no context menu, no new
  * experiment button (per D6). Sorting + search land in P1.

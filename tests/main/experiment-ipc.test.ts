@@ -26,6 +26,9 @@ vi.mock("electron", () => ({
       handlers.set(channel, fn);
     },
   },
+  BrowserWindow: {
+    getAllWindows: () => [],
+  },
   app: {
     getPath: () => "/tmp/prism-experiment-ipc-test-userdata",
   },
@@ -117,7 +120,7 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
 
   it("list/read happy path returns experiments and meta+runs", async () => {
     const c = setupWithExperimentFolder();
-    const created = createExperiment(c, { title: "LR ablation" });
+    const created = createExperiment(c, { title: "LR ablation" }, { ensureVenv: false });
     expect(created.ok).toBe(true);
     if (!created.ok) return;
 
@@ -143,7 +146,7 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
 
   it("detectEnv returns env snapshot for the workspace island", async () => {
     const c = setupWithExperimentFolder();
-    const created = createExperiment(c, { title: "Env" });
+    const created = createExperiment(c, { title: "Env" }, { ensureVenv: false });
     if (!created.ok) return;
 
     const handler = handlers.get("experiment:detectEnv")!;
@@ -157,7 +160,7 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
 
   it("getPaths returns absolute + relative paths", async () => {
     const c = setupWithExperimentFolder();
-    const created = createExperiment(c, { title: "Paths" });
+    const created = createExperiment(c, { title: "Paths" }, { ensureVenv: false });
     if (!created.ok) return;
 
     const handler = handlers.get("experiment:getPaths")!;
@@ -179,7 +182,7 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
 
   it("run returns {status:'started'} and emits experiment:runComplete with the appended run", async () => {
     const c = setupWithExperimentFolder();
-    const created = createExperiment(c, { title: "Run test" });
+    const created = createExperiment(c, { title: "Run test" }, { ensureVenv: false });
     if (!created.ok) return;
 
     const handler = handlers.get("experiment:run")!;
@@ -227,14 +230,46 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
     const runsPath = join(root, ".prismnext", "experiments", created.id, "runs.jsonl");
     const raw = readFileSync(runsPath, "utf-8").trim();
     expect(raw.split("\n").length).toBe(1);
-    const persisted = JSON.parse(raw) as { runId: string; command: string };
+    const persisted = JSON.parse(raw) as { runId: string; command: string; chatSessionId?: string | null };
     expect(persisted.runId).toBe(runId);
     expect(persisted.command).toBe("echo run-complete-ok");
   });
 
+  it("run forwards chatSessionId into the persisted run entry", async () => {
+    const c = setupWithExperimentFolder();
+    const created = createExperiment(c, { title: "Session bind" }, { ensureVenv: false });
+    if (!created.ok) throw new Error("create failed");
+
+    const handler = handlers.get("experiment:run")!;
+    const started = (await handler(makeEvent(), {
+      projectRoot: root,
+      id: created.id,
+      command: "echo session-ok",
+      chatSessionId: "chat-sess-abc",
+    })) as { ok: boolean; runId: string };
+    expect(started.ok).toBe(true);
+
+    await new Promise<{ channel: string; payload: unknown }>((resolve, reject) => {
+      const start = Date.now();
+      const tick = () => {
+        const found = sent.find((s) => s.channel === "experiment:runComplete");
+        if (found) return resolve(found);
+        if (Date.now() - start > 30_000) return reject(new Error("experiment:runComplete never fired"));
+        setTimeout(tick, 25);
+      };
+      tick();
+    });
+
+    const runsPath = join(root, ".prismnext", "experiments", created.id, "runs.jsonl");
+    const persisted = JSON.parse(readFileSync(runsPath, "utf-8").trim()) as {
+      chatSessionId?: string | null;
+    };
+    expect(persisted.chatSessionId).toBe("chat-sess-abc");
+  });
+
   it("run reports permission_denied when permission mode is readonly", async () => {
     const c = setupWithExperimentFolder();
-    const created = createExperiment(c, { title: "Readonly" });
+    const created = createExperiment(c, { title: "Readonly" }, { ensureVenv: false });
     if (!created.ok) return;
 
     const settingsModule = await import("../../src/main/services/settings");
@@ -260,7 +295,7 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
 
   it("run rejects missing command with missing_command error", async () => {
     const c = setupWithExperimentFolder();
-    const created = createExperiment(c, { title: "Bad cmd" });
+    const created = createExperiment(c, { title: "Bad cmd" }, { ensureVenv: false });
     if (!created.ok) return;
 
     const handler = handlers.get("experiment:run")!;
@@ -330,7 +365,7 @@ describe("kickoffExperimentRun (executor refactor)", () => {
     root = mkdtempSync(join(tmpdir(), "prism-exp-exec-"));
     mkdirSync(join(root, "experiment"), { recursive: true });
     ctx = buildExperimentStorageContext(root, "experiment");
-    const created = createExperiment(ctx, { title: "Legacy" });
+    const created = createExperiment(ctx, { title: "Legacy" }, { ensureVenv: false });
     if (!created.ok) throw new Error("create failed");
 
     const resPath = join(root, "result.json");
@@ -339,6 +374,7 @@ describe("kickoffExperimentRun (executor refactor)", () => {
       id: created.id,
       command: "echo legacy-ok",
       resPath,
+      ensureVenv: false,
     });
     const data = await new Promise<Record<string, unknown>>((resolve, reject) => {
       const start = Date.now();
@@ -360,7 +396,7 @@ describe("kickoffExperimentRun (executor refactor)", () => {
     root = mkdtempSync(join(tmpdir(), "prism-exp-exec-"));
     mkdirSync(join(root, "experiment"), { recursive: true });
     ctx = buildExperimentStorageContext(root, "experiment");
-    const created = createExperiment(ctx, { title: "Oncomplete" });
+    const created = createExperiment(ctx, { title: "Oncomplete" }, { ensureVenv: false });
     if (!created.ok) throw new Error("create failed");
 
     const result = await new Promise<{ ok: boolean; run?: { runId: string; command: string }; error?: string }>((resolve) => {
@@ -369,6 +405,7 @@ describe("kickoffExperimentRun (executor refactor)", () => {
         id: created.id,
         command: "echo callback-ok",
         onComplete: resolve,
+        ensureVenv: false,
       });
     });
     expect(result.ok).toBe(true);

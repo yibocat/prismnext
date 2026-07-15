@@ -4,6 +4,7 @@ import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLayoutStore } from "@/stores/layout-store";
 import { SIDEBAR_LEFT_DEFAULT, SIDEBAR_OVERLAY_THRESHOLD } from "@/styles/constants";
+import { openRightArea, closeRightArea } from "@/lib/workspace/right-area-layout";
 import { cn } from "@/lib/utils";
 import { Kbd } from "@/components/ui/kbd";
 import { CommandPalette } from "@/components/modules/shared";
@@ -88,10 +89,15 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
               if (window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD) {
                 st.setLeftSidebarOverlay(true);
               } else {
+                st.setLeftSidebarOverlay(false);
+                st.setSidebarExpanded(true);
+                st.setSidebarFullyCollapsed(false);
+                p.expand();
                 p.resize(st.sidebarWidth || SIDEBAR_LEFT_DEFAULT);
-                if (p.isCollapsed()) st.setLeftSidebarOverlay(true);
               }
             } else {
+              st.setSidebarExpanded(false);
+              st.setSidebarFullyCollapsed(true);
               p.collapse();
             }
           }}
@@ -172,19 +178,19 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
           title={rightAreaExpanded ? "Collapse Right Area" : "Expand Right Area"}
           onClick={() => {
             const r = rightAreaRef.current;
-            const c = centerRef.current;
-            if (!r || !c) return;
+            if (!r) return;
             if (r.isCollapsed()) {
-              if (isMobile) {
-                r.resize(9999);
-                c.collapse();
-              } else {
-                if (c.isCollapsed()) c.expand();
-                r.resize(useLayoutStore.getState().rightAreaWidth);
-              }
+              openRightArea({
+                centerRef: centerRef.current,
+                rightAreaRef: r,
+                leftSidebarRef: leftSidebarRef.current,
+                isMobile,
+              });
             } else {
-              r.collapse();
-              c.resize(9999);
+              closeRightArea({
+                centerRef: centerRef.current,
+                rightAreaRef: r,
+              });
             }
           }}
         >

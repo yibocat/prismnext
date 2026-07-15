@@ -281,7 +281,10 @@ function logTail(log: string): string {
 
 /** True when in-text \\cite{} keys are still missing from the .bbl. */
 function logHasUndefinedCitations(log: string): boolean {
-  return /Citation '[^']+' undefined/i.test(logTail(log));
+  // Warnings appear before "Output written on" — scan the whole log.
+  return /Citation '[^']+' on page \d+ undefined/i.test(log)
+    || /Citation '[^']+' undefined/i.test(log)
+    || /There were undefined citations/i.test(log);
 }
 
 function logNeedsBibliographyRerun(log: string): boolean {
@@ -298,20 +301,21 @@ function logNeedsBiberRerun(log: string): boolean {
   return /Please \(re\)run Biber/i.test(log);
 }
 
-function bibliographyLooksResolved(
+/**
+ * Whether the bibliography pass finished in a usable state.
+ *
+ * An empty bibliography (document uses biblatex/`\\printbibliography` but has
+ * no `\\cite{...}` yet) is **resolved** — biber writes a stub `.bbl` without
+ * `\\entry{...}`. Only undefined citation keys are a real failure.
+ */
+export function bibliographyLooksResolved(
   buildDir: string,
   mainStem: string,
   logContent: string,
 ): boolean {
   if (logHasUndefinedCitations(logContent)) return false;
   const bblPath = join(buildDir, `${mainStem}.bbl`);
-  if (!existsSync(bblPath)) return false;
-  try {
-    const bbl = readFileSync(bblPath, "utf-8");
-    return /\\entry\{/.test(bbl);
-  } catch {
-    return false;
-  }
+  return existsSync(bblPath);
 }
 
 /**

@@ -1,7 +1,13 @@
 import { memo, useState } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
-import { FlaskConicalIcon } from "lucide-react";
+import { ExternalLinkIcon, FlaskConicalIcon } from "lucide-react";
 import { ToolCard, Field } from "./shared";
+import { ChatProjectImage } from "@/lib/markdown/extract-markdown-images";
+import { resolveImageArtifactPaths } from "@/modes/experiments-mode/experiments-artifact-nav";
+import {
+  openExperimentInPanel,
+  resolveExperimentIdFromTool,
+} from "@/modes/experiments-mode/open-experiment";
 
 const LABELS: Record<string, string> = {
   "experiment-log": "Experiment log",
@@ -14,6 +20,7 @@ const ACTION_LABELS: Record<string, string> = {
   read: "read",
   append_run: "append run",
   detect_env: "detect env",
+  open: "open",
   run: "run",
 };
 
@@ -56,6 +63,29 @@ function unwrapPayload(content: unknown): Record<string, unknown> | null {
 function asStringArray(v: unknown): string[] {
   if (!Array.isArray(v)) return [];
   return v.filter((x): x is string => typeof x === "string");
+}
+
+function ArtifactImageGallery({
+  artifacts,
+  workspacePath,
+}: {
+  artifacts: string[];
+  workspacePath?: string;
+}) {
+  const images = resolveImageArtifactPaths(artifacts, workspacePath);
+  if (!images.length) return null;
+  return (
+    <div className="mt-2 space-y-2">
+      {images.map((rel) => (
+        <div key={rel} className="overflow-hidden rounded-md border border-border/50 bg-muted/20">
+          <ChatProjectImage src={rel} alt={rel.split("/").pop() || "artifact"} />
+          <p className="truncate px-2 pb-1.5 text-[length:var(--font-size-11)] text-muted-foreground">
+            {rel}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function ExperimentSummary({
@@ -121,10 +151,14 @@ function ExperimentSummary({
     }
     if (action === "append_run") {
       const run = data.run as Record<string, unknown> | undefined;
+      const artifacts = asStringArray(run?.artifacts);
+      const cwd = typeof run?.cwd === "string" ? run.cwd : undefined;
       return (
         <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
           <Field label="run id" value={String(run?.runId ?? "")} />
           <Field label="exit" value={String(run?.exitCode ?? "")} />
+          {artifacts.length ? <Field label="artifacts" value={artifacts.join(", ")} /> : null}
+          <ArtifactImageGallery artifacts={artifacts} workspacePath={cwd} />
         </div>
       );
     }
@@ -142,7 +176,15 @@ function ExperimentSummary({
         </div>
       );
     }
-    // Unknown action - compact fallback so the card is never empty.
+    if (action === "open") {
+      return (
+        <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
+          <Field label="id" value={String(data.id ?? "")} />
+          <Field label="title" value={String(data.title ?? "")} />
+          <Field label="focused" value={String(data.focused ?? true)} />
+        </div>
+      );
+    }
     return (
       <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
         <Field label="ok" value={String(data.ok ?? "")} />
@@ -152,7 +194,6 @@ function ExperimentSummary({
     );
   }
 
-  // experiment-run
   const run = data.run as Record<string, unknown> | undefined;
   const exitLabel =
     typeof data.exitCode === "number"
@@ -161,11 +202,24 @@ function ExperimentSummary({
         ? String(run.exitCode)
         : "";
   const artifacts = asStringArray(run?.artifacts ?? data.artifacts);
+  const cwd = typeof run?.cwd === "string" ? run.cwd : undefined;
+  const workspaceHint =
+    cwd ||
+    (typeof data.workspacePath === "string" ? data.workspacePath : undefined) ||
+    (typeof input.id === "string" && typeof data.experimentRoot === "string"
+      ? `${data.experimentRoot}/${input.id}`
+      : undefined);
+  const inputArtifacts = asStringArray(input.artifacts);
+  const mergedArtifacts = artifacts.length ? artifacts : inputArtifacts;
+
   return (
     <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
       {run ? <Field label="run id" value={String(run.runId ?? "")} /> : null}
       <Field label="exit" value={exitLabel} />
-      {artifacts.length ? <Field label="artifacts" value={artifacts.join(", ")} /> : null}
+      {mergedArtifacts.length ? (
+        <Field label="artifacts" value={mergedArtifacts.join(", ")} />
+      ) : null}
+      <ArtifactImageGallery artifacts={mergedArtifacts} workspacePath={workspaceHint} />
     </div>
   );
 }
@@ -192,8 +246,6 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
       ? LABELS["experiment-run"]
       : `${LABELS["experiment-log"] ?? toolName} · ${ACTION_LABELS[action] ?? action}`;
 
-  // Fallback: if structured parsing failed but we have raw content, show it so
-  // the widget is never empty AND the actual content shape is visible.
   const rawFallback =
     !data && resultContent
       ? typeof resultContent === "string"
@@ -207,11 +259,30 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
           })()
       : "";
 
+  const experimentId = resolveExperimentIdFromTool(input, data);
+  const canOpenInExperiments = Boolean(experimentId) && !isLoading && !isError;
+
   return (
     <ToolCard
       toolName={toolName}
       icon={<FlaskConicalIcon className="size-3.5 text-info" />}
       label={<span className="truncate font-medium">{label}</span>}
+      headerEnd={
+        canOpenInExperiments ? (
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 shrink-0 text-[length:var(--font-chat-meta)] text-muted-foreground hover:text-foreground transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              void openExperimentInPanel(experimentId!);
+            }}
+            title="Open in Experiments"
+          >
+            <ExternalLinkIcon className="size-3" />
+            Experiments
+          </button>
+        ) : null
+      }
       expanded={expanded}
       onToggle={() => setExpanded(!expanded)}
       isLoading={isLoading}

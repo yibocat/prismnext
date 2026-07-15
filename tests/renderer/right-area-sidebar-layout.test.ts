@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   computeEffectiveSidebarWidth,
   clampSidebarWidth,
+  clampSidebarMax,
+  clampSidebarDragPreviewWidth,
   isSidebarSqueezedByContainer,
   shouldAutoCloseSplitSidebar,
   shouldExitFullMode,
@@ -17,6 +19,23 @@ describe("right-area-sidebar-layout", () => {
     expect(computeEffectiveSidebarWidth(430, 320)).toBe(280);
   });
 
+  it("clamps effective width to sidebar max", () => {
+    expect(computeEffectiveSidebarWidth(1200, 900)).toBe(520);
+    expect(clampSidebarMax(900)).toBe(520);
+  });
+
+  it("hard-stops drag preview at min/max when already open", () => {
+    expect(clampSidebarDragPreviewWidth(600, 320)).toBe(520);
+    expect(clampSidebarDragPreviewWidth(250, 320)).toBe(280);
+    expect(clampSidebarDragPreviewWidth(20, 320)).toBe(20);
+  });
+
+  it("allows sub-min drag preview when opening from collapsed", () => {
+    expect(clampSidebarDragPreviewWidth(120, 0)).toBe(120);
+    expect(clampSidebarDragPreviewWidth(250, 0)).toBe(250);
+    expect(clampSidebarDragPreviewWidth(600, 0)).toBe(520);
+  });
+
   it("auto-closes split mode below threshold but not full overlay", () => {
     expect(shouldAutoCloseSplitSidebar(RIGHT_AREA_SPLIT_THRESHOLD - 1, false)).toBe(true);
     expect(shouldAutoCloseSplitSidebar(RIGHT_AREA_SPLIT_THRESHOLD - 1, true)).toBe(false);
@@ -29,7 +48,13 @@ describe("right-area-sidebar-layout", () => {
     expect(canAutoOpenSplitSidebar(RIGHT_AREA_SPLIT_RECOVER)).toBe(true);
   });
 
-  it("clamps drag width to sidebar min/max", () => {
+  it("allows sub-min width while dragging open", () => {
+    expect(computeEffectiveSidebarWidth(800, 120, 150, 30)).toBe(120);
+    expect(computeEffectiveSidebarWidth(400, 120, 150, 30)).toBe(120);
+    expect(computeEffectiveSidebarWidth(400, 320, 150, 30)).toBe(250);
+  });
+
+  it("clamps persisted drag width to sidebar min/max", () => {
     expect(clampSidebarWidth(100)).toBe(280);
     expect(clampSidebarWidth(320)).toBe(320);
     expect(clampSidebarWidth(900)).toBe(520);

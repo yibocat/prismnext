@@ -159,9 +159,12 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     workflowRules: [
       "BINDING: Do not write any `[n]` markers or a paper recommendation list in text until " +
         "every `literature-stage` call for this turn has returned a verified refId.",
+      "BINDING: Paper Search MCP `search_papers` discovers identifiers only — it does NOT create " +
+        "session citations. After MCP search, you MUST call `literature-stage` for every paper " +
+        "you will mention before writing any reply.",
       "Do NOT use the Task tool or subagents to find, verify, or summarize external papers — " +
-        "call `websearch` and `literature-stage` yourself in this conversation.",
-      "Do not draft the reply first and stage later — websearch/discover identifiers, stage each " +
+        "discover identifiers (Paper Search MCP `search_papers` first, then stage) yourself in this conversation.",
+      "Do not draft the reply first and stage later — discover identifiers (Paper Search MCP), stage each " +
         "paper, then write one final reply using the returned refIds.",
       "For EVERY paper you mention, call this first with its exact DOI or arXiv ID, " +
         "then reference the returned `refId` as `[n]` in your text.",
@@ -171,10 +174,10 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
         "Never mix list numbers with citation refs (bad: `4. [3]`; good: `**Title** [3]`).",
       "Never write the literal `[n]` placeholder — substitute the actual refId number.",
       "If `verified: false`, do NOT write `[n]`; tell the user the identifier could not be verified.",
-      "Never invent DOIs — copy exact identifiers from websearch or the user message.",
+      "Never invent DOIs — copy exact identifiers from Paper Search MCP results or the user message.",
       `Do not call ${TOOL_NAMES.literatureAdd} unless the user explicitly asks to add the paper to the library.`,
-      "For topic discovery (e.g. recent papers), use websearch first, extract arXiv IDs/DOIs, " +
-        "then stage each one. Do not list a paper with `[n]` unless staging succeeded.",
+      "For topic discovery (e.g. recent papers), call Paper Search MCP `search_papers` first, extract arXiv IDs/DOIs, " +
+        "stage each with `discoveredFrom: \"paper-search-mcp\"`. Use websearch only if MCP is unavailable.",
       "Reuse the same `[n]` when mentioning the same paper again in one reply.",
     ],
   },
@@ -326,13 +329,15 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "Workspace lab: `<experiment-dir>/<id>/` (clean folder — agent-owned layout).",
     category: "project",
     usageHint:
-      "action=create opens a new experiment (registry + empty workspace folder); action=list lists experiments; " +
+      "action=create opens a new experiment (registry + workspace folder + best-effort shared `<experiment-dir>/.venv`); action=list lists experiments; " +
       "action=read returns meta + recent runs; action=append_run logs a run you describe; " +
-      "action=detect_env returns optional python/R/git/venv snapshot. Requires a configured Experiment folder.",
+      "action=detect_env / open ensure shared `.venv` then snapshot or focus UI. Requires a configured Experiment folder.",
     workflowRules: [
       "Do NOT use generic read/write/edit on `.prismnext/experiments/**/meta.json` or runs.jsonl — use this tool only.",
       "Do not write meta.json or runs.jsonl under the Workspace experiment folder — registry only.",
       "Before create, call research-brief-read and pass briefLinks (sections + hypothesis excerpt).",
+      "Python packages: one shared `<experiment-dir>/.venv` for all islands — `uv pip install` from workspace or island cwd. " +
+      "Never system Python; never create a separate `.venv` under each island.",
       "Workspace layout inside `<experiment-dir>/<id>/` is agent-owned — no prescribed scripts/results dirs.",
       "If no_experiment_folder is returned, ask the user to add an Experiment folder in Settings → Workspace.",
       "Do not delegate experiment reads/writes via Task — run this tool in the orchestrator conversation.",
@@ -342,7 +347,8 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     name: TOOL_NAMES.experimentRun,
     label: "Experiment Run",
     description:
-      "Run a shell command in the experiment workspace cwd and append a structured run record to the registry.",
+      "Run a shell command in the experiment island cwd (ensures shared Experiment `.venv`, injects it on PATH) " +
+      "and append a structured run record to the registry.",
     category: "project",
     usageHint:
       "Run a command in an existing experiment workspace. Captures stdout/stderr tail + exit code, " +
@@ -350,7 +356,24 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     workflowRules: [
       "The experiment must already exist — call experiment-log action=create first.",
       "Use when you want execution plus structured logging in one step.",
-      "Workspace layout and env setup are your choice — pass artifacts/notes when they matter.",
+      "Python: shared `<experiment-dir>/.venv` is ensured before run; install with `uv pip install` — never system pip.",
+      "Pass artifacts/notes when they matter for provenance.",
+    ],
+  },
+  {
+    name: TOOL_NAMES.provenanceQuery,
+    label: "Provenance Query",
+    description:
+      "Read-only trace of experiment runs and downloaded files from `.prismnext/provenance.jsonl` " +
+      "(resolve_artifact -> the run that produced a file; resolve_run -> a run by id; list_recent -> recent events).",
+    category: "project",
+    usageHint:
+      "Trace an artifact path back to the run that produced it (command, env, exit, chatSessionId) - useful when writing " +
+      "Methods or reproducing a figure. Returns null/empty when nothing is recorded (honest, not an error).",
+    workflowRules: [
+      "Read-only - never writes. Use it to verify which command/env produced an output file.",
+      "When writing Methods, cite the real command from provenance instead of guessing.",
+      "Not finding a file in provenance usually means it was manually copied or the run predates provenance.",
     ],
   },
 ];

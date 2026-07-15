@@ -57,11 +57,35 @@ export interface PaperSnippetRequest {
   extractSource?: "mineru";
 }
 
+/**
+ * An experiment run + the artifact being inspected, pushed to chat so the agent
+ * can discuss "how this figure was produced" with full command/env context.
+ */
+export interface ExperimentRunSnippetRequest {
+  kind: "experiment-run";
+  runId: string;
+  experimentId?: string;
+  command: string;
+  exitCode: number;
+  startedAt: string;
+  finishedAt: string;
+  /** The artifact path being discussed (project-relative), if any. */
+  artifactPath?: string;
+  /** How the artifact was linked to the run (trust signal). */
+  linkMethod?: string;
+  artifacts?: string[];
+  env?: { python?: string | null; pythonVersion?: string | null; platform?: string; gitCommit?: string | null };
+  chatSessionId?: string | null;
+  workspacePath?: string;
+  sourceTabId?: string;
+}
+
 export type ContextInsertRequest =
   | TerminalSnippetRequest
   | CodeSnippetRequest
   | GitDiffSnippetRequest
-  | PaperSnippetRequest;
+  | PaperSnippetRequest
+  | ExperimentRunSnippetRequest;
 
 export function codeSnippetLabel(req: Pick<CodeSnippetRequest, "filePath" | "startLine" | "endLine">): string {
   const shortPath = req.filePath.split("/").pop() || req.filePath;
@@ -124,6 +148,28 @@ export function contextInsertToPart(req: ContextInsertRequest): ComposerPart {
       blockId: req.blockId,
       blockType: req.blockType,
       extractSource: req.extractSource,
+    };
+  }
+
+  if (req.kind === "experiment-run") {
+    const shortId = req.runId.split("-").slice(0, 3).join("-");
+    return {
+      type: "experiment-run",
+      id: createTokenId(),
+      label: `run:${shortId}`,
+      runId: req.runId,
+      experimentId: req.experimentId,
+      command: req.command,
+      exitCode: req.exitCode,
+      startedAt: req.startedAt,
+      finishedAt: req.finishedAt,
+      artifactPath: req.artifactPath,
+      linkMethod: req.linkMethod,
+      artifacts: req.artifacts ?? [],
+      env: req.env ?? null,
+      chatSessionId: req.chatSessionId ?? null,
+      workspacePath: req.workspacePath,
+      sourceTabId: req.sourceTabId,
     };
   }
 

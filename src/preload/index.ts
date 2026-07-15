@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	fsReadBatch: (absPaths: string[]) => ipcRenderer.invoke("fs:readBatch", { absPaths }),
 	fsReadImage: (absPath: string) =>
 		ipcRenderer.invoke("fs:readImage", { absPath }),
+	fsReadBytes: (absPath: string) =>
+		ipcRenderer.invoke("fs:readBytes", { absPath }) as Promise<{ bytes: ArrayBuffer }>,
 	fsWrite: (absPath: string, content: string) =>
 		ipcRenderer.invoke("fs:write", { absPath, content }),
 	fsCreate: (rootPath: string, relativePath: string, content: string) =>
@@ -112,9 +114,30 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		command: string;
 		artifacts?: string[];
 		notes?: string;
+		chatSessionId?: string | null;
 	}) => ipcRenderer.invoke("experiment:run", args),
 	experimentCancelRun: (args: { projectRoot: string; id: string; runId: string }) =>
 		ipcRenderer.invoke("experiment:cancelRun", args),
+	onExperimentChanged: (
+		callback: (data: {
+			projectRoot: string;
+			id?: string;
+			reason: string;
+			focus?: boolean;
+		}) => void,
+	) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			data: {
+				projectRoot: string;
+				id?: string;
+				reason: string;
+				focus?: boolean;
+			},
+		) => callback(data);
+		ipcRenderer.on("experiment:changed", handler);
+		return () => ipcRenderer.removeListener("experiment:changed", handler);
+	},
 	onExperimentRunComplete: (
 		callback: (data: {
 			id: string;
@@ -157,6 +180,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("experiment:runOutput", handler);
 		return () => ipcRenderer.removeListener("experiment:runOutput", handler);
 	},
+
+	// Provenance - trace a claimed artifact / run back to its generating command.
+	provenanceGetForArtifact: (projectRoot: string, artifactPath: string) =>
+		ipcRenderer.invoke("provenance:getForArtifact", { projectRoot, artifactPath }),
+	provenanceGetForRun: (projectRoot: string, runId: string) =>
+		ipcRenderer.invoke("provenance:getForRun", { projectRoot, runId }),
 
 		// Update checker — manifest is a local path or HTTPS url to version.json.
 		updateCheck: () => ipcRenderer.invoke("update:check"),
@@ -295,7 +324,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			doi?: string;
 			arxivId?: string;
 			sourceUrl?: string;
-			discoveredFrom?: "websearch" | "webfetch" | "user" | "agent";
+			discoveredFrom?: "paper-search-mcp" | "websearch" | "webfetch" | "user" | "agent";
 		},
 	) => ipcRenderer.invoke("literature:stage", { projectRoot, ...args }),
 	literatureApplyMetadata: (projectRoot: string, paperId: string, metadata: Record<string, unknown>) =>
@@ -591,6 +620,32 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	// OpenCode agent operations
 	chatDispose: () => ipcRenderer.invoke("chat:dispose"),
 	chatPrewarm: (projectPath: string) => ipcRenderer.invoke("chat:prewarm", { projectPath }),
+	mcpEnsure: (projectPath: string) =>
+		ipcRenderer.invoke("mcp:ensure", { projectPath }) as Promise<{
+			ok: boolean;
+			health: {
+				status: "ready" | "degraded";
+				mode: "npx";
+				detail: string;
+			};
+		}>,
+	mcpApply: (projectPath: string) =>
+		ipcRenderer.invoke("mcp:apply", { projectPath }) as Promise<{
+			ok: boolean;
+			reloadedSessions: number;
+			error?: string;
+			health?: {
+				status: "ready" | "degraded";
+				mode: "npx";
+				detail: string;
+			};
+		}>,
+	mcpPaperSearchHealth: () =>
+		ipcRenderer.invoke("mcp:paperSearchHealth") as Promise<{
+			status: "ready" | "degraded";
+			mode: "npx";
+			detail: string;
+		}>,
 	agentListSkills: (projectPath: string) => ipcRenderer.invoke("agent:listSkills", { projectPath }),
 	agentListRules: (projectPath: string) => ipcRenderer.invoke("agent:listRules", { projectPath }),
 	agentInstallRule: (projectPath: string, ruleId: string, content: string) =>

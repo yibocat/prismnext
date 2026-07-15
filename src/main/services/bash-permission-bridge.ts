@@ -44,6 +44,7 @@ export interface ApprovedBashJob {
   toolCallId: string;
   command: string;
   cwd: string;
+  projectRoot?: string;
 }
 
 /** After permission is granted — unblock custom bash.ts and run PTY. */
@@ -60,6 +61,7 @@ export function executeApprovedBashJob(job: ApprovedBashJob): void {
     toolCallId: job.toolCallId,
     command: job.command,
     cwd: job.cwd,
+    projectRoot: job.projectRoot,
   });
 }
 

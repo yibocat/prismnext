@@ -7,7 +7,12 @@
  * never written to SQLite. See
  * `docs/superpowers/specs/2026-07-01-chat-citation-staging-design.md`.
  */
-export type StagedCitationDiscovery = "websearch" | "webfetch" | "user" | "agent";
+export type StagedCitationDiscovery =
+  | "paper-search-mcp"
+  | "websearch"
+  | "webfetch"
+  | "user"
+  | "agent";
 
 export interface StagedCitation {
   id: string;

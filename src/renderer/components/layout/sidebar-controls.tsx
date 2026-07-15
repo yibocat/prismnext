@@ -44,11 +44,15 @@ export function SidebarControls({ leftSidebarRef, showMacSpacer, showNewAgent = 
                 st.setLeftSidebarOverlay(true);
               } else {
                 st.setLeftSidebarOverlay(false);
+                st.setSidebarExpanded(true);
+                st.setSidebarFullyCollapsed(false);
                 p.expand();
                 const width = Math.min(st.sidebarWidth || SIDEBAR_LEFT_DEFAULT, SIDEBAR_LEFT_MAX);
                 p.resize(width);
               }
             } else {
+              st.setSidebarExpanded(false);
+              st.setSidebarFullyCollapsed(true);
               p.collapse();
             }
           }}

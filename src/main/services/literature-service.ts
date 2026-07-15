@@ -38,6 +38,7 @@ import {
 } from "../../shared/paper-tags";
 import { cslEntryFromPaperRow } from "../../shared/bibliographic-metadata/helpers";
 import { broadcastToRenderer } from "./literature-broadcast";
+import { recordDownloadProvenance } from "./provenance-service";
 import "@citation-js/plugin-bibtex";
 
 export interface PaperRow {
@@ -968,6 +969,32 @@ export function attachPdfBufferToPaper(projectRoot: string, paperId: string, buf
   return getPaper(projectRoot, paperId)!;
 }
 
+/**
+ * Record a `download_recorded` provenance event for a library PDF (Phase 1.1).
+ * `paper.pdf_path` is library-relative; we rebase it to project-relative.
+ */
+export function recordPdfDownload(
+  projectRoot: string,
+  paper: PaperRow,
+  source: "paper-search-mcp" | "literature-ingest" | "manual",
+  sourceUrl: string | null,
+  bytes: number | null,
+): void {
+  if (!paper?.pdf_path) return;
+  const paths = getLibraryPaths(projectRoot);
+  const absPdf = path.join(paths.libraryDir, paper.pdf_path);
+  const relPdf = path
+    .relative(resolveLibraryProjectRoot(projectRoot), absPdf)
+    .replace(/\\/g, "/");
+  recordDownloadProvenance(projectRoot, {
+    artifactPath: relPdf,
+    source,
+    identifier: paper.doi ?? paper.arxiv_id ?? null,
+    sourceUrl,
+    bytes,
+  });
+}
+
 /** Replace an entry's PDF (new sha) — triggers extract invalidation in caller. */
 export function replacePdfFromFile(
   projectRoot: string,
@@ -1209,6 +1236,7 @@ export function ingestPdf(projectRoot: string, pdfPath: string, opts?: { title?:
   const rowid = db.prepare("SELECT rowid FROM papers WHERE id = ?").get(id) as { rowid: number };
   syncFtsForPaper(db, rowid.rowid, { title: baseTitle, abstract: null, authors: null, tags: null, ai_summary: null });
   const paper = getPaper(projectRoot, id)!;
+  recordPdfDownload(projectRoot, paper, "literature-ingest", null, buf.length);
   return { paper, created: true };
 }
 

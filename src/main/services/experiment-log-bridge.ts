@@ -34,13 +34,19 @@ import {
 } from "./experiment-log-service";
 import { EXPERIMENT_REGISTRY_REL } from "../../shared/experiment-log";
 import { kickoffExperimentRun } from "./experiment-run-executor";
+import {
+  readProvenanceEvents,
+  resolveRunById,
+  resolveRunForArtifact,
+} from "./provenance-service";
 import type { ExperimentBriefLinks } from "../../shared/experiment-log";
+import { broadcastExperimentChanged } from "./experiment-ui-events";
 
 const log = createLogger("experiment-log-bridge", "agent");
 
-interface ExperimentLogBridgeRequest {
-  /** Which tool wrote this request. */
-  tool: "experiment-log" | "experiment-run";
+export interface ExperimentLogBridgeRequest {
+  /** Which tool wrote this request. provenance-query is read-only and rides the same bridge. */
+  tool: "experiment-log" | "experiment-run" | "provenance-query";
   action: string;
   sessionId?: string;
   projectRoot?: string;
@@ -69,6 +75,10 @@ interface ExperimentLogBridgeRequest {
   command?: string;
   artifacts?: string[];
   notes?: string;
+  // provenance-query
+  artifactPath?: string;
+  runId?: string;
+  limit?: number;
 }
 
 function bridgeRoot(): string {
@@ -101,6 +111,12 @@ function dispatch(req: ExperimentLogBridgeRequest, resPath: string): Record<stri
       hint: "Open a project in Prism and start a new chat tab from that project.",
     };
   }
+
+  // ── provenance-query: read-only, no experiment folder required ──
+  if (req.tool === "provenance-query") {
+    return dispatchProvenanceQuery(req, projectRoot);
+  }
+
   const ctxResult = resolveExperimentCtx(projectRoot);
   if ("ok" in ctxResult && ctxResult.ok === false) return notConfigured();
   const ctx: ExperimentStorageContext = ctxResult as ExperimentStorageContext;
@@ -121,6 +137,7 @@ function dispatch(req: ExperimentLogBridgeRequest, resPath: string): Record<stri
       artifacts: req.artifacts,
       notes: req.notes,
       resPath,
+      chatSessionId: req.sessionId ?? null,
     });
     return null;
   }
@@ -152,6 +169,11 @@ function dispatchExperimentLog(
         tags: req.tags,
       });
       if (!result.ok) return { ok: false, error: result.error };
+      broadcastExperimentChanged({
+        projectRoot: ctx.projectRoot,
+        id: result.id,
+        reason: "create",
+      });
       return {
         ok: true,
         id: result.id,
@@ -191,8 +213,13 @@ function dispatchExperimentLog(
         artifacts: run.artifacts,
         env: run.env as never,
         notes: run.notes,
-      });
+      }, { chatSessionId: req.sessionId ?? null });
       if (!result.ok) return { ok: false, error: result.error };
+      broadcastExperimentChanged({
+        projectRoot: ctx.projectRoot,
+        id,
+        reason: "append_run",
+      });
       return { ok: true, run: result.run, path: result.path };
     }
     case "detect_env": {
@@ -202,8 +229,65 @@ function dispatchExperimentLog(
       if (!result.ok) return { ok: false, error: result.error };
       return { ok: true, env: result.env, workspacePath: result.workspacePath };
     }
+    case "open": {
+      // Focus Experiments UI on this island (renderer deep-link). Registry read validates id.
+      const id = typeof req.id === "string" ? req.id.trim() : "";
+      if (!id) return { ok: false, error: "missing_id" };
+      const result = readExperiment(ctx, id, 1);
+      if (!result.ok) return { ok: false, error: result.error };
+      broadcastExperimentChanged({
+        projectRoot: ctx.projectRoot,
+        id,
+        reason: "open",
+        focus: true,
+      });
+      return {
+        ok: true,
+        id,
+        focused: true,
+        title: result.meta.title,
+        hint: "Opened in Experiments mode for the user.",
+      };
+    }
     default:
       return { ok: false, error: `Unknown experiment-log action: ${String(req.action)}` };
+  }
+}
+
+/**
+ * Dispatch a read-only provenance-query action. Exported for direct testing.
+ * Actions:
+ *  - resolve_artifact: which run (if any) claimed a file path
+ *  - resolve_run:      the run_recorded event for a runId
+ *  - list_recent:      the most recent provenance events (runs + downloads)
+ *
+ * "Not found" is a normal null / empty result, not an error - the caller
+ * (agent) should treat it as "no provenance recorded".
+ */
+export function dispatchProvenanceQuery(
+  req: ExperimentLogBridgeRequest,
+  projectRoot: string,
+): Record<string, unknown> {
+  switch (req.action) {
+    case "resolve_artifact": {
+      const artifactPath = typeof req.artifactPath === "string" ? req.artifactPath.trim() : "";
+      if (!artifactPath) return { ok: false, error: "missing_artifactPath" };
+      const resolved = resolveRunForArtifact(projectRoot, artifactPath);
+      return { ok: true, found: resolved !== null, resolved };
+    }
+    case "resolve_run": {
+      const runId = typeof req.runId === "string" ? req.runId.trim() : "";
+      if (!runId) return { ok: false, error: "missing_runId" };
+      return { ok: true, run: resolveRunById(projectRoot, runId) };
+    }
+    case "list_recent": {
+      const limit =
+        typeof req.limit === "number" && req.limit > 0 ? Math.min(req.limit, 200) : 20;
+      const events = readProvenanceEvents(projectRoot);
+      return { ok: true, events: events.slice(-limit) };
+    }
+    default:
+      return { ok: false, error: `Unknown provenance-query action: ${String(req.action)}` };
   }
 }
 

@@ -102,4 +102,28 @@ describe("WorkspaceSplit", () => {
     );
     expect(group.getAttribute("data-has-layout-handler")).toBe("yes");
   });
+
+  it("ignores saved layout when rightCollapsed is true", () => {
+    useLayoutStore.setState({
+      workspaceSplitLayouts: {
+        "lit-pdf:lit-notes": { "lit-pdf": 62, "lit-notes": 38 },
+      },
+    });
+
+    render(
+      <WorkspaceSplit
+        left={<span>Lit PDF</span>}
+        right={<span>Notes</span>}
+        leftId="lit-pdf"
+        rightId="lit-notes"
+        defaultLeft={55}
+        rightCollapsed
+      />,
+    );
+
+    const group = screen.getByTestId("workspace-split-group");
+    expect(group.getAttribute("data-default-layout")).toBe(
+      JSON.stringify({ "lit-pdf": 100, "lit-notes": 0 }),
+    );
+  });
 });

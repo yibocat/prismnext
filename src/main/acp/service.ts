@@ -16,6 +16,7 @@ import {
 import { buildPermissionOutcome, type PermissionResponse } from "./permission";
 import { resolveChatTabId } from "../services/chat-session-registry";
 import { mcpJsonToAcpServers, type AcpMcpServer } from "./mcp-transform";
+import { ensureDefaultMcpServers } from "../services/project-mcp-defaults";
 import {
   getPermissionRulesForMode,
   resolvePermissionMode,
@@ -436,6 +437,7 @@ export class AcpService {
                 toolCallId,
                 command: bashCommand,
                 cwd: bashCwd || process.cwd(),
+                projectRoot: this.projectPath || undefined,
               });
             } else if (this.isBashTool(toolName) && sessionId && toolCallId) {
               // Auto-allow arrived before real command — remember context, wait for backfill.
@@ -445,6 +447,7 @@ export class AcpService {
                 toolCallId,
                 command: bashCommand,
                 cwd: bashCwd || process.cwd(),
+                projectRoot: this.projectPath || undefined,
               });
               this.bashAutoApproved.add(toolCallId);
             }
@@ -480,6 +483,7 @@ export class AcpService {
               toolCallId,
               command: bashCommand,
               cwd: bashCwd || process.cwd(),
+              projectRoot: this.projectPath || undefined,
             });
           }
 
@@ -669,6 +673,14 @@ export class AcpService {
     additionalDirectories: string[];
   } {
     const agentDir = join(projectRoot, ".prismnext", "agent");
+
+    // Built-in Paper Search MCP: always present + enabled before ACP reads config.
+    try {
+      ensureDefaultMcpServers(agentDir);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.warn(`ensureDefaultMcpServers failed: ${message}`);
+    }
 
     const additionalDirectories: string[] = [];
     const skillsDir = join(agentDir, "skills");
@@ -1533,18 +1545,24 @@ export class AcpService {
     await this.initSession(sessionId, cwd, projectRoot);
   }
 
-  /** Reload MCP tool definitions for an existing session (composer `/` MCP tokens). */
+  /**
+   * Reload MCP tool definitions for an existing session.
+   * Pass a non-empty allowlist to restrict; omit / empty = full project MCP set.
+   */
   async reloadSessionMcps(
     sessionId: string,
     cwd: string,
     projectRoot: string,
-    mcpServerAllowlist: string[],
+    mcpServerAllowlist?: string[],
   ): Promise<void> {
-    if (!this.conn || mcpServerAllowlist.length === 0) return;
-    const { mcpServers } = this.loadProjectAgentConfig(projectRoot, { mcpServerAllowlist });
+    if (!this.conn) return;
+    const { mcpServers } = this.loadProjectAgentConfig(
+      projectRoot,
+      mcpServerAllowlist?.length ? { mcpServerAllowlist } : undefined,
+    );
     log.info("Reloading session MCP servers", {
       sessionId,
-      allowlist: mcpServerAllowlist,
+      allowlist: mcpServerAllowlist?.length ? mcpServerAllowlist : "(all)",
       loaded: mcpServers.map((s) => s.name),
     });
     await this.withNotificationCollector(
@@ -1560,6 +1578,24 @@ export class AcpService {
     ).catch((err: any) => {
       log.warn(`session/load (MCP reload) failed for ${sessionId}: ${err.message}`);
     });
+  }
+
+  /**
+   * Re-read mcp.json (incl. built-in ensure) and push MCP set into all open
+   * sessions for this project via session/load.
+   */
+  async applyProjectMcpConfig(projectRoot: string): Promise<{ reloadedSessions: number }> {
+    const { listSessionsForProject } = await import("../services/chat-session-registry");
+    this.cachedAgentConfig = null;
+    this.prewarmProject(projectRoot);
+    const sessions = listSessionsForProject(projectRoot);
+    let reloadedSessions = 0;
+    for (const sessionId of sessions) {
+      await this.reloadSessionMcps(sessionId, projectRoot, projectRoot);
+      reloadedSessions++;
+    }
+    log.info("Applied project MCP config", { projectRoot, reloadedSessions });
+    return { reloadedSessions };
   }
 
   async getMessages(sessionId: string, cwd: string, projectRoot?: string): Promise<any[]> {
@@ -2145,6 +2181,7 @@ export class AcpService {
       toolCallId,
       command: command.trim(),
       cwd,
+      projectRoot: this.projectPath || undefined,
     });
 
     log.info(`permission:bash-tool-call gate=${permissionId} toolCallId=${toolCallId}`);

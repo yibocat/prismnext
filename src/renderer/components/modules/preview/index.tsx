@@ -687,7 +687,7 @@ export function PdfDocumentView({
 export function PdfPreview() {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const { isCompiling, compileError, pdfRevision } = useCompileStore();
-  const files = useDocumentStore((s) => s.files);
+  const fileMetadata = useDocumentStore((s) => s.fileMetadata);
   const storeTabs = useRightPanelStore((s) => s.tabs);
   const storeActiveTabId = useRightPanelStore((s) => s.activeTabId);
   const tabCtx = useContext(TabContext);
@@ -696,40 +696,56 @@ export function PdfPreview() {
   // global active tab (when rendered directly by RightMainArea for compiled PDFs).
   const activeTab = tabCtx?.tab ?? storeTabs.find((t) => t.id === storeActiveTabId);
   const isPdfFile = activeTab?.filePath?.toLowerCase().endsWith(".pdf") ?? false;
+  const fileId = activeTab?.fileId ?? null;
+  const absolutePath = fileId
+    ? (fileMetadata.get(fileId)?.absolutePath ?? null)
+    : null;
 
-  const [fileDataUrl, setFileDataUrl] = useState<string | null>(null);
+  /** Standalone Files PDF — same Uint8Array path as compile preview (not data URL). */
+  const [filePdfBytes, setFilePdfBytes] = useState<Uint8Array | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const pdfBytes = useMemo(() => {
+  const compilePdfBytes = useMemo(() => {
     if (isPdfFile) return null;
     if (projectRoot) return getPdfBytes(projectRoot) ?? null;
     return null;
   }, [isPdfFile, projectRoot, pdfRevision]);
 
   useEffect(() => {
-    if (!isPdfFile || !activeTab?.fileId) {
-      setFileDataUrl(null);
+    if (!isPdfFile || !fileId) {
+      setFilePdfBytes(null);
+      setLoadError(null);
       return;
     }
-    const file = files.find((f) => f.id === activeTab.fileId);
-    if (!file?.absolutePath) return;
+    if (!absolutePath) {
+      setFilePdfBytes(null);
+      setLoadError("PDF path not found in project metadata.");
+      return;
+    }
     let cancelled = false;
+    setLoadError(null);
+    setFilePdfBytes(null);
     (async () => {
       try {
-        const { dataUrl } = await window.electronAPI.fsReadImage(file.absolutePath);
-        if (!cancelled) setFileDataUrl(dataUrl);
-      } catch { /* ignore */ }
+        const { bytes } = await window.electronAPI.fsReadBytes(absolutePath);
+        if (!cancelled) setFilePdfBytes(new Uint8Array(bytes));
+      } catch (err) {
+        if (!cancelled) {
+          setFilePdfBytes(null);
+          setLoadError(err instanceof Error ? err.message : "Failed to load PDF");
+        }
+      }
     })();
     return () => { cancelled = true; };
-  }, [isPdfFile, activeTab?.fileId, files]);
+  }, [isPdfFile, fileId, absolutePath]);
 
   const source: string | Uint8Array | null = useMemo(() => {
-    if (fileDataUrl) return fileDataUrl;
-    // CRITICAL: pdfBytes.slice() creates a fresh copy. PDF.js transfers
-    // (not copies) the ArrayBuffer to its web worker via postMessage.
-    // Without this, React Strict Mode double-invocation detaches the buffer.
-    if (pdfBytes) return pdfBytes.slice();
+    // CRITICAL: .slice() creates a fresh copy. PDF.js transfers (not copies)
+    // the ArrayBuffer to its web worker via postMessage.
+    if (filePdfBytes) return filePdfBytes.slice();
+    if (compilePdfBytes) return compilePdfBytes.slice();
     return null;
-  }, [fileDataUrl, pdfBytes]);
+  }, [filePdfBytes, compilePdfBytes]);
 
   // Persistence key: unique identifier for this PDF view.
   // For compiled PDFs we key on the .tex source file; for standalone .pdf
@@ -739,7 +755,25 @@ export function PdfPreview() {
     return `${projectRoot}::${activeTab.fileId}`;
   }, [projectRoot, activeTab?.fileId]);
 
+  if (loadError && isPdfFile) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 bg-background text-[length:var(--font-size-12)] text-muted-foreground px-4 text-center">
+        <AlertCircleIcon className="size-5 text-destructive" />
+        <span>{loadError}</span>
+      </div>
+    );
+  }
+
   if (!source) {
+    // Standalone .pdf tab: show explicit load state. Compiled preview: empty until bytes.
+    if (isPdfFile) {
+      return (
+        <div className="flex h-full flex-col items-center justify-center gap-2 bg-background text-[length:var(--font-size-12)] text-muted-foreground">
+          <LoaderIcon className="size-5 animate-spin" />
+          <span>Loading PDF…</span>
+        </div>
+      );
+    }
     return <div className="flex h-full flex-col bg-background" />;
   }
 

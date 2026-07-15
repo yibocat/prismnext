@@ -7,6 +7,8 @@ const log = createLogger("document-store", "startup");
 
 /** Monotonic id so stale async openProject work is discarded after a newer open. */
 let openProjectGeneration = 0;
+/** Monotonic id so a slower openFile cannot clobber a newer selection. */
+let fileOpenGeneration = 0;
 import { useProjectStore } from "./project-store";
 import { useRightPanelStore } from "./right-panel-store";
 import { useLayoutStore } from "./layout-store";
@@ -385,13 +387,14 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   openFile: async (id: string) => {
     const { openedContents, fileMetadata, activeFileId } = get();
 
-    // Already open — just switch active file
-    if (id === activeFileId) return;
-
-    // Check cache first
+    // Cache hit — only switch active; do not skip load when cache is missing
+    // (id === activeFileId with no content was a common empty-editor stuck state).
     const cached = openedContents.get(id);
-    if (cached) {
-      set({ activeFileId: id });
+    const hasCachedPayload =
+      !!cached &&
+      (typeof cached.content === "string" || typeof cached.dataUrl === "string");
+    if (hasCachedPayload) {
+      if (activeFileId !== id) set({ activeFileId: id });
       return;
     }
 
@@ -404,20 +407,51 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       if (!meta) return;
     }
 
+    const openSeq = ++fileOpenGeneration;
+    // Switch active immediately so tabs/UI match the click while content loads.
+    if (get().activeFileId !== id) set({ activeFileId: id });
+
     try {
-      if (meta.type === "image") {
+      // Images: data URL for ImageViewer. PDFs: preview loads Uint8Array via
+      // fsReadBytes (data:application/pdf hangs pdf.js/lector in Electron).
+      if (meta.type === "pdf") {
+        if (openSeq === fileOpenGeneration) {
+          set({
+            activeFileId: id,
+            contentVersion: get().contentVersion + 1,
+          });
+        }
+      } else if (meta.type === "image") {
         const { dataUrl } = await window.electronAPI.fsReadImage(meta.absolutePath);
         const newMap = new Map(get().openedContents);
         newMap.set(id, { dataUrl, isDirty: false });
-        set({ openedContents: newMap, activeFileId: id });
+        if (openSeq !== fileOpenGeneration) {
+          set({ openedContents: newMap, contentVersion: get().contentVersion + 1 });
+          return;
+        }
+        set({
+          openedContents: newMap,
+          activeFileId: id,
+          contentVersion: get().contentVersion + 1,
+        });
       } else {
         const { content } = await window.electronAPI.fsRead(meta.absolutePath);
         const newMap = new Map(get().openedContents);
         newMap.set(id, { content, isDirty: false });
-        set({ openedContents: newMap, activeFileId: id });
+        if (openSeq !== fileOpenGeneration) {
+          set({ openedContents: newMap, contentVersion: get().contentVersion + 1 });
+          return;
+        }
+        set({
+          openedContents: newMap,
+          activeFileId: id,
+          contentVersion: get().contentVersion + 1,
+        });
       }
     } catch {
-      set({ activeFileId: id });
+      if (openSeq === fileOpenGeneration) {
+        set({ activeFileId: id });
+      }
     }
   },
 
@@ -1347,14 +1381,14 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   // ─── Sync Actions ───
 
   setActiveFile: (id: string) => {
-    if (get().activeFileId === id) return;
     if (!id) {
       // Clearing the selection — openFile can't handle empty id
       // (it early-returns on missing metadata), so set directly.
       set({ activeFileId: null });
       return;
     }
-    // Trigger lazy load — openFile checks cache first, loads from disk on miss
+    // Always go through openFile — even when already active — so a failed /
+    // incomplete prior load (tab open, empty cache) can recover.
     get().openFile(id);
   },
 

@@ -3,6 +3,10 @@ import type { ContentBlock } from "@/stores/chat-store";
 import { MarkdownRenderer } from "./markdown-renderer";
 import { ToolWidget } from "./tools/tool-widget-dispatcher";
 import { ThinkingWidget } from "./tools/thinking-widget";
+import {
+  buildNaturalFigureReplyMarkdown,
+  resolveMissingFigurePathsForReply,
+} from "@/lib/chat/experiment-run-figures";
 
 /** Shared assistant block renderer for main chat and Task expert activity. */
 export const AssistantBlockList = memo(function AssistantBlockList({
@@ -21,6 +25,14 @@ export const AssistantBlockList = memo(function AssistantBlockList({
   const thinkingComplete = blocks.some(
     (b) => b.type === "text" || b.type === "tool_use",
   );
+
+  // If the model forgot to embed figures in its prose, append a natural reply
+  // block at the end (same markdown renderer as AI text). Wait until the turn
+  // finishes so we don't insert between partial prose and later streamed text.
+  const missingFigures = isStreamingMsg
+    ? []
+    : resolveMissingFigurePathsForReply(blocks, toolResultMap);
+  const fallbackReply = buildNaturalFigureReplyMarkdown(missingFigures);
 
   return (
     <>
@@ -54,6 +66,14 @@ export const AssistantBlockList = memo(function AssistantBlockList({
         }
         return null;
       })}
+      {fallbackReply ? (
+        <div
+          key="experiment-figure-reply"
+          className="min-w-0 max-w-full overflow-hidden text-[length:var(--font-chat-message)]"
+        >
+          <MarkdownRenderer content={fallbackReply} sessionId={sessionId} />
+        </div>
+      ) : null}
     </>
   );
 });

@@ -40,6 +40,8 @@ function LiteratureReaderShell({
   tab: RightTab;
   notesOpen: boolean;
 }) {
+  const setNotesPaneOpen = useLiteratureReaderStore((s) => s.setNotesPaneOpen);
+
   return (
     <WorkspaceSplit
       left={<LiteratureReader projectRoot={projectRoot} paper={paper} />}
@@ -49,6 +51,7 @@ function LiteratureReaderShell({
       defaultLeft={55}
       layoutKey={`literature:reader-notes:${paper.id}`}
       rightCollapsed={!notesOpen}
+      onRightCollapsedChange={(collapsed) => setNotesPaneOpen(paper.id, !collapsed)}
     />
   );
 }

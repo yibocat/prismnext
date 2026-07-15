@@ -4,6 +4,7 @@ import {
   serializeMcpConfig,
   type McpServerEntry,
 } from "@/lib/agent/mcp-config";
+import { isBuiltinMcpServer } from "@/lib/agent/mcp-presets";
 
 function mcpPathFor(projectRoot: string): string {
   return `${projectRoot.replace(/[/\\]+$/, "")}/.prismnext/agent/mcp.json`;
@@ -34,6 +35,8 @@ export const useMcpServersStore = create<McpServersState>()((set, get) => ({
     }
     const mcpPath = mcpPathFor(projectRoot);
     try {
+      // Ensures built-in Paper Search MCP is present + enabled on disk.
+      await window.electronAPI.mcpEnsure(projectRoot);
       const exists = await window.electronAPI.fsExists(mcpPath);
       if (!exists) {
         set({ servers: [], loaded: true });
@@ -47,11 +50,21 @@ export const useMcpServersStore = create<McpServersState>()((set, get) => ({
   },
 
   persist: async (projectRoot, next) => {
+    // Built-in servers cannot be removed or disabled via Settings.
+    const guarded = next.map((s) =>
+      isBuiltinMcpServer(s.name) ? { ...s, enabled: true } : s,
+    );
+    const names = new Set(guarded.map((s) => s.name));
     const prev = get().servers;
-    set({ servers: next, projectRoot, saving: true });
+    for (const s of prev) {
+      if (isBuiltinMcpServer(s.name) && !names.has(s.name)) {
+        guarded.unshift({ ...s, enabled: true });
+      }
+    }
+    set({ servers: guarded, projectRoot, saving: true });
     try {
-      await window.electronAPI.fsWrite(mcpPathFor(projectRoot), serializeMcpConfig(next));
-      await window.electronAPI.chatPrewarm(projectRoot);
+      await window.electronAPI.fsWrite(mcpPathFor(projectRoot), serializeMcpConfig(guarded));
+      await window.electronAPI.mcpApply(projectRoot);
     } catch {
       set({ servers: prev });
       throw new Error("Failed to save MCP configuration");
@@ -73,7 +86,7 @@ export const useMcpServersStore = create<McpServersState>()((set, get) => ({
     try {
       const mcpPath = mcpPathFor(projectRoot);
       await window.electronAPI.fsWrite(mcpPath, content);
-      await window.electronAPI.chatPrewarm(projectRoot);
+      await window.electronAPI.mcpApply(projectRoot);
       const result = await window.electronAPI.fsRead(mcpPath);
       set({
         servers: parseMcpConfig(result?.content ?? ""),

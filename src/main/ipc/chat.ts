@@ -376,10 +376,14 @@ export function registerChatHandlers(): void {
             )?.mcpServers
           : undefined;
       const composerMcps = args.mcpServerAllowlist?.filter(Boolean) ?? [];
-      const mcpServerAllowlist =
+      const { ensureBuiltinMcpInAllowlist } = await import(
+        "../services/project-mcp-defaults"
+      );
+      const mcpServerAllowlist = ensureBuiltinMcpInAllowlist(
         composerMcps.length > 0
           ? [...new Set([...(orchestratorMcpAllowlist ?? []), ...composerMcps])]
-          : orchestratorMcpAllowlist;
+          : orchestratorMcpAllowlist,
+      );
 
       const assembledPrompt = promptManager.compose(promptCtx);
       const projectRulesPrompt = promptManager.composeProjectRules(promptCtx);

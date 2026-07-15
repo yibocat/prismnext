@@ -90,6 +90,7 @@ export const TOOL_PERMISSION_REGISTRY: Record<string, ToolPermissionEntry> = {
   // prompt in ask/auto, deny in readonly. append_run + create handle their
   // own file writes via the read/write side of the bridge.
   "experiment-run": { permissionGroup: "shell", confirmUx: "command", rules: SHELL },
+  "provenance-query": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
 };
 
 export function getToolPermissionEntry(toolName: string): ToolPermissionEntry | undefined {

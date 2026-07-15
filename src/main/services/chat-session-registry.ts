@@ -54,6 +54,17 @@ export function getSessionProjectRoot(sessionId: string): string | undefined {
   return sessionToProjectRoot.get(sessionId);
 }
 
+/** Active ACP sessions registered for a project (for MCP apply / reload). */
+export function listSessionsForProject(projectRoot: string): string[] {
+  const root = projectRoot.trim();
+  if (!root) return [];
+  const out: string[] = [];
+  for (const [sessionId, mapped] of sessionToProjectRoot) {
+    if (mapped === root) out.push(sessionId);
+  }
+  return out;
+}
+
 export function setSessionProjectRoot(sessionId: string, projectRoot: string): void {
   const root = projectRoot.trim();
   if (!root) return;

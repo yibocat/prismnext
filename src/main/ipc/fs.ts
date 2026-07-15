@@ -69,6 +69,13 @@ export function registerFsHandlers(): void {
     return { dataUrl };
   });
 
+  ipcMain.handle("fs:readBytes", async (_event, args: { absPath: string }) => {
+    assertUnderHome(args.absPath, "fs:readBytes");
+    const bytes = await fs.readFileBytes(args.absPath);
+    // Structured clone: return a plain ArrayBuffer for the renderer.
+    return { bytes: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) };
+  });
+
   ipcMain.handle(
     "fs:write",
     async (_event, args: { absPath: string; content: string }) => {
@@ -318,13 +325,9 @@ export function registerFsHandlers(): void {
       mkdirSync(skillsDir, { recursive: true });
     }
 
-    // Create mcp.json template
-    const mcpPath = join(newAgentDir, "mcp.json");
-    if (!existsSync(mcpPath)) {
-      writeFileSync(mcpPath, JSON.stringify({
-        "mcpServers": {},
-      }, null, 2), "utf-8");
-    }
+    // Seed curated Paper Search MCP (npx) when mcp.json is missing/empty.
+    const { ensureDefaultMcpServers } = await import("../services/project-mcp-defaults");
+    ensureDefaultMcpServers(newAgentDir);
 
     // Create .gitkeep in skills/
     const gitkeepPath = join(skillsDir, ".gitkeep");

@@ -1,8 +1,9 @@
 /**
  * experiment-run — Run a shell command inside an experiment island and record it.
  *
- * Fixed pipeline (executed by the bridge executor): resolve island → detect_env →
- * run command via the PTY layer → append a runs.jsonl entry → return the run.
+ * Fixed pipeline (executed by the bridge executor): resolve island → ensure island
+ * shared workspace `.venv` (uv/python) → detect_env → run command via PTY (venv on PATH) →
+ * append a runs.jsonl entry → return the run.
  * This is the PREFERRED way to run experiment commands; it guarantees every run
  * is logged with env + exit code + output tail. If you run a raw `bash` command
  * inside an experiment island instead, the experiments module requires the next
@@ -99,7 +100,10 @@ export default tool({
       .describe("Shell command to execute in the experiment island cwd."),
     artifacts: tool.schema
       .array(tool.schema.string())
-      .describe("Optional artifact paths relative to the workspace folder — you choose what to record.")
+      .describe(
+        "Output paths relative to the island folder (e.g. results/plot.png). " +
+          "Always include figures so chat can inline-preview them and provenance can link them.",
+      )
       .optional(),
     notes: tool.schema
       .string()

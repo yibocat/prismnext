@@ -61,12 +61,16 @@ export function McpCatalogPanel() {
     );
   }, [catalogSearch]);
 
+  const builtinPresets = useMemo(
+    () => filteredPresets.filter((p) => p.builtin),
+    [filteredPresets],
+  );
   const recommendedPresets = useMemo(
-    () => filteredPresets.filter((p) => p.recommended),
+    () => filteredPresets.filter((p) => p.recommended && !p.builtin),
     [filteredPresets],
   );
   const morePresets = useMemo(
-    () => filteredPresets.filter((p) => !p.recommended),
+    () => filteredPresets.filter((p) => !p.recommended && !p.builtin),
     [filteredPresets],
   );
 
@@ -132,7 +136,11 @@ export function McpCatalogPanel() {
               <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
                 {MCP_CATEGORY_LABELS[preset.category]}
               </span>
-              {preset.recommended ? (
+              {preset.builtin ? (
+                <span className={cn(BADGE, "bg-primary/10 text-primary normal-case tracking-normal")}>
+                  Built-in
+                </span>
+              ) : preset.recommended ? (
                 <span className={cn(BADGE, "bg-primary/10 text-primary normal-case tracking-normal")}>
                   Recommended
                 </span>
@@ -140,8 +148,10 @@ export function McpCatalogPanel() {
             </div>
             <p className={ROW_DESC}>{preset.description}</p>
           </div>
-          {installed ? (
-            <span className={cn(BADGE, "bg-primary/10 text-primary")}>Installed</span>
+          {installed || preset.builtin ? (
+            <span className={cn(BADGE, "bg-primary/10 text-primary")}>
+              {preset.builtin ? "Default" : "Installed"}
+            </span>
           ) : (
             <Button
               variant="outline"
@@ -193,8 +203,12 @@ export function McpCatalogPanel() {
     <div className="flex-1 overflow-auto">
       <div className={SETTINGS_DETAIL_SHELL}>
         <p className={SETTINGS_ROW_DESC}>
-          Curated MCP servers for research workflows. Requires npx on your machine. Literature search
-          and citations stay in Prism built-in tools — use MCP for web, repos, and data stores.
+          Curated MCP servers for research workflows. Requires{" "}
+          <code className="text-[length:var(--font-size-11)] bg-muted px-1 rounded">npx</code>.{" "}
+          <strong>Paper Search</strong> is built-in (always on). Staging and library citations stay
+          in Prism{" "}
+          <code className="text-[length:var(--font-size-11)] bg-muted px-1 rounded">literature-*</code>{" "}
+          tools.
         </p>
         <div className="relative">
           <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
@@ -212,6 +226,7 @@ export function McpCatalogPanel() {
           </div>
         ) : (
           <div className="space-y-5">
+            {renderPresetSection("Built-in", builtinPresets)}
             {renderPresetSection("Recommended", recommendedPresets)}
             {renderPresetSection("More", morePresets)}
           </div>

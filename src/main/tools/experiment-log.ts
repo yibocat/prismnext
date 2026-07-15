@@ -73,21 +73,23 @@ async function bridgeCall(
 
 export default tool({
   description:
-    "Experiment log — create experiment islands, list/read experiments, append run records, and detect the runtime environment. " +
+    "Experiment log — create experiment islands, list/read experiments, append run records, detect env, and open the Experiments UI. " +
     "Registry: `.prismnext/experiments/<id>/` (meta.json + runs.jsonl). " +
     "Workspace lab: `<experiment-dir>/<id>/` (clean folder — agent-owned layout). " +
     "Use `action` to select an operation. Do NOT use generic read/write/edit on registry files — use this tool only.",
   args: {
     action: tool.schema
-      .enum(["list", "create", "read", "append_run", "detect_env"])
-      .describe("Operation: list experiments, create an island, read meta+runs, append a run, or detect env."),
+      .enum(["list", "create", "read", "append_run", "detect_env", "open"])
+      .describe(
+        "Operation: list, create, read meta+runs, append a run, detect env, or open the Experiments panel on an island.",
+      ),
     title: tool.schema
       .string()
       .describe("create only — experiment title (drives the auto-slug).")
       .optional(),
     id: tool.schema
       .string()
-      .describe("read / append_run / detect_env only — experiment slug (e.g. exp-20260707-lr-ablation-a3f2).")
+      .describe("read / append_run / detect_env / open — experiment slug (e.g. exp-20260707-lr-ablation-a3f2).")
       .optional(),
     runsLimit: tool.schema
       .number()
@@ -149,7 +151,7 @@ export default tool({
         return toolOutput({ ok: false, error: "Missing run.command parameter." });
       }
       payload.run = args.run;
-    } else if (action === "detect_env") {
+    } else if (action === "detect_env" || action === "open") {
       const id = typeof args.id === "string" ? args.id.trim() : "";
       if (!id) return toolOutput({ ok: false, error: "Missing id parameter." });
       payload.id = id;

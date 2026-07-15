@@ -5,6 +5,8 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { resetSettingsEditors } from "@/stores/settings-panel-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
+import { RESIZE_FILL_PX } from "@/lib/workspace/layout-constants";
+import { runWithProgrammaticCenterResize } from "@/lib/workspace/layout-resize-guard";
 import { leftNavRegistry } from "./registry";
 import {
   closeExperimentsPanel,
@@ -146,10 +148,13 @@ const texWorkspaceNav: LeftNavDefinition = {
     rps.ensureTab("texworkspace");
     st.setLeftSidebarView("sessions");
     st.activateMode("texworkspace");
+    st.setRightAreaExpanded(true);
     st.setEditorMaximized(true);
-    if (r.isCollapsed()) r.expand();
-    c.collapse();
-    r.resize(9999);
+    runWithProgrammaticCenterResize(() => {
+      if (r.isCollapsed()) r.expand();
+      c.collapse();
+      r.resize(RESIZE_FILL_PX);
+    });
   },
   deactivate: (ctx) => {
     closeTexWorkspace(ctx);

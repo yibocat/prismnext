@@ -6,6 +6,7 @@ import {
   inferToolNameFromInput,
   inferToolNameFromOutput,
   resolveLiteratureToolTitle,
+  resolveMcpToolTitle,
   resolvePrismToolTitle,
 } from "./tool-name-infer";
 import {
@@ -632,6 +633,12 @@ export class EventMapper {
         const prismTitle = resolvePrismToolTitle(titleLower);
         if (prismTitle) toolName = prismTitle;
       }
+      // MCP titles (`server_tool`) beat query→websearch inference — paper-search
+      // MCP shares the same input keys as builtin websearch.
+      if (!toolName) {
+        const mcpTitle = resolveMcpToolTitle(titleLower);
+        if (mcpTitle) toolName = mcpTitle;
+      }
 
       if (!toolName) {
         // kind "other" is the default for custom Prism tools (citation-health,
@@ -874,7 +881,7 @@ export class EventMapper {
           )
         : null;
 
-      const tuTitleLower = (tu.title || "").toLowerCase();
+      const tuTitleLower = (tu.title || tu.state?.title || "").toLowerCase();
       // Task tool result: OpenCode sends the tool_call_update for a Task
       // delegation with `title: "task"` (matching the tool_call). Recognize it
       // here so the result is attributed to "task" and completeSubAgentTask fires
@@ -891,8 +898,21 @@ export class EventMapper {
         backfillName = tuTitleLower;
       }
 
+      // Prefer MCP `server_tool` title before query→websearch inference.
+      if (backfillInput && !backfillName) {
+        const mcpTitle = resolveMcpToolTitle(tuTitleLower);
+        if (mcpTitle) backfillName = mcpTitle;
+      }
+
       if (backfillInput && !backfillName) {
         backfillName = inferToolNameFromInput(backfillInput) || null;
+      }
+
+      // If inference still said websearch but the ACP title is an MCP tool,
+      // keep the real MCP name (live UI + widget dispatch).
+      if (backfillName === "websearch") {
+        const mcpTitle = resolveMcpToolTitle(tuTitleLower);
+        if (mcpTitle) backfillName = mcpTitle;
       }
 
       const outputInferred = inferToolNameFromOutput(rawResult);

@@ -13,6 +13,10 @@ import {
 } from "../../src/main/services/experiment-log-service";
 import { resolveExperimentDir } from "../../src/main/services/workspace-config";
 import {
+  readProvenanceEvents,
+  resolveRunForArtifact,
+} from "../../src/main/services/provenance-service";
+import {
   EXPERIMENT_REGISTRY_REL,
   experimentEnvDisplayRows,
   slugBaseFromTitle,
@@ -51,11 +55,15 @@ describe("experiment-log-service", () => {
 
   it("createExperiment scaffolds registry + empty workspace folder (split storage)", () => {
     const c = setup();
-    const result = createExperiment(c, {
-      title: "LR ablation",
-      briefLinks: { sections: ["Hypotheses / claims"], hypothesisExcerpt: "H1: lr=1e-3 wins" },
-      tags: ["ablation"],
-    });
+    const result = createExperiment(
+      c,
+      {
+        title: "LR ablation",
+        briefLinks: { sections: ["Hypotheses / claims"], hypothesisExcerpt: "H1: lr=1e-3 wins" },
+        tags: ["ablation"],
+      },
+      { ensureVenv: false },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.id).toMatch(/^exp-\d{8}-lr-ablation-[0-9a-f]{4}$/);
@@ -79,7 +87,7 @@ describe("experiment-log-service", () => {
 
   it("createExperiment rejects empty title", () => {
     const c = setup();
-    const result = createExperiment(c, { title: "   " });
+    const result = createExperiment(c, { title: "   " }, { ensureVenv: false });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toBe("missing_title");
@@ -87,8 +95,8 @@ describe("experiment-log-service", () => {
 
   it("listExperiments returns created experiments from registry", () => {
     const c = setup();
-    const a = createExperiment(c, { title: "A" });
-    const b = createExperiment(c, { title: "B" });
+    const a = createExperiment(c, { title: "A" }, { ensureVenv: false });
+    const b = createExperiment(c, { title: "B" }, { ensureVenv: false });
     expect(a.ok && b.ok).toBe(true);
     if (!a.ok || !b.ok) return;
     const list = listExperiments(c);
@@ -99,7 +107,7 @@ describe("experiment-log-service", () => {
 
   it("readExperiment returns meta + runs (tail-limited)", () => {
     const c = setup();
-    const created = createExperiment(c, { title: "Read test" });
+    const created = createExperiment(c, { title: "Read test" }, { ensureVenv: false });
     expect(created.ok).toBe(true);
     if (!created.ok) return;
     const { id } = created;
@@ -124,7 +132,7 @@ describe("experiment-log-service", () => {
 
   it("appendRun writes JSONL under registry only", () => {
     const c = setup();
-    const created = createExperiment(c, { title: "Append test" });
+    const created = createExperiment(c, { title: "Append test" }, { ensureVenv: false });
     expect(created.ok).toBe(true);
     if (!created.ok) return;
     const { id } = created;
@@ -138,12 +146,47 @@ describe("experiment-log-service", () => {
     expect(existsSync(join(c.projectRoot, "experiment", id, "runs.jsonl"))).toBe(false);
   });
 
-  it("detectEnvForIsland uses workspace island path", () => {
+  it("appendRun stamps provenance fields + mirrors into provenance.jsonl", () => {
     const c = setup();
-    const created = createExperiment(c, { title: "Env test" });
+    const created = createExperiment(c, { title: "Provenance test" }, { ensureVenv: false });
     expect(created.ok).toBe(true);
     if (!created.ok) return;
-    const env = detectEnvForIsland(c, created.id);
+    const { id } = created;
+    const r = appendRun(
+      c,
+      id,
+      {
+        command: "python train.py",
+        exitCode: 0,
+        stdoutTail: "ok",
+        artifacts: [`experiment/${id}/results/plot.png`],
+      },
+      { chatSessionId: "ses_abc" },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // Optional fields are stamped onto the run line (persisted in runs.jsonl).
+    expect(r.run.chatSessionId).toBe("ses_abc");
+    expect(r.run.provenanceEventId).toBeTruthy();
+
+    // Provenance log mirrors run_recorded + one artifact_linked per artifact.
+    const events = readProvenanceEvents(c.projectRoot);
+    expect(events.filter((e) => e.type === "run_recorded")).toHaveLength(1);
+    expect(events.filter((e) => e.type === "artifact_linked")).toHaveLength(1);
+
+    // The artifact resolves back to this run + its chat session.
+    const resolved = resolveRunForArtifact(c.projectRoot, `experiment/${id}/results/plot.png`);
+    expect(resolved?.run.command).toBe("python train.py");
+    expect(resolved?.run.chatSessionId).toBe("ses_abc");
+    expect(resolved?.linkMethod).toBe("explicit");
+  });
+
+  it("detectEnvForIsland uses workspace island path", () => {
+    const c = setup();
+    const created = createExperiment(c, { title: "Env test" }, { ensureVenv: false });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const env = detectEnvForIsland(c, created.id, { ensureVenv: false });
     expect(env.ok).toBe(true);
     if (!env.ok) return;
     expect(env.workspacePath).toBe(`experiment/${created.id}`);

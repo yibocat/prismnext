@@ -76,3 +76,61 @@ export function ExtractMarkdownImage({
     />
   );
 }
+
+/**
+ * Inline image in an agent chat reply. Unlike `ExtractMarkdownImage`, there is
+ * no markdown file to resolve against, so `src` is treated as project-relative
+ * (e.g. `experiment/exp-x/plot.png`) and resolved against the project root.
+ * Absolute http(s)/data/file URLs are left to the browser (http(s)/data pass
+ * CSP; file:// is blocked, so absolute file paths render as the alt fallback).
+ */
+export function ChatProjectImage({ src, alt }: { src?: string; alt?: string }) {
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!src || !projectRoot) {
+      setDataUrl(null);
+      return;
+    }
+    // Leave absolute URLs to the browser.
+    if (/^(https?:|data:|blob:)/i.test(src.trim())) {
+      setDataUrl(null);
+      return;
+    }
+    const abs = resolveProjectRelativePath(projectRoot, src);
+    if (!abs) {
+      setDataUrl(null);
+      return;
+    }
+    let cancelled = false;
+    void window.electronAPI
+      .fsReadImage(abs)
+      .then(({ dataUrl: url }) => {
+        if (!cancelled) setDataUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setDataUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [src, projectRoot]);
+
+  if (!src) return null;
+  if (!dataUrl) {
+    return (
+      <span className="my-2 block text-[length:var(--font-size-12)] text-muted-foreground">
+        [Image unavailable: {alt?.trim() || src}]
+      </span>
+    );
+  }
+  return (
+    <img
+      src={dataUrl}
+      alt={alt ?? ""}
+      className="my-2 max-w-full h-auto rounded border border-border/40"
+      loading="lazy"
+    />
+  );
+}

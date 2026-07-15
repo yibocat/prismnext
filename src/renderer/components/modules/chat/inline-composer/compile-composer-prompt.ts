@@ -3,6 +3,7 @@ import { expandLinkTokensInParts } from "@/lib/chat/composer-parts";
 import { partsToPlainText, partsToAgentText } from "@/lib/chat/composer-parts";
 import type { ContentBlock } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { useExperimentStore } from "@/stores/experiment-store";
 import { isExternalFileId, resolveExternalPath } from "@/lib/files/external-file";
 import { mentionFileLabel } from "@/lib/files/mentionable-files";
 import { resolveSnippetFilePathFromStore } from "@/lib/files/snippet-file-path";
@@ -72,6 +73,8 @@ export interface CompiledComposerPrompt {
   skillIds: string[];
   /** PDF paper excerpt chips attached this turn (block pick → Chat). */
   paperSnippetCount: number;
+  /** Experiment ids @-mentioned this turn (for tools/UI cross-ref). */
+  selectedExperimentIds: string[];
 }
 
 export async function compileComposerPrompt(
@@ -85,11 +88,17 @@ export async function compileComposerPrompt(
   const mcpServerNames: string[] = [];
   const skillIds: string[] = [];
   const selectedExpertIds: string[] = [];
+  const selectedExperimentIds: string[] = [];
 
   for (const part of parts) {
     if (part.type === "mention" && part.mentionType === "expert") {
       if (!selectedExpertIds.includes(part.expertId)) {
         selectedExpertIds.push(part.expertId);
+      }
+    }
+    if (part.type === "mention" && part.mentionType === "experiment") {
+      if (!selectedExperimentIds.includes(part.experimentId)) {
+        selectedExperimentIds.push(part.experimentId);
       }
     }
     if (part.type === "command") {
@@ -294,6 +303,34 @@ export async function compileComposerPrompt(
     sections.push(["## Literature context", "", ...blocks].join("\n"));
   }
 
+  // ## Experiment context: assemble a compact summary per @-mentioned experiment
+  // so the agent knows which experiments the user is referring to and can drill
+  // in with `experiment-log read` / `provenance-query list_recent` as needed.
+  if (selectedExperimentIds.length > 0) {
+    const experiments = useExperimentStore.getState().experiments;
+    const expBlocks: string[] = [];
+    for (const expId of selectedExperimentIds) {
+      const exp = experiments.find((e) => e.id === expId);
+      if (!exp) {
+        expBlocks.push(`### @experiment ${expId}\n\n- (no cached summary — call \`experiment-log read\` for details)`);
+        continue;
+      }
+      const runMeta = exp.runCount > 0
+        ? `${exp.runCount} run${exp.runCount === 1 ? "" : "s"}${exp.lastRunAt ? `, last ${exp.lastRunAt}` : ""}`
+        : "no runs yet";
+      expBlocks.push(
+        [
+          `### @experiment ${exp.id}`,
+          `- **title:** ${exp.title}`,
+          `- **workspace:** ${exp.workspacePath}`,
+          `- **activity:** ${runMeta}`,
+          `- tip: use \`experiment-log action=read id=${exp.id}\` (or \`provenance-query list_recent\`) to inspect runs/artifacts.`,
+        ].join("\n"),
+      );
+    }
+    sections.push(["## Experiment context", "", ...expBlocks].join("\n"));
+  }
+
   const aiExpansions: string[] = [];
   for (const name of aiCommandNames) {
     try {
@@ -344,6 +381,7 @@ export async function compileComposerPrompt(
     displayBlocks,
     promptText,
     selectedExpertIds,
+    selectedExperimentIds,
     actionCommands,
     aiCommandNames,
     mcpServerNames: [...new Set(mcpServerNames)],

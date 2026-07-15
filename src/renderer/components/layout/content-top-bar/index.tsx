@@ -17,7 +17,7 @@ import {
   Maximize2Icon,
   XIcon,
 } from "lucide-react";
-import { RIGHT_AREA_DEFAULT } from "@/styles/constants";
+import { openRightArea } from "@/lib/workspace/right-area-layout";
 
 interface ContentTopBarProps {
   leftSidebarRef: RefObject<PanelImperativeHandle | null>;
@@ -50,22 +50,15 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
   const settingsPanelOpen = hasOpenSettingsEditor();
 
   const expandRightPanel = () => {
-    const r = rightAreaRef?.current;
-    const c = centerRef?.current;
-    if (!r) return;
     if (inSettings) {
-      // Settings detail opens via Configure → openSettingsPanel only.
       return;
     }
-    const width = useLayoutStore.getState().rightAreaWidth || RIGHT_AREA_DEFAULT;
-    if (isMobile && c) {
-      r.resize(9999);
-      c.collapse();
-    } else if (r.isCollapsed()) {
-      r.resize(width);
-      c?.expand();
-    }
-    // Already open — keep current panel sizes.
+    openRightArea({
+      centerRef: centerRef?.current,
+      rightAreaRef: rightAreaRef?.current,
+      leftSidebarRef: leftSidebarRef.current,
+      isMobile,
+    });
   };
 
   // Hide center top bar only when stacked editor is open (list hidden, right chrome active).

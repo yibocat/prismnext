@@ -32,6 +32,7 @@ import {
   deletePaper,
   getPaper,
   ingestPdf,
+  recordPdfDownload,
   type CreatePaperResult,
   type IngestPdfResult,
 } from "./literature-service";
@@ -147,6 +148,7 @@ export async function tryAttachPdfFromUrl(
     const updated = attachPdfBufferToPaper(projectRoot, paperId, buf);
     if (updated.pdf_path && !paper.pdf_path) {
       onPaperPdfAttached(projectRoot, paperId, "download");
+      recordPdfDownload(projectRoot, updated, "literature-ingest", pdfUrl, buf.length);
     }
     return { paper: updated, attached: true };
   } catch (err) {

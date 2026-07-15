@@ -11,6 +11,7 @@ import { getTerminalBridgeRoot } from "./prism-bridge-paths";
 import { runAiCommand } from "./ai-pty";
 import { resolveChatTabId } from "./chat-session-registry";
 import { createLogger } from "./logger";
+import { gateExperimentPythonExecution } from "./experiment-log-service";
 
 const log = createLogger("ai-bash-runner", "agent");
 
@@ -38,6 +39,8 @@ export interface RunAiBashJobArgs {
   toolCallId: string;
   command: string;
   cwd: string;
+  /** Optional project root hint (OpenCode session directory). */
+  projectRoot?: string;
 }
 
 export interface RunAiBashJobResult {
@@ -135,6 +138,41 @@ export function runAiBashJob(args: RunAiBashJobArgs): Promise<RunAiBashJobResult
     // ignore
   }
 
+  const gate = gateExperimentPythonExecution({
+    projectRoot: args.projectRoot,
+    cwd: args.cwd,
+    command: args.command,
+    blockBashPythonScripts: true,
+  });
+
+  if (gate.action === "block") {
+    const blocked: RunAiBashJobResult = {
+      output: gate.error,
+      exitCode: 1,
+      cwd: args.cwd,
+    };
+    try {
+      writeFileSync(resPath, JSON.stringify(blocked), "utf-8");
+    } catch {
+      // ignore
+    }
+    emitAiExit({
+      sessionId: args.sessionId,
+      chatTabId,
+      requestId: args.toolCallId,
+      toolCallId: args.toolCallId,
+      exitCode: 1,
+      cwd: args.cwd,
+    });
+    log.warn("AI bash blocked by experiment Python gate", {
+      chatTabId,
+      error: gate.error,
+    });
+    return Promise.resolve(blocked);
+  }
+
+  const envExtra = gate.action === "apply" ? gate.envExtra : undefined;
+
   const promise = runAiCommand({
     command: args.command,
     cwd: args.cwd,
@@ -142,6 +180,7 @@ export function runAiBashJob(args: RunAiBashJobArgs): Promise<RunAiBashJobResult
     chatTabId,
     requestId: args.toolCallId,
     toolCallId: args.toolCallId,
+    envExtra,
     onChunk: (chunk) => {
       try {
         appendFileSync(streamPath, chunk, "utf-8");

@@ -1,5 +1,5 @@
 import type { ComposerPart } from "@/lib/chat/composer-parts";
-import { GitCompareArrowsIcon } from "lucide-react";
+import { FlaskConicalIcon, GitCompareArrowsIcon } from "lucide-react";
 import { InlineTokenChip } from "./inline-token-chip";
 import { openUrlInBrowser } from "@/lib/browser-link";
 import { useChatStore } from "@/stores/chat-store";
@@ -46,6 +46,19 @@ export function ComposerTokenChip({
         variant="profile"
         prefix="@"
         label={part.label}
+        asToken
+      />
+    );
+  }
+
+  if (part.type === "mention" && part.mentionType === "experiment") {
+    return (
+      <InlineTokenChip
+        variant="code"
+        prefix="@"
+        icon={<FlaskConicalIcon className="size-3 shrink-0" />}
+        label={part.label}
+        title={`Experiment: ${part.experimentId}`}
         asToken
       />
     );
@@ -149,6 +162,28 @@ export function ComposerTokenChip({
         variant="code"
         label={part.label}
         title={`${part.title} (p.${part.page}${blockLabel})\n\n${part.quotedText.slice(0, 200)}`}
+        asToken
+      />
+    );
+  }
+
+  if (part.type === "experiment-run") {
+    const env = part.env;
+    const envBits = [
+      env?.pythonVersion ? `py ${env.pythonVersion}` : env?.python ? "py" : null,
+      env?.platform,
+    ].filter(Boolean);
+    return (
+      <InlineTokenChip
+        variant="code"
+        icon={<FlaskConicalIcon className="size-3 shrink-0" />}
+        label={part.label}
+        title={[
+          `${part.command}`,
+          `exit ${part.exitCode} · runId ${part.runId}`,
+          part.artifactPath ? `artifact: ${part.artifactPath}${part.linkMethod ? ` (${part.linkMethod})` : ""}` : null,
+          envBits.length ? envBits.join(" · ") : null,
+        ].filter(Boolean).join("\n")}
         asToken
       />
     );

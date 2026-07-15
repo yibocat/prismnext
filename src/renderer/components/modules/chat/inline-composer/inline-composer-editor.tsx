@@ -19,7 +19,9 @@ import { mentionFileLabel } from "@/lib/files/mentionable-files";
 import type { LiteraturePaper } from "@/types/electron.d";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useLiteratureExtractStore } from "@/stores/literature-extract-store";
+import { useExperimentStore } from "@/stores/experiment-store";
 import { pickBestReadySource } from "../../../../../shared/paper-extract";
+import type { ExperimentSummary } from "../../../../../shared/experiment-log";
 import { type ComposerPart, COMPOSER_PLACEHOLDER } from "@/lib/chat/composer-parts";
 import {
   createTokenId,
@@ -245,7 +247,20 @@ function insertFromDropdown(
         q.from,
         q.to,
       );
-    } else {
+    } else if (opt.kind === "experiment") {
+      insertComposerToken(
+        view,
+        {
+          type: "mention",
+          mentionType: "experiment",
+          id: createTokenId(),
+          label: opt.experiment.title,
+          experimentId: opt.experiment.id,
+        },
+        q.from,
+        q.to,
+      );
+    } else if (opt.kind === "file") {
       insertComposerToken(
         view,
         {
@@ -312,11 +327,12 @@ function insertFromDropdown(
   );
 }
 
-function buildMentionOptions(
+export function buildMentionOptions(
   query: string,
   experts: ExpertInfo[],
   files: ProjectFile[],
   papers: LiteraturePaper[] = [],
+  experiments: ExperimentSummary[] = [],
 ) {
   const q = query.toLowerCase();
   const expertOpts = experts
@@ -342,7 +358,16 @@ function buildMentionOptions(
     .filter((f) => f.relativePath.toLowerCase().includes(q) || f.name.toLowerCase().includes(q))
     .slice(0, 6)
     .map((file) => ({ kind: "file" as const, file }));
-  return [...expertOpts, ...paperOpts, ...fileOpts];
+  const experimentOpts = experiments
+    .filter(
+      (e) =>
+        e.title.toLowerCase().includes(q) ||
+        e.id.toLowerCase().includes(q) ||
+        (e.workspacePath.toLowerCase().includes(q) ?? false),
+    )
+    .slice(0, 6)
+    .map((experiment) => ({ kind: "experiment" as const, experiment }));
+  return [...expertOpts, ...paperOpts, ...fileOpts, ...experimentOpts];
 }
 
 export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, InlineComposerEditorProps>(
@@ -380,6 +405,9 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
     expertsRef.current = experts;
     const filesRef = useRef(files);
     filesRef.current = files;
+    const experiments = useExperimentStore((s) => s.experiments);
+    const experimentsRef = useRef(experiments);
+    experimentsRef.current = experiments;
     const searchCommandsRef = useRef(searchCommands);
     searchCommandsRef.current = searchCommands;
     const slashSkillsRef = useRef(slashSkills);
@@ -481,8 +509,8 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
 
     const mentionOptions = useMemo(() => {
       if (!activeQuery || activeQuery.kind !== "mention") return [];
-      return buildMentionOptions(activeQuery.query, experts, files, literaturePapers);
-    }, [activeQuery, experts, files, literaturePapers]);
+      return buildMentionOptions(activeQuery.query, experts, files, literaturePapers, experiments);
+    }, [activeQuery, experts, files, literaturePapers, experiments]);
 
     // Best-effort: load extract states for papers shown in the mention menu so
     // the 精读 toggle reflects readiness.
@@ -498,6 +526,14 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       if (missing.length === 0) return;
       void loadExtractStates(projectRoot, missing);
     }, [showDropdown, activeQuery, mentionOptions, extractStatesByPaper, loadExtractStates]);
+
+    // Best-effort: refresh the experiments list when the project changes so the
+    // @ experiment menu has data even before the user opens the Experiments tab.
+    const projectRoot = useDocumentStore((s) => s.projectRoot);
+    useEffect(() => {
+      if (!projectRoot) return;
+      void useExperimentStore.getState().refreshList(projectRoot);
+    }, [projectRoot]);
 
     const slashOptions = useMemo(() => {
       if (!activeQuery || activeQuery.kind !== "slash") return [];
@@ -596,6 +632,19 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       [insertAtQuery],
     );
 
+    const insertExperiment = useCallback(
+      (experiment: ExperimentSummary) => {
+        insertAtQuery({
+          type: "mention",
+          mentionType: "experiment",
+          id: createTokenId(),
+          label: experiment.title,
+          experimentId: experiment.id,
+        });
+      },
+      [insertAtQuery],
+    );
+
     const insertSlashOption = useCallback(
       (option: SlashOption) => {
         if (option.kind === "command") {
@@ -644,7 +693,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         if (!q) return false;
         const mentions =
           q.kind === "mention"
-            ? buildMentionOptions(q.query, expertsRef.current, filesRef.current, useLiteratureStore.getState().papers)
+            ? buildMentionOptions(q.query, expertsRef.current, filesRef.current, useLiteratureStore.getState().papers, experimentsRef.current)
             : [];
         const slashOpts = q.kind === "slash" ? resolveSlashOptions(q.query) : [];
         const count = q.kind === "mention" ? mentions.length : slashOpts.length;
@@ -700,6 +749,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
               expertsRef.current,
               filesRef.current,
               useLiteratureStore.getState().papers,
+              experimentsRef.current,
             );
             const opt = mentions[optsIdx];
             if (opt?.kind !== "paper") return false;
@@ -727,7 +777,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             if (!q) return false;
             const mentions =
               q.kind === "mention"
-                ? buildMentionOptions(q.query, expertsRef.current, filesRef.current, useLiteratureStore.getState().papers)
+                ? buildMentionOptions(q.query, expertsRef.current, filesRef.current, useLiteratureStore.getState().papers, experimentsRef.current)
                 : [];
             const slashOpts = q.kind === "slash" ? resolveSlashOptions(q.query) : [];
             const count = q.kind === "mention" ? mentions.length : slashOpts.length;
@@ -760,6 +810,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
               expertsRef.current,
               filesRef.current,
               useLiteratureStore.getState().papers,
+              experimentsRef.current,
             );
             const count = mentions.length;
             if (count === 0) return false;
@@ -910,7 +961,8 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             part.type !== "terminal-snippet" &&
             part.type !== "code-snippet" &&
             part.type !== "git-diff-snippet" &&
-            part.type !== "paper-snippet"
+            part.type !== "paper-snippet" &&
+            part.type !== "experiment-run"
           ) {
             return false;
           }
@@ -1047,7 +1099,8 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
           part.type !== "terminal-snippet" &&
           part.type !== "code-snippet" &&
           part.type !== "git-diff-snippet" &&
-          part.type !== "paper-snippet"
+          part.type !== "paper-snippet" &&
+          part.type !== "experiment-run"
         ) {
           return false;
         }
@@ -1090,6 +1143,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             onSelectExpert={insertExpert}
             onSelectFile={insertFile}
             onSelectPaper={insertPaper}
+            onSelectExperiment={insertExperiment}
             onHover={handleDropdownHover}
             onListPointerMove={enableDropdownPointerHover}
             canHoverItem={canHoverDropdownItem}

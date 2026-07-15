@@ -5,7 +5,7 @@
  * The result is staged as a session citation: the agent references it as [n]
  * in its reply; the user confirms before the paper is added to the library.
  *
- * NEVER invent identifiers — copy exact DOI/arXiv from websearch or the user.
+ * NEVER invent identifiers — copy exact DOI/arXiv from Paper Search MCP, websearch, or the user.
  */
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
@@ -79,8 +79,9 @@ export default tool({
     "and return its bibliographic metadata. The paper is NOT added to the library — it is staged " +
     "as a session citation the user can review and confirm. " +
     "Use this BEFORE citing a paper in your reply; reference the returned refId as [n]. " +
-    "ONLY use DOI/arXiv copied from websearch results or the user — NEVER invent or guess identifiers. " +
-    "If unsure, websearch first, then call this tool with the exact identifier.",
+    "ONLY use DOI/arXiv copied from Paper Search MCP, websearch, or the user — NEVER invent identifiers. " +
+    "MCP search_papers alone is NOT enough — stage each paper you will mention before writing reply text. " +
+    "For topic discovery, call Paper Search MCP search_papers first, then stage each hit.",
   args: {
     doi: tool.schema
       .string()
@@ -92,7 +93,13 @@ export default tool({
       .optional(),
     sourceUrl: tool.schema
       .string()
-      .describe("Optional origin URL (websearch result / arXiv abs page) for provenance.")
+      .describe("Optional origin URL (Paper Search result, arXiv abs page, websearch) for provenance.")
+      .optional(),
+    discoveredFrom: tool.schema
+      .enum(["paper-search-mcp", "websearch", "webfetch", "user", "agent"])
+      .describe(
+        "How the identifier was discovered. Use paper-search-mcp after MCP search_papers; websearch only as fallback.",
+      )
       .optional(),
   },
   async execute(args, context) {
@@ -103,7 +110,7 @@ export default tool({
         staged: false,
         verified: false,
         error: "Provide exactly one of doi or arxivId.",
-        hint: "Get the identifier from websearch or the user first. Do not invent DOIs.",
+        hint: "Get the identifier from Paper Search MCP, websearch, or the user first. Do not invent DOIs.",
       });
     }
     if (doi && arxivId) {
@@ -113,12 +120,17 @@ export default tool({
         error: "Provide only one of doi or arxivId, not both.",
       });
     }
+    const allowed = ["paper-search-mcp", "websearch", "webfetch", "user", "agent"] as const;
+    const raw = typeof args.discoveredFrom === "string" ? args.discoveredFrom : "agent";
+    const discoveredFrom = (allowed as readonly string[]).includes(raw)
+      ? raw
+      : "agent";
     return bridgeCall(context as Record<string, unknown>, {
       action: "stage",
       doi: doi || undefined,
       arxivId: arxivId || undefined,
       sourceUrl: typeof args.sourceUrl === "string" ? args.sourceUrl.trim() || undefined : undefined,
-      discoveredFrom: "agent",
+      discoveredFrom,
     });
   },
 });

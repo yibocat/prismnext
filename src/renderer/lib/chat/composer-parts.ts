@@ -1,6 +1,6 @@
 /** Default AI Chat composer hint — @ mentions and / slash tokens. */
 export const COMPOSER_PLACEHOLDER =
-  "@ expert, file, or paper · / commands, skills, MCP";
+  "@ expert, file, paper, or experiment · / commands, skills, MCP";
 
 import {
   isBrowsableUrl,
@@ -110,6 +110,31 @@ export type ComposerPart =
       label: string;
       bibkey: string;
       paperId: string;
+    }
+  | {
+      type: "mention";
+      mentionType: "experiment";
+      id: string;
+      label: string;
+      experimentId: string;
+    }
+  | {
+      type: "experiment-run";
+      id: string;
+      label: string;
+      runId: string;
+      experimentId?: string;
+      command: string;
+      exitCode: number;
+      startedAt: string;
+      finishedAt: string;
+      artifactPath?: string;
+      linkMethod?: string;
+      artifacts: string[];
+      env?: { python?: string | null; pythonVersion?: string | null; platform?: string; gitCommit?: string | null } | null;
+      chatSessionId?: string | null;
+      workspacePath?: string;
+      sourceTabId?: string;
     };
 
 export type ComposerDraft = {
@@ -136,6 +161,7 @@ export function plainLabelForPart(part: ComposerPart): string {
   if (part.type === "code-snippet") return `[${part.label}]`;
   if (part.type === "git-diff-snippet") return `[${part.label}]`;
   if (part.type === "paper-snippet") return `[${part.label}]`;
+  if (part.type === "experiment-run") return `[${part.label}]`;
   if (part.type === "skill" || part.type === "mcp") return `/${part.label}`;
   return `/${part.label}`;
 }
@@ -172,6 +198,19 @@ export function partsToAgentText(parts: ComposerPart[]): string {
     if (part.type === "code-snippet") return `[code: ${part.label}]`;
     if (part.type === "git-diff-snippet") return `[diff: ${part.label}]`;
     if (part.type === "paper-snippet") return `[paper: ${part.label}]`;
+    if (part.type === "experiment-run") {
+      const lines = [
+        `[experiment-run: ${part.label}]`,
+        `command: \`${part.command}\``,
+        `exit: ${part.exitCode}`,
+        `runId: ${part.runId}`,
+      ];
+      if (part.experimentId) lines.push(`experiment: ${part.experimentId}`);
+      if (part.artifactPath) lines.push(`artifact: ${part.artifactPath}${part.linkMethod ? ` (${part.linkMethod})` : ""}`);
+      if (part.artifacts.length > 0) lines.push(`artifacts: ${part.artifacts.join(", ")}`);
+      if (part.chatSessionId) lines.push(`chatSession: ${part.chatSessionId}`);
+      return lines.join("\n");
+    }
     if (part.type === "skill") return `[skill: ${part.label}]`;
     if (part.type === "mcp") return `[mcp: ${part.label}]`;
     return plainLabelForPart(part);

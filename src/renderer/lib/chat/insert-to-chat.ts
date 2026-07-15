@@ -14,6 +14,7 @@ import {
 import type {
   CodeSnippetRequest,
   ContextInsertRequest,
+  ExperimentRunSnippetRequest,
   PaperSnippetRequest,
 } from "@/lib/chat/context-insert";
 import type { GitDiffHunkSnippet } from "@/lib/git/diff-hunk-snippet";
@@ -217,6 +218,25 @@ export function insertPaperToChat(
         ? "Added to Chat — intensive reading enabled for this paper"
         : "Added to Chat",
     );
+  }
+  return ok;
+}
+
+/**
+ * Push an experiment run (+ the artifact being inspected) into the chat composer
+ * so the agent can discuss it with command/env context. Mirrors insertPaperToChat.
+ */
+export function insertExperimentRunToChat(
+  req: Omit<ExperimentRunSnippetRequest, "kind"> & { quiet?: boolean },
+): boolean {
+  const { quiet, ...payload } = req;
+  if (!payload.runId?.trim() || !payload.command?.trim()) {
+    toast.info("Run has no command recorded to discuss");
+    return false;
+  }
+  const ok = insertContextToChat({ kind: "experiment-run", ...payload }, { quiet: true });
+  if (ok && !quiet) {
+    toast.success("Added to Chat");
   }
   return ok;
 }

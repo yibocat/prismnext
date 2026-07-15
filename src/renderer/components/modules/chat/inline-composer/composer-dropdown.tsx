@@ -6,6 +6,7 @@ import {
   FileCodeIcon,
   FileIcon,
   FileTextIcon,
+  FlaskConicalIcon,
   ImageIcon,
   PlugIcon,
   PuzzleIcon,
@@ -28,6 +29,7 @@ import type { ProjectFile } from "@/stores/document-store";
 import type { LiteraturePaper } from "@/types/electron.d";
 import { formatPaperMentionLabel } from "../../../../../shared/bibkey-utils";
 import { PAPER_EXTRACT_ACTION_HINT_FIRST } from "../../../../../shared/paper-extract";
+import type { ExperimentSummary } from "../../../../../shared/experiment-log";
 import type { CommandDef } from "@commands/types";
 import type { CursorAnchor } from "./dropdown-position";
 import { preferredMenuSide } from "./dropdown-position";
@@ -38,7 +40,8 @@ export type { SlashCatalogMcp, SlashCatalogSkill };
 export type MentionOption =
   | { kind: "expert"; expert: ExpertInfo }
   | { kind: "paper"; paper: LiteraturePaper }
-  | { kind: "file"; file: ProjectFile };
+  | { kind: "file"; file: ProjectFile }
+  | { kind: "experiment"; experiment: ExperimentSummary };
 
 export type SlashOption =
   | { kind: "command"; command: CommandDef }
@@ -346,6 +349,7 @@ export function MentionDropdown({
   onSelectExpert,
   onSelectFile,
   onSelectPaper,
+  onSelectExperiment,
   onHover,
   onListPointerMove,
   canHoverItem,
@@ -364,6 +368,7 @@ export function MentionDropdown({
   onSelectExpert: (expert: ExpertInfo) => void;
   onSelectFile: (file: ProjectFile) => void;
   onSelectPaper?: (paper: LiteraturePaper) => void;
+  onSelectExperiment?: (experiment: ExperimentSummary) => void;
   onHover: (index: number) => void;
   onListPointerMove?: () => void;
   canHoverItem?: () => boolean;
@@ -385,7 +390,7 @@ export function MentionDropdown({
     >
       {options.length === 0 ? (
         <div className="px-2 py-1.5 text-center text-[length:var(--font-chat-meta)] text-muted-foreground">
-          No agents, papers, or files found
+          No agents, papers, files, or experiments found
         </div>
       ) : (
         options.map((option, i) => {
@@ -395,6 +400,8 @@ export function MentionDropdown({
             option.kind === "file" && (i === 0 || options[i - 1]?.kind !== "file");
           const showPaperHeader =
             option.kind === "paper" && (i === 0 || options[i - 1]?.kind !== "paper");
+          const showExperimentHeader =
+            option.kind === "experiment" && (i === 0 || options[i - 1]?.kind !== "experiment");
           const active = i === activeIndex;
 
           if (option.kind === "expert") {
@@ -471,6 +478,35 @@ export function MentionDropdown({
                       />
                     </span>
                   ) : null}
+                </button>
+              </div>
+            );
+          }
+
+          if (option.kind === "experiment") {
+            const { experiment } = option;
+            const runMeta = experiment.runCount > 0
+              ? `${experiment.runCount} run${experiment.runCount === 1 ? "" : "s"}${experiment.lastRunAt ? ` · last ${experiment.lastRunAt}` : ""}`
+              : "no runs yet";
+            return (
+              <div key={`experiment:${experiment.id}`}>
+                {showExperimentHeader && <div className={sectionLabelClass}>Experiments</div>}
+                <button
+                  type="button"
+                  data-active={active ? "true" : undefined}
+                  className={itemClass(active)}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onSelectExperiment?.(experiment);
+                  }}
+                  onMouseEnter={() => {
+                    if (canHoverItem && !canHoverItem()) return;
+                    onHover(i);
+                  }}
+                >
+                  <FlaskConicalIcon className="size-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <span className={cn(itemLabelClass, "font-medium")}>{experiment.title}</span>
+                  <span className={cn(itemMetaClass)}>{runMeta}</span>
                 </button>
               </div>
             );

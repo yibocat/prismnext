@@ -47,6 +47,8 @@ interface ExperimentRunArgs {
   command: string;
   artifacts?: string[];
   notes?: string;
+  /** Active chat session — binds provenance "Open chat session" for UI runs. */
+  chatSessionId?: string | null;
 }
 interface ExperimentCancelRunArgs {
   projectRoot: string;
@@ -133,6 +135,10 @@ export function registerExperimentHandlers(): void {
 
     const runId = generateRunId();
     const sender = event.sender;
+    const chatSessionId =
+      typeof args.chatSessionId === "string" && args.chatSessionId.trim()
+        ? args.chatSessionId.trim()
+        : null;
     kickoffExperimentRun({
       ctx: ctxResult,
       id,
@@ -140,6 +146,7 @@ export function registerExperimentHandlers(): void {
       artifacts: args.artifacts,
       notes: args.notes,
       runId,
+      chatSessionId,
       onOutputChunk: (chunk) => {
         try {
           sender.send("experiment:runOutput", { id, runId, chunk });

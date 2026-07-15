@@ -6,21 +6,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CircleCheckIcon,
   CircleXIcon,
   CopyIcon,
   FileIcon,
+  Link2Icon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
 import { CopyFeedbackButton } from "@/modes/literature-mode/literature-inline-field";
-import { useDocumentStore } from "@/stores/document-store";
-import { useLayoutStore } from "@/stores/layout-store";
-import { useRightPanelStore } from "@/stores/right-panel-store";
-import { navigateFileTreeToPath } from "@/lib/files/navigate-file-tree";
+import { artifactFullPath, openArtifactInFiles } from "./experiments-artifact-nav";
+import { ExperimentsProvenanceInspector } from "./experiments-provenance-inspector";
 import type {
   ExperimentEnv,
   ExperimentRunEntry,
@@ -40,6 +40,9 @@ export interface ExperimentsRunsTableProps {
 }
 
 const PAGE_SIZE = 10;
+
+/** Artifacts shown before the list collapses into "+N more" (keeps runs with many outputs readable). */
+const ARTIFACT_PREVIEW = 8;
 
 /** Shared column template for header + data rows. */
 const HISTORY_GRID_CLASS =
@@ -84,35 +87,38 @@ function envSummary(env: ExperimentEnv): string {
 function ArtifactChip({
   path,
   workspacePath,
+  onInspect,
 }: {
   path: string;
   workspacePath?: string;
+  onInspect?: (path: string) => void;
 }) {
-  const fullPath =
-    workspacePath && !path.startsWith(workspacePath)
-      ? `${workspacePath}/${path}`
-      : path;
+  const fullPath = artifactFullPath(path, workspacePath);
   const name = path.split("/").pop() ?? path;
 
-  const handleClick = () => {
-    if (!fullPath) return;
-    const fileName = fullPath.split("/").pop() ?? fullPath;
-    useLayoutStore.getState().activateMode("files");
-    navigateFileTreeToPath(fullPath);
-    useDocumentStore.getState().setActiveFile(fullPath);
-    useRightPanelStore.getState().openFile(fullPath, fullPath, fileName, { pin: true });
-  };
-
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className="inline-flex h-6 items-center gap-1 rounded-md border border-border/55 bg-background px-2 text-[length:var(--font-menu-item)] text-foreground/90 transition-colors hover:bg-accent hover:text-foreground"
-      title={fullPath}
-    >
-      <FileIcon className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
-      <span className="max-w-[14rem] truncate">{name}</span>
-    </button>
+    <span className="inline-flex items-center gap-0.5">
+      <button
+        type="button"
+        onClick={() => openArtifactInFiles(fullPath)}
+        className="inline-flex h-6 items-center gap-1 rounded-md border border-border/55 bg-background px-2 text-[length:var(--font-menu-item)] text-foreground/90 transition-colors hover:bg-accent hover:text-foreground"
+        title={fullPath}
+      >
+        <FileIcon className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
+        <span className="max-w-[14rem] truncate">{name}</span>
+      </button>
+      {onInspect ? (
+        <button
+          type="button"
+          onClick={() => onInspect(path)}
+          title="View provenance"
+          aria-label={`View provenance for ${name}`}
+          className="inline-flex h-6 items-center rounded-md border border-border/55 bg-background px-1 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <Link2Icon className="size-3" aria-hidden />
+        </button>
+      ) : null}
+    </span>
   );
 }
 
@@ -121,11 +127,13 @@ function RunRow({
   workspacePath,
   open,
   onToggle,
+  onInspectArtifact,
 }: {
   run: ExperimentRunEntry;
   workspacePath?: string;
   open: boolean;
   onToggle: () => void;
+  onInspectArtifact?: (path: string) => void;
 }) {
   const exit = run.exitCode;
   const ExitIcon = exit === 0 ? CircleCheckIcon : CircleXIcon;
@@ -137,6 +145,16 @@ function RunRow({
   const expandable = hasTail || hasArtifacts || hasNote;
   const duration = formatDuration(run.startedAt, run.finishedAt);
   const noteText = hasNote ? run.notes!.trim() : "";
+
+  // Collapse the artifact chip list once it gets long, so a run with many
+  // outputs doesn't flood the row. The "+N more" toggle expands inline.
+  const [artifactsExpanded, setArtifactsExpanded] = useState(false);
+  const showArtifactFold = hasArtifacts && run.artifacts.length > ARTIFACT_PREVIEW;
+  const visibleArtifacts =
+    hasArtifacts && showArtifactFold && !artifactsExpanded
+      ? run.artifacts.slice(0, ARTIFACT_PREVIEW)
+      : run.artifacts;
+  const hiddenArtifactCount = run.artifacts.length - ARTIFACT_PREVIEW;
 
   return (
     <li className="flex flex-col">
@@ -233,14 +251,37 @@ function RunRow({
               <div className="mb-1.5 text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/60">
                 Artifacts
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {run.artifacts.map((artifact) => (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {visibleArtifacts.map((artifact) => (
                   <ArtifactChip
                     key={artifact}
                     path={artifact}
                     workspacePath={workspacePath}
+                    onInspect={onInspectArtifact}
                   />
                 ))}
+                {showArtifactFold ? (
+                  <button
+                    type="button"
+                    onClick={() => setArtifactsExpanded((v) => !v)}
+                    aria-expanded={artifactsExpanded}
+                    className="inline-flex h-6 items-center gap-1 rounded-md border border-border/55 bg-background px-2 text-[length:var(--font-menu-item)] text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
+                    title={
+                      artifactsExpanded
+                        ? "Show fewer"
+                        : `Show ${hiddenArtifactCount} more artifact${hiddenArtifactCount === 1 ? "" : "s"}`
+                    }
+                  >
+                    <ChevronDownIcon
+                      className={cn(
+                        "size-3 shrink-0 text-muted-foreground/60 transition-transform",
+                        artifactsExpanded && "rotate-180",
+                      )}
+                      aria-hidden
+                    />
+                    {artifactsExpanded ? "show less" : `+${hiddenArtifactCount} more`}
+                  </button>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -262,6 +303,7 @@ export function ExperimentsRunsTable({
 }: ExperimentsRunsTableProps) {
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const [inspect, setInspect] = useState<{ path: string } | null>(null);
 
   const ordered = useMemo(() => [...runs].reverse(), [runs]);
   const totalPages = Math.max(1, Math.ceil(ordered.length / PAGE_SIZE));
@@ -333,6 +375,7 @@ export function ExperimentsRunsTable({
             workspacePath={workspacePath}
             open={expandedRunId === run.runId}
             onToggle={() => handleToggle(run.runId)}
+            onInspectArtifact={(p) => setInspect({ path: p })}
           />
         ))}
       </ul>
@@ -377,6 +420,14 @@ export function ExperimentsRunsTable({
           </div>
         </div>
       ) : null}
+      <ExperimentsProvenanceInspector
+        open={inspect !== null}
+        onOpenChange={(next) => {
+          if (!next) setInspect(null);
+        }}
+        artifactPath={inspect?.path ?? ""}
+        workspacePath={workspacePath}
+      />
     </div>
   );
 }

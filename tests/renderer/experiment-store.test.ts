@@ -47,11 +47,18 @@ const electronAPI = {
       if (idx >= 0) runOutputHandlers.splice(idx, 1);
     };
   }),
+  onExperimentChanged: vi.fn(() => () => {}),
 };
 
 vi.stubGlobal("window", {
   electronAPI,
 });
+
+vi.mock("../../src/renderer/stores/chat-store", () => ({
+  useChatStore: {
+    getState: () => ({ sessionId: "sess-ui-run-test" }),
+  },
+}));
 
 import { useExperimentStore } from "../../src/renderer/stores/experiment-store";
 import type { ExperimentSummary } from "../../src/shared/experiment-log";
@@ -291,6 +298,7 @@ describe("experiment-store", () => {
         command: "echo hi",
         artifacts: ["results/fig1.png"],
         notes: "first try",
+        chatSessionId: "sess-ui-run-test",
       });
     });
 

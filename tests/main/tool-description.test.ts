@@ -23,7 +23,8 @@ describe("buildOpencodeToolDescription", () => {
     const meta = BUILTIN_TOOLS.find((t) => t.name === TOOL_NAMES.literatureStage)!;
     const text = buildOpencodeToolDescription(meta);
     expect(text).toContain("BINDING:");
-    expect(text).toContain("websearch");
+    expect(text).toContain("Paper Search MCP");
+    expect(text).toContain("does NOT create session citations");
     expect(text).toContain("Do NOT use the Task tool");
   });
 
