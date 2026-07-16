@@ -38,6 +38,11 @@ export class ChatErrorBoundary extends Component<Props, State> {
           <p className="text-[length:var(--font-chat-message)] text-muted-foreground">
             Chat unavailable due to a rendering error.
           </p>
+          {this.state.error?.message ? (
+            <p className="max-w-md px-4 text-center text-[length:var(--font-size-11)] text-muted-foreground/80 font-mono break-all">
+              {this.state.error.message}
+            </p>
+          ) : null}
           <button
             onClick={this.handleReset}
             className="rounded-md bg-muted px-3 py-1 text-[length:var(--font-chat-message)] text-foreground transition-colors hover:bg-muted/80"

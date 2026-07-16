@@ -1,4 +1,4 @@
-const CATALOG_USER_AGENT = "Prism/1.0 (mailto:support@researchprism.app)";
+const CATALOG_USER_AGENT = "PrismNext/1.0 (mailto:support@researchprism.app)";
 const MAX_PDF_BYTES = 80 * 1024 * 1024;
 
 export interface PdfDownloadProgress {

@@ -518,7 +518,7 @@ export function gateExperimentPythonExecution(opts: {
     return {
       action: "block",
       error:
-        `Prism: refuse \`pip\` / \`pip3\` / \`python -m pip\` install via bash — that installs into **system Python**. ` +
+        `Prism Next: refuse \`pip\` / \`pip3\` / \`python -m pip\` install via bash — that installs into **system Python**. ` +
         `From the Experiment workspace (or any island), run \`uv pip install <pkg>\` so packages land in the shared \`<experiment-dir>/.venv\` only.`,
     };
   }
@@ -569,7 +569,7 @@ export function gateExperimentPythonExecution(opts: {
     return {
       action: "block",
       error:
-        `Prism: Python scripts under the Experiment workspace (\`${resolved.rel}/\`) must run inside an experiment island ` +
+        `Prism Next: Python scripts under the Experiment workspace (\`${resolved.rel}/\`) must run inside an experiment island ` +
         `(\`${resolved.rel}/<id>/\`) via \`experiment-run\`. Env setup (\`uv pip install\`) may run from \`${resolved.rel}/\` ` +
         `and installs into the shared \`${resolved.rel}/${EXPERIMENT_VENV_DIR}\`.`,
     };
@@ -579,7 +579,7 @@ export function gateExperimentPythonExecution(opts: {
     return {
       action: "block",
       error:
-        `Prism: do not run Python scripts via bash inside the Experiment workspace. ` +
+        `Prism Next: do not run Python scripts via bash inside the Experiment workspace. ` +
         `Use the \`experiment-run\` tool (id + command, pass image paths in \`artifacts\`) so the run is logged and figures appear in chat. ` +
         `Bash is only allowed for env setup (\`uv pip install\`, \`uv venv\` into \`${resolved.rel}/${EXPERIMENT_VENV_DIR}\`).`,
     };
@@ -589,7 +589,7 @@ export function gateExperimentPythonExecution(opts: {
     return {
       action: "block",
       error:
-        `Prism: refuse system Python installs. Use \`uv pip install <pkg>\` from the Experiment workspace ` +
+        `Prism Next: refuse system Python installs. Use \`uv pip install <pkg>\` from the Experiment workspace ` +
         `so packages land in the shared \`${resolved.rel}/${EXPERIMENT_VENV_DIR}\` — never \`pip3\` / \`pip\` / \`python -m pip\`.`,
     };
   }
@@ -602,7 +602,7 @@ export function gateExperimentPythonExecution(opts: {
     return {
       action: "block",
       error:
-        `Prism: Python under Experiment requires the shared \`${resolved.rel}/${EXPERIMENT_VENV_DIR}\`. ` +
+        `Prism Next: Python under Experiment requires the shared \`${resolved.rel}/${EXPERIMENT_VENV_DIR}\`. ` +
         `Could not create it: ${ensured.error ?? "unknown error"}. Install uv or python3, then retry.`,
     };
   }

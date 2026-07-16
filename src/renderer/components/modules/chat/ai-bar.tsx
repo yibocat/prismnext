@@ -14,6 +14,8 @@ import { XIcon } from "lucide-react";
 import { WorktreeSelector } from "./worktree-selector";
 import { IntensiveReadingListButton } from "./intensive-reading-list-button";
 import { cn } from "@/lib/utils";
+import { useChatFileDrop, useOsFileDragging } from "@/lib/chat/use-chat-file-drop";
+import { chatFileDropZoneClass, chatCapsuleFileDropActiveClass } from "@/lib/chat/chat-file-drag-overlay";
 
 /** Capsule AiBar toolbar — dedicated pill radius (not Appearance). */
 const CAPSULE_TOOLBAR_PILL =
@@ -26,8 +28,12 @@ const CAPSULE_SHELL_BORDER_IDLE = "border-neutral-400/35 dark:border-neutral-600
 /** idle: hover pill · input: compact capsule · expanded: full composer */
 type Phase = "idle" | "input" | "expanded";
 
+/** idle / half-input share one radius so size morph doesn't fight 9999px→16px radius jumps. */
+const CAPSULE_PILL_RADIUS = "rounded-[1.5rem]"; // 24px ≈ half of h-12
+const CAPSULE_EXPANDED_RADIUS = "rounded-2xl"; // 16px — small delta from 24px, interpolates smoothly
+
 const CAPSULE_MORPH_TRANSITION =
-  "transition-all duration-200 ease-out";
+  "transition-[max-width,height,max-height,padding,border-radius,background-color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]";
 
 export function AiBar() {
   const [phase, setPhase] = useState<Phase>("idle");
@@ -61,15 +67,20 @@ export function AiBar() {
 
   const aiBarComposerFocusNonce = useLayoutStore((s) => s.aiBarComposerFocusNonce);
   const pendingInsert = useComposerInsertStore((s) => s.pendingInsert);
+  const attachNonce = useComposerInsertStore((s) => s.attachNonce);
+  const attachmentCount = useComposerInsertStore((s) => s.composerAttachmentCount);
 
   const draftParts = loadDraftParts(tabDraft);
   const draftEmpty = isComposerEmpty(draftParts);
   const draftEmptyRef = useRef(draftEmpty);
   draftEmptyRef.current = draftEmpty;
+  const attachmentCountRef = useRef(attachmentCount);
+  attachmentCountRef.current = attachmentCount;
 
   const hasConversation = messages.length > 0 || isStreaming;
   const isInputting = phase === "input";
   const isComposerVisible = phase !== "idle";
+  const composerHasContent = !draftEmpty || attachmentCount > 0;
 
   const focusComposer = useCallback(() => {
     requestAnimationFrame(() => {
@@ -96,12 +107,22 @@ export function AiBar() {
     focusComposer();
   }, [focusComposer]);
 
-  // Restore compact capsule when draft has content (e.g. after tab switch)
+  const panelDrop = useChatFileDrop({ onQueued: openInput });
+  const capsuleDrop = useChatFileDrop({ onQueued: openInput });
+  const osFileDragging = useOsFileDragging();
+
+  // Drag over capsule hit-target → expand to half-input (do not expand on any window drag)
   useEffect(() => {
-    if (phase === "idle" && !draftEmpty) {
+    if (!capsuleDrop.dragActive) return;
+    if (phase === "idle") openInput();
+  }, [capsuleDrop.dragActive, phase, openInput]);
+
+  // Restore compact capsule when draft/attachments have content (e.g. after tab switch)
+  useEffect(() => {
+    if (phase === "idle" && composerHasContent) {
       setPhase("input");
     }
-  }, [phase, draftEmpty]);
+  }, [phase, composerHasContent]);
 
   useEffect(() => {
     if (aiBarComposerFocusNonce === 0) return;
@@ -112,6 +133,12 @@ export function AiBar() {
     if (expandForInsert) openExpanded();
     else openInput();
   }, [aiBarComposerFocusNonce, openExpanded, openInput, pendingInsert?.kind]);
+
+  // New attachment queue → ensure half-input is open (do NOT re-open on every idle)
+  useEffect(() => {
+    if (attachNonce === 0) return;
+    openInput();
+  }, [attachNonce, openInput]);
 
   // Expand only for explicit newlines in draft — line-full overflow handled in editor
   useEffect(() => {
@@ -127,13 +154,14 @@ export function AiBar() {
     if (
       phase === "expanded" &&
       draftEmpty &&
+      attachmentCount === 0 &&
       !composerNeedsExpandedLayout(draftParts)
     ) {
       collapseToInput();
     }
-  }, [phase, draftEmpty, draftParts, collapseToInput]);
+  }, [phase, draftEmpty, attachmentCount, draftParts, collapseToInput]);
 
-  // Click outside → idle when compact capsule is empty
+  // Click outside → idle when compact capsule is empty (no draft, no attachments)
   useEffect(() => {
     if (phase !== "input" || isPanelOpen) return;
 
@@ -141,7 +169,7 @@ export function AiBar() {
       const target = e.target as HTMLElement;
       if (composerShellRef.current?.contains(target)) return;
       if (target.closest("[data-radix-menu-content]") || target.closest("[data-radix-popper-content-wrapper]")) return;
-      if (draftEmptyRef.current) collapseToIdle();
+      if (draftEmptyRef.current && attachmentCountRef.current === 0) collapseToIdle();
     };
 
     document.addEventListener("mousedown", handleMouseDown, true);
@@ -212,10 +240,20 @@ export function AiBar() {
         >
           <div className="px-3 w-full">
             <div
+              ref={panelDrop.zoneRef}
               data-ai-bar-panel
-              className="w-full pointer-events-auto rounded-lg border border-border bg-card shadow-lg overflow-hidden flex flex-col"
+              className={cn(
+                "relative w-full pointer-events-auto rounded-lg border border-border bg-card shadow-lg overflow-hidden flex flex-col",
+                panelDrop.dragActive && chatFileDropZoneClass,
+              )}
               style={{ height: "min(60vh, 600px)" }}
+              {...panelDrop.dropHandlers}
             >
+              {panelDrop.dragActive ? (
+                <span className="pointer-events-none absolute bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-md border border-primary/25 bg-background/95 px-3 py-1 text-[length:var(--font-size-11)] text-muted-foreground shadow-sm">
+                  Drop files to attach
+                </span>
+              ) : null}
               <div className="flex items-center justify-between shrink-0 px-3 py-1.5">
                 <span className="text-[length:var(--font-chat-meta)] text-muted-foreground truncate">
                   {activeTabTitle}
@@ -242,34 +280,62 @@ export function AiBar() {
       <div
         ref={composerShellRef}
         data-ai-bar-capsule
-        className="w-full max-w-3xl mx-auto pointer-events-none @container"
+        className="relative w-full max-w-3xl mx-auto pointer-events-none @container"
       >
+        {/* Idle pill is tiny — only while OS file-dragging, accept drops on a bottom strip (no layout change when idle). */}
+        {phase === "idle" ? (
+          <div
+            ref={capsuleDrop.zoneRef}
+            className={cn(
+              "absolute inset-x-3 bottom-0 h-14 z-20 rounded-2xl",
+              osFileDragging ? "pointer-events-auto" : "pointer-events-none",
+              capsuleDrop.dragActive && chatCapsuleFileDropActiveClass,
+            )}
+            {...capsuleDrop.dropHandlers}
+          />
+        ) : null}
         <div className="px-3 w-full">
           {toolbar}
           <div
-            ref={morphRef}
+            ref={(node) => {
+              morphRef.current = node;
+              if (phase !== "idle") capsuleDrop.zoneRef(node);
+            }}
             className={cn(
-              "pointer-events-auto overflow-hidden border w-full mx-auto",
+              "pointer-events-auto relative overflow-hidden border w-full mx-auto",
+              CAPSULE_PILL_RADIUS,
               CAPSULE_MORPH_TRANSITION,
               phase === "idle" &&
                 cn(
-                  "group flex items-center rounded-full bg-muted-foreground/75 h-1.5 max-h-1.5 max-w-30 px-0 cursor-pointer hover:h-8 hover:max-h-8 hover:max-w-[220px] hover:bg-muted hover:delay-0 delay-100",
+                  "group flex items-center bg-muted-foreground/75 h-1.5 max-h-1.5 max-w-30 px-0 cursor-pointer hover:h-8 hover:max-h-8 hover:max-w-[220px] hover:bg-muted hover:delay-0 delay-100",
                   CAPSULE_SHELL_BORDER_IDLE,
                   "hover:border-neutral-400/55 dark:hover:border-neutral-600/70",
                 ),
               phase === "input" &&
                 cn(
-                  "flex items-center rounded-full h-12 max-h-12 max-w-3xl px-3 bg-card cursor-text",
+                  "flex items-center h-12 max-h-12 max-w-3xl px-3 bg-card cursor-text",
                   CAPSULE_SHELL_BORDER,
                 ),
               phase === "expanded" &&
                 cn(
-                  "rounded-2xl max-h-[min(60vh,480px)] max-w-3xl bg-card",
+                  CAPSULE_EXPANDED_RADIUS,
+                  "max-h-[min(60vh,480px)] max-w-3xl bg-card",
                   CAPSULE_SHELL_BORDER,
                 ),
             )}
             onClick={phase === "idle" ? openInput : undefined}
+            {...(phase !== "idle" ? capsuleDrop.dropHandlers : {})}
           >
+            {phase !== "idle" && capsuleDrop.dragActive ? (
+              <div
+                aria-hidden
+                className={cn(
+                  "pointer-events-none absolute inset-0 z-10",
+                  phase === "expanded" ? CAPSULE_EXPANDED_RADIUS : CAPSULE_PILL_RADIUS,
+                  chatCapsuleFileDropActiveClass,
+                )}
+              />
+            ) : null}
             {phase === "idle" ? (
               <span
                 className="opacity-0 group-hover:opacity-100 scale-50 group-hover:scale-100 origin-center

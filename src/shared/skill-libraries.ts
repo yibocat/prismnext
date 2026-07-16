@@ -12,7 +12,7 @@ export interface SkillLibraryCard {
 
 export const PRISM_CURATED_LIBRARY: SkillLibraryCard = {
   id: "prism-curated",
-  name: "Prism Curated",
+  name: "Prism Next Curated",
   description: "Skills bundled with the app — install copies into your project",
   kind: "bundled",
 };

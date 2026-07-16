@@ -142,6 +142,21 @@ describe("inline composer query", () => {
     );
     expect(options.map((o) => o.kind)).toEqual(["command", "skill", "mcp"]);
   });
+
+  it("appends show-more when a slash section exceeds its limit", () => {
+    const skills = Array.from({ length: 12 }, (_, i) => ({
+      id: `skill-${i}`,
+      name: `Skill ${i}`,
+      enabled: true,
+    }));
+    const limited = buildSlashOptions("", [], skills, []);
+    expect(limited.filter((o) => o.kind === "skill")).toHaveLength(8);
+    expect(limited.some((o) => o.kind === "show-more" && o.section === "skill")).toBe(true);
+
+    const expanded = buildSlashOptions("", [], skills, [], new Set(["skill"]));
+    expect(expanded.filter((o) => o.kind === "skill")).toHaveLength(12);
+    expect(expanded.some((o) => o.kind === "show-more")).toBe(false);
+  });
 });
 
 describe("inline composer serialize", () => {
@@ -519,6 +534,20 @@ describe("buildMentionOptions for experiment", () => {
     // empty query returns the full list (subject to slice cap)
     const all = buildMentionOptions("", [], [], [], experiments);
     expect(all).toHaveLength(2);
+  });
+
+  it("appends show-more for long literature lists", () => {
+    const papers = Array.from({ length: 10 }, (_, i) => ({
+      id: `p-${i}`,
+      bibkey: `key${i}`,
+      title: `Paper ${i}`,
+      authors: "A",
+    })) as any;
+    const limited = buildMentionOptions("", [], [], papers, []);
+    expect(limited.filter((o) => o.kind === "paper")).toHaveLength(6);
+    expect(limited.some((o) => o.kind === "show-more" && o.section === "paper")).toBe(true);
+    const expanded = buildMentionOptions("", [], [], papers, [], new Set(["paper"]));
+    expect(expanded.filter((o) => o.kind === "paper")).toHaveLength(10);
   });
 });
 

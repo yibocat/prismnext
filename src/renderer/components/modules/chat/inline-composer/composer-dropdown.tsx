@@ -37,63 +37,98 @@ import type { SlashCatalogMcp, SlashCatalogSkill } from "@/lib/chat/slash-catalo
 
 export type { SlashCatalogMcp, SlashCatalogSkill };
 
+export type MentionSectionKind = "expert" | "paper" | "file" | "experiment";
+
 export type MentionOption =
   | { kind: "expert"; expert: ExpertInfo }
   | { kind: "paper"; paper: LiteraturePaper }
   | { kind: "file"; file: ProjectFile }
-  | { kind: "experiment"; experiment: ExperimentSummary };
+  | { kind: "experiment"; experiment: ExperimentSummary }
+  | { kind: "show-more"; section: MentionSectionKind; remaining: number };
+
+export type SlashSectionKind = "command" | "skill" | "mcp";
 
 export type SlashOption =
   | { kind: "command"; command: CommandDef }
   | { kind: "skill"; skill: SlashCatalogSkill }
-  | { kind: "mcp"; mcp: SlashCatalogMcp };
+  | { kind: "mcp"; mcp: SlashCatalogMcp }
+  | { kind: "show-more"; section: SlashSectionKind; remaining: number };
 
+export const MENTIONS_LIMIT = 6;
 const SLASH_LIMITS = { command: 10, skill: 8, mcp: 8 } as const;
 
-const SLASH_SECTION_LABELS: Record<SlashOption["kind"], string> = {
+const SLASH_SECTION_LABELS: Record<SlashSectionKind, string> = {
   command: "Commands",
   skill: "Skills",
   mcp: "MCPs",
 };
+
+function appendLimitedSection<T, O extends { kind: string }>(
+  out: O[],
+  matched: T[],
+  limit: number,
+  expanded: boolean,
+  section: string,
+  mapItem: (item: T) => O,
+  makeMore: (remaining: number) => O,
+) {
+  if (expanded || matched.length <= limit) {
+    for (const item of matched) out.push(mapItem(item));
+    return;
+  }
+  for (const item of matched.slice(0, limit)) out.push(mapItem(item));
+  out.push(makeMore(matched.length - limit));
+}
 
 export function buildSlashOptions(
   query: string,
   commands: CommandDef[],
   skills: SlashCatalogSkill[],
   mcps: SlashCatalogMcp[],
+  expandedSections: ReadonlySet<SlashSectionKind> = new Set(),
 ): SlashOption[] {
   const q = query.toLowerCase();
   const options: SlashOption[] = [];
 
-  let commandCount = 0;
-  for (const command of commands) {
-    if (commandCount >= SLASH_LIMITS.command) break;
-    if (command.name.toLowerCase().includes(q) || command.description.toLowerCase().includes(q)) {
-      options.push({ kind: "command", command });
-      commandCount++;
-    }
-  }
+  const matchedCommands = commands.filter(
+    (command) =>
+      command.name.toLowerCase().includes(q) || command.description.toLowerCase().includes(q),
+  );
+  appendLimitedSection(
+    options,
+    matchedCommands,
+    SLASH_LIMITS.command,
+    expandedSections.has("command"),
+    "command",
+    (command) => ({ kind: "command" as const, command }),
+    (remaining) => ({ kind: "show-more" as const, section: "command" as const, remaining }),
+  );
 
-  let skillCount = 0;
-  for (const skill of skills) {
-    if (skillCount >= SLASH_LIMITS.skill) break;
-    if (
+  const matchedSkills = skills.filter(
+    (skill) =>
       skill.enabled &&
-      (skill.name.toLowerCase().includes(q) || skill.id.toLowerCase().includes(q))
-    ) {
-      options.push({ kind: "skill", skill });
-      skillCount++;
-    }
-  }
+      (skill.name.toLowerCase().includes(q) || skill.id.toLowerCase().includes(q)),
+  );
+  appendLimitedSection(
+    options,
+    matchedSkills,
+    SLASH_LIMITS.skill,
+    expandedSections.has("skill"),
+    "skill",
+    (skill) => ({ kind: "skill" as const, skill }),
+    (remaining) => ({ kind: "show-more" as const, section: "skill" as const, remaining }),
+  );
 
-  let mcpCount = 0;
-  for (const mcp of mcps) {
-    if (mcpCount >= SLASH_LIMITS.mcp) break;
-    if (mcp.name.toLowerCase().includes(q)) {
-      options.push({ kind: "mcp", mcp });
-      mcpCount++;
-    }
-  }
+  const matchedMcps = mcps.filter((mcp) => mcp.name.toLowerCase().includes(q));
+  appendLimitedSection(
+    options,
+    matchedMcps,
+    SLASH_LIMITS.mcp,
+    expandedSections.has("mcp"),
+    "mcp",
+    (mcp) => ({ kind: "mcp" as const, mcp }),
+    (remaining) => ({ kind: "show-more" as const, section: "mcp" as const, remaining }),
+  );
 
   return options;
 }
@@ -142,8 +177,16 @@ function ComposerQueryPopover({
 
   useEffect(() => {
     if (!open) return;
-    const active = listRef.current?.querySelector('[data-active="true"]');
-    active?.scrollIntoView({ block: "nearest" });
+    const list = listRef.current;
+    if (!list) return;
+    const active = list.querySelector('[data-active="true"]') as HTMLElement | null;
+    if (!active) return;
+    // Scroll the whole option group so the section label stays visible when wrapping to top.
+    const group = active.closest("[data-composer-option-group]") as HTMLElement | null;
+    const target = group ?? active;
+    target.scrollIntoView({
+      block: activeIndex === 0 ? "start" : "nearest",
+    });
   }, [open, activeIndex]);
 
   if (!anchor) return null;
@@ -273,7 +316,7 @@ export function SlashCommandDropdown({
   onListPointerMove?: () => void;
   canHoverItem?: () => boolean;
 }) {
-  let lastKind: SlashOption["kind"] | null = null;
+  let lastSection: SlashSectionKind | null = null;
 
   return (
     <ComposerQueryPopover
@@ -284,10 +327,19 @@ export function SlashCommandDropdown({
     >
       {options.length > 0 ? (
         options.map((option, i) => {
-          const showHeader = option.kind !== lastKind;
-          lastKind = option.kind;
+          const section: SlashSectionKind =
+            option.kind === "show-more" ? option.section : option.kind;
+          const showHeader = option.kind !== "show-more" && section !== lastSection;
+          lastSection = section;
 
           const row = (() => {
+            if (option.kind === "show-more") {
+              return (
+                <span className={cn(itemLabelClass, "text-muted-foreground")}>
+                  Show {option.remaining} more
+                </span>
+              );
+            }
             if (option.kind === "command") {
               return (
                 <span className={cn(itemLabelClass, "font-medium text-primary")}>
@@ -311,9 +363,18 @@ export function SlashCommandDropdown({
             );
           })();
 
+          const rowKey =
+            option.kind === "show-more"
+              ? `show-more:${option.section}`
+              : option.kind === "command"
+                ? `command:${option.command.name}`
+                : option.kind === "skill"
+                  ? `skill:${option.skill.id}`
+                  : `mcp:${option.mcp.name}`;
+
           return (
-            <div key={`${option.kind}:${option.kind === "command" ? option.command.name : option.kind === "skill" ? option.skill.id : option.mcp.name}`}>
-              {showHeader && <div className={sectionLabelClass}>{SLASH_SECTION_LABELS[option.kind]}</div>}
+            <div key={rowKey} data-composer-option-group>
+              {showHeader && <div className={sectionLabelClass}>{SLASH_SECTION_LABELS[section]}</div>}
               <button
                 type="button"
                 data-active={i === activeIndex}
@@ -350,6 +411,7 @@ export function MentionDropdown({
   onSelectFile,
   onSelectPaper,
   onSelectExperiment,
+  onSelectShowMore,
   onHover,
   onListPointerMove,
   canHoverItem,
@@ -369,6 +431,7 @@ export function MentionDropdown({
   onSelectFile: (file: ProjectFile) => void;
   onSelectPaper?: (paper: LiteraturePaper) => void;
   onSelectExperiment?: (experiment: ExperimentSummary) => void;
+  onSelectShowMore?: (section: MentionSectionKind) => void;
   onHover: (index: number) => void;
   onListPointerMove?: () => void;
   canHoverItem?: () => boolean;
@@ -394,21 +457,50 @@ export function MentionDropdown({
         </div>
       ) : (
         options.map((option, i) => {
-          const showExpertHeader =
-            option.kind === "expert" && (i === 0 || options[i - 1]?.kind !== "expert");
-          const showFileHeader =
-            option.kind === "file" && (i === 0 || options[i - 1]?.kind !== "file");
-          const showPaperHeader =
-            option.kind === "paper" && (i === 0 || options[i - 1]?.kind !== "paper");
-          const showExperimentHeader =
-            option.kind === "experiment" && (i === 0 || options[i - 1]?.kind !== "experiment");
+          const prev = options[i - 1];
+          const prevSection =
+            prev == null
+              ? null
+              : prev.kind === "show-more"
+                ? prev.section
+                : prev.kind;
+          const section =
+            option.kind === "show-more" ? option.section : option.kind;
+          const showSectionHeader =
+            option.kind !== "show-more" && section !== prevSection;
           const active = i === activeIndex;
+
+          if (option.kind === "show-more") {
+            return (
+              <div key={`show-more:${option.section}`} data-composer-option-group>
+                <button
+                  type="button"
+                  data-active={active ? "true" : undefined}
+                  className={itemClass(active)}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onSelectShowMore?.(option.section);
+                  }}
+                  onMouseEnter={() => {
+                    if (canHoverItem && !canHoverItem()) return;
+                    onHover(i);
+                  }}
+                >
+                  <span className={cn(itemLabelClass, "text-muted-foreground")}>
+                    Show {option.remaining} more
+                  </span>
+                </button>
+              </div>
+            );
+          }
 
           if (option.kind === "expert") {
             const { expert } = option;
             return (
-              <div key={`expert:${expert.id}`}>
-                {showExpertHeader && <div className={sectionLabelClass}>{expertSectionLabel}</div>}
+              <div key={`expert:${expert.id}`} data-composer-option-group>
+                {showSectionHeader && (
+                  <div className={sectionLabelClass}>{expertSectionLabel}</div>
+                )}
                 <button
                   type="button"
                   data-active={active ? "true" : undefined}
@@ -435,8 +527,8 @@ export function MentionDropdown({
             const ready = readyPaperIds?.has(paper.id) ?? false;
 
             return (
-              <div key={`paper:${paper.id}`}>
-                {showPaperHeader && <div className={sectionLabelClass}>Literature</div>}
+              <div key={`paper:${paper.id}`} data-composer-option-group>
+                {showSectionHeader && <div className={sectionLabelClass}>Literature</div>}
                 <button
                   type="button"
                   data-active={active ? "true" : undefined}
@@ -489,8 +581,8 @@ export function MentionDropdown({
               ? `${experiment.runCount} run${experiment.runCount === 1 ? "" : "s"}${experiment.lastRunAt ? ` · last ${experiment.lastRunAt}` : ""}`
               : "no runs yet";
             return (
-              <div key={`experiment:${experiment.id}`}>
-                {showExperimentHeader && <div className={sectionLabelClass}>Experiments</div>}
+              <div key={`experiment:${experiment.id}`} data-composer-option-group>
+                {showSectionHeader && <div className={sectionLabelClass}>Experiments</div>}
                 <button
                   type="button"
                   data-active={active ? "true" : undefined}
@@ -518,8 +610,8 @@ export function MentionDropdown({
           const dirPath = pathParts.length > 0 ? `${pathParts.join("/")}/` : "";
 
           return (
-            <div key={`file:${file.id}`}>
-              {showFileHeader && <div className={sectionLabelClass}>Files</div>}
+            <div key={`file:${file.id}`} data-composer-option-group>
+              {showSectionHeader && <div className={sectionLabelClass}>Files</div>}
               <button
                 type="button"
                 data-active={active ? "true" : undefined}

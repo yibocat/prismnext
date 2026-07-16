@@ -1,13 +1,24 @@
 /** Panel width at or above this is considered expanded (persisted width writes). */
 export const PANEL_COLLAPSE_THRESHOLD_PX = 30;
 
-/** Mode sidebar (RightArea L2) sash — 1px line + extended hit area (matches L1/L3). */
+/**
+ * Hit target for react-resizable-panels Separators.
+ * Must match CSS `after:-left-3 after:-right-3` (~12px each side + 1px line ≈ 25px).
+ * Smaller library hits than CSS caused col-resize cursor with no drag on the outer fringe.
+ */
+export const PANEL_RESIZE_HIT = { fine: 24, coarse: 28 } as const;
+
+/** Mode sidebar (RightArea L2) sash — 1px line + extended hit area (custom drag, not RRP). */
 export const MODE_SIDEBAR_SASH_CLASS =
   "w-px bg-border hover:bg-foreground/30 active:bg-foreground/40 transition-colors outline-none cursor-col-resize shrink-0 relative z-10 after:absolute after:inset-y-0 after:-left-3 after:-right-3";
 
-/** App shell + WorkspaceSplit panel sash (react-resizable-panels Separator). */
+/**
+ * App shell + WorkspaceSplit panel sash (react-resizable-panels Separator).
+ * Groups should set `disableCursor` so the library does not inject `ew-resize !important`
+ * (that fought CSS `col-resize` and made the cursor flicker / feel like a second handle).
+ */
 export const PANEL_SASH_SEPARATOR_CLASS =
-  "w-px bg-border hover:bg-foreground/30 active:bg-foreground/40 transition-colors outline-none cursor-col-resize shrink-0 relative after:absolute after:inset-y-0 after:-left-3 after:-right-3";
+  "w-px bg-border hover:bg-foreground/30 active:bg-foreground/40 transition-colors outline-none cursor-col-resize shrink-0 relative z-10 after:absolute after:inset-y-0 after:-left-3 after:-right-3";
 
 /** WorkspaceSplit right pane below this % is treated as collapsed (drag-to-close). */
 export const WORKSPACE_SPLIT_COLLAPSE_PERCENT = 8;

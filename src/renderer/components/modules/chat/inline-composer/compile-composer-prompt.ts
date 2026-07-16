@@ -2,6 +2,12 @@ import type { ComposerPart } from "@/lib/chat/composer-parts";
 import { expandLinkTokensInParts } from "@/lib/chat/composer-parts";
 import { partsToPlainText, partsToAgentText } from "@/lib/chat/composer-parts";
 import type { ContentBlock } from "@/stores/chat-store";
+import type { ComposerAttachment, PromptImageAttachment, PromptFileAttachment } from "@/lib/chat/composer-attach-file";
+import {
+  isVisionImagePath,
+  promptImageFromAttachment,
+  promptFileFromAttachment,
+} from "@/lib/chat/composer-attach-file";
 import { useDocumentStore } from "@/stores/document-store";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { isExternalFileId, resolveExternalPath } from "@/lib/files/external-file";
@@ -20,6 +26,58 @@ import {
   PAPER_AGENT_CONTEXT_FOOTER,
   type PaperNoteAgentContext,
 } from "@/lib/literature/paper-agent-context";
+
+/** Max chars inlined per @-mentioned text file (rest truncated with a note). */
+const MAX_INLINE_ATTACHMENT_CHARS = 200_000;
+
+function looksLikeBinaryText(content: string): boolean {
+  if (!content) return false;
+  const sample = content.slice(0, 8_000);
+  let weird = 0;
+  for (let i = 0; i < sample.length; i++) {
+    const code = sample.charCodeAt(i);
+    if (code === 0) return true;
+    if (code < 8 || (code >= 14 && code < 32 && code !== 9 && code !== 10 && code !== 13)) {
+      weird += 1;
+    }
+  }
+  return weird / sample.length > 0.05;
+}
+
+function formatInlinedFileBlock(displayPath: string, content: string, absolutePath?: string): string {
+  if (!content) {
+    return [
+      `[file unavailable: ${displayPath}]`,
+      absolutePath ? `Absolute path: \`${absolutePath}\`` : null,
+      "Could not read text content. Use file tools if the path is accessible.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (looksLikeBinaryText(content)) {
+    return [
+      `[binary-looking file: ${displayPath}]`,
+      absolutePath ? `Absolute path: \`${absolutePath}\`` : null,
+      "Content was not inlined. Use file tools to inspect this path.",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (content.length > MAX_INLINE_ATTACHMENT_CHARS) {
+    const truncated = content.slice(0, MAX_INLINE_ATTACHMENT_CHARS);
+    return [
+      `\`\`\`${displayPath}`,
+      truncated,
+      "",
+      `… [truncated: showing ${MAX_INLINE_ATTACHMENT_CHARS} of ${content.length} chars]`,
+      absolutePath ? `Full path: \`${absolutePath}\`` : null,
+      "```",
+    ]
+      .filter((line) => line !== null)
+      .join("\n");
+  }
+  return `\`\`\`${displayPath}\n${content}\n\`\`\``;
+}
 
 async function resolveProjectFileContent(
   fileId: string | undefined,
@@ -75,12 +133,20 @@ export interface CompiledComposerPrompt {
   paperSnippetCount: number;
   /** Experiment ids @-mentioned this turn (for tools/UI cross-ref). */
   selectedExperimentIds: string[];
+  /** Vision images sent as ACP `ContentBlock::Image` (not inlined as text). */
+  promptImages: PromptImageAttachment[];
+  /**
+   * Composer strip file attachments as ACP `resource_link` (not dumped into prompt text).
+   * @see https://agentclientprotocol.com/protocol/v1/content
+   */
+  promptFiles: PromptFileAttachment[];
 }
 
 export async function compileComposerPrompt(
   parts: ComposerPart[],
   expandCommand: (name: string, raw: string) => Promise<string>,
   extraPinnedFiles?: Array<{ filePath: string; selectedText: string }>,
+  attachments?: ComposerAttachment[],
 ): Promise<CompiledComposerPrompt> {
   parts = expandLinkTokensInParts(parts);
   const actionCommands: ActionCommandRef[] = [];
@@ -121,9 +187,24 @@ export async function compileComposerPrompt(
   }
 
   const displayLabel = partsToPlainText(parts).trim();
-  const displayBlocks: ContentBlock[] = displayLabel || parts.some((p) => p.type !== "text")
-    ? [{ type: "text", text: displayLabel, inlineParts: parts }]
-    : [];
+  const attachmentDisplay = (attachments ?? []).map((a) => ({
+    name: a.name,
+    kind: a.kind,
+    path: a.displayPath,
+    previewUrl: a.previewUrl,
+    note: a.note,
+  }));
+  const displayBlocks: ContentBlock[] =
+    displayLabel || parts.some((p) => p.type !== "text") || attachmentDisplay.length > 0
+      ? [
+          {
+            type: "text",
+            text: displayLabel,
+            inlineParts: parts.some((p) => p.type !== "text") || displayLabel ? parts : undefined,
+            attachments: attachmentDisplay.length > 0 ? attachmentDisplay : undefined,
+          },
+        ]
+      : [];
 
   const sections: string[] = [];
   const userLine = partsToAgentText(parts).trim();
@@ -134,6 +215,8 @@ export async function compileComposerPrompt(
   );
 
   const fileBlocks: string[] = [];
+  const promptImages: PromptImageAttachment[] = [];
+  const promptFiles: PromptFileAttachment[] = [];
   for (const fp of fileParts) {
     let content = useDocumentStore.getState().getContent(fp.fileId);
     if (!content && isExternalFileId(fp.fileId)) {
@@ -154,8 +237,17 @@ export async function compileComposerPrompt(
       absolutePath: fp.filePath,
       type: "other",
     });
-    const body = content || `[file: ${displayPath}]`;
-    fileBlocks.push(`\`\`\`${displayPath}\n${body}\n\`\`\``);
+    fileBlocks.push(formatInlinedFileBlock(displayPath, content, fp.filePath));
+  }
+
+  for (const att of attachments ?? []) {
+    if (att.kind === "image" || isVisionImagePath(att.absolutePath)) {
+      const img = await promptImageFromAttachment(att);
+      if (img) promptImages.push(img);
+      continue;
+    }
+    // File strip attachments → ACP resource_link (file upload), not prompt text dump.
+    promptFiles.push(promptFileFromAttachment(att));
   }
 
   for (const pinned of extraPinnedFiles ?? []) {
@@ -387,20 +479,34 @@ export async function compileComposerPrompt(
     mcpServerNames: [...new Set(mcpServerNames)],
     skillIds: [...new Set(skillIds)],
     paperSnippetCount,
+    promptImages,
+    promptFiles,
   };
 }
 
 /** Whether the compiled prompt should be sent to the model (vs action-only). */
 export function shouldSendPromptToAgent(
-  compiled: Pick<CompiledComposerPrompt, "promptText" | "aiCommandNames" | "actionCommands">,
+  compiled: Pick<
+    CompiledComposerPrompt,
+    "promptText" | "aiCommandNames" | "actionCommands" | "promptImages" | "promptFiles"
+  >,
   parts: ComposerPart[],
   extraPinnedCount: number,
 ): boolean {
-  if (!compiled.promptText) return false;
+  if (
+    !compiled.promptText &&
+    !(compiled.promptImages?.length > 0) &&
+    !(compiled.promptFiles?.length > 0)
+  ) {
+    return false;
+  }
 
   const hasSubstantiveInput =
     compiled.aiCommandNames.length > 0 ||
+    (compiled.promptImages?.length ?? 0) > 0 ||
+    (compiled.promptFiles?.length ?? 0) > 0 ||
     extraPinnedCount > 0 ||
+    Boolean(compiled.promptText?.includes("## Referenced files")) ||
     parts.some((p) => p.type === "mention") ||
     parts.some((p) => p.type === "link") ||
     parts.some((p) => p.type === "terminal-snippet") ||
@@ -423,4 +529,31 @@ export function shouldSendPromptToAgent(
     compiled.actionCommands.length > 0;
 
   return !onlyActionCommands;
+}
+
+/** Build the user-visible bubble without reading file bodies (fast path before send). */
+export function buildComposerDisplayBlocks(
+  parts: ComposerPart[],
+  attachments?: ComposerAttachment[],
+): ContentBlock[] {
+  const expanded = expandLinkTokensInParts(parts);
+  const displayLabel = partsToPlainText(expanded).trim();
+  const attachmentDisplay = (attachments ?? []).map((a) => ({
+    name: a.name,
+    kind: a.kind,
+    path: a.displayPath,
+    previewUrl: a.previewUrl,
+    note: a.note,
+  }));
+  if (!displayLabel && !expanded.some((p) => p.type !== "text") && attachmentDisplay.length === 0) {
+    return [];
+  }
+  return [
+    {
+      type: "text",
+      text: displayLabel,
+      inlineParts: expanded.some((p) => p.type !== "text") || displayLabel ? expanded : undefined,
+      attachments: attachmentDisplay.length > 0 ? attachmentDisplay : undefined,
+    },
+  ];
 }

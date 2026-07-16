@@ -59,7 +59,7 @@ const communityLoaders: Record<string, { dark?: ThemeLoader; light?: ThemeLoader
 export const SYNTAX_THEMES: EditorSyntaxThemeDef[] = [
   {
     id: "prism",
-    name: "Prism",
+    name: "Prism Next",
     description: "Auto-adapts to your app theme color. Always in harmony.",
     isDefault: true,
     getExtension: () => createPrismHighlightStyle(),
@@ -80,7 +80,7 @@ export const SYNTAX_THEMES: EditorSyntaxThemeDef[] = [
     description: "Arctic, bluish dark palette. Easy on the eyes.",
     getExtension: (mode: ThemeMode) => {
       if (mode === "dark") throw new Error("Nord theme requires async resolution");
-      return createPrismHighlightStyle(); // Nord is dark-only, fallback to Prism for light
+      return createPrismHighlightStyle(); // Nord is dark-only, fallback to Prism Next for light
     },
     hasNativeVariant: (mode: ThemeMode) => mode === "dark",
   },
@@ -90,7 +90,7 @@ export const SYNTAX_THEMES: EditorSyntaxThemeDef[] = [
     description: "Atom editor's classic dark theme.",
     getExtension: (mode: ThemeMode) => {
       if (mode === "dark") return oneDark;
-      return createPrismHighlightStyle(); // fallback to Prism for light mode
+      return createPrismHighlightStyle(); // fallback to Prism Next for light mode
     },
     hasNativeVariant: (mode: ThemeMode) => mode === "dark",
   },
@@ -152,7 +152,7 @@ export function getAllThemeDefs(): EditorSyntaxThemeDef[] {
 
 /**
  * Resolves a theme extension, handling async community theme loading.
- * For Prism and oneDark (synchronous), returns immediately.
+ * For Prism Next and oneDark (synchronous), returns immediately.
  * For community themes, lazy-loads and caches the extension.
  */
 const extensionCache = new Map<string, Extension>();
@@ -167,7 +167,7 @@ export async function getThemeExtensionAsync(
 
   const def = getThemeDef(themeId);
 
-  // Prism: synchronous
+  // Prism Next: synchronous
   if (themeId === "prism") {
     const ext = createPrismHighlightStyle();
     extensionCache.set(cacheKey, ext);
@@ -208,7 +208,7 @@ export async function getThemeExtensionAsync(
 }
 
 /**
- * Synchronous getter — only works for Prism and oneDark (dark).
+ * Synchronous getter — only works for Prism Next and oneDark (dark).
  * Community themes return null (caller must use async path).
  */
 export function getThemeExtensionSync(

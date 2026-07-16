@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useProjectStore } from "@/stores/project-store";
@@ -12,6 +12,10 @@ import {
   appMenuFontClass,
 } from "@/components/ui/app-menu";
 import { NewProjectDialog } from "@/components/modules/project/new-project-dialog";
+import {
+  loadProjectIcon,
+  ProjectIconBadge,
+} from "@/components/modules/project/project-icon";
 import { FolderOpenIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -30,11 +34,46 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
   const setLeftSidebarOverlay = useLayoutStore((s) => s.setLeftSidebarOverlay);
   const projectOpen = useProjectOpen();
 
+  const [currentIcon, setCurrentIcon] = useState<string | null>(null);
+  const [recentIcons, setRecentIcons] = useState<Record<string, string | null>>({});
+
   const projectName = projectRoot
     ? projectRoot.split(/[/\\]/).pop() || projectRoot
     : "No Project Open";
 
   const newProjectTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!projectRoot) {
+      setCurrentIcon(null);
+      return;
+    }
+    void loadProjectIcon(projectRoot).then((icon) => {
+      if (!cancelled) setCurrentIcon(icon);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectRoot]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const entries = await Promise.all(
+        recentProjects.map(async (p) => {
+          const icon = await loadProjectIcon(p.path);
+          return [p.path, icon] as const;
+        }),
+      );
+      if (cancelled) return;
+      setRecentIcons(Object.fromEntries(entries));
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [recentProjects]);
 
   const handleOpenProjectPath = async (path: string) => {
     const ok = await projectOpen(path);
@@ -59,7 +98,15 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
       <AppMenu>
         <AppMenuTrigger asChild>
           <button type="button" className={className}>
-            <FolderOpenIcon className="size-3.5 shrink-0 text-muted-foreground" />
+            {projectRoot ? (
+              <ProjectIconBadge
+                icon={currentIcon}
+                name={projectName}
+                className="size-5 text-[length:var(--font-size-12)]"
+              />
+            ) : (
+              <FolderOpenIcon className="size-3.5 shrink-0 text-muted-foreground" />
+            )}
             <span className="truncate flex-1 text-left">{projectName}</span>
           </button>
         </AppMenuTrigger>
@@ -75,7 +122,13 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
               <AppMenuItem
                 key={p.path}
                 className={sidebarItemClass}
-                leading={<FolderOpenIcon className="size-3.5 shrink-0 text-muted-foreground" />}
+                leading={
+                  <ProjectIconBadge
+                    icon={recentIcons[p.path]}
+                    name={p.name}
+                    className="size-5 text-[length:var(--font-size-12)]"
+                  />
+                }
                 description={p.path}
                 onClick={() => handleOpenProjectPath(p.path)}
               >

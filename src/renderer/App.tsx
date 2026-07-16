@@ -36,6 +36,7 @@ import { hasOpenSettingsEditor } from "@/hooks/use-settings-editor";
 import {
   CENTER_MAXIMIZE_THRESHOLD_PX,
   PANEL_COLLAPSE_THRESHOLD_PX,
+  PANEL_RESIZE_HIT,
   RESIZE_FILL_PX,
   SIDEBAR_FULLY_COLLAPSED_PX,
   PANEL_SASH_SEPARATOR_CLASS,
@@ -463,7 +464,8 @@ export function App() {
               id="main-layout"
               orientation="horizontal"
               className="flex-1 min-h-0"
-              resizeTargetMinimumSize={{ fine: 8, coarse: 12 }}
+              resizeTargetMinimumSize={PANEL_RESIZE_HIT}
+              disableCursor
             >
               <Panel
                 id="left-sidebar"
@@ -499,7 +501,8 @@ export function App() {
                   id="center-right"
                   orientation="horizontal"
                   className="h-full"
-                  resizeTargetMinimumSize={{ fine: 8, coarse: 12 }}
+                  resizeTargetMinimumSize={PANEL_RESIZE_HIT}
+                  disableCursor
                 >
                   <Panel
                     id="center"
@@ -622,7 +625,8 @@ export function App() {
               id="main-layout"
               orientation="horizontal"
               className="flex-1 min-h-0"
-              resizeTargetMinimumSize={{ fine: 8, coarse: 12 }}
+              resizeTargetMinimumSize={PANEL_RESIZE_HIT}
+              disableCursor
             >
               <Panel
                 id="left-sidebar"

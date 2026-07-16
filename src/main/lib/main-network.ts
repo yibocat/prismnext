@@ -1,12 +1,12 @@
 /**
- * Main-process outbound HTTP — single network route for Prism.
+ * Main-process outbound HTTP — single network route for Prism Next.
  *
  * ## Two stacks in Electron main
  *
  * | Stack | API | Proxy / TLS |
  * |-------|-----|-------------|
  * | Node (default) | `globalThis.fetch` | Node/undici — often **ignores macOS/Windows system proxy** |
- * | Chromium (Prism) | `electron.net.fetch` via {@link mainNetFetch} | Same as in-app browser — **follows system proxy/VPN** |
+ * | Chromium (Prism Next) | `electron.net.fetch` via {@link mainNetFetch} | Same as in-app browser — **follows system proxy/VPN** |
  *
  * Use {@link mainNetFetch} (or injected {@link catalogFetch} in shared bibliographic sources)
  * for all user-facing catalog / citation APIs in main. Do **not** rely on bare Node fetch
@@ -19,7 +19,7 @@ import { setCatalogFetch } from "../../shared/bibliographic-metadata/catalog-fet
 
 const DEFAULT_HEADERS = {
   Accept: "application/json",
-  "User-Agent": "Prism/1.0 (mailto:support@researchprism.app)",
+  "User-Agent": "PrismNext/1.0 (mailto:support@researchprism.app)",
 } as const;
 
 const DEFAULT_TIMEOUT_MS = 20_000;

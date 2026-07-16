@@ -3,6 +3,7 @@ import {
   SquareIcon,
   XIcon,
   PlusIcon,
+  FileIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -12,11 +13,17 @@ import {
   AppMenuTrigger,
 } from "@/components/ui/app-menu";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { ComposerToolbar } from "./agent-settings/composer-toolbar";
 import { ModelThoughtSelect } from "./agent-settings/model-thought-select";
 import { PermissionGatePanel, usePermissionGateOpen } from "./permission-gate-panel";
 import { InlineComposerEditor } from "./inline-composer";
 import { useChatComposer } from "@/hooks/use-chat-composer";
+import type { ComposerAttachment } from "@/lib/chat/composer-attach-file";
 
 export type ChatComposerVariant = "panel" | "capsule-compact" | "capsule-expanded";
 
@@ -28,6 +35,75 @@ interface ChatComposerCoreProps {
   onLayoutExpand?: () => void;
 }
 
+function ComposerAttachmentStrip({
+  attachments,
+  onRemove,
+}: {
+  attachments: ComposerAttachment[];
+  onRemove: (id: string) => void;
+}) {
+  const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
+
+  if (attachments.length === 0) return null;
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2 px-4 pt-3 pb-0">
+        {attachments.map((att) => (
+          <span
+            key={att.id}
+            className="group relative inline-flex max-w-[10rem] items-center gap-1.5 rounded-md border border-border bg-muted/60 px-1.5 py-1"
+          >
+            {att.kind === "image" && att.previewUrl ? (
+              <button
+                type="button"
+                aria-label={`Preview ${att.name}`}
+                onClick={() => setPreview({ url: att.previewUrl!, name: att.name })}
+                className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <img
+                  src={att.previewUrl}
+                  alt={att.name}
+                  className="size-8 rounded object-cover transition-opacity hover:opacity-90"
+                />
+              </button>
+            ) : (
+              <span className="flex size-8 shrink-0 items-center justify-center rounded bg-muted">
+                <FileIcon className="size-3.5 text-muted-foreground" />
+              </span>
+            )}
+            <span className="min-w-0 truncate font-mono text-[length:var(--font-chat-meta)] text-muted-foreground">
+              {att.name}
+            </span>
+            <button
+              type="button"
+              aria-label={`Remove ${att.name}`}
+              onClick={() => onRemove(att.id)}
+              className="rounded-sm p-0.5 text-muted-foreground transition-colors hover:bg-muted-foreground/20 hover:text-foreground"
+            >
+              <XIcon className="size-3" />
+            </button>
+          </span>
+        ))}
+      </div>
+      <Dialog open={preview != null} onOpenChange={(open) => !open && setPreview(null)}>
+        <DialogContent
+          className="max-w-[min(92vw,56rem)] gap-2 border-border/80 bg-background p-2 sm:max-w-[min(92vw,56rem)]"
+          showCloseButton
+        >
+          <DialogTitle className="sr-only">{preview?.name ?? "Image preview"}</DialogTitle>
+          {preview ? (
+            <img
+              src={preview.url}
+              alt={preview.name}
+              className="max-h-[min(85vh,720px)] w-full rounded-md object-contain"
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export function ChatComposerCore({
   variant = "panel",
   className,
@@ -37,7 +113,6 @@ export function ChatComposerCore({
 }: ChatComposerCoreProps) {
   const permissionGateOpen = usePermissionGateOpen();
   const composer = useChatComposer();
-  const isExpertTeam = true;
 
   const isCapsule = variant === "capsule-compact" || variant === "capsule-expanded";
   const isCompact = variant === "capsule-compact";
@@ -85,14 +160,14 @@ export function ChatComposerCore({
       <AppMenuContent align="start" className="min-w-[7.5rem]">
         <AppMenuItem
           onClick={() => {
-            void composer.handleAddFile();
+            void composer.handleAddFile().then(() => onLayoutExpand?.());
           }}
         >
           Add file
         </AppMenuItem>
         <AppMenuItem
           onClick={() => {
-            void composer.handleAddImage();
+            void composer.handleAddImage().then(() => onLayoutExpand?.());
           }}
         >
           Add image
@@ -134,6 +209,16 @@ export function ChatComposerCore({
       placeholder={placeholder}
       density={isCompact ? "compact" : "default"}
       onLayoutExpand={onLayoutExpand}
+      onExternalFiles={(paths) => {
+        void composer.addAttachmentsFromPaths(paths).then(() => onLayoutExpand?.());
+      }}
+    />
+  );
+
+  const attachmentStrip = (
+    <ComposerAttachmentStrip
+      attachments={composer.pendingAttachments}
+      onRemove={composer.removeAttachment}
     />
   );
 
@@ -165,6 +250,7 @@ export function ChatComposerCore({
               : "border-0 bg-transparent shadow-none rounded-none",
           )}
         >
+          {!isCompact && attachmentStrip}
           {!isCompact && composer.pinnedContexts.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3 pb-0">
               {composer.pinnedContexts.map((ctx, i) => (
@@ -202,16 +288,18 @@ export function ChatComposerCore({
             </div>
             {isCompact && (
               <>
-                {!isExpertTeam && (
-                  <ModelThoughtSelect presentation={useModelIcon ? "icon" : "capsule"} />
-                )}
+                <ModelThoughtSelect presentation={useModelIcon ? "icon" : "capsule"} />
                 {sendControls}
               </>
             )}
           </div>
 
           {!isCompact && !hideToolbar && (
-            <ComposerToolbar addMenu={addMenu} sendControls={sendControls} />
+            <ComposerToolbar
+              addMenu={addMenu}
+              sendControls={sendControls}
+              modelBesideSend
+            />
           )}
         </div>
       </div>
@@ -235,6 +323,7 @@ export function ChatComposerCore({
             permissionGateOpen ? "rounded-b-lg rounded-t-none" : isCapsule ? "rounded-2xl" : "rounded-lg",
           )}
         >
+          {attachmentStrip}
           {composer.pinnedContexts.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3 pb-0">
               {composer.pinnedContexts.map((ctx, i) => (

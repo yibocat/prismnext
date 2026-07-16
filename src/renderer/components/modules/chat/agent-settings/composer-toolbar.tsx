@@ -12,9 +12,18 @@ function ToolbarDivider() {
 interface ComposerToolbarProps {
   addMenu: ReactNode;
   sendControls: ReactNode;
+  /**
+   * Capsule (RightArea maximized): put model select to the left of send.
+   * Panel (left chat): keep model on the left with add menu.
+   */
+  modelBesideSend?: boolean;
 }
 
-export function ComposerToolbar({ addMenu, sendControls }: ComposerToolbarProps) {
+export function ComposerToolbar({
+  addMenu,
+  sendControls,
+  modelBesideSend = false,
+}: ComposerToolbarProps) {
   const toolbarRef = useRef<HTMLDivElement>(null);
   const compact = useComposerCompact(toolbarRef);
   const intensiveCount = useIntensiveReadingCount();
@@ -26,7 +35,7 @@ export function ComposerToolbar({ addMenu, sendControls }: ComposerToolbarProps)
     >
       <div className={cn("flex min-w-0 flex-1 items-center gap-0.5")}>
         {addMenu}
-        <ModelThoughtSelect compact={compact} />
+        {!modelBesideSend ? <ModelThoughtSelect compact={compact} /> : null}
         {intensiveCount > 0 ? (
           <>
             <ToolbarDivider />
@@ -37,6 +46,9 @@ export function ComposerToolbar({ addMenu, sendControls }: ComposerToolbarProps)
 
       <div className="flex shrink-0 items-center gap-1">
         <PermissionModeSelect compact={compact} />
+        {modelBesideSend ? (
+          <ModelThoughtSelect presentation="capsule" />
+        ) : null}
         {sendControls}
       </div>
     </div>

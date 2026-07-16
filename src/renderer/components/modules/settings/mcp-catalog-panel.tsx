@@ -206,7 +206,7 @@ export function McpCatalogPanel() {
           Curated MCP servers for research workflows. Requires{" "}
           <code className="text-[length:var(--font-size-11)] bg-muted px-1 rounded">npx</code>.{" "}
           <strong>Paper Search</strong> is built-in (always on). Staging and library citations stay
-          in Prism{" "}
+          in Prism Next{" "}
           <code className="text-[length:var(--font-size-11)] bg-muted px-1 rounded">literature-*</code>{" "}
           tools.
         </p>

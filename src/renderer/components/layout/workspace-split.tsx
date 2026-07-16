@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Group, Panel, Separator, type PanelImperativeHandle } from "react-resizable-panels";
 import { useLayoutStore } from "@/stores/layout-store";
 import {
+  PANEL_RESIZE_HIT,
   WORKSPACE_SPLIT_COLLAPSE_PERCENT,
   WORKSPACE_SPLIT_EXPAND_PERCENT,
   PANEL_SASH_SEPARATOR_CLASS,
@@ -88,7 +89,8 @@ export function WorkspaceSplit({
     <Group
       orientation="horizontal"
       className="flex-1 min-h-0"
-      resizeTargetMinimumSize={{ fine: 8, coarse: 12 }}
+      resizeTargetMinimumSize={PANEL_RESIZE_HIT}
+      disableCursor
       defaultLayout={defaultLayout}
       onLayoutChanged={handleLayoutChanged}
     >

@@ -242,6 +242,10 @@ export function registerChatHandlers(): void {
         hasPaperSnippets?: boolean;
         orchestratorId?: string | null;
         selectedExpertIds?: string[];
+        /** Vision images — sent as ACP ContentBlock::Image alongside the text prompt. */
+        promptImages?: Array<{ mimeType: string; data: string; name: string; uri?: string }>;
+        /** File attachments — ACP ContentBlock::ResourceLink (not inlined into prompt text). */
+        promptFiles?: Array<{ uri: string; name: string; mimeType: string; size?: number }>;
       },
     ) => {
       const tabId = args.tabId || "default";
@@ -273,7 +277,7 @@ export function registerChatHandlers(): void {
         return;
       }
 
-      // ── Assemble system prompt (Prism layers) ──
+      // ── Assemble system prompt (Prism Next layers) ──
       const intensivePapers = args.projectPath
         ? resolveIntensivePapers(args.projectPath, args.intensivePaperIds)
         : [];
@@ -512,10 +516,56 @@ export function registerChatHandlers(): void {
       }
       let usage = null;
       try {
-        const result = await service.sendPrompt(sessionId, userPrompt, {
+        let resources:
+          | Array<
+              | { uri: string; mimeType: string; text: string }
+              | { uri: string; mimeType: string; blob: string }
+            >
+          | undefined;
+        let attachmentNotes: string[] = [];
+        if (args.promptFiles?.length) {
+          const { materializePromptFiles } = await import("../services/prompt-file-attachments");
+          const materialized = await materializePromptFiles(args.promptFiles);
+          attachmentNotes = materialized.notes;
+          resources = materialized.blocks.map((b) => b.resource);
+          if (resources.length === 0) {
+            const reason =
+              attachmentNotes.join("；") || "附件无法读取或格式不受支持。";
+            win.webContents.send("chat:complete", {
+              tabId,
+              sessionId: args.sessionId || "",
+              success: false,
+              error: reason,
+            });
+            return;
+          }
+          if (attachmentNotes.length) {
+            log.info("prompt file attachment notes", { notes: attachmentNotes });
+          }
+        }
+
+        let promptForModel = userPrompt;
+        if (attachmentNotes.length) {
+          promptForModel = [
+            userPrompt,
+            "",
+            "---",
+            "**Attachment notes:**",
+            ...attachmentNotes.map((n) => `- ${n}`),
+            "---",
+          ].join("\n");
+        }
+
+        const result = await service.sendPrompt(sessionId, promptForModel, {
           model: modelId ? formatOpenCodeModelRef(provider, modelId) : undefined,
           provider,
           projectRulesPrompt: projectRulesPrompt || undefined,
+          images: args.promptImages?.map((img) => ({
+            mimeType: img.mimeType,
+            data: img.data,
+            uri: img.uri,
+          })),
+          resources,
         });
         if (args.userDisplayContent?.length && args.projectPath && sessionId) {
           appendUserDisplay(args.projectPath, sessionId, args.userDisplayContent);
@@ -544,11 +594,11 @@ export function registerChatHandlers(): void {
 
       // ── Build categorized breakdown ──
       // Categories (sum MUST equal totalUsed):
-      //   1-4: Prism system prompt layers (chars/4 estimate)
+      //   1-4: Prism Next system prompt layers (chars/4 estimate)
       //   5:   Skills — .prismnext/agent/skills/ (file sizes / 4)
       //   6:   MCP Tools — .prismnext/agent/mcp.json config
       //   7:   Agent Base — OpenCode's own built-in prompt + tool defs +
-      //        any conversation content cached beyond what Prism tracks
+      //        any conversation content cached beyond what Prism Next tracks
       //   8:   Messages — actual conversation tokens (remainder)
       //
       //   Formula: totalUsed = sum(sysBreakdown) + skills + mcpTools + agentBase + messages
@@ -558,7 +608,7 @@ export function registerChatHandlers(): void {
       //     not duplicated in messages (which would happen with inputTokens+cacheCreation).
       //   On later turns: cacheRead grows as OpenCode caches more conversation;
       //     agentBase = cacheRead - knownStatic captures the cached portion beyond
-      //     what Prism explicitly tracks.
+      //     what Prism Next explicitly tracks.
       const inputTokens = (usage as any)?.input_tokens ?? 0;
       const cacheCreation = (usage as any)?.cache_creation_input_tokens ?? 0;
       const cacheRead = (usage as any)?.cache_read_input_tokens ?? 0;
@@ -595,11 +645,11 @@ export function registerChatHandlers(): void {
         } catch { /* best-effort */ }
       }
 
-      // Static known portions (Prism prompts + skills + MCP).
+      // Static known portions (Prism Next prompts + skills + MCP).
       // These are chars/4 estimates — not exact, but proportions are what matter.
       const knownStatic = sysTokensEstimate + skillsTokens + mcpTokens;
 
-      // Agent Base: cached tokens NOT explained by Prism's static estimates.
+      // Agent Base: cached tokens NOT explained by Prism Next's static estimates.
       // On turn 1 (cacheRead=0) this is 0. On later turns, it captures:
       //   - OpenCode's own built-in system prompt & tool definitions
       //   - Any conversation content OpenCode chooses to cache
@@ -968,6 +1018,27 @@ export function registerChatHandlers(): void {
     ) => {
       appendUserDisplay(args.projectPath, args.sessionId, args.content);
       return { success: true };
+    },
+  );
+
+  ipcMain.handle(
+    "chat:describeImages",
+    async (
+      _event,
+      args: {
+        providerId: string;
+        modelId: string;
+        images: Array<{ name: string; mimeType: string; data: string; uri?: string }>;
+      },
+    ) => {
+      const { describeImagesWithVisionFallback } = await import("../services/vision-fallback");
+      return {
+        descriptions: await describeImagesWithVisionFallback(
+          args.providerId,
+          args.modelId,
+          args.images,
+        ),
+      };
     },
   );
 

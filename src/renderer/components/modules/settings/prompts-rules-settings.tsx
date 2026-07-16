@@ -251,7 +251,7 @@ export function PromptsRulesSettings() {
                 <p className={ROW_DESC}>
                   {isCustom
                     ? "Custom prompt replaces the built-in default in `_prism-system.md`."
-                    : "Built-in Prism persona written to `_prism-system.md` on chat sync."}
+                    : "Built-in Prism Next persona written to `_prism-system.md` on chat sync."}
                 </p>
                 <p className="text-[length:var(--font-size-11)] text-muted-foreground/70 mt-0.5">
                   {stackSummary

@@ -3,7 +3,15 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
+import {
+  AppSelect,
+  AppSelectContent,
+  AppSelectItem,
+  AppSelectTrigger,
+  AppSelectValue,
+} from "@/components/ui/app-select";
 import {
   ChevronDownIcon,
   KeyRoundIcon,
@@ -12,10 +20,21 @@ import {
   XIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ALL_PROVIDERS, resolveProviderConfig, buildCustomModelEntry, modelIdTaken, type ProviderConfig, type ModelConfig } from "@/lib/providers";
+import {
+  ALL_PROVIDERS,
+  resolveProviderConfig,
+  buildCustomModelEntry,
+  modelIdTaken,
+  getConfiguredVisionModels,
+  modelSupportsVision,
+  type ProviderConfig,
+  type ModelConfig,
+} from "@/lib/providers";
+import { ModelCapabilityBadges } from "@/components/modules/chat/agent-settings/model-capability-badges";
 import {
   SETTINGS_CARD,
   SETTINGS_CATEGORY_HEADER,
+  SETTINGS_ROW,
   SETTINGS_ROW_DESC,
   SETTINGS_ROW_LABEL,
 } from "./settings-tokens";
@@ -71,7 +90,22 @@ function ConnectionStatusLine({ status }: { status: ConnectionStatus }) {
 }
 
 export function ModelSettings() {
+  const settings = useSettingsStore((s) => s.settings);
+  const updateSettings = useSettingsStore((s) => s.updateSettings);
   const customProviders = useSettingsStore((s) => s.settings.aiCustomProviders) || [];
+  const visionCandidates = getConfiguredVisionModels(
+    settings.aiEnabledModels,
+    settings.aiCustomModelsData,
+    customProviders,
+    settings.aiApiKeys,
+  );
+  const selectedVisionFallback = settings.aiVisionFallbackModel ?? "__none__";
+  const visionFallbackValid =
+    selectedVisionFallback === "__none__" ||
+    visionCandidates.some(
+      ({ provider, model }) => `${provider.id}/${model.id}` === selectedVisionFallback,
+    );
+  const visionFallbackValue = visionFallbackValid ? selectedVisionFallback : "__none__";
 
   const openAddProvider = () => {
     openSettingsPanel({ kind: "ai-provider", mode: "new" });
@@ -89,7 +123,7 @@ export function ModelSettings() {
 
   return (
     <div className="flex-1 overflow-auto">
-      <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
+      <div className="max-w-3xl mx-auto px-8 py-8 space-y-8">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-[length:var(--font-dialog-title)] font-semibold">Models</h2>
@@ -102,6 +136,54 @@ export function ModelSettings() {
             Add provider
           </Button>
         </div>
+
+        <section>
+          <h3 className={SETTINGS_CATEGORY_HEADER}>Multimodal</h3>
+          <div className={SETTINGS_CARD}>
+            <div className={SETTINGS_ROW}>
+              <div className="min-w-0 flex-1 pr-4">
+                <p className={SETTINGS_ROW_LABEL}>Helper model</p>
+                <p className={SETTINGS_ROW_DESC}>
+                  Used when the active chat model cannot read images. If unset, image sends are
+                  blocked for text-only models.
+                </p>
+              </div>
+              <AppSelect
+                value={visionFallbackValue}
+                onValueChange={(value) =>
+                  void updateSettings({
+                    aiVisionFallbackModel: value === "__none__" ? null : value,
+                  })
+                }
+              >
+                <AppSelectTrigger className="w-52 shrink-0">
+                  <AppSelectValue placeholder="None" />
+                </AppSelectTrigger>
+                <AppSelectContent className="max-h-72">
+                  <AppSelectItem value="__none__">None</AppSelectItem>
+                  {visionCandidates.map(({ provider, model }) => (
+                    <AppSelectItem
+                      key={`${provider.id}/${model.id}`}
+                      value={`${provider.id}/${model.id}`}
+                    >
+                      {provider.name} / {model.name}
+                    </AppSelectItem>
+                  ))}
+                </AppSelectContent>
+              </AppSelect>
+            </div>
+          </div>
+          {visionCandidates.length === 0 ? (
+            <p className={cn(SETTINGS_ROW_DESC, "mt-1.5 text-amber-600 dark:text-amber-400")}>
+              暂无可用选项。请先在下方 Provider 填入 API Key，并启用带 Vision 标签的模型。
+            </p>
+          ) : null}
+          {!visionFallbackValid && selectedVisionFallback !== "__none__" ? (
+            <p className={cn(SETTINGS_ROW_DESC, "mt-1.5 text-amber-600 dark:text-amber-400")}>
+              之前选择的辅助模型已不可用，请重新选择。
+            </p>
+          ) : null}
+        </section>
 
         <section>
           <h3 className={SETTINGS_CATEGORY_HEADER}>Built-in</h3>
@@ -170,6 +252,7 @@ function ModelProviderCard({
   const [newModelId, setNewModelId] = useState("");
   const [newModelName, setNewModelName] = useState("");
   const [newModelContext, setNewModelContext] = useState("");
+  const [newModelVision, setNewModelVision] = useState(false);
   const [addModelError, setAddModelError] = useState<string | null>(null);
 
   const registryModels = provider.models || [];
@@ -196,6 +279,8 @@ function ModelProviderCard({
     if (staticModel) return staticModel;
     return customModelsData.find((m) => m.id === modelId);
   };
+
+  const visionCount = allModelIds.filter((id) => modelSupportsVision(getModel(id))).length;
 
   const isModelEnabled = (modelId: string) =>
     enabledModels ? enabledModels.includes(modelId) : true;
@@ -227,7 +312,9 @@ function ModelProviderCard({
       setAddModelError("This model ID is already listed.");
       return;
     }
-    const newCustom = buildCustomModelEntry(modelId, newModelName, newModelContext);
+    const newCustom = buildCustomModelEntry(modelId, newModelName, newModelContext, {
+      vision: newModelVision,
+    });
     updateSettings({
       aiCustomModelsData: {
         ...settings.aiCustomModelsData,
@@ -241,6 +328,7 @@ function ModelProviderCard({
     setNewModelId("");
     setNewModelName("");
     setNewModelContext("");
+    setNewModelVision(false);
     setAddModelError(null);
     setAddingModel(false);
   };
@@ -249,8 +337,20 @@ function ModelProviderCard({
     setNewModelId("");
     setNewModelName("");
     setNewModelContext("");
+    setNewModelVision(false);
     setAddModelError(null);
     setAddingModel(true);
+  };
+
+  const toggleCustomModelVision = (modelId: string, vision: boolean) => {
+    updateSettings({
+      aiCustomModelsData: {
+        ...settings.aiCustomModelsData,
+        [provider.id]: customModelsData.map((m) =>
+          m.id === modelId ? { ...m, capabilities: { ...m.capabilities, vision } } : m,
+        ),
+      },
+    });
   };
 
   const openConfigure = () => {
@@ -292,6 +392,9 @@ function ModelProviderCard({
           <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
             {enabledCount}/{allModelIds.length} on
           </span>
+        ) : null}
+        {visionCount > 0 ? (
+          <span className={cn(BADGE, "bg-primary/10 text-primary")}>{visionCount} vision</span>
         ) : null}
 
         <Button variant="outline" size="xs" className="shrink-0" onClick={openConfigure}>
@@ -349,14 +452,17 @@ function ModelProviderCard({
                   return (
                     <div key={modelId} className={MODEL_ROW}>
                       <div className="min-w-0 flex-1">
-                        <p
-                          className={cn(
-                            "text-[length:var(--font-size-13)] font-medium truncate",
-                            enabled ? "text-foreground" : "text-muted-foreground",
-                          )}
-                        >
-                          {model?.name || modelId}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p
+                            className={cn(
+                              "text-[length:var(--font-size-13)] font-medium truncate",
+                              enabled ? "text-foreground" : "text-muted-foreground",
+                            )}
+                          >
+                            {model?.name || modelId}
+                          </p>
+                          <ModelCapabilityBadges model={model} />
+                        </div>
                         {model?.name && model.name !== modelId ? (
                           <p className="text-[length:var(--font-size-11)] font-mono text-muted-foreground/70 truncate mt-0.5">
                             {modelId}
@@ -365,6 +471,20 @@ function ModelProviderCard({
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
+                        {isUserModel ? (
+                          <label
+                            className="flex items-center gap-1.5 text-[length:var(--font-size-11)] text-muted-foreground"
+                            title="Vision / image input"
+                          >
+                            <Checkbox
+                              checked={modelSupportsVision(model)}
+                              onCheckedChange={(checked) =>
+                                toggleCustomModelVision(modelId, Boolean(checked))
+                              }
+                            />
+                            Vision
+                          </label>
+                        ) : null}
                         {model?.contextWindow ? (
                           <span className="text-[length:var(--font-size-11)] text-muted-foreground tabular-nums">
                             {model.contextWindow}
@@ -443,6 +563,13 @@ function ModelProviderCard({
                         if (e.key === "Escape") setAddingModel(false);
                       }}
                     />
+                    <label className="flex items-center gap-2 text-[length:var(--font-size-12)] text-foreground">
+                      <Checkbox
+                        checked={newModelVision}
+                        onCheckedChange={(checked) => setNewModelVision(Boolean(checked))}
+                      />
+                      Vision / image input
+                    </label>
                     {addModelError ? (
                       <p className="text-[length:var(--font-size-11)] text-destructive">{addModelError}</p>
                     ) : null}

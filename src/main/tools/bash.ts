@@ -109,13 +109,13 @@ export default tool({
 
     if (!toolCallId) {
       return {
-        output: "Prism PTY: renderer did not register a toolCallId for this bash job.",
+        output: "Prism Next PTY: renderer did not register a toolCallId for this bash job.",
         exit: 1,
         cwd,
       };
     }
 
-    // Custom bash may start before ACP permission — block until Prism writes decision.
+    // Custom bash may start before ACP permission — block until Prism Next writes decision.
     while (!context.abort.aborted && Date.now() < deadline) {
       const perm = readPermission(sessionDir, toolCallId);
       if (perm?.status === "denied") {
@@ -146,7 +146,7 @@ export default tool({
     }
 
     return {
-      output: "Prism PTY bridge timed out waiting for command result.",
+      output: "Prism Next PTY bridge timed out waiting for command result.",
       exit: 1,
       cwd,
     };

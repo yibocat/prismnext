@@ -9,7 +9,6 @@ import {
   AppMenuSidePanel,
   AppMenuTrigger,
   appMenuFontClass,
-  appMenuInlineChevronTriggerClass,
   appMenuItemClass,
   appMenuNestedFocusHandlers,
 } from "@/components/ui/app-menu";
@@ -58,12 +57,14 @@ function ModelReasoningOptionsMenu({
   onOpenChange,
   levels,
   savedThought,
+  thoughtLabel,
   onSelectLevel,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   levels: Array<{ value: string; label: string }>;
   savedThought?: string;
+  thoughtLabel?: string | null;
   onSelectLevel: (levelValue: string | undefined) => void;
 }) {
   return (
@@ -72,7 +73,11 @@ function ModelReasoningOptionsMenu({
         <button
           type="button"
           data-reasoning-menu-trigger
-          className={appMenuInlineChevronTriggerClass}
+          className={cn(
+            "inline-flex shrink-0 items-center gap-0.5 rounded-sm px-1.5 py-1 -my-0.5",
+            "text-muted-foreground/70 hover:bg-accent/80 hover:text-accent-foreground",
+            "outline-none border-0 bg-transparent",
+          )}
           aria-label="Reasoning depth"
           aria-expanded={open}
           onMouseDown={(e) => {
@@ -81,6 +86,11 @@ function ModelReasoningOptionsMenu({
           }}
           onClick={(e) => e.stopPropagation()}
         >
+          {thoughtLabel ? (
+            <span className="text-[length:var(--font-size-10)] text-muted-foreground/60">
+              {thoughtLabel}
+            </span>
+          ) : null}
           <ChevronRightIcon className="size-3.5 opacity-70" />
         </button>
       </AppMenuTrigger>
@@ -273,11 +283,6 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
                 const currentModelThoughtLabel = savedThought
                   ? levels.find((l) => l.value === savedThought)?.label
                   : null;
-                const thoughtLabelNode = currentModelThoughtLabel ? (
-                  <span className="text-[length:var(--font-size-10)] text-muted-foreground/60">
-                    {currentModelThoughtLabel}
-                  </span>
-                ) : null;
 
                 return (
                   <button
@@ -299,20 +304,18 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
                     }}
                   >
                     <span className="min-w-0 flex-1 truncate">{model.name}</span>
-                    <span className="flex shrink-0 items-center gap-1">
-                      {thoughtLabelNode}
-                      <ModelReasoningOptionsMenu
-                        open={reasoningOpenKey === key}
-                        onOpenChange={(open) => setReasoningOpenKey(open ? key : null)}
-                        levels={levels}
-                        savedThought={savedThought}
-                        onSelectLevel={(levelValue) => {
-                          handleSelectModelWithThought(provider.id, model.id, levelValue);
-                          setReasoningOpenKey(null);
-                          setMenuOpen(false);
-                        }}
-                      />
-                    </span>
+                    <ModelReasoningOptionsMenu
+                      open={reasoningOpenKey === key}
+                      onOpenChange={(open) => setReasoningOpenKey(open ? key : null)}
+                      levels={levels}
+                      savedThought={savedThought}
+                      thoughtLabel={currentModelThoughtLabel}
+                      onSelectLevel={(levelValue) => {
+                        handleSelectModelWithThought(provider.id, model.id, levelValue);
+                        setReasoningOpenKey(null);
+                        setMenuOpen(false);
+                      }}
+                    />
                   </button>
                 );
               }

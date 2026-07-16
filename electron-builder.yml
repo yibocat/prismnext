@@ -6,25 +6,42 @@ directories:
 asarUnpack:
   - "**/node_modules/node-pty/**"
 
+# Shared app assets (all platforms).
 extraResources:
-  - from: "bin/opencode/darwin-${arch}/"
-    to: "opencode"
-    filter:
-      - "opencode*"
   - from: "resources"
     to: "resources"
 
+# OpenCode agent binary — one platform per build.
+# Layout matches resolveOpencodeBinaryPath():
+#   Packaged → <resources>/opencode/opencode[.exe]
+#   Dev      → bin/opencode/<platform>-<arch>/opencode[.exe]
+# Folder names: darwin | linux | windows  (not electron-builder's mac/win macros).
 mac:
   target:
     - dmg
   artifactName: "${productName}-${version}-${arch}.${ext}"
+  extraResources:
+    - from: "bin/opencode/darwin-${arch}/"
+      to: "opencode"
+      filter:
+        - "opencode*"
 
 win:
   target:
     - nsis
   artifactName: "${productName}-${version}-${arch}.${ext}"
+  extraResources:
+    - from: "bin/opencode/windows-${arch}/"
+      to: "opencode"
+      filter:
+        - "opencode*"
 
 linux:
   target:
     - AppImage
   artifactName: "${productName}-${version}-${arch}.${ext}"
+  extraResources:
+    - from: "bin/opencode/linux-${arch}/"
+      to: "opencode"
+      filter:
+        - "opencode*"

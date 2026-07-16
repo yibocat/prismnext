@@ -134,7 +134,7 @@ export function KnowledgeModulesPanel() {
       <div className="space-y-1">
         <h2 className="text-[length:var(--font-size-15)] font-semibold">Knowledge modules</h2>
         <p className={SETTINGS_ROW_DESC}>
-          Built-in workflow guides shipped with Prism. They are always available — attach them per
+          Built-in workflow guides shipped with Prism Next. They are always available — attach them per
           Orchestrator or Expert in the agent editor. Workspace folders inject globally from your
           project workspace settings.
         </p>

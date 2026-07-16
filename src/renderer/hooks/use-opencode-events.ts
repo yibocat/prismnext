@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { useChatStore, type ChatStreamMessage, type ContentBlock } from "@/stores/chat-store";
 
 import { useDocumentStore } from "@/stores/document-store";
@@ -839,6 +840,8 @@ export function useOpenCodeEvents() {
 
       if (!success && error) {
         chatStore._setError(tabId, error);
+        // Surface attachment / send failures that previously looked like a silent stop.
+        toast.error(error);
       }
 
       if (tokenUsage) {

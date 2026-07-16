@@ -110,7 +110,7 @@ export function maybeWriteFullLog(
   try {
     mkdirSync(dirname(abs), { recursive: true });
     const body = [
-      `# Prism experiment full log`,
+      `# Prism Next experiment full log`,
       `# runId: ${runId}`,
       `# --- stdout ---`,
       out,
@@ -295,7 +295,7 @@ function kickoffWithEnv(
         const finishedAt = new Date().toISOString();
         const message = err instanceof Error ? err.message : String(err);
         log.warn("experiment-run failed", { id, runId, error: message });
-        const stderr = "Prism experiment-run: command failed to execute.";
+        const stderr = "Prism Next experiment-run: command failed to execute.";
         const logPath = maybeWriteFullLog(island, runId, message, stderr);
         const cancelled = consumeExperimentRunCancelled(id, runId);
         const append = appendRun(ctx, id, {

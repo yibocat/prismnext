@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** Curated Paper Search MCP server id — Prism built-in default. */
+/** Curated Paper Search MCP server id — Prism Next built-in default. */
 export const PAPER_SEARCH_MCP_ID = "paper-search-mcp";
 
 /** Curated Paper Search MCP — Node.js via npx. No app-bundled package. */

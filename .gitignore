@@ -17,3 +17,6 @@ docs/internal/
 
 .pnpm-store/
 .vscode/
+
+# Brainstorm mockups
+.superpowers/

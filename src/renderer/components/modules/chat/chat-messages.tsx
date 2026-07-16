@@ -29,6 +29,7 @@ import {
   CircleCheckIcon,
   SquareIcon,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 // ─── Copy Button ───
 
@@ -82,9 +83,13 @@ const UserHeader = memo(function UserHeader({
   const profileBlocks = allBlocks.filter((b) => b.type === "profile");
 
   const inlineParts: ComposerPart[] = [];
+  const attachments: NonNullable<ContentBlock["attachments"]> = [];
   for (const b of allBlocks) {
     if (b.type === "text" && b.inlineParts?.length) {
       inlineParts.push(...b.inlineParts);
+    }
+    if (b.type === "text" && b.attachments?.length) {
+      attachments.push(...b.attachments);
     }
   }
   const hasInline = inlineParts.length > 0;
@@ -108,8 +113,10 @@ const UserHeader = memo(function UserHeader({
         .map((b) => b.text)
         .join("\n");
   const [expanded, setExpanded] = useState(false);
+  const [imagePreview, setImagePreview] = useState<{ url: string; name: string } | null>(null);
 
   const long = text.length > 140;
+  const hasBody = Boolean(text) || hasInline || attachments.length > 0;
 
   return (
     <div
@@ -148,18 +155,61 @@ const UserHeader = memo(function UserHeader({
                 ))}
               </div>
             )}
-            <span
-              className={cn(
-                "text-[length:var(--font-chat-message)] text-foreground",
-                long && !expanded ? "line-clamp-2" : "whitespace-pre-wrap break-words",
-              )}
-            >
-              {hasInline ? (
-                <InlineRichText parts={inlineParts} />
-              ) : text ? (
-                <InlineRichText text={text} />
-              ) : null}
-            </span>
+            {attachments.length > 0 && (
+              <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                {attachments.map((att, i) => (
+                  <span
+                    key={`${att.path}-${i}`}
+                    className="inline-flex max-w-[9rem] items-center gap-1.5 rounded-md border border-border/80 bg-background/50 px-1.5 py-0.5"
+                  >
+                    {att.kind === "image" && att.previewUrl ? (
+                      <button
+                        type="button"
+                        aria-label={`Preview ${att.name}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setImagePreview({ url: att.previewUrl!, name: att.name });
+                        }}
+                        className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <img
+                          src={att.previewUrl}
+                          alt={att.name}
+                          className="size-7 rounded object-cover transition-opacity hover:opacity-90"
+                        />
+                      </button>
+                    ) : null}
+                    <span className="truncate font-mono text-[length:var(--font-chat-meta)] text-muted-foreground">
+                      {att.name}
+                    </span>
+                    {att.note ? (
+                      <span className="truncate text-[length:var(--font-size-10)] text-primary/80">
+                        {att.note}
+                      </span>
+                    ) : null}
+                  </span>
+                ))}
+              </div>
+            )}
+            {(hasInline || text) && (
+              <span
+                className={cn(
+                  "text-[length:var(--font-chat-message)] text-foreground",
+                  long && !expanded ? "line-clamp-2" : "whitespace-pre-wrap break-words",
+                )}
+              >
+                {hasInline ? (
+                  <InlineRichText parts={inlineParts} />
+                ) : text ? (
+                  <InlineRichText text={text} />
+                ) : null}
+              </span>
+            )}
+            {!hasBody && (
+              <span className="text-[length:var(--font-chat-meta)] text-muted-foreground">
+                (attachment)
+              </span>
+            )}
           </div>
           <CopyButton text={text} />
         </div>
@@ -175,6 +225,21 @@ const UserHeader = memo(function UserHeader({
           </button>
         )}
       </div>
+      <Dialog open={imagePreview != null} onOpenChange={(open) => !open && setImagePreview(null)}>
+        <DialogContent
+          className="max-w-[min(92vw,56rem)] gap-2 border-border/80 bg-background p-2 sm:max-w-[min(92vw,56rem)]"
+          showCloseButton
+        >
+          <DialogTitle className="sr-only">{imagePreview?.name ?? "Image preview"}</DialogTitle>
+          {imagePreview ? (
+            <img
+              src={imagePreview.url}
+              alt={imagePreview.name}
+              className="max-h-[min(85vh,720px)] w-full rounded-md object-contain"
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 });

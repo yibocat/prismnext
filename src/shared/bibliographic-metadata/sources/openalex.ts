@@ -8,7 +8,7 @@ import { catalogFetch } from "../catalog-fetch";
 
 const CATALOG_HEADERS = {
   Accept: "application/json",
-  "User-Agent": "Prism/1.0 (mailto:support@researchprism.app)",
+  "User-Agent": "PrismNext/1.0 (mailto:support@researchprism.app)",
 } as const;
 
 async function resolveOpenAlexUrl(url: string): Promise<BibliographicMetadata | null> {

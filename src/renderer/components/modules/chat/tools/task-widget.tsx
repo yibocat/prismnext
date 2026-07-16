@@ -15,10 +15,10 @@ const OPENCODE_AGENT_META: Record<string, { label: string; desc: string }> = {
   build: { label: "Build", desc: "Full development with all tools" },
 };
 
-/** Prism synced expert ids */
+/** Prism Next synced expert ids */
 const PRISM_EXPERT_META: Record<string, { label: string; desc: string }> = {
   "research-prism": {
-    label: "Research Prism",
+    label: "Prism Next",
     desc: "Primary research orchestrator",
   },
   "literature-synthesizer": {

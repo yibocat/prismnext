@@ -3,27 +3,270 @@ import { useTheme } from "next-themes";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useProjectStore } from "@/stores/project-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { useCompileStore } from "@/stores/compile-store";
+import { useSettingsStore } from "@/stores/settings-store";
 import { useProjectOpen } from "@/hooks/use-project-open";
 import { NewProjectDialog } from "./new-project-dialog";
+import { loadProjectIcon, ProjectIconBadge } from "./project-icon";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import type { UpdateCheckResult } from "@/types/electron";
 import {
   FolderOpenIcon,
-  FolderIcon,
-  SparklesIcon,
+  FolderPlusIcon,
   XIcon,
-  AlertCircleIcon,
   SunIcon,
   MoonIcon,
   MonitorIcon,
   EllipsisIcon,
-  PlusIcon,
+  GitBranchIcon,
+  CheckIcon,
+  Loader2Icon,
 } from "lucide-react";
+
+function shortenPath(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  const unix = normalized.match(/^\/(?:Users|home)\/[^/]+(\/.*)?$/);
+  if (unix) return `~${unix[1] || ""}`;
+  const win = normalized.match(/^[A-Za-z]:\/Users\/[^/]+(\/.*)?$/i);
+  if (win) return `~${win[1] || ""}`;
+  return normalized;
+}
+
+function joinMeta(parts: Array<string | null | undefined>): string {
+  return parts.filter(Boolean).join(" · ");
+}
+
+/** Simple Prism Next mark — geometric prism facet. */
+function PrismNextMark({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden
+    >
+      <path
+        d="M16 3.5L28 26.5H4L16 3.5Z"
+        className="fill-background"
+        opacity="0.95"
+      />
+      <path
+        d="M16 3.5L28 26.5H16V3.5Z"
+        className="fill-background"
+        opacity="0.55"
+      />
+      <path
+        d="M16 10L22.5 22H9.5L16 10Z"
+        className="fill-foreground"
+        opacity="0.2"
+      />
+    </svg>
+  );
+}
+
+// ─── Startup status checks ───
+
+type CheckState = "loading" | "ok" | "warn" | "error";
+
+interface StatusItem {
+  id: string;
+  label: string;
+  detail?: string;
+  state: CheckState;
+}
+
+function StatusDot({ state }: { state: CheckState }) {
+  if (state === "loading") {
+    return <Loader2Icon className="size-3.5 shrink-0 animate-spin text-muted-foreground/50" />;
+  }
+  if (state === "ok") {
+    return (
+      <span className="flex size-3.5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+        <CheckIcon className="size-2.5 stroke-[3]" />
+      </span>
+    );
+  }
+  if (state === "warn") {
+    return <span className="size-3.5 shrink-0 rounded-full bg-amber-500" title="Warning" />;
+  }
+  return (
+    <span className="flex size-3.5 shrink-0 items-center justify-center rounded-full bg-red-500 text-white">
+      <XIcon className="size-2.5 stroke-[3]" />
+    </span>
+  );
+}
+
+function WelcomeStatusChecks() {
+  const detectCompilers = useCompileStore((s) => s.detectCompilers);
+  const compilerStatus = useCompileStore((s) => s.compilerStatus);
+  const updateSource = useSettingsStore((s) => s.settings.updateSource);
+  const [items, setItems] = useState<StatusItem[]>([
+    { id: "app", label: "App", state: "loading" },
+    { id: "agent", label: "OpenCode", state: "loading" },
+    { id: "compiler", label: "Compiler", state: "loading" },
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const applyAppUpdate = (
+      appVersion: string,
+      update: UpdateCheckResult | null,
+    ) => {
+      let appState: CheckState = "ok";
+      let appDetail = `v${appVersion}`;
+      if (update?.status === "available") {
+        appState = "warn";
+        appDetail = `v${appVersion}↑`;
+      } else if (update?.status === "up-to-date" || update?.status === "no-source" || !update) {
+        appDetail = `v${appVersion}`;
+      } else if (update?.status === "error") {
+        appState = "warn";
+        appDetail = `v${appVersion}`;
+      }
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === "app"
+            ? { ...item, state: appState, detail: appDetail, label: "App" }
+            : item,
+        ),
+      );
+    };
+
+    const run = async () => {
+      void detectCompilers();
+
+      const [versions, chat, cachedUpdate] = await Promise.all([
+        window.electronAPI.aboutGetVersions().catch(() => null),
+        window.electronAPI.chatStatus().catch(() => null),
+        window.electronAPI.updateStatus().catch(() => null),
+      ]);
+
+      if (cancelled) return;
+
+      const appVersion = versions?.appVersion?.trim() || "—";
+      applyAppUpdate(appVersion, cachedUpdate);
+
+      const agentAvailable =
+        Boolean(chat?.available) || Boolean(versions?.opencode?.available);
+
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === "agent"
+            ? {
+                ...item,
+                label: "OpenCode",
+                state: agentAvailable ? "ok" : "error",
+                detail: agentAvailable ? "ready" : "unavailable",
+              }
+            : item,
+        ),
+      );
+
+      if (updateSource?.trim()) {
+        try {
+          const fresh = await window.electronAPI.updateCheck();
+          if (!cancelled) applyAppUpdate(appVersion, fresh);
+        } catch {
+          /* keep cached / version-only */
+        }
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [detectCompilers, updateSource]);
+
+  useEffect(() => {
+    if (!compilerStatus) return;
+    const ready = Boolean(compilerStatus.tectonic || compilerStatus.texlive.available);
+    const detail = compilerStatus.tectonic
+      ? "Tectonic"
+      : compilerStatus.texlive.available
+        ? compilerStatus.texlive.engines?.[0] || "TeXLive"
+        : "Not found";
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === "compiler"
+          ? {
+              ...item,
+              state: ready ? "ok" : "warn",
+              detail,
+            }
+          : item,
+      ),
+    );
+  }, [compilerStatus]);
+
+  const overall: CheckState = items.some((i) => i.state === "loading")
+    ? "loading"
+    : items.some((i) => i.state === "error")
+      ? "error"
+      : items.some((i) => i.state === "warn")
+        ? "warn"
+        : "ok";
+
+  const text = items
+    .map((item) => {
+      const detail = item.detail?.trim();
+      return detail ? `${item.label} ${detail}` : item.label;
+    })
+    .join(" · ");
+
+  return (
+    <div
+      className="mt-4 flex w-full items-start justify-start gap-2 text-[length:var(--font-size-11)] text-muted-foreground"
+      title={text}
+    >
+      <StatusDot state={overall} />
+      <span className="min-w-0 flex-1 text-left leading-relaxed text-foreground/75">
+        {text}
+      </span>
+    </div>
+  );
+}
 
 // ─── Recent Projects ───
 
-interface RecentWithStatus {
+interface RecentRow {
   path: string;
   name: string;
   exists: boolean;
+  isGit: boolean | null;
+  branch: string | null;
+  projectIcon: string | null;
+}
+
+async function loadRecentRow(path: string, name: string): Promise<RecentRow> {
+  try {
+    const exists = await window.electronAPI.fsExists(path);
+    if (!exists) {
+      return { path, name, exists: false, isGit: null, branch: null, projectIcon: null };
+    }
+
+    const [isGit, projectIcon] = await Promise.all([
+      window.electronAPI.gitIsRepo(path).catch(() => false),
+      loadProjectIcon(path),
+    ]);
+
+    let branch: string | null = null;
+    if (isGit) {
+      try {
+        const branches = await window.electronAPI.gitBranches(path);
+        branch = branches.current || null;
+      } catch {
+        branch = null;
+      }
+    }
+
+    return { path, name, exists: true, isGit, branch, projectIcon };
+  } catch {
+    return { path, name, exists: false, isGit: null, branch: null, projectIcon: null };
+  }
 }
 
 function RecentProjects({ projectOpen }: { projectOpen: (path: string) => Promise<boolean> }) {
@@ -31,63 +274,128 @@ function RecentProjects({ projectOpen }: { projectOpen: (path: string) => Promis
   const removeRecentProject = useProjectStore((s) => s.removeRecentProject);
   const addRecentProject = useProjectStore((s) => s.addRecentProject);
   const openProject = useDocumentStore((s) => s.openProject);
-  const [statuses, setStatuses] = useState<RecentWithStatus[]>([]);
+  const [rows, setRows] = useState<RecentRow[]>(() =>
+    recentProjects.map((p) => ({
+      path: p.path,
+      name: p.name,
+      exists: true,
+      isGit: null,
+      branch: null,
+      projectIcon: null,
+    })),
+  );
 
   useEffect(() => {
-    const check = async () => {
+    let cancelled = false;
+    setRows(
+      recentProjects.map((p) => ({
+        path: p.path,
+        name: p.name,
+        exists: true,
+        isGit: null,
+        branch: null,
+        projectIcon: null,
+      })),
+    );
+    const load = async () => {
       const results = await Promise.all(
-        recentProjects.map(async (p) => {
-          try {
-            const exists = await window.electronAPI.fsExists(p.path);
-            return { path: p.path, name: p.name, exists };
-          } catch {
-            return { path: p.path, name: p.name, exists: false };
-          }
-        }),
+        recentProjects.map((p) => loadRecentRow(p.path, p.name)),
       );
-      setStatuses(results);
+      if (!cancelled) setRows(results);
     };
-    check();
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, [recentProjects]);
 
-  if (recentProjects.length === 0) return null;
+  if (recentProjects.length === 0) {
+    return (
+      <p className="px-2 py-5 text-center text-[length:var(--font-size-12)] text-muted-foreground/65">
+        Projects you open will show up here.
+      </p>
+    );
+  }
 
   return (
-    <div className="w-full">
-      <p className="mb-2 text-[length:var(--font-sidebar-section)] font-medium text-muted-foreground/60 uppercase tracking-wider">
-        Recent
-      </p>
-      {statuses.map((p) => (
-        <div key={p.path} className="group flex items-center gap-1.5 py-1">
-          {p.exists ? (
+    <div className="flex flex-col gap-0.5">
+      {rows.map((p) => {
+        const meta = p.exists
+          ? joinMeta([
+              shortenPath(p.path),
+              p.isGit === false ? "No Git" : null,
+            ])
+          : "Missing on disk";
+
+        return (
+          <div
+            key={p.path}
+            className={cn(
+              "group relative flex items-center gap-1 rounded-lg px-2.5 py-2 transition-colors",
+              p.exists ? "hover:bg-muted/70" : "opacity-45",
+            )}
+          >
+            {p.exists ? (
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                onClick={async () => {
+                  const ok = await projectOpen(p.path);
+                  if (!ok) return;
+                  addRecentProject(p.path);
+                  openProject(p.path);
+                }}
+              >
+                <ProjectIconBadge icon={p.projectIcon} name={p.name} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-[length:var(--font-size-13)] font-medium text-foreground">
+                      {p.name}
+                    </span>
+                    {p.isGit ? (
+                      <span
+                        className="inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-px text-[length:var(--font-size-10)] text-muted-foreground"
+                        title={p.branch ? `Git · ${p.branch}` : "Git repository"}
+                      >
+                        <GitBranchIcon className="size-2.5 opacity-70" />
+                        <span className="max-w-[5.5rem] truncate">
+                          {p.branch || "Git"}
+                        </span>
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="mt-0.5 block truncate text-[length:var(--font-size-11)] text-muted-foreground">
+                    {meta}
+                  </span>
+                </span>
+              </button>
+            ) : (
+              <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                <ProjectIconBadge icon={p.projectIcon} name={p.name} muted />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[length:var(--font-size-13)] font-medium">
+                    {p.name}
+                  </span>
+                  <span className="mt-0.5 block truncate text-[length:var(--font-size-11)]">
+                    {meta}
+                  </span>
+                </span>
+              </div>
+            )}
             <button
               type="button"
-              className="flex flex-1 items-center gap-2 min-w-0 text-[length:var(--font-button)] text-muted-foreground hover:text-foreground transition-colors text-left"
-              onClick={async () => {
-                const ok = await projectOpen(p.path);
-                if (!ok) return;
-                addRecentProject(p.path);
-                openProject(p.path);
+              className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/70 hover:bg-background hover:text-foreground"
+              onClick={(e) => {
+                e.stopPropagation();
+                removeRecentProject(p.path);
               }}
+              title="Remove from recent"
             >
-              <FolderIcon className="size-3.5 shrink-0 opacity-60" />
-              <span className="truncate">{p.name}</span>
+              <XIcon className="size-3.5" />
             </button>
-          ) : (
-            <div className="flex flex-1 items-center gap-2 min-w-0 text-[length:var(--font-button)] text-muted-foreground/30">
-              <AlertCircleIcon className="size-3.5 shrink-0" />
-              <span className="truncate">{p.name}</span>
-            </div>
-          )}
-          <button
-            type="button"
-            className="flex size-4 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-muted-foreground transition-all"
-            onClick={(e) => { e.stopPropagation(); removeRecentProject(p.path); }}
-          >
-            <XIcon className="size-3" />
-          </button>
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -98,6 +406,7 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
   const addRecentProject = useProjectStore((s) => s.addRecentProject);
   const openProject = useDocumentStore((s) => s.openProject);
   const projectOpen = useProjectOpen();
+  const recentCount = useProjectStore((s) => s.recentProjects.length);
   const { theme, resolvedTheme, setTheme } = useTheme();
 
   const cycleTheme = () => {
@@ -117,8 +426,10 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
 
   return (
     <div className="flex h-full w-full flex-col bg-background">
-      {/* Minimal titlebar */}
-      <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center justify-end px-2 gap-0.5 select-none" style={{ transform: "translateZ(0)" }}>
+      <div
+        className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center justify-end gap-0.5 px-2 select-none"
+        style={{ transform: "translateZ(0)" }}
+      >
         <button
           type="button"
           className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -146,71 +457,66 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
         </button>
       </div>
 
-      {/* Content */}
-      <div className="flex flex-1 flex-col items-center justify-center px-8">
-        {/* Wordmark */}
-        <div className="flex items-center gap-3 mb-10">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-foreground">
-            <SparklesIcon className="size-4 text-background" />
-          </div>
-          <span className="text-[length:var(--font-size-16)] font-medium text-foreground tracking-tight">Prism</span>
-        </div>
+      {/*
+        Safe centering: my-auto inside overflow-y-auto centers when content is short,
+        and scrolls from the top when the window is short/narrow (avoids justify-center clipping).
+      */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+        <div className="mx-auto my-auto flex w-full max-w-sm flex-col px-6 py-6 sm:py-8">
+          <section className="flex shrink-0 flex-col items-center text-center">
+            <div className="mb-2.5 flex flex-col items-center gap-2.5">
+              <div className="flex size-11 items-center justify-center rounded-2xl bg-foreground shadow-sm">
+                <PrismNextMark className="size-7" />
+              </div>
+              <span className="text-[length:var(--font-size-16)] font-semibold tracking-tight text-foreground">
+                Prism Next
+              </span>
+            </div>
 
-        {/* Two-column layout — stacks vertically on narrow windows */}
-        <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-          {/* Left column: New Project + Open */}
-          <div className="w-full md:w-56 space-y-5">
-            {/* New project */}
-            <div className="space-y-2">
-              <p className="text-[length:var(--font-sidebar-section)] font-medium text-muted-foreground/60 uppercase tracking-wider">
-                New Project
-              </p>
+            <WelcomeStatusChecks />
+
+            <div className="mt-6 grid w-full grid-cols-2 gap-2">
               <NewProjectDialog>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[length:var(--font-button)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors text-left"
-                >
-                  <PlusIcon className="size-4 shrink-0 opacity-60" />
-                  Create new project...
-                </button>
+                <Button type="button" size="sm" className="h-9 w-full gap-1.5 font-medium">
+                  <FolderPlusIcon className="size-3.5 opacity-90" />
+                  New Project
+                </Button>
               </NewProjectDialog>
-            </div>
-
-            {/* Open existing */}
-            <div className="space-y-2">
-              <p className="text-[length:var(--font-sidebar-section)] font-medium text-muted-foreground/60 uppercase tracking-wider">
-                Open
-              </p>
-              <button
+              <Button
                 type="button"
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[length:var(--font-button)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors text-left"
-                onClick={handleOpen}
+                variant="outline"
+                size="sm"
+                className="h-9 w-full gap-1.5 font-medium"
+                onClick={() => void handleOpen()}
               >
-                <FolderOpenIcon className="size-4 shrink-0 opacity-60" />
-                Open project folder
-              </button>
+                <FolderOpenIcon className="size-3.5 opacity-80" />
+                Open
+              </Button>
             </div>
+          </section>
+
+          <div className="my-5 flex shrink-0 items-center gap-3 sm:my-6" aria-hidden>
+            <div className="h-px flex-1 bg-border/80" />
+            <span className="text-[length:var(--font-size-11)] font-medium uppercase tracking-wider text-muted-foreground/55">
+              Recent{recentCount > 0 ? ` · ${recentCount}` : ""}
+            </span>
+            <div className="h-px flex-1 bg-border/80" />
           </div>
 
-          {/* Divider — horizontal on narrow, vertical on wide */}
-          <div className="h-px w-56 md:w-px md:h-48 bg-border shrink-0" />
-
-          {/* Right column: Recent projects */}
-          <div className="w-full md:w-56">
+          <section className="w-full shrink-0">
             <RecentProjects projectOpen={projectOpen} />
-          </div>
-        </div>
+          </section>
 
-        {/* Skip */}
-        {onSkip && (
-          <button
-            type="button"
-            className="mt-10 text-[length:var(--font-button)] text-muted-foreground/40 hover:text-muted-foreground transition-colors"
-            onClick={onSkip}
-          >
-            Skip for now
-          </button>
-        )}
+          {onSkip ? (
+            <button
+              type="button"
+              className="mt-5 shrink-0 self-center text-[length:var(--font-size-12)] text-muted-foreground/45 transition-colors hover:text-muted-foreground sm:mt-6"
+              onClick={onSkip}
+            >
+              Skip for now
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   );

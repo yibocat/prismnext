@@ -45,7 +45,7 @@ export const LITERATURE_LIBRARY_PROMPT = [
   "",
   `- \`${TOOL_NAMES.literatureSearch}\` and \`${TOOL_NAMES.literatureRead}\` in a Task accumulate library hits on the **parent chat session** (for Task result enrich).`,
   "When you finish a Task about the project library, end with a short synthesis that cites **`[@bibkey]`** for every paper you relied on.",
-  "Prism appends **Library papers (this Task)** to the Task result automatically — still write `[@bibkey]` in your summary so the orchestrator can read it inline.",
+  "Prism Next appends **Library papers (this Task)** to the Task result automatically — still write `[@bibkey]` in your summary so the orchestrator can read it inline.",
   "",
   "### Orchestrator after library Tasks",
   "",

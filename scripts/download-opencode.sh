@@ -5,7 +5,8 @@ set -euo pipefail
 # bin/opencode/<platform>-<arch>/ for local dev and electron-builder packaging.
 #
 # This is a developer / CI tool — not a user-facing install path.
-# Users get OpenCode only as the binary bundled inside the Prism app.
+# Users get OpenCode only as the binary bundled inside Prism Next
+# (see electron-builder.yml mac/win/linux extraResources → resources/opencode/).
 #
 # Usage:
 #   ./scripts/download-opencode.sh              # pin from scripts/opencode-version.txt

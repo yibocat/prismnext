@@ -36,6 +36,7 @@ import {
   modelIdTaken,
 } from "@/lib/providers";
 import type { ModelConfig } from "@/lib/providers";
+import { ModelCapabilityBadges } from "@/components/modules/chat/agent-settings/model-capability-badges";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import {
   SETTINGS_DETAIL_ACTIONS,
@@ -266,6 +267,7 @@ function CustomProviderEditorPanel({
   const [newModelId, setNewModelId] = useState("");
   const [newModelName, setNewModelName] = useState("");
   const [newModelContext, setNewModelContext] = useState("");
+  const [newModelVision, setNewModelVision] = useState(false);
   const [addModelError, setAddModelError] = useState<string | null>(null);
   const [addingModel, setAddingModel] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -294,6 +296,7 @@ function CustomProviderEditorPanel({
     setNewModelId("");
     setNewModelName("");
     setNewModelContext("");
+    setNewModelVision(false);
     setAddModelError(null);
     setAddingModel(false);
     setSaving(false);
@@ -367,12 +370,15 @@ function CustomProviderEditorPanel({
       setAddModelError("This model ID is already listed.");
       return;
     }
-    const entry = buildCustomModelEntry(mid, newModelName, newModelContext);
+    const entry = buildCustomModelEntry(mid, newModelName, newModelContext, {
+      vision: newModelVision,
+    });
     setCustomModels([...customModels, entry]);
     setSelectedModels(new Set([...selectedModels, mid]));
     setNewModelId("");
     setNewModelName("");
     setNewModelContext("");
+    setNewModelVision(false);
     setAddModelError(null);
     setAddingModel(false);
   };
@@ -381,6 +387,7 @@ function CustomProviderEditorPanel({
     setNewModelId("");
     setNewModelName("");
     setNewModelContext("");
+    setNewModelVision(false);
     setAddModelError(null);
     setAddingModel(true);
   };
@@ -690,9 +697,10 @@ function CustomProviderEditorPanel({
                     checked={selectedModels.has(m.id)}
                     onCheckedChange={() => toggleModel(m.id)}
                   />
-                  <span className="flex-1 min-w-0 text-[length:var(--font-size-12)] truncate">
-                    {m.name}
-                  </span>
+                  <div className="flex-1 min-w-0 text-[length:var(--font-size-12)]">
+                    <p className="truncate">{m.name}</p>
+                    <ModelCapabilityBadges model={m} />
+                  </div>
                   {m.contextWindow ? (
                     <span className="text-[length:var(--font-size-11)] text-muted-foreground shrink-0">
                       {m.contextWindow}
@@ -726,6 +734,7 @@ function CustomProviderEditorPanel({
                         {m.id}
                       </p>
                     ) : null}
+                    <ModelCapabilityBadges model={m} />
                   </div>
                   {m.contextWindow ? (
                     <span className="text-[length:var(--font-size-11)] text-muted-foreground shrink-0">
@@ -781,6 +790,13 @@ function CustomProviderEditorPanel({
                       if (e.key === "Escape") setAddingModel(false);
                     }}
                   />
+                  <label className="flex items-center gap-2 text-[length:var(--font-size-12)] text-foreground">
+                    <Checkbox
+                      checked={newModelVision}
+                      onCheckedChange={(checked) => setNewModelVision(Boolean(checked))}
+                    />
+                    Vision / image input
+                  </label>
                   {addModelError ? (
                     <p className="text-[length:var(--font-size-11)] text-destructive">{addModelError}</p>
                   ) : null}

@@ -4,10 +4,10 @@
  * Used by experiment `runs.jsonl` and project `.prismnext/provenance.jsonl`
  * so concurrent Agent / UI writers do not interleave mid-line. Single-line
  * POSIX appends are usually atomic for small writes; the lock serializes
- * Prism writers (bridge poll + IPC). `fsync` reduces the power-loss window.
+ * Prism Next writers (bridge poll + IPC). `fsync` reduces the power-loss window.
  *
  * Lock model: `path + ".lock"` with `O_EXCL` (wx) — already cross-process
- * among Prism writers (no native flock; Node has none without addons).
+ * among Prism Next writers (no native flock; Node has none without addons).
  * Stale locks from crashes are broken when mtime is older than
  * {@link LOCK_STALE_MS} (Bug #38 hardening).
  */

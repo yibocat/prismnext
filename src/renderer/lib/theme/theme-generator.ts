@@ -113,7 +113,7 @@ function generateEditorSyntaxVars(
   --editor-diff-deleted-fg: ${mode === "dark" ? "oklch(0.72 0.17 25)" : "oklch(0.55 0.2 25)"};
   --editor-diff-inserted-fg: ${mode === "dark" ? "oklch(0.78 0.15 145)" : "oklch(0.52 0.16 145)"};
 
-  /* Syntax token colors — Prism custom theme
+  /* Syntax token colors — Prism Next custom theme
      Semantic hues: keyword=brand, string=green, number=amber,
      function=blue, type=teal, regexp=rose, comment=gray */
   --syntax-keyword: ${primaryColor};

@@ -1,5 +1,5 @@
 /**
- * OpenCode built-in Task subagents — not Prism experts.
+ * OpenCode built-in Task subagents — not Prism Next experts.
  * Orchestrator must call platform tools directly; Task is for allowlisted experts only.
  */
 
@@ -68,7 +68,7 @@ export function shouldDenyOrchestratorBuiltinTask(
   return isOpencodeBuiltinTaskSubagent(subagentId);
 }
 
-/** Orchestrator Task allowlist — deny OpenCode built-ins + wildcard; allow Prism experts only. */
+/** Orchestrator Task allowlist — deny OpenCode built-ins + wildcard; allow Prism Next experts only. */
 export function buildTaskPermissionBlock(allowedExpertIds: string[]): Record<string, string> {
   const rules: Record<string, string> = { "*": "deny" };
   for (const id of OPENCODE_BUILTIN_TASK_SUBAGENTS) {

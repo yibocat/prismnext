@@ -16,7 +16,7 @@ const OPENCODE_CATALOG_PROVIDER_IDS = new Set([
 /** Env var OpenCode uses for Zen + Go subscription keys. */
 export const OPENCODE_API_KEY_ENV = "OPENCODE_API_KEY";
 
-/** Legacy wrong IDs from early Prism presets → canonical Go catalog IDs. */
+/** Legacy wrong IDs from early Prism Next presets → canonical Go catalog IDs. */
 const OPENCODE_GO_MODEL_ALIASES: Record<string, string> = {
   "GLM-5.2": "glm-5.2",
   "GLM-5.1": "glm-5.1",
@@ -45,7 +45,7 @@ export function isOpenCodeCatalogProvider(providerId: string): boolean {
   return OPENCODE_CATALOG_PROVIDER_IDS.has(providerId);
 }
 
-/** Map Prism settings provider id → OpenCode runtime provider id. */
+/** Map Prism Next settings provider id → OpenCode runtime provider id. */
 export function openCodeRuntimeProviderId(prismProviderId: string): string {
   if (prismProviderId === OPENCODE_ZEN_PROVIDER_ID) return "opencode";
   return prismProviderId;

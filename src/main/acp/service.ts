@@ -847,7 +847,7 @@ export class AcpService {
   }
 
   /**
-   * Merge Prism instruction paths into app-level OpenCode config.
+   * Merge Prism Next instruction paths into app-level OpenCode config.
    * OpenCode reads `instructions` at process start — restart when paths change.
    */
   applyProjectPromptIntegration(_projectRoot: string): {
@@ -1075,7 +1075,7 @@ export class AcpService {
 
   /**
    * Merge enabled tools into all OpenCode config files on every startup.
-   * Ensures new Prism custom tools (delete, move, …) are visible to the model
+   * Ensures new Prism Next custom tools (delete, move, …) are visible to the model
    * even when opencode.json already exists on disk.
    */
   applyBuiltinToolsConfig(overrides?: Record<string, boolean>): void {
@@ -1476,7 +1476,7 @@ export class AcpService {
     }
   }
 
-  /** List sessions for the project root and every Prism worktree checkout. */
+  /** List sessions for the project root and every Prism Next worktree checkout. */
   async listProjectSessions(projectRoot: string): Promise<SessionInfo[]> {
     const { listWorktrees } = await import("../services/worktree");
     const directories = new Set<string>([projectRoot]);
@@ -2007,11 +2007,31 @@ export class AcpService {
       provider?: string;
       /** Project rules — read fresh each turn; always injected when non-empty. */
       projectRulesPrompt?: string;
+      /** Vision images appended after the text prompt (ACP ContentBlock::Image). */
+      images?: Array<{ mimeType: string; data: string; uri?: string }>;
+      /**
+       * File attachments as ACP `resource` blocks (text or blob).
+       * Prefer materialized resources over bare resource_link so OpenCode/LLM actually get content.
+       */
+      resources?: Array<
+        | { uri: string; mimeType: string; text: string }
+        | { uri: string; mimeType: string; blob: string }
+      >;
     },
   ): Promise<{ usage?: any }> {
     if (!this.conn) throw new Error("AcpService not initialized");
 
-    const content: Array<{ type: "text"; text: string; _meta?: Record<string, unknown> }> = [];
+    type PromptBlock =
+      | { type: "text"; text: string; _meta?: Record<string, unknown> }
+      | { type: "image"; mimeType: string; data: string; uri?: string }
+      | {
+          type: "resource";
+          resource:
+            | { uri: string; mimeType: string; text: string }
+            | { uri: string; mimeType: string; blob: string };
+        };
+
+    const content: PromptBlock[] = [];
 
     const rules = opts?.projectRulesPrompt?.trim();
     if (rules) {
@@ -2023,7 +2043,24 @@ export class AcpService {
       log.info(`Project rules injected: ${rules.length} chars`);
     }
 
-    content.push({ type: "text", text: prompt });
+    let promptText = prompt;
+    if (!promptText.trim() && (opts?.resources?.length || opts?.images?.length)) {
+      promptText = "Please review the attached file(s).";
+    }
+    content.push({ type: "text", text: promptText });
+
+    for (const img of opts?.images ?? []) {
+      content.push({
+        type: "image",
+        mimeType: img.mimeType,
+        data: img.data,
+        uri: img.uri,
+      });
+    }
+
+    for (const resource of opts?.resources ?? []) {
+      content.push({ type: "resource", resource });
+    }
 
     if (opts?.model) {
       const modelId = opts.model.includes("/")
@@ -2037,7 +2074,7 @@ export class AcpService {
     }
 
     log.info(
-      `session/prompt: sessionId=${sessionId} userLen=${prompt.length} blocks=${content.length}`,
+      `session/prompt: sessionId=${sessionId} userLen=${promptText.length} blocks=${content.length} images=${opts?.images?.length ?? 0} resources=${opts?.resources?.length ?? 0}`,
     );
     const promptResult = await this.conn.prompt({ sessionId, prompt: content });
     log.info(`session/prompt complete: ${JSON.stringify(promptResult).slice(0, 200)}`);

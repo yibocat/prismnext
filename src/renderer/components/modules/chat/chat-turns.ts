@@ -1,6 +1,6 @@
 import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
 
-/** Restore Prism UI display (inline @ / tokens) over OpenCode-stored user text. */
+/** Restore Prism Next UI display (inline @ / tokens) over OpenCode-stored user text. */
 export function applyUserDisplaySnapshots(
   messages: ChatStreamMessage[],
   snapshots: ContentBlock[][],

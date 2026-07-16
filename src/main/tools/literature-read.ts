@@ -1,5 +1,5 @@
 /**
- * literature-read — Read paper metadata via Prism main-process bridge.
+ * literature-read — Read paper metadata via Prism Next main-process bridge.
  * Pattern mirrors question.ts: fs/path/os only, file bridge, returns `{ output: string }`.
  */
 import { tool } from "@opencode-ai/plugin";
@@ -65,7 +65,7 @@ async function bridgeCall(
     }
   }
   try { fs.unlinkSync(reqPath); } catch {}
-  return toolOutput({ error: "Literature bridge timed out. Restart Prism and try a new chat tab." });
+  return toolOutput({ error: "Literature bridge timed out. Restart Prism Next and try a new chat tab." });
 }
 
 export default tool({

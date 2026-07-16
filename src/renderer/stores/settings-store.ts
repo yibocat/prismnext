@@ -58,15 +58,19 @@ export interface AppSettings {
   editorSyntaxTheme?: string;
   /** Default workspace folder configuration for new projects */
   defaultWorkspaceDirs?: WorkspaceFolder[];
+  /** When creating a new project, initialize a git repo by default (default true). */
+  defaultInitGit?: boolean;
   /** AI reasoning/thinking depth level. Per-provider values: low/medium/high/max/minimal/xhigh.
    *  undefined = provider default. */
   thoughtLevel?: string;
   /** User-added custom model IDs per provider */
   aiCustomModels?: Record<string, string[]>;
   /** User-added custom model configs per provider (structured, with name + context window) */
-  aiCustomModelsData?: Record<string, { id: string; name: string; contextWindow: string }[]>;
+  aiCustomModelsData?: Record<string, { id: string; name: string; contextWindow: string; capabilities?: { vision?: boolean } }[]>;
   /** Enabled model IDs per provider (checked = shown in chat model dropdown) */
   aiEnabledModels?: Record<string, string[]>;
+  /** Optional helper model used to describe images for text-only main models. */
+  aiVisionFallbackModel?: string | null;
   /** Per-model reasoning depth: key = `providerId/modelId` */
   aiModelThoughtLevels?: Record<string, string>;
   /** Providers whose API keys have been verified */
@@ -123,6 +127,7 @@ const defaults: AppSettings = {
     { function: "manuscript", name: "manuscript", mainTex: "main.tex" },
     { function: "notebook", name: "notes" },
   ],
+  defaultInitGit: true,
   permissionMode: DEFAULT_PERMISSION_MODE,
   agentTerminalMode: "pty",
   aiTerminalAutoOpen: true,
@@ -177,6 +182,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
             id,
             name: id,
             contextWindow: "Unknown",
+            capabilities: { vision: false },
           }));
         }
         r.aiCustomModelsData = migrated;

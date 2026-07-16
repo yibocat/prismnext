@@ -22,7 +22,7 @@ export function ProjectSetupDialog() {
         <DialogHeader>
           <DialogTitle className="text-[length:var(--font-dialog-title)]">Setup Project</DialogTitle>
           <DialogDescription className="text-[length:var(--font-dialog-label)]">
-            This folder is missing the standard Prism project structure.
+            This folder is missing the standard Prism Next project structure.
           </DialogDescription>
         </DialogHeader>
 

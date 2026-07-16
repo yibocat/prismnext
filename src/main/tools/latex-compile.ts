@@ -1,5 +1,5 @@
 /**
- * latex-compile — Compile the project LaTeX document via Prism compile service.
+ * latex-compile — Compile the project LaTeX document via Prism Next compile service.
  */
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";

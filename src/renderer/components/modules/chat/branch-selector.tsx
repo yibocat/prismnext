@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useCallback, useRef, useState } from "react";
-import { GitBranchIcon, LockIcon, Loader2Icon } from "lucide-react";
-import { toast } from "sonner";
+import { useEffect, useMemo, useCallback, useRef } from "react";
+import { GitBranchIcon, LockIcon } from "lucide-react";
 import {
   AppMenu,
   AppMenuCheckItem,
   AppMenuContent,
-  AppMenuItem,
   AppMenuTrigger,
   appMenuFontClass,
 } from "@/components/ui/app-menu";
@@ -13,6 +11,7 @@ import { useWorktreeStore } from "@/stores/worktree-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useGitStore } from "@/stores/git-store";
 import { CHAT_PANEL_TOOLBAR_BUTTON } from "./worktree-selector";
+import { GitInitButton } from "@/modes/git-mode/git-init-button";
 import { cn } from "@/lib/utils";
 
 const WT_PREFIX = "wt-";
@@ -69,43 +68,10 @@ export function BranchSelector() {
     [projectRoot, currentBranch, locked],
   );
 
-  const [initLoading, setInitLoading] = useState(false);
-
-  const handleInitGit = useCallback(async () => {
-    if (!projectRoot) return;
-    setInitLoading(true);
-    try {
-      await useGitStore.getState().initRepo(projectRoot);
-      toast.success("Git repository initialized");
-    } catch (err: any) {
-      toast.error(`Failed to init git: ${err?.message}`);
-    } finally {
-      setInitLoading(false);
-    }
-  }, [projectRoot]);
-
   if (!projectRoot) return null;
 
   if (!isGitRepo) {
-    return (
-      <button
-        type="button"
-        onClick={handleInitGit}
-        disabled={initLoading}
-        className={cn(
-          CHAT_PANEL_TOOLBAR_BUTTON,
-          "disabled:opacity-50 disabled:cursor-wait disabled:hover:bg-transparent disabled:hover:text-muted-foreground",
-        )}
-        title="Initialize Git repository"
-      >
-        {initLoading ? (
-          <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
-        ) : (
-          <GitBranchIcon className="size-3.5 shrink-0" />
-        )}
-        <span className="max-w-[100px] truncate hidden @md:inline">Init Git</span>
-      </button>
-    );
+    return <GitInitButton />;
   }
 
   const buttonLabel = pendingBranch && !locked ? pendingBranch : (displayBranch || "...");

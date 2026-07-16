@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { toast } from "sonner";
 import { getMentionableFiles } from "@/lib/files/mentionable-files";
-import { pickComposerAttachments } from "@/lib/chat/composer-attach-file";
+import { pickComposerAttachments, projectFileToAttachment, attachmentsFromAbsolutePaths, type ComposerAttachment } from "@/lib/chat/composer-attach-file";
 import { isComposerEmpty, type ComposerPart, COMPOSER_PLACEHOLDER } from "@/lib/chat/composer-parts";
 import { loadSlashCatalog } from "@/lib/chat/slash-catalog";
 import { useChatStore } from "@/stores/chat-store";
@@ -10,12 +11,16 @@ import { useComposerInsertStore } from "@/stores/composer-insert-store";
 import { useComposerEditorStore } from "@/stores/composer-editor-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useCommandStore } from "@/stores/command-store";
+import { useSettingsStore } from "@/stores/settings-store";
 import { actionRegistry } from "@/actions/registry";
 import "@/actions/builtin-actions";
 import type { ExpertInfo } from "@shared/agent-experts";
+import { getModel, modelSupportsVision, resolveProviderConfig } from "@/lib/providers";
+import type { ContentBlock } from "@/stores/chat-store";
 import {
   compileComposerPrompt,
   shouldSendPromptToAgent,
+  buildComposerDisplayBlocks,
   loadDraftParts,
   saveDraftFromParts,
   type InlineComposerEditorHandle,
@@ -27,6 +32,45 @@ function offsetToLineCol(
 ): { line: number; col: number } {
   const lines = text.slice(0, offset).split("\n");
   return { line: lines.length, col: lines[lines.length - 1].length + 1 };
+}
+
+function withImageAttachmentNotes(
+  blocks: ContentBlock[],
+  note: string,
+): ContentBlock[] {
+  return blocks.map((block) => {
+    if (block.type !== "text" || !block.attachments?.length) return block;
+    return {
+      ...block,
+      attachments: block.attachments.map((att) =>
+        att.kind === "image" ? { ...att, note } : att,
+      ),
+    };
+  });
+}
+
+function patchTabUserImageNotes(tabId: string, note: string) {
+  useChatStore.setState((s) => {
+    const tabs = s.tabs.map((t) => {
+      if (t.id !== tabId) return t;
+      const messages = [...t.messages];
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const m = messages[i];
+        if (m.type !== "user" || !m.message?.content) continue;
+        messages[i] = {
+          ...m,
+          message: {
+            ...m.message,
+            content: withImageAttachmentNotes(m.message.content, note),
+          },
+        };
+        break;
+      }
+      return { ...t, messages };
+    });
+    const activeTab = tabs.find((t) => t.id === s.activeTabId);
+    return { tabs, messages: activeTab?.messages ?? s.messages };
+  });
 }
 
 export interface PinnedContext {
@@ -54,6 +98,7 @@ export function useChatComposer() {
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.draft,
   );
   const composerInsertNonce = useComposerInsertStore((s) => s.nonce);
+  const composerAttachNonce = useComposerInsertStore((s) => s.attachNonce);
 
   const commands = useCommandStore((s) => s.commands);
   const searchCommands = useCommandStore((s) => s.searchCommands);
@@ -76,6 +121,9 @@ export function useChatComposer() {
   const [pinnedContexts, setPinnedContexts] = useState<PinnedContext[]>([]);
   const pinnedContextsRef = useRef(pinnedContexts);
   pinnedContextsRef.current = pinnedContexts;
+  const [pendingAttachments, setPendingAttachments] = useState<ComposerAttachment[]>([]);
+  const pendingAttachmentsRef = useRef(pendingAttachments);
+  pendingAttachmentsRef.current = pendingAttachments;
 
   const draftParts = useMemo(() => loadDraftParts(tabDraft), [tabDraft]);
 
@@ -112,11 +160,44 @@ export function useChatComposer() {
   const activeTabId = useChatStore((s) => s.activeTabId);
   useEffect(() => {
     setPinnedContexts([]);
+    setPendingAttachments([]);
   }, [activeTabId]);
 
   useEffect(() => {
     flushPendingInsert();
   }, [composerInsertNonce, flushPendingInsert]);
+
+  const addAttachmentsFromPaths = useCallback(async (paths: string[], opts?: { imagesOnly?: boolean }) => {
+    const next = await attachmentsFromAbsolutePaths(paths, opts);
+    if (next.length === 0) return;
+    setPendingAttachments((prev) => {
+      const seen = new Set(prev.map((a) => a.absolutePath));
+      return [...prev, ...next.filter((a) => !seen.has(a.absolutePath))];
+    });
+  }, []);
+
+  // Peek (don't consume yet) so React Strict Mode remount can still see the same paths.
+  const handledAttachNonceRef = useRef(0);
+  useEffect(() => {
+    if (composerAttachNonce === 0) return;
+    if (handledAttachNonceRef.current === composerAttachNonce) return;
+    const paths = useComposerInsertStore.getState().pendingAttachPaths;
+    if (!paths?.length) {
+      handledAttachNonceRef.current = composerAttachNonce;
+      return;
+    }
+    handledAttachNonceRef.current = composerAttachNonce;
+    void addAttachmentsFromPaths(paths).finally(() => {
+      const st = useComposerInsertStore.getState();
+      if (st.attachNonce === composerAttachNonce && st.pendingAttachPaths?.length) {
+        st.consumeAttachPaths();
+      }
+    });
+  }, [composerAttachNonce, addAttachmentsFromPaths]);
+
+  useEffect(() => {
+    useComposerInsertStore.getState().setComposerAttachmentCount(pendingAttachments.length);
+  }, [pendingAttachments.length]);
 
   const currentContextLabel = useMemo(() => {
     if (!selectionRange) return null;
@@ -156,44 +237,176 @@ export function useChatComposer() {
     if (root) loadCommands();
   }, [loadCommands]);
 
-  const canSend = !isComposerEmpty(draftParts) || pinnedContexts.length > 0;
+  const canSend =
+    !isComposerEmpty(draftParts) ||
+    pinnedContexts.length > 0 ||
+    pendingAttachments.length > 0;
+
+  const appendAttachments = useCallback(async (files: Awaited<ReturnType<typeof pickComposerAttachments>>) => {
+    if (files.length === 0) return;
+    const next = await Promise.all(files.map((f) => projectFileToAttachment(f)));
+    setPendingAttachments((prev) => {
+      const seen = new Set(prev.map((a) => a.absolutePath));
+      return [...prev, ...next.filter((a) => !seen.has(a.absolutePath))];
+    });
+  }, []);
 
   const handleAddFile = useCallback(async () => {
     const picked = await pickComposerAttachments();
-    for (const file of picked) {
-      editorRef.current?.insertFileMention(file);
-    }
-  }, []);
+    await appendAttachments(picked);
+  }, [appendAttachments]);
 
   const handleAddImage = useCallback(async () => {
     const picked = await pickComposerAttachments({ imagesOnly: true });
-    for (const file of picked) {
-      editorRef.current?.insertFileMention(file);
-    }
+    await appendAttachments(picked);
+  }, [appendAttachments]);
+
+  const removeAttachment = useCallback((id: string) => {
+    setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
   const handleSend = useCallback(async () => {
     const parts = editorRef.current?.getParts() ?? draftParts;
-    if (isComposerEmpty(parts) && pinnedContextsRef.current.length === 0) return;
+    const attachments = pendingAttachmentsRef.current;
+    if (isComposerEmpty(parts) && pinnedContextsRef.current.length === 0 && attachments.length === 0) {
+      return;
+    }
     if (isStreaming) return;
-
-    const compiled = await compileComposerPrompt(
-      parts,
-      expandCommand,
-      pinnedContextsRef.current.map((c) => ({
-        filePath: c.filePath,
-        selectedText: c.selectedText,
-      })),
-    );
 
     const store = useChatStore.getState();
     const tabId = store.activeTabId;
+    const pinnedAtSend = pinnedContextsRef.current.map((c) => ({
+      filePath: c.filePath,
+      selectedText: c.selectedText,
+    }));
+    const pinnedCountAtSend = pinnedAtSend.length;
+    const attachmentCountAtSend = attachments.length;
 
-    if (compiled.displayBlocks.length > 0) {
-      store._appendMessage(tabId, {
-        type: "user",
-        message: { content: compiled.displayBlocks },
+    // Fast path: show the user bubble + clear composer before any disk/network work.
+    const quickDisplay = buildComposerDisplayBlocks(parts, attachments);
+    let skipUserAppend = false;
+    if (quickDisplay.length > 0) {
+      flushSync(() => {
+        store._appendMessage(tabId, {
+          type: "user",
+          message: { content: quickDisplay },
+        });
+        store._setStreaming(tabId, true);
       });
+      skipUserAppend = true;
+      setDraftParts([{ type: "text", text: "" }]);
+      setPinnedContexts([]);
+      setPendingAttachments([]);
+      editorRef.current?.focus();
+    }
+
+    let compiled;
+    try {
+      compiled = await compileComposerPrompt(parts, expandCommand, pinnedAtSend, attachments);
+    } catch (err) {
+      store._setStreaming(tabId, false);
+      toast.error(
+        err instanceof Error ? `发送失败：${err.message}` : "发送失败：无法读取附件内容。",
+      );
+      return;
+    }
+
+    // Stopped while compiling attachments.
+    if (!useChatStore.getState().tabs.find((t) => t.id === tabId)?.isStreaming && skipUserAppend) {
+      return;
+    }
+
+    const settings = useSettingsStore.getState().settings;
+    const currentProviderId = settings.aiProvider || "anthropic";
+    const currentProvider = resolveProviderConfig(currentProviderId, settings.aiCustomProviders);
+    const currentModelId = settings.aiModel ?? currentProvider?.defaultModel ?? "";
+    const currentModel = currentModelId
+      ? getModel(
+          currentProviderId,
+          currentModelId,
+          settings.aiCustomModelsData,
+          settings.aiCustomProviders,
+        )
+      : undefined;
+    const currentSupportsVision = modelSupportsVision(currentModel);
+
+    let promptImages = compiled.promptImages;
+    let promptFiles = compiled.promptFiles;
+    let promptText = compiled.promptText;
+    let displayBlocks = compiled.displayBlocks;
+
+    if (compiled.promptImages.length > 0 && !currentSupportsVision) {
+      const helperRef = settings.aiVisionFallbackModel?.trim();
+      if (!helperRef) {
+        store._setStreaming(tabId, false);
+        toast.error("当前模型不支持图片输入，请先在 Settings 里配置多模态辅助模型。");
+        return;
+      }
+
+      const slash = helperRef.indexOf("/");
+      if (slash <= 0 || slash >= helperRef.length - 1) {
+        store._setStreaming(tabId, false);
+        toast.error("多模态辅助模型配置无效，请重新选择。");
+        return;
+      }
+
+      const helperProviderId = helperRef.slice(0, slash);
+      const helperModelId = helperRef.slice(slash + 1);
+      const helperApiKey = settings.aiApiKeys?.[helperProviderId]?.trim();
+      if (!helperApiKey) {
+        store._setStreaming(tabId, false);
+        toast.error("多模态辅助模型对应的 Provider 未配置 API Key，请先在 Settings 中配置。");
+        return;
+      }
+      const helperModel = getModel(
+        helperProviderId,
+        helperModelId,
+        settings.aiCustomModelsData,
+        settings.aiCustomProviders,
+      );
+      if (!modelSupportsVision(helperModel)) {
+        store._setStreaming(tabId, false);
+        toast.error("所选多模态辅助模型没有标记 Vision 能力，请在 Settings 里检查模型能力。");
+        return;
+      }
+
+      const helperLabel = helperModel?.name ?? helperModelId;
+      try {
+        const result = await window.electronAPI.chatDescribeImages({
+          providerId: helperProviderId,
+          modelId: helperModelId,
+          images: compiled.promptImages,
+        });
+        if (!useChatStore.getState().tabs.find((t) => t.id === tabId)?.isStreaming) {
+          return;
+        }
+        const descriptionBlocks = result.descriptions.map((desc, i) =>
+          [
+            `### Image ${i + 1}: ${desc.name}`,
+            desc.cached ? `- via: ${helperLabel} (cached)` : `- via: ${helperLabel}`,
+            desc.text.trim(),
+          ].join("\n\n"),
+        );
+        promptText = [
+          "## Attached images (via vision fallback)",
+          "",
+          ...descriptionBlocks,
+          "",
+          compiled.promptText,
+        ].join("\n");
+        promptImages = [];
+        displayBlocks = withImageAttachmentNotes(
+          compiled.displayBlocks,
+          `已通过 ${helperLabel} 识图`,
+        );
+        patchTabUserImageNotes(tabId, `已通过 ${helperLabel} 识图`);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "图片识别失败，请检查多模态辅助模型配置。";
+        store._setStreaming(tabId, false);
+        toast.error(`图片识别失败：${message}`);
+        return;
+      }
     }
 
     for (const actionCmd of compiled.actionCommands) {
@@ -266,11 +479,9 @@ export function useChatComposer() {
       }
     }
 
-    const pinnedCount = pinnedContextsRef.current.length;
-
-    if (shouldSendPromptToAgent(compiled, parts, pinnedCount)) {
+    if (shouldSendPromptToAgent(compiled, parts, pinnedCountAtSend + attachmentCountAtSend)) {
       const hadSetup = compiled.actionCommands.some((c) => c.commandName === "setup");
-      let promptToSend = compiled.promptText;
+      let promptToSend = promptText;
       if (hadSetup) {
         promptToSend = [
           "Refine `.prismnext/agent/AGENTS.md` based on the user request below.",
@@ -284,28 +495,34 @@ export function useChatComposer() {
           `User request: ${compiled.promptText}`,
         ].join("\n");
       }
-      sendPrompt(promptToSend, compiled.displayBlocks, true, {
+      sendPrompt(promptToSend, displayBlocks, skipUserAppend, {
         mcpServerAllowlist: compiled.mcpServerNames,
         skillIds: compiled.skillIds,
         hasPaperSnippets: compiled.paperSnippetCount > 0,
         selectedExpertIds: compiled.selectedExpertIds,
         orchestratorId: store.tabs.find((t) => t.id === tabId)?.orchestratorId ?? null,
+        promptImages,
+        promptFiles,
       });
-    } else if (compiled.displayBlocks.length > 0) {
+    } else if (displayBlocks.length > 0 || skipUserAppend) {
       const projectPath = useDocumentStore.getState().projectRoot;
       const sessionId = store.tabs.find((t) => t.id === tabId)?.sessionId;
-      if (projectPath && sessionId) {
+      if (projectPath && sessionId && displayBlocks.length > 0) {
         void window.electronAPI.sessionAppendUserDisplay(
           projectPath,
           sessionId,
-          compiled.displayBlocks,
+          displayBlocks,
         );
       }
+      store._setStreaming(tabId, false);
     }
 
-    setDraftParts([{ type: "text", text: "" }]);
-    setPinnedContexts([]);
-    editorRef.current?.focus();
+    if (!skipUserAppend) {
+      setDraftParts([{ type: "text", text: "" }]);
+      setPinnedContexts([]);
+      setPendingAttachments([]);
+      editorRef.current?.focus();
+    }
   }, [draftParts, isStreaming, sendPrompt, commands, expandCommand, setDraftParts]);
 
   const placeholder = COMPOSER_PLACEHOLDER;
@@ -321,6 +538,9 @@ export function useChatComposer() {
     slashMcps,
     pinnedContexts,
     setPinnedContexts,
+    pendingAttachments,
+    removeAttachment,
+    addAttachmentsFromPaths,
     isArchived,
     isStreaming,
     canSend,

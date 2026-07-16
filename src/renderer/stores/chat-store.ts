@@ -31,6 +31,14 @@ export interface ContentBlock {
   text?: string;
   /** Inline @file / @profile / /command tokens in user message order */
   inlineParts?: ComposerPart[];
+  /** External attach / paste / drop strip (not inline tokens). */
+  attachments?: Array<{
+    name: string;
+    kind: "image" | "file";
+    path: string;
+    previewUrl?: string;
+    note?: string;
+  }>;
   id?: string;
   name?: string;
   /** For "profile" blocks: agent profile id */
@@ -280,6 +288,8 @@ interface ChatState {
       hasPaperSnippets?: boolean;
       selectedExpertIds?: string[];
       orchestratorId?: string | null;
+      promptImages?: Array<{ mimeType: string; data: string; name: string; uri?: string }>;
+      promptFiles?: Array<{ uri: string; name: string; mimeType: string; size?: number }>;
     },
   ) => Promise<void>;
   cancelExecution: () => Promise<void>;
@@ -651,6 +661,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       hasPaperSnippets?: boolean;
       selectedExpertIds?: string[];
       orchestratorId?: string | null;
+      promptImages?: Array<{ mimeType: string; data: string; name: string; uri?: string }>;
+      promptFiles?: Array<{ uri: string; name: string; mimeType: string; size?: number }>;
     },
   ) => {
     const docState = useDocumentStore.getState();
@@ -779,13 +791,23 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           ? tabBeforePrompt.intensivePaperIds
           : undefined,
         hasPaperSnippets: composerExtras?.hasPaperSnippets,
+        promptImages: composerExtras?.promptImages?.length
+          ? composerExtras.promptImages
+          : undefined,
+        promptFiles: composerExtras?.promptFiles?.length
+          ? composerExtras.promptFiles
+          : undefined,
       });
     } catch (err: any) {
+      // Keep the user bubble so attachments/text aren't silently erased on failure.
       set((s) => {
         const tabs = s.tabs.map((t) => {
           if (t.id !== tabId) return t;
-          const msgs = t.messages.filter((m, i) => !(m.type === "user" && i === t.messages.length - 1));
-          return { ...t, messages: msgs, isStreaming: false, error: err?.message || String(err) };
+          return {
+            ...t,
+            isStreaming: false,
+            error: err?.message || String(err),
+          };
         });
         return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
       });

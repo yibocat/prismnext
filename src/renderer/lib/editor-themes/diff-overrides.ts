@@ -6,7 +6,7 @@ import { Prec } from "@codemirror/state";
 /**
  * ── UNIFIED DIFF DISPLAY THEME ──
  *
- * Every theme (Prism, GitHub, Nord, One Dark, Monokai, Dracula, Tokyo Night,
+ * Every theme (Prism Next, GitHub, Nord, One Dark, Monokai, Dracula, Tokyo Night,
  * Solarized Light) must render git diffs IDENTICALLY:
  *
  *   • Deleted lines:     single clean reddish background, NO strikethrough
@@ -516,7 +516,7 @@ export const diffDisplayThemeExtra = Prec.highest(
  *   }
  *
  * This Prec.highest theme overrides EVERYTHING back to our CSS
- * custom properties, so switching between Prism / GitHub / Nord /
+ * custom properties, so switching between Prism Next / GitHub / Nord /
  * Monokai / etc. never causes the text to jump, resize, or reflow.
  */
 export const contentMetricsTheme = Prec.highest(

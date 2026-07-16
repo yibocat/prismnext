@@ -34,7 +34,7 @@ export interface AppSettings {
   /** Built-in slash command enable/disable states. { "compile": false, ... } */
   builtinCommands?: Record<string, boolean>;
 
-  /** Agent shell: mirror (default) or pty (Prism bash tool + bridge) */
+  /** Agent shell: mirror (default) or pty (Prism Next bash tool + bridge) */
   agentTerminalMode?: "mirror" | "pty";
 
   /** Auto-open AI terminal when agent runs bash (default true). */
@@ -60,6 +60,8 @@ export interface AppSettings {
   updateSource?: string;
   /** A version the user dismissed; suppressed from "available" until unignored. */
   ignoredUpdateVersion?: string;
+  /** Optional helper model ref (`provider/model`) used for image fallback. */
+  aiVisionFallbackModel?: string | null;
 
   /**
    * Tools the user pinned to "Allow always" from the permission gate.

@@ -1,6 +1,14 @@
 import type { BrowserWindow } from "electron";
+import { app } from "electron";
 import { AcpService } from "./service";
 import { createLogger } from "../services/logger";
+
+/** Dev-terminal one-liner — always includes tool name. Silent in packaged builds. */
+function logToolDev(message: string) {
+  if (!app.isPackaged) {
+    console.log(`[tool] ${message}`);
+  }
+}
 import { registerChatSession, unregisterChatSession, resolveChatTabId, getSessionProjectRoot } from "../services/chat-session-registry";
 import {
   inferToolNameFromInput,
@@ -310,8 +318,6 @@ export class EventMapper {
   /** Track which session/update shapes we have already logged to avoid spam. */
   private _seenShapes = new Set<string>();
   private _missedShapes = new Set<string>();
-  private _seenToolCallShapes = new Set<string>();
-
   /** Prune oldest entries if a Map exceeds the cap. */
   private pruneAccum(map: Map<string, string>): void {
     while (map.size > EventMapper.MAX_ACCUM_ENTRIES) {
@@ -558,7 +564,7 @@ export class EventMapper {
     const shapeKeys = Object.keys(update).sort().join(",");
     if (!this._seenShapes.has(shapeKeys)) {
       this._seenShapes.add(shapeKeys);
-      log.info(`session/update shape: { ${shapeKeys} } sessionUpdate=${chunkType} — sample: ${JSON.stringify(update).slice(0, 300)}`);
+      log.debug(`session/update shape: { ${shapeKeys} } sessionUpdate=${chunkType} — sample: ${JSON.stringify(update).slice(0, 300)}`);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -613,7 +619,7 @@ export class EventMapper {
       }
 
       if (!toolName) {
-        // kind "other" is the default for custom Prism tools (citation-health,
+        // kind "other" is the default for custom Prism Next tools (citation-health,
         // etc.) AND real task calls. Real task calls carry prompt+subagent_type
         // in input, caught by fromInput above. For other "other" calls, prefer
         // the raw title over KIND_TO_TOOL["other"]="task" — defaulting to
@@ -672,27 +678,11 @@ export class EventMapper {
           : {};
       }
 
-      // One-shot debug: log all keys on tc so we can see what OpenCode
-      // actually sends during live streaming.
-      const tcKeys = Object.keys(tc).sort().join(",");
-      if (!this._seenToolCallShapes.has(tcKeys)) {
-        this._seenToolCallShapes.add(tcKeys);
-        const sample: any = {};
-        for (const k of Object.keys(tc).slice(0, 10)) {
-          const v = tc[k];
-          sample[k] = typeof v === "object"
-            ? (Array.isArray(v) ? `[array(${v.length})]` : `{${Object.keys(v).join(",")}}`)
-            : String(v).slice(0, 80);
-        }
-        log.info(`tool_call live shape: keys={ ${tcKeys} } inputSource=${toolInput && Object.keys(toolInput).length > 0 ? JSON.stringify(Object.keys(toolInput)) : "EMPTY"} sample=${JSON.stringify(sample)}`);
-      }
-
-      // Detailed debug: log what we're sending to the renderer so we can
-      // compare with what the renderer actually receives.
-      log.debug(`tool_call IPC: name="${toolName}" id=${toolId} inputKeys=${JSON.stringify(Object.keys(toolInput))} title="${(tc.title || "").slice(0, 60)}" kind=${tc.kind} status=${tc.status || tc.state?.status}`);
-      if (toolName === "task" || tc.kind === "other") {
-        log.info(`[TASK-TOOL] tool_call detected: name="${toolName}" kind=${tc.kind} title="${(tc.title || "").slice(0, 100)}" inputKeys=${JSON.stringify(Object.keys(toolInput))} hasRawInput=${!!tc.rawInput} hasStateInput=${!!tc.state?.input}`);
-      }
+      const toolLabel = toolName || String(tc.title || tc.kind || "?").trim() || "?";
+      const toolCallMsg =
+        `${toolLabel} id=${toolId || "(none)"} kind=${tc.kind || "?"} status=${tc.status || tc.state?.status || "?"} inputKeys=${JSON.stringify(Object.keys(toolInput || {}))}`;
+      log.debug(`tool_call ${toolCallMsg}`);
+      logToolDev(`call ${toolCallMsg}`);
 
       const isBash =
         toolName === "bash"
@@ -829,12 +819,7 @@ export class EventMapper {
       (chunkType === "tool_call_update" ? update : null);
 
     if (tu) {
-      // Quick sanity log — if this never appears, the `tu` detection is broken
-      console.log(`[event-mapper] tool_call_update HIT: sessionUpdate=${chunkType} hasToolCallUpdate=${!!update.tool_call_update} hasToolCallUpdateCamel=${!!update.toolCallUpdate}`);
       const updateId = tu.toolCallId || tu.tool_call_id || tu.callID || tu.id || "";
-      // DIAG: capture the full status/title/kind of the tool_call_update so we can
-      // see exactly what OpenCode sends and why the renderer may reject it.
-      log.info(`tool_call_update IN: id=${updateId} title=${tu.title || tu.state?.title || "(none)"} kind=${tu.kind || "(none)"} status=${tu.status || tu.state?.status || "(none)"} hasRawOutput=${!!(tu.rawOutput || tu.raw_output)} hasContent=${!!(tu.content && tu.content.length)}`);
 
       // Extract human-readable text from the tool result.
       const rawResult: any =
@@ -892,8 +877,11 @@ export class EventMapper {
         backfillName = outputInferred;
       }
 
+      const toolNameHint = backfillName || tu.tool_name || tu.toolName || "";
+      const toolLabel =
+        toolNameHint || String(tu.title || tu.state?.title || tu.kind || "?").trim() || "?";
+
       if (backfillInput) {
-        log.debug(`tool_call_update backfill: id=${updateId} inputKeys=${JSON.stringify(Object.keys(backfillInput))} name=${backfillName || "(unchanged)"}`);
         const backfillToolName = (backfillName || "").toLowerCase();
         const tuStatusLocal = String(tu.status || tu.state?.status || "").toLowerCase();
         const isTerminalStatus =
@@ -946,7 +934,6 @@ export class EventMapper {
         }
       }
 
-      const toolNameHint = backfillName || tu.tool_name || tu.toolName || "";
       let resultContent = this.extractToolResultContent(rawResult, toolNameHint);
       const tuStatus = String(tu.status || tu.state?.status || "").toLowerCase();
       // OpenCode emits terminal success as `completed`/`success`/`finished`
@@ -976,7 +963,6 @@ export class EventMapper {
       }
 
       const _isSubAgent = AcpService.getInstance().isSubAgentSession(sessionId);
-      log.info(`tool_call_update BRANCH: id=${updateId} sessionId=${sessionId} tabId=${tabId} isSubAgentSession=${_isSubAgent} hint=${(backfillName || toolNameHint || "(none)")} isTerminal=${isTerminal}`);
       if (_isSubAgent) {
         this.emitSubAgentActivity(tabId, sessionId, {
           type: "tool_result",
@@ -1028,7 +1014,10 @@ export class EventMapper {
         ? "completed"
         : (_rawSentStatus || "completed");
       const _sentIsError = _rawSentStatus.toLowerCase() === "failed" || tu.state?.status === "failed";
-      log.info(`tool_call_update OUT: id=${updateId} hint=${(backfillName || toolNameHint || "(none)")} rawStatus=${_rawSentStatus || "(none)"} sentStatus=${_sentStatus} sentIsError=${_sentIsError} contentLen=${typeof resultContent === "string" ? resultContent.length : -1} tabId=${tabId} isSubAgentSession=${AcpService.getInstance().isSubAgentSession(sessionId)}`);
+      const toolResultMsg =
+        `${toolLabel} id=${updateId || "(none)"} status=${_sentStatus}${_sentIsError ? " error" : ""} contentLen=${typeof resultContent === "string" ? resultContent.length : -1}`;
+      log.debug(`tool_result ${toolResultMsg}`);
+      logToolDev(`result ${toolResultMsg}`);
       this.win.webContents.send("chat:stream", {
         tabId,
         type: "message.updated",
@@ -1196,7 +1185,7 @@ export class EventMapper {
       const shape = Object.keys(update).sort().join(",");
       if (!this._missedShapes.has(shape)) {
         this._missedShapes.add(shape);
-        log.info(`Unhandled session/update shape: { ${shape} } — sample keys: ${JSON.stringify(Object.keys(update))}`);
+        log.debug(`Unhandled session/update shape: { ${shape} } — sample keys: ${JSON.stringify(Object.keys(update))}`);
       }
       this.win.webContents.send("chat:stream", {
         tabId,

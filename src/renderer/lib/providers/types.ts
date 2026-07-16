@@ -7,6 +7,11 @@ export interface ModelConfig {
   name: string;
   /** Context window size for display, e.g. "200K", "128K", "1M" */
   contextWindow: string;
+  /** Input capabilities used for composer/media routing. */
+  capabilities?: {
+    /** Accepts image input directly (native vision / multimodal). */
+    vision?: boolean;
+  };
   /** Supported reasoning/thinking levels. If absent, provider defaults apply. */
   reasoning?: string[];
   /** Default reasoning level when this model is selected. */

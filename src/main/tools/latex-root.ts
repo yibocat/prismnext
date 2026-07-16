@@ -1,5 +1,5 @@
 /**
- * latex-root — Resolve LaTeX main file, engine, and bib tool via Prism bridge.
+ * latex-root — Resolve LaTeX main file, engine, and bib tool via Prism Next bridge.
  */
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
@@ -65,7 +65,7 @@ async function bridgeCall(
     }
   }
   try { fs.unlinkSync(reqPath); } catch {}
-  return toolOutput({ error: "LaTeX bridge timed out. Restart Prism and try a new chat tab." });
+  return toolOutput({ error: "LaTeX bridge timed out. Restart Prism Next and try a new chat tab." });
 }
 
 export default tool({

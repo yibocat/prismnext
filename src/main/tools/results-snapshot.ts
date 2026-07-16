@@ -68,7 +68,7 @@ async function bridgeCall(
   }
   try { fs.unlinkSync(reqPath); } catch {}
   return toolOutput({
-    error: "Results-snapshot bridge timed out. Restart Prism and try a new chat tab.",
+    error: "Results-snapshot bridge timed out. Restart Prism Next and try a new chat tab.",
   });
 }
 

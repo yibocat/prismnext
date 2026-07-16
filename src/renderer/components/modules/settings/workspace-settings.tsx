@@ -5,6 +5,7 @@ import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useWorkspaceProjectAutosave } from "@/hooks/use-workspace-project-autosave";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   FOLDER_FUNCTION_LABELS,
   DEFAULT_FUNCTION_DESCRIPTIONS,
@@ -152,6 +153,7 @@ export function WorkspaceSettings() {
 
   const saveStatus = useWorkspaceProjectAutosave(projectRoot, loaded);
   const templateDirs = settings.defaultWorkspaceDirs ?? [];
+  const defaultInitGit = settings.defaultInitGit !== false;
 
   const syncTemplateFromProject = () => {
     if (!projectRoot || workspaceDirs.length === 0) {
@@ -265,6 +267,24 @@ export function WorkspaceSettings() {
             Used only when you create a new project — not applied to projects you have already
             opened. Sync copies this project&apos;s folder list; folders edit via Configure.
           </p>
+
+          <div className={cn(CARD, "mb-3")}>
+            <div className={ROW}>
+              <div className="min-w-0">
+                <span className={ROW_LABEL}>Initialize Git by default</span>
+                <p className={ROW_DESC}>
+                  New Project dialog starts with Git on. You can still turn it off per create.
+                </p>
+              </div>
+              <Switch
+                checked={defaultInitGit}
+                onCheckedChange={(checked) => {
+                  void updateSettings({ defaultInitGit: checked });
+                }}
+              />
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center gap-2 mb-2">
             {projectRoot ? (
               <Button

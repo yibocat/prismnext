@@ -5,4 +5,4 @@ description: Local test skill with an extra notes file
 
 # Demo multi-file skill
 
-Use this fixture to verify Prism installs every file listed in the registry index.
+Use this fixture to verify Prism Next installs every file listed in the registry index.

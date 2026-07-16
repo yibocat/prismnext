@@ -47,9 +47,23 @@ let mainWindow: BrowserWindow | null = null;
 // ─── Window size persistence ───
 
 function getBoundsPath(): string {
-  const dir = join(app.getPath("userData"), "Prism");
+  const userData = app.getPath("userData");
+  const dir = join(userData, "PrismNext");
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  return join(dir, "window-bounds.json");
+  const nextPath = join(dir, "window-bounds.json");
+  // Migrate legacy bounds from older app names.
+  if (!existsSync(nextPath)) {
+    for (const legacy of ["Prism", "Prism Next"] as const) {
+      const legacyPath = join(userData, legacy, "window-bounds.json");
+      if (existsSync(legacyPath)) {
+        try {
+          writeFileSync(nextPath, readFileSync(legacyPath, "utf-8"));
+        } catch {}
+        break;
+      }
+    }
+  }
+  return nextPath;
 }
 
 function saveWindowBounds(win: BrowserWindow) {
@@ -84,7 +98,7 @@ function createWindow() {
     y: savedBounds.y,
     minWidth: 393,
     minHeight: 600,
-    title: "Prism",
+    title: "Prism Next",
     show: false,
     backgroundColor: "#00000000",
     transparent: true,

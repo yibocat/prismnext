@@ -45,6 +45,6 @@ export const CONTEXT_CATEGORY_SCHEMA: ContextCategoryDef[] = [
   { key: "skills",               label: "Skills",               color: "bg-cyan-500",   description: "Agent skills (.prismnext/agent/skills/)",        order: 4 },
   { key: "modules",              label: "Prompt Modules",       color: "bg-emerald-500", description: "Domain-specific knowledge modules",             order: 5 },
   { key: "mcp-tools",            label: "MCP Tools",            color: "bg-orange-500", description: "MCP server tool definitions",                    order: 6 },
-  { key: "core-persona",         label: "Core Persona",         color: "bg-blue-500",   description: "Prism built-in agent role and behavior rules",   order: 7 },
+  { key: "core-persona",         label: "Core Persona",         color: "bg-blue-500",   description: "Prism Next built-in agent role and behavior rules",   order: 7 },
   { key: "agent-base",           label: "Agent Base",           color: "bg-slate-400",  description: "OpenCode built-in system prompt & tool defs",    order: 8 },
 ];

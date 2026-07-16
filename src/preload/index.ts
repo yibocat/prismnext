@@ -81,8 +81,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	fsIsFile: (absPath: string) => ipcRenderer.invoke("fs:isFile", { absPath }),
 	fsFindByBasename: (projectRoot: string, basename: string) =>
 		ipcRenderer.invoke("fs:findByBasename", { projectRoot, basename }),
-	projectCreate: (rootPath: string, workspaceDirs?: WorkspaceFolder[]) =>
-		ipcRenderer.invoke("project:create", { rootPath, workspaceDirs }),
+	projectCreate: (
+		rootPath: string,
+		workspaceDirs?: WorkspaceFolder[],
+		options?: { initGit?: boolean; projectIcon?: string },
+	) =>
+		ipcRenderer.invoke("project:create", {
+			rootPath,
+			workspaceDirs,
+			initGit: options?.initGit,
+			projectIcon: options?.projectIcon,
+		}),
 	projectEnsure: (rootPath: string) => ipcRenderer.invoke("project:ensure", { rootPath }),
 	projectScaffoldAgentsMd: (rootPath: string) =>
 		ipcRenderer.invoke("project:scaffoldAgentsMd", { rootPath }),
@@ -773,8 +782,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		hasPaperSnippets?: boolean;
 		orchestratorId?: string | null;
 		selectedExpertIds?: string[];
+		promptImages?: Array<{ mimeType: string; data: string; name: string; uri?: string }>;
+		promptFiles?: Array<{ uri: string; name: string; mimeType: string; size?: number }>;
 	}) =>
 		ipcRenderer.invoke("chat:send", args),
+	chatDescribeImages: (args: {
+		providerId: string;
+		modelId: string;
+		images: Array<{ name: string; mimeType: string; data: string; uri?: string }>;
+	}) =>
+		ipcRenderer.invoke("chat:describeImages", args),
 	chatCancel: (sessionId: string) =>
 		ipcRenderer.invoke("chat:cancel", { sessionId }),
 	chatRegisterTab: (args: { tabId: string; sessionId: string; projectPath?: string }) =>

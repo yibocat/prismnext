@@ -66,7 +66,7 @@ function MiniPreviewBar({
     >
       {isFallback ? (
         <span className="text-[7px] text-muted-foreground absolute inset-0 flex items-center justify-center">
-          ↳ Prism
+          ↳ Prism Next
         </span>
       ) : (
         <>
@@ -135,7 +135,7 @@ function SyntaxThemeCard({
         <MiniPreviewBar mode="light" colors={preview.light} isFallback={!lightNative} />
       </div>
 
-      {/* Auto-adapts label for Prism */}
+      {/* Auto-adapts label for Prism Next */}
       {theme.isDefault && (
         <p className="text-[9px] text-primary/70 mt-1.5 text-center">
           Auto-adapts to app theme

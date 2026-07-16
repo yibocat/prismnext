@@ -68,7 +68,7 @@ async function searchDblp(query: string): Promise<BibliographicMetadata | null> 
   const timer = setTimeout(() => ctrl.abort(), 6000);
   try {
     const res = await catalogFetch(url, {
-      headers: { Accept: "application/json", "User-Agent": "Prism/1.0" },
+      headers: { Accept: "application/json", "User-Agent": "PrismNext/1.0" },
       signal: ctrl.signal,
     });
     if (!res.ok) throw new Error(`DBLP HTTP ${res.status}`);

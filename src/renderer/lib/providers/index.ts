@@ -15,7 +15,7 @@ export {
   opencodeGoPreset,
 } from "./presets";
 
-import { ALL_PROVIDERS, getPreset } from "./presets";
+import { ALL_PROVIDERS, getPreset, PROVIDER_PRESETS } from "./presets";
 import type { ProviderConfig, ModelConfig } from "./types";
 
 /** User-added provider entry from settings (`aiCustomProviders`). */
@@ -85,6 +85,105 @@ export function getModel(
   customProviders?: CustomProviderEntry[],
 ): ModelConfig | undefined {
   return getProviderModels(providerId, customModels, customProviders).find((m) => m.id === modelId);
+}
+
+export function modelSupportsVision(model: ModelConfig | undefined): boolean {
+  return Boolean(model?.capabilities?.vision);
+}
+
+/** True when the user has saved a non-empty API key for this provider. */
+export function isProviderConfigured(
+  providerId: string,
+  aiApiKeys?: Record<string, string>,
+): boolean {
+  return Boolean(aiApiKeys?.[providerId]?.trim());
+}
+
+/** Provider ids with a configured API key (built-in + user-added). */
+export function getConfiguredProviderIds(
+  aiApiKeys?: Record<string, string>,
+  customProviders?: CustomProviderEntry[],
+): string[] {
+  const ids = new Set<string>();
+  for (const provider of ALL_PROVIDERS) {
+    if (provider.id === "custom") continue;
+    if (isProviderConfigured(provider.id, aiApiKeys)) ids.add(provider.id);
+  }
+  for (const cp of customProviders ?? []) {
+    if (isProviderConfigured(cp.id, aiApiKeys)) ids.add(cp.id);
+  }
+  return [...ids];
+}
+
+/**
+ * Vision-capable models eligible as the multimodal helper:
+ * configured provider (API key) × chat-enabled model × vision capability.
+ */
+export function getConfiguredVisionModels(
+  enabledIds: Record<string, string[]> | undefined,
+  customModels: Record<string, ModelConfig[]> | undefined,
+  customProviders: CustomProviderEntry[] | undefined,
+  aiApiKeys: Record<string, string> | undefined,
+): Array<{ provider: ProviderConfig; model: ModelConfig }> {
+  const configured = new Set(getConfiguredProviderIds(aiApiKeys, customProviders));
+  return getAllEnabledModels(enabledIds, customModels, customProviders)
+    .filter(
+      ({ provider, model }) =>
+        configured.has(provider.id) && modelSupportsVision(model),
+    )
+    .sort(
+      (a, b) =>
+        a.provider.name.localeCompare(b.provider.name) ||
+        a.model.name.localeCompare(b.model.name),
+    );
+}
+
+/** @deprecated Use getConfiguredVisionModels for helper picker. */
+export function getVisionEnabledModels(
+  enabledIds: Record<string, string[]> | undefined,
+  customModels: Record<string, ModelConfig[]> | undefined,
+  customProviders?: CustomProviderEntry[],
+  aiApiKeys?: Record<string, string>,
+): Array<{ provider: ProviderConfig; model: ModelConfig }> {
+  return getConfiguredVisionModels(enabledIds, customModels, customProviders, aiApiKeys);
+}
+
+/** @deprecated Catalog scan — ignores API keys; do not use in Settings UI. */
+export function getVisionCapableModels(
+  customModels?: Record<string, ModelConfig[]>,
+  customProviders?: CustomProviderEntry[],
+): Array<{ provider: ProviderConfig; model: ModelConfig }> {
+  const result: Array<{ provider: ProviderConfig; model: ModelConfig }> = [];
+  const seen = new Set<string>();
+  const providerIds = new Set<string>();
+
+  for (const provider of ALL_PROVIDERS) {
+    if (provider.id !== "custom") providerIds.add(provider.id);
+  }
+  for (const preset of PROVIDER_PRESETS) {
+    providerIds.add(preset.id);
+  }
+  for (const cp of customProviders ?? []) {
+    providerIds.add(cp.id);
+  }
+
+  for (const providerId of providerIds) {
+    const provider = resolveProviderConfig(providerId, customProviders);
+    if (!provider) continue;
+    for (const model of getProviderModels(providerId, customModels, customProviders)) {
+      if (!modelSupportsVision(model)) continue;
+      const key = `${providerId}::${model.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push({ provider, model });
+    }
+  }
+
+  return result.sort(
+    (a, b) =>
+      a.provider.name.localeCompare(b.provider.name) ||
+      a.model.name.localeCompare(b.model.name),
+  );
 }
 
 function collectEnabledModelsForProvider(
@@ -189,9 +288,10 @@ export function buildCustomModelEntry(
   modelId: string,
   displayName?: string,
   contextWindow?: string,
+  capabilities?: ModelConfig["capabilities"],
 ): ModelConfig {
   const id = modelId.trim();
   const name = (displayName || "").trim() || id;
   const ctx = (contextWindow || "").trim() || "Unknown";
-  return { id, name, contextWindow: ctx };
+  return { id, name, contextWindow: ctx, capabilities };
 }

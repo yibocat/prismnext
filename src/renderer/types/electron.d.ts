@@ -542,7 +542,11 @@ export interface ElectronAPI {
   fsIsFile: (absPath: string) => Promise<boolean>;
   /** Bounded project walk: first project-relative path whose basename matches. */
   fsFindByBasename: (projectRoot: string, basename: string) => Promise<string | null>;
-  projectCreate: (rootPath: string, workspaceDirs?: import("./workspace").WorkspaceFolder[]) => Promise<void>;
+  projectCreate: (
+    rootPath: string,
+    workspaceDirs?: import("./workspace").WorkspaceFolder[],
+    options?: { initGit?: boolean; projectIcon?: string },
+  ) => Promise<void>;
   /** Fetch the update manifest and compare against the installed version. */
   updateCheck: () => Promise<UpdateCheckResult>;
   /** Last check result without re-hitting the network. */
@@ -551,7 +555,7 @@ export interface ElectronAPI {
   updateIgnore: (version: string) => Promise<UpdateCheckResult | null>;
   /** Clear the ignored-version flag. Returns the new status. */
   updateUnignore: () => Promise<UpdateCheckResult | null>;
-  /** Prism app version + bundled OpenCode agent binary version. */
+  /** Prism Next app version + bundled OpenCode agent binary version. */
   aboutGetVersions: () => Promise<AboutVersions>;
   projectEnsure: (rootPath: string) => Promise<{ success: boolean }>;
   projectScaffoldAgentsMd: (rootPath: string) => Promise<{
@@ -1431,7 +1435,14 @@ export interface ElectronAPI {
     hasPaperSnippets?: boolean;
     orchestratorId?: string | null;
     selectedExpertIds?: string[];
+    promptImages?: Array<{ mimeType: string; data: string; name: string; uri?: string }>;
+    promptFiles?: Array<{ uri: string; name: string; mimeType: string; size?: number }>;
   }) => Promise<void>;
+  chatDescribeImages: (args: {
+    providerId: string;
+    modelId: string;
+    images: Array<{ name: string; mimeType: string; data: string; uri?: string }>;
+  }) => Promise<{ descriptions: Array<{ name: string; text: string; cached: boolean }> }>;
   chatCancel: (sessionId: string) => Promise<void>;
   chatRegisterTab: (args: { tabId: string; sessionId: string; projectPath?: string }) => Promise<{ success: boolean }>;
   chatSyncIntensiveReading: (args: {
@@ -1505,6 +1516,7 @@ export interface ElectronAPI {
     agentSystemPrompt?: string;
     editorSyntaxTheme?: string;
     defaultWorkspaceDirs?: import("./workspace").WorkspaceFolder[];
+    defaultInitGit?: boolean;
   }>;
   settingsSet: (patch: Record<string, unknown>) => Promise<void>;
   settingsGetKnowledgeModules: (projectRoot?: string) => Promise<Array<{

@@ -33,7 +33,7 @@ function dispatch(req: LatexBridgeRequest): unknown | Promise<unknown> {
   if (!projectRoot) {
     return {
       error: "Project root unknown for this chat session.",
-      hint: "Open a project in Prism and start a new chat tab from that project.",
+      hint: "Open a project in Prism Next and start a new chat tab from that project.",
     };
   }
 

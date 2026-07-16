@@ -137,7 +137,7 @@ function dispatch(req: ExperimentLogBridgeRequest, resPath: string): Record<stri
   if (!projectRoot) {
     return {
       error: "Project root unknown for this chat session.",
-      hint: "Open a project in Prism and start a new chat tab from that project.",
+      hint: "Open a project in Prism Next and start a new chat tab from that project.",
     };
   }
 
@@ -630,7 +630,7 @@ async function processSessionDir(sessionDir: string): Promise<void> {
     if (processingRequests.has(requestId)) continue;
 
     if (isRequest) {
-      // Atomic claim (Bug #30): rename request → claiming so a second Prism
+      // Atomic claim (Bug #30): rename request → claiming so a second Prism Next
       // instance / poll cannot dispatch the same request.
       try {
         renameSync(join(sessionDir, name), claimPath);

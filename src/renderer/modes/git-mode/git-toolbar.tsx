@@ -183,9 +183,9 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
 
   if (!isGitRepo) {
     return (
-      <div className="flex flex-1 items-center gap-1.5 min-h-8 text-[length:var(--font-menu-item)] text-muted-foreground">
+      <div className="flex flex-1 items-center gap-1.5 min-h-8 min-w-0 text-[length:var(--font-menu-item)] text-muted-foreground">
         <GitBranchIcon className="size-3.5 shrink-0 opacity-40" />
-        <span>Not a git repository</span>
+        <span className="truncate">Not a git repository</span>
       </div>
     );
   }

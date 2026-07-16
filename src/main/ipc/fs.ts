@@ -366,7 +366,17 @@ export function registerFsHandlers(): void {
     }
   }
 
-  ipcMain.handle("project:create", async (_event, args: { rootPath: string; workspaceDirs?: WorkspaceFolder[] }) => {
+  ipcMain.handle(
+    "project:create",
+    async (
+      _event,
+      args: {
+        rootPath: string;
+        workspaceDirs?: WorkspaceFolder[];
+        initGit?: boolean;
+        projectIcon?: string;
+      },
+    ) => {
     const { join } = require("node:path");
     const { writeFileSync, existsSync, mkdirSync } = require("node:fs");
 
@@ -374,7 +384,7 @@ export function registerFsHandlers(): void {
     const prismDir = join(args.rootPath, ".prismnext");
     if (existsSync(prismDir)) {
       throw new Error(
-        `A Prism project already exists at "${args.rootPath}". ` +
+        `A Prism Next project already exists at "${args.rootPath}". ` +
         `Choose a different directory or open the existing project.`
       );
     }
@@ -401,7 +411,13 @@ export function registerFsHandlers(): void {
     // writeWorkspaceDirs does a read-modify-write, so we pre-populate the initial settings
     // to avoid a second read-write cycle.
     const settingsPath = join(prismDir, "settings.json");
-    const initialSettings = { version: 1, compiler: "tectonic" };
+    const projectIcon =
+      typeof args.projectIcon === "string" ? args.projectIcon.trim().slice(0, 16) : "";
+    const initialSettings: Record<string, unknown> = {
+      version: 1,
+      compiler: "tectonic",
+    };
+    if (projectIcon) initialSettings.projectIcon = projectIcon;
     writeFileSync(settingsPath, JSON.stringify(initialSettings, null, 2));
     writeWorkspaceDirs(prismDir, workspaceDirs);
 
@@ -431,6 +447,18 @@ export function registerFsHandlers(): void {
         mkdirSync(mainTexDir, { recursive: true });
       }
       writeFileSync(mainTexFullPath, DEFAULT_MAIN_TEX);
+    }
+
+    if (args.initGit) {
+      const { initRepo } = await import("../services/git");
+      const gitResult = await initRepo(args.rootPath);
+      if (!gitResult.success) {
+        log.warn("project:create — git init failed", {
+          rootPath: args.rootPath,
+          error: gitResult.error,
+        });
+        throw new Error(gitResult.error || "Failed to initialize git repository");
+      }
     }
   });
 

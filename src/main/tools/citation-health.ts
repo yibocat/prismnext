@@ -65,7 +65,7 @@ async function bridgeCall(
     }
   }
   try { fs.unlinkSync(reqPath); } catch {}
-  return toolOutput({ error: "Literature bridge timed out. Restart Prism and try a new chat tab." });
+  return toolOutput({ error: "Literature bridge timed out. Restart Prism Next and try a new chat tab." });
 }
 
 export default tool({

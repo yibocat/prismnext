@@ -424,7 +424,7 @@ export function CodeEditor() {
     if (!view) return;
     const mode = isDark ? "dark" as const : "light" as const;
 
-    // Try sync first (Prism, oneDark fallback)
+    // Try sync first (Prism Next, oneDark fallback)
     const syncExt = getThemeExtensionSync(editorSyntaxTheme, mode);
     if (syncExt) {
       view.dispatch({ effects: themeCompartment.reconfigure(syncExt) });

@@ -11,11 +11,11 @@ export interface EditorSyntaxThemeDef {
   name: string;
   /** Short description for tooltip */
   description: string;
-  /** Whether this theme is the default (Prism) */
+  /** Whether this theme is the default (Prism Next) */
   isDefault?: boolean;
   /** Returns the CM6 syntax highlighting extension for the given mode */
   getExtension: (mode: ThemeMode) => Extension;
-  /** Whether this theme has a native variant for the given mode (false = falls back to Prism) */
+  /** Whether this theme has a native variant for the given mode (false = falls back to Prism Next) */
   hasNativeVariant: (mode: ThemeMode) => boolean;
 }
 

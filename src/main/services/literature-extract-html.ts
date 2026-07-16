@@ -46,7 +46,7 @@ export async function fetchHtmlSnapshot(paper: PaperRow): Promise<HtmlSnapshotRe
   const res = await fetch(sourceUrl, {
     headers: {
       Accept: "text/html,application/xhtml+xml",
-      "User-Agent": "Prism/0.5.1 (literature extract)",
+      "User-Agent": "PrismNext/0.5.1 (literature extract)",
     },
     redirect: "follow",
   });

@@ -818,7 +818,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
               const current = get().openedContents.get(relPath);
               if (current && !current.isDirty) {
                 const newMap = new Map(get().openedContents);
-                newMap.set(relPath, { dataUrl, isDirty: false });
+                newMap.set(relPath, { dataUrl: dataUrl ?? undefined, isDirty: false });
                 set({ openedContents: newMap, contentVersion: get().contentVersion + 1 });
               }
             })

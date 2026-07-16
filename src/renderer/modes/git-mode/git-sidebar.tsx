@@ -66,11 +66,6 @@ export function GitSidebar() {
     [files, filterMode],
   );
 
-  const unitDisplay =
-    gitRoot && projectRoot
-      ? gitRoot.replace(projectRoot, "").replace(/^\//, "") || gitRoot.split(/[/\\]/).pop() || ""
-      : (gitRoot || "").split(/[/\\]/).pop() || "";
-
   // ── Not a git repo ──
 
   if (!isGitRepo && !checkingRepo) {
@@ -82,8 +77,16 @@ export function GitSidebar() {
           </span>
         </SidebarHeader>
         <SidebarContent className="px-2 py-1">
-          <div className="px-2 py-4 text-[length:var(--font-size-12)] text-muted-foreground text-center">
-            <p>{unitDisplay || "No git repository"}</p>
+          <div className="flex flex-col items-center gap-2 px-2 py-8 text-center">
+            <GitBranchIcon className="size-5 text-muted-foreground/50" />
+            <div className="space-y-1">
+              <p className="text-[length:var(--font-size-13)] font-medium text-foreground/90">
+                No Git repository
+              </p>
+              <p className="text-[length:var(--font-size-12)] text-muted-foreground max-w-[14rem]">
+                This project is not a Git repository yet.
+              </p>
+            </div>
           </div>
         </SidebarContent>
       </>

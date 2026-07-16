@@ -358,9 +358,22 @@ export const useGitStore = create<GitState>()((set, get) => ({
         ]);
         _statusCache = { projectRoot, data, stats, timestamp: Date.now() };
       } catch (err: unknown) {
-        toast.error((err as Error).message || "Failed to get git status");
+        const msg = (err as Error).message || "Failed to get git status";
+        // Non-repo roots should not surface a fatal toast (Git mode empty state handles CTA).
+        if (/not a git repository/i.test(msg)) {
+          set({
+            isGitRepo: false,
+            loading: false,
+            error: null,
+            files: [],
+            branch: "",
+            branches: [],
+          });
+          return;
+        }
+        toast.error(msg);
         set({
-          error: (err as Error).message || "Failed to get git status",
+          error: msg,
           loading: false,
         });
         return;

@@ -192,7 +192,7 @@ export function writeToolOutputIntoPartData(
 
 /**
  * Persist enriched Task tool_result into OpenCode SQLite so the orchestrator
- * reads Session citations on the same turn (not only in Prism UI transcript).
+ * reads Session citations on the same turn (not only in Prism Next UI transcript).
  */
 export async function syncEnrichedTaskToolResultToOpenCode(
   sessionId: string,

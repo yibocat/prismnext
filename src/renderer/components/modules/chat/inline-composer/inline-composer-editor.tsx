@@ -23,6 +23,7 @@ import { useExperimentStore } from "@/stores/experiment-store";
 import { pickBestReadySource } from "../../../../../shared/paper-extract";
 import type { ExperimentSummary } from "../../../../../shared/experiment-log";
 import { type ComposerPart, COMPOSER_PLACEHOLDER } from "@/lib/chat/composer-parts";
+import { absolutePathsFromDataTransfer } from "@/lib/chat/composer-attach-file";
 import {
   createTokenId,
   insertedTextTriggersLinkify,
@@ -47,7 +48,7 @@ import {
   tokenMapStateField,
 } from "./token-field";
 import { detectQueryAtCursor, type ComposerQuery } from "./query";
-import { MentionDropdown, SlashCommandDropdown, buildSlashOptions, type SlashCatalogMcp, type SlashCatalogSkill, type SlashOption } from "./composer-dropdown";
+import { MentionDropdown, SlashCommandDropdown, buildSlashOptions, MENTIONS_LIMIT, type MentionOption, type MentionSectionKind, type SlashCatalogMcp, type SlashCatalogSkill, type SlashOption, type SlashSectionKind } from "./composer-dropdown";
 import type { CursorAnchor } from "./dropdown-position";
 import { useComposerEditorStore } from "@/stores/composer-editor-store";
 import { compactComposerNeedsExpand } from "./compact-overflow";
@@ -207,18 +208,23 @@ export interface InlineComposerEditorProps {
   density?: "default" | "compact";
   /** AiBar compact → expanded when a line is full or content wraps. */
   onLayoutExpand?: () => void;
+  /**
+   * External files from paste / drop (absolute paths). Parent owns the
+   * attachment strip — do not insert as inline @file tokens.
+   */
+  onExternalFiles?: (paths: string[]) => void;
 }
 
 function insertFromDropdown(
   view: EditorView,
   q: ComposerQuery,
-  mentionOptions: ReturnType<typeof buildMentionOptions>,
+  mentionOptions: MentionOption[],
   slashOptions: SlashOption[],
   index: number,
 ): void {
   if (q.kind === "mention") {
     const opt = mentionOptions[index];
-    if (!opt) return;
+    if (!opt || opt.kind === "show-more") return;
     if (opt.kind === "expert") {
       insertComposerToken(
         view,
@@ -279,7 +285,7 @@ function insertFromDropdown(
   }
 
   const option = slashOptions[index];
-  if (!option) return;
+  if (!option || option.kind === "show-more") return;
 
   if (option.kind === "command") {
     const cmd = option.command;
@@ -333,41 +339,88 @@ export function buildMentionOptions(
   files: ProjectFile[],
   papers: LiteraturePaper[] = [],
   experiments: ExperimentSummary[] = [],
-) {
+  expandedSections: ReadonlySet<MentionSectionKind> = new Set(),
+): MentionOption[] {
   const q = query.toLowerCase();
-  const expertOpts = experts
-    .filter(
-      (p) =>
-        p.enabled &&
-        (p.name.toLowerCase().includes(q) ||
-          p.id.toLowerCase().includes(q) ||
-          p.description.toLowerCase().includes(q)),
-    )
-    .slice(0, 6)
-    .map((expert) => ({ kind: "expert" as const, expert }));
-  const paperOpts = papers
-    .filter(
-      (p) =>
-        p.bibkey.toLowerCase().includes(q) ||
-        p.title.toLowerCase().includes(q) ||
-        (p.authors?.toLowerCase().includes(q) ?? false),
-    )
-    .slice(0, 6)
-    .map((paper) => ({ kind: "paper" as const, paper }));
-  const fileOpts = files
-    .filter((f) => f.relativePath.toLowerCase().includes(q) || f.name.toLowerCase().includes(q))
-    .slice(0, 6)
-    .map((file) => ({ kind: "file" as const, file }));
-  const experimentOpts = experiments
-    .filter(
-      (e) =>
-        e.title.toLowerCase().includes(q) ||
-        e.id.toLowerCase().includes(q) ||
-        (e.workspacePath.toLowerCase().includes(q) ?? false),
-    )
-    .slice(0, 6)
-    .map((experiment) => ({ kind: "experiment" as const, experiment }));
-  return [...expertOpts, ...paperOpts, ...fileOpts, ...experimentOpts];
+  const options: MentionOption[] = [];
+
+  const matchedExperts = experts.filter(
+    (p) =>
+      p.enabled &&
+      (p.name.toLowerCase().includes(q) ||
+        p.id.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q)),
+  );
+  if (expandedSections.has("expert") || matchedExperts.length <= MENTIONS_LIMIT) {
+    for (const expert of matchedExperts) options.push({ kind: "expert", expert });
+  } else {
+    for (const expert of matchedExperts.slice(0, MENTIONS_LIMIT)) {
+      options.push({ kind: "expert", expert });
+    }
+    options.push({
+      kind: "show-more",
+      section: "expert",
+      remaining: matchedExperts.length - MENTIONS_LIMIT,
+    });
+  }
+
+  const matchedPapers = papers.filter(
+    (p) =>
+      p.bibkey.toLowerCase().includes(q) ||
+      p.title.toLowerCase().includes(q) ||
+      (p.authors?.toLowerCase().includes(q) ?? false),
+  );
+  if (expandedSections.has("paper") || matchedPapers.length <= MENTIONS_LIMIT) {
+    for (const paper of matchedPapers) options.push({ kind: "paper", paper });
+  } else {
+    for (const paper of matchedPapers.slice(0, MENTIONS_LIMIT)) {
+      options.push({ kind: "paper", paper });
+    }
+    options.push({
+      kind: "show-more",
+      section: "paper",
+      remaining: matchedPapers.length - MENTIONS_LIMIT,
+    });
+  }
+
+  const matchedFiles = files.filter(
+    (f) => f.relativePath.toLowerCase().includes(q) || f.name.toLowerCase().includes(q),
+  );
+  if (expandedSections.has("file") || matchedFiles.length <= MENTIONS_LIMIT) {
+    for (const file of matchedFiles) options.push({ kind: "file", file });
+  } else {
+    for (const file of matchedFiles.slice(0, MENTIONS_LIMIT)) {
+      options.push({ kind: "file", file });
+    }
+    options.push({
+      kind: "show-more",
+      section: "file",
+      remaining: matchedFiles.length - MENTIONS_LIMIT,
+    });
+  }
+
+  const matchedExperiments = experiments.filter(
+    (e) =>
+      e.title.toLowerCase().includes(q) ||
+      e.id.toLowerCase().includes(q) ||
+      (e.workspacePath.toLowerCase().includes(q) ?? false),
+  );
+  if (expandedSections.has("experiment") || matchedExperiments.length <= MENTIONS_LIMIT) {
+    for (const experiment of matchedExperiments) {
+      options.push({ kind: "experiment", experiment });
+    }
+  } else {
+    for (const experiment of matchedExperiments.slice(0, MENTIONS_LIMIT)) {
+      options.push({ kind: "experiment", experiment });
+    }
+    options.push({
+      kind: "show-more",
+      section: "experiment",
+      remaining: matchedExperiments.length - MENTIONS_LIMIT,
+    });
+  }
+
+  return options;
 }
 
 export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, InlineComposerEditorProps>(
@@ -385,6 +438,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       onEnter,
       density = "default",
       onLayoutExpand,
+      onExternalFiles,
     },
     ref,
   ) {
@@ -401,6 +455,8 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
     onEnterRef.current = onEnter;
     const onLayoutExpandRef = useRef(onLayoutExpand);
     onLayoutExpandRef.current = onLayoutExpand;
+    const onExternalFilesRef = useRef(onExternalFiles);
+    onExternalFilesRef.current = onExternalFiles;
     const expertsRef = useRef(experts);
     expertsRef.current = experts;
     const filesRef = useRef(files);
@@ -464,6 +520,12 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
     const [paperOptionsOpenIndex, setPaperOptionsOpenIndex] = useState<number | null>(null);
     const [paperOptionsSubIndex, setPaperOptionsSubIndex] = useState(0);
     const [dropdownAnchor, setDropdownAnchor] = useState<CursorAnchor | null>(null);
+    const [expandedMentionSections, setExpandedMentionSections] = useState<
+      Set<MentionSectionKind>
+    >(() => new Set());
+    const [expandedSlashSections, setExpandedSlashSections] = useState<Set<SlashSectionKind>>(
+      () => new Set(),
+    );
 
     const activeQueryRef = useRef<ComposerQuery | null>(null);
     const dropdownIndexRef = useRef(dropdownIndex);
@@ -472,6 +534,10 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
     paperOptionsOpenIndexRef.current = paperOptionsOpenIndex;
     const paperOptionsSubIndexRef = useRef(paperOptionsSubIndex);
     paperOptionsSubIndexRef.current = paperOptionsSubIndex;
+    const expandedMentionSectionsRef = useRef(expandedMentionSections);
+    expandedMentionSectionsRef.current = expandedMentionSections;
+    const expandedSlashSectionsRef = useRef(expandedSlashSections);
+    expandedSlashSectionsRef.current = expandedSlashSections;
 
     const syncQuery = useCallback((view: EditorView) => {
       const query = syncComposerQueryState(view, setActiveQuery, setDropdownAnchor);
@@ -485,6 +551,8 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       setDropdownAnchor(null);
       setPaperOptionsOpenIndex(null);
       setPaperOptionsSubIndex(0);
+      setExpandedMentionSections(new Set());
+      setExpandedSlashSections(new Set());
     }, []);
 
     const maybeExpandCompactLayout = useCallback((view: EditorView) => {
@@ -509,8 +577,15 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
 
     const mentionOptions = useMemo(() => {
       if (!activeQuery || activeQuery.kind !== "mention") return [];
-      return buildMentionOptions(activeQuery.query, experts, files, literaturePapers, experiments);
-    }, [activeQuery, experts, files, literaturePapers, experiments]);
+      return buildMentionOptions(
+        activeQuery.query,
+        experts,
+        files,
+        literaturePapers,
+        experiments,
+        expandedMentionSections,
+      );
+    }, [activeQuery, experts, files, literaturePapers, experiments, expandedMentionSections]);
 
     // Best-effort: load extract states for papers shown in the mention menu so
     // the 精读 toggle reflects readiness.
@@ -542,8 +617,9 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         searchCommands(activeQuery.query),
         slashSkills,
         slashMcps,
+        expandedSlashSections,
       );
-    }, [activeQuery, searchCommands, slashSkills, slashMcps]);
+    }, [activeQuery, searchCommands, slashSkills, slashMcps, expandedSlashSections]);
 
     const dropdownCount =
       activeQuery?.kind === "mention" ? mentionOptions.length : slashOptions.length;
@@ -561,6 +637,8 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       setDropdownIndex(0);
       setPaperOptionsOpenIndex(null);
       setPaperOptionsSubIndex(0);
+      setExpandedMentionSections(new Set());
+      setExpandedSlashSections(new Set());
       disableDropdownPointerHover();
     }, [activeQuery?.kind, activeQuery?.query, disableDropdownPointerHover]);
 
@@ -645,8 +723,40 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       [insertAtQuery],
     );
 
+    const resolveSlashOptions = useCallback((query: string) => {
+      return buildSlashOptions(
+        query,
+        searchCommandsRef.current(query),
+        slashSkillsRef.current,
+        slashMcpsRef.current,
+        expandedSlashSectionsRef.current,
+      );
+    }, []);
+
+    const expandMentionSection = useCallback((section: MentionSectionKind) => {
+      setExpandedMentionSections((prev) => {
+        if (prev.has(section)) return prev;
+        const next = new Set(prev);
+        next.add(section);
+        return next;
+      });
+    }, []);
+
+    const expandSlashSection = useCallback((section: SlashSectionKind) => {
+      setExpandedSlashSections((prev) => {
+        if (prev.has(section)) return prev;
+        const next = new Set(prev);
+        next.add(section);
+        return next;
+      });
+    }, []);
+
     const insertSlashOption = useCallback(
       (option: SlashOption) => {
+        if (option.kind === "show-more") {
+          expandSlashSection(option.section);
+          return;
+        }
         if (option.kind === "command") {
           const cmd = option.command;
           insertAtQuery({
@@ -675,17 +785,8 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
           serverName: option.mcp.name,
         });
       },
-      [insertAtQuery],
+      [insertAtQuery, expandSlashSection],
     );
-
-    const resolveSlashOptions = useCallback((query: string) => {
-      return buildSlashOptions(
-        query,
-        searchCommandsRef.current(query),
-        slashSkillsRef.current,
-        slashMcpsRef.current,
-      );
-    }, []);
 
     const selectDropdownItem = useCallback(
       (view: EditorView): boolean => {
@@ -693,18 +794,38 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         if (!q) return false;
         const mentions =
           q.kind === "mention"
-            ? buildMentionOptions(q.query, expertsRef.current, filesRef.current, useLiteratureStore.getState().papers, experimentsRef.current)
+            ? buildMentionOptions(
+                q.query,
+                expertsRef.current,
+                filesRef.current,
+                useLiteratureStore.getState().papers,
+                experimentsRef.current,
+                expandedMentionSectionsRef.current,
+              )
             : [];
         const slashOpts = q.kind === "slash" ? resolveSlashOptions(q.query) : [];
         const count = q.kind === "mention" ? mentions.length : slashOpts.length;
         if (count === 0) return false;
         const idx = Math.min(dropdownIndexRef.current, count - 1);
+        if (q.kind === "mention") {
+          const opt = mentions[idx];
+          if (opt?.kind === "show-more") {
+            expandMentionSection(opt.section);
+            return true;
+          }
+        } else {
+          const opt = slashOpts[idx];
+          if (opt?.kind === "show-more") {
+            expandSlashSection(opt.section);
+            return true;
+          }
+        }
         insertFromDropdown(view, q, mentions, slashOpts, idx);
         emitChange(view);
         clearQuery();
         return true;
       },
-      [emitChange, resolveSlashOptions, clearQuery],
+      [emitChange, resolveSlashOptions, clearQuery, expandMentionSection, expandSlashSection],
     );
 
     useEffect(() => {
@@ -750,6 +871,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
               filesRef.current,
               useLiteratureStore.getState().papers,
               experimentsRef.current,
+              expandedMentionSectionsRef.current,
             );
             const opt = mentions[optsIdx];
             if (opt?.kind !== "paper") return false;
@@ -777,13 +899,20 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             if (!q) return false;
             const mentions =
               q.kind === "mention"
-                ? buildMentionOptions(q.query, expertsRef.current, filesRef.current, useLiteratureStore.getState().papers, experimentsRef.current)
+                ? buildMentionOptions(
+                    q.query,
+                    expertsRef.current,
+                    filesRef.current,
+                    useLiteratureStore.getState().papers,
+                    experimentsRef.current,
+                    expandedMentionSectionsRef.current,
+                  )
                 : [];
             const slashOpts = q.kind === "slash" ? resolveSlashOptions(q.query) : [];
             const count = q.kind === "mention" ? mentions.length : slashOpts.length;
             if (count === 0) return false;
             disableDropdownPointerHover();
-            setDropdownIndex((i) => Math.min(i + 1, count - 1));
+            setDropdownIndex((i) => (i + 1) % count);
             return true;
           },
         },
@@ -794,9 +923,24 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
               setPaperOptionsSubIndex((i) => Math.max(i - 1, 0));
               return true;
             }
-            if (!activeQueryRef.current) return false;
+            const q = activeQueryRef.current;
+            if (!q) return false;
+            const mentions =
+              q.kind === "mention"
+                ? buildMentionOptions(
+                    q.query,
+                    expertsRef.current,
+                    filesRef.current,
+                    useLiteratureStore.getState().papers,
+                    experimentsRef.current,
+                    expandedMentionSectionsRef.current,
+                  )
+                : [];
+            const slashOpts = q.kind === "slash" ? resolveSlashOptions(q.query) : [];
+            const count = q.kind === "mention" ? mentions.length : slashOpts.length;
+            if (count === 0) return false;
             disableDropdownPointerHover();
-            setDropdownIndex((i) => Math.max(i - 1, 0));
+            setDropdownIndex((i) => (i - 1 + count) % count);
             return true;
           },
         },
@@ -811,6 +955,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
               filesRef.current,
               useLiteratureStore.getState().papers,
               experimentsRef.current,
+              expandedMentionSectionsRef.current,
             );
             const count = mentions.length;
             if (count === 0) return false;
@@ -915,6 +1060,15 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
                 return false;
               },
               paste(event, view) {
+                const paths = absolutePathsFromDataTransfer(event.clipboardData);
+                if (paths.length > 0 && onExternalFilesRef.current) {
+                  event.preventDefault();
+                  onExternalFilesRef.current(paths);
+                  if (densityRef.current === "compact") {
+                    onLayoutExpandRef.current?.();
+                  }
+                  return true;
+                }
                 const text = event.clipboardData?.getData("text/plain");
                 if (text == null) return false;
                 event.preventDefault();
@@ -1144,6 +1298,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             onSelectFile={insertFile}
             onSelectPaper={insertPaper}
             onSelectExperiment={insertExperiment}
+            onSelectShowMore={expandMentionSection}
             onHover={handleDropdownHover}
             onListPointerMove={enableDropdownPointerHover}
             canHoverItem={canHoverDropdownItem}
@@ -1162,6 +1317,23 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
               ? "relative flex h-6 w-full min-w-0 items-center overflow-hidden"
               : "w-full"
           }
+          onDragOver={(e) => {
+            if (!onExternalFilesRef.current) return;
+            if ([...e.dataTransfer.types].includes("Files")) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+            }
+          }}
+          onDrop={(e) => {
+            if (!onExternalFilesRef.current) return;
+            const paths = absolutePathsFromDataTransfer(e.dataTransfer);
+            if (paths.length === 0) return;
+            e.preventDefault();
+            onExternalFilesRef.current(paths);
+            if (densityRef.current === "compact") {
+              onLayoutExpandRef.current?.();
+            }
+          }}
         >
           {density === "compact" && isEmpty && (
             <span

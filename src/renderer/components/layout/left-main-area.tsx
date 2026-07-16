@@ -12,6 +12,9 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { getAllEnabledModels } from "@/lib/providers";
 import { parseContextWindow, DEFAULT_CONTEXT_WINDOW } from "@shared/context-constants";
 import { GitBranchIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useChatFileDrop } from "@/lib/chat/use-chat-file-drop";
+import { chatFileDropZoneClass } from "@/lib/chat/chat-file-drag-overlay";
 
 import {
   GeneralSettings,
@@ -75,6 +78,11 @@ export function LeftMainArea() {
   const showHomepage =
     messages.length === 0 && !isStreaming && !isLoadingSession && !sessionId;
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
+  const {
+    dragActive: chatFileDragActive,
+    zoneRef: chatFileDropZoneRef,
+    dropHandlers: chatFileDropHandlers,
+  } = useChatFileDrop({ enabled: !editorMaximized });
 
   useEffect(() => {
     if (sessionId) {
@@ -171,7 +179,19 @@ export function LeftMainArea() {
       <ChatErrorBoundary>
         {showHomepage ? (
           /* ── Homepage ── */
-          <div className="flex flex-1 flex-col items-center justify-end @xl:justify-center @xl:pb-[var(--height-titlebar)]">
+          <div
+            ref={chatFileDropZoneRef}
+            className={cn(
+              "relative flex flex-1 flex-col items-center justify-end rounded-sm @xl:justify-center @xl:pb-[var(--height-titlebar)]",
+              chatFileDragActive && chatFileDropZoneClass,
+            )}
+            {...chatFileDropHandlers}
+          >
+            {chatFileDragActive ? (
+              <span className="pointer-events-none absolute bottom-10 left-1/2 z-30 -translate-x-1/2 rounded-md border border-primary/25 bg-background/95 px-3 py-1 text-[length:var(--font-size-11)] text-muted-foreground shadow-sm">
+                Drop files to attach
+              </span>
+            ) : null}
             {/* Top toolbar — branch & worktree selectors */}
             <div className="w-full max-w-3xl flex items-center gap-1.5 py-1.5 px-3">
               <BranchSelector />
@@ -199,7 +219,19 @@ export function LeftMainArea() {
           </div>
         ) : (
           /* ── Chat view ── */
-          <div className="flex flex-1 flex-col min-w-0 overflow-x-hidden">
+          <div
+            ref={chatFileDropZoneRef}
+            className={cn(
+              "relative flex flex-1 flex-col min-w-0 overflow-x-hidden rounded-sm",
+              chatFileDragActive && chatFileDropZoneClass,
+            )}
+            {...chatFileDropHandlers}
+          >
+            {chatFileDragActive ? (
+              <span className="pointer-events-none absolute bottom-24 left-1/2 z-30 -translate-x-1/2 rounded-md border border-primary/25 bg-background/95 px-3 py-1 text-[length:var(--font-size-11)] text-muted-foreground shadow-sm">
+                Drop files to attach
+              </span>
+            ) : null}
             <ChatMessages />
             <RestoreUndoBar />
             {/* Worktree actions above composer — only when worktree is active */}

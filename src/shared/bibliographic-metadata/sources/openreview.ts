@@ -77,7 +77,7 @@ function metadataFromNote(note: OpenReviewNote): BibliographicMetadata | null {
 async function searchOpenReview(query: string): Promise<BibliographicMetadata | null> {
   const url = `${OPENREVIEW_API}?content.title=${encodeURIComponent(query)}&limit=5`;
   const res = await catalogFetch(url, {
-    headers: { Accept: "application/json", "User-Agent": "Prism/1.0" },
+    headers: { Accept: "application/json", "User-Agent": "PrismNext/1.0" },
   });
   if (!res.ok) throw new Error(`OpenReview HTTP ${res.status}`);
   const json = (await res.json()) as OpenReviewResponse;

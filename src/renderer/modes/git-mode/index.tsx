@@ -19,6 +19,11 @@ export const gitMode: ModeDefinition = {
     if (!root) return;
     import("@/stores/git-store").then(({ useGitStore }) => {
       const gs = useGitStore.getState();
+      if (!gs.isGitRepo) {
+        // Re-check without calling git:status (avoids fatal "not a git repository" toast).
+        void gs.selectUnit(root);
+        return;
+      }
       if (gs.unitRoot === root) {
         void gs.forceRefreshStatus(root);
       } else {
