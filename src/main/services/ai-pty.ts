@@ -95,7 +95,7 @@ export function runAiCommand(args: RunAiCommandArgs): Promise<RunAiCommandResult
   const { command, cwd, sessionId, chatTabId, requestId, onChunk, envExtra, captureStderr } = args;
   const trimmed = command.trim();
   if (!trimmed) {
-    const message = "Prism Next AI bash: empty command";
+    const message = "prismnext AI bash: empty command";
     onChunk(message);
     return Promise.resolve({ output: message, exitCode: 1, cwd });
   }

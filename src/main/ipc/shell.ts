@@ -1,4 +1,11 @@
 import { ipcMain, shell } from "electron";
+import { notifyDesktop } from "../services/desktop-notifications";
+import { setTrayMenuSnapshot, setTrayStatus } from "../services/tray";
+import type {
+  DesktopNotifyKind,
+  TrayMenuSnapshot,
+  TrayStatus,
+} from "../../shared/desktop-shell";
 
 function isAllowedExternalUrl(url: string): boolean {
   try {
@@ -19,5 +26,27 @@ export function registerShellHandlers(): void {
       throw new Error("URL is not allowed for external open");
     }
     await shell.openExternal(args.url);
+  });
+
+  ipcMain.handle(
+    "shell:desktopNotify",
+    (
+      _event,
+      args: { kind: DesktopNotifyKind; title: string; body: string; tabId?: string },
+    ) => {
+      return notifyDesktop(args);
+    },
+  );
+
+  ipcMain.handle("shell:setTrayStatus", (_event, args: { status: TrayStatus }) => {
+    const status = args?.status;
+    if (status === "idle" || status === "busy" || status === "attention") {
+      setTrayStatus(status);
+    }
+  });
+
+  ipcMain.handle("shell:setTrayMenu", (_event, snapshot: TrayMenuSnapshot) => {
+    if (!snapshot || typeof snapshot !== "object") return;
+    setTrayMenuSnapshot(snapshot);
   });
 }

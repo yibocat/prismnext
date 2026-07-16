@@ -380,7 +380,7 @@ export async function getBranchesWithLocks(projectRoot: string): Promise<BranchI
     allBranches = output.split("\n").filter(l => l.trim());
   } catch { return []; }
 
-  // Build lock map — only Prism Next worktree branches are locked
+  // Build lock map — only prismnext worktree branches are locked
   // (main branch is the primary checkout, not "locked")
   const lockMap = new Map<string, string>();
   for (const wt of worktrees) {

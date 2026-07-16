@@ -70,15 +70,15 @@
       "subtitle": "基本應用設定。",
       "language": "語言",
       "appLanguage": "應用語言",
-      "appLanguageDesc": "Prism Next 介面語言 — 設定、歡迎頁、選單與對話方塊。",
+      "appLanguageDesc": "prismnext 介面語言 — 設定、歡迎頁、選單與對話方塊。",
       "notifications": "通知",
-      "conversationNotif": "對話通知",
-      "conversationNotifDesc": "對話回覆完成或需要你操作時顯示系統通知。",
-      "menuBarIcon": "選單欄圖示",
-      "menuBarIconDesc": "在 macOS 頂部選單欄顯示快捷圖示，便於訪問最近對話。",
+      "desktopNotifications": "系統通知",
+      "desktopNotificationsDesc": "視窗在背景時，回覆完成或需要你操作會顯示系統通知。",
+      "trayIcon": "狀態列圖示",
+      "trayIconDesc": "在選單列（macOS）或系統匣（Windows/Linux）顯示狀態圖示。關閉視窗會隱藏應用，從匣選單退出。",
       "shortcuts": "快捷鍵",
       "keyboardShortcuts": "鍵盤快捷鍵",
-      "keyboardShortcutsDesc": "全域性、編輯器、聊天與合併檢視快捷鍵參考。",
+      "keyboardShortcutsDesc": "已接入與計劃中的快捷鍵參考。macOS 為 ⌘；Windows/Linux 為 Ctrl。",
       "logs": "日誌",
       "applicationLogs": "應用日誌",
       "applicationLogsDesc": "瀏覽、篩選、搜尋並匯出主程序日誌。",
@@ -117,7 +117,7 @@
     },
     "appearance": {
       "title": "外觀",
-      "subtitle": "自定義 Prism Next 的外觀與感受。",
+      "subtitle": "自定義 prismnext 的外觀與感受。",
       "theme": "主題",
       "themeMode": "主題模式",
       "themeModeDesc": "深色、淺色，或跟隨系統。",
@@ -287,7 +287,7 @@
       "customBadge": "自定義",
       "rowDesc": {
         "customPrompt": "自定義提示會替換 `_prism-system.md` 中的內建預設內容。",
-        "builtinPrompt": "內建 Prism Next 人設會在聊天同步時寫入 `_prism-system.md`。",
+        "builtinPrompt": "內建 prismnext 人設會在聊天同步時寫入 `_prism-system.md`。",
         "stackSummary": "基線 _prism-system：{{chars}} 字元 · 預覽中共 {{layers}} 層",
         "openForStack": "開啟專案以檢視完整提示棧預覽。",
         "openForInstructions": "開啟專案以編輯專案說明。",
@@ -359,7 +359,7 @@
       "updateSource": "更新來源",
       "checkForUpdates": "檢查更新",
       "subtitle": "版本資訊與更新檢查。",
-      "appName": "Prism Next",
+      "appName": "prismnext",
       "appDesc": "已安裝的應用版本。",
       "opencode": "OpenCode",
       "opencodeDesc": "用於聊天的捆綁 Agent 二進位制（ACP）。",
@@ -610,24 +610,29 @@
     },
     "shortcuts": {
       "title": "快捷鍵",
-      "subtitle": "鍵盤快捷鍵參考。",
+      "subtitle": "區分已接入與計劃中。狀態以應用內實際 wiring 為準，而非設計文件。",
       "groups": {
         "global": "全域性",
+        "rightPanel": "工作區（右側面板）",
         "editor": "編輯器",
         "chat": "聊天",
         "changes": "更改（合併檢視）"
       },
       "status": {
         "active": "已生效",
-        "placed": "已佔位",
+        "placed": "僅 UI",
         "planned": "計劃中"
       },
       "items": {
+        "closeTab": "關閉當前標籤（聊天或工作區）",
         "toggleSidebar": "切換左側邊欄",
         "commandPalette": "開啟命令面板",
         "newAgent": "新建 Agent 會話",
-        "openAi": "開啟 AI 助手",
-        "saveFile": "儲存檔案",
+        "nextWorkspaceTab": "當前工作區模式下的下一個標籤",
+        "prevWorkspaceTab": "當前工作區模式下的上一個標籤",
+        "gitRefresh": "重新整理 Git 狀態或歷史",
+        "insertToChat": "將選區插入聊天（編輯器、差異、終端）",
+        "saveFile": "儲存檔案（TeX 工作區儲存時也會編譯）",
         "compile": "編譯當前文件",
         "searchFile": "在檔案中搜索",
         "bold": "將選區包裹為 \\textbf{}",
@@ -636,10 +641,12 @@
         "closeSearch": "關閉搜尋面板",
         "synctex": "正向搜尋（SyncTeX）到 PDF",
         "newChat": "新建聊天標籤",
-        "closeChat": "關閉聊天標籤",
+        "send": "傳送訊息（焦點在輸入框）",
+        "newline": "輸入框內換行",
         "nextChat": "下一個聊天標籤",
         "prevChat": "上一個聊天標籤",
-        "send": "傳送訊息",
+        "acceptChange": "接受當前合併更改",
+        "rejectChange": "拒絕當前合併更改",
         "acceptAll": "接受全部更改",
         "rejectAll": "拒絕全部更改"
       }
@@ -854,7 +861,7 @@
           "added": "已新增 {{name}} — 請開新對話以使用。"
         },
         "openProject": "請先開啟專案以瀏覽 MCP 目錄。",
-        "intro": "面向研究工作流的精選 MCP 伺服器，需要 npx。「論文搜尋」為內建（始終開啟）。暫存與文獻庫引用仍使用 Prism Next 的 literature-* 工具。",
+        "intro": "面向研究工作流的精選 MCP 伺服器，需要 npx。「論文搜尋」為內建（始終開啟）。暫存與文獻庫引用仍使用 prismnext 的 literature-* 工具。",
         "searchPlaceholder": "搜尋 MCP 伺服器…",
         "badgeBuiltin": "內建",
         "badgeRecommended": "推薦",
@@ -924,7 +931,7 @@
         "title": "知識模組",
         "global": "全域性基線",
         "perProfile": "按 Agent 配置",
-        "intro": "隨 Prism Next 附帶的內建工作流指南，始終可用 — 可在智慧體編輯器中按編排器或專家附加。工作區資料夾會從專案工作區設定全域性注入。",
+        "intro": "隨 prismnext 附帶的內建工作流指南，始終可用 — 可在智慧體編輯器中按編排器或專家附加。工作區資料夾會從專案工作區設定全域性注入。",
         "badgeAuto": "自動",
         "badgeBuiltin": "內建",
         "badgePerAgent": "按智慧體",
@@ -1130,7 +1137,7 @@
     }
   },
   "welcome": {
-    "brand": "Prism Next",
+    "brand": "prismnext",
     "newProject": "新建專案",
     "open": "開啟",
     "recent": "最近",
@@ -1152,7 +1159,7 @@
   "project": {
     "setup": {
       "title": "設定專案",
-      "description": "此資料夾缺少標準的 Prism Next 專案結構。",
+      "description": "此資料夾缺少標準的 prismnext 專案結構。",
       "missing": "缺少的目錄：",
       "openAnyway": "仍要開啟",
       "createAndOpen": "建立並開啟"
@@ -1184,6 +1191,16 @@
     }
   },
   "shell": {
+    "notify": {
+      "replyFinished": "回覆已完成",
+      "needsApproval": "需要你批准",
+      "defaultTitle": "prismnext"
+    },
+    "tray": {
+      "show": "顯示 prismnext",
+      "newChat": "新建對話",
+      "quit": "退出 prismnext"
+    },
     "collapseSidebar": "收起側欄",
     "expandSidebar": "展開側欄",
     "commandPalette": "命令面板",

@@ -60,7 +60,7 @@ describe("experts-sync", () => {
     const md = renderOrchestratorAgentMarkdown(
       {
         id: "research-prism",
-        name: "Prism Next",
+        name: "prismnext",
         description: "Orchestrator",
         allowedExperts: ["peer-reviewer", "research-design-coach"],
       },

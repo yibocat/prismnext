@@ -7,7 +7,7 @@ import { sanitizeUserContentBlocksForDisplay } from "@/lib/chat/user-message-dis
 import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
 
 const PRISM_MARKERS = [
-  "integrated into Prism Next",
+  "integrated into prismnext",
   "integrated into Prism", // legacy sessions before product rename
   "LaTeX academic paper writing workspace",
   "## Core Rules",

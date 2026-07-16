@@ -121,7 +121,7 @@ export function resolveLiteratureToolTitle(title: string): string | null {
 }
 
 /**
- * All Prism Next custom tool names — used to recover the tool name from the ACP
+ * All prismnext custom tool names — used to recover the tool name from the ACP
  * `title` field when `kind` is "other" (the default for custom tools). Without
  * this, custom tools like `citation-health` fall through to
  * `KIND_TO_TOOL["other"] = "task"` and render as task@general during LIVE

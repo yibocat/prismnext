@@ -1,6 +1,7 @@
 import { useEffect, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useOpenCodeEvents } from "@/hooks/use-opencode-events";
+import { useTrayStatusSync } from "@/hooks/use-tray-status-sync";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -45,6 +46,7 @@ import { isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
 export function LeftMainArea() {
   const { t } = useTranslation();
   useOpenCodeEvents();
+  useTrayStatusSync();
 
   const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
   const checkoutRoot = useDocumentStore((s) => s.checkoutRoot);

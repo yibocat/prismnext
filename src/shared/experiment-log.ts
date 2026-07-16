@@ -346,7 +346,7 @@ export function isForbiddenSystemPythonInstall(command: string): boolean {
   const raw = (command || "").trim();
   if (!raw) return false;
   if (/\buv\s+pip\b[\s\S]*--system\b/i.test(raw)) return true;
-  // Bare pip / pip3 / python -m pip → host/system site-packages (Prism Next forbids this).
+  // Bare pip / pip3 / python -m pip → host/system site-packages (prismnext forbids this).
   if (isBarePipInstallCommand(raw)) return true;
   return false;
 }

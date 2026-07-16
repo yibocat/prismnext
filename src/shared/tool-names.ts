@@ -1,5 +1,5 @@
 /**
- * Canonical OpenCode tool names for Prism Next built-in tools.
+ * Canonical OpenCode tool names for prismnext built-in tools.
  * Single source for prompt strings — do not hardcode tool names elsewhere.
  */
 export const TOOL_NAMES = {
@@ -28,5 +28,5 @@ export const TOOL_NAMES = {
 export type ToolNameKey = keyof typeof TOOL_NAMES;
 export type ToolName = (typeof TOOL_NAMES)[ToolNameKey];
 
-/** All registered Prism Next custom tool names (values of TOOL_NAMES). */
+/** All registered prismnext custom tool names (values of TOOL_NAMES). */
 export const ALL_TOOL_NAMES = Object.values(TOOL_NAMES);

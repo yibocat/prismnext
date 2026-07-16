@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronRightIcon, InfoIcon } from "lucide-react";
 import {
@@ -39,28 +38,6 @@ function localeOptionLabel(value: AppLocalePreference, t: (key: string) => strin
   }
 }
 
-interface NotificationToggle {
-  id: string;
-  labelKey: string;
-  descKey: string;
-  defaultOn: boolean;
-}
-
-const NOTIFICATIONS: NotificationToggle[] = [
-  {
-    id: "conversation",
-    labelKey: "settings.general.conversationNotif",
-    descKey: "settings.general.conversationNotifDesc",
-    defaultOn: true,
-  },
-  {
-    id: "menu-bar",
-    labelKey: "settings.general.menuBarIcon",
-    descKey: "settings.general.menuBarIconDesc",
-    defaultOn: true,
-  },
-];
-
 function PanelRow({
   title,
   description,
@@ -95,10 +72,11 @@ export function GeneralSettings() {
   const appLocale = useSettingsStore((s) =>
     normalizeAppLocalePreference(s.settings.appLocale),
   );
-  const updateSettings = useSettingsStore((s) => s.updateSettings);
-  const [notifState, setNotifState] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(NOTIFICATIONS.map((n) => [n.id, n.defaultOn])),
+  const desktopNotifications = useSettingsStore(
+    (s) => s.settings.desktopNotifications !== false,
   );
+  const trayIconEnabled = useSettingsStore((s) => s.settings.trayIconEnabled !== false);
+  const updateSettings = useSettingsStore((s) => s.updateSettings);
 
   return (
     <div className="flex-1 overflow-auto">
@@ -149,18 +127,30 @@ export function GeneralSettings() {
             <InfoIcon className="size-3 text-muted-foreground/50" />
           </div>
           <div className={CARD}>
-            {NOTIFICATIONS.map((n) => (
-              <div key={n.id} className="flex items-center justify-between gap-3 py-2.5">
-                <div className="min-w-0 flex-1 pr-4">
-                  <p className={ROW_LABEL}>{t(n.labelKey)}</p>
-                  <p className={ROW_DESC}>{t(n.descKey)}</p>
-                </div>
-                <Switch
-                  checked={notifState[n.id] ?? false}
-                  onCheckedChange={(v) => setNotifState((s) => ({ ...s, [n.id]: v }))}
-                />
+            <div className="flex items-center justify-between gap-3 py-2.5">
+              <div className="min-w-0 flex-1 pr-4">
+                <p className={ROW_LABEL}>{t("settings.general.desktopNotifications")}</p>
+                <p className={ROW_DESC}>{t("settings.general.desktopNotificationsDesc")}</p>
               </div>
-            ))}
+              <Switch
+                checked={desktopNotifications}
+                onCheckedChange={(v) => {
+                  void updateSettings({ desktopNotifications: v });
+                }}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3 py-2.5">
+              <div className="min-w-0 flex-1 pr-4">
+                <p className={ROW_LABEL}>{t("settings.general.trayIcon")}</p>
+                <p className={ROW_DESC}>{t("settings.general.trayIconDesc")}</p>
+              </div>
+              <Switch
+                checked={trayIconEnabled}
+                onCheckedChange={(v) => {
+                  void updateSettings({ trayIconEnabled: v });
+                }}
+              />
+            </div>
           </div>
         </div>
 

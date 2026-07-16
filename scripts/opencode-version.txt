@@ -1,4 +1,4 @@
-# Pinned OpenCode release tag for Prism Next (developer / packaging only).
+# Pinned OpenCode release tag for prismnext (developer / packaging only).
 # End users never download this — the binary is bundled via electron-builder
 # extraResources from bin/opencode/<platform>-<arch>/.
 #

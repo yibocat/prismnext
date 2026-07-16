@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildEnabledToolsConfig } from "../../src/main/services/opencode-tools-config";
 
 describe("buildEnabledToolsConfig", () => {
-  it("force-enables Prism Next custom tools even when missing from existing config", () => {
+  it("force-enables prismnext custom tools even when missing from existing config", () => {
     const merged = buildEnabledToolsConfig({
       read: true,
       edit: true,

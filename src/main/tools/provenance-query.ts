@@ -77,7 +77,7 @@ async function bridgeCall(
     }
   }
   try { fs.unlinkSync(reqPath); } catch {}
-  return toolOutput({ error: "Provenance bridge timed out. Restart Prism Next and try a new chat tab." });
+  return toolOutput({ error: "Provenance bridge timed out. Restart prismnext and try a new chat tab." });
 }
 
 export default tool({

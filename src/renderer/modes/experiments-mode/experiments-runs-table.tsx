@@ -53,6 +53,7 @@ import {
 import { literatureDetailBadgeClass } from "@/modes/literature-mode/literature-list-chrome";
 import {
   experimentsCodeClass,
+  experimentsRunDetailEmptyClass,
   experimentsRunDetailPanelClass,
   experimentsRunRowTextClass,
   experimentsRunsListHeaderLabelClass,
@@ -72,9 +73,9 @@ const PAGE_SIZE = 10;
 /** Artifacts shown before the list collapses into "+N more". */
 const ARTIFACT_PREVIEW = 8;
 
-/** Compact list columns for the left pane: status · command · exit · time. */
+/** Compact list columns: status · command · exit · time. */
 const HISTORY_GRID_CLASS =
-  "grid grid-cols-[0.75rem_minmax(0,1fr)_2rem_3.5rem] gap-x-2";
+  "grid grid-cols-[0.75rem_minmax(0,1fr)_2.5rem_4rem] gap-x-2";
 
 function formatTime(iso: string): string {
   if (!iso) return "—";
@@ -171,7 +172,7 @@ function RunRow({
       : "text-destructive";
 
   return (
-    <li data-run-row={run.runId}>
+    <li data-run-row={run.runId} id={`run-row-${run.runId}`}>
       <button
         type="button"
         role="option"
@@ -241,6 +242,11 @@ function RunDetailPanel({
       ? run.artifacts.slice(0, ARTIFACT_PREVIEW)
       : run.artifacts;
   const hiddenArtifactCount = run.artifacts.length - ARTIFACT_PREVIEW;
+
+  // Reset fold when switching runs so a long list does not stay expanded.
+  useEffect(() => {
+    setArtifactsExpanded(false);
+  }, [run.runId]);
 
   return (
     <div className={experimentsRunDetailPanelClass} data-run-detail={run.runId}>
@@ -442,6 +448,12 @@ export function ExperimentsRunsTable({
     setSelectedRunId(run.runId);
   };
 
+  const goToPage = (nextPage: number) => {
+    setPage(nextPage);
+    setSelectedRunId(null);
+    setFocusIndex(0);
+  };
+
   const handleListKeyDown = (e: KeyboardEvent) => {
     if (pageRuns.length === 0) return;
     const target = e.target as HTMLElement | null;
@@ -577,7 +589,9 @@ export function ExperimentsRunsTable({
               tabIndex={0}
               role="listbox"
               aria-label={t("experiments.runs.historyAria")}
-              aria-activedescendant={selectedRunId ?? undefined}
+              aria-activedescendant={
+                selectedRunId ? `run-row-${selectedRunId}` : undefined
+              }
               onKeyDown={handleListKeyDown}
             >
               <div
@@ -639,10 +653,7 @@ export function ExperimentsRunsTable({
                     variant="ghost"
                     className="h-6 gap-0.5 px-1.5"
                     disabled={page <= 0}
-                    onClick={() => {
-                      setPage((p) => Math.max(0, p - 1));
-                      setSelectedRunId(null);
-                    }}
+                    onClick={() => goToPage(Math.max(0, page - 1))}
                     title={t("experiments.runs.prevPage")}
                   >
                     <ChevronLeftIcon className="size-3" aria-hidden />
@@ -656,10 +667,7 @@ export function ExperimentsRunsTable({
                     variant="ghost"
                     className="h-6 gap-0.5 px-1.5"
                     disabled={page >= totalPages - 1}
-                    onClick={() => {
-                      setPage((p) => Math.min(totalPages - 1, p + 1));
-                      setSelectedRunId(null);
-                    }}
+                    onClick={() => goToPage(Math.min(totalPages - 1, page + 1))}
                     title={t("experiments.runs.nextPage")}
                   >
                     <ChevronRightIcon className="size-3" aria-hidden />
@@ -683,7 +691,7 @@ export function ExperimentsRunsTable({
                 onInspectArtifact={(p) => setInspect({ path: p })}
               />
             ) : (
-              <div className="flex flex-1 items-center justify-center px-4 py-8">
+              <div className={experimentsRunDetailEmptyClass}>
                 <p className="text-center text-[length:var(--font-size-12)] text-muted-foreground/60">
                   {t("experiments.runs.selectRunHint")}
                 </p>

@@ -6,7 +6,7 @@ license: MIT
 
 # Skill Creator
 
-Guide the user through creating an OpenCode-compatible agent skill for this Prism Next project.
+Guide the user through creating an OpenCode-compatible agent skill for this prismnext project.
 
 ## When to use
 
@@ -23,7 +23,7 @@ If the request is vague, ask **one or two** short clarifying questions:
 
 Do not over-interview. If the user already gave enough detail, proceed.
 
-## Prism Next project layout
+## prismnext project layout
 
 Install skills under this **relative** path (same on macOS, Windows, and Linux):
 
@@ -33,8 +33,8 @@ Install skills under this **relative** path (same on macOS, Windows, and Linux):
 
 - `<skill-id>` must match the `name` in frontmatter (lowercase letters, numbers, hyphens only; e.g. `bibtex-cleanup`, `my-workflow`)
 - Use the project's **relative** path above — never absolute paths, never `.agents/`, never project-root `.opencode/`
-- Prism Next stores skill files only under `.prismnext/agent/skills/`
-- After you write `SKILL.md`, Prism Next **automatically** syncs OpenCode (app-level config in the user's app data directory — not inside the project)
+- prismnext stores skill files only under `.prismnext/agent/skills/`
+- After you write `SKILL.md`, prismnext **automatically** syncs OpenCode (app-level config in the user's app data directory — not inside the project)
 - Do **not** create `.opencode/`, `.agents/`, or run `npm install` for OpenCode in the project
 - To use the skill in chat, the user must **start a new chat tab** (OpenCode skill lists are session-scoped)
 - Optional: enable/disable in Settings → Skills
@@ -68,7 +68,7 @@ Rules:
 1. Propose a `skill-id` and one-line description; confirm if naming is ambiguous
 2. Draft the full SKILL.md (frontmatter + body)
 3. Write the file to `.prismnext/agent/skills/<skill-id>/SKILL.md` using the project's file tools (write/edit tools that target the project tree)
-4. Confirm the relative path; remind the user that Prism Next syncs automatically but a **new chat tab** is needed to invoke the skill via the `skill` tool
+4. Confirm the relative path; remind the user that prismnext syncs automatically but a **new chat tab** is needed to invoke the skill via the `skill` tool
 5. If the skill should stay disabled until reviewed, mention Settings → Skills toggle
 
 ## Quality bar
@@ -82,6 +82,6 @@ Rules:
 
 | Path | Why |
 |------|-----|
-| `.agents/` or `.agents/skills/` | OpenCode default — not Prism Next storage |
+| `.agents/` or `.agents/skills/` | OpenCode default — not prismnext storage |
 | `<project>/.opencode/` | Runtime/npm artifacts; pollutes Git |
 | Any path outside `.prismnext/agent/skills/` for SKILL.md | Breaks Settings + sync |

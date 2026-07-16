@@ -5,7 +5,7 @@
 
 import { TOOL_NAMES } from "./tool-names";
 
-/** Engines Prism Next's compiler may spawn — never via agent bash. */
+/** Engines prismnext's compiler may spawn — never via agent bash. */
 const LATEX_ENGINE =
   "(?:pdflatex|xelatex|lualatex|latexmk|tectonic)";
 
@@ -27,7 +27,7 @@ export function isDirectLatexCompileBashCommand(command: string): boolean {
 /** Tool-result / PTY gate message (same turn). */
 export function latexCompileBashBlockMessage(): string {
   return (
-    `Prism Next: do not compile LaTeX via bash (pdflatex / xelatex / lualatex / latexmk / tectonic). ` +
+    `prismnext: do not compile LaTeX via bash (pdflatex / xelatex / lualatex / latexmk / tectonic). ` +
     `Use the \`${TOOL_NAMES.latexCompile}\` tool (or Cmd+Enter / \`/compile\`). ` +
     `Builds sync sources into \`.prismnext/compile/\` — running engines in the manuscript folder pollutes it with .aux/.log.`
   );

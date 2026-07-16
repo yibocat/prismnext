@@ -1,6 +1,6 @@
 import { BUILTIN_TOOLS } from "../tools";
 
-/** OpenCode built-ins Prism Next always enables (privacy-first defaults otherwise hide them). */
+/** OpenCode built-ins prismnext always enables (privacy-first defaults otherwise hide them). */
 export const OPENCODE_STANDARD_TOOLS: Record<string, boolean> = {
   websearch: true,
   webfetch: true,
@@ -18,7 +18,7 @@ export const OPENCODE_STANDARD_TOOLS: Record<string, boolean> = {
 };
 
 /**
- * Merge OpenCode `tools` config — always force-enable Prism Next-managed tools.
+ * Merge OpenCode `tools` config — always force-enable prismnext-managed tools.
  *
  * Unlike `writeDefaultConfig()` (which skips existing configs), this runs on
  * every startup so new custom tools (delete, move, …) appear in the model's

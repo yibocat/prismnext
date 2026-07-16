@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useChatStore, type ChatStreamMessage, type ContentBlock } from "@/stores/chat-store";
+import { displayChatTitle } from "@/lib/i18n/display-chat-title";
+import { i18n } from "@/lib/i18n";
 
 import { useDocumentStore } from "@/stores/document-store";
 import { useChangesStore } from "@/stores/changes-store";
@@ -30,6 +32,21 @@ import { isPrismSystemPromptText } from "@/lib/chat/session-message-hydrate";
 import { refreshGitStatusNow } from "@/lib/git/checkout-context";
 
 const log = createLogger("opencode-events");
+
+function notifyDesktopForTab(
+  kind: "turn_complete" | "action_required",
+  tabId: string,
+  bodyKey: "shell.notify.replyFinished" | "shell.notify.needsApproval",
+): void {
+  const tab = useChatStore.getState().tabs.find((t) => t.id === tabId);
+  const title = displayChatTitle(tab?.title, (key) => i18n.t(key));
+  void window.electronAPI.shellDesktopNotify({
+    kind,
+    title: title || i18n.t("shell.notify.defaultTitle"),
+    body: i18n.t(bodyKey),
+    tabId,
+  });
+}
 
 export function useOpenCodeEvents() {
   const pendingToolUsesRef = useRef(new Map<string, Map<string, { name: string; input: any }>>());
@@ -832,6 +849,11 @@ export function useOpenCodeEvents() {
         toolCallId,
         toolName,
       );
+      notifyDesktopForTab(
+        "action_required",
+        permission.tabId,
+        "shell.notify.needsApproval",
+      );
     });
 
     // ─── Chat Complete Handler ───
@@ -842,6 +864,8 @@ export function useOpenCodeEvents() {
         chatStore._setError(tabId, error);
         // Surface attachment / send failures that previously looked like a silent stop.
         toast.error(error);
+      } else {
+        notifyDesktopForTab("turn_complete", tabId, "shell.notify.replyFinished");
       }
 
       if (tokenUsage) {

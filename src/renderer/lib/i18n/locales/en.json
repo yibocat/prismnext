@@ -70,15 +70,15 @@
       "subtitle": "Basic application settings.",
       "language": "Language",
       "appLanguage": "App language",
-      "appLanguageDesc": "Language for the Prism Next interface — settings, welcome screen, menus, and dialogs.",
+      "appLanguageDesc": "Language for the prismnext interface — settings, welcome screen, menus, and dialogs.",
       "notifications": "Notifications",
-      "conversationNotif": "Conversation notifications",
-      "conversationNotifDesc": "Show system notifications when a conversation reply completes or needs your action.",
-      "menuBarIcon": "Menu bar icon",
-      "menuBarIconDesc": "Show a shortcut icon in the macOS top menu bar for quick access to recent conversations.",
+      "desktopNotifications": "Desktop notifications",
+      "desktopNotificationsDesc": "Show system notifications when a reply finishes or needs your action, while the window is in the background.",
+      "trayIcon": "Tray icon",
+      "trayIconDesc": "Show a status icon in the menu bar (macOS) or system tray (Windows/Linux). Closing the window hides the app; quit from the tray menu.",
       "shortcuts": "Shortcuts",
       "keyboardShortcuts": "Keyboard shortcuts",
-      "keyboardShortcutsDesc": "Reference for global, editor, chat, and merge-view shortcuts.",
+      "keyboardShortcutsDesc": "Reference for wired shortcuts and planned bindings. ⌘ = Command on macOS; Ctrl on Windows/Linux.",
       "logs": "Logs",
       "applicationLogs": "Application logs",
       "applicationLogsDesc": "Browse, filter, search, and export main-process logs.",
@@ -117,7 +117,7 @@
     },
     "appearance": {
       "title": "Appearance",
-      "subtitle": "Customize the look and feel of Prism Next.",
+      "subtitle": "Customize the look and feel of prismnext.",
       "theme": "Theme",
       "themeMode": "Theme Mode",
       "themeModeDesc": "Dark, light, or follow system.",
@@ -287,7 +287,7 @@
       "customBadge": "Custom",
       "rowDesc": {
         "customPrompt": "Custom prompt replaces the built-in default in `_prism-system.md`.",
-        "builtinPrompt": "Built-in Prism Next persona written to `_prism-system.md` on chat sync.",
+        "builtinPrompt": "Built-in prismnext persona written to `_prism-system.md` on chat sync.",
         "stackSummary": "Baseline _prism-system: {{chars}} chars · {{layers}} layers in stack preview",
         "openForStack": "Open a project to see full stack preview.",
         "openForInstructions": "Open a project to edit project instructions.",
@@ -359,7 +359,7 @@
       "updateSource": "Update source",
       "checkForUpdates": "Check for updates",
       "subtitle": "Version information and update checks.",
-      "appName": "Prism Next",
+      "appName": "prismnext",
       "appDesc": "Installed application version.",
       "opencode": "OpenCode",
       "opencodeDesc": "Bundled agent binary used for chat (ACP).",
@@ -610,24 +610,29 @@
     },
     "shortcuts": {
       "title": "Shortcuts",
-      "subtitle": "Keyboard shortcuts reference.",
+      "subtitle": "What works today vs. planned. Status reflects actual wiring in the app, not the design doc alone.",
       "groups": {
         "global": "Global",
+        "rightPanel": "Workspace (right panel)",
         "editor": "Editor",
         "chat": "Chat",
-        "changes": "Changes (Merge View)"
+        "changes": "Changes (merge view)"
       },
       "status": {
         "active": "Active",
-        "placed": "Placed",
+        "placed": "UI only",
         "planned": "Planned"
       },
       "items": {
+        "closeTab": "Close active tab (chat or workspace)",
         "toggleSidebar": "Toggle left sidebar",
         "commandPalette": "Open command palette",
         "newAgent": "New agent session",
-        "openAi": "Open AI assistant",
-        "saveFile": "Save file",
+        "nextWorkspaceTab": "Next tab in current workspace mode",
+        "prevWorkspaceTab": "Previous tab in current workspace mode",
+        "gitRefresh": "Refresh Git status or history",
+        "insertToChat": "Insert selection into chat (editor, diff, terminal)",
+        "saveFile": "Save file (TeX workspace also compiles on save)",
         "compile": "Compile current document",
         "searchFile": "Search in file",
         "bold": "Wrap selection in \\textbf{}",
@@ -636,10 +641,12 @@
         "closeSearch": "Close search panel",
         "synctex": "Forward search (SyncTeX) to PDF",
         "newChat": "New chat tab",
-        "closeChat": "Close chat tab",
+        "send": "Send message (composer focused)",
+        "newline": "New line in composer",
         "nextChat": "Next chat tab",
         "prevChat": "Previous chat tab",
-        "send": "Send message",
+        "acceptChange": "Accept current merge change",
+        "rejectChange": "Reject current merge change",
         "acceptAll": "Accept all changes",
         "rejectAll": "Reject all changes"
       }
@@ -854,7 +861,7 @@
           "added": "{{name}} added — start a new chat to use it."
         },
         "openProject": "Open a project to browse the MCP catalog.",
-        "intro": "Curated MCP servers for research workflows. Requires npx. Paper Search is built-in (always on). Staging and library citations stay in Prism Next literature-* tools.",
+        "intro": "Curated MCP servers for research workflows. Requires npx. Paper Search is built-in (always on). Staging and library citations stay in prismnext literature-* tools.",
         "searchPlaceholder": "Search MCP servers…",
         "badgeBuiltin": "Built-in",
         "badgeRecommended": "Recommended",
@@ -924,7 +931,7 @@
         "title": "Knowledge modules",
         "global": "Global baseline",
         "perProfile": "Per agent profile",
-        "intro": "Built-in workflow guides shipped with Prism Next. They are always available — attach them per Orchestrator or Expert in the agent editor. Workspace folders inject globally from your project workspace settings.",
+        "intro": "Built-in workflow guides shipped with prismnext. They are always available — attach them per Orchestrator or Expert in the agent editor. Workspace folders inject globally from your project workspace settings.",
         "badgeAuto": "Auto",
         "badgeBuiltin": "Built-in",
         "badgePerAgent": "Per agent",
@@ -1130,7 +1137,7 @@
     }
   },
   "welcome": {
-    "brand": "Prism Next",
+    "brand": "prismnext",
     "newProject": "New Project",
     "open": "Open",
     "recent": "Recent",
@@ -1152,7 +1159,7 @@
   "project": {
     "setup": {
       "title": "Setup Project",
-      "description": "This folder is missing the standard Prism Next project structure.",
+      "description": "This folder is missing the standard prismnext project structure.",
       "missing": "Missing directories:",
       "openAnyway": "Open Anyway",
       "createAndOpen": "Create & Open"
@@ -1184,6 +1191,16 @@
     }
   },
   "shell": {
+    "notify": {
+      "replyFinished": "Reply finished",
+      "needsApproval": "Needs your approval",
+      "defaultTitle": "prismnext"
+    },
+    "tray": {
+      "show": "Show prismnext",
+      "newChat": "New Chat",
+      "quit": "Quit prismnext"
+    },
     "collapseSidebar": "Collapse Sidebar",
     "expandSidebar": "Expand Sidebar",
     "commandPalette": "Command palette",

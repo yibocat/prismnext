@@ -14,7 +14,7 @@ describe("CHAT_CITATION_STAGING_PROMPT", () => {
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("Orchestrator after external literature Tasks");
 
     expect(CHAT_CITATION_STAGING_PROMPT).not.toContain("Task tool");
-    expect(CHAT_CITATION_STAGING_PROMPT).not.toContain("Prism Next Tools Guide");
+    expect(CHAT_CITATION_STAGING_PROMPT).not.toContain("prismnext Tools Guide");
     expect(CHAT_CITATION_STAGING_PROMPT).not.toContain(TOOL_NAMES.literatureRead);
     expect(CHAT_CITATION_STAGING_PROMPT).not.toContain("| refId | Title | Year |");
     expect(CHAT_CITATION_STAGING_PROMPT).not.toContain("Two citation styles");

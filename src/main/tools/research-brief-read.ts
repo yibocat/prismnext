@@ -61,7 +61,7 @@ async function bridgeCall(context: Record<string, unknown>): Promise<{ output: s
     }
   }
   try { fs.unlinkSync(reqPath); } catch {}
-  return toolOutput({ error: "Research brief bridge timed out. Restart Prism Next and try a new chat tab." });
+  return toolOutput({ error: "Research brief bridge timed out. Restart prismnext and try a new chat tab." });
 }
 
 export default tool({

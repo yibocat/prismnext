@@ -7,6 +7,7 @@ import { AcpService } from "../acp/service";
 import { resolvePermissionMode } from "../services/permission-modes";
 import { resolveEffectiveAgentTerminalMode } from "../services/permission-modes";
 import { refreshApplicationMenu } from "../menu";
+import { syncTrayFromSettings } from "../services/tray";
 
 export function registerSettingsHandlers(): void {
   ipcMain.handle("settings:get", async () => {
@@ -23,6 +24,9 @@ export function registerSettingsHandlers(): void {
       }
       if ("appLocale" in patch) {
         refreshApplicationMenu();
+      }
+      if ("trayIconEnabled" in patch) {
+        syncTrayFromSettings();
       }
       if ("permissionMode" in patch) {
         const service = AcpService.getInstance();

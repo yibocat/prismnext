@@ -536,6 +536,29 @@ export interface ElectronAPI {
   }>;
   shellShowItemInFolder: (absPath: string) => Promise<void>;
   shellOpenExternal: (url: string) => Promise<void>;
+  shellDesktopNotify: (args: {
+    kind: "turn_complete" | "action_required";
+    title: string;
+    body: string;
+    tabId?: string;
+  }) => Promise<boolean>;
+  shellSetTrayStatus: (status: "idle" | "busy" | "attention") => Promise<void>;
+  shellSetTrayMenu: (snapshot: {
+    showLabel: string;
+    newChatLabel: string;
+    quitLabel: string;
+    recent: Array<{
+      id: string;
+      title: string;
+      sessionId?: string;
+      tabId?: string;
+    }>;
+  }) => Promise<void>;
+  onShellFocusChatTab: (callback: (args: { tabId: string }) => void) => () => void;
+  onShellTrayNewChat: (callback: () => void) => () => void;
+  onShellTrayOpenRecent: (
+    callback: (args: { id: string; sessionId?: string; tabId?: string }) => void,
+  ) => () => void;
   /** Absolute path for a File from an OS drag-drop (Electron webUtils). */
   getPathForFile: (file: File) => string;
   fsExists: (absPath: string) => Promise<boolean>;
@@ -555,7 +578,7 @@ export interface ElectronAPI {
   updateIgnore: (version: string) => Promise<UpdateCheckResult | null>;
   /** Clear the ignored-version flag. Returns the new status. */
   updateUnignore: () => Promise<UpdateCheckResult | null>;
-  /** Prism Next app version + bundled OpenCode agent binary version. */
+  /** prismnext app version + bundled OpenCode agent binary version. */
   aboutGetVersions: () => Promise<AboutVersions>;
   projectEnsure: (rootPath: string) => Promise<{ success: boolean }>;
   projectScaffoldAgentsMd: (rootPath: string) => Promise<{

@@ -103,8 +103,8 @@ export default tool({
     artifacts: tool.schema
       .array(tool.schema.string())
       .describe(
-        "Output file paths so Prism Next can find them later. Island-relative or " +
-          "project-relative are both accepted; Prism Next resolves against the disk " +
+        "Output file paths so prismnext can find them later. Island-relative or " +
+          "project-relative are both accepted; prismnext resolves against the disk " +
           "when recording the run. Always include figures for chat preview and provenance.",
       )
       .optional(),

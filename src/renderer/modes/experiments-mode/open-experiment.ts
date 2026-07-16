@@ -43,7 +43,7 @@ function ensureExperimentsPanelChrome(): void {
  * Does NOT maximize — Chat ↔ Experiments deep-links keep the center chat visible.
  *
  * Soft-focus (Bug #12 / Phase 3): if this island is already selected with detail
- * loaded, skip `selectExperiment` so an expanded runs-table row is not collapsed.
+ * loaded, skip `selectExperiment` so History selection state is not reset.
  */
 export async function openExperimentInPanel(experimentId: string): Promise<void> {
   const id = (experimentId || "").trim();

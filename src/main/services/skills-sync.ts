@@ -18,7 +18,7 @@ export const OPENCODE_HIDDEN_SKILLS = ["customize-opencode"] as const;
 
 /**
  * Project-root artifacts OpenCode may create when cwd is the project.
- * Prism Next never stores skills or OpenCode packages here — config lives in app userData.
+ * prismnext never stores skills or OpenCode packages here — config lives in app userData.
  */
 const PROJECT_OPENCODE_ARTIFACT_DIRS = [
   ".opencode",
@@ -334,7 +334,7 @@ export function buildSkillPermissions(disabled: string[]): Record<string, string
  * Merge skill permission maps for OpenCode config.
  * Never spread a string into an object — that produces {"0":"a",...} and crashes OpenCode.
  *
- * The result is authoritative: only `patch` (Prism Next's computed allow/deny map)
+ * The result is authoritative: only `patch` (prismnext's computed allow/deny map)
  * plus the inherited `*` wildcard survive. Stale deny entries from previous
  * profile whitelists are dropped so skills don't stay blocked forever after
  * the user switches profiles.
@@ -365,7 +365,7 @@ export function skillPermissionNeedsRepair(existing: unknown): boolean {
   return Object.keys(existing as Record<string, unknown>).some((k) => /^\d+$/.test(k));
 }
 
-/** Remove OpenCode runtime dirs from the project tree (never Prism Next's storage location). */
+/** Remove OpenCode runtime dirs from the project tree (never prismnext's storage location). */
 export function cleanupProjectOpenCodeArtifacts(projectRoot: string): void {
   const root = normalizeProjectRoot(projectRoot);
   for (const rel of PROJECT_OPENCODE_ARTIFACT_DIRS) {
@@ -395,7 +395,7 @@ export function ensureOpencodeArtifactsGitignored(projectRoot: string): void {
 
   const prefix = content.length > 0 && !content.endsWith("\n") ? "\n" : "";
   const block =
-    "\n# OpenCode runtime artifacts (managed by Prism Next, not project source)\n" +
+    "\n# OpenCode runtime artifacts (managed by prismnext, not project source)\n" +
     missing.join("\n") +
     "\n";
   writeFileSync(gitignorePath, content + prefix + block, "utf-8");
@@ -526,7 +526,7 @@ export async function addLibrarySourceFromInput(
 
 export function removeSkillLibrarySource(projectRoot: string, sourceId: string): SkillLibrarySourceInfo[] {
   if (sourceId === PRISM_CURATED_SOURCE_ID) {
-    throw new Error("The built-in Prism Next Curated library cannot be removed.");
+    throw new Error("The built-in prismnext Curated library cannot be removed.");
   }
   const manifest = readSkillsManifest(projectRoot);
   const sources = (manifest.sources ?? defaultLibrarySources()).filter((s) => s.id !== sourceId);

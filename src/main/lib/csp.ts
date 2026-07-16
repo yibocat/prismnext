@@ -1,5 +1,5 @@
 /**
- * Content-Security-Policy for the Prism Next renderer.
+ * Content-Security-Policy for the prismnext renderer.
  *
  * Problem: {@link ../../renderer/index.html} had no CSP, so any XSS (AI markdown
  * output, PDF.js, rehype-raw) gave an attacker full control of the renderer

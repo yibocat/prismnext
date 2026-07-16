@@ -847,7 +847,7 @@ export class AcpService {
   }
 
   /**
-   * Merge Prism Next instruction paths into app-level OpenCode config.
+   * Merge prismnext instruction paths into app-level OpenCode config.
    * OpenCode reads `instructions` at process start — restart when paths change.
    */
   applyProjectPromptIntegration(_projectRoot: string): {
@@ -1075,7 +1075,7 @@ export class AcpService {
 
   /**
    * Merge enabled tools into all OpenCode config files on every startup.
-   * Ensures new Prism Next custom tools (delete, move, …) are visible to the model
+   * Ensures new prismnext custom tools (delete, move, …) are visible to the model
    * even when opencode.json already exists on disk.
    */
   applyBuiltinToolsConfig(overrides?: Record<string, boolean>): void {
@@ -1476,7 +1476,7 @@ export class AcpService {
     }
   }
 
-  /** List sessions for the project root and every Prism Next worktree checkout. */
+  /** List sessions for the project root and every prismnext worktree checkout. */
   async listProjectSessions(projectRoot: string): Promise<SessionInfo[]> {
     const { listWorktrees } = await import("../services/worktree");
     const directories = new Set<string>([projectRoot]);

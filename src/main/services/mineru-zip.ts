@@ -52,7 +52,7 @@ function normalizeAssetRef(ref: string): string {
   }
 }
 
-/** Rewrite markdown / HTML image refs to Prism Next-local `images/…` paths. */
+/** Rewrite markdown / HTML image refs to prismnext-local `images/…` paths. */
 export function rewriteMarkdownAssetPaths(
   markdown: string,
   images: MineruZipImageAsset[],

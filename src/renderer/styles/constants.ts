@@ -1,4 +1,4 @@
-// ──── Prism Next Behavioral Constants ────
+// ──── prismnext Behavioral Constants ────
 // App-wide configuration: timing, limits, sizes.
 // Import from '@/styles/constants' where needed.
 

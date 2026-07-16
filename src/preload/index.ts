@@ -77,6 +77,48 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	shellShowItemInFolder: (absPath: string) =>
 		ipcRenderer.invoke("shell:showItemInFolder", { absPath }),
 	shellOpenExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", { url }),
+	shellDesktopNotify: (args: {
+		kind: "turn_complete" | "action_required";
+		title: string;
+		body: string;
+		tabId?: string;
+	}) => ipcRenderer.invoke("shell:desktopNotify", args),
+	shellSetTrayStatus: (status: "idle" | "busy" | "attention") =>
+		ipcRenderer.invoke("shell:setTrayStatus", { status }),
+	shellSetTrayMenu: (snapshot: {
+		showLabel: string;
+		newChatLabel: string;
+		quitLabel: string;
+		recent: Array<{
+			id: string;
+			title: string;
+			sessionId?: string;
+			tabId?: string;
+		}>;
+	}) => ipcRenderer.invoke("shell:setTrayMenu", snapshot),
+	onShellFocusChatTab: (callback: (args: { tabId: string }) => void) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			args: { tabId: string },
+		) => callback(args);
+		ipcRenderer.on("shell:focusChatTab", handler);
+		return () => ipcRenderer.removeListener("shell:focusChatTab", handler);
+	},
+	onShellTrayNewChat: (callback: () => void) => {
+		const handler = () => callback();
+		ipcRenderer.on("shell:trayNewChat", handler);
+		return () => ipcRenderer.removeListener("shell:trayNewChat", handler);
+	},
+	onShellTrayOpenRecent: (
+		callback: (args: { id: string; sessionId?: string; tabId?: string }) => void,
+	) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			args: { id: string; sessionId?: string; tabId?: string },
+		) => callback(args);
+		ipcRenderer.on("shell:trayOpenRecent", handler);
+		return () => ipcRenderer.removeListener("shell:trayOpenRecent", handler);
+	},
 	fsExists: (absPath: string) => ipcRenderer.invoke("fs:exists", { absPath }),
 	fsIsFile: (absPath: string) => ipcRenderer.invoke("fs:isFile", { absPath }),
 	fsFindByBasename: (projectRoot: string, basename: string) =>

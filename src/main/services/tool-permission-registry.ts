@@ -52,11 +52,11 @@ const READ_ONLY: Record<PermissionMode, OpenCodePermissionRule> = {
 /**
  * Single source of truth for tool permission rules + UI metadata.
  *
- * Only tools that actually exist in OpenCode (built-in or Prism Next custom) are
+ * Only tools that actually exist in OpenCode (built-in or prismnext custom) are
  * listed here.  See https://opencode.ai/docs/tools/ and
  * https://opencode.ai/docs/permissions/ for the authoritative list.
  *
- * Prism Next custom tools (`delete`, `move`) use destructive rules. Like custom
+ * prismnext custom tools (`delete`, `move`) use destructive rules. Like custom
  * `bash`, OpenCode may invoke `execute()` before ACP `requestPermission`;
  * tools poll the file bridge and main process syncs the gate from tool_call.
  */

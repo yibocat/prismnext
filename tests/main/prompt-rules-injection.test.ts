@@ -57,6 +57,6 @@ describe("promptManager project rules injection split", () => {
     expect(stable).not.toContain("Active Agent Profile");
     expect(stable).not.toContain("Chat paper citations");
     expect(stable).not.toContain("Citations & Bibliography");
-    expect(stable).toContain("Prism Next Assistant");
+    expect(stable).toContain("prismnext Assistant");
   });
 });

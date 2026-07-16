@@ -48,7 +48,7 @@ export function buildLatexWorkspacePrompt(ctx: PromptContext): string {
     "### Shell compile — forbidden",
     "",
     "- **Never** run `pdflatex`, `xelatex`, `lualatex`, `latexmk`, or `tectonic` via `bash` (or any shell).",
-    `- Compiling outside \`${TOOL_NAMES.latexCompile}\` / the UI drops \`.aux\` / \`.log\` / \`.synctex\` into the manuscript folder and bypasses Prism Next's build dir.`,
+    `- Compiling outside \`${TOOL_NAMES.latexCompile}\` / the UI drops \`.aux\` / \`.log\` / \`.synctex\` into the manuscript folder and bypasses prismnext's build dir.`,
     `- If a compile fails, fix sources and call \`${TOOL_NAMES.latexCompile}\` again — do not fall back to a shell engine.`,
     "",
     "### Notes",

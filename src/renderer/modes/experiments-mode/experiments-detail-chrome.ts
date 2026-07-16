@@ -65,13 +65,17 @@ export const experimentsRunConsoleShellClass =
   "overflow-hidden rounded-md border border-border bg-card shadow-none";
 
 /**
- * Selected-run detail pane (master–detail, typically right of the list).
+ * Selected-run detail pane — right of the list (master–detail split).
  * Own scroll surface so long output does not push the list.
  */
 export const experimentsRunDetailPanelClass =
   "min-h-0 flex-1 space-y-2.5 overflow-auto bg-muted/15 px-3 py-2.5";
 
-/** Outer shell for list | detail split. */
+/** Empty detail hint when no run is selected. */
+export const experimentsRunDetailEmptyClass =
+  "flex flex-1 items-center justify-center bg-muted/10 px-4 py-8";
+
+/** Outer shell for list | detail split (@container for narrow → stack). */
 export const experimentsRunsSplitShellClass =
   "@container overflow-hidden rounded-md border border-border/60";
 

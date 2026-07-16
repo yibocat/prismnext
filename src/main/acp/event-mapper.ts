@@ -619,7 +619,7 @@ export class EventMapper {
       }
 
       if (!toolName) {
-        // kind "other" is the default for custom Prism Next tools (citation-health,
+        // kind "other" is the default for custom prismnext tools (citation-health,
         // etc.) AND real task calls. Real task calls carry prompt+subagent_type
         // in input, caught by fromInput above. For other "other" calls, prefer
         // the raw title over KIND_TO_TOOL["other"]="task" — defaulting to

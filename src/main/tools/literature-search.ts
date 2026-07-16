@@ -1,5 +1,5 @@
 /**
- * literature-search — Search project literature library via Prism Next main-process bridge.
+ * literature-search — Search project literature library via prismnext main-process bridge.
  * Return shape matches question.ts: `{ output: string }`.
  */
 import { tool } from "@opencode-ai/plugin";
@@ -65,7 +65,7 @@ async function bridgeCall(
     }
   }
   try { fs.unlinkSync(reqPath); } catch {}
-  return toolOutput({ error: "Literature bridge timed out. Restart Prism Next and try a new chat tab." });
+  return toolOutput({ error: "Literature bridge timed out. Restart prismnext and try a new chat tab." });
 }
 
 export default tool({

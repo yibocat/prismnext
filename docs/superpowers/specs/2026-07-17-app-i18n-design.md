@@ -1,4 +1,4 @@
-# App UI i18n (Prism Next) — Design
+# App UI i18n (prismnext) — Design
 
 **Date:** 2026-07-17  
 **Status:** P1–P6 largely done — Git commit/toolbar, Shortcuts, Quick Command, Zotero disconnect, Files delete, Literature secondary panes · remaining: git-store toasts, browser/tex empty states, literature type/origin labels, low-freq chat toasts  

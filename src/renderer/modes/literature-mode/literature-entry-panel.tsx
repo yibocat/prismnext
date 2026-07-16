@@ -591,7 +591,7 @@ export function LiteratureEntryPanel({
           </DialogHeader>
           <p className={SETTINGS_ROW_DESC}>
             {isZoteroPaper
-              ? `"${paper.title}" will be removed from this Prism Next library only (not deleted from Zotero).`
+              ? `"${paper.title}" will be removed from this prismnext library only (not deleted from Zotero).`
               : `"${paper.title}" will be removed from the library.`}
           </p>
           <DialogFooter>

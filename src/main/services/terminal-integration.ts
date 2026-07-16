@@ -2,7 +2,7 @@ import { app } from "electron";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const ZSH_RC = `# Prism Next terminal shell integration (OSC 133)
+const ZSH_RC = `# prismnext terminal shell integration (OSC 133)
 if [[ -z "$PRISM_ZDOTDIR_SOURCED" ]]; then
   export PRISM_ZDOTDIR_SOURCED=1
   if [[ -f "$HOME/.zshrc" ]]; then
@@ -27,7 +27,7 @@ else
 fi
 `;
 
-const BASH_RC = `# Prism Next terminal shell integration (OSC 133)
+const BASH_RC = `# prismnext terminal shell integration (OSC 133)
 if [[ -z "$PRISM_BASHRC_SOURCED" ]]; then
   export PRISM_BASHRC_SOURCED=1
   if [[ -f "$HOME/.bashrc" ]]; then

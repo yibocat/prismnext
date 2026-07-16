@@ -18,6 +18,6 @@ describe("LITERATURE_LIBRARY_PROMPT", () => {
     expect(LITERATURE_LIBRARY_PROMPT).not.toContain("| bibkey | Title | Year |");
     expect(LITERATURE_LIBRARY_PROMPT).not.toContain("| What you used | Tool |");
     expect(LITERATURE_LIBRARY_PROMPT).not.toContain("websearch");
-    expect(LITERATURE_LIBRARY_PROMPT).not.toContain("Prism Next Tools Guide");
+    expect(LITERATURE_LIBRARY_PROMPT).not.toContain("prismnext Tools Guide");
   });
 });

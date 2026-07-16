@@ -17,6 +17,10 @@ export interface AppSettings {
    * Does not affect AI reply language. Legacy `"system"` is treated as `"en"`.
    */
   appLocale?: "en" | "zh-CN" | "zh-HK";
+  /** OS desktop notifications when the window is in the background. */
+  desktopNotifications?: boolean;
+  /** Show Tray (menu bar / system tray) and hide-on-close while enabled. */
+  trayIconEnabled?: boolean;
   sidebarCollapsed: boolean;
   rightPanelCollapsed: boolean;
   lastProjectPath?: string;
@@ -39,7 +43,7 @@ export interface AppSettings {
   /** Built-in slash command enable/disable states. { "compile": false, ... } */
   builtinCommands?: Record<string, boolean>;
 
-  /** Agent shell: mirror (default) or pty (Prism Next bash tool + bridge) */
+  /** Agent shell: mirror (default) or pty (prismnext bash tool + bridge) */
   agentTerminalMode?: "mirror" | "pty";
 
   /** Auto-open AI terminal when agent runs bash (default true). */
@@ -129,6 +133,8 @@ export function addBashAllowAlwaysFromCommand(command: string): string | null {
 const defaults: AppSettings = {
   aiModel: "default",
   theme: "dark",
+  desktopNotifications: true,
+  trayIconEnabled: true,
   sidebarCollapsed: false,
   rightPanelCollapsed: false,
   agentTerminalMode: "pty",

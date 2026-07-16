@@ -1,12 +1,12 @@
 /**
- * Main-process outbound HTTP — single network route for Prism Next.
+ * Main-process outbound HTTP — single network route for prismnext.
  *
  * ## Two stacks in Electron main
  *
  * | Stack | API | Proxy / TLS |
  * |-------|-----|-------------|
  * | Node (default) | `globalThis.fetch` | Node/undici — often **ignores macOS/Windows system proxy** |
- * | Chromium (Prism Next) | `electron.net.fetch` via {@link mainNetFetch} | Same as in-app browser — **follows system proxy/VPN** |
+ * | Chromium (prismnext) | `electron.net.fetch` via {@link mainNetFetch} | Same as in-app browser — **follows system proxy/VPN** |
  *
  * Use {@link mainNetFetch} (or injected {@link catalogFetch} in shared bibliographic sources)
  * for all user-facing catalog / citation APIs in main. Do **not** rely on bare Node fetch

@@ -179,7 +179,7 @@ export default tool({
 
     if (!toolCallId) {
       return {
-        output: "Prism Next: could not resolve toolCallId for move permission gate.",
+        output: "prismnext: could not resolve toolCallId for move permission gate.",
         exit: 1,
       };
     }

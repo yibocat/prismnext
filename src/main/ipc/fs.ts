@@ -384,7 +384,7 @@ export function registerFsHandlers(): void {
     const prismDir = join(args.rootPath, ".prismnext");
     if (existsSync(prismDir)) {
       throw new Error(
-        `A Prism Next project already exists at "${args.rootPath}". ` +
+        `A prismnext project already exists at "${args.rootPath}". ` +
         `Choose a different directory or open the existing project.`
       );
     }

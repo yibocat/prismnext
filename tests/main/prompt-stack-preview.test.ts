@@ -32,7 +32,7 @@ describe("prompt stack preview", () => {
       userCustomPrompt: undefined,
     });
     const stable = preview.sections.find((s) => s.id === "prism-system");
-    expect(stable?.content).toContain("Prism Next Assistant");
+    expect(stable?.content).toContain("prismnext Assistant");
     expect(stable?.content).not.toContain("Chat paper citations");
     expect(stable?.content).not.toContain("User AGENTS");
   });

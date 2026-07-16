@@ -19,6 +19,10 @@ export interface AppSettings {
   theme: "dark" | "light" | "system";
   /** UI language: en | zh-CN | zh-HK (not AI reply language). */
   appLocale?: "en" | "zh-CN" | "zh-HK";
+  /** OS desktop notifications when the window is in the background. */
+  desktopNotifications?: boolean;
+  /** Show Tray (menu bar / system tray) and hide-on-close while enabled. */
+  trayIconEnabled?: boolean;
   sidebarCollapsed: boolean;
   rightPanelCollapsed: boolean;
   /** PDF viewer dark mode: off | on | follow (app theme) */
@@ -120,6 +124,8 @@ export interface AppSettings {
 const defaults: AppSettings = {
   theme: "dark",
   appLocale: "en",
+  desktopNotifications: true,
+  trayIconEnabled: true,
   sidebarCollapsed: false,
   rightPanelCollapsed: false,
   autoCreateMainTex: true,

@@ -114,7 +114,7 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
   {
     name: TOOL_NAMES.bash,
     label: "Shell",
-    description: "Execute shell commands via Prism Next terminal bridge (pty mode)",
+    description: "Execute shell commands via prismnext terminal bridge (pty mode)",
     category: "utility",
     usageHint: "Run shell commands in the project directory when file tools are insufficient.",
     workflowRules: [
@@ -124,7 +124,7 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
   {
     name: TOOL_NAMES.delete,
     label: "Delete",
-    description: "Delete a file (Prism Next custom tool — replaces bash rm for single files)",
+    description: "Delete a file (prismnext custom tool — replaces bash rm for single files)",
     category: "utility",
     usageHint: "Delete a single file by path.",
     workflowRules: ["Do not use bash rm when this tool applies."],
@@ -132,7 +132,7 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
   {
     name: TOOL_NAMES.move,
     label: "Move",
-    description: "Move or rename a file (Prism Next custom tool — replaces bash mv for single files)",
+    description: "Move or rename a file (prismnext custom tool — replaces bash mv for single files)",
     category: "utility",
     usageHint: "Move or rename a single file.",
     workflowRules: ["Do not use bash mv when this tool applies."],

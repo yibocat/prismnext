@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Variant A · P5 light surface -->
+  <g transform="translate(32 32) scale(1.18) translate(-32 -32)">
+    <g transform="translate(1.4 1.9)" opacity="0.45">
+      <path d="M26 31c4.5 5 7.5 10 12.5 12h15" stroke="#1A1714" stroke-width="7.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M9 35c10 0 14-1.5 18-5 4.5-4 7-7.5 11-7.5h17" stroke="#1A1714" stroke-width="7.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <path d="M26 31c4.5 5 7.5 10 12.5 12h15" stroke="#C9853E" stroke-width="7.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M9 35c10 0 14-1.5 18-5 4.5-4 7-7.5 11-7.5h17" stroke="#2C2825" stroke-width="7.2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

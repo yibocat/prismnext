@@ -38,33 +38,10 @@ function joinMeta(parts: Array<string | null | undefined>): string {
   return parts.filter(Boolean).join(" · ");
 }
 
-/** Simple Prism Next mark — geometric prism facet. */
+import { PrismRibbonMark } from "@/components/brand/prism-ribbon-mark";
+
 function PrismNextMark({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 32 32"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-hidden
-    >
-      <path
-        d="M16 3.5L28 26.5H4L16 3.5Z"
-        className="fill-background"
-        opacity="0.95"
-      />
-      <path
-        d="M16 3.5L28 26.5H16V3.5Z"
-        className="fill-background"
-        opacity="0.55"
-      />
-      <path
-        d="M16 10L22.5 22H9.5L16 10Z"
-        className="fill-foreground"
-        opacity="0.2"
-      />
-    </svg>
-  );
+  return <PrismRibbonMark className={className} palette="p5" scheme="auto" />;
 }
 
 // ─── Startup status checks ───
@@ -485,7 +462,8 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
         <div className="mx-auto my-auto flex w-full max-w-sm flex-col px-6 py-6 sm:py-8">
           <section className="flex shrink-0 flex-col items-center text-center">
             <div className="mb-2.5 flex flex-col items-center gap-2.5">
-              <div className="flex size-11 items-center justify-center rounded-2xl bg-foreground shadow-sm">
+              {/* Plate follows UI surface; mark inset so it is not edge-to-edge. */}
+              <div className="flex size-12 items-center justify-center rounded-2xl border border-border/60 bg-card p-2 shadow-sm">
                 <PrismNextMark className="size-7" />
               </div>
               <span className="text-[length:var(--font-size-16)] font-semibold tracking-tight text-foreground">

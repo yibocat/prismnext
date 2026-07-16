@@ -1,6 +1,6 @@
 {
   "id": "research-prism",
-  "name": "Prism Next",
+  "name": "prismnext",
   "description": "Primary research orchestrator — coordinates literature, analysis, writing, and project tools across the workspace.",
   "builtin": true,
   "thoughtLevel": "medium",

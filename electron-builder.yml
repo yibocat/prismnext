@@ -1,5 +1,5 @@
 appId: com.prism-next.app
-productName: Prism Next
+productName: prismnext
 directories:
   output: dist
 
@@ -17,6 +17,7 @@ extraResources:
 #   Dev      → bin/opencode/<platform>-<arch>/opencode[.exe]
 # Folder names: darwin | linux | windows  (not electron-builder's mac/win macros).
 mac:
+  icon: resources/brand/icon.icns
   target:
     - dmg
   artifactName: "${productName}-${version}-${arch}.${ext}"
@@ -27,6 +28,8 @@ mac:
         - "opencode*"
 
 win:
+  # Generated from app-icon-dark.png (Pillow). Falls back to PNG if missing.
+  icon: resources/brand/icon.ico
   target:
     - nsis
   artifactName: "${productName}-${version}-${arch}.${ext}"
@@ -37,6 +40,7 @@ win:
         - "opencode*"
 
 linux:
+  icon: resources/brand/app-icon-dark.png
   target:
     - AppImage
   artifactName: "${productName}-${version}-${arch}.${ext}"

@@ -123,7 +123,7 @@ describe("inferToolNameFromInput — utility / shell / file branches", () => {
 });
 
 describe("resolvePrismToolTitle", () => {
-  it("resolves registered Prism Next custom tool names (trimmed + lowercased)", () => {
+  it("resolves registered prismnext custom tool names (trimmed + lowercased)", () => {
     expect(resolvePrismToolTitle("citation-health")).toBe("citation-health");
     expect(resolvePrismToolTitle("latex-compile")).toBe("latex-compile");
     expect(resolvePrismToolTitle("latex-root")).toBe("latex-root");
@@ -132,7 +132,7 @@ describe("resolvePrismToolTitle", () => {
     expect(resolvePrismToolTitle("  LITERATURE-READ  ")).toBe("literature-read");
   });
 
-  it("rejects non-Prism Next / unknown tool names", () => {
+  it("rejects non-prismnext / unknown tool names", () => {
     expect(resolvePrismToolTitle("unknown-tool")).toBeNull();
     expect(resolvePrismToolTitle("")).toBeNull();
     expect(resolvePrismToolTitle("websearch")).toBeNull();

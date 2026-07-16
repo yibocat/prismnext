@@ -1,3 +1,6 @@
+// First import — pins userData before settings/logger touch app.getPath("userData").
+import "./user-data-bootstrap";
+
 import { app, BrowserWindow, protocol, session } from "electron";
 import { join } from "node:path";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
@@ -19,6 +22,15 @@ import { registerCrashHandlers } from "./lib/crash-handler";
 import { installCsp } from "./lib/csp";
 import { createLogger } from "./services/logger";
 import { providerApiKeyEnvVar } from "../shared/opencode-provider";
+import { setDesktopNotificationWindowGetter } from "./services/desktop-notifications";
+import {
+  getIsQuitting,
+  isTrayIconEnabled,
+  setIsQuitting,
+  setTrayWindowGetter,
+  syncTrayFromSettings,
+} from "./services/tray";
+import { shouldHideOnClose } from "../shared/desktop-shell";
 
 const log = createLogger("main", "startup");
 
@@ -26,6 +38,14 @@ const log = createLogger("main", "startup");
 // could throw an uncaughtException. Makes main-process crashes visible in the
 // Log Viewer and durable in <userData>/logs/crashes.log.
 registerCrashHandlers();
+
+function brandIconPath(...parts: string[]): string {
+  if (app.isPackaged) {
+    return join(process.resourcesPath, "resources", "brand", ...parts);
+  }
+  // electron-vite dev: cwd is the project root.
+  return join(process.cwd(), "resources", "brand", ...parts);
+}
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -53,6 +73,7 @@ function getBoundsPath(): string {
   const nextPath = join(dir, "window-bounds.json");
   // Migrate legacy bounds from older app names.
   if (!existsSync(nextPath)) {
+    // Legacy in-userData subfolders from older app names (literal on-disk names).
     for (const legacy of ["Prism", "Prism Next"] as const) {
       const legacyPath = join(userData, legacy, "window-bounds.json");
       if (existsSync(legacyPath)) {
@@ -98,7 +119,7 @@ function createWindow() {
     y: savedBounds.y,
     minWidth: 393,
     minHeight: 600,
-    title: "Prism Next",
+    title: "prismnext",
     show: false,
     backgroundColor: "#00000000",
     transparent: true,
@@ -126,6 +147,8 @@ function createWindow() {
     if (process.platform === "win32") {
       windowConfig.backgroundMaterial = "acrylic";
     }
+    const winIcon = brandIconPath("app-icon-dark.png");
+    if (existsSync(winIcon)) windowConfig.icon = winIcon;
   }
 
   mainWindow = new BrowserWindow(windowConfig);
@@ -135,7 +158,10 @@ function createWindow() {
   // Make window available to IPC handlers and register window events
   setMainWindow(mainWindow);
   setTerminalBridgeWindow(mainWindow);
+  setTrayWindowGetter(() => mainWindow);
+  setDesktopNotificationWindowGetter(() => mainWindow);
   registerWindowHandlers();
+  syncTrayFromSettings();
 
   // Re-warm child_process after macOS App Nap / background suspension.
   // When the app loses focus for a while, macOS may throttle the process,
@@ -151,8 +177,17 @@ function createWindow() {
     mainWindow?.show();
   });
 
-  mainWindow.on("close", () => {
+  mainWindow.on("close", (event) => {
     if (mainWindow) saveWindowBounds(mainWindow);
+    if (
+      shouldHideOnClose({
+        trayIconEnabled: isTrayIconEnabled(),
+        isQuitting: getIsQuitting(),
+      })
+    ) {
+      event.preventDefault();
+      mainWindow?.hide();
+    }
   });
 
   mainWindow.on("closed", () => {
@@ -197,6 +232,15 @@ app.whenReady().then(async () => {
   // Inject CSP on the default session (renderer only — browser webviews use a
   // separate persist:browser partition). Must run before createWindow().
   installCsp(session.defaultSession);
+
+  const aboutIcon = brandIconPath("app-icon-dark.png");
+  app.setAboutPanelOptions({
+    applicationName: "prismnext",
+    applicationVersion: app.getVersion(),
+    copyright: "prismnext",
+    ...(existsSync(aboutIcon) ? { iconPath: aboutIcon } : {}),
+  });
+
   startTerminalBridge();
   startLiteratureBridge();
   startLatexBridge();
@@ -277,11 +321,15 @@ app.whenReady().then(async () => {
 // Kill in-flight experiment / AI bash PTYs even when quit skips window `closed`
 // (macOS menu Quit paths). Safe to call twice alongside the closed handler.
 app.on("before-quit", () => {
+  setIsQuitting(true);
   destroyAllAiPty();
   destroyAllTerminalSessions();
 });
 
 app.on("window-all-closed", () => {
+  // Tray keep-alive: a hidden BrowserWindow still counts, so we rarely hit this
+  // while tray is enabled. When tray is off, quit on non-mac as before.
+  if (isTrayIconEnabled() && !getIsQuitting()) return;
   if (!isMac) {
     app.quit();
   }
@@ -290,5 +338,10 @@ app.on("window-all-closed", () => {
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
+    return;
+  }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.focus();
   }
 });

@@ -4,7 +4,7 @@ import {
 } from "./tool-permission-registry";
 
 /**
- * Chat permission modes (Prism Next):
+ * Chat permission modes (prismnext):
  * - ask: prompt for edits + shell
  * - edit_auto: allow file edits; still ask for shell / destructive (legacy "Auto")
  * - auto: OpenCode-style full auto-approve (all non-deny tools run without prompts)
@@ -89,7 +89,7 @@ export function migratePermissionModeSetting(
   };
 }
 
-/** Ask / Edit auto need Prism Next PTY bash so shell runs only after UI approval. */
+/** Ask / Edit auto need prismnext PTY bash so shell runs only after UI approval. */
 export function resolveEffectiveAgentTerminalMode(
   permissionMode: PermissionMode | string | undefined,
   agentTerminalMode: string | undefined,

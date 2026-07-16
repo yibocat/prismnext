@@ -658,7 +658,7 @@ describe("experiment-store", () => {
         command: "sleep 9999",
         cwd: "experiment/exp-a",
         exitCode: 124,
-        stdoutTail: "Prism Next experiment-run: command failed or timed out.",
+        stdoutTail: "prismnext experiment-run: command failed or timed out.",
         stderrTail: "",
         artifacts: [],
         env: {
