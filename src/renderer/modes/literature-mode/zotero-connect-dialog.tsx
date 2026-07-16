@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ArrowLeftIcon,
   CheckCircle2Icon,
@@ -24,7 +25,6 @@ import { useLiteratureStore } from "@/stores/literature-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { resolveNotebookDir } from "@/types/workspace";
 import type { ZoteroCollection, ZoteroStatus } from "@/types/electron.d";
-import { PAPER_EXTRACT_ACTION_LABEL } from "../../../shared/paper-extract";
 
 type ZoteroDialogStep = "select" | "disconnect";
 
@@ -67,6 +67,7 @@ export function ZoteroConnectDialog({
   currentCollectionId,
   onBound,
 }: ZoteroConnectDialogProps) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [collections, setCollections] = useState<ZoteroCollection[]>([]);
@@ -169,19 +170,21 @@ export function ZoteroConnectDialog({
             <div className="space-y-4 px-6 pt-6 pb-4">
               <DialogHeader className="gap-1.5">
                 <DialogTitle className="text-[length:var(--font-dialog-title)] font-semibold">
-                  {currentCollectionId ? "Zotero sync" : "Connect Zotero"}
+                  {currentCollectionId
+                    ? t("literature.dialogs.zoteroSync")
+                    : t("literature.dialogs.connectZotero")}
                 </DialogTitle>
                 <DialogDescription className="text-[length:var(--font-dialog-label)]">
                   {currentCollectionId
-                    ? "Choose a different collection to sync, or disconnect from this project."
-                    : "Optionally link a Zotero collection — entries sync into this project library."}
+                    ? t("literature.dialogs.zoteroSyncDesc")
+                    : t("literature.dialogs.connectZoteroDesc")}
                 </DialogDescription>
               </DialogHeader>
 
               {loading ? (
                 <div className="flex items-center justify-center gap-2 rounded-lg border border-border/60 bg-muted/20 py-10 text-[length:var(--font-size-12)] text-muted-foreground">
                   <Loader2Icon className="size-4 animate-spin shrink-0" />
-                  Loading collections…
+                  {t("literature.dialogs.loadingCollections")}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -207,8 +210,7 @@ export function ZoteroConnectDialog({
                     <div className="flex items-center gap-2 rounded-md bg-muted/45 px-3 py-2 text-[length:var(--font-size-12)] text-muted-foreground">
                       <FolderIcon className="size-3.5 shrink-0 text-muted-foreground/70" />
                       <span className="min-w-0 truncate">
-                        Linked collection:{" "}
-                        <span className="text-foreground/90">{boundCollectionName}</span>
+                        {t("literature.dialogs.linkedCollection", { name: boundCollectionName })}
                       </span>
                     </div>
                   ) : null}
@@ -222,7 +224,7 @@ export function ZoteroConnectDialog({
                   ) : (
                     <div className="space-y-1.5">
                       <Label className="text-[length:var(--font-dialog-label)] font-medium text-muted-foreground">
-                        Collection
+                        {t("literature.dialogs.collection")}
                       </Label>
                       <div className="max-h-[min(18rem,45vh)] overflow-auto rounded-lg border border-border/60 bg-muted/15">
                         {sorted.map((col) => {
@@ -270,7 +272,7 @@ export function ZoteroConnectDialog({
                     onClick={() => setStep("disconnect")}
                     disabled={saving || loading}
                   >
-                    Disconnect
+                    {t("literature.dialogs.disconnect")}
                   </Button>
                 ) : null}
               </div>
@@ -281,7 +283,7 @@ export function ZoteroConnectDialog({
                   className="shadow-none"
                   onClick={() => handleOpenChange(false)}
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
                 <Button
                   size="sm"
@@ -289,7 +291,11 @@ export function ZoteroConnectDialog({
                   onClick={() => void handleSave()}
                   disabled={!selectedKey || saving || loading || Boolean(error)}
                 >
-                  {saving ? "Saving…" : currentCollectionId ? "Change collection" : "Connect"}
+                  {saving
+                    ? t("common.saving")
+                    : currentCollectionId
+                      ? t("literature.dialogs.changeCollection")
+                      : t("literature.dialogs.connect")}
                 </Button>
               </div>
             </DialogFooter>
@@ -299,39 +305,30 @@ export function ZoteroConnectDialog({
             <div className="space-y-4 px-6 pt-6 pb-4">
               <DialogHeader className="gap-1.5">
                 <DialogTitle className="text-[length:var(--font-dialog-title)] font-semibold">
-                  Disconnect Zotero?
+                  {t("literature.dialogs.disconnectTitle")}
                 </DialogTitle>
                 <DialogDescription className="text-[length:var(--font-dialog-label)]">
-                  Pure Zotero mirrors (no PDF cached, no extracted text, not kept manually) will be
-                  removed from this project.
+                  {t("literature.dialogs.disconnectBody")}
                 </DialogDescription>
               </DialogHeader>
 
               <div className="space-y-3 text-[length:var(--font-size-12)] text-muted-foreground">
-                <p>
-                  Entries you opened, ran {PAPER_EXTRACT_ACTION_LABEL} on, or chose{" "}
-                  <span className="text-foreground/90">Keep in project</span> stay in the library.
-                </p>
+                <p>{t("literature.dialogs.mirrorKeep")}</p>
                 {zoteroPapersWithNotes.length > 0 ? (
                   <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-amber-950 dark:text-amber-100">
                     <p className="font-medium">
-                      {zoteroPapersWithNotes.length} entr
-                      {zoteroPapersWithNotes.length === 1 ? "y has" : "ies have"} reading notes
-                    </p>
-                    <p className="mt-1 text-amber-900/90 dark:text-amber-200/90">
-                      Note files stay on disk, but literature links and{" "}
-                      <span className="font-mono">@paper</span> context for these entries will break
-                      until you re-sync or re-import them.
+                      {t("literature.dialogs.disconnectNotes", {
+                        count: zoteroPapersWithNotes.length,
+                      })}
                     </p>
                     <ul className="mt-2 list-inside list-disc space-y-0.5 text-amber-900/85 dark:text-amber-200/85">
                       {zoteroPapersWithNotes.slice(0, 4).map(({ paper, noteCount }) => (
                         <li key={paper.id} className="truncate">
-                          {paper.bibkey ?? paper.title} ({noteCount} note
-                          {noteCount === 1 ? "" : "s"})
+                          {paper.bibkey ?? paper.title} ({noteCount})
                         </li>
                       ))}
                       {zoteroPapersWithNotes.length > 4 ? (
-                        <li>…and {zoteroPapersWithNotes.length - 4} more</li>
+                        <li>…+{zoteroPapersWithNotes.length - 4}</li>
                       ) : null}
                     </ul>
                   </div>
@@ -348,7 +345,7 @@ export function ZoteroConnectDialog({
                 disabled={saving}
               >
                 <ArrowLeftIcon className="size-3.5 mr-1.5" />
-                Back
+                {t("common.back")}
               </Button>
               <div className="flex flex-col-reverse gap-2 sm:flex-row">
                 <Button
@@ -358,7 +355,7 @@ export function ZoteroConnectDialog({
                   onClick={() => setStep("select")}
                   disabled={saving}
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
                 <Button
                   size="sm"
@@ -367,7 +364,9 @@ export function ZoteroConnectDialog({
                   onClick={() => void handleDisconnect()}
                   disabled={saving}
                 >
-                  {saving ? "Disconnecting…" : "Disconnect"}
+                  {saving
+                    ? t("literature.dialogs.disconnecting")
+                    : t("literature.dialogs.disconnect")}
                 </Button>
               </div>
             </DialogFooter>

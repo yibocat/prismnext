@@ -1,4 +1,5 @@
 import { useMemo, useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   AlertCircleIcon,
   AlertTriangleIcon,
@@ -83,16 +84,17 @@ function ProblemsList({
   problems: LatexProblem[];
   onSelect: (problem: LatexProblem) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="h-full overflow-auto p-2 space-y-1">
       {isCompiling ? (
         <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
           <Loader2Icon className="size-5 animate-spin" />
-          <p className="text-[length:var(--font-size-12)]">Compiling…</p>
+          <p className="text-[length:var(--font-size-12)]">{t("modes.texworkspace.compiling")}</p>
         </div>
       ) : problems.length === 0 ? (
         <p className="text-[length:var(--font-size-12)] text-muted-foreground px-3 py-8 text-center">
-          No problems reported.
+          {t("modes.texworkspace.noProblems")}
         </p>
       ) : (
         problems.map((p) => <ProblemRow key={p.id} problem={p} onSelect={onSelect} />)
@@ -108,11 +110,12 @@ function CompileLogView({
   isCompiling: boolean;
   compileLog: string;
 }) {
+  const { t } = useTranslation();
   if (isCompiling) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 h-full py-16 text-muted-foreground">
         <Loader2Icon className="size-5 animate-spin" />
-        <p className="text-[length:var(--font-size-12)]">Compiling…</p>
+        <p className="text-[length:var(--font-size-12)]">{t("modes.texworkspace.compiling")}</p>
       </div>
     );
   }
@@ -120,7 +123,7 @@ function CompileLogView({
   if (!compileLog.trim()) {
     return (
       <p className="text-[length:var(--font-size-12)] text-muted-foreground px-3 py-8 text-center">
-        No compiler output yet.
+        {t("modes.texworkspace.noCompileLog")}
       </p>
     );
   }
@@ -134,6 +137,7 @@ function CompileLogView({
 
 /** Replaces the PDF preview slot when compile problems are open from the toolbar. */
 export function CompileProblemsPanel() {
+  const { t } = useTranslation();
   const isCompiling = useCompileStore((s) => s.isCompiling);
   const compileError = useCompileStore((s) => s.compileError);
   const compileLog = useCompileStore((s) => s.compileLog);
@@ -187,7 +191,7 @@ export function CompileProblemsPanel() {
             )}
           >
             <AlertCircleIcon className="size-3.5 shrink-0" />
-            <span>Problems</span>
+            <span>{t("modes.texworkspace.problems")}</span>
             {problems.length > 0 && (
               <span className="text-[length:var(--font-hint)] tabular-nums opacity-70">
                 {problems.length}
@@ -205,7 +209,7 @@ export function CompileProblemsPanel() {
             )}
           >
             <ScrollTextIcon className="size-3.5 shrink-0" />
-            <span>Compile Log</span>
+            <span>{t("modes.texworkspace.compileLog")}</span>
           </button>
         </div>
       </div>

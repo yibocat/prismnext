@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo, type RefObject } from "react";
+import { useTranslation } from "react-i18next";
 import { type PanelImperativeHandle } from "react-resizable-panels";
 import { useLayoutStore, type RightToolbarTab } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -142,9 +143,16 @@ function RightAreaWorkspace({
   centerRef,
   rightAreaRef,
 }: RightAreaProps) {
+  const { t } = useTranslation();
   const { platform, isMaximized, isFullscreen } = useWindowState();
   const isMobile = useIsMobile();
   const isMac = platform === "darwin";
+
+  const modeLabel = useCallback(
+    (mode: { label: string; labelKey?: string }) =>
+      mode.labelKey ? t(mode.labelKey) : mode.label,
+    [t],
+  );
 
   const sidebarFullyCollapsed = useLayoutStore((s) => s.sidebarFullyCollapsed);
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
@@ -175,7 +183,9 @@ function RightAreaWorkspace({
   const prevCategoryRef = useRef(settingsCategory);
 
   const slotTitle = settingsPanelSlotTitle(settingsSlot);
-  const stackedToolbarTitle = slotTitle ?? (settingsSlot ? "Editor" : "Settings editor");
+  const stackedToolbarTitle =
+    slotTitle ??
+    (settingsSlot ? t("settings.slots.editor") : t("settings.slots.settingsEditor"));
 
   useEffect(() => {
     if (!inSettings) return;
@@ -594,7 +604,7 @@ function RightAreaWorkspace({
             <button
               type="button"
               className={TITLEBAR_BTN}
-              title="Back to settings"
+              title={t("shell.rightArea.backToSettings")}
               onClick={closeSettingsPanel}
             >
               <ArrowLeftIcon className="size-3.5" />
@@ -611,7 +621,7 @@ function RightAreaWorkspace({
                 <button
                   type="button"
                   className={TITLEBAR_BTN}
-                  title="Minimize"
+                  title={t("shell.minimize")}
                   onClick={() => window.electronAPI?.windowMinimize()}
                 >
                   <Minimize2Icon className="size-3.5" />
@@ -619,7 +629,7 @@ function RightAreaWorkspace({
                 <button
                   type="button"
                   className={TITLEBAR_BTN}
-                  title={isMaximized ? "Restore" : "Maximize"}
+                  title={isMaximized ? t("shell.restore") : t("shell.maximize")}
                   onClick={() => window.electronAPI?.windowMaximize()}
                 >
                   <Maximize2Icon className="size-3.5" />
@@ -627,7 +637,7 @@ function RightAreaWorkspace({
                 <button
                   type="button"
                   className={cn(TITLEBAR_BTN, "hover:bg-destructive hover:text-white")}
-                  title="Close"
+                  title={t("shell.close")}
                   onClick={() => window.electronAPI?.windowClose()}
                 >
                   <XIcon className="size-3.5" />
@@ -674,7 +684,7 @@ function RightAreaWorkspace({
               <button
                 type="button"
                 className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                title="Open tabs"
+                title={t("shell.rightArea.openTabs")}
               >
                 <ChevronsLeftRightEllipsisIcon className="size-3.5" />
               </button>
@@ -751,7 +761,7 @@ function RightAreaWorkspace({
               <button
                 type="button"
                 className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                title="Modes"
+                title={t("shell.rightArea.modes")}
               >
                 <LayoutGridIcon className="size-3.5" />
               </button>
@@ -760,6 +770,7 @@ function RightAreaWorkspace({
               {toolbarModes.map((mode) => {
                 const isActive = activeModes.includes(mode.id as RightToolbarTab);
                 const isFocused = focusedMode === mode.id;
+                const label = modeLabel(mode);
                 return (
                   <AppMenuItem
                     key={mode.id}
@@ -768,13 +779,13 @@ function RightAreaWorkspace({
                     trailing={
                       isActive ? (
                         <span className="text-[length:var(--font-size-10)] text-muted-foreground">
-                          on
+                          {t("modes.on")}
                         </span>
                       ) : null
                     }
                     onClick={() => handleModeClick(mode.id)}
                   >
-                    {mode.label}
+                    {label}
                   </AppMenuItem>
                 );
               })}
@@ -784,6 +795,7 @@ function RightAreaWorkspace({
           toolbarModes.map((mode) => {
             const isActive = activeModes.includes(mode.id as RightToolbarTab);
             const isFocused = focusedMode === mode.id;
+            const label = modeLabel(mode);
             return (
               <button
                 key={mode.id}
@@ -797,7 +809,11 @@ function RightAreaWorkspace({
                       )
                     : "size-6 text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                 )}
-                title={isActive && isFocused ? `Close ${mode.label}` : mode.label}
+                title={
+                  isActive && isFocused
+                    ? t("modes.closeMode", { label })
+                    : label
+                }
                 onClick={() => handleModeClick(mode.id)}
               >
                 {mode.icon}
@@ -812,7 +828,11 @@ function RightAreaWorkspace({
         <button
           type="button"
           className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title={editorMaximized ? "Restore panel" : "Maximize panel"}
+          title={
+            editorMaximized
+              ? t("shell.rightArea.restorePanel")
+              : t("shell.rightArea.maximizePanel")
+          }
           onClick={() => {
             toggleRightAreaMaximize({
               centerRef: centerRef.current,
@@ -832,7 +852,7 @@ function RightAreaWorkspace({
             "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
             rightAreaExpanded && "bg-muted text-foreground",
           )}
-          title="Close Panel"
+          title={t("shell.rightArea.closePanel")}
           onClick={() => {
             closeRightArea({
               centerRef: centerRef.current,

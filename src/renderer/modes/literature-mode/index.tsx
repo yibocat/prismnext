@@ -13,11 +13,13 @@ function LiteratureToolbarWrapper({ tab }: { tab: RightTab }) {
 export const literatureMode: ModeDefinition = {
   id: "literature",
   label: "Literature",
+  labelKey: "modes.literature.label",
   icon: <BookOpenIcon className="size-3.5" />,
   tabKinds: ["literature"],
   surface: "any",
   persistence: "persistent",
   initialTitle: "Library",
+  initialTitleKey: "modes.literature.initialTitle",
   Sidebar: LiteratureSidebar,
   Toolbar: LiteratureToolbarWrapper,
   Content: LiteratureContent,

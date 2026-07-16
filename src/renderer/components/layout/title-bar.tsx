@@ -1,5 +1,6 @@
 import { useState, useEffect, type RefObject } from "react";
 import { useTheme } from "next-themes";
+import { useTranslation } from "react-i18next";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -45,6 +46,7 @@ interface TitleBarProps {
 }
 
 export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarProps) {
+  const { t } = useTranslation();
   const { platform, isMaximized, isFullscreen } = useWindowState();
   const isMobile = useIsMobile();
   const sidebarExpanded = useLayoutStore((s) => s.sidebarExpanded);
@@ -76,7 +78,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
             "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
             sidebarExpanded && "bg-muted text-foreground",
           )}
-          title={sidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
+          title={sidebarExpanded ? t("shell.collapseSidebar") : t("shell.expandSidebar")}
           onClick={() => {
             const st = useLayoutStore.getState();
             if (st.leftSidebarOverlay) {
@@ -108,7 +110,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
         <button
           type="button"
           className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[length:var(--font-toolbar-label)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title="Command palette"
+          title={t("shell.commandPalette")}
           onClick={() => setCommandOpen(true)}
         >
           <SearchIcon className="size-3.5" />
@@ -127,7 +129,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
             <button
               type="button"
               className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              title="Minimize"
+              title={t("shell.minimize")}
               onClick={() => window.electronAPI?.windowMinimize()}
             >
               <Minimize2Icon className="size-4" />
@@ -135,7 +137,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
             <button
               type="button"
               className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              title={isMaximized ? "Restore" : "Maximize"}
+              title={isMaximized ? t("shell.restore") : t("shell.maximize")}
               onClick={() => window.electronAPI?.windowMaximize()}
             >
               <Maximize2Icon className="size-4" />
@@ -143,7 +145,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
             <button
               type="button"
               className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
-              title="Close"
+              title={t("shell.close")}
               onClick={() => window.electronAPI?.windowClose()}
             >
               <XIcon className="size-4" />
@@ -156,7 +158,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
         <button
           type="button"
           className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title={`Theme: ${theme}`}
+          title={t("common.theme", { theme })}
           onClick={cycleTheme}
         >
           {theme === "system" ? (
@@ -175,7 +177,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
             "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
             rightAreaExpanded && "bg-muted text-foreground",
           )}
-          title={rightAreaExpanded ? "Collapse Right Area" : "Expand Right Area"}
+          title={rightAreaExpanded ? t("shell.collapseRightArea") : t("shell.expandRightArea")}
           onClick={() => {
             const r = rightAreaRef.current;
             if (!r) return;

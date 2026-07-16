@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ChevronRightIcon,
 } from "lucide-react";
@@ -23,6 +24,7 @@ interface GitChangesTreeSidebarProps {
 }
 
 export function GitChangesTreeSidebar({ files }: GitChangesTreeSidebarProps) {
+  const { t } = useTranslation();
   const gitExpandedFolders = useGitStore((s) => s.gitExpandedFolders);
   const toggleGitFolder = useGitStore((s) => s.toggleGitFolder);
 
@@ -60,7 +62,7 @@ export function GitChangesTreeSidebar({ files }: GitChangesTreeSidebarProps) {
     return (
       <div className="px-3 py-3 text-center">
         <p className="text-[length:var(--font-hint)] text-muted-foreground/60">
-          No changes — working tree clean
+          {t("modes.git.emptyChanges")}
         </p>
       </div>
     );

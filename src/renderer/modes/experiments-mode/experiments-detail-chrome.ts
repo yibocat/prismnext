@@ -3,6 +3,7 @@
  * Mirrors `literature-list-chrome.ts` and `git-change-row-chrome.tsx`.
  */
 
+import { i18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 /** Mode toolbar context line (lab path, experiment count). */
@@ -125,17 +126,19 @@ export const experimentsCommandInputClass = cn(
 );
 
 export function formatExperimentRelativeTime(iso: string | null): string {
-  if (!iso) return "No runs yet";
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return iso;
-  const diff = Date.now() - t;
+  if (!iso) return i18n.t("experiments.runs.noRunsYet");
+  const parsed = Date.parse(iso);
+  if (Number.isNaN(parsed)) return iso;
+  const diff = Date.now() - parsed;
   const min = Math.floor(diff / 60000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min}m ago`;
+  if (min < 1) return i18n.t("experiments.relativeTime.justNow");
+  if (min < 60) return i18n.t("experiments.relativeTime.minutesAgo", { count: min });
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
+  if (hr < 24) return i18n.t("experiments.relativeTime.hoursAgo", { count: hr });
   const day = Math.floor(hr / 24);
-  return day < 7 ? `${day}d ago` : new Date(t).toLocaleDateString();
+  return day < 7
+    ? i18n.t("experiments.relativeTime.daysAgo", { count: day })
+    : new Date(parsed).toLocaleDateString();
 }
 
 export function experimentLabBasename(workspacePath: string): string {

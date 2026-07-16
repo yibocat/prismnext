@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useProjectStore } from "@/stores/project-store";
@@ -27,6 +28,7 @@ const sidebarItemClass =
   "focus:bg-sidebar-accent focus:text-sidebar-accent-foreground";
 
 export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const openProject = useDocumentStore((s) => s.openProject);
   const recentProjects = useProjectStore((s) => s.recentProjects);
@@ -39,7 +41,7 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
 
   const projectName = projectRoot
     ? projectRoot.split(/[/\\]/).pop() || projectRoot
-    : "No Project Open";
+    : t("nav.project.noProject");
 
   const newProjectTriggerRef = useRef<HTMLButtonElement>(null);
 
@@ -142,7 +144,7 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
                 appMenuFontClass,
               )}
             >
-              No recent projects
+              {t("nav.project.noRecent")}
             </div>
           )}
           <AppMenuSeparator />
@@ -150,14 +152,14 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
             className={sidebarItemClass}
             onClick={() => newProjectTriggerRef.current?.click()}
           >
-            New Project...
+            {t("nav.project.newProject")}
           </AppMenuItem>
           <AppMenuItem className={sidebarItemClass} onClick={handleOpenProjectDialog}>
-            Open Project...
+            {t("nav.project.openProject")}
           </AppMenuItem>
           <AppMenuSeparator />
           <AppMenuItem className={sidebarItemClass} onClick={handleCloseProject}>
-            Close Project
+            {t("nav.project.closeProject")}
           </AppMenuItem>
         </AppMenuContent>
       </AppMenu>

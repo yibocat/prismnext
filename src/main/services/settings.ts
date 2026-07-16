@@ -12,6 +12,11 @@ import {
 export interface AppSettings {
   aiModel: "default" | "sonnet" | "opus" | "haiku";
   theme: "dark" | "light" | "system";
+  /**
+   * UI language: en | zh-CN | zh-HK.
+   * Does not affect AI reply language. Legacy `"system"` is treated as `"en"`.
+   */
+  appLocale?: "en" | "zh-CN" | "zh-HK";
   sidebarCollapsed: boolean;
   rightPanelCollapsed: boolean;
   lastProjectPath?: string;

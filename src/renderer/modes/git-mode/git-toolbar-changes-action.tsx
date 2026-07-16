@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ChevronDownIcon,
   GitCommitHorizontalIcon,
@@ -44,6 +45,7 @@ export function GitToolbarChangesAction({
   onMerge,
   onCommit,
 }: GitToolbarChangesActionProps) {
+  const { t } = useTranslation();
   const [pushing, setPushing] = useState(false);
 
   const handlePush = useCallback(async () => {
@@ -62,10 +64,10 @@ export function GitToolbarChangesAction({
         type="button"
         onClick={onMerge}
         className={cn(shellClass, primaryBtnClass)}
-        title="Merge to Branch"
+        title={t("git.toolbar.mergeToBranch")}
       >
         <GitMergeIcon className="size-3.5 shrink-0" />
-        {!compact && <span>Merge to Branch</span>}
+        {!compact && <span>{t("git.toolbar.mergeToBranch")}</span>}
       </button>
     );
   }
@@ -77,10 +79,10 @@ export function GitToolbarChangesAction({
         onClick={onCommit}
         disabled={stagedCount === 0}
         className={primaryBtnClass}
-        title="Commit"
+        title={t("git.toolbar.commit")}
       >
         <GitCommitHorizontalIcon className="size-3.5 shrink-0" />
-        {!compact && <span>Commit</span>}
+        {!compact && <span>{t("git.toolbar.commit")}</span>}
       </button>
 
       <AppMenu>
@@ -91,15 +93,15 @@ export function GitToolbarChangesAction({
               "flex items-center justify-center w-6 border-l border-primary-foreground/20",
               "hover:bg-primary/90 transition-colors",
             )}
-            aria-label="More git actions"
+            aria-label={t("git.toolbar.moreActions")}
           >
             <ChevronDownIcon className="size-3 shrink-0" />
           </button>
         </AppMenuTrigger>
         <AppMenuContent align="end" className="min-w-[7rem]">
-          <AppMenuItem onClick={onMerge}>Merge</AppMenuItem>
+          <AppMenuItem onClick={onMerge}>{t("git.toolbar.merge")}</AppMenuItem>
           <AppMenuItem onClick={onCommit} disabled={stagedCount === 0}>
-            Commit
+            {t("git.toolbar.commit")}
           </AppMenuItem>
           <AppMenuItem
             onClick={() => void handlePush()}
@@ -108,7 +110,7 @@ export function GitToolbarChangesAction({
               pushing ? <Loader2Icon className="size-3 animate-spin opacity-80" /> : null
             }
           >
-            Push
+            {t("git.toolbar.push")}
           </AppMenuItem>
         </AppMenuContent>
       </AppMenu>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useCommandStore } from "@/stores/command-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -20,6 +21,7 @@ const SUB_HEADER = "text-[length:var(--font-size-12)] font-medium text-foregroun
 const SUB_DESC = "text-[length:var(--font-size-12)] text-muted-foreground mb-2";
 
 export default function CommandsSettings() {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const commands = useCommandStore((s) => s.commands);
   const loaded = useCommandStore((s) => s.loaded);
@@ -74,7 +76,7 @@ export default function CommandsSettings() {
       const dlg = await window.electronAPI.dialogSaveJsonFile("prismnext-commands.json");
       if (dlg.canceled || !dlg.path) return;
       await writeExportFile(dlg.path, projectRoot);
-      toast.success("Commands exported.");
+      toast.success(t("settings.commandsPage.toast.exported"));
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Export failed.");
     } finally {
@@ -90,33 +92,35 @@ export default function CommandsSettings() {
       const pack = await readImportFile(dlg.path);
       const preview = await previewImport(projectRoot, pack);
       if (preview.incoming.length === 0) {
-        toast.error("No valid commands found in file.");
+        toast.error(t("settings.commandsPage.toast.noValid"));
         return;
       }
       setImportPack(pack);
       setImportPreview(preview);
       setImportDialogOpen(true);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Could not read import file.");
+      toast.error(
+        err instanceof Error ? err.message : t("settings.commandsPage.toast.importReadFailed"),
+      );
     }
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <p className={SUB_HEADER}>Built-in commands</p>
-        <p className={SUB_DESC}>
-          App slash shortcuts (compile, setup, checkpoints). Toggle visibility in the composer{" "}
-          <span className="font-mono">/</span> menu.
-        </p>
+        <p className={SUB_HEADER}>{t("settings.commandsPage.builtinSection")}</p>
+        <p className={SUB_DESC}>{t("settings.commandsPage.builtinDesc")}</p>
         <div className={SETTINGS_CARD}>
           <div className={SETTINGS_ROW}>
             <div className="min-w-0 flex-1 pr-4">
-              <p className={SETTINGS_ROW_LABEL}>App shortcuts</p>
+              <p className={SETTINGS_ROW_LABEL}>{t("settings.commandsPage.appShortcuts")}</p>
               <p className={SETTINGS_ROW_DESC}>
                 {loaded && builtInCount > 0
-                  ? `${builtInEnabledCount} of ${builtInCount} enabled in the composer menu.`
-                  : "Loading built-in commands…"}
+                  ? t("settings.commandsPage.enabledCount", {
+                      enabled: builtInEnabledCount,
+                      total: builtInCount,
+                    })
+                  : t("settings.commandsPage.loadingBuiltin")}
               </p>
             </div>
             <Button
@@ -125,7 +129,7 @@ export default function CommandsSettings() {
               className="shrink-0"
               onClick={() => openSettingsPanel({ kind: "builtin-commands" })}
             >
-              View built-in commands
+              {t("settings.commandsPage.viewBuiltin")}
             </Button>
           </div>
         </div>
@@ -133,7 +137,7 @@ export default function CommandsSettings() {
 
       <div>
         <div className="flex items-start justify-between gap-3 mb-1.5">
-          <p className={SUB_HEADER}>Custom commands</p>
+          <p className={SUB_HEADER}>{t("settings.commandsPage.customSection")}</p>
           {projectRoot ? (
             <div className="flex items-center gap-1 shrink-0">
               <Button
@@ -143,7 +147,7 @@ export default function CommandsSettings() {
                 disabled={exporting || customCommands.length === 0}
                 onClick={() => void handleExport()}
               >
-                Export
+                {t("settings.commandsPage.export")}
               </Button>
               <Button
                 variant="ghost"
@@ -151,17 +155,17 @@ export default function CommandsSettings() {
                 className="shrink-0"
                 onClick={() => void handleImportPick()}
               >
-                Import
+                {t("settings.commandsPage.importBtn")}
               </Button>
             </div>
           ) : null}
         </div>
         {!projectRoot ? (
-          <p className={SUB_DESC}>Open a project to create and manage custom commands.</p>
+          <p className={SUB_DESC}>{t("settings.commandsPage.customOpenProject")}</p>
         ) : (
           <>
             <p className={SUB_DESC}>
-              Per-project prompt templates in{" "}
+              {t("settings.commandsPage.customDesc")}{" "}
               <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">
                 .prismnext/agent/commands/
               </code>
@@ -170,7 +174,7 @@ export default function CommandsSettings() {
               {customCommands.length === 0 ? (
                 <div className={cn(SETTINGS_ROW, "!block")}>
                   <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-                    No custom commands yet.
+                    {t("settings.commandsPage.emptyCustom")}
                   </p>
                 </div>
               ) : (
@@ -189,7 +193,7 @@ export default function CommandsSettings() {
                         className="shrink-0"
                         onClick={() => openEdit(cmd.id, cmd.name)}
                       >
-                        Edit
+                        {t("common.edit")}
                       </Button>
                       <InlineDeleteButton
                         itemId={cmd.id}
@@ -209,7 +213,7 @@ export default function CommandsSettings() {
                     openSettingsPanel({ kind: "custom-command", mode: "new" })
                   }
                 >
-                  + Add custom command
+                  {t("settings.commandsPage.addCustom")}
                 </Button>
               </div>
             </div>

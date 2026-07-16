@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ExternalLinkIcon,
   CopyIcon,
@@ -111,6 +112,7 @@ export function LiteratureEntryPanel({
   expandedInLibrary?: boolean;
   pdfAttach?: LiteraturePdfAttachHandle;
 }) {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const settings = useSettingsStore((s) => s.settings);
   const updatePaper = useLiteratureStore((s) => s.updatePaper);
@@ -156,7 +158,7 @@ export function LiteratureEntryPanel({
   const handleFetch = async () => {
     if (!projectRoot) return;
     if (!paper.doi && !paper.arxiv_id) {
-      toast.error("Add a DOI or arXiv ID first");
+      toast.error(t("literature.detail.addIdFirst"));
       return;
     }
     setFetching(true);
@@ -172,7 +174,7 @@ export function LiteratureEntryPanel({
   const handleDownloadPdf = async () => {
     if (!projectRoot || downloadingPdf) return;
     if (!paper.doi && !paper.arxiv_id) {
-      toast.error("Add a DOI or arXiv ID first");
+      toast.error(t("literature.detail.addIdFirst"));
       return;
     }
     try {
@@ -204,10 +206,6 @@ export function LiteratureEntryPanel({
     if (!paper.zotero_key) return;
     void window.electronAPI.shellOpenExternal(zoteroSelectItemUrl(paper.zotero_key));
   };
-
-  const aiSummaryActionLabel = paper.ai_summary
-    ? "Regenerate summary & keywords"
-    : "Generate summary & keywords";
 
   const handleGenerateAiMetadata = useCallback(() => {
     if (!projectRoot) return;
@@ -241,12 +239,12 @@ export function LiteratureEntryPanel({
               id={fieldId("title")}
               value={paper.title}
               editable={editable}
-              placeholder="Title"
+              placeholder={t("literature.dialogs.entryTitle")}
               displayClassName="text-[length:var(--font-size-18)] font-semibold leading-7 text-foreground"
               onSave={async (title) => {
                 const trimmed = title.trim();
                 if (!trimmed) {
-                  toast.error("Title is required");
+                  toast.error(t("literature.detail.titleRequired"));
                   throw new Error("empty");
                 }
                 await saveField({ title: trimmed });
@@ -259,10 +257,10 @@ export function LiteratureEntryPanel({
                 type="button"
                 onClick={handleOpenPdf}
                 className={cn(literatureReadActionBtnClass, "h-6")}
-                title="Read the PDF (human)"
+                title={t("literature.detail.openPdf")}
               >
                 <ExternalLinkIcon className="size-3.5 shrink-0" />
-                <span className="hidden @md:inline">Open PDF</span>
+                <span className="hidden @md:inline">{t("literature.detail.openPdf")}</span>
               </button>
             ) : canDownloadPdf ? (
               <button
@@ -270,7 +268,7 @@ export function LiteratureEntryPanel({
                 onClick={() => void handleDownloadPdf()}
                 disabled={downloadingPdf}
                 className={cn(literatureReadActionBtnClass, "h-6")}
-                title={downloadingPdf ? pdfDownloadLabel : "Download open-access PDF"}
+                title={downloadingPdf ? pdfDownloadLabel : t("literature.detail.downloadPdf")}
               >
                 {downloadingPdf ? (
                   <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
@@ -278,7 +276,7 @@ export function LiteratureEntryPanel({
                   <DownloadIcon className="size-3.5 shrink-0" />
                 )}
                 <span className="hidden @md:inline">
-                  {downloadingPdf ? pdfDownloadLabel : "Download PDF"}
+                  {downloadingPdf ? pdfDownloadLabel : t("literature.detail.downloadPdf")}
                 </span>
               </button>
             ) : null}
@@ -299,7 +297,7 @@ export function LiteratureEntryPanel({
                     onSelect={() => void handleAddToManuscriptBib()}
                     disabled={citingToBib}
                   >
-                    {citingToBib ? "Adding to manuscript .bib…" : "Add to manuscript .bib"}
+                    {t("literature.detail.addToBib")}
                   </AppMenuItem>
                 ) : null}
                 {!isZoteroPaper ? (
@@ -307,18 +305,18 @@ export function LiteratureEntryPanel({
                     onSelect={() => void handleFetch()}
                     disabled={fetching}
                   >
-                    {fetching ? "Fetching metadata…" : "Fetch metadata"}
+                    {t("literature.detail.fetchMetadata")}
                   </AppMenuItem>
                 ) : null}
                 <AppMenuItem onSelect={() => handleGenerateAiMetadata()}>
-                  {aiSummaryActionLabel}
+                  {t("literature.detail.generateSummary")}
                 </AppMenuItem>
                 {!paper.pdf_path && !paper.zotero_key ? (
                   <AppMenuItem
                     onSelect={() => void handleDownloadPdf()}
                     disabled={downloadingPdf || (!paper.doi && !paper.arxiv_id)}
                   >
-                    {downloadingPdf ? pdfDownloadLabel : "Download PDF"}
+                    {downloadingPdf ? pdfDownloadLabel : t("literature.detail.downloadPdf")}
                   </AppMenuItem>
                 ) : null}
                 {!paper.pdf_path ? (
@@ -326,30 +324,32 @@ export function LiteratureEntryPanel({
                     onSelect={() => void pdfAttach.pickAndAttach()}
                     disabled={pdfAttach.busy}
                   >
-                    Attach PDF…
+                    {t("literature.detail.attachPdf")}
                   </AppMenuItem>
                 ) : (
                   <AppMenuItem
                     onSelect={() => void pdfAttach.pickAndAttach()}
                     disabled={pdfAttach.busy}
                   >
-                    Replace PDF…
+                    {t("literature.detail.replacePdf")}
                   </AppMenuItem>
                 )}
                 {isZoteroPaper ? (
                   <>
-                    <AppMenuItem onSelect={handleOpenInZotero}>Open in Zotero</AppMenuItem>
+                    <AppMenuItem onSelect={handleOpenInZotero}>
+                      {t("literature.detail.openInZotero")}
+                    </AppMenuItem>
                     <AppMenuItem
                       onSelect={() => projectRoot && void importToLocal(projectRoot, paper.id)}
                       title={`Keep metadata and notes in this project without downloading PDF or running ${PAPER_EXTRACT_ACTION_LABEL}`}
                     >
-                      Keep in project
+                      {t("literature.detail.keepInProject")}
                     </AppMenuItem>
                   </>
                 ) : null}
                 <AppMenuSeparator />
                 <AppMenuDestructiveItem onSelect={() => setDeleteOpen(true)}>
-                  Delete
+                  {t("common.delete")}
                 </AppMenuDestructiveItem>
               </AppMenuContent>
             </AppMenu>
@@ -379,7 +379,7 @@ export function LiteratureEntryPanel({
               className="inline-flex shrink-0 items-center rounded-full border border-amber-500/35 bg-amber-500/10 px-2 py-0.5 text-[length:var(--font-size-11)] text-amber-700 dark:text-amber-400"
               title="PDF cache is outdated — refresh from Zotero or reopen the PDF"
             >
-              PDF outdated
+              {t("literature.detail.pdfOutdated")}
             </span>
           ) : null}
           <LiteraturePaperUserTags paperId={paper.id} tags={paper.tags ?? []} />
@@ -389,13 +389,13 @@ export function LiteratureEntryPanel({
       {!pdfAttachProp ? <LiteraturePdfAttachConflictDialog attach={pdfAttach} /> : null}
 
       <div className="space-y-0.5">
-        <MetadataRow label="Year">
+        <MetadataRow label={t("literature.detail.year")}>
           <InlineEditableField
             id={fieldId("year")}
             value={paper.year != null ? String(paper.year) : ""}
             editable={editable}
             inputMode="numeric"
-            placeholder="Year"
+            placeholder={t("literature.detail.year")}
             displayClassName="text-[length:var(--font-size-13)] text-foreground/90"
             onSave={async (raw) => {
               const yearNum = raw.trim() ? Number.parseInt(raw.trim(), 10) : null;
@@ -406,7 +406,7 @@ export function LiteratureEntryPanel({
           />
         </MetadataRow>
 
-        <MetadataRow label="Publication">
+        <MetadataRow label={t("literature.detail.publication")}>
           <InlineEditableField
             id={fieldId("venue")}
             value={paper.venue ?? ""}
@@ -417,7 +417,7 @@ export function LiteratureEntryPanel({
           />
         </MetadataRow>
 
-        <MetadataRow label="Authors">
+        <MetadataRow label={t("literature.detail.authors")}>
           <InlineEditableField
             id={fieldId("authors")}
             value={editable ? authorsForEditField(paper.authors) : authorsDisplay}
@@ -435,7 +435,7 @@ export function LiteratureEntryPanel({
         <PublicationDetailsFromCsl paper={paper} />
 
         {(editable || paper.bibkey) && (
-          <MetadataRow label="Cite key">
+          <MetadataRow label={t("literature.detail.citeKey")}>
             <MetadataIdValue
               value={paper.bibkey ?? ""}
               editable={editable}
@@ -454,7 +454,7 @@ export function LiteratureEntryPanel({
         )}
 
         {(editable || paper.doi) && (
-          <MetadataRow label="DOI">
+          <MetadataRow label={t("literature.detail.doi")}>
             <MetadataIdValue
               value={paper.doi ?? ""}
               editable={editable}
@@ -466,7 +466,7 @@ export function LiteratureEntryPanel({
         )}
 
         {(editable || paper.arxiv_id) && (
-          <MetadataRow label="arXiv">
+          <MetadataRow label={t("literature.detail.arxiv")}>
             <MetadataIdValue
               value={paper.arxiv_id ?? ""}
               editable={editable}
@@ -478,7 +478,7 @@ export function LiteratureEntryPanel({
         )}
 
         {(editable || paper.isbn) && (
-          <MetadataRow label="ISBN">
+          <MetadataRow label={t("literature.detail.isbn")}>
             <MetadataIdValue
               value={paper.isbn ?? ""}
               editable={editable}
@@ -488,10 +488,10 @@ export function LiteratureEntryPanel({
           </MetadataRow>
         )}
 
-        <MetadataRow label="AI Summary" className="items-start">
+        <MetadataRow label={t("literature.detail.aiSummary")} className="items-start">
           {paper.ai_metadata_status === "running" || paper.ai_metadata_status === "queued" ? (
             <span className="text-[length:var(--font-size-13)] italic text-muted-foreground px-1 -mx-1">
-              Generating…
+              {t("literature.detail.generating")}
             </span>
           ) : paper.ai_summary ? (
             <div className="inline-flex max-w-full min-w-0 items-start gap-1 px-1 -mx-1">
@@ -519,14 +519,14 @@ export function LiteratureEntryPanel({
                 className={cn(SETTINGS_ROW_DESC, "text-destructive/80")}
                 title={paper.ai_metadata_error ?? undefined}
               >
-                Summary generation failed
+                {t("literature.detail.summaryFailed")}
               </p>
               <button
                 type="button"
                 className={cn(literatureReadActionBtnClass, "h-6 px-2")}
                 onClick={() => handleGenerateAiMetadata()}
               >
-                Try again
+                {t("literature.detail.tryAgain")}
               </button>
             </div>
           ) : (
@@ -535,12 +535,12 @@ export function LiteratureEntryPanel({
               className={cn(literatureReadActionBtnClass, "h-6 px-2")}
               onClick={() => handleGenerateAiMetadata()}
             >
-              Generate summary & keywords
+              {t("literature.detail.generateSummary")}
             </button>
           )}
         </MetadataRow>
 
-        <MetadataRow label="Abstract" className="items-start">
+        <MetadataRow label={t("literature.detail.abstract")} className="items-start">
           {editable ? (
             <InlineEditableField
               id={fieldId("abstract")}
@@ -549,7 +549,7 @@ export function LiteratureEntryPanel({
               multiline
               fitContent
               minRows={3}
-              placeholder="Abstract"
+              placeholder={t("literature.detail.abstract")}
               displayClassName="text-[length:var(--font-size-13)] leading-relaxed text-foreground/85 whitespace-pre-wrap"
               onSave={async (abstract) => saveField({ abstract: abstract.trim() || null })}
             />
@@ -558,7 +558,7 @@ export function LiteratureEntryPanel({
               {paper.abstract}
             </p>
           ) : (
-            <p className={cn(SETTINGS_ROW_DESC, "px-1 -mx-1")}>No abstract in Zotero.</p>
+            <p className={cn(SETTINGS_ROW_DESC, "px-1 -mx-1")}>{t("literature.detail.noAbstract")}</p>
           )}
         </MetadataRow>
       </div>
@@ -587,7 +587,7 @@ export function LiteratureEntryPanel({
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete entry?</DialogTitle>
+            <DialogTitle>{t("literature.dialogs.deleteEntry")}</DialogTitle>
           </DialogHeader>
           <p className={SETTINGS_ROW_DESC}>
             {isZoteroPaper
@@ -596,7 +596,7 @@ export function LiteratureEntryPanel({
           </p>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setDeleteOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -604,7 +604,7 @@ export function LiteratureEntryPanel({
               onClick={() => void handleDelete()}
               disabled={deleting}
             >
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? t("common.deleting") : t("common.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

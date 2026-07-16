@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { PlusIcon, Loader2Icon, NotebookPenIcon, PlusCircleIcon, Trash2Icon, LoaderCircleIcon, XIcon, BookMarkedIcon } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
@@ -139,6 +140,7 @@ function LiteratureReaderToolbar({ paper, tab }: { paper: LiteraturePaper; tab: 
 }
 
 function LiteratureLibraryToolbar() {
+  const { t } = useTranslation();
   const batchActions = useLiteratureBatchSelectionActions();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const subview = useLiteratureStore((s) => s.librarySubview);
@@ -348,7 +350,7 @@ function LiteratureLibraryToolbar() {
               ) : (
                 <PlusCircleIcon className="size-3.5" />
               )}
-              {!compact ? <span className="ml-1">Add all</span> : null}
+              {!compact ? <span className="ml-1">{t("modes.literature.addAll")}</span> : null}
             </Button>
             <Button
               size="xs"
@@ -362,7 +364,7 @@ function LiteratureLibraryToolbar() {
               title="Clear all citations in this session"
             >
               <Trash2Icon className="size-3.5" />
-              {!compact ? <span className="ml-1">Clear</span> : null}
+              {!compact ? <span className="ml-1">{t("modes.literature.clearCitations")}</span> : null}
             </Button>
           </>
         ) : (
@@ -386,7 +388,7 @@ function LiteratureLibraryToolbar() {
                   toolbarBtn,
                   "shrink-0 size-6 justify-center px-0",
                 )}
-                title="Add to library"
+                title={t("modes.literature.addToLibrary")}
                 disabled={busy}
               >
                 {busy ? (
@@ -404,11 +406,11 @@ function LiteratureLibraryToolbar() {
                   setNewDialog(true);
                 }}
               >
-                New entry…
+                {t("modes.literature.newEntry")}
               </AppMenuItem>
               <AppMenuSeparator />
               <AppMenuItem disabled={!projectRoot || busy} onClick={() => void handleImportPdf()}>
-                Import PDF…
+                {t("modes.literature.importPdf")}
               </AppMenuItem>
               <AppMenuItem disabled={!projectRoot || busy} onClick={() => void handleImportBibTeX()}>
                 Import BibTeX (+ optional .json)…
@@ -418,7 +420,7 @@ function LiteratureLibraryToolbar() {
                 disabled={!projectRoot || busy}
                 onClick={() => setZoteroDialogOpen(true)}
               >
-                {boundCollectionId ? "Manage Zotero sync…" : "Connect Zotero…"}
+                {boundCollectionId ? t("modes.literature.connectZotero") : t("modes.literature.connectZotero")}
               </AppMenuItem>
               {boundCollectionId ? (
                 <AppMenuItem
@@ -440,22 +442,26 @@ function LiteratureLibraryToolbar() {
       <Dialog open={newDialog} onOpenChange={setNewDialog}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>New entry</DialogTitle>
+            <DialogTitle>{t("literature.dialogs.newEntry")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-1.5">
-            <Label className="text-[length:var(--font-size-11)] text-muted-foreground">Title</Label>
+            <Label className="text-[length:var(--font-size-11)] text-muted-foreground">
+              {t("literature.dialogs.entryTitle")}
+            </Label>
             <Input
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="Paper title"
+              placeholder={t("literature.dialogs.paperTitle")}
               onKeyDown={(e) => e.key === "Enter" && handleNewEntry()}
               autoFocus
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setNewDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setNewDialog(false)}>
+              {t("common.cancel")}
+            </Button>
             <Button onClick={() => void handleNewEntry()} disabled={!newTitle.trim() || busy}>
-              {busy ? "Creating…" : "Create"}
+              {busy ? t("common.creating") : t("common.create")}
             </Button>
           </DialogFooter>
         </DialogContent>

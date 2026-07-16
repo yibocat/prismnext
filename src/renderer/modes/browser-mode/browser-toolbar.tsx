@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useBrowserStore } from "@/stores/browser-store";
 import { getWebview } from "./webview-registry";
@@ -39,6 +40,7 @@ interface BrowserToolbarProps {
 }
 
 export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps) {
+  const { t } = useTranslation();
   const navigateBrowserTab = useRightPanelStore((s) => s.navigateBrowserTab);
   const addBookmark = useBrowserStore((s) => s.addBookmark);
   const bookmarks = useBrowserStore((s) => s.bookmarks);
@@ -123,7 +125,7 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
       <button
         type="button"
         className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-        title="Back"
+        title={t("modes.browser.back")}
         onClick={handleBack}
       >
         <ArrowLeftIcon className="size-3.5" />
@@ -131,7 +133,7 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
       <button
         type="button"
         className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-        title="Forward"
+        title={t("modes.browser.forward")}
         onClick={handleForward}
       >
         <ArrowRightIcon className="size-3.5" />
@@ -139,7 +141,7 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
       <button
         type="button"
         className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-        title={isLoading ? "Stop loading" : "Reload"}
+        title={isLoading ? t("modes.browser.stop") : t("modes.browser.reload")}
         onClick={isLoading ? handleStop : handleReload}
       >
         <RefreshCwIcon className={cn("size-3.5", isLoading && "animate-spin")} />
@@ -149,7 +151,7 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
       <button
         type="button"
         className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-        title={isBookmarked ? "Remove bookmark" : "Bookmark this page"}
+        title={isBookmarked ? t("modes.browser.bookmark") : t("modes.browser.bookmark")}
         onClick={handleBookmark}
       >
         <StarIcon className={cn("size-3.5", isBookmarked && "fill-warning text-warning")} />
@@ -165,7 +167,7 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Search or enter URL"
+          placeholder={t("modes.browser.urlPlaceholder")}
           className="flex-1 bg-transparent text-[length:var(--font-size-12)] text-foreground placeholder:text-muted-foreground/50 outline-none min-w-0"
         />
       </div>
@@ -184,10 +186,10 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
           </button>
         </AppMenuTrigger>
         <AppMenuContent align="end" className="min-w-[8.5rem]">
-          <AppMenuItem onClick={handleClearHistory}>Clear History</AppMenuItem>
+          <AppMenuItem onClick={handleClearHistory}>{t("modes.browser.clearHistory")}</AppMenuItem>
           <AppMenuSeparator />
-          <AppMenuItem onClick={handleClearCookies}>Clear Cookies</AppMenuItem>
-          <AppMenuItem onClick={handleClearCache}>Clear Cache</AppMenuItem>
+          <AppMenuItem onClick={handleClearCookies}>{t("modes.browser.clearCookies")}</AppMenuItem>
+          <AppMenuItem onClick={handleClearCache}>{t("modes.browser.clearCache")}</AppMenuItem>
         </AppMenuContent>
       </AppMenu>
     </>

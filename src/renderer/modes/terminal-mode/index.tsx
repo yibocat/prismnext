@@ -18,10 +18,12 @@ function TerminalToolbarWrapper({ tab }: { tab: RightTab }) {
 export const terminalMode: ModeDefinition = {
   id: "terminal",
   label: "Terminal",
+  labelKey: "modes.terminal.label",
   icon: <TerminalIcon className="size-3.5" />,
   tabKinds: ["terminal"],
   persistence: "transient",
   initialTitle: "Shell",
+  initialTitleKey: "modes.terminal.initialTitle",
   Sidebar: TerminalSidebar,
   Toolbar: TerminalToolbarWrapper,
   Content: TerminalContent,

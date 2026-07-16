@@ -1,5 +1,6 @@
 import { type RefObject } from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
+import { useTranslation } from "react-i18next";
 import { useWindowState } from "@/hooks/use-window-state";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -26,6 +27,7 @@ interface ContentTopBarProps {
 }
 
 export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: ContentTopBarProps) {
+  const { t } = useTranslation();
   const { platform, isMaximized, isFullscreen } = useWindowState();
   const isMobile = useIsMobile();
   const sidebarFullyCollapsed = useLayoutStore((s) => s.sidebarFullyCollapsed);
@@ -101,7 +103,7 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
             <button
               type="button"
               className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              title="Minimize"
+              title={t("shell.minimize")}
               onClick={() => window.electronAPI?.windowMinimize()}
             >
               <Minimize2Icon className="size-3.5" />
@@ -109,7 +111,7 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
             <button
               type="button"
               className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              title={isMaximized ? "Restore" : "Maximize"}
+              title={isMaximized ? t("shell.restore") : t("shell.maximize")}
               onClick={() => window.electronAPI?.windowMaximize()}
             >
               <Maximize2Icon className="size-3.5" />
@@ -117,7 +119,7 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
             <button
               type="button"
               className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
-              title="Close"
+              title={t("shell.close")}
               onClick={() => window.electronAPI?.windowClose()}
             >
               <XIcon className="size-3.5" />
@@ -132,7 +134,7 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
             className={cn(
               "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
             )}
-            title="Expand Right Area"
+            title={t("shell.expandRightArea")}
             onClick={expandRightPanel}
           >
             <PanelRight className="size-3.5" />

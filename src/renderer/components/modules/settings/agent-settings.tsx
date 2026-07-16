@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { BotIcon, PlusIcon, RotateCcwIcon, UsersIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
@@ -21,21 +23,39 @@ const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
 const BUILTIN_EXPERTS_RESET_ID = "builtin-experts-reset";
 
-function expertBundleSummary(expert: ExpertInfo): string {
+function expertBundleSummary(expert: ExpertInfo, t: TFunction): string {
   const parts: string[] = [];
-  if (expert.model) parts.push("custom model");
-  if (expert.effectiveModules?.length) parts.push(`${expert.effectiveModules.length} active modules`);
-  if (expert.skills?.length) parts.push(`${expert.skills.length} skills`);
-  if (expert.mcpServers?.length) parts.push(`${expert.mcpServers.length} MCP`);
-  return parts.length > 0 ? parts.join(" · ") : "Standard subagent preset";
+  if (expert.model) parts.push(t("settings.agent.summary.customModel"));
+  if (expert.effectiveModules?.length) {
+    parts.push(
+      t("settings.agent.summary.activeModules", { count: expert.effectiveModules.length }),
+    );
+  }
+  if (expert.skills?.length) {
+    parts.push(t("settings.agent.summary.skills", { count: expert.skills.length }));
+  }
+  if (expert.mcpServers?.length) {
+    parts.push(t("settings.agent.summary.mcp", { count: expert.mcpServers.length }));
+  }
+  return parts.length > 0 ? parts.join(" · ") : t("settings.agent.summary.standardExpert");
 }
 
-function orchestratorBundleSummary(orchestrator: OrchestratorInfo): string {
+function orchestratorBundleSummary(orchestrator: OrchestratorInfo, t: TFunction): string {
   const parts: string[] = [];
-  if (orchestrator.model) parts.push("custom model");
-  if (orchestrator.allowedExperts?.length) parts.push(`${orchestrator.allowedExperts.length} allowed experts`);
-  if (orchestrator.effectiveModules?.length) parts.push(`${orchestrator.effectiveModules.length} modules`);
-  return parts.length > 0 ? parts.join(" · ") : "Research orchestrator";
+  if (orchestrator.model) parts.push(t("settings.agent.summary.customModel"));
+  if (orchestrator.allowedExperts?.length) {
+    parts.push(
+      t("settings.agent.summary.allowedExperts", { count: orchestrator.allowedExperts.length }),
+    );
+  }
+  if (orchestrator.effectiveModules?.length) {
+    parts.push(
+      t("settings.agent.summary.modules", { count: orchestrator.effectiveModules.length }),
+    );
+  }
+  return parts.length > 0
+    ? parts.join(" · ")
+    : t("settings.agent.summary.standardOrchestrator");
 }
 
 function sortExperts(experts: ExpertInfo[]): ExpertInfo[] {
@@ -59,6 +79,7 @@ function builtinsDifferFromManifest(manifest: {
 }
 
 export function AgentSettings() {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const [experts, setExperts] = useState<ExpertInfo[]>([]);
   const [orchestrators, setOrchestrators] = useState<OrchestratorInfo[]>([]);
@@ -129,10 +150,9 @@ export function AgentSettings() {
     <div className="flex-1 overflow-auto">
       <div className="max-w-3xl mx-auto px-8 py-8 space-y-8">
         <div>
-          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">Agent</h2>
+          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">{t("settings.agent.title")}</h2>
           <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-            Orchestrators run the main chat session and delegate to experts via OpenCode Task.
-            @ mention experts in the composer to request specific specialists for a turn.
+            {t("settings.agent.pageDesc")}
           </p>
         </div>
 
@@ -140,14 +160,14 @@ export function AgentSettings() {
           <div className={cn(CARD, "!divide-y-0")}>
             <div className="flex flex-col items-center gap-3 py-10 text-center">
               <BotIcon className="size-8 text-muted-foreground/30" />
-              <p className="text-[length:var(--font-size-13)] text-muted-foreground">Open a project to manage agents.</p>
+              <p className="text-[length:var(--font-size-13)] text-muted-foreground">{t("settings.agent.openProject")}</p>
             </div>
           </div>
         ) : (
           <>
             <section>
               <div className="flex items-center justify-between gap-3 mb-2">
-                <p className={cn(CATEGORY_HEADER, "mb-0")}>Orchestrators</p>
+                <p className={cn(CATEGORY_HEADER, "mb-0")}>{t("settings.agent.orchestrators")}</p>
                 <Button
                   variant="outline"
                   size="xs"
@@ -155,12 +175,12 @@ export function AgentSettings() {
                   disabled={saving}
                 >
                   <PlusIcon className="size-3 mr-1" />
-                  New orchestrator
+                  {t("settings.agent.newOrchestrator")}
                 </Button>
               </div>
               <div className={CARD}>
                 {loading ? (
-                  <div className="py-3 text-[length:var(--font-size-12)] text-muted-foreground">Loading…</div>
+                  <div className="py-3 text-[length:var(--font-size-12)] text-muted-foreground">{t("common.loading")}</div>
                 ) : (
                   orchestrators.map((orchestrator) => {
                     const isDefault = orchestrator.id === defaultOrchestratorId;
@@ -170,7 +190,7 @@ export function AgentSettings() {
                           <div className="flex flex-wrap items-center gap-2">
                             <span className={ROW_LABEL}>{orchestrator.name}</span>
                             {orchestrator.builtin ? (
-                              <span className={cn(BADGE, "bg-muted text-muted-foreground")}>Built-in</span>
+                              <span className={cn(BADGE, "bg-muted text-muted-foreground")}>{t("settings.agent.builtin")}</span>
                             ) : null}
                             {isDefault ? (
                               <span className={cn(BADGE, "bg-primary/10 text-primary")}>Default</span>
@@ -178,7 +198,7 @@ export function AgentSettings() {
                           </div>
                           <p className={ROW_DESC}>{orchestrator.description}</p>
                           <p className="text-[length:var(--font-size-11)] text-muted-foreground/70 mt-0.5">
-                            {orchestratorBundleSummary(orchestrator)}
+                            {orchestratorBundleSummary(orchestrator, t)}
                           </p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
@@ -199,7 +219,7 @@ export function AgentSettings() {
                                     setDefaultOrchestratorId(
                                       result.manifest.defaultOrchestratorId ?? orchestrator.id,
                                     );
-                                    toast.success("Default orchestrator updated.");
+                                    toast.success(t("settings.agent.toast.defaultOrchestratorUpdated"));
                                   } finally {
                                     setSaving(false);
                                   }
@@ -210,7 +230,7 @@ export function AgentSettings() {
                             </Button>
                           ) : null}
                           <Button variant="ghost" size="xs" disabled={saving} onClick={() => openOrchestrator(orchestrator)}>
-                            {orchestrator.builtin ? "Customize" : "Edit"}
+                            {orchestrator.builtin ? t("settings.agent.customize") : t("settings.agent.edit")}
                           </Button>
                           {!orchestrator.builtin ? (
                             <InlineDeleteButton
@@ -228,9 +248,13 @@ export function AgentSettings() {
                                       orchestrator.id,
                                     );
                                     await loadAll();
-                                    toast.success("Orchestrator deleted.");
+                                    toast.success(t("settings.agent.toast.orchestratorDeleted"));
                                   } catch (err: unknown) {
-                                    toast.error(err instanceof Error ? err.message : "Failed to delete.");
+                                    toast.error(
+                                      err instanceof Error
+                                        ? err.message
+                                        : t("settings.agent.toast.deleteFailed"),
+                                    );
                                   } finally {
                                     setSaving(false);
                                   }
@@ -248,7 +272,7 @@ export function AgentSettings() {
 
             <section>
               <div className="flex items-center justify-between gap-3 mb-2">
-                <p className={cn(CATEGORY_HEADER, "mb-0")}>Experts</p>
+                <p className={cn(CATEGORY_HEADER, "mb-0")}>{t("settings.agent.experts")}</p>
                 <div className="flex items-center gap-2">
                   {expertResetConfirm.isPending(BUILTIN_EXPERTS_RESET_ID) ? (
                     <Button variant="destructive" size="xs" disabled={saving} onClick={() => {
@@ -287,13 +311,13 @@ export function AgentSettings() {
                     disabled={saving}
                   >
                     <PlusIcon className="size-3 mr-1" />
-                    New expert
+                    {t("settings.agent.newExpert")}
                   </Button>
                 </div>
               </div>
               <div className={CARD}>
                 {loading ? (
-                  <div className="py-3 text-[length:var(--font-size-12)] text-muted-foreground">Loading…</div>
+                  <div className="py-3 text-[length:var(--font-size-12)] text-muted-foreground">{t("common.loading")}</div>
                 ) : experts.length === 0 ? (
                   <div className="flex flex-col items-center gap-3 py-10 text-center">
                     <UsersIcon className="size-8 text-muted-foreground/30" />
@@ -306,12 +330,12 @@ export function AgentSettings() {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className={ROW_LABEL}>{expert.name}</span>
                           {expert.builtin ? (
-                            <span className={cn(BADGE, "bg-muted text-muted-foreground")}>Built-in</span>
+                            <span className={cn(BADGE, "bg-muted text-muted-foreground")}>{t("settings.agent.builtin")}</span>
                           ) : null}
                         </div>
                         <p className={ROW_DESC}>{expert.description}</p>
                         <p className="text-[length:var(--font-size-11)] text-muted-foreground/70 mt-0.5">
-                          {expertBundleSummary(expert)}
+                          {expertBundleSummary(expert, t)}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -341,7 +365,9 @@ export function AgentSettings() {
                                 } catch (err: unknown) {
                                   setExperts(prevExperts);
                                   toast.error(
-                                    err instanceof Error ? err.message : "Failed to update expert.",
+                                    err instanceof Error
+                                      ? err.message
+                                      : t("settings.agent.toast.updateExpertFailed"),
                                   );
                                 }
                               })();
@@ -370,7 +396,7 @@ export function AgentSettings() {
                             );
                           }}
                         >
-                          {expert.builtin ? "Customize" : "Edit"}
+                          {expert.builtin ? t("settings.agent.customize") : t("settings.agent.edit")}
                         </Button>
                         {!expert.builtin ? (
                           <InlineDeleteButton
@@ -385,9 +411,13 @@ export function AgentSettings() {
                                 try {
                                   await window.electronAPI.expertsDeleteCustom(projectRoot, expert.id);
                                   await loadAll();
-                                  toast.success("Expert deleted.");
+                                  toast.success(t("settings.agent.toast.expertDeleted"));
                                 } catch (err: unknown) {
-                                  toast.error(err instanceof Error ? err.message : "Failed to delete.");
+                                  toast.error(
+                                    err instanceof Error
+                                      ? err.message
+                                      : t("settings.agent.toast.deleteFailed"),
+                                  );
                                 } finally {
                                   setSaving(false);
                                 }

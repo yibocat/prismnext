@@ -26,6 +26,7 @@
 export type ExperimentsRunConfirmDenyReason = "timeout" | "user";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2Icon, TerminalIcon, XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -80,6 +81,7 @@ export function ExperimentsRunConfirmModal({
   onAllow,
   onDeny,
 }: ExperimentsRunConfirmModalProps) {
+  const { t } = useTranslation();
   const [resolving, setResolving] = useState(false);
   // Track whether a final decision has been made so timeout + manual
   // button press can't race the same callback twice.
@@ -150,14 +152,12 @@ export function ExperimentsRunConfirmModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <TerminalIcon className="size-4 text-warning" aria-hidden />
-            Confirm experiment run
+            {t("experiments.runConfirm.title")}
           </DialogTitle>
           <DialogDescription asChild>
             <div className="space-y-2">
               <p className="text-[length:var(--font-size-13)] text-foreground/85">
-                This will execute a shell command in the experiment lab
-                directory. The run is recorded in runs.jsonl with the
-                current environment snapshot.
+                {t("experiments.runConfirm.body")}
               </p>
             </div>
           </DialogDescription>
@@ -166,7 +166,7 @@ export function ExperimentsRunConfirmModal({
         <div className="space-y-2 text-[length:var(--font-size-12)]">
           <div className="space-y-1">
             <div className="text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/70">
-              Command
+              {t("experiments.command")}
             </div>
             <pre
               className={cn(
@@ -175,12 +175,12 @@ export function ExperimentsRunConfirmModal({
                 experimentsCodeClass,
               )}
             >
-              {command || "(empty)"}
+              {command || t("experiments.runConfirm.empty")}
             </pre>
           </div>
           <div className="space-y-1">
             <div className="text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/70">
-              Working directory
+              {t("experiments.runConfirm.workingDir")}
             </div>
             <div
               className={cn(
@@ -194,7 +194,7 @@ export function ExperimentsRunConfirmModal({
           </div>
           <div className="space-y-1">
             <div className="text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/70">
-              Type
+              {t("experiments.type")}
             </div>
             <AppSelect
               value={kind || KIND_UNTYPED}
@@ -203,11 +203,15 @@ export function ExperimentsRunConfirmModal({
                 onKindChange?.(v === KIND_UNTYPED ? "" : (v as ExperimentRunKind))
               }
             >
-              <AppSelectTrigger variant="dialog" className="w-full" aria-label="Run type">
-                <AppSelectValue placeholder="Untyped" />
+              <AppSelectTrigger
+                variant="dialog"
+                className="w-full"
+                aria-label={t("experiments.type")}
+              >
+                <AppSelectValue placeholder={t("experiments.untyped")} />
               </AppSelectTrigger>
               <AppSelectContent>
-                <AppSelectItem value={KIND_UNTYPED}>Untyped</AppSelectItem>
+                <AppSelectItem value={KIND_UNTYPED}>{t("experiments.untyped")}</AppSelectItem>
                 {EXPERIMENT_RUN_KINDS.map((k) => (
                   <AppSelectItem key={k} value={k}>
                     {k}
@@ -228,7 +232,7 @@ export function ExperimentsRunConfirmModal({
             disabled={resolving}
           >
             <XIcon className="size-3.5" aria-hidden />
-            Deny
+            {t("experiments.runConfirm.deny")}
           </Button>
           <Button
             type="button"
@@ -240,7 +244,7 @@ export function ExperimentsRunConfirmModal({
             {resolving ? (
               <Loader2Icon className="size-3.5 animate-spin" aria-hidden />
             ) : null}
-            Allow
+            {t("experiments.runConfirm.allow")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -254,6 +258,7 @@ export function ExperimentsRunConfirmModal({
  * toggles. Driven by setInterval for a simple determinate bar.
  */
 function CountdownProgress({ active }: { active: boolean }) {
+  const { t } = useTranslation();
   const startRef = useRef<number | null>(null);
   const [value, setValue] = useState(0);
 
@@ -288,11 +293,11 @@ function CountdownProgress({ active }: { active: boolean }) {
     <div className="space-y-1">
       <Progress
         value={value}
-        aria-label="Auto-deny countdown"
+        aria-label={t("experiments.runConfirm.autoDeny", { seconds: remaining })}
         className="h-1"
       />
       <p className="text-[length:var(--font-size-11)] text-muted-foreground/60">
-        Auto-deny in {remaining}s
+        {t("experiments.runConfirm.autoDeny", { seconds: remaining })}
       </p>
     </div>
   );

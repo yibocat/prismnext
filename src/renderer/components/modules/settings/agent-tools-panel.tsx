@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2Icon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -10,18 +11,12 @@ import {
 const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
 
-const CATEGORY_LABELS: Record<string, string> = {
-  reference: "Reference",
-  compile: "Compile",
-  project: "Project",
-  utility: "Utility",
-};
-
-const CATEGORY_ORDER = ["reference", "compile", "project", "utility"];
+const CATEGORY_ORDER = ["reference", "compile", "project", "utility"] as const;
 
 type BuiltinToolInfo = Awaited<ReturnType<typeof window.electronAPI.settingsGetBuiltinTools>>[number];
 
 export function AgentToolsPanel() {
+  const { t } = useTranslation();
   const [tools, setTools] = useState<BuiltinToolInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -66,17 +61,15 @@ export function AgentToolsPanel() {
   return (
     <div className={SETTINGS_DETAIL_SHELL}>
       <div className="space-y-1">
-        <h2 className="text-[length:var(--font-size-15)] font-semibold">Agent tools</h2>
-        <p className={SETTINGS_ROW_DESC}>
-          Read-only view of built-in OpenCode tools. Usage hints and workflow rules are synced from
-          the app registry into each tool&apos;s schema description on startup — not knowledge
-          modules.
-        </p>
+        <h2 className="text-[length:var(--font-size-15)] font-semibold">{t("settings.editor.agentTools.title")}</h2>
+        <p className={SETTINGS_ROW_DESC}>{t("settings.editor.agentTools.intro")}</p>
       </div>
 
       {grouped.map(({ category, tools: categoryTools }) => (
         <section key={category} className="space-y-3">
-          <h3 className={SETTINGS_CATEGORY_HEADER}>{CATEGORY_LABELS[category] ?? category}</h3>
+          <h3 className={SETTINGS_CATEGORY_HEADER}>
+            {t(`settings.editor.agentTools.category.${category}`)}
+          </h3>
           <div className="space-y-3">
             {categoryTools.map((tool) => (
               <article
@@ -88,7 +81,7 @@ export function AgentToolsPanel() {
                   <code className="text-[length:var(--font-size-11)] text-muted-foreground">
                     {tool.name}
                   </code>
-                  <span className={cn(BADGE, "bg-muted text-muted-foreground")}>Read-only</span>
+                  <span className={cn(BADGE, "bg-muted text-muted-foreground")}>{t("common.readOnly")}</span>
                 </div>
                 <pre className="whitespace-pre-wrap rounded-md bg-muted/40 px-3 py-2 text-[length:var(--font-size-12)] leading-relaxed text-foreground/90 font-mono">
                   {tool.schemaDescription}

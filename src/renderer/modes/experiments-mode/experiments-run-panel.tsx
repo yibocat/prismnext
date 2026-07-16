@@ -6,6 +6,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   HistoryIcon,
   Loader2Icon,
@@ -52,6 +53,7 @@ import {
 const KIND_UNTYPED = "__untyped__";
 
 function RunConsoleOutput({ output, running }: { output: string; running: boolean }) {
+  const { t } = useTranslation();
   const preRef = useRef<HTMLPreElement>(null);
   const hasOutput = output.trim().length > 0;
 
@@ -71,14 +73,15 @@ function RunConsoleOutput({ output, running }: { output: string; running: boolea
         "whitespace-pre-wrap break-words bg-muted/15",
       )}
       aria-live="polite"
-      aria-label="Command output"
+      aria-label={t("experiments.output")}
     >
-      {hasOutput ? output : running ? "Waiting for output…" : ""}
+      {hasOutput ? output : running ? t("experiments.runPanel.waitingOutput") : ""}
     </pre>
   );
 }
 
 export function ExperimentsRunPanel() {
+  const { t } = useTranslation();
   const projectRoot = useExperimentProjectRoot();
   const selectedId = useExperimentStore((s) => s.selectedId);
   const runs = useExperimentStore((s) => s.detail?.runs);
@@ -142,14 +145,17 @@ export function ExperimentsRunPanel() {
     );
   }, [pendingCommand, pendingKind, projectRoot, runCommand, selectedId]);
 
-  const handleDeny = useCallback((reason: ExperimentsRunConfirmDenyReason) => {
-    setConfirmOpen(false);
-    setPendingCommand("");
-    setPendingKind("");
-    if (reason === "timeout") {
-      toast.info("Confirm timed out — run not started");
-    }
-  }, []);
+  const handleDeny = useCallback(
+    (reason: ExperimentsRunConfirmDenyReason) => {
+      setConfirmOpen(false);
+      setPendingCommand("");
+      setPendingKind("");
+      if (reason === "timeout") {
+        toast.info(t("experiments.runPanel.confirmTimeout"));
+      }
+    },
+    [t],
+  );
 
   const handleCancel = useCallback(() => {
     if (!projectRoot || !selectedId || !runInFlight || runInFlight.id !== selectedId) return;
@@ -166,8 +172,10 @@ export function ExperimentsRunPanel() {
     const paths = await getPaths(projectRoot, selectedId);
     if (!paths) return;
     const leaf = paths.workspaceRel.split("/").pop() ?? paths.workspaceRel;
-    useRightPanelStore.getState().openTerminalAtCwd(paths.workspaceAbs, `Lab: ${leaf}`);
-  }, [projectRoot, selectedId, getPaths]);
+    useRightPanelStore
+      .getState()
+      .openTerminalAtCwd(paths.workspaceAbs, t("experiments.runPanel.labTab", { name: leaf }));
+  }, [projectRoot, selectedId, getPaths, t]);
 
   const cwd = useExperimentStore((s) => s.detail?.meta.workspacePath) ?? "";
   const liveOutput = isInFlightForCurrent ? (runInFlight?.liveOutput ?? "") : "";
@@ -175,18 +183,18 @@ export function ExperimentsRunPanel() {
   return (
     <div className="space-y-2">
       {isReadonly && !isInFlightForCurrent ? (
-        <p className={SETTINGS_ROW_DESC}>Read-only mode — runs are disabled.</p>
+        <p className={SETTINGS_ROW_DESC}>{t("experiments.runPanel.readOnly")}</p>
       ) : null}
 
       <div className={experimentsRunConsoleShellClass}>
         <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-1.5">
-          <span className={experimentsSubsectionLabelClass}>Command</span>
+          <span className={experimentsSubsectionLabelClass}>{t("experiments.command")}</span>
           <span className="font-sans text-[length:var(--font-size-10)] text-muted-foreground/55">
-            Enter to run · Shift+Enter newline
+            {t("experiments.runPanel.enterToRun")}
           </span>
         </div>
         <Textarea
-          aria-label="Command"
+          aria-label={t("experiments.command")}
           value={command}
           onChange={(e) => setCommand(e.target.value)}
           placeholder="python train.py --epochs 50"
@@ -228,14 +236,14 @@ export function ExperimentsRunPanel() {
           >
             <AppSelectTrigger
               variant="wide"
-              aria-label="Run type"
-              title="Optional run classification (omit when unsure)"
+              aria-label={t("experiments.type")}
+              title={t("experiments.runPanel.typeTitle")}
               className="min-w-[7.5rem]"
             >
-              <AppSelectValue placeholder="Type" />
+              <AppSelectValue placeholder={t("experiments.type")} />
             </AppSelectTrigger>
             <AppSelectContent>
-              <AppSelectItem value={KIND_UNTYPED}>Type</AppSelectItem>
+              <AppSelectItem value={KIND_UNTYPED}>{t("experiments.type")}</AppSelectItem>
               {EXPERIMENT_RUN_KINDS.map((k) => (
                 <AppSelectItem key={k} value={k}>
                   {k}
@@ -252,18 +260,18 @@ export function ExperimentsRunPanel() {
             className="h-7 gap-1 px-2.5"
             title={
               isReadonly
-                ? "Permission mode is read-only — runs are disabled."
+                ? t("experiments.runPanel.permissionReadonly")
                 : !projectRoot || !selectedId
-                  ? "Select an experiment to run a command."
+                  ? t("experiments.runPanel.selectExperiment")
                   : isInFlightForCurrent
-                    ? "A run is in progress for this experiment."
+                    ? t("experiments.runPanel.runInProgress")
                     : command.trim().length === 0
-                      ? "Enter a command to run."
-                      : "Run command in lab"
+                      ? t("experiments.runPanel.enterCommand")
+                      : t("experiments.runPanel.runInLab")
             }
           >
             <PlayIcon className="size-3" aria-hidden />
-            Run
+            {t("experiments.run")}
           </Button>
           {isInFlightForCurrent ? (
             <Button
@@ -272,10 +280,10 @@ export function ExperimentsRunPanel() {
               variant="outline"
               onClick={handleCancel}
               className="h-7 gap-1 px-2.5"
-              title="Cancel the in-flight run"
+              title={t("experiments.runPanel.cancelRun")}
             >
               <SquareIcon className="size-3" aria-hidden />
-              Cancel
+              {t("experiments.cancel")}
             </Button>
           ) : null}
           <Button
@@ -285,10 +293,14 @@ export function ExperimentsRunPanel() {
             onClick={handleReuseLast}
             disabled={lastCommand == null || isInFlightForCurrent}
             className="h-7 gap-1 px-2"
-            title={lastCommand == null ? "No prior runs to reuse." : "Populate from the most recent run"}
+            title={
+              lastCommand == null
+                ? t("experiments.runPanel.noPrior")
+                : t("experiments.runPanel.populateLast")
+            }
           >
             <HistoryIcon className="size-3" aria-hidden />
-            Reuse last
+            {t("experiments.reuseLast")}
           </Button>
           <Button
             type="button"
@@ -297,10 +309,10 @@ export function ExperimentsRunPanel() {
             onClick={() => void handleOpenTerminal()}
             disabled={!projectRoot || !selectedId}
             className="h-7 gap-1 px-2"
-            title="Open a terminal in the experiment's lab folder"
+            title={t("experiments.runPanel.openTerminal")}
           >
             <TerminalIcon className="size-3" aria-hidden />
-            Terminal
+            {t("experiments.terminal")}
           </Button>
 
           {isInFlightForCurrent ? (
@@ -309,7 +321,7 @@ export function ExperimentsRunPanel() {
               aria-live="polite"
             >
               <Loader2Icon className="size-3 shrink-0 animate-spin" aria-hidden />
-              <span className="shrink-0 font-medium">Running</span>
+              <span className="shrink-0 font-medium">{t("experiments.running")}</span>
             </span>
           ) : null}
         </div>

@@ -1,4 +1,5 @@
 import { useMemo, useState, useRef, useCallback, useEffect, type RefObject } from "react";
+import { useTranslation } from "react-i18next";
 import {
   FileTextIcon,
   HardDriveIcon,
@@ -112,18 +113,19 @@ function LibraryTableHeader({
   indeterminate: boolean;
   onToggleAll: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div ref={headerRef} className={literatureListHeaderClass} data-literature-list-header>
       <span className={LITERATURE_COL_EXTRACT} aria-hidden />
       <SortHeaderButton
-        label="Year"
+        label={t("modes.literature.colYear")}
         active={sortColumn === "year"}
         direction={sortDirection}
         onClick={() => onSort("year")}
         className={LITERATURE_COL_YEAR}
       />
       <SortHeaderButton
-        label="Title"
+        label={t("modes.literature.colTitle")}
         active={sortColumn === "title"}
         direction={sortDirection}
         onClick={() => onSort("title")}
@@ -132,12 +134,12 @@ function LibraryTableHeader({
       <span
         className={cn(LITERATURE_COL_AUTHORS, literatureListHeaderLabelClass, "text-muted-foreground")}
       >
-        Authors
+        {t("modes.literature.colAuthors")}
       </span>
       <span
         className={cn(LITERATURE_COL_VENUE, literatureListHeaderLabelClass, "text-muted-foreground")}
       >
-        Publication
+        {t("modes.literature.colPublication")}
       </span>
       <span
         className={cn(
@@ -150,14 +152,14 @@ function LibraryTableHeader({
         Labels
       </span>
       <SortHeaderButton
-        label="Added"
+        label={t("modes.literature.colAdded")}
         active={sortColumn === "created_at"}
         direction={sortDirection}
         onClick={() => onSort("created_at")}
         className={LITERATURE_COL_CREATED}
       />
       <SortHeaderButton
-        label="Updated"
+        label={t("modes.literature.colUpdated")}
         active={sortColumn === "updated_at"}
         direction={sortDirection}
         onClick={() => onSort("updated_at")}
@@ -408,6 +410,7 @@ function LibraryTableRow({
 }
 
 export function LiteratureLibrary({ pdfDragActive = false }: { pdfDragActive?: boolean }) {
+  const { t } = useTranslation();
   const papers = useLiteratureStore((s) => s.papers);
   const searchQuery = useLiteratureStore((s) => s.searchQuery);
   const searchResults = useLiteratureStore((s) => s.searchResults);
@@ -516,10 +519,10 @@ export function LiteratureLibrary({ pdfDragActive = false }: { pdfDragActive?: b
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
         <p className="text-[length:var(--font-size-14)] text-foreground/80">
-          Start your library
+          {t("modes.literature.emptyTitle")}
         </p>
         <p className="text-[length:var(--font-size-12)] text-muted-foreground/70 max-w-sm">
-          Drag in a PDF, or use the toolbar <PlusIcon className="inline size-3 align-text-bottom" /> menu to add by DOI, arXiv ID, or import BibTeX.
+          {t("modes.literature.emptyHint")}
         </p>
         <p className="text-[length:var(--font-size-11)] text-muted-foreground/45 max-w-sm">
           Zotero is optional — connect it later from the same menu if you want to sync a collection.
@@ -538,7 +541,7 @@ export function LiteratureLibrary({ pdfDragActive = false }: { pdfDragActive?: b
               ? `No matches for “${searchQuery.trim()}”`
               : viewLabel
                 ? `No entries in “${viewLabel}”`
-                : "No entries"}
+                : t("modes.literature.noEntries")}
         </p>
       </div>
     );

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { ArrowUpRightIcon, LibraryIcon, Loader2Icon, SearchIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -40,19 +42,30 @@ interface LibrarySource {
   removable: boolean;
 }
 
-function filterCatalogItems(items: LibraryCatalogItem[], query: string): LibraryCatalogItem[] {
+function filterCatalogItems(
+  items: LibraryCatalogItem[],
+  query: string,
+  t: TFunction,
+): LibraryCatalogItem[] {
   const q = query.trim().toLowerCase();
   if (!q) return items;
-  return items.filter(
-    (s) =>
+  return items.filter((s) => {
+    const categoryEn = s.category ? SKILL_CATEGORY_LABELS[s.category].toLowerCase() : "";
+    const categoryTr = s.category
+      ? t(`settings.editor.skills.category.${s.category}`).toLowerCase()
+      : "";
+    return (
       s.name.toLowerCase().includes(q) ||
       s.description.toLowerCase().includes(q) ||
       s.sourceLabel.toLowerCase().includes(q) ||
-      (s.category && SKILL_CATEGORY_LABELS[s.category].toLowerCase().includes(q)),
-  );
+      (categoryEn && categoryEn.includes(q)) ||
+      (categoryTr && categoryTr.includes(q))
+    );
+  });
 }
 
 export function SkillLibraryPanel() {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
   const [installedIds, setInstalledIds] = useState<Set<string>>(new Set());
@@ -78,8 +91,8 @@ export function SkillLibraryPanel() {
   );
 
   const filteredCatalogItems = useMemo(
-    () => filterCatalogItems(catalogItems, librarySearch),
-    [catalogItems, librarySearch],
+    () => filterCatalogItems(catalogItems, librarySearch, t),
+    [catalogItems, librarySearch, t],
   );
 
   const visibleCatalogItems = useMemo(
@@ -128,11 +141,13 @@ export function SkillLibraryPanel() {
         setCatalogItems((prev) => [...prev, ...batch]);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load library.");
+      toast.error(
+        err instanceof Error ? err.message : t("settings.editor.skills.toast.loadFailed"),
+      );
     } finally {
       setCatalogLoading(false);
     }
-  }, [connectedSources, projectRoot]);
+  }, [connectedSources, projectRoot, t]);
 
   useEffect(() => {
     void loadPanelData();
@@ -175,9 +190,11 @@ export function SkillLibraryPanel() {
       await window.electronAPI.chatPrewarm(projectRoot);
       bumpSkillsRefresh();
       setInstalledIds((prev) => new Set([...prev, ...result.installedIds]));
-      toast.success(`Installed "${item.name}" — start a new chat to use it.`);
+      toast.success(t("settings.editor.skills.toast.installed", { name: item.name }));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Install failed.");
+      toast.error(
+        err instanceof Error ? err.message : t("settings.editor.skills.toast.installFailed"),
+      );
     } finally {
       setSaving(false);
     }
@@ -195,10 +212,15 @@ export function SkillLibraryPanel() {
       bumpSkillsRefresh();
       setInstalledIds((prev) => new Set([...prev, ...result.installedIds]));
       toast.success(
-        `Installed ${result.installedIds.length} skills from "${source.name}" — start a new chat tab.`,
+        t("settings.editor.skills.toast.installedBatch", {
+          count: result.installedIds.length,
+          name: source.name,
+        }),
       );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Install all failed.");
+      toast.error(
+        err instanceof Error ? err.message : t("settings.editor.skills.toast.installAllFailed"),
+      );
     } finally {
       setSaving(false);
     }
@@ -213,13 +235,13 @@ export function SkillLibraryPanel() {
       setLibrarySources(result.sources);
       setAddSourceUrl("");
       await window.electronAPI.chatPrewarm(projectRoot);
-      const label =
-        result.sourceKind === "github"
-          ? `GitHub source added (${result.skillCount} skills)`
-          : `Registry added (${result.skillCount} skills)`;
-      toast.success(label);
+      toast.success(
+        t("settings.editor.skills.toast.githubAdded", { count: result.skillCount }),
+      );
     } catch (err) {
-      setAddSourceError(err instanceof Error ? err.message : "Could not add source.");
+      setAddSourceError(
+        err instanceof Error ? err.message : t("settings.editor.skills.toast.addSourceFailed"),
+      );
     } finally {
       setSaving(false);
     }
@@ -259,9 +281,11 @@ export function SkillLibraryPanel() {
       loadedSourceIdsRef.current.delete(source.id);
       setCatalogItems((prev) => prev.filter((item) => item.sourceId !== source.id));
       await window.electronAPI.chatPrewarm(projectRoot);
-      toast.success(`Removed "${source.name}".`);
+      toast.success(t("settings.editor.skills.toast.sourceRemoved", { name: source.name }));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to remove source.");
+      toast.error(
+        err instanceof Error ? err.message : t("settings.editor.skills.toast.removeFailed"),
+      );
     } finally {
       setSaving(false);
     }
@@ -270,7 +294,7 @@ export function SkillLibraryPanel() {
   if (!projectRoot) {
     return (
       <div className="flex flex-1 items-center justify-center px-8 text-[length:var(--font-size-13)] text-muted-foreground">
-        Open a project to browse skill libraries.
+        {t("settings.editor.skills.openProject")}
       </div>
     );
   }
@@ -278,18 +302,15 @@ export function SkillLibraryPanel() {
   return (
     <div ref={scrollRootRef} className="flex-1 min-h-0 overflow-auto">
       <div className={SETTINGS_DETAIL_SHELL}>
-        <p className={SETTINGS_ROW_DESC}>
-          Add sources to your library, then install skills one at a time below. Installed skills
-          appear on the main Skills page — start a new chat tab to use them.
-        </p>
+        <p className={SETTINGS_ROW_DESC}>{t("settings.editor.skills.intro")}</p>
 
         <div className="space-y-3">
-          <p className={SETTINGS_CATEGORY_HEADER}>Library sources</p>
+          <p className={SETTINGS_CATEGORY_HEADER}>{t("settings.editor.skills.sources")}</p>
           <div className="flex gap-2">
             <input
               type="url"
               className={cn(INPUT, "flex-1")}
-              placeholder="GitHub repo or registry (e.g. github.com/owner/repo, developers.cloudflare.com)"
+              placeholder={t("settings.editor.skills.sourcePlaceholder")}
               value={addSourceUrl}
               onChange={(e) => {
                 setAddSourceUrl(e.target.value);
@@ -304,7 +325,7 @@ export function SkillLibraryPanel() {
               disabled={saving || !addSourceUrl.trim()}
               onClick={() => void addLibrarySource(addSourceUrl)}
             >
-              Add source
+              {t("settings.editor.skills.addSource")}
             </Button>
           </div>
           {addSourceError && (
@@ -321,7 +342,7 @@ export function SkillLibraryPanel() {
                 disabled={saving}
                 onClick={() => void addLibrarySource(preset.repoUrl)}
               >
-                Add {preset.name}
+                {t("settings.editor.skills.addSourceNamed", { name: preset.name })}
               </Button>
             ))}
           </div>
@@ -330,7 +351,7 @@ export function SkillLibraryPanel() {
             {!loaded ? (
               <div className="flex items-center gap-2 px-4 py-4 text-[length:var(--font-size-12)] text-muted-foreground">
                 <Loader2Icon className="size-3.5 animate-spin" />
-                Loading sources…
+                {t("settings.editor.skills.loadingSources")}
               </div>
             ) : (
               librarySources.map((source) => (
@@ -350,10 +371,10 @@ export function SkillLibraryPanel() {
                         )}
                       >
                         {source.kind === "bundled"
-                          ? "Built-in"
+                          ? t("settings.editor.skills.kind.bundled")
                           : source.kind === "github"
-                            ? "GitHub"
-                            : "Registry"}
+                            ? t("settings.editor.skills.kind.github")
+                            : t("settings.editor.skills.kind.registry")}
                       </span>
                       <span
                         className={cn(
@@ -363,7 +384,9 @@ export function SkillLibraryPanel() {
                             : "bg-muted text-muted-foreground",
                         )}
                       >
-                        {source.connected ? "Connected" : "Disconnected"}
+                        {source.connected
+                          ? t("settings.editor.skills.connected")
+                          : t("settings.editor.skills.disconnected")}
                       </span>
                     </div>
                     <p className={ROW_DESC}>{source.description}</p>
@@ -386,7 +409,7 @@ export function SkillLibraryPanel() {
                         disabled={saving}
                         onClick={() => void installAllFromSource(source)}
                       >
-                        Install all
+                        {t("settings.editor.skills.installAll")}
                       </Button>
                     )}
                     {source.connected ? (
@@ -399,7 +422,7 @@ export function SkillLibraryPanel() {
                           void toggleLibrarySource(source, false);
                         }}
                       >
-                        Disconnect
+                        {t("settings.editor.skills.disconnect")}
                       </Button>
                     ) : (
                       <Button
@@ -410,7 +433,7 @@ export function SkillLibraryPanel() {
                           void toggleLibrarySource(source, true);
                         }}
                       >
-                        Connect
+                        {t("settings.editor.skills.connect")}
                       </Button>
                     )}
                     {source.removable && (
@@ -431,13 +454,13 @@ export function SkillLibraryPanel() {
         </div>
 
         <div className="space-y-3">
-          <p className={SETTINGS_CATEGORY_HEADER}>Browse library</p>
+          <p className={SETTINGS_CATEGORY_HEADER}>{t("settings.editor.skills.browse")}</p>
           <div className="relative">
             <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
             <input
               type="search"
               className={cn(INPUT, "pl-8")}
-              placeholder="Search loaded skills…"
+              placeholder={t("settings.editor.skills.searchPlaceholder")}
               value={librarySearch}
               onChange={(e) => setLibrarySearch(e.target.value)}
             />
@@ -446,20 +469,20 @@ export function SkillLibraryPanel() {
           {!loaded || catalogLoading ? (
             <div className="flex items-center gap-2 text-[length:var(--font-size-12)] text-muted-foreground py-4">
               <Loader2Icon className="size-3.5 animate-spin" />
-              Loading library…
+              {t("settings.editor.skills.loadingLibrary")}
             </div>
           ) : connectedSources.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border py-10 text-center">
               <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-                Connect a library source above to browse skills.
+                {t("settings.editor.skills.connectSourceHint")}
               </p>
             </div>
           ) : visibleCatalogItems.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border py-10 text-center">
               <p className="text-[length:var(--font-size-13)] text-muted-foreground">
                 {librarySearch.trim()
-                  ? "No skills match your search."
-                  : "No skills available yet."}
+                  ? t("settings.editor.skills.emptySearch")
+                  : t("settings.editor.skills.empty")}
               </p>
             </div>
           ) : (
@@ -483,7 +506,7 @@ export function SkillLibraryPanel() {
                               "bg-muted/80 text-muted-foreground normal-case tracking-normal",
                             )}
                           >
-                            {SKILL_CATEGORY_LABELS[item.category]}
+                            {t(`settings.editor.skills.category.${item.category}`)}
                           </span>
                         )}
                       </div>
@@ -505,7 +528,7 @@ export function SkillLibraryPanel() {
                             <button
                               type="button"
                               className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                              title="Open skill URL in browser"
+                              title={t("settings.editor.skills.openUrl")}
                               onClick={() => openUrlInBrowser(item.artifactUrl!)}
                             >
                               <ArrowUpRightIcon className="size-3.5" />
@@ -518,7 +541,7 @@ export function SkillLibraryPanel() {
                                 "bg-primary/10 text-primary normal-case tracking-normal shrink-0",
                               )}
                             >
-                              Installed
+                              {t("settings.editor.skills.installed")}
                             </span>
                           ) : (
                             <Button
@@ -528,7 +551,7 @@ export function SkillLibraryPanel() {
                               disabled={saving}
                               onClick={() => void installCatalogItem(item)}
                             >
-                              Install
+                              {t("settings.editor.skills.install")}
                             </Button>
                           )}
                         </div>

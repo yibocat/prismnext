@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -87,11 +88,11 @@ const PRESET_FOLDERS: Record<Exclude<PresetId, "custom">, NewFolderEntry[]> = {
   ],
 };
 
-const PRESET_OPTIONS: { id: PresetId; label: string }[] = [
-  { id: "minimal", label: "Minimal" },
-  { id: "paper", label: "Paper" },
-  { id: "research", label: "Research" },
-  { id: "custom", label: "Custom" },
+const PRESET_OPTIONS: { id: PresetId; labelKey: string }[] = [
+  { id: "minimal", labelKey: "project.new.minimal" },
+  { id: "paper", labelKey: "project.new.paper" },
+  { id: "research", labelKey: "project.new.research" },
+  { id: "custom", labelKey: "project.new.custom" },
 ];
 
 function foldersEqual(a: NewFolderEntry[], b: NewFolderEntry[]): boolean {
@@ -115,6 +116,7 @@ export function NewProjectDialog({
   open: controlledOpen,
   onOpenChange,
 }: NewProjectDialogProps) {
+  const { t } = useTranslation();
   const addRecentProject = useProjectStore((s) => s.addRecentProject);
   const openProject = useDocumentStore((s) => s.openProject);
 
@@ -216,7 +218,7 @@ export function NewProjectDialog({
       setOpen(false);
       await openProject(fullPath);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to create project";
+      const message = err instanceof Error ? err.message : t("project.new.createFailed");
       console.error("Project creation failed:", err);
       toast.error(message);
     } finally {
@@ -230,16 +232,16 @@ export function NewProjectDialog({
       <DialogContent className="max-w-md gap-0 p-0 overflow-hidden">
         <DialogHeader className="space-y-1 px-5 pt-5 pb-4">
           <DialogTitle className="text-[length:var(--font-size-15)] font-semibold tracking-tight">
-            New Project
+            {t("project.new.title")}
           </DialogTitle>
           <DialogDescription className={SETTINGS_ROW_DESC}>
-            Name, location, and a workspace template.
+            {t("project.new.description")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 px-5 pb-5">
           <div className={SETTINGS_FORM_FIELD}>
-            <label className={SETTINGS_ROW_LABEL}>Project name</label>
+            <label className={SETTINGS_ROW_LABEL}>{t("project.new.projectName")}</label>
             <div className="flex items-center gap-2">
               <Popover modal={false} open={iconOpen} onOpenChange={setIconOpen}>
                 <PopoverTrigger asChild>
@@ -251,7 +253,7 @@ export function NewProjectDialog({
                       "hover:ring-1 hover:ring-border focus-visible:ring-1 focus-visible:ring-ring",
                       "disabled:pointer-events-none disabled:opacity-50",
                     )}
-                    title="Choose project icon"
+                    title={t("project.new.chooseIcon")}
                   >
                     <ProjectIconBadge icon={projectIcon} name={projectName || "P"} />
                   </button>
@@ -270,7 +272,7 @@ export function NewProjectDialog({
                     <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
                     <input
                       className={cn(appMenuInputClass, "h-7 min-w-0")}
-                      placeholder="Paste emoji…"
+                      placeholder={t("project.new.pasteEmoji")}
                       value={customEmoji}
                       maxLength={8}
                       onChange={(e) => {
@@ -336,7 +338,7 @@ export function NewProjectDialog({
           </div>
 
           <div className={SETTINGS_FORM_FIELD}>
-            <label className={SETTINGS_ROW_LABEL}>Location</label>
+            <label className={SETTINGS_ROW_LABEL}>{t("project.new.location")}</label>
             <button
               type="button"
               className={cn(
@@ -348,7 +350,7 @@ export function NewProjectDialog({
             >
               <FolderOpenIcon className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate">
-                {parentPath || "Choose parent folder…"}
+                {parentPath || t("project.new.chooseParent")}
               </span>
             </button>
             {fullPath ? (
@@ -359,7 +361,7 @@ export function NewProjectDialog({
           </div>
 
           <div className={SETTINGS_FORM_FIELD}>
-            <label className={SETTINGS_ROW_LABEL}>Template</label>
+            <label className={SETTINGS_ROW_LABEL}>{t("project.new.template")}</label>
             <div className="flex flex-wrap gap-1.5">
               {PRESET_OPTIONS.map((item) => (
                 <button
@@ -374,13 +376,13 @@ export function NewProjectDialog({
                       : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
-                  {item.label}
+                  {t(item.labelKey)}
                 </button>
               ))}
             </div>
             <div className="flex items-center justify-between gap-2 pt-0.5">
               <p className="min-w-0 truncate text-[length:var(--font-size-11)] text-muted-foreground">
-                {folderSummary || "No folders"}
+                {folderSummary || t("project.new.noFolders")}
               </p>
               <button
                 type="button"
@@ -388,7 +390,7 @@ export function NewProjectDialog({
                 onClick={() => setShowFolders((v) => !v)}
                 className="shrink-0 text-[length:var(--font-size-11)] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
               >
-                {showFolders ? "Hide" : "Edit folders"}
+                {showFolders ? t("common.hide") : t("project.new.editFolders")}
               </button>
             </div>
           </div>
@@ -396,7 +398,7 @@ export function NewProjectDialog({
           {showFolders ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <p className={SETTINGS_ROW_LABEL}>Folders</p>
+                <p className={SETTINGS_ROW_LABEL}>{t("project.new.folders")}</p>
                 <Button
                   type="button"
                   variant="ghost"
@@ -411,7 +413,7 @@ export function NewProjectDialog({
                   }
                 >
                   <PlusIcon className="size-3.5" />
-                  Add
+                  {t("project.new.addFolder")}
                 </Button>
               </div>
               <div className="space-y-1.5">
@@ -471,7 +473,7 @@ export function NewProjectDialog({
                         onClick={() =>
                           markCustomIfEdited(workspaceFolders.filter((_, j) => j !== i))
                         }
-                        title="Remove folder"
+                        title={t("project.new.removeFolder")}
                       >
                         <Trash2Icon className="size-3.5" />
                       </Button>
@@ -481,7 +483,7 @@ export function NewProjectDialog({
               </div>
               {!hasManuscript ? (
                 <p className="text-[length:var(--font-size-11)] text-destructive">
-                  A manuscript folder is required.
+                  {t("project.new.needManuscript")}
                 </p>
               ) : null}
             </div>
@@ -489,8 +491,8 @@ export function NewProjectDialog({
 
           <div className="flex items-center justify-between gap-3 pt-0.5">
             <div className="min-w-0">
-              <p className={SETTINGS_ROW_LABEL}>Initialize Git</p>
-              <p className={SETTINGS_ROW_DESC}>Initial commit after create.</p>
+              <p className={SETTINGS_ROW_LABEL}>{t("project.new.initGit")}</p>
+              <p className={SETTINGS_ROW_DESC}>{t("project.new.initGitDesc")}</p>
             </div>
             <Switch checked={initGit} disabled={creating} onCheckedChange={setInitGit} />
           </div>
@@ -504,7 +506,7 @@ export function NewProjectDialog({
             disabled={creating}
             onClick={() => setOpen(false)}
           >
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             type="button"
@@ -515,10 +517,10 @@ export function NewProjectDialog({
             {creating ? (
               <>
                 <Loader2Icon className="size-3.5 animate-spin" />
-                Creating…
+                {t("project.new.creating")}
               </>
             ) : (
-              "Create"
+              t("common.create")
             )}
           </Button>
         </DialogFooter>

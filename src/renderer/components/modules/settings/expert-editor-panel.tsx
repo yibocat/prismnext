@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -66,6 +67,7 @@ function formFromExpert(
 }
 
 export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
+  const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const builtinCustomize = slot.mode === "customize-builtin";
@@ -110,14 +112,14 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
         const detail = await window.electronAPI.expertsGetDetail(root, expertId!);
         if (cancelled) return;
         if (!detail) {
-          toast.error("Expert not found.");
+          toast.error(t("settings.editor.expert.toast.notFound"));
           closePanel();
           return;
         }
         setForm(formFromExpert(detail));
       } catch {
         if (!cancelled) {
-          toast.error("Failed to load expert.");
+          toast.error(t("settings.editor.expert.toast.loadFailed"));
           closePanel();
         }
       } finally {
@@ -134,11 +136,11 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
   const saveExpert = useCallback(async () => {
     if (!projectRoot) return;
     if (!builtinCustomize && !form.name.trim()) {
-      toast.error("Expert name is required.");
+      toast.error(t("settings.editor.expert.toast.nameRequired"));
       return;
     }
     if (!builtinCustomize && !form.instructions.trim()) {
-      toast.error("Instructions are required.");
+      toast.error(t("settings.editor.expert.toast.instructionsRequired"));
       return;
     }
 
@@ -178,14 +180,14 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
         await window.electronAPI.expertsSaveCustom(projectRoot, payload);
       }
 
-      toast.success(isNew ? "Expert created." : "Expert saved.");
+      toast.success(isNew ? t("settings.editor.expert.toast.created") : t("settings.editor.expert.toast.saved"));
       closePanel();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to save expert.");
+      toast.error(err instanceof Error ? err.message : t("settings.editor.expert.toast.saveFailed"));
     } finally {
       setSaving(false);
     }
-  }, [projectRoot, builtinCustomize, form, editorOptions, isNew, closePanel]);
+  }, [projectRoot, builtinCustomize, form, editorOptions, isNew, closePanel, t]);
 
   const resetBuiltinCustomization = async () => {
     if (!projectRoot || !form.id || !builtinCustomize) return;
@@ -194,9 +196,9 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
       await window.electronAPI.expertsResetBuiltinOverride(projectRoot, form.id);
       const full = await window.electronAPI.expertsGetDetail(projectRoot, form.id);
       if (full) setForm(formFromExpert(full));
-      toast.success("Restored built-in defaults.");
+      toast.success(t("settings.editor.expert.toast.restoredDefaults"));
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to reset expert.");
+      toast.error(err instanceof Error ? err.message : t("settings.editor.expert.toast.resetFailed"));
     } finally {
       setSaving(false);
     }
@@ -208,10 +210,10 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
     setSaving(true);
     try {
       await window.electronAPI.expertsDeleteCustom(projectRoot, form.id);
-      toast.success("Expert deleted.");
+      toast.success(t("settings.editor.expert.toast.deleted"));
       closePanel();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete expert.");
+      toast.error(err instanceof Error ? err.message : t("settings.editor.expert.toast.deleteFailed"));
     } finally {
       setSaving(false);
     }
@@ -221,7 +223,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
     return (
       <div className="flex flex-1 items-center justify-center px-8 py-8">
         <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-          Open a project to edit experts.
+          {t("settings.editor.expert.openProject")}
         </p>
       </div>
     );
@@ -230,7 +232,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center px-8 py-8">
-        <p className="text-[length:var(--font-size-12)] text-muted-foreground">Loading…</p>
+        <p className="text-[length:var(--font-size-12)] text-muted-foreground">{t("common.loading")}</p>
       </div>
     );
   }
@@ -240,10 +242,10 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
       <div className={SETTINGS_DETAIL_SHELL}>
         <p className={SETTINGS_ROW_DESC}>
           {builtinCustomize
-            ? "Built-in expert — customize model, capabilities, and tool permissions for this project. Name and instructions stay fixed."
+            ? t("settings.editor.expert.introBuiltin")
             : isNew
-              ? "Create an OpenCode subagent expert synced to your expert team. Used via @ mention or orchestrator Task delegation."
-              : "Edit this expert’s instructions and capabilities."}
+              ? t("settings.editor.expert.introNew")
+              : t("settings.editor.expert.introEdit")}
         </p>
 
         <ProfileEditorForm
@@ -255,7 +257,10 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
         />
 
         <div className={SETTINGS_DETAIL_SECTION}>
-          <SettingsFormField label="Tool permissions" description="OpenCode subagent tool access preset">
+          <SettingsFormField
+            label={t("settings.editor.expert.toolPermissions")}
+            description={t("settings.editor.expert.toolPermissionsDesc")}
+          >
             <AppSelect
               value={form.permissionPreset}
               onValueChange={(value) =>
@@ -271,7 +276,13 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
               <AppSelectContent>
                 {EXPERT_PERMISSION_PRESET_OPTIONS.map((opt) => (
                   <AppSelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
+                    {t(
+                      opt.value === "read-only"
+                        ? "settings.editor.expert.permissionPreset.readonly"
+                        : opt.value === "standard"
+                          ? "settings.editor.expert.permissionPreset.standard"
+                          : "settings.editor.expert.permissionPreset.full",
+                    )}
                   </AppSelectItem>
                 ))}
               </AppSelectContent>
@@ -282,10 +293,10 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
         <div className={SETTINGS_DETAIL_ACTIONS}>
           <Button size="xs" onClick={() => void saveExpert()} disabled={saving}>
             {saving ? <Loader2Icon className="size-3 animate-spin mr-1" /> : null}
-            {isNew ? "Create expert" : "Save"}
+            {isNew ? t("settings.editor.expert.create") : t("common.save")}
           </Button>
           <Button variant="ghost" size="xs" onClick={closePanel} disabled={saving}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           {builtinCustomize ? (
             <Button
@@ -294,7 +305,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
               onClick={() => void resetBuiltinCustomization()}
               disabled={saving}
             >
-              Reset defaults
+              {t("settings.editor.expert.resetDefaults")}
             </Button>
           ) : null}
           {!builtinCustomize && !isNew ? (
@@ -307,7 +318,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
                 disabled={saving}
                 onClick={() => setDeleteDialogOpen(true)}
               >
-                Delete
+                {t("common.delete")}
               </Button>
             </>
           ) : null}
@@ -317,20 +328,12 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="!max-w-md">
           <DialogHeader>
-            <DialogTitle>Delete expert</DialogTitle>
-            <DialogDescription>
-              Permanently delete{" "}
-              <span className="font-medium text-foreground">{form.name || "this expert"}</span>?
-              This removes the custom expert from{" "}
-              <code className="text-[length:var(--font-size-11)] bg-muted px-1 rounded">
-                .prismnext/agent/experts/custom/
-              </code>
-              .
-            </DialogDescription>
+            <DialogTitle>{t("settings.editor.expert.deleteTitle")}</DialogTitle>
+            <DialogDescription>{t("settings.editor.expert.deleteDesc")}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" size="sm" className="shadow-none" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -339,7 +342,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
               disabled={saving}
               onClick={() => void deleteExpert()}
             >
-              Delete
+              {t("common.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

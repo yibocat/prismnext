@@ -1,4 +1,5 @@
 import { useDocumentStore } from "@/stores/document-store";
+import { useTranslation } from "react-i18next";
 import { openUrlInBrowser } from "@/lib/browser-link";
 import { GlobeIcon } from "lucide-react";
 import { MarkdownToolbar } from "@/components/modules/editor/toolbars/markdown-toolbar";
@@ -9,6 +10,7 @@ interface FileToolbarProps {
 }
 
 function HtmlPreviewButton({ filePath }: { filePath: string }) {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
   const handlePreview = () => {
@@ -22,7 +24,7 @@ function HtmlPreviewButton({ filePath }: { filePath: string }) {
     <button
       type="button"
       className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-      title="Preview in Browser"
+      title={t("modes.files.previewInBrowser")}
       onClick={handlePreview}
     >
       <GlobeIcon className="size-3.5" />

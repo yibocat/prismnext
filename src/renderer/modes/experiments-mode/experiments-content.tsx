@@ -9,6 +9,7 @@
  */
 
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2Icon } from "lucide-react";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { useExperimentStore } from "@/stores/experiment-store";
@@ -25,6 +26,7 @@ import {
 import { useExperimentProjectRoot } from "./experiments-project-root";
 
 function useExperimentsTabTitleSync(tab: RightTab) {
+  const { t, i18n } = useTranslation();
   const updateTab = useRightPanelStore((s) => s.updateTab);
   const experiments = useExperimentStore((s) => s.experiments);
   const detailTitle = useExperimentStore((s) => {
@@ -39,11 +41,12 @@ function useExperimentsTabTitleSync(tab: RightTab) {
   useEffect(() => {
     if (tab.kind !== "experiments") return;
     if (!tab.experimentId) {
-      if (tab.title !== "Experiments" || tab.experimentsView !== "list") {
+      const homeTitle = t("experiments.title");
+      if (tab.title !== homeTitle || tab.experimentsView !== "list") {
         updateTab(tab.id, {
           experimentId: undefined,
           experimentsView: "list",
-          title: "Experiments",
+          title: homeTitle,
         });
       }
       return;
@@ -66,6 +69,8 @@ function useExperimentsTabTitleSync(tab: RightTab) {
     experiments,
     detailTitle,
     updateTab,
+    t,
+    i18n.language,
   ]);
 }
 
@@ -76,6 +81,7 @@ export function ExperimentsContent({
   tab: RightTab;
   isActive: boolean;
 }) {
+  const { t } = useTranslation();
   const projectRoot = useExperimentProjectRoot();
   const refreshList = useExperimentStore((s) => s.refreshList);
   const error = useExperimentStore((s) => s.error);
@@ -105,7 +111,7 @@ export function ExperimentsContent({
   if (!projectRoot) {
     return (
       <div className="flex h-full items-center justify-center font-sans text-sm text-muted-foreground">
-        Open a project first.
+        {t("experiments.empty.openProject")}
       </div>
     );
   }
@@ -140,7 +146,7 @@ export function ExperimentsContent({
       <div className={cn(shellClass, "items-center justify-center")}>
         <Loader2Icon
           className="size-5 animate-spin text-muted-foreground/60"
-          aria-label="Loading experiment"
+          aria-label={t("experiments.content.loadingExperiment")}
         />
       </div>
     );
@@ -161,7 +167,7 @@ export function ExperimentsContent({
       <div className="flex h-full items-center justify-center">
         <Loader2Icon
           className="size-5 animate-spin text-muted-foreground/60"
-          aria-label="Loading experiments"
+          aria-label={t("experiments.content.loadingExperiments")}
         />
       </div>
     );

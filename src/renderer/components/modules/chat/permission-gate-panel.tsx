@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ShieldIcon,
   TerminalIcon,
@@ -6,6 +7,7 @@ import {
   FileDiffIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { i18n } from "@/lib/i18n";
 import { useChatStore, type ContentBlock } from "@/stores/chat-store";
 import { usePermissionStore, type PendingPermission } from "@/stores/permission-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -78,6 +80,7 @@ function permissionSummary(
   const n = toolName.toLowerCase();
   const input = toolUse?.input ?? {};
   const meta = getToolMeta(n);
+  const awaiting = i18n.t("dialogs.permission.awaiting");
 
   if (meta.confirmUx === "command") {
     const command =
@@ -87,20 +90,23 @@ function permissionSummary(
       || permission.message
       || "";
     return {
-      label: "Shell command",
-      detail: truncate(command, 80) || "Awaiting approval",
+      label: i18n.t("dialogs.permission.shellCommand"),
+      detail: truncate(command, 80) || awaiting,
     };
   }
 
   if (meta.confirmUx === "patch") {
     const paths = extractPatchTargetPaths(input);
     if (paths.length > 1) {
-      return { label: "Apply patch", detail: `${paths.length} files` };
+      return {
+        label: i18n.t("dialogs.permission.applyPatch"),
+        detail: i18n.t("dialogs.permission.filesCount", { count: paths.length }),
+      };
     }
     const path = paths[0] || param(input, "file_path", "filePath") || param(input, "path") || "";
     return {
-      label: "Apply patch",
-      detail: path ? basename(path) : truncate(permission.message, 80) || "Awaiting approval",
+      label: i18n.t("dialogs.permission.applyPatch"),
+      detail: path ? basename(path) : truncate(permission.message, 80) || awaiting,
     };
   }
 
@@ -122,25 +128,27 @@ function permissionSummary(
         : "";
 
     if (n === "delete") {
-      return { label: "Delete file", detail: fileName };
+      return { label: i18n.t("dialogs.permission.deleteFile"), detail: fileName };
     }
     if (n === "move") {
       const src = param(input, "source_path", "sourcePath") || filePath;
       const dst = param(input, "destination_path", "destinationPath") || "";
       return {
-        label: "Move file",
+        label: i18n.t("dialogs.permission.moveFile"),
         detail: dst ? `${basename(src)} → ${basename(dst)}` : basename(src),
       };
     }
     return {
-      label: n.startsWith("write") ? "Write file" : "Edit file",
+      label: n.startsWith("write")
+        ? i18n.t("dialogs.permission.writeFile")
+        : i18n.t("dialogs.permission.editFile"),
       detail: `${fileName}${deltaLabel}`,
     };
   }
 
   return {
-    label: "Permission required",
-    detail: truncate(permission.message, 80) || "Awaiting approval",
+    label: i18n.t("dialogs.permission.required"),
+    detail: truncate(permission.message, 80) || awaiting,
   };
 }
 
@@ -171,6 +179,7 @@ export function usePermissionGateOpen(): boolean {
 export const usePermissionAskOpen = usePermissionGateOpen;
 
 export function PermissionGatePanel() {
+  const { t, i18n: i18nInstance } = useTranslation();
   const activeTabId = useChatStore((s) => s.activeTabId);
   const streamTick = useChatStore((s) => s.streamTick);
   const permissionMode = useSettingsStore((s) => s.settings.permissionMode);
@@ -189,7 +198,7 @@ export function PermissionGatePanel() {
 
   const summary = useMemo(
     () => (permission ? permissionSummary(permission, toolUse, toolName) : null),
-    [permission, toolUse, toolName],
+    [permission, toolUse, toolName, i18nInstance.language],
   );
 
   const allow = useCallback(async (always = false) => {
@@ -241,10 +250,10 @@ export function PermissionGatePanel() {
         <span className="font-medium text-foreground">{summary.label}</span>
         <span className="text-muted-foreground"> · {summary.detail}</span>
         {mode === "edit_auto" && (
-          <span className="text-muted-foreground/70"> · Edit auto</span>
+          <span className="text-muted-foreground/70"> · {t("dialogs.permission.editAuto")}</span>
         )}
         {mode === "auto" && (
-          <span className="text-muted-foreground/70"> · Auto mode</span>
+          <span className="text-muted-foreground/70"> · {t("dialogs.permission.autoMode")}</span>
         )}
       </p>
 
@@ -259,7 +268,7 @@ export function PermissionGatePanel() {
           onClick={deny}
           disabled={resolving}
         >
-          Deny
+          {t("dialogs.permission.deny")}
         </button>
         <button
           type="button"
@@ -273,12 +282,12 @@ export function PermissionGatePanel() {
           title={
             toolName
               ? isBashToolName(toolName) || toolName === "experiment-run"
-                ? "Always allow similar commands (prefix match)"
-                : `Always allow ${toolName} without asking again`
-              : "Always allow this tool"
+                ? t("dialogs.permission.alwaysBash")
+                : t("dialogs.permission.alwaysTool", { tool: toolName })
+              : t("dialogs.permission.alwaysGeneric")
           }
         >
-          Always
+          {t("dialogs.permission.always")}
         </button>
         <button
           type="button"
@@ -290,7 +299,7 @@ export function PermissionGatePanel() {
           onClick={() => void allow(false)}
           disabled={resolving}
         >
-          Allow
+          {t("dialogs.permission.allow")}
         </button>
       </div>
     </div>

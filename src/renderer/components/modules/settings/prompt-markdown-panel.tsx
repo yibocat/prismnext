@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -12,6 +13,7 @@ import { SettingsMarkdownToolbar } from "./settings-markdown-toolbar";
 type PromptMarkdownSlot = Extract<SettingsPanelSlot, { kind: "prompt-markdown" }>;
 
 export function PromptMarkdownPanel({ slot }: { slot: PromptMarkdownSlot }) {
+  const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
@@ -60,13 +62,13 @@ export function PromptMarkdownPanel({ slot }: { slot: PromptMarkdownSlot }) {
           }
         }
       } catch {
-        toast.error("Failed to load content.");
+        toast.error(t("settings.editor.prompt.toast.loadFailed"));
         closePanel();
       } finally {
         if (!silent) setLoading(false);
       }
     },
-    [slot.doc, projectRoot, agentsMdPath, closePanel],
+    [slot.doc, projectRoot, agentsMdPath, closePanel, t],
   );
 
   useEffect(() => {
@@ -81,17 +83,17 @@ export function PromptMarkdownPanel({ slot }: { slot: PromptMarkdownSlot }) {
         updateSettings({ agentSystemPrompt: content });
         setSavedContent(content);
         notifyPromptConfigChanged();
-        toast.success("System prompt saved.");
+        toast.success(t("settings.editor.prompt.toast.saved"));
       } else if (slot.doc === "agents-md") {
         if (!projectRoot) return;
         await window.electronAPI.fsWrite(agentsMdPath, content);
         setSavedContent(content);
         notifyPromptConfigChanged();
-        toast.success("AGENTS.md saved.");
+        toast.success(t("settings.editor.prompt.toast.agentsSaved"));
       }
       closePanel();
     } catch {
-      toast.error("Failed to save.");
+      toast.error(t("settings.editor.prompt.toast.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -102,7 +104,7 @@ export function PromptMarkdownPanel({ slot }: { slot: PromptMarkdownSlot }) {
     updateSettings({ agentSystemPrompt: "" });
     setSavedContent("");
     notifyPromptConfigChanged();
-    toast.success("Restored default system prompt.");
+    toast.success(t("settings.editor.prompt.toast.restored"));
     await loadContent({ silent: true });
     setViewMode("preview");
   };
@@ -112,7 +114,7 @@ export function PromptMarkdownPanel({ slot }: { slot: PromptMarkdownSlot }) {
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center text-[length:var(--font-size-12)] text-muted-foreground">
-        Loading…
+        {t("settings.editor.prompt.loading")}
       </div>
     );
   }
@@ -120,7 +122,7 @@ export function PromptMarkdownPanel({ slot }: { slot: PromptMarkdownSlot }) {
   if (slot.doc === "agents-md" && !projectRoot) {
     return (
       <div className="flex flex-1 items-center justify-center px-8 text-[length:var(--font-size-13)] text-muted-foreground">
-        Open a project to edit AGENTS.md.
+        {t("settings.editor.prompt.openProjectAgents")}
       </div>
     );
   }

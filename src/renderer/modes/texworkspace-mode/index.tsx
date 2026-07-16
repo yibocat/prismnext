@@ -5,11 +5,13 @@ import { TexworkspaceContent, TexworkspaceToolbarWrapper } from "./texworkspace-
 
 export const texworkspaceMode: ModeDefinition = {
   id: "texworkspace",
-  label: "Texworkspace",
+  label: "TeX Workspace",
+  labelKey: "modes.texworkspace.label",
   icon: <FileType className="size-3.5" />,
   tabKinds: ["texworkspace"],
   persistence: "transient",
-  initialTitle: "Texworkspace",
+  initialTitle: "TeX Workspace",
+  initialTitleKey: "modes.texworkspace.initialTitle",
   Sidebar: TexworkspaceSidebar,
   Toolbar: TexworkspaceToolbarWrapper,
   Content: TexworkspaceContent,

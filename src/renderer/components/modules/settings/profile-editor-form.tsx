@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { ChevronDownIcon } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -37,10 +39,15 @@ const CARD_DESC = "text-[length:var(--font-size-12)] text-muted-foreground mt-1 
 const SELECT_LIST_PAGE_SIZE = 12;
 const CARD_GRID_PAGE_SIZE = 8;
 
-function selectionSummary(selected: number, total: number, emptyLabel: string): string {
-  if (total === 0) return "None available";
+function selectionSummary(
+  selected: number,
+  total: number,
+  emptyLabel: string,
+  t: TFunction,
+): string {
+  if (total === 0) return t("settings.agent.profileForm.noneAvailable");
   if (selected === 0) return emptyLabel;
-  return `${selected} selected`;
+  return t("settings.agent.profileForm.selectedCount", { count: selected });
 }
 
 export function CollapsibleFormSection({
@@ -351,6 +358,7 @@ export function ProfileEditorForm({
   builtinCustomize?: boolean;
   saving?: boolean;
 }) {
+  const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const enabledModels = useMemo(
     () =>
@@ -391,11 +399,11 @@ export function ProfileEditorForm({
   return (
     <div className="@container space-y-8">
       <div className={SETTINGS_DETAIL_SECTION}>
-        <SettingsFormField label="Name" htmlFor="profile-name">
+        <SettingsFormField label={t("settings.agent.profileForm.name")} htmlFor="profile-name">
           <Input
             id="profile-name"
             className={SETTINGS_FORM_INPUT}
-            placeholder="Profile name"
+            placeholder={t("settings.agent.profileForm.namePlaceholder")}
             value={form.name}
             readOnly={lockIdentity}
             disabled={lockIdentity}
@@ -403,14 +411,14 @@ export function ProfileEditorForm({
           />
         </SettingsFormField>
         <SettingsFormField
-          label="Description"
+          label={t("settings.agent.profileForm.description")}
           htmlFor="profile-description"
-          description="What this expert does — shown in the profile list and @ mentions."
+          description={t("settings.agent.profileForm.descriptionDesc")}
         >
           <Input
             id="profile-description"
             className={SETTINGS_FORM_INPUT}
-            placeholder="Short description"
+            placeholder={t("settings.agent.profileForm.descriptionPlaceholder")}
             value={form.description}
             readOnly={lockIdentity}
             disabled={lockIdentity}
@@ -420,9 +428,9 @@ export function ProfileEditorForm({
       </div>
 
       <div>
-        <h3 className={SETTINGS_CATEGORY_HEADER}>Model</h3>
+        <h3 className={SETTINGS_CATEGORY_HEADER}>{t("settings.agent.profileForm.model")}</h3>
         <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
-          Optional. Leave default to use the chat composer model when this profile is active.
+          {t("settings.agent.profileForm.modelDesc")}
         </p>
         <div className="flex flex-wrap gap-3">
           <AppSelect
@@ -450,10 +458,12 @@ export function ProfileEditorForm({
             }}
           >
             <AppSelectTrigger variant="dialog" className="w-full min-w-[min(320px,100%)]">
-              <AppSelectValue placeholder="Chat default" />
+              <AppSelectValue placeholder={t("settings.agent.profileForm.chatDefault")} />
             </AppSelectTrigger>
             <AppSelectContent>
-              <AppSelectItem value="__default__">Chat default</AppSelectItem>
+              <AppSelectItem value="__default__">
+                {t("settings.agent.profileForm.chatDefault")}
+              </AppSelectItem>
               {Array.from(modelGroups.entries()).map(([providerId, entries]) => (
                 <AppSelectGroup key={providerId}>
                   <AppSelectLabel>{entries[0]?.provider.name ?? providerId}</AppSelectLabel>
@@ -477,10 +487,12 @@ export function ProfileEditorForm({
               onValueChange={(v) => patch({ thoughtLevel: v === "__default__" ? "" : v })}
             >
               <AppSelectTrigger variant="dialog" className="w-full min-w-[min(180px,100%)]">
-                <AppSelectValue placeholder="Reasoning depth" />
+                <AppSelectValue placeholder={t("settings.agent.profileForm.reasoningDepth")} />
               </AppSelectTrigger>
               <AppSelectContent>
-                <AppSelectItem value="__default__">Default depth</AppSelectItem>
+                <AppSelectItem value="__default__">
+                  {t("settings.agent.profileForm.defaultDepth")}
+                </AppSelectItem>
                 {thoughtLevels.map((l) => (
                   <AppSelectItem key={l.value} value={l.value}>
                     {l.label}
@@ -493,16 +505,15 @@ export function ProfileEditorForm({
       </div>
 
       <div>
-        <h3 className={SETTINGS_CATEGORY_HEADER}>Instructions</h3>
+        <h3 className={SETTINGS_CATEGORY_HEADER}>{t("settings.agent.profileForm.instructions")}</h3>
         <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
-          Role and delegation strategy only — citation formats and Task tables live in Knowledge
-          modules synced below.
+          {t("settings.agent.profileForm.instructionsDesc")}
         </p>
         <Textarea
           value={form.instructions}
           readOnly={lockInstructions}
           disabled={lockInstructions}
-          placeholder="You are a citation auditor. Focus on bib consistency and cite key usage…"
+          placeholder={t("settings.agent.profileForm.instructionsPlaceholder")}
           className={cn(SETTINGS_FORM_TEXTAREA, lockInstructions && "opacity-80")}
           onChange={(e) => patch({ instructions: e.target.value })}
         />
@@ -514,31 +525,24 @@ export function ProfileEditorForm({
             const profileModules = editorOptions.modules;
             return (
               <CollapsibleFormSection
-                title="Knowledge modules"
+                title={t("settings.agent.profileForm.knowledgeModules")}
                 summary={selectionSummary(
                   form.modules.length,
                   profileModules.length,
-                  "None selected",
+                  t("settings.agent.profileForm.noneSelected"),
+                  t,
                 )}
                 defaultOpen={form.modules.length > 0}
               >
                 <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
-                  Built-in workflow guides — select which ones to inline into this agent&apos;s
-                  synced <code className="text-[11px]">agent.md</code>. Workspace folders always
-                  inject via global <code className="text-[11px]">_prism-system.md</code>.
+                  {t("settings.agent.profileForm.knowledgeDesc")}
                 </p>
                 <p className={cn(SETTINGS_ROW_DESC, "mb-3 text-muted-foreground")}>
-                  <strong>Modules carry the tool-scheduling discipline.</strong> A subagent only
-                  knows how to use a tool (e.g. <code className="text-[11px]">citation-health</code>)
-                  if the module that teaches it is assembled here. Write
-                  <em> Instructions</em> as role/responsibility prose only — do not hardcode tool
-                  call sequences there. Example: a citation reviewer needs the
-                  <code className="text-[11px]"> Citation &amp; Bibliography Audit</code> module
-                  assembled, or it will not know about <code className="text-[11px]">citation-health</code>.
+                  {t("settings.agent.profileForm.knowledgeDiscipline")}
                 </p>
                 {profileModules.length === 0 ? (
                   <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-                    No profile modules available.
+                    {t("settings.agent.profileForm.noModules")}
                   </p>
                 ) : (
                   <PaginatedSelectableCardGrid
@@ -561,20 +565,21 @@ export function ProfileEditorForm({
           })()}
 
           <CollapsibleFormSection
-            title="Skills"
+            title={t("settings.agent.profileForm.skills")}
             summary={selectionSummary(
               form.skills.length,
               editorOptions.skills.length,
-              "All installed skills",
+              t("settings.agent.profileForm.allSkills"),
+              t,
             )}
             defaultOpen={form.skills.length > 0}
           >
             <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
-              Empty = all installed skills. Select to restrict.
+              {t("settings.agent.profileForm.skillsDesc")}
             </p>
             {editorOptions.skills.length === 0 ? (
               <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-                No skills installed — add them in Settings → Skills.
+                {t("settings.agent.profileForm.noSkills")}
               </p>
             ) : (
               <PaginatedSelectableList
@@ -595,20 +600,21 @@ export function ProfileEditorForm({
           </CollapsibleFormSection>
 
           <CollapsibleFormSection
-            title="MCP servers"
+            title={t("settings.agent.profileForm.mcpServers")}
             summary={selectionSummary(
               form.mcpServers.length,
               editorOptions.mcpServers.length,
-              "All configured servers",
+              t("settings.agent.profileForm.allServers"),
+              t,
             )}
             defaultOpen={form.mcpServers.length > 0}
           >
             <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
-              Empty = all configured servers. Select to restrict.
+              {t("settings.agent.profileForm.mcpDesc")}
             </p>
             {editorOptions.mcpServers.length === 0 ? (
               <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-                No MCP servers — configure them in Settings → Tools &amp; MCP.
+                {t("settings.agent.profileForm.noMcp")}
               </p>
             ) : (
               <div className={SELECT_LIST}>
@@ -634,22 +640,21 @@ export function ProfileEditorForm({
           </CollapsibleFormSection>
 
           <CollapsibleFormSection
-            title="Rules"
+            title={t("settings.agent.profileForm.rules")}
             summary={selectionSummary(
               form.rules.length,
               editorOptions.rules.length,
-              "All enabled rules",
+              t("settings.agent.profileForm.allRules"),
+              t,
             )}
             defaultOpen={form.rules.length > 0}
           >
             <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
-              Subset of enabled project rules injected each chat turn. Empty = all enabled rules
-              with <code className="text-[11px]">apply: always</code>. Non-empty = only selected
-              names (Orchestrator main session only).
+              {t("settings.agent.profileForm.rulesDesc")}
             </p>
             {editorOptions.rules.length === 0 ? (
               <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-                No custom rules — add them in Settings → Prompts &amp; Rules.
+                {t("settings.agent.profileForm.noRules")}
               </p>
             ) : (
               <div className={SELECT_LIST}>

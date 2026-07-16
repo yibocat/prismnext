@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback, useRef, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   GitBranchIcon,
   GitMergeIcon,
@@ -42,6 +43,7 @@ const toolbarBtn = cn(
 );
 
 export function GitToolbar({ projectRoot }: { projectRoot: string }) {
+  const { t } = useTranslation();
   const branch = useGitStore((s) => s.branch);
   const allBranches = useGitStore((s) => s.branches);
   const branches = useMemo(
@@ -185,7 +187,7 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
     return (
       <div className="flex flex-1 items-center gap-1.5 min-h-8 min-w-0 text-[length:var(--font-menu-item)] text-muted-foreground">
         <GitBranchIcon className="size-3.5 shrink-0 opacity-40" />
-        <span className="truncate">Not a git repository</span>
+        <span className="truncate">{t("git.toolbar.notRepo")}</span>
       </div>
     );
   }
@@ -214,7 +216,7 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
             <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
             <input
               className={appMenuInputClass}
-              placeholder="Filter branches..."
+              placeholder={t("git.toolbar.filterBranches")}
               value={branchSearch}
               onChange={(e) => setBranchSearch(e.target.value)}
               onClick={(e) => e.stopPropagation()}
@@ -342,7 +344,7 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
           <GitPanelOverflowMenu projectRoot={gitRoot} variant="history" />
           <div className="flex items-center gap-1.5 h-6 px-1.5 shrink-0 text-[length:var(--font-menu-item)] text-muted-foreground/70">
             <GitCommitVerticalIcon className="size-3.5 shrink-0 opacity-60" />
-            {!compact && <span>Browsing commit history</span>}
+            {!compact && <span>{t("git.toolbar.browsingHistory")}</span>}
             <span className="tabular-nums text-muted-foreground/50">{commits.length}</span>
           </div>
         </>
@@ -362,7 +364,7 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
                 {mergeConfirmBranch ? (
                   <>
                     <DialogHeader>
-                      <DialogTitle>Confirm merge</DialogTitle>
+                      <DialogTitle>{t("dialogs.git.confirmMerge")}</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4">
                       <div className="flex items-center justify-center gap-3 py-2">
@@ -377,9 +379,10 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
                         </span>
                       </div>
                       <p className="text-xs text-muted-foreground text-center">
-                        Merge{" "}
-                        <span className="font-medium text-foreground">{mergeConfirmBranch}</span> into{" "}
-                        <span className="font-medium text-primary">{branchLabel}</span>.
+                        {t("git.toolbar.mergeInto", {
+                          source: mergeConfirmBranch,
+                          target: branchLabel,
+                        })}
                       </p>
                       <div className="flex gap-2 justify-end">
                         <Button
@@ -388,7 +391,7 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
                           onClick={() => setMergeConfirmBranch(null)}
                           disabled={merging}
                         >
-                          Cancel
+                          {t("common.cancel")}
                         </Button>
                         <Button
                           size="sm"
@@ -408,7 +411,9 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
                           }}
                           disabled={merging}
                         >
-                          {merging ? "Merging..." : "Merge"}
+                          {merging
+                            ? t("git.toolbar.merging")
+                            : t("git.toolbar.merge")}
                         </Button>
                       </div>
                     </div>
@@ -416,7 +421,7 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
                 ) : (
                   <>
                     <DialogHeader>
-                      <DialogTitle>Merge branch</DialogTitle>
+                      <DialogTitle>{t("dialogs.git.mergeBranch")}</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-3">
                       <p className="text-xs text-muted-foreground text-center">
@@ -427,7 +432,7 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
                         <SearchIcon className="size-3.5 text-muted-foreground" />
                         <input
                           className="flex-1 bg-transparent text-xs outline-none"
-                          placeholder="Filter branches..."
+                          placeholder={t("git.toolbar.filterBranches")}
                           value={mergeSearch}
                           onChange={(e) => setMergeSearch(e.target.value)}
                           autoFocus
@@ -464,19 +469,19 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
       <Dialog open={commitOpen} onOpenChange={setCommitOpen}>
         <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Commit changes</DialogTitle>
+                  <DialogTitle>{t("dialogs.git.commitChanges")}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <GitBranchIcon className="size-3.5" />
                     <span className="truncate">{branchLabel}</span>
                     <span className="tabular-nums">
-                      {stagedCount} file{stagedCount !== 1 ? "s" : ""}
+                      {t("git.toolbar.filesCount", { count: stagedCount })}
                     </span>
                   </div>
                   <textarea
                     className="w-full bg-muted/50 border rounded-md px-3 py-2 text-sm resize-none outline-none focus:ring-1 focus:ring-ring"
-                    placeholder="Commit message"
+                    placeholder={t("git.toolbar.commitMessage")}
                     rows={4}
                     value={commitMsg}
                     onChange={(e) => setCommitMsg(e.target.value)}
@@ -495,7 +500,9 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
                       disabled={!commitMsg.trim() || committing}
                       className="flex items-center gap-2 h-8 px-4 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
                     >
-                      {committing ? "Committing..." : "Commit"}
+                      {committing
+                        ? t("git.toolbar.committing")
+                        : t("git.toolbar.commit")}
                     </button>
                   </div>
                 </div>
@@ -511,12 +518,12 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
       <Dialog open={branchDialogOpen} onOpenChange={setBranchDialogOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Create new branch</DialogTitle>
+            <DialogTitle>{t("dialogs.git.createBranch")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <input
               className="w-full bg-muted/50 border rounded-md px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
-              placeholder="Branch name"
+              placeholder={t("git.toolbar.branchName")}
               value={newBranchName}
               onChange={(e) => setNewBranchName(e.target.value)}
               onKeyDown={(e) => {
@@ -534,7 +541,9 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
                 disabled={!newBranchName.trim() || creatingBranch}
                 className="flex items-center gap-2 h-8 px-4 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
-                {creatingBranch ? "Creating..." : "Create branch"}
+                {creatingBranch
+                  ? t("git.toolbar.creating")
+                  : t("git.toolbar.createBranch")}
               </button>
             </div>
           </div>

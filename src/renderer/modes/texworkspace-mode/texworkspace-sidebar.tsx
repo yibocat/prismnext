@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { DEFAULT_MANUSCRIPT_DIR } from "@/types/workspace";
@@ -61,10 +62,10 @@ import { Icon } from "@iconify/react/offline";
 
 type SidebarTab = "outline" | "refs" | "files";
 
-const TABS: { key: SidebarTab; icon: React.ReactNode; label: string }[] = [
-  { key: "outline", icon: <ListTreeIcon className="size-3.5" />, label: "Outline" },
-  { key: "refs", icon: <Link2Icon className="size-3.5" />, label: "References" },
-  { key: "files", icon: <FileTextIcon className="size-3.5" />, label: "Files" },
+const TABS: { key: SidebarTab; icon: React.ReactNode; labelKey: string }[] = [
+  { key: "outline", icon: <ListTreeIcon className="size-3.5" />, labelKey: "modes.texworkspace.outline" },
+  { key: "refs", icon: <Link2Icon className="size-3.5" />, labelKey: "modes.texworkspace.references" },
+  { key: "files", icon: <FileTextIcon className="size-3.5" />, labelKey: "modes.texworkspace.files" },
 ];
 
 const LABEL_ICON: Record<LabelEntry["kind"], React.ReactNode> = {
@@ -173,6 +174,7 @@ function SidebarAccordionTrigger({ icon, label, badge }: { icon: React.ReactNode
 // ─── Main Component ───
 
 export function TexworkspaceSidebar() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<SidebarTab>("outline");
   const [accordionValue, setAccordionValue] = useState<string[]>([]);
 
@@ -250,7 +252,7 @@ export function TexworkspaceSidebar() {
             <button key={tab.key} type="button"
               className={cn("flex size-5 items-center justify-center rounded transition-colors shrink-0",
                 activeTab === tab.key ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground")}
-              title={tab.label}
+              title={t(tab.labelKey)}
               onClick={() => { setActiveTab(tab.key); setAccordionValue([]); }}>
               {tab.icon}
             </button>
@@ -259,7 +261,7 @@ export function TexworkspaceSidebar() {
         <span className="h-3 w-px bg-border/40 shrink-0" />
         <button type="button"
           className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-          title={allExpanded ? "Collapse All" : "Expand All"} onClick={handleToggleAll}>
+          title={allExpanded ? t("modes.files.collapseAll") : t("modes.files.expandAll")} onClick={handleToggleAll}>
           {allExpanded ? <FoldVerticalIcon className="size-3.5" /> : <UnfoldVerticalIcon className="size-3.5" />}
         </button>
       </SidebarHeader>
@@ -298,7 +300,7 @@ export function TexworkspaceSidebar() {
             <div className="flex items-center gap-1 px-0.5 pb-1">
               <div className="relative flex-1">
                 <SearchIcon className="absolute left-1.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground/50" />
-                <Input value={searchQuery === " " ? "" : searchQuery} placeholder="Search in project..."
+                <Input value={searchQuery === " " ? "" : searchQuery} placeholder={t("modes.texworkspace.searchPlaceholder")}
                   onChange={(e) => setSearchQuery(e.target.value || " ")}
                   className="h-6 pl-6 pr-5 text-[length:var(--font-size-12)] rounded-sm" autoFocus />
                 {searchQuery && searchQuery !== " " && (
@@ -309,7 +311,7 @@ export function TexworkspaceSidebar() {
               </div>
             </div>
             {searchResults.length === 0 && searchQuery !== " " && searchQuery.trim() !== "" ? (
-              <p className="px-3 py-4 text-[length:var(--font-hint)] text-muted-foreground/60 text-center">No results</p>
+              <p className="px-3 py-4 text-[length:var(--font-hint)] text-muted-foreground/60 text-center">{t("modes.texworkspace.noResults")}</p>
             ) : (
               <div>
                 {searchResults.map((r, i) => (
@@ -332,15 +334,15 @@ export function TexworkspaceSidebar() {
         {!isSearching && activeTab === "outline" && (
           <Accordion type="multiple" value={accordionValue} onValueChange={setAccordionValue}>
             <AccordionItem value="toc" className="border-none">
-              <SidebarAccordionTrigger icon={<HeadingIcon className="size-3" />} label="Table of Contents" badge={tocCount > 0 ? String(tocCount) : undefined} />
+              <SidebarAccordionTrigger icon={<HeadingIcon className="size-3" />} label={t("modes.texworkspace.toc")} badge={tocCount > 0 ? String(tocCount) : undefined} />
               <AccordionContent className="pb-0.5">
-                {toc.length === 0 ? <p className="px-3 py-2 text-[length:var(--font-hint)] text-muted-foreground/60">No sections found</p>
+                {toc.length === 0 ? <p className="px-3 py-2 text-[length:var(--font-hint)] text-muted-foreground/60">{t("modes.texworkspace.noSections")}</p>
                   : <TocTree entries={toc} depth={0} onSelect={handleTocSelect} />}
               </AccordionContent>
             </AccordionItem>
 
             <AccordionItem value="figtables" className="border-none">
-              <SidebarAccordionTrigger icon={<ImageIcon className="size-3" />} label="Figures & Tables" badge={figureTables.length > 0 ? String(figureTables.length) : undefined} />
+              <SidebarAccordionTrigger icon={<ImageIcon className="size-3" />} label={t("modes.texworkspace.figuresTables")} badge={figureTables.length > 0 ? String(figureTables.length) : undefined} />
               <AccordionContent className="pb-0.5">
                 {figureTables.length === 0 ? <p className="px-3 py-2 text-[length:var(--font-hint)] text-muted-foreground/60">No figures or tables found</p>
                   : <div>{figureTables.map((ft, i) => (
@@ -355,7 +357,7 @@ export function TexworkspaceSidebar() {
             </AccordionItem>
 
             <AccordionItem value="todos" className="border-none">
-              <SidebarAccordionTrigger icon={<CheckCheckIcon className="size-3" />} label="TODO Markers" badge={todos.length > 0 ? String(todos.length) : undefined} />
+              <SidebarAccordionTrigger icon={<CheckCheckIcon className="size-3" />} label={t("modes.texworkspace.todoMarkers")} badge={todos.length > 0 ? String(todos.length) : undefined} />
               <AccordionContent className="pb-0.5">
                 {todos.length === 0 ? <p className="px-3 py-2 text-[length:var(--font-hint)] text-muted-foreground/60">No TODO markers found</p>
                   : <div>{todos.map((t, i) => (
@@ -376,7 +378,7 @@ export function TexworkspaceSidebar() {
         {!isSearching && activeTab === "refs" && (
           <Accordion type="multiple" value={accordionValue} onValueChange={setAccordionValue}>
             <AccordionItem value="labels" className="border-none">
-              <SidebarAccordionTrigger icon={<TagIcon className="size-3" />} label="Labels" badge={labels.length > 0 ? String(labels.length) : undefined} />
+              <SidebarAccordionTrigger icon={<TagIcon className="size-3" />} label={t("modes.texworkspace.labels")} badge={labels.length > 0 ? String(labels.length) : undefined} />
               <AccordionContent className="pb-0.5">
                 {labels.length === 0 ? <p className="px-3 py-2 text-[length:var(--font-hint)] text-muted-foreground/60">No labels found</p>
                   : <div>{labels.map((l, i) => (
@@ -389,7 +391,7 @@ export function TexworkspaceSidebar() {
             </AccordionItem>
 
             <AccordionItem value="citations" className="border-none">
-              <SidebarAccordionTrigger icon={<QuoteIcon className="size-3" />} label="Cited References" badge={citations.length > 0 ? String(citations.length) : undefined} />
+              <SidebarAccordionTrigger icon={<QuoteIcon className="size-3" />} label={t("modes.texworkspace.citedReferences")} badge={citations.length > 0 ? String(citations.length) : undefined} />
               <AccordionContent className="pb-0.5">
                 {citations.length === 0 ? <p className="px-3 py-2 text-[length:var(--font-hint)] text-muted-foreground/60">No citations found</p>
                   : <div>{citations.map((c, i) => (

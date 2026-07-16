@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import type { RefObject } from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useTheme } from "next-themes";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -38,31 +39,31 @@ const SECTION_LABEL =
 
 const SETTINGS_GROUPS = [
   {
-    label: "Application",
+    labelKey: "settings.nav.application",
     items: [
-      { id: "general", label: "General", icon: Settings2Icon },
-      { id: "appearance", label: "Appearance", icon: PaletteIcon },
-      { id: "workspace", label: "Workspace", icon: LayoutGridIcon },
-      { id: "about", label: "About", icon: InfoIcon },
+      { id: "general", labelKey: "settings.nav.general", icon: Settings2Icon },
+      { id: "appearance", labelKey: "settings.nav.appearance", icon: PaletteIcon },
+      { id: "workspace", labelKey: "settings.nav.workspace", icon: LayoutGridIcon },
+      { id: "about", labelKey: "settings.nav.about", icon: InfoIcon },
     ],
   },
   {
-    label: "Agent & AI",
+    labelKey: "settings.nav.agentAi",
     items: [
-      { id: "models", label: "Models", icon: GlobeIcon },
-      { id: "agent", label: "Agent", icon: Bot },
-      { id: "prompts-rules", label: "Prompts & Rules", icon: FileTextIcon },
-      { id: "commands", label: "Commands", icon: SlashIcon },
-      { id: "tools-mcp", label: "MCP", icon: PlugIcon },
-      { id: "skills", label: "Skills", icon: PuzzleIcon },
+      { id: "models", labelKey: "settings.nav.models", icon: GlobeIcon },
+      { id: "agent", labelKey: "settings.nav.agent", icon: Bot },
+      { id: "prompts-rules", labelKey: "settings.nav.promptsRules", icon: FileTextIcon },
+      { id: "commands", labelKey: "settings.nav.commands", icon: SlashIcon },
+      { id: "tools-mcp", labelKey: "settings.nav.mcp", icon: PlugIcon },
+      { id: "skills", labelKey: "settings.nav.skills", icon: PuzzleIcon },
     ],
   },
   {
-    label: "Components",
+    labelKey: "settings.nav.components",
     items: [
-      { id: "texworkspace", label: "TeX Workspace", icon: FileTextIcon },
-      { id: "terminal", label: "Terminal", icon: TerminalIcon },
-      { id: "literature", label: "Literature", icon: BookOpenIcon },
+      { id: "texworkspace", labelKey: "settings.nav.texWorkspace", icon: FileTextIcon },
+      { id: "terminal", labelKey: "settings.nav.terminal", icon: TerminalIcon },
+      { id: "literature", labelKey: "settings.nav.literature", icon: BookOpenIcon },
     ],
   },
 ] as const;
@@ -76,6 +77,7 @@ interface SettingsSidebarProps {
 }
 
 export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarRef }: SettingsSidebarProps) {
+  const { t } = useTranslation();
   const { platform, isFullscreen } = useWindowState();
   const isMac = platform === "darwin";
   const showMacSpacer = isMac && !isFullscreen;
@@ -111,9 +113,9 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
 
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto px-2 pb-1">
           {SETTINGS_GROUPS.map((group) => (
-            <div key={group.label}>
+            <div key={group.labelKey}>
               <div className="pt-2 pb-1">
-                <span className={SECTION_LABEL}>{group.label}</span>
+                <span className={SECTION_LABEL}>{t(group.labelKey)}</span>
               </div>
               <div className="flex flex-col gap-1">
                 {group.items.map((cat) => (
@@ -129,7 +131,7 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
                     onClick={() => onSelectCategory(cat.id)}
                   >
                     <cat.icon className="size-3.5 shrink-0 text-muted-foreground" />
-                    <span className="flex-1 text-left">{cat.label}</span>
+                    <span className="flex-1 text-left">{t(cat.labelKey)}</span>
                   </button>
                 ))}
               </div>
@@ -151,12 +153,12 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
               }}
             >
               <ArrowLeftIcon className="size-3.5 shrink-0" />
-              <span>Back</span>
+              <span>{t("common.back")}</span>
             </button>
             <button
               type="button"
               className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors shrink-0"
-              title={`Theme: ${theme}`}
+              title={t("common.theme", { theme })}
               onClick={cycleTheme}
             >
               {theme === "system" ? (

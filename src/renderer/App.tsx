@@ -24,6 +24,7 @@ import { useTerminalAiStream } from "@/hooks/use-terminal-ai-stream";
 import { useAiTerminalSweep } from "@/hooks/use-ai-terminal-sweep";
 import { useSkillsIntegrationEvents } from "@/hooks/use-skills-integration-events";
 import { useAgentCompilePreview } from "@/hooks/use-agent-compile-preview";
+import { LocaleSync } from "@/lib/i18n/locale-sync";
 
 import { ContentTopBar } from "@/components/layout/content-top-bar";
 import {
@@ -440,6 +441,7 @@ export function App() {
   return (
     <GlobalErrorBoundary>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <LocaleSync />
         <ProjectSetupDialog />
         <Toaster
           position="bottom-right"

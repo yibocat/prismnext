@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useGitStore } from "@/stores/git-store";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,7 @@ const tabTriggerClass = cn(
 
 /** Changes / History — text-only toggle in sidebar header. */
 export function GitSidebarViewTabs() {
+  const { t } = useTranslation();
   const sidebarView = useGitStore((s) => s.sidebarView);
   const setSidebarView = useGitStore((s) => s.setSidebarView);
 
@@ -23,10 +25,10 @@ export function GitSidebarViewTabs() {
     >
       <TabsList className="h-7 gap-3 p-0 bg-transparent border-0 shadow-none">
         <TabsTrigger value="changes" className={tabTriggerClass}>
-          Changes
+          {t("modes.git.changes")}
         </TabsTrigger>
         <TabsTrigger value="history" className={tabTriggerClass}>
-          History
+          {t("modes.git.history")}
         </TabsTrigger>
       </TabsList>
     </Tabs>

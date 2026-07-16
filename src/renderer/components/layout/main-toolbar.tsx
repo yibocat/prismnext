@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
+import { useTranslation } from "react-i18next";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { RefObject } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -40,6 +41,7 @@ interface MainToolbarProps {
 }
 
 export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
+  const { t } = useTranslation();
   const { platform, isMaximized, isFullscreen } = useWindowState();
   const isMobile = useIsMobile();
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
@@ -60,7 +62,7 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
           <button
             type="button"
             className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            title="Minimize"
+            title={t("shell.minimize")}
             onClick={() => window.electronAPI?.windowMinimize()}
           >
             <Minimize2Icon className="size-4" />
@@ -68,7 +70,7 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
           <button
             type="button"
             className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            title={isMaximized ? "Restore" : "Maximize"}
+            title={isMaximized ? t("shell.restore") : t("shell.maximize")}
             onClick={() => window.electronAPI?.windowMaximize()}
           >
             <Maximize2Icon className="size-4" />
@@ -76,7 +78,7 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
           <button
             type="button"
             className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
-            title="Close"
+            title={t("shell.close")}
             onClick={() => window.electronAPI?.windowClose()}
           >
             <XIcon className="size-4" />
@@ -88,7 +90,7 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
       <button
         type="button"
         className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-        title={`Theme: ${theme}`}
+        title={t("common.theme", { theme })}
         onClick={cycleTheme}
       >
         {theme === "system" ? (
@@ -106,7 +108,7 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
           "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
           rightAreaExpanded && "bg-muted text-foreground",
         )}
-        title={rightAreaExpanded ? "Collapse Right Area" : "Expand Right Area"}
+        title={rightAreaExpanded ? t("shell.collapseRightArea") : t("shell.expandRightArea")}
         onClick={() => {
           const r = rightAreaRef.current;
           if (!r) return;

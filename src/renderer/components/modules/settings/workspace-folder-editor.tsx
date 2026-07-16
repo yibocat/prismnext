@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { RotateCcwIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,7 +21,6 @@ import {
 } from "@/components/ui/app-select";
 import {
   FOLDER_FUNCTIONS,
-  FOLDER_FUNCTION_LABELS,
   DEFAULT_FUNCTION_DESCRIPTIONS,
   createDefaultFolder,
   type FolderFunction,
@@ -72,8 +72,9 @@ function folderToForm(folder: WorkspaceFolder, defaultDocClass: DocClass): FormS
   };
 }
 
-function defaultDescriptionForFunction(func: FolderFunction): string {
-  return DEFAULT_FUNCTION_DESCRIPTIONS[func] ?? "";
+function defaultDescriptionForFunction(func: FolderFunction, t: (key: string) => string): string {
+  if (func === "custom") return "";
+  return t(`settings.editor.workspaceFolder.functionDesc.${func}`);
 }
 
 function emptyForm(func: FolderFunction = "notebook", defaultDocClass: DocClass = "article"): FormState {
@@ -93,6 +94,7 @@ export function WorkspaceFolderEditor({
 }: {
   slot: Extract<SettingsPanelSlot, { kind: "workspace-folder" }>;
 }) {
+  const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const projectDirs = useWorkspaceConfigStore((s) => s.workspaceDirs);
@@ -138,7 +140,10 @@ export function WorkspaceFolderEditor({
     existing?.function === "manuscript" &&
     sourceDirs.filter((d) => d.function === "manuscript").length === 1;
 
-  const scopeLabel = slot.scope === "project" ? "This project" : "New project template";
+  const scopeLabel =
+    slot.scope === "project"
+      ? t("settings.editor.workspaceFolder.scopeThis")
+      : t("settings.editor.workspaceFolder.scopeTemplate");
 
   const patchFromForm = (): Partial<WorkspaceFolder> => {
     const iconTrim = form.icon.trim();
@@ -219,7 +224,7 @@ export function WorkspaceFolderEditor({
       }
       updateSettings(templateSettings);
     }
-    toast.success(slot.mode === "new" ? "Folder added." : "Folder saved.");
+    toast.success(slot.mode === "new" ? t("settings.workspace.toast.folderAdded") : t("settings.workspace.toast.folderSaved"));
     closePanel();
   };
 
@@ -233,7 +238,7 @@ export function WorkspaceFolderEditor({
         defaultWorkspaceDirs: templateDirs.filter((_, i) => i !== editIndex),
       });
     }
-    toast.success("Folder removed from configuration.");
+    toast.success(t("settings.workspace.toast.folderRemoved"));
     closePanel();
   };
 
@@ -241,16 +246,17 @@ export function WorkspaceFolderEditor({
     <div className="flex-1 overflow-auto">
       <div className={SETTINGS_DETAIL_SHELL}>
         <p className={SETTINGS_ROW_DESC}>
-          {scopeLabel}. Removing an entry only updates workspace configuration — the folder on
-          disk is not deleted.
+          {scopeLabel}. {t("settings.editor.workspaceFolder.intro")}
         </p>
 
         <div className={SETTINGS_DETAIL_SECTION}>
           <SettingsFormField
-              label="Type"
+              label={t("settings.editor.workspaceFolder.type")}
               htmlFor="ws-folder-type"
               description={
-                slot.mode === "edit" ? "Type cannot be changed after creation." : undefined
+                slot.mode === "edit"
+                  ? t("settings.editor.workspaceFolder.typeLocked")
+                  : undefined
               }
             >
               <AppSelect
@@ -276,7 +282,7 @@ export function WorkspaceFolderEditor({
                       value={f}
                       disabled={f === "manuscript" && hasManuscript}
                     >
-                      {FOLDER_FUNCTION_LABELS[f]}
+                      {t(`settings.editor.workspaceFolder.functions.${f}`)}
                     </AppSelectItem>
                   ))}
                 </AppSelectContent>
@@ -284,9 +290,9 @@ export function WorkspaceFolderEditor({
           </SettingsFormField>
 
           <SettingsFormField
-              label="Folder name"
+              label={t("settings.workspace.folderEditor.name")}
               htmlFor="ws-folder-name"
-              description="Relative to the project root. Badge icon opens from the button on the left."
+              description={t("settings.workspace.folderEditor.nameDesc")}
             >
               <div className="flex items-center gap-2">
                 <WorkspaceFolderIconPicker
@@ -298,7 +304,7 @@ export function WorkspaceFolderEditor({
                   id="ws-folder-name"
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="e.g. notes"
+                  placeholder={t("settings.editor.workspaceFolder.namePlaceholder")}
                   className={cn(SETTINGS_FORM_INPUT_MONO, "flex-1 min-w-0")}
                 />
               </div>
@@ -306,9 +312,9 @@ export function WorkspaceFolderEditor({
 
             {form.function === "manuscript" ? (
               <SettingsFormField
-                label="Main TeX file"
+                label={t("settings.workspace.folderEditor.mainTex")}
                 htmlFor="ws-main-tex"
-                description="Compile entry relative to the manuscript folder. Does not rename files on disk."
+                description={t("settings.workspace.folderEditor.mainTexDesc")}
               >
                 <Input
                   id="ws-main-tex"
@@ -322,9 +328,9 @@ export function WorkspaceFolderEditor({
 
             {showTemplateDocClass ? (
               <SettingsFormField
-                label="Default document class"
+                label={t("settings.workspace.folderEditor.docClass")}
                 htmlFor="ws-doc-class"
-                description="Used when auto-generating main.tex for new projects."
+                description={t("settings.workspace.folderEditor.docClassDesc")}
               >
                 <AppSelect
                   value={form.defaultDocClass}
@@ -336,27 +342,33 @@ export function WorkspaceFolderEditor({
                     <AppSelectValue />
                   </AppSelectTrigger>
                   <AppSelectContent>
-                    <AppSelectItem value="article">Article</AppSelectItem>
-                    <AppSelectItem value="report">Report</AppSelectItem>
-                    <AppSelectItem value="book">Book</AppSelectItem>
+                    <AppSelectItem value="article">
+                      {t("settings.workspace.folderEditor.article")}
+                    </AppSelectItem>
+                    <AppSelectItem value="report">
+                      {t("settings.workspace.folderEditor.report")}
+                    </AppSelectItem>
+                    <AppSelectItem value="book">
+                      {t("settings.workspace.folderEditor.book")}
+                    </AppSelectItem>
                   </AppSelectContent>
                 </AppSelect>
               </SettingsFormField>
             ) : null}
 
             <SettingsFormField
-              label="Description for AI agents"
+              label={t("settings.workspace.folderEditor.description")}
               htmlFor="ws-folder-desc"
-              description="Agents read this when reasoning about your project layout."
+              description={t("settings.workspace.folderEditor.descriptionDesc")}
               labelExtra={
                 <button
                   type="button"
                   className={SETTINGS_LABEL_RESET_ICON}
-                  title="Reset to default"
+                  title={t("settings.editor.workspaceFolder.resetDefault")}
                   onClick={() =>
                     setForm((f) => ({
                       ...f,
-                      description: defaultDescriptionForFunction(f.function),
+                      description: defaultDescriptionForFunction(f.function, t),
                     }))
                   }
                 >
@@ -370,8 +382,13 @@ export function WorkspaceFolderEditor({
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 placeholder={
-                  DEFAULT_FUNCTION_DESCRIPTIONS[form.function] ||
-                  "Explain what belongs in this folder so agents use it correctly."
+                  form.function === "custom"
+                    ? t("settings.editor.workspaceFolder.descPlaceholder")
+                    : t(`settings.editor.workspaceFolder.functionDesc.${form.function}`, {
+                        defaultValue:
+                          DEFAULT_FUNCTION_DESCRIPTIONS[form.function] ||
+                          t("settings.editor.workspaceFolder.descPlaceholder"),
+                      })
                 }
               />
             </SettingsFormField>
@@ -379,10 +396,10 @@ export function WorkspaceFolderEditor({
 
         <div className={SETTINGS_DETAIL_ACTIONS}>
           <Button size="xs" onClick={save}>
-            {slot.mode === "new" ? "Add folder" : "Save"}
+            {slot.mode === "new" ? t("settings.workspace.addFolder") : t("common.save")}
           </Button>
           <Button variant="ghost" size="xs" onClick={closePanel}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           {slot.mode === "edit" ? (
             <>
@@ -393,7 +410,7 @@ export function WorkspaceFolderEditor({
                 className="shrink-0 text-muted-foreground hover:text-destructive"
                 onClick={() => setDeleteDialogOpen(true)}
               >
-                Remove
+                {t("common.remove")}
               </Button>
             </>
           ) : null}
@@ -403,15 +420,18 @@ export function WorkspaceFolderEditor({
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="!max-w-md">
           <DialogHeader>
-            <DialogTitle>Remove folder</DialogTitle>
+            <DialogTitle>{t("settings.workspace.folderEditor.removeTitle")}</DialogTitle>
             <DialogDescription>
-              Remove <span className="font-medium text-foreground">{existing?.name || "this folder"}</span>{" "}
-              from {slot.scope === "project" ? "this project" : "the new project template"}? Only
-              workspace configuration is updated — files on disk are not deleted.
+              {t(
+                slot.scope === "project"
+                  ? "settings.workspace.folderEditor.removeDescProject"
+                  : "settings.workspace.folderEditor.removeDescTemplate",
+                { name: existing?.name || "" },
+              )}
               {isOnlyManuscript ? (
                 <>
                   {" "}
-                  Removing the only manuscript folder disables TeX workspace (editor + PDF preview).
+                  {t("settings.workspace.folderEditor.removeManuscriptWarn")}
                 </>
               ) : null}
             </DialogDescription>
@@ -423,7 +443,7 @@ export function WorkspaceFolderEditor({
               className="shadow-none"
               onClick={() => setDeleteDialogOpen(false)}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -431,7 +451,7 @@ export function WorkspaceFolderEditor({
               className="shadow-none"
               onClick={remove}
             >
-              Remove
+              {t("common.remove")}
             </Button>
           </DialogFooter>
         </DialogContent>

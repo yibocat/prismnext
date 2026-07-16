@@ -9,12 +9,14 @@ function SettingsEditorSidebar() {
 export const settingsEditorMode: ModeDefinition = {
   id: "settings-editor",
   label: "Settings",
+  labelKey: "modes.settingsEditor.label",
   icon: <SlidersHorizontalIcon className="size-3.5" />,
   tabKinds: ["settings-editor"],
   surface: "settings",
   showInModeToolbar: false,
   persistence: "transient",
   initialTitle: "Settings",
+  initialTitleKey: "modes.settingsEditor.initialTitle",
   Sidebar: SettingsEditorSidebar,
   Content: SettingsEditorContent,
 };

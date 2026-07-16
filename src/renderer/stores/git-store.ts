@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { toast } from "sonner";
 import { createLogger } from "@/services/logger";
+import { i18n } from "@/lib/i18n";
 import type {
   GitFileStatusData,
   GitStatusData,
@@ -734,8 +735,8 @@ export const useGitStore = create<GitState>()((set, get) => ({
     const result = await window.electronAPI.gitMerge(projectRoot, sourceBranch);
     if (!result.success) {
       // Merge conflicts or other failure
-      const detail = result.output || result.error || "Merge failed";
-      toast.error("Merge conflict", {
+      const detail = result.output || result.error || i18n.t("git.toast.mergeFailed");
+      toast.error(i18n.t("git.toast.mergeConflict"), {
         description: detail.length > 300 ? detail.slice(0, 300) + "..." : detail,
         duration: 8000,
       });
@@ -746,8 +747,8 @@ export const useGitStore = create<GitState>()((set, get) => ({
     const isUpToDate = summary.includes("Already up to date");
     toast.success(
       isUpToDate
-        ? `Already up to date with '${sourceBranch}'`
-        : `Merged '${sourceBranch}' into '${branch}'`,
+        ? i18n.t("git.toast.alreadyUpToDate", { branch: sourceBranch })
+        : i18n.t("git.toast.merged", { source: sourceBranch, target: branch }),
       {
         description: isUpToDate ? undefined : summary.split("\n").slice(0, 3).join("\n"),
         duration: 5000,
@@ -766,11 +767,11 @@ export const useGitStore = create<GitState>()((set, get) => ({
     invalidateStatusCache();
     const result = await window.electronAPI.gitAbortMerge(projectRoot);
     if (!result.success) {
-      toast.error(result.error || "Failed to abort merge");
-      set({ error: result.error || "Failed to abort merge" });
+      toast.error(result.error || i18n.t("git.toast.abortFailed"));
+      set({ error: result.error || i18n.t("git.toast.abortFailed") });
       return;
     }
-    toast.success("Merge aborted");
+    toast.success(i18n.t("git.toast.mergeAborted"));
     await get().refreshStatus(projectRoot);
     await get().refreshBranches(projectRoot);
     // Files restored — force metadata reload

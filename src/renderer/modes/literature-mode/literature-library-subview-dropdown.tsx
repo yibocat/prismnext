@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDownIcon, ListIcon } from "lucide-react";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useChatStore } from "@/stores/chat-store";
@@ -24,16 +25,20 @@ function subviewTriggerLabel(
   subview: LiteratureLibrarySubview,
   entryCount: number,
   citationCount: number,
+  t: (key: string, opts?: Record<string, unknown>) => string,
 ): string {
   if (subview === "session-citations") {
     return citationCount === 0
-      ? "Session citations"
-      : `${citationCount} session citation${citationCount === 1 ? "" : "s"}`;
+      ? t("modes.literature.sessionCitations")
+      : t(citationCount === 1 ? "modes.literature.entryCountOne" : "modes.literature.entryCount", { count: citationCount });
   }
-  return entryCount === 0 ? "All entries" : `${entryCount} entries`;
+  return entryCount === 0
+    ? t("modes.literature.allEntries")
+    : t(entryCount === 1 ? "modes.literature.entryCountOne" : "modes.literature.entryCount", { count: entryCount });
 }
 
 export function LiteratureLibrarySubviewDropdown({ compact = false }: { compact?: boolean }) {
+  const { t } = useTranslation();
   const subview = useLiteratureStore((s) => s.librarySubview);
   const setSubview = useLiteratureStore((s) => s.setLibrarySubview);
   const entryCount = useLiteratureStore((s) => s.papers.length);
@@ -50,7 +55,7 @@ export function LiteratureLibrarySubviewDropdown({ compact = false }: { compact?
     (c) => !isCitationInLibrary(c, libraryPaperIdSet),
   ).length;
 
-  const triggerLabel = subviewTriggerLabel(subview, entryCount, citationCount);
+  const triggerLabel = subviewTriggerLabel(subview, entryCount, citationCount, t);
 
   return (
     <AppMenu>

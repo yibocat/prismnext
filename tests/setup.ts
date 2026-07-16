@@ -1,3 +1,7 @@
+import { initI18n } from "../src/renderer/lib/i18n";
+
+initI18n("en");
+
 /** In-memory localStorage for Vitest (Node's experimental localStorage is unreliable in CI). */
 const store = new Map<string, string>();
 

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2Icon, ExternalLinkIcon, PlusCircleIcon, FolderOpenIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useCitationStagingStore } from "@/stores/citation-staging-store";
@@ -67,6 +68,7 @@ export function StagedCitationEntryPanel({
   citation: StagedCitation;
   inLibrary: boolean;
 }) {
+  const { t } = useTranslation();
   const addToLibrary = useCitationStagingStore((s) => s.addToLibrary);
   const addProgress = useCitationStagingStore((s) => s.addProgressById[citation.id]);
   const libraryPaper = useLiteratureStore((s) =>
@@ -120,7 +122,7 @@ export function StagedCitationEntryPanel({
         <div className="space-y-4">
           <div className="space-y-2">
             <div className="text-[length:var(--font-size-18)] font-semibold leading-snug text-foreground">
-              {citation.title || "Untitled"}
+              {citation.title || t("literature.detail.untitled")}
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               {entryTypeLabel ? (
@@ -160,27 +162,27 @@ export function StagedCitationEntryPanel({
           </div>
 
           <div className="space-y-0.5">
-            <MetadataRow label="Year">
+            <MetadataRow label={t("literature.detail.year")}>
               <span className="text-[length:var(--font-size-13)] text-foreground/90 px-1 -mx-1">
                 {citation.year != null ? String(citation.year) : "—"}
               </span>
             </MetadataRow>
-            <MetadataRow label="Publication">
+            <MetadataRow label={t("literature.detail.publication")}>
               <span className="text-[length:var(--font-size-13)] text-foreground/90 px-1 -mx-1">
                 {citation.venue || "—"}
               </span>
             </MetadataRow>
-            <MetadataRow label="Authors">
+            <MetadataRow label={t("literature.detail.authors")}>
               <span className="text-[length:var(--font-size-13)] text-foreground/90 px-1 -mx-1">
                 {authorsDisplay || "—"}
               </span>
             </MetadataRow>
-            <MetadataRow label="Cite key">
+            <MetadataRow label={t("literature.detail.citeKey")}>
               <span className="text-[length:var(--font-size-13)] text-foreground/90 px-1 -mx-1 font-mono">
                 {citation.libraryBibkey ?? "—"}
               </span>
             </MetadataRow>
-            <MetadataRow label="DOI">
+            <MetadataRow label={t("literature.detail.doi")}>
               {doiHref ? (
                 <button
                   type="button"
@@ -194,7 +196,7 @@ export function StagedCitationEntryPanel({
                 <span className="text-[length:var(--font-size-13)] text-muted-foreground px-1 -mx-1">—</span>
               )}
             </MetadataRow>
-            <MetadataRow label="arXiv">
+            <MetadataRow label={t("literature.detail.arxiv")}>
               {arxivHref ? (
                 <button
                   type="button"
@@ -242,7 +244,7 @@ export function StagedCitationEntryPanel({
             ))}
 
             {citation.abstract ? (
-              <MetadataRow label="Abstract">
+              <MetadataRow label={t("literature.detail.abstract")}>
                 <div className="max-h-40 overflow-y-auto text-[length:var(--font-size-13)] text-foreground/80 px-1 -mx-1 whitespace-pre-wrap">
                   {citation.abstract}
                 </div>
@@ -270,10 +272,10 @@ export function StagedCitationEntryPanel({
                     variant="secondary"
                     size="sm"
                     onClick={handleOpenPdf}
-                    title="Read the PDF (human)"
+                    title={t("literature.detail.openPdf")}
                   >
                     <ExternalLinkIcon className="size-3.5" />
-                    Open PDF
+                    {t("literature.detail.openPdf")}
                   </Button>
                 ) : null}
               </>
@@ -286,8 +288,8 @@ export function StagedCitationEntryPanel({
                 title={
                   progressLabel ??
                   (!citation.catalogVerified
-                    ? "Identifier not verified — cannot add"
-                    : "Add this paper to the project library")
+                    ? t("literature.detail.idNotVerified")
+                    : t("literature.detail.addToLibrary"))
                 }
               >
                 <span className={cn(literaturePrimaryActionBtnClass, "px-2.5")}>
@@ -296,7 +298,7 @@ export function StagedCitationEntryPanel({
                   ) : (
                     <PlusCircleIcon className="size-3.5" />
                   )}
-                  {isAdding && progressLabel ? progressLabel : "Add to library"}
+                  {isAdding && progressLabel ? progressLabel : t("literature.detail.addToLibrary")}
                 </span>
               </button>
             )}

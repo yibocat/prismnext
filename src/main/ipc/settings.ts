@@ -6,6 +6,7 @@ import { CORE_PERSONA_PROMPT } from "../prompts/layers/core-persona";
 import { AcpService } from "../acp/service";
 import { resolvePermissionMode } from "../services/permission-modes";
 import { resolveEffectiveAgentTerminalMode } from "../services/permission-modes";
+import { refreshApplicationMenu } from "../menu";
 
 export function registerSettingsHandlers(): void {
   ipcMain.handle("settings:get", async () => {
@@ -19,6 +20,9 @@ export function registerSettingsHandlers(): void {
       // Invalidate prompt cache when user custom prompt changes
       if ("agentSystemPrompt" in patch) {
         promptManager.invalidate();
+      }
+      if ("appLocale" in patch) {
+        refreshApplicationMenu();
       }
       if ("permissionMode" in patch) {
         const service = AcpService.getInstance();

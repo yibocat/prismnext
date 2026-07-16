@@ -3,6 +3,7 @@
 // Each setting row has a hover-visible reset-to-default button next to its control (right side).
 
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { EditorState } from "@codemirror/state";
 import { EditorView, lineNumbers, Decoration } from "@codemirror/view";
 import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
@@ -37,11 +38,11 @@ import {
 } from "./settings-tokens";
 
 const RADIUS_LEVELS = [
-  { value: "0", label: "Sharp" },
-  { value: "0.375", label: "Small" },
-  { value: "0.525", label: "Medium" },
-  { value: "0.775", label: "Large" },
-  { value: "0.975", label: "Full" },
+  { value: "0", labelKey: "settings.appearance.radius.sharp" },
+  { value: "0.375", labelKey: "settings.appearance.radius.small" },
+  { value: "0.525", labelKey: "settings.appearance.radius.medium" },
+  { value: "0.775", labelKey: "settings.appearance.radius.large" },
+  { value: "0.975", labelKey: "settings.appearance.radius.full" },
 ];
 
 const UI_FONT_SIZES = ["14px", "15px", "16px", "17px", "18px", "19px", "20px"] as const;
@@ -64,6 +65,7 @@ const STEPPER = SETTINGS_STEPPER;
 const STEPPER_BTN = SETTINGS_STEPPER_BTN;
 
 export function AppearanceSettings() {
+  const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
   const config = useThemeStore((s) => s.config);
   const updateConfig = useThemeStore((s) => s.updateConfig);
@@ -138,27 +140,27 @@ export function AppearanceSettings() {
       <div className="max-w-3xl mx-auto px-8 py-8 space-y-8">
         {/* ── Header ── */}
         <div>
-          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">Appearance</h2>
+          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">{t("settings.appearance.title")}</h2>
           <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-            Customize the look and feel of PrismNext.
+            {t("settings.appearance.subtitle")}
           </p>
         </div>
 
         {/* ── Color ── */}
         <div>
-          <h3 className={CATEGORY_HEADER}>Theme</h3>
+          <h3 className={CATEGORY_HEADER}>{t("settings.appearance.theme")}</h3>
           <div className={CARD}>
             {/* Theme Mode */}
             <div className="flex items-center justify-between py-2.5 group">
               <div>
-                <p className={ROW_LABEL}>Theme Mode</p>
-                <p className={ROW_DESC}>Dark, light, or follow system.</p>
+                <p className={ROW_LABEL}>{t("settings.appearance.themeMode")}</p>
+                <p className={ROW_DESC}>{t("settings.appearance.themeModeDesc")}</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   className={RESET_ICON}
                   onClick={() => setTheme("system")}
-                  title="Reset to default"
+                  title={t("settings.appearance.resetDefault")}
                 >
                   <RotateCcwIcon className="size-3" />
                 </button>
@@ -167,9 +169,9 @@ export function AppearanceSettings() {
                     <AppSelectValue />
                   </AppSelectTrigger>
                   <AppSelectContent>
-                    <AppSelectItem value="dark">Dark</AppSelectItem>
-                    <AppSelectItem value="light">Light</AppSelectItem>
-                    <AppSelectItem value="system">System</AppSelectItem>
+                    <AppSelectItem value="dark">{t("settings.appearance.dark")}</AppSelectItem>
+                    <AppSelectItem value="light">{t("settings.appearance.light")}</AppSelectItem>
+                    <AppSelectItem value="system">{t("settings.appearance.system")}</AppSelectItem>
                   </AppSelectContent>
                 </AppSelect>
               </div>
@@ -178,14 +180,14 @@ export function AppearanceSettings() {
             {/* Theme Color */}
             <div className="flex items-center justify-between py-2.5 group">
               <div>
-                <p className={ROW_LABEL}>Theme Color</p>
-                <p className={ROW_DESC}>Color family for buttons, links, and accents.</p>
+                <p className={ROW_LABEL}>{t("settings.appearance.themeColor")}</p>
+                <p className={ROW_DESC}>{t("settings.appearance.themeColorDesc")}</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   className={RESET_ICON}
                   onClick={() => updateConfig({ primaryColor: defaults.primaryColor })}
-                  title="Reset to default"
+                  title={t("settings.appearance.resetDefault")}
                 >
                   <RotateCcwIcon className="size-3" />
                 </button>
@@ -214,14 +216,14 @@ export function AppearanceSettings() {
             <div className="py-2.5 group">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className={ROW_LABEL}>Base Intensity</p>
-                  <p className={ROW_DESC}>How much the theme color infuses the background.</p>
+                  <p className={ROW_LABEL}>{t("settings.appearance.baseIntensity")}</p>
+                  <p className={ROW_DESC}>{t("settings.appearance.baseIntensityDesc")}</p>
                 </div>
                 <div className="flex items-start gap-1.5 shrink-0">
                   <button
                     className={RESET_ICON}
                     onClick={() => updateConfig({ baseIntensity: defaults.baseIntensity })}
-                    title="Reset to default"
+                    title={t("settings.appearance.resetDefault")}
                   >
                     <RotateCcwIcon className="size-3" />
                   </button>
@@ -242,8 +244,8 @@ export function AppearanceSettings() {
                       </span>
                     </div>
                     <div className="flex justify-between text-[length:var(--font-size-10)] text-muted-foreground/50 mt-0.5">
-                      <span>Clean</span>
-                      <span>Deep</span>
+                      <span>{t("settings.appearance.clean")}</span>
+                      <span>{t("settings.appearance.deep")}</span>
                     </div>
                   </div>
                 </div>
@@ -254,13 +256,13 @@ export function AppearanceSettings() {
 
         {/* ── Typography ── */}
         <div>
-          <h3 className={CATEGORY_HEADER}>Typography</h3>
+          <h3 className={CATEGORY_HEADER}>{t("settings.appearance.typography")}</h3>
           <div className={CARD}>
             {/* UI Font */}
             <div className="flex items-center justify-between py-2.5 group">
               <div>
-                <p className={ROW_LABEL}>UI Font</p>
-                <p className={ROW_DESC}>Interface typeface and size.</p>
+                <p className={ROW_LABEL}>{t("settings.appearance.uiFont")}</p>
+                <p className={ROW_DESC}>{t("settings.appearance.uiFontDesc")}</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
@@ -268,7 +270,7 @@ export function AppearanceSettings() {
                   onClick={() =>
                     updateConfig({ fontSans: defaults.fontSans, uiFontSize: defaults.uiFontSize })
                   }
-                  title="Reset to default"
+                  title={t("settings.appearance.resetDefault")}
                 >
                   <RotateCcwIcon className="size-3" />
                 </button>
@@ -317,8 +319,8 @@ export function AppearanceSettings() {
             {/* Code Font */}
             <div className="flex items-center justify-between py-2.5 group">
               <div>
-                <p className={ROW_LABEL}>Code Font</p>
-                <p className={ROW_DESC}>Monospace font for editor, chat code blocks, and output.</p>
+                <p className={ROW_LABEL}>{t("settings.appearance.editorFont")}</p>
+                <p className={ROW_DESC}>{t("settings.appearance.editorFontDesc")}</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
@@ -330,7 +332,7 @@ export function AppearanceSettings() {
                       editorFontSize: defaults.editorFontSize,
                     })
                   }
-                  title="Reset to default"
+                  title={t("settings.appearance.resetDefault")}
                 >
                   <RotateCcwIcon className="size-3" />
                 </button>
@@ -398,19 +400,19 @@ export function AppearanceSettings() {
 
         {/* ── Surface ── */}
         <div>
-          <h3 className={CATEGORY_HEADER}>Surface</h3>
+          <h3 className={CATEGORY_HEADER}>{t("settings.appearance.surface")}</h3>
           <div className={CARD}>
             {/* Border Radius */}
             <div className="flex items-center justify-between py-2.5 group">
               <div>
-                <p className={ROW_LABEL}>Border Radius</p>
-                <p className={ROW_DESC}>Corner roundness for all components.</p>
+                <p className={ROW_LABEL}>{t("settings.appearance.borderRadius")}</p>
+                <p className={ROW_DESC}>{t("settings.appearance.borderRadiusDesc")}</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   className={RESET_ICON}
                   onClick={() => updateConfig({ radius: defaults.radius })}
-                  title="Reset to default"
+                  title={t("settings.appearance.resetDefault")}
                 >
                   <RotateCcwIcon className="size-3" />
                 </button>
@@ -424,7 +426,7 @@ export function AppearanceSettings() {
                   <AppSelectContent>
                     {RADIUS_LEVELS.map((l) => (
                       <AppSelectItem key={l.value} value={l.value}>
-                        {l.label}
+                        {t(l.labelKey)}
                       </AppSelectItem>
                     ))}
                   </AppSelectContent>
@@ -435,10 +437,9 @@ export function AppearanceSettings() {
             {/* Glass Background toggle */}
             <div className="flex items-center justify-between py-2.5 group">
               <div>
-                <p className={ROW_LABEL}>Glass Background</p>
+                <p className={ROW_LABEL}>{t("settings.appearance.glassBackground")}</p>
                 <p className={ROW_DESC}>
-                  Frosted glass window effect. Sidebar becomes more transparent as intensity
-                  increases.
+                  {t("settings.appearance.glassBackgroundDesc")}
                 </p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
@@ -450,7 +451,7 @@ export function AppearanceSettings() {
                       glassIntensity: defaults.glassIntensity,
                     })
                   }
-                  title="Reset to default"
+                  title={t("settings.appearance.resetDefault")}
                 >
                   <RotateCcwIcon className="size-3" />
                 </button>
@@ -470,7 +471,7 @@ export function AppearanceSettings() {
             >
               <div className="flex items-center justify-between group">
                 <div>
-                  <p className={ROW_LABEL}>Glass Intensity</p>
+                  <p className={ROW_LABEL}>{t("settings.appearance.glassIntensity")}</p>
                   <p className={ROW_DESC}>
                     Tier {config.glassIntensity} ·{" "}
                     {GLASS_TIER_LABELS[config.glassIntensity as GlassTier]}
@@ -480,7 +481,7 @@ export function AppearanceSettings() {
                   <button
                     className={RESET_ICON}
                     onClick={() => updateConfig({ glassIntensity: defaults.glassIntensity })}
-                    title="Reset to default"
+                    title={t("settings.appearance.resetDefault")}
                   >
                     <RotateCcwIcon className="size-3" />
                   </button>

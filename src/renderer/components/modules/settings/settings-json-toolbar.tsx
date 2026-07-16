@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   MARKDOWN_SUBTOOLBAR_CLASS,
   MARKDOWN_TOOLBAR_PRIMARY_BTN,
@@ -21,6 +22,7 @@ export function SettingsJsonToolbar({
   saving?: boolean;
   trailing?: ReactNode;
 }) {
+  const { t } = useTranslation();
   return (
     <div className={MARKDOWN_SUBTOOLBAR_CLASS}>
       <button
@@ -29,7 +31,7 @@ export function SettingsJsonToolbar({
         disabled={disabled || saving}
         onClick={onPrimary}
       >
-        {saving ? "Working…" : primaryLabel}
+        {saving ? t("common.loading") : primaryLabel}
       </button>
       <button
         type="button"
@@ -37,7 +39,7 @@ export function SettingsJsonToolbar({
         disabled={saving}
         onClick={onCancel}
       >
-        Cancel
+        {t("common.cancel")}
       </button>
       <div className="flex-1 min-w-0" />
       {trailing}

@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2Icon, GitMergeIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import {
 import { useResolvedWorktree } from "@/lib/git/use-resolved-worktree";
 
 export function MergeWorktreeDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const activeWorktree = useResolvedWorktree();
   const [merging, setMerging] = useState(false);
@@ -59,13 +61,16 @@ export function MergeWorktreeDialog({ open, onClose }: { open: boolean; onClose:
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <GitMergeIcon className="size-4" />
-            Merge Worktree: {activeWorktree.name}
+            {t("dialogs.worktree.mergeTitle", { name: activeWorktree.name })}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3 max-h-80 overflow-y-auto">
           <div className="text-sm text-muted-foreground text-center py-4">
-            Merge branch &quot;{activeWorktree.branch}&quot; into {targetBranch}. The worktree will be removed after a successful merge.
+            {t("dialogs.worktree.mergeBody", {
+              branch: activeWorktree.branch,
+              target: targetBranch,
+            })}
           </div>
 
           {merging && mergeSteps.length > 0 && (
@@ -81,20 +86,20 @@ export function MergeWorktreeDialog({ open, onClose }: { open: boolean; onClose:
           {result && (
             <div className={`text-sm p-2 rounded ${result.success ? "text-green-600 bg-green-50 dark:bg-green-950" : "text-destructive bg-destructive/10"}`}>
               {result.success
-                ? "Merged successfully! Worktree removed."
-                : `Merge failed: ${result.error}`}
+                ? t("dialogs.worktree.mergeSuccess")
+                : t("dialogs.worktree.mergeFailed", { error: result.error })}
             </div>
           )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={merging}>
-            {result?.success ? "Close" : "Cancel"}
+            {result?.success ? t("common.close") : t("common.cancel")}
           </Button>
           {!result?.success && (
             <Button onClick={handleMerge} disabled={merging}>
               {merging ? <Loader2Icon className="size-4 animate-spin mr-1" /> : null}
-              Merge into {targetBranch}
+              {t("dialogs.worktree.mergeInto", { branch: targetBranch })}
             </Button>
           )}
         </DialogFooter>

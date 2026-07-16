@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +34,7 @@ export function CommandsImportDialog({
   pack,
   onComplete,
 }: CommandsImportDialogProps) {
+  const { t } = useTranslation();
   const importPack = useCommandStore((s) => s.importPack);
   const [strategy, setStrategy] = useState<CommandImportConflictStrategy>("skip");
   const [importing, setImporting] = useState(false);
@@ -41,16 +43,18 @@ export function CommandsImportDialog({
     setImporting(true);
     try {
       const result = await importPack(projectRoot, pack, strategy);
-      const parts = [`${result.imported} imported`];
-      if (result.skipped > 0) parts.push(`${result.skipped} skipped`);
-      if (result.renamed.length > 0) {
-        parts.push(`${result.renamed.length} renamed`);
+      const parts = [t("settings.commandsPage.import.imported", { count: result.imported })];
+      if (result.skipped > 0) {
+        parts.push(t("settings.commandsPage.import.skipped", { count: result.skipped }));
       }
-      toast.success(`Commands: ${parts.join(", ")}.`);
+      if (result.renamed.length > 0) {
+        parts.push(t("settings.commandsPage.import.renamed", { count: result.renamed.length }));
+      }
+      toast.success(t("settings.commandsPage.import.toastSummary", { parts: parts.join(", ") }));
       onOpenChange(false);
       onComplete();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Import failed.");
+      toast.error(err instanceof Error ? err.message : t("settings.commandsPage.import.failed"));
     } finally {
       setImporting(false);
     }
@@ -60,21 +64,21 @@ export function CommandsImportDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="!max-w-md">
         <DialogHeader>
-          <DialogTitle>Import commands</DialogTitle>
+          <DialogTitle>{t("settings.commandsPage.import.title")}</DialogTitle>
           <DialogDescription>
-            {incomingCount} command(s) in file.
+            {t("settings.commandsPage.import.countInFile", { count: incomingCount })}
             {invalidCount > 0
-              ? ` ${invalidCount} invalid name(s) will be skipped.`
+              ? ` ${t("settings.commandsPage.import.invalidSkipped", { count: invalidCount })}`
               : null}
             {conflictCount > 0
-              ? ` ${conflictCount} name conflict(s) with existing commands.`
+              ? ` ${t("settings.commandsPage.import.conflicts", { count: conflictCount })}`
               : null}
           </DialogDescription>
         </DialogHeader>
 
         {conflictCount > 0 ? (
           <div className="space-y-2 text-[length:var(--font-size-12)]">
-            <p className="text-muted-foreground">When names collide:</p>
+            <p className="text-muted-foreground">{t("settings.commandsPage.import.whenCollide")}</p>
             <div className="flex flex-col gap-1">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -83,7 +87,7 @@ export function CommandsImportDialog({
                   checked={strategy === "skip"}
                   onChange={() => setStrategy("skip")}
                 />
-                Skip conflicting commands
+                {t("settings.commandsPage.import.skip")}
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -92,7 +96,7 @@ export function CommandsImportDialog({
                   checked={strategy === "replace"}
                   onChange={() => setStrategy("replace")}
                 />
-                Replace existing commands
+                {t("settings.commandsPage.import.replace")}
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -101,7 +105,7 @@ export function CommandsImportDialog({
                   checked={strategy === "rename"}
                   onChange={() => setStrategy("rename")}
                 />
-                Import as renamed copies (e.g. name-2)
+                {t("settings.commandsPage.import.rename")}
               </label>
             </div>
           </div>
@@ -115,15 +119,15 @@ export function CommandsImportDialog({
             onClick={() => onOpenChange(false)}
             disabled={importing}
           >
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             size="sm"
             className="shadow-none"
-            disabled={importing || incomingCount === 0}
             onClick={() => void handleImport()}
+            disabled={importing}
           >
-            {importing ? "Importing…" : "Import"}
+            {importing ? t("settings.commandsPage.import.importing") : t("settings.commandsPage.import.import")}
           </Button>
         </DialogFooter>
       </DialogContent>

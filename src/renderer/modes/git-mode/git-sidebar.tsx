@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import {
   RefreshCwIcon,
   Loader2Icon,
@@ -22,6 +23,7 @@ import { cn } from "@/lib/utils";
 // ─── Main Component ───
 
 export function GitSidebar() {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const unitRoot = useGitStore((s) => s.unitRoot);
   const isGitRepo = useGitStore((s) => s.isGitRepo);
@@ -73,7 +75,7 @@ export function GitSidebar() {
       <>
         <SidebarHeader className="flex h-[var(--height-mode-selector)] shrink-0 flex-row items-center justify-between px-3">
           <span className="truncate text-[length:var(--font-size-12)] font-medium text-muted-foreground">
-            Git
+            {t("modes.git.label")}
           </span>
         </SidebarHeader>
         <SidebarContent className="px-2 py-1">
@@ -81,10 +83,10 @@ export function GitSidebar() {
             <GitBranchIcon className="size-5 text-muted-foreground/50" />
             <div className="space-y-1">
               <p className="text-[length:var(--font-size-13)] font-medium text-foreground/90">
-                No Git repository
+                {t("modes.git.noRepo")}
               </p>
               <p className="text-[length:var(--font-size-12)] text-muted-foreground max-w-[14rem]">
-                This project is not a Git repository yet.
+                {t("modes.git.noRepoHint")}
               </p>
             </div>
           </div>

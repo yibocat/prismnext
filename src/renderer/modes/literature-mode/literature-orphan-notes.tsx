@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { BookOpenIcon, Loader2Icon, Link2OffIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ function orphanLabel(note: OrphanPaperNote): string {
 
 /** Sidebar section — reading notes without a library entry (e.g. after Zotero disconnect). */
 export function LiteratureOrphanNotesSection() {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const files = useDocumentStore((s) => s.files);
   const papers = useLiteratureStore((s) => s.papers);
@@ -86,7 +88,7 @@ export function LiteratureOrphanNotesSection() {
     <div className="mt-3 border-t border-border/60 pt-2 px-1">
       <p className="px-1 py-1 text-[length:var(--font-hint)] font-medium uppercase tracking-wide text-muted-foreground/55 flex items-center gap-1.5">
         <Link2OffIcon className="size-3" />
-        Unlinked notes
+        {t("literature.notes.unlinked")}
       </p>
       {loading ? (
         <p className={cn(SETTINGS_ROW_DESC, "px-1 py-2 flex items-center gap-2")}>
@@ -129,7 +131,7 @@ export function LiteratureOrphanNotesSection() {
                       ) : (
                         <BookOpenIcon className="size-3 mr-1" />
                       )}
-                      Restore entry
+                      {t("literature.notes.restoreEntry")}
                     </Button>
                     <Button
                       size="xs"
@@ -137,7 +139,7 @@ export function LiteratureOrphanNotesSection() {
                       className="h-6 shrink-0"
                       onClick={() => void openPaperNote(note.relativePath, note.name)}
                     >
-                      Open
+                      {t("literature.notes.open")}
                     </Button>
                   </div>
                 </li>

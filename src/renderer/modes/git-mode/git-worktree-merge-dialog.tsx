@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2Icon, AlertTriangleIcon, GitBranchIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -27,6 +28,7 @@ interface GitWorktreeMergeDialogProps {
 }
 
 export function GitWorktreeMergeDialog({ open, onOpenChange, projectRoot }: GitWorktreeMergeDialogProps) {
+  const { t } = useTranslation();
   const resolvedWorktree = useResolvedWorktree({ refreshOnMount: open });
 
   const [files, setFiles] = useState<WorktreeChangedFile[]>([]);
@@ -104,7 +106,7 @@ export function GitWorktreeMergeDialog({ open, onOpenChange, projectRoot }: GitW
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Merge Worktree into Branch</DialogTitle>
+          <DialogTitle>{t("dialogs.git.mergeWorktreeTitle")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-3">
@@ -184,7 +186,7 @@ export function GitWorktreeMergeDialog({ open, onOpenChange, projectRoot }: GitW
                     disabled={merging}
                     className="flex items-center h-8 px-3 rounded-md text-xs font-medium border border-border hover:bg-accent transition-colors disabled:opacity-50"
                   >
-                    Cancel
+                    {t("common.cancel")}
                   </button>
                   <button
                     type="button"

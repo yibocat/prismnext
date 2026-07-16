@@ -1,3 +1,4 @@
+import { i18n } from "@/lib/i18n";
 import type { LiteraturePaper } from "@/types/electron.d";
 
 export interface LiteratureAuthorPart {
@@ -7,7 +8,7 @@ export interface LiteratureAuthorPart {
 }
 
 export function formatLiteratureAuthors(authors: string | null): string {
-  if (!authors) return "Unknown authors";
+  if (!authors) return i18n.t("literature.detail.unknownAuthors");
   try {
     const parsed = JSON.parse(authors) as LiteratureAuthorPart[];
     return parsed
@@ -47,8 +48,8 @@ export function formatLiteratureAuthorsShort(authors: string | null): string {
 
 /** Edit-friendly single-line author list (comma-separated). */
 export function authorsForEditField(authors: string | null): string {
-  const formatted = formatLiteratureAuthors(authors);
-  return formatted === "Unknown authors" ? "" : formatted;
+  if (!authors) return "";
+  return formatLiteratureAuthors(authors);
 }
 
 function splitAuthorSegments(trimmed: string): string[] {

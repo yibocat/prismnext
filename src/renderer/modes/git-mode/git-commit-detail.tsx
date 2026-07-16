@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ArrowLeftIcon,
   ChevronRightIcon,
@@ -45,6 +46,7 @@ interface GitCommitDetailProps {
 }
 
 export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
+  const { t } = useTranslation();
   const clearSelectedCommit = useGitStore((s) => s.clearSelectedCommit);
   const expandedCommitFilePaths = useGitStore((s) => s.expandedCommitFilePaths);
   const expandedSet = useMemo(
@@ -120,7 +122,7 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
           type="button"
           className="size-4 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
           onClick={clearSelectedCommit}
-          title="Back to commit list"
+          title={t("git.commitDetail.back")}
         >
           <ArrowLeftIcon className="size-3" />
         </button>
@@ -130,7 +132,11 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
           onClick={() => setMetaExpanded((v) => !v)}
           role="button"
           tabIndex={0}
-          title={metaExpanded ? "Hide commit details" : "Show commit details"}
+          title={
+            metaExpanded
+              ? t("git.commitDetail.hideMeta")
+              : t("git.commitDetail.showMeta")
+          }
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
@@ -151,10 +157,12 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
             )}
           >
             {loading
-              ? "Loading…"
+              ? t("git.commitDetail.loading")
               : fileCount === 0
-                ? "No files changed"
-                : `${fileCount} File${fileCount !== 1 ? "s" : ""} Changed`}
+                ? t("git.commitDetail.noFiles")
+                : fileCount === 1
+                  ? t("git.commitDetail.fileChanged", { count: fileCount })
+                  : t("git.commitDetail.filesChanged", { count: fileCount })}
           </span>
           <span className="text-muted-foreground/40 shrink-0 select-none">·</span>
           <span
@@ -181,7 +189,7 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
             <button
               type="button"
               className="size-4 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
-              title="Commit actions"
+              title={t("git.commitDetail.actions")}
               onClick={(e) => e.stopPropagation()}
             >
               <EllipsisIcon className="size-3" />
@@ -193,7 +201,7 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
                 setRevertTarget({ hash: commit.hash, message: commit.message })
               }
             >
-              Revert commit
+              {t("git.commitDetail.revertMenu")}
             </AppMenuItem>
             <AppMenuSeparator />
             <AppMenuItem
@@ -202,7 +210,7 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
                 setResetTarget({ hash: commit.hash, message: commit.message });
               }}
             >
-              Reset — soft
+              {t("git.commitDetail.resetSoft")}
             </AppMenuItem>
             <AppMenuItem
               onClick={() => {
@@ -210,7 +218,7 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
                 setResetTarget({ hash: commit.hash, message: commit.message });
               }}
             >
-              Reset — mixed
+              {t("git.commitDetail.resetMixed")}
             </AppMenuItem>
             <AppMenuDestructiveItem
               onClick={() => {
@@ -218,7 +226,7 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
                 setResetTarget({ hash: commit.hash, message: commit.message });
               }}
             >
-              Reset — hard
+              {t("git.commitDetail.resetHard")}
             </AppMenuDestructiveItem>
           </AppMenuContent>
         </AppMenu>
@@ -241,15 +249,17 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
             )}
           >
             <span>
-              <span className="text-muted-foreground/50">Date</span> {formattedDate}
+              <span className="text-muted-foreground/50">{t("git.commitDetail.date")}</span>{" "}
+              {formattedDate}
             </span>
             <span className="text-muted-foreground/30">·</span>
             <span>
-              <span className="text-muted-foreground/50">Author</span> {commit.author}
+              <span className="text-muted-foreground/50">{t("git.commitDetail.author")}</span>{" "}
+              {commit.author}
             </span>
             <span className="text-muted-foreground/30">·</span>
             <span>
-              <span className="text-muted-foreground/50">Hash</span>{" "}
+              <span className="text-muted-foreground/50">{t("git.commitDetail.hash")}</span>{" "}
               <span className="font-mono">{commit.hash}</span>
             </span>
             {refs.length > 0 && (
@@ -295,7 +305,7 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
       ) : (
         <div className="flex flex-1 items-center justify-center py-12">
           <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
-            No files changed in this commit
+            {t("git.commitDetail.noFilesInCommit")}
           </p>
         </div>
       )}
@@ -309,9 +319,9 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
       >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Revert commit</DialogTitle>
+            <DialogTitle>{t("dialogs.git.revertTitle")}</DialogTitle>
             <DialogDescription className="text-xs">
-              This will create a new commit that reverses the changes from:
+              {t("git.commitDetail.revertBody")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -326,7 +336,7 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
               onClick={() => setRevertTarget(null)}
               className="h-8 px-3 rounded text-xs text-muted-foreground hover:bg-accent transition-colors"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               type="button"
@@ -334,7 +344,9 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
               disabled={reverting}
               className="flex items-center gap-1.5 h-8 px-4 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
-              {reverting ? "Reverting..." : "Revert"}
+              {reverting
+                ? t("git.commitDetail.reverting")
+                : t("git.commitDetail.revert")}
             </button>
           </DialogFooter>
         </DialogContent>
@@ -348,24 +360,23 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
       >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Reset to commit</DialogTitle>
+            <DialogTitle>{t("dialogs.git.resetTitle")}</DialogTitle>
             <DialogDescription className="text-xs">
-              This will move the branch pointer to this commit.
+              {t("git.commitDetail.resetBody")}
               {resetMode === "hard" && (
                 <span className="flex items-center gap-1 mt-1 text-destructive font-medium">
                   <AlertTriangleIcon className="size-3.5" />
-                  --hard: all changes after this commit will be permanently
-                  discarded.
+                  {t("git.commitDetail.resetHardWarn")}
                 </span>
               )}
               {resetMode === "soft" && (
                 <span className="block mt-1 text-muted-foreground">
-                  --soft: changes will be kept in the staging area.
+                  {t("git.commitDetail.resetSoftHint")}
                 </span>
               )}
               {resetMode === "mixed" && (
                 <span className="block mt-1 text-muted-foreground">
-                  --mixed: changes will be kept as unstaged modifications.
+                  {t("git.commitDetail.resetMixedHint")}
                 </span>
               )}
             </DialogDescription>
@@ -382,7 +393,7 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
               onClick={() => setResetTarget(null)}
               className="h-8 px-3 rounded text-xs text-muted-foreground hover:bg-accent transition-colors"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               type="button"
@@ -396,8 +407,8 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
               )}
             >
               {resetting
-                ? "Resetting..."
-                : `Reset ${resetMode === "mixed" ? "" : "--" + resetMode}`}
+                ? t("git.commitDetail.resetting")
+                : t("git.commitDetail.reset")}
             </button>
           </DialogFooter>
         </DialogContent>

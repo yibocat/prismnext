@@ -6,6 +6,7 @@ import {
   FileIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   AppMenu,
   AppMenuContent,
@@ -42,6 +43,7 @@ function ComposerAttachmentStrip({
   attachments: ComposerAttachment[];
   onRemove: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
 
   if (attachments.length === 0) return null;
@@ -56,7 +58,7 @@ function ComposerAttachmentStrip({
             {att.kind === "image" && att.previewUrl ? (
               <button
                 type="button"
-                aria-label={`Preview ${att.name}`}
+                aria-label={t("chat.composer.previewAttachment", { name: att.name })}
                 onClick={() => setPreview({ url: att.previewUrl!, name: att.name })}
                 className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
@@ -76,7 +78,7 @@ function ComposerAttachmentStrip({
             </span>
             <button
               type="button"
-              aria-label={`Remove ${att.name}`}
+              aria-label={t("chat.composer.removeAttachment", { name: att.name })}
               onClick={() => onRemove(att.id)}
               className="rounded-sm p-0.5 text-muted-foreground transition-colors hover:bg-muted-foreground/20 hover:text-foreground"
             >
@@ -90,7 +92,7 @@ function ComposerAttachmentStrip({
           className="max-w-[min(92vw,56rem)] gap-2 border-border/80 bg-background p-2 sm:max-w-[min(92vw,56rem)]"
           showCloseButton
         >
-          <DialogTitle className="sr-only">{preview?.name ?? "Image preview"}</DialogTitle>
+          <DialogTitle className="sr-only">{preview?.name ?? t("chat.composer.imagePreview")}</DialogTitle>
           {preview ? (
             <img
               src={preview.url}
@@ -111,12 +113,13 @@ export function ChatComposerCore({
   hideToolbar = false,
   onLayoutExpand,
 }: ChatComposerCoreProps) {
+  const { t } = useTranslation();
   const permissionGateOpen = usePermissionGateOpen();
   const composer = useChatComposer();
 
   const isCapsule = variant === "capsule-compact" || variant === "capsule-expanded";
   const isCompact = variant === "capsule-compact";
-  const placeholder = capsulePlaceholder ?? composer.placeholder;
+  const placeholder = capsulePlaceholder ?? t("chat.composer.placeholder");
 
   const compactRowRef = useRef<HTMLDivElement>(null);
   const [useModelIcon, setUseModelIcon] = useState(false);
@@ -152,7 +155,7 @@ export function ChatComposerCore({
               ? "size-7 rounded-full bg-muted-foreground/20 hover:bg-muted-foreground/30"
               : "size-7 rounded-md hover:bg-accent hover:text-accent-foreground",
           )}
-          title="Add context"
+          title={t("chat.composer.addContext")}
         >
           <PlusIcon className="size-4" />
         </button>
@@ -163,14 +166,14 @@ export function ChatComposerCore({
             void composer.handleAddFile().then(() => onLayoutExpand?.());
           }}
         >
-          Add file
+          {t("chat.composer.addFile")}
         </AppMenuItem>
         <AppMenuItem
           onClick={() => {
             void composer.handleAddImage().then(() => onLayoutExpand?.());
           }}
         >
-          Add image
+          {t("chat.composer.addImage")}
         </AppMenuItem>
       </AppMenuContent>
     </AppMenu>
@@ -226,7 +229,7 @@ export function ChatComposerCore({
     return (
       <div className={cn("relative mx-auto w-full min-w-0 max-w-3xl", className)}>
         <div className="px-4 py-3 text-center text-[length:var(--font-chat-meta)] text-muted-foreground">
-          This session is archived — read only. Restore it to continue the conversation.
+          {t("chat.composer.archivedReadonly")}
         </div>
       </div>
     );
@@ -261,7 +264,7 @@ export function ChatComposerCore({
                   {ctx.label}
                   <button
                     type="button"
-                    aria-label="Remove context"
+                    aria-label={t("chat.composer.removeContext")}
                     onClick={() =>
                       composer.setPinnedContexts((prev) => prev.filter((_, idx) => idx !== i))
                     }
@@ -334,7 +337,7 @@ export function ChatComposerCore({
                   {ctx.label}
                   <button
                     type="button"
-                    aria-label="Remove context"
+                    aria-label={t("chat.composer.removeContext")}
                     onClick={() =>
                       composer.setPinnedContexts((prev) => prev.filter((_, idx) => idx !== i))
                     }

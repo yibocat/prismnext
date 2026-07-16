@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   AnnotationsStoreProvider,
   useAnnotations,
@@ -12,6 +13,7 @@ import { useLiteratureExtractStore } from "@/stores/literature-extract-store";
 import { dbAnnotationToLector, coloredHighlightToDb } from "@/lib/literature/highlight-sync";
 import { PdfDocumentView } from "@/components/modules/preview";
 import { Progress } from "@/components/ui/progress";
+import { i18n } from "@/lib/i18n";
 import type { LiteraturePaper } from "@/types/electron.d";
 import type { PaperExtractBlock } from "../../../shared/paper-extract-block";
 import { paperHasReadablePdf } from "./literature-format";
@@ -165,10 +167,11 @@ function ReaderPageFocusListener() {
 }
 
 export function LiteratureReader({ projectRoot, paper }: LiteratureReaderProps) {
+  const { t } = useTranslation();
   const [pdfSource, setPdfSource] = useState<string | Uint8Array | null>(null);
   const [loadState, setLoadState] = useState<PdfLoadState>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [loadingHint, setLoadingHint] = useState("Loading PDF…");
+  const [loadingHint, setLoadingHint] = useState(() => i18n.t("literature.reader.loadingPdf"));
   const [extractBlocks, setExtractBlocks] = useState<PaperExtractBlock[]>([]);
   const [blocksHint, setBlocksHint] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<{
@@ -216,12 +219,12 @@ export function LiteratureReader({ projectRoot, paper }: LiteratureReaderProps) 
     setLoadError(null);
     setPdfSource(null);
     setDownloadProgress(null);
-    setLoadingHint("Loading PDF…");
+    setLoadingHint(i18n.t("literature.reader.loadingPdf"));
 
     const unsubscribeProgress = window.electronAPI.onLiteraturePdfDownloadProgress((data) => {
       if (cancelled || data.paperId !== paper.id) return;
       if (data.phase === "resolving") {
-        setLoadingHint("Connecting to Zotero…");
+        setLoadingHint(i18n.t("literature.reader.connectingZotero"));
       } else if (data.phase === "downloading" && data.receivedBytes != null) {
         setDownloadProgress((prev) => {
           const receivedBytes = Math.max(prev?.receivedBytes ?? 0, data.receivedBytes ?? 0);
@@ -233,12 +236,12 @@ export function LiteratureReader({ projectRoot, paper }: LiteratureReaderProps) 
               : (prev?.totalBytes ?? null);
           return { receivedBytes, totalBytes };
         });
-        setLoadingHint("Downloading PDF from Zotero…");
+        setLoadingHint(i18n.t("literature.reader.downloadingZotero"));
       } else if (data.phase === "caching") {
-        setLoadingHint("Saving PDF locally…");
+        setLoadingHint(i18n.t("literature.reader.savingPdf"));
         setDownloadProgress(null);
       } else if (data.phase === "opening" || data.phase === "reading") {
-        setLoadingHint("Opening PDF…");
+        setLoadingHint(i18n.t("literature.reader.openingPdf"));
         setDownloadProgress(null);
       }
     });
@@ -252,7 +255,7 @@ export function LiteratureReader({ projectRoot, paper }: LiteratureReaderProps) 
           setLoadError(
             paper.zotero_key
               ? "Could not load PDF from Zotero. The file may not be stored online (linked files need Zotero desktop), or the API key lacks file access."
-              : "No PDF attached to this entry.",
+              : i18n.t("literature.reader.noPdf"),
           );
           return;
         }
@@ -299,7 +302,9 @@ export function LiteratureReader({ projectRoot, paper }: LiteratureReaderProps) 
             )}
             <p className="text-[length:var(--font-size-11)] text-muted-foreground/80 tabular-nums">
               {formatByteSize(downloadProgress.receivedBytes)}
-              {hasTotal ? ` / ${formatByteSize(downloadProgress.totalBytes!)}` : " downloaded"}
+              {hasTotal
+                ? ` / ${formatByteSize(downloadProgress.totalBytes!)}`
+                : ` ${t("literature.reader.downloaded")}`}
             </p>
           </div>
         ) : null}
@@ -310,7 +315,7 @@ export function LiteratureReader({ projectRoot, paper }: LiteratureReaderProps) 
   if (loadState === "empty" || loadState === "error") {
     return (
       <div className="flex h-full items-center justify-center px-6 text-center text-muted-foreground text-sm">
-        {loadError ?? "No PDF attached."}
+        {loadError ?? t("literature.reader.noPdf")}
       </div>
     );
   }
@@ -318,7 +323,7 @@ export function LiteratureReader({ projectRoot, paper }: LiteratureReaderProps) 
   if (!pdfSource) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-        Loading PDF…
+        {t("literature.reader.loadingPdf")}
       </div>
     );
   }

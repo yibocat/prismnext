@@ -4,6 +4,7 @@
  */
 
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { FlaskConicalIcon, Loader2Icon } from "lucide-react";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
@@ -21,10 +22,11 @@ import { experimentsSectionLabelClass } from "./experiments-detail-chrome";
 import { useExperimentProjectRoot } from "./experiments-project-root";
 
 export function ExperimentsSidebar() {
+  const { t } = useTranslation();
   const projectRoot = useExperimentProjectRoot();
   const activeTabId = useRightPanelStore((s) => s.activeTabId);
   const tabs = useRightPanelStore((s) => s.tabs);
-  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const activeTab = tabs.find((tab) => tab.id === activeTabId);
   const experimentId =
     activeTab?.kind === "experiments" ? activeTab.experimentId : undefined;
 
@@ -58,12 +60,12 @@ export function ExperimentsSidebar() {
     <>
       <SidebarHeader className="flex h-[var(--height-mode-selector)] shrink-0 flex-row items-center justify-between gap-2 px-3">
         <span className="truncate font-sans text-[length:var(--font-size-12)] font-medium text-muted-foreground">
-          {showingDetail ? "Details" : "Experiments"}
+          {showingDetail ? t("experiments.details") : t("experiments.title")}
         </span>
         {loading ? (
           <Loader2Icon className="size-3.5 shrink-0 animate-spin text-muted-foreground/60" />
         ) : showingDetail && archived ? (
-          <span className={literatureDetailBadgeClass}>Archived</span>
+          <span className={literatureDetailBadgeClass}>{t("experiments.archived")}</span>
         ) : null}
       </SidebarHeader>
 
@@ -82,7 +84,9 @@ export function ExperimentsSidebar() {
               </div>
             </div>
             <div className="space-y-1">
-              <h3 className={experimentsSectionLabelClass}>Overview</h3>
+              <h3 className={experimentsSectionLabelClass}>
+                {t("experiments.overview.label")}
+              </h3>
               <ExperimentsOverviewPanel
                 meta={detail.meta}
                 runCount={runCount}
@@ -102,10 +106,9 @@ export function ExperimentsSidebar() {
           </div>
         ) : (
           <div className="space-y-2 px-1 py-1">
-            <p className={experimentsSectionLabelClass}>Browse</p>
+            <p className={experimentsSectionLabelClass}>{t("experiments.browse")}</p>
             <p className="font-sans text-[length:var(--font-size-12)] leading-relaxed text-muted-foreground/75">
-              Open an experiment from the grid — each one opens as its own tab. Overview and
-              Environment for the active tab appear here.
+              {t("experiments.sidebar.hint")}
             </p>
           </div>
         )}

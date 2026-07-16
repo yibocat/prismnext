@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
@@ -43,6 +44,7 @@ const EXAMPLE_SINGLE_BLOCK = `{
 }`;
 
 export function McpPasteJsonPanel() {
+  const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const servers = useMcpServersStore((s) => s.servers);
@@ -65,17 +67,15 @@ export function McpPasteJsonPanel() {
     const parsed = parsePastedMcpJson(pasteText);
 
     if (parsed.error === "invalid_json") {
-      setPasteError("Invalid JSON — check brackets and quotes.");
+      setPasteError(t("settings.editor.mcpPaste.errorInvalidJson"));
       return;
     }
     if (parsed.error === "invalid_format") {
-      setPasteError(
-        "Unrecognized format. Paste mcpServers, a name → config map, or a single server block.",
-      );
+      setPasteError(t("settings.editor.mcpPaste.errorInvalidFormat"));
       return;
     }
     if (parsed.error === "empty") {
-      setPasteError("Nothing to add.");
+      setPasteError(t("settings.editor.mcpPaste.errorEmpty"));
       return;
     }
 
@@ -83,25 +83,25 @@ export function McpPasteJsonPanel() {
       const name = pasteBareName.trim();
       const entry = namedEntryFromBareConfig(name, parsed.bareConfig);
       if (!entry) {
-        setPasteError("Enter a valid server name (letters, numbers, hyphens).");
+        setPasteError(t("settings.editor.mcpPaste.errorName"));
         return;
       }
       await persist(projectRoot, mergeMcpEntries(servers, [entry]));
-      toast.success(`Added "${entry.name}" — start a new chat to use it.`);
+      toast.success(t("settings.editor.mcpPaste.toastAddedOne", { name: entry.name }));
       closePanel();
       return;
     }
 
     if (parsed.entries.length === 0) {
-      setPasteError("No servers found in pasted JSON.");
+      setPasteError(t("settings.editor.mcpPaste.errorNoServers"));
       return;
     }
 
     await persist(projectRoot, mergeMcpEntries(servers, parsed.entries));
     toast.success(
       parsed.entries.length === 1
-        ? `Added "${parsed.entries[0].name}" — start a new chat to use it.`
-        : `Added ${parsed.entries.length} servers — start a new chat to use them.`,
+        ? t("settings.editor.mcpPaste.toastAddedOne", { name: parsed.entries[0].name })
+        : t("settings.editor.mcpPaste.toastAddedMany", { count: parsed.entries.length }),
     );
     closePanel();
   };
@@ -109,7 +109,7 @@ export function McpPasteJsonPanel() {
   if (!projectRoot) {
     return (
       <div className="flex flex-1 items-center justify-center px-8 text-[length:var(--font-size-13)] text-muted-foreground">
-        Open a project to add MCP servers.
+        {t("settings.editor.mcpPaste.openProject")}
       </div>
     );
   }
@@ -117,7 +117,7 @@ export function McpPasteJsonPanel() {
   return (
     <div className="flex flex-1 min-h-0 flex-col overflow-auto">
       <SettingsJsonToolbar
-        primaryLabel="Parse and add"
+        primaryLabel={t("settings.editor.mcpPaste.parseAdd")}
         onPrimary={() => void handlePasteAdd()}
         onCancel={closePanel}
         disabled={!pasteText.trim()}
@@ -127,20 +127,16 @@ export function McpPasteJsonPanel() {
             <input
               type="text"
               className={NAME_INPUT}
-              placeholder="Server name"
+              placeholder={t("settings.editor.mcpPaste.serverName")}
               value={pasteBareName}
               onChange={(e) => setPasteBareName(e.target.value)}
-              aria-label="Server name for pasted config"
+              aria-label={t("settings.editor.mcpPaste.serverNameAria")}
             />
           ) : null
         }
       />
       <div className={SETTINGS_DETAIL_SHELL}>
-        <p className={SETTINGS_ROW_DESC}>
-          Paste JSON from MCP docs — full{" "}
-          <code className="text-[length:var(--font-size-11)] bg-muted px-1 rounded">mcpServers</code>
-          , a name → config map, or a single server object.
-        </p>
+        <p className={SETTINGS_ROW_DESC}>{t("settings.editor.mcpPaste.intro")}</p>
 
         {pasteError ? (
           <p className="text-[length:var(--font-size-12)] text-destructive">{pasteError}</p>
@@ -157,13 +153,19 @@ export function McpPasteJsonPanel() {
 
         <section className="space-y-3 pt-1">
           <p className="text-[length:var(--font-size-12)] font-medium text-foreground/90">
-            Example formats
+            {t("settings.editor.mcpPaste.examples")}
           </p>
           <div className="space-y-2">
-            <FormatHint title="Full mcpServers wrapper" example={EXAMPLE_MCPSERVERS} />
-            <FormatHint title="Name → config map" example={EXAMPLE_NAME_MAP} />
             <FormatHint
-              title="Single server block (name required in toolbar when parsing)"
+              title={t("settings.editor.mcpPaste.exampleWrapper")}
+              example={EXAMPLE_MCPSERVERS}
+            />
+            <FormatHint
+              title={t("settings.editor.mcpPaste.exampleNameMap")}
+              example={EXAMPLE_NAME_MAP}
+            />
+            <FormatHint
+              title={t("settings.editor.mcpPaste.exampleSingle")}
               example={EXAMPLE_SINGLE_BLOCK}
             />
           </div>
@@ -174,6 +176,7 @@ export function McpPasteJsonPanel() {
 }
 
 function FormatHint({ title, example }: { title: string; example: string }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -182,7 +185,7 @@ function FormatHint({ title, example }: { title: string; example: string }) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
-      toast.error("Could not copy to clipboard.");
+      toast.error(t("settings.editor.mcpJson.toast.copyFailed"));
     }
   };
 
@@ -194,8 +197,8 @@ function FormatHint({ title, example }: { title: string; example: string }) {
           type="button"
           className={SETTINGS_LABEL_RESET_ICON}
           onClick={() => void handleCopy()}
-          title={copied ? "Copied" : "Copy example"}
-          aria-label={copied ? "Copied" : "Copy example"}
+          title={copied ? t("common.copied") : t("settings.editor.mcp.copyExample")}
+          aria-label={copied ? t("common.copied") : t("settings.editor.mcp.copyExample")}
         >
           {copied ? (
             <CheckIcon className="size-3.5 text-success" />

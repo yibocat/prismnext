@@ -1,4 +1,5 @@
 import { useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   GitBranchIcon,
@@ -40,6 +41,7 @@ interface WorktreeSelectorProps {
 }
 
 export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps) {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const isGitRepo = useGitStore((s) => s.isGitRepo);
   const hasMessages = useChatStore((s) => s.messages.length > 0);
@@ -104,8 +106,8 @@ export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps)
   const triggerLabel = isActive
     ? activeWorktree.name
     : mode === "worktree"
-      ? "New Worktree"
-      : "Local";
+      ? t("chat.worktree.newWorktree")
+      : t("chat.worktree.local");
 
   if (!isGitRepo) return null;
 
@@ -122,7 +124,7 @@ export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps)
           isCapsule && mode === "worktree" && "bg-primary/10 text-primary border-primary/30",
           isCapsule && mode !== "worktree" && "bg-card text-muted-foreground",
         )}
-        title={`Worktree mode is locked: ${triggerLabel}`}
+        title={t("chat.worktree.lockedWithLabel", { label: triggerLabel })}
       >
         {mode === "local" ? <LaptopIcon className="size-3.5 shrink-0" /> : <GitBranchIcon className="size-3.5 shrink-0" />}
         <span className="max-w-[100px] truncate hidden @md:inline">{triggerLabel}</span>
@@ -155,13 +157,13 @@ export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps)
       </AppMenuTrigger>
       <AppMenuContent align="start" className="w-56">
         <AppMenuCheckItem selected={mode === "local"} onClick={handleSetLocal}>
-          Local
+          {t("chat.worktree.local")}
         </AppMenuCheckItem>
 
         {worktrees.length > 0 && (
           <>
             <AppMenuSeparator />
-            <AppMenuLabel>Existing worktrees</AppMenuLabel>
+            <AppMenuLabel>{t("chat.worktree.existing")}</AppMenuLabel>
             {worktrees.map((wt) => (
               <AppMenuItem
                 key={wt.name}
@@ -177,19 +179,21 @@ export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps)
                     {wt.behindCount > 0 && (
                       <span
                         className="text-[length:var(--font-hint)] text-amber-500"
-                        title={`${wt.behindCount} commits behind base`}
+                        title={t("chat.worktree.commitsBehind", { n: wt.behindCount })}
                       >
                         {wt.behindCount}↓
                       </span>
                     )}
                     {activeWorktree?.name === wt.name && (
-                      <span className="text-[length:var(--font-badge)] text-primary">active</span>
+                      <span className="text-[length:var(--font-badge)] text-primary">
+                        {t("chat.worktree.active")}
+                      </span>
                     )}
                     <button
                       type="button"
                       className="flex size-4 items-center justify-center rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all"
                       onClick={(e) => void handleRemove(wt.name, e)}
-                      title={`Remove ${wt.name}`}
+                      title={t("chat.worktree.remove", { name: wt.name })}
                     >
                       <Trash2Icon className="size-2.5" />
                     </button>
@@ -210,11 +214,13 @@ export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps)
             loading ? (
               <Loader2Icon className="size-3 animate-spin opacity-80" />
             ) : mode === "worktree" && !isActive ? (
-              <span className="text-[length:var(--font-badge)] text-primary">selected</span>
+              <span className="text-[length:var(--font-badge)] text-primary">
+                {t("chat.worktree.selected")}
+              </span>
             ) : null
           }
         >
-          New Worktree
+          {t("chat.worktree.newWorktree")}
         </AppMenuItem>
       </AppMenuContent>
     </AppMenu>

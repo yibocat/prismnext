@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Kbd } from "@/components/ui/kbd";
 import { ChatComposerCore } from "./chat-composer-core";
 import { ChatMessages } from "./chat-messages";
@@ -16,6 +17,7 @@ import { IntensiveReadingListButton } from "./intensive-reading-list-button";
 import { cn } from "@/lib/utils";
 import { useChatFileDrop, useOsFileDragging } from "@/lib/chat/use-chat-file-drop";
 import { chatFileDropZoneClass, chatCapsuleFileDropActiveClass } from "@/lib/chat/chat-file-drag-overlay";
+import { displayChatTitle } from "@/lib/i18n/display-chat-title";
 
 /** Capsule AiBar toolbar — dedicated pill radius (not Appearance). */
 const CAPSULE_TOOLBAR_PILL =
@@ -36,6 +38,7 @@ const CAPSULE_MORPH_TRANSITION =
   "transition-[max-width,height,max-height,padding,border-radius,background-color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]";
 
 export function AiBar() {
+  const { t } = useTranslation();
   const [phase, setPhase] = useState<Phase>("idle");
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [panelClosing, setPanelClosing] = useState(false);
@@ -60,10 +63,11 @@ export function AiBar() {
   const tabDraft = useChatStore(
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.draft,
   );
-  const activeTabTitle = useChatStore((s) => {
+  const activeTabTitleRaw = useChatStore((s) => {
     const tab = s.tabs.find((t) => t.id === s.activeTabId);
     return tab?.title ?? "Chat";
   });
+  const activeTabTitle = displayChatTitle(activeTabTitleRaw, t);
 
   const aiBarComposerFocusNonce = useLayoutStore((s) => s.aiBarComposerFocusNonce);
   const pendingInsert = useComposerInsertStore((s) => s.pendingInsert);
@@ -215,10 +219,10 @@ export function AiBar() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
                 <span className="relative inline-flex size-1.5 rounded-full bg-primary" />
               </span>
-              Running
+              {t("chat.aibar.running")}
             </>
           ) : (
-            "Done"
+            t("chat.aibar.done")
           )}
         </button>
       )}
@@ -251,7 +255,7 @@ export function AiBar() {
             >
               {panelDrop.dragActive ? (
                 <span className="pointer-events-none absolute bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-md border border-primary/25 bg-background/95 px-3 py-1 text-[length:var(--font-size-11)] text-muted-foreground shadow-sm">
-                  Drop files to attach
+                  {t("chat.aibar.dropFiles")}
                 </span>
               ) : null}
               <div className="flex items-center justify-between shrink-0 px-3 py-1.5">
@@ -262,7 +266,7 @@ export function AiBar() {
                   type="button"
                   className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                   onClick={closePanel}
-                  title="Close chat panel"
+                  title={t("chat.aibar.closePanel")}
                 >
                   <XIcon className="size-3.5" />
                 </button>
@@ -343,7 +347,7 @@ export function AiBar() {
                   flex items-center justify-between select-none shrink-0 w-full px-3"
               >
                 <span className="text-[length:var(--font-chat-meta)] text-muted-foreground group-hover:text-foreground transition-colors duration-200 whitespace-nowrap">
-                  Manage AI Assistants
+                  {t("chat.aibar.manageAssistants")}
                 </span>
                 <Kbd className="bg-transparent transition-colors duration-200">⌘I</Kbd>
               </span>
@@ -351,7 +355,7 @@ export function AiBar() {
               <div className={cn("w-full min-w-0", phase === "input" && "h-full")}>
                 <ChatComposerCore
                   variant={phase === "expanded" ? "capsule-expanded" : "capsule-compact"}
-                  capsulePlaceholder="Ask AI about your research..."
+                  capsulePlaceholder={t("chat.aibar.placeholder")}
                   onLayoutExpand={openExpanded}
                   className={isInputting ? "h-full w-full" : undefined}
                 />

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, memo, useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useChatStore, type ChatStreamMessage, type ContentBlock } from "@/stores/chat-store";
 import { MarkdownRenderer } from "./markdown-renderer";
@@ -360,6 +361,7 @@ function ActionStatusCard({ msg }: { msg: ChatStreamMessage }) {
 const chatLiteratureWarmupRoots = new Set<string>();
 
 export const ChatMessages = memo(function ChatMessages() {
+  const { t } = useTranslation();
   const messages = useChatStore((s) => s.messages);
   const streamingMessage = useChatStore((s) => s.streamingMessage);
   const isStreaming = useChatStore((s) => s.isStreaming);
@@ -682,7 +684,7 @@ export const ChatMessages = memo(function ChatMessages() {
       <div className="flex flex-1 items-center justify-center gap-2 p-4">
         <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
         <p className="text-[length:var(--font-chat-meta)] text-muted-foreground">
-          Loading conversation…
+          {t("chat.messages.loading")}
         </p>
       </div>
     );

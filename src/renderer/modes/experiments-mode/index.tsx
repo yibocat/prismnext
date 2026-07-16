@@ -30,11 +30,13 @@ function ExperimentsToolbarWrapper({ tab }: { tab: RightTab }) {
 export const experimentsMode: ModeDefinition = {
   id: "experiments",
   label: "Experiments",
+  labelKey: "modes.experiments.label",
   icon: <FlaskConicalIcon className="size-3.5" />,
   tabKinds: ["experiments"],
   surface: "any",
   persistence: "persistent",
   initialTitle: "Experiments",
+  initialTitleKey: "modes.experiments.initialTitle",
   Sidebar: ExperimentsSidebar,
   Toolbar: ExperimentsToolbarWrapper,
   Content: ExperimentsContent,

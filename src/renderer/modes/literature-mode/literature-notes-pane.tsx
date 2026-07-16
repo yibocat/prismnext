@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Suspense } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2Icon, NotebookPenIcon } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
@@ -32,6 +33,7 @@ export function LiteratureNotesPane({
   paper: LiteraturePaper;
   tab: RightTab;
 }) {
+  const { t } = useTranslation();
   const files = useDocumentStore((s) => s.files);
   const openedContents = useDocumentStore((s) => s.openedContents);
   const openFile = useDocumentStore((s) => s.openFile);
@@ -132,19 +134,19 @@ export function LiteratureNotesPane({
       <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
         <NotebookPenIcon className="size-10 text-muted-foreground/25" />
         <div className="space-y-1">
-          <p className="text-sm font-medium text-foreground/90">No reading note open</p>
+          <p className="text-sm font-medium text-foreground/90">{t("literature.notes.noOpen")}</p>
           <p className="text-[length:var(--font-size-12)] text-muted-foreground max-w-[240px]">
-            Create a note for this paper, or pick one from the sidebar.
+            {t("literature.notes.noOpenHint")}
           </p>
         </div>
         <Button size="sm" onClick={() => void handleNewNote()} disabled={creating}>
           {creating ? (
             <>
               <Loader2Icon className="size-3.5 animate-spin" />
-              Creating…
+              {t("common.creating")}
             </>
           ) : (
-            "New note"
+            t("literature.notes.newNote")
           )}
         </Button>
       </div>

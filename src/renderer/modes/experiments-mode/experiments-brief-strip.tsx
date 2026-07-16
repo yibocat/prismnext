@@ -5,6 +5,7 @@
  * (`briefLinks.sections`) are NOT the same as `meta.tags` — see detail Overview.
  */
 
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { ExperimentBriefLinks } from "../../../shared/experiment-log";
 import {
@@ -30,6 +31,7 @@ export function ExperimentsBriefStrip({
   briefLinks: ExperimentBriefLinks | undefined;
   className?: string;
 }) {
+  const { t } = useTranslation();
   if (!hasContent(briefLinks)) return null;
 
   const hypothesis = briefLinks!.hypothesisExcerpt?.trim() ?? "";
@@ -40,7 +42,7 @@ export function ExperimentsBriefStrip({
 
   return (
     <section
-      aria-label="Research brief excerpts"
+      aria-label={t("experiments.brief.excerpts")}
       className={cn(experimentsBriefBoxClass, className)}
     >
       {hypothesis ? (
@@ -50,12 +52,15 @@ export function ExperimentsBriefStrip({
       ) : null}
       {rq ? (
         <p className="text-[length:var(--font-size-13)] leading-snug text-muted-foreground/85">
-          <span className="font-medium text-foreground/80">RQ:</span> {rq}
+          <span className="font-medium text-foreground/80">{t("experiments.brief.rq")}</span>{" "}
+          {rq}
         </p>
       ) : null}
       {sections.length > 0 ? (
         <div className="space-y-1.5">
-          <span className={experimentsSubsectionLabelClass}>Linked brief sections</span>
+          <span className={experimentsSubsectionLabelClass}>
+            {t("experiments.brief.linked")}
+          </span>
           <div className="flex flex-wrap gap-1.5">
             {sections.map((section) => (
               <span key={section} className={experimentsBriefSectionPillClass}>

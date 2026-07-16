@@ -17,6 +17,8 @@ const log = createLogger("settings-store");
 
 export interface AppSettings {
   theme: "dark" | "light" | "system";
+  /** UI language: en | zh-CN | zh-HK (not AI reply language). */
+  appLocale?: "en" | "zh-CN" | "zh-HK";
   sidebarCollapsed: boolean;
   rightPanelCollapsed: boolean;
   /** PDF viewer dark mode: off | on | follow (app theme) */
@@ -117,6 +119,7 @@ export interface AppSettings {
 
 const defaults: AppSettings = {
   theme: "dark",
+  appLocale: "en",
   sidebarCollapsed: false,
   rightPanelCollapsed: false,
   autoCreateMainTex: true,

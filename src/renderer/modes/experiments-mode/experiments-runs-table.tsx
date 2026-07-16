@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useTranslation } from "react-i18next";
 import {
   BanIcon,
   ChevronDownIcon,
@@ -58,6 +59,7 @@ import {
   experimentsRunsListHeaderShellClass,
   experimentsRunsSplitShellClass,
   experimentsSubsectionLabelClass,
+  formatExperimentRelativeTime,
 } from "./experiments-detail-chrome";
 
 export interface ExperimentsRunsTableProps {
@@ -76,15 +78,7 @@ const HISTORY_GRID_CLASS =
 
 function formatTime(iso: string): string {
   if (!iso) return "—";
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return iso;
-  const diffMs = Date.now() - t;
-  const min = Math.floor(diffMs / 60000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  return new Date(t).toLocaleDateString();
+  return formatExperimentRelativeTime(iso);
 }
 
 function formatDuration(startedAt: string, finishedAt: string): string | null {
@@ -98,15 +92,15 @@ function formatDuration(startedAt: string, finishedAt: string): string | null {
   return rem > 0 ? `${min}m ${rem}s` : `${min}m`;
 }
 
-function envSummary(env: ExperimentEnv): string {
+function envSummary(env: ExperimentEnv, noPython: string, venvLabel: string): string {
   const bits: string[] = [];
   if (env.pythonVersion) bits.push(`py ${env.pythonVersion}`);
   else if (env.python) bits.push("py");
-  else bits.push("no python");
+  else bits.push(noPython);
   if (env.rVersion) bits.push(`R ${env.rVersion}`);
   else if (env.rscript) bits.push("R");
   if (env.gitCommit) bits.push(`git ${env.gitCommit}`);
-  if (env.venvPath) bits.push("venv");
+  if (env.venvPath) bits.push(venvLabel);
   return bits.join(" · ");
 }
 
@@ -119,6 +113,7 @@ function ArtifactChip({
   workspacePath?: string;
   onInspect?: (path: string) => void;
 }) {
+  const { t } = useTranslation();
   const fullPath = artifactFullPath(path, workspacePath);
   const name = path.split("/").pop() ?? path;
 
@@ -137,8 +132,8 @@ function ArtifactChip({
         <button
           type="button"
           onClick={() => onInspect(path)}
-          title="View provenance"
-          aria-label={`View provenance for ${name}`}
+          title={t("experiments.runs.viewProvenance")}
+          aria-label={`${t("experiments.runs.viewProvenance")}: ${name}`}
           className="inline-flex h-6 items-center rounded-md border border-border/55 bg-background px-1 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
         >
           <Link2Icon className="size-3" aria-hidden />
@@ -161,6 +156,7 @@ function RunRow({
   onSelect: () => void;
   onFocus: () => void;
 }) {
+  const { t } = useTranslation();
   const exit = run.exitCode;
   const cancelled = Boolean(run.cancelled);
   const ExitIcon = cancelled
@@ -200,7 +196,11 @@ function RunRow({
         </span>
         <span
           className={cn("text-right tabular-nums", exitClass)}
-          title={cancelled ? `cancelled (exit ${exit})` : `exit code ${exit}`}
+          title={
+            cancelled
+              ? t("experiments.runs.cancelledExitTitle", { code: exit })
+              : t("experiments.runs.exitCodeTitle", { code: exit })
+          }
         >
           {exit}
         </span>
@@ -227,6 +227,7 @@ function RunDetailPanel({
   experimentId?: string | null;
   onInspectArtifact?: (path: string) => void;
 }) {
+  const { t } = useTranslation();
   const hasTail = Boolean(run.stdoutTail?.trim());
   const hasArtifacts = run.artifacts.length > 0;
   const hasNote = Boolean(run.notes?.trim());
@@ -244,7 +245,7 @@ function RunDetailPanel({
   return (
     <div className={experimentsRunDetailPanelClass} data-run-detail={run.runId}>
       <div className="flex min-w-0 items-baseline justify-between gap-2">
-        <p className={experimentsSubsectionLabelClass}>Selected run</p>
+        <p className={experimentsSubsectionLabelClass}>{t("experiments.runs.selectedRun")}</p>
         <span className={cn("min-w-0 truncate text-foreground/85", experimentsCodeClass)} title={run.command}>
           {run.command}
         </span>
@@ -252,7 +253,7 @@ function RunDetailPanel({
 
       {hasNote ? (
         <p className="text-[length:var(--font-size-13)] text-foreground/85">
-          <span className="font-medium text-muted-foreground">Note</span>
+          <span className="font-medium text-muted-foreground">{t("experiments.note")}</span>
           {" — "}
           {noteText}
         </p>
@@ -261,7 +262,7 @@ function RunDetailPanel({
       {hasTail ? (
         <div>
           <div className="mb-1 text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/60">
-            Output
+            {t("experiments.output")}
           </div>
           <div className="relative">
             <pre
@@ -276,7 +277,7 @@ function RunDetailPanel({
             </pre>
             <CopyFeedbackButton
               onCopy={() => navigator.clipboard.writeText(run.stdoutTail)}
-              title="Copy output"
+              title={t("experiments.runs.copyOutput")}
               className="absolute top-1.5 right-1.5 rounded bg-background/90 p-0.5 text-muted-foreground/60 hover:bg-muted hover:text-foreground"
             >
               <CopyIcon className="size-3" aria-hidden />
@@ -288,7 +289,7 @@ function RunDetailPanel({
       {hasArtifacts ? (
         <div>
           <div className="mb-1.5 text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/60">
-            Artifacts
+            {t("experiments.artifacts")}
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             {visibleArtifacts.map((artifact) => (
@@ -307,8 +308,8 @@ function RunDetailPanel({
                 className="inline-flex h-6 items-center gap-1 rounded-md border border-border/55 bg-background px-2 text-[length:var(--font-menu-item)] text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
                 title={
                   artifactsExpanded
-                    ? "Show fewer"
-                    : `Show ${hiddenArtifactCount} more artifact${hiddenArtifactCount === 1 ? "" : "s"}`
+                    ? t("experiments.runs.showLess")
+                    : t("experiments.runs.showMoreArtifacts", { count: hiddenArtifactCount })
                 }
               >
                 <ChevronDownIcon
@@ -318,7 +319,9 @@ function RunDetailPanel({
                   )}
                   aria-hidden
                 />
-                {artifactsExpanded ? "show less" : `+${hiddenArtifactCount} more`}
+                {artifactsExpanded
+                  ? t("experiments.runs.showLess")
+                  : t("experiments.runs.moreArtifactsShort", { count: hiddenArtifactCount })}
               </button>
             ) : null}
           </div>
@@ -326,22 +329,24 @@ function RunDetailPanel({
       ) : null}
 
       {!hasNote && !hasTail && !hasArtifacts ? (
-        <p className={SETTINGS_ROW_DESC}>No output, artifacts, or notes for this run.</p>
+        <p className={SETTINGS_ROW_DESC}>{t("experiments.runs.noOutput")}</p>
       ) : null}
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--font-size-11)] text-muted-foreground/55">
         {run.kind ? (
-          <span className={literatureDetailBadgeClass} title="Run type">
+          <span className={literatureDetailBadgeClass} title={t("experiments.type")}>
             {run.kind}
           </span>
         ) : null}
         <span className="text-[length:var(--font-path)]">{run.runId}</span>
         {duration ? <span>{duration}</span> : null}
-        <span>{envSummary(run.env)}</span>
+        <span>
+          {envSummary(run.env, t("experiments.runs.noPython"), t("experiments.runs.venv"))}
+        </span>
         <button
           type="button"
           className="inline-flex h-6 items-center gap-1 rounded-md border border-border/55 bg-background px-2 text-[length:var(--font-menu-item)] text-foreground/85 transition-colors hover:bg-accent hover:text-foreground"
-          title="Send this run to Chat with Methods / figure scaffolding"
+          title={t("experiments.runs.sendToChat")}
           onClick={() =>
             insertExperimentRunToChat({
               runId: run.runId,
@@ -362,7 +367,7 @@ function RunDetailPanel({
           }
         >
           <PenLineIcon className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
-          Use in paper
+          {t("experiments.runs.useInPaper")}
         </button>
         {run.logPath ? (
           <button
@@ -372,7 +377,7 @@ function RunDetailPanel({
             onClick={() => void openArtifactPathInFiles(run.logPath!, workspacePath)}
           >
             <FileTextIcon className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
-            Open full log
+            {t("experiments.runs.openFullLog")}
           </button>
         ) : null}
       </div>
@@ -384,6 +389,7 @@ export function ExperimentsRunsTable({
   runs,
   workspacePath,
 }: ExperimentsRunsTableProps) {
+  const { t } = useTranslation();
   const experimentId = useExperimentStore((s) => s.selectedId);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -475,9 +481,9 @@ export function ExperimentsRunsTable({
   if (runs.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-border/60 px-4 py-8 text-center">
-        <p className={SETTINGS_ROW_DESC}>No runs yet.</p>
+        <p className={SETTINGS_ROW_DESC}>{t("experiments.runs.noRunsYet")}</p>
         <p className="mt-1 text-[length:var(--font-size-11)] text-muted-foreground/50">
-          Enter a command above and click Run.
+          {t("experiments.runs.enterCommandHint")}
         </p>
       </div>
     );
@@ -489,9 +495,9 @@ export function ExperimentsRunsTable({
         <Input
           value={query.text}
           onChange={(e) => setQuery((q) => ({ ...q, text: e.target.value }))}
-          placeholder="Filter command, note, run id…"
+          placeholder={t("experiments.runs.filterPlaceholder")}
           className="h-6 max-w-xs text-[length:var(--font-size-11)]"
-          aria-label="Filter runs"
+          aria-label={t("experiments.runs.filterAria")}
         />
         <AppSelect
           value={query.status}
@@ -499,14 +505,14 @@ export function ExperimentsRunsTable({
             setQuery((q) => ({ ...q, status: v as RunsStatusFilter }))
           }
         >
-          <AppSelectTrigger variant="wide" aria-label="Filter by exit status">
+          <AppSelectTrigger variant="wide" aria-label={t("experiments.runs.exitFilterAria")}>
             <AppSelectValue />
           </AppSelectTrigger>
           <AppSelectContent>
-            <AppSelectItem value="all">All exits</AppSelectItem>
-            <AppSelectItem value="success">Success (0)</AppSelectItem>
-            <AppSelectItem value="failed">Failed (≠0)</AppSelectItem>
-            <AppSelectItem value="cancelled">Cancelled</AppSelectItem>
+            <AppSelectItem value="all">{t("experiments.runs.allExits")}</AppSelectItem>
+            <AppSelectItem value="success">{t("experiments.runs.success")}</AppSelectItem>
+            <AppSelectItem value="failed">{t("experiments.runs.failed")}</AppSelectItem>
+            <AppSelectItem value="cancelled">{t("experiments.runs.cancelled")}</AppSelectItem>
           </AppSelectContent>
         </AppSelect>
         <AppSelect
@@ -515,17 +521,17 @@ export function ExperimentsRunsTable({
             setQuery((q) => ({ ...q, kind: v as RunsKindFilter }))
           }
         >
-          <AppSelectTrigger variant="wide" aria-label="Filter by run type">
+          <AppSelectTrigger variant="wide" aria-label={t("experiments.runs.typeFilterAria")}>
             <AppSelectValue />
           </AppSelectTrigger>
           <AppSelectContent>
-            <AppSelectItem value="all">All types</AppSelectItem>
+            <AppSelectItem value="all">{t("experiments.runs.allTypes")}</AppSelectItem>
             {EXPERIMENT_RUN_KINDS.map((k) => (
               <AppSelectItem key={k} value={k}>
                 {k}
               </AppSelectItem>
             ))}
-            <AppSelectItem value="untagged">Untyped</AppSelectItem>
+            <AppSelectItem value="untagged">{t("experiments.untyped")}</AppSelectItem>
           </AppSelectContent>
         </AppSelect>
         <AppSelect
@@ -534,12 +540,12 @@ export function ExperimentsRunsTable({
             setQuery((q) => ({ ...q, sort: v as RunsSortOrder }))
           }
         >
-          <AppSelectTrigger variant="wide" aria-label="Sort runs">
+          <AppSelectTrigger variant="wide" aria-label={t("experiments.runs.sortAria")}>
             <AppSelectValue />
           </AppSelectTrigger>
           <AppSelectContent>
-            <AppSelectItem value="newest">Newest first</AppSelectItem>
-            <AppSelectItem value="oldest">Oldest first</AppSelectItem>
+            <AppSelectItem value="newest">{t("experiments.runs.newestFirst")}</AppSelectItem>
+            <AppSelectItem value="oldest">{t("experiments.runs.oldestFirst")}</AppSelectItem>
           </AppSelectContent>
         </AppSelect>
         <span className="tabular-nums text-[length:var(--font-size-11)] text-muted-foreground/55">
@@ -551,7 +557,7 @@ export function ExperimentsRunsTable({
 
       {ordered.length === 0 ? (
         <div className="rounded-md border border-dashed border-border/60 px-4 py-6 text-center">
-          <p className={SETTINGS_ROW_DESC}>No runs match this filter.</p>
+          <p className={SETTINGS_ROW_DESC}>{t("experiments.runs.noMatch")}</p>
         </div>
       ) : (
         <div
@@ -570,7 +576,7 @@ export function ExperimentsRunsTable({
               className="min-h-0 flex-1 overflow-auto outline-none"
               tabIndex={0}
               role="listbox"
-              aria-label="Run history"
+              aria-label={t("experiments.runs.historyAria")}
               aria-activedescendant={selectedRunId ?? undefined}
               onKeyDown={handleListKeyDown}
             >
@@ -584,19 +590,19 @@ export function ExperimentsRunsTable({
               >
                 <span aria-hidden />
                 <span className={experimentsRunsListHeaderLabelClass} role="columnheader">
-                  Command
+                  {t("experiments.command")}
                 </span>
                 <span
                   className={cn(experimentsRunsListHeaderLabelClass, "text-right")}
                   role="columnheader"
                 >
-                  Exit
+                  {t("experiments.exit")}
                 </span>
                 <span
                   className={cn(experimentsRunsListHeaderLabelClass, "text-right")}
                   role="columnheader"
                 >
-                  Time
+                  {t("experiments.time")}
                 </span>
               </div>
               <ul>
@@ -620,7 +626,11 @@ export function ExperimentsRunsTable({
                 )}
               >
                 <span className="tabular-nums">
-                  {rangeStart}–{rangeEnd} of {ordered.length}
+                  {t("experiments.runs.pageRange", {
+                    from: rangeStart,
+                    to: rangeEnd,
+                    total: ordered.length,
+                  })}
                 </span>
                 <div className="flex items-center gap-0.5">
                   <Button
@@ -633,7 +643,7 @@ export function ExperimentsRunsTable({
                       setPage((p) => Math.max(0, p - 1));
                       setSelectedRunId(null);
                     }}
-                    title="Previous page"
+                    title={t("experiments.runs.prevPage")}
                   >
                     <ChevronLeftIcon className="size-3" aria-hidden />
                   </Button>
@@ -650,7 +660,7 @@ export function ExperimentsRunsTable({
                       setPage((p) => Math.min(totalPages - 1, p + 1));
                       setSelectedRunId(null);
                     }}
-                    title="Next page"
+                    title={t("experiments.runs.nextPage")}
                   >
                     <ChevronRightIcon className="size-3" aria-hidden />
                   </Button>
@@ -675,7 +685,7 @@ export function ExperimentsRunsTable({
             ) : (
               <div className="flex flex-1 items-center justify-center px-4 py-8">
                 <p className="text-center text-[length:var(--font-size-12)] text-muted-foreground/60">
-                  Select a run to view output, artifacts, and actions.
+                  {t("experiments.runs.selectRunHint")}
                 </p>
               </div>
             )}

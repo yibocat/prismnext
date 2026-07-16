@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { FileDownIcon, FileTextIcon, BookMarkedIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
@@ -106,6 +107,7 @@ export function LiteratureBatchSelectionActions({
   actions: ReturnType<typeof useLiteratureBatchSelectionActions>;
   compact?: boolean;
 }) {
+  const { t } = useTranslation();
   const {
     checkedPaperIds,
     deleteOpen,
@@ -119,7 +121,7 @@ export function LiteratureBatchSelectionActions({
 
   if (checkedPaperIds.length === 0) return null;
 
-  const selectedLabel = `${checkedPaperIds.length} selected`;
+  const selectedLabel = t("literature.batch.selected", { count: checkedPaperIds.length });
 
   return (
     <>
@@ -137,30 +139,30 @@ export function LiteratureBatchSelectionActions({
         variant="ghost"
         className={batchToolbarBtnClass(compact)}
         onClick={() => void handleBatchExtract()}
-        title="Extract selected papers"
+        title={t("literature.batch.extract")}
       >
         <FileTextIcon className={cn("size-3.5 shrink-0", !compact && "mr-1")} />
-        {!compact ? <span>Extract</span> : null}
+        {!compact ? <span>{t("literature.batch.extract")}</span> : null}
       </Button>
       <Button
         size="xs"
         variant="ghost"
         className={batchToolbarBtnClass(compact)}
         onClick={() => void handleBatchAddToManuscriptBib()}
-        title="Add selected to manuscript references.bib"
+        title={t("literature.batch.toBib")}
       >
         <BookMarkedIcon className={cn("size-3.5 shrink-0", !compact && "mr-1")} />
-        {!compact ? <span>To .bib</span> : null}
+        {!compact ? <span>{t("literature.batch.toBib")}</span> : null}
       </Button>
       <Button
         size="xs"
         variant="ghost"
         className={batchToolbarBtnClass(compact)}
         onClick={() => void handleBatchExport()}
-        title="Export .bib to file"
+        title={t("literature.batch.exportBib")}
       >
         <FileDownIcon className={cn("size-3.5 shrink-0", !compact && "mr-1")} />
-        {!compact ? <span>Export .bib</span> : null}
+        {!compact ? <span>{t("literature.batch.exportBib")}</span> : null}
       </Button>
       <Button
         size="xs"
@@ -170,24 +172,25 @@ export function LiteratureBatchSelectionActions({
           "text-muted-foreground hover:text-destructive",
         )}
         onClick={() => setDeleteOpen(true)}
-        title="Delete selected"
+        title={t("common.delete")}
       >
         <Trash2Icon className={cn("size-3.5 shrink-0", !compact && "mr-1")} />
-        {!compact ? <span>Delete</span> : null}
+        {!compact ? <span>{t("common.delete")}</span> : null}
       </Button>
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete {checkedPaperIds.length} entries?</DialogTitle>
+            <DialogTitle>
+              {t("literature.dialogs.deleteEntries", { count: checkedPaperIds.length })}
+            </DialogTitle>
           </DialogHeader>
           <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-            Selected papers will be removed from the library. PDF attachments are deleted when
-            unused.
+            {t("literature.dialogs.deleteEntriesBody")}
           </p>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setDeleteOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -195,7 +198,7 @@ export function LiteratureBatchSelectionActions({
               onClick={() => void handleBatchDelete()}
               disabled={deleting}
             >
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? t("common.deleting") : t("common.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,4 +1,5 @@
 import { TerminalIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
   AppSelect,
@@ -28,6 +29,7 @@ interface AiTerminalSettingsFieldsProps {
 }
 
 export function AiTerminalSettingsFields({ hideExecutionMode = true }: AiTerminalSettingsFieldsProps) {
+  const { t } = useTranslation();
   const agentTerminalMode = useSettingsStore((s) => s.settings.agentTerminalMode ?? "pty");
   const aiTerminalAutoOpen = useSettingsStore((s) => s.settings.aiTerminalAutoOpen !== false);
   const aiTerminalPostExitGraceMs =
@@ -47,13 +49,9 @@ export function AiTerminalSettingsFields({ hideExecutionMode = true }: AiTermina
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <TerminalIcon className="size-3.5 text-muted-foreground shrink-0" />
-              <span className={SETTINGS_ROW_LABEL}>Agent terminal execution</span>
+              <span className={SETTINGS_ROW_LABEL}>{t("settings.terminalPage.ai.execution")}</span>
             </div>
-            <p className={SETTINGS_ROW_DESC}>
-              PTY stream shows live output while commands run. Mirror waits for completion
-              then replays the log. In Ask and Auto permission modes, shell always uses PTY
-              so commands run only after you Allow in the permission gate.
-            </p>
+            <p className={SETTINGS_ROW_DESC}>{t("settings.terminalPage.ai.executionDesc")}</p>
           </div>
           <AppSelect
             value={agentTerminalMode}
@@ -63,19 +61,16 @@ export function AiTerminalSettingsFields({ hideExecutionMode = true }: AiTermina
               <AppSelectValue />
             </AppSelectTrigger>
             <AppSelectContent>
-              <AppSelectItem value="pty">PTY stream (default)</AppSelectItem>
-              <AppSelectItem value="mirror">Mirror (fallback)</AppSelectItem>
+              <AppSelectItem value="pty">{t("settings.terminalPage.ai.optPty")}</AppSelectItem>
+              <AppSelectItem value="mirror">{t("settings.terminalPage.ai.optMirror")}</AppSelectItem>
             </AppSelectContent>
           </AppSelect>
         </div>
       ) : null}
       <div className={SETTINGS_ROW}>
         <div className="min-w-0">
-          <span className={SETTINGS_ROW_LABEL}>Open AI terminal on bash</span>
-          <p className={SETTINGS_ROW_DESC}>
-            Auto-focus the ✨ AI terminal tab when the agent runs bash. Output is always
-            saved to the session log either way.
-          </p>
+          <span className={SETTINGS_ROW_LABEL}>{t("settings.terminalPage.ai.openOnBash")}</span>
+          <p className={SETTINGS_ROW_DESC}>{t("settings.terminalPage.ai.openOnBashDesc")}</p>
         </div>
         <AppSelect
           value={aiTerminalAutoOpen ? "auto" : "manual"}
@@ -87,18 +82,15 @@ export function AiTerminalSettingsFields({ hideExecutionMode = true }: AiTermina
             <AppSelectValue />
           </AppSelectTrigger>
           <AppSelectContent>
-            <AppSelectItem value="auto">Auto open</AppSelectItem>
-            <AppSelectItem value="manual">Manual only</AppSelectItem>
+            <AppSelectItem value="auto">{t("settings.terminalPage.ai.optAutoOpen")}</AppSelectItem>
+            <AppSelectItem value="manual">{t("settings.terminalPage.ai.optManual")}</AppSelectItem>
           </AppSelectContent>
         </AppSelect>
       </div>
       <div className={SETTINGS_ROW}>
         <div className="min-w-0">
-          <span className={SETTINGS_ROW_LABEL}>Keep tab after command exits</span>
-          <p className={SETTINGS_ROW_DESC}>
-            Minimum time to keep the ✨ AI terminal tab open after a command finishes
-            (PTY has already exited). Idle cleanup applies after this grace period.
-          </p>
+          <span className={SETTINGS_ROW_LABEL}>{t("settings.terminalPage.ai.keepTab")}</span>
+          <p className={SETTINGS_ROW_DESC}>{t("settings.terminalPage.ai.keepTabDesc")}</p>
         </div>
         <AppSelect
           value={String(aiTerminalPostExitGraceMs)}
@@ -110,20 +102,17 @@ export function AiTerminalSettingsFields({ hideExecutionMode = true }: AiTermina
             <AppSelectValue />
           </AppSelectTrigger>
           <AppSelectContent>
-            <AppSelectItem value="30000">30 seconds</AppSelectItem>
-            <AppSelectItem value="60000">1 minute</AppSelectItem>
-            <AppSelectItem value="120000">2 minutes</AppSelectItem>
-            <AppSelectItem value="300000">5 minutes</AppSelectItem>
+            <AppSelectItem value="30000">{t("settings.terminalPage.ai.opt30s")}</AppSelectItem>
+            <AppSelectItem value="60000">{t("settings.terminalPage.ai.opt1m")}</AppSelectItem>
+            <AppSelectItem value="120000">{t("settings.terminalPage.ai.opt2m")}</AppSelectItem>
+            <AppSelectItem value="300000">{t("settings.terminalPage.ai.opt5m")}</AppSelectItem>
           </AppSelectContent>
         </AppSelect>
       </div>
       <div className={SETTINGS_ROW}>
         <div className="min-w-0">
-          <span className={SETTINGS_ROW_LABEL}>Idle tab cleanup</span>
-          <p className={SETTINGS_ROW_DESC}>
-            Auto-close an idle ✨ AI terminal tab when you have not viewed that session
-            for this long (after the post-exit grace).
-          </p>
+          <span className={SETTINGS_ROW_LABEL}>{t("settings.terminalPage.ai.idleCleanup")}</span>
+          <p className={SETTINGS_ROW_DESC}>{t("settings.terminalPage.ai.idleCleanupDesc")}</p>
         </div>
         <AppSelect
           value={String(aiTerminalIdleCloseMs)}
@@ -135,20 +124,17 @@ export function AiTerminalSettingsFields({ hideExecutionMode = true }: AiTermina
             <AppSelectValue />
           </AppSelectTrigger>
           <AppSelectContent>
-            <AppSelectItem value="300000">5 minutes</AppSelectItem>
-            <AppSelectItem value="600000">10 minutes</AppSelectItem>
-            <AppSelectItem value="1800000">30 minutes</AppSelectItem>
-            <AppSelectItem value="3600000">1 hour</AppSelectItem>
+            <AppSelectItem value="300000">{t("settings.terminalPage.ai.opt5m")}</AppSelectItem>
+            <AppSelectItem value="600000">{t("settings.terminalPage.ai.opt10m")}</AppSelectItem>
+            <AppSelectItem value="1800000">{t("settings.terminalPage.ai.opt30m")}</AppSelectItem>
+            <AppSelectItem value="3600000">{t("settings.terminalPage.ai.opt1h")}</AppSelectItem>
           </AppSelectContent>
         </AppSelect>
       </div>
       <div className={SETTINGS_ROW}>
         <div className="min-w-0">
-          <span className={SETTINGS_ROW_LABEL}>Close tab cancels command</span>
-          <p className={SETTINGS_ROW_DESC}>
-            When enabled, closing a ✨ AI terminal tab while bash is running also cancels
-            the command. Default: close the view only; the command keeps running.
-          </p>
+          <span className={SETTINGS_ROW_LABEL}>{t("settings.terminalPage.ai.closeCancels")}</span>
+          <p className={SETTINGS_ROW_DESC}>{t("settings.terminalPage.ai.closeCancelsDesc")}</p>
         </div>
         <AppSelect
           value={aiTerminalCloseTabKillsProcess ? "kill" : "keep"}
@@ -160,17 +146,15 @@ export function AiTerminalSettingsFields({ hideExecutionMode = true }: AiTermina
             <AppSelectValue />
           </AppSelectTrigger>
           <AppSelectContent>
-            <AppSelectItem value="keep">Keep running (default)</AppSelectItem>
-            <AppSelectItem value="kill">Cancel command</AppSelectItem>
+            <AppSelectItem value="keep">{t("settings.terminalPage.ai.optKeep")}</AppSelectItem>
+            <AppSelectItem value="kill">{t("settings.terminalPage.ai.optCancel")}</AppSelectItem>
           </AppSelectContent>
         </AppSelect>
       </div>
       <div className={SETTINGS_ROW}>
         <div className="min-w-0">
-          <span className={SETTINGS_ROW_LABEL}>Session title terminal status</span>
-          <p className={SETTINGS_ROW_DESC}>
-            Show AI terminal running / idle status in the session title hover card.
-          </p>
+          <span className={SETTINGS_ROW_LABEL}>{t("settings.terminalPage.ai.sessionStatus")}</span>
+          <p className={SETTINGS_ROW_DESC}>{t("settings.terminalPage.ai.sessionStatusDesc")}</p>
         </div>
         <AppSelect
           value={aiTerminalShowSessionIndicator ? "show" : "hide"}
@@ -182,8 +166,8 @@ export function AiTerminalSettingsFields({ hideExecutionMode = true }: AiTermina
             <AppSelectValue />
           </AppSelectTrigger>
           <AppSelectContent>
-            <AppSelectItem value="show">Show</AppSelectItem>
-            <AppSelectItem value="hide">Hide</AppSelectItem>
+            <AppSelectItem value="show">{t("common.show")}</AppSelectItem>
+            <AppSelectItem value="hide">{t("common.hide")}</AppSelectItem>
           </AppSelectContent>
         </AppSelect>
       </div>

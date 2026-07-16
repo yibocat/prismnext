@@ -11,6 +11,7 @@
  * file.
  */
 
+import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "@/stores/layout-store";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { Button } from "@/components/ui/button";
@@ -29,16 +30,16 @@ import { EXPERIMENT_REGISTRY_REL } from "../../../shared/experiment-log";
  * function: experiment). Task 5+ can replace this with a richer link.
  */
 export function ExperimentsNoFolderEmpty() {
+  const { t } = useTranslation();
   return (
     <div className="flex h-full min-h-0 flex-1 items-center justify-center px-6">
       <div className="flex max-w-md flex-col items-center gap-3 text-center">
         <FlaskConicalIcon className="size-8 text-muted-foreground/60" />
         <p className="text-[length:var(--font-size-13)] text-foreground">
-          No Experiment folder configured.
+          {t("experiments.empty.noFolderTitle")}
         </p>
         <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-          Add one in Settings → Workspace. The folder holds your experiment
-          registry (meta + runs) and the lab workspace you work in.
+          {t("experiments.empty.noFolderDesc")}
         </p>
         <OpenWorkspaceSettingsButton />
       </div>
@@ -52,17 +53,20 @@ export function ExperimentsNoFolderEmpty() {
  * deactivated the Experiments mode on click (looked like the panel broke).
  */
 export function ExperimentsEmptyListEmpty({ archivedOnly = false }: { archivedOnly?: boolean }) {
+  const { t } = useTranslation();
   return (
     <div className="flex h-full min-h-0 flex-1 items-center justify-center px-6 font-sans">
       <div className="flex max-w-md flex-col items-center gap-3 text-center">
         <FlaskConicalIcon className="size-8 text-muted-foreground/60" />
         <p className="text-[length:var(--font-size-13)] text-foreground">
-          {archivedOnly ? "No archived experiments." : "No experiments yet."}
+          {archivedOnly
+            ? t("experiments.empty.noArchived")
+            : t("experiments.empty.noExperiments")}
         </p>
         <p className="text-[length:var(--font-size-12)] text-muted-foreground">
           {archivedOnly
-            ? "Archive an experiment from its detail menu (⋯ → Archive)."
-            : "Ask the Agent in chat to create one. The Agent reads your research brief, scaffolds a registry entry, and links the lab folder."}
+            ? t("experiments.empty.noArchivedDesc")
+            : t("experiments.empty.noExperimentsDesc")}
         </p>
       </div>
     </div>
@@ -80,6 +84,7 @@ export function ExperimentsCorruptMetaBanner({
   corruptIds: string[];
   className?: string;
 }) {
+  const { t } = useTranslation();
   if (corruptIds.length === 0) return null;
   const shown = corruptIds.slice(0, 4);
   const more = corruptIds.length - shown.length;
@@ -99,14 +104,14 @@ export function ExperimentsCorruptMetaBanner({
       <div className="min-w-0 space-y-0.5">
         <p>
           {corruptIds.length === 1
-            ? "1 experiment has corrupt or missing metadata and was skipped."
-            : `${corruptIds.length} experiments have corrupt or missing metadata and were skipped.`}
+            ? t("experiments.empty.corruptOne")
+            : t("experiments.empty.corruptMany", { count: corruptIds.length })}
         </p>
         <p className="truncate text-muted-foreground">
           {shown.join(", ")}
-          {more > 0 ? ` (+${more} more)` : ""}
+          {more > 0 ? ` ${t("experiments.empty.moreCount", { count: more })}` : ""}
           {" · "}
-          check <span className="font-mono">{EXPERIMENT_REGISTRY_REL}/&lt;id&gt;/meta.json</span>
+          {t("experiments.empty.checkMeta", { path: EXPERIMENT_REGISTRY_REL })}
         </p>
       </div>
     </div>
@@ -121,19 +126,20 @@ export function ExperimentsLoadError({
   error: string;
   onRetry?: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="flex h-full min-h-0 flex-1 items-center justify-center px-6">
       <div className="flex max-w-md flex-col items-center gap-3 text-center">
         <AlertCircleIcon className="size-8 text-muted-foreground/60" />
         <p className="text-[length:var(--font-size-13)] text-foreground">
-          Could not load experiments.
+          {t("experiments.empty.loadError")}
         </p>
         <p className="break-words text-[length:var(--font-size-12)] text-muted-foreground">
           {error}
         </p>
         {onRetry ? (
           <Button size="sm" variant="secondary" className="mt-1" onClick={onRetry}>
-            Retry
+            {t("experiments.retry")}
           </Button>
         ) : null}
       </div>
@@ -142,6 +148,7 @@ export function ExperimentsLoadError({
 }
 
 function OpenWorkspaceSettingsButton() {
+  const { t } = useTranslation();
   return (
     <Button
       size="sm"
@@ -158,7 +165,7 @@ function OpenWorkspaceSettingsButton() {
       }}
     >
       <FolderPlusIcon className="size-3.5" />
-      Add folder in Settings
+      {t("experiments.empty.addFolder")}
     </Button>
   );
 }

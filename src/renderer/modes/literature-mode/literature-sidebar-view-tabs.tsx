@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +31,7 @@ export function LiteratureSidebarViewTabs({
   referenceCount?: number;
   citedByCount?: number;
 }) {
+  const { t } = useTranslation();
   return (
     <Tabs
       value={value}
@@ -38,16 +40,18 @@ export function LiteratureSidebarViewTabs({
     >
       <TabsList className="h-7 min-w-0 gap-3 p-0 bg-transparent border-0 shadow-none">
         <TabsTrigger value="notes" className={tabTriggerClass}>
-          Notes
+          {t("modes.literature.notes")}
         </TabsTrigger>
         <TabsTrigger value="marks" className={tabTriggerClass}>
-          Marks
+          {t("modes.literature.marks")}
         </TabsTrigger>
         <TabsTrigger value="references" className={tabTriggerClass}>
-          Refs{countSuffix(referenceCount)}
+          {t("modes.literature.refs")}
+          {countSuffix(referenceCount)}
         </TabsTrigger>
         <TabsTrigger value="citedBy" className={tabTriggerClass}>
-          Cited by{countSuffix(citedByCount)}
+          {t("modes.literature.citedBy")}
+          {countSuffix(citedByCount)}
         </TabsTrigger>
       </TabsList>
     </Tabs>

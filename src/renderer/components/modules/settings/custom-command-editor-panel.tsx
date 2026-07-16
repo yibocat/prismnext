@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ import { SettingsFormField } from "./settings-form-field";
 type CustomCommandSlot = Extract<SettingsPanelSlot, { kind: "custom-command" }>;
 
 export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) {
+  const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const commands = useCommandStore((s) => s.commands);
@@ -72,7 +74,7 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
 
     const cmd = commands.find((c) => c.id === commandId);
     if (!cmd || cmd.source !== "user") {
-      toast.error("Command not found.");
+      toast.error(t("settings.editor.command.toast.notFound"));
       closePanel();
       return;
     }
@@ -101,17 +103,17 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
 
       if (isNew) {
         await createCommand(basePayload);
-        toast.success("Command added.");
+        toast.success(t("settings.editor.command.toast.added"));
       } else if (commandId) {
         await updateCommand(commandId, {
           ...basePayload,
           action: "",
         });
-        toast.success("Command saved.");
+        toast.success(t("settings.editor.command.toast.saved"));
       }
       closePanel();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to save command.");
+      toast.error(err instanceof Error ? err.message : t("settings.editor.command.toast.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -123,10 +125,10 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
     setSaving(true);
     try {
       await deleteCommand(commandId);
-      toast.success("Command deleted.");
+      toast.success(t("settings.editor.command.toast.deleted"));
       closePanel();
     } catch {
-      toast.error("Failed to delete command.");
+      toast.error(t("settings.editor.command.toast.deleteFailed"));
     } finally {
       setSaving(false);
     }
@@ -135,7 +137,7 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
   if (!projectRoot) {
     return (
       <div className="flex flex-1 items-center justify-center px-8 text-[length:var(--font-size-13)] text-muted-foreground">
-        Open a project to create custom commands.
+        {t("settings.editor.command.openProject")}
       </div>
     );
   }
@@ -143,7 +145,7 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center text-[length:var(--font-size-12)] text-muted-foreground">
-        Loading…
+        {t("common.loading")}
       </div>
     );
   }
@@ -151,52 +153,45 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
   return (
     <div className="flex-1 overflow-auto">
       <div className={SETTINGS_DETAIL_SHELL}>
-        <p className={SETTINGS_ROW_DESC}>
-          Reusable prompt for{" "}
-          <code className="text-[length:var(--font-size-11)] bg-muted px-1 rounded">
-            /{trimmedName || "name"}
-          </code>
-          . Stored in{" "}
-          <code className="text-[length:var(--font-size-11)] bg-muted px-1 rounded">
-            .prismnext/agent/commands/
-          </code>
-          .
-        </p>
+        <p className={SETTINGS_ROW_DESC}>{t("settings.editor.command.intro")}</p>
 
         <div className={SETTINGS_DETAIL_SECTION}>
           <SettingsFormField
-            label="Command name"
+            label={t("settings.editor.command.name")}
             htmlFor="custom-command-name"
-            description="Lowercase letters, numbers, and hyphens. No leading slash."
+            description={t("settings.editor.command.nameDesc")}
           >
             <Input
               id="custom-command-name"
               className={SETTINGS_FORM_INPUT_MONO}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="review-section"
+              placeholder={t("settings.editor.command.namePlaceholder")}
             />
             {name.trim() && !nameValid ? (
               <p className="text-[length:var(--font-size-11)] text-destructive mt-1">
-                Use lowercase letters, numbers, and hyphens only.
+                {t("settings.editor.command.validationName")}
               </p>
             ) : null}
           </SettingsFormField>
 
-          <SettingsFormField label="Description" htmlFor="custom-command-description">
+          <SettingsFormField
+            label={t("settings.editor.command.description")}
+            htmlFor="custom-command-description"
+          >
             <Input
               id="custom-command-description"
               className={SETTINGS_FORM_INPUT}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Short description for the / menu"
+              placeholder={t("settings.editor.command.descriptionPlaceholder")}
             />
           </SettingsFormField>
 
           <SettingsFormField
-            label="Prompt template"
+            label={t("settings.editor.command.template")}
             htmlFor="custom-command-template"
-            description="Supports $ARGUMENTS, $1…$9, and @path/to/file."
+            description={t("settings.editor.command.templateDesc")}
           >
             <Textarea
               id="custom-command-template"
@@ -206,18 +201,23 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
               )}
               value={template}
               onChange={(e) => setTemplate(e.target.value)}
-              placeholder="Review this section for clarity: $ARGUMENTS"
+              placeholder={t("settings.editor.command.templatePlaceholder")}
             />
+            {!template.trim() && nameValid ? (
+              <p className="text-[length:var(--font-size-11)] text-destructive mt-1">
+                {t("settings.editor.command.validationTemplate")}
+              </p>
+            ) : null}
           </SettingsFormField>
         </div>
 
         <div className={SETTINGS_DETAIL_ACTIONS}>
           <Button size="xs" onClick={() => void handleSave()} disabled={!canSave}>
             {saving ? <Loader2Icon className="size-3 animate-spin mr-1" /> : null}
-            {isNew ? "Add command" : "Save"}
+            {isNew ? t("settings.editor.command.add") : t("common.save")}
           </Button>
           <Button variant="ghost" size="xs" onClick={closePanel} disabled={saving}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           {!isNew ? (
             <>
@@ -229,7 +229,7 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
                 disabled={saving}
                 onClick={() => setDeleteDialogOpen(true)}
               >
-                Delete
+                {t("common.delete")}
               </Button>
             </>
           ) : null}
@@ -239,14 +239,8 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="!max-w-md">
           <DialogHeader>
-            <DialogTitle>Delete command</DialogTitle>
-            <DialogDescription>
-              Permanently delete{" "}
-              <span className="font-medium text-foreground">
-                /{trimmedName || "this command"}
-              </span>
-              ? This removes the command file from the project.
-            </DialogDescription>
+            <DialogTitle>{t("settings.editor.command.deleteTitle")}</DialogTitle>
+            <DialogDescription>{t("settings.editor.command.deleteDesc")}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
@@ -255,7 +249,7 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
               className="shadow-none"
               onClick={() => setDeleteDialogOpen(false)}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -264,7 +258,7 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
               disabled={saving}
               onClick={() => void handleDelete()}
             >
-              Delete
+              {t("common.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

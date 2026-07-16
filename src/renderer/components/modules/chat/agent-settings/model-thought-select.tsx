@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
   AppMenu,
@@ -67,6 +68,7 @@ function ModelReasoningOptionsMenu({
   thoughtLabel?: string | null;
   onSelectLevel: (levelValue: string | undefined) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <AppMenu modal={false} open={open} onOpenChange={onOpenChange}>
       <AppMenuTrigger asChild>
@@ -78,7 +80,7 @@ function ModelReasoningOptionsMenu({
             "text-muted-foreground/70 hover:bg-accent/80 hover:text-accent-foreground",
             "outline-none border-0 bg-transparent",
           )}
-          aria-label="Reasoning depth"
+          aria-label={t("chat.model.reasoningDepth")}
           aria-expanded={open}
           onMouseDown={(e) => {
             e.preventDefault();
@@ -96,7 +98,7 @@ function ModelReasoningOptionsMenu({
       </AppMenuTrigger>
       <AppMenuSidePanel className="min-w-[8.5rem]">
         <AppMenuLabel className="normal-case tracking-normal text-[length:var(--font-size-11)]">
-          Reasoning Depth
+          {t("chat.model.reasoningDepth")}
         </AppMenuLabel>
         <AppMenuCheckItem
           selected={!savedThought}
@@ -106,7 +108,7 @@ function ModelReasoningOptionsMenu({
             onOpenChange(false);
           }}
         >
-          Default
+          {t("chat.model.default")}
         </AppMenuCheckItem>
         {levels.map((level) => (
           <AppMenuCheckItem
@@ -127,6 +129,7 @@ function ModelReasoningOptionsMenu({
 }
 
 export function ModelThoughtSelect({ compact, presentation = "default" }: ModelThoughtSelectProps) {
+  const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -163,9 +166,10 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
       )?.label
     : undefined;
 
-  const displayName = currentModel?.name || currentProvider?.name || "Select model";
+  const defaultLabel = t("chat.model.default");
+  const displayName = currentModel?.name || currentProvider?.name || t("chat.model.selectModel");
   const triggerDetail =
-    currentThoughtLabel && currentThoughtLabel !== "Default"
+    currentThoughtLabel && currentThoughtLabel !== "Default" && currentThoughtLabel !== defaultLabel
       ? `${displayName} · ${currentThoughtLabel}`
       : displayName;
 

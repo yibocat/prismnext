@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   PuzzleIcon,
   PlusIcon,
@@ -49,6 +50,7 @@ interface SkillUpdateRow {
 }
 
 export function SkillsSettings() {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const skillsRefreshTick = useSkillsRefreshStore((s) => s.tick);
 
@@ -98,7 +100,7 @@ export function SkillsSettings() {
       setSkills((current) =>
         current.map((s) => (s.id === skillId ? { ...s, enabled: !enabled } : s)),
       );
-      toast.error("Failed to update skill.");
+      toast.error(t("settings.skillsPage.toast.updateFailed"));
     }
   };
 
@@ -115,7 +117,7 @@ export function SkillsSettings() {
         delete next[skill.id];
         return next;
       });
-      toast.success(`Reinstalled "${skill.name}" — start a new chat to use it.`);
+      toast.success(t("settings.skillsPage.toast.reinstalled", { name: skill.name }));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Reinstall failed.");
     } finally {
@@ -136,11 +138,11 @@ export function SkillsSettings() {
       setUpdatesBySkillId(next);
       const available = updates.filter((row) => row.updateAvailable).length;
       if (available > 0) {
-        toast.info(`${available} skill${available === 1 ? "" : "s"} have updates available.`);
+        toast.info(t("settings.skillsPage.toast.updatesAvailable", { count: available }));
       } else if (updates.length > 0) {
-        toast.success("All tracked skills are up to date.");
+        toast.success(t("settings.skillsPage.toast.upToDate"));
       } else {
-        toast.message("No install sources recorded — install from URL to enable update checks.");
+        toast.message(t("settings.skillsPage.toast.noSources"));
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Update check failed.");
@@ -157,7 +159,7 @@ export function SkillsSettings() {
       await window.electronAPI.agentDeleteSkill(projectRoot, skillId);
       await window.electronAPI.chatPrewarm(projectRoot);
       await loadSkills();
-      toast.success(`Removed "${skillId}".`);
+      toast.success(t("settings.skillsPage.toast.removed", { name: skillId }));
     } finally {
       setSaving(false);
     }
@@ -190,9 +192,9 @@ export function SkillsSettings() {
       <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-[length:var(--font-dialog-title)] font-semibold">Skills</h2>
+            <h2 className="text-[length:var(--font-dialog-title)] font-semibold">{t("settings.skillsPage.title")}</h2>
             <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-              Reusable instruction packs the agent loads on demand via the skill tool.
+              {t("settings.skillsPage.pageDesc")}
             </p>
           </div>
           {projectRoot && (
@@ -208,7 +210,7 @@ export function SkillsSettings() {
             <div className="flex flex-col items-center gap-3 py-10 text-center">
               <PuzzleIcon className="size-8 text-muted-foreground/30" />
               <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-                Open a project to manage skills.
+                {t("settings.skillsPage.openProject")}
               </p>
             </div>
           </div>
@@ -224,7 +226,7 @@ export function SkillsSettings() {
 
             <div>
               <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-                <p className={cn(CATEGORY_HEADER, "mb-0")}>Installed</p>
+                <p className={cn(CATEGORY_HEADER, "mb-0")}>{t("settings.skillsPage.installed")}</p>
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <Button
                     variant="outline"
@@ -233,15 +235,15 @@ export function SkillsSettings() {
                     onClick={() => void checkForUpdates()}
                   >
                     <RefreshCwIcon className={cn("size-3 mr-1", checkingUpdates && "animate-spin")} />
-                    Check updates
+                    {t("settings.skillsPage.checkUpdates")}
                   </Button>
                   <Button variant="outline" size="xs" onClick={openSkillLibrary}>
                     <LibraryIcon className="size-3 mr-1" />
-                    Install skills
+                    {t("settings.skillsPage.install")}
                   </Button>
                   <Button variant="outline" size="xs" onClick={openCreateSkill}>
                     <PlusIcon className="size-3 mr-1" />
-                    Create skill
+                    {t("settings.skillsPage.create")}
                   </Button>
                 </div>
               </div>
@@ -255,7 +257,7 @@ export function SkillsSettings() {
                   <div className="flex flex-col items-center gap-3 py-10 text-center">
                     <PuzzleIcon className="size-8 text-muted-foreground/30" />
                     <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-                      No skills installed yet.
+                      {t("settings.skillsPage.empty")}
                     </p>
                     <p className="text-[length:var(--font-size-12)] text-muted-foreground/80">
                       Install from GitHub or publisher registries, or create your own SKILL.md.
@@ -263,11 +265,11 @@ export function SkillsSettings() {
                     <div className="flex flex-wrap items-center justify-center gap-2">
                       <Button variant="outline" size="xs" onClick={openSkillLibrary}>
                         <LibraryIcon className="size-3 mr-1" />
-                        Install skills
+                        {t("settings.skillsPage.install")}
                       </Button>
                       <Button variant="outline" size="xs" onClick={openCreateSkill}>
                         <FileTextIcon className="size-3 mr-1" />
-                        Create skill
+                        {t("settings.skillsPage.create")}
                       </Button>
                     </div>
                   </div>

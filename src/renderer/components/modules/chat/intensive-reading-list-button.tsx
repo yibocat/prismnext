@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { BookOpenIcon, XIcon } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { appPopoverListClass } from "@/components/ui/app-popover";
@@ -23,6 +24,7 @@ export function IntensiveReadingListButton({
   /** `capsule` = AiBar slot pill; `panel` = chat composer toolbar. */
   variant?: "panel" | "capsule";
 }) {
+  const { t } = useTranslation();
   const activeTabId = useChatStore((s) => s.activeTabId);
   const intensivePaperIds = useChatStore((s) => {
     const tab = s.tabs.find((t) => t.id === s.activeTabId);
@@ -60,13 +62,13 @@ export function IntensiveReadingListButton({
       <PopoverTrigger asChild>
         <button
           type="button"
-          title="Intensive reading list"
-          aria-label={`Intensive reading list (${count})`}
+          title={t("chat.intensive.list")}
+          aria-label={t("chat.intensive.listWithCount", { count })}
           className={triggerClass}
         >
           <BookOpenIcon className="size-3.5 shrink-0" />
           <span className="max-w-[5rem] truncate hidden @md:inline">
-            {count === 1 ? "Intensive" : `Intensive · ${count}`}
+            {count === 1 ? t("chat.intensive.short") : t("chat.intensive.count", { count })}
           </span>
           <span className="tabular-nums @md:hidden">{count}</span>
         </button>
@@ -79,7 +81,7 @@ export function IntensiveReadingListButton({
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <div className="px-2 py-1.5 text-[length:var(--font-chat-meta)] uppercase tracking-wide text-muted-foreground">
-          Intensive reading · {count}
+          {t("chat.intensive.heading", { count })}
         </div>
         {items.map((paper) => (
           <div
@@ -97,8 +99,8 @@ export function IntensiveReadingListButton({
             </div>
             <button
               type="button"
-              aria-label="Remove from intensive list"
-              title="Remove from intensive list (keeps @ chip)"
+              aria-label={t("chat.intensive.remove")}
+              title={t("chat.intensive.removeTitle")}
               className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-60 hover:bg-muted hover:text-foreground hover:opacity-100"
               onClick={() => removeIntensivePaper(activeTabId, paper.id)}
             >

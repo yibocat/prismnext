@@ -7,10 +7,12 @@ import { resolveGitRefreshRoot } from "@/lib/git/checkout-context";
 export const gitMode: ModeDefinition = {
   id: "git",
   label: "Git",
+  labelKey: "modes.git.label",
   icon: <GitBranchIcon className="size-3.5" />,
   tabKinds: ["git-overview", "git-diff"],
   persistence: "transient",
   initialTitle: "Git",
+  initialTitleKey: "modes.git.initialTitle",
   Sidebar: GitSidebar,
   Toolbar: GitToolbarWrapper,
   Content: GitContent,

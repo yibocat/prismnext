@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
@@ -15,6 +16,7 @@ import { SettingsMarkdownToolbar } from "./settings-markdown-toolbar";
 type SkillMarkdownSlot = Extract<SettingsPanelSlot, { kind: "skill-markdown" }>;
 
 export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
+  const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
@@ -57,13 +59,13 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
         setContent(text);
         setSavedContent(text);
       } catch {
-        toast.error("Failed to load SKILL.md.");
+        toast.error(t("settings.editor.skillMd.toast.loadFailed"));
         closePanel();
       } finally {
         if (!silent) setLoading(false);
       }
     },
-    [slot.mode, skillPath, closePanel],
+    [slot.mode, skillPath, closePanel, t],
   );
 
   const handleRefresh = useCallback(async () => {
@@ -92,7 +94,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
     if (slot.mode === "new") {
       const list = await window.electronAPI.agentListSkills(projectRoot);
       if (list.some((s) => s.id === validation.name)) {
-        toast.error(`Skill "${validation.name}" already exists.`);
+        toast.error(t("settings.editor.skillMd.toast.exists", { name: validation.name }));
         return;
       }
     }
@@ -104,12 +106,14 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
       bumpSkillsRefresh();
       toast.success(
         slot.mode === "new"
-          ? `Created "${validation.name}" — start a new chat to use it.`
-          : "Skill updated — start a new chat to pick up changes.",
+          ? t("settings.editor.skillMd.toast.created", { name: validation.name })
+          : t("settings.editor.skillMd.toast.updated"),
       );
       closePanel();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save skill.");
+      toast.error(
+        err instanceof Error ? err.message : t("settings.editor.skillMd.toast.saveFailed"),
+      );
     } finally {
       setSaving(false);
     }
@@ -118,7 +122,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
   if (!projectRoot) {
     return (
       <div className="flex flex-1 items-center justify-center px-8 text-[length:var(--font-size-13)] text-muted-foreground">
-        Open a project to edit skills.
+        {t("settings.editor.skillMd.openProject")}
       </div>
     );
   }
@@ -126,7 +130,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center text-[length:var(--font-size-12)] text-muted-foreground">
-        Loading…
+        {t("settings.editor.skillMd.loading")}
       </div>
     );
   }

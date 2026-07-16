@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +12,7 @@ import { useProjectDialogStore } from "@/stores/project-dialog-store";
 import { FolderOpenIcon } from "lucide-react";
 
 export function ProjectSetupDialog() {
+  const { t } = useTranslation();
   const open = useProjectDialogStore((s) => s.open);
   const projectPath = useProjectDialogStore((s) => s.projectPath);
   const missing = useProjectDialogStore((s) => s.missing);
@@ -20,9 +22,11 @@ export function ProjectSetupDialog() {
     <Dialog open={open} onOpenChange={() => close("cancel")}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle className="text-[length:var(--font-dialog-title)]">Setup Project</DialogTitle>
+          <DialogTitle className="text-[length:var(--font-dialog-title)]">
+            {t("project.setup.title")}
+          </DialogTitle>
           <DialogDescription className="text-[length:var(--font-dialog-label)]">
-            This folder is missing the standard Prism Next project structure.
+            {t("project.setup.description")}
           </DialogDescription>
         </DialogHeader>
 
@@ -33,7 +37,9 @@ export function ProjectSetupDialog() {
           </div>
 
           <div>
-            <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mb-1.5">Missing directories:</p>
+            <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mb-1.5">
+              {t("project.setup.missing")}
+            </p>
             <div className="flex flex-wrap gap-1">
               {missing.map((d) => (
                 <span
@@ -49,13 +55,13 @@ export function ProjectSetupDialog() {
 
         <DialogFooter className="gap-2">
           <Button variant="outline" size="sm" onClick={() => close("cancel")}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button variant="outline" size="sm" onClick={() => close("skip")}>
-            Open Anyway
+            {t("project.setup.openAnyway")}
           </Button>
           <Button size="sm" onClick={() => close("create")}>
-            Create & Open
+            {t("project.setup.createAndOpen")}
           </Button>
         </DialogFooter>
       </DialogContent>

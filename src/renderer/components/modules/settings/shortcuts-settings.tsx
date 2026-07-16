@@ -1,8 +1,9 @@
 import { Kbd } from "@/components/ui/kbd";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 
 interface ShortcutGroup {
-  title: string;
+  titleKey: string;
   items: ShortcutItem[];
 }
 
@@ -10,64 +11,65 @@ type ShortcutStatus = "implemented" | "placeholder" | "planned";
 
 interface ShortcutItem {
   keys: string[];
-  description: string;
+  descKey: string;
   status: ShortcutStatus;
 }
 
 const SHORTCUTS: ShortcutGroup[] = [
   {
-    title: "Global",
+    titleKey: "settings.shortcuts.groups.global",
     items: [
-      { keys: ["⌘", "B"], description: "Toggle left sidebar", status: "planned" },
-      { keys: ["⌘", "K"], description: "Open command palette", status: "placeholder" },
-      { keys: ["⌘", "N"], description: "New agent session", status: "placeholder" },
-      { keys: ["⌘", "I"], description: "Open AI assistant", status: "placeholder" },
+      { keys: ["⌘", "B"], descKey: "settings.shortcuts.items.toggleSidebar", status: "planned" },
+      { keys: ["⌘", "K"], descKey: "settings.shortcuts.items.commandPalette", status: "placeholder" },
+      { keys: ["⌘", "N"], descKey: "settings.shortcuts.items.newAgent", status: "placeholder" },
+      { keys: ["⌘", "I"], descKey: "settings.shortcuts.items.openAi", status: "placeholder" },
     ],
   },
   {
-    title: "Editor",
+    titleKey: "settings.shortcuts.groups.editor",
     items: [
-      { keys: ["⌘", "S"], description: "Save file", status: "implemented" },
-      { keys: ["⌘", "↵"], description: "Compile current document", status: "planned" },
-      { keys: ["⌘", "F"], description: "Search in file", status: "planned" },
-      { keys: ["⌘", "B"], description: "Wrap selection in \\textbf{}", status: "planned" },
-      { keys: ["⌘", "I"], description: "Wrap selection in \\textit{}", status: "planned" },
-      { keys: ["⌘", "/"], description: "Toggle comment", status: "planned" },
-      { keys: ["Esc"], description: "Close search panel", status: "planned" },
-      { keys: ["⌘", "⇧", "F"], description: "Forward search (SyncTeX) to PDF", status: "planned" },
+      { keys: ["⌘", "S"], descKey: "settings.shortcuts.items.saveFile", status: "implemented" },
+      { keys: ["⌘", "↵"], descKey: "settings.shortcuts.items.compile", status: "planned" },
+      { keys: ["⌘", "F"], descKey: "settings.shortcuts.items.searchFile", status: "planned" },
+      { keys: ["⌘", "B"], descKey: "settings.shortcuts.items.bold", status: "planned" },
+      { keys: ["⌘", "I"], descKey: "settings.shortcuts.items.italic", status: "planned" },
+      { keys: ["⌘", "/"], descKey: "settings.shortcuts.items.comment", status: "planned" },
+      { keys: ["Esc"], descKey: "settings.shortcuts.items.closeSearch", status: "planned" },
+      { keys: ["⌘", "⇧", "F"], descKey: "settings.shortcuts.items.synctex", status: "planned" },
     ],
   },
   {
-    title: "Chat",
+    titleKey: "settings.shortcuts.groups.chat",
     items: [
-      { keys: ["⌘", "T"], description: "New chat tab", status: "planned" },
-      { keys: ["⌘", "W"], description: "Close chat tab", status: "planned" },
-      { keys: ["⌃", "Tab"], description: "Next chat tab", status: "planned" },
-      { keys: ["⌃", "⇧", "Tab"], description: "Previous chat tab", status: "planned" },
-      { keys: ["↵"], description: "Send message", status: "planned" },
+      { keys: ["⌘", "T"], descKey: "settings.shortcuts.items.newChat", status: "planned" },
+      { keys: ["⌘", "W"], descKey: "settings.shortcuts.items.closeChat", status: "planned" },
+      { keys: ["⌃", "Tab"], descKey: "settings.shortcuts.items.nextChat", status: "planned" },
+      { keys: ["⌃", "⇧", "Tab"], descKey: "settings.shortcuts.items.prevChat", status: "planned" },
+      { keys: ["↵"], descKey: "settings.shortcuts.items.send", status: "planned" },
     ],
   },
   {
-    title: "Changes (Merge View)",
+    titleKey: "settings.shortcuts.groups.changes",
     items: [
-      { keys: ["⌘", "Y"], description: "Accept all changes", status: "planned" },
-      { keys: ["⌘", "N"], description: "Reject all changes", status: "planned" },
+      { keys: ["⌘", "Y"], descKey: "settings.shortcuts.items.acceptAll", status: "planned" },
+      { keys: ["⌘", "N"], descKey: "settings.shortcuts.items.rejectAll", status: "planned" },
     ],
   },
 ];
 
-const STATUS_STYLE: Record<ShortcutStatus, { label: string; className: string }> = {
-  implemented: { label: "Active", className: "text-success" },
-  placeholder: { label: "Placed", className: "text-info" },
-  planned: { label: "Planned", className: "text-muted-foreground/50" },
+const STATUS_STYLE: Record<ShortcutStatus, { labelKey: string; className: string }> = {
+  implemented: { labelKey: "settings.shortcuts.status.active", className: "text-success" },
+  placeholder: { labelKey: "settings.shortcuts.status.placed", className: "text-info" },
+  planned: { labelKey: "settings.shortcuts.status.planned", className: "text-muted-foreground/50" },
 };
 
 function ShortcutRow({ item }: { item: ShortcutItem }) {
+  const { t } = useTranslation();
   const s = STATUS_STYLE[item.status];
   return (
     <div className="flex items-center justify-between py-2.5">
       <span className="text-[length:var(--font-size-13)] text-foreground">
-        {item.description}
+        {t(item.descKey)}
       </span>
       <div className="flex items-center gap-2 shrink-0">
         <span className="inline-flex items-center gap-0.5">
@@ -76,7 +78,7 @@ function ShortcutRow({ item }: { item: ShortcutItem }) {
           ))}
         </span>
         <span className={s.className + " text-[length:var(--font-size-10)] font-medium tabular-nums w-14 text-right"}>
-          {s.label}
+          {t(s.labelKey)}
         </span>
       </div>
     </div>
@@ -84,26 +86,27 @@ function ShortcutRow({ item }: { item: ShortcutItem }) {
 }
 
 export function ShortcutsSettings() {
+  const { t } = useTranslation();
   return (
     <div className="flex-1 overflow-auto">
       <div className="max-w-3xl mx-auto px-8 py-8 space-y-8">
         <div>
-          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">Shortcuts</h2>
+          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">{t("settings.shortcuts.title")}</h2>
           <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-            Keyboard shortcuts reference.
+            {t("settings.shortcuts.subtitle")}
           </p>
         </div>
 
         {SHORTCUTS.map((group) => (
-          <div key={group.title}>
+          <div key={group.titleKey}>
             <h3 className="text-[length:var(--font-size-12)] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1">
-              {group.title}
+              {t(group.titleKey)}
             </h3>
             <div className={cn(
               "rounded-lg border border-border px-4 divide-y divide-border",
             )}>
               {group.items.map((item) => (
-                <ShortcutRow key={item.description} item={item} />
+                <ShortcutRow key={item.descKey} item={item} />
               ))}
             </div>
           </div>

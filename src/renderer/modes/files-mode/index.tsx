@@ -7,11 +7,13 @@ import { FilesContent } from "./files-content";
 export const filesMode: ModeDefinition = {
   id: "files",
   label: "Files",
+  labelKey: "modes.files.label",
   icon: <FilesIcon className="size-3.5" />,
   tabKinds: ["file"],
   surface: "any",
   persistence: "persistent",
   initialTitle: "Files",
+  initialTitleKey: "modes.files.initialTitle",
   Sidebar: FilesSidebar,
   Toolbar: ({ tab }: { tab: RightTab }) => <FileToolbar filePath={tab.filePath} />,
   Content: FilesContent,

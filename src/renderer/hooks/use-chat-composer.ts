@@ -525,6 +525,7 @@ export function useChatComposer() {
     }
   }, [draftParts, isStreaming, sendPrompt, commands, expandCommand, setDraftParts]);
 
+  /** Fallback; UI should prefer `t("chat.composer.placeholder")`. */
   const placeholder = COMPOSER_PLACEHOLDER;
 
   return {

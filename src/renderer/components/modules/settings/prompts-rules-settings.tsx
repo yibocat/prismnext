@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
@@ -24,6 +25,7 @@ const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide";
 
 function ProjectRulesSection() {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const [rules, setRules] = useState<
     Awaited<ReturnType<typeof window.electronAPI.agentListRules>>
@@ -94,7 +96,7 @@ function ProjectRulesSection() {
       <div className={CARD}>
         <div className={cn(ROW, "!block")}>
           <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-            Open a project to manage project rules.
+            {t("settings.prompts.empty.openForRules")}
           </p>
         </div>
       </div>
@@ -105,7 +107,9 @@ function ProjectRulesSection() {
     <div className={CARD}>
       {rules.length === 0 ? (
         <div className={cn(ROW, "!block")}>
-          <p className="text-[length:var(--font-size-12)] text-muted-foreground">No project rules yet.</p>
+          <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+            {t("settings.prompts.empty.noRules")}
+          </p>
         </div>
       ) : (
         rules.map((rule) => (
@@ -117,15 +121,17 @@ function ProjectRulesSection() {
             >
               <div className="flex items-center gap-2">
                 <p className={ROW_LABEL}>{rule.name}</p>
-                <span className={cn(BADGE, "bg-muted text-muted-foreground")}>Custom</span>
+                <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
+                  {t("settings.prompts.customBadge")}
+                </span>
               </div>
               <p className={cn(ROW_DESC, "truncate")}>
-                {rule.description || "No description."}
+                {rule.description || t("common.noDescription")}
               </p>
             </button>
             <div className="flex items-center gap-1 shrink-0">
               <Button variant="ghost" size="xs" disabled={busy} onClick={() => openRule(rule)}>
-                Edit
+                {t("common.edit")}
               </Button>
               <Switch
                 checked={rule.enabled}
@@ -149,7 +155,7 @@ function ProjectRulesSection() {
           size="xs"
           onClick={() => openSettingsPanel({ kind: "rule-markdown", mode: "new" })}
         >
-          + Add project rule
+          {t("settings.prompts.addRule")}
         </Button>
       </div>
     </div>
@@ -157,6 +163,7 @@ function ProjectRulesSection() {
 }
 
 export function PromptsRulesSettings() {
+  const { t } = useTranslation();
   const agentSystemPrompt = useSettingsStore((s) => s.settings.agentSystemPrompt) ?? "";
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
@@ -225,43 +232,47 @@ export function PromptsRulesSettings() {
     <div className="flex-1 overflow-auto">
       <div className="max-w-3xl mx-auto px-8 py-8 space-y-8">
         <div>
-          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">Prompts &amp; Rules</h2>
+          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">{t("settings.prompts.title")}</h2>
           <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-            System prompt, project instructions, knowledge modules, and project rules.
+            {t("settings.prompts.pageDesc")}
           </p>
         </div>
 
         <div>
-          <h3 className={CATEGORY_HEADER}>Prompts</h3>
+          <h3 className={CATEGORY_HEADER}>{t("settings.prompts.sectionPrompts")}</h3>
           <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-2">
-            Baseline system file and per-project OpenCode instructions. Citation and Task modules
-            inject via Orchestrator / Expert profiles — see Prompt stack preview.
+            {t("settings.prompts.sectionPromptsDesc")}
           </p>
           <div className={CARD}>
             <div className={PROMPT_ROW}>
               <div className={PROMPT_ROW_BODY}>
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className={ROW_LABEL}>System prompt</p>
+                  <p className={ROW_LABEL}>{t("settings.prompts.systemPrompt")}</p>
                   {isCustom ? (
                     <span className={cn(BADGE, "bg-primary/10 text-primary normal-case tracking-normal")}>
-                      Custom
+                      {t("settings.prompts.customBadge")}
                     </span>
                   ) : null}
                 </div>
                 <p className={ROW_DESC}>
                   {isCustom
-                    ? "Custom prompt replaces the built-in default in `_prism-system.md`."
-                    : "Built-in Prism Next persona written to `_prism-system.md` on chat sync."}
+                    ? t("settings.prompts.rowDesc.customPrompt")
+                    : t("settings.prompts.rowDesc.builtinPrompt")}
                 </p>
                 <p className="text-[length:var(--font-size-11)] text-muted-foreground/70 mt-0.5">
                   {stackSummary
-                    ? `Baseline _prism-system: ${stackSummary.stableChars.toLocaleString()} chars · ${stackSummary.sectionCount} layers in stack preview`
-                    : "Open a project to see full stack preview."}
+                    ? t("settings.prompts.rowDesc.stackSummary", {
+                        chars: stackSummary.stableChars.toLocaleString(),
+                        layers: stackSummary.sectionCount,
+                      })
+                    : t("settings.prompts.rowDesc.openForStack")}
                 </p>
               </div>
               <div className={PROMPT_ROW_ACTIONS}>
                 <Button variant="ghost" size="xs" className="shrink-0" onClick={openSystemPrompt}>
-                  {isCustom ? "View & edit prompt" : "Custom prompt"}
+                  {isCustom
+                    ? t("settings.prompts.viewEditPrompt")
+                    : t("settings.prompts.customPrompt")}
                 </Button>
                 <Button
                   variant="ghost"
@@ -270,26 +281,25 @@ export function PromptsRulesSettings() {
                   disabled={!stackSummary}
                   onClick={() => openSettingsPanel({ kind: "prompt-stack-preview" })}
                 >
-                  Preview stack
+                  {t("settings.prompts.previewStack")}
                 </Button>
               </div>
             </div>
 
             <div className={PROMPT_ROW}>
               <div className={PROMPT_ROW_BODY}>
-                <p className={ROW_LABEL}>Project instructions</p>
+                <p className={ROW_LABEL}>{t("settings.prompts.projectInstructions")}</p>
                 {!projectRoot ? (
-                  <p className={ROW_DESC}>Open a project to edit project instructions.</p>
+                  <p className={ROW_DESC}>{t("settings.prompts.rowDesc.openForInstructions")}</p>
                 ) : (
                   <>
-                    <p className={ROW_DESC}>
-                      Project-specific instructions — separate OpenCode instruction file, not merged
-                      into `_prism-system.md`.
-                    </p>
+                    <p className={ROW_DESC}>{t("settings.prompts.rowDesc.instructions")}</p>
                     <p className="text-[length:var(--font-size-11)] text-muted-foreground/70 mt-0.5">
                       {hasAgentsMd
-                        ? `${agentsMdLength.toLocaleString()} characters in project instructions.`
-                        : "No AGENTS.md yet — create one or run /setup in chat."}
+                        ? t("settings.prompts.rowDesc.agentsChars", {
+                            count: agentsMdLength.toLocaleString(),
+                          })
+                        : t("settings.prompts.rowDesc.noAgents")}
                     </p>
                   </>
                 )}
@@ -304,7 +314,9 @@ export function PromptsRulesSettings() {
                       openSettingsPanel({ kind: "prompt-markdown", doc: "agents-md" })
                     }
                   >
-                    {hasAgentsMd ? "Edit instructions" : "Create AGENTS.md"}
+                    {hasAgentsMd
+                      ? t("settings.prompts.editInstructions")
+                      : t("settings.prompts.createAgentsMd")}
                   </Button>
                 </div>
               ) : null}
@@ -312,17 +324,11 @@ export function PromptsRulesSettings() {
 
             <div className={PROMPT_ROW}>
               <div className={PROMPT_ROW_BODY}>
-                <p className={ROW_LABEL}>Research brief</p>
+                <p className={ROW_LABEL}>{t("settings.prompts.researchBrief")}</p>
                 {!projectRoot ? (
-                  <p className={ROW_DESC}>Open a project to edit the living research design brief.</p>
+                  <p className={ROW_DESC}>{t("settings.prompts.rowDesc.openForBrief")}</p>
                 ) : (
-                  <>
-                    <p className={ROW_DESC}>
-                      Structured research question, hypotheses, contribution, and scope at{" "}
-                      <code className="text-[length:var(--font-size-11)]">.prismnext/research/brief.md</code>
-                      — agents use <code className="text-[length:var(--font-size-11)]">research-brief-read/update</code>.
-                    </p>
-                  </>
+                  <p className={ROW_DESC}>{t("settings.prompts.rowDesc.brief")}</p>
                 )}
               </div>
               {projectRoot ? (
@@ -333,7 +339,7 @@ export function PromptsRulesSettings() {
                     className="shrink-0"
                     onClick={() => openSettingsPanel({ kind: "research-brief" })}
                   >
-                    Edit brief
+                    {t("settings.prompts.editBrief")}
                   </Button>
                 </div>
               ) : null}
@@ -342,18 +348,15 @@ export function PromptsRulesSettings() {
         </div>
 
         <div>
-          <h3 className={CATEGORY_HEADER}>Knowledge Modules</h3>
+          <h3 className={CATEGORY_HEADER}>{t("settings.prompts.knowledgeModules")}</h3>
           <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-2">
-            Built-in workflow guides — always available. Attach per Orchestrator or Expert in the
-            agent editor; workspace folders inject globally from project workspace settings.
+            {t("settings.prompts.knowledgeDesc")}
           </p>
           <div className={CARD}>
             <div className={ROW}>
               <div className="min-w-0 flex-1 pr-4">
-                <p className={ROW_LABEL}>Built-in modules</p>
-                <p className={ROW_DESC}>
-                  Read-only catalog of citation, library, Task, and workspace modules.
-                </p>
+                <p className={ROW_LABEL}>{t("settings.prompts.builtinModules")}</p>
+                <p className={ROW_DESC}>{t("settings.prompts.rowDesc.modules")}</p>
               </div>
               <Button
                 variant="ghost"
@@ -361,25 +364,22 @@ export function PromptsRulesSettings() {
                 className="shrink-0"
                 onClick={() => openSettingsPanel({ kind: "knowledge-modules" })}
               >
-                View modules
+                {t("settings.prompts.viewModules")}
               </Button>
             </div>
           </div>
         </div>
 
         <div>
-          <h3 className={CATEGORY_HEADER}>Agent Tools</h3>
+          <h3 className={CATEGORY_HEADER}>{t("settings.prompts.agentTools")}</h3>
           <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-2">
-            Built-in OpenCode tools. Usage hints sync into each tool&apos;s schema description on
-            startup — not knowledge modules.
+            {t("settings.prompts.toolsDesc")}
           </p>
           <div className={CARD}>
             <div className={ROW}>
               <div className="min-w-0 flex-1 pr-4">
-                <p className={ROW_LABEL}>Built-in tools</p>
-                <p className={ROW_DESC}>
-                  View all registered tools and the descriptions the model sees when choosing tools.
-                </p>
+                <p className={ROW_LABEL}>{t("settings.prompts.builtinTools")}</p>
+                <p className={ROW_DESC}>{t("settings.prompts.rowDesc.tools")}</p>
               </div>
               <Button
                 variant="ghost"
@@ -387,17 +387,16 @@ export function PromptsRulesSettings() {
                 className="shrink-0"
                 onClick={() => openSettingsPanel({ kind: "agent-tools" })}
               >
-                View tools
+                {t("settings.prompts.viewTools")}
               </Button>
             </div>
           </div>
         </div>
 
         <div>
-          <h3 className={CATEGORY_HEADER}>Project Rules</h3>
+          <h3 className={CATEGORY_HEADER}>{t("settings.prompts.projectRules")}</h3>
           <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-2">
-            Injected on every chat turn as a separate user message block. Orchestrator profiles
-            can restrict to a subset (empty selection = all enabled rules).
+            {t("settings.prompts.rulesDesc")}
           </p>
           <ProjectRulesSection />
         </div>

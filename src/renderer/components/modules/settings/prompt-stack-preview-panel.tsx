@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDownIcon, ChevronRightIcon, Loader2Icon, RefreshCwIcon } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -21,12 +22,12 @@ import {
 const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
 
-/** Short role label — clarifies injection timing, not duplicate of layer title. */
-const SECTION_ROLE: Record<string, string> = {
-  "prism-system": "OpenCode instructions",
-  "agents-md": "OpenCode instructions",
-  "project-rules": "Each chat turn",
-  "orchestrator-agent": "Primary agent · Expert team",
+/** Section id → role key under settings.editor.promptStack.role.* */
+const SECTION_ROLE_KEY: Record<string, "opencode" | "eachTurn" | "orchestrator"> = {
+  "prism-system": "opencode",
+  "agents-md": "opencode",
+  "project-rules": "eachTurn",
+  "orchestrator-agent": "orchestrator",
 };
 
 type StackPreview = Awaited<ReturnType<typeof window.electronAPI.settingsGetPromptStackPreview>>;
@@ -63,8 +64,9 @@ function StackSectionCard({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const { t } = useTranslation();
   const empty = !section.content.trim();
-  const role = SECTION_ROLE[section.id];
+  const roleKey = SECTION_ROLE_KEY[section.id];
 
   return (
     <article className="rounded-lg border border-border overflow-hidden">
@@ -84,25 +86,29 @@ function StackSectionCard({
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className={cn(BADGE, "bg-primary/10 text-primary normal-case tracking-normal")}>
-              Layer {index + 1}
+              {t("settings.editor.promptStack.layer", { n: index + 1 })}
             </span>
-            {role ? (
+            {roleKey ? (
               <span
                 className={cn(
                   BADGE,
                   "bg-muted text-muted-foreground normal-case tracking-normal",
                 )}
               >
-                {role}
+                {t(`settings.editor.promptStack.role.${roleKey}`)}
               </span>
             ) : null}
             <p className="text-[length:var(--font-size-13)] font-medium">{section.label}</p>
             <span className="text-[length:var(--font-size-11)] text-muted-foreground/70 tabular-nums">
-              {section.charCount.toLocaleString()} chars
+              {t("settings.editor.promptStack.chars", {
+                count: section.charCount.toLocaleString(),
+              })}
             </span>
           </div>
           <p className="text-[length:var(--font-size-12)] text-muted-foreground leading-snug">
-            <span className="font-medium text-muted-foreground/90">Inject via: </span>
+            <span className="font-medium text-muted-foreground/90">
+              {t("settings.editor.promptStack.injectVia")}{" "}
+            </span>
             {section.injectPath}
           </p>
           {section.fileHint ? (
@@ -116,7 +122,9 @@ function StackSectionCard({
       {expanded ? (
         <div className="border-t border-border bg-muted/15 px-4 py-3">
           {empty ? (
-            <p className="text-[length:var(--font-size-12)] text-muted-foreground italic">(empty)</p>
+            <p className="text-[length:var(--font-size-12)] text-muted-foreground italic">
+              {t("settings.editor.promptStack.emptyContent")}
+            </p>
           ) : (
             <SectionContentPreview content={section.content} />
           )}
@@ -127,6 +135,7 @@ function StackSectionCard({
 }
 
 export function PromptStackPreviewPanel() {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const agentSystemPrompt = useSettingsStore((s) => s.settings.agentSystemPrompt) ?? "";
 
@@ -151,13 +160,13 @@ export function PromptStackPreviewPanel() {
           return first ? new Set([first]) : new Set();
         });
       } catch {
-        toast.error("Failed to load prompt stack preview.");
+        toast.error(t("settings.editor.promptStack.toast.loadFailed"));
         setPreview(null);
       } finally {
         if (!silent) setLoading(false);
       }
     },
-    [projectRoot, agentSystemPrompt],
+    [projectRoot, agentSystemPrompt, t],
   );
 
   useEffect(() => {
@@ -202,7 +211,7 @@ export function PromptStackPreviewPanel() {
   if (!preview) {
     return (
       <div className="flex flex-1 items-center justify-center px-8 text-[length:var(--font-size-13)] text-muted-foreground">
-        Could not load prompt stack preview.
+        {t("settings.editor.promptStack.loadError")}
       </div>
     );
   }
@@ -218,45 +227,39 @@ export function PromptStackPreviewPanel() {
             onClick={() => void handleRefresh()}
           >
             <RefreshCwIcon className={cn("size-3.5", refreshing && "animate-spin")} />
-            Refresh
+            {t("settings.editor.promptStack.refresh")}
           </Button>
           <Button variant="ghost" size="xs" onClick={expandAll}>
-            Expand all
+            {t("settings.editor.promptStack.expandAll")}
           </Button>
           <Button variant="ghost" size="xs" onClick={collapseAll}>
-            Collapse all
+            {t("settings.editor.promptStack.collapseAll")}
           </Button>
         </div>
         <span className="text-[length:var(--font-size-11)] text-muted-foreground tabular-nums">
-          {preview.sections.length} layer{preview.sections.length === 1 ? "" : "s"}
+          {t("settings.editor.promptStack.layerCount", { count: preview.sections.length })}
         </span>
       </div>
 
       <div className="flex-1 min-h-0 overflow-auto">
         <div className={SETTINGS_DETAIL_SHELL}>
           <div className="space-y-1">
-            <p className={SETTINGS_ROW_DESC}>
-              Each layer is injected separately — not one monolithic system prompt. Layer 4 (with a
-              project open) is the default{" "}
-              <span className="font-medium text-foreground/80">Orchestrator primary agent</span>{" "}
-              definition (`agent.md`), not a merged assemble of layers 1–3. Scroll the panel to read
-              expanded content.
-            </p>
+            <p className={SETTINGS_ROW_DESC}>{t("settings.editor.promptStack.intro")}</p>
             {preview.orchestratorName && preview.orchestratorId ? (
               <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-                Default orchestrator:{" "}
+                {t("settings.editor.promptStack.defaultOrchestrator")}{" "}
                 <span className="font-medium text-foreground/90">{preview.orchestratorName}</span>{" "}
                 <code className="text-[length:var(--font-size-11)]">{preview.orchestratorId}</code>
               </p>
             ) : !projectRoot ? (
               <p className="text-[length:var(--font-size-12)] text-muted-foreground italic">
-                Open a project to preview AGENTS.md, project rules, and orchestrator agent.md.
+                {t("settings.editor.promptStack.openProject")}
               </p>
             ) : null}
           </div>
 
           <section className="space-y-3">
-            <h3 className={SETTINGS_CATEGORY_HEADER}>Injection layers</h3>
+            <h3 className={SETTINGS_CATEGORY_HEADER}>{t("settings.editor.promptStack.layers")}</h3>
             {preview.sections.map((section, index) => (
               <StackSectionCard
                 key={section.id}

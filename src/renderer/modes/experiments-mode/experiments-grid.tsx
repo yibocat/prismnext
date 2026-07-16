@@ -6,6 +6,7 @@
  */
 
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { FlaskConicalIcon, Loader2Icon } from "lucide-react";
 import { VirtuosoGrid } from "react-virtuoso";
 import { useExperimentProjectRoot } from "./experiments-project-root";
@@ -36,9 +37,12 @@ function ExperimentCard({
   focused: boolean;
   onFocus: () => void;
 }) {
+  const { t } = useTranslation();
   const labName = experimentLabBasename(experiment.workspacePath);
   const runLabel =
-    experiment.runCount === 1 ? "1 run" : `${experiment.runCount} runs`;
+    experiment.runCount === 1
+      ? t("experiments.grid.oneRun")
+      : t("experiments.grid.nRuns", { count: experiment.runCount });
   const archived = experiment.status === "archived";
 
   return (
@@ -67,7 +71,7 @@ function ExperimentCard({
           </span>
           {archived ? (
             <span className="shrink-0 rounded border border-border/50 bg-muted/40 px-1.5 py-0.5 font-sans text-[length:var(--font-size-10)] text-muted-foreground/80">
-              Archived
+              {t("experiments.archived")}
             </span>
           ) : null}
         </div>
@@ -90,6 +94,7 @@ function ExperimentCard({
 }
 
 export function ExperimentsGrid() {
+  const { t } = useTranslation();
   const projectRoot = useExperimentProjectRoot();
   const experiments = useExperimentStore((s) => s.experiments);
   const loading = useExperimentStore((s) => s.loading);
@@ -157,11 +162,14 @@ export function ExperimentsGrid() {
     <div className="flex h-full min-h-0 flex-col px-6 py-5 font-sans @md:px-8 @md:py-6">
       <div className="mb-4 flex h-6 shrink-0 items-center justify-between gap-2">
         <h2 className={experimentsSectionLabelClass}>
-          {showArchived ? "Archived" : "Experiments"}
+          {showArchived ? t("experiments.archived") : t("experiments.title")}
         </h2>
         <span className="tabular-nums text-[length:var(--font-size-11)] text-muted-foreground/50">
           {loading ? (
-            <Loader2Icon className="size-3 animate-spin" aria-label="Loading" />
+            <Loader2Icon
+              className="size-3 animate-spin"
+              aria-label={t("experiments.content.loadingExperiments")}
+            />
           ) : (
             sorted.length
           )}
@@ -172,7 +180,9 @@ export function ExperimentsGrid() {
         className="min-h-0 w-full flex-1 outline-none"
         tabIndex={0}
         role="listbox"
-        aria-label={showArchived ? "Archived experiments" : "Experiments"}
+        aria-label={
+          showArchived ? t("experiments.grid.archivedExperiments") : t("experiments.title")
+        }
         onKeyDown={handleKeyDown}
       >
         <VirtuosoGrid

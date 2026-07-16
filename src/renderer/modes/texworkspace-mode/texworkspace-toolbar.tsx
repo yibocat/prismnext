@@ -1,4 +1,5 @@
 import { useCompileStore } from "@/stores/compile-store";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -45,6 +46,7 @@ const ENGINE_LABELS: Record<string, string> = {
 };
 
 export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
+  const { t } = useTranslation();
   const isCompiling = useCompileStore((s) => s.isCompiling);
   const compile = useCompileStore((s) => s.compile);
   const compileError = useCompileStore((s) => s.compileError);
@@ -103,7 +105,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
         <button
           type="button"
           onClick={() => setTexworkspaceViewMode("split")}
-          title="Split view"
+          title={t("modes.texworkspace.viewSplit")}
           className={cn(
             "flex size-6 items-center justify-center rounded-sm transition-colors",
             texworkspaceViewMode === "split"
@@ -116,7 +118,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
         <button
           type="button"
           onClick={() => setTexworkspaceViewMode("tex")}
-          title="TeX only"
+          title={t("modes.texworkspace.viewTex")}
           className={cn(
             "flex size-6 items-center justify-center rounded-sm transition-colors",
             texworkspaceViewMode === "tex"
@@ -129,7 +131,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
         <button
           type="button"
           onClick={() => setTexworkspaceViewMode("pdf")}
-          title="PDF only"
+          title={t("modes.texworkspace.viewPdf")}
           className={cn(
             "flex size-6 items-center justify-center rounded-sm transition-colors",
             texworkspaceViewMode === "pdf"
@@ -145,7 +147,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
       <button
         type="button"
         className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0"
-        title={`Compile (${ENGINE_LABELS[compilerBackend]})`}
+        title={t("modes.texworkspace.compile", { engine: ENGINE_LABELS[compilerBackend] })}
         onClick={handleCompile}
         disabled={isCompiling || !compileFile}
       >
@@ -189,7 +191,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
         type="button"
         className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
         onClick={toggleAutoCompile}
-        title={autoCompile ? "Auto-compile: ON" : "Auto-compile: OFF"}
+        title={autoCompile ? t("modes.texworkspace.autoCompileOn") : t("modes.texworkspace.autoCompileOff")}
       >
         {autoCompile ? (
           <ZapIcon className="size-3.5 text-warning" />
@@ -207,7 +209,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
               ? "bg-destructive/15 text-destructive"
               : "text-destructive hover:bg-destructive/10",
           )}
-          title={texworkspaceProblemsOpen ? "Back to PDF preview" : "Show compile problems"}
+          title={texworkspaceProblemsOpen ? t("modes.texworkspace.backToPdf") : t("modes.texworkspace.showProblems")}
           onClick={handleToggleProblems}
         >
           <AlertCircleIcon className="size-3.5" />
@@ -225,7 +227,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
             ? "bg-muted text-foreground"
             : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
         )}
-        title="Search in manuscript (sidebar)"
+        title={t("modes.texworkspace.searchManuscript")}
         onClick={() => setSearchQuery(isSearching ? "" : " ")}
       >
         <SearchIcon className="size-3.5" />
@@ -237,7 +239,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
           <button
             type="button"
             className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-            title="Insert Symbol"
+            title={t("modes.texworkspace.insertSymbol")}
           >
             <SigmaIcon className="size-3.5" />
           </button>
@@ -284,7 +286,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
           <button
             type="button"
             className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-            title="Insert Environment"
+            title={t("modes.texworkspace.insertEnv")}
           >
             <BookOpenIcon className="size-3.5" />
           </button>

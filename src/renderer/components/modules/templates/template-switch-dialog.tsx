@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import type { SwitchDialogLevel } from "@/lib/templates/template-merge";
@@ -17,39 +19,36 @@ export interface TemplateSwitchDialogProps {
   submitting?: boolean;
 }
 
-const LEVEL_CONFIG: Record<
+function getLevelConfig(t: TFunction): Record<
   SwitchDialogLevel,
   {
     title: string;
     message: string;
   }
-> = {
-  L1: {
-    title: "Switch Template",
-    message:
-      "Same document family — matching sections and the abstract/front matter will be preserved where possible. Preamble and packages come from the new template.",
-  },
-  L2: {
-    title: "Switch Template",
-    message:
-      "Related document types (paper ↔ thesis) — section merge will be attempted. Review the result after switching.",
-  },
-  L3: {
-    title: "Switch Template",
-    message:
-      "These template types cannot be merged automatically. Your existing template files will be fully replaced. A backup will be saved.",
-  },
-  reset: {
-    title: "Reset Template",
-    message:
-      "Reset to the template original? Your modifications will be lost. A backup will be saved.",
-  },
-  firstUse: {
-    title: "Apply Template",
-    message:
-      "This project already contains files that overlap with the template. Applying will overwrite them. A backup will be saved.",
-  },
-};
+> {
+  return {
+    L1: {
+      title: t("templates.switch.switchTitle"),
+      message: t("templates.switch.l1"),
+    },
+    L2: {
+      title: t("templates.switch.switchTitle"),
+      message: t("templates.switch.l2"),
+    },
+    L3: {
+      title: t("templates.switch.switchTitle"),
+      message: t("templates.switch.l3"),
+    },
+    reset: {
+      title: t("templates.switch.resetTitle"),
+      message: t("templates.switch.reset"),
+    },
+    firstUse: {
+      title: t("templates.switch.applyTitle"),
+      message: t("templates.switch.firstUse"),
+    },
+  };
+}
 
 export function TemplateSwitchDialog({
   open,
@@ -65,7 +64,8 @@ export function TemplateSwitchDialog({
   onConfirm,
   submitting = false,
 }: TemplateSwitchDialogProps) {
-  const config = LEVEL_CONFIG[level];
+  const { t } = useTranslation();
+  const config = getLevelConfig(t)[level];
   const isDestructive = level === "L3" || level === "reset" || level === "firstUse";
   const isWarning = level === "L2";
 
@@ -76,8 +76,13 @@ export function TemplateSwitchDialog({
           <DialogTitle>{config.title}</DialogTitle>
           <DialogDescription className="text-[length:var(--font-size-13)]">
             {level === "firstUse"
-              ? `Apply ${newName} (${newCategory})`
-              : `${oldName} (${oldCategory}) → ${newName} (${newCategory})`}
+              ? t("templates.switch.applyNamed", { name: newName, category: newCategory })
+              : t("templates.switch.arrow", {
+                  oldName,
+                  oldCategory,
+                  newName,
+                  newCategory,
+                })}
           </DialogDescription>
         </DialogHeader>
 
@@ -96,7 +101,7 @@ export function TemplateSwitchDialog({
 
           {(changedFiles.length > 0 || deletedFiles.length > 0) && (
             <div className="text-[length:var(--font-size-12)]">
-              <span className="text-muted-foreground">Affected files: </span>
+              <span className="text-muted-foreground">{t("templates.switch.affected")} </span>
               {changedFiles.map((f) => (
                 <code
                   key={f}
@@ -125,7 +130,7 @@ export function TemplateSwitchDialog({
             disabled={submitting}
             onClick={() => onOpenChange(false)}
           >
-            Cancel
+            {t("common.cancel")}
           </Button>
           {dialogActions.includes("replace") && (
             <Button
@@ -139,11 +144,7 @@ export function TemplateSwitchDialog({
               disabled={submitting}
               onClick={() => onConfirm("replace")}
             >
-              {level === "reset"
-                ? "Backup & Reset"
-                : level === "firstUse"
-                  ? "Backup & Apply"
-                  : "Backup & Replace"}
+              {t("templates.switch.backupReplace")}
             </Button>
           )}
           {dialogActions.includes("merge") && (
@@ -153,7 +154,7 @@ export function TemplateSwitchDialog({
               disabled={submitting}
               onClick={() => onConfirm("merge")}
             >
-              {level === "L2" ? "Backup & Merge" : "Backup & Switch"}
+              {t("templates.switch.backupMerge")}
             </Button>
           )}
         </DialogFooter>

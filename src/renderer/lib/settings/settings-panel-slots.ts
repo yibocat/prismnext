@@ -11,6 +11,7 @@
 import { useSettingsStore } from "@/stores/settings-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { getProvider } from "@/lib/providers";
+import { i18n } from "@/lib/i18n";
 import type { WorkspaceFolderScope } from "@/lib/settings/workspace-template";
 
 export type SettingsPanelSlot =
@@ -46,6 +47,10 @@ export type SettingsPanelSlot =
   | { kind: "shortcuts" }
   | { kind: "logs" };
 
+function tt(key: string, fallback: string): string {
+  return i18n.t(key, { defaultValue: fallback });
+}
+
 export function settingsPanelSlotTitle(slot: SettingsPanelSlot | null): string | null {
   if (!slot) return null;
   switch (slot.kind) {
@@ -53,72 +58,74 @@ export function settingsPanelSlotTitle(slot: SettingsPanelSlot | null): string |
       return slot.title;
     case "workspace-folder": {
       if (slot.mode === "new") {
-        return slot.scope === "project" ? "Add folder" : "Add template folder";
+        return slot.scope === "project"
+          ? tt("settings.slots.addFolder", "Add folder")
+          : tt("settings.slots.addTemplateFolder", "Add template folder");
       }
       const dirs =
         slot.scope === "project"
           ? useWorkspaceConfigStore.getState().workspaceDirs
           : useSettingsStore.getState().settings.defaultWorkspaceDirs ?? [];
-      return dirs[slot.index]?.name ?? "Folder";
+      return dirs[slot.index]?.name ?? tt("settings.slots.folder", "Folder");
     }
     case "ai-provider": {
-      if (slot.mode === "new") return "Add provider";
+      if (slot.mode === "new") return tt("settings.slots.addProvider", "Add provider");
       if (slot.mode === "builtin-key") {
-        return getProvider(slot.providerId)?.name ?? "API key";
+        return getProvider(slot.providerId)?.name ?? tt("settings.slots.apiKey", "API key");
       }
       const custom = useSettingsStore
         .getState()
         .settings.aiCustomProviders?.find((cp) => cp.id === slot.providerId);
-      return custom?.name ?? "Provider";
+      return custom?.name ?? tt("settings.slots.provider", "Provider");
     }
     case "agent-expert": {
-      if (slot.mode === "new") return "New expert";
-      return slot.title ?? "Expert";
+      if (slot.mode === "new") return tt("settings.slots.newExpert", "New expert");
+      return slot.title ?? tt("settings.slots.expert", "Expert");
     }
     case "agent-orchestrator": {
-      if (slot.mode === "new") return "New orchestrator";
-      return slot.title ?? "Orchestrator";
+      if (slot.mode === "new") return tt("settings.slots.newOrchestrator", "New orchestrator");
+      return slot.title ?? tt("settings.slots.orchestrator", "Orchestrator");
     }
     case "prompt-markdown": {
-      if (slot.doc === "system-prompt") return "System prompt";
-      return "AGENTS.md";
+      if (slot.doc === "system-prompt") return tt("settings.slots.systemPrompt", "System prompt");
+      return tt("settings.slots.agentsMd", "AGENTS.md");
     }
     case "prompt-stack-preview":
-      return "Prompt stack preview";
+      return tt("settings.slots.promptStackPreview", "Prompt stack preview");
     case "research-brief":
-      return "Research brief";
+      return tt("settings.slots.researchBrief", "Research brief");
     case "agent-tools":
-      return "Agent tools";
+      return tt("settings.slots.agentTools", "Agent tools");
     case "knowledge-modules":
-      return "Knowledge modules";
+      return tt("settings.slots.knowledgeModules", "Knowledge modules");
     case "builtin-commands":
-      return "Built-in commands";
+      return tt("settings.slots.builtinCommands", "Built-in commands");
     case "rule-markdown": {
-      if (slot.mode === "new") return "New rule";
+      if (slot.mode === "new") return tt("settings.slots.newRule", "New rule");
       return slot.title ?? slot.ruleId;
     }
     case "custom-command": {
-      if (slot.mode === "new") return "New command";
-      return slot.title ? `/${slot.title}` : "Command";
+      if (slot.mode === "new") return tt("settings.slots.newCommand", "New command");
+      return slot.title ? `/${slot.title}` : tt("settings.slots.command", "Command");
     }
     case "mcp-json":
-      return "mcp.json";
+      return tt("settings.slots.mcpJson", "mcp.json");
     case "mcp-catalog":
-      return "MCP catalog";
+      return tt("settings.slots.mcpCatalog", "MCP catalog");
     case "mcp-paste-json":
-      return "Add from JSON";
+      return tt("settings.slots.addFromJson", "Add from JSON");
     case "mcp-server":
       return slot.title ?? slot.serverName;
     case "skill-markdown": {
-      if (slot.mode === "new") return "Create skill";
+      if (slot.mode === "new") return tt("settings.slots.createSkill", "Create skill");
       return slot.title ?? slot.skillId;
     }
     case "skill-library":
-      return "Install skills";
+      return tt("settings.slots.installSkills", "Install skills");
     case "shortcuts":
-      return "Shortcuts";
+      return tt("settings.slots.shortcuts", "Shortcuts");
     case "logs":
-      return "Logs";
+      return tt("settings.slots.logs", "Logs");
     default:
       return null;
   }

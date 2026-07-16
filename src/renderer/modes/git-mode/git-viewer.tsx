@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { GitBranchIcon, Loader2Icon } from "lucide-react";
 import { useGitStore } from "@/stores/git-store";
 import { GitChangesDiffList } from "./git-changes-diff-list";
@@ -10,6 +11,7 @@ interface GitViewerProps {
 }
 
 export default function GitViewer({ projectRoot }: GitViewerProps) {
+  const { t } = useTranslation();
   const selectedCommitHash = useGitStore((s) => s.selectedCommitHash);
   const sidebarView = useGitStore((s) => s.sidebarView);
   const files = useGitStore((s) => s.files);
@@ -36,10 +38,10 @@ export default function GitViewer({ projectRoot }: GitViewerProps) {
         <GitBranchIcon className="size-8 text-muted-foreground/40" />
         <div className="space-y-1.5 max-w-sm">
           <p className="text-[length:var(--font-size-14)] font-medium text-foreground/90">
-            No Git repository
+            {t("modes.git.noRepo")}
           </p>
           <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-            Initialize Git to track changes, branches, and worktrees for this project.
+            {t("modes.git.noRepoHintInit")}
           </p>
         </div>
         <GitInitButton variant="panel" />
@@ -54,7 +56,7 @@ export default function GitViewer({ projectRoot }: GitViewerProps) {
       return (
         <div className="flex flex-1 items-center justify-center">
           <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
-            Commit not found
+            {t("modes.git.commitNotFound")}
           </p>
         </div>
       );
@@ -70,7 +72,7 @@ export default function GitViewer({ projectRoot }: GitViewerProps) {
   return (
     <div className="flex flex-1 items-center justify-center">
       <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
-        Select a commit to view details
+        {t("modes.git.selectCommit")}
       </p>
     </div>
   );

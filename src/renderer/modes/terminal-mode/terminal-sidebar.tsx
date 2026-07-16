@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { i18n } from "@/lib/i18n";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTerminalStore } from "@/stores/terminal-store";
 import { useTerminalAiStore } from "@/stores/terminal-ai-store";
@@ -85,8 +87,8 @@ function SidebarSectionTrigger({
 }
 
 function aiModeLabel(item: TerminalSidebarAiItem): string {
-  if (item.phase === "running") return "Live";
-  return "Replay";
+  if (item.phase === "running") return i18n.t("modes.terminal.live");
+  return i18n.t("modes.terminal.replay");
 }
 
 function phaseBadgeClass(phase: string, busy?: boolean): string {
@@ -170,6 +172,7 @@ function AiSessionGroup({
 }
 
 export function TerminalSidebar() {
+  const { t } = useTranslation();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editCommand, setEditCommand] = useState<TerminalQuickCommand | null>(null);
   const [accordionValue, setAccordionValue] = useState<string[]>(["quick", "sessions"]);
@@ -264,7 +267,7 @@ export function TerminalSidebar() {
         >
           <AccordionItem value="quick" className="border-0">
             <SidebarSectionTrigger
-              label="Quick Commands"
+              label={t("modes.terminal.quickCommands")}
               count={quickCommands.length}
               extraAction={
                 <button
@@ -283,7 +286,7 @@ export function TerminalSidebar() {
             <AccordionContent className="pb-1 pt-0">
               {quickCommands.length === 0 ? (
                 <p className="px-1.5 py-1 text-[length:var(--font-hint)] text-muted-foreground/60">
-                  No saved commands
+                  {t("modes.terminal.noCommands")}
                 </p>
               ) : (
                 <div className="space-y-0.5">
@@ -335,22 +338,22 @@ export function TerminalSidebar() {
           </AccordionItem>
 
           <AccordionItem value="sessions" className="border-0">
-            <SidebarSectionTrigger label="Sessions" count={sessionCount} />
+            <SidebarSectionTrigger label={t("modes.terminal.sessions")} count={sessionCount} />
             <AccordionContent className="pb-2 pt-0 space-y-1">
               {sessionCount === 0 ? (
                 <p className="px-1.5 py-1 text-[length:var(--font-hint)] text-muted-foreground/60">
-                  No open terminals
+                  {t("modes.terminal.noSessions")}
                 </p>
               ) : null}
 
               <AiSessionGroup
-                label="Live"
+                label={t("modes.terminal.live")}
                 items={aiLiveItems}
                 onFocus={focusAiItem}
                 onClose={closeAiTab}
               />
               <AiSessionGroup
-                label="Saved"
+                label={t("modes.terminal.saved")}
                 items={aiSavedItems}
                 onFocus={focusAiItem}
                 onClose={closeAiTab}
@@ -360,7 +363,7 @@ export function TerminalSidebar() {
                 <div className="space-y-0.5">
                   {userItems.length > 0 && aiItems.length > 0 ? (
                     <p className="px-1.5 pt-1 text-[length:var(--font-hint)] uppercase tracking-wide text-muted-foreground/50">
-                      Shells
+                      {t("modes.terminal.shells")}
                     </p>
                   ) : null}
                   {userItems.map((item) => (

@@ -4,7 +4,7 @@ import { useTerminalStore } from "@/stores/terminal-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTerminalAiStore } from "@/stores/terminal-ai-store";
 import { useSettingsStore } from "@/stores/settings-store";
-import { useChatStore } from "@/stores/chat-store";
+import { i18n } from "@/lib/i18n";
 
 export interface TabCloseConfirmation {
   tabId: string;
@@ -31,23 +31,23 @@ export function getTabCloseConfirmation(tab: RightTab): TabCloseConfirmation | n
     if (tab.terminalSource === "ai") {
       return {
         tabId: tab.id,
-        title: "Close AI Terminal",
+        title: i18n.t("dialogs.tabClose.closeAiTerminal"),
         description: killOnClose
-          ? "A command is still running. Closing will cancel it."
-          : "A command is still running. The tab will close but the command continues in the background.",
+          ? i18n.t("dialogs.tabClose.aiRunningKill")
+          : i18n.t("dialogs.tabClose.aiRunningKeep"),
         detail: killOnClose
-          ? "You can reopen the terminal from the session panel or bash widget."
-          : "Use the session title menu to watch progress or reopen the terminal.",
-        confirmLabel: "Close AI Terminal",
+          ? i18n.t("dialogs.tabClose.aiDetailKill")
+          : i18n.t("dialogs.tabClose.aiDetailKeep"),
+        confirmLabel: i18n.t("dialogs.tabClose.closeAiTerminal"),
         destructive: killOnClose,
       };
     }
     return {
       tabId: tab.id,
-      title: "Close Terminal",
-      description: "A command is still running in this terminal.",
-      detail: "Closing will interrupt the running process.",
-      confirmLabel: "Close Terminal",
+      title: i18n.t("dialogs.tabClose.closeTerminal"),
+      description: i18n.t("dialogs.tabClose.terminalRunning"),
+      detail: i18n.t("dialogs.tabClose.terminalDetail"),
+      confirmLabel: i18n.t("dialogs.tabClose.closeTerminal"),
       destructive: true,
     };
   }
@@ -56,10 +56,10 @@ export function getTabCloseConfirmation(tab: RightTab): TabCloseConfirmation | n
     const label = tab.title || tab.fileId;
     return {
       tabId: tab.id,
-      title: "Close File",
-      description: `"${label}" has unsaved changes.`,
-      detail: "Your edits will be lost unless you save first.",
-      confirmLabel: "Close Without Saving",
+      title: i18n.t("dialogs.tabClose.closeFile"),
+      description: i18n.t("dialogs.tabClose.fileUnsaved", { label }),
+      detail: i18n.t("dialogs.tabClose.fileDetail"),
+      confirmLabel: i18n.t("dialogs.tabClose.closeWithoutSaving"),
       destructive: true,
     };
   }
@@ -71,20 +71,27 @@ export function getTabCloseConfirmation(tab: RightTab): TabCloseConfirmation | n
 export function getBatchTabCloseConfirmation(tabs: RightTab[]): TabCloseConfirmation | null {
   const busyTerminals = tabs.filter((t) => t.kind === "terminal" && isTerminalTabBusy(t.id));
   if (busyTerminals.length > 0) {
+    const count = busyTerminals.length;
     return {
       tabId: busyTerminals[0].id,
-      title: busyTerminals.length === 1 ? "Close Terminal" : "Close Terminals",
+      title:
+        count === 1
+          ? i18n.t("dialogs.tabClose.closeTerminal")
+          : i18n.t("dialogs.tabClose.closeTerminals"),
       description:
-        busyTerminals.length === 1
-          ? "A command is still running in this terminal."
-          : `${busyTerminals.length} terminals still have running commands.`,
-      detail: "Closing will interrupt the running processes.",
-      confirmLabel: busyTerminals.length === 1 ? "Close Terminal" : "Close All",
+        count === 1
+          ? i18n.t("dialogs.tabClose.terminalRunning")
+          : i18n.t("dialogs.tabClose.terminalsRunning", { count }),
+      detail: i18n.t("dialogs.tabClose.terminalsDetail"),
+      confirmLabel:
+        count === 1
+          ? i18n.t("dialogs.tabClose.closeTerminal")
+          : i18n.t("dialogs.tabClose.closeAll"),
       destructive: true,
     };
   }
 
-  const dirtyFile = tabs.find((t) => getTabCloseConfirmation(t)?.title === "Close File");
+  const dirtyFile = tabs.find((t) => t.kind === "file" && t.fileId && isFileTabDirty(t));
   if (dirtyFile) {
     return getTabCloseConfirmation(dirtyFile);
   }

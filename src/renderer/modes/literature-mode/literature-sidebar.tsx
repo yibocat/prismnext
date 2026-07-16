@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ChevronRightIcon,
   FolderIcon,
@@ -224,7 +225,7 @@ export function LiteratureSidebar() {
   const activeTabId = useRightPanelStore((s) => s.activeTabId);
   const papers = useLiteratureStore((s) => s.papers);
 
-  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const activeTab = tabs.find((tab) => tab.id === activeTabId);
   const readerPaper =
     activeTab?.kind === "literature" && activeTab.literaturePaperId
       ? (papers.find((p) => p.id === activeTab.literaturePaperId) ?? null)
@@ -238,6 +239,7 @@ export function LiteratureSidebar() {
 }
 
 function LiteratureLibrarySidebar() {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const papers = useLiteratureStore((s) => s.papers);
   const collections = useLiteratureStore((s) => s.collections);
@@ -436,7 +438,7 @@ function LiteratureLibrarySidebar() {
           <button
             type="button"
             className={headerBtn}
-            title="New local collection"
+            title={t("modes.literature.newCollection")}
             disabled={!projectRoot || collectionWritePending}
             onClick={() =>
               openCreateDialog(resolveLocalParentId(libraryView, visibleCollections, boundCollectionId))
@@ -455,14 +457,14 @@ function LiteratureLibrarySidebar() {
         >
           <ChevronRightIcon className="size-3 shrink-0 invisible" aria-hidden />
           <LibraryIcon className="size-3 shrink-0" />
-          <span className="min-w-0 flex-1 truncate">All entries</span>
+          <span className="min-w-0 flex-1 truncate">{t("modes.literature.allEntries")}</span>
           <span className="shrink-0 tabular-nums text-[length:var(--font-hint)] text-muted-foreground/60">
             {papers.length}
           </span>
         </div>
 
         <p className="px-2 py-1 text-[length:var(--font-hint)] font-medium uppercase tracking-wide text-muted-foreground/55">
-          Collections
+          {t("modes.literature.collections")}
         </p>
 
         {flatRows.length === 0 ? (
@@ -545,27 +547,27 @@ function LiteratureLibrarySidebar() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>New collection</DialogTitle>
+            <DialogTitle>{t("literature.dialogs.newCollection")}</DialogTitle>
           </DialogHeader>
           {createParentLabel ? (
             <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-              Inside “{createParentLabel}”
+              {t("literature.dialogs.insideParent", { name: createParentLabel })}
             </p>
           ) : null}
           <Input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="Collection name"
+            placeholder={t("literature.dialogs.collectionName")}
             onKeyDown={(e) => {
               if (e.key === "Enter") void handleCreate();
             }}
           />
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setCreateOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button size="sm" onClick={() => void handleCreate()} disabled={!newName.trim()}>
-              Create
+              {t("common.create")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -574,7 +576,7 @@ function LiteratureLibrarySidebar() {
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Rename collection</DialogTitle>
+            <DialogTitle>{t("literature.dialogs.renameCollection")}</DialogTitle>
           </DialogHeader>
           <Input
             value={renameName}
@@ -585,10 +587,10 @@ function LiteratureLibrarySidebar() {
           />
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setRenameOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button size="sm" onClick={() => void handleRename()} disabled={!renameName.trim()}>
-              Save
+              {t("common.save")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -597,17 +599,17 @@ function LiteratureLibrarySidebar() {
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete collection</DialogTitle>
+            <DialogTitle>{t("literature.dialogs.deleteCollection")}</DialogTitle>
           </DialogHeader>
           <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-            Delete “{deleteTarget?.name}”? Papers stay in your library; this only removes the collection.
+            {t("literature.dialogs.deleteCollectionBody", { name: deleteTarget?.name ?? "" })}
           </p>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setDeleteOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button variant="destructive" size="sm" onClick={() => void handleDelete()}>
-              Delete
+              {t("common.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

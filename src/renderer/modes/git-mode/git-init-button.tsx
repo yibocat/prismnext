@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { GitBranchIcon, Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
@@ -16,6 +17,7 @@ export function GitInitButton({
   variant?: GitInitButtonVariant;
   className?: string;
 }) {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const [loading, setLoading] = useState(false);
 
@@ -24,13 +26,13 @@ export function GitInitButton({
     setLoading(true);
     try {
       await useGitStore.getState().initRepo(projectRoot);
-      toast.success("Git repository initialized");
+      toast.success(t("git.toast.initSuccess"));
     } catch (err: unknown) {
-      toast.error(`Failed to init git: ${(err as Error)?.message ?? "unknown error"}`);
+      toast.error(t("git.toast.initFailed", { message: (err as Error)?.message ?? "unknown error" }));
     } finally {
       setLoading(false);
     }
-  }, [projectRoot]);
+  }, [projectRoot, t]);
 
   if (!projectRoot) return null;
 
@@ -43,14 +45,14 @@ export function GitInitButton({
         onClick={() => void handleInit()}
         disabled={loading}
         className={cn("gap-1.5", className)}
-        title="Initialize Git repository"
+        title={t("chat.toolbar.initGit")}
       >
         {loading ? (
           <Loader2Icon className="size-3.5 animate-spin" />
         ) : (
           <GitBranchIcon className="size-3.5" />
         )}
-        Init Git
+        {t("chat.toolbar.initGitShort")}
       </Button>
     );
   }
@@ -65,14 +67,16 @@ export function GitInitButton({
         "disabled:opacity-50 disabled:cursor-wait disabled:hover:bg-transparent disabled:hover:text-muted-foreground",
         className,
       )}
-      title="Initialize Git repository"
+      title={t("chat.toolbar.initGit")}
     >
       {loading ? (
         <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
       ) : (
         <GitBranchIcon className="size-3.5 shrink-0" />
       )}
-      <span className="max-w-[100px] truncate hidden @md:inline">Init Git</span>
+      <span className="max-w-[100px] truncate hidden @md:inline">
+        {t("chat.toolbar.initGitShort")}
+      </span>
     </button>
   );
 }

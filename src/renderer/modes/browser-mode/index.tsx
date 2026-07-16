@@ -17,11 +17,13 @@ function BrowserToolbarWrapper({ tab }: { tab: RightTab }) {
 export const browserMode: ModeDefinition = {
   id: "browser",
   label: "Browser",
+  labelKey: "modes.browser.label",
   icon: <GlobeIcon className="size-3.5" />,
   tabKinds: ["browser"],
   surface: "any",
   persistence: "persistent",
   initialTitle: "Browser",
+  initialTitleKey: "modes.browser.initialTitle",
   Sidebar: BrowserSidebar,
   Toolbar: BrowserToolbarWrapper,
   Content: BrowserContent,

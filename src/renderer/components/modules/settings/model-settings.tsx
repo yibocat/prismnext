@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/stores/settings-store";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { Input } from "@/components/ui/input";
@@ -46,7 +47,10 @@ const BADGE =
 
 type ConnectionStatus = "none" | "verified" | "failed" | "untested";
 
-function connectionMeta(status: ConnectionStatus): {
+function connectionMeta(
+  status: ConnectionStatus,
+  t: (key: string) => string,
+): {
   label: string;
   dotClass: string;
   textClass: string;
@@ -54,25 +58,25 @@ function connectionMeta(status: ConnectionStatus): {
   switch (status) {
     case "verified":
       return {
-        label: "Connected",
+        label: t("settings.models.connected"),
         dotClass: "bg-emerald-500",
         textClass: "text-emerald-600 dark:text-emerald-400",
       };
     case "failed":
       return {
-        label: "Connection failed",
+        label: t("settings.models.connectionFailed"),
         dotClass: "bg-destructive",
         textClass: "text-destructive",
       };
     case "untested":
       return {
-        label: "Key set — not verified",
+        label: t("settings.models.keySet"),
         dotClass: "bg-amber-500",
         textClass: "text-amber-600 dark:text-amber-400",
       };
     default:
       return {
-        label: "No API key",
+        label: t("settings.models.noApiKey"),
         dotClass: "bg-muted-foreground/35",
         textClass: "text-muted-foreground",
       };
@@ -80,7 +84,8 @@ function connectionMeta(status: ConnectionStatus): {
 }
 
 function ConnectionStatusLine({ status }: { status: ConnectionStatus }) {
-  const meta = connectionMeta(status);
+  const { t } = useTranslation();
+  const meta = connectionMeta(status, t);
   return (
     <span className={cn("inline-flex items-center gap-1.5 text-[length:var(--font-size-11)]", meta.textClass)}>
       <span className={cn("size-1.5 rounded-full shrink-0", meta.dotClass)} />
@@ -90,6 +95,7 @@ function ConnectionStatusLine({ status }: { status: ConnectionStatus }) {
 }
 
 export function ModelSettings() {
+  const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const customProviders = useSettingsStore((s) => s.settings.aiCustomProviders) || [];
@@ -126,26 +132,25 @@ export function ModelSettings() {
       <div className="max-w-3xl mx-auto px-8 py-8 space-y-8">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-[length:var(--font-dialog-title)] font-semibold">Models</h2>
+            <h2 className="text-[length:var(--font-dialog-title)] font-semibold">{t("settings.models.title")}</h2>
             <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-              Connect providers, verify API keys, and choose which models appear in chat.
+              {t("settings.models.subtitle")}
             </p>
           </div>
           <Button variant="outline" size="xs" className="shrink-0" onClick={openAddProvider}>
             <PlusIcon className="size-3 mr-1" />
-            Add provider
+            {t("settings.models.addProvider")}
           </Button>
         </div>
 
         <section>
-          <h3 className={SETTINGS_CATEGORY_HEADER}>Multimodal</h3>
+          <h3 className={SETTINGS_CATEGORY_HEADER}>{t("settings.models.multimodal")}</h3>
           <div className={SETTINGS_CARD}>
             <div className={SETTINGS_ROW}>
               <div className="min-w-0 flex-1 pr-4">
-                <p className={SETTINGS_ROW_LABEL}>Helper model</p>
+                <p className={SETTINGS_ROW_LABEL}>{t("settings.models.multimodal")}</p>
                 <p className={SETTINGS_ROW_DESC}>
-                  Used when the active chat model cannot read images. If unset, image sends are
-                  blocked for text-only models.
+                  {t("settings.models.multimodalDesc")}
                 </p>
               </div>
               <AppSelect
@@ -157,10 +162,10 @@ export function ModelSettings() {
                 }
               >
                 <AppSelectTrigger className="w-52 shrink-0">
-                  <AppSelectValue placeholder="None" />
+                  <AppSelectValue placeholder={t("settings.models.none")} />
                 </AppSelectTrigger>
                 <AppSelectContent className="max-h-72">
-                  <AppSelectItem value="__none__">None</AppSelectItem>
+                  <AppSelectItem value="__none__">{t("settings.models.none")}</AppSelectItem>
                   {visionCandidates.map(({ provider, model }) => (
                     <AppSelectItem
                       key={`${provider.id}/${model.id}`}
@@ -175,18 +180,18 @@ export function ModelSettings() {
           </div>
           {visionCandidates.length === 0 ? (
             <p className={cn(SETTINGS_ROW_DESC, "mt-1.5 text-amber-600 dark:text-amber-400")}>
-              暂无可用选项。请先在下方 Provider 填入 API Key，并启用带 Vision 标签的模型。
+              {t("settings.models.noVisionCandidates")}
             </p>
           ) : null}
           {!visionFallbackValid && selectedVisionFallback !== "__none__" ? (
             <p className={cn(SETTINGS_ROW_DESC, "mt-1.5 text-amber-600 dark:text-amber-400")}>
-              之前选择的辅助模型已不可用，请重新选择。
+              {t("settings.models.visionInvalid")}
             </p>
           ) : null}
         </section>
 
         <section>
-          <h3 className={SETTINGS_CATEGORY_HEADER}>Built-in</h3>
+          <h3 className={SETTINGS_CATEGORY_HEADER}>{t("settings.models.builtin")}</h3>
           <div className="space-y-2">
             {builtInProviders.map((provider) => (
               <ModelProviderCard
@@ -200,7 +205,7 @@ export function ModelSettings() {
 
         {customProviders.length > 0 ? (
           <section>
-            <h3 className={SETTINGS_CATEGORY_HEADER}>Added providers</h3>
+            <h3 className={SETTINGS_CATEGORY_HEADER}>{t("settings.models.addedProviders")}</h3>
             <div className="space-y-2">
               {customProviders.map((provider) => (
                 <ModelProviderCard
@@ -236,6 +241,7 @@ function ModelProviderCard({
   onConfigure?: () => void;
   onConfigureBuiltin?: () => void;
 }) {
+  const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
 
@@ -362,10 +368,10 @@ function ModelProviderCard({
   };
 
   const configureLabel = isCustom
-    ? "Configure"
+    ? t("settings.models.configure")
     : apiKey
-      ? "API key"
-      : "Add API key";
+      ? t("settings.models.apiKey")
+      : t("settings.models.apiKey");
 
   return (
     <div className={cn(SETTINGS_CARD, "!divide-y-0 !px-0 overflow-hidden")}>

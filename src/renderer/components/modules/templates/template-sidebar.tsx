@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { TemplateMeta } from "./types";
 import { TemplateFull, TemplateCategory, CATEGORIES } from "./types";
@@ -19,6 +20,8 @@ export function TemplateSidebar({
   setCategory: (c: TemplateCategory | "all") => void;
   templates: TemplateMeta[] | null;
 }) {
+  const { t } = useTranslation();
+
   return (
     <div className="lg:w-[200px] shrink-0 flex flex-col gap-1 px-2">
       {/* Category label */}
@@ -30,6 +33,7 @@ export function TemplateSidebar({
       <div className="flex flex-col gap-1">
         {CATEGORIES.map((cat) => {
           const count = categoryCount(templates, cat.id);
+          const label = cat.id === "all" ? t("templates.center.all") : cat.label;
           return (
           <button
             key={cat.id}
@@ -43,7 +47,7 @@ export function TemplateSidebar({
             onClick={() => setCategory(cat.id)}
           >
             {cat.icon}
-            <span className="truncate flex-1">{cat.label}</span>
+            <span className="truncate flex-1">{label}</span>
             <span className="text-[length:var(--font-size-10)] tabular-nums text-muted-foreground/60 shrink-0">
               {count}
             </span>

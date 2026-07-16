@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ExternalLinkIcon, EyeIcon, EyeOffIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AppBrowserLink } from "@/components/modules/shared/app-browser-link";
@@ -6,6 +7,13 @@ import type { McpPreset } from "@/lib/agent/mcp-presets";
 
 const INPUT =
   "w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-[length:var(--font-size-13)] outline-none focus:border-primary/40";
+
+function fieldLabelKey(presetId: string, fieldKey: string): string {
+  if (fieldKey === "__path__") {
+    return `settings.editor.mcp.fields.${presetId}.__path__`;
+  }
+  return `settings.editor.mcp.fields.${fieldKey}`;
+}
 
 export function McpPresetFieldInputs({
   preset,
@@ -16,6 +24,7 @@ export function McpPresetFieldInputs({
   values: Record<string, string>;
   onChange: (key: string, value: string) => void;
 }) {
+  const { t } = useTranslation();
   const [visible, setVisible] = useState<Record<string, boolean>>({});
 
   if (!preset.fields?.length) return null;
@@ -25,7 +34,7 @@ export function McpPresetFieldInputs({
       {preset.fields.map((field) => (
         <div key={field.key}>
           <label className="text-[length:var(--font-size-12)] text-muted-foreground mb-1 block">
-            {field.label}
+            {t(fieldLabelKey(preset.id, field.key), { defaultValue: field.label })}
             {field.required ? " *" : ""}
           </label>
           <div className="relative">
@@ -57,7 +66,7 @@ export function McpPresetFieldInputs({
           href={preset.docsUrl}
           className="inline-flex items-center gap-1 text-[length:var(--font-size-11)] text-primary hover:underline"
         >
-          Documentation <ExternalLinkIcon className="size-3" />
+          {t("settings.editor.mcp.documentation")} <ExternalLinkIcon className="size-3" />
         </AppBrowserLink>
       )}
     </div>

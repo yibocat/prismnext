@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { CircularProgress } from "@/components/ui/circular-progress";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
@@ -62,6 +63,7 @@ export function ContextWindowIndicator({
   promptStale = false,
   isStreaming = false,
 }: ContextWindowIndicatorProps) {
+  const { t } = useTranslation();
   const [compacting, setCompacting] = useState(false);
   const pct = total > 0 ? Math.round((used / total) * 100) : 0;
   const categories = breakdown && schema ? buildCategories(breakdown, schema) : [];
@@ -100,7 +102,7 @@ export function ContextWindowIndicator({
         <div className="space-y-3">
           {/* Header: total used / limit */}
           <div className="flex items-center justify-between text-[length:var(--font-chat-meta)]">
-            <span className="text-muted-foreground">Context window</span>
+            <span className="text-muted-foreground">{t("chat.context.window")}</span>
             <span className="font-medium text-foreground tabular-nums">
               {used.toLocaleString()} / {total.toLocaleString()}
             </span>
@@ -161,10 +163,8 @@ export function ContextWindowIndicator({
           )}
 
           <p className="text-[length:var(--font-hint)] text-foreground/60">
-            Category proportions are estimates only.
-            {promptStale && (
-              <> Base prompt was updated — it will refresh on your next message.</>
-            )}
+            {t("chat.context.estimates")}
+            {promptStale && <> {t("chat.context.promptStale")}</>}
           </p>
 
           <button
@@ -174,7 +174,7 @@ export function ContextWindowIndicator({
             className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border bg-muted/50 px-2.5 py-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Shrink className="size-3" />
-            {compacting ? "Compressing…" : "Compress context"}
+            {compacting ? t("chat.context.compressing") : t("chat.context.compress")}
           </button>
         </div>
       </HoverCardContent>

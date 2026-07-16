@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { FileTextIcon, Loader2Icon, MoreHorizontalIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
@@ -8,8 +9,6 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { openHiddenProjectFile } from "@/lib/files/open-project-path";
 import {
   EXTRACT_MAX_AUTO_RETRIES,
-  PAPER_EXTRACT_ACTION_LABEL,
-  PAPER_EXTRACT_METADATA_LABEL,
   pickBestReadySource,
 } from "../../../shared/paper-extract";
 import type { LiteraturePaper, PaperExtractSource } from "@/types/electron.d";
@@ -166,12 +165,13 @@ function ExtractOverflowMenu({
   actions: ReturnType<typeof useLiteratureAgentTextActions>;
   menuBtnClass?: string;
 }) {
+  const { t } = useTranslation();
   const { hasPdf, hasHtml, state, defaultEngine, handleEngine, handleCancel } = actions;
 
   return (
     <AppMenu>
       <AppMenuTrigger asChild>
-        <button type="button" className={menuBtnClass} title="Extract engines">
+        <button type="button" className={menuBtnClass} title={t("literature.extract.label")}>
           <MoreHorizontalIcon className="size-3.5" />
         </button>
       </AppMenuTrigger>
@@ -193,7 +193,7 @@ function ExtractOverflowMenu({
         {state === "busy" ? (
           <>
             <AppMenuSeparator />
-            <AppMenuItem onSelect={() => void handleCancel()}>Cancel extraction</AppMenuItem>
+            <AppMenuItem onSelect={() => void handleCancel()}>{t("common.cancel")}</AppMenuItem>
           </>
         ) : null}
       </AppMenuContent>
@@ -209,6 +209,7 @@ export function LiteratureAgentTextRow({
   paper: LiteraturePaper;
   actions?: ReturnType<typeof useLiteratureAgentTextActions>;
 }) {
+  const { t } = useTranslation();
   const progress = useLiteratureExtractStore((s) =>
     selectExtractProgressForPaper(s.progressByKey, paper.id),
   );
@@ -219,7 +220,6 @@ export function LiteratureAgentTextRow({
     state,
     source,
     failedState,
-    attemptsLeft,
     handlePrepare,
     handleOpenText,
     handleRetry,
@@ -233,59 +233,56 @@ export function LiteratureAgentTextRow({
     "flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 px-1 -mx-1 text-[length:var(--font-size-13)] leading-relaxed";
 
   return (
-    <MetadataRow label={PAPER_EXTRACT_METADATA_LABEL} className="items-center">
+    <MetadataRow label={t("literature.extract.label")} className="items-center">
       {state === "busy" ? (
         <div className={cn(valueClass, "text-foreground/85")}>
           <Loader2Icon className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-          <span className="truncate">{progress?.message ?? "Extracting text…"}</span>
+          <span className="truncate">{progress?.message ?? t("literature.extract.extracting")}</span>
           <ExtractOverflowMenu actions={actions} />
         </div>
       ) : state === "ready" && source ? (
         <div className={valueClass}>
           <span className="truncate text-emerald-700 dark:text-emerald-400">
-            Text extracted ({sourceShort(source)})
+            {t("literature.extract.ready", { source: sourceShort(source) })}
           </span>
           <span className="shrink-0 text-muted-foreground/60">·</span>
           <button
             type="button"
-            title="Open extracted Markdown"
+            title={t("literature.extract.openMarkdown")}
             className={cn(extractActionChipClass, "text-emerald-700 dark:text-emerald-400")}
             onClick={() => void handleOpenText()}
           >
-            open Markdown
+            {t("literature.extract.openMarkdown")}
           </button>
           <ExtractOverflowMenu actions={actions} />
         </div>
       ) : state === "failed" ? (
         <div className={valueClass}>
           <span className="truncate text-destructive">
-            {failedState?.error ?? "Extraction failed"}
+            {failedState?.error ?? t("literature.extract.retry")}
           </span>
           <span className="shrink-0 text-muted-foreground/60">·</span>
           <button
             type="button"
-            title={
-              failedState?.error ??
-              (attemptsLeft > 0 ? "Retry extraction" : "Retry (auto-retry exhausted)")
-            }
+            title={failedState?.error ?? t("literature.extract.retry")}
             className={cn(extractActionChipClass, "text-destructive")}
             onClick={() => void handleRetry()}
           >
-            retry
+            {t("literature.extract.retry")}
           </button>
           <ExtractOverflowMenu actions={actions} />
         </div>
       ) : state === "idle" ? (
         <div className={valueClass}>
-          <span className="truncate text-foreground/85">Not extracted</span>
+          <span className="truncate text-foreground/85">{t("literature.extract.notExtracted")}</span>
           <span className="shrink-0 text-muted-foreground/60">·</span>
           <button
             type="button"
-            title="Convert PDF to Markdown"
+            title={t("literature.extract.convert")}
             className={cn(extractActionChipClass, "text-foreground/90")}
             onClick={() => void handlePrepare()}
           >
-            {PAPER_EXTRACT_ACTION_LABEL.toLowerCase()}
+            {t("literature.batch.extract")}
           </button>
           {zoteroOnly ? (
             <span className="truncate text-muted-foreground/70">(copies PDF from Zotero)</span>
@@ -293,7 +290,7 @@ export function LiteratureAgentTextRow({
           <ExtractOverflowMenu actions={actions} />
         </div>
       ) : (
-        <p className={cn(valueClass, "text-foreground/85")}>Not extracted</p>
+        <p className={cn(valueClass, "text-foreground/85")}>{t("literature.extract.notExtracted")}</p>
       )}
     </MetadataRow>
   );
@@ -301,6 +298,7 @@ export function LiteratureAgentTextRow({
 
 /** Compact extract control for the literature reader tab toolbar (right edge). */
 export function LiteratureReaderExtractToolbar({ paper }: { paper: LiteraturePaper }) {
+  const { t } = useTranslation();
   const progress = useLiteratureExtractStore((s) =>
     selectExtractProgressForPaper(s.progressByKey, paper.id),
   );
@@ -310,7 +308,6 @@ export function LiteratureReaderExtractToolbar({ paper }: { paper: LiteraturePap
     state,
     source,
     failedState,
-    attemptsLeft,
     handlePrepare,
     handleOpenText,
     handleRetry,
@@ -324,11 +321,11 @@ export function LiteratureReaderExtractToolbar({ paper }: { paper: LiteraturePap
         <>
           <div
             className={cn(extractToolbarBtnClass, "max-w-[min(14rem,34vw)] flex-col items-stretch py-1")}
-            title={progress?.message ?? "Extracting text…"}
+            title={progress?.message ?? t("literature.extract.extracting")}
           >
             <div className="flex min-w-0 items-center gap-1.5">
               <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
-              <span className="truncate">{progress?.message ?? "Extracting…"}</span>
+              <span className="truncate">{progress?.message ?? t("literature.extract.extracting")}</span>
             </div>
             {progress?.percent != null ? (
               <Progress
@@ -343,7 +340,7 @@ export function LiteratureReaderExtractToolbar({ paper }: { paper: LiteraturePap
         <>
           <button
             type="button"
-            title={`Text extracted (${sourceShort(source)}) — open Markdown`}
+            title={t("literature.extract.ready", { source: sourceShort(source) })}
             className={cn(
               extractToolbarBtnClass,
               "text-emerald-700 hover:bg-accent dark:text-emerald-400",
@@ -351,7 +348,7 @@ export function LiteratureReaderExtractToolbar({ paper }: { paper: LiteraturePap
             onClick={() => void handleOpenText()}
           >
             <FileTextIcon className="size-3.5 shrink-0" />
-            <span className="truncate">Markdown</span>
+            <span className="truncate">{t("literature.extract.markdown")}</span>
           </button>
           <ExtractOverflowMenu actions={actions} menuBtnClass={extractToolbarMenuBtnClass} />
         </>
@@ -359,14 +356,11 @@ export function LiteratureReaderExtractToolbar({ paper }: { paper: LiteraturePap
         <>
           <button
             type="button"
-            title={
-              failedState?.error ??
-              (attemptsLeft > 0 ? "Retry extraction" : "Retry (auto-retry exhausted)")
-            }
+            title={failedState?.error ?? t("literature.extract.retry")}
             className={cn(extractToolbarBtnClass, "text-destructive hover:bg-destructive/10")}
             onClick={() => void handleRetry()}
           >
-            <span className="truncate">Retry extract</span>
+            <span className="truncate">{t("literature.extract.retry")}</span>
           </button>
           <ExtractOverflowMenu actions={actions} menuBtnClass={extractToolbarMenuBtnClass} />
         </>
@@ -374,7 +368,7 @@ export function LiteratureReaderExtractToolbar({ paper }: { paper: LiteraturePap
         <>
           <button
             type="button"
-            title="Convert PDF to Markdown"
+            title={t("literature.extract.convert")}
             className={cn(
               extractToolbarBtnClass,
               "text-muted-foreground hover:bg-accent hover:text-foreground",
@@ -382,7 +376,7 @@ export function LiteratureReaderExtractToolbar({ paper }: { paper: LiteraturePap
             onClick={() => void handlePrepare()}
           >
             <FileTextIcon className="size-3.5 shrink-0" />
-            <span className="truncate">{PAPER_EXTRACT_ACTION_LABEL}</span>
+            <span className="truncate">{t("literature.batch.extract")}</span>
           </button>
           <ExtractOverflowMenu actions={actions} menuBtnClass={extractToolbarMenuBtnClass} />
         </>

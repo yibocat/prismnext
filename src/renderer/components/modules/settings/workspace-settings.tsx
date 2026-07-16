@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { useDocumentStore } from "@/stores/document-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
@@ -7,7 +9,6 @@ import { useWorkspaceProjectAutosave } from "@/hooks/use-workspace-project-autos
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
-  FOLDER_FUNCTION_LABELS,
   DEFAULT_FUNCTION_DESCRIPTIONS,
   type WorkspaceFolder,
 } from "@/types/workspace";
@@ -40,9 +41,15 @@ function projectDisplayName(projectRoot: string): string {
   return parts[parts.length - 1] || projectRoot;
 }
 
-function folderSummary(folder: WorkspaceFolder): string {
-  const desc = folder.description || DEFAULT_FUNCTION_DESCRIPTIONS[folder.function];
-  if (!desc) return "No description";
+function folderSummary(folder: WorkspaceFolder, t: TFunction): string {
+  const desc =
+    folder.description ||
+    (folder.function === "custom"
+      ? null
+      : t(`settings.editor.workspaceFolder.functionDesc.${folder.function}`, {
+          defaultValue: DEFAULT_FUNCTION_DESCRIPTIONS[folder.function] ?? "",
+        }));
+  if (!desc) return t("common.noDescription");
   return desc.length > 120 ? `${desc.slice(0, 117)}…` : desc;
 }
 
@@ -93,6 +100,7 @@ function FolderSummaryRow({
   projectRoot?: string | null;
   showDisk?: boolean;
 }) {
+  const { t } = useTranslation();
   const onDisk = useFolderOnDisk(projectRoot ?? null, folder.name, Boolean(showDisk && projectRoot));
   const mainTex = folder.function === "manuscript" ? folder.mainTex : null;
 
@@ -103,12 +111,14 @@ function FolderSummaryRow({
           <WorkspaceFolderIcon
             name={resolveFolderIconName(folder)}
             className="size-3 shrink-0 text-muted-foreground/80"
-            title="Files tree badge"
+            title={t("settings.workspace.filesTreeBadge")}
           />
           <span className={ROW_LABEL}>{folder.name}</span>
-          <span className={BADGE}>{FOLDER_FUNCTION_LABELS[folder.function]}</span>
+          <span className={BADGE}>
+            {t(`settings.editor.workspaceFolder.functions.${folder.function}`)}
+          </span>
         </div>
-        <p className={cn(ROW_DESC, "line-clamp-2")}>{folderSummary(folder)}</p>
+        <p className={cn(ROW_DESC, "line-clamp-2")}>{folderSummary(folder, t)}</p>
         <p className="text-[length:var(--font-size-11)] text-muted-foreground/60 mt-0.5">
           {mainTex ? (
             <>
@@ -118,10 +128,10 @@ function FolderSummaryRow({
           ) : null}
           {showDisk && onDisk !== null
             ? onDisk
-              ? "On disk"
-              : "Not on disk"
+              ? t("settings.workspace.onDisk")
+              : t("settings.workspace.notOnDisk")
             : scope === "template"
-              ? "Template only"
+              ? t("settings.workspace.templateOnly")
               : null}
         </p>
       </div>
@@ -138,14 +148,18 @@ function FolderSummaryRow({
   );
 }
 
-function saveStatusText(status: ReturnType<typeof useWorkspaceProjectAutosave>): string | null {
-  if (status === "saving") return "Saving…";
-  if (status === "saved") return "Saved";
-  if (status === "error") return "Save failed";
+function saveStatusText(
+  status: ReturnType<typeof useWorkspaceProjectAutosave>,
+  t: TFunction,
+): string | null {
+  if (status === "saving") return t("common.saving");
+  if (status === "saved") return t("common.saved");
+  if (status === "error") return t("settings.workspace.saveFailed");
   return null;
 }
 
 export function WorkspaceSettings() {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const { workspaceDirs, loaded } = useWorkspaceConfigStore();
   const settings = useSettingsStore((s) => s.settings);
@@ -157,11 +171,11 @@ export function WorkspaceSettings() {
 
   const syncTemplateFromProject = () => {
     if (!projectRoot || workspaceDirs.length === 0) {
-      toast.error("Open a project with folders to sync.");
+      toast.error(t("settings.workspace.toast.openProjectSync"));
       return;
     }
     updateSettings({ defaultWorkspaceDirs: [...workspaceDirs] });
-    toast.success("Template updated from this project.");
+    toast.success(t("settings.workspace.toast.templateUpdated"));
   };
 
   const resetTemplateToAppDefault = () => {
@@ -169,7 +183,7 @@ export function WorkspaceSettings() {
       defaultWorkspaceDirs: appDefaultWorkspaceTemplate(),
       defaultDocClass: "article",
     });
-    toast.success("Template reset to app defaults.");
+    toast.success(t("settings.workspace.toast.templateReset"));
   };
 
   if (projectRoot && !loaded) {
@@ -177,14 +191,14 @@ export function WorkspaceSettings() {
       <div className="flex-1 overflow-auto">
         <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
           <div>
-            <h2 className="text-[length:var(--font-dialog-title)] font-semibold">Workspace</h2>
+            <h2 className="text-[length:var(--font-dialog-title)] font-semibold">{t("settings.workspace.title")}</h2>
             <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-              Research folder layout for this project and for new projects.
+              {t("settings.workspace.subtitle")}
             </p>
           </div>
           <div className={CARD}>
             <div className="py-4 px-1">
-              <p className={ROW_DESC}>Loading workspace configuration…</p>
+              <p className={ROW_DESC}>{t("settings.workspace.loading")}</p>
             </div>
           </div>
         </div>
@@ -192,22 +206,21 @@ export function WorkspaceSettings() {
     );
   }
 
-  const statusLabel = saveStatusText(saveStatus);
+  const statusLabel = saveStatusText(saveStatus, t);
 
   return (
     <div className="flex-1 overflow-auto">
       <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
         <div>
-          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">Workspace</h2>
+          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">{t("settings.workspace.title")}</h2>
           <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-            Folder layout for AI agents. Use Configure to edit names, descriptions, and manuscript
-            settings in the panel on the right.
+            {t("settings.workspace.pageDesc")}
           </p>
         </div>
 
         {projectRoot ? (
           <div>
-            <p className={CATEGORY_HEADER}>This project</p>
+            <p className={CATEGORY_HEADER}>{t("settings.workspace.thisProject")}</p>
             <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-2">
               <span className="font-medium text-foreground">{projectDisplayName(projectRoot)}</span>
               {statusLabel ? (
@@ -220,7 +233,7 @@ export function WorkspaceSettings() {
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <Button variant="outline" size="xs" onClick={() => openAddFolder("project")}>
                 <PlusIcon className="size-3 mr-1" />
-                Add folder
+                {t("settings.workspace.addFolder")}
               </Button>
             </div>
 
@@ -229,11 +242,11 @@ export function WorkspaceSettings() {
                 <div className="flex flex-col items-center gap-3 py-10 text-center">
                   <FolderIcon className="size-8 text-muted-foreground/30" />
                   <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-                    No folders configured.
+                    {t("settings.workspace.empty")}
                   </p>
                   <Button variant="outline" size="xs" onClick={() => openAddFolder("project")}>
                     <PlusIcon className="size-3 mr-1" />
-                    Add folder
+                    {t("settings.workspace.addFolder")}
                   </Button>
                 </div>
               ) : (
@@ -253,28 +266,22 @@ export function WorkspaceSettings() {
         ) : (
           <div className={CARD}>
             <div className="py-4 px-1">
-              <p className={ROW_DESC}>
-                Open a project to edit its live workspace. You can still configure the new-project
-                template below.
-              </p>
+              <p className={ROW_DESC}>{t("settings.workspace.openProjectHint")}</p>
             </div>
           </div>
         )}
 
         <div>
-          <p className={CATEGORY_HEADER}>New project template</p>
+          <p className={CATEGORY_HEADER}>{t("settings.workspace.newProjectTemplate")}</p>
           <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-2 leading-relaxed">
-            Used only when you create a new project — not applied to projects you have already
-            opened. Sync copies this project&apos;s folder list; folders edit via Configure.
+            {t("settings.workspace.templateDesc")}
           </p>
 
           <div className={cn(CARD, "mb-3")}>
             <div className={ROW}>
               <div className="min-w-0">
-                <span className={ROW_LABEL}>Initialize Git by default</span>
-                <p className={ROW_DESC}>
-                  New Project dialog starts with Git on. You can still turn it off per create.
-                </p>
+                <span className={ROW_LABEL}>{t("settings.workspace.initGit")}</span>
+                <p className={ROW_DESC}>{t("settings.workspace.initGitDesc")}</p>
               </div>
               <Switch
                 checked={defaultInitGit}
@@ -291,25 +298,25 @@ export function WorkspaceSettings() {
                 variant="ghost"
                 size="xs"
                 className="text-muted-foreground"
-                title="Sync from this project"
+                title={t("settings.workspace.syncTitle")}
                 onClick={syncTemplateFromProject}
               >
-                Sync
+                {t("common.sync")}
               </Button>
             ) : null}
             <Button
               variant="ghost"
               size="xs"
               className="text-muted-foreground"
-              title="Reset template to app default"
+              title={t("settings.workspace.resetTitle")}
               onClick={resetTemplateToAppDefault}
             >
               <RotateCcwIcon className="size-3 mr-1" />
-              Reset
+              {t("common.reset")}
             </Button>
             <Button variant="outline" size="xs" onClick={() => openAddFolder("template")}>
               <PlusIcon className="size-3 mr-1" />
-              Add folder
+              {t("settings.workspace.addFolder")}
             </Button>
           </div>
 
@@ -318,11 +325,11 @@ export function WorkspaceSettings() {
               <div className="flex flex-col items-center gap-3 py-10 text-center">
                 <FolderIcon className="size-8 text-muted-foreground/30" />
                 <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-                  No template folders.
+                  {t("settings.workspace.emptyTemplate")}
                 </p>
                 <Button variant="outline" size="xs" onClick={() => openAddFolder("template")}>
                   <PlusIcon className="size-3 mr-1" />
-                  Add folder
+                  {t("settings.workspace.addFolder")}
                 </Button>
               </div>
             ) : (

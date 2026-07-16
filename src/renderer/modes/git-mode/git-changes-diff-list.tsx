@@ -1,4 +1,5 @@
 import { useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useGitStore, type GitFileItem } from "@/stores/git-store";
 import { GitChangeFileRow } from "./git-change-file-row";
 import { GitChangesFilterDropdown } from "./git-changes-filter-dropdown";
@@ -20,6 +21,7 @@ function discardableFiles(files: GitFileItem[]): GitFileItem[] {
 }
 
 export function GitChangesDiffList({ files, gitRoot }: GitChangesDiffListProps) {
+  const { t } = useTranslation();
   const expandedChangeIds = useGitStore((s) => s.expandedChangeIds);
   const expandedSet = useMemo(() => new Set(expandedChangeIds), [expandedChangeIds]);
 
@@ -98,7 +100,7 @@ export function GitChangesDiffList({ files, gitRoot }: GitChangesDiffListProps) 
       {files.length === 0 ? (
         <div className="flex flex-1 items-center justify-center py-12">
           <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
-            No changes — working tree clean
+            {t("modes.git.emptyChanges")}
           </p>
         </div>
       ) : (

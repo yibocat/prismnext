@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import {
   CheckCircle2Icon,
   DownloadIcon,
@@ -41,6 +43,12 @@ type Status =
   | { kind: "error"; message: string }
   | { kind: "no-source" };
 
+type OpencodeInfo = {
+  available: boolean;
+  version: string | null;
+  error?: string;
+};
+
 function fromResult(result: UpdateCheckResult | null): Status {
   if (!result) return { kind: "idle" };
   switch (result.status) {
@@ -57,21 +65,18 @@ function fromResult(result: UpdateCheckResult | null): Status {
   }
 }
 
-function formatOpencodeVersion(info: {
-  available: boolean;
-  version: string | null;
-  error?: string;
-}): string {
-  if (!info.available) return "Not found";
+function formatOpencodeVersion(info: OpencodeInfo, t: TFunction): string {
+  if (!info.available) return t("settings.about.notFound");
   if (info.version) return info.version;
-  return info.error ? "Unavailable" : "—";
+  return info.error ? t("common.unavailable") : "—";
 }
 
 export function AboutSettings() {
+  const { t } = useTranslation();
   const { settings, updateSettings } = useSettingsStore();
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [appVersion, setAppVersion] = useState<string>("—");
-  const [opencodeVersion, setOpencodeVersion] = useState<string>("—");
+  const [opencodeInfo, setOpencodeInfo] = useState<OpencodeInfo | null>(null);
   const [sourceDraft, setSourceDraft] = useState(settings.updateSource ?? "");
   const [savedFlash, setSavedFlash] = useState(false);
 
@@ -88,11 +93,11 @@ export function AboutSettings() {
       .aboutGetVersions()
       .then((info) => {
         setAppVersion(info.appVersion || "—");
-        setOpencodeVersion(formatOpencodeVersion(info.opencode));
+        setOpencodeInfo(info.opencode);
       })
       .catch(() => {
         setAppVersion("—");
-        setOpencodeVersion("—");
+        setOpencodeInfo(null);
       });
   }, []);
 
@@ -149,25 +154,27 @@ export function AboutSettings() {
         ? status.currentVersion
         : "—";
 
+  const opencodeVersion = opencodeInfo ? formatOpencodeVersion(opencodeInfo, t) : "—";
+
   return (
     <div className="flex-1 overflow-auto">
       <div className="max-w-3xl mx-auto px-8 py-8 space-y-8">
         {/* ── Header ── */}
         <div>
-          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">About</h2>
+          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">{t("settings.about.title")}</h2>
           <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-            Version information and update checks.
+            {t("settings.about.subtitle")}
           </p>
         </div>
 
         {/* ── Version ── */}
         <div>
-          <h3 className={CATEGORY_HEADER}>Version</h3>
+          <h3 className={CATEGORY_HEADER}>{t("settings.about.version")}</h3>
           <div className={CARD}>
             <div className="flex items-center justify-between gap-3 py-2.5">
               <div className="min-w-0 flex-1 pr-4">
-                <p className={ROW_LABEL}>Prism Next</p>
-                <p className={ROW_DESC}>Installed application version.</p>
+                <p className={ROW_LABEL}>{t("settings.about.appName")}</p>
+                <p className={ROW_DESC}>{t("settings.about.appDesc")}</p>
               </div>
               <span className="font-mono text-[length:var(--font-size-13)] text-muted-foreground shrink-0">
                 {displayAppVersion}
@@ -175,8 +182,8 @@ export function AboutSettings() {
             </div>
             <div className="flex items-center justify-between gap-3 py-2.5 border-t border-border/60">
               <div className="min-w-0 flex-1 pr-4">
-                <p className={ROW_LABEL}>OpenCode</p>
-                <p className={ROW_DESC}>Bundled agent binary used for chat (ACP).</p>
+                <p className={ROW_LABEL}>{t("settings.about.opencode")}</p>
+                <p className={ROW_DESC}>{t("settings.about.opencodeDesc")}</p>
               </div>
               <span className="font-mono text-[length:var(--font-size-13)] text-muted-foreground shrink-0">
                 {opencodeVersion}
@@ -187,24 +194,21 @@ export function AboutSettings() {
 
         {/* ── Update source ── */}
         <div>
-          <h3 className={CATEGORY_HEADER}>Update source</h3>
+          <h3 className={CATEGORY_HEADER}>{t("settings.about.updateSource")}</h3>
           <div className={CARD}>
             <div className="px-1 py-3 space-y-3">
               <div className="px-1">
-                <p className={ROW_LABEL}>Manifest URL or local path</p>
-                <p className={ROW_DESC + " mb-2"}>
-                  A local file path or HTTPS URL pointing to a <code className="text-[length:var(--font-size-12)]">version.json</code>{" "}
-                  manifest. Leave empty to disable update checks.
-                </p>
+                <p className={ROW_LABEL}>{t("settings.about.manifestLabel")}</p>
+                <p className={ROW_DESC + " mb-2"}>{t("settings.about.manifestDesc")}</p>
                 <div className="flex gap-2">
                   <Input
                     value={sourceDraft}
                     onChange={(e) => setSourceDraft(e.target.value)}
-                    placeholder="/path/to/version.json  or  https://host/version.json"
+                    placeholder={t("settings.about.manifestPlaceholder")}
                     className="font-mono text-[length:var(--font-size-12)]"
                   />
                   <Button variant="outline" size="sm" onClick={saveSource} className="shrink-0">
-                    {savedFlash ? "Saved" : "Save"}
+                    {savedFlash ? t("common.saved") : t("common.save")}
                   </Button>
                 </div>
               </div>
@@ -214,18 +218,15 @@ export function AboutSettings() {
 
         {/* ── Check for updates ── */}
         <div>
-          <h3 className={CATEGORY_HEADER}>Check for updates</h3>
+          <h3 className={CATEGORY_HEADER}>{t("settings.about.checkForUpdates")}</h3>
           <div className={CARD}>
             <div className="px-1 py-3 space-y-3">
               <div className="flex items-center justify-between gap-3 px-1">
                 <div className="min-w-0 flex-1 pr-4">
                   <p className={ROW_LABEL}>
-                    {status.kind === "checking" ? "Checking…" : "Check now"}
+                    {status.kind === "checking" ? t("common.loading") : t("settings.about.checkNow")}
                   </p>
-                  <p className={ROW_DESC}>
-                    Compare the installed version against the manifest. New versions open in
-                    your browser for download.
-                  </p>
+                  <p className={ROW_DESC}>{t("settings.about.checkDesc")}</p>
                 </div>
                 <Button
                   variant="default"
@@ -239,20 +240,22 @@ export function AboutSettings() {
                   ) : (
                     <RefreshCwIcon />
                   )}
-                  Check for updates
+                  {t("settings.about.checkButton")}
                 </Button>
               </div>
 
               {status.kind === "up-to-date" && (
                 <StatusLine icon={<CheckCircle2Icon className="size-4 text-emerald-500" />}>
-                  You're on the latest version ({status.currentVersion}).
+                  {t("settings.about.upToDateDetail", { version: status.currentVersion })}
                 </StatusLine>
               )}
 
               {status.kind === "available" && (
                 <StatusLine icon={<DownloadIcon className="size-4 text-primary" />}>
                   <div className="flex-1">
-                    <p className={ROW_LABEL}>Version {status.latest.version} is available</p>
+                    <p className={ROW_LABEL}>
+                      {t("settings.about.availableLabel", { version: status.latest.version })}
+                    </p>
                     {status.latest.releaseNotes && (
                       <p className={ROW_DESC + " mt-1 whitespace-pre-wrap"}>
                         {status.latest.releaseNotes}
@@ -261,11 +264,11 @@ export function AboutSettings() {
                     <div className="flex gap-2 mt-2">
                       <Button variant="default" size="sm" onClick={onDownload}>
                         <DownloadIcon />
-                        Download update
+                        {t("settings.about.downloadUpdate")}
                       </Button>
                       <Button variant="ghost" size="sm" onClick={ignoreVersion}>
                         <EyeOffIcon />
-                        Skip this version
+                        {t("settings.about.skipVersion")}
                       </Button>
                     </div>
                   </div>
@@ -276,17 +279,19 @@ export function AboutSettings() {
                 <StatusLine icon={<EyeOffIcon className="size-4 text-muted-foreground" />}>
                   <div className="flex-1 flex items-center justify-between gap-3">
                     <div>
-                      <p className={ROW_LABEL}>Version {status.latest.version} is available</p>
-                      <p className={ROW_DESC}>You've skipped this version.</p>
+                      <p className={ROW_LABEL}>
+                        {t("settings.about.availableLabel", { version: status.latest.version })}
+                      </p>
+                      <p className={ROW_DESC}>{t("settings.about.skippedDetail")}</p>
                     </div>
                     <div className="flex gap-2 shrink-0">
                       <Button variant="outline" size="sm" onClick={onDownload}>
                         <DownloadIcon />
-                        Download
+                        {t("settings.about.download")}
                       </Button>
                       <Button variant="ghost" size="sm" onClick={unignoreVersion}>
                         <RotateCcwIcon />
-                        Unskip
+                        {t("settings.about.unskip")}
                       </Button>
                     </div>
                   </div>
@@ -297,12 +302,12 @@ export function AboutSettings() {
                 <StatusLine icon={<AlertTriangleIcon className="size-4 text-amber-500" />}>
                   <div className="flex-1 flex items-center justify-between gap-3">
                     <div>
-                      <p className={ROW_LABEL}>Check failed</p>
+                      <p className={ROW_LABEL}>{t("settings.about.checkFailedLabel")}</p>
                       <p className={ROW_DESC + " font-mono"}>{status.message}</p>
                     </div>
                     <Button variant="ghost" size="sm" onClick={doCheck} className="shrink-0">
                       <RefreshCwIcon />
-                      Retry
+                      {t("settings.about.retry")}
                     </Button>
                   </div>
                 </StatusLine>
@@ -311,10 +316,8 @@ export function AboutSettings() {
               {status.kind === "no-source" && (
                 <StatusLine icon={<AlertTriangleIcon className="size-4 text-amber-500" />}>
                   <div className="flex-1">
-                    <p className={ROW_LABEL}>No update source configured</p>
-                    <p className={ROW_DESC}>
-                      Set a manifest URL or local path above to enable update checks.
-                    </p>
+                    <p className={ROW_LABEL}>{t("settings.about.noSourceLabel")}</p>
+                    <p className={ROW_DESC}>{t("settings.about.noSourceDetail")}</p>
                   </div>
                 </StatusLine>
               )}

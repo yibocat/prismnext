@@ -62,8 +62,10 @@ export interface RightTab {
 export interface ModeDefinition {
   /** 唯一标识，用作工具栏按钮 key 和 layout-store activeModes 的元素 */
   id: string;
-  /** 工具栏显示标签 */
+  /** 工具栏显示标签（英文回退；UI 优先用 labelKey） */
   label: string;
+  /** i18n key for toolbar label, e.g. modes.git.label */
+  labelKey?: string;
   /** 工具栏图标 (JSX element) */
   icon: ReactNode;
   /** 该模式拥有的 tab 类型。第一个 = 点击模式按钮时默认创建的 tab 类型 */
@@ -74,8 +76,10 @@ export interface ModeDefinition {
   showInModeToolbar?: boolean;
   /** persistent: 最后 tab 关闭时重生 home tab；transient: 去激活模式 */
   persistence: "persistent" | "transient";
-  /** home / initial tab 默认标题 */
+  /** home / initial tab 默认标题（英文回退；UI 优先用 initialTitleKey） */
   initialTitle: string;
+  /** i18n key for initial / home tab title */
+  initialTitleKey?: string;
   /** 侧边栏组件；省略则不显示 RightArea 模式侧栏 */
   Sidebar?: ComponentType;
   /** 为 true 时隐藏 RightArea 右侧模式侧栏（如文献库内联详情） */

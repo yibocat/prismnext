@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { filterLogEntries, useLogStore } from "@/stores/log-store";
 import { logBuffer } from "@/services/logger";
 import { cn } from "@/lib/utils";
@@ -18,25 +19,19 @@ import {
   ScrollTextIcon,
 } from "lucide-react";
 
-const CATEGORIES: { value: LogCategory | "all"; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "startup", label: "Startup" },
-  { value: "git", label: "Git" },
-  { value: "agent", label: "Agent" },
-  { value: "compile", label: "Compile" },
-  { value: "fs", label: "Files" },
-  { value: "ipc", label: "IPC" },
-  { value: "general", label: "General" },
+const CATEGORY_VALUES: Array<LogCategory | "all"> = [
+  "all",
+  "startup",
+  "git",
+  "agent",
+  "compile",
+  "fs",
+  "ipc",
+  "general",
 ];
 
 /** Mutually exclusive level tabs — each shows only that level; All shows everything. */
-const LEVELS: { value: LogLevel | "all"; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "debug", label: "Debug" },
-  { value: "info", label: "Info" },
-  { value: "warn", label: "Warn" },
-  { value: "error", label: "Error" },
-];
+const LEVEL_VALUES: Array<LogLevel | "all"> = ["all", "debug", "info", "warn", "error"];
 
 const LEVEL_BADGE: Record<LogLevel, string> = {
   debug: "bg-muted text-muted-foreground",
@@ -85,6 +80,7 @@ function LevelChip({
   count?: number;
   onClick: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <button
       type="button"
@@ -95,7 +91,11 @@ function LevelChip({
           ? "bg-muted text-foreground"
           : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
       )}
-      title={level === "all" ? "Show all levels" : `Show ${level} only`}
+      title={
+        level === "all"
+          ? t("settings.editor.logs.showAllLevels")
+          : t("settings.editor.logs.showLevelOnly", { level })
+      }
     >
       {level !== "all" && (
         <span className={cn("size-1.5 rounded-full", LEVEL_DOT[level])} />
@@ -163,6 +163,7 @@ function safeStringify(value: unknown): string {
 }
 
 export function LogViewer() {
+  const { t } = useTranslation();
   const mainEntries = useLogStore((s) => s.mainEntries);
   const fetchMainLogs = useLogStore((s) => s.fetchMainLogs);
 
@@ -188,8 +189,8 @@ export function LogViewer() {
 
   useEffect(() => {
     if (!autoRefresh) return;
-    const t = setInterval(() => void fetchMainLogs(), 5000);
-    return () => clearInterval(t);
+    const intervalId = setInterval(() => void fetchMainLogs(), 5000);
+    return () => clearInterval(intervalId);
   }, [autoRefresh, fetchMainLogs, filterCategory]);
 
   useEffect(() => {
@@ -230,9 +231,9 @@ export function LogViewer() {
   const emptyMessage =
     search || filterCategory !== "all" || filterLevel !== "all"
       ? filterLevel !== "all"
-        ? `No ${filterLevel} logs in the current view.`
-        : "No logs match the current filters."
-      : "No logs yet.";
+        ? t("settings.editor.logs.emptyLevel", { level: filterLevel })
+        : t("settings.editor.logs.emptyFiltered")
+      : t("settings.editor.logs.empty");
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
@@ -247,9 +248,9 @@ export function LogViewer() {
               <AppSelectValue />
             </AppSelectTrigger>
             <AppSelectContent className="min-w-[var(--radix-select-trigger-width)]">
-              {CATEGORIES.map((c) => (
-                <AppSelectItem key={c.value} value={c.value}>
-                  {c.label}
+              {CATEGORY_VALUES.map((value) => (
+                <AppSelectItem key={value} value={value}>
+                  {t(`settings.editor.logs.category.${value}`)}
                 </AppSelectItem>
               ))}
             </AppSelectContent>
@@ -260,14 +261,14 @@ export function LogViewer() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search messages & modules…"
+              placeholder={t("settings.editor.logs.searchPlaceholder")}
               className="min-w-0 flex-1 bg-transparent text-[length:var(--font-size-12)] outline-none placeholder:text-muted-foreground/50"
             />
             {search && (
               <button
                 onClick={() => setSearch("")}
                 className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground"
-                title="Clear search"
+                title={t("settings.editor.logs.clearSearch")}
               >
                 <XIcon className="size-3" />
               </button>
@@ -277,14 +278,14 @@ export function LogViewer() {
           <button
             onClick={() => void fetchMainLogs()}
             className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            title="Refresh"
+            title={t("settings.editor.logs.refresh")}
           >
             <RotateCwIcon className="size-3.5" />
           </button>
           <button
             onClick={handleExport}
             className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            title="Export logs"
+            title={t("settings.editor.logs.export")}
           >
             <DownloadIcon className="size-3.5" />
           </button>
@@ -293,14 +294,14 @@ export function LogViewer() {
         {/* ── Level tabs (exclusive) ── */}
         <div className="flex items-center justify-between gap-1">
           <div className="flex items-center gap-0.5">
-            {LEVELS.map((l) => (
+            {LEVEL_VALUES.map((value) => (
               <LevelChip
-                key={l.value}
-                level={l.value}
-                label={l.label}
-                active={filterLevel === l.value}
-                count={l.value === "all" ? counts.total : counts.byLevel[l.value]}
-                onClick={() => setFilterLevel(l.value)}
+                key={value}
+                level={value}
+                label={t(`settings.editor.logs.level.${value}`)}
+                active={filterLevel === value}
+                count={value === "all" ? counts.total : counts.byLevel[value]}
+                onClick={() => setFilterLevel(value)}
               />
             ))}
           </div>
@@ -312,9 +313,11 @@ export function LogViewer() {
                 onChange={(e) => setAutoRefresh(e.target.checked)}
                 className="size-2.5 accent-primary"
               />
-              Auto
+              {t("settings.editor.logs.auto")}
             </label>
-            <span className="tabular-nums">{visibleEntries.length} shown</span>
+            <span className="tabular-nums">
+              {t("settings.editor.logs.shown", { count: visibleEntries.length })}
+            </span>
           </div>
         </div>
 
@@ -323,13 +326,13 @@ export function LogViewer() {
             {errorCount > 0 && (
               <span className="inline-flex items-center gap-1 text-red-500">
                 <span className="size-1.5 rounded-full bg-red-500" />
-                {errorCount} error{errorCount > 1 ? "s" : ""}
+                {t("settings.editor.logs.errors", { count: errorCount })}
               </span>
             )}
             {warnCount > 0 && (
               <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-500">
                 <span className="size-1.5 rounded-full bg-amber-500" />
-                {warnCount} warning{warnCount > 1 ? "s" : ""}
+                {t("settings.editor.logs.warnings", { count: warnCount })}
               </span>
             )}
           </div>
@@ -347,7 +350,7 @@ export function LogViewer() {
             <ScrollTextIcon className="size-6" />
             <p className="text-[length:var(--font-size-12)]">{emptyMessage}</p>
             <p className="text-[length:var(--font-size-11)] text-muted-foreground/40">
-              Activity from the main process and UI will appear here.
+              {t("settings.editor.logs.activityHint")}
             </p>
           </div>
         ) : (

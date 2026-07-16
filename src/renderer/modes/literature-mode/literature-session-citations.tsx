@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { BookOpenIcon, Loader2Icon } from "lucide-react";
 import { useCitationStagingStore, EMPTY_STAGED_CITATIONS, isCitationInLibrary } from "@/stores/citation-staging-store";
 import { useChatStore } from "@/stores/chat-store";
@@ -140,6 +141,7 @@ interface Props {
 }
 
 export function LiteratureSessionCitations({ highlightRefId, onHighlightConsumed }: Props) {
+  const { t } = useTranslation();
   const chatSessionId = useChatStore((s) => s.sessionId);
   const panelHidden = useCitationStagingStore(
     (s) => (chatSessionId ? Boolean(s.panelHiddenSessions[chatSessionId]) : false),
@@ -185,7 +187,7 @@ export function LiteratureSessionCitations({ highlightRefId, onHighlightConsumed
     return (
       <div className="flex flex-1 items-center justify-center px-6 text-center">
         <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
-          Open a chat tab to see its citations.
+          {t("literature.citations.openChat")}
         </p>
       </div>
     );
@@ -197,13 +199,13 @@ export function LiteratureSessionCitations({ highlightRefId, onHighlightConsumed
         <BookOpenIcon className="size-6 text-muted-foreground/40" />
         <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
           {panelHidden
-            ? "Session citations cleared from this panel."
-            : "AI-referenced papers in this chat will appear here."}
+            ? t("literature.citations.cleared")
+            : t("literature.citations.empty")}
         </p>
         <p className="text-[length:var(--font-size-11)] text-muted-foreground/60">
           {panelHidden
-            ? "Click [n] in the chat to open a citation here again."
-            : "Click a citation like [1] in the chat to jump here."}
+            ? t("literature.citations.clearedHint")
+            : t("literature.citations.emptyHint")}
         </p>
       </div>
     );
@@ -216,10 +218,18 @@ export function LiteratureSessionCitations({ highlightRefId, onHighlightConsumed
           <span className="shrink-0 w-7 text-[length:var(--font-size-11)] text-muted-foreground/60 font-mono">
             #
           </span>
-          <span className={cn(LITERATURE_COL_TITLE, literatureListHeaderLabelClass)}>Title</span>
-          <span className={cn(LITERATURE_COL_AUTHORS, literatureListHeaderLabelClass)}>Authors</span>
-          <span className={cn(LITERATURE_COL_VENUE, literatureListHeaderLabelClass)}>Publication</span>
-          <span className={cn(LITERATURE_COL_YEAR, literatureListHeaderLabelClass)}>Year</span>
+          <span className={cn(LITERATURE_COL_TITLE, literatureListHeaderLabelClass)}>
+            {t("modes.literature.colTitle")}
+          </span>
+          <span className={cn(LITERATURE_COL_AUTHORS, literatureListHeaderLabelClass)}>
+            {t("literature.detail.authors")}
+          </span>
+          <span className={cn(LITERATURE_COL_VENUE, literatureListHeaderLabelClass)}>
+            {t("literature.detail.publication")}
+          </span>
+          <span className={cn(LITERATURE_COL_YEAR, literatureListHeaderLabelClass)}>
+            {t("literature.detail.year")}
+          </span>
           <span className="ml-auto shrink-0" />
         </div>
         <div className={literatureListBodyClass}>

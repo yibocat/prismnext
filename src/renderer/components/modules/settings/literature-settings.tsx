@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
@@ -18,7 +20,6 @@ import type { LiteratureStorageStats, ZoteroStatus } from "@/types/electron.d";
 import {
   isLiteratureAiMetadataConfigured,
   literatureAiMetadataModelLabel,
-  LITERATURE_AI_METADATA_SETUP_HINT,
 } from "../../../../shared/literature-ai-metadata-model";
 
 const CARD = "rounded-lg border border-border px-4 divide-y divide-border";
@@ -28,7 +29,7 @@ const ROW_DESC = "text-[length:var(--font-size-12)] text-muted-foreground mt-0.5
 const SECTION_TITLE = "text-[length:var(--font-size-14)] font-semibold";
 const SECTION_DESC = "text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5";
 
-function statusLabel(status: ZoteroStatus): string {
+function statusLabel(status: ZoteroStatus, t: TFunction): string {
   if (status.mode === "local") {
     const parts = ["Zotero desktop"];
     if (status.bbtInstalled) parts.push("Better BibTeX");
@@ -36,14 +37,17 @@ function statusLabel(status: ZoteroStatus): string {
     if (status.webReachable) parts.push("Web API");
     const canEditCollections = status.bbtDebugBridge || status.webReachable;
     const suffix = canEditCollections
-      ? "collection edits OK"
+      ? t("settings.literaturePage.status.collectionEditsOk")
       : status.bbtInstalled
-        ? "read-only collections (add Web API or debug-bridge plugin)"
-        : "read-only collections (add Web API)";
-    return `Connected (${parts.join(" + ")}) — ${suffix}`;
+        ? t("settings.literaturePage.status.readOnlyBbt")
+        : t("settings.literaturePage.status.readOnlyWeb");
+    return t("settings.literaturePage.status.connectedLocal", {
+      parts: parts.join(" + "),
+      suffix,
+    });
   }
-  if (status.mode === "web") return "Connected (Zotero web API)";
-  return status.error ?? "Not connected";
+  if (status.mode === "web") return t("settings.literaturePage.status.connectedWeb");
+  return status.error ?? t("settings.literaturePage.status.notConnected");
 }
 
 function formatBytes(bytes: number): string {
@@ -54,6 +58,7 @@ function formatBytes(bytes: number): string {
 }
 
 export function LiteratureSettings() {
+  const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
@@ -135,14 +140,17 @@ export function LiteratureSettings() {
       await loadStorageStats();
       await refreshPdfCacheStatus(projectRoot);
       if (result.deletedFiles === 0) {
-        toast.success("No unused PDF files to remove");
+        toast.success(t("settings.literaturePage.toast.noUnusedPdf"));
       } else {
         toast.success(
-          `Removed ${result.deletedFiles} unused PDF file${result.deletedFiles === 1 ? "" : "s"} (${formatBytes(result.freedBytes)})`,
+          t("settings.literaturePage.toast.removedUnusedPdf", {
+            count: result.deletedFiles,
+            bytes: formatBytes(result.freedBytes),
+          }),
         );
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Cleanup failed");
+      toast.error(err instanceof Error ? err.message : t("settings.literaturePage.toast.cleanupFailed"));
     } finally {
       setPruning(false);
     }
@@ -159,56 +167,64 @@ export function LiteratureSettings() {
     <div className="flex-1 overflow-auto">
       <div className="max-w-3xl mx-auto px-8 py-8 space-y-8">
         <div>
-          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">Literature</h2>
-          <p className={SECTION_DESC}>
-            Project library storage and optional Zotero integration. PDFs opened from Zotero are
-            cached under <span className="font-mono text-[length:var(--font-size-11)]">.prismnext/library/attachments/</span>.
-          </p>
+          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">{t("settings.literaturePage.title")}</h2>
+          <p className={SECTION_DESC}>{t("settings.literaturePage.pageDesc")}</p>
         </div>
 
         <div className="space-y-3">
           <div>
-            <h3 className={SECTION_TITLE}>Library storage</h3>
-            <p className={SECTION_DESC}>
-              Cached PDFs stay until you delete the entry or remove unreferenced files below.
-            </p>
+            <h3 className={SECTION_TITLE}>{t("settings.literaturePage.libraryStorage")}</h3>
+            <p className={SECTION_DESC}>{t("settings.literaturePage.storageDesc")}</p>
           </div>
           <div className={CARD}>
             <div className={ROW}>
               <div>
-                <p className={ROW_LABEL}>Project</p>
+                <p className={ROW_LABEL}>{t("settings.literaturePage.rows.project")}</p>
                 <p className={ROW_DESC}>
-                  {projectRoot ? "Current open project" : "Open a project to manage its library cache."}
+                  {projectRoot
+                    ? t("settings.literaturePage.rowDesc.currentProject")
+                    : t("settings.literaturePage.rowDesc.openProjectCache")}
                 </p>
               </div>
             </div>
             <div className={ROW}>
               <div>
-                <p className={ROW_LABEL}>Cached PDFs</p>
+                <p className={ROW_LABEL}>{t("settings.literaturePage.rows.cachedPdfs")}</p>
                 <p className={ROW_DESC}>
                   {storageLoading
-                    ? "Calculating…"
+                    ? t("common.calculating")
                     : !projectRoot
                       ? "—"
                       : storageStats
-                        ? `${storageStats.attachmentCount} file${storageStats.attachmentCount === 1 ? "" : "s"} · ${formatBytes(storageStats.attachmentBytes)} total`
-                        : "Unavailable"}
+                        ? t("settings.literaturePage.rowDesc.cachedFiles", {
+                            count: storageStats.attachmentCount,
+                            bytes: formatBytes(storageStats.attachmentBytes),
+                          })
+                        : t("common.unavailable")}
                 </p>
               </div>
             </div>
             <div className={ROW}>
               <div>
-                <p className={ROW_LABEL}>Unused files</p>
+                <p className={ROW_LABEL}>{t("settings.literaturePage.rows.unusedFiles")}</p>
                 <p className={ROW_DESC}>
                   {storageLoading
-                    ? "Calculating…"
+                    ? t("common.calculating")
                     : !projectRoot
                       ? "—"
                       : storageStats
                         ? storageStats.orphanCount > 0 || storageStats.legacyPdfCacheBytes > 0
-                          ? `${storageStats.orphanCount} unreferenced PDF${storageStats.orphanCount === 1 ? "" : "s"} (${formatBytes(storageStats.orphanBytes + storageStats.legacyPdfCacheBytes)}${storageStats.legacyPdfCacheBytes ? ", includes legacy cache" : ""})`
-                          : "No unreferenced PDF files"
-                        : "Unavailable"}
+                          ? t("settings.literaturePage.rowDesc.unusedSummary", {
+                              count: storageStats.orphanCount,
+                              bytes: formatBytes(
+                                storageStats.orphanBytes + storageStats.legacyPdfCacheBytes,
+                              ),
+                              legacy: storageStats.legacyPdfCacheBytes
+                                ? t("settings.literaturePage.rowDesc.unusedLegacy")
+                                : "",
+                            })
+                          : t("settings.literaturePage.rowDesc.noUnused")
+                        : t("common.unavailable")}
                 </p>
               </div>
               <Button
@@ -223,7 +239,7 @@ export function LiteratureSettings() {
                 ) : (
                   <Trash2Icon className="size-3 mr-1" />
                 )}
-                Clean up
+                {t("settings.literaturePage.actions.cleanUp")}
               </Button>
             </div>
           </div>
@@ -231,18 +247,14 @@ export function LiteratureSettings() {
 
         <div className="space-y-3">
           <div>
-            <h3 className={SECTION_TITLE}>PDF extraction</h3>
-            <p className={SECTION_DESC}>
-              Agent and Literature panel read cached Markdown under{" "}
-              <span className="font-mono text-[length:var(--font-size-11)]">.prismnext/library/extract/</span>.
-              MinerU (cloud) uploads PDFs for precision parsing when a token is set.
-            </p>
+            <h3 className={SECTION_TITLE}>{t("settings.literaturePage.pdfExtraction")}</h3>
+            <p className={SECTION_DESC}>{t("settings.literaturePage.extractDesc")}</p>
           </div>
           <div className={CARD}>
             <div className={ROW}>
               <div>
-                <p className={ROW_LABEL}>Default engine</p>
-                <p className={ROW_DESC}>Used for Re-extract and agent auto-extract preference.</p>
+                <p className={ROW_LABEL}>{t("settings.literaturePage.rows.defaultEngine")}</p>
+                <p className={ROW_DESC}>{t("settings.literaturePage.rowDesc.defaultEngine")}</p>
               </div>
               <select
                 className="h-7 rounded-md border border-border bg-background px-2 text-[length:var(--font-size-12)]"
@@ -253,23 +265,20 @@ export function LiteratureSettings() {
                   })
                 }
               >
-                <option value="pdfjs">Built-in (pdfjs, local)</option>
-                <option value="mineru">MinerU (cloud, precision)</option>
+                <option value="pdfjs">{t("settings.literaturePage.options.pdfjs")}</option>
+                <option value="mineru">{t("settings.literaturePage.options.mineru")}</option>
               </select>
             </div>
             <div className={ROW}>
               <div>
-                <p className={ROW_LABEL}>MinerU API token</p>
-                <p className={ROW_DESC}>
-                  Optional — leave empty for free flash mode (10MB / 20 pages). Token enables precision
-                  extract (up to 200MB / 200 pages). PDF is sent to MinerU servers.
-                </p>
+                <p className={ROW_LABEL}>{t("settings.literaturePage.rows.mineruToken")}</p>
+                <p className={ROW_DESC}>{t("settings.literaturePage.rowDesc.mineruToken")}</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <Input
                   type={showMineruKey ? "text" : "password"}
                   className="!h-7 !text-[length:var(--font-size-12)] w-48"
-                  placeholder="Bearer token…"
+                  placeholder={t("settings.literaturePage.placeholders.mineruToken")}
                   value={(settings.mineruApiToken as string) || ""}
                   onChange={(e) => {
                     updateSettings({ mineruApiToken: e.target.value });
@@ -284,8 +293,10 @@ export function LiteratureSettings() {
             </div>
             <div className={ROW}>
               <div>
-                <p className={ROW_LABEL}>MinerU connection</p>
-                <p className={ROW_DESC}>{mineruStatus ?? "Test token or flash availability."}</p>
+                <p className={ROW_LABEL}>{t("settings.literaturePage.rows.mineruConnection")}</p>
+                <p className={ROW_DESC}>
+                  {mineruStatus ?? t("settings.literaturePage.rowDesc.mineruTestHint")}
+                </p>
               </div>
               <Button
                 size="sm"
@@ -301,13 +312,13 @@ export function LiteratureSettings() {
                 ) : mineruTestOk === false ? (
                   <XCircleIcon className="size-3 mr-1 text-destructive" />
                 ) : null}
-                Test connection
+                {t("common.testConnection")}
               </Button>
             </div>
             <div className={ROW}>
               <div>
-                <p className={ROW_LABEL}>Auto-extract on import</p>
-                <p className={ROW_DESC}>Queue extraction when a PDF is added to the library.</p>
+                <p className={ROW_LABEL}>{t("settings.literaturePage.rows.autoExtract")}</p>
+                <p className={ROW_DESC}>{t("settings.literaturePage.rowDesc.autoExtract")}</p>
               </div>
               <Switch
                 checked={Boolean(settings.literatureAutoExtractOnImport)}
@@ -318,21 +329,18 @@ export function LiteratureSettings() {
             </div>
             <div className={ROW}>
               <div className="min-w-0 flex-1 pr-4">
-                <p className={ROW_LABEL}>Auto-generate summary & keywords</p>
+                <p className={ROW_LABEL}>{t("settings.literaturePage.rows.autoAiMetadata")}</p>
                 <p className={ROW_DESC}>
-                  After PDF text extraction, generate a one-sentence summary and add keywords to
-                  Tags (small token cost per paper).
+                  {t("settings.literaturePage.rowDesc.autoAiMetadata")}
                   {aiMetadataReady && aiMetadataModelLabel ? (
                     <>
                       {" "}
-                      Uses{" "}
-                      <span className="font-mono text-[length:var(--font-size-11)] text-foreground/80">
-                        {aiMetadataModelLabel}
-                      </span>{" "}
-                      — the same provider and model as Settings → AI.
+                      {t("settings.literaturePage.rowDesc.autoAiUses", {
+                        model: aiMetadataModelLabel,
+                      })}
                     </>
                   ) : (
-                    <> {LITERATURE_AI_METADATA_SETUP_HINT}</>
+                    <> {t("settings.literaturePage.rowDesc.autoAiSetup")}</>
                   )}
                 </p>
               </div>
@@ -341,7 +349,7 @@ export function LiteratureSettings() {
                 disabled={!aiMetadataReady}
                 onCheckedChange={(checked) => {
                   if (checked && !aiMetadataReady) {
-                    toast.error(LITERATURE_AI_METADATA_SETUP_HINT);
+                    toast.error(t("settings.literaturePage.rowDesc.autoAiSetup"));
                     return;
                   }
                   void updateSettings({ literatureAutoAiMetadata: checked });
@@ -350,10 +358,8 @@ export function LiteratureSettings() {
             </div>
             <div className={ROW}>
               <div>
-                <p className={ROW_LABEL}>Strict intensive PDF reading</p>
-                <p className={ROW_DESC}>
-                  Agent may read PDF body text only for papers in the chat intensive reading list.
-                </p>
+                <p className={ROW_LABEL}>{t("settings.literaturePage.rows.strictIntensive")}</p>
+                <p className={ROW_DESC}>{t("settings.literaturePage.rowDesc.strictIntensive")}</p>
               </div>
               <Switch
                 checked={settings.literatureStrictIntensivePdf !== false}
@@ -367,23 +373,20 @@ export function LiteratureSettings() {
 
         <div className="space-y-3">
           <div>
-            <h3 className={SECTION_TITLE}>Zotero</h3>
-            <p className={SECTION_DESC}>
-              Optional — stream PDFs from Zotero desktop when running. Better BibTeX enables
-              citekeys; collection edits need Web API credentials or the debug-bridge add-on.
-            </p>
+            <h3 className={SECTION_TITLE}>{t("settings.literaturePage.zotero")}</h3>
+            <p className={SECTION_DESC}>{t("settings.literaturePage.zoteroDesc")}</p>
           </div>
           <div className={CARD}>
             <div className={ROW}>
               <div>
-                <p className={ROW_LABEL}>API Key</p>
-                <p className={ROW_DESC}>From zotero.org/settings/keys — needed when desktop is off.</p>
+                <p className={ROW_LABEL}>{t("settings.literaturePage.rows.apiKey")}</p>
+                <p className={ROW_DESC}>{t("settings.literaturePage.rowDesc.apiKey")}</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <Input
                   type={showKey ? "text" : "password"}
                   className="!h-7 !text-[length:var(--font-size-12)] w-48"
-                  placeholder="Enter key…"
+                  placeholder={t("settings.literaturePage.placeholders.apiKey")}
                   value={settings.zoteroApiKey || ""}
                   onChange={(e) => updateSettings({ zoteroApiKey: e.target.value })}
                 />
@@ -394,8 +397,8 @@ export function LiteratureSettings() {
             </div>
             <div className={ROW}>
               <div>
-                <p className={ROW_LABEL}>User ID</p>
-                <p className={ROW_DESC}>Numeric user ID from the same keys page.</p>
+                <p className={ROW_LABEL}>{t("settings.literaturePage.rows.userId")}</p>
+                <p className={ROW_DESC}>{t("settings.literaturePage.rowDesc.userId")}</p>
               </div>
               <Input
                 className="!h-7 !text-[length:var(--font-size-12)] w-48"
@@ -406,9 +409,11 @@ export function LiteratureSettings() {
             </div>
             <div className={ROW}>
               <div>
-                <p className={ROW_LABEL}>Connection</p>
+                <p className={ROW_LABEL}>{t("settings.literaturePage.rows.connection")}</p>
                 <p className={ROW_DESC}>
-                  {status ? statusLabel(status) : "Test after saving credentials or starting Zotero."}
+                  {status
+                    ? statusLabel(status, t)
+                    : t("settings.literaturePage.rowDesc.connectionHint")}
                 </p>
               </div>
               <Button
@@ -425,7 +430,7 @@ export function LiteratureSettings() {
                 ) : status ? (
                   <XCircleIcon className="size-3 mr-1 text-destructive" />
                 ) : null}
-                Test connection
+                {t("common.testConnection")}
               </Button>
             </div>
           </div>

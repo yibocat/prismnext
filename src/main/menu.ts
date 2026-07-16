@@ -1,8 +1,27 @@
 import { app, Menu, BrowserWindow } from "electron";
+import { getSettings } from "./services/settings";
+import {
+  normalizeAppLocalePreference,
+  resolveAppLocale,
+} from "../shared/app-locale";
+import { menuStrings } from "../shared/menu-i18n";
+
+let getMainWindowRef: (() => BrowserWindow | null) | null = null;
+
+/** Rebuild menu after `appLocale` changes. */
+export function refreshApplicationMenu(): void {
+  if (getMainWindowRef) installApplicationMenu(getMainWindowRef);
+}
 
 /** Override macOS/Electron default Cmd+W (close window) → close tab in renderer. */
 export function installApplicationMenu(getMainWindow: () => BrowserWindow | null): void {
+  getMainWindowRef = getMainWindow;
   const isMac = process.platform === "darwin";
+  const resolved = resolveAppLocale(
+    normalizeAppLocalePreference(getSettings().appLocale),
+    app.getLocale(),
+  );
+  const t = menuStrings(resolved);
 
   const sendCloseTab = () => {
     const win = getMainWindow();
@@ -31,10 +50,10 @@ export function installApplicationMenu(getMainWindow: () => BrowserWindow | null
         ]
       : []),
     {
-      label: "File",
+      label: t.file,
       submenu: [
         {
-          label: "Close Tab",
+          label: t.closeTab,
           accelerator: "CmdOrCtrl+W",
           click: sendCloseTab,
         },
@@ -45,7 +64,7 @@ export function installApplicationMenu(getMainWindow: () => BrowserWindow | null
       ],
     },
     {
-      label: "Edit",
+      label: t.edit,
       submenu: [
         { role: "undo" as const },
         { role: "redo" as const },
@@ -57,7 +76,7 @@ export function installApplicationMenu(getMainWindow: () => BrowserWindow | null
       ],
     },
     {
-      label: "View",
+      label: t.view,
       submenu: [
         { role: "reload" as const },
         { role: "forceReload" as const },

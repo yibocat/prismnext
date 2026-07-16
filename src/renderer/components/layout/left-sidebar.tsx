@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback, useRef, useMemo, memo, type RefObject
 import { createPortal } from "react-dom";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useTheme } from "next-themes";
+import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "@/stores/layout-store";
+import { displayChatTitle } from "@/lib/i18n/display-chat-title";
 import { useChatStore, type ChatStreamMessage } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
@@ -123,13 +125,13 @@ function tabTitlesFromKey(key: string): Map<string, string> {
   return map;
 }
 
-function relativeTime(ms: number): string {
+function relativeTime(ms: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
   const diff = Date.now() - ms;
   const sec = Math.floor(diff / 1000);
-  if (sec < 60) return "just now";
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
-  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
-  return `${Math.floor(sec / 86400)}d ago`;
+  if (sec < 60) return t("nav.sessions.justNow");
+  if (sec < 3600) return t("nav.sessions.minutesAgo", { n: Math.floor(sec / 60) });
+  if (sec < 86400) return t("nav.sessions.hoursAgo", { n: Math.floor(sec / 3600) });
+  return t("nav.sessions.daysAgo", { n: Math.floor(sec / 86400) });
 }
 
 interface LeftSidebarProps {
@@ -139,6 +141,7 @@ interface LeftSidebarProps {
 }
 
 export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef, rightAreaRef }: LeftSidebarProps) {
+  const { t } = useTranslation();
   const { platform, isFullscreen } = useWindowState();
   const isMac = platform === "darwin";
   const showMacSpacer = isMac && !isFullscreen;
@@ -415,7 +418,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
               className="absolute opacity-0 group-hover/menu-item:opacity-100 transition-opacity text-muted-foreground hover:text-foreground cursor-pointer"
               onClick={(e) => { e.stopPropagation(); pinSession(s.id); }}
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); pinSession(s.id); } }}
-              title={pinnedSessionIds.includes(s.id) ? "Unpin session" : "Pin session"}
+              title={pinnedSessionIds.includes(s.id) ? t("nav.sessions.unpin") : t("nav.sessions.pin")}
             >
               {pinnedSessionIds.includes(s.id) ? (
                 <PinOff className="size-3.5" strokeWidth={1.5} />
@@ -424,9 +427,9 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
               )}
             </span>
           </span>
-          <span className="truncate text-[length:var(--font-session-item)] flex-1">{s.title}</span>
+          <span className="truncate text-[length:var(--font-session-item)] flex-1">{displayChatTitle(s.title, t)}</span>
           <span className="hidden group-hover/menu-item:inline text-[length:var(--font-timestamp)] text-muted-foreground/70 shrink-0">
-            {relativeTime(s.lastModified)}
+            {relativeTime(s.lastModified, t)}
           </span>
           {showArchived ? (
             <>
@@ -436,7 +439,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                 className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
                 onClick={(e) => { e.stopPropagation(); archiveSession(s.id); }}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); archiveSession(s.id); } }}
-                title="Restore from archive"
+                title={t("nav.sessions.restoreFromArchive")}
               >
                 <ArchiveRestore className="size-3" />
               </span>
@@ -466,7 +469,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                     }
                   }
                 }}
-                title="Delete permanently"
+                title={t("nav.sessions.delete")}
               >
                 <Trash2Icon className="size-3" />
               </span>
@@ -488,7 +491,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                   if (s.id === sessionId) clearCurrentTab();
                 }
               }}
-              title="Archive session"
+              title={t("nav.sessions.archive")}
             >
               <Archive className="size-3" />
             </span>
@@ -545,7 +548,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                 onClick={togglePinnedExpanded}
               >
                 <span className="text-[length:var(--font-hint)] font-medium uppercase tracking-wider text-muted-foreground/50">
-                  Pinned
+                  {t("nav.sessions.pinned")}
                 </span>
                 {pinnedExpanded ? <ChevronDown className="size-3 text-muted-foreground/50" /> : <ChevronRight className="size-3 text-muted-foreground/50" />}
               </button>
@@ -561,7 +564,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
 
           <div className="pt-2 pb-1 flex items-center justify-between">
             <span className="text-[length:var(--font-hint)] font-medium uppercase tracking-wider text-muted-foreground/50">
-              {showArchived ? "Archived" : "Sessions"}
+              {showArchived ? t("nav.sessions.archived") : t("nav.sessions.sessions")}
             </span>
             <div className="flex items-center gap-0.5">
               <button
@@ -571,16 +574,16 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                   showArchived ? "text-muted-foreground" : "text-muted-foreground/50 hover:text-muted-foreground",
                 )}
                 onClick={toggleShowArchived}
-                title={showArchived ? "Show active sessions" : "Show archived"}
+                title={showArchived ? t("nav.sessions.showActive") : t("nav.sessions.showArchived")}
               >
                 <Archive className="size-3" />
               </button>
-              <button type="button" className="flex size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors" title="Filter">
+              <button type="button" className="flex size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors" title={t("nav.sessions.filter")}>
                 <ListFilter className="size-3" />
               </button>
               <AppMenu>
                 <AppMenuTrigger asChild>
-                  <button type="button" className="flex size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors" title="Sort">
+                  <button type="button" className="flex size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors" title={t("nav.sessions.sort")}>
                     <ArrowUpDown className="size-3" />
                   </button>
                 </AppMenuTrigger>
@@ -589,13 +592,13 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                     selected={sessionSort === "updated"}
                     onClick={() => setSessionSort("updated")}
                   >
-                    Last updated
+                    {t("nav.sessions.lastUpdated")}
                   </AppMenuCheckItem>
                   <AppMenuCheckItem
                     selected={sessionSort === "created"}
                     onClick={() => setSessionSort("created")}
                   >
-                    Date created
+                    {t("nav.sessions.dateCreated")}
                   </AppMenuCheckItem>
                 </AppMenuContent>
               </AppMenu>
@@ -609,9 +612,9 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
             <div className="flex flex-1 items-center justify-center px-4">
               <p className="text-center text-[length:var(--font-session-item)] leading-relaxed text-muted-foreground">
                 <MessageSquareIcon className="size-5 mx-auto mb-2 opacity-30" />
-                No sessions yet
+                {t("nav.sessions.noSessions")}
                 <span className="mt-1 block text-[length:var(--font-hint)] opacity-50">
-                  Open a project to start
+                  {t("nav.sessions.openProjectHint")}
                 </span>
               </p>
             </div>
@@ -640,7 +643,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
             <button
               type="button"
               className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors shrink-0"
-              title={`Theme: ${theme}`}
+              title={t("common.theme", { theme })}
               onClick={cycleTheme}
             >
               {theme === "system" ? (

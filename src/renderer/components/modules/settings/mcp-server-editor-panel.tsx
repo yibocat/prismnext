@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ import {
 type McpServerSlot = Extract<SettingsPanelSlot, { kind: "mcp-server" }>;
 
 export function McpServerEditorPanel({ slot }: { slot: McpServerSlot }) {
+  const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const servers = useMcpServersStore((s) => s.servers);
@@ -49,7 +51,7 @@ export function McpServerEditorPanel({ slot }: { slot: McpServerSlot }) {
     }
     const found = servers.find((s) => s.name === slot.serverName) ?? null;
     if (!found) {
-      toast.error("MCP server not found.");
+      toast.error(t("settings.editor.mcpServer.toast.notFound"));
       closePanel();
       return;
     }
@@ -86,26 +88,26 @@ export function McpServerEditorPanel({ slot }: { slot: McpServerSlot }) {
           if (nextEntry) nextEntry.enabled = entry.enabled;
         }
       } catch {
-        toast.error("Invalid JSON.");
+        toast.error(t("settings.editor.mcpServer.toast.invalidJson"));
         return;
       }
     }
 
     if (!nextEntry) {
-      toast.error("Could not save — check the configuration.");
+      toast.error(t("settings.editor.mcpServer.toast.saveFailed"));
       return;
     }
 
     const next = servers.map((s) => (s.name === entry.name ? nextEntry! : s));
     await persist(projectRoot, next);
-    toast.success("MCP server updated.");
+    toast.success(t("settings.editor.mcpServer.toast.updated"));
     closePanel();
   };
 
   if (!projectRoot) {
     return (
       <div className="flex flex-1 items-center justify-center px-8 text-[length:var(--font-size-13)] text-muted-foreground">
-        Open a project to configure MCP servers.
+        {t("settings.editor.mcpServer.openProject")}
       </div>
     );
   }
@@ -113,7 +115,7 @@ export function McpServerEditorPanel({ slot }: { slot: McpServerSlot }) {
   if (loading || !entry) {
     return (
       <div className="flex flex-1 items-center justify-center text-[length:var(--font-size-12)] text-muted-foreground">
-        Loading…
+        {t("settings.editor.mcpServer.loading")}
       </div>
     );
   }
@@ -123,8 +125,8 @@ export function McpServerEditorPanel({ slot }: { slot: McpServerSlot }) {
       <div className={SETTINGS_DETAIL_SHELL}>
         <p className={SETTINGS_ROW_DESC}>
           {preset
-            ? `Credentials and options for the ${preset.name} catalog server.`
-            : `Custom MCP server "${entry.name}". Edit the JSON block below, or open the full file.`}
+            ? t("settings.editor.mcpServer.introPreset", { name: preset.name })
+            : t("settings.editor.mcpServer.introCustom")}
         </p>
 
         {preset ? (
@@ -136,7 +138,7 @@ export function McpServerEditorPanel({ slot }: { slot: McpServerSlot }) {
         ) : (
           <div>
             <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-1.5">
-              Server JSON
+              {t("settings.editor.mcpServer.serverJson")}
             </p>
             <Textarea
               className={cn(
@@ -156,17 +158,17 @@ export function McpServerEditorPanel({ slot }: { slot: McpServerSlot }) {
             className="px-0 h-auto text-primary hover:text-primary"
             onClick={() => openSettingsPanel({ kind: "mcp-json" })}
           >
-            Open full mcp.json
+            {t("settings.editor.mcpServer.openFullJson")}
           </Button>
         ) : null}
 
         <div className={SETTINGS_DETAIL_ACTIONS}>
           <Button size="xs" onClick={() => void handleSave()} disabled={saving}>
             {saving ? <Loader2Icon className="size-3 animate-spin mr-1" /> : null}
-            Save
+            {t("common.save")}
           </Button>
           <Button variant="ghost" size="xs" onClick={closePanel} disabled={saving}>
-            Cancel
+            {t("common.cancel")}
           </Button>
         </div>
       </div>

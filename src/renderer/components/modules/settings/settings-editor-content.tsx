@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { SlidersHorizontalIcon } from "lucide-react";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import {
@@ -26,11 +27,11 @@ import { ShortcutsSettings } from "./shortcuts-settings";
 import { LogViewer } from "./log-viewer";
 
 function PlaceholderSlot({ slot }: { slot: Extract<SettingsPanelSlot, { kind: "placeholder" }> }) {
+  const { t } = useTranslation();
   return (
     <div className="px-4 py-6">
       <p className="text-[length:var(--font-size-13)] text-muted-foreground leading-relaxed">
-        {slot.description ??
-          "This slot is reserved for a settings editor that will migrate here from the main list."}
+        {slot.description ?? t("settings.panels.empty.placeholderReserved")}
       </p>
     </div>
   );
@@ -99,11 +100,12 @@ export function settingsSlotBodyClassName(slot: SettingsPanelSlot): string {
 
 /** Unified RightArea tab content for settings editors. */
 export function SettingsEditorContent({ tab, isActive }: { tab: RightTab; isActive: boolean }) {
+  const { t } = useTranslation();
   const slot = tab.settingsSlot;
   if (!slot) {
     return (
       <div className="flex flex-1 items-center justify-center text-[length:var(--font-size-12)] text-muted-foreground">
-        Missing settings editor payload.
+        {t("settings.panels.empty.missingPayload")}
       </div>
     );
   }
@@ -116,13 +118,16 @@ export function SettingsEditorContent({ tab, isActive }: { tab: RightTab; isActi
 }
 
 export function SettingsEditorEmptyState() {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-1 min-h-0 w-full items-center justify-center overflow-auto px-6">
       <div className="max-w-[16rem] space-y-2 text-center">
         <SlidersHorizontalIcon className="mx-auto size-5 text-muted-foreground/40" />
-        <p className="text-[length:var(--font-size-13)] font-medium text-foreground/80">No editor open</p>
+        <p className="text-[length:var(--font-size-13)] font-medium text-foreground/80">
+          {t("settings.panels.empty.noEditor")}
+        </p>
         <p className="text-[length:var(--font-size-12)] text-muted-foreground leading-relaxed">
-          Choose an action in settings to open an editor tab here.
+          {t("settings.panels.empty.chooseAction")}
         </p>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   PlugIcon,
   FileJsonIcon,
@@ -42,6 +43,7 @@ function serverSummary(entry: McpServerEntry): string {
 }
 
 export function ToolsMcpSettings() {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const servers = useMcpServersStore((s) => s.servers);
   const loaded = useMcpServersStore((s) => s.loaded);
@@ -76,16 +78,16 @@ export function ToolsMcpSettings() {
       if (result.health) setPaperHealth(result.health);
       await load(projectRoot);
       if (!result.ok) {
-        toast.error(result.error || "Failed to apply MCP configuration.");
+        toast.error(result.error || t("settings.mcp.toast.applyFailed"));
         return;
       }
       toast.success(
         result.reloadedSessions > 0
-          ? `MCP applied to ${result.reloadedSessions} open chat${result.reloadedSessions === 1 ? "" : "s"}.`
-          : "MCP configuration applied (no open chat sessions yet).",
+          ? t("settings.mcp.toast.appliedSessions", { count: result.reloadedSessions })
+          : t("settings.mcp.toast.appliedNoSessions"),
       );
     } catch {
-      toast.error("Failed to apply MCP configuration.");
+      toast.error(t("settings.mcp.toast.applyFailed"));
     } finally {
       setApplying(false);
     }
@@ -112,7 +114,7 @@ export function ToolsMcpSettings() {
       projectRoot,
       servers.filter((s) => s.name !== name),
     );
-    toast.success(`Removed "${name}".`);
+    toast.success(t("settings.mcp.toast.removed", { name }));
   };
 
   const openConfigure = (entry: McpServerEntry) => {
@@ -132,7 +134,7 @@ export function ToolsMcpSettings() {
         onClick={() => openSettingsPanel({ kind: "mcp-catalog" })}
       >
         <PlusIcon className="size-3 mr-1" />
-        Browse catalog
+        {t("settings.mcp.browseCatalog")}
       </Button>
       <Button
         variant="outline"
@@ -140,7 +142,7 @@ export function ToolsMcpSettings() {
         onClick={() => openSettingsPanel({ kind: "mcp-paste-json" })}
       >
         <FileJsonIcon className="size-3 mr-1" />
-        Add from JSON
+        {t("settings.mcp.addFromJson")}
       </Button>
     </div>
   );
@@ -150,9 +152,9 @@ export function ToolsMcpSettings() {
       <div className="max-w-3xl mx-auto px-8 py-8 space-y-8">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-[length:var(--font-dialog-title)] font-semibold">MCP</h2>
+            <h2 className="text-[length:var(--font-dialog-title)] font-semibold">{t("settings.mcp.title")}</h2>
             <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-              Extend the agent with external tools and data sources.
+              {t("settings.mcp.pageDesc")}
             </p>
           </div>
           {projectRoot ? (
@@ -163,7 +165,7 @@ export function ToolsMcpSettings() {
               onClick={() => openSettingsPanel({ kind: "mcp-json" })}
             >
               <FileJsonIcon className="size-3 mr-1" />
-              Edit mcp.json
+              {t("settings.mcp.editJson")}
             </Button>
           ) : null}
         </div>
@@ -173,7 +175,7 @@ export function ToolsMcpSettings() {
             <div className="flex flex-col items-center gap-3 py-10 text-center">
               <PlugIcon className="size-8 text-muted-foreground/30" />
               <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-                Open a project to manage MCP servers.
+                {t("settings.mcp.openProject")}
               </p>
             </div>
           </div>
@@ -187,7 +189,7 @@ export function ToolsMcpSettings() {
               {" "}
               (not a project-root <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">.mcp.json</code>
               ). Use{" "}
-              <span className="font-medium text-foreground">Apply to chats</span>{" "}
+              <span className="font-medium text-foreground">{t("settings.mcp.applyToChats")}</span>{" "}
               after Configure changes so open sessions reload MCP tools. Paper
               Search may run via <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">npx -y</code>
               {" "}on first use (network).
@@ -195,7 +197,7 @@ export function ToolsMcpSettings() {
 
             <div>
               <div className="flex items-center justify-between gap-3 mb-2">
-                <p className={cn(CATEGORY_HEADER, "mb-0")}>Installed</p>
+                <p className={cn(CATEGORY_HEADER, "mb-0")}>{t("settings.mcp.installed")}</p>
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <Button
                     variant="outline"
@@ -206,7 +208,7 @@ export function ToolsMcpSettings() {
                     <RefreshCwIcon
                       className={cn("size-3 mr-1", applying && "animate-spin")}
                     />
-                    Apply to chats
+                    {t("settings.mcp.applyToChats")}
                   </Button>
                   {renderAddButtons()}
                 </div>
@@ -220,7 +222,7 @@ export function ToolsMcpSettings() {
                   <div className="flex flex-col items-center gap-3 py-10 text-center">
                     <PlugIcon className="size-8 text-muted-foreground/30" />
                     <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-                      No MCP servers yet.
+                      {t("settings.mcp.empty")}
                     </p>
                     {renderAddButtons()}
                   </div>

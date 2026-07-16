@@ -1,5 +1,6 @@
 import { useState, type RefObject } from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
+import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useChatStore } from "@/stores/chat-store";
 import { SIDEBAR_LEFT_DEFAULT, SIDEBAR_LEFT_MAX, SIDEBAR_OVERLAY_THRESHOLD } from "@/styles/constants";
@@ -15,6 +16,7 @@ interface SidebarControlsProps {
 }
 
 export function SidebarControls({ leftSidebarRef, showMacSpacer, showNewAgent = true, className }: SidebarControlsProps) {
+  const { t } = useTranslation();
   const sidebarExpanded = useLayoutStore((s) => s.sidebarExpanded);
   const [commandOpen, setCommandOpen] = useState(false);
   const newSession = useChatStore((s) => s.newSession);
@@ -30,7 +32,7 @@ export function SidebarControls({ leftSidebarRef, showMacSpacer, showNewAgent = 
             "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
             sidebarExpanded && "bg-muted text-foreground",
           )}
-          title={sidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
+          title={sidebarExpanded ? t("shell.collapseSidebar") : t("shell.expandSidebar")}
           onClick={() => {
             const st = useLayoutStore.getState();
             if (st.leftSidebarOverlay) {
@@ -63,7 +65,7 @@ export function SidebarControls({ leftSidebarRef, showMacSpacer, showNewAgent = 
         <button
           type="button"
           className="flex items-center justify-center size-6 rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title="Command palette"
+          title={t("shell.commandPalette")}
           onClick={() => setCommandOpen(true)}
         >
           <SearchIcon className="size-3.5" />
@@ -73,7 +75,7 @@ export function SidebarControls({ leftSidebarRef, showMacSpacer, showNewAgent = 
           <button
             type="button"
             className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            title="New Agent"
+            title={t("shell.newAgent")}
             onClick={() => newSession()}
           >
             <PlusIcon className="size-3.5" />

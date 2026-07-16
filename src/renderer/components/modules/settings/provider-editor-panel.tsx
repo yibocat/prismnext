@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/stores/settings-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
 import { Input } from "@/components/ui/input";
@@ -52,7 +53,10 @@ type ProviderEditorSlot = Extract<SettingsPanelSlot, { kind: "ai-provider" }>;
 
 type ConnectionStatus = "none" | "verified" | "failed" | "untested";
 
-function connectionMeta(status: ConnectionStatus): {
+function connectionMeta(
+  status: ConnectionStatus,
+  t: (key: string) => string,
+): {
   label: string;
   dotClass: string;
   textClass: string;
@@ -60,25 +64,25 @@ function connectionMeta(status: ConnectionStatus): {
   switch (status) {
     case "verified":
       return {
-        label: "Connected",
+        label: t("settings.editor.provider.statusConnected"),
         dotClass: "bg-emerald-500",
         textClass: "text-emerald-600 dark:text-emerald-400",
       };
     case "failed":
       return {
-        label: "Connection failed",
+        label: t("settings.editor.provider.statusFailed"),
         dotClass: "bg-destructive",
         textClass: "text-destructive",
       };
     case "untested":
       return {
-        label: "Key set — not verified",
+        label: t("settings.editor.provider.statusKeySet"),
         dotClass: "bg-amber-500",
         textClass: "text-amber-600 dark:text-amber-400",
       };
     default:
       return {
-        label: "No API key",
+        label: t("settings.editor.provider.statusNoKey"),
         dotClass: "bg-muted-foreground/35",
         textClass: "text-muted-foreground",
       };
@@ -86,7 +90,8 @@ function connectionMeta(status: ConnectionStatus): {
 }
 
 function ConnectionStatusLine({ status }: { status: ConnectionStatus }) {
-  const meta = connectionMeta(status);
+  const { t } = useTranslation();
+  const meta = connectionMeta(status, t);
   return (
     <span
       className={cn(
@@ -104,6 +109,7 @@ const MODEL_ROW =
   "flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted/50 transition-colors";
 
 export function ProviderEditorPanel({ slot }: { slot: ProviderEditorSlot }) {
+  const { t } = useTranslation();
   if (slot.mode === "builtin-key") {
     return <BuiltinProviderKeyPanel providerId={slot.providerId} />;
   }
@@ -111,6 +117,7 @@ export function ProviderEditorPanel({ slot }: { slot: ProviderEditorSlot }) {
 }
 
 function BuiltinProviderKeyPanel({ providerId }: { providerId: string }) {
+  const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
@@ -154,34 +161,36 @@ function BuiltinProviderKeyPanel({ providerId }: { providerId: string }) {
         updateSettings({
           aiVerifiedProviders: [...new Set([...verifiedProviders, providerId])],
         });
-        toast.success("Connection verified.");
+        toast.success(t("settings.editor.provider.toast.verified"));
       } else {
-        toast.error("Connection test failed.");
+        toast.error(t("settings.editor.provider.toast.testFailedDetail"));
       }
     } catch {
       setTestResult("fail");
-      toast.error("Connection test failed.");
+      toast.error(t("settings.editor.provider.testFailedNetwork"));
     } finally {
       setTesting(false);
     }
-  }, [apiKey, providerId, verifiedProviders, updateSettings]);
+  }, [apiKey, providerId, verifiedProviders, updateSettings, t]);
 
   return (
     <div className="flex-1 overflow-auto">
       <div className={SETTINGS_DETAIL_SHELL}>
         <p className={SETTINGS_ROW_DESC}>
-          API keys are stored locally and encrypted. Test the connection before using models in
-          chat.
+          {t("settings.editor.provider.builtinIntro")}
         </p>
 
         <div className={SETTINGS_DETAIL_SECTION}>
-          <SettingsFormField label="API key" htmlFor="builtin-provider-api-key">
+          <SettingsFormField
+            label={t("settings.editor.provider.apiKey")}
+            htmlFor="builtin-provider-api-key"
+          >
             <div className="flex items-center gap-1.5">
               <Input
                 id="builtin-provider-api-key"
                 type={showKey ? "text" : "password"}
                 className={cn(SETTINGS_FORM_INPUT_MONO, "flex-1")}
-                placeholder="sk-…"
+                placeholder={t("settings.editor.provider.apiKeyPlaceholder")}
                 value={apiKey}
                 onChange={(e) => {
                   updateSettings({ aiApiKeys: { ...aiApiKeys, [providerId]: e.target.value } });
@@ -201,7 +210,7 @@ function BuiltinProviderKeyPanel({ providerId }: { providerId: string }) {
               disabled={testing || !apiKey}
             >
               {testing ? <Loader2Icon className="size-3 animate-spin mr-1" /> : null}
-              Test connection
+              {t("common.testConnection")}
             </Button>
           </SettingsFormField>
         </div>
@@ -211,7 +220,7 @@ function BuiltinProviderKeyPanel({ providerId }: { providerId: string }) {
             Done
           </Button>
           <Button variant="ghost" size="xs" onClick={closePanel}>
-            Cancel
+            {t("common.cancel")}
           </Button>
         </div>
       </div>
@@ -224,6 +233,7 @@ function CustomProviderEditorPanel({
 }: {
   slot: Extract<ProviderEditorSlot, { mode: "new" } | { mode: "edit" }>;
 }) {
+  const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
@@ -363,11 +373,11 @@ function CustomProviderEditorPanel({
   const handleAddCustomModel = () => {
     const mid = newModelId.trim();
     if (!mid) {
-      setAddModelError("Model ID is required.");
+      setAddModelError(t("settings.editor.provider.modelIdRequired"));
       return;
     }
     if (modelIdTaken(mid, presetModels, customModels)) {
-      setAddModelError("This model ID is already listed.");
+      setAddModelError(t("settings.editor.provider.modelIdExists"));
       return;
     }
     const entry = buildCustomModelEntry(mid, newModelName, newModelContext, {
@@ -444,13 +454,13 @@ function CustomProviderEditorPanel({
             ],
           });
         }
-        toast.success("Connection verified.");
+        toast.success(t("settings.editor.provider.toast.verified"));
       } else {
-        toast.error("Connection test failed — check your API key and Base URL");
+        toast.error(t("settings.editor.provider.toast.testFailedDetail"));
       }
     } catch {
       setTestResult("fail");
-      toast.error("Connection test failed.");
+      toast.error(t("settings.editor.provider.testFailedNetwork"));
     } finally {
       setTesting(false);
     }
@@ -463,6 +473,7 @@ function CustomProviderEditorPanel({
     editProviderId,
     settings.aiVerifiedProviders,
     updateSettings,
+    t,
   ]);
 
   const handleSave = useCallback(async () => {
@@ -474,11 +485,11 @@ function CustomProviderEditorPanel({
     setSaveError(null);
 
     if (!isEditing && isPresetAlreadyAdded(presetId)) {
-      setSaveError("This provider is already added — use Configure on the existing entry.");
+      setSaveError(t("settings.editor.provider.alreadyAdded"));
       return;
     }
 
-    const effectiveName = name || currentPreset?.name || "Custom Provider";
+    const effectiveName = name || currentPreset?.name || t("settings.editor.provider.customProvider");
     const effectiveBaseUrl = baseUrl || currentPreset?.defaultBaseUrl || "";
 
     setSaving(true);
@@ -489,12 +500,12 @@ function CustomProviderEditorPanel({
         baseUrl: effectiveBaseUrl || undefined,
       });
       if (!r.success) {
-        setSaveError("Connection test failed — check your API key and Base URL");
+        setSaveError(t("settings.editor.provider.toast.testFailedDetail"));
         setSaving(false);
         return;
       }
     } catch {
-      setSaveError("Connection test failed — check network");
+      setSaveError(t("settings.editor.provider.testFailedNetwork"));
       setSaving(false);
       return;
     }
@@ -515,7 +526,7 @@ function CustomProviderEditorPanel({
         },
         aiVerifiedProviders: [...new Set([...(settings.aiVerifiedProviders || []), editProviderId!])],
       });
-      toast.success("Provider saved.");
+      toast.success(t("settings.editor.provider.toast.saved"));
     } else {
       updateSettings({
         aiCustomProviders: [
@@ -531,7 +542,7 @@ function CustomProviderEditorPanel({
         },
         aiVerifiedProviders: [...new Set([...(settings.aiVerifiedProviders || []), providerId])],
       });
-      toast.success("Provider added.");
+      toast.success(t("settings.editor.provider.toast.added"));
     }
 
     setSaving(false);
@@ -554,6 +565,8 @@ function CustomProviderEditorPanel({
     currentPreset?.name,
     currentPreset?.defaultBaseUrl,
     closePanel,
+    t,
+    isPresetAlreadyAdded,
   ]);
 
   const removeProvider = () => {
@@ -562,7 +575,7 @@ function CustomProviderEditorPanel({
     updateSettings({
       aiCustomProviders: customProviders.filter((x) => x.id !== editProviderId),
     });
-    toast.success("Provider removed.");
+    toast.success(t("settings.editor.provider.toast.removed"));
     closePanel();
   };
 
@@ -573,13 +586,16 @@ function CustomProviderEditorPanel({
       <div className={SETTINGS_DETAIL_SHELL}>
         <p className={SETTINGS_ROW_DESC}>
           {isEditing
-            ? "Update credentials, endpoint, and which models appear in chat."
-            : "Pick a provider preset or define a custom endpoint, then choose models to enable."}
+            ? t("settings.editor.provider.editIntro")
+            : t("settings.editor.provider.addIntro")}
         </p>
 
         <div className={SETTINGS_DETAIL_SECTION}>
           {!isEditing ? (
-            <SettingsFormField label="Provider" htmlFor="provider-preset">
+            <SettingsFormField
+              label={t("settings.editor.provider.provider")}
+              htmlFor="provider-preset"
+            >
               <AppSelect value={presetId} onValueChange={handlePresetChange}>
                 <AppSelectTrigger id="provider-preset" variant="dialog" className="w-full">
                   <AppSelectValue />
@@ -593,7 +609,7 @@ function CustomProviderEditorPanel({
                           <span>{p.name}</span>
                           {alreadyAdded ? (
                             <span className="text-[length:var(--font-size-10)] font-normal text-muted-foreground">
-                              Added
+                              {t("settings.editor.provider.added")}
                             </span>
                           ) : null}
                         </span>
@@ -606,11 +622,11 @@ function CustomProviderEditorPanel({
           ) : null}
 
           {showNameField ? (
-            <SettingsFormField label="Name" htmlFor="provider-name">
+            <SettingsFormField label={t("settings.editor.provider.name")} htmlFor="provider-name">
               <Input
                 id="provider-name"
                 className={SETTINGS_FORM_INPUT}
-                placeholder="My Provider"
+                placeholder={t("settings.editor.provider.namePlaceholder")}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
@@ -618,14 +634,14 @@ function CustomProviderEditorPanel({
           ) : null}
 
           <SettingsFormField
-            label="Base URL"
+            label={t("settings.editor.provider.baseUrl")}
             htmlFor="provider-base-url"
-            description="OpenAI-compatible API root. Presets fill this automatically."
+            description={t("settings.editor.provider.baseUrlDesc")}
           >
             <Input
               id="provider-base-url"
               className={SETTINGS_FORM_INPUT_MONO}
-              placeholder="https://api.example.com/v1"
+              placeholder={t("settings.editor.provider.baseUrlPlaceholder")}
               value={baseUrl}
               onChange={(e) => {
                 setBaseUrl(e.target.value);
@@ -634,7 +650,10 @@ function CustomProviderEditorPanel({
             />
           </SettingsFormField>
 
-          <SettingsFormField label="API key" htmlFor="provider-api-key">
+          <SettingsFormField
+            label={t("settings.editor.provider.apiKey")}
+            htmlFor="provider-api-key"
+          >
             <div className="flex items-center gap-1.5">
               <Input
                 id="provider-api-key"
@@ -644,7 +663,7 @@ function CustomProviderEditorPanel({
                   "flex-1",
                   apiKeyError && "!border-destructive",
                 )}
-                placeholder="sk-…"
+                placeholder={t("settings.editor.provider.apiKeyPlaceholder")}
                 value={apiKey}
                 onChange={(e) => {
                   setApiKey(e.target.value);
@@ -658,7 +677,9 @@ function CustomProviderEditorPanel({
               </Button>
             </div>
             {apiKeyError ? (
-              <p className="text-[length:var(--font-size-12)] text-destructive">API key is required.</p>
+              <p className="text-[length:var(--font-size-12)] text-destructive">
+                {t("settings.editor.provider.apiKeyRequired")}
+              </p>
             ) : null}
             <div className="flex flex-wrap items-center gap-2 pt-1">
               <ConnectionStatusLine status={connectionStatus} />
@@ -669,14 +690,14 @@ function CustomProviderEditorPanel({
                 disabled={testing || !apiKey.trim()}
               >
                 {testing ? <Loader2Icon className="size-3 animate-spin mr-1" /> : null}
-                Test connection
+                {t("common.testConnection")}
               </Button>
             </div>
           </SettingsFormField>
 
           <SettingsFormField
-            label="Models"
-            description="Enable models that should appear in the chat model picker."
+            label={t("settings.editor.provider.models")}
+            description={t("settings.editor.provider.modelsDesc")}
           >
             <div className="rounded-md border border-border divide-y divide-border/60">
               {presetModels.map((m) => (
@@ -758,7 +779,7 @@ function CustomProviderEditorPanel({
                 <div className="space-y-2 border-t border-border/60 px-2 py-2">
                   <Input
                     className={cn(SETTINGS_FORM_INPUT_MONO, "w-full")}
-                    placeholder="Model ID (required)"
+                    placeholder={t("settings.editor.provider.modelIdPlaceholder")}
                     value={newModelId}
                     onChange={(e) => {
                       setNewModelId(e.target.value);
@@ -772,7 +793,7 @@ function CustomProviderEditorPanel({
                   />
                   <Input
                     className={cn(SETTINGS_FORM_INPUT, "w-full")}
-                    placeholder="Display name (optional)"
+                    placeholder={t("settings.editor.provider.modelNamePlaceholder")}
                     value={newModelName}
                     onChange={(e) => setNewModelName(e.target.value)}
                     onKeyDown={(e) => {
@@ -782,7 +803,7 @@ function CustomProviderEditorPanel({
                   />
                   <Input
                     className={cn(SETTINGS_FORM_INPUT, "w-full")}
-                    placeholder="Context e.g. 200K, 1M (optional)"
+                    placeholder={t("settings.editor.provider.contextPlaceholder")}
                     value={newModelContext}
                     onChange={(e) => setNewModelContext(e.target.value)}
                     onKeyDown={(e) => {
@@ -795,17 +816,17 @@ function CustomProviderEditorPanel({
                       checked={newModelVision}
                       onCheckedChange={(checked) => setNewModelVision(Boolean(checked))}
                     />
-                    Vision / image input
+                    {t("settings.editor.provider.vision")}
                   </label>
                   {addModelError ? (
                     <p className="text-[length:var(--font-size-11)] text-destructive">{addModelError}</p>
                   ) : null}
                   <div className="flex items-center gap-1.5">
                     <Button variant="outline" size="xs" onClick={handleAddCustomModel}>
-                      Add
+                      {t("settings.editor.provider.addModel")}
                     </Button>
                     <Button variant="ghost" size="xs" onClick={() => setAddingModel(false)}>
-                      Cancel
+                      {t("common.cancel")}
                     </Button>
                   </div>
                 </div>
@@ -816,13 +837,13 @@ function CustomProviderEditorPanel({
                   onClick={openAddModelForm}
                 >
                   <PlusIcon className="size-3" />
-                  Add model…
+                  {t("settings.editor.provider.addModelEllipsis")}
                 </button>
               )}
 
               {allSelectedModels.length === 0 && !addingModel && presetModels.length === 0 && customModels.length === 0 ? (
                 <p className="text-[length:var(--font-size-12)] text-muted-foreground text-center py-4">
-                  No models yet — add one below.
+                  {t("settings.editor.provider.noModels")}
                 </p>
               ) : null}
             </div>
@@ -840,10 +861,10 @@ function CustomProviderEditorPanel({
             disabled={saving || allSelectedModels.length === 0}
           >
             {saving ? <Loader2Icon className="size-3 animate-spin mr-1" /> : null}
-            {isEditing ? "Save" : "Add provider"}
+            {isEditing ? t("common.save") : t("settings.slots.addProvider")}
           </Button>
           <Button variant="ghost" size="xs" onClick={closePanel}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           {isEditing ? (
             <>
@@ -854,7 +875,7 @@ function CustomProviderEditorPanel({
                 className="shrink-0 text-muted-foreground hover:text-destructive"
                 onClick={() => setDeleteDialogOpen(true)}
               >
-                Remove
+                {t("common.remove")}
               </Button>
             </>
           ) : null}
@@ -864,11 +885,11 @@ function CustomProviderEditorPanel({
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="!max-w-md">
           <DialogHeader>
-            <DialogTitle>Remove provider</DialogTitle>
+            <DialogTitle>{t("settings.editor.provider.removeTitle")}</DialogTitle>
             <DialogDescription>
-              Remove <span className="font-medium text-foreground">{existing?.name || "this provider"}</span>{" "}
-              from your configuration? API keys and model selections for this entry will no longer be
-              available in chat.
+              {t("settings.editor.provider.removeDesc", {
+                name: existing?.name || t("settings.editor.provider.thisProvider"),
+              })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -878,7 +899,7 @@ function CustomProviderEditorPanel({
               className="shadow-none"
               onClick={() => setDeleteDialogOpen(false)}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -886,7 +907,7 @@ function CustomProviderEditorPanel({
               className="shadow-none"
               onClick={removeProvider}
             >
-              Remove
+              {t("common.remove")}
             </Button>
           </DialogFooter>
         </DialogContent>

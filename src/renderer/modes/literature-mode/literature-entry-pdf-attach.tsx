@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { i18n } from "@/lib/i18n";
 import {
   formatIdentifierBrief,
   normalizeLiteratureIdentifiers,
@@ -42,38 +44,36 @@ function conflictCopy(conflict: LiteratureAttachLocalPdfConflict): {
   switch (conflict.kind) {
     case "sha_duplicate":
       return {
-        title: "PDF already in library",
-        subtitle: "Duplicate file",
-        message:
-          "This exact file is already attached to another entry. Open that entry to review it — the library stores each PDF once.",
+        title: i18n.t("literature.attach.alreadyInLibrary"),
+        subtitle: i18n.t("literature.attach.duplicateFile"),
+        message: i18n.t("literature.attach.shaDuplicateMsg"),
       };
     case "identifier_duplicate":
       return {
-        title: "Same paper found",
+        title: i18n.t("literature.attach.samePaper"),
         subtitle: identifierLabel(conflict),
-        message:
-          "The PDF identifier matches an existing library entry. Attach there if that is the correct record.",
+        message: i18n.t("literature.attach.identifierDuplicateMsg"),
       };
     case "target_mismatch":
       return {
-        title: "PDF may not match this entry",
-        subtitle: "Identifier mismatch",
-        message:
-          "The DOI or arXiv ID in the file does not match this entry. You may have selected the wrong PDF.",
+        title: i18n.t("literature.attach.mayNotMatch"),
+        subtitle: i18n.t("literature.attach.idMismatch"),
+        message: i18n.t("literature.attach.targetMismatchMsg"),
       };
     case "target_unverified":
       return {
-        title: "Could not verify PDF",
-        subtitle: "No identifier in file",
-        message:
-          "This entry has a DOI or arXiv ID, but the PDF contains no matching identifier to confirm.",
+        title: i18n.t("literature.attach.couldNotVerify"),
+        subtitle: i18n.t("literature.attach.noIdentifierInFile"),
+        message: i18n.t("literature.attach.targetUnverifiedMsg"),
       };
     default:
-      return { title: "Attach PDF", subtitle: "", message: "" };
+      return { title: i18n.t("literature.attach.attachPdf"), subtitle: "", message: "" };
   }
 }
 
 function ConflictDetails({ conflict }: { conflict: LiteratureAttachLocalPdfConflict }) {
+  const { t } = useTranslation();
+
   if (conflict.kind === "sha_duplicate" || conflict.kind === "identifier_duplicate") {
     const otherHasPdf = Boolean(conflict.otherPaper.pdf_path || conflict.otherPaper.zotero_key);
     return (
@@ -87,8 +87,8 @@ function ConflictDetails({ conflict }: { conflict: LiteratureAttachLocalPdfConfl
         {conflict.kind === "identifier_duplicate" ? (
           <p>
             {otherHasPdf
-              ? "That entry already has a PDF. Open it, or attach here anyway."
-              : "That entry has no PDF yet — prefer attaching there."}
+              ? t("literature.attach.otherHasPdf")
+              : t("literature.attach.otherNoPdf")}
           </p>
         ) : null}
       </div>
@@ -112,12 +112,14 @@ function ConflictDetails({ conflict }: { conflict: LiteratureAttachLocalPdfConfl
       <dl className="grid grid-cols-2 gap-2 text-[length:var(--font-size-12)]">
         <div className="rounded-md border border-border bg-muted/20 px-3 py-2">
           <dt className="text-[length:var(--font-dialog-label)] text-muted-foreground mb-1">
-            This entry
+            {t("literature.attach.thisEntry")}
           </dt>
           <dd className="font-mono text-foreground/90 break-all leading-snug">{entry}</dd>
         </div>
         <div className="rounded-md border border-warning/25 bg-warning/5 px-3 py-2">
-          <dt className="text-[length:var(--font-dialog-label)] text-warning mb-1">PDF file</dt>
+          <dt className="text-[length:var(--font-dialog-label)] text-warning mb-1">
+            {t("literature.attach.pdfFile")}
+          </dt>
           <dd className="font-mono text-foreground/90 break-all leading-snug">{pdf}</dd>
         </div>
       </dl>
@@ -134,7 +136,7 @@ function ConflictDetails({ conflict }: { conflict: LiteratureAttachLocalPdfConfl
     return (
       <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-[length:var(--font-size-12)]">
         <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mb-1">
-          Entry identifier
+          {t("literature.attach.entryIdentifier")}
         </p>
         <p className="font-mono text-foreground/90 break-all">{entry}</p>
       </div>
@@ -149,6 +151,7 @@ export function LiteraturePdfAttachConflictDialog({
 }: {
   attach: LiteraturePdfAttachHandle;
 }) {
+  const { t } = useTranslation();
   const { conflict, clearConflict, conflictActions } = attach;
   if (!conflict) return null;
 
@@ -192,7 +195,7 @@ export function LiteraturePdfAttachConflictDialog({
             className="shadow-none"
             onClick={clearConflict}
           >
-            Cancel
+            {t("common.cancel")}
           </Button>
           {canAttachAnyway ? (
             <Button
@@ -202,7 +205,7 @@ export function LiteraturePdfAttachConflictDialog({
               className="shadow-none"
               onClick={() => void conflictActions.handleAttachAnyway()}
             >
-              Attach anyway
+              {t("literature.attach.attachAnyway")}
             </Button>
           ) : null}
           {conflict.kind === "identifier_duplicate" && !otherHasPdf ? (
@@ -212,7 +215,7 @@ export function LiteraturePdfAttachConflictDialog({
               className="shadow-none"
               onClick={() => void conflictActions.handleAttachToOther()}
             >
-              Attach to {conflict.otherPaper.bibkey}
+              {t("literature.attach.attachToBibkey", { bibkey: conflict.otherPaper.bibkey })}
             </Button>
           ) : null}
           {other ? (
@@ -222,7 +225,7 @@ export function LiteraturePdfAttachConflictDialog({
               className="shadow-none"
               onClick={conflictActions.handleOpenOther}
             >
-              Open {other.bibkey}
+              {t("literature.attach.openBibkey", { bibkey: other.bibkey })}
             </Button>
           ) : null}
         </DialogFooter>

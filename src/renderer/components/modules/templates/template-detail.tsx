@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
@@ -74,6 +75,7 @@ export function DetailView({
   canApply?: boolean;
   applyDisabledReason?: string;
 }) {
+  const { t } = useTranslation();
   const [showSource, setShowSource] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
@@ -97,7 +99,7 @@ export function DetailView({
         onClick={onBack}
       >
         <ArrowLeftIcon className="size-3.5" />
-        Back to templates
+        {t("templates.detail.back")}
       </button>
 
       {/* Left content + Right preview */}
@@ -106,7 +108,7 @@ export function DetailView({
         <div className="flex-1 min-w-0 space-y-6">
           {/* Description */}
           <div>
-            <h3 className="text-[length:var(--font-size-13)] font-medium mb-2">Description</h3>
+            <h3 className="text-[length:var(--font-size-13)] font-medium mb-2">{t("templates.detail.description")}</h3>
             <p className="text-[length:var(--font-size-12)] text-muted-foreground leading-relaxed">
               {template.description}
             </p>
@@ -122,7 +124,7 @@ export function DetailView({
           <Accordion type="single" defaultValue="files" collapsible>
             <AccordionItem value="files" className="border rounded-lg px-3">
               <AccordionTrigger className="text-[length:var(--font-size-13)] font-medium hover:no-underline">
-                Files &amp; Structure
+                {t("templates.detail.filesStructure")}
               </AccordionTrigger>
               <AccordionContent className="pb-3">
                 <FileTree nodes={fileTree} />
@@ -139,13 +141,13 @@ export function DetailView({
               disabled={!canApply}
               title={applyDisabledReason}
             >
-              Use
+              {t("templates.detail.use")}
             </Button>
             <Button variant="outline" size="sm" className="shadow-none" onClick={() => setShowSource(true)}>
-              View Source
+              {t("templates.detail.viewSource")}
             </Button>
             <Button variant="outline" size="sm" className="shadow-none" onClick={() => setShowPdfDialog(true)}>
-              View PDF
+              {t("templates.detail.viewPdf")}
             </Button>
           </div>
 
@@ -166,12 +168,12 @@ export function DetailView({
 
         {/* Right side: Preview image */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-[length:var(--font-size-13)] font-medium mb-2">Preview</h3>
+          <h3 className="text-[length:var(--font-size-13)] font-medium mb-2">{t("templates.detail.preview")}</h3>
           <div className="aspect-[3/4] rounded-lg border border-border overflow-hidden bg-muted/20 flex items-center justify-center">
             {previewUrl ? (
               <img src={previewUrl} alt={`${template.name} preview`} className="w-full h-full object-contain" />
             ) : (
-              <span className="text-[length:var(--font-hint)] text-muted-foreground/50">No preview</span>
+              <span className="text-[length:var(--font-hint)] text-muted-foreground/50">{t("templates.detail.noPreview")}</span>
             )}
           </div>
         </div>
@@ -180,7 +182,7 @@ export function DetailView({
         <Dialog open={showPdfDialog} onOpenChange={setShowPdfDialog}>
           <DialogContent className="!max-w-6xl h-[90vh] flex flex-col">
             <DialogHeader>
-              <DialogTitle>{template.name} — Preview</DialogTitle>
+              <DialogTitle>{template.name} — {t("templates.detail.preview")}</DialogTitle>
             </DialogHeader>
             {pdfDataUrl && (
               <div className="flex-1 min-h-0">
@@ -190,7 +192,7 @@ export function DetailView({
                   documentOptions={PDFJS_DOCUMENT_OPTIONS}
                   isZoomFitWidth
                   className="h-full flex flex-col"
-                  loader={<span className="flex justify-center pt-20 text-muted-foreground">Loading...</span>}
+                  loader={<span className="flex justify-center pt-20 text-muted-foreground">{t("common.loading")}</span>}
                 >
                   <PdfScrollClamp />
                   <Pages className={PDF_PAGES_CLASS} style={PDF_PAGES_STYLE} gap={8}>

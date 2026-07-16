@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTerminalStore } from "@/stores/terminal-store";
 import { useTerminalAiStore } from "@/stores/terminal-ai-store";
@@ -34,6 +35,7 @@ export function TerminalToolbar({
   isAi = false,
   linkedChatTabId,
 }: TerminalToolbarProps) {
+  const { t } = useTranslation();
   const newTerminalTab = useRightPanelStore((s) => s.newTerminalTab);
   const session = useTerminalStore((s) => s.sessions[tabId]);
   const envShell = useTerminalStore((s) => s.envInfo?.shell);
@@ -144,7 +146,7 @@ export function TerminalToolbar({
         <button
           type="button"
           className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-          title="New shell tab"
+          title={t("modes.terminal.newTab")}
           onClick={handleNewTab}
         >
           <PlusIcon className="size-3.5" />
@@ -183,7 +185,7 @@ export function TerminalToolbar({
       <button
         type="button"
         className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0 disabled:opacity-40"
-        title="Clear Screen"
+        title={t("modes.terminal.clearScreen")}
         onClick={handleClear}
         disabled={!isActive}
       >
@@ -194,7 +196,7 @@ export function TerminalToolbar({
         <button
           type="button"
           className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-          title="Restart Terminal"
+          title={t("modes.terminal.restart")}
           onClick={handleRestart}
         >
           <RotateCcwIcon className="size-3.5" />
@@ -203,7 +205,7 @@ export function TerminalToolbar({
         <button
           type="button"
           className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0 disabled:opacity-40"
-          title="Interrupt (Ctrl+C)"
+          title={t("modes.terminal.interrupt")}
           onClick={handleKill}
           disabled={!isActive}
         >

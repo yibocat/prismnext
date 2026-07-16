@@ -24,7 +24,10 @@ export interface LeftNavDefinition {
   id: string;
   /** primary = 顶部固定区；footer = 底部（如 Settings） */
   section: LeftNavSection;
+  /** Fallback English label (also used when labelKey is absent). */
   label: string;
+  /** i18n key — preferred over `label` when set. */
+  labelKey?: string;
   icon: LucideIcon;
   /** 同 section 内升序排列 */
   order: number;

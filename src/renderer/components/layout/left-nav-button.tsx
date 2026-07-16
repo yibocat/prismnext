@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { pressLeftNav, type LeftNavDefinition, type LeftNavPanelRefs } from "@/lib/workspace/left-nav";
 
@@ -11,8 +12,10 @@ type LeftNavButtonProps = {
 
 /** 左侧栏导航按钮（由 leftNavRegistry 提供数据，一般无需修改本文件） */
 export function LeftNavButton({ item, panelRefs, onPressed }: LeftNavButtonProps) {
+  const { t } = useTranslation();
   const Icon = item.icon;
   const active = item.isActive();
+  const label = item.labelKey ? t(item.labelKey) : item.label;
 
   return (
     <button
@@ -29,7 +32,7 @@ export function LeftNavButton({ item, panelRefs, onPressed }: LeftNavButtonProps
       }}
     >
       <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-      <span className="flex-1 text-left">{item.label}</span>
+      <span className="flex-1 text-left">{label}</span>
       {item.trailing}
     </button>
   );

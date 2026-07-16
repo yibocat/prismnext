@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,7 @@ export function QuickCommandDialog({
   onSave,
   editCommand,
 }: QuickCommandDialogProps) {
+  const { t } = useTranslation();
   const [label, setLabel] = useState("");
   const [command, setCommand] = useState("");
   const [description, setDescription] = useState("");
@@ -69,10 +71,12 @@ export function QuickCommandDialog({
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
           <DialogTitle>
-            {editCommand ? "Edit Command" : "Add Quick Command"}
+            {editCommand
+              ? t("terminal.quickCommand.edit")
+              : t("terminal.quickCommand.add")}
           </DialogTitle>
           <DialogDescription>
-            Save a frequently-used shell command for quick access.
+            {t("terminal.quickCommand.desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -80,13 +84,13 @@ export function QuickCommandDialog({
           {/* Label */}
           <div className="flex flex-col gap-1.5">
             <label className="text-[length:var(--font-size-12)] font-medium text-foreground">
-              Label
+              {t("terminal.quickCommand.label")}
             </label>
             <input
               type="text"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g. Git Status"
+              placeholder={t("terminal.quickCommand.labelPlaceholder")}
               className="h-8 rounded-md border border-border bg-background px-2.5 text-[length:var(--font-size-13)] text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-1 focus-visible:ring-ring"
               autoFocus
             />
@@ -95,12 +99,12 @@ export function QuickCommandDialog({
           {/* Command */}
           <div className="flex flex-col gap-1.5">
             <label className="text-[length:var(--font-size-12)] font-medium text-foreground">
-              Command
+              {t("terminal.quickCommand.command")}
             </label>
             <textarea
               value={command}
               onChange={(e) => setCommand(e.target.value)}
-              placeholder="e.g. git status"
+              placeholder={t("terminal.quickCommand.commandPlaceholder")}
               rows={3}
               className="resize-none rounded-md border border-border bg-background px-2.5 py-1.5 text-[length:var(--font-size-13)] font-mono text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
@@ -109,16 +113,16 @@ export function QuickCommandDialog({
           {/* Description */}
           <div className="flex flex-col gap-1.5">
             <label className="text-[length:var(--font-size-12)] font-medium text-foreground">
-              Description{" "}
+              {t("terminal.quickCommand.description")}{" "}
               <span className="text-muted-foreground/60 font-normal">
-                (optional)
+                {t("terminal.quickCommand.optional")}
               </span>
             </label>
             <input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief description of what this command does"
+              placeholder={t("terminal.quickCommand.descPlaceholder")}
               className="h-8 rounded-md border border-border bg-background px-2.5 text-[length:var(--font-size-13)] text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
@@ -130,7 +134,7 @@ export function QuickCommandDialog({
             onClick={() => onOpenChange(false)}
             className="h-8 rounded-md border border-border bg-background px-3 text-[length:var(--font-size-13)] text-muted-foreground hover:bg-muted transition-colors"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
           <button
             type="button"
@@ -138,7 +142,7 @@ export function QuickCommandDialog({
             disabled={!label.trim() || !command.trim()}
             className="h-8 rounded-md bg-primary px-3 text-[length:var(--font-size-13)] text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Save
+            {t("common.save")}
           </button>
         </DialogFooter>
       </DialogContent>

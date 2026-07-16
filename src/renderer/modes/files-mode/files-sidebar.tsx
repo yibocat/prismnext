@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Virtuoso } from "react-virtuoso";
 import type { VirtuosoHandle } from "react-virtuoso";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -76,6 +77,7 @@ function FilesHeader({ callbacks, projectName, anyExpanded, onToggleAll }: {
   anyExpanded: boolean;
   onToggleAll: () => void;
 }) {
+  const { t } = useTranslation();
   const refreshFiles = useDocumentStore((s) => s.refreshFiles);
   const [spinning, setSpinning] = useState(false);
 
@@ -94,7 +96,7 @@ function FilesHeader({ callbacks, projectName, anyExpanded, onToggleAll }: {
         <button
           type="button"
           className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title="New File"
+          title={t("modes.files.newFile")}
           onClick={() => callbacks.onNewFile()}
         >
           <FilePlusCorner className="size-3.5" />
@@ -102,7 +104,7 @@ function FilesHeader({ callbacks, projectName, anyExpanded, onToggleAll }: {
         <button
           type="button"
           className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title="New Folder"
+          title={t("modes.files.newFolder")}
           onClick={() => callbacks.onNewFolder()}
         >
           <FolderPlusIcon className="size-3.5" />
@@ -110,7 +112,7 @@ function FilesHeader({ callbacks, projectName, anyExpanded, onToggleAll }: {
         <button
           type="button"
           className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title={anyExpanded ? "Collapse All" : "Expand All"}
+          title={anyExpanded ? t("modes.files.collapseAll") : t("modes.files.expandAll")}
           onClick={onToggleAll}
         >
           {anyExpanded ? (
@@ -122,7 +124,7 @@ function FilesHeader({ callbacks, projectName, anyExpanded, onToggleAll }: {
         <button
           type="button"
           className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title="Refresh"
+          title={t("modes.files.refresh")}
           onClick={handleRefresh}
         >
           <RefreshCwIcon className={cn("size-3.5", spinning && "animate-spin")} />
@@ -135,6 +137,7 @@ function FilesHeader({ callbacks, projectName, anyExpanded, onToggleAll }: {
 // ─── Files Sidebar ───
 
 export function FilesSidebar() {
+  const { t } = useTranslation();
   const tabs = useRightPanelStore((s) => s.tabs);
   const activeTabId = useRightPanelStore((s) => s.activeTabId);
   const allFiles = useDocumentStore((s) => s.files);
@@ -158,16 +161,16 @@ export function FilesSidebar() {
   // Delete file AND close any tabs that were viewing it
   const handleDeleteFile = useCallback(
     (fileId: string) => {
-      if (!window.confirm(`Delete "${fileId}"? This cannot be undone.`)) return;
+      if (!window.confirm(t("dialogs.files.deleteBody", { name: fileId }))) return;
       const rps = useRightPanelStore.getState();
-      for (const t of rps.tabs) {
-        if (t.fileId === fileId || t.filePath === fileId) {
-          rps.requestCloseTab(t.id);
+      for (const tab of rps.tabs) {
+        if (tab.fileId === fileId || tab.filePath === fileId) {
+          rps.requestCloseTab(tab.id);
         }
       }
       deleteFile(fileId);
     },
-    [deleteFile],
+    [deleteFile, t],
   );
 
   // Delete folder AND close any tabs viewing files inside it
@@ -358,9 +361,9 @@ export function FilesSidebar() {
     // Close any tabs viewing files inside this folder
     const rps = useRightPanelStore.getState();
     const prefix = `${folderPath}/`;
-    for (const t of rps.tabs) {
-      if (t.fileId?.startsWith(prefix) || t.filePath?.startsWith(prefix)) {
-        rps.requestCloseTab(t.id);
+    for (const tab of rps.tabs) {
+      if (tab.fileId?.startsWith(prefix) || tab.filePath?.startsWith(prefix)) {
+        rps.requestCloseTab(tab.id);
       }
     }
 
@@ -436,9 +439,9 @@ export function FilesSidebar() {
       await renameFile(renameFileId, name);
       // Sync any tabs that were viewing this file
       const rps = useRightPanelStore.getState();
-      for (const t of rps.tabs) {
-        if (t.fileId === oldPath || t.filePath === oldPath) {
-          rps.updateTab(t.id, { fileId: newPath, filePath: newPath, title: name });
+      for (const tab of rps.tabs) {
+        if (tab.fileId === oldPath || tab.filePath === oldPath) {
+          rps.updateTab(tab.id, { fileId: newPath, filePath: newPath, title: name });
         }
       }
       setRenameDialogOpen(false);
@@ -743,7 +746,7 @@ export function FilesSidebar() {
                       </button>
                     </AppMenuTrigger>
                     <AppMenuContent align="start" side="top" className="w-44">
-                      <AppMenuItem onClick={handleViewProject}>View Project Files</AppMenuItem>
+                      <AppMenuItem onClick={handleViewProject}>{t("modes.files.viewProjectFiles")}</AppMenuItem>
                       {allWorktrees.filter((w) => w.name !== activeWorktree.name).length > 0 && (
                         <>
                           <AppMenuSeparator />
@@ -795,7 +798,7 @@ export function FilesSidebar() {
                       <AppMenuContent align="start" side="top" className="w-48 max-h-56 overflow-y-auto">
                         {activeWorktree?.baseBranch === gitBranch && (
                           <>
-                            <AppMenuItem onClick={handleViewWorktree}>View Worktree Files</AppMenuItem>
+                            <AppMenuItem onClick={handleViewWorktree}>{t("modes.files.viewWorktreeFiles")}</AppMenuItem>
                             {branches.length > 0 && <AppMenuSeparator />}
                           </>
                         )}
@@ -894,7 +897,9 @@ export function FilesSidebar() {
       <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{isFolderRename ? "Rename Folder" : "Rename"}</DialogTitle>
+            <DialogTitle>
+              {isFolderRename ? t("dialogs.files.renameFolder") : t("dialogs.files.rename")}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-2 py-4">
             <Input
@@ -909,9 +914,9 @@ export function FilesSidebar() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenameDialogOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
-            <Button onClick={handleRename}>Rename</Button>
+            <Button onClick={handleRename}>{t("dialogs.files.rename")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -920,47 +925,43 @@ export function FilesSidebar() {
       <Dialog open={!!deleteDialog} onOpenChange={(o) => { if (!o) setDeleteDialog(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Delete Folder</DialogTitle>
+            <DialogTitle>{t("dialogs.files.deleteFolder")}</DialogTitle>
             <DialogDescription asChild>
               <div className="space-y-2">
                 {deleteDialog?.workspaceFunc ? (
                   <>
                     <p className="text-sm">
-                      This folder is configured as a{" "}
-                      <strong className="inline-flex items-center gap-1.5">
-                        {deleteDialog ? (
-                          (() => {
-                            const ws = findWorkspaceFolder(deleteDialog.folderPath, workspaceDirs);
-                            if (!ws) return null;
-                            return (
-                              <WorkspaceFolderIcon
-                                name={resolveFolderIconName(ws)}
-                                className="size-3.5"
-                              />
-                            );
-                          })()
-                        ) : null}
-                        {FOLDER_FUNCTION_LABELS[deleteDialog.workspaceFunc]}
-                      </strong>{" "}
-                      folder in your workspace settings. Deleting it will also
-                      remove it from your workspace configuration.
+                      <span className="inline-flex items-center gap-1.5">
+                        {(() => {
+                          const ws = findWorkspaceFolder(deleteDialog.folderPath, workspaceDirs);
+                          if (!ws) return null;
+                          return (
+                            <WorkspaceFolderIcon
+                              name={resolveFolderIconName(ws)}
+                              className="size-3.5"
+                            />
+                          );
+                        })()}
+                        {t("dialogs.files.workspaceWarn", {
+                          function: FOLDER_FUNCTION_LABELS[deleteDialog.workspaceFunc],
+                        })}
+                      </span>
                     </p>
                     {deleteDialog.workspaceFunc === "manuscript" &&
                       useWorkspaceConfigStore.getState().workspaceDirs.filter(
                         (d) => d.function === "manuscript",
                       ).length === 1 && (
                         <p className="text-sm text-amber-600 dark:text-amber-400">
-                          This is the only manuscript folder. Removing it will
-                          disable TeX workspace features (editor + PDF preview).
+                          {t("dialogs.files.manuscriptWarn")}
                         </p>
                       )}
                   </>
-                ) : (
-                  <p className="text-sm">
-                    Are you sure you want to permanently delete this folder
-                    and all its contents?
-                  </p>
-                )}
+                ) : null}
+                <p className="text-sm">
+                  {t("dialogs.files.deleteFolderBody", {
+                    name: deleteDialog?.folderName ?? "",
+                  })}
+                </p>
               </div>
             </DialogDescription>
           </DialogHeader>
@@ -968,17 +969,15 @@ export function FilesSidebar() {
             <p className="text-sm text-muted-foreground">
               <code className="text-destructive bg-destructive/10 px-1 rounded">
                 {deleteDialog?.folderPath}/
-              </code>{" "}
-              and all files inside will be permanently deleted. This action
-              cannot be undone.
+              </code>
             </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialog(null)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button variant="destructive" onClick={confirmDeleteFolder}>
-              Delete Folder
+              {t("dialogs.files.deleteFolder")}
             </Button>
           </DialogFooter>
         </DialogContent>

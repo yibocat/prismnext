@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2Icon, SearchIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ const INPUT =
   "w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-[length:var(--font-size-13)] outline-none focus:border-primary/40";
 
 export function McpCatalogPanel() {
+  const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const servers = useMcpServersStore((s) => s.servers);
@@ -53,13 +55,17 @@ export function McpCatalogPanel() {
   const filteredPresets = useMemo(() => {
     const q = catalogSearch.trim().toLowerCase();
     if (!q) return MCP_PRESETS;
-    return MCP_PRESETS.filter(
-      (p) =>
+    return MCP_PRESETS.filter((p) => {
+      const categoryEn = MCP_CATEGORY_LABELS[p.category].toLowerCase();
+      const categoryTr = t(`settings.editor.mcp.category.${p.category}`).toLowerCase();
+      return (
         p.name.toLowerCase().includes(q) ||
         p.description.toLowerCase().includes(q) ||
-        MCP_CATEGORY_LABELS[p.category].toLowerCase().includes(q),
-    );
-  }, [catalogSearch]);
+        categoryEn.includes(q) ||
+        categoryTr.includes(q)
+      );
+    });
+  }, [catalogSearch, t]);
 
   const builtinPresets = useMemo(
     () => filteredPresets.filter((p) => p.builtin),
@@ -94,12 +100,12 @@ export function McpCatalogPanel() {
     if (!projectRoot) return;
     const entry = presetToEntry(preset, installValues);
     if (!entry) {
-      toast.error("Fill in all required fields.");
+      toast.error(t("settings.mcp.toast.fillRequired"));
       return;
     }
     await persist(projectRoot, mergeMcpEntries(servers, [entry]));
     cancelInstall();
-    toast.success(`${preset.name} added — start a new chat to use it.`);
+    toast.success(t("settings.editor.mcp.toast.added", { name: preset.name }));
     closePanel();
   };
 
@@ -112,14 +118,14 @@ export function McpCatalogPanel() {
     const entry = presetToEntry(preset);
     if (!entry) return;
     await persist(projectRoot, mergeMcpEntries(servers, [entry]));
-    toast.success(`${preset.name} installed — start a new chat to use it.`);
+    toast.success(t("settings.mcp.toast.installed", { name: preset.name }));
     closePanel();
   };
 
   if (!projectRoot) {
     return (
       <div className="flex flex-1 items-center justify-center px-8 text-[length:var(--font-size-13)] text-muted-foreground">
-        Open a project to browse the MCP catalog.
+        {t("settings.editor.mcp.openProject")}
       </div>
     );
   }
@@ -134,23 +140,29 @@ export function McpCatalogPanel() {
             <div className="flex flex-wrap items-center gap-2">
               <span className={ROW_LABEL}>{preset.name}</span>
               <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
-                {MCP_CATEGORY_LABELS[preset.category]}
+                {t(`settings.editor.mcp.category.${preset.category}`)}
               </span>
               {preset.builtin ? (
                 <span className={cn(BADGE, "bg-primary/10 text-primary normal-case tracking-normal")}>
-                  Built-in
+                  {t("settings.editor.mcp.badgeBuiltin")}
                 </span>
               ) : preset.recommended ? (
                 <span className={cn(BADGE, "bg-primary/10 text-primary normal-case tracking-normal")}>
-                  Recommended
+                  {t("settings.editor.mcp.badgeRecommended")}
                 </span>
               ) : null}
             </div>
-            <p className={ROW_DESC}>{preset.description}</p>
+            <p className={ROW_DESC}>
+              {t(`settings.editor.mcp.presets.${preset.id}.description`, {
+                defaultValue: preset.description,
+              })}
+            </p>
           </div>
           {installed || preset.builtin ? (
             <span className={cn(BADGE, "bg-primary/10 text-primary")}>
-              {preset.builtin ? "Default" : "Installed"}
+              {preset.builtin
+                ? t("settings.editor.mcp.badgeDefault")
+                : t("settings.editor.mcp.badgeInstalled")}
             </span>
           ) : (
             <Button
@@ -159,7 +171,7 @@ export function McpCatalogPanel() {
               disabled={saving}
               onClick={() => void oneClickInstall(preset)}
             >
-              Install
+              {t("settings.editor.mcp.install")}
             </Button>
           )}
         </div>
@@ -177,10 +189,10 @@ export function McpCatalogPanel() {
                 onClick={() => void confirmInstall(preset)}
               >
                 {saving ? <Loader2Icon className="size-3 animate-spin mr-1" /> : null}
-                Add to project
+                {t("settings.editor.mcp.addToProject")}
               </Button>
               <Button variant="ghost" size="xs" onClick={cancelInstall} disabled={saving}>
-                Cancel
+                {t("common.cancel")}
               </Button>
             </div>
           </div>
@@ -202,45 +214,38 @@ export function McpCatalogPanel() {
   return (
     <div className="flex-1 overflow-auto">
       <div className={SETTINGS_DETAIL_SHELL}>
-        <p className={SETTINGS_ROW_DESC}>
-          Curated MCP servers for research workflows. Requires{" "}
-          <code className="text-[length:var(--font-size-11)] bg-muted px-1 rounded">npx</code>.{" "}
-          <strong>Paper Search</strong> is built-in (always on). Staging and library citations stay
-          in Prism Next{" "}
-          <code className="text-[length:var(--font-size-11)] bg-muted px-1 rounded">literature-*</code>{" "}
-          tools.
-        </p>
+        <p className={SETTINGS_ROW_DESC}>{t("settings.editor.mcp.intro")}</p>
         <div className="relative">
           <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
           <input
             type="search"
             className={cn(INPUT, "pl-8")}
-            placeholder="Search MCP servers…"
+            placeholder={t("settings.editor.mcp.searchPlaceholder")}
             value={catalogSearch}
             onChange={(e) => setCatalogSearch(e.target.value)}
           />
         </div>
         {filteredPresets.length === 0 ? (
           <div className={cn(CARD, "py-8 text-center text-[length:var(--font-size-12)] text-muted-foreground")}>
-            No matches.
+            {t("settings.editor.mcp.noMatches")}
           </div>
         ) : (
           <div className="space-y-5">
-            {renderPresetSection("Built-in", builtinPresets)}
-            {renderPresetSection("Recommended", recommendedPresets)}
-            {renderPresetSection("More", morePresets)}
+            {renderPresetSection(t("settings.editor.mcp.sectionBuiltin"), builtinPresets)}
+            {renderPresetSection(t("settings.editor.mcp.sectionRecommended"), recommendedPresets)}
+            {renderPresetSection(t("settings.editor.mcp.sectionMore"), morePresets)}
           </div>
         )}
         <div className="flex gap-2">
           <Button variant="ghost" size="xs" onClick={closePanel}>
-            Close
+            {t("settings.editor.mcp.close")}
           </Button>
           <Button
             variant="ghost"
             size="xs"
             onClick={() => openSettingsPanel({ kind: "mcp-paste-json" })}
           >
-            Add from JSON instead
+            {t("settings.editor.mcp.addFromJson")}
           </Button>
         </div>
       </div>

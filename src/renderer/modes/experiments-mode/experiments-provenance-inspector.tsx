@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   CopyIcon,
   ExternalLinkIcon,
@@ -66,12 +67,6 @@ function formatDuration(startedAt: string, finishedAt: string): string | null {
   return rem > 0 ? `${min}m ${rem}s` : `${min}m`;
 }
 
-function linkMethodLabel(method: ProvenanceLinkMethod): { label: string; tone: string } {
-  return method === "explicit"
-    ? { label: "Declared artifact", tone: "text-emerald-600 dark:text-emerald-400" }
-    : { label: "Inferred by mtime", tone: "text-amber-600 dark:text-amber-400" };
-}
-
 function MetaRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid grid-cols-[4.75rem_minmax(0,1fr)] items-start gap-x-3 py-1">
@@ -87,6 +82,7 @@ export function ExperimentsProvenanceInspector({
   artifactPath,
   workspacePath,
 }: ExperimentsProvenanceInspectorProps) {
+  const { t } = useTranslation();
   const projectRoot = useExperimentProjectRoot();
   const [resolved, setResolved] = useState<{
     run: ProvenanceRunRecorded;
@@ -123,7 +119,18 @@ export function ExperimentsProvenanceInspector({
 
   const run = resolved?.run ?? null;
   const duration = run ? formatDuration(run.startedAt, run.finishedAt) : null;
-  const link = resolved ? linkMethodLabel(resolved.linkMethod) : null;
+  const link =
+    resolved == null
+      ? null
+      : resolved.linkMethod === "explicit"
+        ? {
+            label: t("experiments.provenance.declared"),
+            tone: "text-emerald-600 dark:text-emerald-400",
+          }
+        : {
+            label: t("experiments.provenance.inferred"),
+            tone: "text-amber-600 dark:text-amber-400",
+          };
 
   const handleOpenInFiles = () => {
     void openArtifactPathInFiles(artifactPath, workspacePath);
@@ -186,10 +193,10 @@ export function ExperimentsProvenanceInspector({
         <DialogHeader className="gap-1.5 pr-6 text-left">
           <DialogTitle className="flex items-center gap-2 text-[length:var(--font-dialog-title)] font-semibold">
             <Link2Icon className="size-3.5 text-muted-foreground" aria-hidden />
-            Artifact provenance
+            {t("experiments.provenance.title")}
           </DialogTitle>
           <DialogDescription className="text-[length:var(--font-dialog-label)] text-muted-foreground">
-            Trace this file back to the run that produced it.
+            {t("experiments.provenance.desc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -199,24 +206,22 @@ export function ExperimentsProvenanceInspector({
             experimentsPathValueClass,
           )}
         >
-          {artifactPath || "(no path)"}
+          {artifactPath || t("experiments.provenance.noPath")}
         </p>
 
         {loading ? (
           <div className="flex items-center gap-2 text-[length:var(--font-dialog-label)] text-muted-foreground">
             <Loader2Icon className="size-3.5 animate-spin" aria-hidden />
-            Resolving provenance…
+            {t("experiments.provenance.resolving")}
           </div>
         ) : !run ? (
           <div className="rounded-md border border-dashed border-border/60 px-4 py-5 text-center">
-            <p className={SETTINGS_ROW_DESC}>
-              No run recorded for this file — it may have been copied manually.
-            </p>
+            <p className={SETTINGS_ROW_DESC}>{t("experiments.provenance.noRun")}</p>
           </div>
         ) : (
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <div className={experimentsSectionLabelClass}>Command</div>
+              <div className={experimentsSectionLabelClass}>{t("experiments.command")}</div>
               <div className="relative min-w-0">
                 <pre
                   className={cn(
@@ -225,11 +230,11 @@ export function ExperimentsProvenanceInspector({
                     experimentsCodeClass,
                   )}
                 >
-                  {run.command || "(empty)"}
+                  {run.command || t("experiments.runConfirm.empty")}
                 </pre>
                 <CopyFeedbackButton
                   onCopy={() => navigator.clipboard.writeText(run.command)}
-                  title="Copy command"
+                  title={t("experiments.provenance.copyCommand")}
                   className="absolute top-1.5 right-1.5 rounded-md p-1 text-muted-foreground/60 hover:bg-muted hover:text-foreground"
                 >
                   <CopyIcon className="size-3" aria-hidden />
@@ -238,7 +243,7 @@ export function ExperimentsProvenanceInspector({
             </div>
 
             <div className="space-y-0">
-              <MetaRow label="Exit">
+              <MetaRow label={t("experiments.exit")}>
                 <span
                   className={cn(
                     experimentsUiValueClass,
@@ -251,32 +256,32 @@ export function ExperimentsProvenanceInspector({
                   {run.exitCode}
                 </span>
               </MetaRow>
-              <MetaRow label="Duration">
+              <MetaRow label={t("experiments.provenance.duration")}>
                 <span className={cn(experimentsUiValueClass, "tabular-nums")}>
                   {duration ?? "—"}
                 </span>
               </MetaRow>
-              <MetaRow label="Link">
+              <MetaRow label={t("experiments.provenance.link")}>
                 {link ? (
                   <span className={cn(experimentsUiValueClass, "font-medium", link.tone)}>
                     {link.label}
                   </span>
                 ) : null}
               </MetaRow>
-              <MetaRow label="Run">
+              <MetaRow label={t("experiments.run")}>
                 <span className={experimentsCodeClass}>{run.runId}</span>
               </MetaRow>
-              <MetaRow label="Python">
+              <MetaRow label={t("experiments.provenance.python")}>
                 <span className={experimentsPathValueClass}>
-                  {pythonLabel ?? "not detected"}
+                  {pythonLabel ?? t("experiments.provenance.notDetected")}
                 </span>
               </MetaRow>
-              <MetaRow label="Platform">
+              <MetaRow label={t("experiments.provenance.platform")}>
                 <span className={experimentsUiValueClass}>{run.env.platform}</span>
               </MetaRow>
-              <MetaRow label="Git">
+              <MetaRow label={t("experiments.provenance.git")}>
                 <span className={experimentsUiValueClass}>
-                  {run.env.gitCommit ?? "not a repo"}
+                  {run.env.gitCommit ?? t("experiments.provenance.notRepo")}
                 </span>
               </MetaRow>
             </div>
@@ -292,14 +297,14 @@ export function ExperimentsProvenanceInspector({
                   size="xs"
                   variant="ghost"
                   className="h-auto max-w-full whitespace-normal px-1.5 py-0.5 text-left font-mono text-[length:var(--font-code)]"
-                  title={`Open chat session ${run.chatSessionId}`}
+                  title={t("experiments.provenance.openSession", { id: run.chatSessionId })}
                   onClick={() => handleOpenChatSession(run.chatSessionId!)}
                 >
                   <span className="break-all">{run.chatSessionId}</span>
                 </Button>
               ) : (
                 <span className="text-[length:var(--font-dialog-label)] text-muted-foreground/70">
-                  No chat session linked
+                  {t("experiments.provenance.noChat")}
                 </span>
               )}
             </div>
@@ -313,7 +318,7 @@ export function ExperimentsProvenanceInspector({
             variant="ghost"
             onClick={() => onOpenChange(false)}
           >
-            Close
+            {t("experiments.close")}
           </Button>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button
@@ -324,7 +329,7 @@ export function ExperimentsProvenanceInspector({
               disabled={!artifactPath}
             >
               <ExternalLinkIcon className="size-3.5" aria-hidden />
-              Open in Files
+              {t("experiments.provenance.openInFiles")}
             </Button>
             <Button
               type="button"
@@ -332,10 +337,10 @@ export function ExperimentsProvenanceInspector({
               variant="outline"
               onClick={handleDiscussInChat}
               disabled={!run}
-              title="Send this run + artifact to chat"
+              title={t("experiments.provenance.sendArtifact")}
             >
               <MessagesSquareIcon className="size-3.5" aria-hidden />
-              Discuss
+              {t("experiments.provenance.discuss")}
             </Button>
             <Button
               type="button"
@@ -343,10 +348,10 @@ export function ExperimentsProvenanceInspector({
               variant="default"
               onClick={handleUseInPaper}
               disabled={!run}
-              title="Send this run to Chat for manuscript drafting"
+              title={t("experiments.provenance.sendDraft")}
             >
               <PenLineIcon className="size-3.5" aria-hidden />
-              Use in paper
+              {t("experiments.runs.useInPaper")}
             </Button>
           </div>
         </DialogFooter>

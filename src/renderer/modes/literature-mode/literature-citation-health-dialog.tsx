@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   CheckCircle2Icon,
@@ -51,6 +52,7 @@ export function LiteratureCitationHealthDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const fetchCitationHealth = useLiteratureStore((s) => s.fetchCitationHealth);
   const syncCitedLibraryToManuscriptBib = useLiteratureStore((s) => s.syncCitedLibraryToManuscriptBib);
@@ -120,11 +122,9 @@ export function LiteratureCitationHealthDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Manuscript citations</DialogTitle>
+          <DialogTitle>{t("literature.dialogs.citationHealthTitle")}</DialogTitle>
           <DialogDescription>
-            Library-first rule: every manuscript cite must exist in the literature library.
-            `.bib` entries must be synced from the library (canonical metadata). Fixes use real
-            file data — no guessing.
+            {t("literature.dialogs.citationHealthDesc")}
           </DialogDescription>
         </DialogHeader>
 
@@ -132,40 +132,50 @@ export function LiteratureCitationHealthDialog({
           {loading && !report ? (
             <div className="flex items-center gap-2 text-muted-foreground text-[length:var(--font-size-13)]">
               <Loader2Icon className="size-4 animate-spin" />
-              Scanning project…
+              {t("literature.dialogs.scanning")}
             </div>
           ) : report ? (
             <>
               <div className="space-y-3 rounded-lg border border-border p-3">
                 <StatusRow
                   ok={bibOk}
-                  label=".tex ↔ manuscript .bib"
+                  label={t("literature.citations.texBib")}
                   detail={
                     bibOk
-                      ? `${bib?.citeKeysInTex.length ?? 0} cited keys match ${bib?.bibPath ?? "references.bib"}`
-                      : `${bib?.missingKeys.length ?? 0} missing in .bib · ${bib?.duplicateKeys.length ?? 0} duplicate`
+                      ? t("literature.citations.bibMatch", {
+                          count: bib?.citeKeysInTex.length ?? 0,
+                          bib: bib?.bibPath ?? "references.bib",
+                        })
+                      : t("literature.citations.bibIssues", {
+                          missing: bib?.missingKeys.length ?? 0,
+                          duplicates: bib?.duplicateKeys.length ?? 0,
+                        })
                   }
                 />
                 <StatusRow
                   ok={libraryOk}
-                  label=".tex ↔ literature library (primary)"
+                  label={t("literature.citations.libDb")}
                   detail={
                     libraryOk
-                      ? "All cited keys exist in library.db"
-                      : `${library?.missingKeys.length ?? 0} cited keys not in library — import before syncing .bib`
+                      ? t("literature.citations.allOk")
+                      : t("literature.citations.libraryMissing", {
+                          count: library?.missingKeys.length ?? 0,
+                        })
                   }
                 />
                 {bibOrphans.length > 0 ? (
                   <StatusRow
                     ok={false}
-                    label="Manuscript .bib ↔ library (policy)"
-                    detail={`${bibOrphans.length} .bib entries not in library — import to library, then re-sync from library`}
+                    label={t("literature.citations.policy")}
+                    detail={t("literature.citations.policyMissing", {
+                      count: bibOrphans.length,
+                    })}
                   />
                 ) : (
                   <StatusRow
                     ok={policyOk}
-                    label="Manuscript .bib ↔ library (policy)"
-                    detail="All .bib entries trace to the literature library"
+                    label={t("literature.citations.policy")}
+                    detail={t("literature.citations.policyOk")}
                   />
                 )}
                 {bib?.bibPath ? (
@@ -178,7 +188,7 @@ export function LiteratureCitationHealthDialog({
               {importable.length > 0 ? (
                 <div className="space-y-2">
                   <p className="text-[length:var(--font-size-12)] font-medium text-foreground">
-                    In manuscript .bib — can import to library ({importable.length})
+                    {t("literature.citations.inBib")} ({importable.length})
                   </p>
                   <ul className="max-h-36 overflow-y-auto rounded-md border border-border divide-y divide-border/60">
                     {importable.slice(0, 12).map((entry) => (
@@ -194,7 +204,7 @@ export function LiteratureCitationHealthDialog({
                     ))}
                     {importable.length > 12 ? (
                       <li className="px-2.5 py-1.5 text-muted-foreground text-[length:var(--font-size-11)]">
-                        +{importable.length - 12} more
+                        {t("literature.citations.more", { count: importable.length - 12 })}
                       </li>
                     ) : null}
                   </ul>
@@ -204,10 +214,10 @@ export function LiteratureCitationHealthDialog({
               {notInBib.length > 0 ? (
                 <div className="space-y-1">
                   <p className="text-[length:var(--font-size-12)] font-medium text-foreground">
-                    Not in library or manuscript .bib ({notInBib.length})
+                    {t("literature.citations.notFound")} ({notInBib.length})
                   </p>
                   <p className="text-[length:var(--font-size-11)] text-muted-foreground">
-                    Add to library via DOI/arXiv import, or add BibTeX to references.bib first.
+                    {t("literature.citations.notFoundHint")}
                   </p>
                   <p className="font-mono text-[length:var(--font-size-11)] text-muted-foreground break-all">
                     {notInBib.map((e) => e.bibkey).join(", ")}
@@ -227,7 +237,7 @@ export function LiteratureCitationHealthDialog({
             className="sm:mr-auto"
           >
             <RefreshCwIcon className={cn("size-3.5 mr-1", loading && "animate-spin")} />
-            Refresh
+            {t("literature.citations.refresh")}
           </Button>
           <div className="flex flex-wrap gap-2 justify-end">
             {importable.length > 0 ? (
@@ -240,7 +250,7 @@ export function LiteratureCitationHealthDialog({
                 {acting === "import-lib" ? (
                   <Loader2Icon className="size-3.5 animate-spin mr-1" />
                 ) : null}
-                Import from .bib → library
+                {t("literature.citations.importBib")}
               </Button>
             ) : null}
             {!libraryOk && bibOk ? (
@@ -252,11 +262,11 @@ export function LiteratureCitationHealthDialog({
                 {acting === "sync-bib" ? (
                   <Loader2Icon className="size-3.5 animate-spin mr-1" />
                 ) : null}
-                Sync library → .bib
+                {t("literature.citations.syncBib")}
               </Button>
             ) : null}
             <Button size="sm" variant="secondary" onClick={() => onOpenChange(false)}>
-              Close
+              {t("common.close")}
             </Button>
           </div>
         </DialogFooter>

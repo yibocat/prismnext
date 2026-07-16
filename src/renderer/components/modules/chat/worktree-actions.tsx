@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowLeftIcon, AlertTriangleIcon } from "lucide-react";
 import {
   AppMenu,
@@ -18,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export function WorktreeActions() {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const activeWorktree = useResolvedWorktree();
   const [mergeOpen, setMergeOpen] = useState(false);
@@ -78,29 +80,23 @@ export function WorktreeActions() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <AlertTriangleIcon className="size-4 text-amber-500" />
-              Discard unmerged work?
+              {t("dialogs.worktree.discardTitle")}
             </DialogTitle>
           </DialogHeader>
           <div className="text-sm text-muted-foreground space-y-2">
             <p>
-              This worktree has{" "}
-              <strong className="text-foreground">
-                {activeWorktree.aheadCount} unmerged commit{activeWorktree.aheadCount !== 1 ? "s" : ""}
-              </strong>{" "}
-              that will be <strong className="text-destructive">permanently deleted</strong>.
+              {t("dialogs.worktree.discardBody", { count: activeWorktree.aheadCount })}
             </p>
             <p>
-              Merge to Branch first to integrate changes into{" "}
-              <code className="text-xs bg-muted px-1 rounded">{activeWorktree.baseBranch}</code>,
-              or discard them if you no longer need this work.
+              {t("dialogs.worktree.discardHint", { branch: activeWorktree.baseBranch })}
             </p>
           </div>
           <DialogFooter className="gap-2 sm:gap-2">
             <Button variant="outline" onClick={() => setShowDiscardConfirm(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button variant="destructive" onClick={handleConfirmDiscard}>
-              Discard &amp; Close
+              {t("dialogs.worktree.discardConfirm")}
             </Button>
           </DialogFooter>
         </DialogContent>

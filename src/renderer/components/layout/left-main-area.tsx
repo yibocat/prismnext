@@ -1,4 +1,5 @@
 import { useEffect, useRef, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useOpenCodeEvents } from "@/hooks/use-opencode-events";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -42,6 +43,7 @@ import { isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
 
 
 export function LeftMainArea() {
+  const { t } = useTranslation();
   useOpenCodeEvents();
 
   const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
@@ -189,7 +191,7 @@ export function LeftMainArea() {
           >
             {chatFileDragActive ? (
               <span className="pointer-events-none absolute bottom-10 left-1/2 z-30 -translate-x-1/2 rounded-md border border-primary/25 bg-background/95 px-3 py-1 text-[length:var(--font-size-11)] text-muted-foreground shadow-sm">
-                Drop files to attach
+                {t("chat.aibar.dropFiles")}
               </span>
             ) : null}
             {/* Top toolbar — branch & worktree selectors */}
@@ -212,7 +214,7 @@ export function LeftMainArea() {
                 type="button"
                 className="rounded px-1.5 py-0.5 text-muted-foreground/70 hover:bg-accent hover:text-accent-foreground transition-colors"
               >
-                Suggestions
+                {t("chat.toolbar.suggestions")}
               </button>
               <span className="flex-1" />
             </div>
@@ -229,7 +231,7 @@ export function LeftMainArea() {
           >
             {chatFileDragActive ? (
               <span className="pointer-events-none absolute bottom-24 left-1/2 z-30 -translate-x-1/2 rounded-md border border-primary/25 bg-background/95 px-3 py-1 text-[length:var(--font-size-11)] text-muted-foreground shadow-sm">
-                Drop files to attach
+                {t("chat.aibar.dropFiles")}
               </span>
             ) : null}
             <ChatMessages />
@@ -259,7 +261,7 @@ export function LeftMainArea() {
                   ) : (
                     <>
                       <span className="opacity-40">·</span>
-                      <span>Local</span>
+                      <span>{t("chat.toolbar.local")}</span>
                     </>
                   )}
                 </>

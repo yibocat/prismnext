@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useCompileStore } from "@/stores/compile-store";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -16,6 +17,7 @@ import {
 } from "./settings-tokens";
 
 export function CompileSettingsFields() {
+  const { t } = useTranslation();
   const compilerBackend = useCompileStore((s) => s.compilerBackend);
   const setCompilerBackend = useCompileStore((s) => s.setCompilerBackend);
   const autoCompile = useCompileStore((s) => s.autoCompile);
@@ -31,10 +33,9 @@ export function CompileSettingsFields() {
     <div className={SETTINGS_CARD}>
       <div className={SETTINGS_ROW}>
         <div className="min-w-0">
-          <span className={SETTINGS_ROW_LABEL}>Default engine</span>
+          <span className={SETTINGS_ROW_LABEL}>{t("settings.texWorkspacePage.compile.defaultEngine")}</span>
           <p className={SETTINGS_ROW_DESC}>
-            LaTeX compiler for this project. Build output goes to{" "}
-            <code className="text-[length:var(--font-size-11)] bg-muted px-1 rounded">.prismnext/compile/</code>.
+            {t("settings.texWorkspacePage.compile.defaultEngineDesc")}
           </p>
         </div>
         <AppSelect value={compilerBackend} onValueChange={(v) => setCompilerBackend(v as "tectonic" | "texlive")}>
@@ -51,8 +52,8 @@ export function CompileSettingsFields() {
       </div>
       <div className={SETTINGS_ROW}>
         <div className="min-w-0">
-          <span className={SETTINGS_ROW_LABEL}>Auto compile</span>
-          <p className={SETTINGS_ROW_DESC}>Automatically compile after saving a .tex file.</p>
+          <span className={SETTINGS_ROW_LABEL}>{t("settings.texWorkspacePage.compile.autoCompile")}</span>
+          <p className={SETTINGS_ROW_DESC}>{t("settings.texWorkspacePage.compile.autoCompileDesc")}</p>
         </div>
         <Switch
           checked={autoCompile}

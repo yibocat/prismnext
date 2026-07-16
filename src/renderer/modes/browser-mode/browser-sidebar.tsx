@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useBrowserStore } from "@/stores/browser-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -76,6 +77,7 @@ function SidebarSectionTrigger({
 }
 
 export function BrowserSidebar() {
+  const { t } = useTranslation();
   const [accordionValue, setAccordionValue] = useState<string[]>(["bookmarks", "recent"]);
 
   const activeTabId = useRightPanelStore((s) => s.activeTabId);
@@ -181,24 +183,24 @@ export function BrowserSidebar() {
   const formatTime = (ts: number): string => {
     const diff = Date.now() - ts;
     const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "Just now";
-    if (mins < 60) return `${mins}m ago`;
+    if (mins < 1) return t("modes.browser.justNow");
+    if (mins < 60) return t("modes.browser.minutesAgo", { count: mins });
     const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return `${Math.floor(hours / 24)}d ago`;
+    if (hours < 24) return t("modes.browser.hoursAgo", { count: hours });
+    return t("modes.browser.daysAgo", { count: Math.floor(hours / 24) });
   };
 
   return (
     <>
       <SidebarHeader className="flex h-8 shrink-0 flex-row items-center px-3 py-0 gap-0">
         <span className="text-[length:var(--font-size-12)] font-medium text-muted-foreground truncate">
-          Browser
+          {t("modes.browser.label")}
         </span>
         <div className="flex-1" />
         <button
           type="button"
           className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0 disabled:opacity-50"
-          title="Refresh bookmarks and recent"
+          title={t("modes.browser.refreshSidebar")}
           onClick={handleRefresh}
           disabled={refreshing}
         >
@@ -209,11 +211,11 @@ export function BrowserSidebar() {
       <SidebarContent className="overflow-auto px-1.5 py-1">
         <Accordion type="multiple" value={accordionValue} onValueChange={setAccordionValue}>
           <AccordionItem value="bookmarks" className="border-none">
-            <SidebarSectionTrigger label="Bookmarks" count={bookmarks.length} />
+            <SidebarSectionTrigger label={t("modes.browser.bookmarks")} count={bookmarks.length} />
             <AccordionContent animated={false} className="pb-0.5 pt-0">
               {bookmarks.length === 0 ? (
                 <p className="px-3.5 py-2 text-[length:var(--font-hint)] text-muted-foreground/60">
-                  No bookmarks yet
+                  {t("modes.browser.noBookmarks")}
                 </p>
               ) : (
                 bookmarks.map((b) => (
@@ -255,7 +257,7 @@ export function BrowserSidebar() {
                                 e.stopPropagation();
                                 removeBookmark(b.id);
                               }}
-                              title="Remove bookmark"
+                              title={t("modes.browser.removeBookmark")}
                             >
                               <StarIcon className="size-3 fill-warning text-warning" />
                             </button>
@@ -264,17 +266,17 @@ export function BrowserSidebar() {
                       </AppContextMenuTrigger>
                       <AppContextMenuContent>
                         <AppContextMenuItem onClick={() => handleNavigate(b.url)}>
-                          Open
+                          {t("modes.browser.open")}
                         </AppContextMenuItem>
                         <AppContextMenuItem onClick={() => handleOpenInNewTab(b.url)}>
-                          Open in New Tab
+                          {t("modes.browser.openNewTab")}
                         </AppContextMenuItem>
                         <AppContextMenuSeparator />
                         <AppContextMenuItem onClick={() => handleStartRename(b.id, b.title)}>
-                          Rename
+                          {t("modes.browser.rename")}
                         </AppContextMenuItem>
                         <AppContextMenuItem onClick={() => handleStartChangeUrl(b.id, b.url)}>
-                          Change URL
+                          {t("modes.browser.changeUrl")}
                         </AppContextMenuItem>
                       </AppContextMenuContent>
                     </AppContextMenu>
@@ -293,10 +295,10 @@ export function BrowserSidebar() {
                           placeholder="https://..."
                         />
                         <button type="button" onClick={handleEditConfirm} className="text-[length:var(--font-hint)] text-primary hover:underline shrink-0">
-                          OK
+                          {t("common.ok")}
                         </button>
                         <button type="button" onClick={handleEditCancel} className="text-[length:var(--font-hint)] text-muted-foreground hover:underline shrink-0">
-                          Cancel
+                          {t("common.cancel")}
                         </button>
                       </div>
                     )}
@@ -308,7 +310,7 @@ export function BrowserSidebar() {
 
           <AccordionItem value="recent" className="border-none">
             <SidebarSectionTrigger
-              label="Recent"
+              label={t("modes.browser.recent")}
               count={recentVisits.length}
               extraAction={
                 recentVisits.length > 0 ? (
@@ -316,7 +318,7 @@ export function BrowserSidebar() {
                     type="button"
                     className="flex size-4 items-center justify-center rounded-sm text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
                     onClick={() => clearRecentVisits()}
-                    title="Clear all recent"
+                    title={t("modes.browser.clearRecent")}
                   >
                     <Trash2Icon className="size-3" />
                   </button>
@@ -326,7 +328,7 @@ export function BrowserSidebar() {
             <AccordionContent animated={false} className="pb-0.5 pt-0">
               {recentVisits.length === 0 ? (
                 <p className="px-3.5 py-2 text-[length:var(--font-hint)] text-muted-foreground/60">
-                  No recent visits
+                  {t("modes.browser.noRecent")}
                 </p>
               ) : (
                 recentVisits.map((v, i) => (
@@ -354,7 +356,7 @@ export function BrowserSidebar() {
                             e.stopPropagation();
                             removeRecentVisit(v.url);
                           }}
-                          title="Remove from recent"
+                          title={t("modes.browser.removeRecent")}
                         >
                           <XIcon className="size-3" />
                         </button>
@@ -362,10 +364,10 @@ export function BrowserSidebar() {
                     </AppContextMenuTrigger>
                     <AppContextMenuContent>
                       <AppContextMenuItem onClick={() => handleNavigate(v.url)}>
-                        Open
+                        {t("modes.browser.open")}
                       </AppContextMenuItem>
                       <AppContextMenuItem onClick={() => handleOpenInNewTab(v.url)}>
-                        Open in New Tab
+                        {t("modes.browser.openNewTab")}
                       </AppContextMenuItem>
                     </AppContextMenuContent>
                   </AppContextMenu>

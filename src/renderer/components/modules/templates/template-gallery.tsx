@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -28,31 +28,34 @@ export function GalleryView({
   onUse: (t: TemplateMeta) => void;
   canApply?: boolean;
 }) {
-  if (!templates) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-[length:var(--font-size-12)] text-muted-foreground/50">Loading templates...</p>
-      </div>
-    );
-  }
+  const { t } = useTranslation();
 
   const filtered = useMemo(() => {
-    let list = category === "all" ? templates : templates.filter((t) => t.category === category);
+    if (!templates) return [];
+    let list = category === "all" ? templates : templates.filter((tmpl) => tmpl.category === category);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
-        (t) =>
-          t.name.toLowerCase().includes(q) ||
-          t.description.toLowerCase().includes(q) ||
-          t.tags.some((tag) => tag.toLowerCase().includes(q)),
+        (tmpl) =>
+          tmpl.name.toLowerCase().includes(q) ||
+          tmpl.description.toLowerCase().includes(q) ||
+          tmpl.tags.some((tag) => tag.toLowerCase().includes(q)),
       );
     }
     return list;
   }, [templates, category, search]);
 
+  if (!templates) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <p className="text-[length:var(--font-size-12)] text-muted-foreground/50">{t("common.loading")}</p>
+      </div>
+    );
+  }
+
   const activeCategoryLabel =
     category === "all" ? null : CATEGORIES.find((c) => c.id === category)?.label ?? category;
-  const totalCount = templates?.length ?? 0;
+  const totalCount = templates.length;
 
   return (
     <div className="flex-1 overflow-y-auto pb-8">
@@ -62,7 +65,7 @@ export function GalleryView({
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search templates..."
+          placeholder={t("templates.center.search")}
           className="h-8 pl-8 pr-7 text-[length:var(--font-size-12)] rounded-md border border-border/40 bg-transparent hover:border-border/60 focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all shadow-none"
         />
         {search && (
@@ -91,7 +94,7 @@ export function GalleryView({
                 className="text-primary hover:underline underline-offset-2"
                 onClick={() => setCategory("all")}
               >
-                Show all
+                {t("templates.center.all")}
               </button>
             </>
           ) : null}
@@ -113,23 +116,23 @@ export function GalleryView({
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
           <SearchIcon className="size-8 opacity-20" />
-          <p className="text-[length:var(--font-size-13)]">No templates found</p>
+          <p className="text-[length:var(--font-size-13)]">{t("templates.center.noFound")}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 @sm:grid-cols-2 @md:grid-cols-3 @2xl:grid-cols-4 gap-3">
-          {filtered.map((t) => (
+          {filtered.map((tmpl) => (
             <Card
-              key={t.id}
+              key={tmpl.id}
               className="cursor-pointer hover:border-primary/30 transition-colors overflow-hidden"
-              onClick={() => onSelect(t)}
+              onClick={() => onSelect(tmpl)}
             >
               <div className="h-14 flex items-center justify-center bg-muted/30">
-                {(() => { const IconComp = TEMPLATE_ICONS[t.id] ?? FileTextIcon; return <IconComp className="size-5 text-muted-foreground/50" />; })()}
+                {(() => { const IconComp = TEMPLATE_ICONS[tmpl.id] ?? FileTextIcon; return <IconComp className="size-5 text-muted-foreground/50" />; })()}
               </div>
               <CardHeader className="p-2.5 gap-0">
-                <CardTitle className="text-[length:var(--font-size-12)]">{t.name}</CardTitle>
+                <CardTitle className="text-[length:var(--font-size-12)]">{tmpl.name}</CardTitle>
                 <CardDescription className="text-[length:var(--font-badge)] line-clamp-2 leading-relaxed mt-0.5">
-                  {t.description}
+                  {tmpl.description}
                 </CardDescription>
               </CardHeader>
               <div className="px-2.5 pb-2.5">
@@ -137,9 +140,9 @@ export function GalleryView({
                   size="sm"
                   className="h-7 w-full text-[length:var(--font-size-12)] shadow-none"
                   disabled={!canApply}
-                  onClick={(e) => { e.stopPropagation(); onUse(t); }}
+                  onClick={(e) => { e.stopPropagation(); onUse(tmpl); }}
                 >
-                  Use
+                  {t("templates.detail.use")}
                 </Button>
               </div>
             </Card>

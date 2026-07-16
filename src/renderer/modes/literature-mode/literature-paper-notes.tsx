@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2Icon, NotebookPenIcon, Trash2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
@@ -34,11 +35,13 @@ function NoteCard({
   deleting,
   onOpen,
   onDelete,
+  deleteTitle,
 }: {
   note: PaperNoteFile;
   deleting: boolean;
   onOpen: () => void;
   onDelete: () => void;
+  deleteTitle: string;
 }) {
   return (
     <Card
@@ -57,7 +60,7 @@ function NoteCard({
           "group-hover:opacity-100 focus-visible:opacity-100",
           deleting && "opacity-100 pointer-events-none",
         )}
-        title="Delete note"
+        title={deleteTitle}
         disabled={deleting}
         onClick={(e) => {
           e.stopPropagation();
@@ -90,6 +93,7 @@ export function LiteraturePaperNotesSection({
   isZoteroPaper?: boolean;
   showSectionDivider?: boolean;
 }) {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const files = useDocumentStore((s) => s.files);
   const deleteFile = useDocumentStore((s) => s.deleteFile);
@@ -110,11 +114,11 @@ export function LiteraturePaperNotesSection({
   };
 
   const handleDelete = async (note: PaperNoteFile) => {
-    if (!window.confirm(`Delete note "${note.name}"? This cannot be undone.`)) return;
+    if (!window.confirm(t("literature.notes.deleteConfirm", { name: note.name }))) return;
     setDeletingPath(note.relativePath);
     try {
       await deleteFile(note.relativePath);
-      toast.success("Note deleted");
+      toast.success(t("literature.notes.deleted"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Delete failed");
     } finally {
@@ -131,13 +135,14 @@ export function LiteraturePaperNotesSection({
     >
       <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1">
         <h3 className={NOTES_SECTION_LABEL}>
-          Notes{notes.length > 0 ? ` (${notes.length})` : ""}
+          {t("modes.literature.notes")}
+          {notes.length > 0 ? ` (${notes.length})` : ""}
         </h3>
         <Button
           type="button"
           size="xs"
           variant="ghost"
-          title="New note"
+          title={t("literature.notes.newNote")}
           className="h-6 px-1.5 text-[length:var(--font-menu-item)] text-muted-foreground hover:text-foreground"
           disabled={creatingNote || !projectRoot}
           onClick={() => void handleNewNote()}
@@ -147,20 +152,20 @@ export function LiteraturePaperNotesSection({
           ) : (
             <NotebookPenIcon className="size-3" />
           )}
-          <span className="ml-1">New note</span>
+          <span className="ml-1">{t("literature.notes.newNote")}</span>
         </Button>
       </div>
 
       {isZoteroPaper ? (
         <p className={cn(SETTINGS_ROW_DESC, "mt-0 shrink-0 text-[length:var(--font-size-12)]")}>
           Notes are saved in project files. {PAPER_EXTRACT_ACTION_LABEL}, open PDF, or{" "}
-          <span className="text-foreground/85">Keep in project</span> keeps this entry after
+          <span className="text-foreground/85">{t("literature.detail.keepInProject")}</span> keeps this entry after
           disconnecting Zotero.
         </p>
       ) : null}
 
       {notes.length === 0 ? (
-        <p className={cn(SETTINGS_ROW_DESC, "mt-0 shrink-0")}>No reading notes yet.</p>
+        <p className={cn(SETTINGS_ROW_DESC, "mt-0 shrink-0")}>{t("literature.notes.empty")}</p>
       ) : (
         <div className={cn(NOTES_GRID_CLASS, showSectionDivider && "pr-0.5")}>
           {notes.map((note) => (
@@ -168,6 +173,7 @@ export function LiteraturePaperNotesSection({
               key={note.relativePath}
               note={note}
               deleting={deletingPath === note.relativePath}
+              deleteTitle={t("literature.notes.deleteNote")}
               onOpen={() => void openPaperNote(note.relativePath, note.name)}
               onDelete={() => void handleDelete(note)}
             />

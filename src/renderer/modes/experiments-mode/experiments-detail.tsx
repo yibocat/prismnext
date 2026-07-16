@@ -5,6 +5,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -62,6 +63,7 @@ function CopyableText({
   copyText?: string;
   className?: string;
 }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<number | null>(null);
   const payload = copyText ?? text;
@@ -91,11 +93,18 @@ function CopyableText({
         "rounded-[3px] hover:text-foreground",
         className,
       )}
-      title={copied ? "Copied" : `Click to copy: ${payload}`}
+      title={
+        copied
+          ? t("common.copied")
+          : t("experiments.detail.clickToCopy", { text: payload })
+      }
     >
       <span className="min-w-0 break-all">{text}</span>
       {copied ? (
-        <CheckIcon className="size-3 shrink-0 self-center text-success" aria-label="Copied" />
+        <CheckIcon
+          className="size-3 shrink-0 self-center text-success"
+          aria-label={t("common.copied")}
+        />
       ) : (
         <CopyIcon
           className="size-3 shrink-0 self-center text-muted-foreground/45 opacity-0 transition-opacity group-hover:opacity-100"
@@ -115,6 +124,7 @@ function HistorySection({
   runs: ExperimentRunEntry[];
   workspacePath: string;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(true);
 
   return (
@@ -133,7 +143,7 @@ function HistorySection({
           aria-hidden
         />
         <span className={experimentsSubsectionLabelClass}>
-          History
+          {t("experiments.history")}
           <span className="ml-1.5 tabular-nums text-muted-foreground/65">({runCount})</span>
         </span>
       </button>
@@ -145,6 +155,7 @@ function HistorySection({
 }
 
 export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
+  const { t } = useTranslation();
   const projectRoot = useExperimentProjectRoot();
   const selectedId = useExperimentStore((s) => s.selectedId);
   const runs = useExperimentStore((s) => s.detail?.runs ?? []);
@@ -163,7 +174,11 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
       ? await restoreExperiment(projectRoot, selectedId)
       : await archiveExperiment(projectRoot, selectedId);
     if (!ok) {
-      toast.error(archived ? "Could not restore experiment." : "Could not archive experiment.");
+      toast.error(
+        archived
+          ? t("experiments.detail.restoreFailed")
+          : t("experiments.detail.archiveFailed"),
+      );
     }
   }, [
     archiveExperiment,
@@ -171,6 +186,7 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
     projectRoot,
     restoreExperiment,
     selectedId,
+    t,
   ]);
 
   const handleDelete = useCallback(async () => {
@@ -179,7 +195,7 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
     try {
       const ok = await deleteExperiment(projectRoot, selectedId, { removeLab });
       if (!ok) {
-        toast.error("Could not delete experiment.");
+        toast.error(t("experiments.detail.deleteFailed"));
         return;
       }
       setDeleteOpen(false);
@@ -187,7 +203,7 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
     } finally {
       setDeleting(false);
     }
-  }, [deleteExperiment, projectRoot, removeLab, selectedId]);
+  }, [deleteExperiment, projectRoot, removeLab, selectedId, t]);
 
   const detailRunCount = useExperimentStore((s) => s.detail?.runCount);
   const runCount = detailRunCount ?? runs.length;
@@ -200,7 +216,7 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <h2 className={experimentsDetailTitleClass}>{meta.title}</h2>
               {archived ? (
-                <span className={literatureDetailBadgeClass}>Archived</span>
+                <span className={literatureDetailBadgeClass}>{t("experiments.archived")}</span>
               ) : null}
             </div>
             <AppMenu>
@@ -208,7 +224,7 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
                 <Button
                   size="xs"
                   variant="ghost"
-                  title="More actions"
+                  title={t("experiments.moreActions")}
                   className="size-6 shrink-0 px-0"
                 >
                   <MoreHorizontalIcon className="size-3.5" />
@@ -216,7 +232,7 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
               </AppMenuTrigger>
               <AppMenuContent align="end">
                 <AppMenuItem onSelect={() => void handleArchiveToggle()}>
-                  {archived ? "Restore" : "Archive"}
+                  {archived ? t("experiments.restore") : t("experiments.archive")}
                 </AppMenuItem>
                 <AppMenuSeparator />
                 <AppMenuDestructiveItem
@@ -225,7 +241,7 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
                     setDeleteOpen(true);
                   }}
                 >
-                  Delete
+                  {t("common.delete")}
                 </AppMenuDestructiveItem>
               </AppMenuContent>
             </AppMenu>
@@ -242,12 +258,10 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
         >
           <DialogContent className="sm:max-w-sm">
             <DialogHeader>
-              <DialogTitle>Delete experiment?</DialogTitle>
+              <DialogTitle>{t("dialogs.experiments.deleteTitle")}</DialogTitle>
             </DialogHeader>
             <p className={SETTINGS_ROW_DESC}>
-              Removes registry metadata and run history for{" "}
-              <span className="text-foreground/90">“{meta.title}”</span>. This cannot be
-              undone.
+              {t("experiments.detail.deleteBody", { title: meta.title })}
             </p>
             <label className="flex items-start gap-2 text-[length:var(--font-size-12)] text-muted-foreground">
               <Checkbox
@@ -256,8 +270,7 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
                 className="mt-0.5"
               />
               <span>
-                Also delete the lab folder{" "}
-                <span className="font-mono text-foreground/80">{meta.workspacePath}</span>
+                {t("experiments.detail.deleteLab", { path: meta.workspacePath })}
               </span>
             </label>
             <DialogFooter>
@@ -267,7 +280,7 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
                 onClick={() => setDeleteOpen(false)}
                 disabled={deleting}
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 variant="destructive"
@@ -275,7 +288,7 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
                 onClick={() => void handleDelete()}
                 disabled={deleting}
               >
-                {deleting ? "Deleting…" : "Delete"}
+                {deleting ? t("common.deleting") : t("common.delete")}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -283,7 +296,7 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
 
         <section className="space-y-4">
           <div className={cn(experimentsSectionHeaderRowClass, "items-baseline")}>
-            <h3 className={experimentsSectionLabelClass}>Execution</h3>
+            <h3 className={experimentsSectionLabelClass}>{t("experiments.execution")}</h3>
             {meta.workspacePath ? (
               <div className="flex min-w-0 max-w-[55%] items-baseline justify-end gap-1.5">
                 <span className="shrink-0 text-[length:var(--font-path)] text-muted-foreground/60">

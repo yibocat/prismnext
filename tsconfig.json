@@ -6,6 +6,7 @@
     "jsx": "react-jsx",
     "strict": true,
     "skipLibCheck": true,
+    "resolveJsonModule": true,
     "paths": {
       "@/*": ["./src/renderer/*"],
       "@shared/*": ["./src/main/services/*", "./src/shared/*"],

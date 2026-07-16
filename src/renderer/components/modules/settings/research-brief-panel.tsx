@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
@@ -7,6 +8,7 @@ import { MarkdownContentPreview } from "./markdown-content-preview";
 import { SettingsMarkdownToolbar } from "./settings-markdown-toolbar";
 
 export function ResearchBriefPanel() {
+  const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
@@ -38,13 +40,13 @@ export function ResearchBriefPanel() {
         setContent(text);
         setSavedContent(text);
       } catch {
-        toast.error("Failed to load research brief.");
+        toast.error(t("settings.editor.brief.toast.loadFailed"));
         closePanel();
       } finally {
         if (!silent) setLoading(false);
       }
     },
-    [projectRoot, closePanel],
+    [projectRoot, closePanel, t],
   );
 
   const handleRefresh = useCallback(async () => {
@@ -66,9 +68,9 @@ export function ResearchBriefPanel() {
     try {
       await window.electronAPI.fsWrite(briefPath, content);
       setSavedContent(content);
-      toast.success("Research brief saved.");
+      toast.success(t("settings.editor.brief.toast.saved"));
     } catch {
-      toast.error("Failed to save research brief.");
+      toast.error(t("settings.editor.brief.toast.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -77,7 +79,7 @@ export function ResearchBriefPanel() {
   if (!projectRoot) {
     return (
       <div className="flex flex-1 items-center justify-center px-8 text-[length:var(--font-size-13)] text-muted-foreground">
-        Open a project to edit the research brief.
+        {t("settings.editor.brief.openProject")}
       </div>
     );
   }
@@ -85,7 +87,7 @@ export function ResearchBriefPanel() {
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center text-[length:var(--font-size-12)] text-muted-foreground">
-        Loading…
+        {t("settings.editor.brief.loading")}
       </div>
     );
   }

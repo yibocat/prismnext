@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import {
   MarkdownToolbarControls,
   MARKDOWN_SUBTOOLBAR_CLASS,
@@ -30,6 +31,7 @@ export function SettingsMarkdownToolbar({
   refreshing?: boolean;
   actions?: SettingsMarkdownToolbarActions;
 }) {
+  const { t } = useTranslation();
   return (
     <div className={MARKDOWN_SUBTOOLBAR_CLASS}>
       {actions ? (
@@ -40,7 +42,7 @@ export function SettingsMarkdownToolbar({
             disabled={actions.saving}
             onClick={actions.onSave}
           >
-            {actions.saving ? "Saving…" : "Save"}
+            {actions.saving ? t("common.saving") : t("common.save")}
           </button>
           <button
             type="button"
@@ -48,7 +50,7 @@ export function SettingsMarkdownToolbar({
             disabled={actions.saving}
             onClick={actions.onCancel}
           >
-            Cancel
+            {t("common.cancel")}
           </button>
         </>
       ) : null}
@@ -61,9 +63,9 @@ export function SettingsMarkdownToolbar({
           className={MARKDOWN_TOOLBAR_TEXT_BTN}
           disabled={actions.resetDisabled || actions.saving}
           onClick={actions.onResetToDefault}
-          title="Reset to built-in default system prompt"
+          title={t("settings.appearance.resetDefault")}
         >
-          Reset to default
+          {t("settings.appearance.resetDefault")}
         </button>
       ) : null}
 

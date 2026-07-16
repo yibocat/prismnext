@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -58,6 +59,7 @@ function formFromOrchestrator(
 }
 
 export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot }) {
+  const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const builtinCustomize = slot.mode === "customize-builtin";
@@ -110,7 +112,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
           const detail = await window.electronAPI.orchestratorsGetDetail(root, orchestratorId!);
           if (cancelled) return;
           if (!detail) {
-            toast.error("Orchestrator not found.");
+            toast.error(t("settings.editor.orchestrator.toast.notFound"));
             closePanel();
             return;
           }
@@ -138,7 +140,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
         const detail = await window.electronAPI.orchestratorsGetDetail(root, orchestratorId!);
         if (cancelled) return;
         if (!detail) {
-          toast.error("Orchestrator not found.");
+          toast.error(t("settings.editor.orchestrator.toast.notFound"));
           closePanel();
           return;
         }
@@ -148,7 +150,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
         );
       } catch {
         if (!cancelled) {
-          toast.error("Failed to load orchestrator.");
+          toast.error(t("settings.editor.orchestrator.toast.loadFailed"));
           closePanel();
         }
       } finally {
@@ -165,11 +167,11 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
   const saveOrchestrator = useCallback(async () => {
     if (!projectRoot) return;
     if (!builtinCustomize && !form.name.trim()) {
-      toast.error("Orchestrator name is required.");
+      toast.error(t("settings.editor.orchestrator.toast.nameRequired"));
       return;
     }
     if (!builtinCustomize && !form.instructions.trim()) {
-      toast.error("Instructions are required.");
+      toast.error(t("settings.editor.orchestrator.toast.instructionsRequired"));
       return;
     }
 
@@ -209,24 +211,28 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
         await window.electronAPI.orchestratorsSaveCustom(projectRoot, payload);
       }
 
-      toast.success(isNew ? "Orchestrator created." : "Orchestrator saved.");
+      toast.success(isNew ? t("settings.editor.orchestrator.toast.created") : t("settings.editor.orchestrator.toast.saved"));
       closePanel();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to save orchestrator.");
+      toast.error(
+        err instanceof Error ? err.message : t("settings.editor.orchestrator.toast.saveFailed"),
+      );
     } finally {
       setSaving(false);
     }
-  }, [projectRoot, builtinCustomize, form, editorOptions, allowedExperts, isNew, closePanel]);
+  }, [projectRoot, builtinCustomize, form, editorOptions, allowedExperts, isNew, closePanel, t]);
 
   const resetBuiltinCustomization = async () => {
     if (!projectRoot || !form.id || !builtinCustomize) return;
     setSaving(true);
     try {
       await window.electronAPI.orchestratorsResetBuiltinOverride(projectRoot, form.id);
-      toast.success("Restored orchestrator defaults.");
+      toast.success(t("settings.editor.orchestrator.toast.restoredDefaults"));
       closePanel();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to reset orchestrator.");
+      toast.error(
+        err instanceof Error ? err.message : t("settings.editor.orchestrator.toast.resetFailed"),
+      );
     } finally {
       setSaving(false);
     }
@@ -238,10 +244,12 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
     setSaving(true);
     try {
       await window.electronAPI.orchestratorsDeleteCustom(projectRoot, form.id);
-      toast.success("Orchestrator deleted.");
+      toast.success(t("settings.editor.orchestrator.toast.deleted"));
       closePanel();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete orchestrator.");
+      toast.error(
+        err instanceof Error ? err.message : t("settings.editor.orchestrator.toast.deleteFailed"),
+      );
     } finally {
       setSaving(false);
     }
@@ -251,7 +259,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
     return (
       <div className="flex flex-1 items-center justify-center px-8 py-8">
         <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-          Open a project to edit orchestrators.
+          {t("settings.editor.orchestrator.openProject")}
         </p>
       </div>
     );
@@ -260,7 +268,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center px-8 py-8">
-        <p className="text-[length:var(--font-size-12)] text-muted-foreground">Loading…</p>
+        <p className="text-[length:var(--font-size-12)] text-muted-foreground">{t("common.loading")}</p>
       </div>
     );
   }
@@ -272,10 +280,10 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
       <div className={SETTINGS_DETAIL_SHELL}>
         <p className={SETTINGS_ROW_DESC}>
           {builtinCustomize
-            ? "Built-in orchestrator — customize model, capabilities, and which experts can be invoked via Task."
+            ? t("settings.editor.orchestrator.introBuiltin")
             : isNew
-              ? "Create a primary-session orchestrator that delegates work to experts via OpenCode Task."
-              : "Edit this orchestrator’s instructions and expert allowlist."}
+              ? t("settings.editor.orchestrator.introNew")
+              : t("settings.editor.orchestrator.introEdit")}
         </p>
 
         <ProfileEditorForm
@@ -287,21 +295,24 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
         />
 
         <CollapsibleFormSection
-          title="Allowed experts"
+          title={t("settings.editor.orchestrator.allowedExperts")}
           summary={
             allowedExperts.length === 0
-              ? "None selected"
-              : `${allowedExperts.length} of ${expertRows.length} allowed`
+              ? t("settings.editor.orchestrator.noneSelected")
+              : t("settings.editor.orchestrator.allowedCount", {
+                  selected: allowedExperts.length,
+                  total: expertRows.length,
+                })
           }
           defaultOpen={allowedExperts.length > 0 && allowedExperts.length < expertRows.length}
         >
           <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
-            Experts the orchestrator may invoke via OpenCode Task.
+            {t("settings.editor.orchestrator.allowedExpertsDesc")}
           </p>
           <div className="rounded-lg border border-border divide-y divide-border/60">
             {expertRows.length === 0 ? (
               <p className="px-3 py-2.5 text-[length:var(--font-size-12)] text-muted-foreground">
-                No enabled experts — enable experts below before delegating tasks.
+                {t("settings.editor.orchestrator.noExperts")}
               </p>
             ) : (
               expertRows.map((expert) => {
@@ -340,10 +351,10 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
         <div className={SETTINGS_DETAIL_ACTIONS}>
           <Button size="xs" onClick={() => void saveOrchestrator()} disabled={saving}>
             {saving ? <Loader2Icon className="size-3 animate-spin mr-1" /> : null}
-            {isNew ? "Create" : "Save"}
+            {isNew ? t("common.create") : t("common.save")}
           </Button>
           <Button variant="ghost" size="xs" onClick={closePanel} disabled={saving}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           {builtinCustomize ? (
             <Button
@@ -352,7 +363,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
               onClick={() => void resetBuiltinCustomization()}
               disabled={saving}
             >
-              Reset defaults
+              {t("settings.editor.orchestrator.resetDefaults")}
             </Button>
           ) : null}
           {!builtinCustomize && !isNew && form.id ? (
@@ -362,7 +373,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
               onClick={() => setDeleteDialogOpen(true)}
               disabled={saving}
             >
-              Delete
+              {t("common.delete")}
             </Button>
           ) : null}
         </div>
@@ -371,18 +382,15 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete orchestrator?</DialogTitle>
-            <DialogDescription>
-              This removes the custom orchestrator from your project. Chat tabs already using it will
-              fall back to the default orchestrator on the next message.
-            </DialogDescription>
+            <DialogTitle>{t("settings.editor.orchestrator.deleteTitle")}</DialogTitle>
+            <DialogDescription>{t("settings.editor.orchestrator.deleteDesc")}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button variant="destructive" size="sm" onClick={() => void deleteOrchestrator()}>
-              Delete
+              {t("common.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

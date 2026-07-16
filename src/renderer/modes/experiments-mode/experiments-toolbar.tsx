@@ -10,6 +10,7 @@
  */
 
 import { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ArchiveIcon,
   ArrowLeftIcon,
@@ -31,6 +32,7 @@ const toolbarBtn = cn(
 );
 
 export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
+  const { t } = useTranslation();
   const projectRoot = useExperimentProjectRoot();
   const refreshList = useExperimentStore((s) => s.refreshList);
   const setShowArchived = useExperimentStore((s) => s.setShowArchived);
@@ -60,12 +62,20 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
     if (!projectRoot || !id) return;
     const paths = await openLabInFiles(projectRoot, id);
     if (!paths) {
-      toast.error("Could not resolve experiment paths.");
+      toast.error(t("experiments.toolbar.resolveFailed"));
     }
     // Task 7 will additionally call navigateFileTreeToPath(paths.workspaceRel)
     // from a component layer hook. The store-level action is intentionally
     // minimal: it switches to Files mode and returns the paths.
-  }, [projectRoot, selectedId, tab.experimentId, openLabInFiles]);
+  }, [projectRoot, selectedId, tab.experimentId, openLabInFiles, t]);
+
+  const contextLabel = showArchived
+    ? experimentCount > 0
+      ? t("experiments.toolbar.archivedCount", { count: experimentCount })
+      : t("experiments.toolbar.noArchived")
+    : experimentCount > 0
+      ? t("experiments.toolbar.experimentCount", { count: experimentCount })
+      : t("experiments.title");
 
   return (
     <div className="flex flex-1 items-center min-h-8 min-w-0 overflow-hidden gap-1">
@@ -73,7 +83,7 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
         <button
           type="button"
           className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          title="Back to experiments"
+          title={t("experiments.toolbar.back")}
           onClick={clearSelection}
         >
           <ArrowLeftIcon className="size-3.5" aria-hidden />
@@ -92,13 +102,7 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
         </span>
       ) : (
         <span className={cn("mr-auto truncate", experimentsToolbarContextClass)}>
-          {showArchived
-            ? experimentCount > 0
-              ? `${experimentCount} archived`
-              : "No archived experiments"
-            : experimentCount > 0
-              ? `${experimentCount} experiment${experimentCount === 1 ? "" : "s"}`
-              : "Experiments"}
+          {contextLabel}
         </span>
       )}
       {!inDetail ? (
@@ -111,21 +115,21 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
           )}
           title={
             showArchived
-              ? "Show active experiments"
-              : "Show archived experiments only"
+              ? t("experiments.toolbar.showActive")
+              : t("experiments.toolbar.showArchivedOnly")
           }
           disabled={!projectRoot || loading}
           aria-pressed={showArchived}
           onClick={handleToggleArchived}
         >
           <ArchiveIcon className="size-3.5" />
-          <span>Archived</span>
+          <span>{t("experiments.archived")}</span>
         </button>
       ) : null}
       <button
         type="button"
         className={cn(toolbarBtn, "shrink-0")}
-        title="Refresh experiment list"
+        title={t("experiments.toolbar.refreshTitle")}
         disabled={!projectRoot || loading}
         onClick={handleRefresh}
       >
@@ -134,19 +138,19 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
         ) : (
           <RefreshCwIcon className="size-3.5" />
         )}
-        <span>Refresh</span>
+        <span>{t("experiments.refresh")}</span>
       </button>
 
       <Button
         size="xs"
         variant="ghost"
         className="h-6 shrink-0 px-2 text-muted-foreground hover:text-foreground"
-        title="Open the experiment's lab folder in Files"
+        title={t("experiments.toolbar.openLabTitle")}
         disabled={!projectRoot || !inDetail || !(selectedId ?? tab.experimentId)}
         onClick={() => void handleOpenLab()}
       >
         <FolderOpenIcon className="size-3.5" />
-        <span className="ml-1">Open lab</span>
+        <span className="ml-1">{t("experiments.openLab")}</span>
       </Button>
     </div>
   );

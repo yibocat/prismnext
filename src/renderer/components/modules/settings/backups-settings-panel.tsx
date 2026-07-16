@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,6 +17,7 @@ import { DEFAULT_MANUSCRIPT_DIR } from "@/types/workspace";
 import { clearPdfCache } from "@/stores/compile-store";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { i18n } from "@/lib/i18n";
 
 interface BackupEntry {
   label: string;
@@ -32,7 +34,7 @@ function formatLabel(label: string): { date: string; from: string; to: string } 
   if (rest.startsWith("first_use_")) {
     return {
       date: readable,
-      from: "existing files",
+      from: i18n.t("settings.editor.backups.formatExisting"),
       to: rest.slice("first_use_".length),
     };
   }
@@ -40,7 +42,8 @@ function formatLabel(label: string): { date: string; from: string; to: string } 
   const toIdx = rest.lastIndexOf("_to_");
   const from = toIdx > 0 ? rest.slice(0, toIdx) : rest;
   const to = toIdx > 0 ? rest.slice(toIdx + 4) : "";
-  return { date: readable, from: from || "unknown", to: to || "unknown" };
+  const unknown = i18n.t("settings.editor.backups.formatUnknown");
+  return { date: readable, from: from || unknown, to: to || unknown };
 }
 
 /** Manuscript template backups — embeddable panel (no page chrome). */
@@ -53,6 +56,7 @@ export function BackupsSettingsPanel({
   embedded?: boolean;
   onRestored?: () => void;
 }) {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const manuscriptConfig = useWorkspaceConfigStore((s) => s.manuscriptConfig);
   const manuscriptDir = manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR;
@@ -96,11 +100,11 @@ export function BackupsSettingsPanel({
       useDocumentStore.getState().refreshFiles();
       onRestored?.();
       setConfirmRestore(null);
-      toast.success("Backup restored — files recovered");
+      toast.success(t("settings.editor.backups.toast.restored"));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Restore failed";
+      const msg = err instanceof Error ? err.message : t("settings.editor.backups.toast.restoreFailedShort");
       setRestoreError(msg);
-      toast.error(`Restore failed: ${msg}`);
+      toast.error(t("settings.editor.backups.toast.restoreFailed", { message: msg }));
     }
     setRestoring(null);
   };
@@ -116,12 +120,12 @@ export function BackupsSettingsPanel({
       });
       setConfirmDelete(null);
       if (expanded === label) setExpanded(null);
-      toast.success("Backup deleted");
+      toast.success(t("settings.editor.backups.toast.deleted"));
       await loadBackups();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Delete failed";
+      const msg = err instanceof Error ? err.message : t("settings.editor.backups.toast.deleteFailedShort");
       setDeleteError(msg);
-      toast.error(`Delete failed: ${msg}`);
+      toast.error(t("settings.editor.backups.toast.deleteFailed", { message: msg }));
     }
     setDeleting(null);
   };
@@ -129,7 +133,7 @@ export function BackupsSettingsPanel({
   if (!projectRoot) {
     return (
       <p className="text-[length:var(--font-size-12)] text-muted-foreground py-4">
-        Open a project to manage manuscript backups.
+        {t("settings.editor.backups.openProject")}
       </p>
     );
   }
@@ -139,22 +143,24 @@ export function BackupsSettingsPanel({
       {!compact && (
         <div className="flex items-center justify-end mb-2">
           <Button variant="outline" size="sm" className="shadow-none h-7" onClick={loadBackups} disabled={loading}>
-            Refresh
+            {t("settings.editor.backups.refresh")}
           </Button>
         </div>
       )}
 
       {loading ? (
-        <p className="text-[length:var(--font-size-12)] text-muted-foreground py-4">Loading backups…</p>
+        <p className="text-[length:var(--font-size-12)] text-muted-foreground py-4">
+          {t("settings.editor.backups.loading")}
+        </p>
       ) : backups.length === 0 ? (
         <div className={cn(
           "flex flex-col items-center gap-2 text-center text-muted-foreground",
           embedded ? "py-6" : "py-8",
         )}>
           <HistoryIcon className="size-8 opacity-25" />
-          <p className="text-[length:var(--font-size-12)]">No backups yet</p>
+          <p className="text-[length:var(--font-size-12)]">{t("settings.editor.backups.empty")}</p>
           <p className="text-[length:var(--font-size-11)] max-w-sm">
-            Backups are created automatically when you switch templates.
+            {t("settings.editor.backups.emptyHint")}
           </p>
         </div>
       ) : (
@@ -162,7 +168,7 @@ export function BackupsSettingsPanel({
           {compact && !embedded && (
             <div className="flex justify-end">
               <Button variant="ghost" size="sm" className="h-7 text-[length:var(--font-size-11)]" onClick={loadBackups} disabled={loading}>
-                Refresh
+                {t("settings.editor.backups.refresh")}
               </Button>
             </div>
           )}
@@ -188,7 +194,7 @@ export function BackupsSettingsPanel({
                       <CalendarIcon className="size-3" />
                       {date}
                       <Badge variant="secondary" className="text-[length:var(--font-size-10)] px-1 py-0 h-4">
-                        {b.files.length} file{b.files.length !== 1 ? "s" : ""}
+                        {t("settings.editor.backups.fileCount", { count: b.files.length })}
                       </Badge>
                     </div>
                   </div>
@@ -199,7 +205,7 @@ export function BackupsSettingsPanel({
                     onClick={() => setExpanded(isExpanded ? null : b.label)}
                   >
                     <FileTextIcon className="size-3 mr-1" />
-                    {isExpanded ? "Hide" : "Files"}
+                    {isExpanded ? t("settings.editor.backups.hide") : t("settings.editor.backups.files")}
                   </Button>
                   <Button
                     variant="outline"
@@ -209,7 +215,9 @@ export function BackupsSettingsPanel({
                     onClick={() => setConfirmRestore(b.label)}
                   >
                     <RotateCcwIcon className="size-3 mr-1" />
-                    {isRestoring ? "Restoring…" : "Restore"}
+                    {isRestoring
+                      ? t("settings.editor.backups.restoring")
+                      : t("settings.editor.backups.restore")}
                   </Button>
                   <Button
                     variant="ghost"
@@ -241,9 +249,9 @@ export function BackupsSettingsPanel({
       <Dialog open={!!confirmRestore} onOpenChange={(o) => { if (!o) { setConfirmRestore(null); setRestoreError(null); } }}>
         <DialogContent className="!max-w-md">
           <DialogHeader>
-            <DialogTitle>Restore Backup</DialogTitle>
+            <DialogTitle>{t("settings.editor.backups.restoreTitle")}</DialogTitle>
             <DialogDescription>
-              This will overwrite current manuscript files with the backup. A new backup of your current files will NOT be created automatically.
+              {t("settings.editor.backups.restoreDesc")}
             </DialogDescription>
           </DialogHeader>
           {restoreError && (
@@ -253,10 +261,10 @@ export function BackupsSettingsPanel({
           )}
           <DialogFooter>
             <Button variant="outline" size="sm" className="shadow-none" onClick={() => setConfirmRestore(null)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button size="sm" className="shadow-none" onClick={() => confirmRestore && handleRestore(confirmRestore)}>
-              Restore
+              {t("settings.editor.backups.restore")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -265,11 +273,9 @@ export function BackupsSettingsPanel({
       <Dialog open={!!confirmDelete} onOpenChange={(o) => { if (!o) { setConfirmDelete(null); setDeleteError(null); } }}>
         <DialogContent className="!max-w-md">
           <DialogHeader>
-            <DialogTitle>Delete Backup</DialogTitle>
+            <DialogTitle>{t("settings.editor.backups.deleteTitle")}</DialogTitle>
             <DialogDescription>
-              Permanently remove this snapshot from{" "}
-              <code className="text-[length:var(--font-size-11)] bg-muted px-1 rounded">.prismnext/backups/</code>.
-              This cannot be undone.
+              {t("settings.editor.backups.deleteDesc")}
             </DialogDescription>
           </DialogHeader>
           {deleteError && (
@@ -279,7 +285,7 @@ export function BackupsSettingsPanel({
           )}
           <DialogFooter>
             <Button variant="outline" size="sm" className="shadow-none" onClick={() => setConfirmDelete(null)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -288,7 +294,7 @@ export function BackupsSettingsPanel({
               disabled={!!deleting}
               onClick={() => confirmDelete && handleDelete(confirmDelete)}
             >
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? t("common.deleting") : t("common.delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

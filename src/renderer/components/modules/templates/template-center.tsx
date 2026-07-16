@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { TemplateMeta, TemplateFull, TemplateCategory } from "./types";
 import { getTemplates, invalidateTemplatesCache } from "@/lib/templates/template-data";
 import { TemplateSidebar, DetailSidebar } from "./template-sidebar";
@@ -33,6 +34,7 @@ const EMPTY_DIALOG: TemplateSwitchDialogState = {
 };
 
 export function TemplateCenter({ onBack }: TemplateCenterProps) {
+  const { t } = useTranslation();
   const [templates, setTemplates] = useState<TemplateMeta[] | null>(null);
   const [category, setCategory] = useState<TemplateCategory | "all">("all");
   const [search, setSearch] = useState("");
@@ -91,19 +93,19 @@ export function TemplateCenter({ onBack }: TemplateCenterProps) {
   }, [projectRoot, manuscriptConfig, currentTemplate, reload]);
 
   const handleUse = useCallback(
-    async (t: TemplateMeta) => {
+    async (template: TemplateMeta) => {
       if (processingRef.current) return;
 
       if (!projectRoot) {
-        toast.error("Open a project before applying a template.");
+        toast.error(t("templates.center.openProject"));
         return;
       }
       if (!workspaceLoaded) {
-        toast.info("Loading workspace configuration…");
+        toast.info(t("settings.workspace.loading"));
         return;
       }
       if (!manuscriptConfig) {
-        toast.error("Configure a manuscript folder in Workspace settings first.");
+        toast.error(t("templates.center.needManuscript"));
         useLayoutStore.getState().setLeftSidebarView("settings");
         useLayoutStore.getState().setSettingsCategory("workspace");
         return;
@@ -114,7 +116,7 @@ export function TemplateCenter({ onBack }: TemplateCenterProps) {
 
       processingRef.current = true;
       try {
-        const result = await requestApplyTemplate(t, flowContext);
+        const result = await requestApplyTemplate(template, flowContext);
         if (result.type === "dialog") {
           setSwitchDialog(result.dialog);
         }
@@ -126,7 +128,7 @@ export function TemplateCenter({ onBack }: TemplateCenterProps) {
         processingRef.current = false;
       }
     },
-    [projectRoot, workspaceLoaded, manuscriptConfig, templateLoading, flowContext],
+    [projectRoot, workspaceLoaded, manuscriptConfig, templateLoading, flowContext, t],
   );
 
   const handleSwitchConfirm = useCallback(
@@ -152,7 +154,7 @@ export function TemplateCenter({ onBack }: TemplateCenterProps) {
     <div className="flex-1 overflow-y-auto flex flex-col">
       <div className="max-w-6xl mx-auto w-full px-8 pt-8 pb-8">
         <h2 className="text-[length:var(--font-session-item)] font-semibold mb-6 hidden lg:block">
-          {selected ? selected.name : "Template Center"}
+          {selected ? selected.name : t("templates.center.title")}
         </h2>
         <div className="flex flex-col lg:flex-row lg:items-start min-h-0 gap-6">
         <div className="shrink-0 w-full lg:w-[200px]">
@@ -162,7 +164,7 @@ export function TemplateCenter({ onBack }: TemplateCenterProps) {
             onClick={onBack}
           >
             <ArrowLeftIcon className="size-3.5" />
-            Back
+            {t("common.back")}
           </button>
           {!canApply && projectRoot && workspaceLoaded && !manuscriptConfig && (
             <p className="mb-4 text-[length:var(--font-size-12)] text-destructive lg:hidden">
@@ -185,9 +187,9 @@ export function TemplateCenter({ onBack }: TemplateCenterProps) {
               canApply={canApply}
               applyDisabledReason={
                 !projectRoot
-                  ? "Open a project first"
+                  ? t("templates.center.openProject")
                   : templateLoading
-                    ? "Loading…"
+                    ? t("common.loading")
                     : !manuscriptConfig
                       ? "Configure manuscript folder"
                       : undefined

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
+import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useProjectStore } from "@/stores/project-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -78,6 +79,7 @@ interface StatusItem {
 }
 
 function StatusDot({ state }: { state: CheckState }) {
+  const { t } = useTranslation();
   if (state === "loading") {
     return <Loader2Icon className="size-3.5 shrink-0 animate-spin text-muted-foreground/50" />;
   }
@@ -89,7 +91,7 @@ function StatusDot({ state }: { state: CheckState }) {
     );
   }
   if (state === "warn") {
-    return <span className="size-3.5 shrink-0 rounded-full bg-amber-500" title="Warning" />;
+    return <span className="size-3.5 shrink-0 rounded-full bg-amber-500" title={t("common.warning")} />;
   }
   return (
     <span className="flex size-3.5 shrink-0 items-center justify-center rounded-full bg-red-500 text-white">
@@ -99,6 +101,7 @@ function StatusDot({ state }: { state: CheckState }) {
 }
 
 function WelcomeStatusChecks() {
+  const { t } = useTranslation();
   const detectCompilers = useCompileStore((s) => s.detectCompilers);
   const compilerStatus = useCompileStore((s) => s.compilerStatus);
   const updateSource = useSettingsStore((s) => s.settings.updateSource);
@@ -107,6 +110,17 @@ function WelcomeStatusChecks() {
     { id: "agent", label: "OpenCode", state: "loading" },
     { id: "compiler", label: "Compiler", state: "loading" },
   ]);
+
+  useEffect(() => {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id === "app") return { ...item, label: t("welcome.status.app") };
+        if (item.id === "agent") return { ...item, label: t("welcome.status.agent") };
+        if (item.id === "compiler") return { ...item, label: t("welcome.status.compiler") };
+        return item;
+      }),
+    );
+  }, [t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -270,6 +284,7 @@ async function loadRecentRow(path: string, name: string): Promise<RecentRow> {
 }
 
 function RecentProjects({ projectOpen }: { projectOpen: (path: string) => Promise<boolean> }) {
+  const { t } = useTranslation();
   const recentProjects = useProjectStore((s) => s.recentProjects);
   const removeRecentProject = useProjectStore((s) => s.removeRecentProject);
   const addRecentProject = useProjectStore((s) => s.addRecentProject);
@@ -312,7 +327,7 @@ function RecentProjects({ projectOpen }: { projectOpen: (path: string) => Promis
   if (recentProjects.length === 0) {
     return (
       <p className="px-2 py-5 text-center text-[length:var(--font-size-12)] text-muted-foreground/65">
-        Projects you open will show up here.
+        {t("welcome.emptyRecent")}
       </p>
     );
   }
@@ -323,9 +338,9 @@ function RecentProjects({ projectOpen }: { projectOpen: (path: string) => Promis
         const meta = p.exists
           ? joinMeta([
               shortenPath(p.path),
-              p.isGit === false ? "No Git" : null,
+              p.isGit === false ? t("common.noGit") : null,
             ])
-          : "Missing on disk";
+          : t("welcome.missingOnDisk");
 
         return (
           <div
@@ -355,7 +370,11 @@ function RecentProjects({ projectOpen }: { projectOpen: (path: string) => Promis
                     {p.isGit ? (
                       <span
                         className="inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-px text-[length:var(--font-size-10)] text-muted-foreground"
-                        title={p.branch ? `Git · ${p.branch}` : "Git repository"}
+                        title={
+                          p.branch
+                            ? t("welcome.gitBranch", { branch: p.branch })
+                            : t("welcome.gitRepo")
+                        }
                       >
                         <GitBranchIcon className="size-2.5 opacity-70" />
                         <span className="max-w-[5.5rem] truncate">
@@ -389,7 +408,7 @@ function RecentProjects({ projectOpen }: { projectOpen: (path: string) => Promis
                 e.stopPropagation();
                 removeRecentProject(p.path);
               }}
-              title="Remove from recent"
+              title={t("welcome.removeRecent")}
             >
               <XIcon className="size-3.5" />
             </button>
@@ -403,6 +422,7 @@ function RecentProjects({ projectOpen }: { projectOpen: (path: string) => Promis
 // ─── Welcome Page ───
 
 export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
+  const { t } = useTranslation();
   const addRecentProject = useProjectStore((s) => s.addRecentProject);
   const openProject = useDocumentStore((s) => s.openProject);
   const projectOpen = useProjectOpen();
@@ -433,7 +453,7 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
         <button
           type="button"
           className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title={`Theme: ${theme}`}
+          title={t("common.theme", { theme })}
           onClick={cycleTheme}
         >
           {theme === "system" ? (
@@ -447,7 +467,7 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
         <button
           type="button"
           className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title="Settings"
+          title={t("common.settings")}
           onClick={() => {
             useDocumentStore.getState().setShowWelcome(false);
             useLayoutStore.getState().setLeftSidebarView("settings");
@@ -469,7 +489,7 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
                 <PrismNextMark className="size-7" />
               </div>
               <span className="text-[length:var(--font-size-16)] font-semibold tracking-tight text-foreground">
-                Prism Next
+                {t("welcome.brand")}
               </span>
             </div>
 
@@ -479,7 +499,7 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
               <NewProjectDialog>
                 <Button type="button" size="sm" className="h-9 w-full gap-1.5 font-medium">
                   <FolderPlusIcon className="size-3.5 opacity-90" />
-                  New Project
+                  {t("welcome.newProject")}
                 </Button>
               </NewProjectDialog>
               <Button
@@ -490,7 +510,7 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
                 onClick={() => void handleOpen()}
               >
                 <FolderOpenIcon className="size-3.5 opacity-80" />
-                Open
+                {t("welcome.open")}
               </Button>
             </div>
           </section>
@@ -498,7 +518,9 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
           <div className="my-5 flex shrink-0 items-center gap-3 sm:my-6" aria-hidden>
             <div className="h-px flex-1 bg-border/80" />
             <span className="text-[length:var(--font-size-11)] font-medium uppercase tracking-wider text-muted-foreground/55">
-              Recent{recentCount > 0 ? ` · ${recentCount}` : ""}
+              {recentCount > 0
+                ? t("welcome.recentCount", { count: recentCount })
+                : t("welcome.recent")}
             </span>
             <div className="h-px flex-1 bg-border/80" />
           </div>
@@ -513,7 +535,7 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
               className="mt-5 shrink-0 self-center text-[length:var(--font-size-12)] text-muted-foreground/45 transition-colors hover:text-muted-foreground sm:mt-6"
               onClick={onSkip}
             >
-              Skip for now
+              {t("common.skipForNow")}
             </button>
           ) : null}
         </div>

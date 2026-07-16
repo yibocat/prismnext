@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
@@ -15,6 +16,7 @@ import { SettingsMarkdownToolbar } from "./settings-markdown-toolbar";
 type RuleMarkdownSlot = Extract<SettingsPanelSlot, { kind: "rule-markdown" }>;
 
 export function RuleMarkdownPanel({ slot }: { slot: RuleMarkdownSlot }) {
+  const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
@@ -57,13 +59,13 @@ export function RuleMarkdownPanel({ slot }: { slot: RuleMarkdownSlot }) {
         setContent(text);
         setSavedContent(text);
       } catch {
-        toast.error("Failed to load RULE.md.");
+        toast.error(t("settings.editor.rule.toast.loadFailed"));
         closePanel();
       } finally {
         if (!silent) setLoading(false);
       }
     },
-    [slot.mode, rulePath, closePanel],
+    [slot.mode, rulePath, closePanel, t],
   );
 
   const handleRefresh = useCallback(async () => {
@@ -92,7 +94,7 @@ export function RuleMarkdownPanel({ slot }: { slot: RuleMarkdownSlot }) {
     if (slot.mode === "new") {
       const list = await window.electronAPI.agentListRules(projectRoot);
       if (list.some((r) => r.id === validation.name)) {
-        toast.error(`Rule "${validation.name}" already exists.`);
+        toast.error(t("settings.editor.rule.toast.exists", { name: validation.name }));
         return;
       }
     }
@@ -102,10 +104,16 @@ export function RuleMarkdownPanel({ slot }: { slot: RuleMarkdownSlot }) {
       await window.electronAPI.agentInstallRule(projectRoot, validation.name, content.trim());
       setSavedContent(content);
       notifyPromptConfigChanged();
-      toast.success(slot.mode === "new" ? `Created "${validation.name}".` : "Rule updated.");
+      toast.success(
+        slot.mode === "new"
+          ? t("settings.editor.rule.toast.created", { name: validation.name })
+          : t("settings.editor.rule.toast.updated"),
+      );
       closePanel();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save rule.");
+      toast.error(
+        err instanceof Error ? err.message : t("settings.editor.rule.toast.saveFailed"),
+      );
     } finally {
       setSaving(false);
     }
@@ -114,7 +122,7 @@ export function RuleMarkdownPanel({ slot }: { slot: RuleMarkdownSlot }) {
   if (!projectRoot) {
     return (
       <div className="flex flex-1 items-center justify-center px-8 text-[length:var(--font-size-13)] text-muted-foreground">
-        Open a project to edit rules.
+        {t("settings.editor.rule.openProject")}
       </div>
     );
   }
@@ -122,7 +130,7 @@ export function RuleMarkdownPanel({ slot }: { slot: RuleMarkdownSlot }) {
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center text-[length:var(--font-size-12)] text-muted-foreground">
-        Loading…
+        {t("settings.editor.rule.loading")}
       </div>
     );
   }

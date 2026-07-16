@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { useLayoutStore, type TexworkspaceViewMode } from "@/stores/layout-store";
@@ -43,11 +45,13 @@ function SettingsInlineLink({
   );
 }
 
-const VIEW_LABELS: Record<TexworkspaceViewMode, string> = {
-  split: "Split (TeX + PDF)",
-  tex: "TeX only",
-  pdf: "PDF only",
-};
+function getViewLabels(t: TFunction): Record<TexworkspaceViewMode, string> {
+  return {
+    split: t("settings.texWorkspacePage.viewSplit"),
+    tex: t("settings.texWorkspacePage.viewTex"),
+    pdf: t("settings.texWorkspacePage.viewPdf"),
+  };
+}
 
 function StatusValue({ children }: { children: React.ReactNode }) {
   return (
@@ -58,6 +62,7 @@ function StatusValue({ children }: { children: React.ReactNode }) {
 }
 
 function ManuscriptSection() {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const { workspaceDirs, loaded } = useWorkspaceConfigStore();
   const { state: templateState, loading: templateLoading } = useProjectTemplate();
@@ -71,8 +76,8 @@ function ManuscriptSection() {
   const templateId = templateState?.id ?? null;
   const templateMeta = templateId ? templates.find((t) => t.id === templateId) : null;
   const templateLabel = templateLoading
-    ? "Loading…"
-    : templateMeta?.name ?? templateId ?? "None";
+    ? t("common.loading")
+    : templateMeta?.name ?? templateId ?? t("settings.texWorkspacePage.none");
 
   const openWorkspaceSettings = () => {
     useLayoutStore.getState().setSettingsCategory("workspace");
@@ -87,7 +92,7 @@ function ManuscriptSection() {
     return (
       <div className={SETTINGS_CARD}>
         <div className="py-4 px-1">
-          <p className={SETTINGS_ROW_DESC}>Open a project to configure the manuscript folder.</p>
+          <p className={SETTINGS_ROW_DESC}>{t("settings.texWorkspacePage.openProject")}</p>
         </div>
       </div>
     );
@@ -97,7 +102,7 @@ function ManuscriptSection() {
     return (
       <div className={SETTINGS_CARD}>
         <div className="py-4 px-1">
-          <p className={SETTINGS_ROW_DESC}>Loading…</p>
+          <p className={SETTINGS_ROW_DESC}>{t("common.loading")}</p>
         </div>
       </div>
     );
@@ -108,10 +113,12 @@ function ManuscriptSection() {
       <div className={SETTINGS_CARD}>
         <div className={SETTINGS_ROW}>
           <div className="min-w-0">
-            <span className={SETTINGS_ROW_LABEL}>Folder</span>
-            <p className={SETTINGS_ROW_DESC}>No manuscript folder is bound yet.</p>
+            <span className={SETTINGS_ROW_LABEL}>{t("settings.texWorkspacePage.folder")}</span>
+            <p className={SETTINGS_ROW_DESC}>{t("settings.texWorkspacePage.noManuscript")}</p>
           </div>
-          <SettingsInlineLink onClick={openWorkspaceSettings}>Workspace settings</SettingsInlineLink>
+          <SettingsInlineLink onClick={openWorkspaceSettings}>
+            {t("settings.texWorkspacePage.workspaceSettings")}
+          </SettingsInlineLink>
         </div>
       </div>
     );
@@ -123,20 +130,21 @@ function ManuscriptSection() {
     <div className={SETTINGS_CARD}>
       <div className={SETTINGS_ROW}>
         <div className="min-w-0">
-          <span className={SETTINGS_ROW_LABEL}>Folder</span>
+          <span className={SETTINGS_ROW_LABEL}>{t("settings.texWorkspacePage.folder")}</span>
           <p className={SETTINGS_ROW_DESC}>
-            Edit folder name and main file in{" "}
-            <SettingsInlineLink onClick={openWorkspaceSettings}>Workspace settings</SettingsInlineLink>.
+            {t("settings.texWorkspacePage.folderDescPrefix")}{" "}
+            <SettingsInlineLink onClick={openWorkspaceSettings}>
+              {t("settings.texWorkspacePage.workspaceSettings")}
+            </SettingsInlineLink>
+            {t("settings.texWorkspacePage.folderDescSuffix")}
           </p>
         </div>
         <StatusValue>{manuscript.name}</StatusValue>
       </div>
       <div className={SETTINGS_ROW}>
         <div className="min-w-0">
-          <span className={SETTINGS_ROW_LABEL}>Main file</span>
-          <p className={SETTINGS_ROW_DESC}>
-            Compile entry point relative to the manuscript folder — does not rename files on disk.
-          </p>
+          <span className={SETTINGS_ROW_LABEL}>{t("settings.texWorkspacePage.mainFile")}</span>
+          <p className={SETTINGS_ROW_DESC}>{t("settings.texWorkspacePage.mainFileDesc")}</p>
         </div>
         <StatusValue>
           <span className="font-mono text-[var(--color-primary)]">{mainTex}</span>
@@ -144,13 +152,16 @@ function ManuscriptSection() {
       </div>
       <div className={SETTINGS_ROW}>
         <div className="min-w-0">
-          <span className={SETTINGS_ROW_LABEL}>Template</span>
+          <span className={SETTINGS_ROW_LABEL}>{t("settings.texWorkspacePage.template")}</span>
           <p className={SETTINGS_ROW_DESC}>
             {templateId
-              ? (templateMeta?.description ?? `Applied via Template Center`)
-              : "No template applied yet."}{" "}
-            Change in{" "}
-            <SettingsInlineLink onClick={openTemplateCenter}>Template Center</SettingsInlineLink>.
+              ? (templateMeta?.description ?? t("settings.texWorkspacePage.appliedViaCenter"))
+              : t("settings.texWorkspacePage.noTemplate")}{" "}
+            {t("settings.texWorkspacePage.templateChangePrefix")}{" "}
+            <SettingsInlineLink onClick={openTemplateCenter}>
+              {t("settings.texWorkspacePage.templateCenter")}
+            </SettingsInlineLink>
+            {t("settings.texWorkspacePage.templateChangeSuffix")}
           </p>
         </div>
         <StatusValue>{templateLabel}</StatusValue>
@@ -160,6 +171,7 @@ function ManuscriptSection() {
 }
 
 export function TexworkspaceSettings() {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const workspaceDirs = useWorkspaceConfigStore((s) => s.workspaceDirs);
   const loaded = useWorkspaceConfigStore((s) => s.loaded);
@@ -168,6 +180,7 @@ export function TexworkspaceSettings() {
   const setTexworkspaceDefaultViewMode = useLayoutStore((s) => s.setTexworkspaceDefaultViewMode);
   const { reload: reloadProjectTemplate } = useProjectTemplate();
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const viewLabels = getViewLabels(t);
 
   useEffect(() => {
     if (!loaded || !projectRoot) return;
@@ -189,27 +202,25 @@ export function TexworkspaceSettings() {
     <div className="flex-1 overflow-auto">
       <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
         <div>
-          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">TeX Workspace</h2>
+          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">{t("settings.texWorkspacePage.title")}</h2>
           <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-            Manuscript binding, compilation, backups, and layout for LaTeX writing.
+            {t("settings.texWorkspacePage.pageDesc")}
           </p>
         </div>
 
         <div>
-          <p className={SECTION_HEADER}>Manuscript</p>
-          <p className={SECTION_DESC}>
-            Current manuscript binding and template status for this project.
-          </p>
+          <p className={SECTION_HEADER}>{t("settings.texWorkspacePage.manuscript")}</p>
+          <p className={SECTION_DESC}>{t("settings.texWorkspacePage.manuscriptDesc")}</p>
           <ManuscriptSection />
         </div>
 
         <div>
-          <p className={SECTION_HEADER}>Layout</p>
+          <p className={SECTION_HEADER}>{t("settings.texWorkspacePage.layout")}</p>
           <div className={SETTINGS_CARD}>
             <div className={SETTINGS_ROW}>
               <div className="min-w-0">
-                <span className={SETTINGS_ROW_LABEL}>Default view</span>
-                <p className={SETTINGS_ROW_DESC}>Panel layout when entering TeX Workspace.</p>
+                <span className={SETTINGS_ROW_LABEL}>{t("settings.texWorkspacePage.defaultView")}</span>
+                <p className={SETTINGS_ROW_DESC}>{t("settings.texWorkspacePage.defaultViewDesc")}</p>
               </div>
               <AppSelect
                 value={defaultViewMode}
@@ -219,9 +230,9 @@ export function TexworkspaceSettings() {
                   <AppSelectValue />
                 </AppSelectTrigger>
                 <AppSelectContent>
-                  {(Object.keys(VIEW_LABELS) as TexworkspaceViewMode[]).map((mode) => (
+                  {(Object.keys(viewLabels) as TexworkspaceViewMode[]).map((mode) => (
                     <AppSelectItem key={mode} value={mode}>
-                      {VIEW_LABELS[mode]}
+                      {viewLabels[mode]}
                     </AppSelectItem>
                   ))}
                 </AppSelectContent>
@@ -231,23 +242,17 @@ export function TexworkspaceSettings() {
         </div>
 
         <div>
-          <p className={SECTION_HEADER}>Compile</p>
+          <p className={SECTION_HEADER}>{t("settings.texWorkspacePage.compileSection")}</p>
           <CompileSettingsFields />
         </div>
 
         <div>
-          <p className={SECTION_HEADER}>Backups</p>
+          <p className={SECTION_HEADER}>{t("settings.texWorkspacePage.backups")}</p>
           <div className={SETTINGS_CARD}>
             <div className={SETTINGS_ROW}>
               <div className="min-w-0">
-                <span className={SETTINGS_ROW_LABEL}>Template snapshots</span>
-                <p className={SETTINGS_ROW_DESC}>
-                  Created in{" "}
-                  <code className="text-[length:var(--font-size-11)] bg-muted px-1 rounded">
-                    .prismnext/backups/
-                  </code>{" "}
-                  when switching templates. Delete old snapshots to free disk space.
-                </p>
+                <span className={SETTINGS_ROW_LABEL}>{t("settings.texWorkspacePage.templateSnapshots")}</span>
+                <p className={SETTINGS_ROW_DESC}>{t("settings.texWorkspacePage.templateSnapshotsDesc")}</p>
               </div>
             </div>
             <div className="pb-3 pt-0.5">
@@ -261,18 +266,12 @@ export function TexworkspaceSettings() {
         </div>
 
         <div>
-          <p className={SECTION_HEADER}>References</p>
-          <p className={SECTION_DESC}>
-            Manage citations and reading notes in{" "}
-            <span className="text-foreground/85">Literature</span> mode (right panel). Zotero sync
-            is configured from the Literature library sidebar when a project is open.
-          </p>
+          <p className={SECTION_HEADER}>{t("settings.texWorkspacePage.references")}</p>
+          <p className={SECTION_DESC}>{t("settings.texWorkspacePage.referencesDesc")}</p>
           <div className={SETTINGS_CARD}>
             <div className="py-4 px-1 flex items-start gap-3 text-muted-foreground">
               <BookOpenIcon className="size-4 shrink-0 mt-0.5 opacity-60" />
-              <p className={SETTINGS_ROW_DESC}>
-                BibTeX export and manuscript citation checks live in the TeX workspace compile flow.
-              </p>
+              <p className={SETTINGS_ROW_DESC}>{t("settings.texWorkspacePage.referencesNote")}</p>
             </div>
           </div>
         </div>

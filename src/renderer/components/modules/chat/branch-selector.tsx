@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { GitBranchIcon, LockIcon } from "lucide-react";
 import {
   AppMenu,
@@ -17,6 +18,7 @@ import { cn } from "@/lib/utils";
 const WT_PREFIX = "wt-";
 
 export function BranchSelector() {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const isGitRepo = useGitStore((s) => s.isGitRepo);
   const currentBranch = useGitStore((s) => s.branch);
@@ -110,9 +112,13 @@ export function BranchSelector() {
                 className={cn(locked && "opacity-50")}
                 trailing={
                   isPending && !isCurrent ? (
-                    <span className="text-[length:var(--font-badge)] text-amber-500">next</span>
+                    <span className="text-[length:var(--font-badge)] text-amber-500">
+                      {t("chat.branch.next")}
+                    </span>
                   ) : isCurrent ? (
-                    <span className="text-[length:var(--font-badge)] text-primary">current</span>
+                    <span className="text-[length:var(--font-badge)] text-primary">
+                      {t("chat.branch.current")}
+                    </span>
                   ) : null
                 }
               >
@@ -121,7 +127,9 @@ export function BranchSelector() {
             );
           })
         ) : (
-          <p className={cn("px-2 py-2 text-muted-foreground", appMenuFontClass)}>No branches</p>
+          <p className={cn("px-2 py-2 text-muted-foreground", appMenuFontClass)}>
+            {t("chat.branch.noBranches")}
+          </p>
         )}
       </AppMenuContent>
     </AppMenu>
