@@ -137,7 +137,7 @@ export function resolveLatexRoot(
       }
     }
     if (!startFile) {
-      for (const candidate of ["manuscript/main.tex", "main.tex", "document.tex"]) {
+      for (const candidate of ["main.tex", "document.tex"]) {
         if (fs.existsSync(path.join(projectRoot, candidate))) {
           startFile = candidate;
           resolution = "main.tex-fallback";

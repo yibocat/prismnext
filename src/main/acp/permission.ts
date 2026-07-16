@@ -11,9 +11,12 @@ export type PermissionResponse =
 export function buildPermissionOutcome(
   options: PermissionOption[],
   approved: boolean,
+  opts?: { preferAlways?: boolean },
 ): PermissionResponse {
   const preferredKinds = approved
-    ? ["allow_once", "allow_always"]
+    ? opts?.preferAlways
+      ? ["allow_always", "allow_once"]
+      : ["allow_once", "allow_always"]
     : ["reject_once", "reject_always"];
 
   const option = preferredKinds

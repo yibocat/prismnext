@@ -2,6 +2,7 @@ import { describe, expect, it, afterEach } from "vitest";
 import {
   runAiCommand,
   cancelAiCommandForSession,
+  destroyAllAiPty,
   _resetAiPtyForTests,
   _getActiveAiPtyCountForTests,
   _hasActiveAiPtyForSession,
@@ -45,4 +46,37 @@ describe("ai-pty", () => {
 
     await expect(promise).resolves.toMatchObject({ cwd: process.cwd() });
   });
+
+  it("destroyAllAiPty clears in-flight sessions (Bug #6 quit path)", async () => {
+    const promise = runAiCommand({
+      command: "sleep 30",
+      cwd: process.cwd(),
+      sessionId: "sess-quit",
+      chatTabId: "chat-1",
+      requestId: "req-quit",
+      onChunk: () => {},
+    });
+
+    await new Promise((r) => setTimeout(r, 80));
+    expect(_getActiveAiPtyCountForTests()).toBe(1);
+    destroyAllAiPty();
+    expect(_getActiveAiPtyCountForTests()).toBe(0);
+    await expect(promise).resolves.toMatchObject({ cwd: process.cwd() });
+  });
+
+  it("cancel settles the promise even if exit is slow (Bug #15)", async () => {
+    const promise = runAiCommand({
+      command: "sleep 60",
+      cwd: process.cwd(),
+      sessionId: "sess-settle",
+      chatTabId: "chat-1",
+      requestId: "req-settle",
+      onChunk: () => {},
+    });
+    await new Promise((r) => setTimeout(r, 80));
+    cancelAiCommandForSession("sess-settle");
+    // Must resolve via onExit or the 2s force-settle — never hang the test suite.
+    await expect(promise).resolves.toMatchObject({ cwd: process.cwd() });
+    expect(_getActiveAiPtyCountForTests()).toBe(0);
+  }, 10_000);
 });

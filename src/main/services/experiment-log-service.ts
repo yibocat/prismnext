@@ -5,24 +5,30 @@
  * Workspace experiment folder is an empty lab — agent-owned layout.
  */
 import {
-  appendFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { execSync } from "node:child_process";
-import { dirname, join, resolve as pathResolve } from "node:path";
+import { dirname, join, relative, resolve as pathResolve } from "node:path";
 import { randomBytes } from "node:crypto";
+import { appendJsonlLine } from "../lib/jsonl-append";
+import { findProjectRelByBasename } from "../lib/find-project-file";
+import { normalizeRunArtifactPaths } from "../../shared/artifact-path";
 import { resolveExperimentDir } from "./workspace-config";
 import { generateProvenanceId, recordRunProvenance } from "./provenance-service";
 import {
   EXPERIMENT_META_FILENAME,
   EXPERIMENT_REGISTRY_REL,
   EXPERIMENT_RUNS_FILENAME,
+  EXPERIMENT_RUNS_STATS_FILENAME,
   EXPERIMENT_VENV_DIR,
+  experimentStatusOf,
+  isSafeExperimentId,
   RUN_OUTPUT_TAIL_BYTES,
   isForbiddenSystemPythonInstall,
   isPythonRelatedCommand,
@@ -97,6 +103,92 @@ function runsPath(ctx: ExperimentStorageContext, id: string): string {
   return join(registryEntryPath(ctx, id), EXPERIMENT_RUNS_FILENAME);
 }
 
+function runsStatsPath(ctx: ExperimentStorageContext, id: string): string {
+  return join(registryEntryPath(ctx, id), EXPERIMENT_RUNS_STATS_FILENAME);
+}
+
+interface RunsStats {
+  runCount: number;
+  lastRunAt: string | null;
+}
+
+function writeRunsStats(ctx: ExperimentStorageContext, id: string, stats: RunsStats): void {
+  try {
+    writeFileSync(
+      runsStatsPath(ctx, id),
+      JSON.stringify(stats) + "\n",
+      "utf-8",
+    );
+  } catch {
+    // best-effort sidecar
+  }
+}
+
+function readRunsStatsFile(ctx: ExperimentStorageContext, id: string): RunsStats | null {
+  const sp = runsStatsPath(ctx, id);
+  if (!existsSync(sp)) return null;
+  try {
+    const raw = JSON.parse(readFileSync(sp, "utf-8")) as Partial<RunsStats>;
+    if (typeof raw.runCount !== "number" || raw.runCount < 0) return null;
+    const lastRunAt =
+      raw.lastRunAt === null || typeof raw.lastRunAt === "string" ? raw.lastRunAt : null;
+    return { runCount: raw.runCount, lastRunAt };
+  } catch {
+    return null;
+  }
+}
+
+/** Full scan of runs.jsonl — also heals the sidecar. */
+function recountRunsAndLastAt(ctx: ExperimentStorageContext, id: string): RunsStats {
+  const rp = runsPath(ctx, id);
+  if (!existsSync(rp)) {
+    const empty = { runCount: 0, lastRunAt: null as string | null };
+    writeRunsStats(ctx, id, empty);
+    return empty;
+  }
+  let runCount = 0;
+  let lastRunAt: string | null = null;
+  try {
+    const raw = readFileSync(rp, "utf-8");
+    const lines = raw.split("\n").filter((l) => l.trim().length > 0);
+    runCount = lines.length;
+    if (lines.length > 0) {
+      try {
+        const last = JSON.parse(lines[lines.length - 1]!) as Partial<ExperimentRunEntry>;
+        lastRunAt = last.finishedAt ?? last.startedAt ?? null;
+      } catch {
+        lastRunAt = null;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  const stats = { runCount, lastRunAt };
+  writeRunsStats(ctx, id, stats);
+  return stats;
+}
+
+/**
+ * Refresh sidecar after append (Bug #20). Prefer O(1) increment over a full
+ * JSONL recount — only heal via full scan when the sidecar is missing.
+ */
+function bumpRunsStats(
+  ctx: ExperimentStorageContext,
+  id: string,
+  run?: Pick<ExperimentRunEntry, "finishedAt" | "startedAt">,
+): void {
+  const existing = readRunsStatsFile(ctx, id);
+  if (!existing) {
+    recountRunsAndLastAt(ctx, id);
+    return;
+  }
+  const stamp = run?.finishedAt ?? run?.startedAt ?? null;
+  writeRunsStats(ctx, id, {
+    runCount: existing.runCount + 1,
+    lastRunAt: stamp ?? existing.lastRunAt,
+  });
+}
+
 function workspaceIslandAbs(ctx: ExperimentStorageContext, meta: ExperimentMeta): string {
   return join(ctx.projectRoot, meta.workspacePath);
 }
@@ -139,14 +231,28 @@ export function generateRunId(): string {
   return `run-${utcDateStamp(d)}-${utcTimeStamp(d)}-${shortHex(4)}`;
 }
 
-function readMeta(ctx: ExperimentStorageContext, id: string): ExperimentMeta | null {
+type MetaReadResult =
+  | { ok: true; meta: ExperimentMeta }
+  | { ok: false; reason: "invalid_id" | "missing" | "corrupt" };
+
+function readMetaResult(ctx: ExperimentStorageContext, id: string): MetaReadResult {
+  if (!isSafeExperimentId(id)) return { ok: false, reason: "invalid_id" };
   const mp = metaPath(ctx, id);
-  if (!existsSync(mp)) return null;
+  if (!existsSync(mp)) return { ok: false, reason: "missing" };
   try {
-    return JSON.parse(readFileSync(mp, "utf-8")) as ExperimentMeta;
+    return { ok: true, meta: JSON.parse(readFileSync(mp, "utf-8")) as ExperimentMeta };
   } catch {
-    return null;
+    return { ok: false, reason: "corrupt" };
   }
+}
+
+function readMeta(ctx: ExperimentStorageContext, id: string): ExperimentMeta | null {
+  const r = readMetaResult(ctx, id);
+  return r.ok ? r.meta : null;
+}
+
+function writeMeta(ctx: ExperimentStorageContext, meta: ExperimentMeta): void {
+  writeFileSync(metaPath(ctx, meta.id), JSON.stringify(meta, null, 2) + "\n", "utf-8");
 }
 
 function experimentExists(ctx: ExperimentStorageContext, id: string): boolean {
@@ -315,14 +421,21 @@ function isPathInside(parentAbs: string, childAbs: string): boolean {
   return child === parent || child.startsWith(parent + "/");
 }
 
-/** Extract `cd` targets from a compound shell command (best-effort). */
+/**
+ * Extract `cd` targets from a compound shell command (best-effort).
+ * Supports quoted paths; ignores `cd -` / `$VAR` / `~` (Bugs #17 / #31) —
+ * we do not emulate shell directory stacks or expand env.
+ */
 export function extractCdTargets(command: string): string[] {
   const out: string[] = [];
-  const re = /\bcd\s+([^\s;&|]+)/g;
+  const re = /\bcd\s+(?:'([^']*)'|"([^"]*)"|([^\s;&|$~]+))/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(command))) {
-    const raw = (m[1] || "").replace(/^['"]|['"]$/g, "");
-    if (raw) out.push(raw);
+    const raw = (m[1] ?? m[2] ?? m[3] ?? "").trim();
+    if (!raw) continue;
+    if (raw === "-" || raw === "--") continue;
+    if (raw.includes("$") || raw.startsWith("~")) continue;
+    out.push(raw);
   }
   return out;
 }
@@ -552,46 +665,57 @@ export function detectEnv(
 
 // ─── list ──────────────────────────────────────────────────────────────────
 
-function countRunsAndLastAt(ctx: ExperimentStorageContext, id: string): { runCount: number; lastRunAt: string | null } {
-  const rp = runsPath(ctx, id);
-  if (!existsSync(rp)) return { runCount: 0, lastRunAt: null };
-  let runCount = 0;
-  let lastRunAt: string | null = null;
-  try {
-    const raw = readFileSync(rp, "utf-8");
-    const lines = raw.split("\n").filter((l) => l.trim().length > 0);
-    runCount = lines.length;
-    if (lines.length > 0) {
-      try {
-        const last = JSON.parse(lines[lines.length - 1]!) as Partial<ExperimentRunEntry>;
-        lastRunAt = last.finishedAt ?? last.startedAt ?? null;
-      } catch {
-        lastRunAt = null;
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return { runCount, lastRunAt };
+function countRunsAndLastAt(ctx: ExperimentStorageContext, id: string): RunsStats {
+  const cached = readRunsStatsFile(ctx, id);
+  if (cached) return cached;
+  return recountRunsAndLastAt(ctx, id);
 }
 
-export function listExperiments(ctx: ExperimentStorageContext): {
+export interface ListExperimentsOptions {
+  /**
+   * When false, hide `status: archived` (human browse default).
+   * When true / omitted, include archived (Agent `list` default per Q1=A).
+   */
+  includeArchived?: boolean;
+}
+
+export function listExperiments(
+  ctx: ExperimentStorageContext,
+  opts?: ListExperimentsOptions,
+): {
   registryRoot: string;
   workspaceRel: string;
   experiments: ExperimentSummary[];
+  /** Registry dirs whose meta.json is missing or unparseable (Bug #19). */
+  corruptIds: string[];
 } {
+  const includeArchived = opts?.includeArchived !== false;
   const experiments: ExperimentSummary[] = [];
+  const corruptIds: string[] = [];
   let entries: string[];
   try {
     entries = readdirSync(ctx.registryRoot, { withFileTypes: true })
       .filter((e) => e.isDirectory() && !e.name.startsWith("."))
       .map((e) => e.name);
   } catch {
-    return { registryRoot: EXPERIMENT_REGISTRY_REL, workspaceRel: ctx.workspaceRel, experiments };
+    return {
+      registryRoot: EXPERIMENT_REGISTRY_REL,
+      workspaceRel: ctx.workspaceRel,
+      experiments,
+      corruptIds,
+    };
   }
   for (const id of entries) {
-    const meta = readMeta(ctx, id);
-    if (!meta) continue;
+    const metaRead = readMetaResult(ctx, id);
+    if (!metaRead.ok) {
+      if (metaRead.reason === "corrupt" || metaRead.reason === "missing") {
+        corruptIds.push(id);
+      }
+      continue;
+    }
+    const meta = metaRead.meta;
+    const status = experimentStatusOf(meta);
+    if (!includeArchived && status === "archived") continue;
     const { runCount, lastRunAt } = countRunsAndLastAt(ctx, id);
     experiments.push({
       id,
@@ -599,10 +723,103 @@ export function listExperiments(ctx: ExperimentStorageContext): {
       workspacePath: meta.workspacePath,
       runCount,
       lastRunAt,
+      status,
+      archivedAt: meta.archivedAt ?? null,
     });
   }
   experiments.sort((a, b) => b.id.localeCompare(a.id));
-  return { registryRoot: EXPERIMENT_REGISTRY_REL, workspaceRel: ctx.workspaceRel, experiments };
+  corruptIds.sort((a, b) => a.localeCompare(b));
+  return {
+    registryRoot: EXPERIMENT_REGISTRY_REL,
+    workspaceRel: ctx.workspaceRel,
+    experiments,
+    corruptIds,
+  };
+}
+
+// ─── archive / restore / delete (Phase 4 / P2.1) ─────────────────────────────
+
+export function archiveExperiment(
+  ctx: ExperimentStorageContext,
+  id: string,
+): { ok: true; meta: ExperimentMeta } | { ok: false; error: string } {
+  if (!isSafeExperimentId(id)) return { ok: false, error: "invalid_id" };
+  const meta = readMeta(ctx, id);
+  if (!meta) return { ok: false, error: "experiment_not_found" };
+  if (experimentStatusOf(meta) === "archived") {
+    return { ok: true, meta };
+  }
+  const next: ExperimentMeta = {
+    ...meta,
+    status: "archived",
+    archivedAt: nowUtcIso(),
+  };
+  try {
+    writeMeta(ctx, next);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+  return { ok: true, meta: next };
+}
+
+export function restoreExperiment(
+  ctx: ExperimentStorageContext,
+  id: string,
+): { ok: true; meta: ExperimentMeta } | { ok: false; error: string } {
+  if (!isSafeExperimentId(id)) return { ok: false, error: "invalid_id" };
+  const meta = readMeta(ctx, id);
+  if (!meta) return { ok: false, error: "experiment_not_found" };
+  const next: ExperimentMeta = {
+    ...meta,
+    status: "active",
+    archivedAt: null,
+  };
+  try {
+    writeMeta(ctx, next);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+  return { ok: true, meta: next };
+}
+
+export interface DeleteExperimentOptions {
+  /** When true, also rm the lab island under the Experiment workspace. */
+  removeLab?: boolean;
+}
+
+export function deleteExperiment(
+  ctx: ExperimentStorageContext,
+  id: string,
+  opts?: DeleteExperimentOptions,
+): { ok: true } | { ok: false; error: string } {
+  if (!isSafeExperimentId(id)) return { ok: false, error: "invalid_id" };
+  const meta = readMeta(ctx, id);
+  if (!meta) return { ok: false, error: "experiment_not_found" };
+
+  if (opts?.removeLab) {
+    const island = workspaceIslandAbs(ctx, meta);
+    const workspaceResolved = pathResolve(ctx.workspaceAbs);
+    const islandResolved = pathResolve(island);
+    const rel = relative(workspaceResolved, islandResolved).replace(/\\/g, "/");
+    if (rel !== id || rel.startsWith("..")) {
+      return { ok: false, error: "unsafe_lab_path" };
+    }
+    try {
+      if (existsSync(islandResolved)) {
+        rmSync(islandResolved, { recursive: true, force: true });
+      }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  const registryDir = registryEntryPath(ctx, id);
+  try {
+    rmSync(registryDir, { recursive: true, force: true });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+  return { ok: true };
 }
 
 // ─── create ─────────────────────────────────────────────────────────────────
@@ -664,6 +881,7 @@ export function createExperiment(
   if (!existsSync(runsPath(ctx, id))) {
     writeFileSync(runsPath(ctx, id), "", "utf-8");
   }
+  writeRunsStats(ctx, id, { runCount: 0, lastRunAt: null });
 
   return { ok: true, id, path: workspacePath, meta };
 }
@@ -675,7 +893,16 @@ export function readExperiment(
   id: string,
   runsLimit = 20,
 ):
-  | { ok: true; meta: ExperimentMeta; runs: ExperimentRunEntry[]; workspaceRel: string; registryRoot: string }
+  | {
+      ok: true;
+      meta: ExperimentMeta;
+      runs: ExperimentRunEntry[];
+      /** Total runs in jsonl (not limited by `runsLimit`). */
+      runCount: number;
+      lastRunAt: string | null;
+      workspaceRel: string;
+      registryRoot: string;
+    }
   | { ok: false; error: string } {
   if (!experimentExists(ctx, id)) {
     return { ok: false, error: "experiment_not_found" };
@@ -699,10 +926,13 @@ export function readExperiment(
       // ignore
     }
   }
+  const { runCount, lastRunAt } = countRunsAndLastAt(ctx, id);
   return {
     ok: true,
     meta,
     runs,
+    runCount,
+    lastRunAt,
     workspaceRel: ctx.workspaceRel,
     registryRoot: EXPERIMENT_REGISTRY_REL,
   };
@@ -727,16 +957,25 @@ export function appendRun(
   const island = workspaceIslandAbs(ctx, meta);
   const startedAt = input.startedAt ?? nowUtcIso();
   const finishedAt = input.finishedAt ?? nowUtcIso();
+  const workspacePath = meta.workspacePath;
+  const artifacts = normalizeRunArtifactPaths(
+    Array.isArray(input.artifacts) ? input.artifacts : [],
+    {
+      workspacePath,
+      existsProjectRel: (rel) => existsSync(join(ctx.projectRoot, rel)),
+      findByBasename: (base) => findProjectRelByBasename(ctx.projectRoot, base),
+    },
+  );
   const run: ExperimentRunEntry = {
     runId: input.runId || generateRunId(),
     startedAt,
     finishedAt,
     command,
-    cwd: input.cwd ?? meta.workspacePath,
+    cwd: input.cwd ?? workspacePath,
     exitCode: typeof input.exitCode === "number" ? input.exitCode : -1,
     stdoutTail: tailBytes(stripAnsi(input.stdoutTail ?? ""), RUN_OUTPUT_TAIL_BYTES),
     stderrTail: tailBytes(stripAnsi(input.stderrTail ?? ""), RUN_OUTPUT_TAIL_BYTES),
-    artifacts: Array.isArray(input.artifacts) ? input.artifacts : [],
+    artifacts,
     env:
       input.env ??
       detectEnv(island, {
@@ -745,19 +984,16 @@ export function appendRun(
       }),
   };
   if (input.notes) run.notes = input.notes;
-  // Provenance: stamp the chat session + a shared event id onto the run line
-  // BEFORE appending so both land in runs.jsonl in a single write (no rewrite).
+  if (input.cancelled) run.cancelled = true;
+  if (input.kind) run.kind = input.kind;
+  if (input.logPath) run.logPath = input.logPath;
+  // Provenance before runs.jsonl (Bug #5): never stamp an orphan provenanceEventId
+  // on the run when the mirror fails. Prefer a provenance row without a run link
+  // over a run pointing at a missing event.
   const chatSessionId = context?.chatSessionId ?? null;
-  const provenanceEventId = generateProvenanceId();
   run.chatSessionId = chatSessionId;
-  run.provenanceEventId = provenanceEventId;
-  try {
-    appendFileSync(runsPath(ctx, id), JSON.stringify(run) + "\n", "utf-8");
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
-  }
-  // Mirror into the project-level provenance log (best-effort, never throws).
-  recordRunProvenance(ctx.projectRoot, {
+  const provenanceEventId = generateProvenanceId();
+  const mirroredId = recordRunProvenance(ctx.projectRoot, {
     workspaceRel: ctx.workspaceRel,
     experimentId: id,
     run,
@@ -765,6 +1001,15 @@ export function appendRun(
     provenanceEventId,
     islandAbs: island,
   });
+  if (mirroredId) {
+    run.provenanceEventId = mirroredId;
+  }
+  try {
+    appendJsonlLine(runsPath(ctx, id), run);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+  bumpRunsStats(ctx, id, run);
   return { ok: true, run, path: join(EXPERIMENT_REGISTRY_REL, id, EXPERIMENT_RUNS_FILENAME) };
 }
 

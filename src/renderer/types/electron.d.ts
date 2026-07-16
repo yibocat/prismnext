@@ -20,6 +20,17 @@ export type UpdateCheckResult =
   | { status: "error"; currentVersion: string; error: string }
   | { status: "no-source"; currentVersion: string };
 
+/** App + bundled OpenCode agent versions for Settings → About. */
+export interface AboutVersions {
+  appVersion: string;
+  opencode: {
+    available: boolean;
+    version: string | null;
+    path: string;
+    error?: string;
+  };
+}
+
 export interface CompilerStatus {
   texlive: TexliveStatus;
   tectonic: boolean;
@@ -445,7 +456,7 @@ export interface ElectronAPI {
   }>;
   fsRead: (absPath: string) => Promise<{ content: string }>;
   fsReadBatch: (absPaths: string[]) => Promise<{ results: Record<string, string> }>;
-  fsReadImage: (absPath: string) => Promise<{ dataUrl: string }>;
+  fsReadImage: (absPath: string) => Promise<{ dataUrl: string | null }>;
   /** Binary file bytes (PDF preview). Prefer over data-URL for local PDFs. */
   fsReadBytes: (absPath: string) => Promise<{ bytes: ArrayBuffer }>;
   fsWrite: (absPath: string, content: string) => Promise<void>;
@@ -529,6 +540,8 @@ export interface ElectronAPI {
   getPathForFile: (file: File) => string;
   fsExists: (absPath: string) => Promise<boolean>;
   fsIsFile: (absPath: string) => Promise<boolean>;
+  /** Bounded project walk: first project-relative path whose basename matches. */
+  fsFindByBasename: (projectRoot: string, basename: string) => Promise<string | null>;
   projectCreate: (rootPath: string, workspaceDirs?: import("./workspace").WorkspaceFolder[]) => Promise<void>;
   /** Fetch the update manifest and compare against the installed version. */
   updateCheck: () => Promise<UpdateCheckResult>;
@@ -538,6 +551,8 @@ export interface ElectronAPI {
   updateIgnore: (version: string) => Promise<UpdateCheckResult | null>;
   /** Clear the ignored-version flag. Returns the new status. */
   updateUnignore: () => Promise<UpdateCheckResult | null>;
+  /** Prism app version + bundled OpenCode agent binary version. */
+  aboutGetVersions: () => Promise<AboutVersions>;
   projectEnsure: (rootPath: string) => Promise<{ success: boolean }>;
   projectScaffoldAgentsMd: (rootPath: string) => Promise<{
     agentsMdPath: string;
@@ -566,12 +581,17 @@ export interface ElectronAPI {
   }) => Promise<{ path: string; section: string; append: boolean; ok: boolean; error?: string; lastModified: string | null }>;
 
   // Experiments (Sprint 0.7 — Experiments RightArea mode)
-  experimentList: (projectRoot: string) => Promise<
+  experimentList: (
+    projectRoot: string,
+    includeArchived?: boolean,
+  ) => Promise<
     | {
         ok: true;
         experimentRoot: string;
         registryRoot: string;
         experiments: import("../../shared/experiment-log").ExperimentSummary[];
+        /** Registry dirs with missing/corrupt meta.json (Bug #19). */
+        corruptIds?: string[];
       }
     | { ok: false; error: string; hint?: string }
   >;
@@ -580,11 +600,27 @@ export interface ElectronAPI {
         ok: true;
         meta: import("../../shared/experiment-log").ExperimentMeta;
         runs: import("../../shared/experiment-log").ExperimentRunEntry[];
+        /** Total runs in jsonl (may exceed `runs.length` when limited). */
+        runCount: number;
+        lastRunAt: string | null;
         experimentRoot: string;
         registryRoot: string;
       }
     | { ok: false; error: string; hint?: string }
   >;
+  experimentArchive: (args: { projectRoot: string; id: string }) => Promise<
+    | { ok: true; meta: import("../../shared/experiment-log").ExperimentMeta }
+    | { ok: false; error: string; hint?: string }
+  >;
+  experimentRestore: (args: { projectRoot: string; id: string }) => Promise<
+    | { ok: true; meta: import("../../shared/experiment-log").ExperimentMeta }
+    | { ok: false; error: string; hint?: string }
+  >;
+  experimentDelete: (args: {
+    projectRoot: string;
+    id: string;
+    removeLab?: boolean;
+  }) => Promise<{ ok: true } | { ok: false; error: string; hint?: string }>;
   experimentDetectEnv: (args: { projectRoot: string; id: string }) => Promise<
     | {
         ok: true;
@@ -603,6 +639,8 @@ export interface ElectronAPI {
     command: string;
     artifacts?: string[];
     notes?: string;
+    /** Optional run classification (train/eval/…). Omit when unknown. */
+    kind?: import("../../shared/experiment-log").ExperimentRunKind;
     chatSessionId?: string | null;
   }) => Promise<
     | { ok: true; runId: string; status: "started" }
@@ -619,18 +657,7 @@ export interface ElectronAPI {
     }) => void,
   ) => () => void;
   onExperimentRunComplete: (
-    callback: (data: {
-      id: string;
-      runId: string;
-      result: {
-        ok: boolean;
-        run?: import("../../shared/experiment-log").ExperimentRunEntry;
-        exitCode?: number;
-        stdoutTail?: string;
-        stderrTail?: string;
-        error?: string;
-      };
-    }) => void,
+    callback: (data: import("../../shared/experiment-log").ExperimentRunCompleteEvent) => void,
   ) => () => void;
   onExperimentRunOutput: (
     callback: (data: { id: string; runId: string; chunk: string }) => void,
@@ -1415,7 +1442,12 @@ export interface ElectronAPI {
   chatCompact: (sessionId: string, projectPath: string) => Promise<void>;
   chatAnswer: (sessionId: string, answer: string) => Promise<void>;
   chatAnswerQuestion: (questionId: string, answer: string) => Promise<{ success: boolean; error?: string }>;
-  chatAnswerPermission: (permissionId: string, approved: boolean, toolCallId?: string) => Promise<void>;
+  chatAnswerPermission: (
+    permissionId: string,
+    approved: boolean,
+    toolCallId?: string,
+    opts?: { always?: boolean },
+  ) => Promise<void>;
   chatStatus: () => Promise<{ available: boolean; version: string }>;
   sessionList: (projectPath?: string) => Promise<Array<{ id: string; title: string; lastModified: number; createdAt: number; directory?: string }>>;
   sessionLoad: (sessionId: string, projectPath?: string, cwd?: string) => Promise<any[]>;

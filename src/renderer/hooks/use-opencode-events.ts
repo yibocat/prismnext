@@ -16,6 +16,7 @@ import { enrichTaskToolResultFromStore } from "@/lib/literature/format-session-c
 import {
   resolvePermissionMode,
   extractPermissionToolName,
+  isEditAutoApplyMode,
 } from "@shared/permission-modes";
 import { schedulePermissionTimeout, clearPermissionTimer } from "@/stores/permission-actions";
 import { handleBashToolUse, handleBashToolResult, handleBashPermissionDenied, isBashToolName } from "@/lib/terminal/ai-bridge";
@@ -275,7 +276,7 @@ export function useOpenCodeEvents() {
       return;
     }
 
-    if (resolvePermissionMode(useSettingsStore.getState().settings.permissionMode) !== "auto") {
+    if (!isEditAutoApplyMode(useSettingsStore.getState().settings.permissionMode)) {
       return;
     }
     if (!isDiskMutationTool(toolName)) return;

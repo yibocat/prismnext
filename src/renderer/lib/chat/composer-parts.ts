@@ -9,6 +9,10 @@ import {
   normalizeBrowserUrl,
 } from "@/lib/browser-link/normalize";
 import type { GitDiffHunk } from "@/lib/git/diff-hunk-snippet";
+import {
+  experimentRunFieldsFromPart,
+  formatExperimentRunAgentContext,
+} from "@/lib/chat/experiment-run-paper-context";
 
 export type ComposerPart =
   | { type: "text"; text: string }
@@ -135,6 +139,11 @@ export type ComposerPart =
       chatSessionId?: string | null;
       workspacePath?: string;
       sourceTabId?: string;
+      kind?: string;
+      notes?: string;
+      logPath?: string | null;
+      /** `cite-in-paper` expands agent context with Methods / figure scaffolding. */
+      intent?: "discuss" | "cite-in-paper";
     };
 
 export type ComposerDraft = {
@@ -199,17 +208,7 @@ export function partsToAgentText(parts: ComposerPart[]): string {
     if (part.type === "git-diff-snippet") return `[diff: ${part.label}]`;
     if (part.type === "paper-snippet") return `[paper: ${part.label}]`;
     if (part.type === "experiment-run") {
-      const lines = [
-        `[experiment-run: ${part.label}]`,
-        `command: \`${part.command}\``,
-        `exit: ${part.exitCode}`,
-        `runId: ${part.runId}`,
-      ];
-      if (part.experimentId) lines.push(`experiment: ${part.experimentId}`);
-      if (part.artifactPath) lines.push(`artifact: ${part.artifactPath}${part.linkMethod ? ` (${part.linkMethod})` : ""}`);
-      if (part.artifacts.length > 0) lines.push(`artifacts: ${part.artifacts.join(", ")}`);
-      if (part.chatSessionId) lines.push(`chatSession: ${part.chatSessionId}`);
-      return lines.join("\n");
+      return formatExperimentRunAgentContext(experimentRunFieldsFromPart(part));
     }
     if (part.type === "skill") return `[skill: ${part.label}]`;
     if (part.type === "mcp") return `[mcp: ${part.label}]`;

@@ -1,13 +1,13 @@
 /**
  * experiment-run — Run a shell command inside an experiment island and record it.
  *
- * Fixed pipeline (executed by the bridge executor): resolve island → ensure island
- * shared workspace `.venv` (uv/python) → detect_env → run command via PTY (venv on PATH) →
- * append a runs.jsonl entry → return the run.
- * This is the PREFERRED way to run experiment commands; it guarantees every run
- * is logged with env + exit code + output tail. If you run a raw `bash` command
- * inside an experiment island instead, the experiments module requires the next
- * tool call to be `experiment-log` action=append_run (fallback discipline).
+ * Fixed pipeline (executed by the bridge executor): resolve island → ensure
+ * shared workspace `.venv` (uv/python) → detect_env → run command via PTY
+ * (venv on PATH) → append a runs.jsonl entry → return the run.
+ *
+ * There is NO wall-clock timeout on the tool poll: training jobs may run for
+ * many hours. The loop ends only when the bridge writes a result file, or the
+ * OpenCode session aborts (`context.abort` / user cancel).
  */
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
@@ -15,9 +15,6 @@ import * as path from "path";
 import { experimentLogBridgeRoot } from "./bridge-paths";
 
 const BRIDGE_ROOT = experimentLogBridgeRoot();
-// Experiment runs may take minutes — give the tool a generous poll ceiling.
-// (The executor's own timeout is 10 min; the tool gives up slightly after.)
-const TIMEOUT_MS = 11 * 60 * 1000;
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function toolOutput(data: Record<string, unknown>): { output: string } {
@@ -61,26 +58,30 @@ async function bridgeCall(
   );
 
   const abort = (context as { abort?: AbortSignal }).abort;
-  const deadline = Date.now() + TIMEOUT_MS;
-  while (!abort?.aborted && Date.now() < deadline) {
+  // Poll forever until the executor writes resPath, or the session cancels.
+  // Do not impose a wall-clock soft/hard cap — long training must not be
+  // timed out by the tool layer.
+  while (!abort?.aborted) {
     await delay(50);
     if (!fs.existsSync(resPath)) continue;
     try {
       const result = JSON.parse(fs.readFileSync(resPath, "utf-8")) as Record<string, unknown>;
-      try { fs.unlinkSync(resPath); } catch {}
-      try { fs.unlinkSync(reqPath); } catch {}
+      try {
+        fs.unlinkSync(resPath);
+      } catch {
+        // Bridge bookkeeping may race; ignore.
+      }
       return toolOutput(result);
     } catch (err) {
       return toolOutput({ error: err instanceof Error ? err.message : String(err) });
     }
   }
-  // Timed out. Leave the request file so the executor (still running) can find
-  // its resPath — but the tool returns a timeout to the model. The orphaned
-  // resPath will be written by the executor and cleaned up by a later poll.
+
   return toolOutput({
     ok: false,
-    error: "experiment_run_timeout",
-    hint: "The experiment command is still running in the background. Read its result later with experiment-log action=read.",
+    error: "experiment_run_aborted",
+    hint:
+      "Session was cancelled while the experiment was running. The bridge may still finish the run and append to runs.jsonl — check with `experiment-log action=read`.",
   });
 }
 
@@ -89,6 +90,7 @@ export default tool({
     "Run a shell command inside an experiment workspace folder and append a structured run record. " +
     "Runs in the workspace cwd, captures stdout/stderr tail + exit code, optionally records artifacts/notes you supply, " +
     "and appends one JSONL line to the registry runs log. " +
+    "There is no wall-clock timeout — the tool waits until the command finishes or the chat session is cancelled. " +
     "Use when you want execution + logging in one step; layout and env setup inside the workspace are up to you. " +
     "The experiment must already exist (experiment-log action=create).",
   args: {
@@ -101,13 +103,20 @@ export default tool({
     artifacts: tool.schema
       .array(tool.schema.string())
       .describe(
-        "Output paths relative to the island folder (e.g. results/plot.png). " +
-          "Always include figures so chat can inline-preview them and provenance can link them.",
+        "Output file paths so Prism can find them later. Island-relative or " +
+          "project-relative are both accepted; Prism resolves against the disk " +
+          "when recording the run. Always include figures for chat preview and provenance.",
       )
       .optional(),
     notes: tool.schema
       .string()
       .describe("Optional agent comment recorded with the run.")
+      .optional(),
+    kind: tool.schema
+      .enum(["train", "eval", "plot", "data", "setup", "other"])
+      .describe(
+        "Optional run classification. Omit when unsure — do not invent 'other' as a default.",
+      )
       .optional(),
   },
   async execute(args, context) {
@@ -119,6 +128,7 @@ export default tool({
     const payload: Record<string, unknown> = { action: "run", id, command };
     if (Array.isArray(args.artifacts)) payload.artifacts = args.artifacts;
     if (typeof args.notes === "string") payload.notes = args.notes;
+    if (typeof args.kind === "string" && args.kind.trim()) payload.kind = args.kind.trim();
 
     return bridgeCall(context as Record<string, unknown>, payload);
   },

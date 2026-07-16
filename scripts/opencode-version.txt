@@ -1,0 +1,9 @@
+# Pinned OpenCode release tag for Prism Next (developer / packaging only).
+# End users never download this — the binary is bundled via electron-builder
+# extraResources from bin/opencode/<platform>-<arch>/.
+#
+# Bump intentionally after ACP regression (permissions, Task/subagent, bash/pty,
+# MCP, compaction). Do not use "latest".
+#
+# Format: GitHub release tag, e.g. v1.17.7
+v1.17.7

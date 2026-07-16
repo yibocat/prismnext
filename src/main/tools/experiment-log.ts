@@ -119,6 +119,16 @@ export default tool({
         stderrTail: tool.schema.string().optional(),
         artifacts: tool.schema.array(tool.schema.string()).optional(),
         notes: tool.schema.string().optional(),
+        kind: tool.schema
+          .enum(["train", "eval", "plot", "data", "setup", "other"])
+          .describe("Optional run classification. Omit when unsure.")
+          .optional(),
+        logPath: tool.schema
+          .string()
+          .describe(
+            "Optional lab-relative path to a full stdout/stderr log (e.g. logs/<runId>.log).",
+          )
+          .optional(),
       })
       .describe("append_run only — run entry fields (runId/timestamps/env auto-filled when omitted).")
       .optional(),

@@ -293,38 +293,10 @@ export class EventMapper {
     }
 
     // Sub-agent sessions inherit parent tab via parentSessionId above.
-    // Do NOT fall back to the sole registered tab — that misroutes other sessions.
-
-    // Last-resort heuristic: if we still can't resolve the tab AND there is
-    // exactly ONE chat tab with a pending Task (i.e. an expert subagent was
-    // just dispatched and hasn't linked yet), attribute this unmapped session
-    // to that tab. This recovers the common failure mode where OpenCode didn't
-    // write parent_id (or the row isn't committed yet) so the child session's
-    // activity would otherwise be silently dropped — the "Task hangs invisibly"
-    // bug. Safe because top-level chat sessions are registered before they
-    // emit, so an unmapped session here is almost certainly a subagent.
-    const pendingTabs = Array.from(this.pendingTasksByTab.keys());
-    if (pendingTabs.length === 1) {
-      const soleTab = pendingTabs[0];
-      log.info(
-        `resolveTabForSession: heuristic — attributing unmapped session ${sessionId} ` +
-          `to sole pending-task tab ${soleTab}`,
-      );
-      if (!this.subSessionToTaskTool.has(sessionId)) {
-        this.linkSubAgentSession(soleTab, sessionId);
-      }
-      if (!this.sessionToTab.has(sessionId)) {
-        const parentSessionId = this.tabToSession.get(soleTab);
-        registerChatSession(
-          sessionId,
-          soleTab,
-          parentSessionId ? getSessionProjectRoot(parentSessionId) : undefined,
-        );
-        this.sessionToTab.set(sessionId, soleTab);
-        AcpService.getInstance().markSubAgentSession(sessionId);
-      }
-      return soleTab;
-    }
+    // Do NOT attribute unmapped sessions to a sole pending-task tab (Bug #7):
+    // when Tab A has a pending Task and Tab B's child session arrives first
+    // (before B's Task is enqueued), that heuristic permanently binds B → A.
+    // Prefer the 90s link watchdog ("Task hangs") over silent misrouting.
 
     return undefined;
   }

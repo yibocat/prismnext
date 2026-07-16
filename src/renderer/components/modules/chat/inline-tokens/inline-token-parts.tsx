@@ -173,12 +173,14 @@ export function ComposerTokenChip({
       env?.pythonVersion ? `py ${env.pythonVersion}` : env?.python ? "py" : null,
       env?.platform,
     ].filter(Boolean);
+    const cite = part.intent === "cite-in-paper";
     return (
       <InlineTokenChip
         variant="code"
         icon={<FlaskConicalIcon className="size-3 shrink-0" />}
         label={part.label}
         title={[
+          cite ? "Use in paper — Methods / figure scaffolding" : null,
           `${part.command}`,
           `exit ${part.exitCode} · runId ${part.runId}`,
           part.artifactPath ? `artifact: ${part.artifactPath}${part.linkMethod ? ` (${part.linkMethod})` : ""}` : null,

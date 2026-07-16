@@ -711,8 +711,18 @@ export function registerChatHandlers(): void {
   // ─── Permission Answer ───
   ipcMain.handle(
     "chat:answerPermission",
-    async (_event, args: { permissionId: string; approved: boolean; toolCallId?: string }) => {
-      await getService().answerPermission(args.permissionId, args.approved, args.toolCallId);
+    async (
+      _event,
+      args: {
+        permissionId: string;
+        approved: boolean;
+        toolCallId?: string;
+        always?: boolean;
+      },
+    ) => {
+      await getService().answerPermission(args.permissionId, args.approved, args.toolCallId, {
+        always: args.always,
+      });
     },
   );
 

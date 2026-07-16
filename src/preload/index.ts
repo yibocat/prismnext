@@ -79,6 +79,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	shellOpenExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", { url }),
 	fsExists: (absPath: string) => ipcRenderer.invoke("fs:exists", { absPath }),
 	fsIsFile: (absPath: string) => ipcRenderer.invoke("fs:isFile", { absPath }),
+	fsFindByBasename: (projectRoot: string, basename: string) =>
+		ipcRenderer.invoke("fs:findByBasename", { projectRoot, basename }),
 	projectCreate: (rootPath: string, workspaceDirs?: WorkspaceFolder[]) =>
 		ipcRenderer.invoke("project:create", { rootPath, workspaceDirs }),
 	projectEnsure: (rootPath: string) => ipcRenderer.invoke("project:ensure", { rootPath }),
@@ -100,20 +102,27 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	}) => ipcRenderer.invoke("researchBrief:updateSection", args),
 
 	// Experiments (Sprint 0.7 — Experiments RightArea mode)
-	experimentList: (projectRoot: string) =>
-		ipcRenderer.invoke("experiment:list", { projectRoot }),
+	experimentList: (projectRoot: string, includeArchived?: boolean) =>
+		ipcRenderer.invoke("experiment:list", { projectRoot, includeArchived }),
 	experimentRead: (args: { projectRoot: string; id: string; runsLimit?: number }) =>
 		ipcRenderer.invoke("experiment:read", args),
 	experimentDetectEnv: (args: { projectRoot: string; id: string }) =>
 		ipcRenderer.invoke("experiment:detectEnv", args),
 	experimentGetPaths: (args: { projectRoot: string; id: string }) =>
 		ipcRenderer.invoke("experiment:getPaths", args),
+	experimentArchive: (args: { projectRoot: string; id: string }) =>
+		ipcRenderer.invoke("experiment:archive", args),
+	experimentRestore: (args: { projectRoot: string; id: string }) =>
+		ipcRenderer.invoke("experiment:restore", args),
+	experimentDelete: (args: { projectRoot: string; id: string; removeLab?: boolean }) =>
+		ipcRenderer.invoke("experiment:delete", args),
 	experimentRun: (args: {
 		projectRoot: string;
 		id: string;
 		command: string;
 		artifacts?: string[];
 		notes?: string;
+		kind?: string;
 		chatSessionId?: string | null;
 	}) => ipcRenderer.invoke("experiment:run", args),
 	experimentCancelRun: (args: { projectRoot: string; id: string; runId: string }) =>
@@ -139,33 +148,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		return () => ipcRenderer.removeListener("experiment:changed", handler);
 	},
 	onExperimentRunComplete: (
-		callback: (data: {
-			id: string;
-			runId: string;
-			result: {
-				ok: boolean;
-				run?: import("../shared/experiment-log").ExperimentRunEntry;
-				exitCode?: number;
-				stdoutTail?: string;
-				stderrTail?: string;
-				error?: string;
-			};
-		}) => void,
+		callback: (data: import("../shared/experiment-log").ExperimentRunCompleteEvent) => void,
 	) => {
 		const handler = (
 			_event: Electron.IpcRendererEvent,
-			data: {
-				id: string;
-				runId: string;
-				result: {
-					ok: boolean;
-					run?: import("../shared/experiment-log").ExperimentRunEntry;
-					exitCode?: number;
-					stdoutTail?: string;
-					stderrTail?: string;
-					error?: string;
-				};
-			},
+			data: import("../shared/experiment-log").ExperimentRunCompleteEvent,
 		) => callback(data);
 		ipcRenderer.on("experiment:runComplete", handler);
 		return () => ipcRenderer.removeListener("experiment:runComplete", handler);
@@ -192,6 +179,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		updateStatus: () => ipcRenderer.invoke("update:status"),
 		updateIgnore: (version: string) => ipcRenderer.invoke("update:ignore", { version }),
 		updateUnignore: () => ipcRenderer.invoke("update:unignore"),
+		aboutGetVersions: () => ipcRenderer.invoke("about:getVersions"),
 
 	// Window operations
 	windowSetTitle: (title: string) =>
@@ -802,8 +790,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("chat:answer", { sessionId, answer }),
 		chatAnswerQuestion: (questionId: string, answer: string) =>
 			ipcRenderer.invoke("chat:answerQuestion", { questionId, answer }),
-		chatAnswerPermission: (permissionId: string, approved: boolean, toolCallId?: string) =>
-			ipcRenderer.invoke("chat:answerPermission", { permissionId, approved, toolCallId }),
+		chatAnswerPermission: (
+			permissionId: string,
+			approved: boolean,
+			toolCallId?: string,
+			opts?: { always?: boolean },
+		) =>
+			ipcRenderer.invoke("chat:answerPermission", {
+				permissionId,
+				approved,
+				toolCallId,
+				always: opts?.always,
+			}),
 	chatStatus: () => ipcRenderer.invoke("chat:status"),
 	sessionList: (projectPath?: string) => ipcRenderer.invoke("session:list", { projectPath }),
 	sessionLoad: (sessionId: string, projectPath?: string, cwd?: string) =>

@@ -3,11 +3,21 @@ import {
   getToolPermissionEntry,
 } from "./tool-permission-registry";
 
-export type PermissionMode = "ask" | "auto" | "readonly";
+/**
+ * Chat permission modes (Prism):
+ * - ask: prompt for edits + shell
+ * - edit_auto: allow file edits; still ask for shell / destructive (legacy "Auto")
+ * - auto: OpenCode-style full auto-approve (all non-deny tools run without prompts)
+ * - readonly: block edits + shell
+ */
+export type PermissionMode = "ask" | "edit_auto" | "auto" | "readonly";
 
 export type OpenCodePermissionRule = "allow" | "ask" | "deny";
 
 export const DEFAULT_PERMISSION_MODE: PermissionMode = "ask";
+
+/** Bump when mode semantics change; used to migrate stored settings once. */
+export const PERMISSION_MODE_SCHEMA_VERSION = 2;
 
 export interface PermissionModeOption {
   value: PermissionMode;
@@ -21,34 +31,71 @@ export const PERMISSION_MODE_OPTIONS: PermissionModeOption[] = [
     value: "ask",
     label: "Ask",
     shortLabel: "Ask",
-    description: "Prompt before editing files or running shell commands. Shell runs in the PTY terminal only after you Allow.",
+    description:
+      "Prompt before editing files or running shell commands. Shell runs in the PTY terminal only after you Allow.",
+  },
+  {
+    value: "edit_auto",
+    label: "Edit auto",
+    shortLabel: "Edit",
+    description:
+      "Allow file edits automatically; still ask for shell and destructive operations. Shell uses PTY after Allow.",
   },
   {
     value: "auto",
     label: "Auto",
     shortLabel: "Auto",
-    description: "Allow file edits automatically; still ask for shell and destructive operations. Shell uses PTY after Allow.",
+    description:
+      "Fully automatic — approve edits, shell, and other tools without prompting (same idea as OpenCode --auto). Explicit denials still apply.",
   },
   {
     value: "readonly",
     label: "Read-only",
     shortLabel: "Read",
-    description: "Only read and search — block edits and shell commands. Mirror terminal mode is available in advanced settings.",
+    description:
+      "Only read and search — block edits and shell commands. Mirror terminal mode is available in advanced settings.",
   },
 ];
 
 export function resolvePermissionMode(mode?: string | null): PermissionMode {
-  if (mode === "auto" || mode === "readonly") return mode;
+  if (mode === "auto" || mode === "edit_auto" || mode === "readonly") return mode;
   return DEFAULT_PERMISSION_MODE;
 }
 
-/** Ask/Auto need Prism PTY bash so shell runs only after UI approval. */
+/**
+ * One-shot migration: before schema v2, stored `"auto"` meant today's `edit_auto`.
+ * Returns the mode to persist (may differ from input).
+ */
+export function migratePermissionModeSetting(
+  mode: string | undefined | null,
+  schemaVersion: number | undefined | null,
+): { mode: PermissionMode; schemaVersion: number; changed: boolean } {
+  const version = typeof schemaVersion === "number" ? schemaVersion : 1;
+  if (version >= PERMISSION_MODE_SCHEMA_VERSION) {
+    return { mode: resolvePermissionMode(mode), schemaVersion: version, changed: false };
+  }
+  // v1 → v2: rename legacy auto → edit_auto
+  if (mode === "auto") {
+    return {
+      mode: "edit_auto",
+      schemaVersion: PERMISSION_MODE_SCHEMA_VERSION,
+      changed: true,
+    };
+  }
+  return {
+    mode: resolvePermissionMode(mode),
+    schemaVersion: PERMISSION_MODE_SCHEMA_VERSION,
+    changed: version !== PERMISSION_MODE_SCHEMA_VERSION,
+  };
+}
+
+/** Ask / Edit auto need Prism PTY bash so shell runs only after UI approval. */
 export function resolveEffectiveAgentTerminalMode(
   permissionMode: PermissionMode | string | undefined,
   agentTerminalMode: string | undefined,
 ): "pty" | "mirror" {
   const perm = resolvePermissionMode(permissionMode);
-  if (perm === "ask" || perm === "auto") return "pty";
+  if (perm === "ask" || perm === "edit_auto") return "pty";
   return agentTerminalMode === "mirror" ? "mirror" : "pty";
 }
 
@@ -127,7 +174,14 @@ export function resolvePermissionAction(
   if (rule === "allow") return "allow";
   if (rule === "deny") return "deny";
   if (rule === "ask") return "prompt";
+
+  // OpenCode --auto: approve anything that is not explicitly denied.
   if (mode === "auto") {
+    if (isReadOnlyToolName(toolName)) return "allow";
+    return "allow";
+  }
+
+  if (mode === "edit_auto") {
     if (toolName === "bash" || /bash|shell|terminal|command/.test(toolName)) return "prompt";
     if (isReadOnlyToolName(toolName)) return "allow";
     return "deny";
@@ -142,4 +196,10 @@ export function shouldPromptForPermission(
   toolName: string,
 ): boolean {
   return getPermissionRuleForTool(mode, toolName) === "ask";
+}
+
+/** Modes that auto-apply disk mutations without a proposed-change review. */
+export function isEditAutoApplyMode(mode: PermissionMode | string | undefined): boolean {
+  const m = resolvePermissionMode(mode);
+  return m === "auto" || m === "edit_auto";
 }

@@ -94,6 +94,25 @@ describe("contextInsertToPart", () => {
     expect(part.artifacts).toHaveLength(2);
     expect(part.chatSessionId).toBe("ses_x");
     expect(part.label).toContain("run:");
+    expect(part.intent).toBe("discuss");
+  });
+
+  it("labels cite-in-paper experiment-run parts with cite: prefix", () => {
+    const part = contextInsertToPart({
+      kind: "experiment-run",
+      runId: "run-20260707-120000-a1b2",
+      command: "python plot.py",
+      exitCode: 0,
+      startedAt: "2026-07-07T12:00:00.000Z",
+      finishedAt: "2026-07-07T12:00:05.000Z",
+      runKind: "plot",
+      intent: "cite-in-paper",
+    });
+    expect(part.type).toBe("experiment-run");
+    if (part.type !== "experiment-run") return;
+    expect(part.label).toMatch(/^cite:/);
+    expect(part.intent).toBe("cite-in-paper");
+    expect(part.kind).toBe("plot");
   });
 });
 

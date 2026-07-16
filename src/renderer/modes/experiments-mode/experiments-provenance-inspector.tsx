@@ -1,22 +1,20 @@
 /**
- * experiments-provenance-inspector - modal that traces an artifact chip back to
- * the run that produced it (command, env, exit, chat session).
+ * experiments-provenance-inspector — modal that traces an artifact chip back
+ * to the run that produced it (command, env, exit, chat session).
  *
  * Honesty contract: when no run claimed the file, show an explicit empty state
- * ("may have been copied manually") rather than guessing a nearby run.
- *
- * Design: docs/superpowers/specs/2026-07-11-provenance-lite-design.md §7.1
+ * rather than guessing a nearby run.
  */
-import { useEffect, useState } from "react";
+
+import { useEffect, useState, type ReactNode } from "react";
 import {
-  ArrowUpRightIcon,
-  CheckIcon,
   CopyIcon,
   ExternalLinkIcon,
   Link2Icon,
   Loader2Icon,
   MessageSquareIcon,
   MessagesSquareIcon,
+  PenLineIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -28,18 +26,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
+import { CopyFeedbackButton } from "@/modes/literature-mode/literature-inline-field";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
-import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { insertExperimentRunToChat } from "@/lib/chat/insert-to-chat";
 import {
   experimentsCodeClass,
   experimentsMetadataLabelClass,
-  experimentsMetadataRowClass,
+  experimentsPathValueClass,
+  experimentsSectionLabelClass,
   experimentsUiValueClass,
 } from "./experiments-detail-chrome";
-import { artifactFullPath, openArtifactInFiles } from "./experiments-artifact-nav";
+import { openArtifactPathInFiles } from "./experiments-artifact-nav";
+import { useExperimentProjectRoot } from "./experiments-project-root";
 import type {
   ProvenanceLinkMethod,
   ProvenanceRunRecorded,
@@ -53,8 +54,6 @@ export interface ExperimentsProvenanceInspectorProps {
   /** Experiment workspace path, to build the full path for "Open in Files". */
   workspacePath?: string;
 }
-
-const COPY_FEEDBACK_MS = 1500;
 
 function formatDuration(startedAt: string, finishedAt: string): string | null {
   const start = Date.parse(startedAt);
@@ -73,19 +72,27 @@ function linkMethodLabel(method: ProvenanceLinkMethod): { label: string; tone: s
     : { label: "Inferred by mtime", tone: "text-amber-600 dark:text-amber-400" };
 }
 
+function MetaRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[4.75rem_minmax(0,1fr)] items-start gap-x-3 py-1">
+      <span className={cn(experimentsMetadataLabelClass, "pt-0.5")}>{label}</span>
+      <div className="min-w-0 break-words">{children}</div>
+    </div>
+  );
+}
+
 export function ExperimentsProvenanceInspector({
   open,
   onOpenChange,
   artifactPath,
   workspacePath,
 }: ExperimentsProvenanceInspectorProps) {
-  const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const projectRoot = useExperimentProjectRoot();
   const [resolved, setResolved] = useState<{
     run: ProvenanceRunRecorded;
     linkMethod: ProvenanceLinkMethod;
   } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!open || !artifactPath || !projectRoot) {
@@ -118,30 +125,17 @@ export function ExperimentsProvenanceInspector({
   const duration = run ? formatDuration(run.startedAt, run.finishedAt) : null;
   const link = resolved ? linkMethodLabel(resolved.linkMethod) : null;
 
-  const handleCopyCommand = async () => {
-    if (!resolved) return;
-    await navigator.clipboard.writeText(resolved.run.command);
-    setCopied(true);
-    setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
-  };
-
   const handleOpenInFiles = () => {
-    openArtifactInFiles(artifactFullPath(artifactPath, workspacePath));
+    void openArtifactPathInFiles(artifactPath, workspacePath);
     onOpenChange(false);
   };
 
-  /** Jump to the chat tab that started the run (creates + loads it if closed). */
   const handleOpenChatSession = (sessionId: string) => {
-    // Need the center chat list visible to show that session's history.
     useLayoutStore.getState().unmaximizeRightArea();
     void useChatStore.getState().loadSession(sessionId);
     onOpenChange(false);
   };
 
-  /**
-   * Push run context into the composer. When RightArea is maximized, leave it
-   * maximized — insertContextToChat targets the AiBar capsule (not the center chat).
-   */
   const handleDiscussInChat = () => {
     if (!run) return;
     insertExperimentRunToChat({
@@ -157,185 +151,204 @@ export function ExperimentsProvenanceInspector({
       env: run.env,
       chatSessionId: run.chatSessionId ?? null,
       workspacePath,
+      intent: "discuss",
     });
     onOpenChange(false);
   };
 
+  const handleUseInPaper = () => {
+    if (!run) return;
+    insertExperimentRunToChat({
+      runId: run.runId,
+      experimentId: run.experimentId ?? undefined,
+      command: run.command,
+      exitCode: run.exitCode,
+      startedAt: run.startedAt,
+      finishedAt: run.finishedAt,
+      artifactPath: artifactPath || undefined,
+      linkMethod: resolved?.linkMethod,
+      artifacts: run.artifacts ?? [],
+      env: run.env,
+      chatSessionId: run.chatSessionId ?? null,
+      workspacePath,
+      intent: "cite-in-paper",
+    });
+    onOpenChange(false);
+  };
+
+  const pythonLabel = run?.env.python
+    ? [run.env.python, run.env.pythonVersion].filter(Boolean).join(" · ")
+    : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className={cn(
-          "flex max-h-[min(90vh,36rem)] w-full max-w-lg flex-col gap-0 overflow-hidden p-0",
-          "sm:max-w-lg",
-        )}
-      >
-        <DialogHeader className="shrink-0 space-y-2 px-6 pt-6 pb-3 pr-12">
-          <DialogTitle className="flex items-center gap-2">
-            <Link2Icon className="size-4 text-muted-foreground" aria-hidden />
+      <DialogContent className="w-full gap-4 font-sans sm:max-w-2xl">
+        <DialogHeader className="gap-1.5 pr-6 text-left">
+          <DialogTitle className="flex items-center gap-2 text-[length:var(--font-dialog-title)] font-semibold">
+            <Link2Icon className="size-3.5 text-muted-foreground" aria-hidden />
             Artifact provenance
           </DialogTitle>
-          <DialogDescription asChild>
-            <div className="space-y-1 min-w-0">
-              <p className="text-[length:var(--font-size-12)] text-foreground/80">
-                Trace this file back to the run that produced it.
-              </p>
-              <p className={cn("truncate", experimentsCodeClass)} title={artifactPath}>
-                {artifactPath || "(no path)"}
-              </p>
-            </div>
+          <DialogDescription className="text-[length:var(--font-dialog-label)] text-muted-foreground">
+            Trace this file back to the run that produced it.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-6 py-1">
-          {loading ? (
-            <div className="flex items-center gap-2 py-6 text-muted-foreground">
-              <Loader2Icon className="size-4 animate-spin" aria-hidden /> Resolving provenance…
-            </div>
-          ) : !run ? (
-            <div className="rounded-md border border-dashed border-border/60 px-4 py-6 text-center text-[length:var(--font-size-13)] text-muted-foreground/80">
-              No run recorded for this file - it may have been copied manually.
-            </div>
-          ) : (
-            <div className="min-w-0 space-y-3 pb-2 text-[length:var(--font-size-12)]">
-              <div className="space-y-1">
-                <div className="text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/70">
-                  Command
-                </div>
-                <div className="relative min-w-0">
-                  <pre
-                    className={cn(
-                      "max-h-32 overflow-auto rounded-md border border-border/60 bg-muted/40",
-                      "px-2 py-1.5 pr-8 whitespace-pre-wrap break-words",
-                      experimentsCodeClass,
-                    )}
-                  >
-                    {run.command || "(empty)"}
-                  </pre>
-                  <button
-                    type="button"
-                    onClick={handleCopyCommand}
-                    title="Copy command"
-                    className="absolute top-1.5 right-1.5 rounded bg-background/90 p-0.5 text-muted-foreground/60 shadow-sm hover:bg-muted hover:text-foreground"
-                  >
-                    {copied ? (
-                      <CheckIcon className="size-3 text-emerald-600 dark:text-emerald-400" aria-hidden />
-                    ) : (
-                      <CopyIcon className="size-3" aria-hidden />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1 min-w-0">
-                <div className={experimentsMetadataRowClass}>
-                  <span className={experimentsMetadataLabelClass}>Exit</span>
-                  <span
-                    className={cn(
-                      "tabular-nums",
-                      run.exitCode === 0
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-destructive",
-                    )}
-                  >
-                    {run.exitCode}
-                  </span>
-                </div>
-                <div className={experimentsMetadataRowClass}>
-                  <span className={experimentsMetadataLabelClass}>Duration</span>
-                  <span className="tabular-nums">{duration ?? "-"}</span>
-                </div>
-                <div className={experimentsMetadataRowClass}>
-                  <span className={experimentsMetadataLabelClass}>Link</span>
-                  {link ? (
-                    <span className={cn("font-medium", link.tone)}>{link.label}</span>
-                  ) : null}
-                </div>
-                <div className={cn(experimentsMetadataRowClass, "min-w-0")}>
-                  <span className={experimentsMetadataLabelClass}>Run</span>
-                  <span className={cn("truncate", experimentsCodeClass)} title={run.runId}>
-                    {run.runId}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-1 min-w-0">
-                <div className="text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/70">
-                  Environment
-                </div>
-                <div className="min-w-0 rounded-md border border-border/60 bg-muted/20 px-3 py-1.5">
-                  <div className={cn(experimentsMetadataRowClass, "min-w-0")}>
-                    <span className={experimentsMetadataLabelClass}>Python</span>
-                    <span
-                      className={cn(experimentsUiValueClass, "truncate")}
-                      title={
-                        run.env.python
-                          ? [run.env.python, run.env.pythonVersion].filter(Boolean).join(" · ")
-                          : undefined
-                      }
-                    >
-                      {run.env.python
-                        ? [run.env.python, run.env.pythonVersion].filter(Boolean).join(" · ")
-                        : "not detected"}
-                    </span>
-                  </div>
-                  <div className={experimentsMetadataRowClass}>
-                    <span className={experimentsMetadataLabelClass}>Platform</span>
-                    <span className={experimentsUiValueClass}>{run.env.platform}</span>
-                  </div>
-                  <div className={experimentsMetadataRowClass}>
-                    <span className={experimentsMetadataLabelClass}>Git</span>
-                    <span className={experimentsUiValueClass}>
-                      {run.env.gitCommit ?? "not a repo"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex min-w-0 items-center gap-1.5 text-[length:var(--font-size-11)] text-muted-foreground/70">
-                <MessageSquareIcon className="size-3 shrink-0" aria-hidden />
-                {run.chatSessionId ? (
-                  <button
-                    type="button"
-                    onClick={() => handleOpenChatSession(run.chatSessionId!)}
-                    className="inline-flex min-w-0 items-center gap-0.5 truncate rounded text-foreground/80 underline-offset-2 transition-colors hover:text-foreground hover:underline"
-                    title={`Open chat session ${run.chatSessionId}`}
-                  >
-                    <span className={cn("truncate", experimentsCodeClass)}>
-                      {run.chatSessionId}
-                    </span>
-                    <ArrowUpRightIcon className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
-                  </button>
-                ) : (
-                  <span>No chat session linked (run was not started from a chat tab).</span>
-                )}
-              </div>
-            </div>
+        <p
+          className={cn(
+            "rounded-md border border-border/60 bg-muted/30 px-2.5 py-1.5",
+            experimentsPathValueClass,
           )}
-        </div>
+        >
+          {artifactPath || "(no path)"}
+        </p>
 
-        <DialogFooter className="shrink-0 flex-row flex-wrap items-center justify-end gap-2 border-t border-border/50 bg-background px-6 py-4 sm:justify-end">
+        {loading ? (
+          <div className="flex items-center gap-2 text-[length:var(--font-dialog-label)] text-muted-foreground">
+            <Loader2Icon className="size-3.5 animate-spin" aria-hidden />
+            Resolving provenance…
+          </div>
+        ) : !run ? (
+          <div className="rounded-md border border-dashed border-border/60 px-4 py-5 text-center">
+            <p className={SETTINGS_ROW_DESC}>
+              No run recorded for this file — it may have been copied manually.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <div className={experimentsSectionLabelClass}>Command</div>
+              <div className="relative min-w-0">
+                <pre
+                  className={cn(
+                    "rounded-md border border-border/60 bg-muted/30",
+                    "px-2.5 py-1.5 pr-8 whitespace-pre-wrap break-words",
+                    experimentsCodeClass,
+                  )}
+                >
+                  {run.command || "(empty)"}
+                </pre>
+                <CopyFeedbackButton
+                  onCopy={() => navigator.clipboard.writeText(run.command)}
+                  title="Copy command"
+                  className="absolute top-1.5 right-1.5 rounded-md p-1 text-muted-foreground/60 hover:bg-muted hover:text-foreground"
+                >
+                  <CopyIcon className="size-3" aria-hidden />
+                </CopyFeedbackButton>
+              </div>
+            </div>
+
+            <div className="space-y-0">
+              <MetaRow label="Exit">
+                <span
+                  className={cn(
+                    experimentsUiValueClass,
+                    "tabular-nums",
+                    run.exitCode === 0
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-destructive",
+                  )}
+                >
+                  {run.exitCode}
+                </span>
+              </MetaRow>
+              <MetaRow label="Duration">
+                <span className={cn(experimentsUiValueClass, "tabular-nums")}>
+                  {duration ?? "—"}
+                </span>
+              </MetaRow>
+              <MetaRow label="Link">
+                {link ? (
+                  <span className={cn(experimentsUiValueClass, "font-medium", link.tone)}>
+                    {link.label}
+                  </span>
+                ) : null}
+              </MetaRow>
+              <MetaRow label="Run">
+                <span className={experimentsCodeClass}>{run.runId}</span>
+              </MetaRow>
+              <MetaRow label="Python">
+                <span className={experimentsPathValueClass}>
+                  {pythonLabel ?? "not detected"}
+                </span>
+              </MetaRow>
+              <MetaRow label="Platform">
+                <span className={experimentsUiValueClass}>{run.env.platform}</span>
+              </MetaRow>
+              <MetaRow label="Git">
+                <span className={experimentsUiValueClass}>
+                  {run.env.gitCommit ?? "not a repo"}
+                </span>
+              </MetaRow>
+            </div>
+
+            <div className="flex min-w-0 items-start gap-2 border-t border-border/40 pt-2.5">
+              <MessageSquareIcon
+                className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/60"
+                aria-hidden
+              />
+              {run.chatSessionId ? (
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  className="h-auto max-w-full whitespace-normal px-1.5 py-0.5 text-left font-mono text-[length:var(--font-code)]"
+                  title={`Open chat session ${run.chatSessionId}`}
+                  onClick={() => handleOpenChatSession(run.chatSessionId!)}
+                >
+                  <span className="break-all">{run.chatSessionId}</span>
+                </Button>
+              ) : (
+                <span className="text-[length:var(--font-dialog-label)] text-muted-foreground/70">
+                  No chat session linked
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        <DialogFooter className="gap-2 sm:justify-between">
           <Button
             type="button"
-            variant="outline"
-            onClick={handleOpenInFiles}
-            disabled={!artifactPath}
+            size="sm"
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
           >
-            <ExternalLinkIcon className="size-3.5" aria-hidden />
-            Open in Files
-          </Button>
-          <Button
-            type="button"
-            variant="default"
-            onClick={handleDiscussInChat}
-            disabled={!run}
-            title="Send this run + artifact to the AiBar / chat composer"
-          >
-            <MessagesSquareIcon className="size-3.5" aria-hidden />
-            Discuss in chat
-          </Button>
-          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
             Close
           </Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleOpenInFiles}
+              disabled={!artifactPath}
+            >
+              <ExternalLinkIcon className="size-3.5" aria-hidden />
+              Open in Files
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleDiscussInChat}
+              disabled={!run}
+              title="Send this run + artifact to chat"
+            >
+              <MessagesSquareIcon className="size-3.5" aria-hidden />
+              Discuss
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="default"
+              onClick={handleUseInPaper}
+              disabled={!run}
+              title="Send this run to Chat for manuscript drafting"
+            >
+              <PenLineIcon className="size-3.5" aria-hidden />
+              Use in paper
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

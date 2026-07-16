@@ -57,9 +57,21 @@ function fromResult(result: UpdateCheckResult | null): Status {
   }
 }
 
+function formatOpencodeVersion(info: {
+  available: boolean;
+  version: string | null;
+  error?: string;
+}): string {
+  if (!info.available) return "Not found";
+  if (info.version) return info.version;
+  return info.error ? "Unavailable" : "—";
+}
+
 export function AboutSettings() {
   const { settings, updateSettings } = useSettingsStore();
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const [appVersion, setAppVersion] = useState<string>("—");
+  const [opencodeVersion, setOpencodeVersion] = useState<string>("—");
   const [sourceDraft, setSourceDraft] = useState(settings.updateSource ?? "");
   const [savedFlash, setSavedFlash] = useState(false);
 
@@ -69,6 +81,19 @@ export function AboutSettings() {
       .updateStatus()
       .then((r) => setStatus(fromResult(r)))
       .catch(() => setStatus({ kind: "idle" }));
+  }, []);
+
+  useEffect(() => {
+    window.electronAPI
+      .aboutGetVersions()
+      .then((info) => {
+        setAppVersion(info.appVersion || "—");
+        setOpencodeVersion(formatOpencodeVersion(info.opencode));
+      })
+      .catch(() => {
+        setAppVersion("—");
+        setOpencodeVersion("—");
+      });
   }, []);
 
   // Keep the input in sync if settings change elsewhere.
@@ -116,10 +141,13 @@ export function AboutSettings() {
     });
   }, [downloadUrl]);
 
-  // Derive a display version from status, falling back to a placeholder until
-  // the first check establishes the authoritative value from app.getVersion().
-  const currentVersion =
-    "currentVersion" in status ? status.currentVersion : "—";
+  // Prefer AboutVersions; fall back to update-check payload when present.
+  const displayAppVersion =
+    appVersion !== "—"
+      ? appVersion
+      : "currentVersion" in status
+        ? status.currentVersion
+        : "—";
 
   return (
     <div className="flex-1 overflow-auto">
@@ -142,7 +170,16 @@ export function AboutSettings() {
                 <p className={ROW_DESC}>Installed application version.</p>
               </div>
               <span className="font-mono text-[length:var(--font-size-13)] text-muted-foreground shrink-0">
-                {currentVersion}
+                {displayAppVersion}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3 py-2.5 border-t border-border/60">
+              <div className="min-w-0 flex-1 pr-4">
+                <p className={ROW_LABEL}>OpenCode</p>
+                <p className={ROW_DESC}>Bundled agent binary used for chat (ACP).</p>
+              </div>
+              <span className="font-mono text-[length:var(--font-size-13)] text-muted-foreground shrink-0">
+                {opencodeVersion}
               </span>
             </div>
           </div>

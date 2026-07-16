@@ -18,26 +18,33 @@ export interface ToolPermissionEntry {
   rules: Record<PermissionMode, OpenCodePermissionRule>;
 }
 
+/** Ask + Edit auto ask; Auto allow; Read-only deny. */
 const FILE_MUTATION: Record<PermissionMode, OpenCodePermissionRule> = {
   ask: "ask",
+  edit_auto: "allow",
   auto: "allow",
   readonly: "deny",
 };
 
+/** Ask + Edit auto ask; Auto allow (OpenCode --auto); Read-only deny. */
 const SHELL: Record<PermissionMode, OpenCodePermissionRule> = {
   ask: "ask",
-  auto: "ask",
+  edit_auto: "ask",
+  auto: "allow",
   readonly: "deny",
 };
 
+/** Destructive: still ask in Edit auto; allow in full Auto. */
 const DESTRUCTIVE: Record<PermissionMode, OpenCodePermissionRule> = {
   ask: "ask",
-  auto: "ask",
+  edit_auto: "ask",
+  auto: "allow",
   readonly: "deny",
 };
 
 const READ_ONLY: Record<PermissionMode, OpenCodePermissionRule> = {
   ask: "allow",
+  edit_auto: "allow",
   auto: "allow",
   readonly: "allow",
 };
@@ -78,18 +85,15 @@ export const TOOL_PERMISSION_REGISTRY: Record<string, ToolPermissionEntry> = {
   "citation-health": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "literature-export-bib": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
   "latex-root": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
-  // latex-compile spawns tectonic/latexmk child processes (via compiler.ts),
-  // so it must follow SHELL rules — prompt in ask/auto, deny in readonly.
-  // Previously misclassified as READ_ONLY, which auto-allowed compilation
-  // (including subprocess spawn) even in read-only mode.
+  // latex-compile spawns the project engine (tectonic / pdflatex / …) via compiler.ts
+  // under `.prismnext/compile/` — follow SHELL rules; never run those engines via bash.
   "latex-compile": { permissionGroup: "shell", confirmUx: "none", rules: SHELL },
   "research-brief-read": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "research-brief-update": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
   "experiment-log": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
-  // experiment-run spawns a PTY (subprocess) — must follow SHELL rules:
-  // prompt in ask/auto, deny in readonly. append_run + create handle their
-  // own file writes via the read/write side of the bridge.
+  // experiment-run spawns a PTY (subprocess) — must follow SHELL rules.
   "experiment-run": { permissionGroup: "shell", confirmUx: "command", rules: SHELL },
+  "results-snapshot": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "provenance-query": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
 };
 
@@ -99,8 +103,9 @@ export function getToolPermissionEntry(toolName: string): ToolPermissionEntry | 
   if (key.startsWith("write")) return TOOL_PERMISSION_REGISTRY.write;
   if (key.startsWith("edit")) return TOOL_PERMISSION_REGISTRY.edit;
   if (key.startsWith("apply_patch")) return TOOL_PERMISSION_REGISTRY.apply_patch;
-  if (key.startsWith("lsp")) {
-    return { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY };
+  if (key.startsWith("lsp")) return TOOL_PERMISSION_REGISTRY.read;
+  if (key.includes("bash") || key === "execute" || key === "terminal") {
+    return TOOL_PERMISSION_REGISTRY.bash;
   }
   return undefined;
 }
@@ -108,9 +113,9 @@ export function getToolPermissionEntry(toolName: string): ToolPermissionEntry | 
 export function buildPermissionRulesForMode(
   mode: PermissionMode,
 ): Record<string, OpenCodePermissionRule> {
-  const rules: Record<string, OpenCodePermissionRule> = {};
-  for (const [tool, entry] of Object.entries(TOOL_PERMISSION_REGISTRY)) {
-    rules[tool] = entry.rules[mode];
+  const out: Record<string, OpenCodePermissionRule> = {};
+  for (const [name, entry] of Object.entries(TOOL_PERMISSION_REGISTRY)) {
+    out[name] = entry.rules[mode];
   }
-  return rules;
+  return out;
 }

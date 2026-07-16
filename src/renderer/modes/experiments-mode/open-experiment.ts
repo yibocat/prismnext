@@ -5,32 +5,24 @@
  * Deep-links from Chat / Agent open Experiments as a normal RightArea split
  * (never maximized). Left-nav still uses `openExperimentsPanel` for full-bleed.
  */
-import { useDocumentStore } from "@/stores/document-store";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { getLeftNavPanelRefs } from "@/lib/workspace/left-nav/panel-refs";
 import { closeTexWorkspace } from "@/lib/workspace/left-nav/panel-utils";
+import { getExperimentProjectRoot } from "./experiments-project-root";
 
 function normalizeRoot(p: string): string {
   return p.replace(/\\/g, "/").replace(/\/$/, "");
 }
 
-/**
- * Open Experiments mode beside chat (split RightArea) and select an island.
- * Does NOT maximize — Chat ↔ Experiments deep-links keep the center chat visible.
- */
-export async function openExperimentInPanel(experimentId: string): Promise<void> {
-  const id = (experimentId || "").trim();
-  const projectRoot = useDocumentStore.getState().projectRoot;
-  if (!id || !projectRoot) return;
-
+/** Ensure Experiments is visible in a split RightArea (chat stays visible). */
+function ensureExperimentsPanelChrome(): void {
   const panelRefs = getLeftNavPanelRefs();
   const ctx = { panelRefs };
   const layout = useLayoutStore.getState();
   const rp = useRightPanelStore.getState();
 
-  // Leaving TeX / other maximized fullscreen modes; keep Experiments split with chat.
   closeTexWorkspace(ctx);
 
   if (layout.editorMaximized) {
@@ -41,12 +33,36 @@ export async function openExperimentInPanel(experimentId: string): Promise<void>
   layout.setLeftSidebarView("sessions");
   layout.activateMode("experiments");
 
-  // Split with center chat — never maximize. Expand RightArea if it was collapsed.
   if (!useLayoutStore.getState().rightAreaExpanded) {
     useLayoutStore.getState().requestRightAreaExpand();
   }
+}
+
+/**
+ * Open Experiments mode beside chat (split RightArea) and select an island.
+ * Does NOT maximize — Chat ↔ Experiments deep-links keep the center chat visible.
+ *
+ * Soft-focus (Bug #12 / Phase 3): if this island is already selected with detail
+ * loaded, skip `selectExperiment` so an expanded runs-table row is not collapsed.
+ */
+export async function openExperimentInPanel(experimentId: string): Promise<void> {
+  const id = (experimentId || "").trim();
+  const projectRoot = getExperimentProjectRoot();
+  if (!id || !projectRoot) return;
+
+  ensureExperimentsPanelChrome();
 
   const store = useExperimentStore.getState();
+  const title =
+    store.experiments.find((e) => e.id === id)?.title ??
+    (store.detail?.meta.id === id ? store.detail.meta.title : id);
+  useRightPanelStore.getState().openExperimentTab(id, title);
+
+  // Soft-focus: already showing this island — don't re-fetch / collapse runs.
+  if (store.selectedId === id && store.detail?.meta.id === id) {
+    return;
+  }
+
   await store.refreshList(projectRoot);
   await store.selectExperiment(projectRoot, id);
 }
@@ -76,7 +92,7 @@ export interface ExperimentChangedPayload {
 }
 
 export function handleExperimentChanged(data: ExperimentChangedPayload): void {
-  const projectRoot = useDocumentStore.getState().projectRoot;
+  const projectRoot = getExperimentProjectRoot();
   if (!projectRoot) return;
   if (normalizeRoot(projectRoot) !== normalizeRoot(data.projectRoot || "")) return;
 
@@ -87,16 +103,31 @@ export function handleExperimentChanged(data: ExperimentChangedPayload): void {
 
   const store = useExperimentStore.getState();
   const selectedId = store.selectedId;
+
+  if (data.reason === "delete" && data.id && selectedId === data.id) {
+    store.clearSelection();
+    void store.refreshList(projectRoot);
+    return;
+  }
+
   void store.refreshList(projectRoot).then(() => {
-    if (data.id && selectedId === data.id) {
-      void useExperimentStore.getState().selectExperiment(projectRoot, data.id);
-    }
+    if (!data.id || selectedId !== data.id) return;
+    // run_complete already patches detail via onExperimentRunComplete —
+    // re-select races that path and can briefly flash a spinner or
+    // duplicate the run before handleRunComplete dedup kicks in.
+    if (data.reason === "run_complete") return;
+    void useExperimentStore.getState().selectExperiment(projectRoot, data.id);
   });
 }
 
 // Subscribe once when this module is imported (wired from experiment-store).
+// Persist unsub on globalThis so Vite HMR can tear down the prior listener (Bug #13).
+const gChanged = globalThis as typeof globalThis & {
+  __prismExperimentChangedUnsub?: (() => void) | null;
+};
 if (typeof window !== "undefined" && window.electronAPI?.onExperimentChanged) {
-  window.electronAPI.onExperimentChanged((data) => {
+  gChanged.__prismExperimentChangedUnsub?.();
+  gChanged.__prismExperimentChangedUnsub = window.electronAPI.onExperimentChanged((data) => {
     handleExperimentChanged(data);
   });
 }

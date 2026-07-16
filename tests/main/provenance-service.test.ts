@@ -172,6 +172,33 @@ describe("provenance-service", () => {
     expect(links.every((l) => l.linkMethod === "explicit")).toBe(true);
   });
 
+  it("mtime inference skips venv / node_modules trees", () => {
+    const islandAbs = join(projectRoot, "experiment", "exp-test");
+    mkdirSync(join(islandAbs, "node_modules", "pkg"), { recursive: true });
+    mkdirSync(join(islandAbs, "venv", "lib"), { recursive: true });
+    writeFileSync(join(islandAbs, "node_modules", "pkg", "noise.bin"), "x");
+    writeFileSync(join(islandAbs, "venv", "lib", "noise.bin"), "y");
+    writeFileSync(join(islandAbs, "real.png"), "png");
+    const now = Date.now();
+    const run = makeRun({
+      startedAt: new Date(now - 500).toISOString(),
+      finishedAt: new Date(now - 100).toISOString(),
+      artifacts: [],
+    });
+    recordRunProvenance(projectRoot, {
+      workspaceRel: "experiment",
+      experimentId: "exp-test",
+      run,
+      islandAbs,
+    });
+    const paths = readProvenanceEvents(projectRoot)
+      .filter((e) => e.type === "artifact_linked")
+      .map((e) => e.artifactPath);
+    expect(paths).toContain("experiment/exp-test/real.png");
+    expect(paths.some((p) => p.includes("node_modules"))).toBe(false);
+    expect(paths.some((p) => p.includes("/venv/"))).toBe(false);
+  });
+
   it("reads no events when provenance file is absent (old project)", () => {
     expect(readProvenanceEvents(projectRoot)).toEqual([]);
   });

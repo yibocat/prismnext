@@ -212,3 +212,32 @@ describe("EventMapper Task dispatch recognition (kind:think, title:task)", () =>
     expect((mapper as any).taskLinkTimeouts.has("call_task2")).toBe(false);
   });
 });
+
+describe("EventMapper resolveTabForSession — no sole-pending heuristic (Bug #7)", () => {
+  it("does not bind an unmapped child session to the sole pending-task tab", () => {
+    const { win } = makeMockWin();
+    const mapper = new EventMapper(win);
+    const tabA = "tab-a";
+    (mapper as any).pendingTasksByTab.set(tabA, [
+      { toolUseId: "tool-a", expertId: "citation-auditor", prompt: "audit" },
+    ]);
+
+    const resolved = (mapper as any).resolveTabForSession("ses-orphan-child");
+    expect(resolved).toBeUndefined();
+    expect((mapper as any).sessionToTab.has("ses-orphan-child")).toBe(false);
+  });
+
+  it("still resolves via parentSessionId when present", () => {
+    const { win } = makeMockWin();
+    const mapper = new EventMapper(win);
+    const tabA = "tab-a";
+    (mapper as any).tabToSession.set(tabA, "ses-parent-a");
+    (mapper as any).sessionToTab.set("ses-parent-a", tabA);
+    acpStub.getSessionParentId.mockReturnValueOnce("ses-parent-a");
+
+    const resolved = (mapper as any).resolveTabForSession("ses-child-a");
+    expect(resolved).toBe(tabA);
+    expect((mapper as any).sessionToTab.get("ses-child-a")).toBe(tabA);
+  });
+});
+

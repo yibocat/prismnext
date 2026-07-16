@@ -13,11 +13,17 @@ describe("permission gate", () => {
     expect(shouldShowPermissionGate("ask", "read")).toBe(false);
   });
 
-  it("auto mode shows gate only for tools that prompt", () => {
+  it("edit_auto mode shows gate only for tools that prompt", () => {
+    expect(shouldShowPermissionGate("edit_auto", "edit")).toBe(false);
+    expect(shouldShowPermissionGate("edit_auto", "bash")).toBe(true);
+    expect(shouldPromptForPermission("edit_auto", "bash")).toBe(true);
+    expect(shouldPromptForPermission("edit_auto", "write")).toBe(false);
+  });
+
+  it("full auto mode never shows composer gate", () => {
     expect(shouldShowPermissionGate("auto", "edit")).toBe(false);
-    expect(shouldShowPermissionGate("auto", "bash")).toBe(true);
-    expect(shouldPromptForPermission("auto", "bash")).toBe(true);
-    expect(shouldPromptForPermission("auto", "write")).toBe(false);
+    expect(shouldShowPermissionGate("auto", "bash")).toBe(false);
+    expect(shouldPromptForPermission("auto", "bash")).toBe(false);
   });
 
   it("scheme A disables proposed-change review in ask", () => {
@@ -31,9 +37,9 @@ describe("permission gate", () => {
 
   it("delete and move use inline gate on tool row, not composer", () => {
     expect(shouldShowPermissionGate("ask", "delete")).toBe(false);
-    expect(shouldShowPermissionGate("auto", "delete")).toBe(false);
-    expect(shouldShowPermissionGate("auto", "move")).toBe(false);
-    expect(shouldPromptForPermission("auto", "delete")).toBe(true);
+    expect(shouldShowPermissionGate("edit_auto", "delete")).toBe(false);
+    expect(shouldShowPermissionGate("edit_auto", "move")).toBe(false);
+    expect(shouldPromptForPermission("edit_auto", "delete")).toBe(true);
     expect(shouldPromptForPermission("ask", "delete")).toBe(true);
     expect(resolvePermissionAction("readonly", "delete")).toBe("deny");
   });

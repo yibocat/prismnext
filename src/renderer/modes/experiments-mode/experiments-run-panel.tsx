@@ -13,20 +13,43 @@ import {
   SquareIcon,
   TerminalIcon,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AppSelect,
+  AppSelectContent,
+  AppSelectItem,
+  AppSelectTrigger,
+  AppSelectValue,
+} from "@/components/ui/app-select";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
 import { cn } from "@/lib/utils";
-import { useDocumentStore } from "@/stores/document-store";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { shouldShowPermissionGate } from "@/components/modules/chat/permission-gate-panel";
 import { resolvePermissionMode } from "@shared/permission-modes";
-import { experimentsCodeClass, experimentsRunConsoleShellClass } from "./experiments-detail-chrome";
+import {
+  EXPERIMENT_RUN_KINDS,
+  parseExperimentRunKind,
+  type ExperimentRunKind,
+} from "../../../shared/experiment-log";
+import {
+  experimentsCodeClass,
+  experimentsCommandInputClass,
+  experimentsRunConsoleShellClass,
+  experimentsSubsectionLabelClass,
+} from "./experiments-detail-chrome";
+import { useExperimentProjectRoot } from "./experiments-project-root";
 
-import { ExperimentsRunConfirmModal } from "./experiments-run-confirm-modal";
+import {
+  ExperimentsRunConfirmModal,
+  type ExperimentsRunConfirmDenyReason,
+} from "./experiments-run-confirm-modal";
+
+const KIND_UNTYPED = "__untyped__";
 
 function RunConsoleOutput({ output, running }: { output: string; running: boolean }) {
   const preRef = useRef<HTMLPreElement>(null);
@@ -56,7 +79,7 @@ function RunConsoleOutput({ output, running }: { output: string; running: boolea
 }
 
 export function ExperimentsRunPanel() {
-  const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const projectRoot = useExperimentProjectRoot();
   const selectedId = useExperimentStore((s) => s.selectedId);
   const runs = useExperimentStore((s) => s.detail?.runs);
   const runInFlight = useExperimentStore((s) => s.runInFlight);
@@ -74,44 +97,62 @@ export function ExperimentsRunPanel() {
   }, [runs]);
 
   const [command, setCommand] = useState("");
+  const [kind, setKind] = useState<ExperimentRunKind | "">("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingCommand, setPendingCommand] = useState("");
+  const [pendingKind, setPendingKind] = useState<ExperimentRunKind | "">("");
 
   const isInFlightForCurrent = Boolean(
     runInFlight && selectedId && runInFlight.id === selectedId,
   );
 
+  // Only block Run when *this* experiment is in flight. Another island's
+  // run must not freeze the whole mode (Bug 8.8.1 / Phase 3).
   const canRun =
     Boolean(projectRoot) &&
     Boolean(selectedId) &&
     command.trim().length > 0 &&
-    !runInFlight &&
+    !isInFlightForCurrent &&
     !isReadonly;
 
   const handleRunClick = useCallback(() => {
     if (!canRun || !projectRoot || !selectedId) return;
     const trimmed = command.trim();
+    const runKind = parseExperimentRunKind(kind);
     if (shouldShowPermissionGate(permissionMode, "experiment-run")) {
       setPendingCommand(trimmed);
+      setPendingKind(kind);
       setConfirmOpen(true);
       return;
     }
-    void runCommand(projectRoot, selectedId, trimmed);
-  }, [canRun, command, permissionMode, projectRoot, runCommand, selectedId]);
+    void runCommand(projectRoot, selectedId, trimmed, undefined, undefined, runKind);
+  }, [canRun, command, kind, permissionMode, projectRoot, runCommand, selectedId]);
 
   const handleAllow = useCallback(() => {
     if (!projectRoot || !selectedId) return;
     setConfirmOpen(false);
-    void runCommand(projectRoot, selectedId, pendingCommand);
-  }, [pendingCommand, projectRoot, runCommand, selectedId]);
+    setKind(pendingKind);
+    void runCommand(
+      projectRoot,
+      selectedId,
+      pendingCommand,
+      undefined,
+      undefined,
+      parseExperimentRunKind(pendingKind),
+    );
+  }, [pendingCommand, pendingKind, projectRoot, runCommand, selectedId]);
 
-  const handleDeny = useCallback(() => {
+  const handleDeny = useCallback((reason: ExperimentsRunConfirmDenyReason) => {
     setConfirmOpen(false);
     setPendingCommand("");
+    setPendingKind("");
+    if (reason === "timeout") {
+      toast.info("Confirm timed out — run not started");
+    }
   }, []);
 
   const handleCancel = useCallback(() => {
-    if (!projectRoot || !selectedId || !runInFlight) return;
+    if (!projectRoot || !selectedId || !runInFlight || runInFlight.id !== selectedId) return;
     void cancelRun(projectRoot, selectedId, runInFlight.runId);
   }, [cancelRun, projectRoot, runInFlight, selectedId]);
 
@@ -138,6 +179,12 @@ export function ExperimentsRunPanel() {
       ) : null}
 
       <div className={experimentsRunConsoleShellClass}>
+        <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-1.5">
+          <span className={experimentsSubsectionLabelClass}>Command</span>
+          <span className="font-sans text-[length:var(--font-size-10)] text-muted-foreground/55">
+            Enter to run · Shift+Enter newline
+          </span>
+        </div>
         <Textarea
           aria-label="Command"
           value={command}
@@ -147,10 +194,9 @@ export function ExperimentsRunPanel() {
           disabled={isInFlightForCurrent}
           rows={isInFlightForCurrent ? 2 : 3}
           className={cn(
-            "min-h-0 resize-none rounded-none border-0 bg-transparent shadow-none",
+            experimentsCommandInputClass,
             experimentsCodeClass,
-            "leading-relaxed px-3 py-2 focus-visible:ring-0",
-            isInFlightForCurrent ? "text-muted-foreground/70" : "",
+            isInFlightForCurrent && "cursor-not-allowed text-muted-foreground/70",
           )}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -173,6 +219,30 @@ export function ExperimentsRunPanel() {
             "bg-muted/25",
           )}
         >
+          <AppSelect
+            value={kind || KIND_UNTYPED}
+            disabled={isInFlightForCurrent}
+            onValueChange={(v) =>
+              setKind(v === KIND_UNTYPED ? "" : (v as ExperimentRunKind))
+            }
+          >
+            <AppSelectTrigger
+              variant="wide"
+              aria-label="Run type"
+              title="Optional run classification (omit when unsure)"
+              className="min-w-[7.5rem]"
+            >
+              <AppSelectValue placeholder="Type" />
+            </AppSelectTrigger>
+            <AppSelectContent>
+              <AppSelectItem value={KIND_UNTYPED}>Type</AppSelectItem>
+              {EXPERIMENT_RUN_KINDS.map((k) => (
+                <AppSelectItem key={k} value={k}>
+                  {k}
+                </AppSelectItem>
+              ))}
+            </AppSelectContent>
+          </AppSelect>
           <Button
             type="button"
             size="sm"
@@ -185,9 +255,11 @@ export function ExperimentsRunPanel() {
                 ? "Permission mode is read-only — runs are disabled."
                 : !projectRoot || !selectedId
                   ? "Select an experiment to run a command."
-                  : command.trim().length === 0
-                    ? "Enter a command to run."
-                    : "Run command in lab"
+                  : isInFlightForCurrent
+                    ? "A run is in progress for this experiment."
+                    : command.trim().length === 0
+                      ? "Enter a command to run."
+                      : "Run command in lab"
             }
           >
             <PlayIcon className="size-3" aria-hidden />
@@ -247,6 +319,8 @@ export function ExperimentsRunPanel() {
         open={confirmOpen}
         command={pendingCommand}
         cwd={cwd}
+        kind={pendingKind}
+        onKindChange={setPendingKind}
         onAllow={handleAllow}
         onDeny={handleDeny}
       />

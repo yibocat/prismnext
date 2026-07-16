@@ -28,4 +28,18 @@ describe("permission outcome", () => {
       outcome: { outcome: "selected", optionId: "reject_once" },
     });
   });
+
+  it("prefers allow_always when Always was chosen (Phase 2 allow_always)", () => {
+    const outcome = buildPermissionOutcome(
+      [
+        { optionId: "once", kind: "allow_once", name: "Allow" },
+        { optionId: "always", kind: "allow_always", name: "Always" },
+      ],
+      true,
+      { preferAlways: true },
+    );
+    expect(outcome).toEqual({
+      outcome: { outcome: "selected", optionId: "always" },
+    });
+  });
 });

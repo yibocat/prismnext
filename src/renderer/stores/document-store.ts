@@ -423,6 +423,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         }
       } else if (meta.type === "image") {
         const { dataUrl } = await window.electronAPI.fsReadImage(meta.absolutePath);
+        if (!dataUrl) return;
         const newMap = new Map(get().openedContents);
         newMap.set(id, { dataUrl, isDirty: false });
         if (openSeq !== fileOpenGeneration) {
@@ -848,6 +849,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     try {
       if (file.type === "image") {
         const { dataUrl } = await window.electronAPI.fsReadImage(file.absolutePath);
+        if (!dataUrl) return;
         const newMap = new Map(get().openedContents);
         newMap.set(id, { dataUrl, isDirty: false });
         set({ openedContents: newMap });
@@ -912,7 +914,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       if (r.status !== "fulfilled") continue;
       const { id } = imageTasks[i];
       const existing = current.get(id);
-      if (existing && !existing.isDirty) {
+      if (existing && !existing.isDirty && r.value.dataUrl) {
         newMap.set(id, { dataUrl: r.value.dataUrl, isDirty: false });
         changed = true;
       }
@@ -1004,7 +1006,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       if (r.status !== "fulfilled") continue;
       const { id } = imageTasks[i];
       const existing = newOpenedContents.get(id);
-      if (existing && !existing.isDirty) {
+      if (existing && !existing.isDirty && r.value.dataUrl) {
         newOpenedContents.set(id, { dataUrl: r.value.dataUrl, isDirty: false });
       }
     }

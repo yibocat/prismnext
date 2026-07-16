@@ -180,13 +180,17 @@ export function ToolsMcpSettings() {
         ) : (
           <>
             <p className="text-[length:var(--font-size-12)] text-muted-foreground -mt-4">
-              Saved to{" "}
+              Prism reads only{" "}
               <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">
                 .prismnext/agent/mcp.json
               </code>
-              . Use{" "}
+              {" "}
+              (not a project-root <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">.mcp.json</code>
+              ). Use{" "}
               <span className="font-medium text-foreground">Apply to chats</span>{" "}
-              after Configure changes so open sessions reload MCP tools.
+              after Configure changes so open sessions reload MCP tools. Paper
+              Search may run via <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">npx -y</code>
+              {" "}on first use (network).
             </p>
 
             <div>

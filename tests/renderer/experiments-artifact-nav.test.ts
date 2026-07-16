@@ -12,7 +12,7 @@ describe("artifactFullPath", () => {
     );
   });
 
-  it("leaves project-relative paths unchanged", () => {
+  it("leaves paths already under the workspace unchanged", () => {
     expect(artifactFullPath("labs/exp-demo/results/plot.png", "labs/exp-demo")).toBe(
       "labs/exp-demo/results/plot.png",
     );

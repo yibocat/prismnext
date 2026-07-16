@@ -10,7 +10,10 @@ export type ExperimentChangedReason =
   | "append_run"
   | "run_complete"
   | "open"
-  | "refresh";
+  | "refresh"
+  | "archive"
+  | "restore"
+  | "delete";
 
 export interface ExperimentChangedEvent {
   projectRoot: string;

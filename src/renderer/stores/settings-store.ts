@@ -71,8 +71,14 @@ export interface AppSettings {
   aiModelThoughtLevels?: Record<string, string>;
   /** Providers whose API keys have been verified */
   aiVerifiedProviders?: string[];
-  /** Chat tool permission preset: ask | auto | readonly */
+  /** Chat tool permission preset: ask | edit_auto | auto | readonly */
   permissionMode?: PermissionMode;
+  /** Tools pinned via permission-gate "Always" (lowercased names). */
+  toolAllowAlways?: string[];
+  /** Bash command patterns from "Always" (e.g. `git status*`). */
+  bashAllowAlwaysPatterns?: string[];
+  /** Permission mode schema version (migration). */
+  permissionModeSchemaVersion?: number;
   /** Agent shell execution: mirror (OpenCode bash + UI mirror) | pty (custom bash tool) */
   agentTerminalMode?: "mirror" | "pty";
   /** Auto-open AI terminal tab when agent runs bash (default true). */
@@ -260,7 +266,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     const merged = { ...get().settings, ...patch };
     set({ settings: merged });
 
-    if (patch.permissionMode === "auto") {
+    if (patch.permissionMode === "auto" || patch.permissionMode === "edit_auto") {
       const { useChangesStore } = await import("./changes-store");
       useChangesStore.getState().clearAll();
     }

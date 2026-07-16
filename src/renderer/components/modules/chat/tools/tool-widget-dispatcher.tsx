@@ -71,6 +71,7 @@ const CUSTOM_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
   "research-brief-update": ResearchBriefToolWidget,
   "experiment-log": ExperimentToolWidget,
   "experiment-run": ExperimentToolWidget,
+  "results-snapshot": ExperimentToolWidget,
 };
 
 function parseToolResultContent(content: unknown): Record<string, unknown> | null {

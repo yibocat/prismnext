@@ -33,6 +33,14 @@ export function isLiteraturePaperTab(tab: RightTab): boolean {
   return tab.kind === "literature" && Boolean(tab.literaturePaperId);
 }
 
+export function isExperimentsHomeTab(tab: RightTab): boolean {
+  return tab.kind === "experiments" && !tab.experimentId;
+}
+
+export function isExperimentsDetailTab(tab: RightTab): boolean {
+  return tab.kind === "experiments" && Boolean(tab.experimentId);
+}
+
 /** Literature tab close overrides the generic persistent-mode reset behavior. */
 export type LiteratureTabCloseAction = "deactivate-mode" | "remove-and-ensure-home";
 
@@ -49,6 +57,28 @@ export function getLiteratureTabCloseAction(
   }
 
   if (isLiteraturePaperTab(closingTab) && literatureTabs.length === 1) {
+    return "remove-and-ensure-home";
+  }
+
+  return null;
+}
+
+/** Same pattern as literature: home closes mode; sole detail tab rebuilds home. */
+export type ExperimentsTabCloseAction = "deactivate-mode" | "remove-and-ensure-home";
+
+export function getExperimentsTabCloseAction(
+  closingTab: RightTab,
+  allTabs: RightTab[],
+): ExperimentsTabCloseAction | null {
+  if (closingTab.kind !== "experiments") return null;
+
+  const experimentTabs = allTabs.filter((t) => t.kind === "experiments");
+
+  if (isExperimentsHomeTab(closingTab)) {
+    return "deactivate-mode";
+  }
+
+  if (isExperimentsDetailTab(closingTab) && experimentTabs.length === 1) {
     return "remove-and-ensure-home";
   }
 

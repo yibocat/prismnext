@@ -21,6 +21,7 @@ export const TOOL_NAMES = {
   researchBriefUpdate: "research-brief-update",
   experimentLog: "experiment-log",
   experimentRun: "experiment-run",
+  resultsSnapshot: "results-snapshot",
   provenanceQuery: "provenance-query",
 } as const;
 

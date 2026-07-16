@@ -11,6 +11,7 @@ import {
   assertSafeRelativePaths,
   parseBackupLabelIds,
 } from "../lib/template-path";
+import { findProjectRelByBasename } from "../lib/find-project-file";
 import {
   registerProjectRoot,
   clearRoots,
@@ -65,8 +66,21 @@ export function registerFsHandlers(): void {
 
   ipcMain.handle("fs:readImage", async (_event, args: { absPath: string }) => {
     assertUnderHome(args.absPath, "fs:readImage");
-    const dataUrl = await fs.readImageAsDataUrl(args.absPath);
-    return { dataUrl };
+    const { existsSync } = require("node:fs");
+    if (!existsSync(args.absPath)) {
+      return { dataUrl: null as string | null };
+    }
+    try {
+      const dataUrl = await fs.readImageAsDataUrl(args.absPath);
+      return { dataUrl };
+    } catch (err: unknown) {
+      const code =
+        err && typeof err === "object" && "code" in err
+          ? (err as NodeJS.ErrnoException).code
+          : undefined;
+      if (code === "ENOENT") return { dataUrl: null as string | null };
+      throw err;
+    }
   });
 
   ipcMain.handle("fs:readBytes", async (_event, args: { absPath: string }) => {
@@ -251,6 +265,16 @@ export function registerFsHandlers(): void {
       return false;
     }
   });
+
+  ipcMain.handle(
+    "fs:findByBasename",
+    async (_event, args: { projectRoot: string; basename: string }) => {
+      if (!args.projectRoot || !isPathUnderHome(args.projectRoot)) return null;
+      const base = typeof args.basename === "string" ? args.basename : "";
+      if (!base.trim()) return null;
+      return findProjectRelByBasename(args.projectRoot, base);
+    },
+  );
 
   // ─── Project creation ───
 

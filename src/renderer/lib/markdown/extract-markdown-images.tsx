@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useDocumentStore } from "@/stores/document-store";
+import { useExperimentStore } from "@/stores/experiment-store";
 import { resolveProjectRelativePath } from "@/lib/files/project-path";
+import { chatImagePathCandidates, artifactBasename } from "../../../shared/artifact-path";
 
 /** Resolve `images/foo.png` relative to an extract markdown file path. */
 export function resolveExtractRelativeAssetPath(
@@ -78,14 +80,22 @@ export function ExtractMarkdownImage({
 }
 
 /**
- * Inline image in an agent chat reply. Unlike `ExtractMarkdownImage`, there is
- * no markdown file to resolve against, so `src` is treated as project-relative
- * (e.g. `experiment/exp-x/plot.png`) and resolved against the project root.
- * Absolute http(s)/data/file URLs are left to the browser (http(s)/data pass
- * CSP; file:// is blocked, so absolute file paths render as the alt fallback).
+ * Inline image in an agent chat reply. `src` is preferably project-relative;
+ * when the agent only wrote a basename or lab-relative path, we try candidates
+ * against known experiment workspaces; missing candidates fall back to a
+ * project-wide basename search (no hardcoded folder names).
  */
 export function ChatProjectImage({ src, alt }: { src?: string; alt?: string }) {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const workspaceHintsKey = useExperimentStore((s) => {
+    const hints = new Set<string>();
+    const detailWs = s.detail?.meta.workspacePath;
+    if (detailWs) hints.add(detailWs);
+    for (const e of s.experiments) {
+      if (e.workspacePath) hints.add(e.workspacePath);
+    }
+    return [...hints].join("\n");
+  });
   const [dataUrl, setDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -98,24 +108,54 @@ export function ChatProjectImage({ src, alt }: { src?: string; alt?: string }) {
       setDataUrl(null);
       return;
     }
-    const abs = resolveProjectRelativePath(projectRoot, src);
-    if (!abs) {
-      setDataUrl(null);
-      return;
-    }
     let cancelled = false;
-    void window.electronAPI
-      .fsReadImage(abs)
-      .then(({ dataUrl: url }) => {
-        if (!cancelled) setDataUrl(url);
-      })
-      .catch(() => {
-        if (!cancelled) setDataUrl(null);
-      });
+    const workspaceHints = workspaceHintsKey ? workspaceHintsKey.split("\n") : [];
+    const candidates = chatImagePathCandidates(src, workspaceHints);
+
+    void (async () => {
+      const tryRead = async (rel: string): Promise<string | null> => {
+        const abs = resolveProjectRelativePath(projectRoot, rel);
+        if (!abs) return null;
+        try {
+          const exists = await window.electronAPI.fsExists(abs);
+          if (!exists) return null;
+          const { dataUrl: url } = await window.electronAPI.fsReadImage(abs);
+          return url ?? null;
+        } catch {
+          return null;
+        }
+      };
+
+      for (const rel of candidates) {
+        if (cancelled) return;
+        const url = await tryRead(rel);
+        if (url && !cancelled) {
+          setDataUrl(url);
+          return;
+        }
+      }
+      const base = artifactBasename(src);
+      if (base && !cancelled) {
+        try {
+          const found = await window.electronAPI.fsFindByBasename(projectRoot, base);
+          if (found && !cancelled) {
+            const url = await tryRead(found);
+            if (url && !cancelled) {
+              setDataUrl(url);
+              return;
+            }
+          }
+        } catch {
+          // fall through
+        }
+      }
+      if (!cancelled) setDataUrl(null);
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, [src, projectRoot]);
+  }, [src, projectRoot, workspaceHintsKey]);
 
   if (!src) return null;
   if (!dataUrl) {

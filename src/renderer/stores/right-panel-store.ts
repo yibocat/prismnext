@@ -6,7 +6,11 @@ import { shellDisplayName } from "@/lib/terminal/shell-label";
 import { useTerminalAiStore } from "./terminal-ai-store";
 import { modeRegistry, type RightTabKind, type RightTab } from "@/lib/workspace/mode-registry";
 import { getTabCloseConfirmation, getBatchTabCloseConfirmation } from "@/lib/workspace/tab-close-confirmation";
-import { buildInitialTabShell, getLiteratureTabCloseAction } from "@/lib/workspace/tab-lifecycle";
+import {
+  buildInitialTabShell,
+  getExperimentsTabCloseAction,
+  getLiteratureTabCloseAction,
+} from "@/lib/workspace/tab-lifecycle";
 import { useTabCloseConfirmStore } from "@/stores/tab-close-confirm-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
@@ -34,6 +38,12 @@ interface RightPanelState {
 
   ensureTab: (kind: RightTabKind) => string;
   openLiteraturePaper: (paperId: string, title: string, view?: "grid" | "reader" | "notes") => string;
+  /** Open / focus a detail tab for one experiment (browse home tab stays). */
+  openExperimentTab: (experimentId: string, title: string) => string;
+  /** Remove detail tabs for a deleted experiment id. */
+  closeExperimentTabs: (experimentId: string) => void;
+  /** Activate the Experiments home (browse grid) tab. */
+  activateExperimentsHomeTab: () => string;
   /** Create/activate a terminal tab whose PTY spawns at `cwd` (Sprint 0.7
    *  "Open terminal in lab" - lands the shell in an experiment island). */
   openTerminalAtCwd: (cwd: string, title?: string) => string;
@@ -128,6 +138,71 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     };
     set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
     return id;
+  },
+
+  openExperimentTab: (experimentId, title) => {
+    useLayoutStore.getState().activateMode("experiments");
+    // Keep a browse home tab around so closing detail doesn't lose the grid.
+    get().ensureTab("experiments");
+    const { tabs } = get();
+    const existing = tabs.find(
+      (t) => t.kind === "experiments" && t.experimentId === experimentId,
+    );
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return existing.id;
+    }
+    const id = nextTabId();
+    const tab: RightTab = {
+      id,
+      kind: "experiments",
+      title: title.slice(0, 48),
+      isInitial: false,
+      experimentId,
+      experimentsView: "detail",
+    };
+    set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
+    return id;
+  },
+
+  closeExperimentTabs: (experimentId) => {
+    const removeIds = new Set(
+      get()
+        .tabs.filter((t) => t.kind === "experiments" && t.experimentId === experimentId)
+        .map((t) => t.id),
+    );
+    if (removeIds.size === 0) return;
+    set((s) => {
+      const next = s.tabs.filter((t) => !removeIds.has(t.id));
+      const nextActive =
+        s.activeTabId && removeIds.has(s.activeTabId)
+          ? (next.find((t) => t.kind === "experiments" && !t.experimentId)?.id ??
+            next[0]?.id ??
+            null)
+          : s.activeTabId;
+      return { tabs: next, activeTabId: nextActive };
+    });
+    if (!get().hasTabsOfKind("experiments")) {
+      get().ensureTab("experiments");
+    }
+  },
+
+  activateExperimentsHomeTab: () => {
+    useLayoutStore.getState().activateMode("experiments");
+    const homeId = get().ensureTab("experiments");
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === homeId
+          ? {
+              ...buildInitialTabShell(t, "Experiments"),
+              experimentsView: "list" as const,
+              experimentId: undefined,
+            }
+          : t,
+      ),
+      activeTabId: homeId,
+    }));
+    return homeId;
   },
 
   openTerminalAtCwd: (cwd, title) => {
@@ -585,6 +660,21 @@ function performCloseTab(
       activeTabId: null,
     }));
     const homeId = useRightPanelStore.getState().ensureTab("literature");
+    useRightPanelStore.setState({ activeTabId: homeId });
+    return;
+  }
+
+  const experimentsCloseAction = getExperimentsTabCloseAction(closingTab, state.tabs);
+  if (experimentsCloseAction === "deactivate-mode") {
+    deactivateModeByTabKind(closingTab.kind);
+    return;
+  }
+  if (experimentsCloseAction === "remove-and-ensure-home") {
+    useRightPanelStore.setState((s) => ({
+      tabs: s.tabs.filter((t) => t.id !== id),
+      activeTabId: null,
+    }));
+    const homeId = useRightPanelStore.getState().ensureTab("experiments");
     useRightPanelStore.setState({ activeTabId: homeId });
     return;
   }

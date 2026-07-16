@@ -29,7 +29,7 @@ import {
   extractTaskSubagentType,
   shouldDenyOrchestratorBuiltinTask,
 } from "../services/task-orchestrator-gate";
-import { getSettings } from "../services/settings";
+import { addBashAllowAlwaysFromCommand, addToolAllowAlways, getSettings, isBashCommandAllowAlways, isToolAllowAlways } from "../services/settings";
 import { sanitizeSkillPermissionMap, skillPermissionNeedsRepair } from "../services/skills-sync";
 import { buildEnabledToolsConfig } from "../services/opencode-tools-config";
 import {
@@ -46,13 +46,19 @@ import {
   registerCustomToolJobIntent,
   type ApprovedBashJob,
 } from "../services/bash-permission-bridge";
+import { PERMISSION_TIMEOUT_MS } from "../../shared/permission-timeouts";
+import {
+  isDirectLatexCompileBashCommand,
+  latexCompileBashBlockMessage,
+  latexCompileBashRedirectNote,
+} from "../../shared/latex-compile-bash";
+import { resolveOpencodeBinaryPath } from "../services/opencode-binary";
 
 const CUSTOM_GATED_TOOLS = new Set(["delete", "move"]);
 
 const log = createLogger("acp-service", "agent");
 
 // ── Constants ──
-const PERMISSION_TIMEOUT_MS = 120_000;
 const SIGKILL_GRACE_MS = 5_000;
 /** Files smaller than this are assumed to be auto-generated config stubs. */
 const MIN_CUSTOM_CONFIG_LENGTH = 60;
@@ -406,15 +412,6 @@ export class AcpService {
             }
           }
 
-          const action = resolvePermissionAction(mode, toolName);
-          const tabId = sessionId ? resolveChatTabId(sessionId) : undefined;
-          const toolCallId =
-            (params as { toolCallId?: string }).toolCallId
-            || (params as { tool_call_id?: string }).tool_call_id
-            || (params as { callID?: string }).callID
-            || ((params as { toolCall?: { id?: string; toolCallId?: string } }).toolCall?.toolCallId)
-            || ((params as { toolCall?: { id?: string } }).toolCall?.id);
-
           const bashCommand = this.extractBashCommandFromPermissionParams(
             params as Record<string, unknown>,
           );
@@ -422,6 +419,64 @@ export class AcpService {
             (params as { directory?: string }).directory
             || (params as { cwd?: string }).cwd
             || this.projectPath;
+          const toolCallIdEarly =
+            (params as { toolCallId?: string }).toolCallId
+            || (params as { tool_call_id?: string }).tool_call_id
+            || (params as { callID?: string }).callID
+            || ((params as { toolCall?: { id?: string; toolCallId?: string } }).toolCall?.toolCallId)
+            || ((params as { toolCall?: { id?: string } }).toolCall?.id);
+
+          // Hard block: shell TeX engines pollute manuscript; must use latex-compile.
+          if (
+            bashCommand
+            && isDirectLatexCompileBashCommand(bashCommand)
+            && (
+              this.isBashTool(toolName)
+              || /bash|shell|terminal|command/.test(toolName)
+            )
+          ) {
+            log.info(
+              `permission:latex-compile-bash-deny id=${permissionId} cmd=${bashCommand.slice(0, 80)}`,
+            );
+            if (sessionId) {
+              this.pendingTaskDenialRedirect.set(sessionId, latexCompileBashRedirectNote());
+            }
+            if (sessionId && toolCallIdEarly) {
+              denyBashJob(sessionId, toolCallIdEarly, latexCompileBashBlockMessage());
+            }
+            return buildPermissionOutcome(options, false);
+          }
+
+          let action = resolvePermissionAction(mode, toolName);
+          // Persisted "Allow always": bash uses command patterns; other tools use tool name.
+          if (action === "prompt") {
+            const isBash =
+              this.isBashTool(toolName) ||
+              toolName === "experiment-run" ||
+              /bash|shell|terminal|command/.test(toolName);
+            if (
+              isBash &&
+              ((bashCommand && isBashCommandAllowAlways(bashCommand)) ||
+                isToolAllowAlways(toolName))
+            ) {
+              action = "allow";
+              log.debug(
+                `permission:bash-always-hit id=${permissionId} tool=${toolName || "?"} cmd=${(bashCommand || "").slice(0, 80)}`,
+              );
+            } else if (!isBash && isToolAllowAlways(toolName)) {
+              action = "allow";
+              log.debug(
+                `permission:allow-always-hit id=${permissionId} tool=${toolName || "?"}`,
+              );
+            }
+          }
+          const tabId = sessionId ? resolveChatTabId(sessionId) : undefined;
+          const toolCallId =
+            (params as { toolCallId?: string }).toolCallId
+            || (params as { tool_call_id?: string }).tool_call_id
+            || (params as { callID?: string }).callID
+            || ((params as { toolCall?: { id?: string; toolCallId?: string } }).toolCall?.toolCallId)
+            || ((params as { toolCall?: { id?: string } }).toolCall?.id);
 
           if (action === "allow") {
             log.debug(`permission:auto-allow id=${permissionId} mode=${mode} tool=${toolName || "?"} toolCallId=${toolCallId ?? "(none)"}`);
@@ -2056,6 +2111,7 @@ export class AcpService {
     permissionId: string,
     approved: boolean,
     toolCallId?: string,
+    opts?: { always?: boolean },
   ): Promise<void> {
     let resolvedId = permissionId;
     let pending = this.pendingPermissions.get(permissionId);
@@ -2086,8 +2142,23 @@ export class AcpService {
     if (pending) {
       clearTimeout(pending.timer);
       this.pendingPermissions.delete(resolvedId);
-      log.info(`permission:answer id=${resolvedId} approved=${approved} toolCallId=${pending.toolCallId ?? "(none)"}`);
-      pending.resolve(buildPermissionOutcome(pending.options, approved));
+      const preferAlways = Boolean(approved && opts?.always);
+      if (preferAlways && pending.toolName) {
+        const isBash =
+          this.isBashTool(pending.toolName) ||
+          pending.toolName === "experiment-run" ||
+          /bash|shell|terminal|command/.test(pending.toolName);
+        const cmd = pending.bashCommand || bashCtx?.command || "";
+        if (isBash && cmd.trim()) {
+          addBashAllowAlwaysFromCommand(cmd);
+        } else if (!isBash) {
+          addToolAllowAlways(pending.toolName);
+        }
+      }
+      log.info(
+        `permission:answer id=${resolvedId} approved=${approved} always=${preferAlways} toolCallId=${pending.toolCallId ?? "(none)"}`,
+      );
+      pending.resolve(buildPermissionOutcome(pending.options, approved, { preferAlways }));
     } else {
       log.warn(`permission:answer-miss id=${permissionId} toolCallId=${toolCallId ?? "(none)"} approved=${approved}`);
     }
@@ -2150,6 +2221,17 @@ export class AcpService {
     const { toolCallId, sessionId, tabId, command } = args;
     if (!toolCallId || !isRunnableBashCommand(command)) {
       log.debug(`permission:bash-tool-call waiting-for-command toolCallId=${toolCallId || "(none)"} command=${JSON.stringify(command)}`);
+      return;
+    }
+
+    if (isDirectLatexCompileBashCommand(command)) {
+      log.info(
+        `permission:latex-compile-bash-deny-tool-call toolCallId=${toolCallId} cmd=${command.slice(0, 80)}`,
+      );
+      this.pendingTaskDenialRedirect.set(sessionId, latexCompileBashRedirectNote());
+      denyBashJob(sessionId, toolCallId, latexCompileBashBlockMessage());
+      this.bashJobContext.delete(toolCallId);
+      this.bashAutoApproved.delete(toolCallId);
       return;
     }
 
@@ -2324,6 +2406,14 @@ export class AcpService {
       log.warn(`permission:bash-run skipped non-command toolCallId=${job.toolCallId} command=${JSON.stringify(job.command)}`);
       return;
     }
+    if (isDirectLatexCompileBashCommand(job.command)) {
+      log.info(
+        `permission:latex-compile-bash-deny-run toolCallId=${job.toolCallId} cmd=${job.command.slice(0, 80)}`,
+      );
+      this.pendingTaskDenialRedirect.set(job.sessionId, latexCompileBashRedirectNote());
+      denyBashJob(job.sessionId, job.toolCallId, latexCompileBashBlockMessage());
+      return;
+    }
     executeApprovedBashJob(job);
   }
 
@@ -2429,37 +2519,15 @@ export class AcpService {
   // ─── Binary Discovery ───────────────────────────────────────
 
   isBinaryAvailable(): boolean {
-    try { return existsSync(this.resolveBinaryPath()); } catch { return false; }
+    try {
+      return existsSync(this.resolveBinaryPath());
+    } catch {
+      return false;
+    }
   }
 
-  /** Resolve full path to the opencode binary.
-   *  Packaged: <resources>/opencode/opencode
-   *  Dev:      <project>/bin/opencode/<platform>-<arch>/opencode */
+  /** Resolve full path to the opencode binary. */
   private resolveBinaryPath(): string {
-    const binName = process.platform === "win32" ? "opencode.exe" : "opencode";
-
-    if (app.isPackaged) {
-      return join(process.resourcesPath, "opencode", binName);
-    }
-
-    const platform = process.platform;
-    const arch = process.arch;
-    let platformDir: string;
-    if (platform === "darwin") platformDir = "darwin";
-    else if (platform === "linux") platformDir = "linux";
-    else if (platform === "win32") platformDir = "windows";
-    else platformDir = platform;
-    let archDir: string;
-    if (arch === "arm64") archDir = "arm64";
-    else if (arch === "x64") archDir = "x64";
-    else archDir = arch;
-
-    return join(
-      app.getAppPath(),
-      "bin",
-      "opencode",
-      `${platformDir}-${archDir}`,
-      binName,
-    );
+    return resolveOpencodeBinaryPath();
   }
 }

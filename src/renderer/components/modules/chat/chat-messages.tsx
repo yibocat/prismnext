@@ -57,7 +57,7 @@ CopyButton.displayName = "CopyButton";
 
 // Parent turn column already applies px-6 — keep this flush with ThinkingWidget.
 const StreamingIndicator = memo(() => (
-  <div className="flex items-center gap-2">
+  <div className="mb-2 flex items-center gap-2">
     <div className="flex items-center gap-1">
       <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:0ms]" />
       <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:150ms]" />
@@ -461,20 +461,33 @@ export const ChatMessages = memo(function ChatMessages() {
     return result;
   }, [displayMessages]);
 
-  // Once thinking content is observed, hide the dots indicator permanently
-  // until streaming stops. Using useEffect avoids setState-in-render.
-  const [thinkingSeenThisTurn, setThinkingSeenThisTurn] = useState(false);
-  useEffect(() => { if (!isStreaming) setThinkingSeenThisTurn(false); }, [isStreaming]);
+  // Placeholder "Thinking…" until the assistant emits real content (text,
+  // thinking widget, or a tool call). Hide for the rest of the turn once seen.
+  const [contentSeenThisTurn, setContentSeenThisTurn] = useState(false);
   useEffect(() => {
-    if (!isStreaming) return;
-    const hasThinking = displayMessages.some(
-      (m) => m.type === "assistant" && m.message?.content?.some(
-        (b) => b.type === "thinking" && b.thinking && b.thinking.length >= 10 && !(b as any)._progress,
-      ),
+    if (!isStreaming) setContentSeenThisTurn(false);
+  }, [isStreaming]);
+  useEffect(() => {
+    if (!isStreaming || contentSeenThisTurn) return;
+    const hasContent = displayMessages.some(
+      (m) =>
+        m.type === "assistant" &&
+        m.message?.content?.some((b) => {
+          if (b.type === "text" && b.text?.trim()) return true;
+          if (
+            b.type === "thinking" &&
+            b.thinking?.trim() &&
+            !(b as { _progress?: boolean })._progress
+          ) {
+            return true;
+          }
+          if (b.type === "tool_use") return true;
+          return false;
+        }),
     );
-    if (hasThinking && !thinkingSeenThisTurn) setThinkingSeenThisTurn(true);
-  }, [displayMessages, isStreaming, thinkingSeenThisTurn]);
-  const showStreamingIndicator = isStreaming && !thinkingSeenThisTurn;
+    if (hasContent) setContentSeenThisTurn(true);
+  }, [displayMessages, isStreaming, contentSeenThisTurn]);
+  const showStreamingIndicator = isStreaming && !contentSeenThisTurn;
 
   const lastTurnUserKey = turns[turns.length - 1]?.userMessage
     ? committed.idxMap.get(turns[turns.length - 1].userMessage!) ?? turns.length
@@ -644,6 +657,9 @@ export const ChatMessages = memo(function ChatMessages() {
                 <UserHeader msg={turn.userMessage} isActiveTurn={isLastTurn} />
               )}
               <div className="px-6 min-w-0 max-w-full overflow-hidden">
+                {isLastTurn && showStreamingIndicator && (
+                  <StreamingIndicator />
+                )}
                 {turn.responses.map(({ msg, displayIdx }) => {
                   const idx = committed.idxMap.get(msg) ?? messages.length;
                   const isStreamingMsg = msg === streamingMessage;
@@ -673,9 +689,6 @@ export const ChatMessages = memo(function ChatMessages() {
                   }
                   return null;
                 })}
-                {isLastTurn && showStreamingIndicator && (
-                  <StreamingIndicator />
-                )}
                 <TurnFooter
                   turnIndex={turnIdx}
                   copyText={extractTurnCopyText(turn.responses)}

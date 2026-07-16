@@ -15,6 +15,8 @@ import { RESEARCH_DESIGN_PROMPT } from "../../src/main/prompts/modules/research-
 import { EXPERIMENTS_PROMPT } from "../../src/main/prompts/modules/experiments";
 import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/literature-library";
 import { TASK_DELEGATION_PROMPT } from "../../src/main/prompts/modules/task-delegation";
+import { buildLatexWorkspacePrompt } from "../../src/main/prompts/modules/latex-workspace";
+import type { PromptContext } from "../../src/main/prompts/types";
 
 /** Binding tables and module headings must live in Knowledge Modules, not Instructions. */
 const MODULE_BINDING_MARKERS = [
@@ -81,10 +83,18 @@ describe("builtin instructions audit (Phase 1.3)", () => {
     expect(RESEARCH_DESIGN_PROMPT).toContain("research-brief-read");
     expect(RESEARCH_DESIGN_PROMPT).toContain("research-design-coach");
     expect(EXPERIMENTS_PROMPT).toContain("### Workflow (binding)");
+    expect(EXPERIMENTS_PROMPT).toContain("### Run records & results (binding)");
     expect(EXPERIMENTS_PROMPT).toContain("experiment-log");
     expect(EXPERIMENTS_PROMPT).toContain("experiment-run");
+    expect(EXPERIMENTS_PROMPT).toContain("results-snapshot");
     expect(EXPERIMENTS_PROMPT).toContain("Task expert handoff (experiments)");
     expect(EXPERIMENTS_PROMPT).toContain("methodology-auditor");
+    const latex = buildLatexWorkspacePrompt({} as PromptContext);
+    expect(latex).toContain("### Agent compile chain (binding)");
+    expect(latex).toContain("### Shell compile — forbidden");
+    expect(latex).toContain("latex-compile");
+    expect(latex).toContain("pdflatex");
+    expect(latex).toContain(".prismnext/compile/");
   });
 
   it("no instructions.md under bundled resources duplicates removed academic modules", () => {

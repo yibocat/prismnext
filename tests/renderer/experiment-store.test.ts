@@ -33,6 +33,9 @@ const electronAPI = {
   experimentGetPaths: vi.fn(),
   experimentRun: vi.fn(),
   experimentCancelRun: vi.fn(),
+  experimentArchive: vi.fn(),
+  experimentRestore: vi.fn(),
+  experimentDelete: vi.fn(),
   onExperimentRunComplete: vi.fn((cb: RunCompleteHandler) => {
     runCompleteHandlers.push(cb);
     return () => {
@@ -60,6 +63,28 @@ vi.mock("../../src/renderer/stores/chat-store", () => ({
   },
 }));
 
+vi.mock("../../src/renderer/stores/layout-store", () => ({
+  useLayoutStore: {
+    getState: () => ({
+      activateMode: vi.fn(),
+    }),
+  },
+}));
+
+vi.mock("../../src/renderer/stores/right-panel-store", () => ({
+  useRightPanelStore: {
+    getState: () => ({
+      activateExperimentsHomeTab: vi.fn(),
+      closeExperimentTabs: vi.fn(),
+      ensureTab: vi.fn(),
+      openExperimentTab: vi.fn(),
+      tabs: [],
+      activeTabId: null,
+      updateTab: vi.fn(),
+    }),
+  },
+}));
+
 import { useExperimentStore } from "../../src/renderer/stores/experiment-store";
 import type { ExperimentSummary } from "../../src/shared/experiment-log";
 
@@ -72,6 +97,8 @@ function makeSummary(overrides: Partial<ExperimentSummary> = {}): ExperimentSumm
     workspacePath: "experiment/exp-20260707-lr-a3f2",
     runCount: 0,
     lastRunAt: null,
+    status: "active",
+    archivedAt: null,
     ...overrides,
   };
 }
@@ -100,19 +127,49 @@ describe("experiment-store", () => {
       await useExperimentStore.getState().refreshList(PROJECT);
 
       const state = useExperimentStore.getState();
-      expect(electronAPI.experimentList).toHaveBeenCalledWith(PROJECT);
+      expect(electronAPI.experimentList).toHaveBeenCalledWith(PROJECT, false);
       expect(state.experiments).toEqual(list);
       expect(state.error).toBeNull();
       expect(state.loading).toBe(false);
+    });
+
+    it("passes showArchived=true to experimentList when toggled", async () => {
+      electronAPI.experimentList.mockResolvedValue({
+        ok: true,
+        experimentRoot: "experiment",
+        registryRoot: ".prismnext/experiments",
+        experiments: [],
+      });
+
+      await useExperimentStore.getState().setShowArchived(PROJECT, true);
+
+      expect(useExperimentStore.getState().showArchived).toBe(true);
+      expect(electronAPI.experimentList).toHaveBeenCalledWith(PROJECT, true);
+    });
+
+    it("shows only archived experiments when showArchived is on", async () => {
+      electronAPI.experimentList.mockResolvedValue({
+        ok: true,
+        experimentRoot: "experiment",
+        registryRoot: ".prismnext/experiments",
+        experiments: [
+          makeSummary({ id: "exp-active", title: "Active", status: "active" }),
+          makeSummary({ id: "exp-arch", title: "Arch", status: "archived" }),
+        ],
+      });
+
+      await useExperimentStore.getState().setShowArchived(PROJECT, true);
+
+      expect(useExperimentStore.getState().experiments.map((e) => e.id)).toEqual([
+        "exp-arch",
+      ]);
     });
 
     it("sets error on ok:false and clears stale experiments", async () => {
       // Pre-seed a stale list to verify refreshList clears it on failure
       // (brief: "clears/empties experiments appropriately, don't leave stale list").
       useExperimentStore.setState({
-        experiments: [
-          { id: "exp-stale", title: "Stale", workspacePath: "experiment/exp-stale", runCount: 1, lastRunAt: "2026-07-01T00:00:00Z" },
-        ],
+        experiments: [makeSummary({ id: "exp-stale", title: "Stale", runCount: 1, lastRunAt: "2026-07-01T00:00:00Z" })],
       });
       electronAPI.experimentList.mockResolvedValueOnce({
         ok: false,
@@ -130,9 +187,7 @@ describe("experiment-store", () => {
 
     it("captures thrown errors and clears stale experiments", async () => {
       useExperimentStore.setState({
-        experiments: [
-          { id: "exp-stale", title: "Stale", workspacePath: "experiment/exp-stale", runCount: 1, lastRunAt: "2026-07-01T00:00:00Z" },
-        ],
+        experiments: [makeSummary({ id: "exp-stale", title: "Stale", runCount: 1, lastRunAt: "2026-07-01T00:00:00Z" })],
       });
       electronAPI.experimentList.mockRejectedValueOnce(new Error("IPC blew up"));
 
@@ -156,6 +211,8 @@ describe("experiment-store", () => {
           workspacePath: "experiment/exp-a",
         },
         runs: [],
+        runCount: 0,
+        lastRunAt: null,
         experimentRoot: "experiment",
         registryRoot: ".prismnext/experiments",
       });
@@ -193,6 +250,8 @@ describe("experiment-store", () => {
           workspacePath: "experiment/exp-a",
         },
         runs: [],
+        runCount: 0,
+        lastRunAt: null,
         experimentRoot: "experiment",
         registryRoot: ".prismnext/experiments",
       });
@@ -209,7 +268,7 @@ describe("experiment-store", () => {
       expect(state.error).toBeNull();
     });
 
-    it("returns null and sets error on ok:false", async () => {
+    it("returns null, clears selection, and sets error on ok:false", async () => {
       electronAPI.experimentRead.mockResolvedValueOnce({
         ok: false,
         error: "experiment_not_found",
@@ -222,7 +281,7 @@ describe("experiment-store", () => {
       const detail = await useExperimentStore.getState().selectExperiment(PROJECT, "exp-a");
 
       expect(detail).toBeNull();
-      expect(useExperimentStore.getState().selectedId).toBe("exp-a");
+      expect(useExperimentStore.getState().selectedId).toBeNull();
       expect(useExperimentStore.getState().detail).toBeNull();
       expect(useExperimentStore.getState().error).toBe("experiment_not_found");
     });
@@ -239,6 +298,8 @@ describe("experiment-store", () => {
           workspacePath: "experiment/exp-a",
         },
         runs: [],
+        runCount: 0,
+        lastRunAt: null,
         experimentRoot: "experiment",
         registryRoot: ".prismnext/experiments",
       });
@@ -329,6 +390,8 @@ describe("experiment-store", () => {
             workspacePath: "experiment/exp-a",
           },
           runs: [],
+          runCount: 0,
+          lastRunAt: null,
         },
         runInFlight: {
           id: "exp-a",
@@ -371,6 +434,109 @@ describe("experiment-store", () => {
       expect(state.detail?.runs[0]).toEqual(newRun);
     });
 
+    it("clears runOutputBuffer for the completed runId (Bug #22)", () => {
+      useExperimentStore.setState({
+        selectedId: "exp-a",
+        detail: {
+          meta: {
+            id: "exp-a",
+            title: "A",
+            createdAt: "2026-07-07T00:00:00Z",
+            workspacePath: "experiment/exp-a",
+          },
+          runs: [],
+          runCount: 0,
+          lastRunAt: null,
+        },
+        runOutputBuffer: { "run-1": "stale", "run-keep": "ok" },
+      });
+
+      useExperimentStore.getState().handleRunComplete({
+        id: "exp-a",
+        runId: "run-1",
+        result: {
+          ok: true,
+          run: {
+            runId: "run-1",
+            startedAt: "2026-07-08T10:00:00Z",
+            finishedAt: "2026-07-08T10:00:01Z",
+            command: "echo",
+            cwd: "experiment/exp-a",
+            exitCode: 0,
+            stdoutTail: "",
+            stderrTail: "",
+            artifacts: [],
+            env: {
+              python: null,
+              pythonVersion: null,
+              rscript: null,
+              rVersion: null,
+              platform: "darwin",
+              gitCommit: null,
+              venvPath: null,
+            },
+          },
+          exitCode: 0,
+        },
+      });
+
+      expect(useExperimentStore.getState().runOutputBuffer["run-1"]).toBeUndefined();
+      expect(useExperimentStore.getState().runOutputBuffer["run-keep"]).toBe("ok");
+    });
+
+    it("does not duplicate when the same runId is already in detail.runs", () => {
+      const existingRun = {
+        runId: "run-1",
+        startedAt: "2026-07-08T10:00:00Z",
+        finishedAt: "2026-07-08T10:00:01Z",
+        command: "echo hi",
+        cwd: "experiment/exp-a",
+        exitCode: 0,
+        stdoutTail: "hi\n",
+        stderrTail: "",
+        artifacts: [],
+        env: {
+          python: null,
+          pythonVersion: null,
+          rscript: null,
+          rVersion: null,
+          platform: "darwin",
+          gitCommit: null,
+          venvPath: null,
+        },
+      } as const;
+
+      useExperimentStore.setState({
+        selectedId: "exp-a",
+        detail: {
+          meta: {
+            id: "exp-a",
+            title: "A",
+            createdAt: "2026-07-07T00:00:00Z",
+            workspacePath: "experiment/exp-a",
+          },
+          runs: [existingRun],
+        },
+        runInFlight: {
+          id: "exp-a",
+          runId: "run-1",
+          command: "echo hi",
+          liveOutput: "",
+        },
+      });
+
+      useExperimentStore.getState().handleRunComplete({
+        id: "exp-a",
+        runId: "run-1",
+        result: { ok: true, run: { ...existingRun, stdoutTail: "hi again\n" }, exitCode: 0 },
+      });
+
+      const state = useExperimentStore.getState();
+      expect(state.runInFlight).toBeNull();
+      expect(state.detail?.runs).toHaveLength(1);
+      expect(state.detail?.runs[0].stdoutTail).toBe("hi\n");
+    });
+
     it("clears runInFlight but does not append when ids don't match", () => {
       useExperimentStore.setState({
         selectedId: "exp-a",
@@ -382,6 +548,8 @@ describe("experiment-store", () => {
             workspacePath: "experiment/exp-a",
           },
           runs: [],
+          runCount: 0,
+          lastRunAt: null,
         },
         runInFlight: {
           id: "exp-b",
@@ -437,6 +605,8 @@ describe("experiment-store", () => {
             workspacePath: "experiment/exp-a",
           },
           runs: [],
+          runCount: 0,
+          lastRunAt: null,
         },
         runInFlight: {
           id: "exp-a",
@@ -470,6 +640,8 @@ describe("experiment-store", () => {
             workspacePath: "experiment/exp-a",
           },
           runs: [],
+          runCount: 0,
+          lastRunAt: null,
         },
         runInFlight: {
           id: "exp-a",
@@ -724,6 +896,72 @@ describe("experiment-store", () => {
           electronAPI.onExperimentRunComplete.mockImplementation(originalImpl);
         }
       }
+    });
+  });
+
+  describe("archive / restore / delete", () => {
+    it("archiveExperiment refreshes the list", async () => {
+      electronAPI.experimentArchive.mockResolvedValueOnce({
+        ok: true,
+        meta: {
+          id: "exp-a",
+          title: "A",
+          createdAt: "2026-07-07T00:00:00Z",
+          workspacePath: "experiment/exp-a",
+          status: "archived",
+          archivedAt: "2026-07-16T00:00:00Z",
+        },
+      });
+      electronAPI.experimentList.mockResolvedValueOnce({
+        ok: true,
+        experimentRoot: "experiment",
+        registryRoot: ".prismnext/experiments",
+        experiments: [],
+      });
+
+      const ok = await useExperimentStore.getState().archiveExperiment(PROJECT, "exp-a");
+      expect(ok).toBe(true);
+      expect(electronAPI.experimentArchive).toHaveBeenCalledWith({
+        projectRoot: PROJECT,
+        id: "exp-a",
+      });
+      expect(electronAPI.experimentList).toHaveBeenCalled();
+    });
+
+    it("deleteExperiment clears selection of the deleted island", async () => {
+      useExperimentStore.setState({
+        selectedId: "exp-a",
+        detail: {
+          meta: {
+            id: "exp-a",
+            title: "A",
+            createdAt: "2026-07-07T00:00:00Z",
+            workspacePath: "experiment/exp-a",
+          },
+          runs: [],
+          runCount: 0,
+          lastRunAt: null,
+        },
+      });
+      electronAPI.experimentDelete.mockResolvedValueOnce({ ok: true });
+      electronAPI.experimentList.mockResolvedValueOnce({
+        ok: true,
+        experimentRoot: "experiment",
+        registryRoot: ".prismnext/experiments",
+        experiments: [],
+      });
+
+      const ok = await useExperimentStore
+        .getState()
+        .deleteExperiment(PROJECT, "exp-a", { removeLab: true });
+      expect(ok).toBe(true);
+      expect(electronAPI.experimentDelete).toHaveBeenCalledWith({
+        projectRoot: PROJECT,
+        id: "exp-a",
+        removeLab: true,
+      });
+      expect(useExperimentStore.getState().selectedId).toBeNull();
+      expect(useExperimentStore.getState().detail).toBeNull();
     });
   });
 });

@@ -19,9 +19,11 @@
  * Behaviour:
  *   - Allow  -> call `onAllow` (run panel will call `runCommand`).
  *   - Deny   -> close without invoking onAllow.
- *   - 120s timeout (PERMISSION_UI_TIMEOUT_MS) -> auto-deny.
- *   - Dialog unmounts / backdrop click / Esc all behave like Deny.
+ *   - Timeout (EXPERIMENT_RUN_CONFIRM_TIMEOUT_MS, 60s) -> auto-deny with reason.
+ *   - Dialog unmounts / backdrop click / Esc all behave like user Deny.
  */
+
+export type ExperimentsRunConfirmDenyReason = "timeout" | "user";
 
 import { useEffect, useRef, useState } from "react";
 import { Loader2Icon, TerminalIcon, XIcon } from "lucide-react";
@@ -35,14 +37,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AppSelect,
+  AppSelectContent,
+  AppSelectItem,
+  AppSelectTrigger,
+  AppSelectValue,
+} from "@/components/ui/app-select";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import {
+  EXPERIMENT_RUN_KINDS,
+  type ExperimentRunKind,
+} from "../../../shared/experiment-log";
+import { EXPERIMENT_RUN_CONFIRM_TIMEOUT_MS } from "../../../shared/permission-timeouts";
 import { experimentsCodeClass, experimentsUiValueClass } from "./experiments-detail-chrome";
 
-/** Auto-deny after 15s - shorter than the agent's 120s `PERMISSION_TIMEOUT_MS`
- *  (permission-actions.ts) because this modal confirms a command the user just
- *  typed in the run panel - a quick re-read, not a fresh agent tool call. */
-const PERMISSION_UI_TIMEOUT_MS = 15_000;
+const KIND_UNTYPED = "__untyped__";
 
 export interface ExperimentsRunConfirmModalProps {
   open: boolean;
@@ -50,17 +61,22 @@ export interface ExperimentsRunConfirmModalProps {
   command: string;
   /** Project-relative working directory (e.g. `experiment/exp-xxx`). */
   cwd: string;
+  /** Optional run classification (empty string = untyped). */
+  kind?: ExperimentRunKind | "";
+  onKindChange?: (kind: ExperimentRunKind | "") => void;
   /** Invoked when the user clicks Allow. The modal closes itself. */
   onAllow: () => void;
   /** Invoked when the user clicks Deny, the timeout fires, or the dialog
    *  is dismissed (backdrop / Esc / close button). */
-  onDeny: () => void;
+  onDeny: (reason: ExperimentsRunConfirmDenyReason) => void;
 }
 
 export function ExperimentsRunConfirmModal({
   open,
   command,
   cwd,
+  kind = "",
+  onKindChange,
   onAllow,
   onDeny,
 }: ExperimentsRunConfirmModalProps) {
@@ -78,16 +94,16 @@ export function ExperimentsRunConfirmModal({
     }
   }, [open]);
 
-  // 120s auto-deny — mirrors the agent's `PERMISSION_UI_TIMEOUT_MS` so
-  // the UI path stays in lock-step with the chat-driven path.
+  // Auto-deny — longer than the old 15s window so multi-line commands are
+  // readable, still shorter than chat ACP `PERMISSION_UI_TIMEOUT_MS` (120s).
   useEffect(() => {
     if (!open) return;
     const timer = setTimeout(() => {
       if (!settledRef.current) {
         settledRef.current = true;
-        onDeny();
+        onDeny("timeout");
       }
-    }, PERMISSION_UI_TIMEOUT_MS);
+    }, EXPERIMENT_RUN_CONFIRM_TIMEOUT_MS);
     return () => clearTimeout(timer);
   }, [open, onDeny]);
 
@@ -102,7 +118,7 @@ export function ExperimentsRunConfirmModal({
     if (settledRef.current) return;
     settledRef.current = true;
     setResolving(true);
-    onDeny();
+    onDeny("user");
   };
 
   return (
@@ -115,7 +131,7 @@ export function ExperimentsRunConfirmModal({
         // safe: subsequent onDeny() calls are no-ops.
         if (!next && !settledRef.current) {
           settledRef.current = true;
-          onDeny();
+          onDeny("user");
         }
       }}
     >
@@ -126,7 +142,7 @@ export function ExperimentsRunConfirmModal({
           // Treat Esc as a deny — matches the agent UX.
           if (!settledRef.current) {
             settledRef.current = true;
-            onDeny();
+            onDeny("user");
           }
           e.preventDefault();
         }}
@@ -176,6 +192,30 @@ export function ExperimentsRunConfirmModal({
               {cwd || "—"}
             </div>
           </div>
+          <div className="space-y-1">
+            <div className="text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/70">
+              Type
+            </div>
+            <AppSelect
+              value={kind || KIND_UNTYPED}
+              disabled={!onKindChange}
+              onValueChange={(v) =>
+                onKindChange?.(v === KIND_UNTYPED ? "" : (v as ExperimentRunKind))
+              }
+            >
+              <AppSelectTrigger variant="dialog" className="w-full" aria-label="Run type">
+                <AppSelectValue placeholder="Untyped" />
+              </AppSelectTrigger>
+              <AppSelectContent>
+                <AppSelectItem value={KIND_UNTYPED}>Untyped</AppSelectItem>
+                {EXPERIMENT_RUN_KINDS.map((k) => (
+                  <AppSelectItem key={k} value={k}>
+                    {k}
+                  </AppSelectItem>
+                ))}
+              </AppSelectContent>
+            </AppSelect>
+          </div>
         </div>
 
         <CountdownProgress active={open && !settledRef.current} />
@@ -209,10 +249,9 @@ export function ExperimentsRunConfirmModal({
 }
 
 /**
- * CountdownProgress — 120s linear progress bar that auto-resets on
- * `active` toggling. Indeterminate at the moment-of-render, so we
- * drive value from a setInterval to keep things simple and avoid
- * pulling in a CSS-only animation.
+ * CountdownProgress — linear progress bar over
+ * `EXPERIMENT_RUN_CONFIRM_TIMEOUT_MS` that auto-resets when `active`
+ * toggles. Driven by setInterval for a simple determinate bar.
  */
 function CountdownProgress({ active }: { active: boolean }) {
   const startRef = useRef<number | null>(null);
@@ -230,7 +269,7 @@ function CountdownProgress({ active }: { active: boolean }) {
       const start = startRef.current;
       if (start == null) return;
       const elapsed = Date.now() - start;
-      const pct = Math.min(100, (elapsed / PERMISSION_UI_TIMEOUT_MS) * 100);
+      const pct = Math.min(100, (elapsed / EXPERIMENT_RUN_CONFIRM_TIMEOUT_MS) * 100);
       setValue(pct);
     };
     tick();
@@ -242,7 +281,7 @@ function CountdownProgress({ active }: { active: boolean }) {
 
   const remaining = Math.max(
     0,
-    Math.ceil((PERMISSION_UI_TIMEOUT_MS - (value / 100) * PERMISSION_UI_TIMEOUT_MS) / 1000),
+    Math.ceil((EXPERIMENT_RUN_CONFIRM_TIMEOUT_MS - (value / 100) * EXPERIMENT_RUN_CONFIRM_TIMEOUT_MS) / 1000),
   );
 
   return (

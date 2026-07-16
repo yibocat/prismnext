@@ -42,7 +42,9 @@ describe("useToolPermission", () => {
       await result.current.allow();
     });
 
-    expect(window.electronAPI.chatAnswerPermission).toHaveBeenCalledWith("perm-1", true, "call-1");
+    expect(window.electronAPI.chatAnswerPermission).toHaveBeenCalledWith("perm-1", true, "call-1", {
+      always: false,
+    });
     expect(usePermissionStore.getState().getPermissionForTool("tab-1", "call-1")).toBeUndefined();
     // Scheme A: edit uses permission gate only — proposed changes are not auto-cleared on allow
     expect(useChangesStore.getState().changes).toHaveLength(1);
@@ -95,7 +97,9 @@ describe("useToolPermission", () => {
       await result.current.allow();
     });
 
-    expect(window.electronAPI.chatAnswerPermission).toHaveBeenCalledWith("perm-2", true, "call-2");
+    expect(window.electronAPI.chatAnswerPermission).toHaveBeenCalledWith("perm-2", true, "call-2", {
+      always: false,
+    });
     expect(useChangesStore.getState().changes).toHaveLength(0);
   });
 });

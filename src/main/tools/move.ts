@@ -23,6 +23,7 @@ import { terminalBridgeRoot } from "./bridge-paths";
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const BRIDGE_ROOT = terminalBridgeRoot();
 const ACTIVE_TOOL_FILE = ".active-tool.json";
+/** Keep in sync with `src/shared/permission-timeouts.ts` (tool file is copied standalone). */
 const PERMISSION_TIMEOUT_MS = 120_000;
 
 function shellQuote(value: string): string {

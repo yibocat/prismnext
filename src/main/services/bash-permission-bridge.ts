@@ -32,10 +32,16 @@ export function writeBashPermissionStatus(
   sessionId: string,
   toolCallId: string,
   status: BashPermissionStatus,
+  reason?: string,
 ): void {
   const path = bashPermissionPath(sessionId, toolCallId);
   mkdirSync(join(getBridgeRoot(), sessionId), { recursive: true });
-  writeFileSync(path, JSON.stringify({ status, at: Date.now() }), "utf-8");
+  const payload: { status: BashPermissionStatus; at: number; reason?: string } = {
+    status,
+    at: Date.now(),
+  };
+  if (reason?.trim()) payload.reason = reason.trim();
+  writeFileSync(path, JSON.stringify(payload), "utf-8");
 }
 
 export interface ApprovedBashJob {
@@ -65,8 +71,8 @@ export function executeApprovedBashJob(job: ApprovedBashJob): void {
   });
 }
 
-export function denyBashJob(sessionId: string, toolCallId: string): void {
-  writeBashPermissionStatus(sessionId, toolCallId, "denied");
+export function denyBashJob(sessionId: string, toolCallId: string, reason?: string): void {
+  writeBashPermissionStatus(sessionId, toolCallId, "denied", reason);
 }
 
 /** Custom OpenCode tools (delete, move) share the same permission bridge as bash. */

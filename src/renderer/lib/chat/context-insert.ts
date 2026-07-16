@@ -69,7 +69,7 @@ export interface ExperimentRunSnippetRequest {
   exitCode: number;
   startedAt: string;
   finishedAt: string;
-  /** The artifact path being discussed (project-relative), if any. */
+  /** The artifact path being discussed (project-relative or lab-relative), if any. */
   artifactPath?: string;
   /** How the artifact was linked to the run (trust signal). */
   linkMethod?: string;
@@ -78,6 +78,15 @@ export interface ExperimentRunSnippetRequest {
   chatSessionId?: string | null;
   workspacePath?: string;
   sourceTabId?: string;
+  /** Optional ExperimentRunKind (train/eval/…). Named `runKind` to avoid clashing with request `kind`. */
+  runKind?: string;
+  notes?: string;
+  logPath?: string | null;
+  /**
+   * `cite-in-paper` — Methods / figure scaffolding for the agent (Use in paper).
+   * `discuss` (default) — open-ended chat about the run.
+   */
+  intent?: "discuss" | "cite-in-paper";
 }
 
 export type ContextInsertRequest =
@@ -153,10 +162,11 @@ export function contextInsertToPart(req: ContextInsertRequest): ComposerPart {
 
   if (req.kind === "experiment-run") {
     const shortId = req.runId.split("-").slice(0, 3).join("-");
+    const intent = req.intent === "cite-in-paper" ? "cite-in-paper" : "discuss";
     return {
       type: "experiment-run",
       id: createTokenId(),
-      label: `run:${shortId}`,
+      label: intent === "cite-in-paper" ? `cite:${shortId}` : `run:${shortId}`,
       runId: req.runId,
       experimentId: req.experimentId,
       command: req.command,
@@ -170,6 +180,10 @@ export function contextInsertToPart(req: ContextInsertRequest): ComposerPart {
       chatSessionId: req.chatSessionId ?? null,
       workspacePath: req.workspacePath,
       sourceTabId: req.sourceTabId,
+      kind: req.runKind,
+      notes: req.notes,
+      logPath: req.logPath ?? null,
+      intent,
     };
   }
 

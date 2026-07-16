@@ -1,59 +1,72 @@
 /**
- * experiments-content — Content area for the Experiments RightArea mode
- * (Sprint 0.7).
+ * experiments-content — Content area for the Experiments RightArea mode.
  *
- * Routes the primary states for the mode:
- *   1. No project              — centered muted copy (mirrors literature).
- *   2. No Experiment folder    — `ExperimentsNoFolderEmpty` (settings link).
- *   3. Empty registry list     — `ExperimentsEmptyListEmpty`.
- *   4. Browse                  — `ExperimentsGrid` (card gallery).
- *   5. Detail                  — `ExperimentsDetail`.
+ * Routes:
+ *   - Home tab (no experimentId) → browse grid
+ *   - Detail tab (experimentId) → ExperimentsDetail for that island
  *
- * Mode sidebar open/close uses the shared RightArea path (`rightSidebarOpen`,
- * TabToolbar toggle, drag handle) — same as Files / Git / Literature.
- *
- * Bootstrap (refresh list on project change) is keyed on `projectRoot` per
- * the literature-mode split: heavy IPC work lives here, NOT in onActivate.
+ * Each experiment opens as its own RightArea tab (like Literature papers).
  */
 
 import { useEffect } from "react";
 import { Loader2Icon } from "lucide-react";
 import type { RightTab } from "@/lib/workspace/mode-registry";
-import { useDocumentStore } from "@/stores/document-store";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { cn } from "@/lib/utils";
 import { ExperimentsDetail } from "./experiments-detail";
 import { ExperimentsGrid } from "./experiments-grid";
 import {
+  ExperimentsCorruptMetaBanner,
   ExperimentsEmptyListEmpty,
+  ExperimentsLoadError,
   ExperimentsNoFolderEmpty,
 } from "./experiments-empty";
+import { useExperimentProjectRoot } from "./experiments-project-root";
 
-function useExperimentsTabSync(
-  tab: RightTab,
-  selectedId: string | null,
-  experiments: { id: string; title: string }[],
-) {
+function useExperimentsTabTitleSync(tab: RightTab) {
   const updateTab = useRightPanelStore((s) => s.updateTab);
+  const experiments = useExperimentStore((s) => s.experiments);
+  const detailTitle = useExperimentStore((s) => {
+    // Home tabs have no experimentId (`undefined`). Do not treat
+    // `detail?.meta.id === undefined` as a match when detail is null.
+    if (!tab.experimentId || !s.detail || s.detail.meta.id !== tab.experimentId) {
+      return null;
+    }
+    return s.detail.meta.title;
+  });
 
   useEffect(() => {
     if (tab.kind !== "experiments") return;
-    if (selectedId) {
-      const exp = experiments.find((e) => e.id === selectedId);
-      updateTab(tab.id, {
-        experimentId: selectedId,
-        experimentsView: "detail",
-        title: exp?.title.slice(0, 48) ?? tab.title,
-      });
+    if (!tab.experimentId) {
+      if (tab.title !== "Experiments" || tab.experimentsView !== "list") {
+        updateTab(tab.id, {
+          experimentId: undefined,
+          experimentsView: "list",
+          title: "Experiments",
+        });
+      }
       return;
     }
-    updateTab(tab.id, {
-      experimentId: undefined,
-      experimentsView: "list",
-      title: "Experiments",
-    });
-  }, [tab.id, tab.kind, tab.title, selectedId, experiments, updateTab]);
+    const fromList = experiments.find((e) => e.id === tab.experimentId)?.title;
+    const title = (detailTitle ?? fromList ?? tab.title).slice(0, 48);
+    if (tab.title !== title || tab.experimentsView !== "detail") {
+      updateTab(tab.id, {
+        experimentId: tab.experimentId,
+        experimentsView: "detail",
+        title,
+      });
+    }
+  }, [
+    tab.id,
+    tab.kind,
+    tab.title,
+    tab.experimentId,
+    tab.experimentsView,
+    experiments,
+    detailTitle,
+    updateTab,
+  ]);
 }
 
 export function ExperimentsContent({
@@ -63,33 +76,35 @@ export function ExperimentsContent({
   tab: RightTab;
   isActive: boolean;
 }) {
-  const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const projectRoot = useExperimentProjectRoot();
   const refreshList = useExperimentStore((s) => s.refreshList);
   const error = useExperimentStore((s) => s.error);
   const experiments = useExperimentStore((s) => s.experiments);
+  const corruptIds = useExperimentStore((s) => s.corruptIds);
   const selectedId = useExperimentStore((s) => s.selectedId);
   const detail = useExperimentStore((s) => s.detail);
-  const env = useExperimentStore((s) => s.env);
   const loading = useExperimentStore((s) => s.loading);
   const selectExperiment = useExperimentStore((s) => s.selectExperiment);
+  const showArchived = useExperimentStore((s) => s.showArchived);
 
-  useExperimentsTabSync(tab, selectedId, experiments);
+  useExperimentsTabTitleSync(tab);
 
   useEffect(() => {
     if (!projectRoot) return;
     void refreshList(projectRoot);
-  }, [projectRoot, refreshList]);
+  }, [projectRoot, refreshList, showArchived]);
 
-  // Deep link: tab carries experimentId (e.g. future /experiment open <id>).
+  // Detail tabs drive store selection when focused.
   useEffect(() => {
-    if (!projectRoot || !tab.experimentId || !isActive) return;
-    if (useExperimentStore.getState().selectedId === tab.experimentId) return;
+    if (!projectRoot || !isActive) return;
+    if (!tab.experimentId) return;
+    if (selectedId === tab.experimentId && detail?.meta.id === tab.experimentId) return;
     void selectExperiment(projectRoot, tab.experimentId);
-  }, [projectRoot, tab.experimentId, isActive, selectExperiment]);
+  }, [projectRoot, tab.experimentId, isActive, selectExperiment, selectedId, detail?.meta.id]);
 
   if (!projectRoot) {
     return (
-      <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+      <div className="flex h-full items-center justify-center font-sans text-sm text-muted-foreground">
         Open a project first.
       </div>
     );
@@ -99,30 +114,74 @@ export function ExperimentsContent({
     return <ExperimentsNoFolderEmpty />;
   }
 
-  if (!loading && experiments.length === 0 && !detail) {
-    return <ExperimentsEmptyListEmpty />;
-  }
+  const shellClass = cn("flex h-full min-h-0 flex-col font-sans", !isActive && "hidden");
 
-  const shellClass = cn("h-full min-h-0", !isActive && "hidden");
-
-  if (selectedId) {
-    if (detail && detail.meta.id === selectedId) {
+  // Detail tab
+  if (tab.experimentId) {
+    if (error && !detail) {
+      return (
+        <ExperimentsLoadError
+          error={error}
+          onRetry={() => void selectExperiment(projectRoot, tab.experimentId!)}
+        />
+      );
+    }
+    if (detail && detail.meta.id === tab.experimentId) {
       return (
         <div className={shellClass}>
-          <ExperimentsDetail meta={detail.meta} env={env} />
+          <ExperimentsCorruptMetaBanner corruptIds={corruptIds} />
+          <div className="min-h-0 flex-1">
+            <ExperimentsDetail meta={detail.meta} />
+          </div>
         </div>
       );
     }
     return (
-      <div className={cn(shellClass, "flex h-full items-center justify-center")}>
-        <Loader2Icon className="size-5 animate-spin text-muted-foreground/60" aria-label="Loading experiment" />
+      <div className={cn(shellClass, "items-center justify-center")}>
+        <Loader2Icon
+          className="size-5 animate-spin text-muted-foreground/60"
+          aria-label="Loading experiment"
+        />
+      </div>
+    );
+  }
+
+  // Home / browse tab
+  if (error && experiments.length === 0 && !detail) {
+    return (
+      <ExperimentsLoadError
+        error={error}
+        onRetry={() => void refreshList(projectRoot)}
+      />
+    );
+  }
+
+  if (loading && experiments.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2Icon
+          className="size-5 animate-spin text-muted-foreground/60"
+          aria-label="Loading experiments"
+        />
+      </div>
+    );
+  }
+
+  if (!loading && experiments.length === 0) {
+    return (
+      <div className={shellClass}>
+        <ExperimentsCorruptMetaBanner corruptIds={corruptIds} />
+        <ExperimentsEmptyListEmpty archivedOnly={showArchived} />
       </div>
     );
   }
 
   return (
     <div className={shellClass}>
-      <ExperimentsGrid />
+      <ExperimentsCorruptMetaBanner corruptIds={corruptIds} />
+      <div className="min-h-0 flex-1">
+        <ExperimentsGrid />
+      </div>
     </div>
   );
 }

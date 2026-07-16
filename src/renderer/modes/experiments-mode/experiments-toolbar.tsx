@@ -10,14 +10,20 @@
  */
 
 import { useCallback } from "react";
-import { ArrowLeftIcon, FolderOpenIcon, Loader2Icon, RefreshCwIcon } from "lucide-react";
+import {
+  ArchiveIcon,
+  ArrowLeftIcon,
+  FolderOpenIcon,
+  Loader2Icon,
+  RefreshCwIcon,
+} from "lucide-react";
 import { toast } from "sonner";
-import { useDocumentStore } from "@/stores/document-store";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { Button } from "@/components/ui/button";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { cn } from "@/lib/utils";
 import { experimentsPathCompactClass, experimentsToolbarContextClass } from "./experiments-detail-chrome";
+import { useExperimentProjectRoot } from "./experiments-project-root";
 
 const toolbarBtn = cn(
   "flex items-center gap-1.5 h-6 px-2 rounded text-[length:var(--font-menu-item)]",
@@ -25,20 +31,27 @@ const toolbarBtn = cn(
 );
 
 export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
-  const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const projectRoot = useExperimentProjectRoot();
   const refreshList = useExperimentStore((s) => s.refreshList);
+  const setShowArchived = useExperimentStore((s) => s.setShowArchived);
+  const showArchived = useExperimentStore((s) => s.showArchived);
   const loading = useExperimentStore((s) => s.loading);
   const openLabInFiles = useExperimentStore((s) => s.openLabInFiles);
   const selectedId = useExperimentStore((s) => s.selectedId);
   const clearSelection = useExperimentStore((s) => s.clearSelection);
   const experimentCount = useExperimentStore((s) => s.experiments.length);
   const workspacePath = useExperimentStore((s) => s.detail?.meta.workspacePath);
-  const inDetail = Boolean(selectedId);
+  const inDetail = Boolean(tab.experimentId ?? selectedId);
 
   const handleRefresh = useCallback(() => {
     if (!projectRoot) return;
     void refreshList(projectRoot);
   }, [projectRoot, refreshList]);
+
+  const handleToggleArchived = useCallback(() => {
+    if (!projectRoot) return;
+    void setShowArchived(projectRoot, !showArchived);
+  }, [projectRoot, setShowArchived, showArchived]);
 
   const handleOpenLab = useCallback(async () => {
     // Prefer the tab's experimentId (Task 5 wires it on selection); fall back
@@ -79,9 +92,36 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
         </span>
       ) : (
         <span className={cn("mr-auto truncate", experimentsToolbarContextClass)}>
-          {experimentCount > 0 ? `${experimentCount} experiments` : "Experiments"}
+          {showArchived
+            ? experimentCount > 0
+              ? `${experimentCount} archived`
+              : "No archived experiments"
+            : experimentCount > 0
+              ? `${experimentCount} experiment${experimentCount === 1 ? "" : "s"}`
+              : "Experiments"}
         </span>
       )}
+      {!inDetail ? (
+        <button
+          type="button"
+          className={cn(
+            toolbarBtn,
+            "shrink-0",
+            showArchived && "bg-accent/60 text-foreground",
+          )}
+          title={
+            showArchived
+              ? "Show active experiments"
+              : "Show archived experiments only"
+          }
+          disabled={!projectRoot || loading}
+          aria-pressed={showArchived}
+          onClick={handleToggleArchived}
+        >
+          <ArchiveIcon className="size-3.5" />
+          <span>Archived</span>
+        </button>
+      ) : null}
       <button
         type="button"
         className={cn(toolbarBtn, "shrink-0")}

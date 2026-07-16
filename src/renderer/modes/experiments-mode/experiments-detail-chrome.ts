@@ -3,6 +3,8 @@
  * Mirrors `literature-list-chrome.ts` and `git-change-row-chrome.tsx`.
  */
 
+import { cn } from "@/lib/utils";
+
 /** Mode toolbar context line (lab path, experiment count). */
 export const experimentsToolbarContextClass =
   "text-[length:var(--font-size-11)] text-muted-foreground";
@@ -59,11 +61,21 @@ export const experimentsRunsTableShellClass =
 
 /** Unified command + live output console (Execution section). */
 export const experimentsRunConsoleShellClass =
-  "overflow-hidden rounded-md border border-border/60 bg-background/80";
+  "overflow-hidden rounded-md border border-border bg-card shadow-none";
 
-/** Expanded run detail padding. */
-export const experimentsRunExpandedClass =
-  "border-b border-border/40 bg-muted/20 px-3 py-2.5 space-y-2 last:border-b-0";
+/**
+ * Selected-run detail pane (master–detail, typically right of the list).
+ * Own scroll surface so long output does not push the list.
+ */
+export const experimentsRunDetailPanelClass =
+  "min-h-0 flex-1 space-y-2.5 overflow-auto bg-muted/15 px-3 py-2.5";
+
+/** Outer shell for list | detail split. */
+export const experimentsRunsSplitShellClass =
+  "@container overflow-hidden rounded-md border border-border/60";
+
+/** @deprecated Accordion expand chrome — use experimentsRunDetailPanelClass. */
+export const experimentsRunExpandedClass = experimentsRunDetailPanelClass;
 
 /** Research-brief excerpt block under the title (functional read-only surface). */
 export const experimentsBriefBoxClass =
@@ -84,19 +96,33 @@ export const experimentsMetadataLabelClass =
 export const experimentsSectionHeaderRowClass =
   "flex h-6 items-center justify-between gap-2";
 
-/** Browse grid — up to 3 columns on large panes. */
+/**
+ * Browse grid — fill the pane width with fluid columns
+ * (`minmax` tracks grow instead of fixed 1/2/3 that leave empty gutters).
+ */
 export const experimentsGridClass =
-  "grid min-w-0 gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
+  "grid w-full min-w-0 gap-3 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]";
 
-/** Experiment summary card on the browse grid. */
-export const experimentsCardShellClass =
-  "flex min-h-[7.5rem] flex-col rounded-md border border-border/60 bg-background/80 p-3 text-left transition-colors hover:border-border hover:bg-accent/30";
+/** Flat experiment card — quiet chrome; hover is fill-only (no border flash). */
+export const experimentsCardShellClass = cn(
+  "flex h-full min-h-[7.5rem] w-full flex-col rounded-md border border-border/50 bg-transparent p-3 text-left shadow-none",
+  "transition-colors hover:bg-muted/40",
+  "focus-visible:outline-none focus-visible:bg-muted/50",
+);
 
 export const experimentsCardTitleClass =
-  "line-clamp-2 text-[length:var(--font-size-13)] font-medium leading-snug text-foreground";
+  "line-clamp-2 font-sans text-[length:var(--font-size-13)] font-medium leading-snug text-foreground";
 
 export const experimentsCardMetaClass =
-  "text-[length:var(--font-size-11)] text-muted-foreground/70";
+  "font-sans text-[length:var(--font-size-11)] text-muted-foreground/70";
+
+/** Command input surface — must read as editable, not chrome decoration. */
+export const experimentsCommandInputClass = cn(
+  "min-h-[4.5rem] w-full resize-none rounded-none border-0 shadow-none",
+  "bg-muted/35 px-3 py-2.5 leading-relaxed",
+  "placeholder:text-muted-foreground/55",
+  "focus-visible:bg-muted/45 focus-visible:ring-0",
+);
 
 export function formatExperimentRelativeTime(iso: string | null): string {
   if (!iso) return "No runs yet";

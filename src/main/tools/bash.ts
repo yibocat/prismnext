@@ -45,16 +45,21 @@ function resolveToolCallId(sessionDir: string, context: Record<string, unknown>)
   return extractToolCallId(context) ?? readActiveToolCallId(sessionDir);
 }
 
-function readPermissionStatus(
+function readPermission(
   sessionDir: string,
   toolCallId: string,
-): "approved" | "denied" | undefined {
+): { status: "approved" | "denied"; reason?: string } | undefined {
   const resPath = path.join(sessionDir, `${toolCallId}.permission.json`);
   if (!fs.existsSync(resPath)) return undefined;
   try {
-    const data = JSON.parse(fs.readFileSync(resPath, "utf-8")) as { status?: string };
-    if (data.status === "approved" || data.status === "denied") return data.status;
-    return undefined;
+    const data = JSON.parse(fs.readFileSync(resPath, "utf-8")) as {
+      status?: string;
+      reason?: string;
+    };
+    if (data.status !== "approved" && data.status !== "denied") return undefined;
+    const reason =
+      typeof data.reason === "string" && data.reason.trim() ? data.reason.trim() : undefined;
+    return { status: data.status, reason };
   } catch {
     return undefined;
   }
@@ -112,15 +117,19 @@ export default tool({
 
     // Custom bash may start before ACP permission — block until Prism writes decision.
     while (!context.abort.aborted && Date.now() < deadline) {
-      const perm = readPermissionStatus(sessionDir, toolCallId);
-      if (perm === "denied") {
-        return { output: "Permission denied by user", exit: 1, cwd };
+      const perm = readPermission(sessionDir, toolCallId);
+      if (perm?.status === "denied") {
+        return {
+          output: perm.reason || "Permission denied by user",
+          exit: 1,
+          cwd,
+        };
       }
-      if (perm === "approved") break;
+      if (perm?.status === "approved") break;
       await delay(50);
     }
 
-    if (readPermissionStatus(sessionDir, toolCallId) !== "approved") {
+    if (readPermission(sessionDir, toolCallId)?.status !== "approved") {
       return { output: "Permission timed out waiting for user approval", exit: 1, cwd };
     }
 

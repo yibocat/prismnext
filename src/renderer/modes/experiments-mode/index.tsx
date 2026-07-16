@@ -17,11 +17,11 @@
 
 import type { ModeDefinition, RightTab } from "@/lib/workspace/mode-registry";
 import { FlaskConicalIcon } from "lucide-react";
-import { useDocumentStore } from "@/stores/document-store";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { ExperimentsSidebar } from "./experiments-sidebar";
 import { ExperimentsToolbar } from "./experiments-toolbar";
 import { ExperimentsContent } from "./experiments-content";
+import { getExperimentProjectRoot } from "./experiments-project-root";
 
 function ExperimentsToolbarWrapper({ tab }: { tab: RightTab }) {
   return <ExperimentsToolbar tab={tab} />;
@@ -39,7 +39,7 @@ export const experimentsMode: ModeDefinition = {
   Toolbar: ExperimentsToolbarWrapper,
   Content: ExperimentsContent,
   onActivate: () => {
-    const projectRoot = useDocumentStore.getState().projectRoot;
+    const projectRoot = getExperimentProjectRoot();
     if (!projectRoot) return;
     void useExperimentStore.getState().refreshList(projectRoot);
   },

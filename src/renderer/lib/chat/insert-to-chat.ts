@@ -223,8 +223,10 @@ export function insertPaperToChat(
 }
 
 /**
- * Push an experiment run (+ the artifact being inspected) into the chat composer
- * so the agent can discuss it with command/env context. Mirrors insertPaperToChat.
+ * Push an experiment run into the chat composer.
+ *
+ * - `intent: "discuss"` (default) — open-ended discussion (provenance "Discuss").
+ * - `intent: "cite-in-paper"` — Methods / figure reverse-link ("Use in paper").
  */
 export function insertExperimentRunToChat(
   req: Omit<ExperimentRunSnippetRequest, "kind"> & { quiet?: boolean },
@@ -234,9 +236,17 @@ export function insertExperimentRunToChat(
     toast.info("Run has no command recorded to discuss");
     return false;
   }
-  const ok = insertContextToChat({ kind: "experiment-run", ...payload }, { quiet: true });
+  const intent = payload.intent === "cite-in-paper" ? "cite-in-paper" : "discuss";
+  const ok = insertContextToChat(
+    { kind: "experiment-run", ...payload, intent },
+    { quiet: true },
+  );
   if (ok && !quiet) {
-    toast.success("Added to Chat");
+    toast.success(
+      intent === "cite-in-paper"
+        ? "Added to Chat — Send to draft Methods & figures"
+        : "Added to Chat",
+    );
   }
   return ok;
 }

@@ -2,6 +2,7 @@ import { clearPdfCache } from "@/stores/compile-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useChangesStore } from "@/stores/changes-store";
 import { useCheckpointStore } from "@/stores/checkpoint-store";
+import { useExperimentStore } from "@/stores/experiment-store";
 import { useGitStore } from "@/stores/git-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { usePermissionStore } from "@/stores/permission-store";
@@ -43,4 +44,5 @@ export async function resetApplicationStateForProjectSwitch(): Promise<void> {
   usePermissionStore.getState().clearAllPermissions();
   useGitStore.getState().clearAll();
   useWorkspaceConfigStore.getState().reset();
+  useExperimentStore.getState().reset();
 }

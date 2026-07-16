@@ -467,6 +467,26 @@ describe("partsToAgentText for experiment-run", () => {
     expect(text).toContain("experiment/exp-test/plot.png");
     expect(text).toContain("(explicit)");
   });
+
+  it("expands cite-in-paper intent with Methods / figure scaffolding", () => {
+    const text = partsToAgentText([
+      {
+        type: "experiment-run",
+        id: "tok-cite",
+        label: "cite:run-20260707-120000",
+        runId: "run-20260707-120000-a1b2",
+        command: "python plot.py",
+        exitCode: 0,
+        startedAt: "2026-07-07T12:00:00.000Z",
+        finishedAt: "2026-07-07T12:00:05.000Z",
+        artifacts: ["results/fig.png"],
+        workspacePath: "experiment/exp-plot",
+        intent: "cite-in-paper",
+      },
+    ]);
+    expect(text).toContain("Paper reverse-link");
+    expect(text).toContain("![fig.png](experiment/exp-plot/results/fig.png)");
+  });
 });
 
 describe("buildMentionOptions for experiment", () => {

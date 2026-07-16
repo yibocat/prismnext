@@ -260,6 +260,13 @@ app.whenReady().then(async () => {
   }
 });
 
+// Kill in-flight experiment / AI bash PTYs even when quit skips window `closed`
+// (macOS menu Quit paths). Safe to call twice alongside the closed handler.
+app.on("before-quit", () => {
+  destroyAllAiPty();
+  destroyAllTerminalSessions();
+});
+
 app.on("window-all-closed", () => {
   if (!isMac) {
     app.quit();

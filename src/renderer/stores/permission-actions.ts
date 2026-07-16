@@ -8,11 +8,11 @@ import { usePermissionStore } from "@/stores/permission-store";
 import { useChatStore, type ContentBlock } from "@/stores/chat-store";
 import { usesProposedChange } from "@/components/modules/chat/tools/tool-meta";
 import { createLogger } from "@/services/logger";
+import { PERMISSION_UI_TIMEOUT_MS } from "../../shared/permission-timeouts";
 
 const log = createLogger("permission-actions");
 
-/** Keep in sync with main `PERMISSION_TIMEOUT_MS`. */
-export const PERMISSION_UI_TIMEOUT_MS = 120_000;
+export { PERMISSION_UI_TIMEOUT_MS };
 
 const permissionTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -119,12 +119,50 @@ export async function finalizePermissionAllow(opts: {
   permissionId: string;
   toolCallId?: string;
   toolName?: string;
+  /** Persist tool into settings.toolAllowAlways + prefer allow_always option. */
+  always?: boolean;
 }) {
-  const { tabId, permissionId, toolCallId, toolName } = opts;
+  const { tabId, permissionId, toolCallId, toolName, always } = opts;
   clearPermissionTimer(permissionId);
 
-  log.debug("finalizePermissionAllow", { permissionId, toolCallId, toolName });
-  await window.electronAPI.chatAnswerPermission(permissionId, true, toolCallId);
+  log.debug("finalizePermissionAllow", { permissionId, toolCallId, toolName, always });
+  if (always && toolName?.trim()) {
+    const { useSettingsStore } = await import("@/stores/settings-store");
+    const n = toolName.trim().toLowerCase();
+    const isBash =
+      isBashToolName(n) || n === "experiment-run" || /bash|shell|terminal|command/.test(n);
+    if (isBash) {
+      const tab = useChatStore.getState().tabs.find((t) => t.id === tabId);
+      const toolUseMsg = [
+        ...(tab?.streamingMessage?.message?.content ?? []),
+        ...(tab?.messages.flatMap((m) => m.message?.content ?? []) ?? []),
+      ].find((b) => b.type === "tool_use" && b.id === toolCallId);
+      const input = (toolUseMsg?.input ?? {}) as Record<string, unknown>;
+      const command = String(input.command ?? input.cmd ?? "").trim();
+      if (command) {
+        const { bashAlwaysPatternFromCommand } = await import("../../shared/bash-allow-always");
+        const pattern = bashAlwaysPatternFromCommand(command);
+        if (pattern) {
+          const cur = useSettingsStore.getState().settings.bashAllowAlwaysPatterns ?? [];
+          if (!cur.includes(pattern)) {
+            await useSettingsStore.getState().updateSettings({
+              bashAllowAlwaysPatterns: [...cur.map(String), pattern],
+            });
+          }
+        }
+      }
+    } else {
+      const cur = useSettingsStore.getState().settings.toolAllowAlways ?? [];
+      if (!cur.some((t) => String(t).trim().toLowerCase() === n)) {
+        await useSettingsStore.getState().updateSettings({
+          toolAllowAlways: [...cur.map(String), n],
+        });
+      }
+    }
+  }
+  await window.electronAPI.chatAnswerPermission(permissionId, true, toolCallId, {
+    always: Boolean(always),
+  });
 
   const permissionStore = usePermissionStore.getState();
   if (toolCallId) {

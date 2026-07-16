@@ -17,7 +17,15 @@
  *
  * Errors are data ({ ok: false, error, hint? }), never thrown across the bridge.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join, basename } from "node:path";
 import { createLogger } from "./logger";
 import { getExperimentLogBridgeRoot } from "./prism-bridge-paths";
@@ -32,24 +40,32 @@ import {
   resolveExperimentCtx,
   type ExperimentStorageContext,
 } from "./experiment-log-service";
-import { EXPERIMENT_REGISTRY_REL } from "../../shared/experiment-log";
+import {
+  EXPERIMENT_REGISTRY_REL,
+  parseExperimentRunKind,
+  type ExperimentBriefLinks,
+} from "../../shared/experiment-log";
 import { kickoffExperimentRun } from "./experiment-run-executor";
+import { snapshotExperiment } from "./experiment-results-snapshot";
 import {
   readProvenanceEvents,
   resolveRunById,
   resolveRunForArtifact,
 } from "./provenance-service";
-import type { ExperimentBriefLinks } from "../../shared/experiment-log";
 import { broadcastExperimentChanged } from "./experiment-ui-events";
 
 const log = createLogger("experiment-log-bridge", "agent");
 
 export interface ExperimentLogBridgeRequest {
-  /** Which tool wrote this request. provenance-query is read-only and rides the same bridge. */
-  tool: "experiment-log" | "experiment-run" | "provenance-query";
+  /** Which tool wrote this request. provenance-query / results-snapshot share the bridge. */
+  tool: "experiment-log" | "experiment-run" | "provenance-query" | "results-snapshot";
   action: string;
   sessionId?: string;
   projectRoot?: string;
+  // results-snapshot
+  scanDirs?: string[];
+  metricsFiles?: string[];
+  maxFiles?: number;
   // create
   title?: string;
   briefLinks?: ExperimentBriefLinks;
@@ -70,11 +86,14 @@ export interface ExperimentLogBridgeRequest {
     artifacts?: string[];
     env?: unknown;
     notes?: string;
+    kind?: string;
+    logPath?: string | null;
   };
   // experiment-run
   command?: string;
   artifacts?: string[];
   notes?: string;
+  kind?: string;
   // provenance-query
   artifactPath?: string;
   runId?: string;
@@ -85,9 +104,19 @@ function bridgeRoot(): string {
   return getExperimentLogBridgeRoot();
 }
 
+/**
+ * Resolve the checkout that owns the experiment registry / islands.
+ *
+ * Prefer the tool-supplied OpenCode `directory` (`req.projectRoot`) so Agent
+ * runs land in the active worktree when chat cwd is a worktree. The chat
+ * session registry often stores the canonical **main** project path for
+ * literature / MCP — that must not override experiment cwd (Bug #9).
+ */
 function resolveProjectRoot(req: ExperimentLogBridgeRequest): string {
+  const fromTool = req.projectRoot?.trim().replace(/\\/g, "/") || "";
+  if (fromTool) return fromTool;
   const fromSession = req.sessionId ? getSessionProjectRoot(req.sessionId) : undefined;
-  return (fromSession || req.projectRoot?.trim() || "").replace(/\\/g, "/");
+  return (fromSession || "").replace(/\\/g, "/");
 }
 
 function notConfigured(): Record<string, unknown> {
@@ -121,6 +150,11 @@ function dispatch(req: ExperimentLogBridgeRequest, resPath: string): Record<stri
   if ("ok" in ctxResult && ctxResult.ok === false) return notConfigured();
   const ctx: ExperimentStorageContext = ctxResult as ExperimentStorageContext;
 
+  // ── results-snapshot: read-only lab scan (needs experiment folder) ──
+  if (req.tool === "results-snapshot") {
+    return dispatchResultsSnapshot(req, ctx);
+  }
+
   // ── experiment-run: async, fire-and-forget ──
   if (req.tool === "experiment-run") {
     if (req.action !== "run") {
@@ -130,12 +164,21 @@ function dispatch(req: ExperimentLogBridgeRequest, resPath: string): Record<stri
     const command = typeof req.command === "string" ? req.command : "";
     if (!id) return { ok: false, error: "missing_id" };
     if (!command.trim()) return { ok: false, error: "missing_command" };
+    const kind = parseExperimentRunKind(req.kind);
+    if (req.kind !== undefined && req.kind !== null && req.kind !== "" && !kind) {
+      return {
+        ok: false,
+        error: "invalid_run_kind",
+        hint: "kind must be one of: train, eval, plot, data, setup, other (or omit)",
+      };
+    }
     kickoffExperimentRun({
       ctx,
       id,
       command,
       artifacts: req.artifacts,
       notes: req.notes,
+      kind,
       resPath,
       chatSessionId: req.sessionId ?? null,
     });
@@ -158,6 +201,7 @@ function dispatchExperimentLog(
         experimentRoot: ctx.workspaceRel,
         registryRoot: EXPERIMENT_REGISTRY_REL,
         experiments: result.experiments,
+        corruptIds: result.corruptIds,
       };
     }
     case "create": {
@@ -192,6 +236,8 @@ function dispatchExperimentLog(
         ok: true,
         meta: result.meta,
         runs: result.runs,
+        runCount: result.runCount,
+        lastRunAt: result.lastRunAt,
         experimentRoot: ctx.workspaceRel,
         registryRoot: EXPERIMENT_REGISTRY_REL,
       };
@@ -201,19 +247,24 @@ function dispatchExperimentLog(
       if (!id) return { ok: false, error: "missing_id" };
       const run = req.run;
       if (!run || typeof run !== "object") return { ok: false, error: "missing_run" };
-      const result = appendRun(ctx, id, {
-        runId: run.runId,
-        startedAt: run.startedAt,
-        finishedAt: run.finishedAt,
-        command: run.command ?? "",
-        cwd: run.cwd,
-        exitCode: run.exitCode,
-        stdoutTail: run.stdoutTail,
-        stderrTail: run.stderrTail,
-        artifacts: run.artifacts,
-        env: run.env as never,
-        notes: run.notes,
-      }, { chatSessionId: req.sessionId ?? null });
+
+      // Schema-validate the run record before touching disk. Without this, the
+      // agent could backdate `startedAt` / `finishedAt`, claim any
+      // `exitCode` (including faking success), or inject arbitrary `artifacts`.
+      // In a paper-trace context, runs.jsonl is the "did this experiment
+      // actually run" record — the JSONL must not be trust-the-agent
+      // (Bug #3 from docs/audit/experiment-agent-architecture-analysis.md).
+      const validation = validateAppendRunInput(run);
+      if (!validation.ok) {
+        return {
+          ok: false,
+          error: validation.error,
+          hint: validation.hint,
+        };
+      }
+      const validated = validation.value;
+
+      const result = appendRun(ctx, id, validated, { chatSessionId: req.sessionId ?? null });
       if (!result.ok) return { ok: false, error: result.error };
       broadcastExperimentChanged({
         projectRoot: ctx.projectRoot,
@@ -254,6 +305,29 @@ function dispatchExperimentLog(
   }
 }
 
+/** Dispatch results-snapshot (read-only lab scan). Exported for tests. */
+export function dispatchResultsSnapshot(
+  req: ExperimentLogBridgeRequest,
+  ctx: ExperimentStorageContext,
+): Record<string, unknown> {
+  if (req.action && req.action !== "snapshot") {
+    return { ok: false, error: `Unknown results-snapshot action: ${String(req.action)}` };
+  }
+  const id = typeof req.id === "string" ? req.id.trim() : "";
+  if (!id) return { ok: false, error: "missing_id" };
+  const result = snapshotExperiment(ctx, id, {
+    scanDirs: Array.isArray(req.scanDirs)
+      ? req.scanDirs.filter((d): d is string => typeof d === "string")
+      : undefined,
+    metricsFiles: Array.isArray(req.metricsFiles)
+      ? req.metricsFiles.filter((d): d is string => typeof d === "string")
+      : undefined,
+    maxFiles: typeof req.maxFiles === "number" ? req.maxFiles : undefined,
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, ...result.snapshot };
+}
+
 /**
  * Dispatch a read-only provenance-query action. Exported for direct testing.
  * Actions:
@@ -291,6 +365,243 @@ export function dispatchProvenanceQuery(
   }
 }
 
+// ─── append_run input validation ─────────────────────────────────────────
+//
+// The `append_run` action lets the agent record a run that it executed out
+// of band (typically because it called raw `bash` after `experiment-run`
+// refused a Python script via `gateExperimentPythonExecution`). In a
+// paper-trace context, runs.jsonl is the "did this experiment actually
+// run" record, and a hallucinated entry would silently corrupt the
+// experiment log — see Bug #3 in
+// docs/audit/experiment-agent-architecture-analysis.md.
+//
+// We validate field-by-field and return a precise error rather than
+// silently coercing, so the model gets feedback it can correct from. The
+// single non-negotiable is `command` (a run without a command is nonsense);
+// the rest either fall back to safe defaults (`env` ⇒ `detectEnv`,
+// timestamps ⇒ `now`) or are type-checked.
+function isIsoString(v: unknown): v is string {
+  return typeof v === "string" && !Number.isNaN(Date.parse(v));
+}
+
+function isFiniteInteger(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v) && Number.isInteger(v);
+}
+
+function validateAppendRunInput(
+  raw: Record<string, unknown>,
+): { ok: true; value: Parameters<typeof appendRun>[2] } | {
+  ok: false;
+  error: string;
+  hint: string;
+} {
+  // command — required, must be a non-empty string
+  if (typeof raw.command !== "string" || raw.command.trim() === "") {
+    return {
+      ok: false,
+      error: "invalid_run_command",
+      hint: "run.command must be a non-empty string",
+    };
+  }
+  const command = raw.command;
+
+  // runId — optional string; server generates when missing
+  let runId: string | undefined;
+  if (raw.runId !== undefined) {
+    if (typeof raw.runId !== "string" || raw.runId.trim() === "") {
+      return {
+        ok: false,
+        error: "invalid_run_runId",
+        hint: "run.runId, if provided, must be a non-empty string",
+      };
+    }
+    runId = raw.runId;
+  }
+
+  // startedAt / finishedAt — optional ISO strings
+  let startedAt: string | undefined;
+  if (raw.startedAt !== undefined) {
+    if (!isIsoString(raw.startedAt)) {
+      return {
+        ok: false,
+        error: "invalid_run_startedAt",
+        hint: "run.startedAt, if provided, must be an ISO-8601 string parseable by Date",
+      };
+    }
+    startedAt = raw.startedAt;
+  }
+  let finishedAt: string | undefined;
+  if (raw.finishedAt !== undefined) {
+    if (!isIsoString(raw.finishedAt)) {
+      return {
+        ok: false,
+        error: "invalid_run_finishedAt",
+        hint: "run.finishedAt, if provided, must be an ISO-8601 string parseable by Date",
+      };
+    }
+    finishedAt = raw.finishedAt;
+  }
+  if (startedAt && finishedAt && Date.parse(finishedAt) < Date.parse(startedAt)) {
+    return {
+      ok: false,
+      error: "invalid_run_timestamps",
+      hint: "run.finishedAt must be >= run.startedAt",
+    };
+  }
+
+  // exitCode — optional; -1 (default) means "unstarted", 0 success, others are process exit codes
+  let exitCode: number | undefined;
+  if (raw.exitCode !== undefined) {
+    if (!isFiniteInteger(raw.exitCode)) {
+      return {
+        ok: false,
+        error: "invalid_run_exitCode",
+        hint: "run.exitCode, if provided, must be an integer (0 = success, non-zero = failure, -1 = unstarted)",
+      };
+    }
+    exitCode = raw.exitCode;
+  }
+
+  // cwd — optional string
+  let cwd: string | undefined;
+  if (raw.cwd !== undefined) {
+    if (typeof raw.cwd !== "string") {
+      return {
+        ok: false,
+        error: "invalid_run_cwd",
+        hint: "run.cwd, if provided, must be a string",
+      };
+    }
+    cwd = raw.cwd;
+  }
+
+  // stdoutTail / stderrTail — optional strings
+  let stdoutTail: string | undefined;
+  if (raw.stdoutTail !== undefined) {
+    if (typeof raw.stdoutTail !== "string") {
+      return {
+        ok: false,
+        error: "invalid_run_stdoutTail",
+        hint: "run.stdoutTail, if provided, must be a string",
+      };
+    }
+    stdoutTail = raw.stdoutTail;
+  }
+  let stderrTail: string | undefined;
+  if (raw.stderrTail !== undefined) {
+    if (typeof raw.stderrTail !== "string") {
+      return {
+        ok: false,
+        error: "invalid_run_stderrTail",
+        hint: "run.stderrTail, if provided, must be a string",
+      };
+    }
+    stderrTail = raw.stderrTail;
+  }
+
+  // artifacts — optional string[]
+  let artifacts: string[] | undefined;
+  if (raw.artifacts !== undefined) {
+    if (
+      !Array.isArray(raw.artifacts) ||
+      !raw.artifacts.every((a) => typeof a === "string" && a.length > 0)
+    ) {
+      return {
+        ok: false,
+        error: "invalid_run_artifacts",
+        hint: "run.artifacts, if provided, must be an array of non-empty strings (island-relative paths)",
+      };
+    }
+    artifacts = raw.artifacts as string[];
+  }
+
+  // env — optional object (the run-executor fills this with detectEnv
+  // when omitted; we just type-check what the agent supplies)
+  let env: Parameters<typeof appendRun>[2]["env"];
+  if (raw.env !== undefined) {
+    if (!raw.env || typeof raw.env !== "object" || Array.isArray(raw.env)) {
+      return {
+        ok: false,
+        error: "invalid_run_env",
+        hint: "run.env, if provided, must be an object",
+      };
+    }
+    env = raw.env as never;
+  }
+
+  // notes — optional string
+  let notes: string | undefined;
+  if (raw.notes !== undefined) {
+    if (typeof raw.notes !== "string") {
+      return {
+        ok: false,
+        error: "invalid_run_notes",
+        hint: "run.notes, if provided, must be a string",
+      };
+    }
+    notes = raw.notes;
+  }
+
+  // cancelled — optional bool (human cancel path; agents rarely set this)
+  let cancelled: boolean | undefined;
+  if (raw.cancelled !== undefined && raw.cancelled !== null) {
+    if (typeof raw.cancelled !== "boolean") {
+      return {
+        ok: false,
+        error: "invalid_run_cancelled",
+        hint: "run.cancelled, if provided, must be a boolean",
+      };
+    }
+    cancelled = raw.cancelled || undefined;
+  }
+
+  // kind — optional enum (omit when unknown; reject invalid strings)
+  let kind: ReturnType<typeof parseExperimentRunKind> = undefined;
+  if (raw.kind !== undefined && raw.kind !== null && raw.kind !== "") {
+    kind = parseExperimentRunKind(raw.kind);
+    if (!kind) {
+      return {
+        ok: false,
+        error: "invalid_run_kind",
+        hint: "run.kind, if provided, must be one of: train, eval, plot, data, setup, other",
+      };
+    }
+  }
+
+  // logPath — optional lab-relative string (full log spill)
+  let logPath: string | null | undefined;
+  if (raw.logPath !== undefined && raw.logPath !== null) {
+    if (typeof raw.logPath !== "string") {
+      return {
+        ok: false,
+        error: "invalid_run_logPath",
+        hint: "run.logPath, if provided, must be a string",
+      };
+    }
+    logPath = raw.logPath;
+  }
+
+  return {
+    ok: true,
+    value: {
+      runId,
+      startedAt,
+      finishedAt,
+      command,
+      cwd,
+      exitCode,
+      stdoutTail,
+      stderrTail,
+      artifacts,
+      env,
+      notes,
+      cancelled,
+      kind,
+      logPath,
+    },
+  };
+}
+
 const processingRequests = new Set<string>();
 let pollInFlight = false;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -306,34 +617,73 @@ async function processSessionDir(sessionDir: string): Promise<void> {
   }
 
   for (const name of entries) {
-    if (!name.endsWith(".request.json")) continue;
-    const reqPath = join(sessionDir, name);
-    const requestId = name.replace(".request.json", "");
-    const resPath = join(sessionDir, `${requestId}.result.json`);
-    if (existsSync(resPath)) continue;
-    if (processingRequests.has(reqPath)) continue;
+    const isRequest = name.endsWith(".request.json");
+    const isOrphanClaim = name.endsWith(".claiming");
+    if (!isRequest && !isOrphanClaim) continue;
 
-    processingRequests.add(reqPath);
+    const requestId = isRequest
+      ? name.slice(0, -".request.json".length)
+      : name.slice(0, -".claiming".length);
+    const resPath = join(sessionDir, `${requestId}.result.json`);
+    const claimPath = join(sessionDir, `${requestId}.claiming`);
+    if (existsSync(resPath)) continue;
+    if (processingRequests.has(requestId)) continue;
+
+    if (isRequest) {
+      // Atomic claim (Bug #30): rename request → claiming so a second Prism
+      // instance / poll cannot dispatch the same request.
+      try {
+        renameSync(join(sessionDir, name), claimPath);
+      } catch {
+        continue;
+      }
+    }
+    // Orphan `.claiming` (crash mid-flight): set was cleared; resume from claim.
+
+    processingRequests.add(requestId);
     try {
-      const raw = readFileSync(reqPath, "utf-8");
+      const raw = readFileSync(claimPath, "utf-8");
       const req = JSON.parse(raw) as ExperimentLogBridgeRequest;
       const result = dispatch(req, resPath);
       if (result !== null) {
-        // Sync action: write the result now.
+        // Sync action: write the result now, then drop the claim.
         writeFileSync(resPath, JSON.stringify(result), "utf-8");
+        try { unlinkSync(claimPath); } catch {}
+        processingRequests.delete(requestId);
       }
-      // For experiment-run (result === null), the executor writes resPath when
-      // the run completes. Unlink the request in both cases so it isn't
-      // reprocessed; the tool polls resPath until it appears.
-      try { unlinkSync(reqPath); } catch {}
+      // Async `experiment-run` (`result === null`): keep `.claiming` on disk AND
+      // keep `requestId` in `processingRequests` until `resPath` appears.
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       log.warn("experiment-log bridge request failed", { session: basename(sessionDir), error: message });
       writeFileSync(resPath, JSON.stringify({ error: message, ok: false }), "utf-8");
-      try { unlinkSync(reqPath); } catch {}
-    } finally {
-      processingRequests.delete(reqPath);
+      try { unlinkSync(claimPath); } catch {}
+      processingRequests.delete(requestId);
     }
+  }
+
+  // Post-pass: release slots whose results exist (claiming or leftover request).
+  let liveNames: string[];
+  try {
+    liveNames = readdirSync(sessionDir);
+  } catch {
+    return;
+  }
+  for (const name of liveNames) {
+    let requestId: string | null = null;
+    let holdPath: string | null = null;
+    if (name.endsWith(".claiming")) {
+      requestId = name.slice(0, -".claiming".length);
+      holdPath = join(sessionDir, name);
+    } else if (name.endsWith(".request.json")) {
+      requestId = name.slice(0, -".request.json".length);
+      holdPath = join(sessionDir, name);
+    }
+    if (!requestId || !holdPath) continue;
+    const resPath = join(sessionDir, `${requestId}.result.json`);
+    if (!existsSync(resPath)) continue;
+    processingRequests.delete(requestId);
+    try { unlinkSync(holdPath); } catch {}
   }
 }
 
@@ -370,6 +720,7 @@ export function stopExperimentLogBridge(): void {
     clearInterval(pollTimer);
     pollTimer = null;
   }
+  processingRequests.clear();
 }
 
 /** @internal */

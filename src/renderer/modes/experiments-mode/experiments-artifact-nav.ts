@@ -8,14 +8,16 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { navigateFileTreeToPath } from "@/lib/files/navigate-file-tree";
+import { resolveProjectRelativePath } from "@/lib/files/project-path";
+import {
+  artifactBasename,
+  artifactPathCandidates,
+  toProjectRelativeArtifact,
+} from "../../../shared/artifact-path";
 
-/** Build the project-relative full path (prefix workspace unless already prefixed). */
+/** Build the project-relative path (island-relative → prefixed). */
 export function artifactFullPath(path: string, workspacePath?: string): string {
-  const p = (path || "").replace(/\\/g, "/").replace(/^\.\//, "");
-  const ws = (workspacePath || "").replace(/\\/g, "/").replace(/\/$/, "");
-  if (!p) return ws;
-  if (!ws || p.startsWith(`${ws}/`) || p === ws) return p;
-  return `${ws}/${p}`;
+  return toProjectRelativeArtifact(path, workspacePath);
 }
 
 /** Image file extensions we inline in chat tool cards / markdown. */
@@ -43,6 +45,38 @@ export function resolveImageArtifactPaths(
   return out;
 }
 
+/**
+ * Pick the first candidate that exists on disk under the project root.
+ * Falls back to a basename search, then the heuristic island join.
+ */
+export async function resolveExistingArtifactRel(
+  path: string,
+  workspacePath: string | undefined,
+  projectRoot: string,
+): Promise<string> {
+  const fallback = artifactFullPath(path, workspacePath);
+  for (const cand of artifactPathCandidates(path, workspacePath)) {
+    const abs = resolveProjectRelativePath(projectRoot, cand);
+    if (!abs) continue;
+    try {
+      const ok = await window.electronAPI.fsExists(abs);
+      if (ok) return cand;
+    } catch {
+      // keep trying
+    }
+  }
+  const base = artifactBasename(path);
+  if (base) {
+    try {
+      const found = await window.electronAPI.fsFindByBasename(projectRoot, base);
+      if (found) return found;
+    } catch {
+      // ignore
+    }
+  }
+  return fallback;
+}
+
 /** Reveal + open an artifact path in Files mode and pin it in the right panel. */
 export function openArtifactInFiles(fullPath: string): void {
   if (!fullPath) return;
@@ -51,4 +85,18 @@ export function openArtifactInFiles(fullPath: string): void {
   navigateFileTreeToPath(fullPath);
   useDocumentStore.getState().setActiveFile(fullPath);
   useRightPanelStore.getState().openFile(fullPath, fullPath, fileName, { pin: true });
+}
+
+/** Resolve (existence-aware) then open in Files. */
+export async function openArtifactPathInFiles(
+  path: string,
+  workspacePath?: string,
+): Promise<void> {
+  const projectRoot = useDocumentStore.getState().projectRoot;
+  if (!projectRoot) {
+    openArtifactInFiles(artifactFullPath(path, workspacePath));
+    return;
+  }
+  const rel = await resolveExistingArtifactRel(path, workspacePath, projectRoot);
+  openArtifactInFiles(rel);
 }

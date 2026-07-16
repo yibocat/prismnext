@@ -184,7 +184,37 @@ function makeDefaultTab(id: string): TabState {
   };
 }
 
+/** Session history cache — LRU-capped so long chats cannot grow forever (Bug #23). */
+const MSG_CACHE_MAX = 48;
 const _msgCache = new Map<string, ChatStreamMessage[]>();
+
+function msgCacheGet(sessionId: string): ChatStreamMessage[] | undefined {
+  const hit = _msgCache.get(sessionId);
+  if (!hit) return undefined;
+  _msgCache.delete(sessionId);
+  _msgCache.set(sessionId, hit);
+  return hit;
+}
+
+function msgCacheSet(sessionId: string, messages: ChatStreamMessage[]): void {
+  if (_msgCache.has(sessionId)) _msgCache.delete(sessionId);
+  _msgCache.set(sessionId, messages);
+  while (_msgCache.size > MSG_CACHE_MAX) {
+    const oldest = _msgCache.keys().next().value;
+    if (oldest === undefined) break;
+    _msgCache.delete(oldest);
+  }
+}
+
+/** @internal — exercise LRU via the same path as production. */
+export function _msgCacheSetForTests(sessionId: string, messages: ChatStreamMessage[]): void {
+  msgCacheSet(sessionId, messages);
+}
+
+/** @internal */
+export function _msgCacheMaxForTests(): number {
+  return MSG_CACHE_MAX;
+}
 
 function syncCheckoutForTab(tab: Pick<TabState, "sessionCwd"> | undefined): void {
   const projectRoot = useDocumentStore.getState().projectRoot;
@@ -857,7 +887,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         const messages = truncateChatMessagesToTurn(t.messages, turnIndex);
         // Truncation = this is now the complete dataset
         if (t.sessionId) {
-          _msgCache.set(t.sessionId, messages);
+          msgCacheSet(t.sessionId, messages);
         }
         return {
           ...t,
@@ -877,7 +907,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         if (t.id !== tabId) return t;
         // Restored messages = complete dataset
         if (t.sessionId) {
-          _msgCache.set(t.sessionId, messages);
+          msgCacheSet(t.sessionId, messages);
         }
         return {
           ...t,
@@ -898,7 +928,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const sessionCwd = tab.sessionCwd ?? projectPath;
     const raw = await window.electronAPI.sessionLoad(tab.sessionId, projectPath, sessionCwd);
     const filtered = await hydrateSessionMessages(raw, projectPath, tab.sessionId);
-    _msgCache.set(tab.sessionId, filtered);
+    msgCacheSet(tab.sessionId, filtered);
     set((s) => {
       const tabs = s.tabs.map((t) =>
         t.id === tabId
@@ -1015,7 +1045,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }).catch(() => {});
     };
 
-    const cached = _msgCache.get(sessionId);
+    const cached = msgCacheGet(sessionId);
     const storedIntensiveIds = resolveIntensivePaperIdsForSession(sessionId, []);
     if (cached) {
       // Sync hydrate from cache — avoids empty-tab flash on repeat opens.
@@ -1046,7 +1076,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           const displays = await window.electronAPI.sessionGetUserDisplays(projectPath, sessionId);
           if (!displays?.length) return;
           const enriched = applyUserDisplaySnapshots(cached, displays);
-          _msgCache.set(sessionId, enriched);
+          msgCacheSet(sessionId, enriched);
           useChatStore.setState((s) => {
             const tabs = s.tabs.map((t) =>
               t.id === tabId ? { ...t, messages: enriched } : t,
@@ -1083,7 +1113,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         sessionId, projectPath, sessionCwd,
       );
       const filtered = await hydrateSessionMessages(raw, projectPath, sessionId);
-      _msgCache.set(sessionId, filtered);
+      msgCacheSet(sessionId, filtered);
 
       const title = extractSessionTitle(filtered) || "New Chat";
 

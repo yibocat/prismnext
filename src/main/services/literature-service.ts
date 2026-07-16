@@ -15,6 +15,7 @@ import {
   resolveBibliographyFromMain,
   resolveMainTexRelativePath,
 } from "../lib/bib-path-resolve";
+import { readWorkspaceDirs } from "./workspace-config";
 import {
   isOpaqueBibkey,
   patchRawBibtexKey,
@@ -2414,7 +2415,9 @@ export function findProjectBibPath(projectRoot: string): string {
   }
 
   const candidates = [
-    path.join(projectRoot, "manuscript", "references.bib"),
+    ...readWorkspaceDirs(path.join(projectRoot, ".prismnext"))
+      .filter((d) => d.function === "manuscript")
+      .map((d) => path.join(projectRoot, d.name, "references.bib")),
     path.join(projectRoot, "references.bib"),
     path.join(projectRoot, "bibliography.bib"),
     path.join(projectRoot, ".prismnext", "library", "references.bib"),
@@ -2425,7 +2428,7 @@ export function findProjectBibPath(projectRoot: string): string {
   if (mainRel) {
     return intendedBibliographyPath(projectRoot, mainRel, "references.bib");
   }
-  return candidates[1];
+  return path.join(projectRoot, "references.bib");
 }
 
 function bibKeyPresentInContent(bibContent: string, bibkey: string): boolean {

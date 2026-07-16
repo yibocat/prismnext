@@ -11,10 +11,10 @@ import {
 
 // Rule shape constants (mirror the ones in tool-permission-registry.ts so the
 // test pins classifications independently of the constant names).
-const READ_ONLY = { ask: "allow", auto: "allow", readonly: "allow" };
-const SHELL = { ask: "ask", auto: "ask", readonly: "deny" };
-const FILE_MUTATION = { ask: "ask", auto: "allow", readonly: "deny" };
-const DESTRUCTIVE = { ask: "ask", auto: "ask", readonly: "deny" };
+const READ_ONLY = { ask: "allow", edit_auto: "allow", auto: "allow", readonly: "allow" };
+const SHELL = { ask: "ask", edit_auto: "ask", auto: "allow", readonly: "deny" };
+const FILE_MUTATION = { ask: "ask", edit_auto: "allow", auto: "allow", readonly: "deny" };
+const DESTRUCTIVE = { ask: "ask", edit_auto: "ask", auto: "allow", readonly: "deny" };
 
 describe("tool permission registry — classifications", () => {
   it("classifies latex-compile as SHELL (spawns tectonic/latexmk subprocesses)", () => {
@@ -85,19 +85,22 @@ describe("tool permission registry — classifications", () => {
 describe("tool permission registry — resolution", () => {
   it("resolves latex-compile rules per mode (the A1 fix)", () => {
     expect(getPermissionRuleForTool("ask", "latex-compile")).toBe("ask");
-    expect(getPermissionRuleForTool("auto", "latex-compile")).toBe("ask");
+    expect(getPermissionRuleForTool("edit_auto", "latex-compile")).toBe("ask");
+    expect(getPermissionRuleForTool("auto", "latex-compile")).toBe("allow");
     expect(getPermissionRuleForTool("readonly", "latex-compile")).toBe("deny");
   });
 
-  it("resolves latex-compile actions: prompt in ask/auto, deny in readonly", () => {
+  it("resolves latex-compile actions: prompt in ask/edit_auto, allow in auto, deny in readonly", () => {
     expect(resolvePermissionAction("ask", "latex-compile")).toBe("prompt");
-    expect(resolvePermissionAction("auto", "latex-compile")).toBe("prompt");
+    expect(resolvePermissionAction("edit_auto", "latex-compile")).toBe("prompt");
+    expect(resolvePermissionAction("auto", "latex-compile")).toBe("allow");
     expect(resolvePermissionAction("readonly", "latex-compile")).toBe("deny");
   });
 
   it("emits latex-compile rule in buildPermissionRulesForMode for every mode", () => {
     expect(buildPermissionRulesForMode("ask")["latex-compile"]).toBe("ask");
-    expect(buildPermissionRulesForMode("auto")["latex-compile"]).toBe("ask");
+    expect(buildPermissionRulesForMode("edit_auto")["latex-compile"]).toBe("ask");
+    expect(buildPermissionRulesForMode("auto")["latex-compile"]).toBe("allow");
     expect(buildPermissionRulesForMode("readonly")["latex-compile"]).toBe("deny");
   });
 

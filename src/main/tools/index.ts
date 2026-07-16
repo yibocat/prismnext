@@ -352,12 +352,30 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     category: "project",
     usageHint:
       "Run a command in an existing experiment workspace. Captures stdout/stderr tail + exit code, " +
-      "optionally records artifacts/notes you pass, appends one runs.jsonl line. Returns { ok, run, exitCode, stdoutTail }.",
+      "optionally records artifacts/notes/kind you pass, appends one runs.jsonl line. " +
+      "Long output spills to logs/<runId>.log (logPath on the run). Returns { ok, run, exitCode, stdoutTail }.",
     workflowRules: [
       "The experiment must already exist — call experiment-log action=create first.",
       "Use when you want execution plus structured logging in one step.",
       "Python: shared `<experiment-dir>/.venv` is ensured before run; install with `uv pip install` — never system pip.",
-      "Pass artifacts/notes when they matter for provenance.",
+      "Pass artifacts/notes/kind when they matter for provenance.",
+      "After long runs, check run.logPath for the full log under the lab folder.",
+    ],
+  },
+  {
+    name: TOOL_NAMES.resultsSnapshot,
+    label: "Results Snapshot",
+    description:
+      "Read-only scan of an experiment lab for figures, CSV tables, and JSON metrics. " +
+      "Returns a compact textSummary plus structured lists (unparsed files listed for follow-up read).",
+    category: "project",
+    usageHint:
+      "Call after experiment-run when summarizing results or picking figures for the paper. " +
+      "Does not write meta/runs. Prefer results-snapshot for lab outputs; experiment-log read for run history.",
+    workflowRules: [
+      "Read-only — never writes the registry or lab.",
+      "Complementary to experiment-log action=read (runs.jsonl) — use both for Methods.",
+      "If a file is listed under unparsed, read it yourself with the generic read tool.",
     ],
   },
   {

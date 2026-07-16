@@ -22,6 +22,8 @@ export const EXPERIMENT_REGISTRY_REL = ".prismnext/experiments";
 /** Filenames inside a registry entry directory. */
 export const EXPERIMENT_META_FILENAME = "meta.json";
 export const EXPERIMENT_RUNS_FILENAME = "runs.jsonl";
+/** Sidecar for O(1) runCount / lastRunAt (list + detail Overview). */
+export const EXPERIMENT_RUNS_STATS_FILENAME = "runs.stats.json";
 
 /**
  * Shared Python venv directory name under the Workspace Experiment folder
@@ -42,6 +44,43 @@ export interface ExperimentBriefLinks {
   researchQuestionExcerpt?: string;
 }
 
+/** Lifecycle status for an experiment island (Phase 4 / P2.1). Absent ⇒ active. */
+export type ExperimentStatus = "active" | "archived";
+
+/** Optional run classification (Phase 4 / P2.3). Absent ⇒ untyped (do not invent `other`). */
+export type ExperimentRunKind =
+  | "train"
+  | "eval"
+  | "plot"
+  | "data"
+  | "setup"
+  | "other";
+
+/** Canonical kind values — keep tool enums / UI selects in sync. */
+export const EXPERIMENT_RUN_KINDS: readonly ExperimentRunKind[] = [
+  "train",
+  "eval",
+  "plot",
+  "data",
+  "setup",
+  "other",
+] as const;
+
+const EXPERIMENT_RUN_KIND_SET = new Set<string>(EXPERIMENT_RUN_KINDS);
+
+/**
+ * Parse an optional run kind. Unknown / empty ⇒ `undefined` (omit on write;
+ * never coerce to `"other"`).
+ */
+export function parseExperimentRunKind(value: unknown): ExperimentRunKind | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return undefined;
+  return EXPERIMENT_RUN_KIND_SET.has(trimmed)
+    ? (trimmed as ExperimentRunKind)
+    : undefined;
+}
+
 /** Experiment-level metadata — `meta.json` body (lives under `.prismnext/experiments/<id>/`). */
 export interface ExperimentMeta {
   id: string;
@@ -51,6 +90,23 @@ export interface ExperimentMeta {
   workspacePath: string;
   briefLinks?: ExperimentBriefLinks;
   tags?: string[];
+  /** `archived` hides from human browse by default; Agent list still includes it. */
+  status?: ExperimentStatus;
+  /** ISO timestamp when archived; cleared on restore. */
+  archivedAt?: string | null;
+}
+
+/** Normalize missing / legacy meta to an explicit status. */
+export function experimentStatusOf(
+  meta: Pick<ExperimentMeta, "status"> | null | undefined,
+): ExperimentStatus {
+  return meta?.status === "archived" ? "archived" : "active";
+}
+
+/** Reject path traversal / empty ids before touching the registry or lab. */
+export function isSafeExperimentId(id: string): boolean {
+  if (!id || id.includes("..") || id.includes("/") || id.includes("\\")) return false;
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(id);
 }
 
 /** Best-effort runtime snapshot (optional; returned by `detect_env` / auto-filled on runs). */
@@ -84,10 +140,22 @@ export interface ExperimentRunEntry {
   artifacts: string[];
   env: ExperimentEnv;
   notes?: string;
+  /**
+   * True when the human cancelled the in-flight PTY before natural exit.
+   * Optional — old JSONL lines omit it; readers treat absent as false.
+   */
+  cancelled?: boolean;
   /** OpenCode chat tab that triggered the run (optional; old lines omit it). */
   chatSessionId?: string | null;
   /** Links into `provenance.jsonl` run_recorded event (optional; old lines omit it). */
   provenanceEventId?: string | null;
+  /** Optional run classification (omit when unknown — do not default to `other`). */
+  kind?: ExperimentRunKind;
+  /**
+   * Lab-relative path to a full stdout/stderr log when the live capture exceeded
+   * {@link RUN_OUTPUT_TAIL_BYTES} (e.g. `logs/<runId>.log`).
+   */
+  logPath?: string | null;
 }
 
 /** Summary entry returned by `list` (no run bodies). */
@@ -97,6 +165,8 @@ export interface ExperimentSummary {
   workspacePath: string;
   runCount: number;
   lastRunAt: string | null;
+  status: ExperimentStatus;
+  archivedAt: string | null;
 }
 
 /** Input shape for `append_run` (server fills runId / timestamps / env when omitted). */
@@ -112,6 +182,33 @@ export interface ExperimentRunInput {
   artifacts?: string[];
   env?: ExperimentEnv;
   notes?: string;
+  /** See {@link ExperimentRunEntry.cancelled}. */
+  cancelled?: boolean;
+  kind?: ExperimentRunKind;
+  logPath?: string | null;
+}
+
+/**
+ * Result of one experiment-run kickoff completion.
+ * Shared by executor (`onComplete` / bridge `.result.json`), IPC
+ * `experiment:runComplete`, and the renderer store — do not redefine locally.
+ */
+export interface ExperimentRunResult {
+  ok: boolean;
+  /** Present when the run completed and was appended to runs.jsonl. */
+  run?: ExperimentRunEntry;
+  exitCode?: number;
+  stdoutTail?: string;
+  stderrTail?: string;
+  /** Failure reason (validation, PTY error, cancelled, etc.). */
+  error?: string;
+}
+
+/** Renderer / preload payload for `experiment:runComplete`. */
+export interface ExperimentRunCompleteEvent {
+  id: string;
+  runId: string;
+  result: ExperimentRunResult;
 }
 
 /**

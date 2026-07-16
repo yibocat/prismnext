@@ -116,7 +116,7 @@ export function resolveMainTexRelativePath(projectRoot: string): string | null {
     const rel = normalizeRel(path.join(manuscript.name, manuscript.mainTex));
     if (fs.existsSync(path.join(projectRoot, rel))) return rel;
   }
-  for (const candidate of ["manuscript/main.tex", "main.tex"]) {
+  for (const candidate of ["main.tex"]) {
     if (fs.existsSync(path.join(projectRoot, candidate))) return candidate;
   }
   return null;

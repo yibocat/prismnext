@@ -7,8 +7,9 @@
  *  - UI IPC caller passes `onComplete(result)` (Sprint 0.7).
  *  - Both can be used at once; either is optional.
  */
-import { existsSync, writeFileSync } from "node:fs";
-import { dirname, resolve as pathResolve } from "node:path";
+import { existsSync, mkdirSync, writeFileSync, mkdtempSync } from "node:fs";
+import { dirname, join, resolve as pathResolve } from "node:path";
+import { tmpdir } from "node:os";
 import { runAiCommand } from "./ai-pty";
 import {
   appendRun,
@@ -20,24 +21,111 @@ import {
   type ExperimentStorageContext,
   type ExperimentVenvRunner,
 } from "./experiment-log-service";
-import { isPythonRelatedCommand } from "../../shared/experiment-log";
-import type { ExperimentEnv, ExperimentRunEntry } from "../../shared/experiment-log";
-import { stripAnsi } from "../../shared/experiment-log";
+import {
+  isPythonRelatedCommand,
+  parseExperimentRunKind,
+  RUN_OUTPUT_TAIL_BYTES,
+  stripAnsi,
+  type ExperimentEnv,
+  type ExperimentRunEntry,
+  type ExperimentRunKind,
+  type ExperimentRunResult,
+} from "../../shared/experiment-log";
 import { createLogger } from "./logger";
 import { broadcastExperimentChanged } from "./experiment-ui-events";
 
 const log = createLogger("experiment-run-executor", "agent");
 
-/** Result reported via `onComplete` (UI track) and/or the bridge `.result.json` (agent track). */
-export interface ExperimentRunResult {
-  ok: boolean;
-  /** Present when the run completed and was appended to runs.jsonl. */
-  run?: ExperimentRunEntry;
-  exitCode?: number;
-  stdoutTail?: string;
-  stderrTail?: string;
-  /** Failure reason (validation, PTY error, timeout). */
-  error?: string;
+/** Re-export shared completion payload (UI track + bridge `.result.json`). */
+export type { ExperimentRunResult };
+
+/** Runs the human cancelled before natural PTY exit (Bug #21). Cleared on append. */
+const cancelledRunKeys = new Set<string>();
+
+function cancelledKey(experimentId: string, runId: string): string {
+  return `${experimentId}\0${runId}`;
+}
+
+/** Mark a kickoff'd run as user-cancelled (call from IPC before killing the PTY). */
+export function markExperimentRunCancelled(experimentId: string, runId: string): void {
+  const id = experimentId.trim();
+  const rid = runId.trim();
+  if (!id || !rid) return;
+  cancelledRunKeys.add(cancelledKey(id, rid));
+}
+
+function consumeExperimentRunCancelled(experimentId: string, runId: string): boolean {
+  const key = cancelledKey(experimentId, runId);
+  if (!cancelledRunKeys.has(key)) return false;
+  cancelledRunKeys.delete(key);
+  return true;
+}
+
+function notesForCancel(notes: string | undefined, cancelled: boolean): string | undefined {
+  if (!cancelled) return notes;
+  const tag = "Cancelled by user";
+  const trimmed = notes?.trim();
+  if (!trimmed) return tag;
+  if (trimmed.includes(tag)) return trimmed;
+  return `${tag}. ${trimmed}`;
+}
+
+/** @internal */
+export function _resetExperimentRunCancelledForTests(): void {
+  cancelledRunKeys.clear();
+}
+
+/** @internal */
+export function _consumeExperimentRunCancelledForTests(
+  experimentId: string,
+  runId: string,
+): boolean {
+  return consumeExperimentRunCancelled(experimentId, runId);
+}
+
+function utf8ByteLength(s: string): number {
+  return typeof Buffer !== "undefined"
+    ? Buffer.byteLength(s, "utf-8")
+    : new TextEncoder().encode(s).length;
+}
+
+/**
+ * When combined stdout/stderr exceeds the JSONL tail budget, spill the full
+ * capture to `logs/<runId>.log` under the lab island and return the
+ * lab-relative path (P2.5). Returns undefined when the tail is enough.
+ */
+export function maybeWriteFullLog(
+  islandAbs: string,
+  runId: string,
+  stdout: string,
+  stderr: string,
+): string | undefined {
+  const out = stripAnsi(stdout ?? "");
+  const err = stripAnsi(stderr ?? "");
+  const combined = err ? `${out}${out.endsWith("\n") ? "" : "\n"}--- stderr ---\n${err}` : out;
+  if (!combined || utf8ByteLength(combined) <= RUN_OUTPUT_TAIL_BYTES) return undefined;
+  const safeId = (runId || "run").replace(/[^A-Za-z0-9._-]/g, "_");
+  const rel = `logs/${safeId}.log`;
+  const abs = join(islandAbs, "logs", `${safeId}.log`);
+  try {
+    mkdirSync(dirname(abs), { recursive: true });
+    const body = [
+      `# Prism experiment full log`,
+      `# runId: ${runId}`,
+      `# --- stdout ---`,
+      out,
+      ...(err ? [`# --- stderr ---`, err] : []),
+      "",
+    ].join("\n");
+    writeFileSync(abs, body, "utf-8");
+    return rel;
+  } catch (e) {
+    log.warn("failed to write full experiment log", {
+      abs,
+      error: e instanceof Error ? e.message : String(e),
+    });
+    return undefined;
+  }
 }
 
 export interface KickoffExperimentRunArgs {
@@ -46,6 +134,8 @@ export interface KickoffExperimentRunArgs {
   command: string;
   artifacts?: string[];
   notes?: string;
+  /** Optional run classification (omit when unknown — never invent `other`). */
+  kind?: ExperimentRunKind;
   /** Optional caller-supplied runId; if omitted, the executor generates one. */
   runId?: string;
   /** Legacy file-bridge completion sink — optional in Sprint 0.7. */
@@ -130,10 +220,20 @@ function kickoffWithEnv(
   const sessionId = `experiment:${id}:${runId}`;
   const cwd = island;
   const workspacePath = `${ctx.workspaceRel}/${id}`;
+  const kind = parseExperimentRunKind(args.kind);
 
   // Defer PTY spawn so the IPC handler returns runId before output chunks
   // reach the renderer (avoids losing early chunks before runInFlight is set).
   setImmediate(() => {
+    // Allocate a temp file for stderr capture (Bug #11 — see
+    // docs/audit/experiment-agent-architecture-analysis.md). A PTY merges
+    // stdout+stderr onto a single stream; the only way to get a clean
+    // stderr record without sacrificing the live PTY stream for stdout
+    // is to redirect the *command's* stderr to a file via a subshell
+    // wrapper. The temp dir is OS-managed and the file is unlinked by
+    // ai-pty after the PTY exits.
+    const stderrTmpDir = mkdtempSync(join(tmpdir(), "prism-exp-stderr-"));
+    const stderrPath = join(stderrTmpDir, `${runId}.log`);
     runAiCommand({
       command,
       cwd,
@@ -142,6 +242,7 @@ function kickoffWithEnv(
       requestId: runId,
       toolCallId: runId,
       envExtra,
+      captureStderr: stderrPath,
       onChunk: (chunk) => {
         if (args.onOutputChunk) {
           try {
@@ -154,6 +255,10 @@ function kickoffWithEnv(
     })
       .then((ptyResult) => {
         const finishedAt = new Date().toISOString();
+        const stdout = ptyResult.output ?? "";
+        const stderr = ptyResult.stderr ?? "";
+        const logPath = maybeWriteFullLog(island, runId, stdout, stderr);
+        const cancelled = consumeExperimentRunCancelled(id, runId);
         const append = appendRun(ctx, id, {
           runId,
           startedAt,
@@ -161,11 +266,17 @@ function kickoffWithEnv(
           command,
           cwd: workspacePath,
           exitCode: ptyResult.exitCode,
-          stdoutTail: ptyResult.output,
-          stderrTail: "",
+          stdoutTail: stdout,
+          // Best-effort: PTY may have failed before the redirect fired
+          // (e.g. bash itself crashed, in which case the file was never
+          // created). ai-pty returns "" in that case and we persist "".
+          stderrTail: stderr,
           artifacts: args.artifacts ?? [],
           env,
-          notes: args.notes,
+          notes: notesForCancel(args.notes, cancelled),
+          cancelled: cancelled || undefined,
+          kind,
+          logPath,
         }, { chatSessionId: args.chatSessionId ?? null });
         if (!append.ok) {
           reportResult(args, { ok: false, error: append.error });
@@ -184,6 +295,9 @@ function kickoffWithEnv(
         const finishedAt = new Date().toISOString();
         const message = err instanceof Error ? err.message : String(err);
         log.warn("experiment-run failed", { id, runId, error: message });
+        const stderr = "Prism experiment-run: command failed to execute.";
+        const logPath = maybeWriteFullLog(island, runId, message, stderr);
+        const cancelled = consumeExperimentRunCancelled(id, runId);
         const append = appendRun(ctx, id, {
           runId,
           startedAt,
@@ -192,10 +306,13 @@ function kickoffWithEnv(
           cwd: workspacePath,
           exitCode: 124,
           stdoutTail: message,
-          stderrTail: "Prism experiment-run: command failed to execute.",
+          stderrTail: stderr,
           artifacts: args.artifacts ?? [],
           env,
-          notes: args.notes,
+          notes: notesForCancel(args.notes, cancelled),
+          cancelled: cancelled || undefined,
+          kind,
+          logPath,
         }, { chatSessionId: args.chatSessionId ?? null });
         const run: ExperimentRunEntry | null = append.ok ? append.run : null;
         reportResult(args, {
@@ -260,31 +377,4 @@ export function buildPythonEnvExtra(env: ExperimentEnv): Record<string, string> 
 
 function pathDelimiter(): string {
   return process.platform === "win32" ? ";" : ":";
-}
-
-function runWithTimeout<T>(
-  promise: Promise<T>,
-  ms: number,
-  onTimeout: () => void,
-): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      try {
-        onTimeout();
-      } catch {
-        // ignore
-      }
-      reject(new Error(`Prism experiment-run: command timed out after ${ms}ms.`));
-    }, ms);
-    promise.then(
-      (v) => {
-        clearTimeout(timer);
-        resolve(v);
-      },
-      (e) => {
-        clearTimeout(timer);
-        reject(e);
-      },
-    );
-  });
 }

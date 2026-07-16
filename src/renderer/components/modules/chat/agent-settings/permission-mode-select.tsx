@@ -15,6 +15,7 @@ import {
 import {
   ChevronDownIcon,
   EyeIcon,
+  FilePenLineIcon,
   ShieldQuestionIcon,
   ZapIcon,
   type LucideIcon,
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils";
 
 const PERMISSION_MODE_ICONS: Record<PermissionMode, LucideIcon> = {
   ask: ShieldQuestionIcon,
+  edit_auto: FilePenLineIcon,
   auto: ZapIcon,
   readonly: EyeIcon,
 };
@@ -65,7 +67,7 @@ export function PermissionModeSelect({ compact }: PermissionModeSelectProps) {
           )}
         </button>
       </AppMenuTrigger>
-      <AppMenuContent align="end" className="w-56">
+      <AppMenuContent align="end" className="w-64">
         <AppMenuLabel>Permission Mode</AppMenuLabel>
         {PERMISSION_MODE_OPTIONS.map((option) => (
           <AppMenuCheckItem

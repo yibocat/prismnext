@@ -11,6 +11,10 @@ import { getTerminalBridgeRoot } from "./prism-bridge-paths";
 import { runAiCommand } from "./ai-pty";
 import { resolveChatTabId } from "./chat-session-registry";
 import { createLogger } from "./logger";
+import {
+  isDirectLatexCompileBashCommand,
+  latexCompileBashBlockMessage,
+} from "../../shared/latex-compile-bash";
 import { gateExperimentPythonExecution } from "./experiment-log-service";
 
 const log = createLogger("ai-bash-runner", "agent");
@@ -136,6 +140,32 @@ export function runAiBashJob(args: RunAiBashJobArgs): Promise<RunAiBashJobResult
     );
   } catch {
     // ignore
+  }
+
+  if (isDirectLatexCompileBashCommand(args.command)) {
+    const blocked: RunAiBashJobResult = {
+      output: latexCompileBashBlockMessage(),
+      exitCode: 1,
+      cwd: args.cwd,
+    };
+    try {
+      writeFileSync(resPath, JSON.stringify(blocked), "utf-8");
+    } catch {
+      // ignore
+    }
+    emitAiExit({
+      sessionId: args.sessionId,
+      chatTabId,
+      requestId: args.toolCallId,
+      toolCallId: args.toolCallId,
+      exitCode: 1,
+      cwd: args.cwd,
+    });
+    log.warn("AI bash blocked by LaTeX compile gate", {
+      chatTabId,
+      command: args.command.slice(0, 120),
+    });
+    return Promise.resolve(blocked);
   }
 
   const gate = gateExperimentPythonExecution({

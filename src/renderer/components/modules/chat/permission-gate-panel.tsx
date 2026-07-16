@@ -15,6 +15,7 @@ import {
   type PermissionMode,
 } from "@shared/permission-modes";
 import { finalizePermissionAllow, finalizePermissionDeny } from "@/stores/permission-actions";
+import { isBashToolName } from "@/lib/terminal/ai-bridge";
 import { getToolMeta, extractPatchTargetPaths } from "./tools/tool-meta";
 import { param } from "./tools/shared";
 
@@ -53,7 +54,8 @@ export function shouldShowPermissionGate(
   const meta = getToolMeta(toolName);
   if (meta.confirmUx === "none" || meta.confirmUx === "inline") return false;
   if (mode === "ask") return true;
-  if (mode === "auto") return shouldPromptForPermission(mode, toolName);
+  if (mode === "edit_auto") return shouldPromptForPermission(mode, toolName);
+  // Full auto / readonly: never show composer gate (readonly denies in main).
   return false;
 }
 
@@ -190,7 +192,7 @@ export function PermissionGatePanel() {
     [permission, toolUse, toolName],
   );
 
-  const allow = useCallback(async () => {
+  const allow = useCallback(async (always = false) => {
     if (!permission || resolving) return;
     setResolving(true);
     try {
@@ -199,6 +201,7 @@ export function PermissionGatePanel() {
         permissionId: permission.id,
         toolCallId: permission.toolCallId,
         toolName,
+        always,
       });
     } finally {
       setResolving(false);
@@ -237,6 +240,9 @@ export function PermissionGatePanel() {
       <p className="min-w-0 flex-1 truncate">
         <span className="font-medium text-foreground">{summary.label}</span>
         <span className="text-muted-foreground"> · {summary.detail}</span>
+        {mode === "edit_auto" && (
+          <span className="text-muted-foreground/70"> · Edit auto</span>
+        )}
         {mode === "auto" && (
           <span className="text-muted-foreground/70"> · Auto mode</span>
         )}
@@ -258,11 +264,30 @@ export function PermissionGatePanel() {
         <button
           type="button"
           className={cn(
+            "rounded px-2 py-1 text-muted-foreground transition-colors",
+            "hover:bg-accent hover:text-accent-foreground",
+            "disabled:pointer-events-none disabled:opacity-40",
+          )}
+          onClick={() => void allow(true)}
+          disabled={resolving || !toolName}
+          title={
+            toolName
+              ? isBashToolName(toolName) || toolName === "experiment-run"
+                ? "Always allow similar commands (prefix match)"
+                : `Always allow ${toolName} without asking again`
+              : "Always allow this tool"
+          }
+        >
+          Always
+        </button>
+        <button
+          type="button"
+          className={cn(
             "rounded px-2 py-1 font-medium text-primary transition-colors",
             "hover:bg-accent hover:text-accent-foreground",
             "disabled:pointer-events-none disabled:opacity-40",
           )}
-          onClick={allow}
+          onClick={() => void allow(false)}
           disabled={resolving}
         >
           Allow

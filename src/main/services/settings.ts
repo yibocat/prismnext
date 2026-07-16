@@ -1,5 +1,13 @@
 import Store from "electron-store";
 import { safeStorage } from "electron";
+import {
+  bashAlwaysPatternFromCommand,
+  bashCommandMatchesAnyPattern,
+} from "../../shared/bash-allow-always";
+import {
+  migratePermissionModeSetting,
+  PERMISSION_MODE_SCHEMA_VERSION,
+} from "./permission-modes";
 
 export interface AppSettings {
   aiModel: "default" | "sonnet" | "opus" | "haiku";
@@ -53,9 +61,62 @@ export interface AppSettings {
   /** A version the user dismissed; suppressed from "available" until unignored. */
   ignoredUpdateVersion?: string;
 
+  /**
+   * Tools the user pinned to "Allow always" from the permission gate.
+   * Lowercased tool names; consulted before prompting (non-bash tools).
+   */
+  toolAllowAlways?: string[];
+
+  /**
+   * Bash / shell command patterns from "Allow always" (e.g. `git status*`).
+   * Matched with simple glob against the full command string.
+   */
+  bashAllowAlwaysPatterns?: string[];
+
+  /**
+   * Permission mode schema version. v1 stored `"auto"` as edit-auto semantics;
+   * v2 renames that to `edit_auto` and makes `auto` full OpenCode-style auto.
+   */
+  permissionModeSchemaVersion?: number;
+
   // Renderer-side dynamic keys
   // the catch-all `raw` loop in getSettings(). Listed here for documentation.
   [key: string]: unknown;
+}
+
+/** True when `toolName` is in the persisted allow-always list. */
+export function isToolAllowAlways(toolName: string | undefined | null): boolean {
+  if (!toolName?.trim()) return false;
+  const list = getSettings().toolAllowAlways;
+  if (!Array.isArray(list) || list.length === 0) return false;
+  const n = toolName.trim().toLowerCase();
+  return list.some((t) => typeof t === "string" && t.trim().toLowerCase() === n);
+}
+
+/** Persist a tool into the allow-always list (idempotent). */
+export function addToolAllowAlways(toolName: string): void {
+  const n = toolName.trim().toLowerCase();
+  if (!n) return;
+  const cur = getSettings().toolAllowAlways;
+  const list = Array.isArray(cur) ? cur.map((t) => String(t)) : [];
+  if (list.some((t) => t.trim().toLowerCase() === n)) return;
+  updateSettings({ toolAllowAlways: [...list, n] });
+}
+
+/** Whether a shell command matches a persisted Always pattern. */
+export function isBashCommandAllowAlways(command: string | undefined | null): boolean {
+  return bashCommandMatchesAnyPattern(command ?? "", getSettings().bashAllowAlwaysPatterns);
+}
+
+/** Persist a bash Always pattern derived from a concrete command. */
+export function addBashAllowAlwaysFromCommand(command: string): string | null {
+  const pattern = bashAlwaysPatternFromCommand(command);
+  if (!pattern) return null;
+  const cur = getSettings().bashAllowAlwaysPatterns;
+  const list = Array.isArray(cur) ? cur.map((t) => String(t)) : [];
+  if (list.includes(pattern)) return pattern;
+  updateSettings({ bashAllowAlwaysPatterns: [...list, pattern] });
+  return pattern;
 }
 
 const defaults: AppSettings = {
@@ -65,6 +126,7 @@ const defaults: AppSettings = {
   rightPanelCollapsed: false,
   agentTerminalMode: "pty",
   agentSystemPrompt: "",
+  permissionModeSchemaVersion: PERMISSION_MODE_SCHEMA_VERSION,
   promptModules: {
     "workspace-folders": true,
     "chat-citation-staging": true,
@@ -161,6 +223,24 @@ export function getSettings(): AppSettings {
     result.mineruApiToken = settings.mineruApiToken;
   if (settings.aiApiKeys !== undefined)
     result.aiApiKeys = settings.aiApiKeys;
+
+  // One-shot: v1 `"auto"` meant edit-auto; v2 makes `"auto"` full OpenCode auto.
+  const migrated = migratePermissionModeSetting(
+    result.permissionMode as string | undefined,
+    result.permissionModeSchemaVersion as number | undefined,
+  );
+  if (migrated.changed) {
+    result.permissionMode = migrated.mode;
+    result.permissionModeSchemaVersion = migrated.schemaVersion;
+    store.set({
+      permissionMode: migrated.mode,
+      permissionModeSchemaVersion: migrated.schemaVersion,
+    } as any);
+  } else if (result.permissionModeSchemaVersion !== PERMISSION_MODE_SCHEMA_VERSION) {
+    result.permissionModeSchemaVersion = PERMISSION_MODE_SCHEMA_VERSION;
+    store.set({ permissionModeSchemaVersion: PERMISSION_MODE_SCHEMA_VERSION } as any);
+  }
+
   return result as AppSettings;
 }
 

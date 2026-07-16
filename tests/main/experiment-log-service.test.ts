@@ -1,15 +1,19 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { join, dirname } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   appendRun,
+  archiveExperiment,
   buildExperimentStorageContext,
   createExperiment,
+  deleteExperiment,
   detectEnvForIsland,
+  extractCdTargets,
   generateExperimentSlug,
   listExperiments,
   readExperiment,
+  restoreExperiment,
 } from "../../src/main/services/experiment-log-service";
 import { resolveExperimentDir } from "../../src/main/services/workspace-config";
 import {
@@ -102,7 +106,95 @@ describe("experiment-log-service", () => {
     const list = listExperiments(c);
     expect(list.experiments.map((e) => e.id).sort()).toEqual([a.id, b.id].sort());
     expect(list.experiments[0]!.workspacePath).toMatch(/^experiment\//);
+    expect(list.experiments.every((e) => e.status === "active")).toBe(true);
     expect(list.registryRoot).toBe(EXPERIMENT_REGISTRY_REL);
+    expect(list.corruptIds).toEqual([]);
+  });
+
+  it("listExperiments reports corrupt / missing meta without hiding healthy rows (Bug #19)", () => {
+    const c = setup();
+    const good = createExperiment(c, { title: "Healthy" }, { ensureVenv: false });
+    expect(good.ok).toBe(true);
+    if (!good.ok) return;
+
+    const badId = "exp-corrupt-meta";
+    mkdirSync(join(c.registryRoot, badId), { recursive: true });
+    writeFileSync(join(c.registryRoot, badId, "meta.json"), "{not-json", "utf-8");
+
+    const orphanId = "exp-orphan-dir";
+    mkdirSync(join(c.registryRoot, orphanId), { recursive: true });
+
+    const list = listExperiments(c);
+    expect(list.experiments.map((e) => e.id)).toEqual([good.id]);
+    expect(list.corruptIds.sort()).toEqual([badId, orphanId].sort());
+  });
+
+  it("extractCdTargets handles quotes and ignores special targets (Bugs #17/#31)", () => {
+    expect(extractCdTargets('cd labs/exp-demo && python train.py')).toEqual(["labs/exp-demo"]);
+    expect(extractCdTargets('cd "labs/exp demo" && python train.py')).toEqual(["labs/exp demo"]);
+    expect(extractCdTargets("cd 'labs/x' && uv pip install numpy")).toEqual(["labs/x"]);
+    expect(extractCdTargets("cd - && python train.py")).toEqual([]);
+    expect(extractCdTargets("cd $OLDPWD && python train.py")).toEqual([]);
+    expect(extractCdTargets("cd ~/labs && python train.py")).toEqual([]);
+  });
+
+  it("archiveExperiment hides from human list; restore brings it back; delete removes registry (+ optional lab)", () => {
+    const c = setup();
+    const created = createExperiment(c, { title: "Archive me" }, { ensureVenv: false });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const { id, path: labRel } = created;
+    const labAbs = join(c.projectRoot, labRel);
+    writeFileSync(join(labAbs, "readme.txt"), "keep or drop");
+
+    const archived = archiveExperiment(c, id);
+    expect(archived.ok).toBe(true);
+    if (!archived.ok) return;
+    expect(archived.meta.status).toBe("archived");
+    expect(archived.meta.archivedAt).toBeTruthy();
+
+    expect(listExperiments(c, { includeArchived: false }).experiments).toHaveLength(0);
+    const agentList = listExperiments(c, { includeArchived: true }).experiments;
+    expect(agentList).toHaveLength(1);
+    expect(agentList[0]!.status).toBe("archived");
+
+    // Idempotent archive
+    expect(archiveExperiment(c, id).ok).toBe(true);
+
+    const restored = restoreExperiment(c, id);
+    expect(restored.ok).toBe(true);
+    if (!restored.ok) return;
+    expect(restored.meta.status).toBe("active");
+    expect(restored.meta.archivedAt).toBeNull();
+    expect(listExperiments(c, { includeArchived: false }).experiments).toHaveLength(1);
+
+    // Registry-only delete keeps the lab island
+    expect(deleteExperiment(c, id).ok).toBe(true);
+    expect(listExperiments(c).experiments).toHaveLength(0);
+    expect(existsSync(labAbs)).toBe(true);
+
+    const again = createExperiment(c, { title: "Wipe lab" }, { ensureVenv: false });
+    expect(again.ok).toBe(true);
+    if (!again.ok) return;
+    const lab2 = join(c.projectRoot, again.path);
+    writeFileSync(join(lab2, "script.py"), "print(1)");
+    expect(deleteExperiment(c, again.id, { removeLab: true }).ok).toBe(true);
+    expect(existsSync(lab2)).toBe(false);
+  });
+
+  it("deleteExperiment refuses removeLab when workspacePath is not the island id", () => {
+    const c = setup();
+    const created = createExperiment(c, { title: "Unsafe" }, { ensureVenv: false });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const metaPath = join(c.registryRoot, created.id, "meta.json");
+    const meta = JSON.parse(readFileSync(metaPath, "utf-8")) as Record<string, unknown>;
+    meta.workspacePath = "experiment/../secret";
+    writeFileSync(metaPath, JSON.stringify(meta));
+    const result = deleteExperiment(c, created.id, { removeLab: true });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBe("unsafe_lab_path");
   });
 
   it("readExperiment returns meta + runs (tail-limited)", () => {
@@ -120,6 +212,12 @@ describe("experiment-log-service", () => {
     expect(read.runs.length).toBe(5);
     expect(read.runs[4]!.stdoutTail).toBe("out24");
     expect(read.meta.title).toBe("Read test");
+    expect(read.runCount).toBe(25);
+    expect(read.lastRunAt).toBeTruthy();
+    const statsPath = join(c.registryRoot, id, "runs.stats.json");
+    expect(existsSync(statsPath)).toBe(true);
+    const stats = JSON.parse(readFileSync(statsPath, "utf-8")) as { runCount: number };
+    expect(stats.runCount).toBe(25);
   });
 
   it("readExperiment returns experiment_not_found for unknown id", () => {
@@ -144,6 +242,95 @@ describe("experiment-log-service", () => {
     const raw = readFileSync(join(c.registryRoot, id, "runs.jsonl"), "utf-8");
     expect(raw.trim().split("\n").length).toBe(1);
     expect(existsSync(join(c.projectRoot, "experiment", id, "runs.jsonl"))).toBe(false);
+  });
+
+  it("appendRun normalizes island-relative artifacts to project-relative", () => {
+    const c = setup();
+    const created = createExperiment(c, { title: "Artifact normalize" }, { ensureVenv: false });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const { id } = created;
+    const fig = join(c.projectRoot, "experiment", id, "results", "plot.png");
+    mkdirSync(dirname(fig), { recursive: true });
+    writeFileSync(fig, "fake");
+    const r = appendRun(c, id, {
+      command: "python plot.py",
+      exitCode: 0,
+      artifacts: ["results/plot.png"],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.run.artifacts).toEqual([`experiment/${id}/results/plot.png`]);
+  });
+
+  it("appendRun keeps artifacts outside the island when that file exists", () => {
+    const c = setup();
+    const created = createExperiment(c, { title: "Outside artifact" }, { ensureVenv: false });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const { id } = created;
+    const fig = join(c.projectRoot, "papers", "out", "fig.png");
+    mkdirSync(dirname(fig), { recursive: true });
+    writeFileSync(fig, "fake");
+    const r = appendRun(c, id, {
+      command: "python plot.py",
+      exitCode: 0,
+      artifacts: ["papers/out/fig.png"],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.run.artifacts).toEqual(["papers/out/fig.png"]);
+  });
+
+  it("appendRun resolves bare basenames via project search", () => {
+    const c = setup();
+    const created = createExperiment(c, { title: "Basename search" }, { ensureVenv: false });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const { id } = created;
+    const fig = join(c.projectRoot, "analysis", "plots", "bare.png");
+    mkdirSync(dirname(fig), { recursive: true });
+    writeFileSync(fig, "fake");
+    const r = appendRun(c, id, {
+      command: "python plot.py",
+      exitCode: 0,
+      artifacts: ["bare.png"],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.run.artifacts).toEqual(["analysis/plots/bare.png"]);
+  });
+
+  it("bumpRunsStats increments sidecar O(1) without full JSONL recount (Bug #20)", () => {
+    const c = setup();
+    const created = createExperiment(c, { title: "Stats bump" }, { ensureVenv: false });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const { id } = created;
+    // Seed one real line + a deliberately high sidecar — O(1) bump keeps
+    // sidecar+1; a full recount would reset to the true line count (2).
+    appendRun(c, id, { command: "echo 1", exitCode: 0 });
+    const statsPath = join(c.registryRoot, id, "runs.stats.json");
+    writeFileSync(
+      statsPath,
+      JSON.stringify({ runCount: 100, lastRunAt: "2020-01-01T00:00:00.000Z" }),
+      "utf-8",
+    );
+    appendRun(c, id, {
+      command: "echo 2",
+      exitCode: 0,
+      finishedAt: "2026-07-16T12:00:00.000Z",
+    });
+    const stats = JSON.parse(readFileSync(statsPath, "utf-8")) as {
+      runCount: number;
+      lastRunAt: string | null;
+    };
+    expect(stats.runCount).toBe(101);
+    expect(stats.lastRunAt).toBe("2026-07-16T12:00:00.000Z");
+    const lines = readFileSync(join(c.registryRoot, id, "runs.jsonl"), "utf-8")
+      .trim()
+      .split("\n");
+    expect(lines).toHaveLength(2);
   });
 
   it("appendRun stamps provenance fields + mirrors into provenance.jsonl", () => {
@@ -179,6 +366,54 @@ describe("experiment-log-service", () => {
     expect(resolved?.run.command).toBe("python train.py");
     expect(resolved?.run.chatSessionId).toBe("ses_abc");
     expect(resolved?.linkMethod).toBe("explicit");
+  });
+
+  it("appendRun persists cancelled flag (Bug #21)", () => {
+    const c = setup();
+    const created = createExperiment(c, { title: "Cancel stamp" }, { ensureVenv: false });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const r = appendRun(c, created.id, {
+      command: "python train.py",
+      exitCode: 130,
+      stdoutTail: "",
+      cancelled: true,
+      notes: "Cancelled by user",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.run.cancelled).toBe(true);
+    const line = JSON.parse(
+      readFileSync(join(c.registryRoot, created.id, "runs.jsonl"), "utf-8").trim(),
+    ) as { cancelled?: boolean; notes?: string };
+    expect(line.cancelled).toBe(true);
+    expect(line.notes).toContain("Cancelled by user");
+  });
+
+  it("appendRun omits provenanceEventId when provenance mirror fails (Bug #5)", async () => {
+    const c = setup();
+    const created = createExperiment(c, { title: "Prov fail" }, { ensureVenv: false });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const provenance = await import("../../src/main/services/provenance-service");
+    const spy = vi.spyOn(provenance, "recordRunProvenance").mockReturnValue(null);
+    try {
+      const r = appendRun(c, created.id, {
+        command: "python train.py",
+        exitCode: 0,
+        stdoutTail: "ok",
+      });
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.run.provenanceEventId).toBeUndefined();
+      const line = JSON.parse(
+        readFileSync(join(c.registryRoot, created.id, "runs.jsonl"), "utf-8").trim(),
+      ) as { provenanceEventId?: string };
+      expect(line.provenanceEventId).toBeUndefined();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("detectEnvForIsland uses workspace island path", () => {

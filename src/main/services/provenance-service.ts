@@ -12,10 +12,11 @@
  *
  * Design: docs/superpowers/specs/2026-07-11-provenance-lite-design.md
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { join, relative } from "node:path";
 import { randomBytes } from "node:crypto";
+import { appendJsonlLine } from "../lib/jsonl-append";
 import {
   PROVENANCE_REL,
   PROVENANCE_SCHEMA_VERSION,
@@ -73,11 +74,16 @@ export function readProvenanceEvents(projectRoot: string): ProvenanceEvent[] {
   return out;
 }
 
-/** Append one event (creates `.prismnext/` if needed). Never throws. */
-export function appendProvenanceEvent(projectRoot: string, event: ProvenanceEvent): void {
+/** Append one event (creates `.prismnext/` if needed). Never throws; returns false on I/O failure. */
+export function appendProvenanceEvent(projectRoot: string, event: ProvenanceEvent): boolean {
   const root = projectRoot.replace(/\\/g, "/");
-  mkdirSync(join(root, ".prismnext"), { recursive: true });
-  appendFileSync(provenancePath(root), JSON.stringify(event) + "\n", "utf-8");
+  try {
+    appendJsonlLine(provenancePath(root), event);
+    return true;
+  } catch {
+    // Best-effort: never break run accounting on provenance I/O failure.
+    return false;
+  }
 }
 
 /** The run + how the file was linked, for one claimed artifact. Null = unlinked. */
@@ -167,8 +173,17 @@ function inferArtifactsByMtime(
     }
     for (const entry of entries) {
       if (visited > MTIME_SCAN_MAX_ENTRIES) break;
-      // Skip hidden dirs/files and the platform registry / library dirs.
+      // Skip hidden (covers shared `.venv`), dependency trees, and caches —
+      // mtime noise here must never become provenance claims.
       if (entry.name.startsWith(".")) continue;
+      if (
+        entry.name === "venv" ||
+        entry.name === "node_modules" ||
+        entry.name === "__pycache__" ||
+        entry.name === ".venv"
+      ) {
+        continue;
+      }
       const abs = join(dir, entry.name);
       try {
         if (entry.isDirectory()) {
@@ -251,7 +266,9 @@ export function recordRunProvenance(
       stdoutTailBytes: opts.run.stdoutTail?.length ?? 0,
       stderrTailBytes: opts.run.stderrTail?.length ?? 0,
     };
-    appendProvenanceEvent(projectRoot, runEvent);
+    if (!appendProvenanceEvent(projectRoot, runEvent)) {
+      return null;
+    }
 
     for (const artifactPath of opts.run.artifacts ?? []) {
       const link: ProvenanceArtifactLinked = {

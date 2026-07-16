@@ -8,7 +8,11 @@ import {
 import { invalidateProjectChatPrewarm } from "../services/project-chat-prewarm";
 
 export function registerMcpHandlers(): void {
-  /** Seed/repair mcp.json + refresh ACP cache (no session/load). */
+  /**
+   * Seed/repair mcp.json + refresh ACP cache. When seed/migrate/reenable
+   * actually changed the file, also push into open sessions (Bug #25) —
+   * otherwise Settings→load would leave running chats on the old MCP set.
+   */
   ipcMain.handle(
     "mcp:ensure",
     async (_e, args: { projectPath: string }) => {
@@ -16,9 +20,21 @@ export function registerMcpHandlers(): void {
       if (!projectPath) {
         return { ok: false as const, health: getPaperSearchMcpHealth() };
       }
-      ensureDefaultMcpServers(join(projectPath, ".prismnext", "agent"));
-      AcpService.getInstance().prewarmProject(projectPath);
-      return { ok: true as const, health: getPaperSearchMcpHealth() };
+      const ensure = ensureDefaultMcpServers(join(projectPath, ".prismnext", "agent"));
+      const acp = AcpService.getInstance();
+      acp.prewarmProject(projectPath);
+      let reloadedSessions = 0;
+      if (ensure.added || ensure.migrated || ensure.reenabled) {
+        invalidateProjectChatPrewarm(projectPath);
+        const applied = await acp.applyProjectMcpConfig(projectPath);
+        reloadedSessions = applied.reloadedSessions;
+      }
+      return {
+        ok: true as const,
+        health: getPaperSearchMcpHealth(),
+        ensure,
+        reloadedSessions,
+      };
     },
   );
 
