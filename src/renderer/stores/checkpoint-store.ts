@@ -5,7 +5,7 @@ import { useChatStore, type ChatStreamMessage } from "./chat-store";
 import { useChangesStore } from "./changes-store";
 import { createLogger } from "@/services/logger";
 
-const log = createLogger("checkpoint-store");
+const log = createLogger("checkpoint-store", "agent");
 
 export interface CheckpointFile {
   relativePath: string;

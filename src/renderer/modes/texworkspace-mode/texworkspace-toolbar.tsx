@@ -34,6 +34,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { SYMBOL_CATEGORIES, getSymbolHtml } from "@/lib/tex/latex-symbols";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 
 interface TexworkspaceToolbarProps {
@@ -102,74 +103,82 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
     <>
       {/* View mode toggles — far left */}
       <div className="flex items-center shrink-0 rounded-md border border-border/40 p-0.5 gap-px">
-        <button
-          type="button"
-          onClick={() => setTexworkspaceViewMode("split")}
-          title={t("modes.texworkspace.viewSplit")}
-          className={cn(
-            "flex size-6 items-center justify-center rounded-sm transition-colors",
-            texworkspaceViewMode === "split"
-              ? "bg-muted text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          <Columns2Icon className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setTexworkspaceViewMode("tex")}
-          title={t("modes.texworkspace.viewTex")}
-          className={cn(
-            "flex size-6 items-center justify-center rounded-sm transition-colors",
-            texworkspaceViewMode === "tex"
-              ? "bg-muted text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          <FileTextIcon className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setTexworkspaceViewMode("pdf")}
-          title={t("modes.texworkspace.viewPdf")}
-          className={cn(
-            "flex size-6 items-center justify-center rounded-sm transition-colors",
-            texworkspaceViewMode === "pdf"
-              ? "bg-muted text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          <EyeIcon className="size-3.5" />
-        </button>
+        <Hint label={t("modes.texworkspace.viewSplit")}>
+          <button
+            type="button"
+            onClick={() => setTexworkspaceViewMode("split")}
+            className={cn(
+              "flex size-6 items-center justify-center rounded-sm transition-colors",
+              texworkspaceViewMode === "split"
+                ? "bg-muted text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Columns2Icon className="size-3.5" />
+          </button>
+        </Hint>
+        <Hint label={t("modes.texworkspace.viewTex")}>
+          <button
+            type="button"
+            onClick={() => setTexworkspaceViewMode("tex")}
+            className={cn(
+              "flex size-6 items-center justify-center rounded-sm transition-colors",
+              texworkspaceViewMode === "tex"
+                ? "bg-muted text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <FileTextIcon className="size-3.5" />
+          </button>
+        </Hint>
+        <Hint label={t("modes.texworkspace.viewPdf")}>
+          <button
+            type="button"
+            onClick={() => setTexworkspaceViewMode("pdf")}
+            className={cn(
+              "flex size-6 items-center justify-center rounded-sm transition-colors",
+              texworkspaceViewMode === "pdf"
+                ? "bg-muted text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <EyeIcon className="size-3.5" />
+          </button>
+        </Hint>
       </div>
 
       {/* Compile button */}
-      <button
-        type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0"
-        title={t("modes.texworkspace.compile", { engine: ENGINE_LABELS[compilerBackend] })}
-        onClick={handleCompile}
-        disabled={isCompiling || !compileFile}
+      <Hint
+        label={t("modes.texworkspace.compile", { engine: ENGINE_LABELS[compilerBackend] })}
+        shortcutId="product.compile"
       >
-        {isCompiling ? (
-          <Loader2Icon className="size-3.5 animate-spin" />
-        ) : (
-          <PlayIcon className="size-3.5" />
-        )}
-      </button>
+        <button
+          type="button"
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0"
+          onClick={handleCompile}
+          disabled={isCompiling || !compileFile}
+        >
+          {isCompiling ? (
+            <Loader2Icon className="size-3.5 animate-spin" />
+          ) : (
+            <PlayIcon className="size-3.5" />
+          )}
+        </button>
+      </Hint>
 
       {/* Compiler engine selector */}
       <AppMenu>
-        <AppMenuTrigger asChild>
-          <button
-            type="button"
-            className="flex items-center gap-1 h-6 px-1.5 rounded text-[length:var(--font-menu-item)] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0"
-            title="Select compiler"
-          >
-            <span>{ENGINE_LABELS[compilerBackend]}</span>
-            <ChevronDownIcon className="size-3" />
-          </button>
-        </AppMenuTrigger>
+        <Hint label="Select compiler">
+          <AppMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center gap-1 h-6 px-1.5 rounded text-[length:var(--font-menu-item)] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0"
+            >
+              <span>{ENGINE_LABELS[compilerBackend]}</span>
+              <ChevronDownIcon className="size-3" />
+            </button>
+          </AppMenuTrigger>
+        </Hint>
         <AppMenuContent align="start" className="min-w-[6.5rem]">
           <AppMenuCheckItem
             selected={compilerBackend === "tectonic"}
@@ -187,63 +196,67 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
       </AppMenu>
 
       {/* Auto-compile toggle */}
-      <button
-        type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-        onClick={toggleAutoCompile}
-        title={autoCompile ? t("modes.texworkspace.autoCompileOn") : t("modes.texworkspace.autoCompileOff")}
-      >
-        {autoCompile ? (
-          <ZapIcon className="size-3.5 text-warning" />
-        ) : (
-          <ZapOffIcon className="size-3.5" />
-        )}
-      </button>
-
-      {showProblemsButton && (
+      <Hint label={autoCompile ? t("modes.texworkspace.autoCompileOn") : t("modes.texworkspace.autoCompileOff")}>
         <button
           type="button"
-          className={cn(
-            "flex size-6 items-center justify-center rounded transition-colors shrink-0",
-            texworkspaceProblemsOpen
-              ? "bg-destructive/15 text-destructive"
-              : "text-destructive hover:bg-destructive/10",
-          )}
-          title={texworkspaceProblemsOpen ? t("modes.texworkspace.backToPdf") : t("modes.texworkspace.showProblems")}
-          onClick={handleToggleProblems}
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+          onClick={toggleAutoCompile}
         >
-          <AlertCircleIcon className="size-3.5" />
+          {autoCompile ? (
+            <ZapIcon className="size-3.5 text-warning" />
+          ) : (
+            <ZapOffIcon className="size-3.5" />
+          )}
         </button>
+      </Hint>
+
+      {showProblemsButton && (
+        <Hint label={texworkspaceProblemsOpen ? t("modes.texworkspace.backToPdf") : t("modes.texworkspace.showProblems")}>
+          <button
+            type="button"
+            className={cn(
+              "flex size-6 items-center justify-center rounded transition-colors shrink-0",
+              texworkspaceProblemsOpen
+                ? "bg-destructive/15 text-destructive"
+                : "text-destructive hover:bg-destructive/10",
+            )}
+            onClick={handleToggleProblems}
+          >
+            <AlertCircleIcon className="size-3.5" />
+          </button>
+        </Hint>
       )}
 
       <div className="flex-1" />
 
       {/* Search toggle — drives sidebar project search */}
-      <button
-        type="button"
-        className={cn(
-          "flex size-6 items-center justify-center rounded transition-colors shrink-0",
-          isSearching
-            ? "bg-muted text-foreground"
-            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-        )}
-        title={t("modes.texworkspace.searchManuscript")}
-        onClick={() => setSearchQuery(isSearching ? "" : " ")}
-      >
-        <SearchIcon className="size-3.5" />
-      </button>
+      <Hint label={t("modes.texworkspace.searchManuscript")}>
+        <button
+          type="button"
+          className={cn(
+            "flex size-6 items-center justify-center rounded transition-colors shrink-0",
+            isSearching
+              ? "bg-muted text-foreground"
+              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+          )}
+          onClick={() => setSearchQuery(isSearching ? "" : " ")}
+        >
+          <SearchIcon className="size-3.5" />
+        </button>
+      </Hint>
 
       {/* Symbol Palette */}
       <Popover>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-            title={t("modes.texworkspace.insertSymbol")}
-          >
-            <SigmaIcon className="size-3.5" />
-          </button>
-        </PopoverTrigger>
+        <Hint label={t("modes.texworkspace.insertSymbol")}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+            >
+              <SigmaIcon className="size-3.5" />
+            </button>
+          </PopoverTrigger>
+        </Hint>
         <PopoverContent side="bottom" align="end" className="w-[364px] p-0">
           <div className="max-h-[380px] overflow-y-auto overscroll-contain">
             {SYMBOL_CATEGORIES.map((cat) => (
@@ -282,15 +295,16 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
 
       {/* Environment Insertion */}
       <AppMenu>
-        <AppMenuTrigger asChild>
-          <button
-            type="button"
-            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-            title={t("modes.texworkspace.insertEnv")}
-          >
-            <BookOpenIcon className="size-3.5" />
-          </button>
-        </AppMenuTrigger>
+        <Hint label={t("modes.texworkspace.insertEnv")}>
+          <AppMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+            >
+              <BookOpenIcon className="size-3.5" />
+            </button>
+          </AppMenuTrigger>
+        </Hint>
         <AppMenuContent align="end" className="w-40">
           <AppMenuLabel>Common</AppMenuLabel>
           {[

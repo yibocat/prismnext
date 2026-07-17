@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon, CopyIcon } from "lucide-react";
+import { Hint } from "@/components/ui/hint";
 import { openUrlInBrowser } from "@/lib/browser-link";
 import { cn } from "@/lib/utils";
 import { literatureMetadataLabelClass } from "./literature-list-chrome";
@@ -382,19 +383,20 @@ export function CopyFeedbackButton({
   };
 
   return (
-    <button
-      type="button"
-      className={className}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={handleClick}
-      title={title}
-    >
-      {copied ? (
-        <CheckIcon className="size-3 text-success" aria-label="Copied" />
-      ) : (
-        children
-      )}
-    </button>
+    <Hint label={title}>
+      <button
+        type="button"
+        className={className}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={handleClick}
+      >
+        {copied ? (
+          <CheckIcon className="size-3 text-success" aria-label="Copied" />
+        ) : (
+          children
+        )}
+      </button>
+    </Hint>
   );
 }
 

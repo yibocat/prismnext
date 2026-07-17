@@ -17,6 +17,7 @@ import {
   type ModelConfig,
 } from "@/lib/providers";
 import { ChevronDownIcon } from "lucide-react";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 
 export function ModelSelect() {
@@ -63,16 +64,17 @@ export function ModelSelect() {
 
   return (
     <AppMenu>
-      <AppMenuTrigger asChild>
-        <button
-          type="button"
-          className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors max-w-56"
-          title="AI Model"
-        >
-          <span className="truncate">{displayName}</span>
-          <ChevronDownIcon className="size-3 shrink-0" />
-        </button>
-      </AppMenuTrigger>
+      <Hint label="AI Model">
+        <AppMenuTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors max-w-56"
+          >
+            <span className="truncate">{displayName}</span>
+            <ChevronDownIcon className="size-3 shrink-0" />
+          </button>
+        </AppMenuTrigger>
+      </Hint>
       <AppMenuContent align="start" className="min-w-[13rem] w-[min(20rem,calc(100vw-2rem))] max-h-72 overflow-y-auto">
         {isEmpty && (
           <p className={cn("px-2 py-3 text-center text-muted-foreground", appMenuFontClass)}>

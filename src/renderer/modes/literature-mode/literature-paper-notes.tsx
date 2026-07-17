@@ -8,6 +8,7 @@ import { resolveNotebookDir } from "@/types/workspace";
 import { listPaperNotes, type PaperNoteFile } from "@/lib/literature/paper-notes";
 import { createNewPaperNote, openPaperNote } from "@/lib/literature/create-paper-note";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/hint";
 import { Card } from "@/components/ui/card";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
 import { cn } from "@/lib/utils";
@@ -51,28 +52,29 @@ function NoteCard({
       )}
       onClick={onOpen}
     >
-      <button
-        type="button"
-        className={cn(
-          "absolute right-1 top-1 z-10 flex size-5 items-center justify-center rounded-sm",
-          "text-muted-foreground/45 opacity-0 transition-opacity",
-          "hover:bg-destructive/10 hover:text-destructive",
-          "group-hover:opacity-100 focus-visible:opacity-100",
-          deleting && "opacity-100 pointer-events-none",
-        )}
-        title={deleteTitle}
-        disabled={deleting}
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete();
-        }}
-      >
-        {deleting ? (
-          <Loader2Icon className="size-2.5 animate-spin" />
-        ) : (
-          <Trash2Icon className="size-2.5" />
-        )}
-      </button>
+      <Hint label={deleteTitle}>
+        <button
+          type="button"
+          className={cn(
+            "absolute right-1 top-1 z-10 flex size-5 items-center justify-center rounded-sm",
+            "text-muted-foreground/45 opacity-0 transition-opacity",
+            "hover:bg-destructive/10 hover:text-destructive",
+            "group-hover:opacity-100 focus-visible:opacity-100",
+            deleting && "opacity-100 pointer-events-none",
+          )}
+          disabled={deleting}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
+          {deleting ? (
+            <Loader2Icon className="size-2.5 animate-spin" />
+          ) : (
+            <Trash2Icon className="size-2.5" />
+          )}
+        </button>
+      </Hint>
 
       <div className="flex flex-col gap-0.5 p-2.5 pr-6">
         <p className="truncate text-[length:var(--font-size-13)] font-medium leading-snug text-foreground/90">
@@ -138,22 +140,23 @@ export function LiteraturePaperNotesSection({
           {t("modes.literature.notes")}
           {notes.length > 0 ? ` (${notes.length})` : ""}
         </h3>
-        <Button
-          type="button"
-          size="xs"
-          variant="ghost"
-          title={t("literature.notes.newNote")}
-          className="h-6 px-1.5 text-[length:var(--font-menu-item)] text-muted-foreground hover:text-foreground"
-          disabled={creatingNote || !projectRoot}
-          onClick={() => void handleNewNote()}
-        >
-          {creatingNote ? (
-            <Loader2Icon className="size-3 animate-spin" />
-          ) : (
-            <NotebookPenIcon className="size-3" />
-          )}
-          <span className="ml-1">{t("literature.notes.newNote")}</span>
-        </Button>
+        <Hint label={t("literature.notes.newNote")}>
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            className="h-6 px-1.5 text-[length:var(--font-menu-item)] text-muted-foreground hover:text-foreground"
+            disabled={creatingNote || !projectRoot}
+            onClick={() => void handleNewNote()}
+          >
+            {creatingNote ? (
+              <Loader2Icon className="size-3 animate-spin" />
+            ) : (
+              <NotebookPenIcon className="size-3" />
+            )}
+            <span className="ml-1">{t("literature.notes.newNote")}</span>
+          </Button>
+        </Hint>
       </div>
 
       {isZoteroPaper ? (

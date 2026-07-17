@@ -10,6 +10,7 @@ import { useProjectOpen } from "@/hooks/use-project-open";
 import { NewProjectDialog } from "./new-project-dialog";
 import { loadProjectIcon, ProjectIconBadge } from "./project-icon";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import type { UpdateCheckResult } from "@/types/electron";
 import {
@@ -378,17 +379,18 @@ function RecentProjects({ projectOpen }: { projectOpen: (path: string) => Promis
                 </span>
               </div>
             )}
-            <button
-              type="button"
-              className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/70 hover:bg-background hover:text-foreground"
-              onClick={(e) => {
-                e.stopPropagation();
-                removeRecentProject(p.path);
-              }}
-              title={t("welcome.removeRecent")}
-            >
-              <XIcon className="size-3.5" />
-            </button>
+            <Hint label={t("welcome.removeRecent")}>
+              <button
+                type="button"
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/70 hover:bg-background hover:text-foreground"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeRecentProject(p.path);
+                }}
+              >
+                <XIcon className="size-3.5" />
+              </button>
+            </Hint>
           </div>
         );
       })}
@@ -427,31 +429,33 @@ export function WelcomePage({ onSkip }: { onSkip?: () => void }) {
         className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center justify-end gap-0.5 px-2 select-none"
         style={{ transform: "translateZ(0)" }}
       >
-        <button
-          type="button"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title={t("common.theme", { theme })}
-          onClick={cycleTheme}
-        >
-          {theme === "system" ? (
-            <MonitorIcon className="size-3.5" />
-          ) : resolvedTheme === "dark" ? (
-            <SunIcon className="size-3.5" />
-          ) : (
-            <MoonIcon className="size-3.5" />
-          )}
-        </button>
-        <button
-          type="button"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title={t("common.settings")}
-          onClick={() => {
-            useDocumentStore.getState().setShowWelcome(false);
-            useLayoutStore.getState().setLeftSidebarView("settings");
-          }}
-        >
-          <EllipsisIcon className="size-3.5" />
-        </button>
+        <Hint label={t("common.theme", { theme })}>
+          <button
+            type="button"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            onClick={cycleTheme}
+          >
+            {theme === "system" ? (
+              <MonitorIcon className="size-3.5" />
+            ) : resolvedTheme === "dark" ? (
+              <SunIcon className="size-3.5" />
+            ) : (
+              <MoonIcon className="size-3.5" />
+            )}
+          </button>
+        </Hint>
+        <Hint label={t("common.settings")} shortcutId="shell.openSettings">
+          <button
+            type="button"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            onClick={() => {
+              useDocumentStore.getState().setShowWelcome(false);
+              useLayoutStore.getState().setLeftSidebarView("settings");
+            }}
+          >
+            <EllipsisIcon className="size-3.5" />
+          </button>
+        </Hint>
       </div>
 
       {/*

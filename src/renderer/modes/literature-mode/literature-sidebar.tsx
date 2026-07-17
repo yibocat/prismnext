@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/app-context-menu";
 import type { LiteratureCollection, LiteratureLibraryView } from "@/types/electron.d";
 import { cn } from "@/lib/utils";
+import { Hint } from "@/components/ui/hint";
 import { useLiteratureExtractStore } from "@/stores/literature-extract-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { PaperExtractSource } from "@/types/electron.d";
@@ -414,38 +415,42 @@ function LiteratureLibrarySidebar() {
         </span>
         <div className="flex items-center gap-0.5 shrink-0">
           {boundCollectionId ? (
-            <button
-              type="button"
-              className={headerBtn}
-              title={
+            <Hint
+              label={
                 lastZoteroSyncAt
                   ? `Refresh from Zotero (last sync ${new Date(lastZoteroSyncAt).toLocaleString()})`
                   : "Refresh from Zotero"
               }
-              disabled={!projectRoot || pullingFromZotero}
-              onClick={() => {
-                if (!projectRoot) return;
-                void pullFromZotero(projectRoot);
-              }}
             >
-              {pullingFromZotero ? (
-                <Loader2Icon className="size-3.5 animate-spin" />
-              ) : (
-                <RefreshCwIcon className="size-3.5" />
-              )}
-            </button>
+              <button
+                type="button"
+                className={headerBtn}
+                disabled={!projectRoot || pullingFromZotero}
+                onClick={() => {
+                  if (!projectRoot) return;
+                  void pullFromZotero(projectRoot);
+                }}
+              >
+                {pullingFromZotero ? (
+                  <Loader2Icon className="size-3.5 animate-spin" />
+                ) : (
+                  <RefreshCwIcon className="size-3.5" />
+                )}
+              </button>
+            </Hint>
           ) : null}
-          <button
-            type="button"
-            className={headerBtn}
-            title={t("modes.literature.newCollection")}
-            disabled={!projectRoot || collectionWritePending}
-            onClick={() =>
-              openCreateDialog(resolveLocalParentId(libraryView, visibleCollections, boundCollectionId))
-            }
-          >
-            <FolderPlusIcon className="size-3.5" />
-          </button>
+          <Hint label={t("modes.literature.newCollection")}>
+            <button
+              type="button"
+              className={headerBtn}
+              disabled={!projectRoot || collectionWritePending}
+              onClick={() =>
+                openCreateDialog(resolveLocalParentId(libraryView, visibleCollections, boundCollectionId))
+              }
+            >
+              <FolderPlusIcon className="size-3.5" />
+            </button>
+          </Hint>
         </div>
       </SidebarHeader>
 

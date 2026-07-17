@@ -20,6 +20,7 @@ import { useTerminalStore } from "@/stores/terminal-store";
 import { useGitStore } from "@/stores/git-store";
 import { scheduleGitStatusRefresh } from "@/lib/git/checkout-context";
 import { AiBar } from "@/components/modules/chat";
+import { Hint } from "@/components/ui/hint";
 import {
   PanelRight,
   MaximizeIcon,
@@ -28,6 +29,8 @@ import {
   Maximize2Icon,
   XIcon,
   ArrowLeftIcon,
+  ChevronsLeftRightEllipsisIcon,
+  LayoutGridIcon,
 } from "lucide-react";
 import {
   clampSidebarDragPreviewWidth,
@@ -45,13 +48,23 @@ import {
   closeRightArea,
   toggleRightAreaMaximize,
 } from "@/lib/workspace/right-area-layout";
+
+/** RightArea toolbar mode → open (split) shortcut. */
+const MODE_TOOLBAR_SHORTCUT: Partial<Record<string, string>> = {
+  texworkspace: "workspace.openTexWorkspace",
+  literature: "workspace.openLiterature",
+  experiments: "workspace.openExperiments",
+  files: "workspace.openFiles",
+  git: "workspace.openGit",
+  browser: "workspace.openBrowser",
+  terminal: "workspace.openTerminal",
+};
 import {
   AppMenu,
   AppMenuContent,
   AppMenuItem,
   AppMenuTrigger,
 } from "@/components/ui/app-menu";
-import { ChevronsLeftRightEllipsisIcon, LayoutGridIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useActiveSettingsEditorSlot } from "@/hooks/use-settings-editor";
 import { settingsPanelSlotTitle } from "@/lib/settings/settings-panel-slots";
@@ -601,14 +614,15 @@ function RightAreaWorkspace({
             )}
           </div>
           <div className="flex items-center min-w-0 gap-1 ml-0.5 shrink-0">
-            <button
-              type="button"
-              className={TITLEBAR_BTN}
-              title={t("shell.rightArea.backToSettings")}
-              onClick={closeSettingsPanel}
-            >
-              <ArrowLeftIcon className="size-3.5" />
-            </button>
+            <Hint label={t("shell.rightArea.backToSettings")}>
+              <button
+                type="button"
+                className={TITLEBAR_BTN}
+                onClick={closeSettingsPanel}
+              >
+                <ArrowLeftIcon className="size-3.5" />
+              </button>
+            </Hint>
             <ServerStatusDot />
             <p className="min-w-0 max-w-[14rem] truncate text-[length:var(--font-size-12)] font-medium">
               {stackedToolbarTitle}
@@ -618,30 +632,33 @@ function RightAreaWorkspace({
           <div className="flex items-center gap-0.5 shrink-0">
             {!isMac ? (
               <>
-                <button
-                  type="button"
-                  className={TITLEBAR_BTN}
-                  title={t("shell.minimize")}
-                  onClick={() => window.electronAPI?.windowMinimize()}
-                >
-                  <Minimize2Icon className="size-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className={TITLEBAR_BTN}
-                  title={isMaximized ? t("shell.restore") : t("shell.maximize")}
-                  onClick={() => window.electronAPI?.windowMaximize()}
-                >
-                  <Maximize2Icon className="size-3.5" />
-                </button>
-                <button
-                  type="button"
-                  className={cn(TITLEBAR_BTN, "hover:bg-destructive hover:text-white")}
-                  title={t("shell.close")}
-                  onClick={() => window.electronAPI?.windowClose()}
-                >
-                  <XIcon className="size-3.5" />
-                </button>
+                <Hint label={t("shell.minimize")}>
+                  <button
+                    type="button"
+                    className={TITLEBAR_BTN}
+                    onClick={() => window.electronAPI?.windowMinimize()}
+                  >
+                    <Minimize2Icon className="size-3.5" />
+                  </button>
+                </Hint>
+                <Hint label={isMaximized ? t("shell.restore") : t("shell.maximize")}>
+                  <button
+                    type="button"
+                    className={TITLEBAR_BTN}
+                    onClick={() => window.electronAPI?.windowMaximize()}
+                  >
+                    <Maximize2Icon className="size-3.5" />
+                  </button>
+                </Hint>
+                <Hint label={t("shell.close")}>
+                  <button
+                    type="button"
+                    className={cn(TITLEBAR_BTN, "hover:bg-destructive hover:text-white")}
+                    onClick={() => window.electronAPI?.windowClose()}
+                  >
+                    <XIcon className="size-3.5" />
+                  </button>
+                </Hint>
               </>
             ) : null}
           </div>
@@ -680,15 +697,16 @@ function RightAreaWorkspace({
         {/* ── Tab overflow dropdown (shown when tabs don't fit) ── */}
         {tabsOverflow && tabs.length > 0 && (
           <AppMenu>
-            <AppMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                title={t("shell.rightArea.openTabs")}
-              >
-                <ChevronsLeftRightEllipsisIcon className="size-3.5" />
-              </button>
-            </AppMenuTrigger>
+            <Hint label={t("shell.rightArea.openTabs")}>
+              <AppMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                >
+                  <ChevronsLeftRightEllipsisIcon className="size-3.5" />
+                </button>
+              </AppMenuTrigger>
+            </Hint>
             <AppMenuContent align="end" className="w-52 max-h-80 overflow-y-auto">
               {tabs.map((tab) => (
                 <AppMenuItem
@@ -699,17 +717,18 @@ function RightAreaWorkspace({
                     tab.id === activeTabId && "font-medium",
                   )}
                   trailing={
-                    <button
-                      type="button"
-                      className="flex size-4 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/10 transition-opacity"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleTabClose(tab.id);
-                      }}
-                      title="Close tab"
-                    >
-                      <XIcon className="size-2.5" />
-                    </button>
+                    <Hint label={t("menu.closeTab")}>
+                      <button
+                        type="button"
+                        className="flex size-4 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/10 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleTabClose(tab.id);
+                        }}
+                      >
+                        <XIcon className="size-2.5" />
+                      </button>
+                    </Hint>
                   }
                 >
                   <span className={cn(tab.isPreview && "italic")}>
@@ -724,30 +743,33 @@ function RightAreaWorkspace({
         {/* Window controls when editorMaximized (ContentTopBar is hidden) */}
         {editorMaximized && !isMac && (
           <>
-            <button
-              type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              title="Minimize"
-              onClick={() => window.electronAPI?.windowMinimize()}
-            >
-              <Minimize2Icon className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              title={isMaximized ? "Restore" : "Maximize"}
-              onClick={() => window.electronAPI?.windowMaximize()}
-            >
-              <Maximize2Icon className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
-              title="Close"
-              onClick={() => window.electronAPI?.windowClose()}
-            >
-              <XIcon className="size-3.5" />
-            </button>
+            <Hint label={t("shell.minimize")}>
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                onClick={() => window.electronAPI?.windowMinimize()}
+              >
+                <Minimize2Icon className="size-3.5" />
+              </button>
+            </Hint>
+            <Hint label={isMaximized ? t("shell.restore") : t("shell.maximize")}>
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                onClick={() => window.electronAPI?.windowMaximize()}
+              >
+                <Maximize2Icon className="size-3.5" />
+              </button>
+            </Hint>
+            <Hint label={t("shell.close")}>
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
+                onClick={() => window.electronAPI?.windowClose()}
+              >
+                <XIcon className="size-3.5" />
+              </button>
+            </Hint>
             <div className="mx-1 h-4 w-px bg-border shrink-0" />
           </>
         )}
@@ -757,15 +779,16 @@ function RightAreaWorkspace({
         {/* ── Mode buttons — collapse to dropdown on narrow windows ── */}
         {compactModes ? (
           <AppMenu>
-            <AppMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                title={t("shell.rightArea.modes")}
-              >
-                <LayoutGridIcon className="size-3.5" />
-              </button>
-            </AppMenuTrigger>
+            <Hint label={t("shell.rightArea.modes")}>
+              <AppMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
+                  <LayoutGridIcon className="size-3.5" />
+                </button>
+              </AppMenuTrigger>
+            </Hint>
             <AppMenuContent align="end" className="min-w-[8.5rem]">
               {toolbarModes.map((mode) => {
                 const isActive = activeModes.includes(mode.id as RightToolbarTab);
@@ -797,71 +820,80 @@ function RightAreaWorkspace({
             const isFocused = focusedMode === mode.id;
             const label = modeLabel(mode);
             return (
-              <button
+              <Hint
                 key={mode.id}
-                type="button"
-                className={cn(
-                  "flex items-center justify-center rounded transition-all",
-                  isActive
-                    ? cn(
-                        "bg-muted text-foreground h-6 px-1.5 gap-0.5",
-                        isFocused && "ring-1 ring-primary/40",
-                      )
-                    : "size-6 text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                )}
-                title={
+                label={
                   isActive && isFocused
                     ? t("modes.closeMode", { label })
                     : label
                 }
-                onClick={() => handleModeClick(mode.id)}
+                shortcutId={MODE_TOOLBAR_SHORTCUT[mode.id]}
               >
-                {mode.icon}
-                {isActive && <XIcon className="size-2.5" />}
-              </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "flex items-center justify-center rounded transition-all",
+                    isActive
+                      ? cn(
+                          "bg-muted text-foreground h-6 px-1.5 gap-0.5",
+                          isFocused && "ring-1 ring-primary/40",
+                        )
+                      : "size-6 text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                  )}
+                  onClick={() => handleModeClick(mode.id)}
+                >
+                  {mode.icon}
+                  {isActive && <XIcon className="size-2.5" />}
+                </button>
+              </Hint>
             );
           }))}
 
         <div className="mx-1 h-4 w-px bg-border shrink-0" />
 
         {/* Editor maximize / restore */}
-        <button
-          type="button"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title={
+        <Hint
+          label={
             editorMaximized
               ? t("shell.rightArea.restorePanel")
               : t("shell.rightArea.maximizePanel")
           }
-          onClick={() => {
-            toggleRightAreaMaximize({
-              centerRef: centerRef.current,
-              rightAreaRef: rightAreaRef.current,
-              leftSidebarRef: leftSidebarRef.current,
-              isMobile,
-            });
-          }}
+          shortcutId="shell.toggleRightAreaMaximize"
         >
-          {editorMaximized ? <MinimizeIcon className="size-3.5" /> : <MaximizeIcon className="size-3.5" />}
-        </button>
+          <button
+            type="button"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            onClick={() => {
+              toggleRightAreaMaximize({
+                centerRef: centerRef.current,
+                rightAreaRef: rightAreaRef.current,
+                leftSidebarRef: leftSidebarRef.current,
+                isMobile,
+              });
+            }}
+          >
+            {editorMaximized ? <MinimizeIcon className="size-3.5" /> : <MaximizeIcon className="size-3.5" />}
+          </button>
+        </Hint>
 
         {/* Close right area panel */}
-        <button
-          type="button"
-          className={cn(
-            "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
-            rightAreaExpanded && "bg-muted text-foreground",
-          )}
-          title={t("shell.rightArea.closePanel")}
-          onClick={() => {
-            closeRightArea({
-              centerRef: centerRef.current,
-              rightAreaRef: rightAreaRef.current,
-            });
-          }}
-        >
-          <PanelRight className="size-3.5" />
-        </button>
+        <Hint label={t("shell.rightArea.closePanel")} shortcutId="shell.toggleRightArea">
+          <button
+            type="button"
+            className={cn(
+              "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
+              rightAreaExpanded && "bg-muted text-foreground",
+            )}
+            onClick={() => {
+              closeRightArea({
+                centerRef: centerRef.current,
+                rightAreaRef: rightAreaRef.current,
+              });
+            }}
+          >
+            <PanelRight className="size-3.5" />
+          </button>
+        </Hint>
         </div>
       </div>
 

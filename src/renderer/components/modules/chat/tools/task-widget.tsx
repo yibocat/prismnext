@@ -5,6 +5,10 @@ import { BotIcon } from "lucide-react";
 import { ToolCard, param } from "./shared";
 import { AssistantBlockList } from "../assistant-block-list";
 import { buildToolResultMapFromBlocks } from "./tool-result-map";
+import {
+  formatOrchestratorBuiltinTaskDeniedMessage,
+  isOpaqueTaskCancelledResult,
+} from "../../../../../shared/task-deny-message";
 
 /** OpenCode built-in subagent types */
 const OPENCODE_AGENT_META: Record<string, { label: string; desc: string }> = {
@@ -180,10 +184,13 @@ export const TaskWidget = memo(function TaskWidget({
               </p>
               <pre className="font-mono whitespace-pre-wrap text-muted-foreground text-[length:var(--font-size-12)]">
                 {(() => {
-                  const raw =
+                  let raw =
                     (typeof toolResult.content === "string"
                       ? toolResult.content
                       : JSON.stringify(toolResult.content ?? "", null, 2)) || "";
+                  if (toolResult.is_error && isOpaqueTaskCancelledResult(raw)) {
+                    raw = formatOrchestratorBuiltinTaskDeniedMessage(agentType);
+                  }
                   return raw.length > 2000
                     ? raw.slice(0, 2000) + `\n\n··· ${raw.length - 2000} more chars`
                     : raw;

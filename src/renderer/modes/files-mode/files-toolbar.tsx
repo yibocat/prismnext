@@ -4,6 +4,7 @@ import { openUrlInBrowser } from "@/lib/browser-link";
 import { GlobeIcon } from "lucide-react";
 import { MarkdownToolbar } from "@/components/modules/editor/toolbars/markdown-toolbar";
 import { LanguageLabel } from "@/components/modules/editor/toolbars/language-label";
+import { Hint } from "@/components/ui/hint";
 
 interface FileToolbarProps {
   filePath?: string;
@@ -21,14 +22,15 @@ function HtmlPreviewButton({ filePath }: { filePath: string }) {
   };
 
   return (
-    <button
-      type="button"
-      className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-      title={t("modes.files.previewInBrowser")}
-      onClick={handlePreview}
-    >
-      <GlobeIcon className="size-3.5" />
-    </button>
+    <Hint label={t("modes.files.previewInBrowser")}>
+      <button
+        type="button"
+        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+        onClick={handlePreview}
+      >
+        <GlobeIcon className="size-3.5" />
+      </button>
+    </Hint>
   );
 }
 

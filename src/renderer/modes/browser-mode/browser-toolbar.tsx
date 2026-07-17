@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useBrowserStore } from "@/stores/browser-store";
 import { getWebview } from "./webview-registry";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import {
   AppMenu,
@@ -122,40 +123,44 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
   return (
     <>
       {/* Nav buttons */}
-      <button
-        type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-        title={t("modes.browser.back")}
-        onClick={handleBack}
-      >
-        <ArrowLeftIcon className="size-3.5" />
-      </button>
-      <button
-        type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-        title={t("modes.browser.forward")}
-        onClick={handleForward}
-      >
-        <ArrowRightIcon className="size-3.5" />
-      </button>
-      <button
-        type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-        title={isLoading ? t("modes.browser.stop") : t("modes.browser.reload")}
-        onClick={isLoading ? handleStop : handleReload}
-      >
-        <RefreshCwIcon className={cn("size-3.5", isLoading && "animate-spin")} />
-      </button>
+      <Hint label={t("modes.browser.back")}>
+        <button
+          type="button"
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+          onClick={handleBack}
+        >
+          <ArrowLeftIcon className="size-3.5" />
+        </button>
+      </Hint>
+      <Hint label={t("modes.browser.forward")}>
+        <button
+          type="button"
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+          onClick={handleForward}
+        >
+          <ArrowRightIcon className="size-3.5" />
+        </button>
+      </Hint>
+      <Hint label={isLoading ? t("modes.browser.stop") : t("modes.browser.reload")}>
+        <button
+          type="button"
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+          onClick={isLoading ? handleStop : handleReload}
+        >
+          <RefreshCwIcon className={cn("size-3.5", isLoading && "animate-spin")} />
+        </button>
+      </Hint>
 
       {/* Bookmark */}
-      <button
-        type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-        title={isBookmarked ? t("modes.browser.bookmark") : t("modes.browser.bookmark")}
-        onClick={handleBookmark}
-      >
-        <StarIcon className={cn("size-3.5", isBookmarked && "fill-warning text-warning")} />
-      </button>
+      <Hint label={t("modes.browser.bookmark")}>
+        <button
+          type="button"
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+          onClick={handleBookmark}
+        >
+          <StarIcon className={cn("size-3.5", isBookmarked && "fill-warning text-warning")} />
+        </button>
+      </Hint>
 
       <div className="mx-1 h-4 w-px bg-border shrink-0" />
 
@@ -176,15 +181,16 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
 
       {/* Three-dot menu */}
       <AppMenu open={menuOpen} onOpenChange={setMenuOpen}>
-        <AppMenuTrigger asChild>
-          <button
-            type="button"
-            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-            title="More"
-          >
-            <EllipsisIcon className="size-3.5" />
-          </button>
-        </AppMenuTrigger>
+        <Hint label="More">
+          <AppMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+            >
+              <EllipsisIcon className="size-3.5" />
+            </button>
+          </AppMenuTrigger>
+        </Hint>
         <AppMenuContent align="end" className="min-w-[8.5rem]">
           <AppMenuItem onClick={handleClearHistory}>{t("modes.browser.clearHistory")}</AppMenuItem>
           <AppMenuSeparator />

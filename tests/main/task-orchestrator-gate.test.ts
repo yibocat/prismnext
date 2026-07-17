@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildTaskPermissionBlock,
   extractTaskSubagentType,
+  formatOrchestratorBuiltinTaskDeniedMessage,
+  isOpaqueTaskCancelledResult,
   isOpencodeBuiltinTaskSubagent,
   shouldDenyOrchestratorBuiltinTask,
 } from "../../src/main/services/task-orchestrator-gate";
@@ -38,5 +40,18 @@ describe("task-orchestrator-gate", () => {
     expect(shouldDenyOrchestratorBuiltinTask(null)).toBe(true);
     expect(shouldDenyOrchestratorBuiltinTask(undefined)).toBe(true);
     expect(shouldDenyOrchestratorBuiltinTask("")).toBe(true);
+  });
+
+  it("formatOrchestratorBuiltinTaskDeniedMessage clarifies not a user cancel", () => {
+    const msg = formatOrchestratorBuiltinTaskDeniedMessage("explore");
+    expect(msg).toContain("@explore");
+    expect(msg).toMatch(/not a user cancel/i);
+    expect(msg).toContain("literature-stage");
+  });
+
+  it("isOpaqueTaskCancelledResult detects OpenCode cancel JSON", () => {
+    expect(isOpaqueTaskCancelledResult('{"error":"Task cancelled"}')).toBe(true);
+    expect(isOpaqueTaskCancelledResult("Task cancelled")).toBe(true);
+    expect(isOpaqueTaskCancelledResult(formatOrchestratorBuiltinTaskDeniedMessage("explore"))).toBe(false);
   });
 });

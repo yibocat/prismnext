@@ -16,6 +16,7 @@ import {
   deriveSessionTitleForSend,
   extractSessionTitle,
   isGenericSessionTitle,
+  pruneDisposableEmptyChatTabs,
 } from "@/lib/chat/session-title";
 import {
   persistAndSyncIntensiveReading,
@@ -23,6 +24,7 @@ import {
 } from "@/lib/literature/sync-intensive-reading";
 import { scheduleCitationStagingBackfill } from "@/lib/literature/sync-citation-staging-from-messages";
 import { useCitationStagingStore } from "./citation-staging-store";
+import type { ChatPreparePhase } from "../../shared/chat-prepare-phases";
 
 // ─── Types ───
 
@@ -124,6 +126,12 @@ interface TabState {
   streamingMessage: ChatStreamMessage | null;
   /** OpenCode assistant message id for the active streaming turn (blocks isolation). */
   streamingPartMessageId: string | null;
+  /**
+   * OpenCode messageIds already committed for this tab. Late ACP replays of
+   * those ids must not re-enter `streamingMessage` (otherwise prior-turn tools /
+   * thoughts append under the latest turn until restart/hydrate).
+   */
+  settledStreamMessageIds: string[];
   isStreaming: boolean;
   error: string | null;
   draft: TabDraft;
@@ -153,6 +161,11 @@ interface TabState {
   intensivePaperIds: string[];
   /** Live activity for OpenCode Task / subagent runs keyed by parent task tool_use id. */
   subAgentRuns: Record<string, SubAgentRun>;
+  /**
+   * First-turn preparation stage from main (`system.prepare`) while there is
+   * still no assistant content — shown instead of a bare "Thinking…".
+   */
+  preparePhase: ChatPreparePhase | null;
 }
 
 export interface SubAgentRun {
@@ -176,6 +189,7 @@ function makeDefaultTab(id: string): TabState {
     messages: [],
     streamingMessage: null,
     streamingPartMessageId: null,
+    settledStreamMessageIds: [],
     isStreaming: false,
     error: null,
     draft: { input: "" },
@@ -189,7 +203,26 @@ function makeDefaultTab(id: string): TabState {
     sessionCwd: null,
     intensivePaperIds: [],
     subAgentRuns: {},
+    preparePhase: null,
   };
+}
+
+function withSettledStreamMessageId(tab: TabState, messageId: string | null | undefined): string[] {
+  const id = messageId?.trim();
+  if (!id || tab.settledStreamMessageIds.includes(id)) return tab.settledStreamMessageIds;
+  return [...tab.settledStreamMessageIds, id];
+}
+
+function collectCommittedToolUseIds(messages: ChatStreamMessage[]): Set<string> {
+  const ids = new Set<string>();
+  for (const msg of messages) {
+    for (const block of msg.message?.content || []) {
+      if (block.type === "tool_use" && typeof block.id === "string" && block.id) {
+        ids.add(block.id);
+      }
+    }
+  }
+  return ids;
 }
 
 /** Session history cache — LRU-capped so long chats cannot grow forever (Bug #23). */
@@ -262,6 +295,8 @@ interface ChatState {
   isLoadingSession: boolean;
   /** Debug: incremented on every _upsertLastMessage call to verify re-renders */
   streamTick: number;
+  /** Active tab first-turn prepare phase (projected). */
+  preparePhase: ChatPreparePhase | null;
 
   // Tab management
   createTab: () => string;
@@ -312,6 +347,7 @@ interface ChatState {
   _setSessionId: (tabId: string, id: string) => void;
   _setTitle: (tabId: string, title: string) => void;
   _setStreaming: (tabId: string, streaming: boolean) => void;
+  _setPreparePhase: (tabId: string, phase: ChatPreparePhase | null) => void;
   _setError: (tabId: string, error: string | null) => void;
   _setContextTokens: (tabId: string, tokens: number, breakdown?: Record<string, number> | null, schema?: { key: string; label: string; color: string; description?: string; order?: number }[] | null) => void;
   _setPromptStale: (tabId: string, stale: boolean) => void;
@@ -385,7 +421,23 @@ function extractPersistedBreakdown(messages: ChatStreamMessage[]): {
 
 function projectActiveTab(tabs: TabState[], activeTabId: string) {
   const tab = tabs.find((t) => t.id === activeTabId);
-  if (!tab) return { messages: [] as ChatStreamMessage[], streamingMessage: null as ChatStreamMessage | null, messageMeta: {} as Record<number, string>, sessionId: null as string | null, isStreaming: false, error: null as string | null, contextTokens: null as number | null, contextBreakdown: null as Record<string, number> | null, categorySchema: null as { key: string; label: string; color: string; description?: string; order?: number }[] | null, promptStale: false, isLoadingSession: false, streamTick: 0 };
+  if (!tab) {
+    return {
+      messages: [] as ChatStreamMessage[],
+      streamingMessage: null as ChatStreamMessage | null,
+      messageMeta: {} as Record<number, string>,
+      sessionId: null as string | null,
+      isStreaming: false,
+      error: null as string | null,
+      contextTokens: null as number | null,
+      contextBreakdown: null as Record<string, number> | null,
+      categorySchema: null as { key: string; label: string; color: string; description?: string; order?: number }[] | null,
+      promptStale: false,
+      isLoadingSession: false,
+      streamTick: 0,
+      preparePhase: null as ChatPreparePhase | null,
+    };
+  }
 
   // Primary: tab-stored contextTokens (set by _setContextTokens during live
   // chat, or restored from sessions-context.json during session load).
@@ -414,6 +466,7 @@ function projectActiveTab(tabs: TabState[], activeTabId: string) {
     promptStale: tab.promptStale,
     isLoadingSession: tab.isLoadingSession,
     streamTick: (tab as any).streamTick || 0,
+    preparePhase: tab.preparePhase ?? null,
   };
 }
 
@@ -477,18 +530,32 @@ function syncTabSessionMapping(tabId: string, sessionId: string): void {
 /** Commit in-flight streaming only during an active turn; discard stale orphans. */
 function finalizeStreamingForMutation(
   tab: TabState,
-): Pick<TabState, "messages" | "streamingMessage" | "streamingPartMessageId"> {
+): Pick<
+  TabState,
+  "messages" | "streamingMessage" | "streamingPartMessageId" | "settledStreamMessageIds"
+> {
   if (!tab.streamingMessage) {
-    return { messages: tab.messages, streamingMessage: null, streamingPartMessageId: null };
+    return {
+      messages: tab.messages,
+      streamingMessage: null,
+      streamingPartMessageId: null,
+      settledStreamMessageIds: tab.settledStreamMessageIds,
+    };
   }
   if (tab.isStreaming) {
     return {
       messages: [...tab.messages, tab.streamingMessage],
       streamingMessage: null,
       streamingPartMessageId: null,
+      settledStreamMessageIds: withSettledStreamMessageId(tab, tab.streamingPartMessageId),
     };
   }
-  return { messages: tab.messages, streamingMessage: null, streamingPartMessageId: null };
+  return {
+    messages: tab.messages,
+    streamingMessage: null,
+    streamingPartMessageId: null,
+    settledStreamMessageIds: tab.settledStreamMessageIds,
+  };
 }
 
 // ─── Store ───
@@ -840,6 +907,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             messages: [...t.messages, committed],
             streamingMessage: null,
             streamingPartMessageId: null,
+            settledStreamMessageIds: withSettledStreamMessageId(t, t.streamingPartMessageId),
           };
         }
         return { ...t, isStreaming: false };
@@ -1006,14 +1074,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     const existingTab = get().tabs.find((t) => t.sessionId === sessionId);
     if (existingTab) {
-      let nextTabs = get().tabs;
+      // Opening history from a blank New Chat should not leave that empty tab around.
+      let nextTabs = pruneDisposableEmptyChatTabs(get().tabs, existingTab.id);
       if (sessionCwd && sessionCwd !== existingTab.sessionCwd) {
         nextTabs = nextTabs.map((t) =>
           t.id === existingTab.id ? { ...t, sessionCwd } : t,
         );
-        set((s) => ({
-          tabs: s.tabs.map((t) => (t.id === existingTab.id ? { ...t, sessionCwd } : t)),
-        }));
       }
       if (sessionCwd && sessionCwd !== projectPath) {
         await attachWorktreeForSessionDirectory(sessionCwd);
@@ -1021,6 +1087,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         await applyCheckoutTransition({ type: "local" });
       }
       set({
+        tabs: nextTabs,
         activeTabId: existingTab.id,
         ...projectActiveTab(nextTabs, existingTab.id),
       });
@@ -1081,11 +1148,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         isLoadingSession: false,
         intensivePaperIds: storedIntensiveIds,
       };
-      set((s) => ({
-        tabs: [...s.tabs, hydratedTab],
-        activeTabId: tabId,
-        ...projectActiveTab([...s.tabs, hydratedTab], tabId),
-      }));
+      set((s) => {
+        const kept = pruneDisposableEmptyChatTabs(s.tabs);
+        const tabs = [...kept, hydratedTab];
+        return {
+          tabs,
+          activeTabId: tabId,
+          ...projectActiveTab(tabs, tabId),
+        };
+      });
       syncTabSessionMapping(tabId, sessionId);
       persistAndSyncIntensiveReading(sessionId, storedIntensiveIds);
       void import("./checkpoint-store").then(({ useCheckpointStore }) => {
@@ -1121,11 +1192,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       isLoadingSession: true,
       intensivePaperIds: storedIntensiveIds,
     };
-    set((s) => ({
-      tabs: [...s.tabs, loadingTab],
-      activeTabId: tabId,
-      ...projectActiveTab([...s.tabs, loadingTab], tabId),
-    }));
+    set((s) => {
+      const kept = pruneDisposableEmptyChatTabs(s.tabs);
+      const tabs = [...kept, loadingTab];
+      return {
+        tabs,
+        activeTabId: tabId,
+        ...projectActiveTab(tabs, tabId),
+      };
+    });
     syncTabSessionMapping(tabId, sessionId);
     persistAndSyncIntensiveReading(sessionId, storedIntensiveIds);
 
@@ -1269,6 +1344,14 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const streamTick = ((s as any).streamTick || 0) + 1;
       const incomingMessageId = messageId?.trim() || null;
 
+      // Late ACP replay of an already-committed OpenCode message — drop it.
+      // Without this, a delayed tool/thought chunk tagged with an old messageId
+      // commits the current turn and re-opens a streaming bubble of prior-turn
+      // tools at the bottom of the latest turn (vanishes after hydrate/restart).
+      if (incomingMessageId && tab.settledStreamMessageIds.includes(incomingMessageId)) {
+        return {};
+      }
+
       // New OpenCode assistant message — commit prior streaming turn first.
       let baseTab = tab;
       if (
@@ -1281,24 +1364,38 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           ...tab,
           messages: [...tab.messages, tab.streamingMessage],
           streamingMessage: null,
+          settledStreamMessageIds: withSettledStreamMessageId(tab, tab.streamingPartMessageId),
         };
       }
 
       const prev = baseTab.streamingMessage;
+      const committedToolIds = collectCommittedToolUseIds(baseTab.messages);
+      const incomingBlocks = msg.message?.content || [];
+      const newBlocks = incomingBlocks.filter((b) => {
+        if (b.type === "tool_use" && b.id && committedToolIds.has(b.id)) return false;
+        return true;
+      });
+      // Entire update was a late replay of already-committed tool_use ids.
+      if (incomingBlocks.length > 0 && newBlocks.length === 0) {
+        return {};
+      }
+      const msgForMerge: ChatStreamMessage =
+        newBlocks.length === incomingBlocks.length
+          ? msg
+          : { ...msg, message: { ...msg.message, content: newBlocks } };
 
       // No existing streaming message — set as first
       if (!prev) {
         const newTabs = [...s.tabs];
         newTabs[tabIdx] = {
           ...baseTab,
-          streamingMessage: msg,
+          streamingMessage: msgForMerge,
           streamingPartMessageId: incomingMessageId ?? baseTab.streamingPartMessageId,
         };
         return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId), streamTick };
       }
 
       const oldBlocks = prev.message?.content || [];
-      const newBlocks = msg.message?.content || [];
 
       const oldHasProgressThinking = oldBlocks.some(
         (b) => b.type === "thinking" && (b as ContentBlock)._progress
@@ -1307,14 +1404,32 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         (b) => (b.type === "text" || b.type === "thinking") && !(b as ContentBlock)._progress
       );
 
+      // Mid-turn layout split (progress→real, or tool→text/think). Only settle
+      // the prior messageId when OpenCode actually moved to a *different* id.
+      // Settling the same id here drops subsequent thought deltas (common for
+      // GLM-style streams that tool-call before/during reasoning).
+      const settlePriorMessageId = (
+        priorId: string | null | undefined,
+        nextId: string | null,
+      ): string[] => {
+        if (priorId && nextId && priorId !== nextId) {
+          return withSettledStreamMessageId(baseTab, priorId);
+        }
+        return baseTab.settledStreamMessageIds;
+      };
+
       if (oldHasProgressThinking && newHasRealContent) {
+        const nextId = incomingMessageId ?? baseTab.streamingPartMessageId;
         const newTabs = [...s.tabs];
-        const newMsgCount = baseTab.messages.length + 1;
         newTabs[tabIdx] = {
           ...baseTab,
           messages: [...baseTab.messages, prev],
-          streamingMessage: msg,
-          streamingPartMessageId: incomingMessageId ?? baseTab.streamingPartMessageId,
+          streamingMessage: msgForMerge,
+          streamingPartMessageId: nextId,
+          settledStreamMessageIds: settlePriorMessageId(
+            baseTab.streamingPartMessageId,
+            incomingMessageId,
+          ),
         };
         return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId), streamTick };
       }
@@ -1323,12 +1438,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const newIsTextOrThink = newBlocks.every((b) => b.type === "text" || b.type === "thinking");
 
       if (lastHasToolUse && newIsTextOrThink) {
+        const nextId = incomingMessageId ?? baseTab.streamingPartMessageId;
         const newTabs = [...s.tabs];
         newTabs[tabIdx] = {
           ...baseTab,
           messages: [...baseTab.messages, prev],
-          streamingMessage: msg,
-          streamingPartMessageId: incomingMessageId ?? baseTab.streamingPartMessageId,
+          streamingMessage: msgForMerge,
+          streamingPartMessageId: nextId,
+          settledStreamMessageIds: settlePriorMessageId(
+            baseTab.streamingPartMessageId,
+            incomingMessageId,
+          ),
         };
         return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId), streamTick };
       }
@@ -1343,8 +1463,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       });
 
       const merged: ChatStreamMessage = {
-        ...msg,
-        message: { ...msg.message, content: [...preserved, ...newBlocks] },
+        ...msgForMerge,
+        message: { ...msgForMerge.message, content: [...preserved, ...newBlocks] },
       };
 
       const newTabs = [...s.tabs];
@@ -1386,6 +1506,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }));
   },
 
+  _setPreparePhase: (tabId: string, phase: ChatPreparePhase | null) => {
+    set((s) => {
+      const tabs = s.tabs.map((t) =>
+        t.id === tabId ? { ...t, preparePhase: phase } : t,
+      );
+      return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+    });
+  },
+
   _setStreaming: (tabId: string, isStreaming: boolean) => {
     set((s) => {
       const tabs = s.tabs.map((t) => {
@@ -1395,15 +1524,23 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             return {
               ...t,
               isStreaming: false,
+              preparePhase: null,
               messages: [...t.messages, t.streamingMessage],
+              streamingMessage: null,
+              streamingPartMessageId: null,
+              settledStreamMessageIds: withSettledStreamMessageId(t, t.streamingPartMessageId),
+            };
+          }
+          if (t.streamingMessage) {
+            return {
+              ...t,
+              isStreaming: false,
+              preparePhase: null,
               streamingMessage: null,
               streamingPartMessageId: null,
             };
           }
-          if (t.streamingMessage) {
-            return { ...t, isStreaming: false, streamingMessage: null, streamingPartMessageId: null };
-          }
-          return { ...t, isStreaming: false };
+          return { ...t, isStreaming: false, preparePhase: null };
         }
         return { ...t, isStreaming: true };
       });

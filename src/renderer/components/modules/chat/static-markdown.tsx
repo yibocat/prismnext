@@ -18,6 +18,7 @@ import {
   decodeLibraryCiteHref,
   LibraryCitationInline,
 } from "./library-citation-inline";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import { openProjectFileFromChat } from "@/lib/files/open-project-file";
 import { useDocumentStore } from "@/stores/document-store";
@@ -69,14 +70,15 @@ function CitationRefLink({ n, sessionId }: { n: number; sessionId: string }) {
     return <span>[{n}]</span>;
   }
   return (
-    <button
-      type="button"
-      className="mx-0.5 inline-flex items-center rounded-[3px] px-1 align-baseline font-medium text-primary bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer"
-      title={`Open citation [${n}] in Literature → Session citations`}
-      onClick={() => jumpToStagedCitation(sessionId, n)}
-    >
-      [{n}]
-    </button>
+    <Hint label={`Open citation [${n}] in Literature → Session citations`}>
+      <button
+        type="button"
+        className="mx-0.5 inline-flex items-center rounded-[3px] px-1 align-baseline font-medium text-primary bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer"
+        onClick={() => jumpToStagedCitation(sessionId, n)}
+      >
+        [{n}]
+      </button>
+    </Hint>
   );
 }
 

@@ -30,6 +30,7 @@ import {
   XIcon,
   Trash2Icon,
 } from "lucide-react";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 
 function SidebarSectionTrigger({
@@ -197,15 +198,16 @@ export function BrowserSidebar() {
           {t("modes.browser.label")}
         </span>
         <div className="flex-1" />
-        <button
-          type="button"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0 disabled:opacity-50"
-          title={t("modes.browser.refreshSidebar")}
-          onClick={handleRefresh}
-          disabled={refreshing}
-        >
-          <RefreshCwIcon className={cn("size-3.5", refreshing && "animate-spin")} />
-        </button>
+        <Hint label={t("modes.browser.refreshSidebar")}>
+          <button
+            type="button"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0 disabled:opacity-50"
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            <RefreshCwIcon className={cn("size-3.5", refreshing && "animate-spin")} />
+          </button>
+        </Hint>
       </SidebarHeader>
 
       <SidebarContent className="overflow-auto px-1.5 py-1">
@@ -250,17 +252,18 @@ export function BrowserSidebar() {
                             <span className="truncate flex-1">{b.title}</span>
                           )}
                           {!(editing?.id === b.id && editing.type === "rename") && (
-                            <button
-                              type="button"
-                              className="size-4 shrink-0 rounded-sm opacity-0 group-hover/bookmark:opacity-100 hover:bg-muted-foreground/20 flex items-center justify-center"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeBookmark(b.id);
-                              }}
-                              title={t("modes.browser.removeBookmark")}
-                            >
-                              <StarIcon className="size-3 fill-warning text-warning" />
-                            </button>
+                            <Hint label={t("modes.browser.removeBookmark")}>
+                              <button
+                                type="button"
+                                className="size-4 shrink-0 rounded-sm opacity-0 group-hover/bookmark:opacity-100 hover:bg-muted-foreground/20 flex items-center justify-center"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeBookmark(b.id);
+                                }}
+                              >
+                                <StarIcon className="size-3 fill-warning text-warning" />
+                              </button>
+                            </Hint>
                           )}
                         </SidebarMenuButton>
                       </AppContextMenuTrigger>
@@ -314,14 +317,15 @@ export function BrowserSidebar() {
               count={recentVisits.length}
               extraAction={
                 recentVisits.length > 0 ? (
-                  <button
-                    type="button"
-                    className="flex size-4 items-center justify-center rounded-sm text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
-                    onClick={() => clearRecentVisits()}
-                    title={t("modes.browser.clearRecent")}
-                  >
-                    <Trash2Icon className="size-3" />
-                  </button>
+                  <Hint label={t("modes.browser.clearRecent")}>
+                    <button
+                      type="button"
+                      className="flex size-4 items-center justify-center rounded-sm text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+                      onClick={() => clearRecentVisits()}
+                    >
+                      <Trash2Icon className="size-3" />
+                    </button>
+                  </Hint>
                 ) : undefined
               }
             />
@@ -349,17 +353,18 @@ export function BrowserSidebar() {
                         <span className="text-[length:var(--font-hint)] text-muted-foreground/40 tabular-nums mr-1 shrink-0">
                           {formatTime(v.visitedAt)}
                         </span>
-                        <button
-                          type="button"
-                          className="size-4 shrink-0 rounded-sm opacity-0 group-hover/recent:opacity-100 hover:bg-muted-foreground/20 flex items-center justify-center"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeRecentVisit(v.url);
-                          }}
-                          title={t("modes.browser.removeRecent")}
-                        >
-                          <XIcon className="size-3" />
-                        </button>
+                        <Hint label={t("modes.browser.removeRecent")}>
+                          <button
+                            type="button"
+                            className="size-4 shrink-0 rounded-sm opacity-0 group-hover/recent:opacity-100 hover:bg-muted-foreground/20 flex items-center justify-center"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeRecentVisit(v.url);
+                            }}
+                          >
+                            <XIcon className="size-3" />
+                          </button>
+                        </Hint>
                       </SidebarMenuButton>
                     </AppContextMenuTrigger>
                     <AppContextMenuContent>

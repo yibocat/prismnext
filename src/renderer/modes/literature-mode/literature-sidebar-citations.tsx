@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import {
   buildLibraryIdentityIndex,
@@ -105,19 +106,20 @@ function CitationRow({
             In library
           </span>
         ) : entry.doi || entry.arxivId ? (
-          <button
-            type="button"
-            className={cn(headerBtn, "mt-0.5 size-6 shrink-0")}
-            title="Add to library"
-            disabled={adding}
-            onClick={() => onAddToLibrary(entry)}
-          >
-            {adding ? (
-              <Loader2Icon className="size-3 animate-spin" />
-            ) : (
-              <BookPlusIcon className="size-3" />
-            )}
-          </button>
+          <Hint label="Add to library">
+            <button
+              type="button"
+              className={cn(headerBtn, "mt-0.5 size-6 shrink-0")}
+              disabled={adding}
+              onClick={() => onAddToLibrary(entry)}
+            >
+              {adding ? (
+                <Loader2Icon className="size-3 animate-spin" />
+              ) : (
+                <BookPlusIcon className="size-3" />
+              )}
+            </button>
+          </Hint>
         ) : null}
       </div>
 

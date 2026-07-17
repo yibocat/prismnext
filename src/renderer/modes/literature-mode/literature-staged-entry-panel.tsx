@@ -4,6 +4,7 @@ import { Loader2Icon, ExternalLinkIcon, PlusCircleIcon, FolderOpenIcon } from "l
 import { toast } from "sonner";
 import { useCitationStagingStore } from "@/stores/citation-staging-store";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/hint";
 import { MetadataRow, literatureIdentifierValueClass, literatureMetadataLinkClass } from "./literature-inline-field";
 import {
   formatEntryType,
@@ -255,52 +256,57 @@ export function StagedCitationEntryPanel({
           <div className="flex flex-wrap items-center gap-2 pt-1">
             {inLibrary ? (
               <>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleOpenInLibrary}
-                  disabled={!inLibrary || !citation.libraryPaperId}
-                  title="Show this entry in the main Library list"
-                >
-                  <FolderOpenIcon className="size-3.5" />
-                  Open in library
-                </Button>
-                {hasPdf ? (
+                <Hint label="Show this entry in the main Library list">
                   <Button
                     type="button"
                     variant="secondary"
                     size="sm"
-                    onClick={handleOpenPdf}
-                    title={t("literature.detail.openPdf")}
+                    onClick={handleOpenInLibrary}
+                    disabled={!inLibrary || !citation.libraryPaperId}
                   >
-                    <ExternalLinkIcon className="size-3.5" />
-                    {t("literature.detail.openPdf")}
+                    <FolderOpenIcon className="size-3.5" />
+                    Open in library
                   </Button>
+                </Hint>
+                {hasPdf ? (
+                  <Hint label={t("literature.detail.openPdf")}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleOpenPdf}
+                    >
+                      <ExternalLinkIcon className="size-3.5" />
+                      {t("literature.detail.openPdf")}
+                    </Button>
+                  </Hint>
                 ) : null}
               </>
             ) : (
-              <button
-                type="button"
-                className={cn(literaturePrimaryActionShellClass)}
-                onClick={handleAdd}
-                disabled={isAdding || !citation.catalogVerified}
-                title={
+              <Hint
+                label={
                   progressLabel ??
                   (!citation.catalogVerified
                     ? t("literature.detail.idNotVerified")
                     : t("literature.detail.addToLibrary"))
                 }
               >
-                <span className={cn(literaturePrimaryActionBtnClass, "px-2.5")}>
-                  {isAdding ? (
-                    <Loader2Icon className="size-3.5 animate-spin" />
-                  ) : (
-                    <PlusCircleIcon className="size-3.5" />
-                  )}
-                  {isAdding && progressLabel ? progressLabel : t("literature.detail.addToLibrary")}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  className={cn(literaturePrimaryActionShellClass)}
+                  onClick={handleAdd}
+                  disabled={isAdding || !citation.catalogVerified}
+                >
+                  <span className={cn(literaturePrimaryActionBtnClass, "px-2.5")}>
+                    {isAdding ? (
+                      <Loader2Icon className="size-3.5 animate-spin" />
+                    ) : (
+                      <PlusCircleIcon className="size-3.5" />
+                    )}
+                    {isAdding && progressLabel ? progressLabel : t("literature.detail.addToLibrary")}
+                  </span>
+                </button>
+              </Hint>
             )}
           </div>
         </div>

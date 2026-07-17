@@ -20,7 +20,8 @@ import {
   assertUnderHome,
 } from "../services/active-project-roots";
 
-const log = createLogger("template-ipc");
+const templateLog = createLogger("template-ipc", "ipc");
+const fsLog = createLogger("fs-ipc", "fs");
 
 export function registerFsHandlers(): void {
   ipcMain.handle("fs:scan", async (_event, args: { rootPath: string }) => {
@@ -430,7 +431,7 @@ export function registerFsHandlers(): void {
     // Create configured folders on disk + log any failures
     const createResult = createConfiguredFolders(args.rootPath, workspaceDirs);
     if (createResult.errors.length > 0) {
-      log.warn("project:create — some folders could not be created", {
+      fsLog.warn("project:create — some folders could not be created", {
         rootPath: args.rootPath,
         errors: createResult.errors,
       });
@@ -453,7 +454,7 @@ export function registerFsHandlers(): void {
       const { initRepo } = await import("../services/git");
       const gitResult = await initRepo(args.rootPath);
       if (!gitResult.success) {
-        log.warn("project:create — git init failed", {
+        fsLog.warn("project:create — git init failed", {
           rootPath: args.rootPath,
           error: gitResult.error,
         });
@@ -636,14 +637,14 @@ export function registerFsHandlers(): void {
         mkdirSync(prismDir, { recursive: true });
         writeFileSync(settingsPath, JSON.stringify(oldSettings, null, 2), "utf-8");
 
-        log.info("template:apply", {
+        templateLog.info("template:apply", {
           rootPath: args.rootPath,
           templateId: args.templateId,
           count: args.files.length,
         });
         return { appliedFiles };
       } catch (err) {
-        log.error("template:apply failed", { error: String(err) });
+        templateLog.error("template:apply failed", { error: String(err) });
         throw err;
       } finally {
         try {
@@ -681,7 +682,7 @@ export function registerFsHandlers(): void {
       }
     }).filter(Boolean);
 
-    log.info("template:list", { count: result.length });
+    templateLog.info("template:list", { count: result.length });
     return result;
   });
 
@@ -698,16 +699,16 @@ export function registerFsHandlers(): void {
 
     const pngPath = join(templatesDir, args.templateId, "preview.png");
     if (!existsSync(pngPath)) {
-      log.info("template:preview — no preview.png", { templateId: args.templateId });
+      templateLog.info("template:preview — no preview.png", { templateId: args.templateId });
       return null;
     }
 
     try {
       const buffer = readFileSync(pngPath);
-      log.info("template:preview", { templateId: args.templateId, sizeBytes: buffer.length });
+      templateLog.info("template:preview", { templateId: args.templateId, sizeBytes: buffer.length });
       return `data:image/png;base64,${buffer.toString("base64")}`;
     } catch (err) {
-      log.error("template:preview failed", { templateId: args.templateId, error: String(err) });
+      templateLog.error("template:preview failed", { templateId: args.templateId, error: String(err) });
       return null;
     }
   });
@@ -729,7 +730,7 @@ export function registerFsHandlers(): void {
     try {
       manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
     } catch {
-      log.error("template:get — invalid manifest", { templateId: args.templateId });
+      templateLog.error("template:get — invalid manifest", { templateId: args.templateId });
       return null;
     }
     const filesDir = join(templateDir, "files");
@@ -751,7 +752,7 @@ export function registerFsHandlers(): void {
     };
 
     const files = readFiles(filesDir);
-    log.info("template:get", { templateId: args.templateId, fileCount: files.length });
+    templateLog.info("template:get", { templateId: args.templateId, fileCount: files.length });
     return { ...manifest, files };
   });
 
@@ -768,16 +769,16 @@ export function registerFsHandlers(): void {
 
     const pdfPath = join(templatesDir, args.templateId, "preview.pdf");
     if (!existsSync(pdfPath)) {
-      log.info("template:getPdfData — no preview.pdf", { templateId: args.templateId });
+      templateLog.info("template:getPdfData — no preview.pdf", { templateId: args.templateId });
       return null;
     }
 
     try {
       const buffer = readFileSync(pdfPath);
-      log.info("template:getPdfData", { templateId: args.templateId, sizeBytes: buffer.length });
+      templateLog.info("template:getPdfData", { templateId: args.templateId, sizeBytes: buffer.length });
       return `data:application/pdf;base64,${buffer.toString("base64")}`;
     } catch (err) {
-      log.error("template:getPdfData failed", { templateId: args.templateId, error: String(err) });
+      templateLog.error("template:getPdfData failed", { templateId: args.templateId, error: String(err) });
       return null;
     }
   });
@@ -824,7 +825,7 @@ export function registerFsHandlers(): void {
         }
       }
 
-      log.info("template:detectChanges", {
+      templateLog.info("template:detectChanges", {
         changed: changed.length,
         deleted: deleted.length,
         unchanged: unchanged.length,
@@ -901,7 +902,7 @@ export function registerFsHandlers(): void {
         throw err;
       }
 
-      log.info("template:backup", { backupDir: actualBackupDir, fileCount: copied.length });
+      templateLog.info("template:backup", { backupDir: actualBackupDir, fileCount: copied.length });
       return { backupPath: actualBackupDir };
     },
   );
@@ -938,7 +939,7 @@ export function registerFsHandlers(): void {
         })
         .sort((a, b) => b.timestamp.localeCompare(a.timestamp)); // newest first
 
-      log.info("template:listBackups", { count: entries.length });
+      templateLog.info("template:listBackups", { count: entries.length });
       return entries;
     },
   );
@@ -1026,7 +1027,7 @@ export function registerFsHandlers(): void {
           } catch { /* skip */ }
         }
       } catch (err) {
-        log.error("template:restoreBackup failed mid-operation", {
+        templateLog.error("template:restoreBackup failed mid-operation", {
           error: String(err),
           restored,
           remaining: manifestFiles.filter(f => !restored.includes(f)),
@@ -1078,7 +1079,7 @@ export function registerFsHandlers(): void {
       mkdirSync(prismDir, { recursive: true });
       writeFileSync(settingsPath, JSON.stringify(settings, null, 2), "utf-8");
 
-      log.info("template:restoreBackup", { backupLabel: args.backupLabel, restored: restored.length });
+      templateLog.info("template:restoreBackup", { backupLabel: args.backupLabel, restored: restored.length });
       return { restored };
     },
   );
@@ -1111,7 +1112,7 @@ export function registerFsHandlers(): void {
       }
 
       rmSync(backupDir, { recursive: true, force: true });
-      log.info("template:deleteBackup", { backupLabel: label });
+      templateLog.info("template:deleteBackup", { backupLabel: label });
       return { deleted: true };
     },
   );

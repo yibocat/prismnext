@@ -108,6 +108,15 @@ function applyClosedPanels(refs: RightAreaPanelRefs): void {
   });
 }
 
+/** Open RightArea already maximized (toolbar / mode shortcuts with Shift). */
+export function openRightAreaMaximized(ctx: RightAreaLayoutCtx): void {
+  if (!ctx.rightAreaRef) return;
+  const st = useLayoutStore.getState();
+  st.setRightAreaExpanded(true);
+  st.setEditorMaximized(true);
+  applyMaximizePanels(ctx);
+}
+
 /** Open RightArea — split when wide enough, else chat-first maximize. */
 export function openRightArea({ centerRef, rightAreaRef, leftSidebarRef, isMobile }: RightAreaLayoutCtx): void {
   const r = rightAreaRef;
@@ -139,14 +148,18 @@ export function closeRightArea({ centerRef, rightAreaRef }: RightAreaPanelRefs):
 }
 
 /**
- * Toolbar maximize / restore / close (narrow).
+ * Toolbar / ⌘⇧J maximize control:
+ * - closed → open already maximized
  * - split ↔ maximize when canSplit
  * - maximize → close when !canSplit or mobile
  */
 export function toggleRightAreaMaximize(ctx: RightAreaLayoutCtx): void {
   const st = useLayoutStore.getState();
   if (!st.rightAreaExpanded) {
-    openRightArea(ctx);
+    if (!ctx.rightAreaRef) return;
+    st.setRightAreaExpanded(true);
+    st.setEditorMaximized(true);
+    applyMaximizePanels(ctx);
     return;
   }
 

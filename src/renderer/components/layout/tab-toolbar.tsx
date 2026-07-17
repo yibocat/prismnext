@@ -12,6 +12,7 @@ import {
   BreadcrumbSeparator,
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
+import { Hint } from "@/components/ui/hint";
 
 interface TabToolbarProps {
   children?: ReactNode;
@@ -74,15 +75,16 @@ export const TabToolbar = memo(function TabToolbar({
             {projectName && !isExternal && (
               <>
                 <BreadcrumbItem>
-                  <button
-                    type="button"
-                    className="inline-flex items-center hover:text-foreground transition-colors cursor-pointer"
-                    onClick={() => setFileTreeNavigatePath("")}
-                    title="Go to project root"
-                  >
-                    <FolderIcon className="size-3 shrink-0" />
-                    <span className="ml-1">{projectName}</span>
-                  </button>
+                  <Hint label="Go to project root">
+                    <button
+                      type="button"
+                      className="inline-flex items-center hover:text-foreground transition-colors cursor-pointer"
+                      onClick={() => setFileTreeNavigatePath("")}
+                    >
+                      <FolderIcon className="size-3 shrink-0" />
+                      <span className="ml-1">{projectName}</span>
+                    </button>
+                  </Hint>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
               </>
@@ -117,14 +119,15 @@ export const TabToolbar = memo(function TabToolbar({
               const cumPath = segments.slice(0, segIndex + 1).join("/");
               return (
                 <BreadcrumbItem key={`${segIndex}-${seg}`}>
-                  <button
-                    type="button"
-                    className="hover:text-foreground transition-colors cursor-pointer"
-                    onClick={() => navigateToPath(cumPath)}
-                    title={`Go to ${cumPath}`}
-                  >
-                    {seg}
-                  </button>
+                  <Hint label={`Go to ${cumPath}`}>
+                    <button
+                      type="button"
+                      className="hover:text-foreground transition-colors cursor-pointer"
+                      onClick={() => navigateToPath(cumPath)}
+                    >
+                      {seg}
+                    </button>
+                  </Hint>
                   <BreadcrumbSeparator />
                 </BreadcrumbItem>
               );
@@ -141,17 +144,18 @@ export const TabToolbar = memo(function TabToolbar({
       {children && <div className="mx-1 h-4 w-px bg-border shrink-0" />}
 
       {!hideSidebarToggle ? (
-        <button
-          type="button"
-          className={cn(
-            "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0",
-            rightSidebarOpen && "bg-muted text-foreground",
-          )}
-          title="Toggle Right Sidebar"
-          onClick={() => toggle()}
-        >
-          <ListTreeIcon className="size-3.5" />
-        </button>
+        <Hint label={rightSidebarOpen ? "Hide mode sidebar" : "Show mode sidebar"}>
+          <button
+            type="button"
+            className={cn(
+              "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0",
+              rightSidebarOpen && "bg-muted text-foreground",
+            )}
+            onClick={() => toggle()}
+          >
+            <ListTreeIcon className="size-3.5" />
+          </button>
+        </Hint>
       ) : null}
     </div>
   );

@@ -159,11 +159,14 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     workflowRules: [
       "BINDING: Do not write any `[n]` markers or a paper recommendation list in text until " +
         "every `literature-stage` call for this turn has returned a verified refId.",
-      "BINDING: Paper Search MCP `search_papers` discovers identifiers only — it does NOT create " +
-        "session citations. After MCP search, you MUST call `literature-stage` for every paper " +
-        "you will mention before writing any reply.",
+      "BINDING: Any Paper Search MCP tool (`search_papers`, `search_arxiv`, `search_crossref`, " +
+        "`search_semantic_scholar`, `get_paper_by_doi`, or any `paper-search-mcp_*`) discovers " +
+        "identifiers only — it does NOT create session citations. After MCP search, you MUST call " +
+        "`literature-stage` for every paper you will mention before writing any reply.",
+      "BINDING: After you have enough DOIs/arXiv IDs, stop calling more `paper-search-mcp_*` tools " +
+        "and stage immediately — do not keep searching, and do not bash/rg OpenCode tool-output spills.",
       "Do NOT use the Task tool or subagents to find, verify, or summarize external papers — " +
-        "discover identifiers (Paper Search MCP `search_papers` first, then stage) yourself in this conversation.",
+        "discover identifiers (Paper Search MCP first, then stage) yourself in this conversation.",
       "Do not draft the reply first and stage later — discover identifiers (Paper Search MCP), stage each " +
         "paper, then write one final reply using the returned refIds.",
       "For EVERY paper you mention, call this first with its exact DOI or arXiv ID, " +
@@ -176,8 +179,9 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "If `verified: false`, do NOT write `[n]`; tell the user the identifier could not be verified.",
       "Never invent DOIs — copy exact identifiers from Paper Search MCP results or the user message.",
       `Do not call ${TOOL_NAMES.literatureAdd} unless the user explicitly asks to add the paper to the library.`,
-      "For topic discovery (e.g. recent papers), call Paper Search MCP `search_papers` first, extract arXiv IDs/DOIs, " +
-        "stage each with `discoveredFrom: \"paper-search-mcp\"`. Use websearch only if MCP is unavailable.",
+      "For topic discovery (e.g. recent papers), call Paper Search MCP once (or a small focused set), " +
+        "extract arXiv IDs/DOIs, then stage each with `discoveredFrom: \"paper-search-mcp\"`. " +
+        "Use websearch only if MCP is unavailable.",
       "Reuse the same `[n]` when mentioning the same paper again in one reply.",
     ],
   },

@@ -14,6 +14,7 @@ import {
   CopyIcon,
   PinIcon,
 } from "lucide-react";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import { terminalTabLabelFromCommand } from "@/lib/terminal/root";
 import { shellDisplayName } from "@/lib/terminal/shell-label";
@@ -121,36 +122,39 @@ export function TerminalToolbar({
           read-only · {aiModeBadge}
         </span>
         <div className="flex-1" />
-        <button
-          type="button"
-          className={cn(
-            "flex size-6 items-center justify-center rounded transition-colors shrink-0",
-            sessionState?.pinned
-              ? "text-primary bg-primary/10"
-              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-          )}
-          title={sessionState?.pinned ? "Unpin tab (allow idle cleanup)" : "Pin tab (skip idle cleanup)"}
-          onClick={handleTogglePin}
-          disabled={!linkedChatTabId}
-        >
-          <PinIcon className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-          title="Copy output"
-          onClick={() => void handleCopyAiOutput()}
-        >
-          <CopyIcon className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-          title={t("modes.terminal.newTab")}
-          onClick={handleNewTab}
-        >
-          <PlusIcon className="size-3.5" />
-        </button>
+        <Hint label={sessionState?.pinned ? "Unpin tab (allow idle cleanup)" : "Pin tab (skip idle cleanup)"}>
+          <button
+            type="button"
+            className={cn(
+              "flex size-6 items-center justify-center rounded transition-colors shrink-0",
+              sessionState?.pinned
+                ? "text-primary bg-primary/10"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+            )}
+            onClick={handleTogglePin}
+            disabled={!linkedChatTabId}
+          >
+            <PinIcon className="size-3.5" />
+          </button>
+        </Hint>
+        <Hint label="Copy output">
+          <button
+            type="button"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+            onClick={() => void handleCopyAiOutput()}
+          >
+            <CopyIcon className="size-3.5" />
+          </button>
+        </Hint>
+        <Hint label={t("modes.terminal.newTab")}>
+          <button
+            type="button"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+            onClick={handleNewTab}
+          >
+            <PlusIcon className="size-3.5" />
+          </button>
+        </Hint>
       </>
     );
   }
@@ -172,55 +176,60 @@ export function TerminalToolbar({
       <div className="flex-1" />
 
       {session?.cwd ? (
-        <button
-          type="button"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-          title="Copy working directory"
-          onClick={handleCopyCwd}
-        >
-          <CopyIcon className="size-3.5" />
-        </button>
+        <Hint label="Copy working directory">
+          <button
+            type="button"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+            onClick={handleCopyCwd}
+          >
+            <CopyIcon className="size-3.5" />
+          </button>
+        </Hint>
       ) : null}
 
-      <button
-        type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0 disabled:opacity-40"
-        title={t("modes.terminal.clearScreen")}
-        onClick={handleClear}
-        disabled={!isActive}
-      >
-        <EraserIcon className="size-3.5" />
-      </button>
-
-      {canRestart ? (
-        <button
-          type="button"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-          title={t("modes.terminal.restart")}
-          onClick={handleRestart}
-        >
-          <RotateCcwIcon className="size-3.5" />
-        </button>
-      ) : (
+      <Hint label={t("modes.terminal.clearScreen")}>
         <button
           type="button"
           className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0 disabled:opacity-40"
-          title={t("modes.terminal.interrupt")}
-          onClick={handleKill}
+          onClick={handleClear}
           disabled={!isActive}
         >
-          <XCircleIcon className="size-3.5" />
+          <EraserIcon className="size-3.5" />
         </button>
+      </Hint>
+
+      {canRestart ? (
+        <Hint label={t("modes.terminal.restart")}>
+          <button
+            type="button"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+            onClick={handleRestart}
+          >
+            <RotateCcwIcon className="size-3.5" />
+          </button>
+        </Hint>
+      ) : (
+        <Hint label={t("modes.terminal.interrupt")}>
+          <button
+            type="button"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0 disabled:opacity-40"
+            onClick={handleKill}
+            disabled={!isActive}
+          >
+            <XCircleIcon className="size-3.5" />
+          </button>
+        </Hint>
       )}
 
-      <button
-        type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-        title={`New ${shellLabel} tab`}
-        onClick={handleNewTab}
-      >
-        <PlusIcon className="size-3.5" />
-      </button>
+      <Hint label={`New ${shellLabel} tab`}>
+        <button
+          type="button"
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+          onClick={handleNewTab}
+        >
+          <PlusIcon className="size-3.5" />
+        </button>
+      </Hint>
     </>
   );
 }

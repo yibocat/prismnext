@@ -19,6 +19,7 @@ import {
   SidebarContent,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
+import { Hint } from "@/components/ui/hint";
 
 // ─── Main Component ───
 
@@ -121,14 +122,15 @@ export function GitSidebar() {
         <div className="flex-1" />
 
         {/* Refresh */}
-        <button
-          type="button"
-          onClick={handleRefresh}
-          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-          title="Refresh"
-        >
-          <RefreshCwIcon className="size-3.5" />
-        </button>
+        <Hint shortcutId="workspace.gitRefresh">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          >
+            <RefreshCwIcon className="size-3.5" />
+          </button>
+        </Hint>
       </SidebarHeader>
 
       <SidebarContent className="gap-0 overflow-auto">

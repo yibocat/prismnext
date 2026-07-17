@@ -21,8 +21,14 @@ describe("CHAT_CITATION_STAGING_PROMPT", () => {
 
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("paper-search-mcp");
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("search_papers");
+    // Binding covers the tools models actually call (not only search_papers).
+    expect(CHAT_CITATION_STAGING_PROMPT).toContain("search_arxiv");
+    expect(CHAT_CITATION_STAGING_PROMPT).toContain("search_crossref");
+    expect(CHAT_CITATION_STAGING_PROMPT).toContain("paper-search-mcp_*");
+    expect(CHAT_CITATION_STAGING_PROMPT).toContain("tool-output");
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("discoveredFrom");
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("MCP search ≠ session citation");
+    expect(CHAT_CITATION_STAGING_PROMPT).toContain("stop calling more");
     // websearch allowed only as named fallback
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("websearch");
   });

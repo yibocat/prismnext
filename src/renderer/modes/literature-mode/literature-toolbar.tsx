@@ -39,6 +39,7 @@ import { ZoteroConnectDialog } from "./zotero-connect-dialog";
 import { LiteratureReaderExtractToolbar } from "./literature-agent-text";
 import { LiteratureCitationHealthDialog } from "./literature-citation-health-dialog";
 import { stagedAddProgressLabel } from "@/lib/literature/staged-add-progress-label";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import type { LiteraturePaper } from "@/types/electron.d";
 
@@ -116,25 +117,26 @@ function LiteratureReaderToolbar({ paper, tab }: { paper: LiteraturePaper; tab: 
         />
       ) : null}
       <LiteratureReaderExtractToolbar paper={paper} />
-      <button
-        type="button"
-        className={cn(
-          "flex size-6 shrink-0 items-center justify-center rounded transition-colors",
-          notesOpen
-            ? "bg-muted text-foreground shadow-sm"
-            : "text-muted-foreground hover:bg-accent hover:text-foreground",
-        )}
-        onClick={() => {
-          const opening = !notesOpen;
-          toggleNotesPane(paper.id);
-          if (opening && !tab.viewMode) {
-            setTabViewMode(tab.id, "source");
-          }
-        }}
-        title={notesOpen ? "Close reading notes" : "Open reading notes"}
-      >
-        <NotebookPenIcon className="size-3.5" />
-      </button>
+      <Hint label={notesOpen ? "Close reading notes" : "Open reading notes"}>
+        <button
+          type="button"
+          className={cn(
+            "flex size-6 shrink-0 items-center justify-center rounded transition-colors",
+            notesOpen
+              ? "bg-muted text-foreground shadow-sm"
+              : "text-muted-foreground hover:bg-accent hover:text-foreground",
+          )}
+          onClick={() => {
+            const opening = !notesOpen;
+            toggleNotesPane(paper.id);
+            if (opening && !tab.viewMode) {
+              setTabViewMode(tab.id, "source");
+            }
+          }}
+        >
+          <NotebookPenIcon className="size-3.5" />
+        </button>
+      </Hint>
     </div>
   );
 }
@@ -337,67 +339,71 @@ function LiteratureLibraryToolbar() {
                 </span>
               </span>
             ) : null}
-            <Button
-              size="xs"
-              variant="ghost"
-              className={cn("h-6 shrink-0", compact ? "size-6 px-0" : "px-1.5")}
-              onClick={() => void handleAddAllCitations()}
-              disabled={pendingCount === 0 || addingAll}
-              title="Add all pending citations to the library"
-            >
-              {addingAll ? (
-                <Loader2Icon className="size-3.5 animate-spin" />
-              ) : (
-                <PlusCircleIcon className="size-3.5" />
-              )}
-              {!compact ? <span className="ml-1">{t("modes.literature.addAll")}</span> : null}
-            </Button>
-            <Button
-              size="xs"
-              variant="ghost"
-              className={cn(
-                "h-6 shrink-0 text-muted-foreground hover:text-destructive",
-                compact ? "size-6 px-0" : "px-1.5",
-              )}
-              onClick={handleClearCitations}
-              disabled={citations.length === 0}
-              title="Clear all citations in this session"
-            >
-              <Trash2Icon className="size-3.5" />
-              {!compact ? <span className="ml-1">{t("modes.literature.clearCitations")}</span> : null}
-            </Button>
+            <Hint label="Add all pending citations to the library">
+              <Button
+                size="xs"
+                variant="ghost"
+                className={cn("h-6 shrink-0", compact ? "size-6 px-0" : "px-1.5")}
+                onClick={() => void handleAddAllCitations()}
+                disabled={pendingCount === 0 || addingAll}
+              >
+                {addingAll ? (
+                  <Loader2Icon className="size-3.5 animate-spin" />
+                ) : (
+                  <PlusCircleIcon className="size-3.5" />
+                )}
+                {!compact ? <span className="ml-1">{t("modes.literature.addAll")}</span> : null}
+              </Button>
+            </Hint>
+            <Hint label="Clear all citations in this session">
+              <Button
+                size="xs"
+                variant="ghost"
+                className={cn(
+                  "h-6 shrink-0 text-muted-foreground hover:text-destructive",
+                  compact ? "size-6 px-0" : "px-1.5",
+                )}
+                onClick={handleClearCitations}
+                disabled={citations.length === 0}
+              >
+                <Trash2Icon className="size-3.5" />
+                {!compact ? <span className="ml-1">{t("modes.literature.clearCitations")}</span> : null}
+              </Button>
+            </Hint>
           </>
         ) : (
           <>
-            <button
-              type="button"
-              className={cn(toolbarBtn, "shrink-0 size-6 justify-center px-0")}
-              title="Manuscript citation health (.tex ↔ .bib ↔ library)"
-              disabled={!projectRoot}
-              onClick={() => setCitationHealthOpen(true)}
-            >
-              <BookMarkedIcon className="size-3.5" />
-            </button>
+            <Hint label="Manuscript citation health (.tex ↔ .bib ↔ library)">
+              <button
+                type="button"
+                className={cn(toolbarBtn, "shrink-0 size-6 justify-center px-0")}
+                disabled={!projectRoot}
+                onClick={() => setCitationHealthOpen(true)}
+              >
+                <BookMarkedIcon className="size-3.5" />
+              </button>
+            </Hint>
             <LiteratureBatchSelectionActions actions={batchActions} compact={compact} />
             <LiteratureAddByIdentifierButton projectRoot={projectRoot} disabled={busy} />
             <AppMenu>
-            <AppMenuTrigger asChild>
-              <button
-                type="button"
-                className={cn(
-                  toolbarBtn,
-                  "shrink-0 size-6 justify-center px-0",
-                )}
-                title={t("modes.literature.addToLibrary")}
-                disabled={busy}
-              >
-                {busy ? (
-                  <Loader2Icon className="size-3.5 animate-spin" />
-                ) : (
-                  <PlusIcon className="size-3.5" />
-                )}
-              </button>
-            </AppMenuTrigger>
+            <Hint label={t("modes.literature.addToLibrary")}>
+              <AppMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    toolbarBtn,
+                    "shrink-0 size-6 justify-center px-0",
+                  )}
+                  disabled={busy}
+                >
+                  {busy ? (
+                    <Loader2Icon className="size-3.5 animate-spin" />
+                  ) : (
+                    <PlusIcon className="size-3.5" />
+                  )}
+                </button>
+              </AppMenuTrigger>
+            </Hint>
             <AppMenuContent align="end">
               <AppMenuItem
                 disabled={!projectRoot || busy}

@@ -70,6 +70,10 @@ interface LayoutState {
   settingsDetailStacked: boolean;
   setSettingsDetailStacked: (stacked: boolean) => void;
 
+  /** Ephemeral — not persisted. */
+  commandPaletteOpen: boolean;
+  setCommandPaletteOpen: (open: boolean) => void;
+
   rightSidebarOpen: boolean;
   toggleRightSidebar: () => void;
   setRightSidebarOpen: (open: boolean) => void;
@@ -237,6 +241,10 @@ export const useLayoutStore = create<LayoutState>()(
       settingsDetailStacked: false,
       setSettingsDetailStacked: (stacked) =>
         set((s) => (s.settingsDetailStacked === stacked ? s : { settingsDetailStacked: stacked })),
+
+      commandPaletteOpen: false,
+      setCommandPaletteOpen: (open) =>
+        set((s) => (s.commandPaletteOpen === open ? s : { commandPaletteOpen: open })),
 
       rightSidebarOpen: false,
       toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),

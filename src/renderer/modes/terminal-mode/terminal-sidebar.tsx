@@ -32,6 +32,7 @@ import {
   XIcon,
   PinIcon,
 } from "lucide-react";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import { QuickCommandDialog } from "./quick-command-dialog";
 import type { TerminalQuickCommand } from "@/types/terminal";
@@ -130,18 +131,21 @@ function AiSessionRow({
         ) : null}
       </button>
       {item.aiTabId && onClose ? (
-        <button
-          type="button"
-          className="size-5 shrink-0 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/15 flex items-center justify-center"
-          title={
+        <Hint
+          label={
             isLive
               ? "Close view (command keeps running unless configured to cancel)"
               : "Close replay view (output log is kept)"
           }
-          onClick={() => onClose(item.aiTabId!)}
         >
-          <XIcon className="size-3" />
-        </button>
+          <button
+            type="button"
+            className="size-5 shrink-0 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/15 flex items-center justify-center"
+            onClick={() => onClose(item.aiTabId!)}
+          >
+            <XIcon className="size-3" />
+          </button>
+        </Hint>
       ) : null}
     </div>
   );
@@ -270,17 +274,18 @@ export function TerminalSidebar() {
               label={t("modes.terminal.quickCommands")}
               count={quickCommands.length}
               extraAction={
-                <button
-                  type="button"
-                  className="flex size-4 items-center justify-center rounded-sm text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
-                  onClick={() => {
-                    setEditCommand(null);
-                    setDialogOpen(true);
-                  }}
-                  title="Add command"
-                >
-                  <PlusIcon className="size-3" />
-                </button>
+                <Hint label="Add command">
+                  <button
+                    type="button"
+                    className="flex size-4 items-center justify-center rounded-sm text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
+                    onClick={() => {
+                      setEditCommand(null);
+                      setDialogOpen(true);
+                    }}
+                  >
+                    <PlusIcon className="size-3" />
+                  </button>
+                </Hint>
               }
             />
             <AccordionContent className="pb-1 pt-0">
@@ -304,17 +309,18 @@ export function TerminalSidebar() {
                         >
                           <PlayIcon className="size-3 shrink-0 text-muted-foreground/40 group-hover/cmd:text-foreground" />
                           <span className="truncate flex-1">{cmd.label}</span>
-                          <button
-                            type="button"
-                            className="size-4 shrink-0 rounded-sm opacity-0 group-hover/cmd:opacity-100 hover:bg-muted-foreground/20 flex items-center justify-center transition-opacity"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeQuickCommand(cmd.id);
-                            }}
-                            title="Remove command"
-                          >
-                            <Trash2Icon className="size-3" />
-                          </button>
+                          <Hint label="Remove command">
+                            <button
+                              type="button"
+                              className="size-4 shrink-0 rounded-sm opacity-0 group-hover/cmd:opacity-100 hover:bg-muted-foreground/20 flex items-center justify-center transition-opacity"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeQuickCommand(cmd.id);
+                              }}
+                            >
+                              <Trash2Icon className="size-3" />
+                            </button>
+                          </Hint>
                         </button>
                       </AppContextMenuTrigger>
                       <AppContextMenuContent className="min-w-[5.5rem]">
@@ -386,14 +392,15 @@ export function TerminalSidebar() {
                           {item.busy ? "busy" : item.shellLabel}
                         </span>
                       </button>
-                      <button
-                        type="button"
-                        className="size-5 shrink-0 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/15 flex items-center justify-center"
-                        title="Close terminal tab"
-                        onClick={() => closeTab(item.tabId)}
-                      >
-                        <XIcon className="size-3" />
-                      </button>
+                      <Hint label="Close terminal tab">
+                        <button
+                          type="button"
+                          className="size-5 shrink-0 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/15 flex items-center justify-center"
+                          onClick={() => closeTab(item.tabId)}
+                        >
+                          <XIcon className="size-3" />
+                        </button>
+                      </Hint>
                     </div>
                   ))}
                 </div>

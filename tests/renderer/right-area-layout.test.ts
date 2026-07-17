@@ -92,6 +92,36 @@ describe("right-area-layout", () => {
     expect(center.resize).toHaveBeenCalledWith(RESIZE_FILL_PX);
   });
 
+  it("toggleRightAreaMaximize opens maximized when closed", () => {
+    vi.stubGlobal("innerWidth", 1400);
+    const center = mockPanel({ px: 900, collapsed: false });
+    const right = mockPanel({ px: 0, collapsed: true });
+    toggleRightAreaMaximize({ centerRef: center, rightAreaRef: right });
+    const st = useLayoutStore.getState();
+    expect(st.rightAreaExpanded).toBe(true);
+    expect(st.editorMaximized).toBe(true);
+    expect(center.collapse).toHaveBeenCalled();
+    expect(right.resize).toHaveBeenCalledWith(RESIZE_FILL_PX);
+  });
+
+  it("toggleRightAreaMaximize restores split when maximized and wide enough", () => {
+    vi.stubGlobal("innerWidth", 1400);
+    useLayoutStore.setState({ rightAreaExpanded: true, editorMaximized: true, rightAreaWidth: 500 });
+    const left = mockPanel({ px: 280, collapsed: false });
+    const center = mockPanel({ px: 0, collapsed: true });
+    const right = mockPanel({ px: 1100, collapsed: false });
+    toggleRightAreaMaximize({
+      centerRef: center,
+      rightAreaRef: right,
+      leftSidebarRef: left,
+    });
+    const st = useLayoutStore.getState();
+    expect(st.rightAreaExpanded).toBe(true);
+    expect(st.editorMaximized).toBe(false);
+    expect(center.expand).toHaveBeenCalled();
+    expect(right.resize).toHaveBeenCalledWith(500);
+  });
+
   it("toggleRightAreaMaximize closes when narrow and already maximized", () => {
     vi.stubGlobal("innerWidth", 700);
     useLayoutStore.setState({ rightAreaExpanded: true, editorMaximized: true });

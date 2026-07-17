@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureExtractStore, selectExtractProgressForPaper } from "@/stores/literature-extract-store";
 import { Progress } from "@/components/ui/progress";
+import { Hint } from "@/components/ui/hint";
 import { useSettingsStore } from "@/stores/settings-store";
 import { openHiddenProjectFile } from "@/lib/files/open-project-path";
 import {
@@ -170,11 +171,13 @@ function ExtractOverflowMenu({
 
   return (
     <AppMenu>
-      <AppMenuTrigger asChild>
-        <button type="button" className={menuBtnClass} title={t("literature.extract.label")}>
-          <MoreHorizontalIcon className="size-3.5" />
-        </button>
-      </AppMenuTrigger>
+      <Hint label={t("literature.extract.label")}>
+        <AppMenuTrigger asChild>
+          <button type="button" className={menuBtnClass}>
+            <MoreHorizontalIcon className="size-3.5" />
+          </button>
+        </AppMenuTrigger>
+      </Hint>
       <AppMenuContent align="end">
         {hasPdf ? (
           <>
@@ -246,14 +249,15 @@ export function LiteratureAgentTextRow({
             {t("literature.extract.ready", { source: sourceShort(source) })}
           </span>
           <span className="shrink-0 text-muted-foreground/60">·</span>
-          <button
-            type="button"
-            title={t("literature.extract.openMarkdown")}
-            className={cn(extractActionChipClass, "text-emerald-700 dark:text-emerald-400")}
-            onClick={() => void handleOpenText()}
-          >
-            {t("literature.extract.openMarkdown")}
-          </button>
+          <Hint label={t("literature.extract.openMarkdown")}>
+            <button
+              type="button"
+              className={cn(extractActionChipClass, "text-emerald-700 dark:text-emerald-400")}
+              onClick={() => void handleOpenText()}
+            >
+              {t("literature.extract.openMarkdown")}
+            </button>
+          </Hint>
           <ExtractOverflowMenu actions={actions} />
         </div>
       ) : state === "failed" ? (
@@ -262,28 +266,30 @@ export function LiteratureAgentTextRow({
             {failedState?.error ?? t("literature.extract.retry")}
           </span>
           <span className="shrink-0 text-muted-foreground/60">·</span>
-          <button
-            type="button"
-            title={failedState?.error ?? t("literature.extract.retry")}
-            className={cn(extractActionChipClass, "text-destructive")}
-            onClick={() => void handleRetry()}
-          >
-            {t("literature.extract.retry")}
-          </button>
+          <Hint label={failedState?.error ?? t("literature.extract.retry")}>
+            <button
+              type="button"
+              className={cn(extractActionChipClass, "text-destructive")}
+              onClick={() => void handleRetry()}
+            >
+              {t("literature.extract.retry")}
+            </button>
+          </Hint>
           <ExtractOverflowMenu actions={actions} />
         </div>
       ) : state === "idle" ? (
         <div className={valueClass}>
           <span className="truncate text-foreground/85">{t("literature.extract.notExtracted")}</span>
           <span className="shrink-0 text-muted-foreground/60">·</span>
-          <button
-            type="button"
-            title={t("literature.extract.convert")}
-            className={cn(extractActionChipClass, "text-foreground/90")}
-            onClick={() => void handlePrepare()}
-          >
-            {t("literature.batch.extract")}
-          </button>
+          <Hint label={t("literature.extract.convert")}>
+            <button
+              type="button"
+              className={cn(extractActionChipClass, "text-foreground/90")}
+              onClick={() => void handlePrepare()}
+            >
+              {t("literature.batch.extract")}
+            </button>
+          </Hint>
           {zoteroOnly ? (
             <span className="truncate text-muted-foreground/70">(copies PDF from Zotero)</span>
           ) : null}
@@ -338,46 +344,49 @@ export function LiteratureReaderExtractToolbar({ paper }: { paper: LiteraturePap
         </>
       ) : state === "ready" && source ? (
         <>
-          <button
-            type="button"
-            title={t("literature.extract.ready", { source: sourceShort(source) })}
-            className={cn(
-              extractToolbarBtnClass,
-              "text-emerald-700 hover:bg-accent dark:text-emerald-400",
-            )}
-            onClick={() => void handleOpenText()}
-          >
-            <FileTextIcon className="size-3.5 shrink-0" />
-            <span className="truncate">{t("literature.extract.markdown")}</span>
-          </button>
+          <Hint label={t("literature.extract.ready", { source: sourceShort(source) })}>
+            <button
+              type="button"
+              className={cn(
+                extractToolbarBtnClass,
+                "text-emerald-700 hover:bg-accent dark:text-emerald-400",
+              )}
+              onClick={() => void handleOpenText()}
+            >
+              <FileTextIcon className="size-3.5 shrink-0" />
+              <span className="truncate">{t("literature.extract.markdown")}</span>
+            </button>
+          </Hint>
           <ExtractOverflowMenu actions={actions} menuBtnClass={extractToolbarMenuBtnClass} />
         </>
       ) : state === "failed" ? (
         <>
-          <button
-            type="button"
-            title={failedState?.error ?? t("literature.extract.retry")}
-            className={cn(extractToolbarBtnClass, "text-destructive hover:bg-destructive/10")}
-            onClick={() => void handleRetry()}
-          >
-            <span className="truncate">{t("literature.extract.retry")}</span>
-          </button>
+          <Hint label={failedState?.error ?? t("literature.extract.retry")}>
+            <button
+              type="button"
+              className={cn(extractToolbarBtnClass, "text-destructive hover:bg-destructive/10")}
+              onClick={() => void handleRetry()}
+            >
+              <span className="truncate">{t("literature.extract.retry")}</span>
+            </button>
+          </Hint>
           <ExtractOverflowMenu actions={actions} menuBtnClass={extractToolbarMenuBtnClass} />
         </>
       ) : (
         <>
-          <button
-            type="button"
-            title={t("literature.extract.convert")}
-            className={cn(
-              extractToolbarBtnClass,
-              "text-muted-foreground hover:bg-accent hover:text-foreground",
-            )}
-            onClick={() => void handlePrepare()}
-          >
-            <FileTextIcon className="size-3.5 shrink-0" />
-            <span className="truncate">{t("literature.batch.extract")}</span>
-          </button>
+          <Hint label={t("literature.extract.convert")}>
+            <button
+              type="button"
+              className={cn(
+                extractToolbarBtnClass,
+                "text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+              onClick={() => void handlePrepare()}
+            >
+              <FileTextIcon className="size-3.5 shrink-0" />
+              <span className="truncate">{t("literature.batch.extract")}</span>
+            </button>
+          </Hint>
           <ExtractOverflowMenu actions={actions} menuBtnClass={extractToolbarMenuBtnClass} />
         </>
       )}

@@ -7,6 +7,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useLayoutStore } from "@/stores/layout-store";
 import { cn } from "@/lib/utils";
 import { openRightArea, closeRightArea } from "@/lib/workspace/right-area-layout";
+import { Hint } from "@/components/ui/hint";
 import {
   PanelRight,
   SunIcon,
@@ -42,7 +43,7 @@ interface MainToolbarProps {
 
 export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
   const { t } = useTranslation();
-  const { platform, isMaximized, isFullscreen } = useWindowState();
+  const { platform, isMaximized } = useWindowState();
   const isMobile = useIsMobile();
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
   const { theme, resolvedTheme, setTheme } = useTheme();
@@ -59,75 +60,80 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
     <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center justify-end gap-1 px-2" data-surface="content">
       {!isMac && (
         <>
-          <button
-            type="button"
-            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            title={t("shell.minimize")}
-            onClick={() => window.electronAPI?.windowMinimize()}
-          >
-            <Minimize2Icon className="size-4" />
-          </button>
-          <button
-            type="button"
-            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            title={isMaximized ? t("shell.restore") : t("shell.maximize")}
-            onClick={() => window.electronAPI?.windowMaximize()}
-          >
-            <Maximize2Icon className="size-4" />
-          </button>
-          <button
-            type="button"
-            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
-            title={t("shell.close")}
-            onClick={() => window.electronAPI?.windowClose()}
-          >
-            <XIcon className="size-4" />
-          </button>
+          <Hint label={t("shell.minimize")}>
+            <button
+              type="button"
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              onClick={() => window.electronAPI?.windowMinimize()}
+            >
+              <Minimize2Icon className="size-4" />
+            </button>
+          </Hint>
+          <Hint label={isMaximized ? t("shell.restore") : t("shell.maximize")}>
+            <button
+              type="button"
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              onClick={() => window.electronAPI?.windowMaximize()}
+            >
+              <Maximize2Icon className="size-4" />
+            </button>
+          </Hint>
+          <Hint label={t("shell.close")}>
+            <button
+              type="button"
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
+              onClick={() => window.electronAPI?.windowClose()}
+            >
+              <XIcon className="size-4" />
+            </button>
+          </Hint>
           <div className="mx-1 h-4 w-px bg-border" />
         </>
       )}
 
-      <button
-        type="button"
-        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-        title={t("common.theme", { theme })}
-        onClick={cycleTheme}
-      >
-        {theme === "system" ? (
-          <MonitorIcon className="size-3.5" />
-        ) : resolvedTheme === "dark" ? (
-          <SunIcon className="size-3.5" />
-        ) : (
-          <MoonIcon className="size-3.5" />
-        )}
-      </button>
+      <Hint label={t("common.theme", { theme })}>
+        <button
+          type="button"
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          onClick={cycleTheme}
+        >
+          {theme === "system" ? (
+            <MonitorIcon className="size-3.5" />
+          ) : resolvedTheme === "dark" ? (
+            <SunIcon className="size-3.5" />
+          ) : (
+            <MoonIcon className="size-3.5" />
+          )}
+        </button>
+      </Hint>
 
-      <button
-        type="button"
-        className={cn(
-          "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
-          rightAreaExpanded && "bg-muted text-foreground",
-        )}
-        title={rightAreaExpanded ? t("shell.collapseRightArea") : t("shell.expandRightArea")}
-        onClick={() => {
-          const r = rightAreaRef.current;
-          if (!r) return;
-          if (r.isCollapsed()) {
-            openRightArea({
-              centerRef: centerRef.current,
-              rightAreaRef: r,
-              isMobile,
-            });
-          } else {
-            closeRightArea({
-              centerRef: centerRef.current,
-              rightAreaRef: r,
-            });
-          }
-        }}
-      >
-        <PanelRight className="size-3.5" />
-      </button>
+      <Hint shortcutId="shell.toggleRightArea">
+        <button
+          type="button"
+          className={cn(
+            "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
+            rightAreaExpanded && "bg-muted text-foreground",
+          )}
+          onClick={() => {
+            const r = rightAreaRef.current;
+            if (!r) return;
+            if (r.isCollapsed()) {
+              openRightArea({
+                centerRef: centerRef.current,
+                rightAreaRef: r,
+                isMobile,
+              });
+            } else {
+              closeRightArea({
+                centerRef: centerRef.current,
+                rightAreaRef: r,
+              });
+            }
+          }}
+        >
+          <PanelRight className="size-3.5" />
+        </button>
+      </Hint>
     </div>
   );
 }

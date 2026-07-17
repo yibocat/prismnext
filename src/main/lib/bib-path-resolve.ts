@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { createLogger } from "../services/logger";
 import { readWorkspaceDirs } from "../services/workspace-config";
 
-const log = createLogger("bib-path");
+const log = createLogger("bib-path", "fs");
 
 export interface ResolvedBibliography {
   /** Paths as written in the main .tex (e.g. references.bib) */

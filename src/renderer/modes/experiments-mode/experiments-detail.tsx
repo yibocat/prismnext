@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/hint";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -84,34 +85,37 @@ function CopyableText({
   };
 
   return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className={cn(
-        "group inline-flex max-w-full items-baseline gap-1.5 text-left transition-colors",
-        experimentsUiValueClass,
-        "rounded-[3px] hover:text-foreground",
-        className,
-      )}
-      title={
+    <Hint
+      label={
         copied
           ? t("common.copied")
           : t("experiments.detail.clickToCopy", { text: payload })
       }
     >
-      <span className="min-w-0 break-all">{text}</span>
-      {copied ? (
-        <CheckIcon
-          className="size-3 shrink-0 self-center text-success"
-          aria-label={t("common.copied")}
-        />
-      ) : (
-        <CopyIcon
-          className="size-3 shrink-0 self-center text-muted-foreground/45 opacity-0 transition-opacity group-hover:opacity-100"
-          aria-hidden
-        />
-      )}
-    </button>
+      <button
+        type="button"
+        onClick={handleCopy}
+        className={cn(
+          "group inline-flex max-w-full items-baseline gap-1.5 text-left transition-colors",
+          experimentsUiValueClass,
+          "rounded-[3px] hover:text-foreground",
+          className,
+        )}
+      >
+        <span className="min-w-0 break-all">{text}</span>
+        {copied ? (
+          <CheckIcon
+            className="size-3 shrink-0 self-center text-success"
+            aria-label={t("common.copied")}
+          />
+        ) : (
+          <CopyIcon
+            className="size-3 shrink-0 self-center text-muted-foreground/45 opacity-0 transition-opacity group-hover:opacity-100"
+            aria-hidden
+          />
+        )}
+      </button>
+    </Hint>
   );
 }
 
@@ -220,16 +224,17 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
               ) : null}
             </div>
             <AppMenu>
-              <AppMenuTrigger asChild>
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  title={t("experiments.moreActions")}
-                  className="size-6 shrink-0 px-0"
-                >
-                  <MoreHorizontalIcon className="size-3.5" />
-                </Button>
-              </AppMenuTrigger>
+              <Hint label={t("experiments.moreActions")}>
+                <AppMenuTrigger asChild>
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    className="size-6 shrink-0 px-0"
+                  >
+                    <MoreHorizontalIcon className="size-3.5" />
+                  </Button>
+                </AppMenuTrigger>
+              </Hint>
               <AppMenuContent align="end">
                 <AppMenuItem onSelect={() => void handleArchiveToggle()}>
                   {archived ? t("experiments.restore") : t("experiments.archive")}

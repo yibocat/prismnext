@@ -213,6 +213,11 @@ export interface InlineComposerEditorProps {
    * attachment strip — do not insert as inline @file tokens.
    */
   onExternalFiles?: (paths: string[]) => void;
+  /**
+   * Panel composer: after dismissing @ / slash UI, Esc blurs the input.
+   * Leave false for AiBar (capsule owns Esc → idle / blur).
+   */
+  escapeBlurs?: boolean;
 }
 
 function insertFromDropdown(
@@ -439,6 +444,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       density = "default",
       onLayoutExpand,
       onExternalFiles,
+      escapeBlurs = false,
     },
     ref,
   ) {
@@ -449,6 +455,8 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
     const selectionCompartmentRef = useRef(new Compartment());
     const densityRef = useRef(density);
     densityRef.current = density;
+    const escapeBlursRef = useRef(escapeBlurs);
+    escapeBlursRef.current = escapeBlurs;
     const onChangeRef = useRef(onChange);
     onChangeRef.current = onChange;
     const onEnterRef = useRef(onEnter);
@@ -977,15 +985,21 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         },
         {
           key: "Escape",
-          run: () => {
+          run: (view) => {
             if (paperOptionsOpenIndexRef.current !== null) {
               setPaperOptionsOpenIndex(null);
               setPaperOptionsSubIndex(0);
               return true;
             }
-            if (!activeQueryRef.current) return false;
-            clearQuery();
-            return true;
+            if (activeQueryRef.current) {
+              clearQuery();
+              return true;
+            }
+            if (escapeBlursRef.current) {
+              view.contentDOM.blur();
+              return true;
+            }
+            return false;
           },
         },
         {

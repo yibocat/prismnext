@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RotateCcwIcon } from "lucide-react";
+import { Hint } from "@/components/ui/hint";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -361,19 +362,20 @@ export function WorkspaceFolderEditor({
               htmlFor="ws-folder-desc"
               description={t("settings.workspace.folderEditor.descriptionDesc")}
               labelExtra={
-                <button
-                  type="button"
-                  className={SETTINGS_LABEL_RESET_ICON}
-                  title={t("settings.editor.workspaceFolder.resetDefault")}
-                  onClick={() =>
-                    setForm((f) => ({
-                      ...f,
-                      description: defaultDescriptionForFunction(f.function, t),
-                    }))
-                  }
-                >
-                  <RotateCcwIcon className="size-3" />
-                </button>
+                <Hint label={t("settings.editor.workspaceFolder.resetDefault")}>
+                  <button
+                    type="button"
+                    className={SETTINGS_LABEL_RESET_ICON}
+                    onClick={() =>
+                      setForm((f) => ({
+                        ...f,
+                        description: defaultDescriptionForFunction(f.function, t),
+                      }))
+                    }
+                  >
+                    <RotateCcwIcon className="size-3" />
+                  </button>
+                </Hint>
               }
             >
               <Textarea

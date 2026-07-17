@@ -31,6 +31,7 @@ import { createLogger } from "@/services/logger";
 import { getLanguageLoader } from "@/lib/editor/language-mappings";
 import { ChangesBar } from "./changes-bar";
 import { saveViewerPosition, loadViewerPosition } from "@/lib/editor/viewer-position";
+import { editorSearchAndKeymap } from "@/lib/editor";
 import { useTabContext } from "@/lib/workspace/tab-context";
 import { CodeMirrorInsertHost } from "./codemirror-insert-host";
 
@@ -173,6 +174,7 @@ export function CodeEditor() {
         highlightActiveLine(),
         editorTypographyTheme,
         history(),
+        ...editorSearchAndKeymap({ latexWrap: false }),
         keymap.of([
           ...defaultKeymap,
           ...historyKeymap,

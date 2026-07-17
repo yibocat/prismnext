@@ -10,6 +10,7 @@ import {
   CAPSULE_TOOLBAR_PILL,
   CHAT_PANEL_TOOLBAR_BUTTON,
 } from "./worktree-selector";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 
 /**
@@ -59,20 +60,21 @@ export function IntensiveReadingListButton({
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          title={t("chat.intensive.list")}
-          aria-label={t("chat.intensive.listWithCount", { count })}
-          className={triggerClass}
-        >
-          <BookOpenIcon className="size-3.5 shrink-0" />
-          <span className="max-w-[5rem] truncate hidden @md:inline">
-            {count === 1 ? t("chat.intensive.short") : t("chat.intensive.count", { count })}
-          </span>
-          <span className="tabular-nums @md:hidden">{count}</span>
-        </button>
-      </PopoverTrigger>
+      <Hint label={t("chat.intensive.list")}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label={t("chat.intensive.listWithCount", { count })}
+            className={triggerClass}
+          >
+            <BookOpenIcon className="size-3.5 shrink-0" />
+            <span className="max-w-[5rem] truncate hidden @md:inline">
+              {count === 1 ? t("chat.intensive.short") : t("chat.intensive.count", { count })}
+            </span>
+            <span className="tabular-nums @md:hidden">{count}</span>
+          </button>
+        </PopoverTrigger>
+      </Hint>
       <PopoverContent
         align="start"
         sideOffset={6}
@@ -97,15 +99,16 @@ export function IntensiveReadingListButton({
                 {paper.title}
               </div>
             </div>
-            <button
-              type="button"
-              aria-label={t("chat.intensive.remove")}
-              title={t("chat.intensive.removeTitle")}
-              className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-60 hover:bg-muted hover:text-foreground hover:opacity-100"
-              onClick={() => removeIntensivePaper(activeTabId, paper.id)}
-            >
-              <XIcon className="size-3" />
-            </button>
+            <Hint label={t("chat.intensive.removeTitle")}>
+              <button
+                type="button"
+                aria-label={t("chat.intensive.remove")}
+                className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-60 hover:bg-muted hover:text-foreground hover:opacity-100"
+                onClick={() => removeIntensivePaper(activeTabId, paper.id)}
+              >
+                <XIcon className="size-3" />
+              </button>
+            </Hint>
           </div>
         ))}
       </PopoverContent>

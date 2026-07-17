@@ -2,6 +2,7 @@ import { memo, useCallback, useState } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { TerminalIcon, ExternalLinkIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Hint } from "@/components/ui/hint";
 import { ToolCard, param } from "./shared";
 import { useToolPermission } from "./use-tool-permission";
 import { parseBashResultContent } from "@/lib/terminal/ai-bridge";
@@ -90,18 +91,19 @@ export const BashWidget = memo(function BashWidget({
               exit {exitCode}
             </span>
           )}
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 shrink-0 text-[length:var(--font-chat-meta)] text-muted-foreground hover:text-foreground transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleOpenInTerminal();
-            }}
-            title="Open in AI Terminal"
-          >
-            <ExternalLinkIcon className="size-3" />
-            Terminal
-          </button>
+          <Hint label="Open in AI Terminal">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 shrink-0 text-[length:var(--font-chat-meta)] text-muted-foreground hover:text-foreground transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenInTerminal();
+              }}
+            >
+              <ExternalLinkIcon className="size-3" />
+              Terminal
+            </button>
+          </Hint>
         </>
       }
       expanded={expanded}

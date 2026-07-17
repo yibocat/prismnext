@@ -24,6 +24,7 @@ import "pdfjs-dist/web/pdf_viewer.css";
 import { PDFJS_DOCUMENT_OPTIONS, PDF_PAGES_CLASS, PDF_PAGES_DARK_CLASS, PDF_PAGES_STYLE, PDF_PAGE_CLASS, PDF_PAGE_DARK_FILTER, PDF_PAGE_INVERTED_CLASS } from "./pdf-config";
 import { PdfScrollClamp } from "./pdf-scroll-clamp";
 import { cn } from "@/lib/utils";
+import { Hint } from "@/components/ui/hint";
 import { applyPdfZoomMode, PDF_ZOOM_MODE_LABELS, type PdfZoomMode } from "./pdf-zoom";
 import {
   LoaderIcon,
@@ -75,6 +76,47 @@ function PdfLinkNavigationBridge() {
     });
     return () => linkService.unregisterPageNavigationCallback();
   }, [linkService, jumpToPage]);
+
+  return null;
+}
+
+/** Consume forward SyncTeX requests from the TeX editor (⌘⇧F). */
+function SynctexForwardBridge() {
+  const target = useCompileStore((s) => s.synctexForwardTarget);
+  const { jumpToHighlightRects } = usePdfJump();
+  const getPdfPageProxy = usePdf((s) => s.getPdfPageProxy);
+
+  useEffect(() => {
+    if (!target) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const pageProxy = getPdfPageProxy(target.page);
+        const viewport = pageProxy.getViewport({ scale: 1 });
+        // SyncTeX y is from page bottom; Lector/PDF.js highlights use top-left.
+        const top = viewport.height - target.y - target.height;
+        if (cancelled) return;
+        jumpToHighlightRects(
+          [
+            {
+              pageNumber: target.page,
+              left: target.x,
+              top: Math.max(0, top),
+              width: target.width,
+              height: target.height,
+              type: "pixels",
+            },
+          ],
+          "pixels",
+        );
+      } catch {
+        /* page not ready yet */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [target, getPdfPageProxy, jumpToHighlightRects]);
 
   return null;
 }
@@ -463,19 +505,19 @@ export function PdfViewerInner({
         {/* Left: side panel toggles */}
         <div className="flex items-center gap-0.5">
           {PANEL_TOGGLES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={`flex size-6 items-center justify-center rounded transition-colors ${
-                sidePanel === t.id
-                  ? "bg-muted text-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              }`}
-              title={t.label}
-              onClick={() => setSidePanel(sidePanel === t.id ? null : t.id)}
-            >
-              {t.icon}
-            </button>
+            <Hint key={t.id} label={t.label}>
+              <button
+                type="button"
+                className={`flex size-6 items-center justify-center rounded transition-colors ${
+                  sidePanel === t.id
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                }`}
+                onClick={() => setSidePanel(sidePanel === t.id ? null : t.id)}
+              >
+                {t.icon}
+              </button>
+            </Hint>
           ))}
         </div>
 
@@ -501,21 +543,24 @@ export function PdfViewerInner({
 
         {/* Zoom controls */}
         <div className="flex items-center">
-          <Button
-            variant="ghost" size="icon" className="size-6 rounded-r-none"
-            title="Zoom out" onClick={handleZoomOut}
-          >
-            <MinusIcon className="size-3.5" />
-          </Button>
+          <Hint label="Zoom out">
+            <Button
+              variant="ghost" size="icon" className="size-6 rounded-r-none"
+              onClick={handleZoomOut}
+            >
+              <MinusIcon className="size-3.5" />
+            </Button>
+          </Hint>
           <AppMenu>
-            <AppMenuTrigger asChild>
-              <button
-                className="h-6 min-w-[4.5rem] px-1 tabular-nums text-muted-foreground hover:text-foreground rounded transition-colors cursor-pointer select-none text-center"
-                title="Zoom"
-              >
-                {zoomLabel}
-              </button>
-            </AppMenuTrigger>
+            <Hint label="Zoom">
+              <AppMenuTrigger asChild>
+                <button
+                  className="h-6 min-w-[4.5rem] px-1 tabular-nums text-muted-foreground hover:text-foreground rounded transition-colors cursor-pointer select-none text-center"
+                >
+                  {zoomLabel}
+                </button>
+              </AppMenuTrigger>
+            </Hint>
             <AppMenuContent align="center" className="min-w-[8.5rem]">
               {FIT_ZOOM_MODES.map((mode) => (
                 <AppMenuCheckItem
@@ -542,50 +587,57 @@ export function PdfViewerInner({
               ))}
             </AppMenuContent>
           </AppMenu>
-          <Button
-            variant="ghost" size="icon" className="size-6 rounded-l-none"
-            title="Zoom in" onClick={handleZoomIn}
-          >
-            <PlusIcon className="size-3.5" />
-          </Button>
+          <Hint label="Zoom in">
+            <Button
+              variant="ghost" size="icon" className="size-6 rounded-l-none"
+              onClick={handleZoomIn}
+            >
+              <PlusIcon className="size-3.5" />
+            </Button>
+          </Hint>
         </div>
 
         <span className="mx-0.5 h-3 w-px bg-border shrink-0" />
 
         {/* Page navigation */}
         <div className="flex items-center">
-          <Button
-            variant="ghost" size="icon" className="size-6 rounded-r-none"
-            title="Previous page" disabled={currentPage <= 1}
-            onClick={handlePrevPage}
-          >
-            <ChevronLeftIcon className="size-3.5" />
-          </Button>
+          <Hint label="Previous page">
+            <Button
+              variant="ghost" size="icon" className="size-6 rounded-r-none"
+              disabled={currentPage <= 1}
+              onClick={handlePrevPage}
+            >
+              <ChevronLeftIcon className="size-3.5" />
+            </Button>
+          </Hint>
           <span className="inline-flex items-center h-6 px-0.5 tabular-nums text-muted-foreground select-none min-w-[3rem] justify-center">
             {currentPage}<span className="text-border mx-px">/</span>{totalPages}
           </span>
-          <Button
-            variant="ghost" size="icon" className="size-6 rounded-l-none"
-            title="Next page" disabled={currentPage >= totalPages}
-            onClick={handleNextPage}
-          >
-            <ChevronRightIcon className="size-3.5" />
-          </Button>
+          <Hint label="Next page">
+            <Button
+              variant="ghost" size="icon" className="size-6 rounded-l-none"
+              disabled={currentPage >= totalPages}
+              onClick={handleNextPage}
+            >
+              <ChevronRightIcon className="size-3.5" />
+            </Button>
+          </Hint>
         </div>
 
         <span className="mx-0.5 h-3 w-px bg-border shrink-0" />
 
         {/* PDF dark mode toggle */}
-        <button
-          type="button"
-          className={`flex size-6 items-center justify-center rounded transition-colors ${
-            pdfDark !== "off" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-          }`}
-          title={pdfDark === "on" ? "Light mode" : pdfDark === "follow" ? "Following app theme" : "Dark mode"}
-          onClick={cyclePdfDark}
-        >
-          {pdfDark === "on" ? <MoonIcon className="size-3.5" /> : pdfDark === "follow" ? <MonitorIcon className="size-3.5" /> : <SunIcon className="size-3.5" />}
-        </button>
+        <Hint label={pdfDark === "on" ? "Light mode" : pdfDark === "follow" ? "Following app theme" : "Dark mode"}>
+          <button
+            type="button"
+            className={`flex size-6 items-center justify-center rounded transition-colors ${
+              pdfDark !== "off" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={cyclePdfDark}
+          >
+            {pdfDark === "on" ? <MoonIcon className="size-3.5" /> : pdfDark === "follow" ? <MonitorIcon className="size-3.5" /> : <SunIcon className="size-3.5" />}
+          </button>
+        </Hint>
       </div>
 
       {/* Body: Side Panel + Pages */}
@@ -784,6 +836,7 @@ export function PdfPreview() {
       isPdfFile={isPdfFile}
       isCompiling={isCompiling}
       compileError={compileError}
+      documentLayers={isPdfFile ? undefined : <SynctexForwardBridge />}
     />
   );
 }

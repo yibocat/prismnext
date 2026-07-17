@@ -22,6 +22,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Hint } from "@/components/ui/hint";
 
 const PERMISSION_MODE_ICONS: Record<PermissionMode, LucideIcon> = {
   ask: ShieldQuestionIcon,
@@ -78,24 +79,25 @@ export function PermissionModeSelect({ compact }: PermissionModeSelectProps) {
 
   return (
     <AppMenu>
-      <AppMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
-            compact && "size-7 justify-center px-0",
-          )}
-          title={t("chat.permission.modeTitle", { mode: t(currentKeys.label) })}
-        >
-          <CurrentIcon className="size-3.5 shrink-0" />
-          {!compact && (
-            <>
-              <span>{t(currentKeys.short)}</span>
-              <ChevronDownIcon className="size-3 shrink-0" />
-            </>
-          )}
-        </button>
-      </AppMenuTrigger>
+      <Hint label={t("chat.permission.modeTitle", { mode: t(currentKeys.label) })}>
+        <AppMenuTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              "flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
+              compact && "size-7 justify-center px-0",
+            )}
+          >
+            <CurrentIcon className="size-3.5 shrink-0" />
+            {!compact && (
+              <>
+                <span>{t(currentKeys.short)}</span>
+                <ChevronDownIcon className="size-3 shrink-0" />
+              </>
+            )}
+          </button>
+        </AppMenuTrigger>
+      </Hint>
       <AppMenuContent align="end" className="w-64">
         <AppMenuLabel>{t("chat.permission.label")}</AppMenuLabel>
         {PERMISSION_MODE_OPTIONS.map((option) => {

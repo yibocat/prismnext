@@ -24,6 +24,7 @@ import {
 } from "../services/session-citations-context";
 import { buildTaskDelegationCiteAuditPreface } from "../services/session-cite-audit-context";
 import {
+  formatOrchestratorBuiltinTaskDeniedMessage,
   normalizeTaskSubagentId,
   shouldDenyOrchestratorBuiltinTask,
 } from "../services/task-orchestrator-gate";
@@ -61,6 +62,13 @@ export class EventMapper {
    *  Generous because OpenCode may take time to spawn the child and commit its
    *  session row; the watchdog only fires when linking genuinely fails. */
   private static readonly TASK_LINK_TIMEOUT_MS = 90_000;
+  /**
+   * Child sessions whose updates arrived before we could resolve parent_id /
+   * pending Task. Retried when parent_id appears or a Task is enqueued.
+   */
+  private orphanSubSessions = new Map<string, { firstSeenAt: number; retries: number }>();
+  private orphanRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private static readonly ORPHAN_RETRY_DELAYS_MS = [400, 1500, 4000, 10_000] as const;
 
   constructor(win: BrowserWindow) {
     this.win = win;
@@ -163,14 +171,16 @@ export class EventMapper {
         // its activity (text/thinking/tool_use) is silently dropped from the
         // UI. This is the symptom of the "Task hangs invisibly" bug: OpenCode
         // spawned the expert, but we can't tell which chat tab owns it. Log
-        // loudly so it's diagnosable.
+        // loudly so it's diagnosable — and keep retrying parent_id lookup.
         const pendingTabs = Array.from(this.pendingTasksByTab.keys());
+        const hasParentId = !!AcpService.getInstance().getSessionParentId(sessionId);
         log.warn(`session/update dropped — no chat tab mapping`, {
           sessionId,
           method,
           pendingTaskTabs: pendingTabs,
-          hasParentId: !!AcpService.getInstance().getSessionParentId(sessionId),
+          hasParentId,
         });
+        this.rememberOrphanSubSession(sessionId);
       }
       return;
     }
@@ -389,6 +399,80 @@ export class EventMapper {
       type: "subAgent.linked",
       data: { taskToolUseId: toolUseId, expertId, prompt, rawPrompt, hasStagingPreface: !!stagingPreface },
     });
+    // Child session/update may have arrived (and been dropped) before this Task
+    // was enqueued — try to bind orphans now that a pending slot exists.
+    this.tryLinkOrphanSubSessions(tabId);
+  }
+
+  /** Remember an unmapped session and schedule parent_id re-lookups. */
+  private rememberOrphanSubSession(sessionId: string): void {
+    if (this.sessionToTab.has(sessionId) || this.subSessionToTaskTool.has(sessionId)) return;
+    const prev = this.orphanSubSessions.get(sessionId);
+    this.orphanSubSessions.set(sessionId, {
+      firstSeenAt: prev?.firstSeenAt ?? Date.now(),
+      retries: prev?.retries ?? 0,
+    });
+    this.scheduleOrphanRetry(sessionId);
+  }
+
+  private scheduleOrphanRetry(sessionId: string): void {
+    if (this.orphanRetryTimers.has(sessionId)) return;
+    const entry = this.orphanSubSessions.get(sessionId);
+    if (!entry) return;
+    const delay =
+      EventMapper.ORPHAN_RETRY_DELAYS_MS[
+        Math.min(entry.retries, EventMapper.ORPHAN_RETRY_DELAYS_MS.length - 1)
+      ] ?? 10_000;
+    const timer = setTimeout(() => {
+      this.orphanRetryTimers.delete(sessionId);
+      const cur = this.orphanSubSessions.get(sessionId);
+      if (!cur) return;
+      if (this.sessionToTab.has(sessionId) || this.subSessionToTaskTool.has(sessionId)) {
+        this.orphanSubSessions.delete(sessionId);
+        return;
+      }
+      cur.retries += 1;
+      this.orphanSubSessions.set(sessionId, cur);
+      const tabId = this.resolveTabForSession(sessionId);
+      if (tabId) {
+        log.info(`orphan sub-session linked on retry`, {
+          sessionId,
+          tabId,
+          retries: cur.retries,
+        });
+        this.orphanSubSessions.delete(sessionId);
+        return;
+      }
+      if (cur.retries < EventMapper.ORPHAN_RETRY_DELAYS_MS.length) {
+        this.scheduleOrphanRetry(sessionId);
+      }
+    }, delay);
+    timer.unref?.();
+    this.orphanRetryTimers.set(sessionId, timer);
+  }
+
+  /** After a Task is queued, bind any orphan child sessions that now have parent_id. */
+  private tryLinkOrphanSubSessions(tabId: string): void {
+    if (!this.pendingTasksByTab.get(tabId)?.length) return;
+    for (const sessionId of [...this.orphanSubSessions.keys()]) {
+      if (this.subSessionToTaskTool.has(sessionId)) {
+        this.orphanSubSessions.delete(sessionId);
+        continue;
+      }
+      const parentId = AcpService.getInstance().getSessionParentId(sessionId);
+      if (!parentId) continue;
+      const parentTab = this.resolveTabForSession(parentId);
+      if (parentTab !== tabId) continue;
+      if (!this.pendingTasksByTab.get(tabId)?.length) break;
+      log.info(`linking orphan sub-session after Task enqueue`, { sessionId, tabId });
+      this.linkSubAgentSession(tabId, sessionId);
+      this.orphanSubSessions.delete(sessionId);
+      const t = this.orphanRetryTimers.get(sessionId);
+      if (t) {
+        clearTimeout(t);
+        this.orphanRetryTimers.delete(sessionId);
+      }
+    }
   }
 
   private emitOrchestratorBuiltinTaskDenied(
@@ -398,9 +482,7 @@ export class EventMapper {
     toolInput: Record<string, unknown>,
     subagentId: string,
   ): void {
-    const message =
-      `Task delegation to @${subagentId} is disabled on the orchestrator. ` +
-      "Call platform tools directly in this conversation (e.g. citation-health, literature-search).";
+    const message = formatOrchestratorBuiltinTaskDeniedMessage(subagentId);
     this.win.webContents.send("chat:stream", {
       tabId,
       type: "message.part.updated",
@@ -411,18 +493,38 @@ export class EventMapper {
           id: toolId,
           name: "task",
           input: toolInput,
+          title: "task",
+          kind: "think",
           status: "failed",
+        },
+      },
+    });
+    // Prefer message.updated so the renderer stores a real tool_result (not lost
+    // under an unhandled stream type). OpenCode may still emit "Task cancelled"
+    // afterward — our explicit error content should already be on the widget.
+    this.win.webContents.send("chat:stream", {
+      tabId,
+      type: "message.updated",
+      data: {
+        message: {
+          content: [{
+            type: "tool_result",
+            tool_use_id: toolId,
+            content: message,
+            is_error: true,
+            status: "failed",
+            name: "task",
+          }],
         },
       },
     });
     this.win.webContents.send("chat:stream", {
       tabId,
-      type: "tool_result",
+      type: "subAgent.completed",
       data: {
-        messageId: msgId,
-        tool_use_id: toolId,
-        content: message,
-        is_error: true,
+        taskToolUseId: toolId,
+        status: "error",
+        error: message,
       },
     });
   }
@@ -438,6 +540,12 @@ export class EventMapper {
     this.clearTaskLinkWatchdog(pending.toolUseId);
     this.subSessionToTaskTool.set(subSessionId, pending.toolUseId);
     this.sessionToTab.set(subSessionId, parentTabId);
+    this.orphanSubSessions.delete(subSessionId);
+    const orphanTimer = this.orphanRetryTimers.get(subSessionId);
+    if (orphanTimer) {
+      clearTimeout(orphanTimer);
+      this.orphanRetryTimers.delete(subSessionId);
+    }
     const parentSessionId = this.tabToSession.get(parentTabId);
     registerChatSession(
       subSessionId,
@@ -516,11 +624,11 @@ export class EventMapper {
     }
   }
 
-  /** Watchdog fired: the subagent session never linked back to a chat tab. Emit
-   *  a visible error so the Task widget stops spinning and the user knows to
-   *  cancel/retry. This updates the RENDERER only — it does not unblock OpenCode
-   *  (the parent orchestrator may still be waiting for the Task result). The
-   *  user can click Stop to abort the turn. */
+  /**
+   * Watchdog fired: the subagent session never linked back to a chat tab.
+   * Mark the Task UI as failed and abort the parent turn — otherwise OpenCode
+   * keeps waiting for a Task result that will never arrive (session appears stuck).
+   */
   private handleTaskLinkTimeout(tabId: string, toolUseId: string, expertId: string): void {
     const queue = this.pendingTasksByTab.get(tabId);
     if (!queue) return; // already linked/completed
@@ -531,6 +639,9 @@ export class EventMapper {
     else this.pendingTasksByTab.set(tabId, queue);
 
     const secs = EventMapper.TASK_LINK_TIMEOUT_MS / 1000;
+    const errorText =
+      `Expert @${expertId} did not start within ${secs}s — its session could not be linked to this chat. ` +
+      "The parent turn was stopped automatically; retry or run the work with platform tools instead of Task.";
     log.warn(
       `task-link-timeout: expert=@${expertId} toolUse=${toolUseId} tab=${tabId} ` +
         `— subagent session did not link within ${secs}s`,
@@ -541,9 +652,28 @@ export class EventMapper {
       data: {
         taskToolUseId: toolUseId,
         status: "error",
-        error: `Expert @${expertId} did not start within ${secs}s — its session could not be linked to this chat. The parent turn may be stuck; click Stop to cancel and retry, or run the task inline with platform tools.`,
+        error: errorText,
       },
     });
+    this.win.webContents.send("chat:stream", {
+      tabId,
+      type: "tool_result",
+      data: {
+        tool_use_id: toolUseId,
+        content: errorText,
+        is_error: true,
+        status: "failed",
+        name: "task",
+      },
+    });
+
+    const parentSessionId = this.tabToSession.get(tabId);
+    if (parentSessionId) {
+      log.warn(
+        `task-link-timeout: aborting parent session ${parentSessionId} to unblock tab=${tabId}`,
+      );
+      void AcpService.getInstance().abort(parentSessionId);
+    }
   }
 
   private mapSessionUpdate(tabId: string, sessionId: string, params: any): void {

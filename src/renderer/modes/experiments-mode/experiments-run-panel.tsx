@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/hint";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AppSelect,
@@ -251,14 +252,8 @@ export function ExperimentsRunPanel() {
               ))}
             </AppSelectContent>
           </AppSelect>
-          <Button
-            type="button"
-            size="sm"
-            variant="default"
-            onClick={handleRunClick}
-            disabled={!canRun}
-            className="h-7 gap-1 px-2.5"
-            title={
+          <Hint
+            label={
               isReadonly
                 ? t("experiments.runPanel.permissionReadonly")
                 : !projectRoot || !selectedId
@@ -270,50 +265,64 @@ export function ExperimentsRunPanel() {
                       : t("experiments.runPanel.runInLab")
             }
           >
-            <PlayIcon className="size-3" aria-hidden />
-            {t("experiments.run")}
-          </Button>
-          {isInFlightForCurrent ? (
             <Button
               type="button"
               size="sm"
-              variant="outline"
-              onClick={handleCancel}
+              variant="default"
+              onClick={handleRunClick}
+              disabled={!canRun}
               className="h-7 gap-1 px-2.5"
-              title={t("experiments.runPanel.cancelRun")}
             >
-              <SquareIcon className="size-3" aria-hidden />
-              {t("experiments.cancel")}
+              <PlayIcon className="size-3" aria-hidden />
+              {t("experiments.run")}
             </Button>
+          </Hint>
+          {isInFlightForCurrent ? (
+            <Hint label={t("experiments.runPanel.cancelRun")}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleCancel}
+                className="h-7 gap-1 px-2.5"
+              >
+                <SquareIcon className="size-3" aria-hidden />
+                {t("experiments.cancel")}
+              </Button>
+            </Hint>
           ) : null}
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={handleReuseLast}
-            disabled={lastCommand == null || isInFlightForCurrent}
-            className="h-7 gap-1 px-2"
-            title={
+          <Hint
+            label={
               lastCommand == null
                 ? t("experiments.runPanel.noPrior")
                 : t("experiments.runPanel.populateLast")
             }
           >
-            <HistoryIcon className="size-3" aria-hidden />
-            {t("experiments.reuseLast")}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => void handleOpenTerminal()}
-            disabled={!projectRoot || !selectedId}
-            className="h-7 gap-1 px-2"
-            title={t("experiments.runPanel.openTerminal")}
-          >
-            <TerminalIcon className="size-3" aria-hidden />
-            {t("experiments.terminal")}
-          </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={handleReuseLast}
+              disabled={lastCommand == null || isInFlightForCurrent}
+              className="h-7 gap-1 px-2"
+            >
+              <HistoryIcon className="size-3" aria-hidden />
+              {t("experiments.reuseLast")}
+            </Button>
+          </Hint>
+          <Hint label={t("experiments.runPanel.openTerminal")}>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => void handleOpenTerminal()}
+              disabled={!projectRoot || !selectedId}
+              className="h-7 gap-1 px-2"
+            >
+              <TerminalIcon className="size-3" aria-hidden />
+              {t("experiments.terminal")}
+            </Button>
+          </Hint>
 
           {isInFlightForCurrent ? (
             <span

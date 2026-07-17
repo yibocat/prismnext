@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Kbd } from "@/components/ui/kbd";
+import { Hint } from "@/components/ui/hint";
 import { ChatComposerCore } from "./chat-composer-core";
 import { ChatMessages } from "./chat-messages";
 import { RestoreUndoBar } from "./restore-undo-bar";
@@ -18,6 +18,13 @@ import { cn } from "@/lib/utils";
 import { useChatFileDrop, useOsFileDragging } from "@/lib/chat/use-chat-file-drop";
 import { chatFileDropZoneClass, chatCapsuleFileDropActiveClass } from "@/lib/chat/chat-file-drag-overlay";
 import { displayChatTitle } from "@/lib/i18n/display-chat-title";
+import { ShortcutKbdChips } from "@/lib/shortcuts";
+import {
+  chordMatchesEvent,
+  detectShortcutPlatform,
+  resolveChord,
+} from "../../../../shared/shortcuts";
+import { useSettingsStore } from "@/stores/settings-store";
 
 /** Capsule AiBar toolbar — dedicated pill radius (not Appearance). */
 const CAPSULE_TOOLBAR_PILL =
@@ -195,6 +202,65 @@ export function AiBar() {
     return () => document.removeEventListener("mousedown", handleMouseDown, true);
   }, [isPanelOpen, closePanel]);
 
+  // ⌘I → open/focus capsule. AiBar only mounts when editor is maximized;
+  // in that mode this chord prefers the capsule over editor.italic.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && !e.metaKey && !e.ctrlKey) return;
+      const overrides = useSettingsStore.getState().settings.shortcutOverrides;
+      const resolved = resolveChord("product.focusAiBar", overrides);
+      if (!resolved) return;
+      if (!chordMatchesEvent(resolved.chord, e, detectShortcutPlatform())) return;
+      e.preventDefault();
+      e.stopPropagation();
+      useLayoutStore.getState().requestAiBarComposerFocus();
+    };
+    // Capture so we win over CodeMirror italic while maximized.
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, []);
+
+  // Esc → close message panel, then collapse capsule (empty → idle; else blur).
+  useEffect(() => {
+    if (phase === "idle" && !isPanelOpen) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target?.closest("[data-radix-menu-content]")
+        || target?.closest("[data-radix-popper-content-wrapper]")
+      ) {
+        return;
+      }
+
+      if (isPanelOpen) {
+        e.preventDefault();
+        closePanel();
+        return;
+      }
+
+      if (phase === "expanded") {
+        e.preventDefault();
+        if (draftEmptyRef.current && attachmentCountRef.current === 0) collapseToIdle();
+        else collapseToInput();
+        return;
+      }
+
+      if (phase === "input") {
+        e.preventDefault();
+        if (draftEmptyRef.current && attachmentCountRef.current === 0) {
+          collapseToIdle();
+        } else {
+          (document.activeElement as HTMLElement | null)?.blur?.();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [phase, isPanelOpen, closePanel, collapseToIdle, collapseToInput]);
+
   const toolbar = !isPanelOpen && (
     <div
       className={cn(
@@ -262,14 +328,15 @@ export function AiBar() {
                 <span className="text-[length:var(--font-chat-meta)] text-muted-foreground truncate">
                   {activeTabTitle}
                 </span>
-                <button
-                  type="button"
-                  className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                  onClick={closePanel}
-                  title={t("chat.aibar.closePanel")}
-                >
-                  <XIcon className="size-3.5" />
-                </button>
+                <Hint label={t("chat.aibar.closePanel")}>
+                  <button
+                    type="button"
+                    className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                    onClick={closePanel}
+                  >
+                    <XIcon className="size-3.5" />
+                  </button>
+                </Hint>
               </div>
               <div className="flex-1 min-h-0 flex flex-col">
                 <ChatMessages />
@@ -349,7 +416,10 @@ export function AiBar() {
                 <span className="text-[length:var(--font-chat-meta)] text-muted-foreground group-hover:text-foreground transition-colors duration-200 whitespace-nowrap">
                   {t("chat.aibar.manageAssistants")}
                 </span>
-                <Kbd className="bg-transparent transition-colors duration-200">⌘I</Kbd>
+                <ShortcutKbdChips
+                  id="product.focusAiBar"
+                  kbdClassName="bg-transparent transition-colors duration-200"
+                />
               </span>
             ) : (
               <div className={cn("w-full min-w-0", phase === "input" && "h-full")}>

@@ -26,6 +26,7 @@ import { useProjectStore } from "@/stores/project-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { toast } from "sonner";
+import { Hint } from "@/components/ui/hint";
 import {
   Select,
   SelectContent,
@@ -244,20 +245,21 @@ export function NewProjectDialog({
             <label className={SETTINGS_ROW_LABEL}>{t("project.new.projectName")}</label>
             <div className="flex items-center gap-2">
               <Popover modal={false} open={iconOpen} onOpenChange={setIconOpen}>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    disabled={creating}
-                    className={cn(
-                      "shrink-0 rounded-md outline-none transition-colors",
-                      "hover:ring-1 hover:ring-border focus-visible:ring-1 focus-visible:ring-ring",
-                      "disabled:pointer-events-none disabled:opacity-50",
-                    )}
-                    title={t("project.new.chooseIcon")}
-                  >
-                    <ProjectIconBadge icon={projectIcon} name={projectName || "P"} />
-                  </button>
-                </PopoverTrigger>
+                <Hint label={t("project.new.chooseIcon")}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      disabled={creating}
+                      className={cn(
+                        "shrink-0 rounded-md outline-none transition-colors",
+                        "hover:ring-1 hover:ring-border focus-visible:ring-1 focus-visible:ring-ring",
+                        "disabled:pointer-events-none disabled:opacity-50",
+                      )}
+                    >
+                      <ProjectIconBadge icon={projectIcon} name={projectName || "P"} />
+                    </button>
+                  </PopoverTrigger>
+                </Hint>
                 <PopoverContent
                   side="bottom"
                   align="start"
@@ -464,19 +466,20 @@ export function NewProjectDialog({
                           ))}
                         </SelectContent>
                       </Select>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 shrink-0 text-muted-foreground hover:text-destructive"
-                        disabled={creating}
-                        onClick={() =>
-                          markCustomIfEdited(workspaceFolders.filter((_, j) => j !== i))
-                        }
-                        title={t("project.new.removeFolder")}
-                      >
-                        <Trash2Icon className="size-3.5" />
-                      </Button>
+                      <Hint label={t("project.new.removeFolder")}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 shrink-0 text-muted-foreground hover:text-destructive"
+                          disabled={creating}
+                          onClick={() =>
+                            markCustomIfEdited(workspaceFolders.filter((_, j) => j !== i))
+                          }
+                        >
+                          <Trash2Icon className="size-3.5" />
+                        </Button>
+                      </Hint>
                     </div>
                   );
                 })}

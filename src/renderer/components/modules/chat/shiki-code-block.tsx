@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef, memo } from "react";
 import { createHighlighter, type Highlighter } from "shiki";
 import { CheckIcon, CopyIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings-store";
+import { Hint } from "@/components/ui/hint";
 
 // ── Map app syntax themes to Shiki theme names ──
 // Keys match EditorSyntaxThemeId from src/renderer/lib/editor-themes/types.ts
@@ -47,14 +48,15 @@ const CopyButton = memo(({ text }: { text: string }) => {
     setTimeout(() => setCopied(false), 2000);
   }, [text]);
   return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className="flex size-6 items-center justify-center rounded text-muted-foreground/60 hover:bg-white/10 hover:text-muted-foreground transition-colors"
-      title="Copy"
-    >
-      {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
-    </button>
+    <Hint label="Copy">
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="flex size-6 items-center justify-center rounded text-muted-foreground/60 hover:bg-white/10 hover:text-muted-foreground transition-colors"
+      >
+        {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
+      </button>
+    </Hint>
   );
 });
 CopyButton.displayName = "CopyButton";

@@ -7,8 +7,9 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { SIDEBAR_LEFT_DEFAULT, SIDEBAR_OVERLAY_THRESHOLD } from "@/styles/constants";
 import { openRightArea, closeRightArea } from "@/lib/workspace/right-area-layout";
 import { cn } from "@/lib/utils";
+import { Hint } from "@/components/ui/hint";
 import { Kbd } from "@/components/ui/kbd";
-import { CommandPalette } from "@/components/modules/shared";
+import { shortcutChordLabel } from "@/lib/shortcuts";
 import {
   PanelLeft,
   PanelRight,
@@ -53,7 +54,8 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   const inSettings = leftSidebarView === "settings";
-  const [commandOpen, setCommandOpen] = useState(false);
+  const setCommandPaletteOpen = useLayoutStore((s) => s.setCommandPaletteOpen);
+  const commandChord = shortcutChordLabel("shell.commandPalette");
   const { theme, resolvedTheme, setTheme } = useTheme();
 
   const cycleTheme = () => {
@@ -66,56 +68,62 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
   const showMacSpacer = isMac && !isFullscreen && !isMaximized;
 
   return (
-    <>
     <div className="drag-region relative flex h-[var(--height-titlebar)] shrink-0 items-center px-2.5 select-none" data-surface="content">
       {/* ── Left: Traffic lights spacer + Project + Sidebar toggle ── */}
       <div className="z-10 flex items-center gap-1">
         {showMacSpacer && <div className="w-[60px]" />}
 
-        <button
-          type="button"
-          className={cn(
-            "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
-            sidebarExpanded && "bg-muted text-foreground",
-          )}
-          title={sidebarExpanded ? t("shell.collapseSidebar") : t("shell.expandSidebar")}
-          onClick={() => {
-            const st = useLayoutStore.getState();
-            if (st.leftSidebarOverlay) {
-              st.setLeftSidebarOverlay(false);
-              return;
-            }
-            const p = leftSidebarRef.current;
-            if (!p) return;
-            if (p.isCollapsed()) {
-              if (window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD) {
-                st.setLeftSidebarOverlay(true);
-              } else {
+        <Hint
+          label={sidebarExpanded ? t("shell.collapseSidebar") : t("shell.expandSidebar")}
+          shortcutId="shell.toggleLeftSidebar"
+        >
+          <button
+            type="button"
+            className={cn(
+              "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
+              sidebarExpanded && "bg-muted text-foreground",
+            )}
+            onClick={() => {
+              const st = useLayoutStore.getState();
+              if (st.leftSidebarOverlay) {
                 st.setLeftSidebarOverlay(false);
-                st.setSidebarExpanded(true);
-                st.setSidebarFullyCollapsed(false);
-                p.expand();
-                p.resize(st.sidebarWidth || SIDEBAR_LEFT_DEFAULT);
+                return;
               }
-            } else {
-              st.setSidebarExpanded(false);
-              st.setSidebarFullyCollapsed(true);
-              p.collapse();
-            }
-          }}
-        >
-          <PanelLeft className="size-3.5" />
-        </button>
+              const p = leftSidebarRef.current;
+              if (!p) return;
+              if (p.isCollapsed()) {
+                if (window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD) {
+                  st.setLeftSidebarOverlay(true);
+                } else {
+                  st.setLeftSidebarOverlay(false);
+                  st.setSidebarExpanded(true);
+                  st.setSidebarFullyCollapsed(false);
+                  p.expand();
+                  p.resize(st.sidebarWidth || SIDEBAR_LEFT_DEFAULT);
+                }
+              } else {
+                st.setSidebarExpanded(false);
+                st.setSidebarFullyCollapsed(true);
+                p.collapse();
+              }
+            }}
+          >
+            <PanelLeft className="size-3.5" />
+          </button>
+        </Hint>
 
-        <button
-          type="button"
-          className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[length:var(--font-toolbar-label)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title={t("shell.commandPalette")}
-          onClick={() => setCommandOpen(true)}
-        >
-          <SearchIcon className="size-3.5" />
-          <Kbd className="text-[length:var(--font-kbd)] h-4 min-w-4 px-0.5 bg-transparent">⌘K</Kbd>
-        </button>
+        <Hint shortcutId="shell.commandPalette">
+          <button
+            type="button"
+            className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[length:var(--font-toolbar-label)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            onClick={() => setCommandPaletteOpen(true)}
+          >
+            <SearchIcon className="size-3.5" />
+            {commandChord ? (
+              <Kbd className="text-[length:var(--font-kbd)] h-4 min-w-4 px-0.5 bg-transparent">{commandChord}</Kbd>
+            ) : null}
+          </button>
+        </Hint>
 
       </div>
 
@@ -126,82 +134,85 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
       <div className="z-10 flex items-center gap-1">
         {!isMac && (
           <>
-            <button
-              type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              title={t("shell.minimize")}
-              onClick={() => window.electronAPI?.windowMinimize()}
-            >
-              <Minimize2Icon className="size-4" />
-            </button>
-            <button
-              type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              title={isMaximized ? t("shell.restore") : t("shell.maximize")}
-              onClick={() => window.electronAPI?.windowMaximize()}
-            >
-              <Maximize2Icon className="size-4" />
-            </button>
-            <button
-              type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
-              title={t("shell.close")}
-              onClick={() => window.electronAPI?.windowClose()}
-            >
-              <XIcon className="size-4" />
-            </button>
+            <Hint label={t("shell.minimize")}>
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                onClick={() => window.electronAPI?.windowMinimize()}
+              >
+                <Minimize2Icon className="size-4" />
+              </button>
+            </Hint>
+            <Hint label={isMaximized ? t("shell.restore") : t("shell.maximize")}>
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                onClick={() => window.electronAPI?.windowMaximize()}
+              >
+                <Maximize2Icon className="size-4" />
+              </button>
+            </Hint>
+            <Hint label={t("shell.close")}>
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
+                onClick={() => window.electronAPI?.windowClose()}
+              >
+                <XIcon className="size-4" />
+              </button>
+            </Hint>
 
             <div className="mx-1 h-4 w-px bg-border" />
           </>
         )}
 
-        <button
-          type="button"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title={t("common.theme", { theme })}
-          onClick={cycleTheme}
-        >
-          {theme === "system" ? (
-            <MonitorIcon className="size-3.5" />
-          ) : resolvedTheme === "dark" ? (
-            <SunIcon className="size-3.5" />
-          ) : (
-            <MoonIcon className="size-3.5" />
-          )}
-        </button>
+        <Hint label={t("common.theme", { theme })}>
+          <button
+            type="button"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            onClick={cycleTheme}
+          >
+            {theme === "system" ? (
+              <MonitorIcon className="size-3.5" />
+            ) : resolvedTheme === "dark" ? (
+              <SunIcon className="size-3.5" />
+            ) : (
+              <MoonIcon className="size-3.5" />
+            )}
+          </button>
+        </Hint>
 
         {!inSettings && (
-        <button
-          type="button"
-          className={cn(
-            "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
-            rightAreaExpanded && "bg-muted text-foreground",
-          )}
-          title={rightAreaExpanded ? t("shell.collapseRightArea") : t("shell.expandRightArea")}
-          onClick={() => {
-            const r = rightAreaRef.current;
-            if (!r) return;
-            if (r.isCollapsed()) {
-              openRightArea({
-                centerRef: centerRef.current,
-                rightAreaRef: r,
-                leftSidebarRef: leftSidebarRef.current,
-                isMobile,
-              });
-            } else {
-              closeRightArea({
-                centerRef: centerRef.current,
-                rightAreaRef: r,
-              });
-            }
-          }}
-        >
-          <PanelRight className="size-3.5" />
-        </button>
+        <Hint shortcutId="shell.toggleRightArea">
+          <button
+            type="button"
+            className={cn(
+              "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
+              rightAreaExpanded && "bg-muted text-foreground",
+            )}
+            onClick={() => {
+              const r = rightAreaRef.current;
+              if (!r) return;
+              if (r.isCollapsed()) {
+                openRightArea({
+                  centerRef: centerRef.current,
+                  rightAreaRef: r,
+                  leftSidebarRef: leftSidebarRef.current,
+                  isMobile,
+                });
+              } else {
+                closeRightArea({
+                  centerRef: centerRef.current,
+                  rightAreaRef: r,
+                });
+              }
+            }}
+          >
+            <PanelRight className="size-3.5" />
+          </button>
+        </Hint>
         )}
       </div>
     </div>
-    <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
-  </>
   );
 }

@@ -6,6 +6,7 @@ import { parseCatalogIdentifier } from "../../../shared/parse-catalog-identifier
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { appPopoverFontClass, appPopoverListClass } from "@/components/ui/app-popover";
 import { Input } from "@/components/ui/input";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 
 const triggerClass = cn(
@@ -54,20 +55,21 @@ export function LiteratureAddByIdentifierButton({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={triggerClass}
-          disabled={!projectRoot || disabled}
-          title="Add by identifier (DOI, arXiv, ISBN, PMID, ADS)"
-        >
-          {busy ? (
-            <Loader2Icon className="size-3.5 animate-spin" />
-          ) : (
-            <Wand2Icon className="size-3.5" />
-          )}
-        </button>
-      </PopoverTrigger>
+      <Hint label="Add by identifier (DOI, arXiv, ISBN, PMID, ADS)">
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className={triggerClass}
+            disabled={!projectRoot || disabled}
+          >
+            {busy ? (
+              <Loader2Icon className="size-3.5 animate-spin" />
+            ) : (
+              <Wand2Icon className="size-3.5" />
+            )}
+          </button>
+        </PopoverTrigger>
+      </Hint>
       <PopoverContent
         align="start"
         sideOffset={6}

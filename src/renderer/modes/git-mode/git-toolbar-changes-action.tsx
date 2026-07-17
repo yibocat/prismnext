@@ -13,6 +13,7 @@ import {
   AppMenuTrigger,
 } from "@/components/ui/app-menu";
 import { useGitStore } from "@/stores/git-store";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 
 export type GitToolbarChangesMode = "local" | "worktree";
@@ -60,30 +61,32 @@ export function GitToolbarChangesAction({
 
   if (mode === "worktree") {
     return (
-      <button
-        type="button"
-        onClick={onMerge}
-        className={cn(shellClass, primaryBtnClass)}
-        title={t("git.toolbar.mergeToBranch")}
-      >
-        <GitMergeIcon className="size-3.5 shrink-0" />
-        {!compact && <span>{t("git.toolbar.mergeToBranch")}</span>}
-      </button>
+      <Hint label={t("git.toolbar.mergeToBranch")}>
+        <button
+          type="button"
+          onClick={onMerge}
+          className={cn(shellClass, primaryBtnClass)}
+        >
+          <GitMergeIcon className="size-3.5 shrink-0" />
+          {!compact && <span>{t("git.toolbar.mergeToBranch")}</span>}
+        </button>
+      </Hint>
     );
   }
 
   return (
     <div className={shellClass}>
-      <button
-        type="button"
-        onClick={onCommit}
-        disabled={stagedCount === 0}
-        className={primaryBtnClass}
-        title={t("git.toolbar.commit")}
-      >
-        <GitCommitHorizontalIcon className="size-3.5 shrink-0" />
-        {!compact && <span>{t("git.toolbar.commit")}</span>}
-      </button>
+      <Hint label={t("git.toolbar.commit")}>
+        <button
+          type="button"
+          onClick={onCommit}
+          disabled={stagedCount === 0}
+          className={primaryBtnClass}
+        >
+          <GitCommitHorizontalIcon className="size-3.5 shrink-0" />
+          {!compact && <span>{t("git.toolbar.commit")}</span>}
+        </button>
+      </Hint>
 
       <AppMenu>
         <AppMenuTrigger asChild>

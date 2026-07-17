@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 
+vi.mock("electron", () => ({
+  app: { isPackaged: true },
+}));
+
 // electron-store fails to construct without a projectName option; stub it so
 // transitive imports of settings.ts don't blow up at import time.
 vi.mock("electron-store", () => ({
@@ -19,6 +23,7 @@ const acpStub = {
   isSessionReplaySuppressed: vi.fn().mockReturnValue(false),
   getSessionParentId: vi.fn().mockReturnValue(null),
   resolveCitationStagingSessionId: vi.fn().mockReturnValue(null),
+  abort: vi.fn().mockResolvedValue(undefined),
 };
 vi.mock("../../src/main/acp/service", () => ({
   AcpService: { getInstance: () => acpStub },
@@ -59,7 +64,8 @@ describe("EventMapper Task link watchdog", () => {
     expect(send).not.toHaveBeenCalled();
 
     vi.advanceTimersByTime(1); // cross the 90s threshold
-    expect(send).toHaveBeenCalledTimes(1);
+    // UI fail + tool_result (parent abort only when tabToSession is set).
+    expect(send).toHaveBeenCalledTimes(2);
     expect(send).toHaveBeenCalledWith("chat:stream", {
       tabId,
       type: "subAgent.completed",
@@ -67,6 +73,15 @@ describe("EventMapper Task link watchdog", () => {
         taskToolUseId: toolUseId,
         status: "error",
         error: expect.stringContaining("citation-auditor"),
+      }),
+    });
+    expect(send).toHaveBeenCalledWith("chat:stream", {
+      tabId,
+      type: "tool_result",
+      data: expect.objectContaining({
+        tool_use_id: toolUseId,
+        is_error: true,
+        name: "task",
       }),
     });
     // Pending task consumed.
@@ -214,6 +229,13 @@ describe("EventMapper Task dispatch recognition (kind:think, title:task)", () =>
 });
 
 describe("EventMapper resolveTabForSession — no sole-pending heuristic (Bug #7)", () => {
+  beforeEach(() => {
+    acpStub.getSessionParentId.mockReset();
+    acpStub.getSessionParentId.mockReturnValue(null);
+    acpStub.markSubAgentSession.mockClear();
+    acpStub.abort.mockClear();
+  });
+
   it("does not bind an unmapped child session to the sole pending-task tab", () => {
     const { win } = makeMockWin();
     const mapper = new EventMapper(win);
@@ -238,6 +260,71 @@ describe("EventMapper resolveTabForSession — no sole-pending heuristic (Bug #7
     const resolved = (mapper as any).resolveTabForSession("ses-child-a");
     expect(resolved).toBe(tabA);
     expect((mapper as any).sessionToTab.get("ses-child-a")).toBe(tabA);
+  });
+
+  it("links orphan child after parent_id appears on retry (late SQLite commit)", () => {
+    vi.useFakeTimers();
+    const { win, send } = makeMockWin();
+    const mapper = new EventMapper(win);
+    const tabId = "tab-late-parent";
+    const childId = "ses-child-late";
+    const parentId = "ses-parent-late";
+    (mapper as any).tabToSession.set(tabId, parentId);
+    (mapper as any).sessionToTab.set(parentId, tabId);
+    (mapper as any).pendingTasksByTab.set(tabId, [
+      { toolUseId: "tool-late", expertId: "literature-scout", prompt: "find" },
+    ]);
+
+    // First lookup: parent_id not committed yet (the historical null-cache bug).
+    acpStub.getSessionParentId.mockReturnValue(null);
+    (mapper as any).handleNotification("session/update", {
+      sessionId: childId,
+      update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "hi" } },
+    });
+    expect((mapper as any).sessionToTab.has(childId)).toBe(false);
+    expect((mapper as any).orphanSubSessions.has(childId)).toBe(true);
+
+    // Later commit: parent_id available on retry.
+    acpStub.getSessionParentId.mockReturnValue(parentId);
+    vi.advanceTimersByTime(400);
+
+    expect((mapper as any).sessionToTab.get(childId)).toBe(tabId);
+    expect((mapper as any).subSessionToTaskTool.get(childId)).toBe("tool-late");
+    expect(
+      send.mock.calls.some(
+        (c) => c[0] === "chat:stream" && c[1]?.type === "subAgent.linked" && c[1]?.data?.subSessionId === childId,
+      ),
+    ).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("links orphan child immediately when Task is enqueued after early child updates", () => {
+    const { win, send } = makeMockWin();
+    const mapper = new EventMapper(win);
+    const tabId = "tab-enqueue-late";
+    const childId = "ses-child-early";
+    const parentId = "ses-parent-early";
+    (mapper as any).tabToSession.set(tabId, parentId);
+    (mapper as any).sessionToTab.set(parentId, tabId);
+
+    // Child activity arrives before Task is tracked → orphan buffer.
+    acpStub.getSessionParentId.mockReturnValue(parentId);
+    (mapper as any).rememberOrphanSubSession(childId);
+    expect((mapper as any).orphanSubSessions.has(childId)).toBe(true);
+
+    // Parent Task tool_call finally enqueued.
+    (mapper as any).trackTaskToolUse(tabId, "tool-early", {
+      subagent_type: "citation-auditor",
+      prompt: "audit",
+    });
+
+    expect((mapper as any).subSessionToTaskTool.get(childId)).toBe("tool-early");
+    expect((mapper as any).orphanSubSessions.has(childId)).toBe(false);
+    expect(
+      send.mock.calls.some(
+        (c) => c[0] === "chat:stream" && c[1]?.type === "subAgent.linked" && c[1]?.data?.subSessionId === childId,
+      ),
+    ).toBe(true);
   });
 });
 

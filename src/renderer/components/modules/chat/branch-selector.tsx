@@ -13,6 +13,7 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useGitStore } from "@/stores/git-store";
 import { CHAT_PANEL_TOOLBAR_BUTTON } from "./worktree-selector";
 import { GitInitButton } from "@/modes/git-mode/git-init-button";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 
 const WT_PREFIX = "wt-";
@@ -80,24 +81,25 @@ export function BranchSelector() {
 
   return (
     <AppMenu>
-      <AppMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            CHAT_PANEL_TOOLBAR_BUTTON,
-            locked
-              ? "cursor-not-allowed opacity-70 hover:bg-transparent hover:text-muted-foreground/70"
-              : undefined,
-          )}
-          onMouseDown={(e) => e.preventDefault()}
-          title={buttonLabel}
-          disabled={locked}
-        >
-          <GitBranchIcon className="size-3.5 shrink-0" />
-          <span className="max-w-[100px] truncate hidden @md:inline">{buttonLabel}</span>
-          {locked && <LockIcon className="size-3" />}
-        </button>
-      </AppMenuTrigger>
+      <Hint label={buttonLabel}>
+        <AppMenuTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              CHAT_PANEL_TOOLBAR_BUTTON,
+              locked
+                ? "cursor-not-allowed opacity-70 hover:bg-transparent hover:text-muted-foreground/70"
+                : undefined,
+            )}
+            onMouseDown={(e) => e.preventDefault()}
+            disabled={locked}
+          >
+            <GitBranchIcon className="size-3.5 shrink-0" />
+            <span className="max-w-[100px] truncate hidden @md:inline">{buttonLabel}</span>
+            {locked && <LockIcon className="size-3" />}
+          </button>
+        </AppMenuTrigger>
+      </Hint>
       <AppMenuContent align="start" className="w-56 max-h-56 overflow-y-auto">
         {visibleBranches.length > 0 ? (
           visibleBranches.map((b) => {

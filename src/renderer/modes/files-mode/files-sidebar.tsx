@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import { buildFileTree, flattenVisibleTree, type TreeNode, type FlatVisibleNode } from "@/lib/files/file-tree";
 
@@ -93,42 +94,46 @@ function FilesHeader({ callbacks, projectName, anyExpanded, onToggleAll }: {
         {projectName || "Project"}
       </span>
       <div className="flex items-center gap-0.5 shrink-0">
-        <button
-          type="button"
-          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title={t("modes.files.newFile")}
-          onClick={() => callbacks.onNewFile()}
-        >
-          <FilePlusCorner className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title={t("modes.files.newFolder")}
-          onClick={() => callbacks.onNewFolder()}
-        >
-          <FolderPlusIcon className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title={anyExpanded ? t("modes.files.collapseAll") : t("modes.files.expandAll")}
-          onClick={onToggleAll}
-        >
-          {anyExpanded ? (
-            <FoldVerticalIcon className="size-3.5" />
-          ) : (
-            <UnfoldVerticalIcon className="size-3.5" />
-          )}
-        </button>
-        <button
-          type="button"
-          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title={t("modes.files.refresh")}
-          onClick={handleRefresh}
-        >
-          <RefreshCwIcon className={cn("size-3.5", spinning && "animate-spin")} />
-        </button>
+        <Hint label={t("modes.files.newFile")}>
+          <button
+            type="button"
+            className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            onClick={() => callbacks.onNewFile()}
+          >
+            <FilePlusCorner className="size-3.5" />
+          </button>
+        </Hint>
+        <Hint label={t("modes.files.newFolder")}>
+          <button
+            type="button"
+            className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            onClick={() => callbacks.onNewFolder()}
+          >
+            <FolderPlusIcon className="size-3.5" />
+          </button>
+        </Hint>
+        <Hint label={anyExpanded ? t("modes.files.collapseAll") : t("modes.files.expandAll")}>
+          <button
+            type="button"
+            className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            onClick={onToggleAll}
+          >
+            {anyExpanded ? (
+              <FoldVerticalIcon className="size-3.5" />
+            ) : (
+              <UnfoldVerticalIcon className="size-3.5" />
+            )}
+          </button>
+        </Hint>
+        <Hint label={t("modes.files.refresh")}>
+          <button
+            type="button"
+            className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            onClick={handleRefresh}
+          >
+            <RefreshCwIcon className={cn("size-3.5", spinning && "animate-spin")} />
+          </button>
+        </Hint>
       </div>
     </SidebarHeader>
   );

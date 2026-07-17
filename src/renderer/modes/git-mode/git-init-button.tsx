@@ -6,6 +6,7 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useGitStore } from "@/stores/git-store";
 import { CHAT_PANEL_TOOLBAR_BUTTON } from "@/components/modules/chat/worktree-selector";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 
 type GitInitButtonVariant = "toolbar" | "panel";
@@ -38,45 +39,47 @@ export function GitInitButton({
 
   if (variant === "panel") {
     return (
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        onClick={() => void handleInit()}
-        disabled={loading}
-        className={cn("gap-1.5", className)}
-        title={t("chat.toolbar.initGit")}
-      >
-        {loading ? (
-          <Loader2Icon className="size-3.5 animate-spin" />
-        ) : (
-          <GitBranchIcon className="size-3.5" />
-        )}
-        {t("chat.toolbar.initGitShort")}
-      </Button>
+      <Hint label={t("chat.toolbar.initGit")}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => void handleInit()}
+          disabled={loading}
+          className={cn("gap-1.5", className)}
+        >
+          {loading ? (
+            <Loader2Icon className="size-3.5 animate-spin" />
+          ) : (
+            <GitBranchIcon className="size-3.5" />
+          )}
+          {t("chat.toolbar.initGitShort")}
+        </Button>
+      </Hint>
     );
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => void handleInit()}
-      disabled={loading}
-      className={cn(
-        CHAT_PANEL_TOOLBAR_BUTTON,
-        "disabled:opacity-50 disabled:cursor-wait disabled:hover:bg-transparent disabled:hover:text-muted-foreground",
-        className,
-      )}
-      title={t("chat.toolbar.initGit")}
-    >
-      {loading ? (
-        <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
-      ) : (
-        <GitBranchIcon className="size-3.5 shrink-0" />
-      )}
-      <span className="max-w-[100px] truncate hidden @md:inline">
-        {t("chat.toolbar.initGitShort")}
-      </span>
-    </button>
+    <Hint label={t("chat.toolbar.initGit")}>
+      <button
+        type="button"
+        onClick={() => void handleInit()}
+        disabled={loading}
+        className={cn(
+          CHAT_PANEL_TOOLBAR_BUTTON,
+          "disabled:opacity-50 disabled:cursor-wait disabled:hover:bg-transparent disabled:hover:text-muted-foreground",
+          className,
+        )}
+      >
+        {loading ? (
+          <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
+        ) : (
+          <GitBranchIcon className="size-3.5 shrink-0" />
+        )}
+        <span className="max-w-[100px] truncate hidden @md:inline">
+          {t("chat.toolbar.initGitShort")}
+        </span>
+      </button>
+    </Hint>
   );
 }

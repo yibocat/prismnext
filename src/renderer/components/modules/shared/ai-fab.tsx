@@ -1,15 +1,17 @@
 import { MessageSquarePlusIcon } from "lucide-react";
+import { Hint } from "@/components/ui/hint";
 
 export function AiFab() {
   return (
     <div className="absolute bottom-5 right-5 z-10">
-      <button
-        type="button"
-        className="flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-all hover:scale-105 hover:shadow-xl active:scale-95"
-        title="Open AI Assistant"
-      >
-        <MessageSquarePlusIcon className="size-5" />
-      </button>
+      <Hint label="Open AI Assistant">
+        <button
+          type="button"
+          className="flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-all hover:scale-105 hover:shadow-xl active:scale-95"
+        >
+          <MessageSquarePlusIcon className="size-5" />
+        </button>
+      </Hint>
     </div>
   );
 }

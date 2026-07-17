@@ -6,6 +6,7 @@ import {
   shouldPromptForPermission,
   extractPermissionToolName,
   resolvePermissionAction,
+  resolveBridgeToolCallSyncAction,
   resolveEffectiveAgentTerminalMode,
   migratePermissionModeSetting,
   isEditAutoApplyMode,
@@ -142,5 +143,17 @@ describe("permission modes", () => {
     expect(isEditAutoApplyMode("auto")).toBe(true);
     expect(isEditAutoApplyMode("edit_auto")).toBe(true);
     expect(isEditAutoApplyMode("ask")).toBe(false);
+  });
+
+  // Regression: Auto + PTY custom bash used to hit syncBashPermissionFromToolCall,
+  // see action!=="prompt", and return without writing permission.json — tool hung
+  // waiting for an approval UI that never appears.
+  it("bridge tool_call sync: auto allows bash/delete; edit_auto still prompts shell", () => {
+    expect(resolveBridgeToolCallSyncAction("auto", "bash")).toBe("auto_allow");
+    expect(resolveBridgeToolCallSyncAction("auto", "delete")).toBe("auto_allow");
+    expect(resolveBridgeToolCallSyncAction("edit_auto", "bash")).toBe("prompt");
+    expect(resolveBridgeToolCallSyncAction("edit_auto", "edit")).toBe("auto_allow");
+    expect(resolveBridgeToolCallSyncAction("ask", "bash")).toBe("prompt");
+    expect(resolveBridgeToolCallSyncAction("readonly", "bash")).toBe("deny");
   });
 });

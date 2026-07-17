@@ -33,6 +33,7 @@ import { createLogger } from "@/services/logger";
 import { ChangesBar } from "./changes-bar";
 import { CodeMirrorInsertHost } from "./codemirror-insert-host";
 import { saveViewerPosition, loadViewerPosition } from "@/lib/editor/viewer-position";
+import { editorSearchAndKeymap, createSynctexForwardCommand } from "@/lib/editor";
 import { useTabContext } from "@/lib/workspace/tab-context";
 
 const log = createLogger("editor");
@@ -194,6 +195,10 @@ export function LatexEditor() {
           },
         }),
         history(),
+        ...editorSearchAndKeymap({
+          latexWrap: true,
+          onSynctexForward: createSynctexForwardCommand(filePath),
+        }),
         keymap.of([
           ...defaultKeymap,
           ...historyKeymap,

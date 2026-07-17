@@ -25,6 +25,8 @@ describe("buildOpencodeToolDescription", () => {
     expect(text).toContain("BINDING:");
     expect(text).toContain("Paper Search MCP");
     expect(text).toContain("does NOT create session citations");
+    expect(text).toContain("search_arxiv");
+    expect(text).toContain("paper-search-mcp_*");
     expect(text).toContain("Do NOT use the Task tool");
   });
 

@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { Button } from "@/components/ui/button";
 import type { RightTab } from "@/lib/workspace/mode-registry";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import { experimentsPathCompactClass, experimentsToolbarContextClass } from "./experiments-detail-chrome";
 import { useExperimentProjectRoot } from "./experiments-project-root";
@@ -80,14 +81,15 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
   return (
     <div className="flex flex-1 items-center min-h-8 min-w-0 overflow-hidden gap-1">
       {inDetail ? (
-        <button
-          type="button"
-          className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          title={t("experiments.toolbar.back")}
-          onClick={clearSelection}
-        >
-          <ArrowLeftIcon className="size-3.5" aria-hidden />
-        </button>
+        <Hint label={t("experiments.toolbar.back")}>
+          <button
+            type="button"
+            className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            onClick={clearSelection}
+          >
+            <ArrowLeftIcon className="size-3.5" aria-hidden />
+          </button>
+        </Hint>
       ) : null}
       {inDetail && workspacePath ? (
         <span
@@ -106,52 +108,57 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
         </span>
       )}
       {!inDetail ? (
-        <button
-          type="button"
-          className={cn(
-            toolbarBtn,
-            "shrink-0",
-            showArchived && "bg-accent/60 text-foreground",
-          )}
-          title={
+        <Hint
+          label={
             showArchived
               ? t("experiments.toolbar.showActive")
               : t("experiments.toolbar.showArchivedOnly")
           }
-          disabled={!projectRoot || loading}
-          aria-pressed={showArchived}
-          onClick={handleToggleArchived}
         >
-          <ArchiveIcon className="size-3.5" />
-          <span>{t("experiments.archived")}</span>
-        </button>
+          <button
+            type="button"
+            className={cn(
+              toolbarBtn,
+              "shrink-0",
+              showArchived && "bg-accent/60 text-foreground",
+            )}
+            disabled={!projectRoot || loading}
+            aria-pressed={showArchived}
+            onClick={handleToggleArchived}
+          >
+            <ArchiveIcon className="size-3.5" />
+            <span>{t("experiments.archived")}</span>
+          </button>
+        </Hint>
       ) : null}
-      <button
-        type="button"
-        className={cn(toolbarBtn, "shrink-0")}
-        title={t("experiments.toolbar.refreshTitle")}
-        disabled={!projectRoot || loading}
-        onClick={handleRefresh}
-      >
-        {loading ? (
-          <Loader2Icon className="size-3.5 animate-spin" />
-        ) : (
-          <RefreshCwIcon className="size-3.5" />
-        )}
-        <span>{t("experiments.refresh")}</span>
-      </button>
+      <Hint label={t("experiments.toolbar.refreshTitle")}>
+        <button
+          type="button"
+          className={cn(toolbarBtn, "shrink-0")}
+          disabled={!projectRoot || loading}
+          onClick={handleRefresh}
+        >
+          {loading ? (
+            <Loader2Icon className="size-3.5 animate-spin" />
+          ) : (
+            <RefreshCwIcon className="size-3.5" />
+          )}
+          <span>{t("experiments.refresh")}</span>
+        </button>
+      </Hint>
 
-      <Button
-        size="xs"
-        variant="ghost"
-        className="h-6 shrink-0 px-2 text-muted-foreground hover:text-foreground"
-        title={t("experiments.toolbar.openLabTitle")}
-        disabled={!projectRoot || !inDetail || !(selectedId ?? tab.experimentId)}
-        onClick={() => void handleOpenLab()}
-      >
-        <FolderOpenIcon className="size-3.5" />
-        <span className="ml-1">{t("experiments.openLab")}</span>
-      </Button>
+      <Hint label={t("experiments.toolbar.openLabTitle")}>
+        <Button
+          size="xs"
+          variant="ghost"
+          className="h-6 shrink-0 px-2 text-muted-foreground hover:text-foreground"
+          disabled={!projectRoot || !inDetail || !(selectedId ?? tab.experimentId)}
+          onClick={() => void handleOpenLab()}
+        >
+          <FolderOpenIcon className="size-3.5" />
+          <span className="ml-1">{t("experiments.openLab")}</span>
+        </Button>
+      </Hint>
     </div>
   );
 }

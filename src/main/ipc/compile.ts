@@ -1,6 +1,9 @@
 import { ipcMain } from "electron";
 import { compileLatex, synctexEdit, synctexForward } from "../services/compiler";
 import { detectTexlive, detectTectonic } from "../services/texlive-detect";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("compile-ipc", "compile");
 
 export function registerCompileHandlers(): void {
   ipcMain.handle(
@@ -9,17 +12,21 @@ export function registerCompileHandlers(): void {
       _event,
       args: { projectDir: string; mainFile: string; useTexlive?: boolean },
     ) => {
-      console.log(`[compile:execute] projectDir=${args.projectDir} mainFile=${args.mainFile} useTexlive=${args.useTexlive ?? false}`);
+      log.info("compile:execute", {
+        projectDir: args.projectDir,
+        mainFile: args.mainFile,
+        useTexlive: args.useTexlive ?? false,
+      });
       const result = await compileLatex(
         args.projectDir,
         args.mainFile,
         args.useTexlive,
       );
       if (result.success && result.pdfBytes) {
-        console.log(`[compile:execute] SUCCESS — ${result.pdfBytes.length} bytes`);
+        log.info("compile:execute success", { bytes: result.pdfBytes.length });
         return { pdfBytes: result.pdfBytes, buildDir: result.buildDir, stdout: result.logContent };
       } else {
-        console.log(`[compile:execute] FAILED — error: ${result.error || "unknown"}`);
+        log.warn("compile:execute failed", { error: result.error || "unknown" });
         return { error: result.error || "Compilation failed", stdout: result.logContent };
       }
     },

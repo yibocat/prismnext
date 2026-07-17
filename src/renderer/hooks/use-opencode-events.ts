@@ -30,8 +30,13 @@ import { compileCurrentDocument, pauseAutoCompileForAi, resumeAutoCompileAfterAi
 import { createLogger } from "@/services/logger";
 import { isPrismSystemPromptText } from "@/lib/chat/session-message-hydrate";
 import { refreshGitStatusNow } from "@/lib/git/checkout-context";
+import { isChatPreparePhase } from "../../shared/chat-prepare-phases";
+import {
+  formatOrchestratorBuiltinTaskDeniedMessage,
+  isOpaqueTaskCancelledResult,
+} from "../../shared/task-deny-message";
 
-const log = createLogger("opencode-events");
+const log = createLogger("opencode-events", "agent");
 
 function notifyDesktopForTab(
   kind: "turn_complete" | "action_required",
@@ -414,6 +419,31 @@ export function useOpenCodeEvents() {
       if (!tab) return;
 
       switch (type) {
+        case "system.prepare": {
+          const phase = data?.phase;
+          if (phase == null || phase === "") {
+            chatStore._setPreparePhase(tabId, null);
+          } else if (isChatPreparePhase(phase)) {
+            chatStore._setPreparePhase(tabId, phase);
+          }
+          break;
+        }
+
+        case "system.sessionRecovered": {
+          const text =
+            typeof data?.message === "string" && data.message.trim()
+              ? data.message
+              : "Previous OpenCode session was lost. Continued in a new session.";
+          chatStore._appendMessage(tabId, {
+            type: "system",
+            subtype: "system.sessionRecovered",
+            message: {
+              content: [{ type: "text", text }],
+            },
+          });
+          break;
+        }
+
         case "subAgent.linked": {
           const taskToolUseId = String(data.taskToolUseId || "");
           if (!taskToolUseId) break;
@@ -519,6 +549,9 @@ export function useOpenCodeEvents() {
               message: { content: [block] },
             };
             chatStore._upsertLastMessage(tabId, msg, data.messageId ? String(data.messageId) : undefined);
+            if (useChatStore.getState().tabs.find((t) => t.id === tabId)?.preparePhase) {
+              chatStore._setPreparePhase(tabId, null);
+            }
 
             // Track tool uses for change registration + result name lookup.
             if (
@@ -610,17 +643,39 @@ export function useOpenCodeEvents() {
               }
               console.log(`[opencode-events] tool_result RX: toolUseId=${toolUseId} status=${(block.status || "").toLowerCase() || "(none)"} isFinal=${isFinalToolResult} isError=${block.is_error} contentLen=${typeof block.content === "string" ? block.content.length : -1} ${isFinalToolResult ? "" : "→ DROPPED (not final)"}`);
               if (isFinalToolResult) {
+                const toolName = (
+                  pendingToolUsesRef.current.get(tabId)?.get(toolUseId)?.name
+                  || (block as any)._backfillName
+                  || ""
+                ).toLowerCase();
+
+                // OpenCode returns opaque {"error":"Task cancelled"} after we
+                // reject builtin Task — rewrite so the widget isn't misleading.
+                if (
+                  toolName === "task"
+                  && block.is_error
+                  && isOpaqueTaskCancelledResult(block.content)
+                ) {
+                  const input = pendingToolUsesRef.current.get(tabId)?.get(toolUseId)?.input as
+                    | Record<string, unknown>
+                    | undefined;
+                  const subagent =
+                    (typeof input?.subagent_type === "string" && input.subagent_type)
+                    || (typeof input?.subagentType === "string" && input.subagentType)
+                    || (typeof input?.agent === "string" && input.agent)
+                    || "general";
+                  block = {
+                    ...block,
+                    content: formatOrchestratorBuiltinTaskDeniedMessage(String(subagent)),
+                  };
+                }
+
                 const resultMsg: ChatStreamMessage = {
                   type: "result",
                   message: { content: [block] },
                 };
                 chatStore._appendMessage(tabId, resultMsg);
 
-                const toolName = (
-                  pendingToolUsesRef.current.get(tabId)?.get(toolUseId)?.name
-                  || (block as any)._backfillName
-                  || ""
-                ).toLowerCase();
                 if (toolName === "bash" || toolName === "shell" || toolName === "terminal" || toolName === "execute") {
                   handleBashToolResult(toolUseId, block.content, block.is_error);
                 }

@@ -6,6 +6,7 @@ import {
   MARKDOWN_TOOLBAR_PRIMARY_BTN,
 } from "@/components/modules/editor/toolbars/markdown-toolbar";
 import { cn } from "@/lib/utils";
+import { Hint } from "@/components/ui/hint";
 
 export type SettingsMarkdownToolbarActions = {
   onSave: () => void;
@@ -58,15 +59,16 @@ export function SettingsMarkdownToolbar({
       <div className="flex-1 min-w-0" />
 
       {actions?.onResetToDefault ? (
-        <button
-          type="button"
-          className={MARKDOWN_TOOLBAR_TEXT_BTN}
-          disabled={actions.resetDisabled || actions.saving}
-          onClick={actions.onResetToDefault}
-          title={t("settings.appearance.resetDefault")}
-        >
-          {t("settings.appearance.resetDefault")}
-        </button>
+        <Hint label={t("settings.appearance.resetDefault")}>
+          <button
+            type="button"
+            className={MARKDOWN_TOOLBAR_TEXT_BTN}
+            disabled={actions.resetDisabled || actions.saving}
+            onClick={actions.onResetToDefault}
+          >
+            {t("settings.appearance.resetDefault")}
+          </button>
+        </Hint>
       ) : null}
 
       <MarkdownToolbarControls

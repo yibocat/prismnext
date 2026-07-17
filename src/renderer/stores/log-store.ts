@@ -24,13 +24,24 @@ interface LogState {
   exportLogs: () => string;
 }
 
+function detailSearchText(detail: unknown): string {
+  if (detail == null) return "";
+  if (typeof detail === "string") return detail;
+  try {
+    return JSON.stringify(detail);
+  } catch {
+    return String(detail);
+  }
+}
+
+/** Newest first — Settings log viewer pins fresh activity at the top. */
 export function filterLogEntries(
   mainEntries: LogEntry[],
   filterCategory: LogCategory | "all",
   filterLevel: LogLevel | "all",
   search: string,
 ): LogEntry[] {
-  const all = [...mainEntries, ...logBuffer].sort((a, b) => a.ts - b.ts || a.id - b.id);
+  const all = [...mainEntries, ...logBuffer].sort((a, b) => b.ts - a.ts || b.id - a.id);
 
   let filtered = all;
   if (filterCategory !== "all") {
@@ -41,11 +52,13 @@ export function filterLogEntries(
   }
   if (search) {
     const q = search.toLowerCase();
-    filtered = filtered.filter(
-      (e) =>
-        e.message.toLowerCase().includes(q) ||
-        e.module.toLowerCase().includes(q),
-    );
+    filtered = filtered.filter((e) => {
+      if (e.message.toLowerCase().includes(q) || e.module.toLowerCase().includes(q)) {
+        return true;
+      }
+      const detail = detailSearchText(e.detail).toLowerCase();
+      return detail.includes(q);
+    });
   }
   return filtered;
 }

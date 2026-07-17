@@ -1,6 +1,7 @@
 import { BookOpenIcon, Loader2Icon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { Hint } from "@/components/ui/hint";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -44,19 +45,20 @@ export function LiteratureNoteLinkButton({ filePath }: { filePath: string }) {
 
   if (!paper) {
     return (
-      <button
-        type="button"
-        className={MARKDOWN_TOOLBAR_BTN}
-        title="Restore library entry from this note"
-        disabled={recovering || !projectRoot}
-        onClick={() => void handleRestore()}
-      >
-        {recovering ? (
-          <Loader2Icon className="size-3.5 animate-spin" />
-        ) : (
-          <BookOpenIcon className="size-3.5 opacity-70" />
-        )}
-      </button>
+      <Hint label="Restore library entry from this note">
+        <button
+          type="button"
+          className={MARKDOWN_TOOLBAR_BTN}
+          disabled={recovering || !projectRoot}
+          onClick={() => void handleRestore()}
+        >
+          {recovering ? (
+            <Loader2Icon className="size-3.5 animate-spin" />
+          ) : (
+            <BookOpenIcon className="size-3.5 opacity-70" />
+          )}
+        </button>
+      </Hint>
     );
   }
 
@@ -66,13 +68,14 @@ export function LiteratureNoteLinkButton({ filePath }: { filePath: string }) {
   };
 
   return (
-    <button
-      type="button"
-      className={MARKDOWN_TOOLBAR_BTN}
-      title={`Open in Literature: ${paper.title}`}
-      onClick={handleOpen}
-    >
-      <BookOpenIcon className="size-3.5" />
-    </button>
+    <Hint label={`Open in Literature: ${paper.title}`}>
+      <button
+        type="button"
+        className={MARKDOWN_TOOLBAR_BTN}
+        onClick={handleOpen}
+      >
+        <BookOpenIcon className="size-3.5" />
+      </button>
+    </Hint>
   );
 }

@@ -13,6 +13,7 @@ import { useLiteratureStore } from "@/stores/literature-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/hint";
 import {
   AppMenu,
   AppMenuContent,
@@ -253,44 +254,47 @@ export function LiteratureEntryPanel({
           </div>
           <div className="flex h-8 shrink-0 items-center gap-0.5 self-start">
             {paperHasReadablePdf(paper) ? (
-              <button
-                type="button"
-                onClick={handleOpenPdf}
-                className={cn(literatureReadActionBtnClass, "h-6")}
-                title={t("literature.detail.openPdf")}
-              >
-                <ExternalLinkIcon className="size-3.5 shrink-0" />
-                <span className="hidden @md:inline">{t("literature.detail.openPdf")}</span>
-              </button>
+              <Hint label={t("literature.detail.openPdf")}>
+                <button
+                  type="button"
+                  onClick={handleOpenPdf}
+                  className={cn(literatureReadActionBtnClass, "h-6")}
+                >
+                  <ExternalLinkIcon className="size-3.5 shrink-0" />
+                  <span className="hidden @md:inline">{t("literature.detail.openPdf")}</span>
+                </button>
+              </Hint>
             ) : canDownloadPdf ? (
-              <button
-                type="button"
-                onClick={() => void handleDownloadPdf()}
-                disabled={downloadingPdf}
-                className={cn(literatureReadActionBtnClass, "h-6")}
-                title={downloadingPdf ? pdfDownloadLabel : t("literature.detail.downloadPdf")}
-              >
-                {downloadingPdf ? (
-                  <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
-                ) : (
-                  <DownloadIcon className="size-3.5 shrink-0" />
-                )}
-                <span className="hidden @md:inline">
-                  {downloadingPdf ? pdfDownloadLabel : t("literature.detail.downloadPdf")}
-                </span>
-              </button>
+              <Hint label={downloadingPdf ? pdfDownloadLabel : t("literature.detail.downloadPdf")}>
+                <button
+                  type="button"
+                  onClick={() => void handleDownloadPdf()}
+                  disabled={downloadingPdf}
+                  className={cn(literatureReadActionBtnClass, "h-6")}
+                >
+                  {downloadingPdf ? (
+                    <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
+                  ) : (
+                    <DownloadIcon className="size-3.5 shrink-0" />
+                  )}
+                  <span className="hidden @md:inline">
+                    {downloadingPdf ? pdfDownloadLabel : t("literature.detail.downloadPdf")}
+                  </span>
+                </button>
+              </Hint>
             ) : null}
             <AppMenu>
-              <AppMenuTrigger asChild>
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  title="More actions"
-                  className="size-6 px-0"
-                >
-                  <MoreHorizontalIcon className="size-3.5" />
-                </Button>
-              </AppMenuTrigger>
+              <Hint label="More actions">
+                <AppMenuTrigger asChild>
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    className="size-6 px-0"
+                  >
+                    <MoreHorizontalIcon className="size-3.5" />
+                  </Button>
+                </AppMenuTrigger>
+              </Hint>
               <AppMenuContent align="end">
                 {paper.bibkey?.trim() ? (
                   <AppMenuItem

@@ -10,6 +10,7 @@ import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language"
 import { python } from "@codemirror/lang-python";
 import { useTheme } from "next-themes";
 import { RotateCcwIcon } from "lucide-react";
+import { Hint } from "@/components/ui/hint";
 import { useThemeStore } from "@/stores/theme-store";
 import { getDefaultThemeConfig } from "@/lib/theme/theme-generator";
 import { GLASS_TIER_LABELS, type GlassTier } from "@/lib/theme/glass-system";
@@ -157,13 +158,14 @@ export function AppearanceSettings() {
                 <p className={ROW_DESC}>{t("settings.appearance.themeModeDesc")}</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  className={RESET_ICON}
+                <Hint label={t("settings.appearance.resetDefault")}>
+                  <button
+                    className={RESET_ICON}
                   onClick={() => setTheme("system")}
-                  title={t("settings.appearance.resetDefault")}
                 >
-                  <RotateCcwIcon className="size-3" />
-                </button>
+                    <RotateCcwIcon className="size-3" />
+                  </button>
+                </Hint>
                 <AppSelect value={theme} onValueChange={(v) => setTheme(v)}>
                   <AppSelectTrigger className="w-24">
                     <AppSelectValue />
@@ -184,13 +186,14 @@ export function AppearanceSettings() {
                 <p className={ROW_DESC}>{t("settings.appearance.themeColorDesc")}</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  className={RESET_ICON}
+                <Hint label={t("settings.appearance.resetDefault")}>
+                  <button
+                    className={RESET_ICON}
                   onClick={() => updateConfig({ primaryColor: defaults.primaryColor })}
-                  title={t("settings.appearance.resetDefault")}
                 >
-                  <RotateCcwIcon className="size-3" />
-                </button>
+                    <RotateCcwIcon className="size-3" />
+                  </button>
+                </Hint>
                 <AppSelect value={config.primaryColor} onValueChange={(v) => updateConfig({ primaryColor: v })}>
                   <AppSelectTrigger className="w-32">
                     <AppSelectValue />
@@ -220,13 +223,14 @@ export function AppearanceSettings() {
                   <p className={ROW_DESC}>{t("settings.appearance.baseIntensityDesc")}</p>
                 </div>
                 <div className="flex items-start gap-1.5 shrink-0">
-                  <button
-                    className={RESET_ICON}
+                  <Hint label={t("settings.appearance.resetDefault")}>
+                    <button
+                      className={RESET_ICON}
                     onClick={() => updateConfig({ baseIntensity: defaults.baseIntensity })}
-                    title={t("settings.appearance.resetDefault")}
                   >
-                    <RotateCcwIcon className="size-3" />
-                  </button>
+                      <RotateCcwIcon className="size-3" />
+                    </button>
+                  </Hint>
                   <div>
                     <div className="flex items-center gap-1.5">
                       <Slider
@@ -265,15 +269,16 @@ export function AppearanceSettings() {
                 <p className={ROW_DESC}>{t("settings.appearance.uiFontDesc")}</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  className={RESET_ICON}
+                <Hint label={t("settings.appearance.resetDefault")}>
+                  <button
+                    className={RESET_ICON}
                   onClick={() =>
                     updateConfig({ fontSans: defaults.fontSans, uiFontSize: defaults.uiFontSize })
                   }
-                  title={t("settings.appearance.resetDefault")}
                 >
-                  <RotateCcwIcon className="size-3" />
-                </button>
+                    <RotateCcwIcon className="size-3" />
+                  </button>
+                </Hint>
                 <div className="flex gap-2">
                   <AppSelect value={config.fontSans} onValueChange={(v) => updateConfig({ fontSans: v })}>
                     <AppSelectTrigger className="w-28">
@@ -323,8 +328,9 @@ export function AppearanceSettings() {
                 <p className={ROW_DESC}>{t("settings.appearance.editorFontDesc")}</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  className={RESET_ICON}
+                <Hint label={t("settings.appearance.resetDefault")}>
+                  <button
+                    className={RESET_ICON}
                   onClick={() =>
                     updateConfig({
                       editorFontFamily: defaults.editorFontFamily,
@@ -332,10 +338,10 @@ export function AppearanceSettings() {
                       editorFontSize: defaults.editorFontSize,
                     })
                   }
-                  title={t("settings.appearance.resetDefault")}
                 >
-                  <RotateCcwIcon className="size-3" />
-                </button>
+                    <RotateCcwIcon className="size-3" />
+                  </button>
+                </Hint>
                 <div className="flex gap-2">
                   <AppSelect
                     value={config.editorFontFamily}
@@ -409,13 +415,14 @@ export function AppearanceSettings() {
                 <p className={ROW_DESC}>{t("settings.appearance.borderRadiusDesc")}</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  className={RESET_ICON}
+                <Hint label={t("settings.appearance.resetDefault")}>
+                  <button
+                    className={RESET_ICON}
                   onClick={() => updateConfig({ radius: defaults.radius })}
-                  title={t("settings.appearance.resetDefault")}
                 >
-                  <RotateCcwIcon className="size-3" />
-                </button>
+                    <RotateCcwIcon className="size-3" />
+                  </button>
+                </Hint>
                 <AppSelect
                   value={config.radius.toString()}
                   onValueChange={(v) => updateConfig({ radius: parseFloat(v) })}
@@ -443,18 +450,19 @@ export function AppearanceSettings() {
                 </p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  className={RESET_ICON}
+                <Hint label={t("settings.appearance.resetDefault")}>
+                  <button
+                    className={RESET_ICON}
                   onClick={() =>
                     updateConfig({
                       glassEffect: defaults.glassEffect,
                       glassIntensity: defaults.glassIntensity,
                     })
                   }
-                  title={t("settings.appearance.resetDefault")}
                 >
-                  <RotateCcwIcon className="size-3" />
-                </button>
+                    <RotateCcwIcon className="size-3" />
+                  </button>
+                </Hint>
                 <Switch
                   checked={config.glassEffect}
                   onCheckedChange={(v) => updateConfig({ glassEffect: v })}
@@ -478,13 +486,14 @@ export function AppearanceSettings() {
                   </p>
                 </div>
                 <div className="flex items-start gap-1.5 shrink-0">
-                  <button
-                    className={RESET_ICON}
+                  <Hint label={t("settings.appearance.resetDefault")}>
+                    <button
+                      className={RESET_ICON}
                     onClick={() => updateConfig({ glassIntensity: defaults.glassIntensity })}
-                    title={t("settings.appearance.resetDefault")}
                   >
-                    <RotateCcwIcon className="size-3" />
-                  </button>
+                      <RotateCcwIcon className="size-3" />
+                    </button>
+                  </Hint>
                   <div>
                     <div className="flex gap-1">
                       {([1, 2, 3, 4, 5] as GlassTier[]).map((tier) => (

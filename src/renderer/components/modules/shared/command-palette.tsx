@@ -17,6 +17,8 @@ import {
   SearchIcon,
   SettingsIcon,
 } from "lucide-react";
+import { useLayoutStore } from "@/stores/layout-store";
+import { shortcutChordLabel } from "@/lib/shortcuts";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -34,7 +36,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           <CommandItem>
             <Bot className="size-4" />
             <span>{t("shell.newAgent")}</span>
-            <CommandShortcut>⌘N</CommandShortcut>
+            <CommandShortcut>{shortcutChordLabel("product.newChat") || "⌘T"}</CommandShortcut>
           </CommandItem>
           <CommandItem>
             <PenLine className="size-4" />
@@ -46,10 +48,12 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           <CommandItem>
             <PanelLeft className="size-4" />
             <span>{t("shell.command.toggleLeftSidebar")}</span>
+            <CommandShortcut>{shortcutChordLabel("shell.toggleLeftSidebar")}</CommandShortcut>
           </CommandItem>
           <CommandItem>
             <PanelRight className="size-4" />
             <span>{t("shell.command.toggleRightArea")}</span>
+            <CommandShortcut>{shortcutChordLabel("shell.toggleRightArea")}</CommandShortcut>
           </CommandItem>
         </CommandGroup>
         <CommandSeparator />
@@ -61,9 +65,17 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           <CommandItem>
             <SettingsIcon className="size-4" />
             <span>{t("nav.settings")}</span>
+            <CommandShortcut>{shortcutChordLabel("shell.openSettings")}</CommandShortcut>
           </CommandItem>
         </CommandGroup>
       </CommandList>
     </CommandDialog>
   );
+}
+
+/** Single app-level host — open via layout-store / ⌘K. */
+export function AppCommandPalette() {
+  const open = useLayoutStore((s) => s.commandPaletteOpen);
+  const setOpen = useLayoutStore((s) => s.setCommandPaletteOpen);
+  return <CommandPalette open={open} onOpenChange={setOpen} />;
 }

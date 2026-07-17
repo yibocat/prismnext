@@ -6,7 +6,7 @@ import { syncTexSourceToBuildDir } from "../lib/bib-path-resolve";
 
 import { createLogger } from "./logger";
 
-const log = createLogger("compiler");
+const log = createLogger("compiler", "compile");
 
 const MAX_CONCURRENT = 3;
 const COMPILE_TIMEOUT_MS = 60000;

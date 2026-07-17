@@ -1,7 +1,7 @@
 import { Component, type ReactNode } from "react";
 import { createLogger } from "@/services/logger";
 
-const log = createLogger("error-boundary");
+const log = createLogger("error-boundary", "crash");
 
 interface Props {
   children: ReactNode;

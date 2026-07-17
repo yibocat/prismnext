@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/hint";
 import {
   Dialog,
   DialogContent,
@@ -292,16 +293,17 @@ export function ExperimentsProvenanceInspector({
                 aria-hidden
               />
               {run.chatSessionId ? (
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="ghost"
-                  className="h-auto max-w-full whitespace-normal px-1.5 py-0.5 text-left font-mono text-[length:var(--font-code)]"
-                  title={t("experiments.provenance.openSession", { id: run.chatSessionId })}
-                  onClick={() => handleOpenChatSession(run.chatSessionId!)}
-                >
-                  <span className="break-all">{run.chatSessionId}</span>
-                </Button>
+                <Hint label={t("experiments.provenance.openSession", { id: run.chatSessionId })}>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="ghost"
+                    className="h-auto max-w-full whitespace-normal px-1.5 py-0.5 text-left font-mono text-[length:var(--font-code)]"
+                    onClick={() => handleOpenChatSession(run.chatSessionId!)}
+                  >
+                    <span className="break-all">{run.chatSessionId}</span>
+                  </Button>
+                </Hint>
               ) : (
                 <span className="text-[length:var(--font-dialog-label)] text-muted-foreground/70">
                   {t("experiments.provenance.noChat")}
@@ -331,28 +333,30 @@ export function ExperimentsProvenanceInspector({
               <ExternalLinkIcon className="size-3.5" aria-hidden />
               {t("experiments.provenance.openInFiles")}
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={handleDiscussInChat}
-              disabled={!run}
-              title={t("experiments.provenance.sendArtifact")}
-            >
-              <MessagesSquareIcon className="size-3.5" aria-hidden />
-              {t("experiments.provenance.discuss")}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="default"
-              onClick={handleUseInPaper}
-              disabled={!run}
-              title={t("experiments.provenance.sendDraft")}
-            >
-              <PenLineIcon className="size-3.5" aria-hidden />
-              {t("experiments.runs.useInPaper")}
-            </Button>
+            <Hint label={t("experiments.provenance.sendArtifact")}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleDiscussInChat}
+                disabled={!run}
+              >
+                <MessagesSquareIcon className="size-3.5" aria-hidden />
+                {t("experiments.provenance.discuss")}
+              </Button>
+            </Hint>
+            <Hint label={t("experiments.provenance.sendDraft")}>
+              <Button
+                type="button"
+                size="sm"
+                variant="default"
+                onClick={handleUseInPaper}
+                disabled={!run}
+              >
+                <PenLineIcon className="size-3.5" aria-hidden />
+                {t("experiments.runs.useInPaper")}
+              </Button>
+            </Hint>
           </div>
         </DialogFooter>
       </DialogContent>

@@ -40,6 +40,12 @@ export interface AppSettings {
    *  { "active-modules": true, "agents-md": true, "custom-rules": true } */
   promptLayers?: Record<string, boolean>;
 
+  /**
+   * User shortcut overrides keyed by shortcut id.
+   * Only applied when the definition is remappable (workspace/product).
+   */
+  shortcutOverrides?: Record<string, import("../../shared/shortcuts").ShortcutChord>;
+
   /** Built-in slash command enable/disable states. { "compile": false, ... } */
   builtinCommands?: Record<string, boolean>;
 
@@ -213,14 +219,31 @@ export function getSettings(): AppSettings {
   const encryptedAiKeys = store.get("aiApiKeys") as string | undefined;
   if (encryptedAiKeys) {
     try {
-      settings.aiApiKeys = JSON.parse(decryptIfAvailable(encryptedAiKeys)) as Record<string, string>;
+      const decrypted = decryptIfAvailable(encryptedAiKeys);
+      const parsed = JSON.parse(decrypted) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        settings.aiApiKeys = parsed as Record<string, string>;
+      } else {
+        // Decrypt returned ciphertext / garbage after app-name / userData moves.
+        console.warn(
+          "[settings] aiApiKeys decrypt did not yield a key map — re-enter API keys in Settings → AI",
+        );
+        settings.aiApiKeys = {};
+      }
     } catch {
-      // Handle plaintext fallback from before encryption was added
-      settings.aiApiKeys = (store.get("aiApiKeys") as Record<string, string>) || {};
+      const rawKeys = store.get("aiApiKeys");
+      // Plaintext object fallback from before encryption was added
+      if (rawKeys && typeof rawKeys === "object" && !Array.isArray(rawKeys)) {
+        settings.aiApiKeys = rawKeys as Record<string, string>;
+      } else {
+        console.warn(
+          "[settings] aiApiKeys could not be decrypted — re-enter API keys in Settings → AI",
+        );
+        settings.aiApiKeys = {};
+      }
     }
   } else {
-    // Plaintext fallback (existing unencrypted data)
-    settings.aiApiKeys = (store.get("aiApiKeys") as Record<string, string>) || {};
+    settings.aiApiKeys = {};
   }
 
   // Start with explicitly-read settings, then overlay all raw store keys

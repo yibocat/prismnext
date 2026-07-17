@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useChangesStore, type ProposedChange } from "@/stores/changes-store";
+import { Hint } from "@/components/ui/hint";
 import { CheckIcon, XIcon, ChevronUpIcon, ChevronDownIcon, ShieldAlertIcon } from "lucide-react";
 import { diffLines } from "diff";
 
@@ -80,43 +81,53 @@ export function ChangesBar({
 
       {totalChanges > 1 && onPrevChange && onNextChange && (
         <>
-          <button
-            type="button"
-            className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-            onClick={onPrevChange}
-            title="Previous change"
-          >
-            <ChevronUpIcon className="size-3" />
-          </button>
-          <button
-            type="button"
-            className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-            onClick={onNextChange}
-            title="Next change"
-          >
-            <ChevronDownIcon className="size-3" />
-          </button>
+          <Hint label="Previous change">
+            <button
+              type="button"
+              className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+              onClick={onPrevChange}
+            >
+              <ChevronUpIcon className="size-3" />
+            </button>
+          </Hint>
+          <Hint label="Next change">
+            <button
+              type="button"
+              className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+              onClick={onNextChange}
+            >
+              <ChevronDownIcon className="size-3" />
+            </button>
+          </Hint>
         </>
       )}
 
-      <button
-        type="button"
-        className="flex items-center gap-1 rounded px-2 py-0.5 text-[length:var(--font-toolbar-tab)] text-success hover:bg-success/10 transition-colors shrink-0"
-        onClick={onAcceptAll}
-        title={isPermission ? "Allow (⌘Y)" : "Accept all changes (⌘Y)"}
+      <Hint
+        label={isPermission ? "Allow" : "Accept all changes"}
+        shortcutId={isPermission ? "product.acceptChange" : "product.acceptAll"}
       >
-        <CheckIcon className="size-3" />
-        {isPermission ? "Allow" : "Accept"}
-      </button>
-      <button
-        type="button"
-        className="flex items-center gap-1 rounded px-2 py-0.5 text-[length:var(--font-toolbar-tab)] text-destructive hover:bg-destructive/10 transition-colors shrink-0"
-        onClick={onRejectAll}
-        title={isPermission ? "Deny (⌘N)" : "Reject all changes (⌘N)"}
+        <button
+          type="button"
+          className="flex items-center gap-1 rounded px-2 py-0.5 text-[length:var(--font-toolbar-tab)] text-success hover:bg-success/10 transition-colors shrink-0"
+          onClick={onAcceptAll}
+        >
+          <CheckIcon className="size-3" />
+          {isPermission ? "Allow" : "Accept"}
+        </button>
+      </Hint>
+      <Hint
+        label={isPermission ? "Deny" : "Reject all changes"}
+        shortcutId={isPermission ? "product.rejectChange" : "product.rejectAll"}
       >
-        <XIcon className="size-3" />
-        {isPermission ? "Deny" : "Reject"}
-      </button>
+        <button
+          type="button"
+          className="flex items-center gap-1 rounded px-2 py-0.5 text-[length:var(--font-toolbar-tab)] text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+          onClick={onRejectAll}
+        >
+          <XIcon className="size-3" />
+          {isPermission ? "Deny" : "Reject"}
+        </button>
+      </Hint>
     </div>
   );
 }

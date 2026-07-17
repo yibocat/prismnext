@@ -74,4 +74,31 @@ describe("filterLogEntries", () => {
     expect(result).toHaveLength(2);
     expect(result.every((e) => e.category === "agent" && e.level === "warn")).toBe(true);
   });
+
+  it("orders newest first", () => {
+    const result = filterLogEntries(mainEntries, "all", "all", "");
+    expect(result.map((e) => e.id)).toEqual([4, 3, 2, 1]);
+  });
+
+  it("searches message, module, and detail JSON", () => {
+    const withDetail: LogEntry[] = [
+      ...mainEntries,
+      {
+        id: 5,
+        ts: 5000,
+        level: "error",
+        category: "compile",
+        module: "compile-ipc",
+        message: "compile:execute failed",
+        detail: { error: "missing main.tex", projectDir: "/tmp/demo" },
+        process: "main",
+      },
+    ];
+    const byDetail = filterLogEntries(withDetail, "all", "all", "missing main.tex");
+    expect(byDetail).toHaveLength(1);
+    expect(byDetail[0].id).toBe(5);
+
+    const byModule = filterLogEntries(withDetail, "all", "all", "compile-ipc");
+    expect(byModule.some((e) => e.id === 5)).toBe(true);
+  });
 });

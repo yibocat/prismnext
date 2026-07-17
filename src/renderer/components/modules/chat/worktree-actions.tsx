@@ -16,6 +16,7 @@ import {
   CHAT_PANEL_TOOLBAR_BUTTON,
   CHAT_PANEL_TOOLBAR_BUTTON_PRIMARY,
 } from "./worktree-selector";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 
 export function WorktreeActions() {
@@ -46,15 +47,16 @@ export function WorktreeActions() {
 
   return (
     <div className="flex items-center gap-1.5">
-      <button
-        type="button"
-        onClick={handleMoveToLocal}
-        className={CHAT_PANEL_TOOLBAR_BUTTON}
-        title="Discard worktree and return to main project"
-      >
-        <ArrowLeftIcon className="size-3" />
-        <span>Close Worktree</span>
-      </button>
+      <Hint label="Discard worktree and return to main project">
+        <button
+          type="button"
+          onClick={handleMoveToLocal}
+          className={CHAT_PANEL_TOOLBAR_BUTTON}
+        >
+          <ArrowLeftIcon className="size-3" />
+          <span>Close Worktree</span>
+        </button>
+      </Hint>
 
       <AppMenu open={mergeOpen} onOpenChange={setMergeOpen}>
         <AppMenuTrigger asChild>

@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { Hint } from "@/components/ui/hint";
 import { useTranslation } from "react-i18next";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
@@ -249,21 +250,24 @@ export function TexworkspaceSidebar() {
       <SidebarHeader className="flex h-[var(--height-mode-selector)] shrink-0 flex-row items-center justify-end px-3 py-0 gap-1">
         <div className="flex items-center gap-0.5">
           {TABS.map((tab) => (
-            <button key={tab.key} type="button"
-              className={cn("flex size-5 items-center justify-center rounded transition-colors shrink-0",
-                activeTab === tab.key ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground")}
-              title={t(tab.labelKey)}
-              onClick={() => { setActiveTab(tab.key); setAccordionValue([]); }}>
-              {tab.icon}
-            </button>
+            <Hint key={tab.key} label={t(tab.labelKey)}>
+              <button type="button"
+                className={cn("flex size-5 items-center justify-center rounded transition-colors shrink-0",
+                  activeTab === tab.key ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground")}
+                onClick={() => { setActiveTab(tab.key); setAccordionValue([]); }}>
+                {tab.icon}
+              </button>
+            </Hint>
           ))}
         </div>
         <span className="h-3 w-px bg-border/40 shrink-0" />
-        <button type="button"
-          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-          title={allExpanded ? t("modes.files.collapseAll") : t("modes.files.expandAll")} onClick={handleToggleAll}>
-          {allExpanded ? <FoldVerticalIcon className="size-3.5" /> : <UnfoldVerticalIcon className="size-3.5" />}
-        </button>
+        <Hint label={allExpanded ? t("modes.files.collapseAll") : t("modes.files.expandAll")}>
+          <button type="button"
+            className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+            onClick={handleToggleAll}>
+            {allExpanded ? <FoldVerticalIcon className="size-3.5" /> : <UnfoldVerticalIcon className="size-3.5" />}
+          </button>
+        </Hint>
       </SidebarHeader>
 
       {!manuscriptConfig ? (

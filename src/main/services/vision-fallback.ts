@@ -3,7 +3,7 @@ import { createLogger } from "./logger";
 import { getSettings } from "./settings";
 import { normalizeOpenCodeModelId } from "../../shared/opencode-provider";
 
-const log = createLogger("vision-fallback");
+const log = createLogger("vision-fallback", "agent");
 
 const CACHE_VERSION = "v1";
 const CACHE_MAX_ITEMS = 200;

@@ -2,6 +2,7 @@ import { useState, memo } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { GlobeIcon, ExternalLinkIcon } from "lucide-react";
 import { openUrlInBrowser } from "@/lib/browser-link";
+import { Hint } from "@/components/ui/hint";
 import { ToolCard, param } from "./shared";
 
 export const WebFetchWidget = memo(function WebFetchWidget({
@@ -55,17 +56,18 @@ export const WebFetchWidget = memo(function WebFetchWidget({
     >
       <div className="flex items-center gap-1 text-[length:var(--font-chat-meta)] text-muted-foreground/70 mb-1">
         <span className="truncate">{url}</span>
-        <button
-          type="button"
-          className="shrink-0 text-info hover:text-info/80"
-          title="Open in Browser"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (url) openUrlInBrowser(url);
-          }}
-        >
-          <ExternalLinkIcon className="size-3" />
-        </button>
+        <Hint label="Open in Browser">
+          <button
+            type="button"
+            className="shrink-0 text-info hover:text-info/80"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (url) openUrlInBrowser(url);
+            }}
+          >
+            <ExternalLinkIcon className="size-3" />
+          </button>
+        </Hint>
       </div>
       <pre className="whitespace-pre-wrap break-all font-mono text-muted-foreground">
         {outputText.length > 3000

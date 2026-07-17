@@ -9,6 +9,7 @@ import {
 import { useSettingsStore } from "@/stores/settings-store";
 import { getThoughtLevels } from "@/lib/providers";
 import { ChevronDownIcon } from "lucide-react";
+import { Hint } from "@/components/ui/hint";
 
 export function ThoughtLevelSelect() {
   const aiProvider = useSettingsStore((s) => s.settings.aiProvider) || "anthropic";
@@ -20,16 +21,17 @@ export function ThoughtLevelSelect() {
 
   return (
     <AppMenu>
-      <AppMenuTrigger asChild>
-        <button
-          type="button"
-          className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title="Reasoning depth"
-        >
-          <span>{current?.label || "Default"}</span>
-          <ChevronDownIcon className="size-3" />
-        </button>
-      </AppMenuTrigger>
+      <Hint label="Reasoning depth">
+        <AppMenuTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <span>{current?.label || "Default"}</span>
+            <ChevronDownIcon className="size-3" />
+          </button>
+        </AppMenuTrigger>
+      </Hint>
       <AppMenuContent align="start" className="min-w-[9rem]">
         <AppMenuLabel>Reasoning Depth</AppMenuLabel>
         <AppMenuCheckItem

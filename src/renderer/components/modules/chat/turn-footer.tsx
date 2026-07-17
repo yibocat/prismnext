@@ -1,6 +1,7 @@
 import { memo, useCallback, useState } from "react";
 import { CopyIcon, CheckIcon, HistoryIcon, Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import { useCheckpointStore } from "@/stores/checkpoint-store";
 import { useChatStore } from "@/stores/chat-store";
@@ -58,37 +59,39 @@ export const TurnFooter = memo(function TurnFooter({
   return (
     <div className="group/footer flex items-center gap-2 py-1.5 mt-0.5">
       {copyText.trim().length > 0 && (
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 opacity-0 transition-all hover:bg-accent hover:text-accent-foreground group-hover/footer:opacity-100"
-          title="Copy this turn"
-        >
-          {copied ? <CheckIcon className="size-3 text-success" /> : <CopyIcon className="size-3" />}
-        </button>
+        <Hint label="Copy this turn">
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 opacity-0 transition-all hover:bg-accent hover:text-accent-foreground group-hover/footer:opacity-100"
+          >
+            {copied ? <CheckIcon className="size-3 text-success" /> : <CopyIcon className="size-3" />}
+          </button>
+        </Hint>
       )}
       {canRestore && !isStreaming && (
-        <button
-          type="button"
-          onClick={handleRestore}
-          disabled={restoring}
-          className={cn(
-            "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[length:var(--font-chat-meta)]",
-            "text-muted-foreground/70 opacity-0 transition-all hover:bg-accent hover:text-accent-foreground",
-            "group-hover/footer:opacity-100 disabled:opacity-50",
-          )}
-          title="Restore workspace files to the end of this turn"
-        >
-          {restoring ? (
-            <Loader2Icon className="size-3 animate-spin" />
-          ) : (
-            <HistoryIcon className="size-3" />
-          )}
-          <span>Restore here</span>
-          {touchedCount > 0 && (
-            <span className="text-muted-foreground/50 tabular-nums">({touchedCount} file{touchedCount === 1 ? "" : "s"})</span>
-          )}
-        </button>
+        <Hint label="Restore workspace files to the end of this turn">
+          <button
+            type="button"
+            onClick={handleRestore}
+            disabled={restoring}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[length:var(--font-chat-meta)]",
+              "text-muted-foreground/70 opacity-0 transition-all hover:bg-accent hover:text-accent-foreground",
+              "group-hover/footer:opacity-100 disabled:opacity-50",
+            )}
+          >
+            {restoring ? (
+              <Loader2Icon className="size-3 animate-spin" />
+            ) : (
+              <HistoryIcon className="size-3" />
+            )}
+            <span>Restore here</span>
+            {touchedCount > 0 && (
+              <span className="text-muted-foreground/50 tabular-nums">({touchedCount} file{touchedCount === 1 ? "" : "s"})</span>
+            )}
+          </button>
+        </Hint>
       )}
       {metaText && (
         <span className="ml-auto text-[length:var(--font-chat-meta)] text-muted-foreground/50 tabular-nums">

@@ -32,8 +32,15 @@ import {
 import { buildSessionCitationsTurnAppendix } from "../services/session-citations-context";
 import { buildSessionCiteAuditTurnAppendix } from "../services/session-cite-audit-context";
 import { getQuestionsBridgeRoot } from "../services/prism-bridge-paths";
+import { getSettings } from "../services/settings";
+import { emitChatStream } from "../services/chat-stream-notify";
+import type { ChatPreparePhase } from "../../shared/chat-prepare-phases";
 
 const log = createLogger("chat-ipc", "agent");
+
+function emitChatPrepare(tabId: string, phase: ChatPreparePhase | null): void {
+  emitChatStream(tabId, "system.prepare", { phase });
+}
 
 /**
  * Resolve intensive paper IDs to {bibkey, title} for the per-turn instruction.
@@ -162,14 +169,23 @@ function registerTabSession(
 
 /**
  * Ensure the OpenCode ACP process is running. Auto-reconnects if needed.
- * extraEnv (API keys etc.) is passed through to opencode on first init;
- * subsequent calls are no-ops since the process is already running.
+ * Always merges settings credentials + call-site extraEnv — AcpService restarts
+ * the child when credentials change (API keys are only applied at spawn).
  */
 async function ensureConnected(extraEnv?: Record<string, string>): Promise<void> {
-  const service = getService();
-  if (!service.getConnection()) {
-    await service.initialize(extraEnv);
+  const settings = getSettings() as Record<string, unknown>;
+  const aiApiKeys = (settings.aiApiKeys as Record<string, string>) || {};
+  const aiBaseUrls = (settings.aiBaseUrls as Record<string, string>) || {};
+  const fromSettings: Record<string, string> = {};
+  for (const [provider, apiKey] of Object.entries(aiApiKeys)) {
+    if (!apiKey?.trim()) continue;
+    fromSettings[providerApiKeyEnvVar(provider)] = apiKey.trim();
+    if (aiBaseUrls[provider] && !isOpenCodeCatalogProvider(provider)) {
+      fromSettings[`${provider.replace(/-/g, "_").toUpperCase()}_BASE_URL`] =
+        aiBaseUrls[provider];
+    }
   }
+  await getService().initialize({ ...fromSettings, ...extraEnv });
 }
 
 export function registerChatHandlers(): void {
@@ -254,6 +270,13 @@ export function registerChatHandlers(): void {
 
       const service = getService();
       const cwd = args.worktreePath || args.projectPath || app.getPath("home");
+      const isFirstSend = !args.sessionId;
+      const clearPrepare = () => {
+        if (isFirstSend) emitChatPrepare(tabId, null);
+      };
+      // Surface progress immediately — otherwise the UI only shows bare "Thinking…"
+      // until the first await below finishes.
+      if (isFirstSend) emitChatPrepare(tabId, "syncing_project");
 
       // Build env vars for API keys — passed to opencode process on first init
       const extraEnv: Record<string, string> = {};
@@ -271,6 +294,7 @@ export function registerChatHandlers(): void {
         await ensureConnected(extraEnv);
       } catch (err: any) {
         log.error(`OpenCode initialize failed: ${err.message}`);
+        clearPrepare();
         win.webContents.send("chat:complete", {
           tabId, sessionId: args.sessionId || "", success: false, error: err.message,
         });
@@ -323,6 +347,7 @@ export function registerChatHandlers(): void {
         });
 
         const { ensureProjectChatPrewarm } = await import("../services/project-chat-prewarm");
+        if (isFirstSend) emitChatPrepare(tabId, "syncing_project");
         await ensureProjectChatPrewarm(args.projectPath);
 
         const { refreshProjectExpertsIntegrationIfNeeded } = await import("../services/project-experts-refresh");
@@ -331,6 +356,7 @@ export function registerChatHandlers(): void {
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
           log.error(`Experts integration refresh failed: ${message}`);
+          clearPrepare();
           win.webContents.send("chat:complete", {
             tabId,
             sessionId: args.sessionId || "",
@@ -412,17 +438,30 @@ export function registerChatHandlers(): void {
         const model = modelId && provider
           ? formatOpenCodeModelRef(provider, modelId)
           : modelId || undefined;
-        const session = await service.createSession(
-          cwd,
-          model,
-          args.projectPath,
-          {
-            mcpServerAllowlist: mcpServerAllowlist?.length ? mcpServerAllowlist : undefined,
-            agentId: orchestratorId,
-          },
-        );
-        sessionId = session.id;
-        win.webContents.send("chat:sessionCreated", { tabId, sessionId });
+        try {
+          // createSession attaches MCP servers (e.g. paper-search via npx) — often
+          // the slow part of first-message wait after project sync.
+          emitChatPrepare(tabId, "creating_session");
+          emitChatPrepare(tabId, "connecting_mcp");
+          const session = await service.createSession(
+            cwd,
+            model,
+            args.projectPath,
+            {
+              mcpServerAllowlist: mcpServerAllowlist?.length ? mcpServerAllowlist : undefined,
+              agentId: orchestratorId,
+            },
+          );
+          sessionId = session.id;
+          win.webContents.send("chat:sessionCreated", { tabId, sessionId });
+        } catch (err: any) {
+          log.error(`createSession failed: ${err.message}`);
+          clearPrepare();
+          win.webContents.send("chat:complete", {
+            tabId, sessionId: "", success: false, error: err.message,
+          });
+          return;
+        }
       } else if (sessionId && composerMcps.length > 0 && args.projectPath) {
         await service.reloadSessionMcps(
           sessionId,
@@ -508,7 +547,9 @@ export function registerChatHandlers(): void {
 
       log.info(
         `Sending prompt: sessionId=${sessionId} tabId=${tabId} promptLen=${userPrompt.length} ` +
-        `promptSync=${isFirstTurn || promptStale}`,
+        `promptSync=${isFirstTurn || promptStale} ` +
+        `model=${modelId ? formatOpenCodeModelRef(provider, modelId) : "(default)"} ` +
+        `provider=${provider}`,
       );
       getMapper(win).clearTurnAccumulators();
       if (!isFirstTurn && args.projectPath) {
@@ -556,9 +597,11 @@ export function registerChatHandlers(): void {
           ].join("\n");
         }
 
-        const result = await service.sendPrompt(sessionId, promptForModel, {
+        const promptOpts = {
           model: modelId ? formatOpenCodeModelRef(provider, modelId) : undefined,
           provider,
+          cwd,
+          projectRoot: args.projectPath,
           projectRulesPrompt: projectRulesPrompt || undefined,
           images: args.promptImages?.map((img) => ({
             mimeType: img.mimeType,
@@ -566,7 +609,15 @@ export function registerChatHandlers(): void {
             uri: img.uri,
           })),
           resources,
-        });
+        };
+
+        // After cancel, abort() clears the hydrate cache so sendPrompt's
+        // internal session/load re-bind runs. Never mint a replacement
+        // session here — interrupt must keep the same session/history.
+        if (isFirstSend) emitChatPrepare(tabId, "starting_model");
+        const result = await service.sendPrompt(sessionId, promptForModel, promptOpts);
+        // Model may still be thinking — keep phase until first stream chunk
+        // clears it in the renderer. Clear here only on hard failure paths.
         if (args.userDisplayContent?.length && args.projectPath && sessionId) {
           appendUserDisplay(args.projectPath, sessionId, args.userDisplayContent);
         }
@@ -586,6 +637,7 @@ export function registerChatHandlers(): void {
         }
       } catch (err: any) {
         log.error(`sendPrompt failed: ${err.message}`);
+        clearPrepare();
         win.webContents.send("chat:complete", {
           tabId, sessionId, success: false, error: err.message,
         });
@@ -701,6 +753,9 @@ export function registerChatHandlers(): void {
         promptFingerprint: currentFingerprint,
       });
 
+      // Renderer also clears prepare on first stream chunk; clear here so a
+      // turn that finishes without visible parts does not leave a stuck label.
+      clearPrepare();
       win.webContents.send("chat:complete", {
         tabId, sessionId, success: true, tokenUsage: effectiveUsage,
         contextBreakdown: fullBreakdown,

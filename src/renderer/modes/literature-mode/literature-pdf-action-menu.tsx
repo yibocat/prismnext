@@ -14,6 +14,7 @@ import {
   blocksUnionClientRect,
   clampFloatingMenuPosition,
 } from "@/lib/literature/literature-block-hit-test";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import type { LiteraturePaper } from "@/types/electron.d";
 import type { PaperExtractBlock } from "../../../shared/paper-extract-block";
@@ -311,15 +312,15 @@ function ActionMenuPanel({
             <div className={cn(appMenuLabelClass, "px-0 pb-1")}>Highlight</div>
             <div className="flex flex-wrap gap-1">
               {LITERATURE_PDF_HIGHLIGHT_COLORS.map(({ color, label }) => (
-                <button
-                  key={color}
-                  type="button"
-                  title={label}
-                  aria-label={label}
-                  className="size-4 shrink-0 rounded-sm ring-offset-background transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  style={{ backgroundColor: color }}
-                  onClick={() => handleHighlightColor(color)}
-                />
+                <Hint key={color} label={label}>
+                  <button
+                    type="button"
+                    aria-label={label}
+                    className="size-4 shrink-0 rounded-sm ring-offset-background transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    style={{ backgroundColor: color }}
+                    onClick={() => handleHighlightColor(color)}
+                  />
+                </Hint>
               ))}
             </div>
           </div>

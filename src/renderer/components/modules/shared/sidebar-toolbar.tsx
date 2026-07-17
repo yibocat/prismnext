@@ -1,11 +1,12 @@
-import { useState, type RefObject } from "react";
+import type { RefObject } from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useLayoutStore } from "@/stores/layout-store";
-import { SIDEBAR_LEFT_DEFAULT, SIDEBAR_OVERLAY_THRESHOLD } from "@/styles/constants";
 import { cn } from "@/lib/utils";
+import { Hint } from "@/components/ui/hint";
 import { Kbd } from "@/components/ui/kbd";
-import { CommandPalette } from "@/components/modules/shared";
 import { PanelLeft, SearchIcon } from "lucide-react";
+import { toggleLeftSidebarPanel } from "@/lib/workspace/left-sidebar-panel";
+import { shortcutChordLabel } from "@/lib/shortcuts";
 
 interface SidebarToolbarProps {
   leftSidebarRef?: RefObject<PanelImperativeHandle | null>;
@@ -13,52 +14,36 @@ interface SidebarToolbarProps {
 
 export function SidebarToolbar({ leftSidebarRef }: SidebarToolbarProps) {
   const sidebarExpanded = useLayoutStore((s) => s.sidebarExpanded);
-  const [commandOpen, setCommandOpen] = useState(false);
+  const setCommandPaletteOpen = useLayoutStore((s) => s.setCommandPaletteOpen);
+  const commandChord = shortcutChordLabel("shell.commandPalette");
 
   return (
-    <>
-      <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center gap-1 px-2">
+    <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center gap-1 px-2">
+      <Hint shortcutId="shell.toggleLeftSidebar">
         <button
           type="button"
           className={cn(
             "flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
             sidebarExpanded && "bg-muted text-foreground",
           )}
-          title={sidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
-          onClick={() => {
-            const st = useLayoutStore.getState();
-            if (st.leftSidebarOverlay) {
-              st.setLeftSidebarOverlay(false);
-              return;
-            }
-            const p = leftSidebarRef?.current;
-            if (!p) return;
-            if (p.isCollapsed()) {
-              if (window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD) {
-                st.setLeftSidebarOverlay(true);
-              } else {
-                p.resize(st.sidebarWidth || SIDEBAR_LEFT_DEFAULT);
-                if (p.isCollapsed()) st.setLeftSidebarOverlay(true);
-              }
-            } else {
-              p.collapse();
-            }
-          }}
+          onClick={() => toggleLeftSidebarPanel(leftSidebarRef ?? { current: null })}
         >
           <PanelLeft className="size-3.5" />
         </button>
+      </Hint>
 
+      <Hint shortcutId="shell.commandPalette">
         <button
           type="button"
           className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[length:var(--font-toolbar-label)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title="Command palette"
-          onClick={() => setCommandOpen(true)}
+          onClick={() => setCommandPaletteOpen(true)}
         >
           <SearchIcon className="size-3.5" />
-          <Kbd className="text-[length:var(--font-kbd)] h-4 min-w-4 px-0.5 bg-transparent">⌘K</Kbd>
+          {commandChord ? (
+            <Kbd className="text-[length:var(--font-kbd)] h-4 min-w-4 px-0.5 bg-transparent">{commandChord}</Kbd>
+          ) : null}
         </button>
-      </div>
-      <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
-    </>
+      </Hint>
+    </div>
   );
 }

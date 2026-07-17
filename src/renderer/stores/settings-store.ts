@@ -60,6 +60,11 @@ export interface AppSettings {
   aiApiKeys?: Record<string, string>;
   /** AI provider base URLs (provider → url mapping) */
   aiBaseUrls?: Record<string, string>;
+  /**
+   * User shortcut overrides keyed by ShortcutDef.id.
+   * Only applied when the definition is remappable (workspace/product).
+   */
+  shortcutOverrides?: Record<string, import("../../shared/shortcuts").ShortcutChord>;
   /** Selected editor syntax highlighting theme */
   editorSyntaxTheme?: string;
   /** Default workspace folder configuration for new projects */

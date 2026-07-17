@@ -350,6 +350,17 @@
   scrollbar-color: var(--border) transparent;
 }
 
+/* Hide scrollbar but keep overflow scrolling (chat open-tabs, RightArea TabBar). */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* PDF.js Text Layer styles are imported from pdfjs-dist/web/pdf_viewer.css */
 
 /* ── Browser loading bar animation ── */

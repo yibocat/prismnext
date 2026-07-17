@@ -22,6 +22,7 @@ import { useDocumentStore } from "@/stores/document-store";
 import { applyCheckoutTransition } from "@/lib/git/checkout-context";
 import { useGitStore } from "@/stores/git-store";
 import { useChatStore } from "@/stores/chat-store";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 
 /** AI Chat panel toolbar above composer — ghost button (hover bg only). */
@@ -135,26 +136,27 @@ export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps)
 
   return (
     <AppMenu>
-      <AppMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            isCapsule ? CAPSULE_TOOLBAR_PILL : CHAT_PANEL_TOOLBAR_BUTTON,
-            mode === "worktree"
-              ? isCapsule
-                ? "bg-primary/10 text-primary border-primary/30 hover:bg-primary/15"
-                : "text-primary hover:bg-primary/10 hover:text-primary"
-              : isCapsule
-                ? "bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                : undefined,
-          )}
-          onMouseDown={(e) => e.preventDefault()}
-          title={triggerLabel}
-        >
-          {mode === "local" ? <LaptopIcon className="size-3.5 shrink-0" /> : <GitBranchIcon className="size-3.5 shrink-0" />}
-          <span className="max-w-[100px] truncate hidden @md:inline">{triggerLabel}</span>
-        </button>
-      </AppMenuTrigger>
+      <Hint label={triggerLabel}>
+        <AppMenuTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              isCapsule ? CAPSULE_TOOLBAR_PILL : CHAT_PANEL_TOOLBAR_BUTTON,
+              mode === "worktree"
+                ? isCapsule
+                  ? "bg-primary/10 text-primary border-primary/30 hover:bg-primary/15"
+                  : "text-primary hover:bg-primary/10 hover:text-primary"
+                : isCapsule
+                  ? "bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  : undefined,
+            )}
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            {mode === "local" ? <LaptopIcon className="size-3.5 shrink-0" /> : <GitBranchIcon className="size-3.5 shrink-0" />}
+            <span className="max-w-[100px] truncate hidden @md:inline">{triggerLabel}</span>
+          </button>
+        </AppMenuTrigger>
+      </Hint>
       <AppMenuContent align="start" className="w-56">
         <AppMenuCheckItem selected={mode === "local"} onClick={handleSetLocal}>
           {t("chat.worktree.local")}
@@ -189,14 +191,15 @@ export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps)
                         {t("chat.worktree.active")}
                       </span>
                     )}
-                    <button
-                      type="button"
-                      className="flex size-4 items-center justify-center rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all"
-                      onClick={(e) => void handleRemove(wt.name, e)}
-                      title={t("chat.worktree.remove", { name: wt.name })}
-                    >
-                      <Trash2Icon className="size-2.5" />
-                    </button>
+                    <Hint label={t("chat.worktree.remove", { name: wt.name })}>
+                      <button
+                        type="button"
+                        className="flex size-4 items-center justify-center rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all"
+                        onClick={(e) => void handleRemove(wt.name, e)}
+                      >
+                        <Trash2Icon className="size-2.5" />
+                      </button>
+                    </Hint>
                   </span>
                 }
               >

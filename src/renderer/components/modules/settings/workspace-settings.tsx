@@ -26,6 +26,7 @@ import {
   SETTINGS_ROW_LABEL,
 } from "./settings-tokens";
 import { FolderIcon, PlusIcon, RotateCcwIcon, Settings2Icon } from "lucide-react";
+import { Hint } from "@/components/ui/hint";
 
 const CARD = SETTINGS_CARD;
 const ROW = SETTINGS_ROW;
@@ -294,26 +295,28 @@ export function WorkspaceSettings() {
 
           <div className="flex flex-wrap items-center gap-2 mb-2">
             {projectRoot ? (
+              <Hint label={t("settings.workspace.syncTitle")}>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="text-muted-foreground"
+                  onClick={syncTemplateFromProject}
+                >
+                  {t("common.sync")}
+                </Button>
+              </Hint>
+            ) : null}
+            <Hint label={t("settings.workspace.resetTitle")}>
               <Button
                 variant="ghost"
                 size="xs"
                 className="text-muted-foreground"
-                title={t("settings.workspace.syncTitle")}
-                onClick={syncTemplateFromProject}
+                onClick={resetTemplateToAppDefault}
               >
-                {t("common.sync")}
+                <RotateCcwIcon className="size-3 mr-1" />
+                {t("common.reset")}
               </Button>
-            ) : null}
-            <Button
-              variant="ghost"
-              size="xs"
-              className="text-muted-foreground"
-              title={t("settings.workspace.resetTitle")}
-              onClick={resetTemplateToAppDefault}
-            >
-              <RotateCcwIcon className="size-3 mr-1" />
-              {t("common.reset")}
-            </Button>
+            </Hint>
             <Button variant="outline" size="xs" onClick={() => openAddFolder("template")}>
               <PlusIcon className="size-3 mr-1" />
               {t("settings.workspace.addFolder")}

@@ -13,6 +13,7 @@ import {
   AppMenuItem,
   AppMenuTrigger,
 } from "@/components/ui/app-menu";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -146,20 +147,21 @@ export function ChatComposerCore({
 
   const addMenu = (
     <AppMenu>
-      <AppMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "flex items-center justify-center text-muted-foreground transition-colors hover:text-foreground shrink-0",
-            isCompact
-              ? "size-7 rounded-full bg-muted-foreground/20 hover:bg-muted-foreground/30"
-              : "size-7 rounded-md hover:bg-accent hover:text-accent-foreground",
-          )}
-          title={t("chat.composer.addContext")}
-        >
-          <PlusIcon className="size-4" />
-        </button>
-      </AppMenuTrigger>
+      <Hint label={t("chat.composer.addContext")}>
+        <AppMenuTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              "flex items-center justify-center text-muted-foreground transition-colors hover:text-foreground shrink-0",
+              isCompact
+                ? "size-7 rounded-full bg-muted-foreground/20 hover:bg-muted-foreground/30"
+                : "size-7 rounded-md hover:bg-accent hover:text-accent-foreground",
+            )}
+          >
+            <PlusIcon className="size-4" />
+          </button>
+        </AppMenuTrigger>
+      </Hint>
       <AppMenuContent align="start" className="min-w-[7.5rem]">
         <AppMenuItem
           onClick={() => {
@@ -211,6 +213,7 @@ export function ChatComposerCore({
       onEnter={composer.handleSend}
       placeholder={placeholder}
       density={isCompact ? "compact" : "default"}
+      escapeBlurs={!isCapsule}
       onLayoutExpand={onLayoutExpand}
       onExternalFiles={(paths) => {
         void composer.addAttachmentsFromPaths(paths).then(() => onLayoutExpand?.());

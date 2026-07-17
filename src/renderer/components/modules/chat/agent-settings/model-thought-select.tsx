@@ -24,6 +24,7 @@ import {
 } from "@/lib/providers";
 import { cn } from "@/lib/utils";
 import { ChevronDownIcon, ChevronRightIcon, SparklesIcon } from "lucide-react";
+import { Hint } from "@/components/ui/hint";
 import { modelPreferenceKey } from "./model-keys";
 import { useModelMenuPlacement } from "./use-submenu-side";
 
@@ -231,30 +232,31 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
         if (open) refreshPlacement();
       }}
     >
-      <AppMenuTrigger asChild>
-        <button
-          ref={triggerRef}
-          type="button"
-          className={cn(
-            "flex items-center gap-0.5 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors min-w-0 outline-hidden focus-visible:ring-1 focus-visible:ring-ring shrink-0",
-            useIconTrigger && "size-7 justify-center px-0 max-w-none",
-            useCapsuleTrigger && "max-w-[9rem] px-1",
-            !useIconTrigger && !useCapsuleTrigger && "max-w-56",
-          )}
-          title={triggerDetail}
-        >
-          {useIconTrigger ? (
-            <SparklesIcon className="size-3.5 shrink-0" />
-          ) : (
-            <>
-              <span className="truncate">
-                {useCapsuleTrigger ? displayName : triggerDetail}
-              </span>
-              <ChevronDownIcon className="size-3 shrink-0 opacity-60" />
-            </>
-          )}
-        </button>
-      </AppMenuTrigger>
+      <Hint label={triggerDetail}>
+        <AppMenuTrigger asChild>
+          <button
+            ref={triggerRef}
+            type="button"
+            className={cn(
+              "flex items-center gap-0.5 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors min-w-0 outline-hidden focus-visible:ring-1 focus-visible:ring-ring shrink-0",
+              useIconTrigger && "size-7 justify-center px-0 max-w-none",
+              useCapsuleTrigger && "max-w-[9rem] px-1",
+              !useIconTrigger && !useCapsuleTrigger && "max-w-56",
+            )}
+          >
+            {useIconTrigger ? (
+              <SparklesIcon className="size-3.5 shrink-0" />
+            ) : (
+              <>
+                <span className="truncate">
+                  {useCapsuleTrigger ? displayName : triggerDetail}
+                </span>
+                <ChevronDownIcon className="size-3 shrink-0 opacity-60" />
+              </>
+            )}
+          </button>
+        </AppMenuTrigger>
+      </Hint>
       <AppMenuContent
         align={menuAlign}
         side="top"

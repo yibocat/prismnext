@@ -3,6 +3,7 @@ import { RotateCcwIcon, Loader2Icon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useCheckpointStore } from "@/stores/checkpoint-store";
 import { useChatStore } from "@/stores/chat-store";
+import { Hint } from "@/components/ui/hint";
 
 export const RestoreUndoBar = memo(function RestoreUndoBar() {
   const activeTabId = useChatStore((s) => s.activeTabId);
@@ -63,14 +64,15 @@ export const RestoreUndoBar = memo(function RestoreUndoBar() {
           {undoing ? <Loader2Icon className="size-3 animate-spin" /> : null}
           Undo restore
         </button>
-        <button
-          type="button"
-          onClick={handleDismiss}
-          className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title="Dismiss"
-        >
-          <XIcon className="size-3" />
-        </button>
+        <Hint label="Dismiss">
+          <button
+            type="button"
+            onClick={handleDismiss}
+            className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <XIcon className="size-3" />
+          </button>
+        </Hint>
       </div>
     </div>
   );

@@ -12,7 +12,7 @@ import { useDocumentStore } from "@/stores/document-store";
 import { cn } from "@/lib/utils";
 import { injectDiffOverrides } from "@/lib/editor-themes/diff-overrides";
 import { registerAllModes } from "@/modes/_register";
-import { GlobalErrorBoundary } from "@/components/modules/shared";
+import { AppCommandPalette, GlobalErrorBoundary } from "@/components/modules/shared";
 import { ProjectSetupDialog, WelcomePage } from "@/components/modules/project";
 import { Toaster } from "@/components/ui/sonner";
 import { TabCloseConfirmDialog } from "@/components/layout/tab-close-confirm-dialog";
@@ -20,6 +20,9 @@ import { LeftSidebar } from "@/components/layout/left-sidebar";
 import { LeftMainArea } from "@/components/layout/left-main-area";
 import { RightArea } from "@/components/layout/right-area";
 import { useAppCloseTab } from "@/hooks/use-app-close-tab";
+import { useAppShellShortcuts } from "@/hooks/use-app-shell-shortcuts";
+import { useProductShortcuts } from "@/hooks/use-product-shortcuts";
+import { useWorkspaceModeShortcuts } from "@/hooks/use-workspace-mode-shortcuts";
 import { useTerminalAiStream } from "@/hooks/use-terminal-ai-stream";
 import { useAiTerminalSweep } from "@/hooks/use-ai-terminal-sweep";
 import { useSkillsIntegrationEvents } from "@/hooks/use-skills-integration-events";
@@ -95,6 +98,9 @@ export function App() {
   }, [centerRef, rightAreaRef]);
 
   useAppCloseTab();
+  useAppShellShortcuts({ leftSidebarRef, centerRef, rightAreaRef }, { isMobile });
+  useWorkspaceModeShortcuts({ leftSidebarRef, centerRef, rightAreaRef }, { isMobile });
+  useProductShortcuts();
   useTerminalAiStream();
   useAiTerminalSweep();
   useSkillsIntegrationEvents();
@@ -443,6 +449,7 @@ export function App() {
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <LocaleSync />
         <ProjectSetupDialog />
+        <AppCommandPalette />
         <Toaster
           position="bottom-right"
           duration={5000}

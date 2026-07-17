@@ -24,6 +24,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useGitStore, type GitCommitData } from "@/stores/git-store";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import { GitCommitFileRow } from "./git-commit-file-row";
 import {
@@ -118,32 +119,35 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
     <div className="flex flex-col flex-1 min-h-0">
       <div className="shrink-0 z-20 bg-background">
         <div className={gitPanelListHeaderShellClass}>
-        <button
-          type="button"
-          className="size-4 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
-          onClick={clearSelectedCommit}
-          title={t("git.commitDetail.back")}
-        >
-          <ArrowLeftIcon className="size-3" />
-        </button>
+        <Hint label={t("git.commitDetail.back")}>
+          <button
+            type="button"
+            className="size-4 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+            onClick={clearSelectedCommit}
+          >
+            <ArrowLeftIcon className="size-3" />
+          </button>
+        </Hint>
 
-        <div
-          className="flex min-w-0 flex-1 items-center gap-2 px-1 -mx-1 cursor-pointer"
-          onClick={() => setMetaExpanded((v) => !v)}
-          role="button"
-          tabIndex={0}
-          title={
+        <Hint
+          label={
             metaExpanded
               ? t("git.commitDetail.hideMeta")
               : t("git.commitDetail.showMeta")
           }
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              setMetaExpanded((v) => !v);
-            }
-          }}
         >
+          <div
+            className="flex min-w-0 flex-1 items-center gap-2 px-1 -mx-1 cursor-pointer"
+            onClick={() => setMetaExpanded((v) => !v)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setMetaExpanded((v) => !v);
+              }
+            }}
+          >
           <ChevronRightIcon
             className={cn(
               "size-3 shrink-0 text-muted-foreground transition-transform",
@@ -182,19 +186,21 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
             {formatRelativeTime(commit.date)}
           </span>
           <GitChangeLineCounts added={totalAdded} deleted={totalDeleted} />
-        </div>
+          </div>
+        </Hint>
 
         <AppMenu>
-          <AppMenuTrigger asChild>
-            <button
-              type="button"
-              className="size-4 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
-              title={t("git.commitDetail.actions")}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <EllipsisIcon className="size-3" />
-            </button>
-          </AppMenuTrigger>
+          <Hint label={t("git.commitDetail.actions")}>
+            <AppMenuTrigger asChild>
+              <button
+                type="button"
+                className="size-4 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <EllipsisIcon className="size-3" />
+              </button>
+            </AppMenuTrigger>
+          </Hint>
           <AppMenuContent align="end" className="min-w-[8.5rem]">
             <AppMenuItem
               onClick={() =>

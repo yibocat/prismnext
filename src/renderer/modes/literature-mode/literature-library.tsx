@@ -41,6 +41,7 @@ import {
   literatureRowZoteroBadgeClass,
 } from "./literature-list-chrome";
 import { cn } from "@/lib/utils";
+import { Hint } from "@/components/ui/hint";
 import { useLiteratureListMarquee } from "@/lib/literature/literature-list-marquee";
 import { paperMatchesTagFilter } from "@/lib/literature/paper-tag-utils";
 import {
@@ -166,16 +167,17 @@ function LibraryTableHeader({
         className={LITERATURE_COL_UPDATED}
       />
       <span className={LITERATURE_COL_CHECK}>
-        <input
-          type="checkbox"
-          checked={allChecked}
-          ref={(el) => {
-            if (el) el.indeterminate = indeterminate;
-          }}
-          onChange={onToggleAll}
-          className="size-3 cursor-pointer accent-primary rounded-sm"
-          title="Select all"
-        />
+        <Hint label="Select all">
+          <input
+            type="checkbox"
+            checked={allChecked}
+            ref={(el) => {
+              if (el) el.indeterminate = indeterminate;
+            }}
+            onChange={onToggleAll}
+            className="size-3 cursor-pointer accent-primary rounded-sm"
+          />
+        </Hint>
       </span>
     </div>
   );
@@ -326,18 +328,19 @@ function LibraryTableRow({
             )
           ) : null}
           {hasPdf ? (
-            <button
-              type="button"
-              data-literature-pdf-open
-              className={cn(
-                "pointer-events-auto w-fit max-w-full shrink min-w-0 truncate text-left font-medium text-foreground hover:underline",
-                literatureRowTextClass,
-              )}
-              onClick={handleOpenPdf}
-              title={`Open PDF — ${paper.title}`}
-            >
-              {paper.title}
-            </button>
+            <Hint label={`Open PDF — ${paper.title}`}>
+              <button
+                type="button"
+                data-literature-pdf-open
+                className={cn(
+                  "pointer-events-auto w-fit max-w-full shrink min-w-0 truncate text-left font-medium text-foreground hover:underline",
+                  literatureRowTextClass,
+                )}
+                onClick={handleOpenPdf}
+              >
+                {paper.title}
+              </button>
+            </Hint>
           ) : (
             <span
               className={cn(

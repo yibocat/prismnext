@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, accessSync, constants, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, accessSync, constants, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, copyFileSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { homedir } from "node:os";
 import { Readable, Writable } from "node:stream";
 import { app } from "electron";
 import {
@@ -23,15 +24,23 @@ import {
   resolveEffectiveAgentTerminalMode,
   extractPermissionToolName,
   resolvePermissionAction,
+  resolveBridgeToolCallSyncAction,
   type PermissionMode,
 } from "../services/permission-modes";
 import {
   extractTaskSubagentType,
+  formatOrchestratorBuiltinTaskDeniedMessage,
   shouldDenyOrchestratorBuiltinTask,
 } from "../services/task-orchestrator-gate";
+import { emitChatStream } from "../services/chat-stream-notify";
 import { addBashAllowAlwaysFromCommand, addToolAllowAlways, getSettings, isBashCommandAllowAlways, isToolAllowAlways } from "../services/settings";
 import { sanitizeSkillPermissionMap, skillPermissionNeedsRepair } from "../services/skills-sync";
 import { buildEnabledToolsConfig } from "../services/opencode-tools-config";
+import {
+  isOpenCodeCatalogProvider,
+  OPENCODE_API_KEY_ENV,
+  providerApiKeyEnvVar,
+} from "../../shared/opencode-provider";
 import {
   mergeOpencodeInstructions,
   PRISM_OPENCODE_INSTRUCTIONS,
@@ -43,6 +52,7 @@ import {
   executeApprovedBashJob,
   extractBashCommandFromInput,
   isRunnableBashCommand,
+  readBashPermissionStatus,
   registerCustomToolJobIntent,
   type ApprovedBashJob,
 } from "../services/bash-permission-bridge";
@@ -142,6 +152,8 @@ export class AcpService {
   private reconnectBaseDelay = 1000;
   /** Stored API keys from last chat:send — reused on reconnect. */
   private lastExtraEnv: Record<string, string> = {};
+  /** Env actually baked into the running OpenCode child (keys only take effect at spawn). */
+  private bakedExtraEnv: Record<string, string> = {};
   /** Cached agent config from project prewarm — avoids re-reading on session create. */
   private cachedAgentConfig: {
     projectRoot: string;
@@ -205,15 +217,100 @@ export class AcpService {
     return join(this.getServerDataDir(), "opencode", "opencode.db");
   }
 
-  private sessionParentCache = new Map<string, string | null>();
+  /**
+   * OpenCode looks for auth under `$XDG_DATA_HOME/opencode/auth.json`.
+   * Prism remaps XDG to `<userData>/opencode-server/`, so CLI auth at
+   * `~/.local/share/opencode/auth.json` is invisible unless we copy it.
+   */
+  private ensureOpenCodeAuthUnderXdg(serverDir: string): void {
+    const destDir = join(serverDir, "opencode");
+    const dest = join(destDir, "auth.json");
+    if (existsSync(dest)) return;
 
-  /** OpenCode session.parent_id (or null for root orchestrator sessions). Cached. */
+    const candidates = [
+      join(homedir(), ".local", "share", "opencode", "auth.json"),
+      join(homedir(), ".config", "opencode", "auth.json"),
+    ];
+    for (const src of candidates) {
+      if (!existsSync(src)) continue;
+      try {
+        mkdirSync(destDir, { recursive: true });
+        copyFileSync(src, dest);
+        log.info("Seeded OpenCode auth.json into XDG data dir from CLI install");
+        return;
+      } catch (err: any) {
+        log.warn(`Failed to seed OpenCode auth.json from ${src}: ${err.message}`);
+      }
+    }
+  }
+
+  /** Merge decrypted settings keys + auth.json into lastExtraEnv before spawn. */
+  private hydrateCredentialEnv(serverDir: string): void {
+    try {
+      const settings = getSettings() as Record<string, unknown>;
+      const aiApiKeys = (settings.aiApiKeys as Record<string, string>) || {};
+      const aiBaseUrls = (settings.aiBaseUrls as Record<string, string>) || {};
+      for (const [provider, apiKey] of Object.entries(aiApiKeys)) {
+        if (!apiKey?.trim()) continue;
+        const envKey = providerApiKeyEnvVar(provider);
+        if (!this.lastExtraEnv[envKey]) {
+          this.lastExtraEnv[envKey] = apiKey.trim();
+        }
+        if (
+          aiBaseUrls[provider] &&
+          !isOpenCodeCatalogProvider(provider) &&
+          !this.lastExtraEnv[`${provider.replace(/-/g, "_").toUpperCase()}_BASE_URL`]
+        ) {
+          this.lastExtraEnv[`${provider.replace(/-/g, "_").toUpperCase()}_BASE_URL`] =
+            aiBaseUrls[provider];
+        }
+      }
+    } catch (err: any) {
+      log.warn(`hydrateCredentialEnv from settings failed: ${err.message}`);
+    }
+
+    if (this.lastExtraEnv[OPENCODE_API_KEY_ENV]) return;
+
+    const authPaths = [
+      join(serverDir, "opencode", "auth.json"),
+      join(homedir(), ".local", "share", "opencode", "auth.json"),
+    ];
+    for (const authPath of authPaths) {
+      if (!existsSync(authPath)) continue;
+      try {
+        const raw = JSON.parse(readFileSync(authPath, "utf8")) as Record<
+          string,
+          { type?: string; key?: string }
+        >;
+        const key =
+          raw["opencode-go"]?.key?.trim() ||
+          raw["opencode"]?.key?.trim() ||
+          raw["opencode-zen"]?.key?.trim();
+        if (key) {
+          this.lastExtraEnv[OPENCODE_API_KEY_ENV] = key;
+          log.info("Hydrated OPENCODE_API_KEY from OpenCode auth.json");
+          return;
+        }
+      } catch (err: any) {
+        log.warn(`Failed reading OpenCode auth.json at ${authPath}: ${err.message}`);
+      }
+    }
+  }
+
+  /** Positive parent_id only — never cache null (child rows often commit parent_id late). */
+  private sessionParentCache = new Map<string, string>();
+
+  /**
+   * OpenCode session.parent_id (or null for root / not-yet-linked child sessions).
+   * Important: do NOT cache null. Task subagent session/update often arrives
+   * before SQLite writes parent_id; caching null permanently caused
+   * task-link-timeout (child never links to the parent chat tab).
+   */
   getSessionParentId(sessionId: string): string | null {
     const id = sessionId?.trim();
     if (!id) return null;
-    if (this.sessionParentCache.has(id)) {
-      return this.sessionParentCache.get(id) ?? null;
-    }
+    const cached = this.sessionParentCache.get(id);
+    if (cached) return cached;
     let parent: string | null = null;
     try {
       const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
@@ -229,7 +326,7 @@ export class AcpService {
     } catch {
       parent = null;
     }
-    this.sessionParentCache.set(id, parent);
+    if (parent) this.sessionParentCache.set(id, parent);
     return parent;
   }
 
@@ -256,9 +353,27 @@ export class AcpService {
     // Merge into stored env — preserves keys from other providers across reconnects
     if (extraEnv) Object.assign(this.lastExtraEnv, extraEnv);
 
-    // Already alive — skip (API keys are baked into the running process)
-    if (this.conn && this.proc) {
+    // Route OpenCode's XDG directories to the app-level data folder.
+    const serverDir = this.getServerDataDir();
+    mkdirSync(serverDir, { recursive: true });
+    this.ensureOpenCodeAuthUnderXdg(serverDir);
+    // Fill missing keys from settings / CLI auth.json before deciding whether
+    // the running child already has the right credentials baked in.
+    this.hydrateCredentialEnv(serverDir);
+
+    // API keys / base URLs only apply at spawn. If credentials arrived after the
+    // process was already warm (or changed), restart so OpenCode can use them —
+    // otherwise session/set_model to opencode-go/* silently falls back to big-pickle.
+    const credentialDelta = Object.entries(this.lastExtraEnv).some(
+      ([k, v]) => Boolean(v) && /API_KEY|BASE_URL/i.test(k) && this.bakedExtraEnv[k] !== v,
+    );
+
+    if (this.conn && this.proc && !credentialDelta) {
       return;
+    }
+
+    if (this.conn && this.proc && credentialDelta) {
+      log.info("Restarting OpenCode to apply updated provider credentials");
     }
 
     await this.shutdown();
@@ -282,10 +397,6 @@ export class AcpService {
         "Fix: chmod +x " + binaryPath
       );
     }
-
-    // Route OpenCode's XDG directories to the app-level data folder.
-    const serverDir = this.getServerDataDir();
-    mkdirSync(serverDir, { recursive: true });
 
     // Load previously persisted sub-agent session IDs
     this.loadSubAgentSessions();
@@ -331,16 +442,22 @@ export class AcpService {
       OPENCODE_ENABLE_EXA: "1",
     };
 
-    log.info(`Spawning opencode acp (data: ${serverDir})`);
+    log.info(`Spawning opencode acp (data: ${serverDir})`, {
+      credentialEnvKeys: Object.keys(this.lastExtraEnv).filter((k) =>
+        /API_KEY|BASE_URL/i.test(k),
+      ),
+    });
     try {
       this.proc = spawn(binaryPath, ["acp"], {
         cwd: serverDir,
         env,
         stdio: ["pipe", "pipe", "pipe"],
       });
+      this.bakedExtraEnv = { ...this.lastExtraEnv };
     } catch (err: any) {
       log.error(`Failed to spawn opencode: ${err.message}`);
       this.proc = null;
+      this.bakedExtraEnv = {};
       throw new Error(`Failed to start OpenCode: ${err.message}`);
     }
 
@@ -350,6 +467,7 @@ export class AcpService {
       log.error(`OpenCode process error: ${err.message}`);
       this.conn = null;
       this.proc = null;
+      this.bakedExtraEnv = {};
     });
 
     // Pipe stderr through for debugging
@@ -396,18 +514,60 @@ export class AcpService {
           ) {
             const subagent = extractTaskSubagentType(params as Record<string, unknown>);
             if (shouldDenyOrchestratorBuiltinTask(subagent)) {
+              const deniedMsg = formatOrchestratorBuiltinTaskDeniedMessage(subagent);
               log.info(
                 `permission:task-builtin-deny sessionId=${sessionId} subagent=${subagent ?? "(none)"}`,
               );
               // Phase 1B: stash a redirect note for the next chat:send — the LLM
               // only gets a generic permission rejection, so we re-surface the
               // guidance ("use platform tools directly") on the next turn.
-              this.pendingTaskDenialRedirect.set(
-                sessionId,
-                `A Task delegation to @${subagent ?? "general"} was blocked on the orchestrator. ` +
-                  "Call platform tools directly in this conversation (e.g. citation-health, literature-search) " +
-                  "— do not delegate via Task.",
-              );
+              this.pendingTaskDenialRedirect.set(sessionId, deniedMsg);
+              const tabId = resolveChatTabId(sessionId);
+              const toolCallId =
+                (params as { toolCallId?: string }).toolCallId
+                || (params as { tool_call_id?: string }).tool_call_id
+                || (params as { callID?: string }).callID
+                || ((params as { toolCall?: { toolCallId?: string; id?: string } }).toolCall?.toolCallId)
+                || ((params as { toolCall?: { id?: string } }).toolCall?.id);
+              // Surface a clear UI error immediately — OpenCode only returns
+              // opaque {"error":"Task cancelled"} after we reject permission.
+              if (tabId && toolCallId) {
+                const tc = (params as { toolCall?: { rawInput?: unknown; input?: unknown } }).toolCall;
+                const toolInput =
+                  (tc?.rawInput && typeof tc.rawInput === "object"
+                    ? tc.rawInput
+                    : tc?.input && typeof tc.input === "object"
+                      ? tc.input
+                      : {}) as Record<string, unknown>;
+                emitChatStream(tabId, "message.part.updated", {
+                  part: {
+                    type: "tool",
+                    id: toolCallId,
+                    name: "task",
+                    input: toolInput,
+                    title: "task",
+                    kind: "think",
+                    status: "failed",
+                  },
+                });
+                emitChatStream(tabId, "message.updated", {
+                  message: {
+                    content: [{
+                      type: "tool_result",
+                      tool_use_id: toolCallId,
+                      content: deniedMsg,
+                      is_error: true,
+                      status: "failed",
+                      name: "task",
+                    }],
+                  },
+                });
+                emitChatStream(tabId, "subAgent.completed", {
+                  taskToolUseId: toolCallId,
+                  status: "error",
+                  error: deniedMsg,
+                });
+              }
               return buildPermissionOutcome(options, false);
             }
           }
@@ -486,14 +646,17 @@ export class AcpService {
               && toolCallId
               && isRunnableBashCommand(bashCommand)
             ) {
-              this.runApprovedBash({
-                sessionId,
-                chatTabId: tabId || sessionId,
-                toolCallId,
-                command: bashCommand,
-                cwd: bashCwd || process.cwd(),
-                projectRoot: this.projectPath || undefined,
-              });
+              // tool_call sync may have already unblocked the bridge in Auto mode.
+              if (!readBashPermissionStatus(sessionId, toolCallId)) {
+                this.runApprovedBash({
+                  sessionId,
+                  chatTabId: tabId || sessionId,
+                  toolCallId,
+                  command: bashCommand,
+                  cwd: bashCwd || process.cwd(),
+                  projectRoot: this.projectPath || undefined,
+                });
+              }
             } else if (this.isBashTool(toolName) && sessionId && toolCallId) {
               // Auto-allow arrived before real command — remember context, wait for backfill.
               this.bashJobContext.set(toolCallId, {
@@ -692,6 +855,7 @@ export class AcpService {
 
     this.conn = null;
     this.proc = null;
+    this.bakedExtraEnv = {};
   }
 
   async healthCheck(): Promise<{ healthy: boolean; version: string }> {
@@ -1320,14 +1484,9 @@ export class AcpService {
 
     // Set the model via standard ACP session/set_model
     if (model) {
-      try {
-        await this.conn.extMethod("session/set_model", {
-          sessionId,
-          modelId: model,
-        });
-      } catch (err: any) {
-        log.warn(`session/set_model failed: ${err.message}`);
-      }
+      await this.applySessionModel(sessionId, model);
+    } else {
+      log.warn("session/new without model — OpenCode will keep its default (often opencode/big-pickle)");
     }
 
     return {
@@ -1336,6 +1495,54 @@ export class AcpService {
       lastModified: Date.now(),
       createdAt: Date.now(),
     };
+  }
+
+  /** OpenCode rejected the session id (lost after cancel/restart/cwd change). */
+  static isSessionNotFoundError(err: unknown): boolean {
+    const msg = err instanceof Error ? err.message : String(err);
+    return /session not found/i.test(msg);
+  }
+
+  /**
+   * Drop the "already hydrated" cache and force ACP session/load.
+   * @returns true if OpenCode accepted the load (session is usable again).
+   */
+  async forceRehydrateSession(
+    sessionId: string,
+    cwd: string,
+    projectRoot?: string,
+  ): Promise<boolean> {
+    this.opencodeHydratedSessions.delete(sessionId);
+    await this.initSession(sessionId, cwd, projectRoot);
+    return this.opencodeHydratedSessions.has(sessionId);
+  }
+
+  /**
+   * Apply model via ACP session/set_model. Throws on failure so callers do not
+   * silently fall through to OpenCode's free default (opencode/big-pickle).
+   */
+  private async applySessionModel(sessionId: string, modelId: string): Promise<void> {
+    if (!this.conn) throw new Error("AcpService not initialized");
+    try {
+      await this.conn.extMethod("session/set_model", { sessionId, modelId });
+      log.info(`session/set_model ok: ${modelId}`);
+    } catch (err: any) {
+      const detail = err?.message || String(err);
+      log.warn(`session/set_model failed for ${modelId}: ${detail}`);
+      if (AcpService.isSessionNotFoundError(err)) {
+        throw new Error(
+          `Session not found in OpenCode ACP map (${sessionId}). ` +
+            `The chat should still exist — retry will re-bind via session/load without discarding history.`,
+        );
+      }
+      const missingCatalog =
+        /model not found/i.test(detail) &&
+        (modelId.startsWith("opencode-go/") || modelId.startsWith("opencode/"));
+      const hint = missingCatalog
+        ? " OpenCode Go/Zen models need a valid OPENCODE_API_KEY — re-save the key in Settings → AI, then restart prismnext."
+        : "";
+      throw new Error(`Failed to switch model to ${modelId}: ${detail}.${hint}`);
+    }
   }
 
   /**
@@ -1588,13 +1795,19 @@ export class AcpService {
       );
       this.opencodeHydratedSessions.add(sessionId);
     } catch (err: any) {
-      log.debug(`session/load failed for ${sessionId}: ${err.message}`);
+      // Visible: failed re-bind after cancel is the main "session not found" cause.
+      log.warn(`session/load failed for ${sessionId}: ${err.message}`);
     } finally {
       this.sessionReplaySuppress = Math.max(0, this.sessionReplaySuppress - 1);
     }
   }
 
-  /** Hydrate OpenCode in-memory session state once before the first prompt after restart. */
+  /**
+   * Hydrate OpenCode/ACP in-memory session state before prompting.
+   * Skips if already bound in this process — except after abort(), which
+   * clears the cache so the same session is re-bound via session/load
+   * without creating a new id.
+   */
   async ensureSessionHydrated(sessionId: string, cwd: string, projectRoot?: string): Promise<void> {
     if (!this.conn || this.opencodeHydratedSessions.has(sessionId)) return;
     await this.initSession(sessionId, cwd, projectRoot);
@@ -2005,6 +2218,9 @@ export class AcpService {
     opts?: {
       model?: string;
       provider?: string;
+      /** Used to rehydrate if OpenCode dropped the session after cancel/restart. */
+      cwd?: string;
+      projectRoot?: string;
       /** Project rules — read fresh each turn; always injected when non-empty. */
       projectRulesPrompt?: string;
       /** Vision images appended after the text prompt (ACP ContentBlock::Image). */
@@ -2062,23 +2278,36 @@ export class AcpService {
       content.push({ type: "resource", resource });
     }
 
-    if (opts?.model) {
+    const applyModelIfNeeded = async () => {
+      if (!opts?.model) return;
       const modelId = opts.model.includes("/")
         ? opts.model
         : `${opts.provider || "anthropic"}/${opts.model}`;
-      try {
-        await this.conn.extMethod("session/set_model", { sessionId, modelId });
-      } catch (err: any) {
-        log.warn(`session/set_model failed before prompt: ${err.message}`);
-      }
-    }
+      await this.applySessionModel(sessionId, modelId);
+    };
 
-    log.info(
-      `session/prompt: sessionId=${sessionId} userLen=${promptText.length} blocks=${content.length} images=${opts?.images?.length ?? 0} resources=${opts?.resources?.length ?? 0}`,
-    );
-    const promptResult = await this.conn.prompt({ sessionId, prompt: content });
-    log.info(`session/prompt complete: ${JSON.stringify(promptResult).slice(0, 200)}`);
-    return promptResult as any;
+    const runPrompt = async () => {
+      await applyModelIfNeeded();
+      log.info(
+        `session/prompt: sessionId=${sessionId} userLen=${promptText.length} blocks=${content.length} images=${opts?.images?.length ?? 0} resources=${opts?.resources?.length ?? 0}`,
+      );
+      const promptResult = await this.conn!.prompt({ sessionId, prompt: content });
+      log.info(`session/prompt complete: ${JSON.stringify(promptResult).slice(0, 200)}`);
+      return promptResult as any;
+    };
+
+    try {
+      return await runPrompt();
+    } catch (err: any) {
+      if (!AcpService.isSessionNotFoundError(err) || !opts?.cwd) throw err;
+      log.warn(`session gone during prompt — force rehydrate then retry`, {
+        sessionId,
+        detail: err?.message,
+      });
+      const ok = await this.forceRehydrateSession(sessionId, opts.cwd, opts.projectRoot);
+      if (!ok) throw err;
+      return await runPrompt();
+    }
   }
 
   async sendAnswer(sessionId: string, answer: string): Promise<{ usage?: any }> {
@@ -2104,6 +2333,11 @@ export class AcpService {
 
   async abort(sessionId: string): Promise<void> {
     this.releaseSessionPendingWork(sessionId);
+    // Cancel must only stop the in-flight turn — never discard the session.
+    // Drop the hydrate cache so the next prompt re-binds via session/load
+    // (ACP in-memory map can desync after abort even though the session
+    // still exists on disk / in OpenCode's store).
+    this.opencodeHydratedSessions.delete(sessionId);
     if (!this.conn) return;
 
     try {
@@ -2241,8 +2475,11 @@ export class AcpService {
   }
 
   /**
-   * OpenCode custom bash may invoke execute() before ACP requestPermission.
-   * When we see a bash tool_call and no ACP pending exists, emit the same UI gate.
+   * OpenCode custom bash may invoke execute() before ACP requestPermission —
+   * and when `permission.bash` is already "allow" (Auto mode), OpenCode often
+   * skips requestPermission entirely. Custom bash.ts still polls the bridge
+   * for permission.json, so we must auto-approve + run (or deny) from tool_call.
+   * Ask / Edit auto still emit the synthetic PermissionGatePanel.
    */
   syncBashPermissionFromToolCall(args: {
     sessionId: string;
@@ -2287,21 +2524,41 @@ export class AcpService {
     const mode = resolvePermissionMode(
       (getSettings() as Record<string, unknown>).permissionMode as string | undefined,
     );
-    if (resolvePermissionAction(mode, "bash") !== "prompt") return;
-    if (this.emittedBashUi.has(toolCallId)) return;
-    if (this.hasAcpPendingForToolCall(toolCallId)) return;
-
+    const syncAction = resolveBridgeToolCallSyncAction(mode, "bash");
     const cwd = args.cwd || this.projectPath || process.cwd();
-    this.emittedBashUi.add(toolCallId);
-    const permissionId = `bash-gate-${toolCallId}`;
-    this.bashJobContext.set(toolCallId, {
+    const job: ApprovedBashJob = {
       sessionId,
       chatTabId: tabId,
       toolCallId,
       command: command.trim(),
       cwd,
       projectRoot: this.projectPath || undefined,
-    });
+    };
+
+    if (syncAction === "auto_allow") {
+      // Do NOT silently return — that left PTY bash polling permission.json forever
+      // with no UI (Auto mode + OpenCode skipping ACP requestPermission).
+      if (readBashPermissionStatus(sessionId, toolCallId)) {
+        log.debug(`permission:bash-tool-call already-settled toolCallId=${toolCallId}`);
+        return;
+      }
+      log.info(`permission:bash-tool-call auto-execute toolCallId=${toolCallId} mode=${mode}`);
+      this.runApprovedBash(job);
+      return;
+    }
+    if (syncAction === "deny") {
+      if (readBashPermissionStatus(sessionId, toolCallId)) return;
+      log.info(`permission:bash-tool-call auto-deny toolCallId=${toolCallId} mode=${mode}`);
+      denyBashJob(sessionId, toolCallId);
+      return;
+    }
+
+    if (this.emittedBashUi.has(toolCallId)) return;
+    if (this.hasAcpPendingForToolCall(toolCallId)) return;
+
+    this.emittedBashUi.add(toolCallId);
+    const permissionId = `bash-gate-${toolCallId}`;
+    this.bashJobContext.set(toolCallId, job);
 
     log.info(`permission:bash-tool-call gate=${permissionId} toolCallId=${toolCallId}`);
     this.emitNotification("session/permission", {
@@ -2326,8 +2583,9 @@ export class AcpService {
   }
 
   /**
-   * OpenCode custom delete/move may invoke execute() before ACP requestPermission.
-   * When we see a tool_call, emit the same PermissionGatePanel as built-in tools.
+   * OpenCode custom delete/move may invoke execute() before ACP requestPermission
+   * (or skip permission entirely when the rule is allow). Mirror bash: unblock
+   * the bridge on auto_allow / deny; only prompt when the mode asks.
    */
   syncCustomToolPermissionFromToolCall(args: {
     sessionId: string;
@@ -2347,7 +2605,26 @@ export class AcpService {
     const mode = resolvePermissionMode(
       (getSettings() as Record<string, unknown>).permissionMode as string | undefined,
     );
-    if (resolvePermissionAction(mode, normalized) !== "prompt") return;
+    const syncAction = resolveBridgeToolCallSyncAction(mode, normalized);
+
+    if (syncAction === "auto_allow") {
+      if (readBashPermissionStatus(sessionId, toolCallId)) return;
+      registerCustomToolJobIntent({ sessionId, toolCallId, toolName: normalized });
+      approveCustomToolJob(sessionId, toolCallId);
+      log.info(
+        `permission:custom-tool-call auto-approve tool=${normalized} toolCallId=${toolCallId} mode=${mode}`,
+      );
+      return;
+    }
+    if (syncAction === "deny") {
+      if (readBashPermissionStatus(sessionId, toolCallId)) return;
+      denyBashJob(sessionId, toolCallId);
+      log.info(
+        `permission:custom-tool-call auto-deny tool=${normalized} toolCallId=${toolCallId} mode=${mode}`,
+      );
+      return;
+    }
+
     if (this.emittedCustomToolUi.has(toolCallId)) return;
     if (this.hasAcpPendingForToolCall(toolCallId)) return;
 
@@ -2441,6 +2718,11 @@ export class AcpService {
   private runApprovedBash(job: ApprovedBashJob): void {
     if (!isRunnableBashCommand(job.command)) {
       log.warn(`permission:bash-run skipped non-command toolCallId=${job.toolCallId} command=${JSON.stringify(job.command)}`);
+      return;
+    }
+    // Avoid double PTY starts when both ACP auto-allow and tool_call sync fire.
+    if (readBashPermissionStatus(job.sessionId, job.toolCallId)) {
+      log.debug(`permission:bash-run already-settled toolCallId=${job.toolCallId}`);
       return;
     }
     if (isDirectLatexCompileBashCommand(job.command)) {

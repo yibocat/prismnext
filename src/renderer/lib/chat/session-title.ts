@@ -100,3 +100,35 @@ export function deriveSessionTitleForSend(
   if (cleaned) return cleaned.slice(0, 40);
   return tab.title;
 }
+
+/**
+ * Blank "New Chat" tab with no session, messages, or draft — safe to drop when
+ * the user opens a history session instead of sending on this tab.
+ */
+export function isDisposableEmptyChatTab(tab: {
+  sessionId: string | null;
+  isStreaming: boolean;
+  isLoadingSession?: boolean;
+  messages: unknown[];
+  streamingMessage: unknown;
+  draft?: { input?: string; parts?: unknown[] };
+}): boolean {
+  if (tab.sessionId || tab.isStreaming || tab.isLoadingSession) return false;
+  if (tab.messages.length > 0 || tab.streamingMessage) return false;
+  if ((tab.draft?.input ?? "").trim()) return false;
+  if (tab.draft?.parts && tab.draft.parts.length > 0) return false;
+  return true;
+}
+
+/** Drop disposable empty tabs, optionally keeping one id (e.g. the session being opened). */
+export function pruneDisposableEmptyChatTabs<T extends {
+  id: string;
+  sessionId: string | null;
+  isStreaming: boolean;
+  isLoadingSession?: boolean;
+  messages: unknown[];
+  streamingMessage: unknown;
+  draft?: { input?: string; parts?: unknown[] };
+}>(tabs: T[], keepId?: string): T[] {
+  return tabs.filter((t) => t.id === keepId || !isDisposableEmptyChatTab(t));
+}

@@ -1,5 +1,5 @@
 import { Bot, BookOpenIcon, FileType, FlaskConical, LayoutTemplate, SettingsIcon } from "lucide-react";
-import { Kbd } from "@/components/ui/kbd";
+import { ShortcutKbdChips } from "@/lib/shortcuts";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -69,7 +69,7 @@ const newAgentNav: LeftNavDefinition = {
     st.clearPendingRightAreaRestore();
     closeTexWorkspace(ctx);
   },
-  trailing: <Kbd className="text-[length:var(--font-kbd)] h-4 min-w-4 px-0.5 bg-transparent">⌘N</Kbd>,
+  trailing: <ShortcutKbdChips id="product.newChat" />,
 };
 
 const literatureNav: LeftNavDefinition = {
@@ -78,7 +78,7 @@ const literatureNav: LeftNavDefinition = {
   label: "Library",
   labelKey: "nav.library",
   icon: BookOpenIcon,
-  order: 5,
+  order: 10,
   toggleable: true,
   isActive: () => isLiteraturePanelOpen() && !isTexWorkspaceOpen(),
   activate: (ctx) => {
@@ -100,7 +100,7 @@ const experimentsNav: LeftNavDefinition = {
   label: "Experiments",
   labelKey: "nav.experiments",
   icon: FlaskConical,
-  order: 7,
+  order: 15,
   toggleable: true,
   isActive: () => isExperimentsPanelOpen() && !isTexWorkspaceOpen(),
   activate: (ctx) => {
@@ -122,7 +122,7 @@ const templatesNav: LeftNavDefinition = {
   label: "Templates",
   labelKey: "nav.templates",
   icon: LayoutTemplate,
-  order: 10,
+  order: 20,
   centerView: "templates",
   immersive: true,
   toggleable: true,
@@ -140,7 +140,7 @@ const texWorkspaceNav: LeftNavDefinition = {
   label: "TeX Workspace",
   labelKey: "nav.texWorkspace",
   icon: FileType,
-  order: 20,
+  order: 5,
   toggleable: true,
   isActive: () => isTexWorkspaceOpen(),
   activate: (ctx) => {
@@ -196,10 +196,10 @@ const settingsNav: LeftNavDefinition = {
 /** 应用启动时注册所有左侧栏入口（在 App.tsx 与 registerAllModes 一并调用） */
 export function registerLeftNavItems(): void {
   leftNavRegistry.register(newAgentNav);
+  leftNavRegistry.register(texWorkspaceNav);
   leftNavRegistry.register(literatureNav);
   leftNavRegistry.register(experimentsNav);
   leftNavRegistry.register(templatesNav);
-  leftNavRegistry.register(texWorkspaceNav);
   leftNavRegistry.register(settingsNav);
   // leftNavRegistry.register(yourNav);  // ← 新入口加在这里，或拆到 feature 模块再 import
 }

@@ -6,10 +6,10 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useLayoutStore } from "@/stores/layout-store";
 import { hasOpenSettingsEditor } from "@/hooks/use-settings-editor";
 import { useChatStore } from "@/stores/chat-store";
-import { useDocumentStore } from "@/stores/document-store";
 import { useSessionTitle } from "@/hooks/use-session-title";
 import { SidebarControls } from "@/components/layout/sidebar-controls";
 import { SessionTitle } from "./session-title";
+import { ChatOpenTabs, shouldShowChatOpenTabs } from "./chat-open-tabs";
 import { ServerStatusDot } from "@/components/server-status-dot";
 import { cn } from "@/lib/utils";
 import {
@@ -19,6 +19,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { openRightArea } from "@/lib/workspace/right-area-layout";
+import { Hint } from "@/components/ui/hint";
 
 interface ContentTopBarProps {
   leftSidebarRef: RefObject<PanelImperativeHandle | null>;
@@ -36,8 +37,8 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
 
   const sessionTitle = useSessionTitle();
-  const agentName = "OpenCode";
-  const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const chatTabCount = useChatStore((s) => s.tabs.length);
+  const showOpenTabs = shouldShowChatOpenTabs(chatTabCount);
   const sessionDirectory = useChatStore((s) => {
     const tab = s.tabs.find((t) => t.id === s.activeTabId);
     return tab?.sessionCwd ?? null;
@@ -80,65 +81,68 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
         )}
       </div>
 
-      {/* Status dot + Session title */}
-      <div className="flex items-center min-w-0 gap-1 ml-0.5">
+      {/* Status dot + open chat tabs (≥2) or single session title */}
+      <div className="flex min-w-0 flex-1 items-center gap-1 ml-0.5">
         <ServerStatusDot />
-        {sessionTitle && (
-          <SessionTitle
-            title={sessionTitle}
-            projectRoot={projectRoot}
-            agentName={agentName}
-            sessionDirectory={sessionDirectory}
-          />
+        {showOpenTabs ? (
+          <ChatOpenTabs />
+        ) : (
+          sessionTitle && (
+            <SessionTitle
+              title={sessionTitle}
+              sessionDirectory={sessionDirectory}
+            />
+          )
         )}
       </div>
-
-      {/* Spacer */}
-      <div className="flex-1 min-w-0" />
 
       {/* ── Right: expand right panel (RightArea or Settings detail) ── */}
       <div className="flex items-center gap-0.5 shrink-0">
         {!isMac && (
           <>
-            <button
-              type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              title={t("shell.minimize")}
-              onClick={() => window.electronAPI?.windowMinimize()}
-            >
-              <Minimize2Icon className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              title={isMaximized ? t("shell.restore") : t("shell.maximize")}
-              onClick={() => window.electronAPI?.windowMaximize()}
-            >
-              <Maximize2Icon className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
-              title={t("shell.close")}
-              onClick={() => window.electronAPI?.windowClose()}
-            >
-              <XIcon className="size-3.5" />
-            </button>
+            <Hint label={t("shell.minimize")}>
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                onClick={() => window.electronAPI?.windowMinimize()}
+              >
+                <Minimize2Icon className="size-3.5" />
+              </button>
+            </Hint>
+            <Hint label={isMaximized ? t("shell.restore") : t("shell.maximize")}>
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                onClick={() => window.electronAPI?.windowMaximize()}
+              >
+                <Maximize2Icon className="size-3.5" />
+              </button>
+            </Hint>
+            <Hint label={t("shell.close")}>
+              <button
+                type="button"
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
+                onClick={() => window.electronAPI?.windowClose()}
+              >
+                <XIcon className="size-3.5" />
+              </button>
+            </Hint>
             <div className="mx-1 h-4 w-px bg-border shrink-0" />
           </>
         )}
 
         {!rightAreaExpanded && rightAreaRef && !inSettings ? (
-          <button
-            type="button"
-            className={cn(
-              "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
-            )}
-            title={t("shell.expandRightArea")}
-            onClick={expandRightPanel}
-          >
-            <PanelRight className="size-3.5" />
-          </button>
+          <Hint shortcutId="shell.toggleRightArea">
+            <button
+              type="button"
+              className={cn(
+                "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
+              )}
+              onClick={expandRightPanel}
+            >
+              <PanelRight className="size-3.5" />
+            </button>
+          </Hint>
         ) : null}
       </div>
     </div>

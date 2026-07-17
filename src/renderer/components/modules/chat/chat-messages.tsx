@@ -31,6 +31,7 @@ import {
   SquareIcon,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Hint } from "@/components/ui/hint";
 
 // ─── Copy Button ───
 
@@ -43,14 +44,15 @@ const CopyButton = memo(({ text }: { text: string }) => {
   }, [text]);
 
   return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 opacity-0 transition-all hover:bg-accent hover:text-accent-foreground group-hover:opacity-100"
-      title="Copy"
-    >
-      {copied ? <CheckIcon className="size-3 text-success" /> : <CopyIcon className="size-3" />}
-    </button>
+    <Hint label="Copy">
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 opacity-0 transition-all hover:bg-accent hover:text-accent-foreground group-hover:opacity-100"
+      >
+        {copied ? <CheckIcon className="size-3 text-success" /> : <CopyIcon className="size-3" />}
+      </button>
+    </Hint>
   );
 });
 CopyButton.displayName = "CopyButton";
@@ -58,14 +60,14 @@ CopyButton.displayName = "CopyButton";
 // ─── Streaming Indicator ───
 
 // Parent turn column already applies px-6 — keep this flush with ThinkingWidget.
-const StreamingIndicator = memo(() => (
+const StreamingIndicator = memo(({ label }: { label: string }) => (
   <div className="mb-2 flex items-center gap-2">
     <div className="flex items-center gap-1">
       <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:0ms]" />
       <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:150ms]" />
       <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:300ms]" />
     </div>
-    <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">Thinking…</span>
+    <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">{label}</span>
   </div>
 ));
 StreamingIndicator.displayName = "StreamingIndicator";
@@ -119,16 +121,18 @@ const UserHeader = memo(function UserHeader({
   const long = text.length > 140;
   const hasBody = Boolean(text) || hasInline || attachments.length > 0;
 
+  // Inset with margin (matches composer `px-3`), not padded sticky plate —
+  // gutters stay transparent so glass / panel surfaces show through cleanly.
   return (
     <div
       className={cn(
-        "px-3 pb-2 sticky top-0 z-20 bg-background/95 backdrop-blur-sm",
+        "sticky top-0 z-20 mx-3 mb-2",
         isActiveTurn && "z-30",
       )}
     >
       <div
         className={cn(
-          "max-w-3xl mx-auto rounded-lg border border-input bg-muted px-4 py-2 shadow-[0_0_6px_rgba(0,0,0,0.06)]",
+          "rounded-lg border border-input bg-muted px-4 py-2 shadow-[0_0_6px_rgba(0,0,0,0.06)]",
           long && !expanded && "cursor-pointer hover:bg-muted/50",
         )}
         onClick={long && !expanded ? () => setExpanded(true) : undefined}
@@ -365,10 +369,14 @@ export const ChatMessages = memo(function ChatMessages() {
   const messages = useChatStore((s) => s.messages);
   const streamingMessage = useChatStore((s) => s.streamingMessage);
   const isStreaming = useChatStore((s) => s.isStreaming);
+  const preparePhase = useChatStore((s) => s.preparePhase);
   const isLoadingSession = useChatStore((s) => s.isLoadingSession);
   const activeTabId = useChatStore((s) => s.activeTabId);
   const chatSessionId = useChatStore((s) => s.sessionId);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const streamingLabel = preparePhase
+    ? t(`chat.prepare.${preparePhase}`, { defaultValue: t("chat.prepare.thinking") })
+    : t("chat.prepare.thinking");
 
   useEffect(() => {
     if (!projectRoot) return;
@@ -725,7 +733,7 @@ export const ChatMessages = memo(function ChatMessages() {
               )}
               <div className="px-6 min-w-0 max-w-full overflow-hidden">
                 {isLastTurn && showStreamingIndicator && (
-                  <StreamingIndicator />
+                  <StreamingIndicator label={streamingLabel} />
                 )}
                 {turn.responses.map(({ msg, displayIdx }) => {
                   const idx = committed.idxMap.get(msg) ?? messages.length;

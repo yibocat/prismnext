@@ -80,8 +80,9 @@ export default tool({
     "as a session citation the user can review and confirm. " +
     "Use this BEFORE citing a paper in your reply; reference the returned refId as [n]. " +
     "ONLY use DOI/arXiv copied from Paper Search MCP, websearch, or the user — NEVER invent identifiers. " +
-    "MCP search_papers alone is NOT enough — stage each paper you will mention before writing reply text. " +
-    "For topic discovery, call Paper Search MCP search_papers first, then stage each hit.",
+    "Any paper-search-mcp_* result (search_papers / search_arxiv / search_crossref / …) alone is NOT enough — " +
+    "stage each paper you will mention before writing reply text. " +
+    "For topic discovery: search once, then immediately stage each hit (do not re-parse tool-output with bash).",
   args: {
     doi: tool.schema
       .string()
@@ -98,7 +99,7 @@ export default tool({
     discoveredFrom: tool.schema
       .enum(["paper-search-mcp", "websearch", "webfetch", "user", "agent"])
       .describe(
-        "How the identifier was discovered. Use paper-search-mcp after MCP search_papers; websearch only as fallback.",
+        "How the identifier was discovered. Use paper-search-mcp after any Paper Search MCP tool; websearch only as fallback.",
       )
       .optional(),
   },

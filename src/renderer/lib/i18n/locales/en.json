@@ -81,7 +81,7 @@
       "keyboardShortcutsDesc": "Reference for wired shortcuts and planned bindings. ⌘ = Command on macOS; Ctrl on Windows/Linux.",
       "logs": "Logs",
       "applicationLogs": "Application logs",
-      "applicationLogsDesc": "Browse, filter, search, and export main-process logs.",
+      "applicationLogsDesc": "Browse, filter, search, and export app logs (main + UI).",
       "open": "Open"
     },
     "slots": {
@@ -610,29 +610,36 @@
     },
     "shortcuts": {
       "title": "Shortcuts",
-      "subtitle": "What works today vs. planned. Status reflects actual wiring in the app, not the design doc alone.",
+      "subtitle": "System defaults (shell & editor) are fixed. Workspace and product shortcuts will be customizable later; tooltips always show the resolved chord.",
       "groups": {
         "global": "Global",
         "rightPanel": "Workspace (right panel)",
         "editor": "Editor",
-        "chat": "Chat",
+        "chat": "Chat & product",
         "changes": "Changes (merge view)"
       },
       "status": {
         "active": "Active",
         "placed": "UI only",
-        "planned": "Planned"
+        "planned": "Planned",
+        "fixed": "Fixed"
       },
       "items": {
-        "closeTab": "Close active tab (chat or workspace)",
+        "closeTab": "Close: RightArea tab → chat tab → window (not quit)",
+        "closeWindow": "Close window immediately",
         "toggleSidebar": "Toggle left sidebar",
+        "toggleRightArea": "Toggle RightArea panel",
+        "openSettings": "Open Settings",
         "commandPalette": "Open command palette",
         "newAgent": "New agent session",
+        "quit": "Quit prismnext",
+        "hide": "Hide prismnext",
+        "minimize": "Minimize window",
         "nextWorkspaceTab": "Next tab in current workspace mode",
         "prevWorkspaceTab": "Previous tab in current workspace mode",
         "gitRefresh": "Refresh Git status or history",
         "insertToChat": "Insert selection into chat (editor, diff, terminal)",
-        "saveFile": "Save file (TeX workspace also compiles on save)",
+        "saveFile": "Save active workspace file (TeX also compiles on save)",
         "compile": "Compile current document",
         "searchFile": "Search in file",
         "bold": "Wrap selection in \\textbf{}",
@@ -959,6 +966,8 @@
           "compile": "Compile",
           "fs": "Files",
           "ipc": "IPC",
+          "crash": "Crash",
+          "security": "Security",
           "general": "General"
         },
         "level": {
@@ -970,7 +979,7 @@
         },
         "showAllLevels": "Show all levels",
         "showLevelOnly": "Show {{level}} only",
-        "searchPlaceholder": "Search messages & modules…",
+        "searchPlaceholder": "Search messages, modules, details…",
         "clearSearch": "Clear search",
         "refresh": "Refresh",
         "export": "Export logs",
@@ -1190,6 +1199,71 @@
       "createFailed": "Failed to create project"
     }
   },
+  "editor": {
+    "findPanel": {
+      "find": "Find",
+      "replace": "Replace",
+      "replaceAll": "All",
+      "matchCase": "Match case",
+      "wholeWord": "Match whole word",
+      "regexp": "Use regular expression",
+      "previous": "Previous match",
+      "next": "Next match",
+      "close": "Close",
+      "toggleReplace": "Toggle replace"
+    }
+  },
+  "shortcuts": {
+    "shell": {
+      "close": "Close: RightArea tab → chat tab → window",
+      "closeWindow": "Close window",
+      "saveFile": "Save active workspace file",
+      "toggleLeftSidebar": "Toggle left sidebar",
+      "toggleRightArea": "Toggle RightArea",
+      "toggleRightAreaMaximize": "Maximize RightArea (or restore / close)",
+      "openSettings": "Open Settings",
+      "commandPalette": "Open command palette"
+    },
+    "editor": {
+      "find": "Find in file",
+      "bold": "Bold (\\textbf{})",
+      "italic": "Italic (\\textit{})",
+      "comment": "Toggle comment",
+      "closeSearch": "Close search panel",
+      "synctex": "Forward SyncTeX to PDF"
+    },
+    "workspace": {
+      "nextTab": "Next workspace tab",
+      "prevTab": "Previous workspace tab",
+      "gitRefresh": "Refresh Git status or history",
+      "insertToChat": "Insert selection into chat",
+      "openTexWorkspace": "Open TeX Workspace (split)",
+      "openTexWorkspaceMaximize": "Open TeX Workspace (maximize)",
+      "openLiterature": "Open Library (split)",
+      "openLiteratureMaximize": "Open Library (maximize)",
+      "openExperiments": "Open Experiments (split)",
+      "openExperimentsMaximize": "Open Experiments (maximize)",
+      "openFiles": "Open Files (split)",
+      "openFilesMaximize": "Open Files (maximize)",
+      "openGit": "Open Git (split)",
+      "openGitMaximize": "Open Git (maximize)",
+      "openBrowser": "Open Browser (split)",
+      "openBrowserMaximize": "Open Browser (maximize)",
+      "openTerminal": "Open Terminal (split)",
+      "openTerminalMaximize": "Open Terminal (maximize)"
+    },
+    "product": {
+      "focusAiBar": "Focus chat composer",
+      "newChat": "New chat tab",
+      "nextChat": "Next chat tab",
+      "prevChat": "Previous chat tab",
+      "compile": "Compile document",
+      "acceptChange": "Accept current change",
+      "rejectChange": "Reject current change",
+      "acceptAll": "Accept all changes",
+      "rejectAll": "Reject all changes"
+    }
+  },
   "shell": {
     "notify": {
       "replyFinished": "Reply finished",
@@ -1284,6 +1358,17 @@
       "newChat": "New Chat",
       "chat": "Chat"
     },
+    "openTabs": {
+      "label": "Open chats",
+      "close": "Close chat tab",
+      "closeDisabledStreaming": "Cannot close while the agent is running",
+      "unsavedSession": "Not saved as a session yet",
+      "mergesInto": "Merges into {{branch}}",
+      "worktreeRemoved": "Worktree removed — session kept on project",
+      "citationsCount": "{{count}} staged citation",
+      "citationsCount_plural": "{{count}} staged citations",
+      "citationsNone": "No staged citations"
+    },
     "aibar": {
       "done": "Done",
       "running": "Running",
@@ -1365,6 +1450,13 @@
     },
     "messages": {
       "loading": "Loading conversation…"
+    },
+    "prepare": {
+      "thinking": "Thinking…",
+      "syncing_project": "Preparing project…",
+      "creating_session": "Creating chat session…",
+      "connecting_mcp": "Connecting tools…",
+      "starting_model": "Starting model…"
     }
   },
   "modes": {

@@ -59,7 +59,7 @@ export function installApplicationMenu(getMainWindow: () => BrowserWindow | null
         },
         { type: "separator" },
         ...(isMac
-          ? [{ role: "close" as const, accelerator: "CmdOrCtrl+Shift+W" }]
+          ? [{ role: "close" as const, label: t.closeWindow, accelerator: "CmdOrCtrl+Shift+W" }]
           : [{ role: "quit" as const }]),
       ],
     },

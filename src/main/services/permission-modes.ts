@@ -198,6 +198,26 @@ export function shouldPromptForPermission(
   return getPermissionRuleForTool(mode, toolName) === "ask";
 }
 
+/**
+ * How Prism should handle a custom-tool bridge gate from `tool_call` alone
+ * (OpenCode may skip ACP `requestPermission` when the rule is already allow).
+ *
+ * - auto_allow: write bridge approval (+ run bash) — no UI
+ * - deny: write bridge denial — no UI
+ * - prompt: emit PermissionGatePanel / synthetic bash-gate
+ */
+export type BridgeToolCallSyncAction = "auto_allow" | "deny" | "prompt";
+
+export function resolveBridgeToolCallSyncAction(
+  mode: PermissionMode,
+  toolName: string,
+): BridgeToolCallSyncAction {
+  const action = resolvePermissionAction(mode, toolName);
+  if (action === "allow") return "auto_allow";
+  if (action === "deny") return "deny";
+  return "prompt";
+}
+
 /** Modes that auto-apply disk mutations without a proposed-change review. */
 export function isEditAutoApplyMode(mode: PermissionMode | string | undefined): boolean {
   const m = resolvePermissionMode(mode);

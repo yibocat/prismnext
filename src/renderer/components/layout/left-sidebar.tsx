@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo, memo, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import type { PanelImperativeHandle } from "react-resizable-panels";
-import { useTheme } from "next-themes";
 import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "@/stores/layout-store";
 import { displayChatTitle } from "@/lib/i18n/display-chat-title";
@@ -25,9 +24,6 @@ import {
   ArrowUpDown,
   ChevronDown,
   ChevronRight,
-  SunIcon,
-  MoonIcon,
-  MonitorIcon,
 } from "lucide-react";
 import { SettingsSidebar, type SettingsCategory } from "@/components/modules/settings";
 import { ProjectSwitcher } from "@/components/modules/shared";
@@ -49,6 +45,7 @@ import {
   AppMenuContent,
   AppMenuTrigger,
 } from "@/components/ui/app-menu";
+import { Hint } from "@/components/ui/hint";
 import {
   SidebarProvider,
   Sidebar,
@@ -145,13 +142,6 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const { platform, isFullscreen } = useWindowState();
   const isMac = platform === "darwin";
   const showMacSpacer = isMac && !isFullscreen;
-  const { theme, resolvedTheme, setTheme } = useTheme();
-
-  const cycleTheme = () => {
-    if (theme === "light") setTheme("dark");
-    else if (theme === "dark") setTheme("system");
-    else setTheme("light");
-  };
 
   const sidebarFullyCollapsed = useLayoutStore((s) => s.sidebarFullyCollapsed);
   const leftSidebarOverlay = useLayoutStore((s) => s.leftSidebarOverlay);
@@ -412,20 +402,27 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
             ) : (
               <Dot className="absolute size-3.5 text-muted-foreground/30 transition-opacity group-hover/menu-item:opacity-0" strokeWidth={5.5} />
             )}
-            <span
-              role="button"
-              tabIndex={0}
-              className="absolute opacity-0 group-hover/menu-item:opacity-100 transition-opacity text-muted-foreground hover:text-foreground cursor-pointer"
-              onClick={(e) => { e.stopPropagation(); pinSession(s.id); }}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); pinSession(s.id); } }}
-              title={pinnedSessionIds.includes(s.id) ? t("nav.sessions.unpin") : t("nav.sessions.pin")}
+            <Hint
+              label={
+                pinnedSessionIds.includes(s.id)
+                  ? t("nav.sessions.unpin")
+                  : t("nav.sessions.pin")
+              }
             >
-              {pinnedSessionIds.includes(s.id) ? (
-                <PinOff className="size-3.5" strokeWidth={1.5} />
-              ) : (
-                <PinIcon className="size-3.5" strokeWidth={1.5} />
-              )}
-            </span>
+              <span
+                role="button"
+                tabIndex={0}
+                className="absolute opacity-0 group-hover/menu-item:opacity-100 transition-opacity text-muted-foreground hover:text-foreground cursor-pointer"
+                onClick={(e) => { e.stopPropagation(); pinSession(s.id); }}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); pinSession(s.id); } }}
+              >
+                {pinnedSessionIds.includes(s.id) ? (
+                  <PinOff className="size-3.5" strokeWidth={1.5} />
+                ) : (
+                  <PinIcon className="size-3.5" strokeWidth={1.5} />
+                )}
+              </span>
+            </Hint>
           </span>
           <span className="truncate text-[length:var(--font-session-item)] flex-1">{displayChatTitle(s.title, t)}</span>
           <span className="hidden group-hover/menu-item:inline text-[length:var(--font-timestamp)] text-muted-foreground/70 shrink-0">
@@ -433,32 +430,23 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
           </span>
           {showArchived ? (
             <>
-              <span
-                role="button"
-                tabIndex={0}
-                className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
-                onClick={(e) => { e.stopPropagation(); archiveSession(s.id); }}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); archiveSession(s.id); } }}
-                title={t("nav.sessions.restoreFromArchive")}
-              >
-                <ArchiveRestore className="size-3" />
-              </span>
-              <span
-                role="button"
-                tabIndex={0}
-                className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-destructive cursor-pointer"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  if (!projectRoot) return;
-                  const result = await window.electronAPI.sessionDelete(s.id, projectRoot);
-                  if (result.success) {
-                    clearSessionUiPrefs(s.id);
-                    setSessions((prev) => prev.filter((x) => x.id !== s.id));
-                    if (s.id === sessionId) clearCurrentTab();
-                  }
-                }}
-                onKeyDown={async (e) => {
-                  if (e.key === "Enter" || e.key === " ") {
+              <Hint label={t("nav.sessions.restoreFromArchive")}>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                  onClick={(e) => { e.stopPropagation(); archiveSession(s.id); }}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); archiveSession(s.id); } }}
+                >
+                  <ArchiveRestore className="size-3" />
+                </span>
+              </Hint>
+              <Hint label={t("nav.sessions.delete")}>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-destructive cursor-pointer"
+                  onClick={async (e) => {
                     e.stopPropagation();
                     if (!projectRoot) return;
                     const result = await window.electronAPI.sessionDelete(s.id, projectRoot);
@@ -467,34 +455,46 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                       setSessions((prev) => prev.filter((x) => x.id !== s.id));
                       if (s.id === sessionId) clearCurrentTab();
                     }
-                  }
-                }}
-                title={t("nav.sessions.delete")}
-              >
-                <Trash2Icon className="size-3" />
-              </span>
+                  }}
+                  onKeyDown={async (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.stopPropagation();
+                      if (!projectRoot) return;
+                      const result = await window.electronAPI.sessionDelete(s.id, projectRoot);
+                      if (result.success) {
+                        clearSessionUiPrefs(s.id);
+                        setSessions((prev) => prev.filter((x) => x.id !== s.id));
+                        if (s.id === sessionId) clearCurrentTab();
+                      }
+                    }
+                  }}
+                >
+                  <Trash2Icon className="size-3" />
+                </span>
+              </Hint>
             </>
           ) : (
-            <span
-              role="button"
-              tabIndex={0}
-              className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
-              onClick={(e) => {
-                e.stopPropagation();
-                archiveSession(s.id);
-                if (s.id === sessionId) clearCurrentTab();
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
+            <Hint label={t("nav.sessions.archive")}>
+              <span
+                role="button"
+                tabIndex={0}
+                className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                onClick={(e) => {
                   e.stopPropagation();
                   archiveSession(s.id);
                   if (s.id === sessionId) clearCurrentTab();
-                }
-              }}
-              title={t("nav.sessions.archive")}
-            >
-              <Archive className="size-3" />
-            </span>
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    archiveSession(s.id);
+                    if (s.id === sessionId) clearCurrentTab();
+                  }
+                }}
+              >
+                <Archive className="size-3" />
+              </span>
+            </Hint>
           )}
         </SidebarMenuButton>
       </SidebarMenuItem>
@@ -567,26 +567,33 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
               {showArchived ? t("nav.sessions.archived") : t("nav.sessions.sessions")}
             </span>
             <div className="flex items-center gap-0.5">
-              <button
-                type="button"
-                className={cn(
-                  "flex size-4 items-center justify-center rounded transition-colors",
-                  showArchived ? "text-muted-foreground" : "text-muted-foreground/50 hover:text-muted-foreground",
-                )}
-                onClick={toggleShowArchived}
-                title={showArchived ? t("nav.sessions.showActive") : t("nav.sessions.showArchived")}
+              <Hint
+                label={showArchived ? t("nav.sessions.showActive") : t("nav.sessions.showArchived")}
               >
-                <Archive className="size-3" />
-              </button>
-              <button type="button" className="flex size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors" title={t("nav.sessions.filter")}>
-                <ListFilter className="size-3" />
-              </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "flex size-4 items-center justify-center rounded transition-colors",
+                    showArchived ? "text-muted-foreground" : "text-muted-foreground/50 hover:text-muted-foreground",
+                  )}
+                  onClick={toggleShowArchived}
+                >
+                  <Archive className="size-3" />
+                </button>
+              </Hint>
+              <Hint label={t("nav.sessions.filter")}>
+                <button type="button" className="flex size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+                  <ListFilter className="size-3" />
+                </button>
+              </Hint>
               <AppMenu>
-                <AppMenuTrigger asChild>
-                  <button type="button" className="flex size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors" title={t("nav.sessions.sort")}>
-                    <ArrowUpDown className="size-3" />
-                  </button>
-                </AppMenuTrigger>
+                <Hint label={t("nav.sessions.sort")}>
+                  <AppMenuTrigger asChild>
+                    <button type="button" className="flex size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+                      <ArrowUpDown className="size-3" />
+                    </button>
+                  </AppMenuTrigger>
+                </Hint>
                 <AppMenuContent align="end" className="min-w-[8.5rem]">
                   <AppMenuCheckItem
                     selected={sessionSort === "updated"}
@@ -630,31 +637,14 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
           )}
         </div>
         <SidebarFooter className="px-2 pb-2">
-          <div className="flex items-center gap-0.5">
-            {footerNavItems.map((item) => (
-              <div key={item.id} className="flex-1 min-w-0">
-                <LeftNavButton
-                  item={item}
-                  panelRefs={navPanelRefs}
-                  onPressed={dismissOverlay}
-                />
-              </div>
-            ))}
-            <button
-              type="button"
-              className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors shrink-0"
-              title={t("common.theme", { theme })}
-              onClick={cycleTheme}
-            >
-              {theme === "system" ? (
-                <MonitorIcon className="size-3.5" />
-              ) : resolvedTheme === "dark" ? (
-                <SunIcon className="size-3.5" />
-              ) : (
-                <MoonIcon className="size-3.5" />
-              )}
-            </button>
-          </div>
+          {footerNavItems.map((item) => (
+            <LeftNavButton
+              key={item.id}
+              item={item}
+              panelRefs={navPanelRefs}
+              onPressed={dismissOverlay}
+            />
+          ))}
         </SidebarFooter>
       </Sidebar>
     </SidebarProvider>

@@ -54,6 +54,17 @@ interface CompilerStatus {
   tectonic: boolean;
 }
 
+/** Forward SyncTeX result queued for the TeX PDF preview to consume. */
+export type SynctexForwardTarget = {
+  page: number;
+  x: number;
+  y: number;
+  height: number;
+  width: number;
+  /** Bumps on every request so identical coords still trigger a jump. */
+  rev: number;
+};
+
 interface CompileState {
   isCompiling: boolean;
   compileError: string | null;
@@ -64,6 +75,7 @@ interface CompileState {
   pendingRecompile: boolean;
   lastCompiledRootId: string | null;
   autoCompile: boolean;
+  synctexForwardTarget: SynctexForwardTarget | null;
 
   compile: (projectDir: string, mainFile: string) => Promise<void>;
   setCompilerBackend: (backend: "tectonic" | "texlive") => void;
@@ -73,6 +85,7 @@ interface CompileState {
   clearCompileState: () => void;
   toggleAutoCompile: () => void;
   scheduleAutoCompile: () => void;
+  requestSynctexForward: (result: Omit<SynctexForwardTarget, "rev">) => void;
 }
 
 // ─── Store ───
@@ -93,6 +106,7 @@ export const useCompileStore = create<CompileState>()(
       // already survives app restarts). The toolbar toggle should remain as a
       // quick-access shortcut synchronized with the settings value.
       autoCompile: true,
+      synctexForwardTarget: null,
 
       compile: async (projectDir: string, mainFile: string) => {
         const state = get();
@@ -295,6 +309,16 @@ export const useCompileStore = create<CompileState>()(
           pdfRevision: 0,
           lastCompiledRootId: null,
           pendingRecompile: false,
+          synctexForwardTarget: null,
+        });
+      },
+
+      requestSynctexForward: (result) => {
+        set({
+          synctexForwardTarget: {
+            ...result,
+            rev: (get().synctexForwardTarget?.rev ?? 0) + 1,
+          },
         });
       },
     }),

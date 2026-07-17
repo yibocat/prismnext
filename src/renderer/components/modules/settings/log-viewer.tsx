@@ -18,6 +18,7 @@ import {
   XIcon,
   ScrollTextIcon,
 } from "lucide-react";
+import { Hint } from "@/components/ui/hint";
 
 const CATEGORY_VALUES: Array<LogCategory | "all"> = [
   "all",
@@ -27,6 +28,8 @@ const CATEGORY_VALUES: Array<LogCategory | "all"> = [
   "compile",
   "fs",
   "ipc",
+  "crash",
+  "security",
   "general",
 ];
 
@@ -81,30 +84,32 @@ function LevelChip({
   onClick: () => void;
 }) {
   const { t } = useTranslation();
+  const levelLabel =
+    level === "all"
+      ? t("settings.editor.logs.showAllLevels")
+      : t("settings.editor.logs.showLevelOnly", { level });
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[length:var(--font-size-11)] font-medium transition-colors",
-        active
-          ? "bg-muted text-foreground"
-          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-      )}
-      title={
-        level === "all"
-          ? t("settings.editor.logs.showAllLevels")
-          : t("settings.editor.logs.showLevelOnly", { level })
-      }
-    >
-      {level !== "all" && (
-        <span className={cn("size-1.5 rounded-full", LEVEL_DOT[level])} />
-      )}
-      <span className={level === "all" ? "" : "uppercase tracking-wide"}>{label}</span>
-      {count !== undefined && (
-        <span className="tabular-nums text-muted-foreground/70">{count}</span>
-      )}
-    </button>
+    <Hint label={levelLabel}>
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[length:var(--font-size-11)] font-medium transition-colors",
+          active
+            ? "bg-muted text-foreground"
+            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+        )}
+      >
+        {level !== "all" && (
+          <span className={cn("size-1.5 rounded-full", LEVEL_DOT[level])} />
+        )}
+        <span className={level === "all" ? "" : "uppercase tracking-wide"}>{label}</span>
+        {count !== undefined && (
+          <span className="tabular-nums text-muted-foreground/70">{count}</span>
+        )}
+      </button>
+    </Hint>
   );
 }
 
@@ -198,7 +203,7 @@ export function LogViewer() {
   }, [filterKey]);
 
   const counts = useMemo(() => {
-    const all = [...mainEntries, ...logBuffer].sort((a, b) => a.ts - b.ts || a.id - b.id);
+    const all = [...mainEntries, ...logBuffer];
     const scoped =
       filterCategory === "all"
         ? all
@@ -244,7 +249,7 @@ export function LogViewer() {
             value={filterCategory}
             onValueChange={(v) => setFilterCategory(v as LogCategory | "all")}
           >
-            <AppSelectTrigger className="w-[6.5rem] shrink-0">
+            <AppSelectTrigger className="w-[7.25rem] shrink-0">
               <AppSelectValue />
             </AppSelectTrigger>
             <AppSelectContent className="min-w-[var(--radix-select-trigger-width)]">
@@ -265,30 +270,33 @@ export function LogViewer() {
               className="min-w-0 flex-1 bg-transparent text-[length:var(--font-size-12)] outline-none placeholder:text-muted-foreground/50"
             />
             {search && (
-              <button
-                onClick={() => setSearch("")}
-                className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground"
-                title={t("settings.editor.logs.clearSearch")}
-              >
-                <XIcon className="size-3" />
-              </button>
+              <Hint label={t("settings.editor.logs.clearSearch")}>
+                <button
+                  onClick={() => setSearch("")}
+                  className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground"
+                >
+                  <XIcon className="size-3" />
+                </button>
+              </Hint>
             )}
           </div>
 
-          <button
-            onClick={() => void fetchMainLogs()}
-            className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            title={t("settings.editor.logs.refresh")}
-          >
-            <RotateCwIcon className="size-3.5" />
-          </button>
-          <button
-            onClick={handleExport}
-            className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            title={t("settings.editor.logs.export")}
-          >
-            <DownloadIcon className="size-3.5" />
-          </button>
+          <Hint label={t("settings.editor.logs.refresh")}>
+            <button
+              onClick={() => void fetchMainLogs()}
+              className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <RotateCwIcon className="size-3.5" />
+            </button>
+          </Hint>
+          <Hint label={t("settings.editor.logs.export")}>
+            <button
+              onClick={handleExport}
+              className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <DownloadIcon className="size-3.5" />
+            </button>
+          </Hint>
         </div>
 
         {/* ── Level tabs (exclusive) ── */}

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Undo2Icon } from "lucide-react";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 
 /**
@@ -98,15 +98,16 @@ export function GitChangeStageCheckbox({
   }, [indeterminate, checked]);
 
   return (
-    <input
-      ref={ref}
-      type="checkbox"
-      checked={checked}
-      onClick={onClick}
-      readOnly
-      className="size-3 shrink-0 cursor-pointer accent-primary rounded-sm"
-      title={title}
-    />
+    <Hint label={title}>
+      <input
+        ref={ref}
+        type="checkbox"
+        checked={checked}
+        onClick={onClick}
+        readOnly
+        className="size-3 shrink-0 cursor-pointer accent-primary rounded-sm"
+      />
+    </Hint>
   );
 }
 
@@ -120,24 +121,18 @@ export function GitChangeHeaderDiscardButton({
   return (
     <GitChangeDiscardSlot>
       {visible && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClick();
-              }}
-              className="size-4 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-              title="Discard all unstaged changes"
-            >
-              <Undo2Icon className="size-3" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-[length:var(--font-size-11)]">
-            Discard all
-          </TooltipContent>
-        </Tooltip>
+        <Hint label="Discard all unstaged changes">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClick();
+            }}
+            className="size-4 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            <Undo2Icon className="size-3" />
+          </button>
+        </Hint>
       )}
     </GitChangeDiscardSlot>
   );

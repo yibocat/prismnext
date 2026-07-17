@@ -8,7 +8,7 @@ import { app } from "electron";
 import { createLogger } from "./logger";
 import { extractPdfTextWithPdfJs } from "./literature-extract-pdfjs";
 
-const log = createLogger("prompt-file-attachments");
+const log = createLogger("prompt-file-attachments", "agent");
 const execFileAsync = promisify(execFile);
 
 const MAX_TEXT_CHARS = 200_000;

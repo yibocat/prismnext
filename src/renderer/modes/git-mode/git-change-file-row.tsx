@@ -4,7 +4,7 @@ import { Icon } from "@iconify/react/offline";
 import { useGitStore, type GitFileItem } from "@/stores/git-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import { GitDiffView } from "./git-diff-view";
 import { getFileIconName } from "@/lib/files/file-icon-class";
@@ -132,17 +132,18 @@ export const GitChangeFileRow = memo(function GitChangeFileRow({
           className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 overflow-hidden"
           onClick={handleRowClick}
         >
-          <button
-            type="button"
-            className={cn(
-              "w-fit max-w-full truncate min-w-0 shrink text-left font-medium text-foreground hover:underline",
-              gitChangeRowTextClass,
-            )}
-            onClick={handleOpenInEditor}
-            title={`Open ${file.path} in editor`}
-          >
-            {file.path}
-          </button>
+          <Hint label={`Open ${file.path} in editor`}>
+            <button
+              type="button"
+              className={cn(
+                "w-fit max-w-full truncate min-w-0 shrink text-left font-medium text-foreground hover:underline",
+                gitChangeRowTextClass,
+              )}
+              onClick={handleOpenInEditor}
+            >
+              {file.path}
+            </button>
+          </Hint>
           <GitChangeLineCounts added={file.added} deleted={file.deleted} />
         </div>
 
@@ -150,21 +151,15 @@ export const GitChangeFileRow = memo(function GitChangeFileRow({
 
         <GitChangeDiscardSlot>
           {showDiscard && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={handleDiscard}
-                  className="size-4 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                  title="Discard changes"
-                >
-                  <Undo2Icon className="size-3" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="text-[length:var(--font-size-11)]">
-                Discard
-              </TooltipContent>
-            </Tooltip>
+            <Hint label="Discard changes">
+              <button
+                type="button"
+                onClick={handleDiscard}
+                className="size-4 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              >
+                <Undo2Icon className="size-3" />
+              </button>
+            </Hint>
           )}
         </GitChangeDiscardSlot>
 

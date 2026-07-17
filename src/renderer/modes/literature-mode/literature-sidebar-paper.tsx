@@ -24,6 +24,7 @@ import {
   SidebarContent,
   SidebarHeader,
 } from "@/components/ui/sidebar";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import type { LiteraturePaper } from "@/types/electron.d";
 import {
@@ -206,19 +207,20 @@ export function LiteraturePaperWorkspaceSidebar({ paper }: { paper: LiteraturePa
         />
         <div className="flex-1" />
         {citationTabActive ? (
-          <button
-            type="button"
-            className={headerBtn}
-            title="Refresh citations"
-            disabled={citationNetwork.loading || citationNetwork.refreshing}
-            onClick={() => void citationNetwork.refresh()}
-          >
-            {citationNetwork.refreshing ? (
-              <Loader2Icon className="size-3.5 animate-spin" />
-            ) : (
-              <RefreshCwIcon className="size-3.5" />
-            )}
-          </button>
+          <Hint label="Refresh citations">
+            <button
+              type="button"
+              className={headerBtn}
+              disabled={citationNetwork.loading || citationNetwork.refreshing}
+              onClick={() => void citationNetwork.refresh()}
+            >
+              {citationNetwork.refreshing ? (
+                <Loader2Icon className="size-3.5 animate-spin" />
+              ) : (
+                <RefreshCwIcon className="size-3.5" />
+              )}
+            </button>
+          </Hint>
         ) : null}
       </SidebarHeader>
 
@@ -238,19 +240,20 @@ export function LiteraturePaperWorkspaceSidebar({ paper }: { paper: LiteraturePa
               >
                 {notesFolder.split("/").pop()}
               </span>
-              <button
-                type="button"
-                className={headerBtn}
-                title="New note"
-                disabled={creating}
-                onClick={() => void handleNewNote()}
-              >
-                {creating ? (
-                  <Loader2Icon className="size-3 animate-spin" />
-                ) : (
-                  <PlusIcon className="size-3" />
-                )}
-              </button>
+              <Hint label="New note">
+                <button
+                  type="button"
+                  className={headerBtn}
+                  disabled={creating}
+                  onClick={() => void handleNewNote()}
+                >
+                  {creating ? (
+                    <Loader2Icon className="size-3 animate-spin" />
+                  ) : (
+                    <PlusIcon className="size-3" />
+                  )}
+                </button>
+              </Hint>
             </div>
 
             {notes.length === 0 ? (
@@ -306,17 +309,18 @@ export function LiteraturePaperWorkspaceSidebar({ paper }: { paper: LiteraturePa
                             : "(highlight)"}
                         </span>
                       </button>
-                      <button
-                        type="button"
-                        className={cn(
-                          headerBtn,
-                          "ml-auto opacity-0 group-hover:opacity-100",
-                        )}
-                        title="Delete highlight"
-                        onClick={() => void handleDeleteAnnotation(ann.id)}
-                      >
-                        <Trash2Icon className="size-3" />
-                      </button>
+                      <Hint label="Delete highlight">
+                        <button
+                          type="button"
+                          className={cn(
+                            headerBtn,
+                            "ml-auto opacity-0 group-hover:opacity-100",
+                          )}
+                          onClick={() => void handleDeleteAnnotation(ann.id)}
+                        >
+                          <Trash2Icon className="size-3" />
+                        </button>
+                      </Hint>
                     </div>
                   </li>
                 ))}

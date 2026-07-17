@@ -10,7 +10,7 @@ import { usesProposedChange } from "@/components/modules/chat/tools/tool-meta";
 import { createLogger } from "@/services/logger";
 import { PERMISSION_UI_TIMEOUT_MS } from "../../shared/permission-timeouts";
 
-const log = createLogger("permission-actions");
+const log = createLogger("permission-actions", "agent");
 
 export { PERMISSION_UI_TIMEOUT_MS };
 

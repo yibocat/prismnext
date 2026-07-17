@@ -3,7 +3,8 @@
 
 /* Z-Index layers used by editor:
      z-10: CodeMirror overview ruler
-     z-20: CodeMirror chunk navigator (merge view) */
+     z-20: CodeMirror chunk navigator (merge view)
+     z-25: floating find / replace widget */
 
 :root {
   /* ── Heights ── */
@@ -12,6 +13,7 @@
   --height-tab-bar:            var(--height-base-32);
   --height-changes-bar:        28px;
   --height-search-panel:       var(--height-base-36);
+  --width-search-float:        26rem;
 
   /* ── Font tokens ── */
   /* --font-editor / --font-editor-size are set by theme-generator (Appearance → Editor) */
@@ -21,5 +23,238 @@
   --font-file-tree:     var(--font-size-12);  /* file tree nodes */
   --font-file-tree-node: var(--font-size-14); /* workspace sidebar file tree nodes */
   --font-toc-item:      var(--font-size-12);  /* table-of-contents entries */
-  --font-search-input:  var(--font-size-14);  /* search panel input */
+  --font-search-input:  var(--font-size-13);  /* find float input */
+}
+
+/* ── Prism CodeMirror find / replace — VS Code–style top-right float ── */
+
+.cm-editor {
+  position: relative;
+}
+
+/* Take the panel host out of document flow so it does not push the scroller. */
+.cm-editor .cm-panels.cm-panels-top:has(.prism-cm-search--float) {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  left: auto;
+  width: auto;
+  max-width: calc(100% - 24px);
+  z-index: 25;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+/*
+ * One shared grid for both rows (via display:contents) so:
+ * - column 3 sizes to the wider meta cluster (no empty gap)
+ * - find/replace fields share the same left/right edges
+ */
+.cm-editor .cm-panel.prism-cm-search--float {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  column-gap: 4px;
+  row-gap: 4px;
+  align-items: center;
+  width: min(var(--width-search-float), 100%);
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-12);
+  box-shadow:
+    0 1px 2px color-mix(in oklch, var(--foreground) 6%, transparent),
+    0 8px 24px color-mix(in oklch, var(--foreground) 10%, transparent);
+}
+
+.cm-editor .cm-panel.prism-cm-search--float .prism-cm-search__row {
+  display: contents;
+}
+
+/* When replace is collapsed, hide its three grid children (contents + [hidden] is unreliable). */
+.cm-editor .cm-panel.prism-cm-search--float:not(.prism-cm-search--replace-open)
+  .prism-cm-search__row--replace
+  > * {
+  display: none;
+}
+
+.cm-editor .cm-panel.prism-cm-search--float .prism-cm-search__gutter {
+  width: 24px;
+  height: 24px;
+}
+
+.cm-editor .cm-panel.prism-cm-search--float .prism-cm-search__field {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--background);
+}
+
+.cm-editor .cm-panel.prism-cm-search--float .prism-cm-search__field:focus-within {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--ring) 40%, transparent);
+}
+
+.cm-editor .cm-panel.prism-cm-search--float.prism-cm-search--invalid
+  .prism-cm-search__field:has(.prism-cm-search__input.is-invalid) {
+  border-color: var(--destructive);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--destructive) 35%, transparent);
+}
+
+.cm-editor .cm-panel.prism-cm-search--float .prism-cm-search__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0 6px;
+  border: none;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--foreground);
+  font-size: var(--font-search-input);
+  font-family: var(--font-sans);
+  outline: none;
+  box-shadow: none;
+}
+
+.cm-editor .cm-panel.prism-cm-search--float .prism-cm-search__input::placeholder {
+  color: var(--muted-foreground);
+}
+
+.cm-editor .cm-panel.prism-cm-search--float .prism-cm-search__toggles {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+  height: 100%;
+  padding: 0 3px 0 2px;
+}
+
+.cm-editor .cm-panel.prism-cm-search--float .prism-cm-search__meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1px;
+}
+
+.cm-editor .cm-panel.prism-cm-search--float .prism-cm-search__count {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 2px;
+  text-align: right;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--font-size-11);
+  line-height: 24px;
+  user-select: none;
+  white-space: nowrap;
+}
+
+/*
+ * Match app toolbar icon buttons (size-6 / 24×24, no UA chrome).
+ * High specificity beats CodeMirror panel + browser button defaults.
+ */
+.cm-editor .cm-panel.prism-cm-search--float button.prism-cm-search__btn {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  max-width: 24px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-11);
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.cm-editor .cm-panel.prism-cm-search--float button.prism-cm-search__btn:hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.cm-editor .cm-panel.prism-cm-search--float button.prism-cm-search__btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--ring) 50%, transparent);
+}
+
+/*
+ * In-field toggles: compact chips inside the 24px input (not full size-6).
+ * Idle = quiet text; active = small accent chip — must not inflate the field.
+ */
+.cm-editor .cm-panel.prism-cm-search--float
+  .prism-cm-search__toggles
+  button.prism-cm-search__btn {
+  width: auto;
+  min-width: 16px;
+  max-width: none;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+.cm-editor .cm-panel.prism-cm-search--float
+  .prism-cm-search__toggles
+  button.prism-cm-search__btn:hover {
+  background: color-mix(in oklch, var(--muted) 70%, transparent);
+  color: var(--foreground);
+}
+
+.cm-editor .cm-panel.prism-cm-search--float
+  .prism-cm-search__toggles
+  button.prism-cm-search__btn.is-active {
+  background: var(--accent);
+  color: var(--foreground);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--border) 70%, transparent);
+}
+
+.cm-editor .cm-panel.prism-cm-search--float button.prism-cm-search__btn--word {
+  text-decoration: underline;
+  text-underline-offset: 1px;
+}
+
+.cm-editor .cm-panel.prism-cm-search--float button.prism-cm-search__btn--re {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  padding: 0 2px;
+}
+
+/* Text actions: same 24px height as toolbar text buttons, not square */
+.cm-editor .cm-panel.prism-cm-search--float button.prism-cm-search__btn.prism-cm-search__text-btn {
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  height: 24px;
+  padding: 0 6px;
+  font-size: var(--font-size-12);
+}
+
+.cm-editor .cm-panel.prism-cm-search--float button.prism-cm-search__btn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
 }

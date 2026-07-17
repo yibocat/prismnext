@@ -1,7 +1,6 @@
 import { createPortal } from "react-dom";
 import type { RefObject } from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
-import { useTheme } from "next-themes";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -23,9 +22,6 @@ import {
   FileTextIcon,
   LayoutGridIcon,
   XIcon,
-  SunIcon,
-  MoonIcon,
-  MonitorIcon,
   Bot,
   BookOpenIcon,
   PuzzleIcon,
@@ -81,13 +77,6 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
   const { platform, isFullscreen } = useWindowState();
   const isMac = platform === "darwin";
   const showMacSpacer = isMac && !isFullscreen;
-  const { theme, resolvedTheme, setTheme } = useTheme();
-
-  const cycleTheme = () => {
-    if (theme === "light") setTheme("dark");
-    else if (theme === "dark") setTheme("system");
-    else setTheme("light");
-  };
 
   const sidebarFullyCollapsed = useLayoutStore((s) => s.sidebarFullyCollapsed);
   const leftSidebarOverlay = useLayoutStore((s) => s.leftSidebarOverlay);
@@ -140,36 +129,20 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
         </div>
 
         <SidebarFooter className="px-2 pb-2">
-          <div className="flex items-center gap-0.5">
-            <button
-              type="button"
-              className="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-              onClick={() => {
-                if (!projectRoot) {
-                  useDocumentStore.getState().setShowWelcome(true);
-                }
-                useLayoutStore.getState().setLeftSidebarView("sessions");
-                setLeftSidebarOverlay(false);
-              }}
-            >
-              <ArrowLeftIcon className="size-3.5 shrink-0" />
-              <span>{t("common.back")}</span>
-            </button>
-            <button
-              type="button"
-              className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors shrink-0"
-              title={t("common.theme", { theme })}
-              onClick={cycleTheme}
-            >
-              {theme === "system" ? (
-                <MonitorIcon className="size-3.5" />
-              ) : resolvedTheme === "dark" ? (
-                <SunIcon className="size-3.5" />
-              ) : (
-                <MoonIcon className="size-3.5" />
-              )}
-            </button>
-          </div>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+            onClick={() => {
+              if (!projectRoot) {
+                useDocumentStore.getState().setShowWelcome(true);
+              }
+              useLayoutStore.getState().setLeftSidebarView("sessions");
+              setLeftSidebarOverlay(false);
+            }}
+          >
+            <ArrowLeftIcon className="size-3.5 shrink-0" />
+            <span>{t("common.back")}</span>
+          </button>
         </SidebarFooter>
       </Sidebar>
     </SidebarProvider>

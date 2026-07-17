@@ -68,6 +68,11 @@ export function shouldDenyOrchestratorBuiltinTask(
   return isOpencodeBuiltinTaskSubagent(subagentId);
 }
 
+export {
+  formatOrchestratorBuiltinTaskDeniedMessage,
+  isOpaqueTaskCancelledResult,
+} from "../../shared/task-deny-message";
+
 /** Orchestrator Task allowlist — deny OpenCode built-ins + wildcard; allow prismnext experts only. */
 export function buildTaskPermissionBlock(allowedExpertIds: string[]): Record<string, string> {
   const rules: Record<string, string> = { "*": "deny" };

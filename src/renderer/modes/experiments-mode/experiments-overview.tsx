@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { CheckIcon, CopyIcon, Loader2Icon, RefreshCwIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
 import { literatureDetailBadgeClass } from "@/modes/literature-mode/literature-list-chrome";
@@ -63,40 +64,43 @@ function CopyableText({
   );
 
   return (
-    <button
-      type="button"
-      onClick={() => {
-        void navigator.clipboard.writeText(payload).then(() => {
-          setCopied(true);
-          if (timerRef.current != null) window.clearTimeout(timerRef.current);
-          timerRef.current = window.setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
-        });
-      }}
-      className={cn(
-        "group inline-flex max-w-full items-baseline gap-1.5 text-left transition-colors",
-        experimentsUiValueClass,
-        "rounded-[3px] hover:text-foreground",
-        className,
-      )}
-      title={
+    <Hint
+      label={
         copied
           ? t("common.copied")
           : t("experiments.detail.clickToCopy", { text: payload })
       }
     >
-      <span className="min-w-0 break-all">{text}</span>
-      {copied ? (
-        <CheckIcon
-          className="size-3 shrink-0 self-center text-success"
-          aria-label={t("common.copied")}
-        />
-      ) : (
-        <CopyIcon
-          className="size-3 shrink-0 self-center text-muted-foreground/45 opacity-0 transition-opacity group-hover:opacity-100"
-          aria-hidden
-        />
-      )}
-    </button>
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard.writeText(payload).then(() => {
+            setCopied(true);
+            if (timerRef.current != null) window.clearTimeout(timerRef.current);
+            timerRef.current = window.setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
+          });
+        }}
+        className={cn(
+          "group inline-flex max-w-full items-baseline gap-1.5 text-left transition-colors",
+          experimentsUiValueClass,
+          "rounded-[3px] hover:text-foreground",
+          className,
+        )}
+      >
+        <span className="min-w-0 break-all">{text}</span>
+        {copied ? (
+          <CheckIcon
+            className="size-3 shrink-0 self-center text-success"
+            aria-label={t("common.copied")}
+          />
+        ) : (
+          <CopyIcon
+            className="size-3 shrink-0 self-center text-muted-foreground/45 opacity-0 transition-opacity group-hover:opacity-100"
+            aria-hidden
+          />
+        )}
+      </button>
+    </Hint>
   );
 }
 
@@ -186,22 +190,23 @@ export function ExperimentsEnvironmentPanel({
         <h3 className={experimentsSectionLabelClass}>
           {t("experiments.overview.environment")}
         </h3>
-        <Button
-          type="button"
-          size="xs"
-          variant="ghost"
-          className="h-6 gap-1 px-1.5 text-muted-foreground hover:text-foreground"
-          onClick={onRefresh}
-          disabled={reloading}
-          title={t("experiments.overview.redetect")}
-        >
-          {reloading ? (
-            <Loader2Icon className="size-3 animate-spin" aria-hidden />
-          ) : (
-            <RefreshCwIcon className="size-3" aria-hidden />
-          )}
-          <span className="sr-only">{t("experiments.refresh")}</span>
-        </Button>
+        <Hint label={t("experiments.overview.redetect")}>
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            className="h-6 gap-1 px-1.5 text-muted-foreground hover:text-foreground"
+            onClick={onRefresh}
+            disabled={reloading}
+          >
+            {reloading ? (
+              <Loader2Icon className="size-3 animate-spin" aria-hidden />
+            ) : (
+              <RefreshCwIcon className="size-3" aria-hidden />
+            )}
+            <span className="sr-only">{t("experiments.refresh")}</span>
+          </Button>
+        </Hint>
       </div>
 
       {!env ? (

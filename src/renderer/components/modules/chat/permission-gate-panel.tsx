@@ -7,6 +7,7 @@ import {
   FileDiffIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Hint } from "@/components/ui/hint";
 import { i18n } from "@/lib/i18n";
 import { useChatStore, type ContentBlock } from "@/stores/chat-store";
 import { usePermissionStore, type PendingPermission } from "@/stores/permission-store";
@@ -235,6 +236,11 @@ export function PermissionGatePanel() {
   if (!show || !permission || !summary) return null;
 
   const mode = resolvePermissionMode(permissionMode) as PermissionMode;
+  const alwaysLabel = toolName
+    ? isBashToolName(toolName) || toolName === "experiment-run"
+      ? t("dialogs.permission.alwaysBash")
+      : t("dialogs.permission.alwaysTool", { tool: toolName })
+    : t("dialogs.permission.alwaysGeneric");
 
   return (
     <div
@@ -270,25 +276,20 @@ export function PermissionGatePanel() {
         >
           {t("dialogs.permission.deny")}
         </button>
-        <button
-          type="button"
-          className={cn(
-            "rounded px-2 py-1 text-muted-foreground transition-colors",
-            "hover:bg-accent hover:text-accent-foreground",
-            "disabled:pointer-events-none disabled:opacity-40",
-          )}
-          onClick={() => void allow(true)}
-          disabled={resolving || !toolName}
-          title={
-            toolName
-              ? isBashToolName(toolName) || toolName === "experiment-run"
-                ? t("dialogs.permission.alwaysBash")
-                : t("dialogs.permission.alwaysTool", { tool: toolName })
-              : t("dialogs.permission.alwaysGeneric")
-          }
-        >
-          {t("dialogs.permission.always")}
-        </button>
+        <Hint label={alwaysLabel}>
+          <button
+            type="button"
+            className={cn(
+              "rounded px-2 py-1 text-muted-foreground transition-colors",
+              "hover:bg-accent hover:text-accent-foreground",
+              "disabled:pointer-events-none disabled:opacity-40",
+            )}
+            onClick={() => void allow(true)}
+            disabled={resolving || !toolName}
+          >
+            {t("dialogs.permission.always")}
+          </button>
+        </Hint>
         <button
           type="button"
           className={cn(

@@ -1,6 +1,7 @@
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { FileCode2Icon, EyeIcon, AlignCenterIcon, RefreshCwIcon } from "lucide-react";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import { LiteratureNoteLinkButton } from "./literature-note-link";
 
@@ -37,38 +38,41 @@ export function MarkdownToolbarControls({
 
   return (
     <>
-      <button
-        type="button"
-        className={cn(MARKDOWN_TOOLBAR_BTN, mdWidthLimited && "text-foreground")}
-        title={mdWidthLimited ? "Full width" : "Limit width"}
-        onClick={() => setMdWidthLimited(!mdWidthLimited)}
-      >
-        <AlignCenterIcon className="size-3.5" />
-      </button>
-      {showViewToggle && onViewModeChange ? (
+      <Hint label={mdWidthLimited ? "Full width" : "Limit width"}>
         <button
           type="button"
-          className={MARKDOWN_TOOLBAR_BTN}
-          title={isPreview ? "Source view" : "Rendered view"}
-          onClick={() => onViewModeChange(isPreview ? "source" : "preview")}
+          className={cn(MARKDOWN_TOOLBAR_BTN, mdWidthLimited && "text-foreground")}
+          onClick={() => setMdWidthLimited(!mdWidthLimited)}
         >
-          {isPreview ? (
-            <FileCode2Icon className="size-3.5" />
-          ) : (
-            <EyeIcon className="size-3.5" />
-          )}
+          <AlignCenterIcon className="size-3.5" />
         </button>
+      </Hint>
+      {showViewToggle && onViewModeChange ? (
+        <Hint label={isPreview ? "Source view" : "Rendered view"}>
+          <button
+            type="button"
+            className={MARKDOWN_TOOLBAR_BTN}
+            onClick={() => onViewModeChange(isPreview ? "source" : "preview")}
+          >
+            {isPreview ? (
+              <FileCode2Icon className="size-3.5" />
+            ) : (
+              <EyeIcon className="size-3.5" />
+            )}
+          </button>
+        </Hint>
       ) : null}
       {onRefresh ? (
-        <button
-          type="button"
-          className={MARKDOWN_TOOLBAR_BTN}
-          title="Refresh"
-          disabled={refreshing}
-          onClick={onRefresh}
-        >
-          <RefreshCwIcon className={cn("size-3.5", refreshing && "animate-spin")} />
-        </button>
+        <Hint label="Refresh">
+          <button
+            type="button"
+            className={MARKDOWN_TOOLBAR_BTN}
+            disabled={refreshing}
+            onClick={onRefresh}
+          >
+            <RefreshCwIcon className={cn("size-3.5", refreshing && "animate-spin")} />
+          </button>
+        </Hint>
       ) : null}
     </>
   );

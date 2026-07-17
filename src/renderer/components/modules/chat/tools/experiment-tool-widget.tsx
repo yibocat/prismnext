@@ -8,6 +8,7 @@ import {
   openExperimentInPanel,
   resolveExperimentIdFromTool,
 } from "@/modes/experiments-mode/open-experiment";
+import { Hint } from "@/components/ui/hint";
 
 const LABELS: Record<string, string> = {
   "experiment-log": "Experiment log",
@@ -406,18 +407,19 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
       label={<span className="truncate font-medium">{label}</span>}
       headerEnd={
         canOpenInExperiments ? (
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 shrink-0 text-[length:var(--font-chat-meta)] text-muted-foreground hover:text-foreground transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              void openExperimentInPanel(experimentId!);
-            }}
-            title="Open in Experiments"
-          >
-            <ExternalLinkIcon className="size-3" />
-            Experiments
-          </button>
+          <Hint label="Open in Experiments">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 shrink-0 text-[length:var(--font-chat-meta)] text-muted-foreground hover:text-foreground transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                void openExperimentInPanel(experimentId!);
+              }}
+            >
+              <ExternalLinkIcon className="size-3" />
+              Experiments
+            </button>
+          </Hint>
         ) : null
       }
       expanded={expanded}

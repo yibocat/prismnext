@@ -81,7 +81,7 @@
       "keyboardShortcutsDesc": "已接入與計劃中的快捷鍵參考。macOS 為 ⌘；Windows/Linux 為 Ctrl。",
       "logs": "日誌",
       "applicationLogs": "應用日誌",
-      "applicationLogsDesc": "瀏覽、篩選、搜尋並匯出主程序日誌。",
+      "applicationLogsDesc": "瀏覽、篩選、搜尋並匯出應用日誌（主進程與介面）。",
       "open": "開啟"
     },
     "slots": {
@@ -610,29 +610,36 @@
     },
     "shortcuts": {
       "title": "快捷鍵",
-      "subtitle": "區分已接入與計劃中。狀態以應用內實際 wiring 為準，而非設計文件。",
+      "subtitle": "殼層與編輯器為系統預設、不可修改；工作區與產品快捷鍵將支援自訂。Tooltip 始終顯示解析後的鍵位。",
       "groups": {
         "global": "全域性",
         "rightPanel": "工作區（右側面板）",
         "editor": "編輯器",
-        "chat": "聊天",
+        "chat": "聊天與產品",
         "changes": "更改（合併檢視）"
       },
       "status": {
         "active": "已生效",
         "placed": "僅 UI",
-        "planned": "計劃中"
+        "planned": "計劃中",
+        "fixed": "固定"
       },
       "items": {
-        "closeTab": "關閉當前標籤（聊天或工作區）",
+        "closeTab": "關閉：工作區標籤 → 聊天標籤 → 視窗（不退出應用）",
+        "closeWindow": "立即關閉視窗",
         "toggleSidebar": "切換左側邊欄",
+        "toggleRightArea": "切換 RightArea 面板",
+        "openSettings": "開啟設定",
         "commandPalette": "開啟命令面板",
         "newAgent": "新建 Agent 會話",
+        "quit": "結束 prismnext",
+        "hide": "隱藏 prismnext",
+        "minimize": "最小化視窗",
         "nextWorkspaceTab": "當前工作區模式下的下一個標籤",
         "prevWorkspaceTab": "當前工作區模式下的上一個標籤",
         "gitRefresh": "重新整理 Git 狀態或歷史",
         "insertToChat": "將選區插入聊天（編輯器、差異、終端）",
-        "saveFile": "儲存檔案（TeX 工作區儲存時也會編譯）",
+        "saveFile": "儲存當前工作區檔案（TeX 儲存時也會編譯）",
         "compile": "編譯當前文件",
         "searchFile": "在檔案中搜索",
         "bold": "將選區包裹為 \\textbf{}",
@@ -959,6 +966,8 @@
           "compile": "編譯",
           "fs": "檔案",
           "ipc": "IPC",
+          "crash": "崩潰",
+          "security": "安全",
           "general": "常規"
         },
         "level": {
@@ -970,7 +979,7 @@
         },
         "showAllLevels": "顯示所有級別",
         "showLevelOnly": "僅顯示 {{level}}",
-        "searchPlaceholder": "搜尋訊息與模組…",
+        "searchPlaceholder": "搜尋訊息、模組與詳情…",
         "clearSearch": "清除搜尋",
         "refresh": "重新整理",
         "export": "匯出日誌",
@@ -1190,6 +1199,71 @@
       "createFailed": "建立專案失敗"
     }
   },
+  "editor": {
+    "findPanel": {
+      "find": "尋找",
+      "replace": "取代",
+      "replaceAll": "全部",
+      "matchCase": "區分大小寫",
+      "wholeWord": "全詞符合",
+      "regexp": "使用正規表示式",
+      "previous": "上一個符合項",
+      "next": "下一個符合項",
+      "close": "關閉",
+      "toggleReplace": "展開／收起取代"
+    }
+  },
+  "shortcuts": {
+    "shell": {
+      "close": "關閉：工作區標籤 → 聊天標籤 → 視窗",
+      "closeWindow": "關閉視窗",
+      "saveFile": "儲存當前工作區檔案",
+      "toggleLeftSidebar": "切換左側邊欄",
+      "toggleRightArea": "切換 RightArea",
+      "toggleRightAreaMaximize": "最大化 RightArea（再按還原或關閉）",
+      "openSettings": "開啟設定",
+      "commandPalette": "開啟命令面板"
+    },
+    "editor": {
+      "find": "在檔案中尋找",
+      "bold": "粗體（\\textbf{}）",
+      "italic": "斜體（\\textit{}）",
+      "comment": "切換註釋",
+      "closeSearch": "關閉搜尋面板",
+      "synctex": "正向 SyncTeX 到 PDF"
+    },
+    "workspace": {
+      "nextTab": "下一個工作區標籤",
+      "prevTab": "上一個工作區標籤",
+      "gitRefresh": "重新整理 Git 狀態或歷史",
+      "insertToChat": "將選區插入聊天",
+      "openTexWorkspace": "開啟 TeX 工作區（分欄）",
+      "openTexWorkspaceMaximize": "開啟 TeX 工作區（最大化）",
+      "openLiterature": "開啟文獻庫（分欄）",
+      "openLiteratureMaximize": "開啟文獻庫（最大化）",
+      "openExperiments": "開啟實驗（分欄）",
+      "openExperimentsMaximize": "開啟實驗（最大化）",
+      "openFiles": "開啟檔案（分欄）",
+      "openFilesMaximize": "開啟檔案（最大化）",
+      "openGit": "開啟 Git（分欄）",
+      "openGitMaximize": "開啟 Git（最大化）",
+      "openBrowser": "開啟瀏覽器（分欄）",
+      "openBrowserMaximize": "開啟瀏覽器（最大化）",
+      "openTerminal": "開啟終端（分欄）",
+      "openTerminalMaximize": "開啟終端（最大化）"
+    },
+    "product": {
+      "focusAiBar": "聚焦聊天輸入框",
+      "newChat": "新建聊天標籤",
+      "nextChat": "下一個聊天標籤",
+      "prevChat": "上一個聊天標籤",
+      "compile": "編譯文件",
+      "acceptChange": "接受當前更改",
+      "rejectChange": "拒絕當前更改",
+      "acceptAll": "接受全部更改",
+      "rejectAll": "拒絕全部更改"
+    }
+  },
   "shell": {
     "notify": {
       "replyFinished": "回覆已完成",
@@ -1284,6 +1358,17 @@
       "newChat": "新對話",
       "chat": "聊天"
     },
+    "openTabs": {
+      "label": "開啟的對話",
+      "close": "關閉對話標籤",
+      "closeDisabledStreaming": "智慧體執行中無法關閉",
+      "unsavedSession": "尚未儲存為會話",
+      "mergesInto": "合併到 {{branch}}",
+      "worktreeRemoved": "Worktree 已移除 — 會話保留在專案上",
+      "citationsCount": "{{count}} 條暫存引用",
+      "citationsCount_plural": "{{count}} 條暫存引用",
+      "citationsNone": "暫無暫存引用"
+    },
     "aibar": {
       "done": "完成",
       "running": "執行中",
@@ -1365,6 +1450,13 @@
     },
     "messages": {
       "loading": "正在載入對話…"
+    },
+    "prepare": {
+      "thinking": "思考中…",
+      "syncing_project": "正在準備專案…",
+      "creating_session": "正在建立會話…",
+      "connecting_mcp": "正在連接工具…",
+      "starting_model": "正在啟動模型…"
     }
   },
   "modes": {

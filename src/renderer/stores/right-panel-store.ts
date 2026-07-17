@@ -78,8 +78,12 @@ interface RightPanelState {
   setBrowserTabLoading: (id: string, isLoading: boolean) => void;
   setTabHibernated: (id: string, hibernated: boolean) => void;
   closeTab: (id: string) => void;
-  /** Close with unsaved/busy confirmation. Returns false if user cancelled. */
-  requestCloseTab: (id: string) => boolean;
+  /**
+   * Close with unsaved/busy confirmation.
+   * Returns false when a confirmation dialog was shown (close deferred) or tab missing.
+   * `onAfterClose` runs after the tab is actually removed (immediate or post-confirm).
+   */
+  requestCloseTab: (id: string, options?: { onAfterClose?: () => void }) => boolean;
   closeAllTabs: () => void;
   /** Remove all tabs of a specific kind (used when deactivating transient modes) */
   closeTabsOfKind: (kind: RightTabKind, options?: { onClosed?: () => void }) => void;
@@ -493,9 +497,14 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     get().requestCloseTab(id);
   },
 
-  requestCloseTab: (id: string) => {
+  requestCloseTab: (id, options) => {
     const closingTab = get().tabs.find((t) => t.id === id);
     if (!closingTab) return false;
+
+    const finish = () => {
+      performCloseTab(id);
+      options?.onAfterClose?.();
+    };
 
     const confirmation = getTabCloseConfirmation(closingTab);
     if (confirmation) {
@@ -514,13 +523,13 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
               void window.electronAPI.chatCancel(sessionId);
             }
           }
-          performCloseTab(id);
+          finish();
         },
       });
       return false;
     }
 
-    performCloseTab(id);
+    finish();
     return true;
   },
 

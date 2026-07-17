@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import type { PaperExtractSource } from "@/types/electron.d";
 import { EXTRACT_BATCH_MAX_PAPERS } from "../../../shared/paper-extract";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 
 const batchToolbarBtnClass = (compact: boolean) =>
@@ -134,49 +135,53 @@ export function LiteratureBatchSelectionActions({
       >
         {compact ? checkedPaperIds.length : selectedLabel}
       </span>
-      <Button
-        size="xs"
-        variant="ghost"
-        className={batchToolbarBtnClass(compact)}
-        onClick={() => void handleBatchExtract()}
-        title={t("literature.batch.extract")}
-      >
-        <FileTextIcon className={cn("size-3.5 shrink-0", !compact && "mr-1")} />
-        {!compact ? <span>{t("literature.batch.extract")}</span> : null}
-      </Button>
-      <Button
-        size="xs"
-        variant="ghost"
-        className={batchToolbarBtnClass(compact)}
-        onClick={() => void handleBatchAddToManuscriptBib()}
-        title={t("literature.batch.toBib")}
-      >
-        <BookMarkedIcon className={cn("size-3.5 shrink-0", !compact && "mr-1")} />
-        {!compact ? <span>{t("literature.batch.toBib")}</span> : null}
-      </Button>
-      <Button
-        size="xs"
-        variant="ghost"
-        className={batchToolbarBtnClass(compact)}
-        onClick={() => void handleBatchExport()}
-        title={t("literature.batch.exportBib")}
-      >
-        <FileDownIcon className={cn("size-3.5 shrink-0", !compact && "mr-1")} />
-        {!compact ? <span>{t("literature.batch.exportBib")}</span> : null}
-      </Button>
-      <Button
-        size="xs"
-        variant="ghost"
-        className={cn(
-          batchToolbarBtnClass(compact),
-          "text-muted-foreground hover:text-destructive",
-        )}
-        onClick={() => setDeleteOpen(true)}
-        title={t("common.delete")}
-      >
-        <Trash2Icon className={cn("size-3.5 shrink-0", !compact && "mr-1")} />
-        {!compact ? <span>{t("common.delete")}</span> : null}
-      </Button>
+      <Hint label={t("literature.batch.extract")}>
+        <Button
+          size="xs"
+          variant="ghost"
+          className={batchToolbarBtnClass(compact)}
+          onClick={() => void handleBatchExtract()}
+        >
+          <FileTextIcon className={cn("size-3.5 shrink-0", !compact && "mr-1")} />
+          {!compact ? <span>{t("literature.batch.extract")}</span> : null}
+        </Button>
+      </Hint>
+      <Hint label={t("literature.batch.toBib")}>
+        <Button
+          size="xs"
+          variant="ghost"
+          className={batchToolbarBtnClass(compact)}
+          onClick={() => void handleBatchAddToManuscriptBib()}
+        >
+          <BookMarkedIcon className={cn("size-3.5 shrink-0", !compact && "mr-1")} />
+          {!compact ? <span>{t("literature.batch.toBib")}</span> : null}
+        </Button>
+      </Hint>
+      <Hint label={t("literature.batch.exportBib")}>
+        <Button
+          size="xs"
+          variant="ghost"
+          className={batchToolbarBtnClass(compact)}
+          onClick={() => void handleBatchExport()}
+        >
+          <FileDownIcon className={cn("size-3.5 shrink-0", !compact && "mr-1")} />
+          {!compact ? <span>{t("literature.batch.exportBib")}</span> : null}
+        </Button>
+      </Hint>
+      <Hint label={t("common.delete")}>
+        <Button
+          size="xs"
+          variant="ghost"
+          className={cn(
+            batchToolbarBtnClass(compact),
+            "text-muted-foreground hover:text-destructive",
+          )}
+          onClick={() => setDeleteOpen(true)}
+        >
+          <Trash2Icon className={cn("size-3.5 shrink-0", !compact && "mr-1")} />
+          {!compact ? <span>{t("common.delete")}</span> : null}
+        </Button>
+      </Hint>
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-sm">

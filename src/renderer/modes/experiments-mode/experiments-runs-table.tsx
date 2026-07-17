@@ -21,6 +21,7 @@ import {
   PenLineIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/hint";
 import { Input } from "@/components/ui/input";
 import {
   AppSelect,
@@ -120,25 +121,27 @@ function ArtifactChip({
 
   return (
     <span className="inline-flex items-center gap-0.5">
-      <button
-        type="button"
-        onClick={() => void openArtifactPathInFiles(path, workspacePath)}
-        className="inline-flex h-6 items-center gap-1 rounded-md border border-border/55 bg-background px-2 text-[length:var(--font-menu-item)] text-foreground/90 transition-colors hover:bg-accent hover:text-foreground"
-        title={fullPath}
-      >
-        <FileIcon className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
-        <span className="max-w-[14rem] truncate">{name}</span>
-      </button>
-      {onInspect ? (
+      <Hint label={fullPath}>
         <button
           type="button"
-          onClick={() => onInspect(path)}
-          title={t("experiments.runs.viewProvenance")}
-          aria-label={`${t("experiments.runs.viewProvenance")}: ${name}`}
-          className="inline-flex h-6 items-center rounded-md border border-border/55 bg-background px-1 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+          onClick={() => void openArtifactPathInFiles(path, workspacePath)}
+          className="inline-flex h-6 items-center gap-1 rounded-md border border-border/55 bg-background px-2 text-[length:var(--font-menu-item)] text-foreground/90 transition-colors hover:bg-accent hover:text-foreground"
         >
-          <Link2Icon className="size-3" aria-hidden />
+          <FileIcon className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
+          <span className="max-w-[14rem] truncate">{name}</span>
         </button>
+      </Hint>
+      {onInspect ? (
+        <Hint label={t("experiments.runs.viewProvenance")}>
+          <button
+            type="button"
+            onClick={() => onInspect(path)}
+            aria-label={`${t("experiments.runs.viewProvenance")}: ${name}`}
+            className="inline-flex h-6 items-center rounded-md border border-border/55 bg-background px-1 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Link2Icon className="size-3" aria-hidden />
+          </button>
+        </Hint>
       ) : null}
     </span>
   );
@@ -307,28 +310,31 @@ function RunDetailPanel({
               />
             ))}
             {showArtifactFold ? (
-              <button
-                type="button"
-                onClick={() => setArtifactsExpanded((v) => !v)}
-                aria-expanded={artifactsExpanded}
-                className="inline-flex h-6 items-center gap-1 rounded-md border border-border/55 bg-background px-2 text-[length:var(--font-menu-item)] text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
-                title={
+              <Hint
+                label={
                   artifactsExpanded
                     ? t("experiments.runs.showLess")
                     : t("experiments.runs.showMoreArtifacts", { count: hiddenArtifactCount })
                 }
               >
-                <ChevronDownIcon
-                  className={cn(
-                    "size-3 shrink-0 text-muted-foreground/60 transition-transform",
-                    artifactsExpanded && "rotate-180",
-                  )}
-                  aria-hidden
-                />
-                {artifactsExpanded
-                  ? t("experiments.runs.showLess")
-                  : t("experiments.runs.moreArtifactsShort", { count: hiddenArtifactCount })}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setArtifactsExpanded((v) => !v)}
+                  aria-expanded={artifactsExpanded}
+                  className="inline-flex h-6 items-center gap-1 rounded-md border border-border/55 bg-background px-2 text-[length:var(--font-menu-item)] text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <ChevronDownIcon
+                    className={cn(
+                      "size-3 shrink-0 text-muted-foreground/60 transition-transform",
+                      artifactsExpanded && "rotate-180",
+                    )}
+                    aria-hidden
+                  />
+                  {artifactsExpanded
+                    ? t("experiments.runs.showLess")
+                    : t("experiments.runs.moreArtifactsShort", { count: hiddenArtifactCount })}
+                </button>
+              </Hint>
             ) : null}
           </div>
         </div>
@@ -349,42 +355,44 @@ function RunDetailPanel({
         <span>
           {envSummary(run.env, t("experiments.runs.noPython"), t("experiments.runs.venv"))}
         </span>
-        <button
-          type="button"
-          className="inline-flex h-6 items-center gap-1 rounded-md border border-border/55 bg-background px-2 text-[length:var(--font-menu-item)] text-foreground/85 transition-colors hover:bg-accent hover:text-foreground"
-          title={t("experiments.runs.sendToChat")}
-          onClick={() =>
-            insertExperimentRunToChat({
-              runId: run.runId,
-              experimentId: experimentId ?? undefined,
-              command: run.command,
-              exitCode: run.exitCode,
-              startedAt: run.startedAt,
-              finishedAt: run.finishedAt,
-              artifacts: run.artifacts ?? [],
-              env: run.env,
-              chatSessionId: run.chatSessionId ?? null,
-              workspacePath,
-              runKind: run.kind,
-              notes: run.notes,
-              logPath: run.logPath ?? null,
-              intent: "cite-in-paper",
-            })
-          }
-        >
-          <PenLineIcon className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
-          {t("experiments.runs.useInPaper")}
-        </button>
-        {run.logPath ? (
+        <Hint label={t("experiments.runs.sendToChat")}>
           <button
             type="button"
             className="inline-flex h-6 items-center gap-1 rounded-md border border-border/55 bg-background px-2 text-[length:var(--font-menu-item)] text-foreground/85 transition-colors hover:bg-accent hover:text-foreground"
-            title={artifactFullPath(run.logPath, workspacePath)}
-            onClick={() => void openArtifactPathInFiles(run.logPath!, workspacePath)}
+            onClick={() =>
+              insertExperimentRunToChat({
+                runId: run.runId,
+                experimentId: experimentId ?? undefined,
+                command: run.command,
+                exitCode: run.exitCode,
+                startedAt: run.startedAt,
+                finishedAt: run.finishedAt,
+                artifacts: run.artifacts ?? [],
+                env: run.env,
+                chatSessionId: run.chatSessionId ?? null,
+                workspacePath,
+                runKind: run.kind,
+                notes: run.notes,
+                logPath: run.logPath ?? null,
+                intent: "cite-in-paper",
+              })
+            }
           >
-            <FileTextIcon className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
-            {t("experiments.runs.openFullLog")}
+            <PenLineIcon className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
+            {t("experiments.runs.useInPaper")}
           </button>
+        </Hint>
+        {run.logPath ? (
+          <Hint label={artifactFullPath(run.logPath, workspacePath)}>
+            <button
+              type="button"
+              className="inline-flex h-6 items-center gap-1 rounded-md border border-border/55 bg-background px-2 text-[length:var(--font-menu-item)] text-foreground/85 transition-colors hover:bg-accent hover:text-foreground"
+              onClick={() => void openArtifactPathInFiles(run.logPath!, workspacePath)}
+            >
+              <FileTextIcon className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
+              {t("experiments.runs.openFullLog")}
+            </button>
+          </Hint>
         ) : null}
       </div>
     </div>
@@ -647,31 +655,33 @@ export function ExperimentsRunsTable({
                   })}
                 </span>
                 <div className="flex items-center gap-0.5">
-                  <Button
-                    type="button"
-                    size="xs"
-                    variant="ghost"
-                    className="h-6 gap-0.5 px-1.5"
-                    disabled={page <= 0}
-                    onClick={() => goToPage(Math.max(0, page - 1))}
-                    title={t("experiments.runs.prevPage")}
-                  >
-                    <ChevronLeftIcon className="size-3" aria-hidden />
-                  </Button>
+                  <Hint label={t("experiments.runs.prevPage")}>
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="ghost"
+                      className="h-6 gap-0.5 px-1.5"
+                      disabled={page <= 0}
+                      onClick={() => goToPage(Math.max(0, page - 1))}
+                    >
+                      <ChevronLeftIcon className="size-3" aria-hidden />
+                    </Button>
+                  </Hint>
                   <span className="min-w-[3rem] text-center tabular-nums">
                     {page + 1}/{totalPages}
                   </span>
-                  <Button
-                    type="button"
-                    size="xs"
-                    variant="ghost"
-                    className="h-6 gap-0.5 px-1.5"
-                    disabled={page >= totalPages - 1}
-                    onClick={() => goToPage(Math.min(totalPages - 1, page + 1))}
-                    title={t("experiments.runs.nextPage")}
-                  >
-                    <ChevronRightIcon className="size-3" aria-hidden />
-                  </Button>
+                  <Hint label={t("experiments.runs.nextPage")}>
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="ghost"
+                      className="h-6 gap-0.5 px-1.5"
+                      disabled={page >= totalPages - 1}
+                      onClick={() => goToPage(Math.min(totalPages - 1, page + 1))}
+                    >
+                      <ChevronRightIcon className="size-3" aria-hidden />
+                    </Button>
+                  </Hint>
                 </div>
               </div>
             ) : null}
