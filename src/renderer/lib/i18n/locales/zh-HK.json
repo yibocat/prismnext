@@ -1215,7 +1215,8 @@
   },
   "shortcuts": {
     "shell": {
-      "close": "關閉：工作區標籤 → 聊天標籤 → 視窗",
+      "newWindow": "新建視窗",
+      "close": "關閉：工作區標籤 → 聊天標籤 → 新空白對話 → 視窗",
       "closeWindow": "關閉視窗",
       "saveFile": "儲存當前工作區檔案",
       "toggleLeftSidebar": "切換左側邊欄",
@@ -1272,8 +1273,12 @@
     },
     "tray": {
       "show": "顯示 prismnext",
+      "showProject": "顯示 {{project}}",
       "newChat": "新建對話",
-      "quit": "退出 prismnext"
+      "quit": "退出 prismnext",
+      "tooltipIdle": "{{project}}",
+      "tooltipBusy": "{{project}} — 工作中…",
+      "tooltipAttention": "{{project}} — 需要關注"
     },
     "collapseSidebar": "收起側欄",
     "expandSidebar": "展開側欄",
@@ -1354,6 +1359,18 @@
     }
   },
   "chat": {
+    "artifact": {
+      "openInFiles": "在檔案中開啟",
+      "copyPath": "複製路徑",
+      "copied": "已複製",
+      "unavailable": "無法顯示該結果檔案",
+      "galleryOverflow": "另有 {{count}} 個 — 可在 Experiments 中查看",
+      "pdfLoading": "正在載入 PDF…",
+      "pdfUnavailable": "無法預覽該 PDF",
+      "pdfPreview": "PDF 預覽",
+      "previewPdf": "預覽 {{name}}",
+      "clickToPreview": "點擊預覽"
+    },
     "tab": {
       "newChat": "新對話",
       "chat": "聊天"
@@ -1385,6 +1402,8 @@
       "removeAttachment": "移除 {{name}}",
       "previewAttachment": "預覽 {{name}}",
       "imagePreview": "圖片預覽",
+      "zoomIn": "放大",
+      "zoomOut": "縮小",
       "placeholder": "@ 專家、檔案、文獻或實驗 · / 命令、技能、MCP",
       "archivedReadonly": "此對話已歸檔。恢復後可繼續聊天。"
     },
@@ -1449,7 +1468,11 @@
       "removeTitle": "從精讀列表移除（保留 @ 標籤）"
     },
     "messages": {
-      "loading": "正在載入對話…"
+      "loading": "正在載入對話…",
+      "loadMore": "載入更多歷史",
+      "loadMoreArmed": "停穩後再向上滑載入",
+      "loadMorePulling": "繼續向上滑…",
+      "loadingOlder": "載入中…"
     },
     "prepare": {
       "thinking": "思考中…",
@@ -1549,6 +1572,7 @@
       "viewSplit": "分屏檢視",
       "viewTex": "僅 TeX",
       "viewPdf": "僅 PDF",
+      "swapPanes": "交換編輯器與 PDF",
       "compile": "編譯（{{engine}}）",
       "autoCompileOn": "自動編譯：開",
       "autoCompileOff": "自動編譯：關",
@@ -1563,6 +1587,17 @@
       "citedReferences": "已引用文獻",
       "noProblems": "未報告問題。",
       "noCompileLog": "尚無編譯輸出。",
+      "noPdfPreview": "尚無 PDF — 編譯手稿後即可在此預覽。",
+      "loadingPdfPreview": "正在載入 PDF…",
+      "exportMenu": "匯出",
+      "exportPdf": "匯出編譯 PDF…",
+      "packManuscript": "打包 manuscript…",
+      "exportPdfSuccess": "PDF 已匯出。",
+      "exportPdfMissing": "尚無編譯 PDF — 請先編譯手稿。",
+      "exportNoTarget": "無法確定編譯目標。",
+      "packManuscriptSuccess": "manuscript 已打包。",
+      "packNoManuscript": "未設定 manuscript 資料夾。",
+      "exportFailed": "匯出失敗。",
       "insertSymbol": "插入符號",
       "insertEnv": "插入環境",
       "noResults": "無結果",
@@ -2034,6 +2069,8 @@
       "sortAria": "排序執行",
       "moreArtifactsShort": "+{{count}} 個",
       "sendToChat": "將此次執行傳送到聊天（含方法/圖表腳手架）",
+      "workingCopyNewer": "工作區檔案在本 run 之後又被更新 — 下方預覽為本 run 固化的快照。",
+      "runSnapshot": "執行快照",
       "noPython": "無 python",
       "venv": "venv",
       "exitCodeTitle": "退出碼 {{code}}",

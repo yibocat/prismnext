@@ -25,6 +25,8 @@ export type ToolWidgetComponent = ComponentType<{
   toolUse: ContentBlock;
   toolResult?: ContentBlock;
   toolName: string;
+  /** Paths already shown (or about to be shown) in the assistant reply body. */
+  suppressArtifactPaths?: readonly string[];
 }>;
 
 let registeredTaskWidget: ToolWidgetComponent | null = null;
@@ -123,9 +125,11 @@ function resolveToolWidgetName(
 export const ToolWidget = memo(function ToolWidget({
   toolUse,
   toolResult,
+  suppressArtifactPaths,
 }: {
   toolUse: ContentBlock;
   toolResult?: ContentBlock;
+  suppressArtifactPaths?: readonly string[];
 }) {
   const name = resolveToolWidgetName(toolUse, toolResult);
   const displayName = name === (toolUse.name || "").toLowerCase()
@@ -150,5 +154,12 @@ export const ToolWidget = memo(function ToolWidget({
     Widget = GenericWidget;
   }
 
-  return <Widget toolUse={toolUse} toolResult={toolResult} toolName={displayName} />;
+  return (
+    <Widget
+      toolUse={toolUse}
+      toolResult={toolResult}
+      toolName={displayName}
+      suppressArtifactPaths={suppressArtifactPaths}
+    />
+  );
 });

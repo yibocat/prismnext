@@ -219,7 +219,7 @@ export class AcpService {
 
   /**
    * OpenCode looks for auth under `$XDG_DATA_HOME/opencode/auth.json`.
-   * Prism remaps XDG to `<userData>/opencode-server/`, so CLI auth at
+   * prismnext remaps XDG to `<userData>/opencode-server/`, so CLI auth at
    * `~/.local/share/opencode/auth.json` is invisible unless we copy it.
    */
   private ensureOpenCodeAuthUnderXdg(serverDir: string): void {
@@ -1140,7 +1140,7 @@ export class AcpService {
       if (name === "bash" && agentTerminalMode !== "pty") {
         if (existsSync(dest)) {
           try { unlinkSync(dest); } catch {}
-          log.info("Removed prism bash tool (mirror mode uses OpenCode built-in)");
+          log.info("Removed prismnext bash tool (mirror mode uses OpenCode built-in)");
         }
         continue;
       }
@@ -1338,7 +1338,7 @@ export class AcpService {
     await this.initialize();
   }
 
-  /** Restart OpenCode so custom tools (e.g. prism bash) are picked up. */
+  /** Restart OpenCode so custom tools (e.g. prismnext bash) are picked up. */
   async reloadAfterToolsChange(): Promise<void> {
     if (!this.proc && !this.conn) return;
     log.info("Restarting OpenCode to apply agent terminal mode / tools change");

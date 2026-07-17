@@ -56,7 +56,7 @@ vi.mock("../../src/renderer/lib/workspace/left-nav/panel-refs", () => ({
 }));
 
 vi.mock("../../src/renderer/lib/workspace/left-nav/panel-utils", () => ({
-  closeTexWorkspace: vi.fn(),
+  openExperimentsSplit: vi.fn(),
 }));
 
 import { handleExperimentChanged } from "../../src/renderer/modes/experiments-mode/open-experiment";

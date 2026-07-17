@@ -21,6 +21,17 @@ export function shouldHideOnClose(input: {
   return input.trayIconEnabled && !input.isQuitting;
 }
 
+/**
+ * Whether a tray click should open the menu.
+ * After the menu closes, the dismissing click still fires — skip until `ignoreUntil`.
+ */
+export function shouldOpenTrayMenuOnClick(input: {
+  now: number;
+  ignoreUntil: number;
+}): boolean {
+  return input.now >= input.ignoreUntil;
+}
+
 /** True when an OS notification may be shown. */
 export function shouldSendDesktopNotification(input: {
   desktopNotificationsEnabled: boolean;
@@ -47,13 +58,42 @@ export type TrayRecentItem = {
   tabId?: string;
 };
 
+/** RightArea modes that Tray can open maximized. */
+export type TrayModeId = "texworkspace" | "literature" | "experiments";
+
+export type TrayModeItem = {
+  id: TrayModeId;
+  label: string;
+};
+
 /** Localized Tray menu snapshot pushed from the renderer. */
 export type TrayMenuSnapshot = {
   showLabel: string;
   newChatLabel: string;
   quitLabel: string;
   recent: TrayRecentItem[];
+  /** Open project folder basename; shown as a disabled menu header when set. */
+  projectName?: string | null;
+  /** Mode shortcuts (only when a project is open). */
+  modes?: TrayModeItem[];
 };
+
+/**
+ * Tray hover tooltip. Prefer `projectName` when a project is open so the
+ * menu-bar / tray item identifies which workspace is running.
+ */
+export function formatTrayTooltip(input: {
+  status: TrayStatus;
+  projectName?: string | null;
+  appName?: string;
+}): string {
+  const app = (input.appName ?? "prismnext").trim() || "prismnext";
+  const project = input.projectName?.trim() || "";
+  const head = project || app;
+  if (input.status === "attention") return `${head} — Needs attention`;
+  if (input.status === "busy") return `${head} — Working…`;
+  return head;
+}
 
 export const TRAY_RECENT_LIMIT = 3;
 

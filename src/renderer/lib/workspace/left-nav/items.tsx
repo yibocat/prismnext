@@ -4,9 +4,6 @@ import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { resetSettingsEditors } from "@/stores/settings-panel-store";
-import { useRightPanelStore } from "@/stores/right-panel-store";
-import { RESIZE_FILL_PX } from "@/lib/workspace/layout-constants";
-import { runWithProgrammaticCenterResize } from "@/lib/workspace/layout-resize-guard";
 import { leftNavRegistry } from "./registry";
 import {
   closeExperimentsPanel,
@@ -17,6 +14,7 @@ import {
   isTexWorkspaceOpen,
   openExperimentsPanel,
   openLiteratureLibrary,
+  openTexWorkspaceMaximized,
 } from "./panel-utils";
 import type { LeftNavContext, LeftNavDefinition } from "./types";
 
@@ -80,9 +78,8 @@ const literatureNav: LeftNavDefinition = {
   icon: BookOpenIcon,
   order: 10,
   toggleable: true,
-  isActive: () => isLiteraturePanelOpen() && !isTexWorkspaceOpen(),
+  isActive: () => isLiteraturePanelOpen(),
   activate: (ctx) => {
-    closeTexWorkspace(ctx);
     openLiteratureLibrary(ctx);
   },
   deactivate: (ctx) => {
@@ -102,9 +99,8 @@ const experimentsNav: LeftNavDefinition = {
   icon: FlaskConical,
   order: 15,
   toggleable: true,
-  isActive: () => isExperimentsPanelOpen() && !isTexWorkspaceOpen(),
+  isActive: () => isExperimentsPanelOpen(),
   activate: (ctx) => {
-    closeTexWorkspace(ctx);
     openExperimentsPanel(ctx);
   },
   deactivate: (ctx) => {
@@ -144,22 +140,7 @@ const texWorkspaceNav: LeftNavDefinition = {
   toggleable: true,
   isActive: () => isTexWorkspaceOpen(),
   activate: (ctx) => {
-    const st = useLayoutStore.getState();
-    const rps = useRightPanelStore.getState();
-    const r = ctx.panelRefs.rightAreaRef?.current;
-    const c = ctx.panelRefs.centerRef?.current;
-    if (!r || !c) return;
-
-    rps.ensureTab("texworkspace");
-    st.setLeftSidebarView("sessions");
-    st.activateMode("texworkspace");
-    st.setRightAreaExpanded(true);
-    st.setEditorMaximized(true);
-    runWithProgrammaticCenterResize(() => {
-      if (r.isCollapsed()) r.expand();
-      c.collapse();
-      r.resize(RESIZE_FILL_PX);
-    });
+    openTexWorkspaceMaximized(ctx);
   },
   deactivate: (ctx) => {
     closeTexWorkspace(ctx);

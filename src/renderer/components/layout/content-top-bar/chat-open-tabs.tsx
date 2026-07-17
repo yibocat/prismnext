@@ -7,6 +7,7 @@ import { resolveSessionTitle } from "@/lib/chat/session-title";
 import { displayChatTitle } from "@/lib/i18n/display-chat-title";
 import { Hint } from "@/components/ui/hint";
 import { SessionContextCard } from "./session-context-card";
+import { SortableTabStrip } from "@/components/layout/sortable-tab-strip";
 
 /** Visible open-chat strip only when the user actually has parallel tabs. */
 export function shouldShowChatOpenTabs(tabCount: number): boolean {
@@ -19,6 +20,7 @@ export const ChatOpenTabs = memo(function ChatOpenTabs() {
   const activeTabId = useChatStore((s) => s.activeTabId);
   const setActiveTab = useChatStore((s) => s.setActiveTab);
   const closeTab = useChatStore((s) => s.closeTab);
+  const moveTab = useChatStore((s) => s.moveTab);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   // Vertical wheel → horizontal scroll when the strip overflows (trackpads / mice).
@@ -33,13 +35,17 @@ export const ChatOpenTabs = memo(function ChatOpenTabs() {
   if (!shouldShowChatOpenTabs(tabs.length)) return null;
 
   return (
-    <div
+    <SortableTabStrip
       ref={scrollerRef}
-      className="flex min-w-0 w-0 flex-1 items-center gap-0.5 overflow-x-auto overscroll-x-contain scrollbar-none"
+      items={tabs}
+      getKey={(tab) => tab.id}
+      onReorder={moveTab}
+      onDragItem={(tab) => setActiveTab(tab.id)}
+      className="min-w-0 w-0 flex-1"
+      rowClassName="gap-0.5 overflow-x-auto overscroll-x-contain scrollbar-none"
       aria-label={t("chat.openTabs.label")}
       onWheel={onWheel}
-    >
-      {tabs.map((tab) => {
+      renderItem={({ item: tab, dragging, dragHandleProps }) => {
         const rawTitle = resolveSessionTitle(tab) ?? tab.title;
         const title = displayChatTitle(rawTitle, t);
         const active = tab.id === activeTabId;
@@ -48,13 +54,13 @@ export const ChatOpenTabs = memo(function ChatOpenTabs() {
 
         return (
           <SessionContextCard
-            key={tab.id}
             tabId={tab.id}
             title={title}
             sessionId={tab.sessionId}
             sessionDirectory={tab.sessionCwd}
           >
             <div
+              {...dragHandleProps}
               role="button"
               aria-pressed={active}
               tabIndex={0}
@@ -64,6 +70,7 @@ export const ChatOpenTabs = memo(function ChatOpenTabs() {
                 active
                   ? "bg-muted text-foreground"
                   : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                dragging && "opacity-40",
               )}
               onClick={() => setActiveTab(tab.id)}
               onKeyDown={(e) => {
@@ -107,7 +114,7 @@ export const ChatOpenTabs = memo(function ChatOpenTabs() {
             </div>
           </SessionContextCard>
         );
-      })}
-    </div>
+      }}
+    />
   );
 });

@@ -48,6 +48,7 @@ import {
   closeRightArea,
   toggleRightAreaMaximize,
 } from "@/lib/workspace/right-area-layout";
+import { deactivateModeFromToolbar } from "@/lib/workspace/deactivate-mode";
 
 /** RightArea toolbar mode → open (split) shortcut. */
 const MODE_TOOLBAR_SHORTCUT: Partial<Record<string, string>> = {
@@ -491,34 +492,8 @@ function RightAreaWorkspace({
           }
         }
       } else if (focusedMode === target) {
-        // ── Deactivate mode → close ALL its tabs → Dashboard ──
-        if (def) {
-          const kinds = def.tabKinds;
-          const finishDeactivate = () => {
-            def.onDeactivate?.();
-            toggleMode(target as RightToolbarTab);
-            const newFocused = useLayoutStore.getState().focusedMode;
-            if (newFocused !== "dashboard") {
-              const newDef = modeRegistry.get(newFocused);
-              const newTab = useRightPanelStore.getState().tabs.find((t) =>
-                newDef?.tabKinds.includes(t.kind),
-              );
-              if (newTab) useRightPanelStore.getState().setActiveTab(newTab.id);
-            }
-          };
-          const closeKindAt = (index: number) => {
-            if (index >= kinds.length) {
-              finishDeactivate();
-              return;
-            }
-            store.closeTabsOfKind(kinds[index], {
-              onClosed: () => closeKindAt(index + 1),
-            });
-          };
-          closeKindAt(0);
-        } else {
-          toggleMode(target as RightToolbarTab);
-        }
+        // ── Deactivate mode (Terminal keeps tabs/PTY; others close tabs) ──
+        deactivateModeFromToolbar(target);
       } else {
         // ── Switch focus (active but not focused) ──
         toggleMode(target as RightToolbarTab);
@@ -666,7 +641,7 @@ function RightAreaWorkspace({
       ) : null}
 
       {/* Toolbar */}
-      <div ref={toolbarRef} className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center gap-0.5 select-none px-2">
+      <div ref={toolbarRef} className="drag-region flex h-[var(--height-titlebar)] min-w-0 shrink-0 items-center gap-0.5 overflow-hidden select-none px-2">
         <div className="flex items-center gap-0.5 shrink-0">
         {/* Sidebar controls when sidebar collapsed AND editor maximized */}
         {sidebarFullyCollapsed && editorMaximized && (
@@ -680,7 +655,7 @@ function RightAreaWorkspace({
         )}
         </div>
 
-        <div ref={tabBarContainerRef} className="flex-1 min-w-0">
+        <div ref={tabBarContainerRef} className="no-drag flex-1 min-w-0 self-stretch">
           <TabBar
             tabs={tabs}
             activeTabId={activeTabId}
@@ -917,16 +892,23 @@ function RightAreaWorkspace({
       )}
 
       {/* Main content: flex layout — main expands, sidebar stays fixed width */}
-      <div ref={containerElRef} className="flex flex-1 min-h-0 min-w-0 relative border-t border-border">
-        {!sidebarFull && (
-          <div className="flex-1 min-w-[150px]">
-            <RightMainArea tabs={tabs} activeTabId={activeTabId} />
-          </div>
-        )}
+      <div ref={containerElRef} className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden border-t border-border">
+        {/* Keep mounted when sidebar is full-width — unmounting wiped PDF/editor scroll. */}
+        <div
+          className={
+            sidebarFull
+              ? "pointer-events-none invisible absolute inset-0 overflow-hidden"
+              : "min-w-0 flex-1 overflow-hidden"
+          }
+          aria-hidden={sidebarFull}
+        >
+          <RightMainArea tabs={tabs} activeTabId={activeTabId} />
+        </div>
 
         {modeSidebarEligible && (
           <>
-            {!sidebarFull && (
+            {/* Collapsed: omit sash — its ±12px hit fringe sat on the window edge. */}
+            {!sidebarFull && sidebarPanelVisible && (
               <SidebarDragHandle
                 onResize={handleSidebarResize}
                 getStartWidth={getSidebarDragStartWidth}

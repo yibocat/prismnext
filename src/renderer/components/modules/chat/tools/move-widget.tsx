@@ -7,6 +7,7 @@ import {
   StatusIcon,
   TOOL_PANEL_CLASS,
   TOOL_INLINE_ROW_CLASS,
+  TOOL_INLINE_LABEL_CLASS,
   TOOL_EXPANDED_CONTENT_CLASS,
   basenamePath,
   param,
@@ -67,17 +68,17 @@ export const MoveWidget = memo(function MoveWidget({
           type="button"
           className={cn(
             TOOL_INLINE_ROW_CLASS,
-            "text-left text-[length:var(--font-code)] py-0.5 w-full",
+            "w-full text-left text-[length:var(--font-chat-message)] py-1",
             !canExpand && "cursor-default",
           )}
           onClick={() => canExpand && setExpanded(!expanded)}
         >
           <StatusIcon isLoading={false} isError={!!isError || isToolDenied} />
-          <span className="text-[length:var(--font-chat-meta)] shrink-0">{toolName}</span>
+          <span className="shrink-0 text-muted-foreground/55">{toolName}</span>
           <ArrowRightIcon className="size-3.5 shrink-0 text-info" />
-          <span className="min-w-0 truncate font-medium text-foreground/90 flex items-center gap-1">
+          <span className={cn(TOOL_INLINE_LABEL_CLASS, "flex items-center gap-1")}>
             {srcPath ? <ChatFileLink path={srcPath} /> : "…"}
-            <ArrowRightIcon className="size-3 shrink-0 text-muted-foreground" />
+            <ArrowRightIcon className="size-3 shrink-0 text-muted-foreground/60" />
             {dstPath ? <ChatFileLink path={dstPath} /> : "…"}
           </span>
           <span className="text-muted-foreground/60 shrink-0 text-[length:var(--font-chat-meta)]">

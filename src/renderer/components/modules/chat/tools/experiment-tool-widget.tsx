@@ -2,8 +2,8 @@ import { memo, useState } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { ExternalLinkIcon, FlaskConicalIcon } from "lucide-react";
 import { ToolCard, Field } from "./shared";
-import { ChatProjectImage } from "@/lib/markdown/extract-markdown-images";
-import { resolveImageArtifactPaths } from "@/modes/experiments-mode/experiments-artifact-nav";
+import { ChatArtifactGallery } from "@/lib/markdown/chat-artifact-block";
+import { pathsForRunChatDisplay } from "@/lib/chat/experiment-run-figures";
 import {
   openExperimentInPanel,
   resolveExperimentIdFromTool,
@@ -93,37 +93,16 @@ function asStringArray(v: unknown): string[] {
   return v.filter((x): x is string => typeof x === "string");
 }
 
-function ArtifactImageGallery({
-  artifacts,
-  workspacePath,
-}: {
-  artifacts: string[];
-  workspacePath?: string;
-}) {
-  const images = resolveImageArtifactPaths(artifacts, workspacePath);
-  if (!images.length) return null;
-  return (
-    <div className="mt-2 space-y-2">
-      {images.map((rel) => (
-        <div key={rel} className="overflow-hidden rounded-md border border-border/50 bg-muted/20">
-          <ChatProjectImage src={rel} alt={rel.split("/").pop() || "artifact"} />
-          <p className="truncate px-2 pb-1.5 text-[length:var(--font-size-11)] text-muted-foreground">
-            {rel}
-          </p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function ExperimentSummary({
   toolName,
   toolUse,
   data,
+  suppressArtifactPaths,
 }: {
   toolName: string;
   toolUse: ContentBlock;
   data: Record<string, unknown>;
+  suppressArtifactPaths?: readonly string[];
 }) {
   if (data.error && typeof data.error === "string") {
     return (
@@ -241,6 +220,7 @@ function ExperimentSummary({
     if (action === "append_run") {
       const run = data.run as Record<string, unknown> | undefined;
       const artifacts = asStringArray(run?.artifacts);
+      const artifactSnapshots = asStringArray(run?.artifactSnapshots);
       const cwd = typeof run?.cwd === "string" ? run.cwd : undefined;
       const duration = formatDurationMs(run?.startedAt, run?.finishedAt);
       return (
@@ -253,7 +233,14 @@ function ExperimentSummary({
           {typeof run?.kind === "string" ? <Field label="kind" value={run.kind} /> : null}
           {duration ? <Field label="duration" value={duration} /> : null}
           {artifacts.length ? <Field label="artifacts" value={artifacts.join(", ")} /> : null}
-          <ArtifactImageGallery artifacts={artifacts} workspacePath={cwd} />
+          <ChatArtifactGallery
+            paths={pathsForRunChatDisplay({
+              artifacts,
+              artifactSnapshots,
+              workspacePath: cwd,
+            })}
+            suppressPaths={suppressArtifactPaths}
+          />
         </div>
       );
     }
@@ -299,6 +286,7 @@ function ExperimentSummary({
         : null;
   const exitLabel = exitRaw != null ? String(exitRaw) : "";
   const artifacts = asStringArray(run?.artifacts ?? data.artifacts);
+  const artifactSnapshots = asStringArray(run?.artifactSnapshots ?? data.artifactSnapshots);
   const cwd = typeof run?.cwd === "string" ? run.cwd : undefined;
   const workspaceHint =
     cwd ||
@@ -355,7 +343,14 @@ function ExperimentSummary({
           {stdoutPreview}
         </pre>
       ) : null}
-      <ArtifactImageGallery artifacts={mergedArtifacts} workspacePath={workspaceHint} />
+      <ChatArtifactGallery
+        paths={pathsForRunChatDisplay({
+          artifacts: mergedArtifacts,
+          artifactSnapshots,
+          workspacePath: workspaceHint,
+        })}
+        suppressPaths={suppressArtifactPaths}
+      />
     </div>
   );
 }
@@ -364,10 +359,12 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
   toolUse,
   toolResult,
   toolName,
+  suppressArtifactPaths,
 }: {
   toolUse: ContentBlock;
   toolResult?: ContentBlock;
   toolName: string;
+  suppressArtifactPaths?: readonly string[];
 }) {
   const [expanded, setExpanded] = useState(false);
   const resultContent = toolResult?.content ?? toolUse.content;
@@ -430,7 +427,12 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
     >
       {() =>
         data ? (
-          <ExperimentSummary toolName={toolName} toolUse={toolUse} data={data} />
+          <ExperimentSummary
+            toolName={toolName}
+            toolUse={toolUse}
+            data={data}
+            suppressArtifactPaths={suppressArtifactPaths}
+          />
         ) : rawFallback ? (
           <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-muted/40 p-2 text-[length:var(--font-size-12)] text-muted-foreground">
             {rawFallback}

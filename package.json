@@ -1,7 +1,7 @@
 {
   "name": "prism-next",
   "productName": "prismnext",
-  "version": "0.5.12",
+  "version": "0.5.13",
   "description": "AI-powered LaTeX writing workspace",
   "main": "./out/main/index.js",
   "scripts": {
@@ -86,6 +86,7 @@
     "diff": "^9.0.0",
     "electron-store": "^11.0.2",
     "extract-zip": "^2.0.1",
+    "fflate": "^0.8.3",
     "i18next": "^26.3.6",
     "katex": "^0.16.28",
     "lucide-react": "^1.16.0",

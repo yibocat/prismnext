@@ -1,9 +1,8 @@
-import { useMemo, lazy } from "react";
+import { useMemo } from "react";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { TabContext, type TabContextValue } from "@/lib/workspace/tab-context";
-
-const TerminalView = lazy(() => import("./terminal-view").then((m) => ({ default: m.TerminalView })));
-const AiTerminalView = lazy(() => import("./ai-terminal-view").then((m) => ({ default: m.AiTerminalView })));
+import { TerminalView } from "./terminal-view";
+import { AiTerminalView } from "./ai-terminal-view";
 
 export function TerminalContent({ tab, isActive }: { tab: RightTab; isActive: boolean }) {
   const ctx: TabContextValue = useMemo(

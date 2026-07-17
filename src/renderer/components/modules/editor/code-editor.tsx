@@ -402,20 +402,28 @@ export function CodeEditor() {
     }
   }, [isActive]);
 
-  // ─── Periodic position save (cross-session persistence) ───
+  // ─── Position save (restore happens on EditorView create above) ───
 
   useEffect(() => {
     if (!fileId) return;
-    const timer = setInterval(() => {
+    const saveNow = () => {
       const view = viewRef.current;
       if (!view || isMergeActiveRef.current) return;
       saveViewerPosition(fileId, {
         cursorPos: view.state.selection.main.head,
         scrollTop: view.scrollDOM.scrollTop,
       });
-    }, 3000);
-    return () => clearInterval(timer);
-  }, [fileId]);
+    };
+    const onScroll = () => saveNow();
+    const view = viewRef.current;
+    view?.scrollDOM.addEventListener("scroll", onScroll, { passive: true });
+    const interval = setInterval(saveNow, 2000);
+    return () => {
+      view?.scrollDOM.removeEventListener("scroll", onScroll);
+      clearInterval(interval);
+      saveNow();
+    };
+  }, [fileId, viewEpoch]);
 
   // ─── Language reload when extension changes ───
   // (edge case: same fileId but different ext, handled by the full destroy/recreate above)

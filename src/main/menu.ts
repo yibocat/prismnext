@@ -6,16 +6,21 @@ import {
 } from "../shared/app-locale";
 import { menuStrings } from "../shared/menu-i18n";
 
-let getMainWindowRef: (() => BrowserWindow | null) | null = null;
+type MenuWindowApi = {
+  getTargetWindow: () => BrowserWindow | null;
+  createWindow: () => BrowserWindow;
+};
+
+let menuApi: MenuWindowApi | null = null;
 
 /** Rebuild menu after `appLocale` changes. */
 export function refreshApplicationMenu(): void {
-  if (getMainWindowRef) installApplicationMenu(getMainWindowRef);
+  if (menuApi) installApplicationMenu(menuApi);
 }
 
 /** Override macOS/Electron default Cmd+W (close window) → close tab in renderer. */
-export function installApplicationMenu(getMainWindow: () => BrowserWindow | null): void {
-  getMainWindowRef = getMainWindow;
+export function installApplicationMenu(api: MenuWindowApi): void {
+  menuApi = api;
   const isMac = process.platform === "darwin";
   const resolved = resolveAppLocale(
     normalizeAppLocalePreference(getSettings().appLocale),
@@ -24,7 +29,7 @@ export function installApplicationMenu(getMainWindow: () => BrowserWindow | null
   const t = menuStrings(resolved);
 
   const sendCloseTab = () => {
-    const win = getMainWindow();
+    const win = api.getTargetWindow();
     if (win && !win.isDestroyed()) {
       win.webContents.send("app:closeTab");
     }
@@ -52,6 +57,13 @@ export function installApplicationMenu(getMainWindow: () => BrowserWindow | null
     {
       label: t.file,
       submenu: [
+        {
+          label: t.newWindow,
+          accelerator: "CmdOrCtrl+N",
+          click: () => {
+            api.createWindow();
+          },
+        },
         {
           label: t.closeTab,
           accelerator: "CmdOrCtrl+W",

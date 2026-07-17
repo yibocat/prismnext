@@ -5,10 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ArrowLeftIcon, FileTextIcon } from "lucide-react";
-import { Root, Pages, Page, CanvasLayer, TextLayer } from "@anaralabs/lector";
-import "pdfjs-dist/web/pdf_viewer.css";
-import { PDFJS_DOCUMENT_OPTIONS, PDF_PAGES_CLASS, PDF_PAGES_STYLE, PDF_PAGE_CLASS } from "@/components/modules/preview/pdf-config";
-import { PdfScrollClamp } from "@/components/modules/preview/pdf-scroll-clamp";
+import { PdfDocumentView } from "@/components/modules/preview";
+import { pdfDataUrlToUint8Array } from "@/components/modules/preview/pdf-config";
 import { TemplateFull } from "./types";
 
 // ─── File tree ───
@@ -78,7 +76,7 @@ export function DetailView({
   const { t } = useTranslation();
   const [showSource, setShowSource] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
+  const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
   const [showPdfDialog, setShowPdfDialog] = useState(false);
   const fileTree = useMemo(() => buildFileTree(template.files), [template]);
   const mainTexContent = useMemo(
@@ -87,8 +85,24 @@ export function DetailView({
   );
 
   useEffect(() => {
+    let cancelled = false;
+    setPdfBytes(null);
     window.electronAPI.templatePreview(template.id).then(setPreviewUrl);
-    window.electronAPI.templateGetPdfData(template.id).then(setPdfDataUrl);
+    void window.electronAPI.templateGetPdfData(template.id).then((dataUrl) => {
+      if (cancelled) return;
+      if (!dataUrl) {
+        setPdfBytes(null);
+        return;
+      }
+      try {
+        setPdfBytes(pdfDataUrlToUint8Array(dataUrl));
+      } catch {
+        setPdfBytes(null);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [template.id]);
 
   return (
@@ -146,7 +160,13 @@ export function DetailView({
             <Button variant="outline" size="sm" className="shadow-none" onClick={() => setShowSource(true)}>
               {t("templates.detail.viewSource")}
             </Button>
-            <Button variant="outline" size="sm" className="shadow-none" onClick={() => setShowPdfDialog(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shadow-none"
+              disabled={!pdfBytes}
+              onClick={() => setShowPdfDialog(true)}
+            >
               {t("templates.detail.viewPdf")}
             </Button>
           </div>
@@ -178,32 +198,23 @@ export function DetailView({
           </div>
         </div>
 
-        {/* View PDF Dialog — live lector viewer */}
+        {/* View PDF Dialog — same PdfDocumentView path as chat / TeX (bytes, not data: URL) */}
         <Dialog open={showPdfDialog} onOpenChange={setShowPdfDialog}>
-          <DialogContent className="!max-w-6xl h-[90vh] flex flex-col">
-            <DialogHeader>
+          <DialogContent className="!max-w-6xl h-[90vh] flex flex-col gap-0 overflow-hidden p-0 sm:max-w-6xl">
+            <DialogHeader className="shrink-0 border-b border-border/60 px-4 py-3">
               <DialogTitle>{template.name} — {t("templates.detail.preview")}</DialogTitle>
             </DialogHeader>
-            {pdfDataUrl && (
-              <div className="flex-1 min-h-0">
-                <Root
-                  key={template.id}
-                  source={pdfDataUrl}
-                  documentOptions={PDFJS_DOCUMENT_OPTIONS}
-                  isZoomFitWidth
-                  className="h-full flex flex-col"
-                  loader={<span className="flex justify-center pt-20 text-muted-foreground">{t("common.loading")}</span>}
-                >
-                  <PdfScrollClamp />
-                  <Pages className={PDF_PAGES_CLASS} style={PDF_PAGES_STYLE} gap={8}>
-                    <Page className={PDF_PAGE_CLASS}>
-                      <CanvasLayer />
-                      <TextLayer />
-                    </Page>
-                  </Pages>
-                </Root>
+            {showPdfDialog && pdfBytes ? (
+              <div className="min-h-0 flex-1">
+                <PdfDocumentView
+                  key={`${template.id}::pdf-dialog`}
+                  source={pdfBytes}
+                  isPdfFile
+                  hideToolbar
+                  persistKey={`template-pdf::${template.id}`}
+                />
               </div>
-            )}
+            ) : null}
           </DialogContent>
         </Dialog>
       </div>

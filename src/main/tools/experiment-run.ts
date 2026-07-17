@@ -103,9 +103,11 @@ export default tool({
     artifacts: tool.schema
       .array(tool.schema.string())
       .describe(
-        "Output file paths so prismnext can find them later. Island-relative or " +
-          "project-relative are both accepted; prismnext resolves against the disk " +
-          "when recording the run. Always include figures for chat preview and provenance.",
+        "Result file paths produced by the command (any kind: figures, CSV, JSON metrics, " +
+          "checkpoints, logs you care about, … — not images only). Island-relative or " +
+          "project-relative; prismnext resolves against the disk when recording. " +
+          "Declare all important outputs; undeclared paths may still be inferred from " +
+          "island mtime or paths printed in stdout.",
       )
       .optional(),
     notes: tool.schema

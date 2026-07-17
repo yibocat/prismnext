@@ -6,6 +6,7 @@ import type { RightToolbarTab } from "@/stores/layout-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { modeRegistry } from "@/lib/workspace/mode-registry";
+import { deactivateModeFromToolbar } from "@/lib/workspace/deactivate-mode";
 import {
   closeRightArea,
   openRightArea,
@@ -45,42 +46,6 @@ export function activateToolbarMode(modeId: string): void {
   def.onActivate?.();
 }
 
-function deactivateToolbarMode(modeId: string): void {
-  const store = useRightPanelStore.getState();
-  const def = modeRegistry.get(modeId);
-  const st = useLayoutStore.getState();
-
-  const finish = () => {
-    def?.onDeactivate?.();
-    st.deactivateMode(modeId as RightToolbarTab);
-    const newFocused = useLayoutStore.getState().focusedMode;
-    if (newFocused !== "dashboard") {
-      const newDef = modeRegistry.get(newFocused);
-      const newTab = useRightPanelStore.getState().tabs.find((t) =>
-        newDef?.tabKinds.includes(t.kind),
-      );
-      if (newTab) useRightPanelStore.getState().setActiveTab(newTab.id);
-    }
-  };
-
-  if (!def) {
-    st.deactivateMode(modeId as RightToolbarTab);
-    return;
-  }
-
-  const kinds = def.tabKinds;
-  const closeKindAt = (index: number) => {
-    if (index >= kinds.length) {
-      finish();
-      return;
-    }
-    store.closeTabsOfKind(kinds[index], {
-      onClosed: () => closeKindAt(index + 1),
-    });
-  };
-  closeKindAt(0);
-}
-
 /** Split open (toggle off when already split + focused). */
 export function toggleToolbarModeSplit(
   modeId: string,
@@ -88,7 +53,7 @@ export function toggleToolbarModeSplit(
 ): void {
   const st = useLayoutStore.getState();
   if (st.rightAreaExpanded && !st.editorMaximized && isModeFocused(modeId)) {
-    deactivateToolbarMode(modeId);
+    deactivateModeFromToolbar(modeId);
     return;
   }
   openRightArea(ctx);
@@ -102,7 +67,7 @@ export function toggleToolbarModeMaximize(
 ): void {
   const st = useLayoutStore.getState();
   if (st.rightAreaExpanded && st.editorMaximized && isModeFocused(modeId)) {
-    deactivateToolbarMode(modeId);
+    deactivateModeFromToolbar(modeId);
     closeRightArea(ctx);
     return;
   }

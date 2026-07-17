@@ -456,7 +456,7 @@ export interface ElectronAPI {
   }>;
   fsRead: (absPath: string) => Promise<{ content: string }>;
   fsReadBatch: (absPaths: string[]) => Promise<{ results: Record<string, string> }>;
-  fsReadImage: (absPath: string) => Promise<{ dataUrl: string | null }>;
+  fsReadImage: (absPath: string) => Promise<{ dataUrl: string | null; mtimeMs?: number | null }>;
   /** Binary file bytes (PDF preview). Prefer over data-URL for local PDFs. */
   fsReadBytes: (absPath: string) => Promise<{ bytes: ArrayBuffer }>;
   fsWrite: (absPath: string, content: string) => Promise<void>;
@@ -542,7 +542,10 @@ export interface ElectronAPI {
     body: string;
     tabId?: string;
   }) => Promise<boolean>;
-  shellSetTrayStatus: (status: "idle" | "busy" | "attention") => Promise<void>;
+  shellSetTrayStatus: (
+    status: "idle" | "busy" | "attention",
+    tooltip?: string | null,
+  ) => Promise<void>;
   shellSetTrayMenu: (snapshot: {
     showLabel: string;
     newChatLabel: string;
@@ -553,17 +556,30 @@ export interface ElectronAPI {
       sessionId?: string;
       tabId?: string;
     }>;
+    projectName?: string | null;
+    modes?: Array<{
+      id: "texworkspace" | "literature" | "experiments";
+      label: string;
+    }>;
   }) => Promise<void>;
   onShellFocusChatTab: (callback: (args: { tabId: string }) => void) => () => void;
   onShellTrayNewChat: (callback: () => void) => () => void;
   onShellTrayOpenRecent: (
     callback: (args: { id: string; sessionId?: string; tabId?: string }) => void,
   ) => () => void;
+  onShellTrayOpenMode: (
+    callback: (args: {
+      modeId: "texworkspace" | "literature" | "experiments";
+    }) => void,
+  ) => () => void;
   /** Absolute path for a File from an OS drag-drop (Electron webUtils). */
   getPathForFile: (file: File) => string;
   fsExists: (absPath: string) => Promise<boolean>;
   fsIsFile: (absPath: string) => Promise<boolean>;
-  /** Bounded project walk: first project-relative path whose basename matches. */
+  fsStat: (
+    absPath: string,
+  ) => Promise<{ mtimeMs: number; size: number; isFile: boolean; isDirectory: boolean } | null>;
+  /** Bounded project walk: newest-mtime project-relative path whose basename matches. */
   fsFindByBasename: (projectRoot: string, basename: string) => Promise<string | null>;
   projectCreate: (
     rootPath: string,
@@ -716,6 +732,7 @@ export interface ElectronAPI {
   windowMinimize: () => Promise<void>;
   windowMaximize: () => Promise<void>;
   windowClose: () => Promise<void>;
+  windowNew: () => Promise<{ ok: true; id: number }>;
 
   // Window state events
   onWindowStateChange: (
@@ -745,6 +762,23 @@ export interface ElectronAPI {
     line: number,
   ) => Promise<SynctexForwardResult | null>;
   compileDetectTexlive: () => Promise<CompilerStatus>;
+  compileExportPdf: (
+    projectRoot: string,
+    mainFile: string,
+    pdfBytes?: Uint8Array | null,
+  ) => Promise<
+    | { canceled: true }
+    | { canceled: false; ok: true; path: string }
+    | { canceled: false; ok: false; error: string }
+  >;
+  manuscriptPackZip: (
+    projectRoot: string,
+    manuscriptDir: string,
+  ) => Promise<
+    | { canceled: true }
+    | { canceled: false; ok: true; path: string }
+    | { canceled: false; ok: false; error: string }
+  >;
   onCompileAgentComplete: (
     callback: (data: {
       projectDir: string;

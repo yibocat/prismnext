@@ -6,6 +6,7 @@
  *   .prismnext/experiments/<id>/     ← Platform registry (agent metadata)
  *     meta.json                      — title, briefLinks, workspacePath pointer
  *     runs.jsonl                     — append-only run records
+ *     artifacts/<runId>/             — frozen image copies (`artifactSnapshots`)
  *
  *   <workspace-experiment-dir>/<id>/ ← User-facing lab (Workspace function: experiment)
  *     (empty at create — agent chooses layout, tooling, and artifacts)
@@ -138,6 +139,13 @@ export interface ExperimentRunEntry {
   stdoutTail: string;
   stderrTail: string;
   artifacts: string[];
+  /**
+   * Frozen copies of image artifacts at append time (project-relative under
+   * `.prismnext/experiments/<id>/artifacts/<runId>/`). Prefer these when
+   * showing "what this run produced"; `artifacts` remain the mutable working paths.
+   * Optional — old JSONL lines omit it.
+   */
+  artifactSnapshots?: string[];
   env: ExperimentEnv;
   notes?: string;
   /**

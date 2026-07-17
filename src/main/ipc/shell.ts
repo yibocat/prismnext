@@ -38,12 +38,15 @@ export function registerShellHandlers(): void {
     },
   );
 
-  ipcMain.handle("shell:setTrayStatus", (_event, args: { status: TrayStatus }) => {
-    const status = args?.status;
-    if (status === "idle" || status === "busy" || status === "attention") {
-      setTrayStatus(status);
-    }
-  });
+  ipcMain.handle(
+    "shell:setTrayStatus",
+    (_event, args: { status: TrayStatus; tooltip?: string | null }) => {
+      const status = args?.status;
+      if (status === "idle" || status === "busy" || status === "attention") {
+        setTrayStatus(status, args?.tooltip);
+      }
+    },
+  );
 
   ipcMain.handle("shell:setTrayMenu", (_event, snapshot: TrayMenuSnapshot) => {
     if (!snapshot || typeof snapshot !== "object") return;

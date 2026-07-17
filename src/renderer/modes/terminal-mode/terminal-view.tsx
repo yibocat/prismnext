@@ -51,16 +51,34 @@ export function TerminalView({ tabId }: TerminalViewProps) {
   const [termReadySignal, setTermReadySignal] = useState(0);
 
   // ─── Initialize terminal ───
+  // PTY lifetime follows the tab (store.destroyTab), not this React mount.
+  // Switching modes may unmount the view; remount reattaches to the same session.
 
   useEffect(() => {
     if (!spawnCwd || !projectRoot || !containerRef.current) return;
 
+    const existing = useTerminalStore.getState().sessions[tabId];
+    const existingAlive =
+      !!existing?.sessionId &&
+      (existing.status === "running" || existing.status === "starting");
+    const canReuse =
+      existingAlive && (!existing!.cwd || existing!.cwd === spawnCwd);
+
+    if (existingAlive && !canReuse) {
+      window.electronAPI.terminalDestroy({ sessionId: existing!.sessionId });
+      useTerminalStore.getState().removeSession(tabId);
+    }
+
     const gen = ++_globalGen;
-    const sessionId = `${tabId}:${gen}:${restartNonce}`;
+    const sessionId = canReuse
+      ? existing!.sessionId
+      : `${tabId}:${gen}:${restartNonce}`;
 
     const container = containerRef.current;
     setSpawnError(null);
-    useTerminalStore.getState().markSessionStarting(tabId, sessionId);
+    if (!canReuse) {
+      useTerminalStore.getState().markSessionStarting(tabId, sessionId);
+    }
 
     const computedStyle = getComputedStyle(document.documentElement);
     const editorFont = computedStyle.getPropertyValue("--font-editor").trim() || "'Geist Mono', 'Menlo', 'Monaco', 'Courier New', monospace";
@@ -92,25 +110,27 @@ export function TerminalView({ tabId }: TerminalViewProps) {
     let captureBuf = "";
     let capturing = false;
 
-    // ─── Spawn PTY ───
-    window.electronAPI
-      .terminalCreate({
-        sessionId,
-        tabId,
-        projectRoot,
-        cwd: spawnCwd,
-      })
-      .then(({ shell, cwd, pid }) => {
-        if (disposed) return;
-        useTerminalStore.getState().registerSession(tabId, sessionId, { shell, cwd, pid });
-      })
-      .catch((err) => {
-        if (disposed) return;
-        const message = err instanceof Error ? err.message : String(err);
-        setSpawnError(message);
-        useTerminalStore.getState().markSessionExited(tabId, 1);
-        term.writeln(`\x1b[1;31mPTY failed: ${message}\x1b[0m`);
-      });
+    if (!canReuse) {
+      // ─── Spawn PTY ───
+      window.electronAPI
+        .terminalCreate({
+          sessionId,
+          tabId,
+          projectRoot,
+          cwd: spawnCwd,
+        })
+        .then(({ shell, cwd, pid }) => {
+          if (disposed) return;
+          useTerminalStore.getState().registerSession(tabId, sessionId, { shell, cwd, pid });
+        })
+        .catch((err) => {
+          if (disposed) return;
+          const message = err instanceof Error ? err.message : String(err);
+          setSpawnError(message);
+          useTerminalStore.getState().markSessionExited(tabId, 1);
+          term.writeln(`\x1b[1;31mPTY failed: ${message}\x1b[0m`);
+        });
+    }
 
     // ─── Input → PTY ───
     const onDataDisposable = term.onData((data) => {
@@ -207,7 +227,7 @@ export function TerminalView({ tabId }: TerminalViewProps) {
       window.electronAPI.terminalResize({ sessionId: activeSessionId, cols, rows });
     });
 
-    // ─── Cleanup ───
+    // ─── Cleanup (UI only — PTY survives until tab close / restart) ───
     return () => {
       disposed = true;
       terminalSelectionRegistry.unregister(tabId);
@@ -217,11 +237,6 @@ export function TerminalView({ tabId }: TerminalViewProps) {
       onDataDisposable.dispose();
       resizeObserver.disconnect();
       resizeDisposable.dispose();
-      window.electronAPI.terminalDestroy({ sessionId: activeSessionId });
-      const current = useTerminalStore.getState().sessions[tabId];
-      if (current?.sessionId === activeSessionId) {
-        useTerminalStore.getState().removeSession(tabId);
-      }
       term.dispose();
       termRef.current = null;
       fitAddonRef.current = null;

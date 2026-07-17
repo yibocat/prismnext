@@ -313,7 +313,15 @@ export async function readTexFileContent(absolutePath: string): Promise<string> 
 }
 
 export async function readImageAsDataUrl(absolutePath: string): Promise<string> {
-  const data = await readFile(absolutePath);
+  const { dataUrl } = await readImageAsDataUrlWithMeta(absolutePath);
+  return dataUrl;
+}
+
+/** Image data URL plus mtime so the renderer can refresh when the file is overwritten. */
+export async function readImageAsDataUrlWithMeta(
+  absolutePath: string,
+): Promise<{ dataUrl: string; mtimeMs: number }> {
+  const [data, st] = await Promise.all([readFile(absolutePath), stat(absolutePath)]);
   const ext = extname(absolutePath).toLowerCase().slice(1) || "png";
 
   const mimeMap: Record<string, string> = {
@@ -329,7 +337,10 @@ export async function readImageAsDataUrl(absolutePath: string): Promise<string> 
 
   const mime = mimeMap[ext] || "image/png";
   const base64 = data.toString("base64");
-  return `data:${mime};base64,${base64}`;
+  return {
+    dataUrl: `data:${mime};base64,${base64}`,
+    mtimeMs: st.mtimeMs,
+  };
 }
 
 /** Raw file bytes for binary viewers (PDF preview — same path as compile cache). */

@@ -1,121 +1,49 @@
+/**
+ * Left-nav / shortcut helpers for TeX · Library · Experiments in RightArea.
+ * Opening a mode focuses it in parallel with other modes (no sibling teardown).
+ * Dismissing a mode closes only that mode’s tabs; RightArea collapses only when empty.
+ */
 import type { LeftNavContext } from "./types";
+import type { RightToolbarTab } from "@/stores/layout-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useLiteratureStore } from "@/stores/literature-store";
-import { RESIZE_FILL_PX } from "@/lib/workspace/layout-constants";
-import { runWithProgrammaticCenterResize } from "@/lib/workspace/layout-resize-guard";
+import { deactivateModeFromToolbar } from "@/lib/workspace/deactivate-mode";
 import {
   openRightArea,
+  openRightAreaMaximized,
   type RightAreaLayoutCtx,
 } from "@/lib/workspace/right-area-layout";
+
+export type LeftNavWorkspaceMode = "texworkspace" | "literature" | "experiments";
 
 export function isTexWorkspaceOpen(): boolean {
   const st = useLayoutStore.getState();
   const rps = useRightPanelStore.getState();
   return (
-    rps.tabs.some((t) => t.kind === "texworkspace") &&
-    st.rightAreaExpanded &&
-    st.focusedMode === "texworkspace"
+    rps.tabs.some((t) => t.kind === "texworkspace")
+    && st.rightAreaExpanded
+    && st.focusedMode === "texworkspace"
   );
-}
-
-function finishTexClose(ctx: LeftNavContext, onClosed?: () => void): void {
-  const st = useLayoutStore.getState();
-  st.setEditorMaximized(false);
-  st.setRightAreaExpanded(false);
-  ctx.panelRefs.centerRef?.current?.expand();
-  ctx.panelRefs.rightAreaRef?.current?.collapse();
-  onClosed?.();
-}
-
-/** Close TeX Workspace tab and return layout to the chat-centered view. */
-export function closeTexWorkspace(ctx: LeftNavContext, onClosed?: () => void): void {
-  const st = useLayoutStore.getState();
-  const rps = useRightPanelStore.getState();
-  const hasTab = rps.tabs.some((t) => t.kind === "texworkspace");
-
-  st.setEditorMaximized(false);
-  if (!hasTab && st.focusedMode !== "texworkspace") {
-    finishTexClose(ctx, onClosed);
-    return;
-  }
-
-  st.deactivateMode("texworkspace");
-  if (hasTab) {
-    rps.closeTabsOfKind("texworkspace", { onClosed: () => finishTexClose(ctx, onClosed) });
-  } else {
-    finishTexClose(ctx, onClosed);
-  }
-}
-
-function finishLiteratureClose(ctx: LeftNavContext, onClosed?: () => void): void {
-  const st = useLayoutStore.getState();
-  st.setEditorMaximized(false);
-  st.setRightAreaExpanded(false);
-  ctx.panelRefs.centerRef?.current?.expand();
-  ctx.panelRefs.rightAreaRef?.current?.collapse();
-  onClosed?.();
 }
 
 export function isLiteraturePanelOpen(): boolean {
   const st = useLayoutStore.getState();
   const rps = useRightPanelStore.getState();
   return (
-    rps.tabs.some((t) => t.kind === "literature") &&
-    st.rightAreaExpanded &&
-    st.focusedMode === "literature"
+    rps.tabs.some((t) => t.kind === "literature")
+    && st.rightAreaExpanded
+    && st.focusedMode === "literature"
   );
-}
-
-/** Open Literature library full-width in RightArea (same maximize pattern as TeX Workspace). */
-export function openLiteratureLibrary(ctx: LeftNavContext): void {
-  const st = useLayoutStore.getState();
-  const rps = useRightPanelStore.getState();
-  const r = ctx.panelRefs.rightAreaRef?.current;
-  const c = ctx.panelRefs.centerRef?.current;
-  if (!r || !c) return;
-
-  useLiteratureStore.getState().setLibrarySubview("library");
-  rps.ensureTab("literature");
-  st.setLeftSidebarView("sessions");
-  st.activateMode("literature");
-  st.setRightAreaExpanded(true);
-  st.setEditorMaximized(true);
-  runWithProgrammaticCenterResize(() => {
-    if (r.isCollapsed()) r.expand();
-    c.collapse();
-    r.resize(RESIZE_FILL_PX);
-  });
-}
-
-/** Exit maximized Literature and restore chat-centered layout (tabs kept). */
-export function closeLiteraturePanel(ctx: LeftNavContext, onClosed?: () => void): void {
-  const st = useLayoutStore.getState();
-  st.setEditorMaximized(false);
-  if (st.focusedMode !== "literature") {
-    finishLiteratureClose(ctx, onClosed);
-    return;
-  }
-  st.deactivateMode("literature");
-  finishLiteratureClose(ctx, onClosed);
-}
-
-function finishExperimentsClose(ctx: LeftNavContext, onClosed?: () => void): void {
-  const st = useLayoutStore.getState();
-  st.setEditorMaximized(false);
-  st.setRightAreaExpanded(false);
-  ctx.panelRefs.centerRef?.current?.expand();
-  ctx.panelRefs.rightAreaRef?.current?.collapse();
-  onClosed?.();
 }
 
 export function isExperimentsPanelOpen(): boolean {
   const st = useLayoutStore.getState();
   const rps = useRightPanelStore.getState();
   return (
-    rps.tabs.some((t) => t.kind === "experiments") &&
-    st.rightAreaExpanded &&
-    st.focusedMode === "experiments"
+    rps.tabs.some((t) => t.kind === "experiments")
+    && st.rightAreaExpanded
+    && st.focusedMode === "experiments"
   );
 }
 
@@ -131,76 +59,136 @@ function rightAreaCtxFromLeftNav(
   };
 }
 
-/** Open Literature in split (or chat-first maximize when too narrow). */
+/** Collapse RightArea only when no tabs remain. */
+export function maybeCollapseRightAreaIfEmpty(ctx: LeftNavContext): void {
+  const rps = useRightPanelStore.getState();
+  if (rps.tabs.length > 0) return;
+
+  const st = useLayoutStore.getState();
+  st.setEditorMaximized(false);
+  st.setRightAreaExpanded(false);
+  ctx.panelRefs.centerRef?.current?.expand();
+  ctx.panelRefs.rightAreaRef?.current?.collapse();
+}
+
+/**
+ * Ensure mode tab + focus + open RightArea.
+ * Does not close sibling modes or their tabs.
+ */
+export function focusModeInRightArea(
+  modeId: LeftNavWorkspaceMode,
+  ctx: LeftNavContext,
+  options?: {
+    maximize?: boolean;
+    layout?: Pick<RightAreaLayoutCtx, "leftSidebarRef" | "isMobile">;
+  },
+): void {
+  const st = useLayoutStore.getState();
+  const rps = useRightPanelStore.getState();
+
+  if (modeId === "literature") {
+    useLiteratureStore.getState().setLibrarySubview("library");
+  }
+
+  rps.ensureTab(modeId);
+  st.setLeftSidebarView("sessions");
+  st.activateMode(modeId as RightToolbarTab);
+
+  const layoutCtx = rightAreaCtxFromLeftNav(ctx, options?.layout);
+  if (options?.maximize) {
+    openRightAreaMaximized(layoutCtx);
+  } else {
+    openRightArea(layoutCtx);
+  }
+}
+
+/**
+ * Dismiss one mode (close its tabs like the toolbar), keep sibling tabs.
+ * Collapse RightArea only when nothing is left.
+ */
+export function dismissModeFromRightArea(
+  modeId: LeftNavWorkspaceMode,
+  ctx: LeftNavContext,
+  onClosed?: () => void,
+): void {
+  deactivateModeFromToolbar(modeId, {
+    onComplete: () => {
+      maybeCollapseRightAreaIfEmpty(ctx);
+      onClosed?.();
+    },
+  });
+}
+
+/** @deprecated Prefer dismissModeFromRightArea — kept for immersive nav callers. */
+export function closeTexWorkspace(ctx: LeftNavContext, onClosed?: () => void): void {
+  dismissModeFromRightArea("texworkspace", ctx, onClosed);
+}
+
+/** @deprecated Prefer dismissModeFromRightArea */
+export function closeLiteraturePanel(ctx: LeftNavContext, onClosed?: () => void): void {
+  dismissModeFromRightArea("literature", ctx, onClosed);
+}
+
+/** @deprecated Prefer dismissModeFromRightArea */
+export function closeExperimentsPanel(ctx: LeftNavContext, onClosed?: () => void): void {
+  dismissModeFromRightArea("experiments", ctx, onClosed);
+}
+
+export function openLiteratureLibrary(ctx: LeftNavContext): void {
+  focusModeInRightArea("literature", ctx, { maximize: true });
+}
+
 export function openLiteratureSplit(
   ctx: LeftNavContext,
   layout?: Pick<RightAreaLayoutCtx, "leftSidebarRef" | "isMobile">,
 ): void {
-  const st = useLayoutStore.getState();
-  const rps = useRightPanelStore.getState();
-  closeTexWorkspace(ctx);
-  closeExperimentsPanel(ctx);
-  useLiteratureStore.getState().setLibrarySubview("library");
-  rps.ensureTab("literature");
-  st.setLeftSidebarView("sessions");
-  st.activateMode("literature");
-  openRightArea(rightAreaCtxFromLeftNav(ctx, layout));
+  focusModeInRightArea("literature", ctx, { layout });
 }
 
-/**
- * Shortcut: maximize Literature (toggle off when already maximized).
- * From split → promote to maximize.
- */
 export function toggleLiteratureMaximize(ctx: LeftNavContext): void {
   const st = useLayoutStore.getState();
   if (isLiteraturePanelOpen() && st.editorMaximized) {
-    closeLiteraturePanel(ctx);
-    st.setLeftSidebarView("sessions");
+    dismissModeFromRightArea("literature", ctx, () => {
+      st.setLeftSidebarView("sessions");
+    });
     return;
   }
-  closeTexWorkspace(ctx);
-  closeExperimentsPanel(ctx);
   openLiteratureLibrary(ctx);
 }
 
-/** Shortcut: split Literature (toggle off when already split; demote when maximized). */
 export function toggleLiteratureSplit(
   ctx: LeftNavContext,
   layout?: Pick<RightAreaLayoutCtx, "leftSidebarRef" | "isMobile">,
 ): void {
   const st = useLayoutStore.getState();
   if (isLiteraturePanelOpen() && !st.editorMaximized) {
-    closeLiteraturePanel(ctx);
-    st.setLeftSidebarView("sessions");
+    dismissModeFromRightArea("literature", ctx, () => {
+      st.setLeftSidebarView("sessions");
+    });
     return;
   }
   openLiteratureSplit(ctx, layout);
 }
 
-/** Open Experiments in split (or chat-first maximize when too narrow). */
 export function openExperimentsSplit(
   ctx: LeftNavContext,
   layout?: Pick<RightAreaLayoutCtx, "leftSidebarRef" | "isMobile">,
 ): void {
-  const st = useLayoutStore.getState();
-  const rps = useRightPanelStore.getState();
-  closeTexWorkspace(ctx);
-  closeLiteraturePanel(ctx);
-  rps.ensureTab("experiments");
-  st.setLeftSidebarView("sessions");
-  st.activateMode("experiments");
-  openRightArea(rightAreaCtxFromLeftNav(ctx, layout));
+  focusModeInRightArea("experiments", ctx, { layout });
+}
+
+export function openExperimentsPanel(ctx: LeftNavContext): void {
+  focusModeInRightArea("experiments", ctx, { maximize: true });
 }
 
 export function toggleExperimentsMaximize(ctx: LeftNavContext): void {
   const st = useLayoutStore.getState();
   if (isExperimentsPanelOpen() && st.editorMaximized) {
-    closeExperimentsPanel(ctx);
-    st.setLeftSidebarView("sessions");
+    dismissModeFromRightArea("experiments", ctx, () => {
+      st.setLeftSidebarView("sessions");
+    });
     return;
   }
-  closeTexWorkspace(ctx);
-  closeLiteraturePanel(ctx);
   openExperimentsPanel(ctx);
 }
 
@@ -210,50 +198,32 @@ export function toggleExperimentsSplit(
 ): void {
   const st = useLayoutStore.getState();
   if (isExperimentsPanelOpen() && !st.editorMaximized) {
-    closeExperimentsPanel(ctx);
-    st.setLeftSidebarView("sessions");
+    dismissModeFromRightArea("experiments", ctx, () => {
+      st.setLeftSidebarView("sessions");
+    });
     return;
   }
   openExperimentsSplit(ctx, layout);
 }
 
-/** Open TeX Workspace in split (or chat-first maximize when too narrow). */
 export function openTexWorkspaceSplit(
   ctx: LeftNavContext,
   layout?: Pick<RightAreaLayoutCtx, "leftSidebarRef" | "isMobile">,
 ): void {
-  const st = useLayoutStore.getState();
-  const rps = useRightPanelStore.getState();
-  closeLiteraturePanel(ctx);
-  closeExperimentsPanel(ctx);
-  rps.ensureTab("texworkspace");
-  st.setLeftSidebarView("sessions");
-  st.activateMode("texworkspace");
-  openRightArea(rightAreaCtxFromLeftNav(ctx, layout));
+  focusModeInRightArea("texworkspace", ctx, { layout });
+}
+
+export function openTexWorkspaceMaximized(ctx: LeftNavContext): void {
+  focusModeInRightArea("texworkspace", ctx, { maximize: true });
 }
 
 export function toggleTexWorkspaceMaximize(ctx: LeftNavContext): void {
   const st = useLayoutStore.getState();
   if (isTexWorkspaceOpen() && st.editorMaximized) {
-    closeTexWorkspace(ctx);
+    dismissModeFromRightArea("texworkspace", ctx);
     return;
   }
-  closeLiteraturePanel(ctx);
-  closeExperimentsPanel(ctx);
-  const rps = useRightPanelStore.getState();
-  const r = ctx.panelRefs.rightAreaRef?.current;
-  const c = ctx.panelRefs.centerRef?.current;
-  if (!r || !c) return;
-  rps.ensureTab("texworkspace");
-  st.setLeftSidebarView("sessions");
-  st.activateMode("texworkspace");
-  st.setRightAreaExpanded(true);
-  st.setEditorMaximized(true);
-  runWithProgrammaticCenterResize(() => {
-    if (r.isCollapsed()) r.expand();
-    c.collapse();
-    r.resize(RESIZE_FILL_PX);
-  });
+  openTexWorkspaceMaximized(ctx);
 }
 
 export function toggleTexWorkspaceSplit(
@@ -262,40 +232,8 @@ export function toggleTexWorkspaceSplit(
 ): void {
   const st = useLayoutStore.getState();
   if (isTexWorkspaceOpen() && !st.editorMaximized) {
-    closeTexWorkspace(ctx);
+    dismissModeFromRightArea("texworkspace", ctx);
     return;
   }
   openTexWorkspaceSplit(ctx, layout);
-}
-
-/** Open Experiments mode full-width in RightArea (same maximize pattern as Literature / TeX). */
-export function openExperimentsPanel(ctx: LeftNavContext): void {
-  const st = useLayoutStore.getState();
-  const rps = useRightPanelStore.getState();
-  const r = ctx.panelRefs.rightAreaRef?.current;
-  const c = ctx.panelRefs.centerRef?.current;
-  if (!r || !c) return;
-
-  rps.ensureTab("experiments");
-  st.setLeftSidebarView("sessions");
-  st.activateMode("experiments");
-  st.setRightAreaExpanded(true);
-  st.setEditorMaximized(true);
-  runWithProgrammaticCenterResize(() => {
-    if (r.isCollapsed()) r.expand();
-    c.collapse();
-    r.resize(RESIZE_FILL_PX);
-  });
-}
-
-/** Exit maximized Experiments and restore chat-centered layout (tabs kept). */
-export function closeExperimentsPanel(ctx: LeftNavContext, onClosed?: () => void): void {
-  const st = useLayoutStore.getState();
-  st.setEditorMaximized(false);
-  if (st.focusedMode !== "experiments") {
-    finishExperimentsClose(ctx, onClosed);
-    return;
-  }
-  st.deactivateMode("experiments");
-  finishExperimentsClose(ctx, onClosed);
 }

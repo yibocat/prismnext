@@ -5,44 +5,58 @@
  * one place (chip click and the inspector's "Open in Files" button agree).
  */
 import { useDocumentStore } from "@/stores/document-store";
-import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { navigateFileTreeToPath } from "@/lib/files/navigate-file-tree";
+import { ensureRightAreaVisibleForFiles } from "@/lib/files/open-project-file";
 import { resolveProjectRelativePath } from "@/lib/files/project-path";
 import {
   artifactBasename,
   artifactPathCandidates,
+  imagePathsForRunDisplay,
+  isImageArtifactPath,
+  resolveImageArtifactPathsForDisplay,
   toProjectRelativeArtifact,
 } from "../../../shared/artifact-path";
 
-/** Build the project-relative path (island-relative → prefixed). */
+export { isImageArtifactPath, imagePathsForRunDisplay };
+
+/** Build the project-relative path (island-relative → prefixed). Open-in-Files only. */
 export function artifactFullPath(path: string, workspacePath?: string): string {
   return toProjectRelativeArtifact(path, workspacePath);
 }
 
-/** Image file extensions we inline in chat tool cards / markdown. */
-const IMAGE_ARTIFACT_EXT = /\.(png|jpe?g|gif|webp|svg)$/i;
-
-export function isImageArtifactPath(path: string): boolean {
-  const base = (path || "").replace(/\\/g, "/").split(/[?#]/)[0] ?? "";
-  return IMAGE_ARTIFACT_EXT.test(base);
-}
-
-/** Project-relative paths for image artifacts (cwd = island workspacePath). */
+/**
+ * Project-relative paths for image embeds in chat tool cards.
+ * Keeps as-declared paths (e.g. manuscript/…) — does NOT blind-join under the island.
+ * Bare filenames still join workspace. Prefer {@link imagePathsForRunDisplay} when
+ * the run has `artifactSnapshots`.
+ */
 export function resolveImageArtifactPaths(
   artifacts: string[],
   workspacePath?: string,
 ): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const a of artifacts) {
-    if (!isImageArtifactPath(a)) continue;
-    const full = artifactFullPath(a, workspacePath);
-    if (!full || seen.has(full)) continue;
-    seen.add(full);
-    out.push(full);
+  return resolveImageArtifactPathsForDisplay(artifacts, workspacePath);
+}
+
+/**
+ * Image paths to embed for a run: frozen snapshots first, else declared artifacts.
+ */
+export function resolveRunImagePathsForDisplay(
+  run: {
+    artifacts?: string[] | null;
+    artifactSnapshots?: string[] | null;
+  },
+  workspacePath?: string,
+): string[] {
+  const preferred = imagePathsForRunDisplay({
+    artifacts: run.artifacts,
+    artifactSnapshots: run.artifactSnapshots,
+  });
+  // Snapshots are already project-relative under .prismnext/ — pass through.
+  if ((run.artifactSnapshots?.length ?? 0) > 0) {
+    return preferred;
   }
-  return out;
+  return resolveImageArtifactPathsForDisplay(preferred, workspacePath);
 }
 
 /**
@@ -81,7 +95,7 @@ export async function resolveExistingArtifactRel(
 export function openArtifactInFiles(fullPath: string): void {
   if (!fullPath) return;
   const fileName = fullPath.split("/").pop() ?? fullPath;
-  useLayoutStore.getState().activateMode("files");
+  ensureRightAreaVisibleForFiles();
   navigateFileTreeToPath(fullPath);
   useDocumentStore.getState().setActiveFile(fullPath);
   useRightPanelStore.getState().openFile(fullPath, fullPath, fileName, { pin: true });

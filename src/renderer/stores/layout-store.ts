@@ -48,6 +48,13 @@ interface LayoutState {
   /** Default layout applied when entering TeX Workspace. */
   texworkspaceDefaultViewMode: TexworkspaceViewMode;
   setTexworkspaceDefaultViewMode: (mode: TexworkspaceViewMode) => void;
+  /**
+   * When true, TeX split shows editor on the left and compile PDF on the right
+   * (default is PDF left / editor right).
+   */
+  texworkspacePanesSwapped: boolean;
+  setTexworkspacePanesSwapped: (swapped: boolean) => void;
+  toggleTexworkspacePanesSwapped: () => void;
   /** When true, the PDF preview slot shows compile problems (texworkspace only). */
   texworkspaceProblemsOpen: boolean;
   setTexworkspaceProblemsOpen: (open: boolean) => void;
@@ -218,6 +225,10 @@ export const useLayoutStore = create<LayoutState>()(
       texworkspaceViewMode: "split",
       texworkspaceDefaultViewMode: "split",
       setTexworkspaceDefaultViewMode: (mode) => set({ texworkspaceDefaultViewMode: mode }),
+      texworkspacePanesSwapped: false,
+      setTexworkspacePanesSwapped: (swapped) => set({ texworkspacePanesSwapped: swapped }),
+      toggleTexworkspacePanesSwapped: () =>
+        set((s) => ({ texworkspacePanesSwapped: !s.texworkspacePanesSwapped })),
       texworkspaceProblemsOpen: false,
       setTexworkspaceProblemsOpen: (open) => set({ texworkspaceProblemsOpen: open }),
       texworkspaceSearchQuery: "",
@@ -426,6 +437,7 @@ export const useLayoutStore = create<LayoutState>()(
         sessionSort: state.sessionSort,
         expandedFileTreeFolders: state.expandedFileTreeFolders,
         texworkspaceDefaultViewMode: state.texworkspaceDefaultViewMode,
+        texworkspacePanesSwapped: state.texworkspacePanesSwapped,
         workspaceSplitLayouts: state.workspaceSplitLayouts,
       }),
     },

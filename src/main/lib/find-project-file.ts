@@ -1,6 +1,6 @@
 /**
  * Bounded filename search under a project root (no hardcoded folder allowlists).
- * Skips heavy/irrelevant trees; returns the first project-relative match.
+ * Skips heavy/irrelevant trees; when multiple matches exist, prefers newest mtime.
  */
 import { readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -25,23 +25,26 @@ export interface FindProjectFileByBasenameOpts {
   skipDirNames?: ReadonlySet<string>;
 }
 
+type Hit = { rel: string; mtimeMs: number };
+
 /**
- * Walk `projectRoot` for a file whose basename matches (case-sensitive).
- * Returns a forward-slash project-relative path, or null.
+ * Walk `projectRoot` for files whose basename matches (case-sensitive).
+ * Returns all project-relative hits (capped by maxFiles walk budget).
  */
-export function findProjectRelByBasename(
+export function findAllProjectRelByBasename(
   projectRoot: string,
   basename: string,
   opts?: FindProjectFileByBasenameOpts,
-): string | null {
+): Hit[] {
   const name = (basename || "").replace(/\\/g, "/").split("/").pop() ?? "";
-  if (!name || name === "." || name === "..") return null;
+  if (!name || name === "." || name === "..") return [];
 
   const maxDepth = opts?.maxDepth ?? 8;
   const maxFiles = opts?.maxFiles ?? 4000;
   const skip = opts?.skipDirNames ?? DEFAULT_SKIP;
 
   let seen = 0;
+  const hits: Hit[] = [];
   const stack: { abs: string; depth: number }[] = [{ abs: projectRoot, depth: 0 }];
 
   while (stack.length > 0) {
@@ -56,7 +59,7 @@ export function findProjectRelByBasename(
     }
 
     for (const ent of entries) {
-      if (seen >= maxFiles) return null;
+      if (seen >= maxFiles) return hits;
       const abs = join(cur.abs, ent.name);
       if (ent.isDirectory()) {
         if (skip.has(ent.name) || ent.name.startsWith(".")) continue;
@@ -67,12 +70,34 @@ export function findProjectRelByBasename(
       seen += 1;
       if (ent.name !== name) continue;
       try {
-        if (!statSync(abs).isFile()) continue;
+        const st = statSync(abs);
+        if (!st.isFile()) continue;
+        hits.push({
+          rel: relative(projectRoot, abs).replace(/\\/g, "/"),
+          mtimeMs: st.mtimeMs,
+        });
       } catch {
-        continue;
+        // skip
       }
-      return relative(projectRoot, abs).replace(/\\/g, "/");
     }
   }
-  return null;
+  return hits;
+}
+
+/**
+ * Walk `projectRoot` for a file whose basename matches (case-sensitive).
+ * When multiple matches exist, returns the newest by mtime (stable tie-break: path).
+ */
+export function findProjectRelByBasename(
+  projectRoot: string,
+  basename: string,
+  opts?: FindProjectFileByBasenameOpts,
+): string | null {
+  const hits = findAllProjectRelByBasename(projectRoot, basename, opts);
+  if (hits.length === 0) return null;
+  hits.sort((a, b) => {
+    if (b.mtimeMs !== a.mtimeMs) return b.mtimeMs - a.mtimeMs;
+    return a.rel.localeCompare(b.rel);
+  });
+  return hits[0]!.rel;
 }

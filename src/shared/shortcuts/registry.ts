@@ -4,6 +4,16 @@ import type { ShortcutDef } from "./types";
 export const SHORTCUT_REGISTRY: readonly ShortcutDef[] = [
   // ── shell (fixed) ──
   {
+    id: "shell.newWindow",
+    category: "shell",
+    remappable: false,
+    scope: "app",
+    defaultChord: { key: "n", primary: true },
+    labelKey: "shortcuts.shell.newWindow",
+    menuAccelerator: true,
+    implemented: true,
+  },
+  {
     id: "shell.close",
     category: "shell",
     remappable: false,

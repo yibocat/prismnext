@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	fsReadBatch: (absPaths: string[]) => ipcRenderer.invoke("fs:readBatch", { absPaths }),
 	fsReadImage: (absPath: string) =>
 		ipcRenderer.invoke("fs:readImage", { absPath }),
+	fsStat: (absPath: string) =>
+		ipcRenderer.invoke("fs:stat", { absPath }),
 	fsReadBytes: (absPath: string) =>
 		ipcRenderer.invoke("fs:readBytes", { absPath }) as Promise<{ bytes: ArrayBuffer }>,
 	fsWrite: (absPath: string, content: string) =>
@@ -83,8 +85,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		body: string;
 		tabId?: string;
 	}) => ipcRenderer.invoke("shell:desktopNotify", args),
-	shellSetTrayStatus: (status: "idle" | "busy" | "attention") =>
-		ipcRenderer.invoke("shell:setTrayStatus", { status }),
+	shellSetTrayStatus: (
+		status: "idle" | "busy" | "attention",
+		tooltip?: string | null,
+	) => ipcRenderer.invoke("shell:setTrayStatus", { status, tooltip }),
 	shellSetTrayMenu: (snapshot: {
 		showLabel: string;
 		newChatLabel: string;
@@ -94,6 +98,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			title: string;
 			sessionId?: string;
 			tabId?: string;
+		}>;
+		projectName?: string | null;
+		modes?: Array<{
+			id: "texworkspace" | "literature" | "experiments";
+			label: string;
 		}>;
 	}) => ipcRenderer.invoke("shell:setTrayMenu", snapshot),
 	onShellFocusChatTab: (callback: (args: { tabId: string }) => void) => {
@@ -118,6 +127,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		) => callback(args);
 		ipcRenderer.on("shell:trayOpenRecent", handler);
 		return () => ipcRenderer.removeListener("shell:trayOpenRecent", handler);
+	},
+	onShellTrayOpenMode: (
+		callback: (args: {
+			modeId: "texworkspace" | "literature" | "experiments";
+		}) => void,
+	) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			args: { modeId: "texworkspace" | "literature" | "experiments" },
+		) => callback(args);
+		ipcRenderer.on("shell:trayOpenMode", handler);
+		return () => ipcRenderer.removeListener("shell:trayOpenMode", handler);
 	},
 	fsExists: (absPath: string) => ipcRenderer.invoke("fs:exists", { absPath }),
 	fsIsFile: (absPath: string) => ipcRenderer.invoke("fs:isFile", { absPath }),
@@ -240,6 +261,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	windowMinimize: () => ipcRenderer.invoke("window:minimize"),
 	windowMaximize: () => ipcRenderer.invoke("window:maximize"),
 	windowClose: () => ipcRenderer.invoke("window:close"),
+	windowNew: () => ipcRenderer.invoke("window:new"),
 
 	// Window state events (Main → Renderer)
 	onWindowStateChange: (
@@ -270,6 +292,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	compileSynctexForward: (projectDir: string, file: string, line: number) =>
 		ipcRenderer.invoke("compile:synctexForward", { projectDir, file, line }),
 	compileDetectTexlive: () => ipcRenderer.invoke("compile:detectTexlive"),
+	compileExportPdf: (projectRoot: string, mainFile: string, pdfBytes?: Uint8Array | null) =>
+		ipcRenderer.invoke("compile:exportPdf", { projectRoot, mainFile, pdfBytes }),
+	manuscriptPackZip: (projectRoot: string, manuscriptDir: string) =>
+		ipcRenderer.invoke("manuscript:packZip", { projectRoot, manuscriptDir }),
 	onCompileAgentComplete: (
 		callback: (data: {
 			projectDir: string;

@@ -3,6 +3,7 @@ import { createHighlighter, type Highlighter } from "shiki";
 import { CheckIcon, CopyIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { Hint } from "@/components/ui/hint";
+import { ChatArtifactFence } from "@/lib/markdown/chat-artifact-block";
 
 // ── Map app syntax themes to Shiki theme names ──
 // Keys match EditorSyntaxThemeId from src/renderer/lib/editor-themes/types.ts
@@ -61,7 +62,7 @@ const CopyButton = memo(({ text }: { text: string }) => {
 });
 CopyButton.displayName = "CopyButton";
 
-// ── ShikiCodeBlock ──
+// ── Entry: artifact fence vs Shiki highlight (hooks stay inside each branch) ──
 export const ShikiCodeBlock = memo(function ShikiCodeBlock({
   className,
   children,
@@ -71,6 +72,21 @@ export const ShikiCodeBlock = memo(function ShikiCodeBlock({
 }) {
   const lang = className?.replace("language-", "") || "";
   const code = String(children).replace(/\n$/, "");
+  if (lang === "artifact") {
+    return <ChatArtifactFence raw={code} />;
+  }
+  return <ShikiHighlightedCode className={className} code={code} lang={lang} />;
+});
+
+const ShikiHighlightedCode = memo(function ShikiHighlightedCode({
+  className,
+  code,
+  lang,
+}: {
+  className?: string;
+  code: string;
+  lang: string;
+}) {
   const [html, setHtml] = useState<string>("");
   const [lines, setLines] = useState(0);
   const [folded, setFolded] = useState(true);
@@ -130,7 +146,7 @@ export const ShikiCodeBlock = memo(function ShikiCodeBlock({
   if (isInline) {
     return (
       <code className="rounded bg-muted px-1 py-0.5 font-mono text-[length:var(--font-code)]">
-        {children}
+        {code}
       </code>
     );
   }

@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { PaneContent } from "./content";
 
@@ -7,27 +8,44 @@ interface RightPaneProps {
 }
 
 /**
- * Only the active tab is mounted. Inactive tabs used to stay mounted with
- * `position:absolute` + `visibility:hidden` so editors kept scroll state, but
- * that left stale compositor layers visible through transparent regions
- * (e.g. LogViewer empty state). Remount on tab switch is acceptable here.
+ * Keep every open tab mounted. Inactive tabs stay in the tree as
+ * `absolute + invisible` so editors/PDF keep scroll, cursor, and undo.
+ *
+ * Opaque `bg-background` + `isolation` avoids the old LogViewer compositor bleed
+ * that forced active-only mounting in v0.4.4.
  */
 export function RightPane({ tabs, activeTabId }: RightPaneProps) {
-  const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
-
-  return (
-    <div className="flex h-full flex-col min-w-0 bg-background">
-      {activeTab ? (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
-          <PaneContent activeTab={activeTab} isActive />
-        </div>
-      ) : tabs.length === 0 ? (
+  if (tabs.length === 0) {
+    return (
+      <div className="flex h-full flex-col min-w-0 bg-background">
         <div className="flex flex-1 items-center justify-center">
           <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
             Open a file to get started
           </p>
         </div>
-      ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative isolate flex h-full min-w-0 flex-col overflow-hidden bg-background">
+      {tabs.map((tab) => {
+        const isActive = tab.id === activeTabId;
+        return (
+          <div
+            key={tab.id}
+            className={cn(
+              "flex min-h-0 flex-col overflow-hidden bg-background",
+              isActive
+                ? "relative z-0 h-full flex-1"
+                : "pointer-events-none invisible absolute inset-0 z-[-1]",
+            )}
+            aria-hidden={!isActive}
+          >
+            <PaneContent activeTab={tab} isActive={isActive} />
+          </div>
+        );
+      })}
     </div>
   );
 }

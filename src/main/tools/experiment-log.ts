@@ -76,6 +76,8 @@ export default tool({
     "Experiment log — create experiment islands, list/read experiments, append run records, detect env, and open the Experiments UI. " +
     "Registry: `.prismnext/experiments/<id>/` (meta.json + runs.jsonl). " +
     "Workspace lab: `<experiment-dir>/<id>/` (clean folder — agent-owned layout). " +
+    "action=read returns lean run records by default (command/artifacts/exitCode/times; no stdout/stderr). " +
+    "Response includes oldestRun + latestRun (absolute first/last in jsonl) and runs ordered chronological oldest→newest. " +
     "Use `action` to select an operation. Do NOT use generic read/write/edit on registry files — use this tool only.",
   args: {
     action: tool.schema
@@ -93,7 +95,17 @@ export default tool({
       .optional(),
     runsLimit: tool.schema
       .number()
-      .describe("read only — max recent runs to return (default 20).")
+      .describe(
+        "read only — max recent runs in the `runs` window (default 20, lean max 50). " +
+          "Window is a tail of jsonl; for absolute first/latest prefer oldestRun/latestRun.",
+      )
+      .optional(),
+    includeOutput: tool.schema
+      .boolean()
+      .describe(
+        "read only — when true, include stdoutTail/stderrTail (capped to 10 runs). " +
+          "Default false. Prefer artifacts / logPath / results-snapshot for figures.",
+      )
       .optional(),
     briefLinks: tool.schema
       .object({
@@ -149,6 +161,7 @@ export default tool({
       if (!id) return toolOutput({ ok: false, error: "Missing id parameter." });
       payload.id = id;
       if (typeof args.runsLimit === "number") payload.runsLimit = args.runsLimit;
+      if (args.includeOutput === true) payload.includeOutput = true;
     } else if (action === "append_run") {
       const id = typeof args.id === "string" ? args.id.trim() : "";
       if (!id) return toolOutput({ ok: false, error: "Missing id parameter." });

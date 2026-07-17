@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatTrayTooltip,
   notifyDedupeKey,
   pickRecentSessionsForTray,
   resolveTrayStatus,
   shouldHideOnClose,
+  shouldOpenTrayMenuOnClick,
   shouldSendDesktopNotification,
 } from "../../src/shared/desktop-shell";
 
@@ -18,6 +20,11 @@ describe("desktop-shell", () => {
     expect(
       resolveTrayStatus({ hasPendingPermission: false, isStreaming: false }),
     ).toBe("idle");
+  });
+
+  it("skips tray menu reopen during dismiss echo window", () => {
+    expect(shouldOpenTrayMenuOnClick({ now: 1000, ignoreUntil: 900 })).toBe(true);
+    expect(shouldOpenTrayMenuOnClick({ now: 1000, ignoreUntil: 1100 })).toBe(false);
   });
 
   it("hides on close only when tray is on and not quitting", () => {
@@ -76,5 +83,17 @@ describe("desktop-shell", () => {
       3,
     );
     expect(picked.map((s) => s.id)).toEqual(["b", "c", "d"]);
+  });
+
+  it("formats tray tooltip with project name and status", () => {
+    expect(formatTrayTooltip({ status: "idle", projectName: "MyPaper" })).toBe("MyPaper");
+    expect(formatTrayTooltip({ status: "busy", projectName: "MyPaper" })).toBe(
+      "MyPaper — Working…",
+    );
+    expect(formatTrayTooltip({ status: "attention", projectName: "MyPaper" })).toBe(
+      "MyPaper — Needs attention",
+    );
+    expect(formatTrayTooltip({ status: "idle" })).toBe("prismnext");
+    expect(formatTrayTooltip({ status: "busy" })).toBe("prismnext — Working…");
   });
 });

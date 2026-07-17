@@ -24,6 +24,7 @@ export type ExperimentRunPaperFields = {
   artifactPath?: string;
   linkMethod?: string;
   artifacts?: string[];
+  artifactSnapshots?: string[];
   env?: {
     python?: string | null;
     pythonVersion?: string | null;
@@ -48,6 +49,7 @@ export function experimentArtifactProjectPath(
 
 /** Image artifacts as project-relative paths suitable for markdown / `\includegraphics`. */
 export function experimentRunFigurePaths(fields: ExperimentRunPaperFields): string[] {
+  // Paper cites working copies (e.g. manuscript/…), not frozen registry snapshots.
   return resolveImageArtifactPaths(fields.artifacts ?? [], fields.workspacePath);
 }
 
@@ -76,6 +78,12 @@ export function formatExperimentRunAgentContext(fields: ExperimentRunPaperFields
   if (arts.length > 0) {
     const projArts = arts.map((a) => experimentArtifactProjectPath(fields.workspacePath, a));
     lines.push(`artifacts: ${projArts.join(", ")}`);
+  }
+  if (fields.artifactSnapshots?.length) {
+    lines.push(`artifactSnapshots: ${fields.artifactSnapshots.join(", ")}`);
+    lines.push(
+      "(When showing what THIS run produced, prefer artifactSnapshots — artifacts are mutable working paths.)",
+    );
   }
   if (fields.logPath) {
     lines.push(
@@ -136,6 +144,7 @@ export function experimentRunFieldsFromPart(
     artifactPath: part.artifactPath,
     linkMethod: part.linkMethod,
     artifacts: part.artifacts,
+    artifactSnapshots: part.artifactSnapshots,
     env: part.env,
     chatSessionId: part.chatSessionId,
     workspacePath: part.workspacePath,

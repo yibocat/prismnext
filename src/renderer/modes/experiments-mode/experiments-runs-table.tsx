@@ -35,7 +35,11 @@ import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens
 import { CopyFeedbackButton } from "@/modes/literature-mode/literature-inline-field";
 import { insertExperimentRunToChat } from "@/lib/chat/insert-to-chat";
 import { useExperimentStore } from "@/stores/experiment-store";
-import { artifactFullPath, openArtifactPathInFiles } from "./experiments-artifact-nav";
+import { artifactFullPath, openArtifactPathInFiles, resolveRunImagePathsForDisplay } from "./experiments-artifact-nav";
+import { ChatProjectImage } from "@/lib/markdown/extract-markdown-images";
+import { useDocumentStore } from "@/stores/document-store";
+import { resolveProjectRelativePath } from "@/lib/files/project-path";
+import { isImageArtifactPath } from "../../../shared/artifact-path";
 import { ExperimentsProvenanceInspector } from "./experiments-provenance-inspector";
 import {
   DEFAULT_RUNS_QUERY,
@@ -245,11 +249,44 @@ function RunDetailPanel({
       ? run.artifacts.slice(0, ARTIFACT_PREVIEW)
       : run.artifacts;
   const hiddenArtifactCount = run.artifacts.length - ARTIFACT_PREVIEW;
+  const snapshotImages = resolveRunImagePathsForDisplay(
+    { artifacts: run.artifacts, artifactSnapshots: run.artifactSnapshots },
+    workspacePath,
+  ).filter((p) => (run.artifactSnapshots?.length ? true : isImageArtifactPath(p)));
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const [workingCopyNewer, setWorkingCopyNewer] = useState(false);
 
   // Reset fold when switching runs so a long list does not stay expanded.
   useEffect(() => {
     setArtifactsExpanded(false);
   }, [run.runId]);
+
+  useEffect(() => {
+    setWorkingCopyNewer(false);
+    if (!projectRoot || !run.artifactSnapshots?.length || !run.finishedAt) return;
+    const finishedMs = Date.parse(run.finishedAt) || 0;
+    if (!finishedMs) return;
+    let cancelled = false;
+    void (async () => {
+      for (const art of run.artifacts) {
+        if (!isImageArtifactPath(art)) continue;
+        const abs = resolveProjectRelativePath(projectRoot, artifactFullPath(art, workspacePath));
+        if (!abs) continue;
+        try {
+          const st = await window.electronAPI.fsStat(abs);
+          if (st && st.mtimeMs > finishedMs + 1000) {
+            if (!cancelled) setWorkingCopyNewer(true);
+            return;
+          }
+        } catch {
+          // ignore
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectRoot, run.runId, run.finishedAt, run.artifacts, run.artifactSnapshots, workspacePath]);
 
   return (
     <div className={experimentsRunDetailPanelClass} data-run-detail={run.runId}>
@@ -300,6 +337,11 @@ function RunDetailPanel({
           <div className="mb-1.5 text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/60">
             {t("experiments.artifacts")}
           </div>
+          {workingCopyNewer ? (
+            <p className="mb-1.5 text-[length:var(--font-size-11)] text-amber-600 dark:text-amber-400">
+              {t("experiments.runs.workingCopyNewer")}
+            </p>
+          ) : null}
           <div className="flex flex-wrap items-center gap-1.5">
             {visibleArtifacts.map((artifact) => (
               <ArtifactChip
@@ -337,6 +379,20 @@ function RunDetailPanel({
               </Hint>
             ) : null}
           </div>
+          {snapshotImages.length > 0 && (run.artifactSnapshots?.length ?? 0) > 0 ? (
+            <div className="mt-2 space-y-2">
+              <div className="text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/60">
+                {t("experiments.runs.runSnapshot")}
+              </div>
+              {snapshotImages.slice(0, 3).map((rel) => (
+                <ChatProjectImage
+                  key={rel}
+                  src={rel}
+                  alt={rel.split("/").pop() || "snapshot"}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -368,6 +424,7 @@ function RunDetailPanel({
                 startedAt: run.startedAt,
                 finishedAt: run.finishedAt,
                 artifacts: run.artifacts ?? [],
+                artifactSnapshots: run.artifactSnapshots,
                 env: run.env,
                 chatSessionId: run.chatSessionId ?? null,
                 workspacePath,

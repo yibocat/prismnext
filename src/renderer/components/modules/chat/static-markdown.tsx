@@ -22,7 +22,7 @@ import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import { openProjectFileFromChat } from "@/lib/files/open-project-file";
 import { useDocumentStore } from "@/stores/document-store";
-import { ChatProjectImage } from "@/lib/markdown/extract-markdown-images";
+import { ChatArtifactBlock } from "@/lib/markdown/chat-artifact-block";
 import { AppBrowserLink } from "@/components/modules/shared/app-browser-link";
 
 function ChatWikilink({ target, children }: { target: string; children: React.ReactNode }) {
@@ -113,9 +113,10 @@ export const StaticMarkdown = memo(function StaticMarkdown({
     const base: Components = {
       ...MARKDOWN_COMPONENTS,
       code: ShikiCodeBlock as any,
-      img: ({ src, alt }: ComponentProps<"img">) => (
-        <ChatProjectImage src={typeof src === "string" ? src : undefined} alt={alt} />
-      ),
+      img: ({ src, alt }: ComponentProps<"img">) =>
+        typeof src === "string" && src.trim() ? (
+          <ChatArtifactBlock path={src} title={alt} kind="image" />
+        ) : null,
       a: ({ href, children, ...props }: any) => {
         if (href?.startsWith("wikilink:")) {
           const target = href.slice("wikilink:".length).split("#")[0];

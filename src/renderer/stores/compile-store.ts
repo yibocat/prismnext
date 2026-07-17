@@ -14,6 +14,99 @@ export function getPdfBytes(rootFileId: string): Uint8Array | undefined {
   return _pdfBytesCache.get(rootFileId);
 }
 
+function joinProjectPath(projectRoot: string, ...parts: string[]): string {
+  const sep = projectRoot.includes("\\") ? "\\" : "/";
+  const root = projectRoot.replace(/[/\\]+$/, "");
+  return [root, ...parts.map((p) => p.replace(/^[/\\]+/, "").replace(/[/\\]+/g, sep))].join(sep);
+}
+
+function texStem(relativePath: string): string {
+  const base = relativePath.split(/[/\\]/).pop() ?? relativePath;
+  return base.replace(/\.tex$/i, "");
+}
+
+/** Absolute path of the compile PDF for a manuscript main file. */
+export function resolveCompilePdfDiskPath(
+  projectRoot: string,
+  mainRelativePath: string,
+): string {
+  return joinProjectPath(
+    projectRoot,
+    ".prismnext",
+    "compile",
+    `${texStem(mainRelativePath)}.pdf`,
+  );
+}
+
+function collectCompilePdfDiskCandidates(projectRoot: string): string[] {
+  const candidates: string[] = [];
+  const push = (rel: string) => {
+    const abs = resolveCompilePdfDiskPath(projectRoot, rel);
+    if (!candidates.includes(abs)) candidates.push(abs);
+  };
+
+  const doc = useDocumentStore.getState();
+  const resolved = resolveCompileTarget(
+    doc.activeFileId || "",
+    doc.files,
+    doc.getContent,
+  );
+  if (resolved?.targetPath) push(resolved.targetPath);
+
+  const manuscript = useWorkspaceConfigStore.getState().manuscriptConfig;
+  if (manuscript) {
+    push(`${manuscript.dir}/${manuscript.mainTex}`.replace(/\/+/g, "/"));
+  }
+
+  return candidates;
+}
+
+let _ensureDiskPdfPromise: Promise<boolean> | null = null;
+let _ensureDiskPdfKey: string | null = null;
+
+/**
+ * If memory cache is empty, try loading a previously compiled PDF from
+ * `<project>/.prismnext/compile/<stem>.pdf`. Returns true when bytes are available.
+ */
+export async function ensureCompilePdfFromDisk(projectRoot: string): Promise<boolean> {
+  if (!projectRoot) return false;
+  if (getPdfBytes(projectRoot)) return true;
+
+  if (_ensureDiskPdfPromise && _ensureDiskPdfKey === projectRoot) {
+    return _ensureDiskPdfPromise;
+  }
+
+  _ensureDiskPdfKey = projectRoot;
+  _ensureDiskPdfPromise = (async () => {
+    if (getPdfBytes(projectRoot)) return true;
+
+    for (const abs of collectCompilePdfDiskCandidates(projectRoot)) {
+      try {
+        const { bytes } = await window.electronAPI.fsReadBytes(abs);
+        if (!bytes || bytes.byteLength === 0) continue;
+        const copy = new Uint8Array(bytes);
+        _pdfBytesCache.set(projectRoot, copy);
+        _currentPdfRootId = projectRoot;
+        useCompileStore.setState((s) => ({
+          pdfRevision: s.pdfRevision + 1,
+          lastCompiledRootId: projectRoot,
+        }));
+        return true;
+      } catch {
+        // Missing or unreadable — try next candidate.
+      }
+    }
+    return false;
+  })().finally(() => {
+    if (_ensureDiskPdfKey === projectRoot) {
+      _ensureDiskPdfPromise = null;
+      _ensureDiskPdfKey = null;
+    }
+  });
+
+  return _ensureDiskPdfPromise;
+}
+
 export function clearPdfCache() {
   // Clear auto-compile timer
   if (_autoCompileTimer !== null) {

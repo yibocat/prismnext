@@ -11,6 +11,7 @@ import { useSettingsStore } from "./settings-store";
 import { truncateChatMessagesToTurn, applyUserDisplaySnapshots, isToolResultUserMessage } from "@/components/modules/chat/chat-turns";
 import { mapOpenCodePartToBlocks } from "@/lib/chat/message-parts";
 import { hydrateSessionMessages } from "@/lib/chat/session-message-hydrate";
+import { clearTurnWindowState } from "@/lib/chat/turn-window";
 import { contentBlocks } from "@/components/modules/chat/tools/tool-result-map";
 import {
   deriveSessionTitleForSend,
@@ -302,6 +303,7 @@ interface ChatState {
   createTab: () => string;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
+  moveTab: (fromIndex: number, toIndex: number) => void;
   saveDraft: (tabId: string, draft: TabDraft) => void;
 
   // Intensive reading list (per-tab)
@@ -620,6 +622,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
     syncCheckoutForTab(hydratedTabs.find((t) => t.id === newActiveId));
     syncCitationStagingForTab(hydratedTabs.find((t) => t.id === newActiveId));
+    clearTurnWindowState(id);
 
       // Clean up agent session for this tab — cancel any running prompt
       if (closingTab.sessionId) {
@@ -631,6 +634,25 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
         useTerminalAiStore.getState().removeAiTabsForChat(id);
       });
+  },
+
+  moveTab: (fromIndex: number, toIndex: number) => {
+    set((s) => {
+      if (
+        fromIndex < 0
+        || toIndex < 0
+        || fromIndex >= s.tabs.length
+        || toIndex >= s.tabs.length
+        || fromIndex === toIndex
+      ) {
+        return s;
+      }
+      const tabs = [...s.tabs];
+      const [moved] = tabs.splice(fromIndex, 1);
+      if (!moved) return s;
+      tabs.splice(toIndex, 0, moved);
+      return { tabs };
+    });
   },
 
   setActiveTab: (id: string) => {

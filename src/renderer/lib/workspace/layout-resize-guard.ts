@@ -12,7 +12,19 @@ export function runWithProgrammaticCenterResize(fn: () => void): void {
   try {
     fn();
   } finally {
-    programmaticCenterResizeDepth -= 1;
+    // Panel `onResize` is ResizeObserver-driven (async). Keep the guard until
+    // after the next paint so maximize/collapse is not immediately undone by a
+    // stale or in-flight size callback seeing center still ≥ 20px.
+    const release = () => {
+      programmaticCenterResizeDepth -= 1;
+    };
+    if (typeof requestAnimationFrame === "undefined") {
+      queueMicrotask(release);
+      return;
+    }
+    requestAnimationFrame(() => {
+      requestAnimationFrame(release);
+    });
   }
 }
 

@@ -32,13 +32,14 @@ vi.mock("react-resizable-panels", () => ({
   }: {
     children: React.ReactNode;
     id?: string;
-    defaultSize?: number;
+    defaultSize?: number | string;
   }) => (
     <div data-testid={`panel-${id}`} data-default-size={defaultSize}>
       {children}
     </div>
   ),
   Separator: ({ id }: { id?: string }) => <div data-testid={`sep-${id}`} />,
+  useGroupRef: () => ({ current: null }),
 }));
 
 describe("WorkspaceSplit", () => {
@@ -57,8 +58,8 @@ describe("WorkspaceSplit", () => {
       />,
     );
 
-    expect(screen.getByTestId("panel-pdf").getAttribute("data-default-size")).toBe("60");
-    expect(screen.getByTestId("panel-editor").getAttribute("data-default-size")).toBe("40");
+    expect(screen.getByTestId("panel-pdf").getAttribute("data-default-size")).toBe("60%");
+    expect(screen.getByTestId("panel-editor").getAttribute("data-default-size")).toBe("40%");
     expect(screen.getByTestId("sep-sep-pdf")).toBeTruthy();
     expect(screen.getByText("PDF")).toBeTruthy();
     expect(screen.getByText("Editor")).toBeTruthy();
@@ -75,8 +76,8 @@ describe("WorkspaceSplit", () => {
       />,
     );
 
-    expect(screen.getByTestId("panel-lit-pdf").getAttribute("data-default-size")).toBe("55");
-    expect(screen.getByTestId("panel-lit-notes").getAttribute("data-default-size")).toBe("45");
+    expect(screen.getByTestId("panel-lit-pdf").getAttribute("data-default-size")).toBe("55%");
+    expect(screen.getByTestId("panel-lit-notes").getAttribute("data-default-size")).toBe("45%");
   });
 
   it("restores saved layout from layout-store", () => {
@@ -124,6 +125,47 @@ describe("WorkspaceSplit", () => {
     const group = screen.getByTestId("workspace-split-group");
     expect(group.getAttribute("data-default-layout")).toBe(
       JSON.stringify({ "lit-pdf": 100, "lit-notes": 0 }),
+    );
+  });
+
+  it("ignores saved layout when leftCollapsed is true", () => {
+    useLayoutStore.setState({
+      workspaceSplitLayouts: {
+        "pdf:editor": { pdf: 60, editor: 40 },
+      },
+    });
+
+    render(
+      <WorkspaceSplit
+        left={<span>PDF</span>}
+        right={<span>Editor</span>}
+        leftId="pdf"
+        rightId="editor"
+        defaultLeft={60}
+        leftCollapsed
+      />,
+    );
+
+    const group = screen.getByTestId("workspace-split-group");
+    expect(group.getAttribute("data-default-layout")).toBe(
+      JSON.stringify({ pdf: 0, editor: 100 }),
+    );
+  });
+
+  it("keeps fixed left→right DOM order (swap must not reverse flex)", () => {
+    render(
+      <WorkspaceSplit
+        left={<span>PDF</span>}
+        right={<span>Editor</span>}
+        leftId="pdf"
+        rightId="editor"
+      />,
+    );
+
+    expect(screen.getByText("PDF")).toBeTruthy();
+    expect(screen.getByText("Editor")).toBeTruthy();
+    expect(screen.getByTestId("workspace-split-group").className).not.toContain(
+      "flex-row-reverse",
     );
   });
 });

@@ -22,8 +22,17 @@ export const TOOL_PANEL_CLASS =
   "rounded-lg border border-border/80 bg-muted/10 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden";
 export const TOOL_PANEL_HEADER_CLASS =
   "border-b border-border/40 bg-muted/30";
+/** Collapsed tool row — UI Font + muted vs assistant prose (Cursor-like hierarchy). */
 export const TOOL_INLINE_ROW_CLASS =
-  "flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors min-w-0";
+  "flex items-center gap-2 font-sans text-muted-foreground/65 hover:text-muted-foreground/80 transition-colors min-w-0";
+
+/**
+ * Primary label/path/command on a tool row.
+ * Always UI Font (`font-sans`) — do not use `font-mono` / editor font here;
+ * monospace is reserved for expanded tool bodies.
+ */
+export const TOOL_INLINE_LABEL_CLASS =
+  "min-w-0 truncate font-sans font-normal text-muted-foreground/70 [&_*]:font-sans [&_[role=link]]:font-normal [&_[role=link]]:text-muted-foreground/70 [&_[role=link]]:hover:text-muted-foreground/85";
 /** Expanded tool body — content-only panel below the inline row (matches ThinkingWidget). */
 export const TOOL_EXPANDED_CONTENT_CLASS =
   "my-1.5 min-w-0 max-w-full rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-[length:var(--font-code)] overflow-x-auto overflow-y-hidden animate-in fade-in slide-in-from-top-1 duration-150";
@@ -99,7 +108,8 @@ export function ToolCard({
         type="button"
         className={cn(
           TOOL_INLINE_ROW_CLASS,
-          "w-full max-w-full overflow-hidden text-left text-[length:var(--font-code)] py-0.5",
+          // Match assistant body size (--font-chat-message); hierarchy comes from color, not size.
+          "w-full max-w-full overflow-hidden text-left text-[length:var(--font-chat-message)] py-1",
           collapsible ? "cursor-pointer" : "cursor-default",
         )}
         onMouseDown={(e) => {
@@ -108,11 +118,11 @@ export function ToolCard({
         onClick={handleToggle}
       >
         {statusIcon ?? <StatusIcon isLoading={isLoading} isError={isError} />}
-        <span className="text-[length:var(--font-chat-meta)] shrink-0 tabular-nums">
+        <span className="shrink-0 text-muted-foreground/55 tabular-nums">
           {toolName}
         </span>
         {icon}
-        <span className="min-w-0 truncate font-medium text-foreground/90">{label}</span>
+        <span className={TOOL_INLINE_LABEL_CLASS}>{label}</span>
         {meta}
         {headerEnd}
         {collapsible && (

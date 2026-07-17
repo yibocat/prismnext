@@ -1,45 +1,84 @@
 import { BrowserWindow, ipcMain } from "electron";
 
-let mainWindow: BrowserWindow | null = null;
+let primaryWindow: BrowserWindow | null = null;
+let handlersRegistered = false;
 
-export function setMainWindow(win: BrowserWindow) {
-  mainWindow = win;
+export function setMainWindow(win: BrowserWindow | null) {
+  primaryWindow = win && !win.isDestroyed() ? win : null;
+}
+
+export function getPrimaryWindow(): BrowserWindow | null {
+  if (primaryWindow && !primaryWindow.isDestroyed()) return primaryWindow;
+  const first = BrowserWindow.getAllWindows()[0] ?? null;
+  primaryWindow = first;
+  return first;
+}
+
+function windowFromEvent(event: Electron.IpcMainInvokeEvent): BrowserWindow | null {
+  return BrowserWindow.fromWebContents(event.sender);
 }
 
 export function registerWindowHandlers() {
+  if (handlersRegistered) return;
+  handlersRegistered = true;
+
   ipcMain.handle(
     "window:setTitle",
     (event, args: { title: string }) => {
-      const win = BrowserWindow.fromWebContents(event.sender);
+      const win = windowFromEvent(event);
       if (win) {
         win.setTitle(args.title);
       }
     },
   );
 
-  ipcMain.handle("window:isMaximized", () => mainWindow?.isMaximized() ?? false);
-  ipcMain.handle("window:isFullscreen", () => mainWindow?.isFullScreen() ?? false);
+  ipcMain.handle("window:isMaximized", (event) => {
+    return windowFromEvent(event)?.isMaximized() ?? false;
+  });
+  ipcMain.handle("window:isFullscreen", (event) => {
+    return windowFromEvent(event)?.isFullScreen() ?? false;
+  });
 
-  ipcMain.handle("window:minimize", () => mainWindow?.minimize());
-  ipcMain.handle("window:maximize", () => {
-    if (mainWindow?.isMaximized()) {
-      mainWindow.unmaximize();
+  ipcMain.handle("window:minimize", (event) => {
+    windowFromEvent(event)?.minimize();
+  });
+  ipcMain.handle("window:maximize", (event) => {
+    const win = windowFromEvent(event);
+    if (!win) return;
+    if (win.isMaximized()) {
+      win.unmaximize();
     } else {
-      mainWindow?.maximize();
+      win.maximize();
     }
   });
-  ipcMain.handle("window:close", () => mainWindow?.close());
+  ipcMain.handle("window:close", (event) => {
+    windowFromEvent(event)?.close();
+  });
+}
 
-  // Emit state changes to renderer
+let newWindowHandlerRegistered = false;
+
+/** Call once after `createWindow` exists so Cmd+N / menu can open another window. */
+export function registerNewWindowHandler(createWindow: () => BrowserWindow): void {
+  if (newWindowHandlerRegistered) return;
+  newWindowHandlerRegistered = true;
+  ipcMain.handle("window:new", () => {
+    const win = createWindow();
+    return { ok: true as const, id: win.id };
+  });
+}
+
+export function attachWindowStateEmitter(win: BrowserWindow): void {
   const emitState = () => {
-    mainWindow?.webContents.send("window:stateChange", {
-      isMaximized: mainWindow?.isMaximized() ?? false,
-      isFullscreen: mainWindow?.isFullScreen() ?? false,
+    if (win.isDestroyed()) return;
+    win.webContents.send("window:stateChange", {
+      isMaximized: win.isMaximized(),
+      isFullscreen: win.isFullScreen(),
     });
   };
 
-  mainWindow?.on("enter-full-screen", emitState);
-  mainWindow?.on("leave-full-screen", emitState);
-  mainWindow?.on("maximize", emitState);
-  mainWindow?.on("unmaximize", emitState);
+  win.on("enter-full-screen", emitState);
+  win.on("leave-full-screen", emitState);
+  win.on("maximize", emitState);
+  win.on("unmaximize", emitState);
 }

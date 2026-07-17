@@ -37,4 +37,11 @@ export const REPLY_DEPTH_PROMPT = [
   "",
   "- When uncertain, err toward thoroughness for research questions — a full answer that slightly over-engages is more useful than a brief one that leaves the work undone. Err toward brevity only for tool/status replies.",
   "- Over-explaining a trivial task wastes attention; under-answering a research question avoids the work. Both are failures of calibration.",
+  "",
+  "### Showing project result files in chat",
+  "",
+  "- Prefer an **`artifact` fence** for any project-relative result file (figures, CSV/JSON, PDF, …): fenced code with language tag `artifact`, body lines `path: project-relative/path.ext` and optional `title: Short title` (one file per fence).",
+  "- Images and PDFs get an inline peek in chat; other types get a file card. Images may still use markdown `![short title](project-relative/path.png)`. Prefer the fence for new replies so non-image results stay honest.",
+  "- This works for **any** project file you want the human to open or preview — manuscript figures, experiment outputs, metrics tables, screenshots, etc. It is not limited to files just produced by a script or `experiment-run`.",
+  "- Embedding is how you **show** the file to the human. Image embeds do not require vision / image-input on your model. Prefer the embed over only listing the path, and prefer the embed over launching an external viewer — unless the human explicitly wants the file opened outside chat.",
 ].join("\n");

@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useDocumentStore } from "@/stores/document-store";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { resolveProjectRelativePath } from "@/lib/files/project-path";
+import { ChatImagePreviewDialog } from "@/lib/markdown/chat-image-preview";
 import { chatImagePathCandidates, artifactBasename } from "../../../shared/artifact-path";
 
 /** Resolve `images/foo.png` relative to an extract markdown file path. */
@@ -86,6 +88,7 @@ export function ExtractMarkdownImage({
  * project-wide basename search (no hardcoded folder names).
  */
 export function ChatProjectImage({ src, alt }: { src?: string; alt?: string }) {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const workspaceHintsKey = useExperimentStore((s) => {
     const hints = new Set<string>();
@@ -97,10 +100,15 @@ export function ChatProjectImage({ src, alt }: { src?: string; alt?: string }) {
     return [...hints].join("\n");
   });
   const [dataUrl, setDataUrl] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const loadedAbsRef = useRef<string | null>(null);
+  const loadedMtimeRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!src || !projectRoot) {
       setDataUrl(null);
+      loadedAbsRef.current = null;
+      loadedMtimeRef.current = null;
       return;
     }
     // Leave absolute URLs to the browser.
@@ -112,25 +120,28 @@ export function ChatProjectImage({ src, alt }: { src?: string; alt?: string }) {
     const workspaceHints = workspaceHintsKey ? workspaceHintsKey.split("\n") : [];
     const candidates = chatImagePathCandidates(src, workspaceHints);
 
-    void (async () => {
-      const tryRead = async (rel: string): Promise<string | null> => {
-        const abs = resolveProjectRelativePath(projectRoot, rel);
-        if (!abs) return null;
-        try {
-          const exists = await window.electronAPI.fsExists(abs);
-          if (!exists) return null;
-          const { dataUrl: url } = await window.electronAPI.fsReadImage(abs);
-          return url ?? null;
-        } catch {
-          return null;
-        }
-      };
+    const tryRead = async (rel: string): Promise<{ url: string; abs: string; mtimeMs: number } | null> => {
+      const abs = resolveProjectRelativePath(projectRoot, rel);
+      if (!abs) return null;
+      try {
+        const exists = await window.electronAPI.fsExists(abs);
+        if (!exists) return null;
+        const { dataUrl: url, mtimeMs } = await window.electronAPI.fsReadImage(abs);
+        if (!url) return null;
+        return { url, abs, mtimeMs: typeof mtimeMs === "number" ? mtimeMs : 0 };
+      } catch {
+        return null;
+      }
+    };
 
+    const load = async () => {
       for (const rel of candidates) {
         if (cancelled) return;
-        const url = await tryRead(rel);
-        if (url && !cancelled) {
-          setDataUrl(url);
+        const hit = await tryRead(rel);
+        if (hit && !cancelled) {
+          loadedAbsRef.current = hit.abs;
+          loadedMtimeRef.current = hit.mtimeMs;
+          setDataUrl(hit.url);
           return;
         }
       }
@@ -139,9 +150,11 @@ export function ChatProjectImage({ src, alt }: { src?: string; alt?: string }) {
         try {
           const found = await window.electronAPI.fsFindByBasename(projectRoot, base);
           if (found && !cancelled) {
-            const url = await tryRead(found);
-            if (url && !cancelled) {
-              setDataUrl(url);
+            const hit = await tryRead(found);
+            if (hit && !cancelled) {
+              loadedAbsRef.current = hit.abs;
+              loadedMtimeRef.current = hit.mtimeMs;
+              setDataUrl(hit.url);
               return;
             }
           }
@@ -149,11 +162,44 @@ export function ChatProjectImage({ src, alt }: { src?: string; alt?: string }) {
           // fall through
         }
       }
-      if (!cancelled) setDataUrl(null);
-    })();
+      if (!cancelled) {
+        loadedAbsRef.current = null;
+        loadedMtimeRef.current = null;
+        setDataUrl(null);
+      }
+    };
+
+    const refreshIfChanged = async () => {
+      const abs = loadedAbsRef.current;
+      if (!abs || cancelled) return;
+      try {
+        const st = await window.electronAPI.fsStat(abs);
+        if (!st || cancelled) return;
+        if (loadedMtimeRef.current != null && st.mtimeMs === loadedMtimeRef.current) return;
+        const { dataUrl: url, mtimeMs } = await window.electronAPI.fsReadImage(abs);
+        if (url && !cancelled) {
+          loadedMtimeRef.current = typeof mtimeMs === "number" ? mtimeMs : st.mtimeMs;
+          setDataUrl(url);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    void load();
+
+    const onVis = () => {
+      if (document.visibilityState === "visible") void refreshIfChanged();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    const poll = window.setInterval(() => {
+      void refreshIfChanged();
+    }, 2500);
 
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVis);
+      window.clearInterval(poll);
     };
   }, [src, projectRoot, workspaceHintsKey]);
 
@@ -165,12 +211,30 @@ export function ChatProjectImage({ src, alt }: { src?: string; alt?: string }) {
       </span>
     );
   }
+
+  const previewName = alt?.trim() || artifactBasename(src) || t("chat.composer.imagePreview");
+
   return (
-    <img
-      src={dataUrl}
-      alt={alt ?? ""}
-      className="my-2 max-w-full h-auto rounded border border-border/40"
-      loading="lazy"
-    />
+    <>
+      <button
+        type="button"
+        aria-label={t("chat.composer.previewAttachment", { name: previewName })}
+        onClick={() => setPreviewOpen(true)}
+        className="my-2 block max-w-full cursor-zoom-in rounded-lg border border-border/50 bg-muted/20 p-1.5 text-left transition-opacity hover:opacity-90"
+      >
+        <img
+          src={dataUrl}
+          alt={alt ?? ""}
+          className="max-w-full h-auto rounded-md"
+          loading="lazy"
+        />
+      </button>
+      <ChatImagePreviewDialog
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        url={dataUrl}
+        name={previewName}
+      />
+    </>
   );
 }

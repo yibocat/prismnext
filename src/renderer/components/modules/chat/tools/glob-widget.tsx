@@ -33,7 +33,7 @@ export const GlobWidget = memo(function GlobWidget({
     <ToolCard
       toolName={toolName}
       icon={<FolderSearchIcon className="size-3.5 text-info" />}
-      label={<span className="font-mono truncate">{pattern.slice(0, 50)}</span>}
+      label={<span className="truncate">{pattern.slice(0, 50)}</span>}
       meta={
         fileCount > 0 ? (
           <span className="text-muted-foreground/70 shrink-0 text-[length:var(--font-chat-meta)]">

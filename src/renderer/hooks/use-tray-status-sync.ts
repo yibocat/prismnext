@@ -4,12 +4,42 @@ import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { usePermissionStore } from "@/stores/permission-store";
 import { displayChatTitle } from "@/lib/i18n/display-chat-title";
+import { getLeftNavPanelRefs } from "@/lib/workspace/left-nav/panel-refs";
+import {
+  openExperimentsPanel,
+  openLiteratureLibrary,
+  openTexWorkspaceMaximized,
+} from "@/lib/workspace/left-nav/panel-utils";
 import {
   pickRecentSessionsForTray,
   resolveTrayStatus,
   type TrayMenuSnapshot,
+  type TrayModeId,
   type TrayRecentItem,
+  type TrayStatus,
 } from "../../shared/desktop-shell";
+
+function projectDisplayName(projectRoot: string | null | undefined): string | null {
+  if (!projectRoot) return null;
+  const parts = projectRoot.replace(/[/\\]+$/, "").split(/[/\\]/);
+  const name = parts[parts.length - 1]?.trim();
+  return name || null;
+}
+
+function trayTooltip(
+  status: TrayStatus,
+  projectName: string | null,
+  t: (key: string, opts?: Record<string, string>) => string,
+): string {
+  const head = projectName || t("shell.notify.defaultTitle");
+  if (status === "attention") {
+    return t("shell.tray.tooltipAttention", { project: head });
+  }
+  if (status === "busy") {
+    return t("shell.tray.tooltipBusy", { project: head });
+  }
+  return t("shell.tray.tooltipIdle", { project: head });
+}
 
 async function buildRecentItems(
   t: (key: string) => string,
@@ -21,7 +51,7 @@ async function buildRecentItems(
     try {
       const sessions = await window.electronAPI.sessionList(projectRoot);
       return pickRecentSessionsForTray(sessions, 3).map((s) => {
-        const tab = tabs.find((t) => t.sessionId === s.id);
+        const tab = tabs.find((tab) => tab.sessionId === s.id);
         const title =
           displayChatTitle(tab?.title && tab.title !== "New Chat" ? tab.title : s.title, t) ||
           s.title ||
@@ -50,7 +80,7 @@ async function buildRecentItems(
     }));
 }
 
-/** Keep Tray icon status + menu (new chat / recent sessions) in sync. */
+/** Keep Tray icon status + menu (project / new chat / recent sessions) in sync. */
 export function useTrayStatusSync(): void {
   const { t, i18n } = useTranslation();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -61,21 +91,41 @@ export function useTrayStatusSync(): void {
       const isStreaming = tabs.some((tab) => tab.isStreaming);
       const hasPendingPermission = usePermissionStore.getState().permissions.length > 0;
       const status = resolveTrayStatus({ hasPendingPermission, isStreaming });
-      void window.electronAPI.shellSetTrayStatus(status);
+      const projectName = projectDisplayName(useDocumentStore.getState().projectRoot);
+      void window.electronAPI.shellSetTrayStatus(
+        status,
+        trayTooltip(status, projectName, t),
+      );
     };
 
     const pushMenu = () => {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         void (async () => {
+          const projectName = projectDisplayName(
+            useDocumentStore.getState().projectRoot,
+          );
           const recent = await buildRecentItems((key) => t(key));
           const snapshot: TrayMenuSnapshot = {
-            showLabel: t("shell.tray.show"),
+            showLabel: projectName
+              ? t("shell.tray.showProject", { project: projectName })
+              : t("shell.tray.show"),
             newChatLabel: t("shell.tray.newChat"),
             quitLabel: t("shell.tray.quit"),
             recent,
+            projectName,
+            modes: projectName
+              ? [
+                  { id: "texworkspace", label: t("nav.texWorkspace") },
+                  { id: "literature", label: t("nav.library") },
+                  { id: "experiments", label: t("nav.experiments") },
+                ]
+              : [],
           };
           void window.electronAPI.shellSetTrayMenu(snapshot);
+          // Menu update does not change status, but project rename/open should
+          // refresh the hover tooltip immediately.
+          pushStatus();
         })();
       }, 150);
     };
@@ -88,7 +138,7 @@ export function useTrayStatusSync(): void {
     pushAll();
     const unsubChat = useChatStore.subscribe(pushAll);
     const unsubPerm = usePermissionStore.subscribe(pushStatus);
-    const unsubDoc = useDocumentStore.subscribe(pushMenu);
+    const unsubDoc = useDocumentStore.subscribe(pushAll);
 
     const onSessionRefresh = () => pushMenu();
     window.addEventListener("prism:session-list-refresh", onSessionRefresh);
@@ -116,6 +166,10 @@ export function useTrayStatusSync(): void {
       }
     });
 
+    const unsubOpenMode = window.electronAPI.onShellTrayOpenMode(({ modeId }) => {
+      openTrayModeMaximized(modeId);
+    });
+
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
       unsubChat();
@@ -125,6 +179,23 @@ export function useTrayStatusSync(): void {
       unsubFocus();
       unsubNewChat();
       unsubOpenRecent();
+      unsubOpenMode();
     };
   }, [t, i18n.language]);
+}
+
+function openTrayModeMaximized(modeId: TrayModeId): void {
+  if (!useDocumentStore.getState().projectRoot) return;
+  const ctx = { panelRefs: getLeftNavPanelRefs() };
+  if (modeId === "texworkspace") {
+    openTexWorkspaceMaximized(ctx);
+    return;
+  }
+  if (modeId === "literature") {
+    openLiteratureLibrary(ctx);
+    return;
+  }
+  if (modeId === "experiments") {
+    openExperimentsPanel(ctx);
+  }
 }

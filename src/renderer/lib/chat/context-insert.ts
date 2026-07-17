@@ -74,6 +74,8 @@ export interface ExperimentRunSnippetRequest {
   /** How the artifact was linked to the run (trust signal). */
   linkMethod?: string;
   artifacts?: string[];
+  /** Frozen image copies from append time (prefer when showing this run's figures). */
+  artifactSnapshots?: string[];
   env?: { python?: string | null; pythonVersion?: string | null; platform?: string; gitCommit?: string | null };
   chatSessionId?: string | null;
   workspacePath?: string;
@@ -176,6 +178,7 @@ export function contextInsertToPart(req: ContextInsertRequest): ComposerPart {
       artifactPath: req.artifactPath,
       linkMethod: req.linkMethod,
       artifacts: req.artifacts ?? [],
+      artifactSnapshots: req.artifactSnapshots,
       env: req.env ?? null,
       chatSessionId: req.chatSessionId ?? null,
       workspacePath: req.workspacePath,

@@ -70,7 +70,7 @@ export const BashWidget = memo(function BashWidget({
     <ToolCard
       toolName={toolName}
       icon={<TerminalIcon className="size-3.5 text-warning" />}
-      label={<span className="truncate font-mono">{command.slice(0, 80) || "shell command"}</span>}
+      label={<span className="truncate">{command.slice(0, 80) || "shell command"}</span>}
       meta={
         <>
           {isAwaitingPermission && (

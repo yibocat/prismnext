@@ -35,6 +35,7 @@ import {
   createExperiment,
   detectEnvForIsland,
   listExperiments,
+  MAX_AGENT_RUNS_WITH_OUTPUT,
   NO_EXPERIMENT_FOLDER_HINT,
   readExperiment,
   resolveExperimentCtx,
@@ -73,6 +74,8 @@ export interface ExperimentLogBridgeRequest {
   // read / append_run / detect_env / run
   id?: string;
   runsLimit?: number;
+  /** read only — when true, include stdoutTail/stderrTail (default false for agent). */
+  includeOutput?: boolean;
   // append_run
   run?: {
     runId?: string;
@@ -229,8 +232,13 @@ function dispatchExperimentLog(
     case "read": {
       const id = typeof req.id === "string" ? req.id.trim() : "";
       if (!id) return { ok: false, error: "missing_id" };
-      const limit = typeof req.runsLimit === "number" && req.runsLimit > 0 ? req.runsLimit : 20;
-      const result = readExperiment(ctx, id, limit);
+      const rawLimit = typeof req.runsLimit === "number" && req.runsLimit > 0 ? req.runsLimit : 20;
+      // Agent default: lean (no stdout/stderr tails). UI IPC keeps full output.
+      const includeOutput = req.includeOutput === true;
+      const limit = includeOutput
+        ? Math.min(rawLimit, MAX_AGENT_RUNS_WITH_OUTPUT)
+        : rawLimit;
+      const result = readExperiment(ctx, id, limit, { includeOutput });
       if (!result.ok) return { ok: false, error: result.error };
       return {
         ok: true,
@@ -238,8 +246,16 @@ function dispatchExperimentLog(
         runs: result.runs,
         runCount: result.runCount,
         lastRunAt: result.lastRunAt,
+        oldestRun: result.oldestRun,
+        latestRun: result.latestRun,
+        runsOrder: result.runsOrder,
+        includeOutput: result.includeOutput,
         experimentRoot: ctx.workspaceRel,
         registryRoot: EXPERIMENT_REGISTRY_REL,
+        hint:
+          "runs are the last N entries, chronological oldest→newest (latest = runs[runs.length-1]). " +
+          "For absolute first/latest use oldestRun / latestRun. " +
+          "stdout/stderr omitted unless includeOutput=true — prefer artifacts / logPath / results-snapshot for figures.",
       };
     }
     case "append_run": {

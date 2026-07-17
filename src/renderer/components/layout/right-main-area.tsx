@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useCompileStore } from "@/stores/compile-store";
-import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
@@ -9,10 +8,9 @@ import { useLiteratureReaderStore } from "@/stores/literature-reader-store";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import type { LiteraturePaper } from "@/types/electron.d";
 import { useTexworkspace } from "@/modes/texworkspace-mode/use-texworkspace";
+import { TexWorkspaceMain } from "@/modes/texworkspace-mode/texworkspace-main";
 import { RightPane } from "@/components/layout/right-pane";
 import { WorkspaceSplit } from "@/components/layout/workspace-split";
-import { PdfPreview } from "@/components/modules/preview";
-import { CompileProblemsPanel } from "@/modes/texworkspace-mode/compile-problems-panel";
 import { LiteratureReader } from "@/modes/literature-mode/literature-reader";
 import { LiteratureNotesPane } from "@/modes/literature-mode/literature-notes-pane";
 
@@ -23,8 +21,8 @@ interface RightMainAreaProps {
 
 function mainWrapper(children: React.ReactNode) {
   return (
-    <div className="flex flex-col h-full min-w-0">
-      <div className="relative flex-1 min-h-0">{children}</div>
+    <div className="flex h-full min-w-0 flex-col">
+      <div className="relative min-h-0 flex-1">{children}</div>
     </div>
   );
 }
@@ -56,26 +54,34 @@ function LiteratureReaderShell({
   );
 }
 
-function withLiteratureKeepAlive(
-  content: ReactNode,
-  shells: ReactNode | null,
-  readerVisible: boolean,
-): ReactNode {
-  if (!shells) return content;
+function KeepAliveLayer({
+  visible,
+  children,
+  className,
+}: {
+  visible: boolean;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <div className="relative h-full min-h-0">
-      {shells}
-      {!readerVisible ? (
-        <div className="relative z-0 h-full min-h-0">{content}</div>
-      ) : null}
+    <div
+      className={cn(
+        "h-full min-h-0 bg-background",
+        visible
+          ? "relative z-0"
+          : "pointer-events-none invisible absolute inset-0 z-[-1]",
+        className,
+      )}
+      aria-hidden={!visible}
+    >
+      {children}
     </div>
   );
 }
 
 export function RightMainArea({ tabs, activeTabId }: RightMainAreaProps) {
-  const { isActive: texActive, viewMode: texViewMode, switchToFile } = useTexworkspace();
+  const { isActive: texActive, switchToFile } = useTexworkspace();
   const pdfRevision = useCompileStore((s) => s.pdfRevision);
-  const problemsOpen = useLayoutStore((s) => s.texworkspaceProblemsOpen);
 
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const papers = useLiteratureStore((s) => s.papers);
@@ -87,6 +93,27 @@ export function RightMainArea({ tabs, activeTabId }: RightMainAreaProps) {
   const literaturePaper = activePaperId
     ? (papers.find((p) => p.id === activePaperId) ?? null)
     : null;
+
+  const texTab = useMemo(
+    () => tabs.find((t) => t.kind === "texworkspace") ?? null,
+    [tabs],
+  );
+  const hasTexTab = texTab != null;
+
+  /** Prefer the live tex tab id so a hidden TeX shell does not follow Files tabs. */
+  const texShellActiveTabId = texActive
+    ? activeTabId
+    : (texTab?.id ?? activeTabId);
+
+  /**
+   * Everything except TeX (TeX has its own shell). Literature library tabs stay
+   * here; paper *reader* overlays via `literatureShells` when a paper is open.
+   * Filtering literature out left the library count in the toolbar with an empty main pane.
+   */
+  const otherTabs = useMemo(
+    () => tabs.filter((t) => t.kind !== "texworkspace"),
+    [tabs],
+  );
 
   const openLiteraturePaperTabs = useMemo(
     () =>
@@ -112,7 +139,7 @@ export function RightMainArea({ tabs, activeTabId }: RightMainAreaProps) {
             <div
               key={paper.id}
               className={cn(
-                "absolute inset-0 z-10",
+                "absolute inset-0 z-10 bg-background",
                 !isVisible && "invisible pointer-events-none",
               )}
               aria-hidden={!isVisible}
@@ -129,8 +156,6 @@ export function RightMainArea({ tabs, activeTabId }: RightMainAreaProps) {
       </>
     ) : null;
 
-  const previewSlot = problemsOpen ? <CompileProblemsPanel /> : <PdfPreview />;
-
   const lastRevision = useRef(pdfRevision);
   useEffect(() => {
     if (pdfRevision > 0 && pdfRevision !== lastRevision.current) {
@@ -143,61 +168,35 @@ export function RightMainArea({ tabs, activeTabId }: RightMainAreaProps) {
     }
   }, [pdfRevision, switchToFile]);
 
-  if (activeTab?.kind === "literature" && activeTab.literaturePaperId && projectRoot && !literaturePaper) {
-    return mainWrapper(
-      <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-        Loading paper…
-      </div>,
-    );
-  }
-
-  if (activeTab?.kind === "literature" && projectRoot && activeTab) {
-    return mainWrapper(
-      withLiteratureKeepAlive(
-        <RightPane tabs={tabs} activeTabId={activeTabId} />,
-        literatureShells,
-        showLiteratureReader,
-      ),
-    );
-  }
-
-  if (!texActive) {
-    return mainWrapper(
-      withLiteratureKeepAlive(
-        <RightPane tabs={tabs} activeTabId={activeTabId} />,
-        literatureShells,
-        false,
-      ),
-    );
-  }
-
-  if (texViewMode === "tex") {
-    return mainWrapper(
-      withLiteratureKeepAlive(
-        <RightPane tabs={tabs} activeTabId={activeTabId} />,
-        literatureShells,
-        false,
-      ),
-    );
-  }
-
-  if (texViewMode === "pdf") {
-    return mainWrapper(
-      withLiteratureKeepAlive(previewSlot, literatureShells, false),
-    );
-  }
+  // Non-TeX / non-literature pane (Files, Git, Terminal, …). Hidden — not
+  // unmounted — while TeX or lit reader is up (keeps Terminal PTY / xterm alive).
+  const otherPaneVisible = !texActive && !showLiteratureReader;
+  const literatureLoading =
+    activeTab?.kind === "literature" &&
+    Boolean(activeTab.literaturePaperId) &&
+    Boolean(projectRoot) &&
+    !literaturePaper;
 
   return mainWrapper(
-    withLiteratureKeepAlive(
-      <WorkspaceSplit
-        left={previewSlot}
-        right={<RightPane tabs={tabs} activeTabId={activeTabId} />}
-        leftId="pdf"
-        rightId="editor"
-        defaultLeft={60}
-      />,
-      literatureShells,
-      false,
-    ),
+    <div className="relative isolate h-full min-h-0 bg-background">
+      {literatureShells}
+
+      {hasTexTab ? (
+        <KeepAliveLayer visible={texActive && !showLiteratureReader}>
+          <TexWorkspaceMain tabs={tabs} activeTabId={texShellActiveTabId} />
+        </KeepAliveLayer>
+      ) : null}
+
+      {/* Always mount — empty tabs render the “Open a file…” placeholder. */}
+      <KeepAliveLayer visible={otherPaneVisible && !literatureLoading}>
+        <RightPane tabs={otherTabs} activeTabId={activeTabId} />
+      </KeepAliveLayer>
+
+      {literatureLoading ? (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-background text-muted-foreground text-sm">
+          Loading paper…
+        </div>
+      ) : null}
+    </div>,
   );
 }

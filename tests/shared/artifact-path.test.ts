@@ -2,9 +2,20 @@ import { describe, expect, it } from "vitest";
 import {
   artifactPathCandidates,
   chatImagePathCandidates,
+  imagePathsForRunDisplay,
+  isPdfArtifactPath,
   normalizeRunArtifactPaths,
+  resolveImageArtifactPathsForDisplay,
   toProjectRelativeArtifact,
 } from "../../src/shared/artifact-path";
+
+describe("isPdfArtifactPath", () => {
+  it("detects pdf extension", () => {
+    expect(isPdfArtifactPath("out/report.pdf")).toBe(true);
+    expect(isPdfArtifactPath("X.PDF")).toBe(true);
+    expect(isPdfArtifactPath("out/report.png")).toBe(false);
+  });
+});
 
 describe("toProjectRelativeArtifact", () => {
   it("joins under workspace when not already prefixed (island-relative default)", () => {
@@ -39,6 +50,31 @@ describe("chatImagePathCandidates", () => {
     const c = chatImagePathCandidates("results/plot.png", ["labs/exp-a"]);
     expect(c).toContain("results/plot.png");
     expect(c).toContain("labs/exp-a/results/plot.png");
+  });
+});
+
+describe("resolveImageArtifactPathsForDisplay", () => {
+  it("keeps manuscript paths as-declared", () => {
+    expect(
+      resolveImageArtifactPathsForDisplay(["manuscript/foo.png"], "experiment/exp-a"),
+    ).toEqual(["manuscript/foo.png"]);
+  });
+
+  it("joins bare filenames under workspace", () => {
+    expect(resolveImageArtifactPathsForDisplay(["plot.png"], "labs/exp-a")).toEqual([
+      "labs/exp-a/plot.png",
+    ]);
+  });
+});
+
+describe("imagePathsForRunDisplay", () => {
+  it("prefers snapshots when present", () => {
+    expect(
+      imagePathsForRunDisplay({
+        artifacts: ["manuscript/foo.png"],
+        artifactSnapshots: [".prismnext/experiments/e/artifacts/r/foo.png"],
+      }),
+    ).toEqual([".prismnext/experiments/e/artifacts/r/foo.png"]);
   });
 });
 

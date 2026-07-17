@@ -5,6 +5,7 @@
  * Workspace experiment folder is an empty lab — agent-owned layout.
  */
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -18,7 +19,12 @@ import { dirname, join, relative, resolve as pathResolve } from "node:path";
 import { randomBytes } from "node:crypto";
 import { appendJsonlLine } from "../lib/jsonl-append";
 import { findProjectRelByBasename } from "../lib/find-project-file";
-import { normalizeRunArtifactPaths } from "../../shared/artifact-path";
+import {
+  artifactBasename,
+  isImageArtifactPath,
+  normalizeArtifactSlash,
+  normalizeRunArtifactPaths,
+} from "../../shared/artifact-path";
 import { resolveExperimentDir } from "./workspace-config";
 import { generateProvenanceId, recordRunProvenance } from "./provenance-service";
 import {
@@ -888,10 +894,37 @@ export function createExperiment(
 
 // ─── read ───────────────────────────────────────────────────────────────────
 
+export type ReadExperimentOptions = {
+  /**
+   * When false (agent default), strip `stdoutTail` / `stderrTail` so a modest
+   * `runsLimit` cannot blow the tool-output budget. UI / IPC keep full tails.
+   */
+  includeOutput?: boolean;
+};
+
+/** Agent fat reads (stdout/stderr) — keep tiny so tool output is not truncated. */
+export const MAX_AGENT_RUNS_WITH_OUTPUT = 10;
+/** Lean agent history window — identity / artifacts / command only. */
+export const MAX_AGENT_RUNS_LEAN = 50;
+
+function stripRunOutput(run: ExperimentRunEntry): ExperimentRunEntry {
+  if (!run.stdoutTail && !run.stderrTail) return run;
+  return { ...run, stdoutTail: "", stderrTail: "" };
+}
+
+function parseRunLine(line: string): ExperimentRunEntry | null {
+  try {
+    return JSON.parse(line) as ExperimentRunEntry;
+  } catch {
+    return null;
+  }
+}
+
 export function readExperiment(
   ctx: ExperimentStorageContext,
   id: string,
   runsLimit = 20,
+  options?: ReadExperimentOptions,
 ):
   | {
       ok: true;
@@ -900,6 +933,15 @@ export function readExperiment(
       /** Total runs in jsonl (not limited by `runsLimit`). */
       runCount: number;
       lastRunAt: string | null;
+      /**
+       * Absolute first / last lines in `runs.jsonl` (lean). Prefer these for
+       * “第一次 / 最新一次” — do not infer from `runs[0]` when the window is a tail.
+       */
+      oldestRun: ExperimentRunEntry | null;
+      latestRun: ExperimentRunEntry | null;
+      /** Always chronological within the returned window: oldest → newest. */
+      runsOrder: "chronological_oldest_first";
+      includeOutput: boolean;
       workspaceRel: string;
       registryRoot: string;
     }
@@ -907,24 +949,40 @@ export function readExperiment(
   if (!experimentExists(ctx, id)) {
     return { ok: false, error: "experiment_not_found" };
   }
+  const includeOutput = options?.includeOutput !== false;
+  // Cap only lean agent-style windows here; UI passes includeOutput:true with its own limit.
+  // Agent bridge additionally caps fat reads via MAX_AGENT_RUNS_WITH_OUTPUT.
+  const cappedLimit = includeOutput
+    ? Math.max(0, runsLimit)
+    : Math.min(Math.max(0, runsLimit), MAX_AGENT_RUNS_LEAN);
   const meta = readMeta(ctx, id)!;
   const runs: ExperimentRunEntry[] = [];
+  let oldestRun: ExperimentRunEntry | null = null;
+  let latestRun: ExperimentRunEntry | null = null;
   const rp = runsPath(ctx, id);
   if (existsSync(rp)) {
     try {
       const raw = readFileSync(rp, "utf-8");
       const lines = raw.split("\n").filter((l) => l.trim().length > 0);
-      const tail = lines.slice(-Math.max(0, runsLimit));
+      if (lines.length > 0) {
+        oldestRun = parseRunLine(lines[0]!);
+        latestRun = parseRunLine(lines[lines.length - 1]!);
+      }
+      const tail = lines.slice(-cappedLimit);
       for (const line of tail) {
-        try {
-          runs.push(JSON.parse(line) as ExperimentRunEntry);
-        } catch {
-          // skip malformed line
-        }
+        const entry = parseRunLine(line);
+        if (entry) runs.push(entry);
       }
     } catch {
       // ignore
     }
+  }
+  if (!includeOutput) {
+    for (let i = 0; i < runs.length; i++) {
+      runs[i] = stripRunOutput(runs[i]!);
+    }
+    if (oldestRun) oldestRun = stripRunOutput(oldestRun);
+    if (latestRun) latestRun = stripRunOutput(latestRun);
   }
   const { runCount, lastRunAt } = countRunsAndLastAt(ctx, id);
   return {
@@ -933,12 +991,201 @@ export function readExperiment(
     runs,
     runCount,
     lastRunAt,
+    oldestRun,
+    latestRun,
+    runsOrder: "chronological_oldest_first",
+    includeOutput,
     workspaceRel: ctx.workspaceRel,
     registryRoot: EXPERIMENT_REGISTRY_REL,
   };
 }
 
 // ─── append_run ──────────────────────────────────────────────────────────────
+
+/** Grace after finishedAt when attributing files to a run (ms). */
+const ARTIFACT_MTIME_GRACE_MS = 1500;
+const ARTIFACT_MTIME_MAX_DEPTH = 4;
+const ARTIFACT_MTIME_MAX_ENTRIES = 2000;
+
+/**
+ * Path-like tokens in command output. Any extension — artifacts are result files
+ * (csv/json/npz/png/…), not an image-only type list. No folder allowlists.
+ */
+const OUTPUT_REL_PATH_RE =
+  /(?:^|[\s"'`(=\[{])((?:[\w.-]+\/)+[\w.-]+\.[\w.-]+)\b/gi;
+const OUTPUT_BASENAME_RE =
+  /(?:^|[\s"'`(=\[{])([\w.-]+\.[\w]{1,12})\b/gi;
+
+function mtimeInRunWindow(abs: string, startMs: number, endMs: number): boolean {
+  try {
+    const st = statSync(abs);
+    return st.isFile() && st.mtimeMs >= startMs && st.mtimeMs <= endMs;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Result files under the lab island whose mtime falls in the run window.
+ * Any file type (metrics, tables, plots, archives, …). No project-folder allowlist.
+ * Skips only dependency/cache/log trees that are never run outputs.
+ */
+export function inferArtifactsByMtimeInIsland(
+  projectRoot: string,
+  islandAbs: string,
+  startedAt: string,
+  finishedAt: string,
+): string[] {
+  const startMs = Date.parse(startedAt);
+  const endMs = Date.parse(finishedAt) + ARTIFACT_MTIME_GRACE_MS;
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || !islandAbs || !existsSync(islandAbs)) {
+    return [];
+  }
+  const out: string[] = [];
+  const seen = new Set<string>();
+  let visited = 0;
+
+  const walk = (dir: string, depth: number): void => {
+    if (depth > ARTIFACT_MTIME_MAX_DEPTH || visited > ARTIFACT_MTIME_MAX_ENTRIES) return;
+    let entries: ReturnType<typeof readdirSync>;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (visited > ARTIFACT_MTIME_MAX_ENTRIES) break;
+      if (entry.name.startsWith(".")) continue;
+      if (
+        entry.name === "venv" ||
+        entry.name === "node_modules" ||
+        entry.name === "__pycache__" ||
+        entry.name === "logs"
+      ) {
+        continue;
+      }
+      const abs = join(dir, entry.name);
+      try {
+        if (entry.isDirectory()) {
+          walk(abs, depth + 1);
+        } else if (entry.isFile()) {
+          visited += 1;
+          if (!mtimeInRunWindow(abs, startMs, endMs)) continue;
+          const rel = normalizeArtifactSlash(relative(projectRoot, abs));
+          if (!rel || rel.startsWith("..") || seen.has(rel)) continue;
+          seen.add(rel);
+          out.push(rel);
+        }
+      } catch {
+        // skip
+      }
+    }
+  };
+
+  walk(islandAbs, 0);
+  return out;
+}
+
+/**
+ * Paths mentioned in stdout/stderr/notes that exist on disk and were touched in
+ * the run window. Folder names and file kinds come from the text + disk — not
+ * from an allowlist of directories or extensions.
+ */
+export function inferArtifactsFromOutputText(
+  projectRoot: string,
+  workspacePath: string,
+  text: string,
+  startedAt: string,
+  finishedAt: string,
+): string[] {
+  const startMs = Date.parse(startedAt);
+  const endMs = Date.parse(finishedAt) + ARTIFACT_MTIME_GRACE_MS;
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || !text.trim()) return [];
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const tryAdd = (relRaw: string) => {
+    const candidates = [
+      normalizeArtifactSlash(relRaw),
+      workspacePath
+        ? normalizeArtifactSlash(`${workspacePath.replace(/\/$/, "")}/${relRaw}`)
+        : "",
+    ].filter(Boolean);
+    for (const rel of candidates) {
+      if (seen.has(rel) || rel.includes("..")) continue;
+      const abs = join(projectRoot, rel);
+      if (!mtimeInRunWindow(abs, startMs, endMs)) continue;
+      seen.add(rel);
+      out.push(rel);
+      return;
+    }
+    const base = artifactBasename(relRaw);
+    if (!base || !base.includes(".")) return;
+    const found = findProjectRelByBasename(projectRoot, base);
+    if (!found || seen.has(found)) return;
+    const abs = join(projectRoot, found);
+    if (!mtimeInRunWindow(abs, startMs, endMs)) return;
+    seen.add(found);
+    out.push(found);
+  };
+
+  for (const re of [OUTPUT_REL_PATH_RE, OUTPUT_BASENAME_RE]) {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const token = m[1];
+      if (token) tryAdd(token);
+    }
+  }
+  return out;
+}
+
+/**
+ * Frozen **image** copies for chat/history figure display when working paths are
+ * overwritten later. Non-image artifacts stay path-only in `artifacts[]`.
+ */
+export function snapshotImageArtifactsForRun(
+  ctx: ExperimentStorageContext,
+  experimentId: string,
+  runId: string,
+  artifacts: string[],
+): string[] {
+  const snaps: string[] = [];
+  const usedNames = new Set<string>();
+  const destDir = join(ctx.registryRoot, experimentId, "artifacts", runId);
+
+  for (const rel of artifacts) {
+    if (!isImageArtifactPath(rel)) continue;
+    const abs = join(ctx.projectRoot, normalizeArtifactSlash(rel));
+    if (!existsSync(abs)) continue;
+    try {
+      if (!statSync(abs).isFile()) continue;
+    } catch {
+      continue;
+    }
+    mkdirSync(destDir, { recursive: true });
+    let base = artifactBasename(rel) || "image.png";
+    if (usedNames.has(base)) {
+      const dot = base.lastIndexOf(".");
+      const stem = dot > 0 ? base.slice(0, dot) : base;
+      const ext = dot > 0 ? base.slice(dot) : "";
+      base = `${stem}-${randomBytes(3).toString("hex")}${ext}`;
+    }
+    usedNames.add(base);
+    const destAbs = join(destDir, base);
+    try {
+      copyFileSync(abs, destAbs);
+    } catch {
+      continue;
+    }
+    snaps.push(
+      normalizeArtifactSlash(
+        join(EXPERIMENT_REGISTRY_REL, experimentId, "artifacts", runId, base),
+      ),
+    );
+  }
+  return snaps;
+}
 
 export function appendRun(
   ctx: ExperimentStorageContext,
@@ -958,16 +1205,29 @@ export function appendRun(
   const startedAt = input.startedAt ?? nowUtcIso();
   const finishedAt = input.finishedAt ?? nowUtcIso();
   const workspacePath = meta.workspacePath;
-  const artifacts = normalizeRunArtifactPaths(
-    Array.isArray(input.artifacts) ? input.artifacts : [],
-    {
+  const declared = Array.isArray(input.artifacts) ? input.artifacts : [];
+  // When the agent omits artifacts[]: any result files (not image-only) —
+  // (1) touched under the island, (2) paths mentioned in stdout/stderr/notes
+  // that exist + mtime-match. No folder/extension allowlists.
+  const inferred = [
+    ...inferArtifactsByMtimeInIsland(ctx.projectRoot, island, startedAt, finishedAt),
+    ...inferArtifactsFromOutputText(
+      ctx.projectRoot,
       workspacePath,
-      existsProjectRel: (rel) => existsSync(join(ctx.projectRoot, rel)),
-      findByBasename: (base) => findProjectRelByBasename(ctx.projectRoot, base),
-    },
-  );
+      [input.stdoutTail, input.stderrTail, input.notes].filter(Boolean).join("\n"),
+      startedAt,
+      finishedAt,
+    ),
+  ];
+  const artifacts = normalizeRunArtifactPaths([...declared, ...inferred], {
+    workspacePath,
+    existsProjectRel: (rel) => existsSync(join(ctx.projectRoot, rel)),
+    findByBasename: (base) => findProjectRelByBasename(ctx.projectRoot, base),
+  });
+  const runId = input.runId || generateRunId();
+  const artifactSnapshots = snapshotImageArtifactsForRun(ctx, id, runId, artifacts);
   const run: ExperimentRunEntry = {
-    runId: input.runId || generateRunId(),
+    runId,
     startedAt,
     finishedAt,
     command,
@@ -983,6 +1243,7 @@ export function appendRun(
         workspaceRel: ctx.workspaceRel,
       }),
   };
+  if (artifactSnapshots.length > 0) run.artifactSnapshots = artifactSnapshots;
   if (input.notes) run.notes = input.notes;
   if (input.cancelled) run.cancelled = true;
   if (input.kind) run.kind = input.kind;

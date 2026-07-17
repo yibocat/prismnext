@@ -137,7 +137,8 @@ export function registerExperimentHandlers(): void {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
     if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
     const limit = typeof args.runsLimit === "number" && args.runsLimit > 0 ? args.runsLimit : 20;
-    const result = readExperiment(ctxResult, args.id, limit);
+    // Human UI needs stdout/stderr tails; agent bridge uses lean reads separately.
+    const result = readExperiment(ctxResult, args.id, limit, { includeOutput: true });
     if (!result.ok) return { ok: false as const, error: result.error };
     return {
       ok: true as const,
@@ -145,6 +146,8 @@ export function registerExperimentHandlers(): void {
       runs: result.runs,
       runCount: result.runCount,
       lastRunAt: result.lastRunAt,
+      oldestRun: result.oldestRun,
+      latestRun: result.latestRun,
       experimentRoot: result.workspaceRel,
       registryRoot: result.registryRoot,
     };

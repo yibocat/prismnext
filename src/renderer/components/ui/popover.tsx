@@ -19,6 +19,8 @@ function PopoverContent({
   className,
   align = "center",
   sideOffset = 4,
+  // Desktop UI: don't restore focus to the opener after Esc/close (avoids sticky focus rings).
+  onCloseAutoFocus = (event) => event.preventDefault(),
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   return (
@@ -32,6 +34,7 @@ function PopoverContent({
           className,
         )}
         {...props}
+        onCloseAutoFocus={onCloseAutoFocus}
       />
     </PopoverPrimitive.Portal>
   );

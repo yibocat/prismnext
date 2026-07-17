@@ -43,7 +43,7 @@ export const GrepWidget = memo(function GrepWidget({
     <ToolCard
       toolName={toolName}
       icon={<SearchIcon className="size-3.5 text-warning" />}
-      label={<span className="font-mono truncate">{pattern.slice(0, 60)}</span>}
+      label={<span className="truncate">{pattern.slice(0, 60)}</span>}
       meta={
         <>
           {matchCount > 0 && (

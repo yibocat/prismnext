@@ -135,6 +135,8 @@ export type ComposerPart =
       artifactPath?: string;
       linkMethod?: string;
       artifacts: string[];
+      /** Frozen image copies from append time. */
+      artifactSnapshots?: string[];
       env?: { python?: string | null; pythonVersion?: string | null; platform?: string; gitCommit?: string | null } | null;
       chatSessionId?: string | null;
       workspacePath?: string;

@@ -54,7 +54,8 @@ CM still uses `Panel.top`, but CSS takes `.cm-panels-top:has(.prism-cm-search--f
 
 ## Chrome
 
-- Popover surface: `bg-popover`, border, rounded, soft shadow
+- Popover surface: `bg-popover`, border, rounded — no drop shadow
+- Inset from editor top/right (`top`/`right` ~16px / 12px) so it is not flush under the toolbar
 - Compact ~26–28px row height; width `--width-search-float` (capped to editor)
 - Active toggle: primary-tinted chip
 - Invalid regexp: count `—`, destructive ring on find field

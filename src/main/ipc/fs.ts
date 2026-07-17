@@ -69,18 +69,37 @@ export function registerFsHandlers(): void {
     assertUnderHome(args.absPath, "fs:readImage");
     const { existsSync } = require("node:fs");
     if (!existsSync(args.absPath)) {
-      return { dataUrl: null as string | null };
+      return { dataUrl: null as string | null, mtimeMs: null as number | null };
     }
     try {
-      const dataUrl = await fs.readImageAsDataUrl(args.absPath);
-      return { dataUrl };
+      const { dataUrl, mtimeMs } = await fs.readImageAsDataUrlWithMeta(args.absPath);
+      return { dataUrl, mtimeMs };
     } catch (err: unknown) {
       const code =
         err && typeof err === "object" && "code" in err
           ? (err as NodeJS.ErrnoException).code
           : undefined;
-      if (code === "ENOENT") return { dataUrl: null as string | null };
+      if (code === "ENOENT") {
+        return { dataUrl: null as string | null, mtimeMs: null as number | null };
+      }
       throw err;
+    }
+  });
+
+  ipcMain.handle("fs:stat", async (_event, args: { absPath: string }) => {
+    if (!isPathUnderHome(args.absPath)) return null;
+    const { existsSync, statSync } = require("node:fs");
+    try {
+      if (!existsSync(args.absPath)) return null;
+      const st = statSync(args.absPath);
+      return {
+        mtimeMs: st.mtimeMs,
+        size: st.size,
+        isFile: st.isFile(),
+        isDirectory: st.isDirectory(),
+      };
+    } catch {
+      return null;
     }
   });
 

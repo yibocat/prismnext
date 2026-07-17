@@ -1,12 +1,23 @@
 /**
- * Experiment figures in assistant chat replies.
+ * Experiment result files in assistant chat replies.
  *
- * Prefer the model embedding `![…](project-relative-path)` in its own prose.
- * As a hard fallback, the UI appends a short natural reply block when those
- * images are missing from the assistant text (message stream, not tool dropdown).
+ * Prefer the model embedding ```artifact fences (or `![…](path)` for images).
+ * Narrow fallback: append fences for missing experiment-run / append_run artifacts.
  */
 import type { ContentBlock } from "@/stores/chat-store";
-import { resolveImageArtifactPaths } from "@/modes/experiments-mode/experiments-artifact-nav";
+import {
+  artifactBasename,
+  isImageArtifactPath,
+  normalizeArtifactSlash,
+  resolveImageArtifactPathsForDisplay,
+} from "../../../shared/artifact-path";
+import {
+  assistantTextEmbedsArtifactPath,
+  buildArtifactFallbackMarkdown,
+  CHAT_ARTIFACT_AUTO_CAP,
+  collectEmbeddedArtifactPaths,
+  missingArtifactPathsInText,
+} from "@/lib/markdown/chat-artifact";
 
 function parseToolJson(content: unknown): Record<string, unknown> | null {
   if (content == null) return null;
@@ -49,7 +60,7 @@ function asStringArray(v: unknown): string[] {
   return v.filter((x): x is string => typeof x === "string");
 }
 
-/** Whether this tool_use is an experiment run that may carry image artifacts. */
+/** Whether this tool_use may carry run artifacts for reply fallback. */
 export function isExperimentFigureToolUse(toolUse: ContentBlock): boolean {
   const name = (toolUse.name || "").toLowerCase();
   if (name === "experiment-run") return true;
@@ -59,10 +70,47 @@ export function isExperimentFigureToolUse(toolUse: ContentBlock): boolean {
 }
 
 /**
- * Project-relative image paths from a successful experiment-run / append_run result.
- * Empty when missing result, error, or no image artifacts.
+ * Paths to show for a run: keep every artifact; for images prefer a matching
+ * snapshot (same basename) when present so chat shows the frozen figure.
  */
-export function extractExperimentImageArtifactPaths(
+export function pathsForRunChatDisplay(opts: {
+  artifacts: string[];
+  artifactSnapshots?: string[];
+  workspacePath?: string;
+}): string[] {
+  const arts = opts.artifacts.map(normalizeArtifactSlash).filter(Boolean);
+  const snaps = (opts.artifactSnapshots ?? []).map(normalizeArtifactSlash).filter(Boolean);
+  const snapByBase = new Map<string, string>();
+  for (const s of snaps) {
+    const base = artifactBasename(s);
+    if (base) snapByBase.set(base, s);
+  }
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const a of arts) {
+    let chosen = a;
+    if (isImageArtifactPath(a)) {
+      const snap = snapByBase.get(artifactBasename(a));
+      if (snap) chosen = snap;
+      else {
+        const resolved = resolveImageArtifactPathsForDisplay([a], opts.workspacePath);
+        chosen = resolved[0] ?? a;
+      }
+    }
+    const n = normalizeArtifactSlash(chosen);
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out;
+}
+
+/**
+ * Project-relative paths from a successful experiment-run / append_run result
+ * (any file kind). Empty when missing result or error.
+ */
+export function extractExperimentArtifactPaths(
   toolUse: ContentBlock,
   toolResult?: ContentBlock,
 ): string[] {
@@ -75,8 +123,10 @@ export function extractExperimentImageArtifactPaths(
   const input = (toolUse.input ?? {}) as Record<string, unknown>;
   const run = data.run as Record<string, unknown> | undefined;
   const artifacts = asStringArray(run?.artifacts ?? data.artifacts);
+  const snapshots = asStringArray(run?.artifactSnapshots ?? data.artifactSnapshots);
   const inputArtifacts = asStringArray(input.artifacts);
-  const merged = artifacts.length ? artifacts : inputArtifacts;
+  const mergedArts = artifacts.length ? artifacts : inputArtifacts;
+  if (!mergedArts.length) return [];
 
   const cwd =
     (typeof run?.cwd === "string" && run.cwd) ||
@@ -85,11 +135,22 @@ export function extractExperimentImageArtifactPaths(
       ? `${data.experimentRoot}/${input.id}`
       : undefined);
 
-  return resolveImageArtifactPaths(merged, cwd);
+  return pathsForRunChatDisplay({
+    artifacts: mergedArts,
+    artifactSnapshots: snapshots,
+    workspacePath: cwd,
+  });
 }
 
-/** Collect image artifact paths from all experiment tool_use blocks in a message. */
-export function collectExperimentImagePathsFromBlocks(
+/** @deprecated Use extractExperimentArtifactPaths — kept for image-only call sites. */
+export function extractExperimentImageArtifactPaths(
+  toolUse: ContentBlock,
+  toolResult?: ContentBlock,
+): string[] {
+  return extractExperimentArtifactPaths(toolUse, toolResult).filter(isImageArtifactPath);
+}
+
+export function collectExperimentArtifactPathsFromBlocks(
   blocks: ContentBlock[],
   toolResultMap: Map<string, ContentBlock>,
 ): string[] {
@@ -98,7 +159,7 @@ export function collectExperimentImagePathsFromBlocks(
   for (const block of blocks) {
     if (block.type !== "tool_use") continue;
     const result = toolResultMap.get(block.id || "");
-    for (const p of extractExperimentImageArtifactPaths(block, result)) {
+    for (const p of extractExperimentArtifactPaths(block, result)) {
       if (seen.has(p)) continue;
       seen.add(p);
       out.push(p);
@@ -107,53 +168,79 @@ export function collectExperimentImagePathsFromBlocks(
   return out;
 }
 
-/** True when assistant markdown already embeds this project-relative image. */
+/** @deprecated */
+export function collectExperimentImagePathsFromBlocks(
+  blocks: ContentBlock[],
+  toolResultMap: Map<string, ContentBlock>,
+): string[] {
+  return collectExperimentArtifactPathsFromBlocks(blocks, toolResultMap).filter(
+    isImageArtifactPath,
+  );
+}
+
 export function assistantTextEmbedsImagePath(text: string, projectRelPath: string): boolean {
-  if (!text || !projectRelPath) return false;
-  const norm = projectRelPath.replace(/\\/g, "/");
-  const escaped = norm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  // ![…](path) or bare path mentioned as markdown image target
-  const re = new RegExp(`!\\[[^\\]]*\\]\\(\\s*${escaped}\\s*\\)`, "i");
-  return re.test(text);
+  return assistantTextEmbedsArtifactPath(text, projectRelPath);
 }
 
 export function missingExperimentImagePathsInText(
   textCorpus: string,
   paths: string[],
 ): string[] {
-  return paths.filter((p) => !assistantTextEmbedsImagePath(textCorpus, p));
+  return missingArtifactPathsInText(textCorpus, paths);
 }
 
-/**
- * Natural reply prose + markdown images for paths not already in the assistant text.
- * Rendered as a normal chat text block (same MarkdownRenderer as AI prose).
- */
+/** @deprecated Prefer buildArtifactFallbackMarkdown via resolveMissingArtifactPathsForReply. */
 export function buildNaturalFigureReplyMarkdown(paths: string[]): string {
-  if (!paths.length) return "";
-  const fileName = (p: string) => p.replace(/\\/g, "/").split("/").pop() || p;
-  if (paths.length === 1) {
-    const p = paths[0]!;
-    return `本次运行生成的图如下：\n\n![${fileName(p)}](${p})`;
-  }
-  const lines = ["本次运行生成的图如下：", ""];
-  for (const p of paths) {
-    lines.push(`![${fileName(p)}](${p})`, "");
-  }
-  return lines.join("\n").trim();
+  return buildArtifactFallbackMarkdown(paths);
 }
 
-/** Paths still missing from assistant text blocks (for reply-body fallback). */
-export function resolveMissingFigurePathsForReply(
-  blocks: ContentBlock[],
-  toolResultMap: Map<string, ContentBlock>,
-): string[] {
-  const all = collectExperimentImagePathsFromBlocks(blocks, toolResultMap);
-  if (!all.length) return [];
-  const corpus = blocks
+function assistantTextCorpus(blocks: ContentBlock[]): string {
+  return blocks
     .filter((b): b is ContentBlock & { type: "text"; text: string } =>
       b.type === "text" && typeof b.text === "string",
     )
     .map((b) => b.text)
     .join("\n");
-  return missingExperimentImagePathsInText(corpus, all);
+}
+
+export function resolveMissingArtifactPathsForReply(
+  blocks: ContentBlock[],
+  toolResultMap: Map<string, ContentBlock>,
+): string[] {
+  const all = collectExperimentArtifactPathsFromBlocks(blocks, toolResultMap);
+  if (!all.length) return [];
+  return missingArtifactPathsInText(assistantTextCorpus(blocks), all);
+}
+
+/**
+ * Paths the tool-card gallery should hide: already in reply prose, or about to
+ * appear in the capped auto-fallback (overflow may still show on the card).
+ */
+export function resolveSuppressArtifactPathsForToolCards(
+  blocks: ContentBlock[],
+  toolResultMap: Map<string, ContentBlock>,
+  missingForFallback: string[] = resolveMissingArtifactPathsForReply(
+    blocks,
+    toolResultMap,
+  ),
+): string[] {
+  const embedded = collectEmbeddedArtifactPaths(assistantTextCorpus(blocks));
+  const fallbackShown = missingForFallback.slice(0, CHAT_ARTIFACT_AUTO_CAP);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const p of [...embedded, ...fallbackShown]) {
+    const n = normalizeArtifactSlash(p);
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out;
+}
+
+/** @deprecated */
+export function resolveMissingFigurePathsForReply(
+  blocks: ContentBlock[],
+  toolResultMap: Map<string, ContentBlock>,
+): string[] {
+  return resolveMissingArtifactPathsForReply(blocks, toolResultMap);
 }

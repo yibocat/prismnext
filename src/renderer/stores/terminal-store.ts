@@ -276,6 +276,9 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
   },
 
   requestRestart: (tabId) => {
+    // Kill the live PTY first — TerminalView unmount no longer destroys it.
+    window.electronAPI.terminalDestroyTab({ tabId });
+    get().removeSession(tabId);
     set((s) => ({
       restartNonce: {
         ...s.restartNonce,

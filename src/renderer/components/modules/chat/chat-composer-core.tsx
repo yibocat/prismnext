@@ -15,11 +15,7 @@ import {
 } from "@/components/ui/app-menu";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ChatImagePreviewDialog } from "@/lib/markdown/chat-image-preview";
 import { ComposerToolbar } from "./agent-settings/composer-toolbar";
 import { ModelThoughtSelect } from "./agent-settings/model-thought-select";
 import { PermissionGatePanel, usePermissionGateOpen } from "./permission-gate-panel";
@@ -88,21 +84,12 @@ function ComposerAttachmentStrip({
           </span>
         ))}
       </div>
-      <Dialog open={preview != null} onOpenChange={(open) => !open && setPreview(null)}>
-        <DialogContent
-          className="max-w-[min(92vw,56rem)] gap-2 border-border/80 bg-background p-2 sm:max-w-[min(92vw,56rem)]"
-          showCloseButton
-        >
-          <DialogTitle className="sr-only">{preview?.name ?? t("chat.composer.imagePreview")}</DialogTitle>
-          {preview ? (
-            <img
-              src={preview.url}
-              alt={preview.name}
-              className="max-h-[min(85vh,720px)] w-full rounded-md object-contain"
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      <ChatImagePreviewDialog
+        open={preview != null}
+        onOpenChange={(open) => !open && setPreview(null)}
+        url={preview?.url ?? null}
+        name={preview?.name ?? t("chat.composer.imagePreview")}
+      />
     </>
   );
 }

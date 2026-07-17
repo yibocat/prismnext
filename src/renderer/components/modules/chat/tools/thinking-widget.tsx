@@ -92,13 +92,13 @@ export function ThinkingWidget({
       <button
         ref={toggleRef}
         type="button"
-        className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors group"
+        className="flex items-center gap-2 py-1 text-[length:var(--font-chat-message)] text-muted-foreground/65 hover:text-muted-foreground/80 transition-colors group"
         onMouseDown={(e) => e.preventDefault()}
         onClick={toggleExpanded}
       >
         <BrainIcon className="size-3.5 shrink-0" />
         <span
-          className="text-[length:var(--font-chat-meta)] tabular-nums transition-opacity duration-200"
+          className="tabular-nums transition-opacity duration-200"
           key={isStreaming ? "live" : "frozen"}
         >
           {isProgress

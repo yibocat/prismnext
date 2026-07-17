@@ -1,4 +1,5 @@
 import { modeRegistry } from "./mode-registry";
+import { isDisposableEmptyChatTab } from "@/lib/chat/session-title";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
@@ -33,9 +34,11 @@ function resolveRightAreaTabToClose() {
  * App-wide Close (Cmd+W) cascade:
  * 1. RightArea expanded with tabs → close current RightArea tab;
  *    when none remain → exit maximize + collapse RightArea.
- * 2. RightArea collapsed → close current chat tab (skip streaming);
- *    last remaining chat tab → close window (Chrome-style).
- * 3. Nothing left to close → close window (not quit).
+ * 2. RightArea collapsed → chat sessions (stored RightArea tabs ignored):
+ *    - multiple tabs → close current (prefer non-streaming);
+ *    - sole disposable empty New Chat → close window;
+ *    - sole tab with content → open a fresh session, then close the old one;
+ *    - sole streaming tab → close window.
  */
 export function closeActiveTabFromShortcut(): CloseShortcutResult {
   const layout = useLayoutStore.getState();
@@ -73,9 +76,16 @@ export function closeActiveTabFromShortcut(): CloseShortcutResult {
     return "close-window";
   }
 
-  // Last closable chat tab → close window (keep a live session rather than empty store).
   if (chat.tabs.length === 1) {
-    return "close-window";
+    const only = chat.tabs[0];
+    if (only.isStreaming) return "close-window";
+    if (isDisposableEmptyChatTab(only)) return "close-window";
+
+    // Last tab has content — replace with a fresh blank session (keep the window).
+    const oldId = only.id;
+    chat.createTab();
+    chat.closeTab(oldId);
+    return "handled";
   }
 
   if (active && !active.isStreaming) {

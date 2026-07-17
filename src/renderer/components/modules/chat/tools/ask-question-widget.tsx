@@ -13,7 +13,15 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { StatusIcon, param, TOOL_PANEL_CLASS, TOOL_PANEL_HEADER_CLASS, TOOL_INLINE_ROW_CLASS, TOOL_EXPANDED_CONTENT_CLASS } from "./shared";
+import {
+  StatusIcon,
+  param,
+  TOOL_PANEL_CLASS,
+  TOOL_PANEL_HEADER_CLASS,
+  TOOL_INLINE_ROW_CLASS,
+  TOOL_INLINE_LABEL_CLASS,
+  TOOL_EXPANDED_CONTENT_CLASS,
+} from "./shared";
 
 /** Extract the human-readable answer string from toolResult.content. */
 function parseAnswer(content: unknown): string {
@@ -121,9 +129,9 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
   // Compact loading / empty-question fallback
   if (!question && !options.length) {
     return (
-      <div className={cn(TOOL_INLINE_ROW_CLASS, "text-[length:var(--font-code)] py-0.5")}>
+      <div className={cn(TOOL_INLINE_ROW_CLASS, "text-[length:var(--font-chat-message)] py-1")}>
         <StatusIcon isLoading={!hasResult} isError={!!isError} />
-        <span className="text-[length:var(--font-chat-meta)] shrink-0">{toolName}</span>
+        <span className="shrink-0 text-muted-foreground/55">{toolName}</span>
         <MessageCircleQuestionIcon className="size-3.5 shrink-0 text-info" />
         <span className="text-muted-foreground truncate">
           {!hasResult ? "Waiting for question…" : isError ? "Question failed" : "Question asked"}
@@ -138,13 +146,13 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
       <div>
         <button
           type="button"
-          className={cn(TOOL_INLINE_ROW_CLASS, "text-left text-[length:var(--font-code)] py-0.5")}
+          className={cn(TOOL_INLINE_ROW_CLASS, "text-left text-[length:var(--font-chat-message)] py-1")}
           onClick={() => setExpanded(!expanded)}
         >
           <StatusIcon isLoading={false} isError={false} />
-          <span className="text-[length:var(--font-chat-meta)] shrink-0">{toolName}</span>
+          <span className="shrink-0 text-muted-foreground/55">{toolName}</span>
           <MessageCircleQuestionIcon className="size-3.5 shrink-0 text-info" />
-          <span className="min-w-0 truncate font-medium text-foreground/90">
+          <span className={TOOL_INLINE_LABEL_CLASS}>
             {answerLabel.slice(0, 80)}{answerLabel.length > 80 && "…"}
           </span>
           <ChevronDownIcon

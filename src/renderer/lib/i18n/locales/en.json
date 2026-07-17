@@ -1215,7 +1215,8 @@
   },
   "shortcuts": {
     "shell": {
-      "close": "Close: RightArea tab → chat tab → window",
+      "newWindow": "New window",
+      "close": "Close: RightArea tab → chat tab → fresh chat → window",
       "closeWindow": "Close window",
       "saveFile": "Save active workspace file",
       "toggleLeftSidebar": "Toggle left sidebar",
@@ -1272,8 +1273,12 @@
     },
     "tray": {
       "show": "Show prismnext",
+      "showProject": "Show {{project}}",
       "newChat": "New Chat",
-      "quit": "Quit prismnext"
+      "quit": "Quit prismnext",
+      "tooltipIdle": "{{project}}",
+      "tooltipBusy": "{{project}} — Working…",
+      "tooltipAttention": "{{project}} — Needs attention"
     },
     "collapseSidebar": "Collapse Sidebar",
     "expandSidebar": "Expand Sidebar",
@@ -1354,6 +1359,18 @@
     }
   },
   "chat": {
+    "artifact": {
+      "openInFiles": "Open in Files",
+      "copyPath": "Copy path",
+      "copied": "Copied",
+      "unavailable": "Artifact unavailable",
+      "galleryOverflow": "+{{count}} more — open in Experiments",
+      "pdfLoading": "Loading PDF…",
+      "pdfUnavailable": "PDF unavailable",
+      "pdfPreview": "PDF preview",
+      "previewPdf": "Preview {{name}}",
+      "clickToPreview": "Click to preview"
+    },
     "tab": {
       "newChat": "New Chat",
       "chat": "Chat"
@@ -1385,6 +1402,8 @@
       "removeAttachment": "Remove {{name}}",
       "previewAttachment": "Preview {{name}}",
       "imagePreview": "Image preview",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
       "placeholder": "@ expert, file, paper, or experiment · / commands, skills, MCP",
       "archivedReadonly": "This conversation is archived. Restore it to continue chatting."
     },
@@ -1449,7 +1468,11 @@
       "removeTitle": "Remove from intensive list (keeps @ chip)"
     },
     "messages": {
-      "loading": "Loading conversation…"
+      "loading": "Loading conversation…",
+      "loadMore": "Load earlier messages",
+      "loadMoreArmed": "Scroll up again to load",
+      "loadMorePulling": "Keep scrolling up…",
+      "loadingOlder": "Loading…"
     },
     "prepare": {
       "thinking": "Thinking…",
@@ -1549,6 +1572,7 @@
       "viewSplit": "Split view",
       "viewTex": "TeX only",
       "viewPdf": "PDF only",
+      "swapPanes": "Swap editor and PDF",
       "compile": "Compile ({{engine}})",
       "autoCompileOn": "Auto-compile: ON",
       "autoCompileOff": "Auto-compile: OFF",
@@ -1563,6 +1587,17 @@
       "citedReferences": "Cited References",
       "noProblems": "No problems reported.",
       "noCompileLog": "No compiler output yet.",
+      "noPdfPreview": "No PDF yet — compile the manuscript to preview here.",
+      "loadingPdfPreview": "Loading PDF…",
+      "exportMenu": "Export",
+      "exportPdf": "Export compiled PDF…",
+      "packManuscript": "Pack manuscript…",
+      "exportPdfSuccess": "PDF exported.",
+      "exportPdfMissing": "No compiled PDF yet — compile the manuscript first.",
+      "exportNoTarget": "Could not determine the compile target.",
+      "packManuscriptSuccess": "Manuscript packed.",
+      "packNoManuscript": "No manuscript folder configured.",
+      "exportFailed": "Export failed.",
       "insertSymbol": "Insert Symbol",
       "insertEnv": "Insert Environment",
       "noResults": "No results",
@@ -2034,6 +2069,8 @@
       "sortAria": "Sort runs",
       "moreArtifactsShort": "+{{count}} more",
       "sendToChat": "Send this run to Chat with Methods / figure scaffolding",
+      "workingCopyNewer": "Working file(s) were updated after this run — preview below is the frozen snapshot from this run.",
+      "runSnapshot": "Run snapshot",
       "noPython": "no python",
       "venv": "venv",
       "exitCodeTitle": "exit code {{code}}",

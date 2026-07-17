@@ -2,17 +2,26 @@ import { Tray, Menu, nativeImage, app, type BrowserWindow, type NativeImage } fr
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { getSettings } from "./settings";
-import type { TrayMenuSnapshot, TrayStatus } from "../../shared/desktop-shell";
+import {
+  formatTrayTooltip,
+  shouldOpenTrayMenuOnClick,
+  type TrayMenuSnapshot,
+  type TrayStatus,
+} from "../../shared/desktop-shell";
 
 let tray: Tray | null = null;
 let isQuitting = false;
 let status: TrayStatus = "idle";
+/** Localized tooltip from renderer; falls back to formatTrayTooltip. */
+let statusTooltip: string | null = null;
 let getMainWindow: (() => BrowserWindow | null) | null = null;
 let menuSnapshot: TrayMenuSnapshot = {
   showLabel: "Show prismnext",
   newChatLabel: "New Chat",
   quitLabel: "Quit prismnext",
   recent: [],
+  projectName: null,
+  modes: [],
 };
 
 function trayIconDir(): string {
@@ -56,9 +65,11 @@ function iconForStatus(s: TrayStatus): NativeImage {
 }
 
 function tooltipForStatus(s: TrayStatus): string {
-  if (s === "attention") return "prismnext — Needs attention";
-  if (s === "busy") return "prismnext — Working…";
-  return "prismnext";
+  if (statusTooltip) return statusTooltip;
+  return formatTrayTooltip({
+    status: s,
+    projectName: menuSnapshot.projectName,
+  });
 }
 
 function showMainWindow(): BrowserWindow | null {
@@ -69,6 +80,12 @@ function showMainWindow(): BrowserWindow | null {
   win.focus();
   return win;
 }
+
+/**
+ * After `popUpContextMenu` returns, the same click that dismissed the menu still
+ * delivers `click` / `mouse-up` — ignore that echo so we don't flash reopen.
+ */
+let ignoreMenuPopupUntil = 0;
 
 function sendTrayAction(channel: string, payload?: Record<string, unknown>): void {
   const win = showMainWindow();
@@ -88,7 +105,19 @@ function buildMenu(): Menu {
     },
   }));
 
-  const template: Electron.MenuItemConstructorOptions[] = [
+  const template: Electron.MenuItemConstructorOptions[] = [];
+  const projectName = menuSnapshot.projectName?.trim();
+  if (projectName) {
+    template.push(
+      {
+        label: projectName.length > 48 ? `${projectName.slice(0, 47)}…` : projectName,
+        enabled: false,
+      },
+      { type: "separator" },
+    );
+  }
+
+  template.push(
     {
       label: menuSnapshot.showLabel,
       click: () => {
@@ -101,7 +130,17 @@ function buildMenu(): Menu {
         sendTrayAction("shell:trayNewChat");
       },
     },
-  ];
+  );
+
+  const modeItems = (menuSnapshot.modes ?? []).map((mode) => ({
+    label: mode.label,
+    click: () => {
+      sendTrayAction("shell:trayOpenMode", { modeId: mode.id });
+    },
+  }));
+  if (modeItems.length > 0) {
+    template.push({ type: "separator" }, ...modeItems);
+  }
 
   if (recentItems.length > 0) {
     template.push({ type: "separator" }, ...recentItems);
@@ -127,13 +166,16 @@ function applyStatusVisuals(): void {
 }
 
 /**
- * Pop menu on demand. Do **not** keep a persistent `setContextMenu` on macOS —
- * that makes the system open the menu on mouse-*down*. We open on mouse-*up*
- * (or `click` on other platforms) via `popUpContextMenu` only.
+ * Toggle tray menu: first click opens, second click closes (without reopening).
+ * Do **not** keep a persistent `setContextMenu` on macOS — that opens on press.
  */
 function popupTrayMenu(): void {
   if (!tray) return;
+  const now = Date.now();
+  if (!shouldOpenTrayMenuOnClick({ now, ignoreUntil: ignoreMenuPopupUntil })) return;
   tray.popUpContextMenu(buildMenu());
+  // Menu is closed when this returns; suppress the dismissing click's echo.
+  ignoreMenuPopupUntil = Date.now() + 300;
 }
 
 function refreshTrayMenu(): void {
@@ -164,8 +206,9 @@ export function isTrayIconEnabled(): boolean {
   return settings.trayIconEnabled !== false;
 }
 
-export function setTrayStatus(next: TrayStatus): void {
+export function setTrayStatus(next: TrayStatus, tooltip?: string | null): void {
   status = next;
+  statusTooltip = tooltip?.trim() ? tooltip.trim() : null;
   applyStatusVisuals();
 }
 
@@ -175,7 +218,12 @@ export function setTrayMenuSnapshot(snapshot: TrayMenuSnapshot): void {
     newChatLabel: snapshot.newChatLabel || menuSnapshot.newChatLabel,
     quitLabel: snapshot.quitLabel || menuSnapshot.quitLabel,
     recent: Array.isArray(snapshot.recent) ? snapshot.recent.slice(0, 3) : [],
+    projectName: snapshot.projectName?.trim() || null,
+    modes: Array.isArray(snapshot.modes) ? snapshot.modes.slice(0, 8) : [],
   };
+  // Project name also affects the fallback tooltip when renderer has not
+  // pushed a localized one for the current status yet.
+  applyStatusVisuals();
   refreshTrayMenu();
 }
 
@@ -206,23 +254,14 @@ export function ensureTray(): void {
   const icon = iconForStatus(status);
   tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon);
   tray.setToolTip(tooltipForStatus(status));
-  // Never attach a persistent context menu on macOS — that opens on press.
-  // Open on release instead (mouse-up); other platforms use click.
-  if (process.platform === "darwin") {
-    tray.on("mouse-up", () => {
-      popupTrayMenu();
-    });
-    tray.on("right-click", () => {
-      popupTrayMenu();
-    });
-  } else {
-    tray.on("click", () => {
-      popupTrayMenu();
-    });
-    tray.on("right-click", () => {
-      popupTrayMenu();
-    });
-  }
+  // Click toggles menu open/close (suppress echo so dismiss does not reopen).
+  // Prefer `click` over bare `mouse-up` so we share one path with Windows/Linux.
+  tray.on("click", () => {
+    popupTrayMenu();
+  });
+  tray.on("right-click", () => {
+    popupTrayMenu();
+  });
   applyStatusVisuals();
 }
 

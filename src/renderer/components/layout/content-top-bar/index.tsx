@@ -71,7 +71,7 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
   if (hideContentTopBar) return null;
 
   return (
-    <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center px-2 gap-0.5 select-none" data-surface="content">
+    <div className="drag-region flex h-[var(--height-titlebar)] min-w-0 shrink-0 items-center gap-0.5 overflow-hidden px-2 select-none" data-surface="content">
       {/* ── Left: traffic lights spacer + sidebar controls ── */}
       <div className="flex items-center gap-0.5 shrink-0">
         {showSidebarControls ? (

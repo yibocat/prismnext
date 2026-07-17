@@ -26,4 +26,14 @@ describe("findProjectRelByBasename", () => {
     writeFileSync(join(root, "ok", "hidden.png"), "y");
     expect(findProjectRelByBasename(root, "hidden.png")).toBe("ok/hidden.png");
   });
+
+  it("prefers newest mtime when multiple basenames match", async () => {
+    root = mkdtempSync(join(tmpdir(), "prism-find-mtime-"));
+    mkdirSync(join(root, "old"), { recursive: true });
+    mkdirSync(join(root, "new"), { recursive: true });
+    writeFileSync(join(root, "old", "chart.png"), "old");
+    await new Promise((r) => setTimeout(r, 20));
+    writeFileSync(join(root, "new", "chart.png"), "new");
+    expect(findProjectRelByBasename(root, "chart.png")).toBe("new/chart.png");
+  });
 });

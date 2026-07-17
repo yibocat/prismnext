@@ -6,10 +6,9 @@
  * (never maximized). Left-nav still uses `openExperimentsPanel` for full-bleed.
  */
 import { useExperimentStore } from "@/stores/experiment-store";
-import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { getLeftNavPanelRefs } from "@/lib/workspace/left-nav/panel-refs";
-import { closeTexWorkspace } from "@/lib/workspace/left-nav/panel-utils";
+import { openExperimentsSplit } from "@/lib/workspace/left-nav/panel-utils";
 import { getExperimentProjectRoot } from "./experiments-project-root";
 
 function normalizeRoot(p: string): string {
@@ -19,23 +18,7 @@ function normalizeRoot(p: string): string {
 /** Ensure Experiments is visible in a split RightArea (chat stays visible). */
 function ensureExperimentsPanelChrome(): void {
   const panelRefs = getLeftNavPanelRefs();
-  const ctx = { panelRefs };
-  const layout = useLayoutStore.getState();
-  const rp = useRightPanelStore.getState();
-
-  closeTexWorkspace(ctx);
-
-  if (layout.editorMaximized) {
-    layout.unmaximizeRightArea();
-  }
-
-  rp.ensureTab("experiments");
-  layout.setLeftSidebarView("sessions");
-  layout.activateMode("experiments");
-
-  if (!useLayoutStore.getState().rightAreaExpanded) {
-    useLayoutStore.getState().requestRightAreaExpand();
-  }
+  openExperimentsSplit({ panelRefs });
 }
 
 /**

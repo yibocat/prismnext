@@ -21,7 +21,16 @@ import {
 } from "@anaralabs/lector";
 import type { SearchResult } from "@anaralabs/lector";
 import "pdfjs-dist/web/pdf_viewer.css";
-import { PDFJS_DOCUMENT_OPTIONS, PDF_PAGES_CLASS, PDF_PAGES_DARK_CLASS, PDF_PAGES_STYLE, PDF_PAGE_CLASS, PDF_PAGE_DARK_FILTER, PDF_PAGE_INVERTED_CLASS } from "./pdf-config";
+import {
+  PDFJS_DOCUMENT_OPTIONS,
+  PDF_PAGES_CLASS,
+  PDF_PAGES_DARK_CLASS,
+  PDF_PAGES_STYLE,
+  PDF_PAGE_CLASS,
+  PDF_PAGE_DARK_FILTER,
+  PDF_PAGE_INVERTED_CLASS,
+  copyPdfSourceForViewer,
+} from "./pdf-config";
 import { PdfScrollClamp } from "./pdf-scroll-clamp";
 import { cn } from "@/lib/utils";
 import { Hint } from "@/components/ui/hint";
@@ -49,13 +58,14 @@ import {
   AppMenuContent,
   AppMenuTrigger,
 } from "@/components/ui/app-menu";
-import { useCompileStore, getPdfBytes } from "@/stores/compile-store";
+import { useCompileStore, getPdfBytes, ensureCompilePdfFromDisk } from "@/stores/compile-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { saveViewerPosition, loadViewerPosition } from "@/lib/editor/viewer-position";
 import { TabContext } from "@/lib/workspace/tab-context";
 import { isBrowsableUrl, normalizeBrowserUrl, openUrlInBrowser } from "@/lib/browser-link";
+import { useTranslation } from "react-i18next";
 
 type SidePanel = "outline" | "search" | "thumbnails" | null;
 
@@ -356,6 +366,8 @@ export interface PdfViewerInnerProps {
   pageLayers?: ReactNode;
   /** Layers rendered once per document (inside Root, outside virtualized Pages). */
   documentLayers?: ReactNode;
+  /** Chat / lightbox: pages only, no outline/zoom/page chrome. */
+  hideToolbar?: boolean;
 }
 
 export function PdfViewerInner({
@@ -366,6 +378,7 @@ export function PdfViewerInner({
   toolbarExtra,
   pageLayers,
   documentLayers,
+  hideToolbar = false,
 }: PdfViewerInnerProps) {
   const [sidePanel, setSidePanel] = useState<SidePanel>(null);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
@@ -404,44 +417,97 @@ export function PdfViewerInner({
   const [zoomMode, setZoomMode] = useState<PdfZoomMode>("fit-width");
   const zoomModeRef = useRef<PdfZoomMode>("fit-width");
 
-  // ─── Cross-session page + scroll persistence ───
-  const pageRestoredRef = useRef(false);
+  // Page memory:
+  // - View/swap: TexWorkspaceMain keeps this tree mounted (do not unmount).
+  // - Collapse to 0px still wipes Lector scroll → re-apply when size returns.
+  // - Recompile creates a new pdfDocumentProxy → re-apply once per document.
   const currentPageRef = useRef(currentPage);
   currentPageRef.current = currentPage;
+  const restoredDocRef = useRef<unknown>(null);
+
+  const applySavedPdfPosition = useCallback(() => {
+    if (!persistKey || !pdfDocumentProxy) return;
+    const el = viewportRef.current;
+    if (!el || el.clientWidth < 8 || el.clientHeight < 8) return;
+    const saved = loadViewerPosition(persistKey);
+    const page = saved?.pdfPage;
+    if (
+      page == null ||
+      page < 1 ||
+      page > (pdfDocumentProxy.numPages ?? Infinity)
+    ) {
+      return;
+    }
+    jumpToPage(page, { align: "start", behavior: "auto" });
+    if (saved.pdfScrollOffset != null && saved.pdfScrollOffset > 0) {
+      requestAnimationFrame(() => {
+        const vp = viewportRef.current;
+        if (vp) vp.scrollTop = saved.pdfScrollOffset!;
+      });
+    }
+  }, [persistKey, pdfDocumentProxy, jumpToPage, viewportRef]);
 
   useEffect(() => {
-    if (!pdfDocumentProxy || !persistKey || pageRestoredRef.current) return;
-    pageRestoredRef.current = true;
-    const saved = loadViewerPosition(persistKey);
-    if (saved?.pdfPage && saved.pdfPage > 0 && saved.pdfPage <= (pdfDocumentProxy.numPages ?? Infinity)) {
-      jumpToPage(saved.pdfPage, { align: "start", behavior: "auto" });
-      if (saved.pdfScrollOffset != null && viewportRef.current) {
-        requestAnimationFrame(() => {
-          if (viewportRef.current) {
-            viewportRef.current.scrollTop = saved.pdfScrollOffset!;
-          }
-        });
-      }
-    }
-  }, [pdfDocumentProxy, persistKey, jumpToPage, viewportRef]);
+    restoredDocRef.current = null;
+  }, [persistKey]);
+
+  useEffect(() => {
+    if (!persistKey || !pdfDocumentProxy) return;
+    if (restoredDocRef.current === pdfDocumentProxy) return;
+    restoredDocRef.current = pdfDocumentProxy;
+    applySavedPdfPosition();
+  }, [persistKey, pdfDocumentProxy, applySavedPdfPosition]);
 
   useEffect(() => {
     if (!persistKey) return;
     const saveNow = () => {
-      const scrollTop = viewportRef.current?.scrollTop;
-      if (currentPageRef.current > 0) {
-        saveViewerPosition(persistKey, {
-          pdfPage: currentPageRef.current,
-          ...(scrollTop != null ? { pdfScrollOffset: scrollTop } : {}),
-        });
-      }
+      if (currentPageRef.current <= 0) return;
+      const el = viewportRef.current;
+      if (!el || el.clientWidth < 8 || el.clientHeight < 8) return;
+      saveViewerPosition(persistKey, {
+        pdfPage: currentPageRef.current,
+        pdfScrollOffset: el.scrollTop,
+      });
     };
-    const timer = setInterval(saveNow, 3000);
+    const onScroll = () => saveNow();
+    let el: HTMLElement | null = null;
+    let wasTiny = true;
+    let ro: ResizeObserver | null = null;
+
+    const tryBind = () => {
+      const next = viewportRef.current;
+      if (!next || next === el) return;
+      el?.removeEventListener("scroll", onScroll);
+      ro?.disconnect();
+      el = next;
+      el.addEventListener("scroll", onScroll, { passive: true });
+      wasTiny = el.clientWidth < 8 || el.clientHeight < 8;
+      ro = new ResizeObserver(() => {
+        const node = viewportRef.current;
+        if (!node) return;
+        const tiny = node.clientWidth < 8 || node.clientHeight < 8;
+        if (wasTiny && !tiny) {
+          // Panel expanded after tex/pdf-only — put the page back.
+          applySavedPdfPosition();
+        }
+        wasTiny = tiny;
+      });
+      ro.observe(el);
+      if (!wasTiny) applySavedPdfPosition();
+    };
+
+    tryBind();
+    const interval = setInterval(() => {
+      tryBind();
+      saveNow();
+    }, 2000);
     return () => {
-      clearInterval(timer);
+      el?.removeEventListener("scroll", onScroll);
+      ro?.disconnect();
+      clearInterval(interval);
       saveNow();
     };
-  }, [persistKey, viewportRef]);
+  }, [persistKey, pdfDocumentProxy, viewportRef, applySavedPdfPosition]);
 
   const zoomStore = useMemo(
     () => ({ viewportRef, viewports, zoomOptions, currentPage, updateZoom, zoomFitWidth }),
@@ -500,149 +566,151 @@ export function PdfViewerInner({
       <PdfScrollClamp />
       <PdfLinkNavigationBridge />
       <PdfLinkCapture />
-      {/* Toolbar */}
-      <div className="flex h-[var(--height-right-area-subtoolbar)] shrink-0 items-center gap-0.5 border-b border-border bg-card px-2 text-[length:var(--font-toolbar-label)]">
-        {/* Left: side panel toggles */}
-        <div className="flex items-center gap-0.5">
-          {PANEL_TOGGLES.map((t) => (
-            <Hint key={t.id} label={t.label}>
-              <button
-                type="button"
-                className={`flex size-6 items-center justify-center rounded transition-colors ${
-                  sidePanel === t.id
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                }`}
-                onClick={() => setSidePanel(sidePanel === t.id ? null : t.id)}
-              >
-                {t.icon}
-              </button>
-            </Hint>
-          ))}
-        </div>
-
-        {toolbarExtra}
-
-        {/* Compile status (TeX mode only) */}
-        <div className="flex items-center gap-1.5">
-          {!isPdfFile && isCompiling && (
-            <span className="flex items-center gap-1 text-warning">
-              <LoaderIcon className="size-3 animate-spin" /> Compiling…
-            </span>
-          )}
-          {!isPdfFile && compileError && (
-            <span className="flex items-center gap-1 text-destructive">
-              <AlertCircleIcon className="size-3" /> Error
-            </span>
-          )}
-        </div>
-
-        <div className="flex-1" />
-
-        <span className="mx-0.5 h-3 w-px bg-border shrink-0" />
-
-        {/* Zoom controls */}
-        <div className="flex items-center">
-          <Hint label="Zoom out">
-            <Button
-              variant="ghost" size="icon" className="size-6 rounded-r-none"
-              onClick={handleZoomOut}
-            >
-              <MinusIcon className="size-3.5" />
-            </Button>
-          </Hint>
-          <AppMenu>
-            <Hint label="Zoom">
-              <AppMenuTrigger asChild>
+      {/* Toolbar — omitted for chat lightbox / compact peeks */}
+      {!hideToolbar ? (
+        <div className="flex h-[var(--height-right-area-subtoolbar)] shrink-0 items-center gap-0.5 border-b border-border bg-card px-2 text-[length:var(--font-toolbar-label)]">
+          {/* Left: side panel toggles */}
+          <div className="flex items-center gap-0.5">
+            {PANEL_TOGGLES.map((t) => (
+              <Hint key={t.id} label={t.label}>
                 <button
-                  className="h-6 min-w-[4.5rem] px-1 tabular-nums text-muted-foreground hover:text-foreground rounded transition-colors cursor-pointer select-none text-center"
+                  type="button"
+                  className={`flex size-6 items-center justify-center rounded transition-colors ${
+                    sidePanel === t.id
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                  onClick={() => setSidePanel(sidePanel === t.id ? null : t.id)}
                 >
-                  {zoomLabel}
+                  {t.icon}
                 </button>
-              </AppMenuTrigger>
+              </Hint>
+            ))}
+          </div>
+
+          {toolbarExtra}
+
+          {/* Compile status (TeX mode only) */}
+          <div className="flex items-center gap-1.5">
+            {!isPdfFile && isCompiling && (
+              <span className="flex items-center gap-1 text-warning">
+                <LoaderIcon className="size-3 animate-spin" /> Compiling…
+              </span>
+            )}
+            {!isPdfFile && compileError && (
+              <span className="flex items-center gap-1 text-destructive">
+                <AlertCircleIcon className="size-3" /> Error
+              </span>
+            )}
+          </div>
+
+          <div className="flex-1" />
+
+          <span className="mx-0.5 h-3 w-px bg-border shrink-0" />
+
+          {/* Zoom controls */}
+          <div className="flex items-center">
+            <Hint label="Zoom out">
+              <Button
+                variant="ghost" size="icon" className="size-6 rounded-r-none"
+                onClick={handleZoomOut}
+              >
+                <MinusIcon className="size-3.5" />
+              </Button>
             </Hint>
-            <AppMenuContent align="center" className="min-w-[8.5rem]">
-              {FIT_ZOOM_MODES.map((mode) => (
-                <AppMenuCheckItem
-                  key={mode}
-                  selected={zoomMode === mode}
-                  onClick={() => applyZoomMode(mode)}
-                >
-                  {PDF_ZOOM_MODE_LABELS[mode]}
-                </AppMenuCheckItem>
-              ))}
-              <div className="my-1 h-px bg-border" />
-              {ZOOM_PRESETS.map((preset) => (
-                <AppMenuCheckItem
-                  key={preset}
-                  selected={zoomMode === "custom" && Math.abs(zoom - preset) < 0.01}
-                  onClick={() => {
-                    zoomModeRef.current = "custom";
-                    setZoomMode("custom");
-                    updateZoom(preset, false);
-                  }}
-                >
-                  {Math.round(preset * 100)}%
-                </AppMenuCheckItem>
-              ))}
-            </AppMenuContent>
-          </AppMenu>
-          <Hint label="Zoom in">
-            <Button
-              variant="ghost" size="icon" className="size-6 rounded-l-none"
-              onClick={handleZoomIn}
+            <AppMenu>
+              <Hint label="Zoom">
+                <AppMenuTrigger asChild>
+                  <button
+                    className="h-6 min-w-[4.5rem] px-1 tabular-nums text-muted-foreground hover:text-foreground rounded transition-colors cursor-pointer select-none text-center"
+                  >
+                    {zoomLabel}
+                  </button>
+                </AppMenuTrigger>
+              </Hint>
+              <AppMenuContent align="center" className="min-w-[8.5rem]">
+                {FIT_ZOOM_MODES.map((mode) => (
+                  <AppMenuCheckItem
+                    key={mode}
+                    selected={zoomMode === mode}
+                    onClick={() => applyZoomMode(mode)}
+                  >
+                    {PDF_ZOOM_MODE_LABELS[mode]}
+                  </AppMenuCheckItem>
+                ))}
+                <div className="my-1 h-px bg-border" />
+                {ZOOM_PRESETS.map((preset) => (
+                  <AppMenuCheckItem
+                    key={preset}
+                    selected={zoomMode === "custom" && Math.abs(zoom - preset) < 0.01}
+                    onClick={() => {
+                      zoomModeRef.current = "custom";
+                      setZoomMode("custom");
+                      updateZoom(preset, false);
+                    }}
+                  >
+                    {Math.round(preset * 100)}%
+                  </AppMenuCheckItem>
+                ))}
+              </AppMenuContent>
+            </AppMenu>
+            <Hint label="Zoom in">
+              <Button
+                variant="ghost" size="icon" className="size-6 rounded-l-none"
+                onClick={handleZoomIn}
+              >
+                <PlusIcon className="size-3.5" />
+              </Button>
+            </Hint>
+          </div>
+
+          <span className="mx-0.5 h-3 w-px bg-border shrink-0" />
+
+          {/* Page navigation */}
+          <div className="flex items-center">
+            <Hint label="Previous page">
+              <Button
+                variant="ghost" size="icon" className="size-6 rounded-r-none"
+                disabled={currentPage <= 1}
+                onClick={handlePrevPage}
+              >
+                <ChevronLeftIcon className="size-3.5" />
+              </Button>
+            </Hint>
+            <span className="inline-flex items-center h-6 px-0.5 tabular-nums text-muted-foreground select-none min-w-[3rem] justify-center">
+              {currentPage}<span className="text-border mx-px">/</span>{totalPages}
+            </span>
+            <Hint label="Next page">
+              <Button
+                variant="ghost" size="icon" className="size-6 rounded-l-none"
+                disabled={currentPage >= totalPages}
+                onClick={handleNextPage}
+              >
+                <ChevronRightIcon className="size-3.5" />
+              </Button>
+            </Hint>
+          </div>
+
+          <span className="mx-0.5 h-3 w-px bg-border shrink-0" />
+
+          {/* PDF dark mode toggle */}
+          <Hint label={pdfDark === "on" ? "Light mode" : pdfDark === "follow" ? "Following app theme" : "Dark mode"}>
+            <button
+              type="button"
+              className={`flex size-6 items-center justify-center rounded transition-colors ${
+                pdfDark !== "off" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={cyclePdfDark}
             >
-              <PlusIcon className="size-3.5" />
-            </Button>
+              {pdfDark === "on" ? <MoonIcon className="size-3.5" /> : pdfDark === "follow" ? <MonitorIcon className="size-3.5" /> : <SunIcon className="size-3.5" />}
+            </button>
           </Hint>
         </div>
-
-        <span className="mx-0.5 h-3 w-px bg-border shrink-0" />
-
-        {/* Page navigation */}
-        <div className="flex items-center">
-          <Hint label="Previous page">
-            <Button
-              variant="ghost" size="icon" className="size-6 rounded-r-none"
-              disabled={currentPage <= 1}
-              onClick={handlePrevPage}
-            >
-              <ChevronLeftIcon className="size-3.5" />
-            </Button>
-          </Hint>
-          <span className="inline-flex items-center h-6 px-0.5 tabular-nums text-muted-foreground select-none min-w-[3rem] justify-center">
-            {currentPage}<span className="text-border mx-px">/</span>{totalPages}
-          </span>
-          <Hint label="Next page">
-            <Button
-              variant="ghost" size="icon" className="size-6 rounded-l-none"
-              disabled={currentPage >= totalPages}
-              onClick={handleNextPage}
-            >
-              <ChevronRightIcon className="size-3.5" />
-            </Button>
-          </Hint>
-        </div>
-
-        <span className="mx-0.5 h-3 w-px bg-border shrink-0" />
-
-        {/* PDF dark mode toggle */}
-        <Hint label={pdfDark === "on" ? "Light mode" : pdfDark === "follow" ? "Following app theme" : "Dark mode"}>
-          <button
-            type="button"
-            className={`flex size-6 items-center justify-center rounded transition-colors ${
-              pdfDark !== "off" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={cyclePdfDark}
-          >
-            {pdfDark === "on" ? <MoonIcon className="size-3.5" /> : pdfDark === "follow" ? <MonitorIcon className="size-3.5" /> : <SunIcon className="size-3.5" />}
-          </button>
-        </Hint>
-      </div>
+      ) : null}
 
       {/* Body: Side Panel + Pages */}
       <div className="relative flex flex-1 min-h-0">
-        {panelOpen && (
+        {!hideToolbar && panelOpen && (
           <div className="shrink-0 border-r border-border bg-card overflow-hidden" style={{ width: PANEL_WIDTH }}>
             {sidePanel === "outline" && <OutlinePanel onJump={() => setSidePanel(null)} />}
             {sidePanel === "search" && <SearchPanel />}
@@ -687,6 +755,8 @@ export interface PdfDocumentViewProps {
   pageLayers?: ReactNode;
   documentLayers?: ReactNode;
   className?: string;
+  /** Hide outline/zoom/page toolbar (chat PDF lightbox). */
+  hideToolbar?: boolean;
 }
 
 export function PdfDocumentView({
@@ -699,11 +769,10 @@ export function PdfDocumentView({
   pageLayers,
   documentLayers,
   className,
+  hideToolbar = false,
 }: PdfDocumentViewProps) {
-  const pdfSource = useMemo(() => {
-    if (typeof source === "string") return source;
-    return source.slice();
-  }, [source]);
+  // Fresh TypedArray per mount/source identity — pdf.js detaches buffers it loads.
+  const pdfSource = useMemo(() => copyPdfSourceForViewer(source), [source]);
 
   return (
     <div className={cn("flex h-full flex-col bg-background", className)}>
@@ -727,6 +796,7 @@ export function PdfDocumentView({
             toolbarExtra={toolbarExtra}
             pageLayers={pageLayers}
             documentLayers={documentLayers}
+            hideToolbar={hideToolbar}
           />
         </Root>
       </div>
@@ -736,7 +806,39 @@ export function PdfDocumentView({
 
 // ─── TeX / standalone .pdf tab preview ───
 
-export function PdfPreview() {
+export type PdfPreviewSourceMode = "auto" | "compile";
+
+export interface PdfPreviewProps {
+  /**
+   * `compile` — always show the project compile cache (TeX workspace preview).
+   * Never follows the active tab, even when a `.pdf` asset is selected.
+   * `auto` — Files / standalone tabs: show the open `.pdf` file, else compile cache.
+   */
+  sourceMode?: PdfPreviewSourceMode;
+}
+
+/** Whether PdfPreview should load a standalone project `.pdf` asset (not compile output). */
+export function resolvePdfPreviewIsAssetFile(
+  sourceMode: PdfPreviewSourceMode,
+  filePath: string | undefined,
+): boolean {
+  if (sourceMode === "compile") return false;
+  return filePath?.toLowerCase().endsWith(".pdf") ?? false;
+}
+
+export function resolvePdfPreviewPersistKey(
+  sourceMode: PdfPreviewSourceMode,
+  projectRoot: string | null | undefined,
+  fileId: string | undefined,
+): string | undefined {
+  if (!projectRoot) return undefined;
+  if (sourceMode === "compile") return `${projectRoot}::compile-preview`;
+  if (!fileId) return undefined;
+  return `${projectRoot}::${fileId}`;
+}
+
+export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const { isCompiling, compileError, pdfRevision } = useCompileStore();
   const fileMetadata = useDocumentStore((s) => s.fileMetadata);
@@ -747,7 +849,7 @@ export function PdfPreview() {
   // Prefer per-tab context (when rendered inside PaneContent); fall back to
   // global active tab (when rendered directly by RightMainArea for compiled PDFs).
   const activeTab = tabCtx?.tab ?? storeTabs.find((t) => t.id === storeActiveTabId);
-  const isPdfFile = activeTab?.filePath?.toLowerCase().endsWith(".pdf") ?? false;
+  const isPdfFile = resolvePdfPreviewIsAssetFile(sourceMode, activeTab?.filePath);
   const fileId = activeTab?.fileId ?? null;
   const absolutePath = fileId
     ? (fileMetadata.get(fileId)?.absolutePath ?? null)
@@ -756,11 +858,32 @@ export function PdfPreview() {
   /** Standalone Files PDF — same Uint8Array path as compile preview (not data URL). */
   const [filePdfBytes, setFilePdfBytes] = useState<Uint8Array | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  /** Hydrating compile preview from `.prismnext/compile/` when memory cache is empty. */
+  const [diskHydrating, setDiskHydrating] = useState(false);
 
   const compilePdfBytes = useMemo(() => {
     if (isPdfFile) return null;
     if (projectRoot) return getPdfBytes(projectRoot) ?? null;
     return null;
+  }, [isPdfFile, projectRoot, pdfRevision]);
+
+  useEffect(() => {
+    if (isPdfFile || !projectRoot) {
+      setDiskHydrating(false);
+      return;
+    }
+    if (getPdfBytes(projectRoot)) {
+      setDiskHydrating(false);
+      return;
+    }
+    let cancelled = false;
+    setDiskHydrating(true);
+    void ensureCompilePdfFromDisk(projectRoot).finally(() => {
+      if (!cancelled) setDiskHydrating(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [isPdfFile, projectRoot, pdfRevision]);
 
   useEffect(() => {
@@ -791,25 +914,22 @@ export function PdfPreview() {
     return () => { cancelled = true; };
   }, [isPdfFile, fileId, absolutePath]);
 
+  // Stable reference until bytes identity changes (pdfRevision / file load).
+  // A new .slice() every render would reload Lector and jump to page 1.
   const source: string | Uint8Array | null = useMemo(() => {
-    // CRITICAL: .slice() creates a fresh copy. PDF.js transfers (not copies)
-    // the ArrayBuffer to its web worker via postMessage.
     if (filePdfBytes) return filePdfBytes.slice();
     if (compilePdfBytes) return compilePdfBytes.slice();
     return null;
   }, [filePdfBytes, compilePdfBytes]);
 
-  // Persistence key: unique identifier for this PDF view.
-  // For compiled PDFs we key on the .tex source file; for standalone .pdf
-  // files we key on the .pdf file itself.
-  const persistKey = useMemo(() => {
-    if (!projectRoot || !activeTab?.fileId) return undefined;
-    return `${projectRoot}::${activeTab.fileId}`;
-  }, [projectRoot, activeTab?.fileId]);
+  const persistKey = useMemo(
+    () => resolvePdfPreviewPersistKey(sourceMode, projectRoot, activeTab?.fileId),
+    [projectRoot, sourceMode, activeTab?.fileId],
+  );
 
   if (loadError && isPdfFile) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 bg-background text-[length:var(--font-size-12)] text-muted-foreground px-4 text-center">
+      <div className="flex h-full min-h-0 w-full flex-col items-center justify-center gap-2 bg-background text-[length:var(--font-size-12)] text-muted-foreground px-4 text-center">
         <AlertCircleIcon className="size-5 text-destructive" />
         <span>{loadError}</span>
       </div>
@@ -817,16 +937,23 @@ export function PdfPreview() {
   }
 
   if (!source) {
-    // Standalone .pdf tab: show explicit load state. Compiled preview: empty until bytes.
-    if (isPdfFile) {
+    const loadingLabel = isPdfFile
+      ? "Loading PDF…"
+      : t("modes.texworkspace.loadingPdfPreview");
+    if (isPdfFile || diskHydrating || isCompiling) {
       return (
-        <div className="flex h-full flex-col items-center justify-center gap-2 bg-background text-[length:var(--font-size-12)] text-muted-foreground">
+        <div className="flex h-full min-h-0 w-full flex-col items-center justify-center gap-2 bg-background text-[length:var(--font-size-12)] text-muted-foreground">
           <LoaderIcon className="size-5 animate-spin" />
-          <span>Loading PDF…</span>
+          <span>{loadingLabel}</span>
         </div>
       );
     }
-    return <div className="flex h-full flex-col bg-background" />;
+    // Never-compiled project: keep a full-height pane so split layout stays stable.
+    return (
+      <div className="flex h-full min-h-0 w-full flex-col items-center justify-center gap-2 bg-background px-4 text-center text-[length:var(--font-size-12)] text-muted-foreground">
+        <span>{t("modes.texworkspace.noPdfPreview")}</span>
+      </div>
+    );
   }
 
   return (

@@ -59,17 +59,17 @@ export const TodoWriteWidget = memo(function TodoWriteWidget({
         type="button"
         className={cn(
           TOOL_INLINE_ROW_CLASS,
-          "text-left text-[length:var(--font-code)] py-0.5",
+          "text-left text-[length:var(--font-chat-message)] py-1",
         )}
         onClick={() => setExpanded((prev) => !prev)}
       >
         <StatusIcon isLoading={isLoading} isError={false} />
-        <span className="text-[length:var(--font-chat-meta)] shrink-0 tabular-nums">
+        <span className="shrink-0 text-muted-foreground/55 tabular-nums">
           {toolName}
         </span>
         <ListTodoIcon className="size-3.5 shrink-0 text-plan" />
-        <span className="font-medium text-foreground/90 shrink-0">Task Plan</span>
-        <span className="text-muted-foreground/70 text-[length:var(--font-chat-meta)] tabular-nums shrink-0">
+        <span className="shrink-0 text-muted-foreground/70">Task Plan</span>
+        <span className="shrink-0 text-muted-foreground/55 tabular-nums">
           {completed}/{todos.length}
         </span>
         <ChevronDownIcon

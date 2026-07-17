@@ -22,6 +22,19 @@ const chatGet = useChatStore.getState as ReturnType<typeof vi.fn>;
 const layoutGet = useLayoutStore.getState as ReturnType<typeof vi.fn>;
 const rpGet = useRightPanelStore.getState as ReturnType<typeof vi.fn>;
 
+function emptyTab(id: string, overrides: Record<string, unknown> = {}) {
+  return {
+    id,
+    isStreaming: false,
+    sessionId: null,
+    isLoadingSession: false,
+    messages: [],
+    streamingMessage: null,
+    draft: { input: "", parts: [] },
+    ...overrides,
+  };
+}
+
 describe("closeActiveTabFromShortcut", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -74,36 +87,56 @@ describe("closeActiveTabFromShortcut", () => {
     rpGet.mockReturnValue({ tabs: [], activeTabId: null });
     chatGet.mockReturnValue({
       tabs: [
-        { id: "c1", isStreaming: false },
-        { id: "c2", isStreaming: false },
+        emptyTab("c1", { messages: [{ role: "user" }] }),
+        emptyTab("c2"),
       ],
       activeTabId: "c1",
       closeTab,
+      createTab: vi.fn(),
     });
 
     expect(closeActiveTabFromShortcut()).toBe("handled");
     expect(closeTab).toHaveBeenCalledWith("c1");
   });
 
-  it("requests close-window for last chat tab", () => {
+  it("requests close-window for last disposable empty chat tab", () => {
     layoutGet.mockReturnValue({ rightAreaExpanded: false });
     rpGet.mockReturnValue({ tabs: [], activeTabId: null });
     chatGet.mockReturnValue({
-      tabs: [{ id: "c1", isStreaming: false }],
+      tabs: [emptyTab("c1")],
       activeTabId: "c1",
       closeTab: vi.fn(),
+      createTab: vi.fn(),
     });
 
     expect(closeActiveTabFromShortcut()).toBe("close-window");
+  });
+
+  it("replaces last content chat tab with a fresh session", () => {
+    const closeTab = vi.fn();
+    const createTab = vi.fn(() => "c2");
+    layoutGet.mockReturnValue({ rightAreaExpanded: false });
+    rpGet.mockReturnValue({ tabs: [], activeTabId: null });
+    chatGet.mockReturnValue({
+      tabs: [emptyTab("c1", { messages: [{ role: "user", content: "hi" }] })],
+      activeTabId: "c1",
+      closeTab,
+      createTab,
+    });
+
+    expect(closeActiveTabFromShortcut()).toBe("handled");
+    expect(createTab).toHaveBeenCalled();
+    expect(closeTab).toHaveBeenCalledWith("c1");
   });
 
   it("skips streaming-only chat and closes window", () => {
     layoutGet.mockReturnValue({ rightAreaExpanded: false });
     rpGet.mockReturnValue({ tabs: [], activeTabId: null });
     chatGet.mockReturnValue({
-      tabs: [{ id: "c1", isStreaming: true }],
+      tabs: [emptyTab("c1", { isStreaming: true })],
       activeTabId: "c1",
       closeTab: vi.fn(),
+      createTab: vi.fn(),
     });
 
     expect(closeActiveTabFromShortcut()).toBe("close-window");

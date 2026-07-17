@@ -80,6 +80,88 @@ export function artifactBasename(path: string): string {
   return parts[parts.length - 1] ?? p;
 }
 
+/** Image extensions we snapshot / inline in chat (case-insensitive). */
+const IMAGE_ARTIFACT_EXT = /\.(png|jpe?g|gif|webp|svg)$/i;
+
+export function isImageArtifactPath(path: string): boolean {
+  const base = (path || "").replace(/\\/g, "/").split(/[?#]/)[0] ?? "";
+  return IMAGE_ARTIFACT_EXT.test(base);
+}
+
+/** PDF artifacts for chat peek / kind classification. */
+const PDF_ARTIFACT_EXT = /\.pdf$/i;
+
+export function isPdfArtifactPath(path: string): boolean {
+  const base = (path || "").replace(/\\/g, "/").split(/[?#]/)[0] ?? "";
+  return PDF_ARTIFACT_EXT.test(base);
+}
+
+/**
+ * Paths to show for a run's figures in chat / tool cards.
+ * Prefer frozen `artifactSnapshots` when present; otherwise declared `artifacts`.
+ * Does **not** island-join — callers pass workspace hints to ChatProjectImage.
+ */
+export function imagePathsForRunDisplay(opts: {
+  artifacts?: string[] | null;
+  artifactSnapshots?: string[] | null;
+}): string[] {
+  const snaps = (opts.artifactSnapshots ?? []).filter(
+    (p): p is string => typeof p === "string" && isImageArtifactPath(p),
+  );
+  if (snaps.length > 0) return dedupePaths(snaps);
+  const arts = (opts.artifacts ?? []).filter(
+    (p): p is string => typeof p === "string" && isImageArtifactPath(p),
+  );
+  return dedupePaths(arts);
+}
+
+function dedupePaths(paths: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of paths) {
+    const p = normalizeArtifactSlash(raw);
+    if (!p || seen.has(p)) continue;
+    seen.add(p);
+    out.push(p);
+  }
+  return out;
+}
+
+/**
+ * Prefer declared project-relative paths for display embeds.
+ * Only island-join bare filenames / island-relative paths when `workspacePath` is set
+ * and the path does not already look project-rooted (no blind join of `manuscript/…`).
+ *
+ * Sync heuristic (no fs): if path has no `/`, join workspace; if it already starts
+ * with the workspace prefix, keep; otherwise keep as-declared (ChatProjectImage
+ * tries as-declared first via candidates).
+ */
+export function resolveImageArtifactPathsForDisplay(
+  artifacts: string[],
+  workspacePath?: string,
+): string[] {
+  const ws = normalizeArtifactSlash(workspacePath || "").replace(/\/$/, "");
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of artifacts) {
+    if (!isImageArtifactPath(raw)) continue;
+    const p = normalizeArtifactSlash(raw);
+    if (!p) continue;
+    let chosen = p;
+    // Bare filename → island join (tool often passes "plot.png")
+    if (ws && !p.includes("/")) {
+      chosen = `${ws}/${p}`;
+    } else if (ws && (p === ws || p.startsWith(`${ws}/`))) {
+      chosen = p;
+    }
+    // Else: keep as-declared (e.g. manuscript/foo.png) — do NOT invent ws/manuscript/…
+    if (seen.has(chosen)) continue;
+    seen.add(chosen);
+    out.push(chosen);
+  }
+  return out;
+}
+
 /**
  * Normalize artifact list for persistence (runs.jsonl / provenance).
  *

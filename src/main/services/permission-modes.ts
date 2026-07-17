@@ -199,7 +199,7 @@ export function shouldPromptForPermission(
 }
 
 /**
- * How Prism should handle a custom-tool bridge gate from `tool_call` alone
+ * How prismnext should handle a custom-tool bridge gate from `tool_call` alone
  * (OpenCode may skip ACP `requestPermission` when the rule is already allow).
  *
  * - auto_allow: write bridge approval (+ run bash) — no UI

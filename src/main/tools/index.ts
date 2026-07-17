@@ -334,7 +334,8 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     category: "project",
     usageHint:
       "action=create opens a new experiment (registry + workspace folder + best-effort shared `<experiment-dir>/.venv`); action=list lists experiments; " +
-      "action=read returns meta + recent runs; action=append_run logs a run you describe; " +
+      "action=read returns meta + lean recent runs (no stdout/stderr by default) plus oldestRun/latestRun; " +
+      "action=append_run logs a run you describe; " +
       "action=detect_env / open ensure shared `.venv` then snapshot or focus UI. Requires a configured Experiment folder.",
     workflowRules: [
       "Do NOT use generic read/write/edit on `.prismnext/experiments/**/meta.json` or runs.jsonl — use this tool only.",
@@ -345,6 +346,8 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "Workspace layout inside `<experiment-dir>/<id>/` is agent-owned — no prescribed scripts/results dirs.",
       "If no_experiment_folder is returned, ask the user to add an Experiment folder in Settings → Workspace.",
       "Do not delegate experiment reads/writes via Task — run this tool in the orchestrator conversation.",
+      "For “第一次 / 最新一次” use oldestRun / latestRun from action=read — do not take runs[0] of a short window as the first-ever run.",
+      "Keep action=read lean (default). Only set includeOutput=true when you truly need stdout/stderr tails.",
     ],
   },
   {
@@ -362,8 +365,9 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "The experiment must already exist — call experiment-log action=create first.",
       "Use when you want execution plus structured logging in one step.",
       "Python: shared `<experiment-dir>/.venv` is ensured before run; install with `uv pip install` — never system pip.",
-      "Pass artifacts/notes/kind when they matter for provenance.",
+      "Pass artifacts/notes/kind when they matter for provenance — list every important result path (any file kind), not only images.",
       "After long runs, check run.logPath for the full log under the lab folder.",
+      "When showing historical run figures, prefer run.artifactSnapshots (frozen images) over mutable working paths.",
     ],
   },
   {

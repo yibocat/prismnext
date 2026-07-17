@@ -35,7 +35,8 @@
 /* Take the panel host out of document flow so it does not push the scroller. */
 .cm-editor .cm-panels.cm-panels-top:has(.prism-cm-search--float) {
   position: absolute;
-  top: 8px;
+  /* Clear the editor toolbar / ChangesBar edge — not flush to the top. */
+  top: 16px;
   right: 12px;
   left: auto;
   width: auto;
@@ -66,9 +67,7 @@
   color: var(--popover-foreground);
   font-family: var(--font-sans);
   font-size: var(--font-size-12);
-  box-shadow:
-    0 1px 2px color-mix(in oklch, var(--foreground) 6%, transparent),
-    0 8px 24px color-mix(in oklch, var(--foreground) 10%, transparent);
+  box-shadow: none;
 }
 
 .cm-editor .cm-panel.prism-cm-search--float .prism-cm-search__row {

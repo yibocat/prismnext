@@ -461,7 +461,7 @@ export function App() {
         {showWelcome ? (
           <WelcomePage onSkip={() => setShowWelcome(false)} />
         ) : projectRoot ? (
-          <div className="flex flex-col h-full" key={projectRoot}>
+          <div className="flex h-full flex-col" key={projectRoot}>
             {/* Subtle loading bar during project open / switch */}
             {isOpeningProject && (
               <div className="h-0.5 w-full bg-muted overflow-hidden shrink-0">
@@ -547,22 +547,33 @@ export function App() {
                       }
                     }}
                   >
-                    <div className="flex flex-col h-full min-w-0">
+                    <div className="flex h-full min-w-0 flex-col">
                       <ContentTopBar
                         leftSidebarRef={leftSidebarRef}
                         centerRef={centerRef}
                         rightAreaRef={rightAreaRef}
                       />
-                      <div className="flex-1 min-h-0">
+                      <div className="min-h-0 flex-1">
                         <LeftMainArea />
                       </div>
                     </div>
                   </Panel>
 
+                  {/*
+                    Collapsed RightArea: keep `w-0` but do NOT strip the ±12px hit fringe
+                    or set pointer-events-none — first edge-drag to open relies on it.
+                    Maximized: hide width only; `disabled` blocks drag (restore via button).
+                  */}
                   <Separator
                     id="sep-center-right"
-                    className={cn(PANEL_SASH_SEPARATOR_CLASS, ((editorMaximized && !inSettings) || !rightAreaExpanded) && "w-0")}
-                    disabled={(editorMaximized && !inSettings) || (inSettings && settingsDetailStacked)}
+                    className={cn(
+                      PANEL_SASH_SEPARATOR_CLASS,
+                      ((editorMaximized && !inSettings) || !rightAreaExpanded) && "w-0",
+                    )}
+                    disabled={
+                      (editorMaximized && !inSettings) ||
+                      (inSettings && settingsDetailStacked)
+                    }
                   />
 
                   <Panel
@@ -629,7 +640,7 @@ export function App() {
 
           </div>
         ) : (
-          <div className="flex flex-col h-full">
+          <div className="flex h-full flex-col">
             <Group
               id="main-layout"
               orientation="horizontal"
@@ -661,9 +672,9 @@ export function App() {
               <Separator id="sep-sidebar" className={PANEL_SASH_SEPARATOR_CLASS} />
 
               <Panel id="main-area" minSize={MAIN_AREA_MIN}>
-                <div className="flex flex-col h-full min-w-0">
+                <div className="flex h-full min-w-0 flex-col">
                   <ContentTopBar leftSidebarRef={leftSidebarRef} />
-                  <div className="flex-1 min-h-0">
+                  <div className="min-h-0 flex-1">
                     <LeftMainArea />
                   </div>
                 </div>

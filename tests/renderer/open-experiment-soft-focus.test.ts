@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const selectExperiment = vi.fn().mockResolvedValue(null);
-const refreshList = vi.fn().mockResolvedValue(undefined);
+const { selectExperiment, refreshList, openExperimentsSplit, openExperimentTab } = vi.hoisted(() => ({
+  selectExperiment: vi.fn().mockResolvedValue(null),
+  refreshList: vi.fn().mockResolvedValue(undefined),
+  openExperimentsSplit: vi.fn(),
+  openExperimentTab: vi.fn(),
+}));
 
 vi.stubGlobal("window", {
   electronAPI: {
@@ -21,29 +25,10 @@ vi.mock("../../src/renderer/stores/experiment-store", () => ({
   },
 }));
 
-const ensureTab = vi.fn();
-const activateMode = vi.fn();
-const setLeftSidebarView = vi.fn();
-const unmaximizeRightArea = vi.fn();
-const requestRightAreaExpand = vi.fn();
-
-vi.mock("../../src/renderer/stores/layout-store", () => ({
-  useLayoutStore: {
-    getState: () => ({
-      editorMaximized: false,
-      rightAreaExpanded: true,
-      unmaximizeRightArea,
-      setLeftSidebarView,
-      activateMode,
-      requestRightAreaExpand,
-    }),
-  },
-}));
-
 vi.mock("../../src/renderer/stores/right-panel-store", () => ({
   useRightPanelStore: {
     getState: () => ({
-      ensureTab,
+      openExperimentTab,
     }),
   },
 }));
@@ -53,11 +38,12 @@ vi.mock("../../src/renderer/lib/workspace/left-nav/panel-refs", () => ({
 }));
 
 vi.mock("../../src/renderer/lib/workspace/left-nav/panel-utils", () => ({
-  closeTexWorkspace: vi.fn(),
+  openExperimentsSplit,
 }));
 
 let storeState: {
   selectedId: string | null;
+  experiments: { id: string; title: string }[];
   detail: { meta: { id: string }; runs: unknown[]; runCount: number; lastRunAt: string | null } | null;
   refreshList: typeof refreshList;
   selectExperiment: typeof selectExperiment;
@@ -70,6 +56,7 @@ describe("openExperimentInPanel soft-focus", () => {
     vi.clearAllMocks();
     storeState = {
       selectedId: null,
+      experiments: [],
       detail: null,
       refreshList,
       selectExperiment,
@@ -78,6 +65,7 @@ describe("openExperimentInPanel soft-focus", () => {
 
   it("skips selectExperiment when the island is already open", async () => {
     storeState.selectedId = "exp-a";
+    storeState.experiments = [{ id: "exp-a", title: "Exp A" }];
     storeState.detail = {
       meta: { id: "exp-a" },
       runs: [],
@@ -87,13 +75,17 @@ describe("openExperimentInPanel soft-focus", () => {
 
     await openExperimentInPanel("exp-a");
 
-    expect(activateMode).toHaveBeenCalledWith("experiments");
+    expect(openExperimentsSplit).toHaveBeenCalled();
     expect(refreshList).not.toHaveBeenCalled();
     expect(selectExperiment).not.toHaveBeenCalled();
   });
 
   it("selects when a different island is requested", async () => {
     storeState.selectedId = "exp-a";
+    storeState.experiments = [
+      { id: "exp-a", title: "Exp A" },
+      { id: "exp-b", title: "Exp B" },
+    ];
     storeState.detail = {
       meta: { id: "exp-a" },
       runs: [],
@@ -103,6 +95,7 @@ describe("openExperimentInPanel soft-focus", () => {
 
     await openExperimentInPanel("exp-b");
 
+    expect(openExperimentsSplit).toHaveBeenCalled();
     expect(refreshList).toHaveBeenCalledWith("/projects/demo");
     expect(selectExperiment).toHaveBeenCalledWith("/projects/demo", "exp-b");
   });

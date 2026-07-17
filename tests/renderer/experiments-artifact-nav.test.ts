@@ -30,12 +30,12 @@ describe("isImageArtifactPath", () => {
 });
 
 describe("resolveImageArtifactPaths", () => {
-  it("filters to images and prefixes workspace", () => {
+  it("keeps paths with directories as-declared; joins bare filenames", () => {
     expect(
       resolveImageArtifactPaths(
-        ["results/loss.png", "results/metrics.json", "fig.jpg"],
+        ["results/loss.png", "results/metrics.json", "fig.jpg", "manuscript/out.png"],
         "labs/exp-a",
       ),
-    ).toEqual(["labs/exp-a/results/loss.png", "labs/exp-a/fig.jpg"]);
+    ).toEqual(["results/loss.png", "labs/exp-a/fig.jpg", "manuscript/out.png"]);
   });
 });

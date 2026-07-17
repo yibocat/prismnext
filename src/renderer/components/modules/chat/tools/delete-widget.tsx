@@ -7,6 +7,7 @@ import {
   StatusIcon,
   TOOL_PANEL_CLASS,
   TOOL_INLINE_ROW_CLASS,
+  TOOL_INLINE_LABEL_CLASS,
   TOOL_EXPANDED_CONTENT_CLASS,
   basenamePath,
   param,
@@ -61,15 +62,15 @@ export const DeleteWidget = memo(function DeleteWidget({
           type="button"
           className={cn(
             TOOL_INLINE_ROW_CLASS,
-            "text-left text-[length:var(--font-code)] py-0.5 w-full",
+            "w-full text-left text-[length:var(--font-chat-message)] py-1",
             !canExpand && "cursor-default",
           )}
           onClick={() => canExpand && setExpanded(!expanded)}
         >
           <StatusIcon isLoading={false} isError={!!isError || isToolDenied} />
-          <span className="text-[length:var(--font-chat-meta)] shrink-0">{toolName}</span>
+          <span className="shrink-0 text-muted-foreground/55">{toolName}</span>
           <Trash2Icon className="size-3.5 shrink-0 text-destructive" />
-          <span className="min-w-0 truncate font-medium text-foreground/90">
+          <span className={TOOL_INLINE_LABEL_CLASS}>
             {filePath ? <ChatFileLink path={filePath} /> : fileName}
           </span>
           <span className="text-muted-foreground/60 shrink-0 text-[length:var(--font-chat-meta)]">

@@ -206,11 +206,15 @@ describe("experiment-log-service", () => {
     for (let i = 0; i < 25; i++) {
       appendRun(c, id, { command: `echo ${i}`, exitCode: 0, stdoutTail: `out${i}` });
     }
-    const read = readExperiment(c, id, 5);
+    const read = readExperiment(c, id, 5, { includeOutput: true });
     expect(read.ok).toBe(true);
     if (!read.ok) return;
     expect(read.runs.length).toBe(5);
     expect(read.runs[4]!.stdoutTail).toBe("out24");
+    expect(read.runs[0]!.command).toBe("echo 20");
+    expect(read.oldestRun?.command).toBe("echo 0");
+    expect(read.latestRun?.command).toBe("echo 24");
+    expect(read.runsOrder).toBe("chronological_oldest_first");
     expect(read.meta.title).toBe("Read test");
     expect(read.runCount).toBe(25);
     expect(read.lastRunAt).toBeTruthy();
@@ -220,12 +224,119 @@ describe("experiment-log-service", () => {
     expect(stats.runCount).toBe(25);
   });
 
+  it("readExperiment lean mode strips stdout/stderr but keeps oldest/latest", () => {
+    const c = setup();
+    const created = createExperiment(c, { title: "Lean read" }, { ensureVenv: false });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const { id } = created;
+    for (let i = 0; i < 8; i++) {
+      appendRun(c, id, {
+        command: `cmd ${i}`,
+        exitCode: 0,
+        stdoutTail: `fat-stdout-${i}-${"x".repeat(200)}`,
+        stderrTail: `fat-stderr-${i}`,
+        artifacts: [`fig-${i}.png`],
+      });
+    }
+    const read = readExperiment(c, id, 3, { includeOutput: false });
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.includeOutput).toBe(false);
+    expect(read.runs.length).toBe(3);
+    expect(read.runs.every((r) => r.stdoutTail === "" && r.stderrTail === "")).toBe(true);
+    expect(read.runs[0]!.command).toBe("cmd 5");
+    expect(read.runs[2]!.artifacts.some((a) => a.endsWith("fig-7.png"))).toBe(true);
+    expect(read.oldestRun?.command).toBe("cmd 0");
+    expect(read.latestRun?.command).toBe("cmd 7");
+    expect(read.oldestRun?.stdoutTail).toBe("");
+    expect(read.latestRun?.artifacts.some((a) => a.endsWith("fig-7.png"))).toBe(true);
+  });
+
   it("readExperiment returns experiment_not_found for unknown id", () => {
     const c = setup();
     const read = readExperiment(c, "exp-does-not-exist", 20);
     expect(read.ok).toBe(false);
     if (read.ok) return;
     expect(read.error).toBe("experiment_not_found");
+  });
+
+  it("appendRun infers any island result files by mtime when artifacts omitted", () => {
+    const c = setup();
+    const created = createExperiment(c, { title: "Infer island" }, { ensureVenv: false });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const { id } = created;
+    const islandDir = join(c.projectRoot, "experiment", id);
+    const startedAt = new Date(Date.now() - 2000).toISOString();
+    writeFileSync(join(islandDir, "local-plot.png"), "x");
+    writeFileSync(join(islandDir, "metrics.json"), '{"ok":1}');
+    const finishedAt = new Date().toISOString();
+    const r = appendRun(c, id, {
+      command: "python train.py",
+      exitCode: 0,
+      startedAt,
+      finishedAt,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.run.artifacts.some((a) => a.endsWith("local-plot.png"))).toBe(true);
+    expect(r.run.artifacts.some((a) => a.endsWith("metrics.json"))).toBe(true);
+  });
+
+  it("appendRun infers off-island results only when mentioned in stdout", () => {
+    const c = setup();
+    const created = createExperiment(c, { title: "Infer stdout" }, { ensureVenv: false });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const { id } = created;
+    const outDir = join(c.projectRoot, "papers", "out");
+    mkdirSync(outDir, { recursive: true });
+    const startedAt = new Date(Date.now() - 2000).toISOString();
+    writeFileSync(join(outDir, "table.csv"), "a,b\n1,2\n");
+    writeFileSync(join(outDir, "silent.csv"), "x\n");
+    const finishedAt = new Date().toISOString();
+    const r = appendRun(c, id, {
+      command: "python export.py",
+      exitCode: 0,
+      startedAt,
+      finishedAt,
+      stdoutTail: "Wrote papers/out/table.csv",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.run.artifacts.some((a) => a.endsWith("table.csv"))).toBe(true);
+    expect(r.run.artifacts.some((a) => a.endsWith("silent.csv"))).toBe(false);
+  });
+
+  it("appendRun snapshots image artifacts under the registry", () => {
+    const c = setup();
+    const created = createExperiment(c, { title: "Snap test" }, { ensureVenv: false });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const { id } = created;
+    const manuscriptDir = join(c.projectRoot, "manuscript");
+    mkdirSync(manuscriptDir, { recursive: true });
+    const pngPath = join(manuscriptDir, "fig.png");
+    writeFileSync(pngPath, "png-bytes-v1");
+    const r = appendRun(c, id, {
+      command: "python plot.py",
+      exitCode: 0,
+      artifacts: ["manuscript/fig.png"],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.run.artifacts).toEqual(["manuscript/fig.png"]);
+    expect(r.run.artifactSnapshots?.length).toBe(1);
+    const snapRel = r.run.artifactSnapshots![0]!;
+    expect(snapRel).toContain(`.prismnext/experiments/${id}/artifacts/`);
+    expect(snapRel.endsWith("fig.png")).toBe(true);
+    const snapAbs = join(c.projectRoot, snapRel);
+    expect(existsSync(snapAbs)).toBe(true);
+    expect(readFileSync(snapAbs, "utf-8")).toBe("png-bytes-v1");
+    // Overwrite working copy — snapshot stays frozen
+    writeFileSync(pngPath, "png-bytes-v2");
+    expect(readFileSync(snapAbs, "utf-8")).toBe("png-bytes-v1");
   });
 
   it("appendRun writes JSONL under registry only", () => {

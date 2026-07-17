@@ -20,6 +20,14 @@ export const MODE_SIDEBAR_SASH_CLASS =
 export const PANEL_SASH_SEPARATOR_CLASS =
   "w-px bg-border hover:bg-foreground/30 active:bg-foreground/40 transition-colors outline-none cursor-col-resize shrink-0 relative z-10 after:absolute after:inset-y-0 after:-left-3 after:-right-3";
 
+/**
+ * Fully non-interactive sash (no hit fringe).
+ * Do NOT use on the shell center↔RightArea sash when RightArea is merely
+ * collapsed — first edge-drag-to-open needs the ±12px `after` fringe (`w-0` only).
+ */
+export const PANEL_SASH_HIDDEN_CLASS =
+  "w-0 after:hidden pointer-events-none";
+
 /** WorkspaceSplit right pane below this % is treated as collapsed (drag-to-close). */
 export const WORKSPACE_SPLIT_COLLAPSE_PERCENT = 8;
 

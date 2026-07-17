@@ -53,6 +53,8 @@ function SelectContent({
   children,
   position = "item-aligned",
   align = "center",
+  // Desktop UI: don't restore focus to the opener after Esc/close (avoids sticky focus rings).
+  onCloseAutoFocus = (event) => event.preventDefault(),
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
   return (
@@ -68,6 +70,7 @@ function SelectContent({
         position={position}
         align={align}
         {...props}
+        onCloseAutoFocus={onCloseAutoFocus}
       >
         <SelectScrollUpButton />
         <SelectPrimitive.Viewport

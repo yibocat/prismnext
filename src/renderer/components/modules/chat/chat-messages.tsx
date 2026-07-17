@@ -10,12 +10,24 @@ import { TurnFooter, extractTurnCopyText } from "./turn-footer";
 import { InlineRichText, InlineTokenChip } from "./inline-tokens";
 import { partsToPlainText, type ComposerPart } from "@/lib/chat/composer-parts";
 import {
+  captureSentinelScrollAnchor,
   followActiveTurnTail,
   getTurnScrollTop,
   isFollowingStreamTurn,
   pinActiveTurnTop,
+  restoreSentinelScrollAnchor,
   scrollToTurnEnd,
+  type SentinelsScrollAnchor,
 } from "@/lib/chat/active-turn-scroll";
+import {
+  maybeSnapWindowStart,
+  pageUpWindowStart,
+  resolveWindowStart,
+  setTurnWindowStart,
+  TURN_WINDOW_COAST_END_MS,
+  TURN_WINDOW_LOAD_PULL_PX,
+  TURN_WINDOW_SENTINEL_SUPPRESS_MS,
+} from "@/lib/chat/turn-window";
 import { isToolResultUserMessage } from "./chat-turns";
 import { buildToolResultMap, contentBlocks } from "./tools/tool-result-map";
 import { useDocumentStore } from "@/stores/document-store";
@@ -30,7 +42,7 @@ import {
   CircleCheckIcon,
   SquareIcon,
 } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { ChatImagePreviewDialog } from "@/lib/markdown/chat-image-preview";
 import { Hint } from "@/components/ui/hint";
 
 // ─── Copy Button ───
@@ -105,7 +117,8 @@ const UserHeader = memo(function UserHeader({
           const t = b.text;
           if (
             t.startsWith("## Role") &&
-            (t.includes("integrated into Prism") ||
+            (t.includes("integrated into prismnext") ||
+              t.includes("integrated into Prism") ||
               t.includes("LaTeX academic paper writing workspace") ||
               t.includes("## Core Rules"))
           ) {
@@ -230,21 +243,12 @@ const UserHeader = memo(function UserHeader({
           </button>
         )}
       </div>
-      <Dialog open={imagePreview != null} onOpenChange={(open) => !open && setImagePreview(null)}>
-        <DialogContent
-          className="max-w-[min(92vw,56rem)] gap-2 border-border/80 bg-background p-2 sm:max-w-[min(92vw,56rem)]"
-          showCloseButton
-        >
-          <DialogTitle className="sr-only">{imagePreview?.name ?? "Image preview"}</DialogTitle>
-          {imagePreview ? (
-            <img
-              src={imagePreview.url}
-              alt={imagePreview.name}
-              className="max-h-[min(85vh,720px)] w-full rounded-md object-contain"
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      <ChatImagePreviewDialog
+        open={imagePreview != null}
+        onOpenChange={(open) => !open && setImagePreview(null)}
+        url={imagePreview?.url ?? null}
+        name={imagePreview?.name ?? "Image preview"}
+      />
     </div>
   );
 });
@@ -387,12 +391,32 @@ export const ChatMessages = memo(function ChatMessages() {
   }, [projectRoot]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const topSentinelRef = useRef<HTMLDivElement>(null);
   const lastTurnRef = useRef<HTMLElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const wasStreamingRef = useRef(false);
   const isStreamingRef = useRef(isStreaming);
   isStreamingRef.current = isStreaming;
   const streamScrollRafRef = useRef<number | null>(null);
+  const suppressSentinelUntilRef = useRef(0);
+  const loadingOlderRef = useRef(false);
+  const loadMoreArmedRef = useRef(false);
+  /**
+   * false = still in the 1st gesture (coasting to a stop on "load more");
+   * true = 1st gesture ended — a new upward pull may accumulate toward load.
+   */
+  const loadMoreSecondGestureRef = useRef(false);
+  /** Last upward wheel while coasting (1st gesture). 0 = none since arm. */
+  const loadMoreCoastWheelAtRef = useRef(0);
+  const loadMoreCoastRafRef = useRef<number | null>(null);
+  /** Accumulated upward px of the 2nd gesture — must reach TURN_WINDOW_LOAD_PULL_PX. */
+  const loadMorePullAccumRef = useRef(0);
+  const windowStartRef = useRef(0);
+  /** Applied in useLayoutEffect after React commits prepended turns. */
+  const pendingPrependAnchorRef = useRef<SentinelsScrollAnchor | null>(null);
+  const [loadMorePhase, setLoadMorePhase] = useState<"idle" | "armed" | "loading">("idle");
+  const [loadMorePullProgress, setLoadMorePullProgress] = useState(0);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [viewportHeight, setViewportHeight] = useState(0);
   const [isActiveTurnMode, setIsActiveTurnMode] = useState(true);
@@ -420,16 +444,6 @@ export const ChatMessages = memo(function ChatMessages() {
     scrollToTurnEnd(container, turn, smooth);
     setShowScrollButton(false);
   }, []);
-
-  const returnToActiveTurn = useCallback((smooth = false) => {
-    shouldAutoScrollRef.current = true;
-    setIsActiveTurnMode(true);
-    if (isStreamingRef.current) {
-      followStreamTail(smooth);
-    } else {
-      scrollToLatest(smooth);
-    }
-  }, [followStreamTail, scrollToLatest]);
 
   // ── Stable computations (committed messages only) ──
   // These O(n) scans only re-run when committed messages change,
@@ -574,6 +588,264 @@ export const ChatMessages = memo(function ChatMessages() {
   const lastTurnUserMsg = turns[turns.length - 1]?.userMessage ?? null;
   const prevLastUserMsgRef = useRef<ChatStreamMessage | null>(null);
 
+  const [windowStart, setWindowStartState] = useState(0);
+
+  useLayoutEffect(() => {
+    if (!activeTabId || isLoadingSession) return;
+    const start = resolveWindowStart(activeTabId, turns.length);
+    windowStartRef.current = start;
+    setWindowStartState(start);
+    if (start <= 0) {
+      loadMoreArmedRef.current = false;
+      loadMoreSecondGestureRef.current = false;
+      loadMoreCoastWheelAtRef.current = 0;
+      loadMorePullAccumRef.current = 0;
+      setLoadMorePullProgress(0);
+      setLoadMorePhase("idle");
+    }
+  }, [activeTabId, turns.length, isLoadingSession]);
+
+  const attachTurnSectionRef = useCallback(
+    (_turnIndex: number, isLastTurn: boolean) => (el: HTMLElement | null) => {
+      if (isLastTurn) {
+        lastTurnRef.current = el;
+      }
+    },
+    [],
+  );
+
+  const visibleTurns = turns.slice(windowStart);
+
+  const stopLoadMoreCoastWatch = useCallback(() => {
+    if (loadMoreCoastRafRef.current != null) {
+      cancelAnimationFrame(loadMoreCoastRafRef.current);
+      loadMoreCoastRafRef.current = null;
+    }
+  }, []);
+
+  const disarmLoadMore = useCallback(() => {
+    stopLoadMoreCoastWatch();
+    loadMoreArmedRef.current = false;
+    loadMoreSecondGestureRef.current = false;
+    loadMoreCoastWheelAtRef.current = 0;
+    loadMorePullAccumRef.current = 0;
+    setLoadMorePullProgress(0);
+    setLoadMorePhase((p) => (p === "loading" ? p : "idle"));
+  }, [stopLoadMoreCoastWatch]);
+
+  /** 1st gesture finished (inertia stopped) → allow a new upward pull to count. */
+  const beginSecondGestureWindow = useCallback(() => {
+    if (!loadMoreArmedRef.current || loadingOlderRef.current) return;
+    if (loadMoreSecondGestureRef.current) return;
+    loadMoreSecondGestureRef.current = true;
+    loadMorePullAccumRef.current = 0;
+    setLoadMorePullProgress(0);
+    stopLoadMoreCoastWatch();
+  }, [stopLoadMoreCoastWatch]);
+
+  const loadOlderTurns = useCallback(() => {
+    const root = scrollRef.current;
+    const content = contentRef.current;
+    if (!root || !content || !activeTabId) return;
+    if (loadingOlderRef.current) return;
+    if (Date.now() < suppressSentinelUntilRef.current) return;
+    if (isStreamingRef.current && shouldAutoScrollRef.current) return;
+
+    const currentStart = windowStartRef.current;
+    if (currentStart <= 0) return;
+
+    stopLoadMoreCoastWatch();
+    loadingOlderRef.current = true;
+    setLoadMorePhase("loading");
+    loadMoreSecondGestureRef.current = false;
+    loadMoreCoastWheelAtRef.current = 0;
+    loadMorePullAccumRef.current = 0;
+    setLoadMorePullProgress(0);
+    // Pin to the first mounted turn (bottom of the page we're about to prepend onto).
+    // Restore runs in useLayoutEffect AFTER React commits the new sections above it.
+    pendingPrependAnchorRef.current = captureSentinelScrollAnchor(root, content);
+    const next = pageUpWindowStart(currentStart);
+    setTurnWindowStart(activeTabId, next);
+    windowStartRef.current = next;
+    setWindowStartState(next);
+    loadMoreArmedRef.current = false;
+  }, [activeTabId, stopLoadMoreCoastWatch]);
+
+  // Keep the previously-visible turn fixed in the viewport after older turns mount above it.
+  useLayoutEffect(() => {
+    const anchor = pendingPrependAnchorRef.current;
+    if (!anchor) return;
+    const root = scrollRef.current;
+    const content = contentRef.current;
+    if (!root || !content) {
+      pendingPrependAnchorRef.current = null;
+      loadingOlderRef.current = false;
+      setLoadMorePhase("idle");
+      return;
+    }
+    restoreSentinelScrollAnchor(root, anchor, content);
+    pendingPrependAnchorRef.current = null;
+    loadingOlderRef.current = false;
+    setLoadMorePhase("idle");
+    suppressSentinelUntilRef.current = Date.now() + TURN_WINDOW_SENTINEL_SUPPRESS_MS;
+  }, [windowStart]);
+
+  const applySnapIfNeeded = useCallback(() => {
+    if (!activeTabId) return;
+    const next = maybeSnapWindowStart({
+      totalTurns: turns.length,
+      windowStart,
+      followingBottom: shouldAutoScrollRef.current,
+      isStreaming,
+    });
+    if (next !== windowStart) {
+      setTurnWindowStart(activeTabId, next);
+      windowStartRef.current = next;
+      setWindowStartState(next);
+      suppressSentinelUntilRef.current = Date.now() + TURN_WINDOW_SENTINEL_SUPPRESS_MS;
+      stopLoadMoreCoastWatch();
+      loadMoreArmedRef.current = false;
+      loadMoreSecondGestureRef.current = false;
+      loadMoreCoastWheelAtRef.current = 0;
+      loadMorePullAccumRef.current = 0;
+      setLoadMorePullProgress(0);
+      setLoadMorePhase("idle");
+    }
+  }, [activeTabId, turns.length, windowStart, isStreaming, stopLoadMoreCoastWatch]);
+
+  // 1) Scroll into "load more" and coast to a stop.
+  // 2) Start a *new* upward gesture; accumulate TURN_WINDOW_LOAD_PULL_PX → load (or click).
+  useEffect(() => {
+    const root = scrollRef.current;
+    const target = topSentinelRef.current;
+    if (!root || !target || windowStart <= 0) return;
+
+    const watchCoastEnd = () => {
+      stopLoadMoreCoastWatch();
+      const tick = () => {
+        loadMoreCoastRafRef.current = null;
+        if (!loadMoreArmedRef.current || loadMoreSecondGestureRef.current || loadingOlderRef.current) {
+          return;
+        }
+        const last = loadMoreCoastWheelAtRef.current;
+        if (last > 0 && performance.now() - last >= TURN_WINDOW_COAST_END_MS) {
+          beginSecondGestureWindow();
+          return;
+        }
+        loadMoreCoastRafRef.current = requestAnimationFrame(tick);
+      };
+      loadMoreCoastRafRef.current = requestAnimationFrame(tick);
+    };
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        const hit = entries.some((e) => e.isIntersecting);
+        if (!hit) {
+          if (!loadingOlderRef.current) disarmLoadMore();
+          return;
+        }
+        if (loadingOlderRef.current) return;
+        if (Date.now() < suppressSentinelUntilRef.current) return;
+        if (isStreamingRef.current && shouldAutoScrollRef.current) return;
+        if (loadMoreArmedRef.current) return;
+
+        // Park on the control — still the 1st gesture until inertia ends.
+        loadMoreArmedRef.current = true;
+        loadMoreSecondGestureRef.current = false;
+        // Seed coast clock so an already-stopped arrival unlocks after COAST_END_MS;
+        // ongoing inertia keeps refreshing this timestamp via wheel.
+        loadMoreCoastWheelAtRef.current = performance.now();
+        loadMorePullAccumRef.current = 0;
+        setLoadMorePullProgress(0);
+        setLoadMorePhase("armed");
+        watchCoastEnd();
+      },
+      { root, rootMargin: "24px 0px 0px 0px", threshold: 0 },
+    );
+    io.observe(target);
+
+    const onScrollEnd = () => {
+      // Platform signal that the scroll (incl. momentum) finished.
+      if (loadMoreArmedRef.current && !loadMoreSecondGestureRef.current) {
+        beginSecondGestureWindow();
+      }
+    };
+    root.addEventListener("scrollend", onScrollEnd);
+
+    const onWheel = (e: WheelEvent) => {
+      if (loadingOlderRef.current) return;
+      if (Date.now() < suppressSentinelUntilRef.current) return;
+      if (isStreamingRef.current && shouldAutoScrollRef.current) return;
+
+      if (e.deltaY > 0) {
+        // Downward nudge also ends the 1st gesture / clears 2nd-gesture progress.
+        if (loadMoreArmedRef.current && !loadMoreSecondGestureRef.current) {
+          beginSecondGestureWindow();
+        }
+        if (loadMorePullAccumRef.current > 0) {
+          loadMorePullAccumRef.current = 0;
+          setLoadMorePullProgress(0);
+        }
+        return;
+      }
+
+      if (e.deltaY >= 0) return;
+      if (root.scrollTop > 2) return;
+      if (!loadMoreArmedRef.current) return;
+
+      // Stay parked on "load more".
+      e.preventDefault();
+
+      if (!loadMoreSecondGestureRef.current) {
+        // Still coasting from the 1st fling — do not count toward load.
+        loadMoreCoastWheelAtRef.current = performance.now();
+        watchCoastEnd();
+        return;
+      }
+
+      // New upward gesture after the 1st one stopped.
+      loadMorePullAccumRef.current += -e.deltaY;
+      const progress = Math.min(1, loadMorePullAccumRef.current / TURN_WINDOW_LOAD_PULL_PX);
+      setLoadMorePullProgress(progress);
+      if (loadMorePullAccumRef.current < TURN_WINDOW_LOAD_PULL_PX) return;
+
+      loadOlderTurns();
+    };
+    root.addEventListener("wheel", onWheel, { passive: false });
+
+    return () => {
+      io.disconnect();
+      root.removeEventListener("scrollend", onScrollEnd);
+      root.removeEventListener("wheel", onWheel);
+      stopLoadMoreCoastWatch();
+    };
+  }, [
+    windowStart,
+    activeTabId,
+    turns.length,
+    disarmLoadMore,
+    loadOlderTurns,
+    beginSecondGestureWindow,
+    stopLoadMoreCoastWatch,
+  ]);
+
+  const returnToActiveTurn = useCallback(
+    (smooth = false) => {
+      shouldAutoScrollRef.current = true;
+      setIsActiveTurnMode(true);
+      if (isStreamingRef.current) {
+        followStreamTail(smooth);
+      } else {
+        scrollToLatest(smooth);
+      }
+      requestAnimationFrame(() => {
+        shouldAutoScrollRef.current = true;
+        applySnapIfNeeded();
+      });
+    },
+    [followStreamTail, scrollToLatest, applySnapIfNeeded],
+  );
+
   /** Sync runway CSS var only — no scroll (avoids fighting stream tail follow). */
   const syncRunwayMinHeight = useCallback(() => {
     const el = scrollRef.current;
@@ -641,9 +913,12 @@ export const ChatMessages = memo(function ChatMessages() {
       shouldAutoScrollRef.current = true;
       setIsActiveTurnMode(true);
       syncRunwayMinHeight();
-      requestAnimationFrame(() => pinToActiveTurn(false));
+      requestAnimationFrame(() => {
+        pinToActiveTurn(false);
+        applySnapIfNeeded();
+      });
     }
-  }, [lastTurnUserMsg, lastTurnUserKey, pinToActiveTurn, syncRunwayMinHeight]);
+  }, [lastTurnUserMsg, lastTurnUserKey, pinToActiveTurn, syncRunwayMinHeight, applySnapIfNeeded]);
 
   useLayoutEffect(() => {
     if (isLoadingSession || turns.length === 0) return;
@@ -661,9 +936,12 @@ export const ChatMessages = memo(function ChatMessages() {
     wasStreamingRef.current = isStreaming;
     if (wasStreaming && !isStreaming && shouldAutoScrollRef.current) {
       syncRunwayMinHeight();
-      requestAnimationFrame(() => scrollToLatest(false));
+      requestAnimationFrame(() => {
+        scrollToLatest(false);
+        applySnapIfNeeded();
+      });
     }
-  }, [isStreaming, scrollToLatest, syncRunwayMinHeight]);
+  }, [isStreaming, scrollToLatest, syncRunwayMinHeight, applySnapIfNeeded]);
 
   useLayoutEffect(() => {
     if (!isStreaming || !shouldAutoScrollRef.current) return;
@@ -711,9 +989,51 @@ export const ChatMessages = memo(function ChatMessages() {
         data-chat-scroll
         className="absolute inset-0 overflow-y-auto overflow-x-hidden"
       >
-        <div className="w-full min-w-0 max-w-3xl mx-auto">
-          {turns.map((turn, turnIdx) => {
-            const isLastTurn = turnIdx === turns.length - 1;
+        <div ref={contentRef} className="w-full min-w-0 max-w-3xl mx-auto">
+          {windowStart > 0 && (
+            <div
+              ref={topSentinelRef}
+              data-chat-turn-window-load-more
+              className="flex justify-center px-6 py-3"
+            >
+              <button
+                type="button"
+                onClick={() => loadOlderTurns()}
+                disabled={loadMorePhase === "loading"}
+                className={cn(
+                  "relative overflow-hidden inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-muted/40 px-3 py-1.5",
+                  "text-[length:var(--font-chat-meta)] text-muted-foreground transition-colors",
+                  "hover:bg-muted/70 hover:text-foreground disabled:opacity-60",
+                  loadMorePhase === "armed" && "border-border text-foreground/80",
+                )}
+              >
+                {loadMorePullProgress > 0 && loadMorePhase === "armed" && (
+                  <span
+                    aria-hidden
+                    className="absolute inset-y-0 left-0 bg-foreground/10 transition-[width] duration-75"
+                    style={{ width: `${Math.round(loadMorePullProgress * 100)}%` }}
+                  />
+                )}
+                <span className="relative inline-flex items-center gap-1.5">
+                  {loadMorePhase === "loading" ? (
+                    <>
+                      <Loader2Icon className="size-3.5 animate-spin" />
+                      {t("chat.messages.loadingOlder")}
+                    </>
+                  ) : loadMorePhase === "armed" ? (
+                    loadMorePullProgress > 0.05
+                      ? t("chat.messages.loadMorePulling")
+                      : t("chat.messages.loadMoreArmed")
+                  ) : (
+                    t("chat.messages.loadMore")
+                  )}
+                </span>
+              </button>
+            </div>
+          )}
+          {visibleTurns.map((turn, localIdx) => {
+            const turnIdx = windowStart + localIdx;
+            const isLastTurn = localIdx === visibleTurns.length - 1;
             const isTurnComplete = !isLastTurn || !isStreaming;
             const lastAsst = [...turn.responses].reverse().find((r) => r.msg.type === "assistant");
             const turnMeta = lastAsst ? metaMap.get(lastAsst.displayIdx) : undefined;
@@ -721,7 +1041,8 @@ export const ChatMessages = memo(function ChatMessages() {
             return (
             <section
               key={turn.userMessage ? `turn-${committed.idxMap.get(turn.userMessage) ?? turnIdx}` : `turn-orphan-${turnIdx}`}
-              ref={isLastTurn ? lastTurnRef : undefined}
+              data-chat-turn-index={turnIdx}
+              ref={attachTurnSectionRef(turnIdx, isLastTurn)}
               style={
                 isLastTurn
                   ? { minHeight: "var(--chat-runway-h, 100%)" }

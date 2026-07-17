@@ -243,7 +243,7 @@
     @apply border-border outline-ring/50;
   }
   html {
-    @apply h-full overscroll-y-none;
+    @apply h-full overflow-x-hidden overscroll-y-none;
     font-size: var(--font-ui-size);
   }
   html.dark {
@@ -253,7 +253,7 @@
     color-scheme: light;
   }
   body {
-    @apply h-full font-sans text-foreground;
+    @apply h-full overflow-x-hidden font-sans text-foreground;
     /* bg-background removed — body is semi-transparent for desktop glass */
   }
   /* Glass body — CSS vars from theme generator. Falls back to solid background. */
@@ -261,7 +261,7 @@
     background-color: var(--glass-body-bg, var(--background));
   }
   #root {
-    @apply h-full overflow-hidden;
+    @apply h-full min-w-0 overflow-hidden;
   }
 }
 

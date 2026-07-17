@@ -33,6 +33,8 @@ function DropdownMenuContent({
   className,
   sideOffset = 4,
   collisionPadding = 8,
+  // Desktop UI: don't restore focus to the opener after Esc/close (avoids sticky focus rings).
+  onCloseAutoFocus = (event) => event.preventDefault(),
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content> & {
   collisionPadding?: number;
@@ -48,6 +50,7 @@ function DropdownMenuContent({
           className,
         )}
         {...props}
+        onCloseAutoFocus={onCloseAutoFocus}
       />
     </DropdownMenuPrimitive.Portal>
   );
@@ -227,6 +230,7 @@ function DropdownMenuSubTrigger({
 function DropdownMenuSubContent({
   className,
   collisionPadding = 8,
+  onCloseAutoFocus = (event) => event.preventDefault(),
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent> & {
   collisionPadding?: number;
@@ -240,6 +244,7 @@ function DropdownMenuSubContent({
         className,
       )}
       {...props}
+      onCloseAutoFocus={onCloseAutoFocus}
     />
   );
 }
