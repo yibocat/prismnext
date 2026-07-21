@@ -27,6 +27,7 @@ import {
   type ExperimentRunResult,
 } from "../services/experiment-run-executor";
 import { broadcastExperimentChanged } from "../services/experiment-ui-events";
+import { AcpService } from "../acp/service";
 import { resolvePermissionAction, resolvePermissionMode } from "../services/permission-modes";
 import {
   EXPERIMENT_REGISTRY_REL,
@@ -190,24 +191,30 @@ export function registerExperimentHandlers(): void {
 
     // Permission backstop: the renderer-side modal is the primary gate, but
     // main still refuses the call in readonly mode to mirror the agent path.
+    const chatSessionId =
+      typeof args.chatSessionId === "string" && args.chatSessionId.trim()
+        ? args.chatSessionId.trim()
+        : null;
     const mode = resolvePermissionMode(
       (getSettings() as Record<string, unknown>).permissionMode as string | undefined,
     );
-    const action = resolvePermissionAction(mode, "experiment-run");
+    const sessionAgent = chatSessionId
+      ? AcpService.getInstance().getSessionAgent(chatSessionId)
+      : undefined;
+    const action = resolvePermissionAction(mode, "experiment-run", sessionAgent);
     if (action === "deny") {
+      const planBlocked = sessionAgent === "plan";
       return {
         ok: false as const,
         error: "permission_denied",
-        hint: "Current permission mode is read-only; experiment runs are disabled.",
+        hint: planBlocked
+          ? "Plan mode blocks experiment runs; switch the tab to Build to run."
+          : "Current permission mode is read-only; experiment runs are disabled.",
       };
     }
 
     const runId = generateRunId();
     const sender = event.sender;
-    const chatSessionId =
-      typeof args.chatSessionId === "string" && args.chatSessionId.trim()
-        ? args.chatSessionId.trim()
-        : null;
     const kind = parseExperimentRunKind(args.kind);
     if (args.kind !== undefined && args.kind !== null && String(args.kind).trim() && !kind) {
       return {

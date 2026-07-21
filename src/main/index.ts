@@ -22,6 +22,7 @@ import { startTerminalBridge, stopTerminalBridge, setTerminalBridgeWindow } from
 import { startLiteratureBridge, stopLiteratureBridge } from "./services/literature-bridge";
 import { startLatexBridge, stopLatexBridge } from "./services/latex-bridge";
 import { startResearchBriefBridge, stopResearchBriefBridge } from "./services/research-brief-bridge";
+import { startPlanSuggestBridge, stopPlanSuggestBridge } from "./services/plan-suggest-bridge";
 import { startExperimentLogBridge, stopExperimentLogBridge } from "./services/experiment-log-bridge";
 import { installMainProcessNetwork } from "./lib/main-network";
 import { registerCrashHandlers } from "./lib/crash-handler";
@@ -184,6 +185,7 @@ function disposeGlobalsWhenNoWindows(): void {
   stopLiteratureBridge();
   stopLatexBridge();
   stopResearchBriefBridge();
+  stopPlanSuggestBridge();
   stopExperimentLogBridge();
   setTerminalBridgeWindow(null);
   void import("./ipc/log").then((m) => m.disposeLogger());
@@ -334,6 +336,7 @@ app.whenReady().then(async () => {
   startLiteratureBridge();
   startLatexBridge();
   startResearchBriefBridge();
+  startPlanSuggestBridge();
   startExperimentLogBridge();
 
   installApplicationMenu({

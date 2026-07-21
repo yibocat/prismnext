@@ -51,7 +51,10 @@ export function CodeEditor() {
     ?? DEFAULT_SYNTAX_THEME;
 
   const { tab, isActive } = useTabContext();
-  const fileId = tab.kind === "file" || tab.kind === "texworkspace" ? tab.fileId : null;
+  const fileId =
+    tab.kind === "file" || tab.kind === "texworkspace" || tab.kind === "research-plan"
+      ? tab.fileId
+      : null;
   const filePath = tab.filePath ?? "";
   const ext = (() => {
     const dot = filePath.lastIndexOf(".");

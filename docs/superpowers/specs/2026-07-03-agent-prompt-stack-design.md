@@ -2,6 +2,7 @@
 
 > **日期：** 2026-07-03  
 > **状态：** Approved for implementation planning（先对齐认知 → 再按计划执行）  
+> **Enforcement / Hard vs Soft / 体积预算 / 瘦身：** 见 **`2026-07-21-prompt-hard-soft-architecture-design.md`**（实现计划：`plans/2026-07-21-prompt-hard-soft-architecture.md`）  
 > **关联：**  
 > - `2026-06-19-prompt-system-redesign.md`（Layer 体系 — 部分已落地，部分已演进）  
 > - `2026-07-03-expert-team-subagents-design.md`（Orchestrator / Expert sync）  

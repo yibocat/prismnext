@@ -156,4 +156,12 @@ describe("permission modes", () => {
     expect(resolveBridgeToolCallSyncAction("ask", "bash")).toBe("prompt");
     expect(resolveBridgeToolCallSyncAction("readonly", "bash")).toBe("deny");
   });
+
+  it("Plan session agent denies write/shell even in auto mode", () => {
+    expect(resolvePermissionAction("auto", "edit", "plan")).toBe("deny");
+    expect(resolvePermissionAction("auto", "bash", "plan")).toBe("deny");
+    expect(resolvePermissionAction("auto", "literature-search", "plan")).toBe("allow");
+    expect(resolveBridgeToolCallSyncAction("auto", "bash", "plan")).toBe("deny");
+    expect(resolveBridgeToolCallSyncAction("auto", "delete", "plan")).toBe("deny");
+  });
 });

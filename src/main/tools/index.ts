@@ -157,32 +157,12 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "and stage a session citation. Returns metadata + a `refId`. No library write. " +
       "This is the DEFAULT for any paper you cite.",
     workflowRules: [
-      "BINDING: Do not write any `[n]` markers or a paper recommendation list in text until " +
-        "every `literature-stage` call for this turn has returned a verified refId.",
-      "BINDING: Any Paper Search MCP tool (`search_papers`, `search_arxiv`, `search_crossref`, " +
-        "`search_semantic_scholar`, `get_paper_by_doi`, or any `paper-search-mcp_*`) discovers " +
-        "identifiers only — it does NOT create session citations. After MCP search, you MUST call " +
-        "`literature-stage` for every paper you will mention before writing any reply.",
-      "BINDING: After you have enough DOIs/arXiv IDs, stop calling more `paper-search-mcp_*` tools " +
-        "and stage immediately — do not keep searching, and do not bash/rg OpenCode tool-output spills.",
-      "Do NOT use the Task tool or subagents to find, verify, or summarize external papers — " +
-        "discover identifiers (Paper Search MCP first, then stage) yourself in this conversation.",
-      "Do not draft the reply first and stage later — discover identifiers (Paper Search MCP), stage each " +
-        "paper, then write one final reply using the returned refIds.",
-      "For EVERY paper you mention, call this first with its exact DOI or arXiv ID, " +
-        "then reference the returned `refId` as `[n]` in your text.",
-      "Always use `[n]` markers (square brackets). Do NOT use markdown ordered lists " +
-        "or bare numbers to refer to staged citations.",
-      "Citation layout: one paper per line — `**Title** [n]` then a short summary. " +
-        "Never mix list numbers with citation refs (bad: `4. [3]`; good: `**Title** [3]`).",
-      "Never write the literal `[n]` placeholder — substitute the actual refId number.",
-      "If `verified: false`, do NOT write `[n]`; tell the user the identifier could not be verified.",
-      "Never invent DOIs — copy exact identifiers from Paper Search MCP results or the user message.",
-      `Do not call ${TOOL_NAMES.literatureAdd} unless the user explicitly asks to add the paper to the library.`,
-      "For topic discovery (e.g. recent papers), call Paper Search MCP once (or a small focused set), " +
-        "extract arXiv IDs/DOIs, then stage each with `discoveredFrom: \"paper-search-mcp\"`. " +
-        "Use websearch only if MCP is unavailable.",
-      "Reuse the same `[n]` when mentioning the same paper again in one reply.",
+      "BINDING: No `[n]` / paper list in reply until every stage call this turn returned a verified refId.",
+      "BINDING: Paper Search MCP (`paper-search-mcp_*`) only discovers IDs — after results, stage each paper you will mention, then reply. Do not bash/rg tool-output spills.",
+      "Discover → stage → one reply with `[n]`. Do not Task-out discovery/staging. Exact DOI/arXiv only — never invent.",
+      "Layout: `**Title** [n]` + short summary per line; reuse `[n]` for the same paper; no markdown ordered-list citations.",
+      "If `verified: false`, do not write `[n]`. Topic search: focused MCP query then stage (`discoveredFrom: \"paper-search-mcp\"`); websearch only if MCP unavailable.",
+      `Do not call ${TOOL_NAMES.literatureAdd} unless the user explicitly asks to add to the library.`,
     ],
   },
   {
@@ -237,6 +217,22 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "If not extracted yet, call with `force=true` to start background extraction.",
       "When quoting PDF content in chat, cite as `[@bibkey]` (exact cite key) plus page numbers as `p.X`.",
       "Reserved for intensive reading mode — costs tokens to extract.",
+      `If intensiveReadingRequired, call ${TOOL_NAMES.literatureIntensiveReading} action=add first — do not ask the user to @-toggle unless they refuse.`,
+    ],
+  },
+  {
+    name: TOOL_NAMES.literatureIntensiveReading,
+    label: "Intensive Reading",
+    description:
+      "Add/remove/list papers on this chat's intensive-reading list (gate for literature-read-pdf)",
+    category: "reference",
+    usageHint:
+      "action=add|remove|list by exact library bibkey. Enables literature-read-pdf for that paper in this chat session. " +
+      "Prefer adding yourself when PDF body is needed.",
+    workflowRules: [
+      "Call action=add before literature-read-pdf when the paper is not yet intensive.",
+      "Do not ask the user to manually @-toggle Intensive reading unless they refuse agent control.",
+      "Only library papers (existing bibkeys) — discover/add to library first if missing.",
     ],
   },
   {
@@ -322,6 +318,27 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "One section per call — do not rewrite the whole brief.",
       "Do not use generic edit/write on brief.md — use this tool only.",
       "research-design-coach does not write the brief — orchestrator applies updates after user confirmation.",
+    ],
+  },
+  {
+    name: TOOL_NAMES.suggestPlan,
+    label: "Suggest Plan",
+    description:
+      "Pause and show a 15s Enter Plan consent strip (timeout ≡ stay in Build)",
+    category: "utility",
+    usageHint:
+      "You decide after thinking — research workspace, not an engineering IDE. " +
+      "Call when work is multi-step / multi-phase: experiment design, hypotheses & factor matrices, " +
+      "protocols, literature pipelines, staged analyses, etc. " +
+      "CRITICAL: Plan is also for the design phase itself — not only later execution. " +
+      "“Think through / discuss design” does NOT mean skip this tool and dump a long chat essay. " +
+      "If phasing would help, call suggest-plan first (user can dismiss). " +
+      "Skip only trivial one-shots (compile, typo, yes/no). Do not wait for the user to say “enter Plan”.",
+    workflowRules: [
+      "Do not invent “Plan = execution only” — design / hypotheses / factor matrices qualify.",
+      "Do not claim Plan mode unless status is accepted.",
+      "On accepted: follow `instruction` / write `draftPath` immediately — chat is not the plan of record.",
+      "Do not use Task or prose markers for this — call suggest-plan.",
     ],
   },
   {

@@ -421,6 +421,14 @@ function yamlScalar(value: string): string {
   return value;
 }
 
+/** Quote YAML mapping keys that are illegal unquoted (`*` is an alias indicator). */
+function yamlKey(key: string): string {
+  if (key === "*" || /[:#\n"'&*!|>%@`{}[\],?]/.test(key) || /^\s|\s$/.test(key)) {
+    return JSON.stringify(key);
+  }
+  return key;
+}
+
 function serializeYamlLines(value: unknown, indent = 0): string[] {
   const pad = "  ".repeat(indent);
   if (value === null || value === undefined) {
@@ -443,14 +451,15 @@ function serializeYamlLines(value: unknown, indent = 0): string[] {
   if (typeof value === "object") {
     const lines: string[] = [];
     for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      const safeKey = yamlKey(key);
       if (typeof nested === "object" && nested !== null && !Array.isArray(nested)) {
-        lines.push(`${pad}${key}:`);
+        lines.push(`${pad}${safeKey}:`);
         lines.push(...serializeYamlLines(nested, indent + 1));
       } else if (Array.isArray(nested)) {
-        lines.push(`${pad}${key}:`);
+        lines.push(`${pad}${safeKey}:`);
         lines.push(...serializeYamlLines(nested, indent + 1));
       } else {
-        lines.push(`${pad}${key}: ${serializeYamlLines(nested, 0)[0]?.trim() ?? "null"}`);
+        lines.push(`${pad}${safeKey}: ${serializeYamlLines(nested, 0)[0]?.trim() ?? "null"}`);
       }
     }
     return lines;

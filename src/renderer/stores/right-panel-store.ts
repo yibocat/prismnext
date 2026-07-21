@@ -4,7 +4,13 @@ import { useLayoutStore } from "./layout-store";
 import { useTerminalStore } from "./terminal-store";
 import { shellDisplayName } from "@/lib/terminal/shell-label";
 import { useTerminalAiStore } from "./terminal-ai-store";
-import { modeRegistry, type RightTabKind, type RightTab } from "@/lib/workspace/mode-registry";
+import {
+  isEditableFileTabKind,
+  modeRegistry,
+  type RightTabKind,
+  type RightTab,
+} from "@/lib/workspace/mode-registry";
+import { isResearchPlanFilePath } from "@/lib/chat/plan-artifact-ui";
 import { getTabCloseConfirmation, getBatchTabCloseConfirmation } from "@/lib/workspace/tab-close-confirmation";
 import {
   buildInitialTabShell,
@@ -52,6 +58,13 @@ interface RightPanelState {
     filePath: string,
     name: string,
     opts?: { pin?: boolean; isExternal?: boolean },
+  ) => void;
+  /** Open a research plan of record in the dedicated Plan tab (not Files). */
+  openResearchPlan: (
+    fileId: string,
+    filePath: string,
+    name: string,
+    opts?: { pin?: boolean },
   ) => void;
   /** Pin a preview tab (italic → normal) */
   pinTab: (id: string) => void;
@@ -280,6 +293,11 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   },
 
   openFile: (fileId, filePath, name, opts) => {
+    if (isResearchPlanFilePath(filePath) || isResearchPlanFilePath(fileId)) {
+      get().openResearchPlan(fileId, filePath, name, { pin: opts?.pin });
+      return;
+    }
+
     const pin = opts?.pin ?? false;
     const isExternal = opts?.isExternal ?? false;
 
@@ -350,10 +368,66 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     }));
   },
 
+  openResearchPlan: (fileId, filePath, name, opts) => {
+    const pin = opts?.pin ?? true;
+    useLayoutStore.getState().activateMode("research-plan");
+
+    const { tabs } = get();
+
+    // Drop a stale Files tab on the same path so Plan owns the surface.
+    const strayFileIds = new Set(
+      tabs
+        .filter((t) => t.kind === "file" && (t.fileId === fileId || t.filePath === filePath))
+        .map((t) => t.id),
+    );
+
+    const existing = tabs.find(
+      (t) => t.kind === "research-plan" && (t.fileId === fileId || t.filePath === filePath),
+    );
+
+    const makePlanTab = (id: string): RightTab => ({
+      id,
+      kind: "research-plan",
+      title: name,
+      fileId,
+      filePath,
+      isInitial: false,
+      isPreview: !pin,
+      viewMode: "preview",
+    });
+
+    if (existing) {
+      set((s) => ({
+        tabs: s.tabs
+          .filter((t) => !strayFileIds.has(t.id))
+          .map((t) =>
+            t.id === existing.id
+              ? {
+                  ...makePlanTab(existing.id),
+                  isPreview: pin ? false : t.isPreview,
+                }
+              : t,
+          ),
+        activeTabId: existing.id,
+      }));
+      useDocumentStore.getState().setActiveFile(fileId);
+      return;
+    }
+
+    const id = nextTabId();
+    set((s) => ({
+      tabs: [makePlanTab(id), ...s.tabs.filter((t) => !strayFileIds.has(t.id))],
+      activeTabId: id,
+    }));
+    useDocumentStore.getState().setActiveFile(fileId);
+  },
+
   pinTab: (id: string) => {
     set((s) => ({
       tabs: s.tabs.map((t) =>
-        t.id === id && t.kind === "file" && t.isPreview
+        t.id === id
+        && (t.kind === "file" || t.kind === "research-plan")
+        && t.isPreview
           ? { ...t, isPreview: false }
           : t,
       ),
@@ -536,7 +610,8 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   setActiveTab: (id: string) => {
     const tab = get().tabs.find((t) => t.id === id);
     set({ activeTabId: id });
-    const fileId = (tab?.kind === "file" || tab?.kind === "texworkspace") && tab.fileId ? tab.fileId : "";
+    const fileId =
+      tab && isEditableFileTabKind(tab.kind) && tab.fileId ? tab.fileId : "";
     useDocumentStore.getState().setActiveFile(fileId);
     if (tab?.terminalSource === "ai" && tab.linkedChatTabId) {
       useTerminalAiStore.getState().touchSessionViewed(tab.linkedChatTabId);
@@ -617,7 +692,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       useRightPanelStore.setState((s) => {
         const next = s.tabs.filter((t) => t.kind !== kind);
         const nextActive = next.length > 0 ? next[0].id : null;
-        if (kind === "file" || kind === "texworkspace") {
+        if (kind === "file" || kind === "texworkspace" || kind === "research-plan") {
           useDocumentStore.getState().setActiveFile("");
         }
         return { tabs: next, activeTabId: nextActive };
@@ -731,7 +806,9 @@ function performCloseTab(
     }
     const nextActiveTab = next.find((t) => t.id === nextActive);
     const nextFileId =
-      (nextActiveTab?.kind === "file" || nextActiveTab?.kind === "texworkspace") && nextActiveTab.fileId
+      nextActiveTab
+      && isEditableFileTabKind(nextActiveTab.kind)
+      && nextActiveTab.fileId
         ? nextActiveTab.fileId
         : "";
     useDocumentStore.getState().setActiveFile(nextFileId);

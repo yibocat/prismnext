@@ -19,7 +19,8 @@ import { buildWorkspacePrompt } from "./workspace-folders";
  * (workspace-folders, research-reasoning, reply-depth).
  * Profile modules attach per Orchestrator/Expert in the agent editor.
  *
- * Per-tool behavior → OpenCode tool `description` in tools/index.ts only.
+ * Per-tool how-to → `BUILTIN_TOOLS` / `tools/<name>.ts` only (not modules).
+ * Hard/Soft homes: `docs/superpowers/specs/2026-07-21-prompt-hard-soft-architecture-design.md`.
  */
 export const ALL_MODULES: PromptModule[] = [
   {

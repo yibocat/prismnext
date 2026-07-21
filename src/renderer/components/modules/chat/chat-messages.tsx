@@ -40,6 +40,7 @@ import {
   ZapIcon,
   Loader2Icon,
   CircleCheckIcon,
+  ChevronRightIcon,
   SquareIcon,
 } from "lucide-react";
 import { ChatImagePreviewDialog } from "@/lib/markdown/chat-image-preview";
@@ -360,6 +361,62 @@ function ActionStatusCard({ msg }: { msg: ChatStreamMessage }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Inline Approve / Reject notice — flat card; approved+path is openable. */
+function PlanDecisionCard({ msg }: { msg: ChatStreamMessage }) {
+  const { t } = useTranslation();
+  const openPlanFileInEditor = useChatStore((s) => s.openPlanFileInEditor);
+  const approved = msg.planDecision === "approved";
+  const title = msg.planTitle?.trim();
+  const path = msg.planPath?.trim();
+  const openable = approved && !!path;
+
+  const body = (
+    <>
+      {approved ? (
+        <CircleCheckIcon className="size-3.5 shrink-0 text-success" />
+      ) : (
+        <AlertCircleIcon className="size-3.5 shrink-0 text-muted-foreground" />
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="text-[length:var(--font-chat-meta)] font-medium text-foreground">
+          {approved
+            ? t("chat.planWorkflow.decisionApproved")
+            : t("chat.planWorkflow.decisionRejected")}
+        </p>
+        {(title || path || msg.result) && (
+          <p className="truncate text-[length:var(--font-chat-meta)] text-muted-foreground">
+            {title || path || msg.result}
+          </p>
+        )}
+      </div>
+      {openable ? (
+        <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
+      ) : null}
+    </>
+  );
+
+  return (
+    <div className="mb-2">
+      {openable ? (
+        <button
+          type="button"
+          className={cn(
+            "flex w-full items-center gap-2 rounded-md border border-success/30 bg-success/5 px-3 py-2 text-left",
+            "transition-colors hover:bg-success/10",
+          )}
+          onClick={() => void openPlanFileInEditor(path)}
+        >
+          {body}
+        </button>
+      ) : (
+        <div className="flex w-full items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
+          {body}
+        </div>
+      )}
     </div>
   );
 }
@@ -1078,6 +1135,18 @@ export const ChatMessages = memo(function ChatMessages() {
                         msg={msg}
                       />
                     );
+                  }
+                  if (msg.type === "plan-decision") {
+                    return (
+                      <PlanDecisionCard
+                        key={`plan-decision-${displayIdx}`}
+                        msg={msg}
+                      />
+                    );
+                  }
+                  // Created Plan renders inline after write/edit tools (AssistantBlockList).
+                  if (msg.type === "plan-artifact") {
+                    return null;
                   }
                   if (msg.type === "result") {
                     if (!msg.is_error) return null;

@@ -173,6 +173,25 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		append?: boolean;
 	}) => ipcRenderer.invoke("researchBrief:updateSection", args),
 
+	researchPlanWrite: (args: {
+		projectRoot: string;
+		doc: import("../../shared/research-plan").ResearchPlanDoc;
+	}) => ipcRenderer.invoke("researchPlan:write", args),
+	researchPlanReadDraft: (args: { projectRoot: string; sessionId?: string }) =>
+		ipcRenderer.invoke("researchPlan:readDraft", args),
+	researchPlanClaimDraft: (args: { projectRoot: string; sessionId: string }) =>
+		ipcRenderer.invoke("researchPlan:claimDraft", args),
+	researchPlanHasPendingDraft: (args: { projectRoot: string; sessionId: string }) =>
+		ipcRenderer.invoke("researchPlan:hasPendingDraft", args),
+	researchPlanPromoteDraft: (args: {
+		projectRoot: string;
+		sessionId?: string;
+		/** @deprecated Ignored — promote always renames draft to approved. */
+		status?: "approved" | "snapshot";
+	}) => ipcRenderer.invoke("researchPlan:promoteDraft", args),
+	researchPlanDiscardDraft: (args: { projectRoot: string; sessionId?: string }) =>
+		ipcRenderer.invoke("researchPlan:discardDraft", args),
+
 	// Experiments (Sprint 0.7 — Experiments RightArea mode)
 	experimentList: (projectRoot: string, includeArchived?: boolean) =>
 		ipcRenderer.invoke("experiment:list", { projectRoot, includeArchived }),
@@ -849,6 +868,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		intensivePaperIds?: string[];
 		hasPaperSnippets?: boolean;
 		orchestratorId?: string | null;
+		sessionAgent?: "build" | "plan";
 		selectedExpertIds?: string[];
 		promptImages?: Array<{ mimeType: string; data: string; name: string; uri?: string }>;
 		promptFiles?: Array<{ uri: string; name: string; mimeType: string; size?: number }>;
@@ -869,6 +889,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		projectRoot: string;
 		paperIds?: string[];
 	}) => ipcRenderer.invoke("chat:syncIntensiveReading", args),
+	chatSetSessionAgent: (args: { sessionId: string; agent: "build" | "plan" }) =>
+		ipcRenderer.invoke("chat:setSessionAgent", args),
+	chatSetPlanSuggestDismissed: (args: { sessionId: string; dismissed: boolean }) =>
+		ipcRenderer.invoke("chat:setPlanSuggestDismissed", args),
+	chatResolvePlanSuggest: (args: {
+		sessionId: string;
+		decision: "accepted" | "dismissed" | "timed_out";
+	}) => ipcRenderer.invoke("chat:resolvePlanSuggest", args),
 	chatCompact: (sessionId: string, projectPath: string) =>
 		ipcRenderer.invoke("chat:compact", { sessionId, projectPath }),
 	chatAnswer: (sessionId: string, answer: string) =>
@@ -919,6 +947,32 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		sessionId: string,
 		content: Record<string, unknown>[],
 	) => ipcRenderer.invoke("session:appendUserDisplay", { projectPath, sessionId, content }),
+	sessionGetPlanEvents: (projectPath: string, sessionId: string) =>
+		ipcRenderer.invoke("session:getPlanEvents", { projectPath, sessionId }),
+	sessionUpsertPlanArtifact: (
+		projectPath: string,
+		sessionId: string,
+		event: {
+			kind: "plan-artifact";
+			path: string;
+			title?: string;
+			discarded?: boolean;
+			afterIndex: number;
+		},
+	) => ipcRenderer.invoke("session:upsertPlanArtifact", { projectPath, sessionId, event }),
+	sessionAppendPlanDecision: (
+		projectPath: string,
+		sessionId: string,
+		event: {
+			kind: "plan-decision";
+			decision: "approved" | "rejected";
+			path?: string;
+			title?: string;
+			afterIndex: number;
+		},
+	) => ipcRenderer.invoke("session:appendPlanDecision", { projectPath, sessionId, event }),
+	sessionMarkPlanArtifactDiscarded: (projectPath: string, sessionId: string) =>
+		ipcRenderer.invoke("session:markPlanArtifactDiscarded", { projectPath, sessionId }),
 	chatGetProviders: () => ipcRenderer.invoke("chat:getProviders"),
 	chatSetAuth: (provider: string, credentials: Record<string, string>) =>
 		ipcRenderer.invoke("chat:setAuth", { provider, credentials }),
@@ -1187,7 +1241,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("chat:stream", handler);
 		return () => ipcRenderer.removeListener("chat:stream", handler);
 	},
-	onChatComplete: (callback: (data: { tabId: string; sessionId: string; success: boolean; error?: string; tokenUsage?: any }) => void) => {
+	onChatComplete: (callback: (data: { tabId: string; sessionId: string; success: boolean; error?: string; tokenUsage?: any; planDraftMissing?: boolean }) => void) => {
 		const handler = (_event: Electron.IpcRendererEvent, data: any) => callback(data);
 		ipcRenderer.on("chat:complete", handler);
 		return () => ipcRenderer.removeListener("chat:complete", handler);

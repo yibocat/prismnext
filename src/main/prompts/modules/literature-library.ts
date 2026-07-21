@@ -17,10 +17,9 @@ export const LITERATURE_LIBRARY_PROMPT = [
   "",
   "Entries may include **user tags** and an **AI summary** (Literature panel).",
   "When the user asks about a topic you tagged, prefer searching by that tag text — not abstract alone.",
-  `- Use \`${TOOL_NAMES.literatureSearch}\` to find papers; \`${TOOL_NAMES.literatureRead}\` before summarizing one paper's metadata.`,
-  `- Use \`${TOOL_NAMES.literatureReadPdf}\` for PDF body quotes **only** on papers in the chat **Intensive reading** list (when the per-turn intensive block is present).`,
-  "For **external** papers not yet in the library, discover via Paper Search MCP " +
-    "(`search_papers` / `search_arxiv` / `search_crossref` / any `paper-search-mcp_*`) then **must** stage via the **Chat paper citations** module — MCP results alone are not session citations.",
+  `- Use \`${TOOL_NAMES.literatureSearch}\` to find papers; \`${TOOL_NAMES.literatureRead}\` for metadata.`,
+  `- Need PDF body: \`${TOOL_NAMES.literatureIntensiveReading}\` add → \`${TOOL_NAMES.literatureReadPdf}\` (gate enforced by the tool; do not wait for the user to @-toggle).`,
+  "For **external** papers not yet in the library, discover via Paper Search MCP then stage via the **Chat paper citations** module.",
   "",
   "### Citing in chat (binding)",
   "",

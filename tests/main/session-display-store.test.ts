@@ -4,10 +4,14 @@ import * as os from "node:os";
 import * as path from "node:path";
 import {
   appendUserDisplay,
+  appendPlanDecisionEvent,
   getUserDisplays,
+  getPlanEvents,
+  markLatestPlanArtifactDiscarded,
   truncateUserDisplays,
   deleteSessionDisplays,
   restoreUserDisplays,
+  upsertPlanArtifactEvent,
 } from "../../src/main/services/session-display-store";
 
 describe("session-display-store", () => {
@@ -49,5 +53,37 @@ describe("session-display-store", () => {
       [{ type: "text", text: "b" }],
     ]);
     expect(getUserDisplays(tmpDir, "sess-3")).toHaveLength(2);
+  });
+
+  it("persists plan artifact upsert and discarded mark", () => {
+    upsertPlanArtifactEvent(tmpDir, "sess-plan", {
+      kind: "plan-artifact",
+      path: ".prismnext/research/plans/current-draft.md",
+      title: "T1",
+      afterIndex: 2,
+    });
+    upsertPlanArtifactEvent(tmpDir, "sess-plan", {
+      kind: "plan-artifact",
+      path: ".prismnext/research/plans/2026-07-18-ab12.md",
+      title: "T1",
+      afterIndex: 2,
+    });
+    expect(getPlanEvents(tmpDir, "sess-plan")).toHaveLength(1);
+    expect(getPlanEvents(tmpDir, "sess-plan")[0]).toMatchObject({
+      kind: "plan-artifact",
+      path: ".prismnext/research/plans/2026-07-18-ab12.md",
+    });
+
+    markLatestPlanArtifactDiscarded(tmpDir, "sess-plan");
+    appendPlanDecisionEvent(tmpDir, "sess-plan", {
+      kind: "plan-decision",
+      decision: "rejected",
+      title: "T1",
+      afterIndex: 2,
+    });
+    const events = getPlanEvents(tmpDir, "sess-plan");
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({ kind: "plan-artifact", discarded: true, path: "" });
+    expect(events[1]).toMatchObject({ kind: "plan-decision", decision: "rejected" });
   });
 });

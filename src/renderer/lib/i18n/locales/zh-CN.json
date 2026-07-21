@@ -1410,6 +1410,7 @@
     "toolbar": {
       "local": "本地",
       "suggestions": "建议",
+      "planNewIdea": "Plan a new idea",
       "initGit": "初始化 Git 仓库",
       "initGitShort": "初始化 Git"
     },
@@ -1450,6 +1451,51 @@
       "editAutoDesc": "自动允许文件编辑；Shell 与破坏性操作仍会询问。允许后 Shell 使用 PTY。",
       "autoDesc": "全自动——编辑、Shell 等工具无需确认（类似 OpenCode --auto）。显式拒绝规则仍生效。",
       "readonlyDesc": "仅允许读取与搜索——阻止编辑与 Shell。高级设置中可使用镜像终端模式。"
+    },
+    "sessionAgent": {
+      "label": "会话 Agent",
+      "build": "构建",
+      "plan": "规划",
+      "buildShort": "构建",
+      "planShort": "规划",
+      "buildDesc": "完整 Agent — 编辑与工具遵循权限模式",
+      "planDesc": "仅规划 — 可写计划草稿文件；其它编辑与 Shell 禁止",
+      "planHint": "规划模式 — 仅草稿文件；其它编辑与 Shell 禁止",
+      "orchestratorCleared": "规划模式已清除此标签页的专家编排器"
+    },
+    "planWorkflow": {
+      "label": "规划工作流",
+      "suggestTitle": "进入规划模式？",
+      "suggestBody": "这看起来像研究规划。先规划 — 具体计划写入草稿文件；同意前不改其它文件、不跑 Shell。",
+      "suggestCountdown": "等待选择… {{seconds}} 秒后将留在 Build",
+      "enterPlan": "进入规划",
+      "dismiss": "忽略",
+      "chipLabel": "Plan",
+      "chipHint": "规划模式 — 具体计划写在草稿文件里；点 × 退出。",
+      "placeholder": "先规划与设计，再写代码…",
+      "planningBanner": "计划草稿已就绪 — 同意后保存并开始构建，或继续改草稿文件。",
+      "planningBannerWaiting": "规划模式 — 正式计划必须写入会话草稿文件（聊天长文不算）；Approve & Build 只认文件。",
+      "approveDrawerTitle": "Plan ready for confirmation",
+      "approveDrawerBody": "同意后按计划文件开始构建；拒绝则丢弃草稿，会话可继续聊。",
+      "approveDrawerBodyWithTitle": "{{title}}",
+      "viewDraft": "查看草稿",
+      "draftNotYet": "草稿文件尚未就绪 — 请等助手写入本会话的 `.prismnext/research/plans/drafts/<sessionId>.md`。",
+      "draftMissingRedirect": "本轮未写入计划草稿文件。聊天内容不是正式计划 — 下一条消息会强制要求助手先写草稿。",
+      "approveExecute": "Approve & Build",
+      "rejectPlan": "Deny",
+      "exitPlan": "退出规划",
+      "exitDialogTitle": "有未确认的计划",
+      "exitDialogBody": "当前有计划草稿文件。可同意并执行，或拒绝并丢弃草稿后返回构建。",
+      "discardAndBuild": "拒绝",
+      "cancel": "取消",
+      "createdPlan": "已创建计划",
+      "createdPlanDiscarded": "计划已丢弃",
+      "draftDiscardedGone": "该计划草稿已丢弃，磁盘上已不存在。",
+      "planFileMissing": "计划文件不存在，可能已被删除。",
+      "decisionApproved": "已同意计划 — 开始执行",
+      "decisionRejected": "已拒绝计划 — 草稿已丢弃",
+      "approveNeedsContent": "计划草稿为空 — 等助手写入本会话草稿后再点「同意并执行」。",
+      "saveFailed": "保存研究计划失败"
     },
     "context": {
       "window": "上下文窗口",
@@ -1498,6 +1544,10 @@
       "previewInBrowser": "在浏览器中预览",
       "rename": "重命名",
       "deleteFolder": "删除文件夹"
+    },
+    "researchPlan": {
+      "label": "Plan",
+      "initialTitle": "Plan"
     },
     "git": {
       "label": "Git",

@@ -211,7 +211,10 @@ function RightAreaWorkspace({
   const tabs = useRightPanelStore((s) => s.tabs);
   const activeTabId = useRightPanelStore((s) => s.activeTabId);
   const activeTab = tabs.find((t) => t.id === activeTabId);
-  const isEditorKind = activeTab?.kind === "file" || activeTab?.kind === "texworkspace";
+  const isEditorKind =
+    activeTab?.kind === "file"
+    || activeTab?.kind === "texworkspace"
+    || activeTab?.kind === "research-plan";
   const isSettingsEditorTab = activeTab?.kind === "settings-editor";
   const showTabToolbar =
     activeTab &&

@@ -8,6 +8,7 @@ import {
   FileTextIcon,
   FlaskConicalIcon,
   ImageIcon,
+  ListTodoIcon,
   PlugIcon,
   PuzzleIcon,
 } from "lucide-react";
@@ -46,18 +47,37 @@ export type MentionOption =
   | { kind: "experiment"; experiment: ExperimentSummary }
   | { kind: "show-more"; section: MentionSectionKind; remaining: number };
 
-export type SlashSectionKind = "command" | "skill" | "mcp";
+export type SlashSectionKind = "mode" | "command" | "skill" | "mcp";
+
+/** Composer session modes shown under slash → Modes (not Commands). */
+export type SlashModeDef = {
+  id: "plan";
+  name: string;
+  label: string;
+  description: string;
+};
+
+export const COMPOSER_SLASH_MODES: SlashModeDef[] = [
+  {
+    id: "plan",
+    name: "plan",
+    label: "Plan",
+    description: "Plan and design before coding — no file edits or shell until you approve",
+  },
+];
 
 export type SlashOption =
+  | { kind: "mode"; mode: SlashModeDef }
   | { kind: "command"; command: CommandDef }
   | { kind: "skill"; skill: SlashCatalogSkill }
   | { kind: "mcp"; mcp: SlashCatalogMcp }
   | { kind: "show-more"; section: SlashSectionKind; remaining: number };
 
 export const MENTIONS_LIMIT = 6;
-const SLASH_LIMITS = { command: 10, skill: 8, mcp: 8 } as const;
+const SLASH_LIMITS = { mode: 6, command: 10, skill: 8, mcp: 8 } as const;
 
 const SLASH_SECTION_LABELS: Record<SlashSectionKind, string> = {
+  mode: "Modes",
   command: "Commands",
   skill: "Skills",
   mcp: "MCPs",
@@ -128,6 +148,24 @@ export function buildSlashOptions(
     "mcp",
     (mcp) => ({ kind: "mcp" as const, mcp }),
     (remaining) => ({ kind: "show-more" as const, section: "mcp" as const, remaining }),
+  );
+
+  // Modes last (Cursor-style): Plan is a mode, never a Command.
+  const matchedModes = COMPOSER_SLASH_MODES.filter(
+    (mode) =>
+      !q
+      || mode.name.toLowerCase().includes(q)
+      || mode.label.toLowerCase().includes(q)
+      || mode.description.toLowerCase().includes(q),
+  );
+  appendLimitedSection(
+    options,
+    matchedModes,
+    SLASH_LIMITS.mode,
+    expandedSections.has("mode"),
+    "mode",
+    (mode) => ({ kind: "mode" as const, mode }),
+    (remaining) => ({ kind: "show-more" as const, section: "mode" as const, remaining }),
   );
 
   return options;
@@ -340,6 +378,19 @@ export function SlashCommandDropdown({
                 </span>
               );
             }
+            if (option.kind === "mode") {
+              return (
+                <>
+                  <ListTodoIcon className="size-3.5 shrink-0 text-amber-700 dark:text-amber-400" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{option.mode.label}</span>
+                    <span className="mt-0.5 block truncate text-[length:var(--font-path)] text-muted-foreground">
+                      {option.mode.description}
+                    </span>
+                  </span>
+                </>
+              );
+            }
             if (option.kind === "command") {
               return (
                 <span className={cn(itemLabelClass, "font-medium text-primary")}>
@@ -366,11 +417,13 @@ export function SlashCommandDropdown({
           const rowKey =
             option.kind === "show-more"
               ? `show-more:${option.section}`
-              : option.kind === "command"
-                ? `command:${option.command.name}`
-                : option.kind === "skill"
-                  ? `skill:${option.skill.id}`
-                  : `mcp:${option.mcp.name}`;
+              : option.kind === "mode"
+                ? `mode:${option.mode.id}`
+                : option.kind === "command"
+                  ? `command:${option.command.name}`
+                  : option.kind === "skill"
+                    ? `skill:${option.skill.id}`
+                    : `mcp:${option.mcp.name}`;
 
           return (
             <div key={rowKey} data-composer-option-group>

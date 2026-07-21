@@ -5,6 +5,7 @@ import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 
 export type RightTabKind =
   | "file"
+  | "research-plan"
   | "browser"
   | "git-overview"
   | "git-diff"
@@ -13,6 +14,11 @@ export type RightTabKind =
   | "settings-editor"
   | "literature"
   | "experiments";
+
+/** Tabs that host an editable project file buffer (Files / TeX / Plan). */
+export function isEditableFileTabKind(kind: RightTabKind): boolean {
+  return kind === "file" || kind === "texworkspace" || kind === "research-plan";
+}
 
 /** Where a mode may appear in the app chrome. */
 export type ModeSurface = "workspace" | "settings" | "any";

@@ -20,6 +20,7 @@ import { registerBibliographyHandlers } from "./bibliography";
 import { registerZoteroHandlers } from "./zotero";
 import { registerUpdateHandlers } from "./update";
 import { registerResearchBriefHandlers } from "./research-brief";
+import { registerResearchPlanHandlers } from "./research-plan";
 import { registerExperimentHandlers } from "./experiment";
 import { registerProvenanceHandlers } from "./provenance";
 import { registerMcpHandlers } from "./mcp";
@@ -48,6 +49,7 @@ export function registerIpcHandlers(): void {
   registerZoteroHandlers();
   registerUpdateHandlers();
   registerResearchBriefHandlers();
+  registerResearchPlanHandlers();
   registerExperimentHandlers();
   registerProvenanceHandlers();
 }

@@ -3,6 +3,7 @@ import type { ContentBlock } from "@/stores/chat-store";
 import { EditWidget } from "./edit-widget";
 import { BashWidget } from "./bash-widget";
 import { TodoWriteWidget } from "./todo-widget";
+import { PlanWidget } from "./plan-widget";
 import { AskUserQuestionWidget } from "./ask-question-widget";
 import { ReadWidget } from "./read-widget";
 import { GrepWidget } from "./grep-widget";
@@ -52,7 +53,7 @@ const BUILTIN_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
   websearch: WebSearchWidget,
   skill: SkillWidget,
   todowrite: TodoWriteWidget,
-  plan: TodoWriteWidget,
+  plan: PlanWidget,
 };
 
 const CUSTOM_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
@@ -64,6 +65,7 @@ const CUSTOM_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
   "literature-add": LiteratureToolWidget,
   "literature-read": LiteratureToolWidget,
   "literature-read-pdf": LiteratureToolWidget,
+  "literature-intensive-reading": LiteratureToolWidget,
   "literature-export-bib": LiteratureToolWidget,
   "literature-delete": LiteratureToolWidget,
   "citation-health": LiteratureToolWidget,

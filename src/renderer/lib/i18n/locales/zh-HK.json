@@ -1410,6 +1410,7 @@
     "toolbar": {
       "local": "本地",
       "suggestions": "建議",
+      "planNewIdea": "Plan a new idea",
       "initGit": "初始化 Git 倉庫",
       "initGitShort": "初始化 Git"
     },
@@ -1450,6 +1451,51 @@
       "editAutoDesc": "自動允許檔案編輯；Shell 與破壞性操作仍會詢問。允許後 Shell 使用 PTY。",
       "autoDesc": "全自動——編輯、Shell 等工具無需確認（類似 OpenCode --auto）。顯式拒絕規則仍生效。",
       "readonlyDesc": "僅允許讀取與搜尋——阻止編輯與 Shell。進階設定中可使用映象終端模式。"
+    },
+    "sessionAgent": {
+      "label": "會話 Agent",
+      "build": "構建",
+      "plan": "規劃",
+      "buildShort": "構建",
+      "planShort": "規劃",
+      "buildDesc": "完整 Agent — 編輯與工具遵循許可權模式",
+      "planDesc": "僅規劃 — 可寫計劃草稿檔；其它編輯與 Shell 禁止",
+      "planHint": "規劃模式 — 僅草稿檔；其它編輯與 Shell 禁止",
+      "orchestratorCleared": "規劃模式已清除此標籤頁的專家編排器"
+    },
+    "planWorkflow": {
+      "label": "規劃工作流",
+      "suggestTitle": "進入規劃模式？",
+      "suggestBody": "這看起來像研究規劃。先規劃 — 具體計劃寫入草稿檔；同意前不改其它檔案、不跑 Shell。",
+      "suggestCountdown": "等待選擇… {{seconds}} 秒後將留在 Build",
+      "enterPlan": "進入規劃",
+      "dismiss": "忽略",
+      "chipLabel": "Plan",
+      "chipHint": "規劃模式 — 具體計劃寫在草稿檔裡；點 × 退出。",
+      "placeholder": "先規劃與設計，再寫程式…",
+      "planningBanner": "計劃草稿已就緒 — 同意後儲存並開始構建，或繼續改草稿檔。",
+      "planningBannerWaiting": "規劃模式 — 正式計劃必須寫入會話草稿檔（聊天長文不算）；Approve & Build 只認檔案。",
+      "approveDrawerTitle": "Plan ready for confirmation",
+      "approveDrawerBody": "同意後按計劃檔開始構建；拒絕則丟棄草稿，會話可繼續聊。",
+      "approveDrawerBodyWithTitle": "{{title}}",
+      "viewDraft": "查看草稿",
+      "draftNotYet": "草稿檔尚未就緒 — 請等助手寫入本會話的 `.prismnext/research/plans/drafts/<sessionId>.md`。",
+      "draftMissingRedirect": "本輪未寫入計劃草稿檔。聊天內容不是正式計劃 — 下一條訊息會強制要求助手先寫草稿。",
+      "approveExecute": "Approve & Build",
+      "rejectPlan": "Deny",
+      "exitPlan": "退出規劃",
+      "exitDialogTitle": "有未確認的計劃",
+      "exitDialogBody": "目前有計劃草稿檔。可同意並執行，或拒絕並丟棄草稿後返回構建。",
+      "discardAndBuild": "拒絕",
+      "cancel": "取消",
+      "createdPlan": "已建立計劃",
+      "createdPlanDiscarded": "計劃已丟棄",
+      "draftDiscardedGone": "該計劃草稿已丟棄，磁碟上已不存在。",
+      "planFileMissing": "計劃檔不存在，可能已被刪除。",
+      "decisionApproved": "已同意計劃 — 開始執行",
+      "decisionRejected": "已拒絕計劃 — 草稿已丟棄",
+      "approveNeedsContent": "計劃草稿為空 — 等助手寫入本會話草稿後再點「同意並執行」。",
+      "saveFailed": "儲存研究計劃失敗"
     },
     "context": {
       "window": "上下文視窗",
@@ -1498,6 +1544,10 @@
       "previewInBrowser": "在瀏覽器中預覽",
       "rename": "重新命名",
       "deleteFolder": "刪除資料夾"
+    },
+    "researchPlan": {
+      "label": "Plan",
+      "initialTitle": "Plan"
     },
     "git": {
       "label": "Git",

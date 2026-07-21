@@ -4,3 +4,4 @@ export {
   type IntensivePaper,
   type IntensiveReadingOptions,
 } from "./intensive-reading";
+export { buildPlanModeTurnAppendix } from "./plan-mode";

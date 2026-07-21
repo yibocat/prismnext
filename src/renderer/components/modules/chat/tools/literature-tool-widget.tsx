@@ -7,6 +7,7 @@ import { parseStageToolResult } from "@/lib/literature/parse-stage-tool-result";
 const LABELS: Record<string, string> = {
   "literature-read": "Read library paper",
   "literature-read-pdf": "Read paper PDF text",
+  "literature-intensive-reading": "Intensive reading",
   "literature-search": "Search literature library",
   "literature-stage": "Stage citation",
   "literature-add": "Add paper to library",
@@ -81,6 +82,31 @@ function LiteratureResultSummary({
           <p className="text-muted-foreground">Already in library · {stage.libraryBibkey}</p>
         ) : null}
       </div>
+    );
+  }
+
+  if (toolName === "literature-intensive-reading") {
+    if (data.error) {
+      return (
+        <p className="text-[length:var(--font-chat-meta)] text-destructive">{String(data.error)}</p>
+      );
+    }
+    const bibkey = typeof data.bibkey === "string" ? data.bibkey : "";
+    const action = typeof data.action === "string" ? data.action : "add";
+    const title = typeof data.title === "string" ? data.title : "";
+    if (action === "list" && Array.isArray(data.bibkeys)) {
+      return (
+        <p className="text-[length:var(--font-chat-meta)] text-muted-foreground">
+          Intensive list: {data.bibkeys.length === 0 ? "empty" : data.bibkeys.join(", ")}
+        </p>
+      );
+    }
+    return (
+      <p className="text-[length:var(--font-chat-meta)] text-muted-foreground">
+        {action === "remove" ? "Removed from" : "Added to"} intensive reading:{" "}
+        {bibkey ? <span className="font-mono">{bibkey}</span> : "paper"}
+        {title ? ` — ${title}` : ""}
+      </p>
     );
   }
 

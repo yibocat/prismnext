@@ -28,12 +28,13 @@ import { shouldTrackProposedChange, isDiskMutationTool, isFileWriteTool, isPatch
 import { useCheckpointStore, resolveRelativeToolPath } from "@/stores/checkpoint-store";
 import { compileCurrentDocument, pauseAutoCompileForAi, resumeAutoCompileAfterAi } from "@/stores/compile-store";
 import { createLogger } from "@/services/logger";
+import { parsePlanSteps } from "@/lib/chat/parse-plan-steps";
 import { isPrismSystemPromptText } from "@/lib/chat/session-message-hydrate";
 import { refreshGitStatusNow } from "@/lib/git/checkout-context";
 import { isChatPreparePhase } from "../../shared/chat-prepare-phases";
 import {
-  formatOrchestratorBuiltinTaskDeniedMessage,
   isOpaqueTaskCancelledResult,
+  resolveOpaqueTaskCancelledDisplay,
 } from "../../shared/task-deny-message";
 
 const log = createLogger("opencode-events", "agent");
@@ -650,7 +651,7 @@ export function useOpenCodeEvents() {
                 ).toLowerCase();
 
                 // OpenCode returns opaque {"error":"Task cancelled"} after we
-                // reject builtin Task — rewrite so the widget isn't misleading.
+                // reject Task — rewrite by subagent kind (builtin vs expert).
                 if (
                   toolName === "task"
                   && block.is_error
@@ -666,7 +667,7 @@ export function useOpenCodeEvents() {
                     || "general";
                   block = {
                     ...block,
-                    content: formatOrchestratorBuiltinTaskDeniedMessage(String(subagent)),
+                    content: resolveOpaqueTaskCancelledDisplay(String(subagent)),
                   };
                 }
 
@@ -827,6 +828,57 @@ export function useOpenCodeEvents() {
           break;
         }
 
+        case "plan.suggest": {
+          const reason =
+            typeof data?.reason === "string" ? data.reason : null;
+          const deadlineAt =
+            typeof data?.deadlineAt === "number" ? data.deadlineAt : undefined;
+          const sessionId =
+            typeof data?.sessionId === "string" ? data.sessionId : null;
+          useChatStore.getState().showPlanSuggest(tabId, reason, {
+            deadlineAt,
+            sessionId,
+          });
+          break;
+        }
+
+        case "literature.intensive": {
+          const paperId = typeof data?.paperId === "string" ? data.paperId : "";
+          const action = typeof data?.action === "string" ? data.action : "add";
+          if (!paperId) break;
+          if (action === "remove") {
+            chatStore.removeIntensivePaper(tabId, paperId);
+          } else {
+            chatStore.addIntensivePaper(tabId, paperId);
+          }
+          break;
+        }
+
+        case "plan.suggest.resolve": {
+          // Main finished tool consent — clear strip; don't double-flush heuristic pending.
+          const decision = data?.decision;
+          const markDismissed =
+            decision === "dismissed" || decision === "timed_out";
+          useChatStore.setState((s) => ({
+            tabs: s.tabs.map((t) =>
+              t.id === tabId
+                ? {
+                    ...t,
+                    planSuggestVisible: false,
+                    planSuggestReason: null,
+                    planSuggestDeadlineAt: null,
+                    planSuggestConsentSessionId: null,
+                    ...(markDismissed ? { planSuggestDismissed: true } : {}),
+                    ...(decision === "accepted"
+                      ? { sessionAgent: "plan" as const }
+                      : {}),
+                  }
+                : t,
+            ),
+          }));
+          break;
+        }
+
         case "plan.updated": {
           // OpenCode plan event — render as a structured plan widget
           const planMsg: ChatStreamMessage = {
@@ -843,12 +895,28 @@ export function useOpenCodeEvents() {
             },
           };
           chatStore._appendMessage(tabId, planMsg);
+
+          const steps = parsePlanSteps(data).map((s) => ({
+            text: s.text,
+            status: s.status,
+          }));
+          const title =
+            data && typeof data === "object" && typeof (data as { title?: unknown }).title === "string"
+              ? (data as { title: string }).title
+              : null;
+          chatStore.setPlanDraftFromEvent(steps, title, tabId);
+          // Formal plan lives in current-draft.md (agent write) — do not overwrite with checklist.
+          void chatStore.refreshPlanDraftFromDisk(tabId);
           break;
         }
 
         case "session.status": {
           const status = String(data?.status ?? "").toLowerCase();
           if (status === "completed" || status === "idle" || status === "error") {
+            const tab = chatStore.tabs.find((t) => t.id === tabId);
+            if (tab?.sessionAgent === "plan") {
+              void chatStore.refreshPlanDraftFromDisk(tabId);
+            }
             // Backup path: if sendPrompt hung (tool blocked), chat:complete never
             // fires and isStreaming stays true — blocking the next user message.
             window.setTimeout(() => {
@@ -912,7 +980,7 @@ export function useOpenCodeEvents() {
     });
 
     // ─── Chat Complete Handler ───
-    const unsubComplete = window.electronAPI.onChatComplete(({ tabId, success, error, tokenUsage, contextBreakdown, categorySchema, promptStale }) => {
+    const unsubComplete = window.electronAPI.onChatComplete(({ tabId, success, error, tokenUsage, contextBreakdown, categorySchema, promptStale, planDraftMissing }) => {
       const chatStore = useChatStore.getState();
 
       if (!success && error) {
@@ -921,6 +989,10 @@ export function useOpenCodeEvents() {
         toast.error(error);
       } else {
         notifyDesktopForTab("turn_complete", tabId, "shell.notify.replyFinished");
+      }
+
+      if (success && planDraftMissing) {
+        toast.message(i18n.t("chat.planWorkflow.draftMissingRedirect"));
       }
 
       if (tokenUsage) {
@@ -939,6 +1011,11 @@ export function useOpenCodeEvents() {
       setTimeout(() => {
         chatStore._setStreaming(tabId, false);
       }, 50);
+
+      const tab = chatStore.tabs.find((t) => t.id === tabId);
+      if (tab?.sessionAgent === "plan") {
+        void chatStore.refreshPlanDraftFromDisk(tabId);
+      }
 
       if (hasTexChangesRef.current.get(tabId)) {
         const docState = useDocumentStore.getState();

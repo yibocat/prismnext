@@ -6,12 +6,12 @@ import { settingsPanelSlotTitle } from "@/lib/settings/settings-panel-slots";
 import { i18n } from "@/lib/i18n";
 
 export function isFileTabDirty(tab: RightTab): boolean {
-  if (tab.kind !== "file" || !tab.fileId) return false;
+  if ((tab.kind !== "file" && tab.kind !== "research-plan") || !tab.fileId) return false;
   return useDocumentStore.getState().isFileDirty(tab.fileId);
 }
 
 export function isTabDirty(tab: RightTab, dirtyFileIds?: Set<string>): boolean {
-  if (tab.kind === "file" && tab.fileId) {
+  if ((tab.kind === "file" || tab.kind === "research-plan") && tab.fileId) {
     return dirtyFileIds?.has(tab.fileId) ?? isFileTabDirty(tab);
   }
   if (tab.kind === "literature") {

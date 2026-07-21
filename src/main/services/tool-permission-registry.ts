@@ -79,6 +79,7 @@ export const TOOL_PERMISSION_REGISTRY: Record<string, ToolPermissionEntry> = {
   "literature-search": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "literature-read": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "literature-read-pdf": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
+  "literature-intensive-reading": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "literature-stage": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "literature-add": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
   "literature-delete": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: DESTRUCTIVE },
@@ -90,6 +91,7 @@ export const TOOL_PERMISSION_REGISTRY: Record<string, ToolPermissionEntry> = {
   "latex-compile": { permissionGroup: "shell", confirmUx: "none", rules: SHELL },
   "research-brief-read": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "research-brief-update": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
+  "suggest-plan": { permissionGroup: "interactive", confirmUx: "none", rules: READ_ONLY },
   "experiment-log": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
   // experiment-run spawns a PTY (subprocess) — must follow SHELL rules.
   "experiment-run": { permissionGroup: "shell", confirmUx: "command", rules: SHELL },

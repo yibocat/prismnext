@@ -80,9 +80,32 @@ describe("experts-sync", () => {
     );
     expect(md).toContain("mode: primary");
     expect(md).toContain("peer-reviewer: allow");
-    expect(md).toContain('*: deny');
+    // Unquoted `*: deny` is invalid YAML (alias) — must be quoted so OpenCode can parse task rules.
+    expect(md).toContain('"*": deny');
+    expect(md).not.toMatch(/^\s*\*: deny\s*$/m);
     expect(md).toContain("## Available experts (via Task)");
     expect(md).toContain("`peer-reviewer` — Peer Reviewer:");
+  });
+
+  it("quotes task wildcard so frontmatter is valid YAML for OpenCode", () => {
+    const md = renderOrchestratorAgentMarkdown(
+      {
+        id: "research-prism",
+        name: "prismnext",
+        description: "test",
+        builtin: true,
+        enabled: true,
+        permission: {},
+      },
+      "body",
+      [{ id: "research-design-coach", name: "Coach", description: "d" }],
+    );
+    const fm = md.split("---")[1] ?? "";
+    // yaml package treats bare `*: deny` as an alias — OpenCode then drops task allows.
+    expect(fm).toContain('"*": deny');
+    expect(fm).toContain("research-design-coach: allow");
+    expect(fm).toContain("general: deny");
+    expect(fm).not.toMatch(/^\s*\*: deny\s*$/m);
   });
 
   it("buildTaskPermissionBlock denies by default", () => {

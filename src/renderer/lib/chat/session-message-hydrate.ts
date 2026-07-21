@@ -3,6 +3,7 @@ import {
   isToolResultUserMessage,
 } from "@/components/modules/chat/chat-turns";
 import { mapOpenCodePartToBlocks } from "@/lib/chat/message-parts";
+import { mergePlanUiEvents, stripPlanControlTurns } from "@/lib/chat/plan-ui-events";
 import { sanitizeUserContentBlocksForDisplay } from "@/lib/chat/user-message-display";
 import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
 
@@ -136,6 +137,18 @@ export async function hydrateSessionMessages(
     const displays = await window.electronAPI.sessionGetUserDisplays(projectPath, sessionId);
     if (displays?.length) {
       filtered = applyUserDisplaySnapshots(filtered, displays);
+    }
+  } catch { /* best-effort */ }
+
+  // Remove silent Approve/Deny user kicks only (keep Build execution assistants).
+  filtered = stripPlanControlTurns(filtered);
+
+  try {
+    const planEvents = await window.electronAPI.sessionGetPlanEvents(projectPath, sessionId);
+    // Decisions only — Created Plan renders inline after write/edit tools.
+    const decisions = planEvents?.filter((e) => e.kind === "plan-decision") ?? [];
+    if (decisions.length) {
+      filtered = mergePlanUiEvents(filtered, decisions);
     }
   } catch { /* best-effort */ }
 

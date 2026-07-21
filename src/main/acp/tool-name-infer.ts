@@ -131,7 +131,7 @@ export function resolveLiteratureToolTitle(title: string): string | null {
 const PRISM_TOOL_NAMES = new Set([
   "question", "bash", "delete", "move",
   "literature-search", "literature-stage", "literature-add",
-  "literature-read", "literature-read-pdf", "literature-export-bib",
+  "literature-read", "literature-read-pdf", "literature-intensive-reading", "literature-export-bib",
   "literature-delete", "citation-health", "latex-root", "latex-compile",
   "experiment-log", "experiment-run", "results-snapshot", "provenance-query",
 ]);

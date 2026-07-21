@@ -55,22 +55,25 @@ export function isOpencodeBuiltinTaskSubagent(subagentId: string): boolean {
 /**
  * Deny Task → OpenCode built-in subagent on primary orchestrator sessions.
  *
- * `subagentId` is null/empty when the agent calls `task({ prompt })` WITHOUT an
- * explicit `subagent_type`. OpenCode then spawns the DEFAULT subagent (`general`),
- * which is a built-in — so a missing id MUST be treated as `general` and denied.
- * Without this, the orchestrator bypasses the gate entirely by omitting the
- * subagent type (the null-hole that let agents use @general instead of tools).
+ * When `subagentId` is missing, do **not** deny here. OpenCode often asks ACP
+ * permission before `subagent_type` is visible on the payload (empty rawInput);
+ * false-denying that case kills legitimate Expert Tasks (e.g. research-design-coach).
+ * Built-ins without an explicit type still hit OpenCode `permission.task`
+ * (`"*": deny` + `general: deny`) after ACP allows.
  */
 export function shouldDenyOrchestratorBuiltinTask(
   subagentId: string | null | undefined,
 ): boolean {
-  if (!subagentId) return true; // missing subagent_type → OpenCode default = `general` → deny
+  if (!subagentId) return false;
   return isOpencodeBuiltinTaskSubagent(subagentId);
 }
 
 export {
+  formatExpertTaskCancelledMessage,
   formatOrchestratorBuiltinTaskDeniedMessage,
+  formatPlanModeExpertTaskDeniedMessage,
   isOpaqueTaskCancelledResult,
+  resolveOpaqueTaskCancelledDisplay,
 } from "../../shared/task-deny-message";
 
 /** Orchestrator Task allowlist — deny OpenCode built-ins + wildcard; allow prismnext experts only. */

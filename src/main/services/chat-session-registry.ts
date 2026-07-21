@@ -105,6 +105,24 @@ export function isSessionIntensiveBibkey(sessionId: string | undefined, bibkey: 
   return set.has(bibkey.trim());
 }
 
+/** Add one bibkey to the intensive-reading allowlist; returns the new list. */
+export function addSessionIntensiveBibkey(sessionId: string, bibkey: string): string[] {
+  const key = bibkey.trim();
+  if (!sessionId.trim() || !key) return getSessionIntensiveBibkeys(sessionId);
+  const next = [...new Set([...getSessionIntensiveBibkeys(sessionId), key])];
+  setSessionIntensiveBibkeys(sessionId, next);
+  return next;
+}
+
+/** Remove one bibkey from the intensive-reading allowlist; returns the new list. */
+export function removeSessionIntensiveBibkey(sessionId: string, bibkey: string): string[] {
+  const key = bibkey.trim();
+  if (!sessionId.trim() || !key) return getSessionIntensiveBibkeys(sessionId);
+  const next = getSessionIntensiveBibkeys(sessionId).filter((k) => k !== key);
+  setSessionIntensiveBibkeys(sessionId, next);
+  return next;
+}
+
 /** @internal */
 export function _resetChatSessionRegistryForTests(): void {
   sessionToTab.clear();

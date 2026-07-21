@@ -134,3 +134,12 @@ actionRegistry.register("undo-last-restore", async () => {
 
   return "Restore undone. Workspace files and chat history are back to their pre-restore state.";
 });
+
+// ── enter-plan-mode ──
+// Prefer slash Modes → Plan (immediate mode switch, no command chip / no send).
+// Kept for any leftover command chip that still carries this action.
+actionRegistry.register("enter-plan-mode", async () => {
+  const { useChatStore } = await import("@/stores/chat-store");
+  useChatStore.getState().setSessionAgent("plan");
+  return "Plan mode on — draft a plan first; Approve & Execute when ready.";
+});

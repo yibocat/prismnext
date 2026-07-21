@@ -143,6 +143,16 @@ describe("inline composer query", () => {
     expect(options.map((o) => o.kind)).toEqual(["command", "skill", "mcp"]);
   });
 
+  it("lists Plan under Modes, not Commands", () => {
+    const options = buildSlashOptions("", [], [], []);
+    expect(options.some((o) => o.kind === "mode" && o.mode.id === "plan")).toBe(true);
+    expect(options.some((o) => o.kind === "command")).toBe(false);
+
+    const planQuery = buildSlashOptions("plan", [], [], []);
+    expect(planQuery.map((o) => o.kind)).toEqual(["mode"]);
+    expect(planQuery[0]).toMatchObject({ kind: "mode", mode: { id: "plan", label: "Plan" } });
+  });
+
   it("appends show-more when a slash section exceeds its limit", () => {
     const skills = Array.from({ length: 12 }, (_, i) => ({
       id: `skill-${i}`,
@@ -152,6 +162,8 @@ describe("inline composer query", () => {
     const limited = buildSlashOptions("", [], skills, []);
     expect(limited.filter((o) => o.kind === "skill")).toHaveLength(8);
     expect(limited.some((o) => o.kind === "show-more" && o.section === "skill")).toBe(true);
+    // Empty skills/commands/mcps still append Modes at the end
+    expect(limited.some((o) => o.kind === "mode" && o.mode.id === "plan")).toBe(true);
 
     const expanded = buildSlashOptions("", [], skills, [], new Set(["skill"]));
     expect(expanded.filter((o) => o.kind === "skill")).toHaveLength(12);

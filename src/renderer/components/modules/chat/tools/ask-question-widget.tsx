@@ -15,13 +15,13 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   StatusIcon,
-  param,
   TOOL_PANEL_CLASS,
   TOOL_PANEL_HEADER_CLASS,
   TOOL_INLINE_ROW_CLASS,
   TOOL_INLINE_LABEL_CLASS,
   TOOL_EXPANDED_CONTENT_CLASS,
 } from "./shared";
+import { extractQuestionPrompt } from "@/lib/chat/normalize-question-options";
 
 /** Extract the human-readable answer string from toolResult.content. */
 function parseAnswer(content: unknown): string {
@@ -33,6 +33,18 @@ function parseAnswer(content: unknown): string {
     return String(obj.output || obj.answer || obj.text || "");
   }
   return String(content);
+}
+
+async function writeQuestionAnswer(answer: string): Promise<boolean> {
+  const tabId = useChatStore.getState().activeTabId;
+  const sessionId = useChatStore.getState().tabs.find((t) => t.id === tabId)?.sessionId;
+  if (!sessionId) return false;
+  try {
+    const result = await window.electronAPI.chatAnswerQuestion(sessionId, answer);
+    return !!result?.success;
+  } catch {
+    return false;
+  }
 }
 
 export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
@@ -55,14 +67,12 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
   const isError = toolResult?.is_error;
   const hasResult = toolResult?.content != null;
 
-  const isMulti = toolUse.input?.multiSelect === true;
-  const question = param(toolUse.input, "question") || "";
-  const options: string[] = toolUse.input?.options || [];
+  const { question, options, multiSelect: isMulti } = extractQuestionPrompt(toolUse.input);
 
   // Derived from persistent toolResult — survives tab switches / restart
   const isAlreadyAnswered = hasResult && !isError;
   const persistedAnswer = isAlreadyAnswered ? parseAnswer(toolResult!.content) : "";
-  const isPrismQuestion = toolUse.name === "question";
+  const isPrismQuestion = (toolUse.name || "").toLowerCase() === "question";
   const needsUserAnswer = !isAlreadyAnswered && (isPrismQuestion || (!isStreaming && toolResult)) && !isError;
 
   // Reset ephemeral selection when a new question arrives
@@ -73,55 +83,62 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
     setSending(false);
   }, [toolUse.id]);
 
+  // No choices → open Other so the user can type immediately
+  useEffect(() => {
+    if (!needsUserAnswer || options.length > 0) return;
+    setUseCustom(true);
+    requestAnimationFrame(() => customInputRef.current?.focus());
+  }, [toolUse.id, needsUserAnswer, options.length]);
+
+  const selectedLabels = options
+    .filter((o) => selected.has(o.key))
+    .map((o) => o.label);
   const selectedLabel = isMulti
-    ? [...selected].join(", ")
-    : [...selected][0] || customText;
+    ? selectedLabels.join(", ")
+    : selectedLabels[0] || customText;
   const answerLabel = isAlreadyAnswered ? persistedAnswer : selectedLabel;
 
   const hasSelection = isMulti
     ? selected.size > 0
-    : selected.size === 1 || (useCustom && customText.trim());
+    : selected.size === 1 || (useCustom && customText.trim().length > 0);
 
   // ── Handlers ──
 
-  const toggleOption = (opt: string) => {
-    if (!needsUserAnswer) return;
+  const toggleOption = (key: string) => {
+    if (!needsUserAnswer || sending) return;
     setUseCustom(false);
     setSelected((prev) => {
       const next = new Set(prev);
       if (isMulti) {
-        next.has(opt) ? next.delete(opt) : next.add(opt);
+        next.has(key) ? next.delete(key) : next.add(key);
       } else {
-        if (next.has(opt)) { next.clear(); } else { next.clear(); next.add(opt); }
+        if (next.has(key)) { next.clear(); } else { next.clear(); next.add(key); }
       }
       return next;
     });
   };
 
   const handleCustomCheck = (checked: boolean | "indeterminate") => {
-    if (!needsUserAnswer) return;
+    if (!needsUserAnswer || sending) return;
     setUseCustom(!!checked);
     if (checked) { setSelected(new Set()); }
     requestAnimationFrame(() => customInputRef.current?.focus());
   };
 
-  const handleSend = () => {
-    if (!needsUserAnswer || !hasSelection) return;
+  const handleSend = async () => {
+    if (!needsUserAnswer || !hasSelection || sending) return;
     setSending(true);
     const answer = useCustom ? customText.trim() : selectedLabel;
-    const tabId = useChatStore.getState().activeTabId;
-    const sessionId = useChatStore.getState().tabs.find((t) => t.id === tabId)?.sessionId;
-    if (!sessionId) { setSending(false); return; }
-
-    window.electronAPI.chatAnswerQuestion(sessionId, answer).catch(() => {
-      setSending(false);
-    });
+    const ok = await writeQuestionAnswer(answer);
+    if (!ok) setSending(false);
   };
 
-  const handleCancel = () => {
-    setSelected(new Set());
-    setCustomText("");
-    setUseCustom(false);
+  /** Dismiss the question and unblock the polling tool (writes Cancelled). */
+  const handleCancel = async () => {
+    if (!needsUserAnswer || sending) return;
+    setSending(true);
+    const ok = await writeQuestionAnswer("Cancelled");
+    if (!ok) setSending(false);
   };
 
   // ── Render ──
@@ -186,7 +203,9 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
         <StatusIcon isLoading={!hasResult} isError={!!isError} />
         <span className="text-muted-foreground text-[length:var(--font-chat-meta)] shrink-0">{toolName}</span>
         <MessageCircleQuestionIcon className="size-3.5 text-info" />
-        <span className="font-medium text-foreground/90">Choose an option</span>
+        <span className="font-medium text-foreground/90">
+          {options.length > 0 ? "Choose an option" : "Your answer"}
+        </span>
         {isMulti && (
           <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">
             ({selected.size > 0 ? `${selected.size} selected` : "multi"})
@@ -204,18 +223,20 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
       {/* Options */}
       {options.length > 0 && (
         <div className="px-3 py-1.5 flex flex-col gap-px">
-          {options.map((opt, i) => {
-            const isSelected = selected.has(opt);
+          {options.map((opt) => {
+            const isSelected = selected.has(opt.key);
             return (
               <button
-                key={i}
+                key={opt.key}
                 type="button"
+                disabled={sending}
                 className={cn(
                   "flex items-center gap-2 rounded-md px-2 py-1.5 text-left transition-all",
                   "hover:bg-muted/50 cursor-pointer",
                   isSelected && "bg-info/8 ring-1 ring-inset ring-info/25",
+                  sending && "opacity-60 pointer-events-none",
                 )}
-                onClick={() => toggleOption(opt)}
+                onClick={() => toggleOption(opt.key)}
               >
                 {isMulti ? (
                   <Checkbox checked={isSelected} className="size-3.5 pointer-events-none" tabIndex={-1} />
@@ -226,8 +247,20 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
                     <CircleIcon className="size-4 shrink-0 text-muted-foreground/40" />
                   )
                 )}
-                <span className={cn("select-none", isSelected ? "text-foreground font-medium" : "text-foreground/80")}>
-                  {opt}
+                <span className="min-w-0 flex-1">
+                  <span
+                    className={cn(
+                      "block select-none",
+                      isSelected ? "text-foreground font-medium" : "text-foreground/80",
+                    )}
+                  >
+                    {opt.label}
+                  </span>
+                  {opt.description ? (
+                    <span className="mt-0.5 block select-none text-[length:var(--font-chat-meta)] text-muted-foreground">
+                      {opt.description}
+                    </span>
+                  ) : null}
                 </span>
               </button>
             );
@@ -242,11 +275,14 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
             "flex items-center gap-2 rounded-md px-2 py-1.5 transition-all",
             "hover:bg-muted/50 cursor-pointer",
             useCustom && "bg-muted/20",
+            sending && "opacity-60 pointer-events-none",
           )}
           onClick={() => handleCustomCheck(!useCustom)}
         >
           <Checkbox checked={useCustom} className="size-3.5 pointer-events-none" tabIndex={-1} />
-          <span className="text-muted-foreground">Other — type your own</span>
+          <span className="text-muted-foreground">
+            {options.length > 0 ? "Other — type your own" : "Type your answer"}
+          </span>
         </div>
         {useCustom && (
           <div className="mt-1 ml-8">
@@ -254,8 +290,9 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
               ref={customInputRef}
               type="text"
               value={customText}
+              disabled={sending}
               onChange={(e) => setCustomText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && hasSelection) handleSend(); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && hasSelection) void handleSend(); }}
               placeholder="Type your answer…"
               className="h-8 text-[length:var(--font-code)]"
             />
@@ -265,11 +302,22 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
 
       {/* Action bar */}
       <div className={cn("flex items-center justify-end gap-1.5 px-3 py-1.5", TOOL_PANEL_HEADER_CLASS)}>
-        <Button type="button" variant="ghost" size="xs" disabled={!hasSelection} onClick={handleCancel}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          disabled={sending}
+          onClick={() => void handleCancel()}
+        >
           <XIcon className="size-3" />
-          Clear
+          Cancel
         </Button>
-        <Button type="button" size="xs" disabled={!hasSelection || sending} onClick={handleSend}>
+        <Button
+          type="button"
+          size="xs"
+          disabled={!hasSelection || sending}
+          onClick={() => void handleSend()}
+        >
           <SendIcon className="size-3" />
           {sending ? "Sending…" : "Send"}
         </Button>

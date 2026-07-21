@@ -9,11 +9,17 @@ import { promptManager } from "../prompts";
 import { buildPromptContext } from "../prompts/context";
 import { CONTEXT_CATEGORY_SCHEMA } from "../services/context-constants";
 import {
+  appendPlanDecisionEvent,
   appendUserDisplay,
   deleteSessionDisplays,
+  getPlanEvents,
+  getSessionDisplayBackup,
   getUserDisplays,
-  restoreUserDisplays,
+  markLatestPlanArtifactDiscarded,
+  restoreSessionDisplayEntry,
   truncateUserDisplays,
+  upsertPlanArtifactEvent,
+  type PlanUiEvent,
   type UserDisplayContent,
 } from "../services/session-display-store";
 import { cancelAiCommandForSession } from "../services/ai-pty";
@@ -31,10 +37,19 @@ import {
 } from "../../shared/opencode-provider";
 import { buildSessionCitationsTurnAppendix } from "../services/session-citations-context";
 import { buildSessionCiteAuditTurnAppendix } from "../services/session-cite-audit-context";
+import {
+  buildPlanModeTurnAppendix,
+  planDraftMissingRedirectNote,
+} from "../prompts/per-turn/plan-mode";
+import {
+  sessionDraftMetaShowsWrite,
+  snapshotSessionDraftMeta,
+} from "../services/research-plan-service";
 import { getQuestionsBridgeRoot } from "../services/prism-bridge-paths";
 import { getSettings } from "../services/settings";
 import { emitChatStream } from "../services/chat-stream-notify";
 import type { ChatPreparePhase } from "../../shared/chat-prepare-phases";
+import { resolveSessionAgent } from "../../shared/session-agent";
 
 const log = createLogger("chat-ipc", "agent");
 
@@ -72,7 +87,10 @@ function syncIntensiveBibkeysForSession(
 
 /** Full SQLite snapshot before session:truncateToTurn — used by session:undoTruncate. */
 const sessionTruncationBackups = new Map<string, SessionMessageBackup>();
-const sessionDisplayBackups = new Map<string, UserDisplayContent[]>();
+const sessionDisplayBackups = new Map<
+  string,
+  NonNullable<ReturnType<typeof getSessionDisplayBackup>>
+>();
 
 // ── Session context persistence ──────────────────────────────────
 
@@ -229,6 +247,60 @@ export function registerChatHandlers(): void {
     },
   );
 
+  ipcMain.handle(
+    "chat:setSessionAgent",
+    async (
+      _event,
+      args: { sessionId: string; agent: "build" | "plan" },
+    ) => {
+      const sessionId = args.sessionId?.trim();
+      if (!sessionId) {
+        return { success: false, error: "missing_session_id" };
+      }
+      try {
+        await getService().applySessionAgent(sessionId, args.agent);
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, error: err.message };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "chat:setPlanSuggestDismissed",
+    async (
+      _event,
+      args: { sessionId: string; dismissed: boolean },
+    ) => {
+      const sessionId = args.sessionId?.trim();
+      if (!sessionId) {
+        return { success: false, error: "missing_session_id" };
+      }
+      const { setPlanSuggestDismissed } = await import("../services/plan-suggest-bridge");
+      setPlanSuggestDismissed(sessionId, !!args.dismissed);
+      return { success: true };
+    },
+  );
+
+  ipcMain.handle(
+    "chat:resolvePlanSuggest",
+    async (
+      _event,
+      args: { sessionId: string; decision: "accepted" | "dismissed" | "timed_out" },
+    ) => {
+      const sessionId = args.sessionId?.trim();
+      if (!sessionId) {
+        return { success: false, error: "missing_session_id" };
+      }
+      const decision = args.decision;
+      if (decision !== "accepted" && decision !== "dismissed" && decision !== "timed_out") {
+        return { success: false, error: "invalid_decision" };
+      }
+      const { resolvePlanSuggestConsent } = await import("../services/plan-suggest-bridge");
+      return resolvePlanSuggestConsent(sessionId, decision);
+    },
+  );
+
   // ─── Send Prompt ───
   ipcMain.handle(
     "chat:send",
@@ -257,6 +329,7 @@ export function registerChatHandlers(): void {
         /** Composer includes ```paper …``` excerpt block(s) this turn. */
         hasPaperSnippets?: boolean;
         orchestratorId?: string | null;
+        sessionAgent?: "build" | "plan";
         selectedExpertIds?: string[];
         /** Vision images — sent as ACP ContentBlock::Image alongside the text prompt. */
         promptImages?: Array<{ mimeType: string; data: string; name: string; uri?: string }>;
@@ -486,17 +559,38 @@ export function registerChatHandlers(): void {
         }
       }
 
-      if (orchestratorId) {
+      const sessionAgent = resolveSessionAgent(args.sessionAgent);
+      // Plan wins over orchestrator for ACP agent key
+      if (sessionAgent === "plan") {
+        await service.applySessionAgent(sessionId, "plan");
+      } else if (orchestratorId) {
+        await service.applySessionAgent(sessionId, "build");
         try {
           await service.setConfigOption(sessionId, "agent", orchestratorId);
         } catch (err: any) {
-          log.debug(`setConfigOption agent not supported by this OpenCode version: ${err.message}`);
+          log.debug(`setConfigOption agent orchestrator failed: ${err.message}`);
         }
+      } else {
+        await service.applySessionAgent(sessionId, "build");
       }
 
       const citationsAppendix = buildSessionCitationsTurnAppendix(sessionId);
       const citeAuditAppendix = buildSessionCiteAuditTurnAppendix(sessionId);
-      const turnContextAppendix = [citationsAppendix, citeAuditAppendix].filter(Boolean).join("\n\n");
+      // Use the resolved sessionId (created above on first turn) — never args.sessionId,
+      // or the appendix would literally say drafts/SESSION_ID.md and the model invents names.
+      const planModeAppendix =
+        sessionAgent === "plan" ? buildPlanModeTurnAppendix(sessionId) : "";
+      const planDraftRedirect = service.consumePendingPlanDraftRedirect(sessionId);
+      const turnContextAppendix = [
+        citationsAppendix,
+        citeAuditAppendix,
+        planModeAppendix,
+        planDraftRedirect
+          ? `---\n**System note:** ${planDraftRedirect}\n---`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
       if (turnContextAppendix) {
         userPrompt = `${userPrompt}\n\n${turnContextAppendix}`;
       }
@@ -556,6 +650,7 @@ export function registerChatHandlers(): void {
         await service.ensureSessionHydrated(sessionId, cwd, args.projectPath);
       }
       let usage = null;
+      let planDraftMissingThisTurn = false;
       try {
         let resources:
           | Array<
@@ -615,9 +710,42 @@ export function registerChatHandlers(): void {
         // internal session/load re-bind runs. Never mint a replacement
         // session here — interrupt must keep the same session/history.
         if (isFirstSend) emitChatPrepare(tabId, "starting_model");
+        const planDraftBefore =
+          sessionAgent === "plan" && args.projectPath && sessionId
+            ? snapshotSessionDraftMeta(args.projectPath, sessionId)
+            : null;
         const result = await service.sendPrompt(sessionId, promptForModel, promptOpts);
         // Model may still be thinking — keep phase until first stream chunk
         // clears it in the renderer. Clear here only on hard failure paths.
+        if (planDraftBefore && args.projectPath && sessionId) {
+          let planDraftAfter = snapshotSessionDraftMeta(args.projectPath, sessionId);
+          if (sessionDraftMetaShowsWrite(planDraftBefore, planDraftAfter)) {
+            service.clearPendingPlanDraftRedirect(sessionId);
+          } else {
+            // Chat-only dump — auto-kick one silent write turn so Plan UI can activate.
+            const kickNote = planDraftMissingRedirectNote(sessionId);
+            log.warn("Plan turn ended without updating session draft — auto-kicking write", {
+              sessionId,
+              draft: planDraftAfter.relativePath,
+            });
+            try {
+              await service.sendPrompt(
+                sessionId,
+                `---\n**System note:** ${kickNote}\n---`,
+                promptOpts,
+              );
+              planDraftAfter = snapshotSessionDraftMeta(args.projectPath, sessionId);
+            } catch (kickErr: any) {
+              log.warn("Plan draft auto-kick failed", { error: kickErr?.message });
+            }
+            if (sessionDraftMetaShowsWrite(planDraftBefore, planDraftAfter)) {
+              service.clearPendingPlanDraftRedirect(sessionId);
+            } else {
+              service.setPendingPlanDraftRedirect(sessionId, kickNote);
+              planDraftMissingThisTurn = true;
+            }
+          }
+        }
         if (args.userDisplayContent?.length && args.projectPath && sessionId) {
           appendUserDisplay(args.projectPath, sessionId, args.userDisplayContent);
         }
@@ -761,6 +889,7 @@ export function registerChatHandlers(): void {
         contextBreakdown: fullBreakdown,
         categorySchema: CONTEXT_CATEGORY_SCHEMA,
         promptStale,
+        planDraftMissing: planDraftMissingThisTurn,
       });
     },
   );
@@ -998,10 +1127,8 @@ export function registerChatHandlers(): void {
       const backup = await service.backupSessionMessages(args.sessionId);
       sessionTruncationBackups.set(args.sessionId, backup);
       if (args.projectPath) {
-        sessionDisplayBackups.set(
-          args.sessionId,
-          getUserDisplays(args.projectPath, args.sessionId),
-        );
+        const backup = getSessionDisplayBackup(args.projectPath, args.sessionId);
+        if (backup) sessionDisplayBackups.set(args.sessionId, backup);
       }
 
       const result = await service.truncateSessionToTurn(args.sessionId, args.turnIndex);
@@ -1039,7 +1166,7 @@ export function registerChatHandlers(): void {
       sessionDisplayBackups.delete(args.sessionId);
 
       if (displayBackup && args.projectPath) {
-        restoreUserDisplays(args.projectPath, args.sessionId, displayBackup);
+        restoreSessionDisplayEntry(args.projectPath, args.sessionId, displayBackup);
       }
 
       const cwd = args.worktreePath || args.projectPath || "";
@@ -1072,6 +1199,51 @@ export function registerChatHandlers(): void {
       args: { projectPath: string; sessionId: string; content: UserDisplayContent },
     ) => {
       appendUserDisplay(args.projectPath, args.sessionId, args.content);
+      return { success: true };
+    },
+  );
+
+  ipcMain.handle(
+    "session:getPlanEvents",
+    async (_event, args: { projectPath: string; sessionId: string }) => {
+      return getPlanEvents(args.projectPath, args.sessionId);
+    },
+  );
+
+  ipcMain.handle(
+    "session:upsertPlanArtifact",
+    async (
+      _event,
+      args: {
+        projectPath: string;
+        sessionId: string;
+        event: Extract<PlanUiEvent, { kind: "plan-artifact" }>;
+      },
+    ) => {
+      upsertPlanArtifactEvent(args.projectPath, args.sessionId, args.event);
+      return { success: true };
+    },
+  );
+
+  ipcMain.handle(
+    "session:appendPlanDecision",
+    async (
+      _event,
+      args: {
+        projectPath: string;
+        sessionId: string;
+        event: Extract<PlanUiEvent, { kind: "plan-decision" }>;
+      },
+    ) => {
+      appendPlanDecisionEvent(args.projectPath, args.sessionId, args.event);
+      return { success: true };
+    },
+  );
+
+  ipcMain.handle(
+    "session:markPlanArtifactDiscarded",
+    async (_event, args: { projectPath: string; sessionId: string }) => {
+      markLatestPlanArtifactDiscarded(args.projectPath, args.sessionId);
       return { success: true };
     },
   );

@@ -52,7 +52,11 @@ export function getTabCloseConfirmation(tab: RightTab): TabCloseConfirmation | n
     };
   }
 
-  if (tab.kind === "file" && tab.fileId && isFileTabDirty(tab)) {
+  if (
+    (tab.kind === "file" || tab.kind === "research-plan")
+    && tab.fileId
+    && isFileTabDirty(tab)
+  ) {
     const label = tab.title || tab.fileId;
     return {
       tabId: tab.id,
@@ -91,7 +95,12 @@ export function getBatchTabCloseConfirmation(tabs: RightTab[]): TabCloseConfirma
     };
   }
 
-  const dirtyFile = tabs.find((t) => t.kind === "file" && t.fileId && isFileTabDirty(t));
+  const dirtyFile = tabs.find(
+    (t) =>
+      (t.kind === "file" || t.kind === "research-plan")
+      && t.fileId
+      && isFileTabDirty(t),
+  );
   if (dirtyFile) {
     return getTabCloseConfirmation(dirtyFile);
   }

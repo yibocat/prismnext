@@ -112,8 +112,8 @@ export const BUILTIN_COMMANDS: CommandDef[] = [
     order: 3,
     enabled: true,
   },
-
   // ── Action commands (has `action` — runs locally with chat feedback) ──
+  // Note: Plan is a composer Mode (slash panel → Modes), not a Command.
 
   {
     id: "builtin:compile",

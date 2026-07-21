@@ -57,6 +57,15 @@ import { loadDraftParts } from "./draft-utils";
 import { useChatStore } from "@/stores/chat-store";
 import type { Extension } from "@codemirror/state";
 
+/** Clear the `/…` query and enter Plan mode without inserting a command chip. */
+function applyEnterPlanFromSlash(view: EditorView, q: ComposerQuery): void {
+  view.dispatch({
+    changes: { from: q.from, to: q.to, insert: "" },
+    selection: { anchor: q.from },
+  });
+  useChatStore.getState().setSessionAgent("plan");
+}
+
 function collectInsertedText(changes: import("@codemirror/state").ChangeSet): string {
   let text = "";
   changes.iterChanges((_fromA, _toA, _fromB, _toB, inserted) => {
@@ -291,6 +300,13 @@ function insertFromDropdown(
 
   const option = slashOptions[index];
   if (!option || option.kind === "show-more") return;
+
+  if (option.kind === "mode") {
+    if (option.mode.id === "plan") {
+      applyEnterPlanFromSlash(view, q);
+    }
+    return;
+  }
 
   if (option.kind === "command") {
     const cmd = option.command;
@@ -765,6 +781,19 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
           expandSlashSection(option.section);
           return;
         }
+        if (option.kind === "mode") {
+          if (option.mode.id === "plan") {
+            const view = viewRef.current;
+            const q = activeQueryRef.current;
+            if (view && q) {
+              applyEnterPlanFromSlash(view, q);
+              emitChange(view);
+            }
+            closeDropdown();
+            viewRef.current?.focus();
+          }
+          return;
+        }
         if (option.kind === "command") {
           const cmd = option.command;
           insertAtQuery({
@@ -793,7 +822,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
           serverName: option.mcp.name,
         });
       },
-      [insertAtQuery, expandSlashSection],
+      [insertAtQuery, expandSlashSection, emitChange, closeDropdown],
     );
 
     const selectDropdownItem = useCallback(

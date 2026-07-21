@@ -15,7 +15,16 @@ export type AppMode = string;
  * ModeDefinition entries in modeRegistry. The dashboard sentinel is the only
  * value not backed by a ModeDefinition — it represents "no mode active."
  */
-export type RightToolbarTab = "dashboard" | "files" | "git" | "browser" | "texworkspace" | "terminal" | "literature" | "experiments";
+export type RightToolbarTab =
+  | "dashboard"
+  | "files"
+  | "research-plan"
+  | "git"
+  | "browser"
+  | "texworkspace"
+  | "terminal"
+  | "literature"
+  | "experiments";
 export type TexworkspaceViewMode = "split" | "tex" | "pdf";
 
 export type TabType = "file" | "pdf";

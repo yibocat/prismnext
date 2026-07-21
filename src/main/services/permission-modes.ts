@@ -1,4 +1,8 @@
 import {
+  resolveEffectivePermissionRule,
+  type SessionAgent,
+} from "../../shared/session-agent";
+import {
   buildPermissionRulesForMode,
   getToolPermissionEntry,
 } from "./tool-permission-registry";
@@ -165,11 +169,23 @@ export function extractPermissionToolName(params: Record<string, unknown>): stri
 
 export type PermissionAction = "prompt" | "allow" | "deny";
 
-/** Decide how to handle a permission request for the current mode. */
+function ruleToPermissionAction(rule: OpenCodePermissionRule): PermissionAction {
+  if (rule === "allow") return "allow";
+  if (rule === "deny") return "deny";
+  return "prompt";
+}
+
+/** Decide how to handle a permission request for the current mode (and optional session agent). */
 export function resolvePermissionAction(
   mode: PermissionMode,
   toolName: string,
+  agent?: SessionAgent,
+  ctx?: { filePath?: string | null; projectRoot?: string | null; bashCommand?: string | null },
 ): PermissionAction {
+  if (agent && agent !== "build") {
+    return ruleToPermissionAction(resolveEffectivePermissionRule(mode, agent, toolName, ctx));
+  }
+
   const rule = getPermissionRuleForTool(mode, toolName);
   if (rule === "allow") return "allow";
   if (rule === "deny") return "deny";
@@ -211,8 +227,9 @@ export type BridgeToolCallSyncAction = "auto_allow" | "deny" | "prompt";
 export function resolveBridgeToolCallSyncAction(
   mode: PermissionMode,
   toolName: string,
+  agent?: SessionAgent,
 ): BridgeToolCallSyncAction {
-  const action = resolvePermissionAction(mode, toolName);
+  const action = resolvePermissionAction(mode, toolName, agent);
   if (action === "allow") return "auto_allow";
   if (action === "deny") return "deny";
   return "prompt";

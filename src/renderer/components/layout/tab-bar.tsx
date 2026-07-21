@@ -124,7 +124,12 @@ export const TabBar = memo(function TabBar({
               )}
               onClick={() => onSelect(tab.id)}
               onDoubleClick={() => {
-                if (tab.kind === "file" && tab.isPreview) onPinTab?.(tab.id);
+                if (
+                  (tab.kind === "file" || tab.kind === "research-plan")
+                  && tab.isPreview
+                ) {
+                  onPinTab?.(tab.id);
+                }
               }}
             >
               {tabIcon(tab, dirtyFileIds, terminalSessions[tab.id]?.status)}

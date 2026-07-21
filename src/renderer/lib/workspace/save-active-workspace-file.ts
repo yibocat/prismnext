@@ -21,7 +21,9 @@ export function saveActiveWorkspaceFile(): boolean {
   const fileId = activeTab.fileId;
   if (
     fileId &&
-    (activeTab.kind === "file" || activeTab.kind === "texworkspace") &&
+    (activeTab.kind === "file"
+      || activeTab.kind === "texworkspace"
+      || activeTab.kind === "research-plan") &&
     useDocumentStore.getState().isFileDirty(fileId)
   ) {
     void useDocumentStore.getState().saveFile(fileId);

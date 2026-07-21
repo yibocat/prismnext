@@ -3,8 +3,10 @@ import {
   buildTaskPermissionBlock,
   extractTaskSubagentType,
   formatOrchestratorBuiltinTaskDeniedMessage,
+  formatPlanModeExpertTaskDeniedMessage,
   isOpaqueTaskCancelledResult,
   isOpencodeBuiltinTaskSubagent,
+  resolveOpaqueTaskCancelledDisplay,
   shouldDenyOrchestratorBuiltinTask,
 } from "../../src/main/services/task-orchestrator-gate";
 
@@ -33,13 +35,13 @@ describe("task-orchestrator-gate", () => {
     expect(shouldDenyOrchestratorBuiltinTask("citation-auditor")).toBe(false);
   });
 
-  it("shouldDenyOrchestratorBuiltinTask denies null/empty subagent (the null-hole fix)", () => {
-    // OpenCode defaults to `general` when subagent_type is omitted — a missing id
-    // MUST be treated as a built-in and denied, or the orchestrator bypasses the
-    // gate by calling task({ prompt }) with no subagent_type.
-    expect(shouldDenyOrchestratorBuiltinTask(null)).toBe(true);
-    expect(shouldDenyOrchestratorBuiltinTask(undefined)).toBe(true);
-    expect(shouldDenyOrchestratorBuiltinTask("")).toBe(true);
+  it("shouldDenyOrchestratorBuiltinTask does not false-deny when subagent type is not yet visible", () => {
+    // Permission payloads often omit subagent_type — denying here killed Expert Tasks.
+    // OpenCode permission.task ("*" / general deny) still blocks bare @general.
+    expect(shouldDenyOrchestratorBuiltinTask(null)).toBe(false);
+    expect(shouldDenyOrchestratorBuiltinTask(undefined)).toBe(false);
+    expect(shouldDenyOrchestratorBuiltinTask("")).toBe(false);
+    expect(shouldDenyOrchestratorBuiltinTask("research-design-coach")).toBe(false);
   });
 
   it("formatOrchestratorBuiltinTaskDeniedMessage clarifies not a user cancel", () => {
@@ -47,6 +49,23 @@ describe("task-orchestrator-gate", () => {
     expect(msg).toContain("@explore");
     expect(msg).toMatch(/not a user cancel/i);
     expect(msg).toContain("literature-stage");
+  });
+
+  it("formatPlanModeExpertTaskDeniedMessage points to Build + brief tools", () => {
+    const msg = formatPlanModeExpertTaskDeniedMessage("research-design-coach");
+    expect(msg).toContain("@research-design-coach");
+    expect(msg).toMatch(/Plan mode/i);
+    expect(msg).toMatch(/switch to Build/i);
+    expect(msg).not.toMatch(/Built-in Task/i);
+  });
+
+  it("resolveOpaqueTaskCancelledDisplay does not mislabel experts as builtin", () => {
+    expect(resolveOpaqueTaskCancelledDisplay("explore")).toContain("Built-in Task @explore");
+    expect(resolveOpaqueTaskCancelledDisplay(null)).toContain("Built-in Task @general");
+    const expert = resolveOpaqueTaskCancelledDisplay("research-design-coach");
+    expect(expert).toContain("@research-design-coach");
+    expect(expert).not.toMatch(/Built-in Task/i);
+    expect(expert).toMatch(/cancelled before the expert finished/i);
   });
 
   it("isOpaqueTaskCancelledResult detects OpenCode cancel JSON", () => {

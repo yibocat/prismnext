@@ -2,10 +2,8 @@ import { PAPER_EXTRACT_AGENT_UI_HINT } from "../../../shared/paper-extract";
 import { TOOL_NAMES } from "../../../shared/tool-names";
 
 /**
- * Per-turn intensive reading block (L4 user prompt sidecar).
- *
- * Lives under `prompts/per-turn/` — not `prompts/modules/` (Knowledge Modules registry).
- * Built from the active chat tab's intensive paper list; appended each `chat:send`.
+ * Per-turn intensive reading block (L4) — bibkey list + short evidence rules.
+ * Gate is HARD in literature-bridge; do not reprint manuals here.
  */
 
 export interface IntensivePaper {
@@ -35,47 +33,30 @@ export function buildIntensiveReadingInstruction(
   });
 
   const rules: string[] = [
-    "**Evidence priority:**",
-    "- Intensive papers have extracted Markdown under `.prismnext/library/extract/`.",
-    `- \`${readPdfTool}\` reads that extract (optional \`pages=\`, \`query=\`).`,
-    "- Judge whether the user message already contains enough text to answer.",
+    `- Extracts live under \`.prismnext/library/extract/\`; use \`${readPdfTool}\` (optional \`pages=\` / \`query=\`). Gate is enforced by the tool.`,
+    "- Cite library papers as **`[@bibkey]`**; add `p.X` when quoting PDF / excerpt text.",
   ];
 
   if (options?.hasPaperSnippets) {
     rules.push(
-      "- **This turn:** the message includes ```paper …``` **excerpt block(s)** the user selected from the PDF. Treat them as the **primary source** for questions about those passages.",
-      "- If the excerpt alone suffices (explain this formula, summarize this paragraph, etc.), answer **directly** — do not call `" +
+      "- This turn includes ```paper``` excerpt(s) — prefer them; call `" +
         readPdfTool +
-        "` just to repeat the same text.",
-      "- Call `" +
-        readPdfTool +
-        "` when you **genuinely need context outside** the excerpt: earlier/later pages, other sections, paper-wide claims, symbol definitions elsewhere, or cross-references.",
+        "` only if you need context outside the excerpt.",
     );
   } else {
     rules.push(
-      "- When the question is about paper **content** and no excerpt is provided, use `" +
-        readPdfTool +
-        "` with the bibkey instead of guessing from abstract or metadata alone.",
-      "- Narrow with `pages=` or `query=` before pulling a long extract.",
+      `- For paper **content** questions, call \`${readPdfTool}\` instead of guessing from abstract alone.`,
     );
   }
 
   rules.push(
-    "- When quoting or paraphrasing PDF content, cite page numbers as `p.X`.",
-    "- In your chat reply, cite the library paper inline as **`[@bibkey]`** with the exact cite key from this list — e.g. `… as shown [@Vaswani2017] (p. 4).`",
-    "- Combine `[@bibkey]` with `p.X` when the answer comes from `" + readPdfTool + "` or a ```paper``` excerpt.",
-    `- If \`${readPdfTool}\` reports the extract is not ready, tell the user to run ${PAPER_EXTRACT_AGENT_UI_HINT} and retry.`,
-    "- These papers stay in intensive mode for the session even without @-mention each turn.",
+    `- If extract is not ready, tell the user to run ${PAPER_EXTRACT_AGENT_UI_HINT} and retry.`,
   );
 
   return [
     "## Intensive reading papers (this session)",
     "",
-    "The following library papers are in **intensive reading mode**:",
-    "",
     ...items,
-    "",
-    "**Rules:**",
     "",
     ...rules,
     "",

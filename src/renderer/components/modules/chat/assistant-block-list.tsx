@@ -1,6 +1,7 @@
 import { memo } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { MarkdownRenderer } from "./markdown-renderer";
+import { PlanArtifactCard } from "./plan-artifact-card";
 import { ToolWidget } from "./tools/tool-widget-dispatcher";
 import { ThinkingWidget } from "./tools/thinking-widget";
 import { buildArtifactFallbackMarkdown } from "@/lib/markdown/chat-artifact";
@@ -8,6 +9,7 @@ import {
   resolveMissingArtifactPathsForReply,
   resolveSuppressArtifactPathsForToolCards,
 } from "@/lib/chat/experiment-run-figures";
+import { planPathFromToolUse } from "@/lib/chat/plan-artifact-ui";
 
 /** Shared assistant block renderer for main chat and Task expert activity. */
 export const AssistantBlockList = memo(function AssistantBlockList({
@@ -70,13 +72,20 @@ export const AssistantBlockList = memo(function AssistantBlockList({
         }
         if (block.type === "tool_use") {
           const result = toolResultMap.get(block.id || "");
+          const planPath = planPathFromToolUse(block);
+          const showPlanCard =
+            !!planPath
+            && !!result
+            && !result.is_error;
           return (
-            <ToolWidget
-              key={i}
-              toolUse={block}
-              toolResult={result}
-              suppressArtifactPaths={suppressArtifactPaths}
-            />
+            <div key={i}>
+              <ToolWidget
+                toolUse={block}
+                toolResult={result}
+                suppressArtifactPaths={suppressArtifactPaths}
+              />
+              {showPlanCard ? <PlanArtifactCard pathFallback={planPath} /> : null}
+            </div>
           );
         }
         return null;

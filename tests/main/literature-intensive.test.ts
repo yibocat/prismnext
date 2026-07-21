@@ -18,16 +18,15 @@ describe("buildIntensiveReadingInstruction", () => {
     expect(out).toContain("2. `Devlin2019` — BERT");
   });
 
-  it("mentions literature-read-pdf and extract hint without mandating it every turn", () => {
+  it("mentions literature-read-pdf, cite form, and extract hint", () => {
     const out = buildIntensiveReadingInstruction([
       { bibkey: "Vaswani2017", title: "Attention Is All You Need" },
     ]);
     expect(out).toContain(TOOL_NAMES.literatureReadPdf);
     expect(out).toContain("p.X");
     expect(out).toContain("[@bibkey]");
-    expect(out).toContain("[@Vaswani2017]");
     expect(out).toContain(PAPER_EXTRACT_ACTION_LABEL);
-    expect(out).toContain("Evidence priority");
+    expect(out).toContain("enforced by the tool");
     expect(out).not.toContain("you MUST use");
   });
 
@@ -37,9 +36,8 @@ describe("buildIntensiveReadingInstruction", () => {
       { hasPaperSnippets: true },
     );
     expect(out).toContain("```paper");
-    expect(out).toContain("primary source");
-    expect(out).toContain("do not call");
-    expect(out).toContain("genuinely need context outside");
+    expect(out).toContain("prefer them");
+    expect(out).toContain("context outside");
   });
 
   it("falls back to bibkey when title is empty", () => {

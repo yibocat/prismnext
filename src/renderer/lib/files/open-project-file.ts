@@ -1,6 +1,7 @@
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
+import { isResearchPlanFilePath } from "@/lib/chat/plan-artifact-ui";
 import {
   isLazyProjectFilePath,
   isSafeProjectRelativePath,
@@ -47,18 +48,23 @@ export function resolveChatFilePath(rawPath: string, projectRoot: string): strin
   return path;
 }
 
-/** Expand RightArea and focus Files mode so chat file links are immediately visible. */
-export function ensureRightAreaVisibleForFiles(): void {
+/** Expand RightArea so chat file / plan links are immediately visible. */
+export function ensureRightAreaVisible(mode: "files" | "research-plan" = "files"): void {
   const layout = useLayoutStore.getState();
-  layout.activateMode("files");
+  layout.activateMode(mode);
   // Maximize mode already gives RightArea full width with center collapsed — keep it.
   if (!layout.editorMaximized) {
     layout.requestRightAreaExpand();
   }
 }
 
+/** @deprecated Prefer {@link ensureRightAreaVisible}. */
+export function ensureRightAreaVisibleForFiles(): void {
+  ensureRightAreaVisible("files");
+}
+
 /**
- * Open a project file in RightArea Files (editor tab + Files tree reveal).
+ * Open a project file in RightArea (Files tab, or dedicated Plan tab for plans).
  * Returns false when the path cannot be resolved or the file is missing.
  */
 export async function openProjectFileFromChat(
@@ -72,10 +78,9 @@ export async function openProjectFileFromChat(
   const projectRoot = docStore.projectRoot;
   if (!projectRoot) return false;
 
-  ensureRightAreaVisibleForFiles();
-
   const relativePath = resolveChatFilePath(raw, projectRoot);
   if (!relativePath) {
+    ensureRightAreaVisible("files");
     const normalized = raw.replace(/\\/g, "/");
     if (normalized.startsWith("/") || /^[A-Za-z]:/.test(normalized)) {
       await docStore.openExternalFile(normalized, { pin: opts?.pin ?? false });
@@ -84,10 +89,17 @@ export async function openProjectFileFromChat(
     return false;
   }
 
-  navigateFileTreeToPath(relativePath);
+  const isPlan = isResearchPlanFilePath(relativePath);
+  ensureRightAreaVisible(isPlan ? "research-plan" : "files");
+
+  if (!isPlan) {
+    navigateFileTreeToPath(relativePath);
+  }
 
   if (isLazyProjectFilePath(relativePath)) {
-    await openHiddenProjectFile(relativePath, { pin: opts?.pin ?? false });
+    await openHiddenProjectFile(relativePath, {
+      pin: opts?.pin ?? (isPlan ? true : false),
+    });
     return true;
   }
 
@@ -110,9 +122,15 @@ export async function openProjectFileFromChat(
     }
   }
 
-  useRightPanelStore.getState().openFile(relativePath, relativePath, name, {
-    pin: opts?.pin ?? false,
-  });
+  if (isPlan) {
+    useRightPanelStore.getState().openResearchPlan(relativePath, relativePath, name, {
+      pin: opts?.pin ?? true,
+    });
+  } else {
+    useRightPanelStore.getState().openFile(relativePath, relativePath, name, {
+      pin: opts?.pin ?? false,
+    });
+  }
   await docStore.openFile(relativePath);
   return true;
 }

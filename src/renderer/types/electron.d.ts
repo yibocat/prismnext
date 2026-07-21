@@ -454,7 +454,7 @@ export interface ElectronAPI {
     }>;
     folders: string[];
   }>;
-  fsRead: (absPath: string) => Promise<{ content: string }>;
+  fsRead: (absPath: string) => Promise<{ content: string; missing?: boolean }>;
   fsReadBatch: (absPaths: string[]) => Promise<{ results: Record<string, string> }>;
   fsReadImage: (absPath: string) => Promise<{ dataUrl: string | null; mtimeMs?: number | null }>;
   /** Binary file bytes (PDF preview). Prefer over data-URL for local PDFs. */
@@ -622,6 +622,72 @@ export interface ElectronAPI {
     content: string;
     append?: boolean;
   }) => Promise<{ path: string; section: string; append: boolean; ok: boolean; error?: string; lastModified: string | null }>;
+
+  researchPlanWrite: (args: {
+    projectRoot: string;
+    doc: import("../../shared/research-plan").ResearchPlanDoc;
+  }) => Promise<
+    | { ok: true; relativePath: string; absolutePath: string }
+    | { ok: false; error: string }
+  >;
+
+  researchPlanReadDraft: (args: {
+    projectRoot: string;
+    sessionId?: string;
+  }) => Promise<
+    | {
+        ok: true;
+        exists: boolean;
+        empty: boolean;
+        relativePath: string;
+        absolutePath: string;
+        markdown: string;
+        title?: string;
+        description?: string;
+        sessionId?: string;
+      }
+    | { ok: false; error: string }
+  >;
+  researchPlanClaimDraft: (args: {
+    projectRoot: string;
+    sessionId: string;
+  }) => Promise<
+    | {
+        ok: true;
+        owned: boolean;
+        claimed: boolean;
+        ownedByOther: boolean;
+        sessionId?: string;
+        title?: string;
+        description?: string;
+        relativePath?: string;
+      }
+    | { ok: false; error: string }
+  >;
+  researchPlanHasPendingDraft: (args: {
+    projectRoot: string;
+    sessionId: string;
+  }) => Promise<{ ok: true; pending: boolean } | { ok: false; error: string }>;
+
+  researchPlanPromoteDraft: (args: {
+    projectRoot: string;
+    sessionId?: string;
+    /** @deprecated Ignored — promote always renames draft to approved. */
+    status?: "approved" | "snapshot";
+  }) => Promise<
+    | {
+        ok: true;
+        relativePath: string;
+        absolutePath: string;
+        title?: string;
+        markdown: string;
+      }
+    | { ok: false; error: string }
+  >;
+  researchPlanDiscardDraft: (args: {
+    projectRoot: string;
+    sessionId?: string;
+  }) => Promise<{ ok: true; discarded: boolean } | { ok: false; error: string }>;
 
   // Experiments (Sprint 0.7 — Experiments RightArea mode)
   experimentList: (
@@ -1491,6 +1557,7 @@ export interface ElectronAPI {
     intensivePaperIds?: string[];
     hasPaperSnippets?: boolean;
     orchestratorId?: string | null;
+    sessionAgent?: "build" | "plan";
     selectedExpertIds?: string[];
     promptImages?: Array<{ mimeType: string; data: string; name: string; uri?: string }>;
     promptFiles?: Array<{ uri: string; name: string; mimeType: string; size?: number }>;
@@ -1507,6 +1574,18 @@ export interface ElectronAPI {
     projectRoot: string;
     paperIds?: string[];
   }) => Promise<{ success: boolean }>;
+  chatSetSessionAgent: (args: {
+    sessionId: string;
+    agent: "build" | "plan";
+  }) => Promise<{ success: boolean; error?: string }>;
+  chatSetPlanSuggestDismissed: (args: {
+    sessionId: string;
+    dismissed: boolean;
+  }) => Promise<{ success: boolean; error?: string }>;
+  chatResolvePlanSuggest: (args: {
+    sessionId: string;
+    decision: "accepted" | "dismissed" | "timed_out";
+  }) => Promise<{ success: boolean; error?: string }>;
   chatCompact: (sessionId: string, projectPath: string) => Promise<void>;
   chatAnswer: (sessionId: string, answer: string) => Promise<void>;
   chatAnswerQuestion: (questionId: string, answer: string) => Promise<{ success: boolean; error?: string }>;
@@ -1541,13 +1620,31 @@ export interface ElectronAPI {
     sessionId: string,
     content: import("@/stores/chat-store").ContentBlock[],
   ) => Promise<{ success: boolean }>;
+  sessionGetPlanEvents: (
+    projectPath: string,
+    sessionId: string,
+  ) => Promise<import("@/lib/chat/plan-ui-events").PlanUiEvent[]>;
+  sessionUpsertPlanArtifact: (
+    projectPath: string,
+    sessionId: string,
+    event: Extract<import("@/lib/chat/plan-ui-events").PlanUiEvent, { kind: "plan-artifact" }>,
+  ) => Promise<{ success: boolean }>;
+  sessionAppendPlanDecision: (
+    projectPath: string,
+    sessionId: string,
+    event: Extract<import("@/lib/chat/plan-ui-events").PlanUiEvent, { kind: "plan-decision" }>,
+  ) => Promise<{ success: boolean }>;
+  sessionMarkPlanArtifactDiscarded: (
+    projectPath: string,
+    sessionId: string,
+  ) => Promise<{ success: boolean }>;
   chatGetProviders: () => Promise<any[]>;
   chatSetAuth: (provider: string, credentials: Record<string, string>) => Promise<{ success: boolean }>;
   chatTestConnection(args: { provider: string; apiKey: string; baseUrl?: string }): Promise<{ success: boolean; models?: string[] }>;
 
   // Chat events (Main → Renderer)
   onChatStream: (callback: (data: { tabId: string; type: string; data: any }) => void) => () => void;
-  onChatComplete: (callback: (data: { tabId: string; sessionId: string; success: boolean; error?: string; tokenUsage?: any; contextBreakdown?: Record<string, number> | null; categorySchema?: import("../../shared/constants").ContextCategoryDef[] | null; promptStale?: boolean }) => void) => () => void;
+  onChatComplete: (callback: (data: { tabId: string; sessionId: string; success: boolean; error?: string; tokenUsage?: any; contextBreakdown?: Record<string, number> | null; categorySchema?: import("../../shared/constants").ContextCategoryDef[] | null; promptStale?: boolean; planDraftMissing?: boolean }) => void) => () => void;
   onChatPermission: (callback: (data: { tabId: string; permissionId: string; message: string; options: any; toolCallId?: string; toolName?: string; raw?: any }) => void) => () => void;
   onChatSessionCreated: (callback: (data: { tabId: string; sessionId: string }) => void) => () => void;
   removeChatListeners: () => void;

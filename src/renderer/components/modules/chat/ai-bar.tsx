@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Hint } from "@/components/ui/hint";
 import { ChatComposerCore } from "./chat-composer-core";
 import { ChatMessages } from "./chat-messages";
+import { PlanChrome } from "./plan-chrome";
+import { PlanSuggestBar } from "./plan-suggest-bar";
 import { RestoreUndoBar } from "./restore-undo-bar";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -367,6 +369,11 @@ export function AiBar() {
         ) : null}
         <div className="px-3 w-full">
           {toolbar}
+          {/* Outside morph shell: compact capsule is fixed h-12; idle still needs Approve when draft is ready. */}
+          <div className="pointer-events-auto w-full max-w-3xl mx-auto">
+            <PlanSuggestBar />
+            <PlanChrome />
+          </div>
           <div
             ref={(node) => {
               morphRef.current = node;

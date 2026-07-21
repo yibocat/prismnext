@@ -6,7 +6,14 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFile
 import { join, basename } from "node:path";
 import { createLogger } from "./logger";
 import { getLiteratureBridgeRoot } from "./prism-bridge-paths";
-import { getSessionProjectRoot, isSessionIntensiveBibkey, resolveChatTabId } from "./chat-session-registry";
+import {
+  addSessionIntensiveBibkey,
+  getSessionIntensiveBibkeys,
+  getSessionProjectRoot,
+  isSessionIntensiveBibkey,
+  removeSessionIntensiveBibkey,
+  resolveChatTabId,
+} from "./chat-session-registry";
 import { AcpService } from "../acp/service";
 import { emitChatStream } from "./chat-stream-notify";
 import { normalizeArxivId, normalizeDoi } from "../../shared/doi-utils";
@@ -52,7 +59,16 @@ function libraryPdfRelativePath(pdfPath: string | null): string | null {
 }
 
 interface LiteratureBridgeRequest {
-  action: "read" | "read-pdf" | "search" | "add" | "stage" | "delete" | "citation-health" | "export-bib";
+  action:
+    | "read"
+    | "read-pdf"
+    | "search"
+    | "add"
+    | "stage"
+    | "delete"
+    | "citation-health"
+    | "export-bib"
+    | "intensive-reading";
   sessionId?: string;
   projectRoot?: string;
   verify?: boolean;
@@ -72,6 +88,8 @@ interface LiteratureBridgeRequest {
   pages?: string;
   source?: "auto" | "mineru" | "pdfjs" | "html";
   force?: boolean;
+  /** intensive-reading: add | remove | list */
+  intensiveAction?: string;
 }
 
 interface SessionStageRecord {
@@ -504,8 +522,80 @@ function intensiveReadPdfBlocked(
     bibkey,
     intensiveReadingRequired: true,
     hint:
-      "Ask the user to enable **Intensive reading** for this paper in the chat composer (@ paper menu), " +
-      `then run ${PAPER_EXTRACT_AGENT_UI_HINT} if needed.`,
+      `Call literature-intensive-reading with action=add and bibkey="${bibkey}" to enable intensive reading for this chat, ` +
+      `then retry literature-read-pdf. Or ask the user to toggle Intensive reading via @ paper menu. ` +
+      `If extract is missing, run ${PAPER_EXTRACT_AGENT_UI_HINT}.`,
+  };
+}
+
+function handleIntensiveReading(req: LiteratureBridgeRequest): Record<string, unknown> {
+  const sessionId = (req.sessionId ?? "").trim();
+  if (!sessionId || sessionId === "unknown") {
+    return { error: "Missing sessionId for intensive reading." };
+  }
+  const projectRoot = resolveProjectRoot(req);
+  if (!projectRoot) {
+    return { error: "Project root unknown for this chat session." };
+  }
+
+  const intensiveAction = (req.intensiveAction ?? "add").trim().toLowerCase();
+  if (intensiveAction === "list") {
+    const bibkeys = getSessionIntensiveBibkeys(sessionId);
+    return { ok: true, action: "list", bibkeys, count: bibkeys.length };
+  }
+
+  const bibkey = req.bibkey?.trim() ?? "";
+  if (!bibkey) return { error: "Missing bibkey parameter." };
+  const paper = getPaperByBibkey(projectRoot, bibkey);
+  if (!paper) {
+    return {
+      error: `No library paper with bibkey "${bibkey}".`,
+      hint: "Use literature-search / literature-read to confirm the exact cite key first.",
+    };
+  }
+
+  const tabId = resolveChatTabId(sessionId);
+  if (intensiveAction === "remove") {
+    const bibkeys = removeSessionIntensiveBibkey(sessionId, paper.bibkey);
+    if (tabId) {
+      emitChatStream(tabId, "literature.intensive", {
+        action: "remove",
+        sessionId,
+        paperId: paper.id,
+        bibkey: paper.bibkey,
+        bibkeys,
+      });
+    }
+    return {
+      ok: true,
+      action: "remove",
+      bibkey: paper.bibkey,
+      paperId: paper.id,
+      title: paper.title,
+      bibkeys,
+      hint: "Paper removed from intensive reading for this chat.",
+    };
+  }
+
+  // default: add
+  const bibkeys = addSessionIntensiveBibkey(sessionId, paper.bibkey);
+  if (tabId) {
+    emitChatStream(tabId, "literature.intensive", {
+      action: "add",
+      sessionId,
+      paperId: paper.id,
+      bibkey: paper.bibkey,
+      bibkeys,
+    });
+  }
+  return {
+    ok: true,
+    action: "add",
+    bibkey: paper.bibkey,
+    paperId: paper.id,
+    title: paper.title,
+    bibkeys,
+    hint: "Intensive reading enabled for this chat. You may now call literature-read-pdf on this bibkey.",
   };
 }
 
@@ -567,6 +657,8 @@ function dispatch(req: LiteratureBridgeRequest): unknown | Promise<unknown> {
       if (!doi && !arxivId) return { error: "Missing doi or arxivId parameter." };
       return handleAdd(projectRoot, doi, arxivId, req.collection?.trim() || undefined);
     }
+    case "intensive-reading":
+      return handleIntensiveReading(req);
     case "stage": {
       const sessionId = req.sessionId?.trim() ?? "";
       if (!sessionId) {

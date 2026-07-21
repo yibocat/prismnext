@@ -79,8 +79,15 @@ export function LeftMainArea() {
   const promptStale = useChatStore((s) => s.promptStale);
   const sessionId = useChatStore((s) => s.sessionId);
   const isLoadingSession = useChatStore((s) => s.isLoadingSession);
+  const sessionAgent = useChatStore((s) => {
+    const tab = s.tabs.find((x) => x.id === s.activeTabId);
+    return tab?.sessionAgent ?? "build";
+  });
+  const setSessionAgent = useChatStore((s) => s.setSessionAgent);
   const showHomepage =
     messages.length === 0 && !isStreaming && !isLoadingSession && !sessionId;
+  /** New empty session shortcut — same as slash Modes → Plan; hide once in Plan. */
+  const showPlanNewIdea = showHomepage && sessionAgent !== "plan";
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
   const {
     dragActive: chatFileDragActive,
@@ -209,15 +216,20 @@ export function LeftMainArea() {
                 <ChatComposer />
               </div>
             )}
-            {/* Context bar — matches toolbar height, bottom padding for breathing room */}
-            <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-7 px-3 mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
-              {/* Placeholder — future: suggested follow-up prompts */}
-              <button
-                type="button"
-                className="rounded px-1.5 py-0.5 text-muted-foreground/70 hover:bg-accent hover:text-accent-foreground transition-colors"
-              >
-                {t("chat.toolbar.suggestions")}
-              </button>
+            {/* Suggestion chips under homepage composer */}
+            <div className="mb-2 flex h-7 w-full max-w-3xl items-center gap-1.5 px-3 mx-auto text-[length:var(--font-chat-meta)] text-muted-foreground/70">
+              {showPlanNewIdea ? (
+                <button
+                  type="button"
+                  className={cn(
+                    "rounded px-1.5 py-0.5 text-muted-foreground/70 transition-colors",
+                    "hover:bg-accent hover:text-accent-foreground",
+                  )}
+                  onClick={() => setSessionAgent("plan")}
+                >
+                  {t("chat.toolbar.planNewIdea")}
+                </button>
+              ) : null}
               <span className="flex-1" />
             </div>
           </div>

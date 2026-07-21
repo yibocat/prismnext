@@ -36,6 +36,10 @@ export function researchBriefBridgeRoot(): string {
   return process.env.PRISM_RESEARCH_BRIEF_BRIDGE_ROOT || path.join(bridgeRoot(), "research-brief");
 }
 
+export function planSuggestBridgeRoot(): string {
+  return process.env.PRISM_PLAN_SUGGEST_BRIDGE_ROOT || path.join(bridgeRoot(), "plan-suggest");
+}
+
 export function experimentLogBridgeRoot(): string {
   return process.env.PRISM_EXPERIMENT_LOG_BRIDGE_ROOT || path.join(bridgeRoot(), "experiment-log");
 }

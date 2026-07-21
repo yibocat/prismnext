@@ -39,6 +39,10 @@ export function getResearchBriefBridgeRoot(): string {
   return process.env.PRISM_RESEARCH_BRIEF_BRIDGE_ROOT || join(getPrismBridgeRoot(), "research-brief");
 }
 
+export function getPlanSuggestBridgeRoot(): string {
+  return process.env.PRISM_PLAN_SUGGEST_BRIDGE_ROOT || join(getPrismBridgeRoot(), "plan-suggest");
+}
+
 export function getExperimentLogBridgeRoot(): string {
   return process.env.PRISM_EXPERIMENT_LOG_BRIDGE_ROOT || join(getPrismBridgeRoot(), "experiment-log");
 }
@@ -52,6 +56,7 @@ export function getPrismBridgeEnv(): Record<string, string> {
     PRISM_LATEX_BRIDGE_ROOT: getLatexBridgeRoot(),
     PRISM_QUESTIONS_BRIDGE_ROOT: getQuestionsBridgeRoot(),
     PRISM_RESEARCH_BRIEF_BRIDGE_ROOT: getResearchBriefBridgeRoot(),
+    PRISM_PLAN_SUGGEST_BRIDGE_ROOT: getPlanSuggestBridgeRoot(),
     PRISM_EXPERIMENT_LOG_BRIDGE_ROOT: getExperimentLogBridgeRoot(),
   };
 }

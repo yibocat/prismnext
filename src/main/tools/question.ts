@@ -7,7 +7,7 @@
  *
  * ## How it works
  *
- * 1. AI calls prism-question({ question, options })
+ * 1. AI calls question({ question, options })
  * 2. Tool writes the question to `<userData>/opencode-server/bridges/questions/<id>.json`
  * 3. Tool polls for `<id>.answer.json` (200 ms interval)
  * 4. prism‑next's renderer shows AskUserQuestionWidget
@@ -55,12 +55,19 @@ export default tool({
   },
 
   async execute(args, context) {
-    const { question, options = [], multiSelect = false } = args;
+    const question = typeof args.question === "string" ? args.question : "";
+    const options = Array.isArray(args.options)
+      ? args.options.filter((o): o is string => typeof o === "string")
+      : [];
+    const multiSelect = args.multiSelect === true;
 
     // Use session ID as question ID so the renderer can find the answer
     // file without needing a separate discovery mechanism.  Only one
     // question can be active per session at a time.
-    const sessionId = context.sessionID || "unknown";
+    const sessionId =
+      (context as { sessionID?: string; sessionId?: string }).sessionID
+      || (context as { sessionID?: string; sessionId?: string }).sessionId
+      || "unknown";
     const qDir = questionsBridgeRoot();
     fs.mkdirSync(qDir, { recursive: true });
 

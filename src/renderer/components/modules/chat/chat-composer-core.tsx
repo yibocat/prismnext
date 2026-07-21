@@ -20,7 +20,11 @@ import { ComposerToolbar } from "./agent-settings/composer-toolbar";
 import { ModelThoughtSelect } from "./agent-settings/model-thought-select";
 import { PermissionGatePanel, usePermissionGateOpen } from "./permission-gate-panel";
 import { InlineComposerEditor } from "./inline-composer";
+import { PlanChrome } from "./plan-chrome";
+import { PlanSuggestBar } from "./plan-suggest-bar";
+import { PlanModeChip } from "./plan-mode-chip";
 import { useChatComposer } from "@/hooks/use-chat-composer";
+import { useChatStore } from "@/stores/chat-store";
 import type { ComposerAttachment } from "@/lib/chat/composer-attach-file";
 
 export type ChatComposerVariant = "panel" | "capsule-compact" | "capsule-expanded";
@@ -104,10 +108,17 @@ export function ChatComposerCore({
   const { t } = useTranslation();
   const permissionGateOpen = usePermissionGateOpen();
   const composer = useChatComposer();
+  const sessionAgent = useChatStore((s) => {
+    const tab = s.tabs.find((x) => x.id === s.activeTabId);
+    return tab?.sessionAgent ?? "build";
+  });
 
   const isCapsule = variant === "capsule-compact" || variant === "capsule-expanded";
   const isCompact = variant === "capsule-compact";
-  const placeholder = capsulePlaceholder ?? t("chat.composer.placeholder");
+  const placeholder =
+    sessionAgent === "plan"
+      ? t("chat.planWorkflow.placeholder")
+      : (capsulePlaceholder ?? t("chat.composer.placeholder"));
 
   const compactRowRef = useRef<HTMLDivElement>(null);
   const [useModelIcon, setUseModelIcon] = useState(false);
@@ -234,6 +245,7 @@ export function ChatComposerCore({
         )}
       >
         <PermissionGatePanel />
+        {/* PlanChrome lives on AiBar outside the morph shell — compact h-12 would clip it. */}
 
         <div
           className={cn(
@@ -276,6 +288,7 @@ export function ChatComposerCore({
             )}
           >
             {isCompact && addMenu}
+            {isCompact && <PlanModeChip />}
             <div className={cn(isCompact && "flex-1 min-w-0 overflow-hidden self-center")}>
               {editor}
             </div>
@@ -308,6 +321,8 @@ export function ChatComposerCore({
     >
       <div className="flex w-full flex-col">
         <PermissionGatePanel />
+        <PlanSuggestBar />
+        <PlanChrome />
 
         <div
           className={cn(

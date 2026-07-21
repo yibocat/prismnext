@@ -30,12 +30,13 @@ import {
 import {
   extractTaskSubagentType,
   formatOrchestratorBuiltinTaskDeniedMessage,
+  formatPlanModeExpertTaskDeniedMessage,
   shouldDenyOrchestratorBuiltinTask,
 } from "../services/task-orchestrator-gate";
 import { emitChatStream } from "../services/chat-stream-notify";
 import { addBashAllowAlwaysFromCommand, addToolAllowAlways, getSettings, isBashCommandAllowAlways, isToolAllowAlways } from "../services/settings";
 import { sanitizeSkillPermissionMap, skillPermissionNeedsRepair } from "../services/skills-sync";
-import { buildEnabledToolsConfig } from "../services/opencode-tools-config";
+import { buildEnabledToolsConfig, ensurePlanAgentPermissionConfig } from "../services/opencode-tools-config";
 import {
   isOpenCodeCatalogProvider,
   OPENCODE_API_KEY_ENV,
@@ -63,6 +64,18 @@ import {
   latexCompileBashRedirectNote,
 } from "../../shared/latex-compile-bash";
 import { resolveOpencodeBinaryPath } from "../services/opencode-binary";
+import {
+  getPlanPermissionOverride,
+  isResearchBriefPath,
+  planDraftPathRedirectNote,
+  researchBriefEditRedirectNote,
+  resolveSessionAgent,
+  type SessionAgent,
+} from "../../shared/session-agent";
+import {
+  isResearchPlanDraftPath,
+  planDraftMissingRedirectNote,
+} from "../../shared/research-plan";
 
 const CUSTOM_GATED_TOOLS = new Set(["delete", "move"]);
 
@@ -175,6 +188,10 @@ export class AcpService {
    *  retrying Task. ACP permission rejections can't carry a reason string, so
    *  we surface it on the next turn. */
   private pendingTaskDenialRedirect = new Map<string, string>();
+  /** Plan turn ended without writing the session draft — hard note on next send. */
+  private pendingPlanDraftRedirect = new Map<string, string>();
+  /** Per-session OpenCode agent identity (build | plan). Defaults to build. */
+  private sessionAgents = new Map<string, SessionAgent>();
 
   /** Phase 1B: consume (and clear) the pending task-denial redirect for a session. */
   consumePendingTaskDenial(sessionId: string | undefined | null): string | null {
@@ -182,6 +199,32 @@ export class AcpService {
     const note = this.pendingTaskDenialRedirect.get(sessionId);
     if (note) {
       this.pendingTaskDenialRedirect.delete(sessionId);
+      return note;
+    }
+    return null;
+  }
+
+  setPendingPlanDraftRedirect(sessionId: string, note: string): void {
+    const id = sessionId?.trim();
+    if (!id || !note.trim()) return;
+    this.pendingPlanDraftRedirect.set(id, note.trim());
+  }
+
+  clearPendingPlanDraftRedirect(sessionId: string): void {
+    const id = sessionId?.trim();
+    if (id) this.pendingPlanDraftRedirect.delete(id);
+  }
+
+  hasPendingPlanDraftRedirect(sessionId: string | undefined | null): boolean {
+    if (!sessionId) return false;
+    return this.pendingPlanDraftRedirect.has(sessionId);
+  }
+
+  consumePendingPlanDraftRedirect(sessionId: string | undefined | null): string | null {
+    if (!sessionId) return null;
+    const note = this.pendingPlanDraftRedirect.get(sessionId);
+    if (note) {
+      this.pendingPlanDraftRedirect.delete(sessionId);
       return note;
     }
     return null;
@@ -513,14 +556,27 @@ export class AcpService {
             && !this.isSubAgentSession(sessionId)
           ) {
             const subagent = extractTaskSubagentType(params as Record<string, unknown>);
+            const taskSessionAgent = this.getSessionAgent(sessionId);
+            // Built-in OpenCode subagents (@Explore / @general / …) stay denied on
+            // the orchestrator. Plan mode also clears the expert orchestrator — so
+            // Prism experts (e.g. research-design-coach) must be denied with a
+            // Plan-specific message, not the misleading "builtin disabled" copy.
+            let deniedMsg: string | null = null;
             if (shouldDenyOrchestratorBuiltinTask(subagent)) {
-              const deniedMsg = formatOrchestratorBuiltinTaskDeniedMessage(subagent);
+              deniedMsg = formatOrchestratorBuiltinTaskDeniedMessage(subagent);
               log.info(
                 `permission:task-builtin-deny sessionId=${sessionId} subagent=${subagent ?? "(none)"}`,
               );
+            } else if (taskSessionAgent === "plan") {
+              deniedMsg = formatPlanModeExpertTaskDeniedMessage(subagent);
+              log.info(
+                `permission:task-plan-expert-deny sessionId=${sessionId} subagent=${subagent ?? "(none)"}`,
+              );
+            }
+            if (deniedMsg) {
               // Phase 1B: stash a redirect note for the next chat:send — the LLM
               // only gets a generic permission rejection, so we re-surface the
-              // guidance ("use platform tools directly") on the next turn.
+              // guidance on the next turn.
               this.pendingTaskDenialRedirect.set(sessionId, deniedMsg);
               const tabId = resolveChatTabId(sessionId);
               const toolCallId =
@@ -607,9 +663,23 @@ export class AcpService {
             return buildPermissionOutcome(options, false);
           }
 
-          let action = resolvePermissionAction(mode, toolName);
+          const sessionAgent = sessionId ? this.getSessionAgent(sessionId) : undefined;
+          const editFilePath = this.extractFilePathFromPermissionParams(
+            params as Record<string, unknown>,
+          );
+          const planPermCtx = {
+            filePath: editFilePath,
+            projectRoot: this.projectPath,
+            sessionId: sessionId ?? null,
+            bashCommand,
+          };
+          let action = resolvePermissionAction(mode, toolName, sessionAgent, planPermCtx);
           // Persisted "Allow always": bash uses command patterns; other tools use tool name.
-          if (action === "prompt") {
+          // Plan ask overrides must still prompt — never skip via allow-always.
+          const planAskLocked =
+            sessionAgent === "plan"
+            && getPlanPermissionOverride(toolName, planPermCtx) === "ask";
+          if (action === "prompt" && !planAskLocked) {
             const isBash =
               this.isBashTool(toolName) ||
               toolName === "experiment-run" ||
@@ -673,6 +743,31 @@ export class AcpService {
           }
           if (action === "deny") {
             log.debug(`permission:auto-deny id=${permissionId} mode=${mode} tool=${toolName || "?"} toolCallId=${toolCallId ?? "(none)"}`);
+            if (
+              sessionAgent === "plan"
+              && sessionId
+              && editFilePath
+              && getPlanPermissionOverride(toolName, planPermCtx) === "deny"
+              && isResearchPlanDraftPath(editFilePath, this.projectPath)
+            ) {
+              // Model invented drafts/<title>.md — hard-redirect next turn to canonical path.
+              const note = planDraftMissingRedirectNote(sessionId);
+              this.setPendingPlanDraftRedirect(sessionId, note);
+              this.pendingTaskDenialRedirect.set(
+                sessionId,
+                planDraftPathRedirectNote(sessionId),
+              );
+            }
+            if (
+              sessionId
+              && editFilePath
+              && isResearchBriefPath(editFilePath, this.projectPath)
+            ) {
+              this.pendingTaskDenialRedirect.set(
+                sessionId,
+                researchBriefEditRedirectNote(),
+              );
+            }
             if (this.isBashTool(toolName) && sessionId && toolCallId) {
               denyBashJob(sessionId, toolCallId);
             }
@@ -1262,8 +1357,9 @@ export class AcpService {
           config.tools as Record<string, unknown> | undefined,
           overrides,
         );
+        const next = ensurePlanAgentPermissionConfig(config);
         mkdirSync(dirname(p), { recursive: true });
-        writeFileSync(p, JSON.stringify(config, null, 2), "utf-8");
+        writeFileSync(p, JSON.stringify(next, null, 2), "utf-8");
         log.info(`Applied built-in tools config to ${p}`);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
@@ -1364,7 +1460,7 @@ export class AcpService {
    * (because XDG_CONFIG_HOME = <userData>/opencode-server/config/)
    */
   private writeDefaultConfig(): void {
-    const defaultConfig = {
+    const defaultConfig = ensurePlanAgentPermissionConfig({
       $schema: "https://opencode.ai/config.json",
       tools: buildEnabledToolsConfig(),
       permission: {
@@ -1385,7 +1481,7 @@ export class AcpService {
         prune: true,
       },
       instructions: [...PRISM_OPENCODE_INSTRUCTIONS],
-    };
+    });
 
     const configStr = JSON.stringify(defaultConfig, null, 2);
 
@@ -1560,6 +1656,24 @@ export class AcpService {
       configId,
       value,
     });
+  }
+
+  setSessionAgent(sessionId: string, agent: SessionAgent): void {
+    this.sessionAgents.set(sessionId, resolveSessionAgent(agent));
+  }
+
+  getSessionAgent(sessionId: string): SessionAgent {
+    return this.sessionAgents.get(sessionId) ?? "build";
+  }
+
+  async applySessionAgent(sessionId: string, agent: SessionAgent): Promise<void> {
+    const resolved = resolveSessionAgent(agent);
+    this.setSessionAgent(sessionId, resolved);
+    try {
+      await this.setConfigOption(sessionId, "agent", resolved);
+    } catch (err: any) {
+      log.debug(`setConfigOption agent=${resolved} failed: ${err.message}`);
+    }
   }
 
   /**
@@ -2047,6 +2161,7 @@ export class AcpService {
       await this.withDb((db) => {
         db.prepare("UPDATE session SET time_archived = ? WHERE id = ?").run(Date.now(), sessionId);
       });
+      this.sessionAgents.delete(sessionId);
       return { success: true };
     } catch (err: any) {
       log.error(`Failed to delete session ${sessionId}: ${err.message}`);
@@ -2524,7 +2639,7 @@ export class AcpService {
     const mode = resolvePermissionMode(
       (getSettings() as Record<string, unknown>).permissionMode as string | undefined,
     );
-    const syncAction = resolveBridgeToolCallSyncAction(mode, "bash");
+    const syncAction = resolveBridgeToolCallSyncAction(mode, "bash", this.getSessionAgent(sessionId));
     const cwd = args.cwd || this.projectPath || process.cwd();
     const job: ApprovedBashJob = {
       sessionId,
@@ -2605,7 +2720,7 @@ export class AcpService {
     const mode = resolvePermissionMode(
       (getSettings() as Record<string, unknown>).permissionMode as string | undefined,
     );
-    const syncAction = resolveBridgeToolCallSyncAction(mode, normalized);
+    const syncAction = resolveBridgeToolCallSyncAction(mode, normalized, this.getSessionAgent(sessionId));
 
     if (syncAction === "auto_allow") {
       if (readBashPermissionStatus(sessionId, toolCallId)) return;
@@ -2745,6 +2860,32 @@ export class AcpService {
     if (fromInput) return fromInput;
     const msg = params.message ?? params.title ?? tc?.title;
     return typeof msg === "string" ? msg.trim() : "";
+  }
+
+  /** Best-effort path for edit/write/apply_patch permission gating (Plan draft allowlist). */
+  private extractFilePathFromPermissionParams(params: Record<string, unknown>): string {
+    const tc = (params.toolCall ?? params.tool_call) as Record<string, unknown> | undefined;
+    const input = (tc?.rawInput ?? tc?.raw_input ?? tc?.input ?? params.input) as
+      | Record<string, unknown>
+      | undefined;
+    if (input && typeof input === "object") {
+      for (const key of ["file_path", "filePath", "path", "target", "file"]) {
+        const val = input[key];
+        if (typeof val === "string" && val.trim()) return val.trim();
+      }
+    }
+    for (const key of ["file_path", "filePath", "path"]) {
+      const val = params[key];
+      if (typeof val === "string" && val.trim()) return val.trim();
+    }
+    const msg = params.message ?? params.title ?? tc?.title;
+    if (typeof msg === "string") {
+      const m = msg.match(
+        /(?:^|[\s`"'])((?:\.prismnext\/research\/plans\/drafts\/[^\s`"']+\.md)|(?:\.prismnext\/research\/plans\/current-draft\.md)|(?:[^\s`"']*current-draft\.md))/i,
+      );
+      if (m?.[1]) return m[1].trim();
+    }
+    return "";
   }
 
   // ─── Config ─────────────────────────────────────────────────

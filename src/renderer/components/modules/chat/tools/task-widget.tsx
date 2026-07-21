@@ -6,8 +6,8 @@ import { ToolCard, param } from "./shared";
 import { AssistantBlockList } from "../assistant-block-list";
 import { buildToolResultMapFromBlocks } from "./tool-result-map";
 import {
-  formatOrchestratorBuiltinTaskDeniedMessage,
   isOpaqueTaskCancelledResult,
+  resolveOpaqueTaskCancelledDisplay,
 } from "../../../../../shared/task-deny-message";
 
 /** OpenCode built-in subagent types */
@@ -189,7 +189,7 @@ export const TaskWidget = memo(function TaskWidget({
                       ? toolResult.content
                       : JSON.stringify(toolResult.content ?? "", null, 2)) || "";
                   if (toolResult.is_error && isOpaqueTaskCancelledResult(raw)) {
-                    raw = formatOrchestratorBuiltinTaskDeniedMessage(agentType);
+                    raw = resolveOpaqueTaskCancelledDisplay(agentType);
                   }
                   return raw.length > 2000
                     ? raw.slice(0, 2000) + `\n\n··· ${raw.length - 2000} more chars`

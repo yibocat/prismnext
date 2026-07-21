@@ -1410,6 +1410,7 @@
     "toolbar": {
       "local": "Local",
       "suggestions": "Suggestions",
+      "planNewIdea": "Plan a new idea",
       "initGit": "Initialize Git repository",
       "initGitShort": "Init Git"
     },
@@ -1450,6 +1451,51 @@
       "editAutoDesc": "Allow file edits automatically; still ask for shell and destructive operations. Shell uses PTY after Allow.",
       "autoDesc": "Fully automatic — approve edits, shell, and other tools without prompting (same idea as OpenCode --auto). Explicit denials still apply.",
       "readonlyDesc": "Only read and search — block edits and shell commands. Mirror terminal mode is available in advanced settings."
+    },
+    "sessionAgent": {
+      "label": "Session Agent",
+      "build": "Build",
+      "plan": "Plan",
+      "buildShort": "Build",
+      "planShort": "Plan",
+      "buildDesc": "Full agent — edits and tools follow Permission Mode",
+      "planDesc": "Plan only — write the draft plan file; no other edits or shell",
+      "planHint": "Plan mode — draft file only; no other edits or shell",
+      "orchestratorCleared": "Plan mode cleared the expert orchestrator for this tab"
+    },
+    "planWorkflow": {
+      "label": "Plan workflow",
+      "suggestTitle": "Enter Plan mode?",
+      "suggestBody": "This looks like research planning. Plan first — write the draft file; no other edits or shell until you approve.",
+      "suggestCountdown": "Waiting… {{seconds}}s (then stay in Build)",
+      "enterPlan": "Enter Plan",
+      "dismiss": "Dismiss",
+      "chipLabel": "Plan",
+      "chipHint": "Plan mode — concrete plan goes in the draft file; click × to exit.",
+      "placeholder": "Plan and design before coding…",
+      "planningBanner": "Draft plan ready — approve to save and start Build, or keep refining the draft file.",
+      "planningBannerWaiting": "Plan mode — the plan of record must be the session draft file (chat text does not count); Approve & Build only uses the file.",
+      "approveDrawerTitle": "Plan ready for confirmation",
+      "approveDrawerBody": "Approve to start Build against the plan file, or deny to discard the draft and keep chatting.",
+      "approveDrawerBodyWithTitle": "{{title}}",
+      "viewDraft": "View draft",
+      "draftNotYet": "Draft file not ready yet — the agent should write this session's `.prismnext/research/plans/drafts/<sessionId>.md` first.",
+      "draftMissingRedirect": "This turn did not update the plan draft file. Chat text is not the plan of record — the next message will require the agent to write the draft first.",
+      "approveExecute": "Approve & Build",
+      "rejectPlan": "Deny",
+      "exitPlan": "Exit Plan",
+      "exitDialogTitle": "Unconfirmed plan",
+      "exitDialogBody": "You have a draft plan file. Approve and execute, or reject to discard the draft and return to Build.",
+      "discardAndBuild": "Reject",
+      "cancel": "Cancel",
+      "createdPlan": "Created Plan",
+      "createdPlanDiscarded": "Plan discarded",
+      "draftDiscardedGone": "That plan draft was discarded and is no longer on disk.",
+      "planFileMissing": "Plan file is missing — it may have been deleted.",
+      "decisionApproved": "Plan approved — executing",
+      "decisionRejected": "Plan rejected — draft discarded",
+      "approveNeedsContent": "Plan draft is empty — wait until the assistant writes this session's draft, then Approve.",
+      "saveFailed": "Failed to save research plan"
     },
     "context": {
       "window": "Context window",
@@ -1498,6 +1544,10 @@
       "previewInBrowser": "Preview in Browser",
       "rename": "Rename",
       "deleteFolder": "Delete Folder"
+    },
+    "researchPlan": {
+      "label": "Plan",
+      "initialTitle": "Plan"
     },
     "git": {
       "label": "Git",
