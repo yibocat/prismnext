@@ -12,14 +12,37 @@ export interface UpdateVersionInfo {
   pubDate?: string;
 }
 
-/** Result of comparing the installed version against the manifest. */
+/**
+ * Primary updater status from main (`update:check` / `update:status` / download).
+ * Prefer this over the legacy UpdateCheckResult shape.
+ */
+export type UpdaterStatus = {
+  status:
+    | "idle"
+    | "checking"
+    | "up-to-date"
+    | "available"
+    | "downloading"
+    | "downloaded"
+    | "error"
+    | "no-source"
+    | "ignored";
+  currentVersion: string;
+  latestVersion?: string;
+  progress?: { percent: number };
+  error?: string;
+  releaseNotes?: string;
+  /** Compat openExternal fallback — prefer updateDownload when packaged. */
+  latest?: UpdateVersionInfo;
+};
+
+/** @deprecated Prefer UpdaterStatus — kept for narrow welcome-badge checks. */
 export type UpdateCheckResult =
   | { status: "up-to-date"; currentVersion: string }
   | { status: "available"; currentVersion: string; latest: UpdateVersionInfo }
   | { status: "ignored"; currentVersion: string; latest: UpdateVersionInfo }
   | { status: "error"; currentVersion: string; error: string }
   | { status: "no-source"; currentVersion: string };
-
 /** App + bundled OpenCode agent versions for Settings → About. */
 export interface AboutVersions {
   appVersion: string;
@@ -586,14 +609,20 @@ export interface ElectronAPI {
     workspaceDirs?: import("./workspace").WorkspaceFolder[],
     options?: { initGit?: boolean; projectIcon?: string },
   ) => Promise<void>;
-  /** Fetch the update manifest and compare against the installed version. */
-  updateCheck: () => Promise<UpdateCheckResult>;
-  /** Last check result without re-hitting the network. */
-  updateStatus: () => Promise<UpdateCheckResult | null>;
-  /** Suppress a version from surfacing as an update. Returns the new status. */
-  updateIgnore: (version: string) => Promise<UpdateCheckResult | null>;
-  /** Clear the ignored-version flag. Returns the new status. */
-  updateUnignore: () => Promise<UpdateCheckResult | null>;
+  /** Check feed / manifest and return full updater status. */
+  updateCheck: () => Promise<UpdaterStatus>;
+  /** Last known status without re-hitting the network. */
+  updateStatus: () => Promise<UpdaterStatus>;
+  /** Download the pending update (packaged builds). */
+  updateDownload: () => Promise<UpdaterStatus>;
+  /** Quit and install a downloaded update. */
+  updateInstall: () => Promise<{ ok: true }>;
+  /** Suppress a version from surfacing as an update. */
+  updateIgnore: (version: string) => Promise<UpdaterStatus>;
+  /** Clear the ignored-version flag. */
+  updateUnignore: () => Promise<UpdaterStatus>;
+  /** Download progress from main (`update:progress`). */
+  onUpdateProgress: (callback: (data: { percent: number }) => void) => () => void;
   /** prismnext app version + bundled OpenCode agent binary version. */
   aboutGetVersions: () => Promise<AboutVersions>;
   projectEnsure: (rootPath: string) => Promise<{ success: boolean }>;

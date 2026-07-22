@@ -5,15 +5,18 @@ import {
   CheckCircle2Icon,
   DownloadIcon,
   EyeOffIcon,
+  ExternalLinkIcon,
   Loader2Icon,
   RefreshCwIcon,
   RotateCcwIcon,
   AlertTriangleIcon,
+  RocketIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { useSettingsStore } from "@/stores/settings-store";
-import type { UpdateCheckResult } from "@/types/electron";
+import type { UpdaterStatus } from "@/types/electron";
 import {
   SETTINGS_CARD,
   SETTINGS_CATEGORY_HEADER,
@@ -33,14 +36,30 @@ type Status =
   | {
       kind: "available";
       currentVersion: string;
-      latest: { version: string; path: string; releaseNotes?: string; pubDate?: string };
+      latestVersion: string;
+      releaseNotes?: string;
+      downloadPath?: string;
     }
   | {
       kind: "ignored";
       currentVersion: string;
-      latest: { version: string; path: string; releaseNotes?: string; pubDate?: string };
+      latestVersion: string;
+      downloadPath?: string;
     }
-  | { kind: "error"; message: string }
+  | {
+      kind: "downloading";
+      currentVersion: string;
+      latestVersion?: string;
+      percent: number;
+      downloadPath?: string;
+    }
+  | {
+      kind: "downloaded";
+      currentVersion: string;
+      latestVersion?: string;
+      downloadPath?: string;
+    }
+  | { kind: "error"; message: string; downloadPath?: string }
   | { kind: "no-source" };
 
 type OpencodeInfo = {
@@ -49,19 +68,53 @@ type OpencodeInfo = {
   error?: string;
 };
 
-function fromResult(result: UpdateCheckResult | null): Status {
-  if (!result) return { kind: "idle" };
+function fromUpdaterStatus(result: UpdaterStatus | null | undefined): Status {
+  if (!result || result.status === "idle") return { kind: "idle" };
   switch (result.status) {
+    case "checking":
+      return { kind: "checking" };
     case "up-to-date":
       return { kind: "up-to-date", currentVersion: result.currentVersion };
     case "available":
-      return { kind: "available", currentVersion: result.currentVersion, latest: result.latest };
+      return {
+        kind: "available",
+        currentVersion: result.currentVersion,
+        latestVersion: result.latestVersion ?? result.latest?.version ?? "",
+        releaseNotes: result.releaseNotes ?? result.latest?.releaseNotes,
+        downloadPath: result.latest?.path,
+      };
     case "ignored":
-      return { kind: "ignored", currentVersion: result.currentVersion, latest: result.latest };
+      return {
+        kind: "ignored",
+        currentVersion: result.currentVersion,
+        latestVersion: result.latestVersion ?? result.latest?.version ?? "",
+        downloadPath: result.latest?.path,
+      };
+    case "downloading":
+      return {
+        kind: "downloading",
+        currentVersion: result.currentVersion,
+        latestVersion: result.latestVersion,
+        percent: result.progress?.percent ?? 0,
+        downloadPath: result.latest?.path,
+      };
+    case "downloaded":
+      return {
+        kind: "downloaded",
+        currentVersion: result.currentVersion,
+        latestVersion: result.latestVersion,
+        downloadPath: result.latest?.path,
+      };
     case "error":
-      return { kind: "error", message: result.error };
+      return {
+        kind: "error",
+        message: result.error ?? "Unknown error",
+        downloadPath: result.latest?.path,
+      };
     case "no-source":
       return { kind: "no-source" };
+    default:
+      return { kind: "idle" };
   }
 }
 
@@ -69,6 +122,12 @@ function formatOpencodeVersion(info: OpencodeInfo, t: TFunction): string {
   if (!info.available) return t("settings.about.notFound");
   if (info.version) return info.version;
   return info.error ? t("common.unavailable") : "—";
+}
+
+function openExternal(url: string): void {
+  window.electronAPI.shellOpenExternal(url).catch(() => {
+    /* user dismissed or URL blocked */
+  });
 }
 
 export function AboutSettings() {
@@ -79,12 +138,13 @@ export function AboutSettings() {
   const [opencodeInfo, setOpencodeInfo] = useState<OpencodeInfo | null>(null);
   const [sourceDraft, setSourceDraft] = useState(settings.updateSource ?? "");
   const [savedFlash, setSavedFlash] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   // On mount: surface any previously-cached check result without a network call.
   useEffect(() => {
     window.electronAPI
       .updateStatus()
-      .then((r) => setStatus(fromResult(r)))
+      .then((r) => setStatus(fromUpdaterStatus(r)))
       .catch(() => setStatus({ kind: "idle" }));
   }, []);
 
@@ -106,11 +166,27 @@ export function AboutSettings() {
     setSourceDraft(settings.updateSource ?? "");
   }, [settings.updateSource]);
 
+  // Live download percent from main.
+  useEffect(() => {
+    return window.electronAPI.onUpdateProgress(({ percent }) => {
+      setStatus((prev) => {
+        if (prev.kind !== "downloading" && prev.kind !== "available") return prev;
+        return {
+          kind: "downloading",
+          currentVersion: prev.currentVersion,
+          latestVersion: "latestVersion" in prev ? prev.latestVersion : undefined,
+          percent,
+          downloadPath: "downloadPath" in prev ? prev.downloadPath : undefined,
+        };
+      });
+    });
+  }, []);
+
   const doCheck = useCallback(async () => {
     setStatus({ kind: "checking" });
     try {
       const result = await window.electronAPI.updateCheck();
-      setStatus(fromResult(result));
+      setStatus(fromUpdaterStatus(result));
     } catch (err) {
       setStatus({
         kind: "error",
@@ -127,24 +203,66 @@ export function AboutSettings() {
 
   const ignoreVersion = useCallback(async () => {
     if (status.kind !== "available") return;
-    const result = await window.electronAPI.updateIgnore(status.latest.version);
-    setStatus(fromResult(result));
+    const result = await window.electronAPI.updateIgnore(status.latestVersion);
+    setStatus(fromUpdaterStatus(result));
   }, [status]);
 
   const unignoreVersion = useCallback(async () => {
     const result = await window.electronAPI.updateUnignore();
-    setStatus(fromResult(result));
+    setStatus(fromUpdaterStatus(result));
   }, []);
 
-  const downloadUrl =
-    status.kind === "available" || status.kind === "ignored" ? status.latest.path : null;
-
-  const onDownload = useCallback(() => {
-    if (!downloadUrl) return;
-    window.electronAPI.shellOpenExternal(downloadUrl).catch(() => {
-      /* user dismissed or URL blocked */
+  const onDownloadInApp = useCallback(async () => {
+    setBusy(true);
+    setStatus((prev) => {
+      if (prev.kind !== "available" && prev.kind !== "ignored") return prev;
+      return {
+        kind: "downloading",
+        currentVersion: prev.currentVersion,
+        latestVersion: prev.latestVersion,
+        percent: 0,
+        downloadPath: prev.downloadPath,
+      };
     });
-  }, [downloadUrl]);
+    try {
+      const result = await window.electronAPI.updateDownload();
+      setStatus(fromUpdaterStatus(result));
+    } catch (err) {
+      setStatus({
+        kind: "error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const onInstall = useCallback(async () => {
+    setBusy(true);
+    try {
+      await window.electronAPI.updateInstall();
+    } catch (err) {
+      setBusy(false);
+      setStatus({
+        kind: "error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }, []);
+
+  const downloadPath =
+    status.kind === "available" ||
+    status.kind === "ignored" ||
+    status.kind === "downloading" ||
+    status.kind === "downloaded" ||
+    status.kind === "error"
+      ? status.downloadPath
+      : undefined;
+
+  const onOpenDownloadPage = useCallback(() => {
+    if (!downloadPath) return;
+    openExternal(downloadPath);
+  }, [downloadPath]);
 
   // Prefer AboutVersions; fall back to update-check payload when present.
   const displayAppVersion =
@@ -232,7 +350,7 @@ export function AboutSettings() {
                   variant="default"
                   size="sm"
                   onClick={doCheck}
-                  disabled={status.kind === "checking"}
+                  disabled={status.kind === "checking" || status.kind === "downloading" || busy}
                   className="shrink-0"
                 >
                   {status.kind === "checking" ? (
@@ -254,15 +372,20 @@ export function AboutSettings() {
                 <StatusLine icon={<DownloadIcon className="size-4 text-primary" />}>
                   <div className="flex-1">
                     <p className={ROW_LABEL}>
-                      {t("settings.about.availableLabel", { version: status.latest.version })}
+                      {t("settings.about.availableLabel", { version: status.latestVersion })}
                     </p>
-                    {status.latest.releaseNotes && (
+                    {status.releaseNotes && (
                       <p className={ROW_DESC + " mt-1 whitespace-pre-wrap"}>
-                        {status.latest.releaseNotes}
+                        {status.releaseNotes}
                       </p>
                     )}
-                    <div className="flex gap-2 mt-2">
-                      <Button variant="default" size="sm" onClick={onDownload}>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={onDownloadInApp}
+                        disabled={busy}
+                      >
                         <DownloadIcon />
                         {t("settings.about.downloadUpdate")}
                       </Button>
@@ -270,6 +393,60 @@ export function AboutSettings() {
                         <EyeOffIcon />
                         {t("settings.about.skipVersion")}
                       </Button>
+                      {status.downloadPath && (
+                        <Button variant="ghost" size="sm" onClick={onOpenDownloadPage}>
+                          <ExternalLinkIcon />
+                          {t("settings.about.openDownloadPage")}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </StatusLine>
+              )}
+
+              {status.kind === "downloading" && (
+                <StatusLine icon={<Loader2Icon className="size-4 text-primary animate-spin" />}>
+                  <div className="flex-1 space-y-2">
+                    <p className={ROW_LABEL}>
+                      {status.latestVersion
+                        ? t("settings.about.downloadingLabel", { version: status.latestVersion })
+                        : t("settings.about.downloading")}
+                    </p>
+                    <Progress value={Math.min(100, Math.max(0, status.percent))} />
+                    <p className={ROW_DESC}>
+                      {t("settings.about.downloadProgress", {
+                        percent: Math.round(status.percent),
+                      })}
+                    </p>
+                  </div>
+                </StatusLine>
+              )}
+
+              {status.kind === "downloaded" && (
+                <StatusLine icon={<RocketIcon className="size-4 text-emerald-500" />}>
+                  <div className="flex-1">
+                    <p className={ROW_LABEL}>
+                      {status.latestVersion
+                        ? t("settings.about.downloadedLabel", { version: status.latestVersion })
+                        : t("settings.about.downloaded")}
+                    </p>
+                    <p className={ROW_DESC}>{t("settings.about.restartToInstallDetail")}</p>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={onInstall}
+                        disabled={busy}
+                      >
+                        <RocketIcon />
+                        {t("settings.about.restartToInstall")}
+                      </Button>
+                      {status.downloadPath && (
+                        <Button variant="ghost" size="sm" onClick={onOpenDownloadPage}>
+                          <ExternalLinkIcon />
+                          {t("settings.about.openDownloadPage")}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </StatusLine>
@@ -280,15 +457,26 @@ export function AboutSettings() {
                   <div className="flex-1 flex items-center justify-between gap-3">
                     <div>
                       <p className={ROW_LABEL}>
-                        {t("settings.about.availableLabel", { version: status.latest.version })}
+                        {t("settings.about.availableLabel", { version: status.latestVersion })}
                       </p>
                       <p className={ROW_DESC}>{t("settings.about.skippedDetail")}</p>
                     </div>
                     <div className="flex gap-2 shrink-0">
-                      <Button variant="outline" size="sm" onClick={onDownload}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={onDownloadInApp}
+                        disabled={busy}
+                      >
                         <DownloadIcon />
                         {t("settings.about.download")}
                       </Button>
+                      {status.downloadPath && (
+                        <Button variant="ghost" size="sm" onClick={onOpenDownloadPage}>
+                          <ExternalLinkIcon />
+                          {t("settings.about.openDownloadPage")}
+                        </Button>
+                      )}
                       <Button variant="ghost" size="sm" onClick={unignoreVersion}>
                         <RotateCcwIcon />
                         {t("settings.about.unskip")}
@@ -305,10 +493,18 @@ export function AboutSettings() {
                       <p className={ROW_LABEL}>{t("settings.about.checkFailedLabel")}</p>
                       <p className={ROW_DESC + " font-mono"}>{status.message}</p>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={doCheck} className="shrink-0">
-                      <RefreshCwIcon />
-                      {t("settings.about.retry")}
-                    </Button>
+                    <div className="flex gap-2 shrink-0">
+                      {status.downloadPath && (
+                        <Button variant="outline" size="sm" onClick={onOpenDownloadPage}>
+                          <ExternalLinkIcon />
+                          {t("settings.about.openDownloadPage")}
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={doCheck} className="shrink-0">
+                        <RefreshCwIcon />
+                        {t("settings.about.retry")}
+                      </Button>
+                    </div>
                   </div>
                 </StatusLine>
               )}

@@ -1,38 +1,44 @@
 // prism-next/src/main/ipc/update.ts
-// IPC surface for the app updater. Task 5: check/ignore remain; Task 6 adds
-// download / install / progress. About still uses openExternal via `latest.path`
-// until downloadUpdate is wired in the UI.
-// About also reads app + bundled OpenCode versions here (same settings panel).
+// IPC surface for the app updater: check / download / install / ignore + About versions.
+// Progress is broadcast from update-checker as `update:progress`.
 
 import { ipcMain } from "electron";
 import {
   checkForUpdates,
-  getCachedStatus,
+  downloadUpdate,
+  getUpdaterStatus,
   ignoreVersion,
-  toLegacyResult,
+  quitAndInstall,
   unignoreVersion,
 } from "../services/update-checker";
 import { getAboutVersions } from "../services/opencode-binary";
 
 export function registerUpdateHandlers(): void {
   ipcMain.handle("update:check", async () => {
-    // Return legacy shape so current About / welcome UI keep working.
-    // Task 6 should switch to UpdaterStatus + download/install channels.
-    return toLegacyResult(await checkForUpdates());
+    return checkForUpdates();
   });
 
   ipcMain.handle("update:status", async () => {
-    return getCachedStatus();
+    return getUpdaterStatus();
+  });
+
+  ipcMain.handle("update:download", async () => {
+    return downloadUpdate();
+  });
+
+  ipcMain.handle("update:install", async () => {
+    quitAndInstall();
+    return { ok: true as const };
   });
 
   ipcMain.handle("update:ignore", async (_event, args: { version: string }) => {
     ignoreVersion(args.version);
-    return getCachedStatus();
+    return getUpdaterStatus();
   });
 
   ipcMain.handle("update:unignore", async () => {
     unignoreVersion();
-    return getCachedStatus();
+    return getUpdaterStatus();
   });
 
   ipcMain.handle("about:getVersions", async () => {

@@ -12,7 +12,6 @@ import { loadProjectIcon, ProjectIconBadge } from "./project-icon";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
-import type { UpdateCheckResult } from "@/types/electron";
 import {
   FolderOpenIcon,
   FolderPlusIcon,
@@ -105,14 +104,19 @@ function WelcomeStatusChecks() {
 
     const applyAppUpdate = (
       appVersion: string,
-      update: UpdateCheckResult | null,
+      update: { status: string } | null,
     ) => {
       let appState: CheckState = "ok";
       let appDetail = `v${appVersion}`;
-      if (update?.status === "available") {
+      if (update?.status === "available" || update?.status === "downloaded") {
         appState = "warn";
         appDetail = `v${appVersion}↑`;
-      } else if (update?.status === "up-to-date" || update?.status === "no-source" || !update) {
+      } else if (
+        update?.status === "up-to-date" ||
+        update?.status === "no-source" ||
+        update?.status === "idle" ||
+        !update
+      ) {
         appDetail = `v${appVersion}`;
       } else if (update?.status === "error") {
         appState = "warn";

@@ -265,11 +265,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	provenanceGetForRun: (projectRoot: string, runId: string) =>
 		ipcRenderer.invoke("provenance:getForRun", { projectRoot, runId }),
 
-		// Update checker — manifest is a local path or HTTPS url to version.json.
+		// App updater — electron-updater (packaged) / version.json (dev QA).
 		updateCheck: () => ipcRenderer.invoke("update:check"),
 		updateStatus: () => ipcRenderer.invoke("update:status"),
+		updateDownload: () => ipcRenderer.invoke("update:download"),
+		updateInstall: () => ipcRenderer.invoke("update:install"),
 		updateIgnore: (version: string) => ipcRenderer.invoke("update:ignore", { version }),
 		updateUnignore: () => ipcRenderer.invoke("update:unignore"),
+		onUpdateProgress: (callback: (data: { percent: number }) => void) => {
+			const handler = (
+				_event: Electron.IpcRendererEvent,
+				data: { percent: number },
+			) => callback(data);
+			ipcRenderer.on("update:progress", handler);
+			return () => ipcRenderer.removeListener("update:progress", handler);
+		},
 		aboutGetVersions: () => ipcRenderer.invoke("about:getVersions"),
 
 	// Window operations

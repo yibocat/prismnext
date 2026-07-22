@@ -381,6 +381,7 @@ export async function downloadUpdate(): Promise<UpdaterStatus> {
 
   if (
     cachedStatus.status !== "available" &&
+    cachedStatus.status !== "ignored" &&
     cachedStatus.status !== "downloading" &&
     cachedStatus.status !== "downloaded"
   ) {

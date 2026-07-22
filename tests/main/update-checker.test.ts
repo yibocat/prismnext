@@ -33,7 +33,11 @@ vi.mock("electron-updater", () => ({
   },
 }));
 
-import { compareVersions } from "../../src/main/services/update-checker";
+import {
+  compareVersions,
+  toLegacyResult,
+  type UpdaterStatus,
+} from "../../src/main/services/update-checker";
 
 describe("compareVersions", () => {
   it("orders semver", () => {
@@ -45,5 +49,48 @@ describe("compareVersions", () => {
   it("strips leading v and pads short versions", () => {
     expect(compareVersions("v1.2.0", "1.2")).toBe(0);
     expect(compareVersions("1.2.1", "1.2")).toBe(1);
+  });
+});
+
+describe("toLegacyResult", () => {
+  const base = { currentVersion: "0.5.14" };
+
+  it("maps available / up-to-date for welcome badge compat", () => {
+    expect(
+      toLegacyResult({ ...base, status: "up-to-date" }),
+    ).toEqual({ status: "up-to-date", currentVersion: "0.5.14" });
+
+    const latest = {
+      version: "0.5.15",
+      path: "https://example.com/app.dmg",
+    };
+    expect(
+      toLegacyResult({
+        ...base,
+        status: "available",
+        latestVersion: "0.5.15",
+        latest,
+      }),
+    ).toEqual({
+      status: "available",
+      currentVersion: "0.5.14",
+      latest,
+    });
+  });
+
+  it("returns null for download lifecycle so About uses UpdaterStatus", () => {
+    const downloading: UpdaterStatus = {
+      ...base,
+      status: "downloading",
+      progress: { percent: 42 },
+    };
+    const downloaded: UpdaterStatus = {
+      ...base,
+      status: "downloaded",
+      progress: { percent: 100 },
+    };
+    expect(toLegacyResult(downloading)).toBeNull();
+    expect(toLegacyResult(downloaded)).toBeNull();
+    expect(toLegacyResult({ ...base, status: "checking" })).toBeNull();
   });
 });
