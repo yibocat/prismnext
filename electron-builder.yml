@@ -49,3 +49,10 @@ linux:
       to: "opencode"
       filter:
         - "opencode*"
+
+# CI must pass --config.publish.url="$R2_PUBLIC_BASE_URL" (Task 4).
+# Local dist:* uses --publish never — no upload.
+publish:
+  provider: generic
+  url: https://REPLACE_WITH_R2_PUBLIC_BASE_URL
+  channel: latest
