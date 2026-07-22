@@ -33,5 +33,34 @@ cd resources/brand
 rsvg-convert -w 1024 -h 1024 app-icon-light.svg -o app-icon-light.png
 rsvg-convert -w 1024 -h 1024 app-icon-dark.svg -o app-icon-dark.png
 cp app-icon-dark.png icon.png
-# then rebuild icon.icns via iconutil iconset (16…1024) and icon.ico via Pillow
+# macOS: iconutil iconset (16…1024) → icon.icns
+# Windows: multi-size ICO with a **256×256** frame (electron-builder rejects 16-only .ico)
+python3 <<'PY'
+from pathlib import Path
+import struct
+from io import BytesIO
+from PIL import Image
+
+master = Image.open("app-icon-dark.png").convert("RGBA")
+sizes = [16, 24, 32, 48, 64, 128, 256]
+entries = []
+for s in sizes:
+    buf = BytesIO()
+    master.resize((s, s), Image.Resampling.LANCZOS).save(buf, format="PNG")
+    entries.append((s, buf.getvalue()))
+header = struct.pack("<HHH", 0, 1, len(entries))
+offset = 6 + 16 * len(entries)
+directory = bytearray()
+blobs = bytearray()
+for s, data in entries:
+    w = 0 if s >= 256 else s
+    h = 0 if s >= 256 else s
+    directory += struct.pack("<BBBBHHII", w, h, 0, 0, 1, 32, len(data), offset)
+    blobs += data
+    offset += len(data)
+Path("icon.ico").write_bytes(header + directory + blobs)
+print("icon.ico", Path("icon.ico").stat().st_size, "bytes")
+PY
 ```
+
+**Do not** save `icon.ico` with a single 16×16 frame — Windows packaging fails with `Icon must be at least 256x256`.
