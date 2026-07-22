@@ -1,5 +1,5 @@
 appId: com.prism-next.app
-productName: prismnext
+productName: PrismNext
 directories:
   output: dist
 
