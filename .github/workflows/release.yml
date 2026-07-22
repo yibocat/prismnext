@@ -15,6 +15,9 @@ concurrency:
   group: release-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
+permissions:
+  contents: write
+
 env:
   R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
   PRISM_UPDATER_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
@@ -26,6 +29,7 @@ jobs:
     outputs:
       artifact_name: ${{ steps.artifact.outputs.name }}
       version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -99,16 +103,28 @@ jobs:
           aws configure set aws_secret_access_key "${{ secrets.R2_SECRET_ACCESS_KEY }}"
           aws configure set region auto
 
+      # Only root-level installers / updater manifests — not mac-arm64/ or other unpack dirs.
       - name: Upload macOS artifacts to R2
         shell: bash
         env:
           ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
         run: |
-          aws s3 cp dist/ "s3://${{ secrets.R2_BUCKET }}/" \
-            --endpoint-url "$ENDPOINT" \
-            --recursive \
-            --exclude "*" \
-            --include "*.dmg" --include "*.zip" --include "*.yml" --include "*.blockmap"
+          shopt -s nullglob
+          for f in dist/*.dmg dist/*.zip dist/*.yml dist/*.blockmap; do
+            aws s3 cp "$f" "s3://${{ secrets.R2_BUCKET }}/$(basename "$f")" \
+              --endpoint-url "$ENDPOINT"
+          done
+
+      - name: Upload macOS artifacts for GitHub Release
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-release
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.yml
+            dist/*.blockmap
+          if-no-files-found: error
 
   win:
     name: Build Windows
@@ -178,17 +194,42 @@ jobs:
         env:
           ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
         run: |
-          aws s3 cp dist/ "s3://${{ secrets.R2_BUCKET }}/" \
-            --endpoint-url "$ENDPOINT" \
-            --recursive \
-            --exclude "*" \
-            --include "*.exe" --include "*.yml" --include "*.blockmap"
+          shopt -s nullglob
+          for f in dist/*.exe dist/*.yml dist/*.blockmap; do
+            aws s3 cp "$f" "s3://${{ secrets.R2_BUCKET }}/$(basename "$f")" \
+              --endpoint-url "$ENDPOINT"
+          done
 
-  publish-version:
-    name: Publish version.json
+      - name: Upload Windows artifacts for GitHub Release
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-release
+          path: |
+            dist/*.exe
+            dist/*.yml
+            dist/*.blockmap
+          if-no-files-found: error
+
+  publish:
+    name: Publish version.json + GitHub Release
     needs: [mac, win]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-release
+          path: release-assets
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: win-release
+          path: release-assets
+
       - name: Install AWS CLI
         run: |
           if ! command -v aws >/dev/null 2>&1; then
@@ -214,6 +255,42 @@ jobs:
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
         run: |
           node -e "const fs=require('fs');fs.writeFileSync('version.json',JSON.stringify({version:process.env.VERSION,macUrl:\`\${process.env.R2_PUBLIC_BASE_URL}/\${process.env.MAC_ARTIFACT}\`,winUrl:\`\${process.env.R2_PUBLIC_BASE_URL}/\${process.env.WIN_ARTIFACT}\`,notes:''},null,2));"
+          cp version.json release-assets/version.json
           aws s3 cp version.json "s3://${{ secrets.R2_BUCKET }}/version.json" \
             --endpoint-url "$ENDPOINT" \
             --content-type "application/json"
+
+      # Write notes via shell env so the public R2 URL is not ***redacted*** in the Release body.
+      - name: Write release notes
+        shell: bash
+        env:
+          VERSION: ${{ needs.mac.outputs.version }}
+          MAC_ARTIFACT: ${{ needs.mac.outputs.artifact_name }}
+          WIN_ARTIFACT: ${{ needs.win.outputs.artifact_name }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        run: |
+          {
+            echo "## Downloads"
+            echo ""
+            echo "- **macOS:** \`${MAC_ARTIFACT}\`"
+            echo "- **Windows:** \`${WIN_ARTIFACT}\`"
+            echo ""
+            echo "Mirrored on R2 (in-app updates + download site):"
+            echo ""
+            echo "- version.json: ${R2_PUBLIC_BASE_URL}/version.json"
+            echo ""
+            echo "> Private repository: only collaborators can see this Release."
+          } > RELEASE_NOTES.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.mac.outputs.tag }}
+          name: prismnext ${{ needs.mac.outputs.version }}
+          body_path: RELEASE_NOTES.md
+          files: release-assets/*
+          draft: false
+          make_latest: true
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

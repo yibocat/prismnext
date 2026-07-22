@@ -35,8 +35,35 @@ When both the baked default and `updateSource` are empty (typical unsigned local
 | `CSC_KEY_PASSWORD` | Windows cert password |
 | `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` | macOS notarization |
 
-## Cloudflare Pages
+## Cloudflare Pages (download site)
 
-- Project root directory: `website`
-- Production branch: same as app default branch
-- No build command if pure static HTML; or `exit 0` if needed
+1. Workers & Pages → Create → Connect to Git → `yibocat/prismnext`
+2. Production branch: `master`
+3. **Root directory:** `website`
+4. Build command: empty (or `exit 0`)
+5. Deploy → open the `*.pages.dev` URL
+
+### R2 CORS (required for the download page)
+
+The Pages site fetches `version.json` from the R2 public URL (cross-origin).
+In the bucket **Settings → CORS Policy**, add a rule that allows GET from browsers, e.g.:
+
+```json
+[
+  {
+    "AllowedOrigins": ["*"],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": [],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+Later you can replace `*` with your exact `https://….pages.dev` origin.
+
+### GitHub Releases
+
+The Release workflow also creates a **GitHub Release** (right-hand Releases list)
+with the same installers attached. Collaborators on the private repo can see it;
+it does not replace R2 as the updater feed.
