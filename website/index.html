@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>prismnext — Download</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>prismnext</h1>
+      <p class="tagline">AI-powered LaTeX writing workspace</p>
+      <div class="downloads">
+        <a id="dl-mac" href="#">Download for macOS</a>
+        <a id="dl-win" href="#">Download for Windows</a>
+      </div>
+      <p class="version">Version <span id="version">…</span></p>
+      <p class="notes" id="notes"></p>
+    </main>
+    <script>
+      async function load() {
+        const res = await fetch("./version.json", { cache: "no-store" });
+        const v = await res.json();
+        document.getElementById("version").textContent = v.version;
+        const mac = document.getElementById("dl-mac");
+        const win = document.getElementById("dl-win");
+        mac.href = v.macUrl;
+        win.href = v.winUrl;
+        if (v.notes) document.getElementById("notes").textContent = v.notes;
+      }
+      load();
+    </script>
+  </body>
+</html>

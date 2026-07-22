@@ -1,0 +1,78 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #f7f3ee;
+  color: #2c2825;
+}
+
+main {
+  text-align: center;
+  padding: 2rem 1.5rem;
+  max-width: 28rem;
+}
+
+h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.tagline {
+  margin: 0 0 2rem;
+  color: #5c5650;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+
+.downloads a {
+  display: inline-block;
+  padding: 0.625rem 1.25rem;
+  border: 1px solid #2c2825;
+  border-radius: 0.375rem;
+  background: #2c2825;
+  color: #f7f3ee;
+  text-decoration: none;
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.downloads a:hover {
+  background: #1a1714;
+  border-color: #1a1714;
+}
+
+.version {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: #5c5650;
+}
+
+.notes {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #8a837a;
+  line-height: 1.4;
+}
+
+.notes:empty {
+  display: none;
+}
