@@ -67,3 +67,17 @@ Later you can replace `*` with your exact `https://….pages.dev` origin.
 The Release workflow also creates a **GitHub Release** (right-hand Releases list)
 with the same installers attached. Collaborators on the private repo can see it;
 it does not replace R2 as the updater feed.
+
+**Release notes** come from the changelog (not a hardcoded blurb):
+
+1. Version `X.Y.Z` → series file `changelog/X.Y.x.md`  
+   (e.g. `0.5.14` → `0.5.x.md`, `0.6.0` → `0.6.x.md`, `2.1.3` → `2.1.x.md`)
+2. Extract the `## X.Y.Z …` section (`— date` or `(Unreleased)` headings both work)
+3. If the series file is missing, fall back to `changelog/CHANGELOG.md`
+4. Append a short Downloads / R2 footer
+
+Before tagging: ensure that section exists. Dry-run locally:
+
+```bash
+node scripts/release/extract-changelog-section.mjs 0.5.14
+```

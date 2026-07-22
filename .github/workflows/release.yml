@@ -260,7 +260,8 @@ jobs:
             --endpoint-url "$ENDPOINT" \
             --content-type "application/json"
 
-      # Write notes via shell env so the public R2 URL is not ***redacted*** in the Release body.
+      # Body = changelog section for this version + fixed Downloads footer.
+      # Series file: changelog/{major}.{minor}.x.md (e.g. 0.5.14 → 0.5.x.md, 2.1.0 → 2.1.x.md).
       - name: Write release notes
         shell: bash
         env:
@@ -269,7 +270,14 @@ jobs:
           WIN_ARTIFACT: ${{ needs.win.outputs.artifact_name }}
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
         run: |
+          set -euo pipefail
           {
+            echo "## What's new"
+            echo ""
+            node scripts/release/extract-changelog-section.mjs "$VERSION"
+            echo ""
+            echo "---"
+            echo ""
             echo "## Downloads"
             echo ""
             echo "- **macOS:** \`${MAC_ARTIFACT}\`"
