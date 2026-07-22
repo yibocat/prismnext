@@ -70,8 +70,8 @@ export interface AppSettings {
   /** Optional override model for literature AI metadata (`provider/model`). */
   literatureAiMetadataModel?: string;
 
-  /** Update-check source — local file path or HTTPS url to a version.json
-   *  manifest (fields mirror electron-builder's latest.yml). Empty = disabled. */
+  /** Optional update feed override (generic provider root, or unpackaged
+   *  version.json URL/path). Empty → use PRISM_UPDATER_BASE_URL / baked default. */
   updateSource?: string;
   /** A version the user dismissed; suppressed from "available" until unignored. */
   ignoredUpdateVersion?: string;

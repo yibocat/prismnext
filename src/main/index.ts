@@ -339,6 +339,13 @@ app.whenReady().then(async () => {
   startPlanSuggestBridge();
   startExperimentLogBridge();
 
+  try {
+    const { initAppUpdater } = await import("./services/update-checker");
+    initAppUpdater();
+  } catch (err) {
+    log.warn("App updater init failed", { error: (err as Error).message });
+  }
+
   installApplicationMenu({
     getTargetWindow: pickWindowForShell,
     createWindow,
