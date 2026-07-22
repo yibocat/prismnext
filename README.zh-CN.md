@@ -204,7 +204,7 @@ PrismNext 把**读文献 → 想清楚 → 跑实验 → 写成稿 → 审一遍
 
 欢迎 Issue / PR：科研闭环、闸门体验、本地优先工程，都欢迎。详见 [CONTRIBUTING.md](./CONTRIBUTING.md)、[SUPPORT.md](./SUPPORT.md)、[CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)。安全漏洞请走 [SECURITY.md](./SECURITY.md)。
 
-采用 [Apache License 2.0](./LICENSE) 许可。
+采用 [Apache License 2.0](./LICENSE) 许可。版权 © 2026 yibocat — 见 [NOTICE](./NOTICE)。
 
 ---
 

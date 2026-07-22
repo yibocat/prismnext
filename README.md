@@ -206,7 +206,7 @@ We’re deepening **co-drive**:
 
 Issues / PRs that improve the loop, gates, or local-first UX are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md), [SUPPORT.md](./SUPPORT.md), and [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md). Security reports: [SECURITY.md](./SECURITY.md).
 
-Licensed under the [Apache License 2.0](./LICENSE).
+Licensed under the [Apache License 2.0](./LICENSE). Copyright © 2026 yibocat — see [NOTICE](./NOTICE).
 
 ---
 
