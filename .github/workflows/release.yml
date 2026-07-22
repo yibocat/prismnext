@@ -1,0 +1,218 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.5.14). Defaults to pushed tag or package.json version."
+        required: false
+        type: string
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+
+jobs:
+  mac:
+    name: Build macOS
+    runs-on: macos-latest
+    outputs:
+      artifact_name: ${{ steps.artifact.outputs.name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Resolve release metadata
+        id: release
+        shell: bash
+        run: |
+          TAG="${{ inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          if [[ "$TAG" != v* ]]; then
+            VERSION="$(node -p "require('./package.json').version")"
+            TAG="v${VERSION}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download OpenCode binary
+        shell: bash
+        run: ./scripts/download-opencode.sh
+
+      - name: Build app
+        run: pnpm build
+
+      - name: Package (macOS)
+        shell: bash
+        env:
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        run: |
+          pnpm exec electron-builder --mac --publish never --config.publish.url="$R2_PUBLIC_BASE_URL"
+
+      - name: Capture artifact name
+        id: artifact
+        shell: bash
+        run: |
+          name="$(basename "$(ls dist/*.dmg | head -1)")"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Install AWS CLI
+        shell: bash
+        run: |
+          if ! command -v aws >/dev/null 2>&1; then
+            curl -fsSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o /tmp/AWSCLIV2.pkg
+            sudo installer -pkg /tmp/AWSCLIV2.pkg -target /
+          fi
+          aws --version
+
+      - name: Configure AWS CLI for R2
+        shell: bash
+        run: |
+          aws configure set aws_access_key_id "${{ secrets.R2_ACCESS_KEY_ID }}"
+          aws configure set aws_secret_access_key "${{ secrets.R2_SECRET_ACCESS_KEY }}"
+          aws configure set region auto
+
+      - name: Upload macOS artifacts to R2
+        shell: bash
+        env:
+          ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        run: |
+          aws s3 cp dist/ "s3://${{ secrets.R2_BUCKET }}/" \
+            --endpoint-url "$ENDPOINT" \
+            --recursive \
+            --exclude "*" \
+            --include "*.dmg" --include "*.yml" --include "*.blockmap"
+
+  win:
+    name: Build Windows
+    runs-on: windows-latest
+    outputs:
+      artifact_name: ${{ steps.artifact.outputs.name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download OpenCode binary
+        shell: bash
+        run: ./scripts/download-opencode.sh
+
+      - name: Build app
+        run: pnpm build
+
+      - name: Package (Windows)
+        shell: bash
+        env:
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        run: |
+          pnpm exec electron-builder --win --publish never --config.publish.url="$R2_PUBLIC_BASE_URL"
+
+      - name: Capture artifact name
+        id: artifact
+        shell: bash
+        run: |
+          name="$(basename "$(ls dist/*.exe | head -1)")"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Install AWS CLI
+        shell: bash
+        run: |
+          if ! command -v aws >/dev/null 2>&1; then
+            curl -fsSL "https://awscli.amazonaws.com/AWSCLIV2.msi" -o /tmp/AWSCLIV2.msi
+            msiexec.exe /i /tmp/AWSCLIV2.msi /qn
+            export PATH="/c/Program Files/Amazon/AWSCLIV2:$PATH"
+          fi
+          aws --version
+
+      - name: Configure AWS CLI for R2
+        shell: bash
+        run: |
+          aws configure set aws_access_key_id "${{ secrets.R2_ACCESS_KEY_ID }}"
+          aws configure set aws_secret_access_key "${{ secrets.R2_SECRET_ACCESS_KEY }}"
+          aws configure set region auto
+
+      - name: Upload Windows artifacts to R2
+        shell: bash
+        env:
+          ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        run: |
+          aws s3 cp dist/ "s3://${{ secrets.R2_BUCKET }}/" \
+            --endpoint-url "$ENDPOINT" \
+            --recursive \
+            --exclude "*" \
+            --include "*.exe" --include "*.yml" --include "*.blockmap"
+
+  publish-version:
+    name: Publish version.json
+    needs: [mac, win]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install AWS CLI
+        run: |
+          if ! command -v aws >/dev/null 2>&1; then
+            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+            unzip -q /tmp/awscliv2.zip -d /tmp
+            sudo /tmp/aws/install
+          fi
+          aws --version
+
+      - name: Configure AWS CLI for R2
+        run: |
+          aws configure set aws_access_key_id "${{ secrets.R2_ACCESS_KEY_ID }}"
+          aws configure set aws_secret_access_key "${{ secrets.R2_SECRET_ACCESS_KEY }}"
+          aws configure set region auto
+
+      - name: Write and upload version.json
+        shell: bash
+        env:
+          ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          VERSION: ${{ needs.mac.outputs.version }}
+          MAC_ARTIFACT: ${{ needs.mac.outputs.artifact_name }}
+          WIN_ARTIFACT: ${{ needs.win.outputs.artifact_name }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        run: |
+          node -e "const fs=require('fs');fs.writeFileSync('version.json',JSON.stringify({version:process.env.VERSION,macUrl:\`\${process.env.R2_PUBLIC_BASE_URL}/\${process.env.MAC_ARTIFACT}\`,winUrl:\`\${process.env.R2_PUBLIC_BASE_URL}/\${process.env.WIN_ARTIFACT}\`,notes:''},null,2));"
+          aws s3 cp version.json "s3://${{ secrets.R2_BUCKET }}/version.json" \
+            --endpoint-url "$ENDPOINT" \
+            --content-type "application/json"

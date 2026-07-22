@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="prismnext-version" content="0.0.0-dev" />
     <title>prismnext — Download</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
@@ -17,16 +18,48 @@
       <p class="version">Version <span id="version">…</span></p>
       <p class="notes" id="notes"></p>
     </main>
+    <script src="./config.js"></script>
     <script>
+      function defaultVersion() {
+        return (
+          document.querySelector('meta[name="prismnext-version"]')?.content ||
+          "0.0.0-dev"
+        );
+      }
+
+      function versionJsonUrls() {
+        const base = window.__RELEASES_BASE__;
+        const isPlaceholder =
+          !base || base.includes("REPLACE_WITH_R2_PUBLIC_BASE_URL");
+        if (isPlaceholder) return ["./version.json"];
+        const normalized = base.replace(/\/$/, "");
+        return [`${normalized}/version.json`, "./version.json"];
+      }
+
+      async function loadVersionJson() {
+        for (const url of versionJsonUrls()) {
+          try {
+            const res = await fetch(url, { cache: "no-store" });
+            if (res.ok) return res.json();
+          } catch (_) {
+            /* try next source */
+          }
+        }
+        throw new Error("Failed to load version.json");
+      }
+
       async function load() {
-        const res = await fetch("./version.json", { cache: "no-store" });
-        const v = await res.json();
-        document.getElementById("version").textContent = v.version;
-        const mac = document.getElementById("dl-mac");
-        const win = document.getElementById("dl-win");
-        mac.href = v.macUrl;
-        win.href = v.winUrl;
-        if (v.notes) document.getElementById("notes").textContent = v.notes;
+        document.getElementById("version").textContent = defaultVersion();
+        try {
+          const v = await loadVersionJson();
+          document.getElementById("version").textContent = v.version;
+          document.getElementById("dl-mac").href = v.macUrl;
+          document.getElementById("dl-win").href = v.winUrl;
+          if (v.notes) document.getElementById("notes").textContent = v.notes;
+        } catch (_) {
+          document.getElementById("notes").textContent =
+            "Release metadata unavailable.";
+        }
       }
       load();
     </script>
