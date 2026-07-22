@@ -108,7 +108,7 @@ jobs:
             --endpoint-url "$ENDPOINT" \
             --recursive \
             --exclude "*" \
-            --include "*.dmg" --include "*.yml" --include "*.blockmap"
+            --include "*.dmg" --include "*.zip" --include "*.yml" --include "*.blockmap"
 
   win:
     name: Build Windows

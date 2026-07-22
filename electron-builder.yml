@@ -18,8 +18,10 @@ extraResources:
 # Folder names: darwin | linux | windows  (not electron-builder's mac/win macros).
 mac:
   icon: resources/brand/icon.icns
+  # dmg = human download; zip = electron-updater (generic provider requires zip on macOS)
   target:
     - dmg
+    - zip
   artifactName: "${productName}-${version}-${arch}.${ext}"
   extraResources:
     - from: "bin/opencode/darwin-${arch}/"

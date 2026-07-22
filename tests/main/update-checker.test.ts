@@ -35,9 +35,62 @@ vi.mock("electron-updater", () => ({
 
 import {
   compareVersions,
+  normalizeVersionManifest,
   toLegacyResult,
   type UpdaterStatus,
 } from "../../src/main/services/update-checker";
+
+describe("normalizeVersionManifest", () => {
+  it("accepts classic {version, path}", () => {
+    expect(
+      normalizeVersionManifest({
+        version: "0.5.15",
+        path: "https://cdn.example/app.dmg",
+      }),
+    ).toEqual({
+      version: "0.5.15",
+      path: "https://cdn.example/app.dmg",
+      releaseNotes: undefined,
+      pubDate: undefined,
+    });
+  });
+
+  it("maps macUrl/winUrl to path by platform when path is missing", () => {
+    const r2 = {
+      version: "0.5.15",
+      macUrl: "https://cdn.example/app.dmg",
+      winUrl: "https://cdn.example/app.exe",
+    };
+    expect(normalizeVersionManifest(r2, "darwin")?.path).toBe(
+      "https://cdn.example/app.dmg",
+    );
+    expect(normalizeVersionManifest(r2, "win32")?.path).toBe(
+      "https://cdn.example/app.exe",
+    );
+  });
+
+  it("prefers explicit path over macUrl/winUrl", () => {
+    expect(
+      normalizeVersionManifest(
+        {
+          version: "0.5.15",
+          path: "https://cdn.example/explicit.zip",
+          macUrl: "https://cdn.example/app.dmg",
+          winUrl: "https://cdn.example/app.exe",
+        },
+        "darwin",
+      )?.path,
+    ).toBe("https://cdn.example/explicit.zip");
+  });
+
+  it("returns null when platform URL is missing", () => {
+    expect(
+      normalizeVersionManifest({ version: "0.5.15", winUrl: "https://x/a.exe" }, "darwin"),
+    ).toBeNull();
+    expect(normalizeVersionManifest({ version: "0.5.15" }, "darwin")).toBeNull();
+    expect(normalizeVersionManifest(null)).toBeNull();
+  });
+});
 
 describe("compareVersions", () => {
   it("orders semver", () => {

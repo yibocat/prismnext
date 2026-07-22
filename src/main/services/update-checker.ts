@@ -117,10 +117,38 @@ export function resolveFeedUrl(): string {
   return resolveDefaultFeedUrl();
 }
 
-function isValidVersionInfo(obj: unknown): obj is VersionInfo {
-  if (!obj || typeof obj !== "object") return false;
+/**
+ * Normalize a version.json payload into VersionInfo.
+ * Accepts classic `{version, path}` and R2 website shape `{version, macUrl, winUrl}`
+ * (maps platform URL → `path` when `path` is absent).
+ */
+export function normalizeVersionManifest(
+  obj: unknown,
+  platform: NodeJS.Platform = process.platform,
+): VersionInfo | null {
+  if (!obj || typeof obj !== "object") return null;
   const o = obj as Record<string, unknown>;
-  return typeof o.version === "string" && typeof o.path === "string";
+  if (typeof o.version !== "string" || !o.version.trim()) return null;
+
+  let pathValue: string | undefined;
+  if (typeof o.path === "string" && o.path.trim()) {
+    pathValue = o.path.trim();
+  } else {
+    const macUrl = typeof o.macUrl === "string" ? o.macUrl.trim() : "";
+    const winUrl = typeof o.winUrl === "string" ? o.winUrl.trim() : "";
+    if (platform === "darwin" && macUrl) pathValue = macUrl;
+    else if (platform === "win32" && winUrl) pathValue = winUrl;
+  }
+
+  if (!pathValue) return null;
+
+  const notes = releaseNotesText(o.notes ?? o.releaseNotes);
+  return {
+    version: o.version.trim(),
+    path: pathValue,
+    releaseNotes: notes,
+    pubDate: typeof o.pubDate === "string" ? o.pubDate : undefined,
+  };
 }
 
 function releaseNotesText(notes: unknown): string | undefined {
@@ -165,6 +193,7 @@ function versionInfoFromUpdate(
 
 /** Read the manifest from a local file path or an HTTPS url. */
 async function fetchManifest(source: string): Promise<VersionInfo> {
+  let text: string;
   if (/^https?:\/\//i.test(source)) {
     const res = await fetch(source, {
       signal: AbortSignal.timeout(15000),
@@ -173,12 +202,17 @@ async function fetchManifest(source: string): Promise<VersionInfo> {
     if (!res.ok) {
       throw new Error(`HTTP ${res.status} fetching ${source}`);
     }
-    const text = await res.text();
-    return JSON.parse(text) as VersionInfo;
+    text = await res.text();
+  } else {
+    const abs = path.resolve(source);
+    text = await fs.promises.readFile(abs, "utf8");
   }
-  const abs = path.resolve(source);
-  const text = await fs.promises.readFile(abs, "utf8");
-  return JSON.parse(text) as VersionInfo;
+  const raw: unknown = JSON.parse(text);
+  const normalized = normalizeVersionManifest(raw);
+  if (!normalized) {
+    throw new Error("Manifest is missing required fields (version, path or macUrl/winUrl)");
+  }
+  return normalized;
 }
 
 /** True when source looks like a version.json manifest (not a generic feed root). */
@@ -298,9 +332,6 @@ async function checkViaManifest(source: string): Promise<UpdaterStatus> {
 
   try {
     const latest = await fetchManifest(manifestUrl);
-    if (!isValidVersionInfo(latest)) {
-      throw new Error("Manifest is missing required fields (version, path)");
-    }
 
     const cmp = compareVersions(latest.version, cv);
     if (cmp <= 0) {
