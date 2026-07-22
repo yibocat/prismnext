@@ -428,11 +428,21 @@ export interface ToolFile {
   content: string;
 }
 
-/** Dev: `src/main/tools/`; packaged: `main/tools/` under app path. */
+/**
+ * OpenCode tool `.ts` sources live under `src/main/tools/` in the repo.
+ * Packaged asars also keep that path (electron-builder includes `src/`);
+ * there is no `main/tools/` rewrite step in the current build.
+ */
 export function getToolsSourceDir(): string {
-  return app.isPackaged
-    ? join(app.getAppPath(), "main", "tools")
-    : join(app.getAppPath(), "src", "main", "tools");
+  const candidates = [
+    join(app.getAppPath(), "src", "main", "tools"),
+    // Legacy / mistaken packaged layout (never shipped correctly) — keep as fallback
+    join(app.getAppPath(), "main", "tools"),
+  ];
+  for (const dir of candidates) {
+    if (existsSync(dir)) return dir;
+  }
+  return candidates[0];
 }
 
 /** Shared helper copied alongside tools — not an OpenCode tool itself. */
