@@ -172,6 +172,12 @@ export class AcpService {
   private lastInitError: string | null = null;
   /** Suppress exit-handler lifecycle updates while we intentionally replace the child. */
   private suppressExitLifecycle = false;
+  /**
+   * Single-flight for initialize(). App startup and renderer `chat:prewarm` can
+   * overlap after `createWindow()`; without this, a second call `shutdown()`s the
+   * child mid-handshake → "ACP connection closed".
+   */
+  private initInflight: Promise<void> | null = null;
   /** Cached agent config from project prewarm — avoids re-reading on session create. */
   private cachedAgentConfig: {
     projectRoot: string;
@@ -485,30 +491,54 @@ export class AcpService {
     // Merge into stored env — preserves keys from other providers across reconnects
     if (extraEnv) Object.assign(this.lastExtraEnv, extraEnv);
 
-    // Route OpenCode's XDG directories to the app-level data folder.
-    const serverDir = this.getServerDataDir();
-    mkdirSync(serverDir, { recursive: true });
-    this.ensureOpenCodeAuthUnderXdg(serverDir);
-    // Fill missing keys from settings / CLI auth.json before deciding whether
-    // the running child already has the right credentials baked in.
-    this.hydrateCredentialEnv(serverDir);
+    for (;;) {
+      // Join any in-flight attempt (do not start a parallel spawn/shutdown race).
+      while (this.initInflight) {
+        try {
+          await this.initInflight;
+        } catch {
+          // Shared attempt failed — fall through and retry if still needed.
+        }
+      }
 
-    // API keys / base URLs only apply at spawn. If credentials arrived after the
-    // process was already warm (or changed), restart so OpenCode can use them —
-    // otherwise session/set_model to opencode-go/* silently falls back to big-pickle.
-    const credentialDelta = Object.entries(this.lastExtraEnv).some(
-      ([k, v]) => Boolean(v) && /API_KEY|BASE_URL/i.test(k) && this.bakedExtraEnv[k] !== v,
-    );
+      // Route OpenCode's XDG directories to the app-level data folder.
+      const serverDir = this.getServerDataDir();
+      mkdirSync(serverDir, { recursive: true });
+      this.ensureOpenCodeAuthUnderXdg(serverDir);
+      // Fill missing keys from settings / CLI auth.json before deciding whether
+      // the running child already has the right credentials baked in.
+      this.hydrateCredentialEnv(serverDir);
 
-    if (this.conn && this.proc && !credentialDelta) {
-      this.setLifecycle("ready");
+      // API keys / base URLs only apply at spawn. If credentials arrived after the
+      // process was already warm (or changed), restart so OpenCode can use them —
+      // otherwise session/set_model to opencode-go/* silently falls back to big-pickle.
+      const credentialDelta = Object.entries(this.lastExtraEnv).some(
+        ([k, v]) => Boolean(v) && /API_KEY|BASE_URL/i.test(k) && this.bakedExtraEnv[k] !== v,
+      );
+
+      if (this.conn && this.proc && !credentialDelta) {
+        this.setLifecycle("ready");
+        return;
+      }
+
+      if (this.conn && this.proc && credentialDelta) {
+        log.info("Restarting OpenCode to apply updated provider credentials");
+      }
+
+      // Another caller may have started while we hydrated — join them.
+      if (this.initInflight) continue;
+
+      const run = this.initializeExclusive();
+      this.initInflight = run.finally(() => {
+        this.initInflight = null;
+      });
+      await run;
       return;
     }
+  }
 
-    if (this.conn && this.proc && credentialDelta) {
-      log.info("Restarting OpenCode to apply updated provider credentials");
-    }
-
+  /** Exclusive spawn + ACP handshake (callers must go through initialize()). */
+  private async initializeExclusive(): Promise<void> {
     this.setLifecycle("starting");
     this.suppressExitLifecycle = true;
     try {
@@ -574,16 +604,16 @@ export class AcpService {
       ...process.env,
       PATH: safePath,
       ...this.lastExtraEnv,
-      ...extraEnv,
       ...getPrismBridgeEnv(),
-      XDG_DATA_HOME: serverDir,
-      XDG_CONFIG_HOME: join(serverDir, "config"),
-      XDG_CACHE_HOME: join(serverDir, "cache"),
-      XDG_STATE_HOME: join(serverDir, "state"),
+      XDG_DATA_HOME: this.getServerDataDir(),
+      XDG_CONFIG_HOME: join(this.getServerDataDir(), "config"),
+      XDG_CACHE_HOME: join(this.getServerDataDir(), "cache"),
+      XDG_STATE_HOME: join(this.getServerDataDir(), "state"),
       // Enable OpenCode's built-in websearch (disabled by default)
       OPENCODE_ENABLE_EXA: "1",
     };
 
+    const serverDir = this.getServerDataDir();
     log.info(`Spawning opencode acp (data: ${serverDir})`, {
       credentialEnvKeys: Object.keys(this.lastExtraEnv).filter((k) =>
         /API_KEY|BASE_URL/i.test(k),
