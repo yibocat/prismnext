@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sidebar";
 import { ProjectSwitcher } from "@/components/modules/shared";
 import { SidebarControls } from "@/components/layout/sidebar-controls";
+import { SidebarUpdateButton } from "@/components/layout/sidebar-update-button";
 import {
   ArrowLeftIcon,
   Settings2Icon,
@@ -129,20 +130,23 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
         </div>
 
         <SidebarFooter className="px-2 pb-2">
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-            onClick={() => {
-              if (!projectRoot) {
-                useDocumentStore.getState().setShowWelcome(true);
-              }
-              useLayoutStore.getState().setLeftSidebarView("sessions");
-              setLeftSidebarOverlay(false);
-            }}
-          >
-            <ArrowLeftIcon className="size-3.5 shrink-0" />
-            <span>{t("common.back")}</span>
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+              onClick={() => {
+                if (!projectRoot) {
+                  useDocumentStore.getState().setShowWelcome(true);
+                }
+                useLayoutStore.getState().setLeftSidebarView("sessions");
+                setLeftSidebarOverlay(false);
+              }}
+            >
+              <ArrowLeftIcon className="size-3.5 shrink-0" />
+              <span>{t("common.back")}</span>
+            </button>
+            <SidebarUpdateButton />
+          </div>
         </SidebarFooter>
       </Sidebar>
     </SidebarProvider>

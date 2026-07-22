@@ -1,8 +1,9 @@
 {
   "name": "prism-next",
   "productName": "PrismNext",
-  "version": "0.5.15",
+  "version": "0.5.16",
   "description": "AI-powered LaTeX writing workspace",
+  "license": "Apache-2.0",
   "main": "./out/main/index.js",
   "scripts": {
     "copy-pdfjs-assets": "node scripts/copy-pdfjs-assets.mjs",

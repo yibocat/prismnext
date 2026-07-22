@@ -29,6 +29,7 @@ import { SettingsSidebar, type SettingsCategory } from "@/components/modules/set
 import { ProjectSwitcher } from "@/components/modules/shared";
 import { SidebarControls } from "@/components/layout/sidebar-controls";
 import { LeftNavButton, LeftNavButtonBar, leftNavPanelRefs } from "@/components/layout/left-nav-button";
+import { SidebarUpdateButton } from "@/components/layout/sidebar-update-button";
 import { leftNavRegistry } from "@/lib/workspace/left-nav";
 import { cn } from "@/lib/utils";
 import { isGenericSessionTitle, resolveSessionTitle } from "@/lib/chat/session-title";
@@ -637,14 +638,19 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
           )}
         </div>
         <SidebarFooter className="px-2 pb-2">
-          {footerNavItems.map((item) => (
-            <LeftNavButton
-              key={item.id}
-              item={item}
-              panelRefs={navPanelRefs}
-              onPressed={dismissOverlay}
-            />
-          ))}
+          <div className="flex items-center gap-1">
+            <div className="min-w-0 flex-1">
+              {footerNavItems.map((item) => (
+                <LeftNavButton
+                  key={item.id}
+                  item={item}
+                  panelRefs={navPanelRefs}
+                  onPressed={dismissOverlay}
+                />
+              ))}
+            </div>
+            <SidebarUpdateButton />
+          </div>
         </SidebarFooter>
       </Sidebar>
     </SidebarProvider>

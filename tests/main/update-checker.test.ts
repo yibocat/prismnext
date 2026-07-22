@@ -35,6 +35,7 @@ vi.mock("electron-updater", () => ({
 
 import {
   compareVersions,
+  isUsableUpdateSourceOverride,
   normalizeVersionManifest,
   toLegacyResult,
   type UpdaterStatus,
@@ -145,5 +146,42 @@ describe("toLegacyResult", () => {
     expect(toLegacyResult(downloading)).toBeNull();
     expect(toLegacyResult(downloaded)).toBeNull();
     expect(toLegacyResult({ ...base, status: "checking" })).toBeNull();
+  });
+});
+
+describe("isUsableUpdateSourceOverride", () => {
+  it("rejects obsolete update-channel fixture paths", () => {
+    expect(
+      isUsableUpdateSourceOverride("/Users/me/prism-next/update-channel/version.json"),
+    ).toBe(false);
+    expect(isUsableUpdateSourceOverride("update-channel/version.json")).toBe(false);
+  });
+
+  it("accepts https feeds", () => {
+    expect(isUsableUpdateSourceOverride("https://pub.example.r2.dev")).toBe(true);
+  });
+
+  it("rejects local paths when packaged", () => {
+    expect(
+      isUsableUpdateSourceOverride("/tmp/version.json", {
+        packaged: true,
+        existsSync: () => true,
+      }),
+    ).toBe(false);
+  });
+
+  it("accepts existing local paths only when unpackaged", () => {
+    expect(
+      isUsableUpdateSourceOverride("/tmp/version.json", {
+        packaged: false,
+        existsSync: () => true,
+      }),
+    ).toBe(true);
+    expect(
+      isUsableUpdateSourceOverride("/tmp/missing.json", {
+        packaged: false,
+        existsSync: () => false,
+      }),
+    ).toBe(false);
   });
 });

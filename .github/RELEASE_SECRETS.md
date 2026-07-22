@@ -23,7 +23,7 @@ Packaged apps resolve the default electron-updater generic feed from a **build-t
 
 - **Release workflow:** sets `PRISM_UPDATER_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}` on build/package steps (same value as `R2_PUBLIC_BASE_URL`).
 - **Local dist:** export the same URL before `pnpm build` / `pnpm dist`, e.g. `PRISM_UPDATER_BASE_URL=https://pub-xxx.r2.dev pnpm dist:mac`.
-- **Runtime override:** Settings → About **Update source** (`updateSource`) still overrides the baked default for advanced QA.
+- **Runtime override:** optional settings key `updateSource` can still override the baked default for advanced QA (not shown in About UI).
 
 When both the baked default and `updateSource` are empty (typical unsigned local dev without env), About shows **no-source**.
 

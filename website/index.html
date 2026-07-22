@@ -4,64 +4,83 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="prismnext-version" content="0.0.0-dev" />
+    <meta
+      name="description"
+      content="PrismNext — collaborative AI scientist workspace. Literature, design, experiments, and LaTeX in one local app."
+    />
+    <meta name="theme-color" content="#F4EFE8" />
     <title>PrismNext — Download</title>
+    <link rel="icon" type="image/png" href="./assets/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main>
-      <h1>PrismNext</h1>
-      <p class="tagline">AI-powered LaTeX writing workspace</p>
-      <div class="downloads">
-        <a id="dl-mac" href="#">Download for macOS</a>
-        <a id="dl-win" href="#">Download for Windows</a>
+    <div class="atmosphere" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="lang" role="group" aria-label="Language">
+        <button type="button" class="lang-btn is-active" data-lang="en" aria-pressed="true">
+          EN
+        </button>
+        <button type="button" class="lang-btn" data-lang="zh" aria-pressed="false">中文</button>
       </div>
-      <p class="version">Version <span id="version">…</span></p>
+    </header>
+
+    <main class="hero">
+      <div class="mark-wrap">
+        <img
+          class="mark mark-light"
+          src="./assets/ribbon-light.svg"
+          width="88"
+          height="88"
+          alt=""
+        />
+        <img
+          class="mark mark-dark"
+          src="./assets/ribbon-dark.svg"
+          width="88"
+          height="88"
+          alt=""
+        />
+      </div>
+
+      <p class="eyebrow" data-i18n="eyebrow">Early Access</p>
+      <h1 class="brand">PrismNext</h1>
+      <p class="lede" data-i18n="lede">
+        Your collaborative AI scientist — on your desk.
+      </p>
+      <p class="sub" data-i18n="sub">
+        Literature · design · experiments · LaTeX — one local workspace. The agent can drive; you keep the gates.
+      </p>
+
+      <div class="downloads">
+        <a id="dl-primary" class="btn btn-primary" href="#">Download for macOS</a>
+        <a id="dl-secondary" class="btn btn-ghost" href="#">Windows</a>
+      </div>
+
+      <p class="meta">
+        <span data-i18n="versionLabel">Version</span>
+        <span id="version">…</span>
+        <span class="dot" aria-hidden="true">·</span>
+        <span data-i18n="pillars">Local-first · BYOK</span>
+        <span class="dot" aria-hidden="true">·</span>
+        <span data-i18n="platforms">macOS · Windows</span>
+      </p>
       <p class="notes" id="notes"></p>
     </main>
+
+    <footer class="foot">
+      <p data-i18n="foot">
+        Apache-2.0 · Not an unsupervised paper factory — serious co-driving, locally.
+      </p>
+    </footer>
+
     <script src="./config.js"></script>
-    <script>
-      function defaultVersion() {
-        return (
-          document.querySelector('meta[name="prismnext-version"]')?.content ||
-          "0.0.0-dev"
-        );
-      }
-
-      function versionJsonUrls() {
-        const base = window.__RELEASES_BASE__;
-        const isPlaceholder =
-          !base || base.includes("REPLACE_WITH_R2_PUBLIC_BASE_URL");
-        if (isPlaceholder) return ["./version.json"];
-        const normalized = base.replace(/\/$/, "");
-        return [`${normalized}/version.json`, "./version.json"];
-      }
-
-      async function loadVersionJson() {
-        for (const url of versionJsonUrls()) {
-          try {
-            const res = await fetch(url, { cache: "no-store" });
-            if (res.ok) return res.json();
-          } catch (_) {
-            /* try next source */
-          }
-        }
-        throw new Error("Failed to load version.json");
-      }
-
-      async function load() {
-        document.getElementById("version").textContent = defaultVersion();
-        try {
-          const v = await loadVersionJson();
-          document.getElementById("version").textContent = v.version;
-          document.getElementById("dl-mac").href = v.macUrl;
-          document.getElementById("dl-win").href = v.winUrl;
-          if (v.notes) document.getElementById("notes").textContent = v.notes;
-        } catch (_) {
-          document.getElementById("notes").textContent =
-            "Release metadata unavailable.";
-        }
-      }
-      load();
-    </script>
+    <script src="./site.js"></script>
   </body>
 </html>

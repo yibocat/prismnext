@@ -1,182 +1,217 @@
-# prismnext
+# PrismNext
 
-**Collaborative AI Scientist workspace**  
-Local-first research loop · literature · experiments · LaTeX
+**Your collaborative AI scientist — on your desk.**  
+Literature · design · experiments · LaTeX — one local workspace.
 
 [English](./README.md) | [中文](./README.zh-CN.md)
 
-> **Early Access** — prismnext is under active development. The scholarly loop and co-driving model are real; we do not claim a finished 1.0 “auto-publish science” product.
+
+
+ **PrismNext** 
+
+`🚀 Early Access`  ·  `💻 macOS · Windows`  ·  `🔒 Local-first · BYOK`  ·  `📝 LaTeX first-class`
+
+> ✨ **Shipping fast.** The research loop is real; we are not claiming a finished “auto-publish science” product. Serious co-driving is the point.
 
 ---
 
-## What it is
 
-**prismnext** is a local-first desktop workspace for the full research loop: literature → research design → experiments → LaTeX manuscript → review. In the same surface you can switch among **Human-led**, **AI-led**, and **Co-drive**.
 
-- **OpenCode** is the agent runtime (ACP).
-- **prismnext** owns the research objects, workspace modes, prompt governance, and permission gates.
+## 👋 What is this?
 
-It is **not** an unattended “ship a paper overnight” engine, and **not** a cloud-only literature Q&A product. LaTeX is a first-class writing surface — not the whole product. Research reasoning is the core.
 
----
 
-## Why it’s different
-
-| Generic coding agents | Lit-chat / “auto AI scientist” narratives | **prismnext** |
-| --- | --- | --- |
-| Files + chat + tools | Retrieval or overnight pipelines | **Research objects** with lifecycle: brief, plan, library, experiments, manuscript, provenance |
-| Little scholarly structure | Weak daily manuscript control & integrity gates | **Co-drive with hard gates**: Plan consent, Approve & Build, permission modes, staged citations, experiment venv rules |
-| Cloud or IDE-centric | Often SaaS-first | **Local-first + BYOK**: project data under `.prismnext/`, keys on your machine |
-| “Write the `.tex`” | “Find papers / generate claims” | **Full loop**: read → design → run → write → cite → compile |
-
-You stay on the work surface; the agent advances design, plans, experiments, and writing **inside gates**. Light intervention via the AiBar capsule when you need it. We deepen serious co-driving — we do not pretend to replace the scientist.
+Not another “chat that edits files.” Not an overnight black-box paper machine.  
+PrismNext keeps **read → design → run → write → review** in one **local** app. The agent can drive — **you keep the gates**.
 
 ---
 
-## Features
 
-### Research loop
 
-- **Research Brief** — living design notes at `.prismnext/research/brief.md`
-- **Plan workflow** — Build | Plan session modes; agent proposes Plan via `suggest-plan` (consent strip); draft → Approve → checklist
-- **Literature** — project SQLite library, PDF reader, enrich (Crossref / arXiv / OpenAlex / …), BibTeX, citation staging & citation health
-- **Experiments** — experiment islands, run logs, artifacts, provenance query
-- **Paper search** — built-in Paper Search MCP, then stage into the local library
+## 🎯 Who it’s for
 
-### Writing surface
+- 🎓 **PhD / MSc / researchers** living in papers, experiments, and citations  
+- 👥 **Small writing teams** sharing a repo, with Git / worktrees and AI that doesn’t go rogue  
+- ✍️ **People who actually write LaTeX** — SyncTeX, compile, diffs — not Markdown-only  
+- 🛡️ **Privacy-minded authors** — manuscripts & library on disk; bring your own keys (BYOK)
 
-- **TeX Workspace** — CodeMirror 6 + LaTeX language support, outline, find
-- **PDF preview** — pdf.js + SyncTeX bidirectional jump
-- **Compile** — Tectonic (default) or TeXLive; `% !TEX program` / `% !TEX root`; export PDF or source zip
-- **Proposed Changes** — review AI edits in merge view; accept / reject per change or in bulk
+If you only want casual lit Q&A, this may be heavier than you need.  
+If you want something open **all day while you work**, this is built for that.
 
-### Agent platform
+---
 
-- Multi-tab OpenCode ACP chat, streaming, worktree-aware sessions
-- **Orchestrator + experts** — research-prism plus specialized experts (literature, design, methods, structure, peer review)
-- **Skills · Commands · Knowledge modules · Project rules**
-- **Hard / Soft governance** — real deny/bridges in ACP & UI; tool how-tos in tool descriptions; modules answer *when*, not manuals
+
+
+## ✨ Why PrismNext?
+
+
+|            | Generic coding agents      | Lit-chat / “auto AI scientist”          | **PrismNext**                                        |
+| ---------- | -------------------------- | --------------------------------------- | ---------------------------------------------------- |
+| 🧠 Focus   | Files + chat + tools       | Retrieval or overnight pipelines        | **Research objects with lifecycle**                  |
+| 🚪 Control | Little scholarly structure | Weak daily manuscript / integrity gates | **Plan consent, approve-to-build, permission modes** |
+| 💾 Data    | Cloud / IDE-centric        | Often SaaS-first                        | **Local-first + your API keys**                      |
+| 📄 Outcome | “Edit the `.tex`”          | “Find papers / generate claims”         | **Read → design → run → write → cite → compile**     |
+
+
+One line: **the agent advances; you keep the veto.**
+
+---
+
+
+
+## 🧰 What’s inside
+
+
+
+### 📚 Literature
+
+- Project **library** (SQLite) + PDF reading — not disposable chat attachments  
+- Metadata enrich: Crossref / arXiv / OpenAlex / …  
+- BibTeX in/out, citation staging & citation health  
+- Search, then **stage into the local library** — your shelf grows with the project
+
+
+
+### 🧭 Research design
+
+- **Research Brief** — living design notes that travel with the project  
+- **Plan workflow** — Build | Plan; consent before the agent enters Plan  
+- Draft → **Approve** → checklist — fewer “chat wandered off” disasters
+
+
+
+### 🧪 Experiments
+
+- Experiment islands, run logs, artifact snapshots  
+- **Provenance** — which command produced this plot / result (handy for Methods)
+
+
+
+### ✍️ LaTeX writing
+
+- TeX workspace (outline, find, language support)  
+- **pdf.js preview + SyncTeX** both ways  
+- Tectonic (default) or TeXLive; `% !TEX program` / `% !TEX root`  
+- **Proposed Changes** — merge view; accept / reject per change or in bulk  
+- Export PDF or source zip
+
+
+
+### 🤖 Agent co-drive
+
+- Multi-tab streaming chat  
+- Orchestrator + experts (literature, design, methods, structure, peer review, …)  
+- Skills · slash commands · knowledge modules · project rules  
 - Permission modes: Ask / Edit-auto / Auto / Readonly
 
-### Engineering shell
+Drive styles:
 
-- **Git** — status, stage, diff, commit, branches, merge, stash
-- **Worktrees** — parallel writing contexts under `.prismnext/worktrees/`
-- **Terminal** — xterm + AI bash via PTY bridge
-- **Browser** — in-app webview
-- **Templates** — paper, thesis, beamer, poster, CV, letter
-- **i18n** — English, 简体中文, 繁體中文（香港）
 
----
+| Mode             | Feel                                                          |
+| ---------------- | ------------------------------------------------------------- |
+| 👤 **Human-led** | You write & compile; ask when stuck                           |
+| 🤝 **Co-drive**  | Agent pushes design / runs / prose; you approve the big beats |
+| 🛰️ **AI-led**   | Maximize the work surface; nudge via the capsule bar          |
 
-## Architecture
 
-```text
-┌─ Renderer (React 19 · Zustand · modes) ─────────────────────┐
-│  Chat  │  TeX / Literature / Experiments / Git / …          │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ preload · IPC (domain:action)
-┌──────────────────────────▼──────────────────────────────────┐
-│  Main (services · prompts · tools · permission)             │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ ACP (stdio JSON-RPC)
-┌──────────────────────────▼──────────────────────────────────┐
-│  OpenCode (single persistent process)                       │
-│  runtime under app userData · skills from .prismnext/agent  │
-└─────────────────────────────────────────────────────────────┘
 
-Project data (local-first):
-  .prismnext/
-    library/       # library.db, PDFs, extracts
-    research/      # brief + plans
-    experiments/   # islands + runs
-    agent/         # AGENTS.md, skills, experts
-    compile/       # LaTeX build
-    worktrees/     # git worktrees
-```
 
-**Privacy posture:** manuscripts, library, experiments, and agent config stay on disk. `literature-search` queries the **local** library. Model calls use **your** API keys (BYOK). Optional catalog/enrich/MCP calls are explicit, not a hidden cloud vault for your project.
+### 🛠️ Everyday shell
+
+- Git: status, stage, diff, commit, branches, merge, stash  
+- Worktrees for parallel writing contexts  
+- Terminal + AI bash  
+- In-app browser  
+- Templates: paper / thesis / beamer / poster / CV / letter  
+- UI: English · 简体中文 · 繁體中文（香港）  
+- Packaged builds support **in-app updates**
 
 ---
 
-## Getting started
 
-### Use the app
 
-1. Download for **macOS** or **Windows** from the [download page](./website/) (or your release channel when published).
-2. Open or create a project folder.
-3. Set your AI provider & API key in **Settings**.
-4. Work in TeX / Literature / Experiments; chat in Human-led, or maximize the work surface for AI-led monitoring with the capsule bar.
+## 🚀 How to use
 
-Linux AppImage packaging exists in the build config; current release CI focuses on macOS and Windows.
 
-### Develop from source
 
-**Requirements:** Node.js 20+, [pnpm](https://pnpm.io), and a platform toolchain for native modules (`node-pty`).
+### 1️⃣ Install
 
-```bash
-# Clone this repository, then:
-pnpm install
+Grab **macOS** / **Windows** from the [download page](./website/) (or your release channel).
 
-# Download the pinned OpenCode binary for your platform (dev / packaging)
-./scripts/download-opencode.sh
+> 💡 On macOS, if Gatekeeper says the app is “damaged,” clear quarantine once: `xattr -cr` on the `.app`, then reopen.
 
-pnpm dev
-```
 
-| Command | Purpose |
-| --- | --- |
-| `pnpm dev` | Dev app (electron-vite) |
-| `pnpm test` | Vitest |
-| `pnpm typecheck` | TypeScript (main + renderer) |
-| `pnpm build` | Production build |
-| `pnpm dist:mac` / `pnpm dist:win` | Package installers (no publish) |
 
----
+### 2️⃣ Open or create a project
 
-## Repository layout
+Pick a folder as the project root. PrismNext keeps `.prismnext/` there (library, brief, experiments, compile cache, …) — **on your disk**.
 
-```text
-src/main/        # Electron main: ACP, IPC, services, prompts, tools
-src/preload/     # contextBridge → electronAPI
-src/renderer/    # React UI, stores, modes
-tests/           # Vitest (mirrors main / renderer)
-resources/       # Brand, templates, tray
-website/         # Minimal download page
-docs/            # Design specs & plans (superpowers/)
-changelog/       # Version notes
-```
+### 3️⃣ Connect your AI
+
+**Settings** → provider + API key (BYOK).  
+No “upload your thesis to our cloud” step.
+
+### 4️⃣ Get to work
+
+1. 📚 Add papers to the library (or search → stage)
+2. 🧭 Capture the problem & path in Brief / Plan
+3. ✍️ Write in TeX with live PDF
+4. 🧪 Attach experiment runs & artifacts when needed
+5. 🤖 Chat when stuck; use Plan / permissions for big moves
+6. ✅ Review Proposed Changes — keep only what you want
 
 ---
 
-## Roadmap (Early Access)
 
-Near-term direction (see internal phase inventory):
 
-- Stronger **topic discovery** into the local library (bounded, auditable)
-- **Evidence / stance** snapshots for co-drive — not “consensus declared”
-- Clearer **Drive Mode** (human | ai | co) productization
+## 🔒 What “local-first” means
 
-**Explicitly out of scope for now:** overnight unattended discovery as default, automatic submission, cloning a giant lit-SaaS index, replacing the OpenCode runtime.
+- Manuscript, library, experiments, agent config → **your machine**  
+- Model calls → **your keys**  
+- Optional network (enrich / search MCP, …) → **explicit**, not a silent project sync
 
----
-
-## Contributing
-
-Issues and pull requests that improve the research loop, gates, or local-first ergonomics are welcome. Please keep changes in the existing domain homes (`src/main/…`, `src/renderer/…`) rather than one-off patch files.
-
-Design history and deeper specs live under [`docs/superpowers/`](./docs/superpowers/). User-facing changes are logged in [`changelog/`](./changelog/).
+Built for unpublished data, sensitive drafts, and “I don’t want this whole project living in a SaaS.”
 
 ---
 
-## License
 
-License terms for this repository are not yet published. Contact the maintainers before redistribution.
+
+## 📸 Screenshots
+
+Product screenshots will land in `[docs/readme/](./docs/readme/)`. For now, brand + loop art set the tone:
+
+   
+
+> 🙋 PRs welcome with real UI shots (welcome, TeX+PDF, library, Plan consent) under `docs/readme/screenshots/`.
 
 ---
 
-<p align="center">
-  <img src="./resources/brand/ribbon-p5-light.svg" alt="prismnext mark" width="48" />
-</p>
 
-<p align="center"><sub>prismnext — co-drive serious research, locally.</sub></p>
+
+## 🗺️ Roadmap (Early Access)
+
+We’re deepening **co-drive**:
+
+- 🔭 Bounded, auditable topic discovery → local library  
+- 🧾 Clearer evidence / stance snapshots (not “consensus declared”)  
+- 🎛️ Sharper Human / AI / Co drive modes
+
+**Not the goal right now:** default overnight unattended discovery, auto-submission, or replacing the scientist.
+
+---
+
+
+
+## 🤝 Contributing & license
+
+Issues / PRs that improve the loop, gates, or local-first UX are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md), [SUPPORT.md](./SUPPORT.md), and [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md). Security reports: [SECURITY.md](./SECURITY.md).
+
+Licensed under the [Apache License 2.0](./LICENSE).
+
+---
+
+
+
+**PrismNext**
+
+Co-drive serious research, locally.

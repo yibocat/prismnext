@@ -359,8 +359,9 @@
       "updateSource": "Update source",
       "checkForUpdates": "Check for updates",
       "subtitle": "Version information and update checks.",
-      "appName": "prismnext",
+      "appName": "PrismNext",
       "appDesc": "Installed application version.",
+      "installedVsLatest": "Installed {{current}} · latest {{latest}}",
       "opencode": "OpenCode",
       "opencodeDesc": "Bundled agent binary used for chat (ACP).",
       "notFound": "Not found",
@@ -379,6 +380,10 @@
       "manifestDesc": "HTTPS feed root for packaged updates, or a version.json path for local QA. Leave empty to use the built-in default (if any).",
       "manifestPlaceholder": "https://releases.example.com  or  /path/to/version.json",
       "checkDesc": "Compare the installed version against the update feed. Packaged builds can download and install in-app.",
+      "checkDescShort": "Uses the built-in release feed. No setup needed.",
+      "updatesStatus": "Updates",
+      "oneClickUpdate": "Update now",
+      "oneClickUpdatingHint": "Downloading… the app will restart to finish installing.",
       "checkButton": "Check for updates",
       "upToDateDetail": "You're on the latest version ({{version}}).",
       "availableLabel": "Version {{version}} is available",
@@ -396,8 +401,9 @@
       "unskip": "Unskip",
       "checkFailedLabel": "Check failed",
       "retry": "Retry",
-      "noSourceLabel": "No update source configured",
-      "noSourceDetail": "Set a feed URL or local path above to enable update checks."
+      "noSourceLabel": "No update feed available",
+      "noSourceDetail": "Set a feed URL or local path above to enable update checks.",
+      "noSourceDevOnly": "This usually only happens in local development builds without a baked release URL."
     },
     "compiler": {
       "title": "Compiler",
@@ -1154,7 +1160,7 @@
     }
   },
   "welcome": {
-    "brand": "prismnext",
+    "brand": "PrismNext",
     "newProject": "New Project",
     "open": "Open",
     "recent": "Recent",
@@ -1169,6 +1175,11 @@
       "agent": "OpenCode",
       "compiler": "Compiler",
       "updateAvailable": "Update {{version}} available",
+      "updateDownloading": "Downloading {{version}}… {{percent}}%",
+      "updateReady": "Update {{version}} ready to install",
+      "updateHint": "Click Update now — download and restart automatically.",
+      "openAbout": "About",
+      "agentReady": "ready",
       "agentMissing": "Not found",
       "compilerMissing": "Not detected"
     }
@@ -1335,6 +1346,7 @@
     "templates": "Templates",
     "texWorkspace": "TeX Workspace",
     "settings": "Settings",
+    "updateToVersion": "Update to {{version}}",
     "sessions": {
       "pinned": "Pinned",
       "sessions": "Sessions",

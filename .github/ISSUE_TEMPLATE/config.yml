@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/yibocat/prismnext/security/advisories/new
+    about: Please report vulnerabilities privately (see SECURITY.md). Do not open a public issue.
+  - name: Contributing guide
+    url: https://github.com/yibocat/prismnext/blob/main/CONTRIBUTING.md
+    about: How to set up the repo and open pull requests.

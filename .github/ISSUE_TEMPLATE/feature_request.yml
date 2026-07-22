@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest an idea that fits PrismNext’s local-first research loop
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem first. Features that strengthen literature → design → experiment → LaTeX (with human gates) are the best fit.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What friction exists today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like PrismNext to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds or other approaches you thought about.
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots, related issues, research workflow notes.
+    validations:
+      required: false

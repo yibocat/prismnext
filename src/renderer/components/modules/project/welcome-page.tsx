@@ -5,13 +5,16 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { useProjectStore } from "@/stores/project-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useCompileStore } from "@/stores/compile-store";
-import { useSettingsStore } from "@/stores/settings-store";
 import { useProjectOpen } from "@/hooks/use-project-open";
 import { NewProjectDialog } from "./new-project-dialog";
 import { loadProjectIcon, ProjectIconBadge } from "./project-icon";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
+import {
+  mapUpdaterStatus,
+  type UpdateUiStatus,
+} from "@/lib/updates/map-updater-status";
 import {
   FolderOpenIcon,
   FolderPlusIcon,
@@ -81,12 +84,13 @@ function WelcomeStatusChecks() {
   const { t } = useTranslation();
   const detectCompilers = useCompileStore((s) => s.detectCompilers);
   const compilerStatus = useCompileStore((s) => s.compilerStatus);
-  const updateSource = useSettingsStore((s) => s.settings.updateSource);
   const [items, setItems] = useState<StatusItem[]>([
     { id: "app", label: "App", state: "loading" },
     { id: "agent", label: "OpenCode", state: "loading" },
     { id: "compiler", label: "Compiler", state: "loading" },
   ]);
+  const [updateUi, setUpdateUi] = useState<UpdateUiStatus>({ kind: "idle" });
+  const [updateBusy, setUpdateBusy] = useState(false);
 
   useEffect(() => {
     setItems((prev) =>
@@ -100,21 +104,42 @@ function WelcomeStatusChecks() {
   }, [t]);
 
   useEffect(() => {
+    return window.electronAPI.onUpdateProgress(({ percent }) => {
+      setUpdateUi((prev) => {
+        if (prev.kind !== "downloading" && prev.kind !== "available") return prev;
+        return {
+          kind: "downloading",
+          currentVersion: prev.currentVersion,
+          latestVersion: "latestVersion" in prev ? prev.latestVersion : undefined,
+          percent,
+          downloadPath: "downloadPath" in prev ? prev.downloadPath : undefined,
+        };
+      });
+    });
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
     const applyAppUpdate = (
       appVersion: string,
-      update: { status: string } | null,
+      update: { status: string; latestVersion?: string } | null,
     ) => {
       let appState: CheckState = "ok";
       let appDetail = `v${appVersion}`;
-      if (update?.status === "available" || update?.status === "downloaded") {
+      if (
+        update?.status === "available" ||
+        update?.status === "downloaded" ||
+        update?.status === "downloading"
+      ) {
         appState = "warn";
-        appDetail = `v${appVersion}↑`;
+        const latest = update.latestVersion?.trim();
+        appDetail = latest ? `v${appVersion}→${latest}` : `v${appVersion}↑`;
       } else if (
         update?.status === "up-to-date" ||
         update?.status === "no-source" ||
         update?.status === "idle" ||
+        update?.status === "ignored" ||
         !update
       ) {
         appDetail = `v${appVersion}`;
@@ -125,7 +150,12 @@ function WelcomeStatusChecks() {
       setItems((prev) =>
         prev.map((item) =>
           item.id === "app"
-            ? { ...item, state: appState, detail: appDetail, label: "App" }
+            ? {
+                ...item,
+                state: appState,
+                detail: appDetail,
+                label: t("welcome.status.app"),
+              }
             : item,
         ),
       );
@@ -144,6 +174,7 @@ function WelcomeStatusChecks() {
 
       const appVersion = versions?.appVersion?.trim() || "—";
       applyAppUpdate(appVersion, cachedUpdate);
+      setUpdateUi(mapUpdaterStatus(cachedUpdate));
 
       const agentAvailable =
         Boolean(chat?.available) || Boolean(versions?.opencode?.available);
@@ -153,21 +184,24 @@ function WelcomeStatusChecks() {
           item.id === "agent"
             ? {
                 ...item,
-                label: "OpenCode",
+                label: t("welcome.status.agent"),
                 state: agentAvailable ? "ok" : "error",
-                detail: agentAvailable ? "ready" : "unavailable",
+                detail: agentAvailable
+                  ? t("welcome.status.agentReady")
+                  : t("welcome.status.agentMissing"),
               }
             : item,
         ),
       );
 
-      if (updateSource?.trim()) {
-        try {
-          const fresh = await window.electronAPI.updateCheck();
-          if (!cancelled) applyAppUpdate(appVersion, fresh);
-        } catch {
-          /* keep cached / version-only */
-        }
+      // Always check — main resolves baked default feed when updateSource is empty.
+      try {
+        const fresh = await window.electronAPI.updateCheck();
+        if (cancelled) return;
+        applyAppUpdate(appVersion, fresh);
+        setUpdateUi(mapUpdaterStatus(fresh));
+      } catch {
+        /* keep cached / version-only */
       }
     };
 
@@ -175,7 +209,7 @@ function WelcomeStatusChecks() {
     return () => {
       cancelled = true;
     };
-  }, [detectCompilers, updateSource]);
+  }, [detectCompilers, t]);
 
   useEffect(() => {
     if (!compilerStatus) return;
@@ -184,19 +218,20 @@ function WelcomeStatusChecks() {
       ? "Tectonic"
       : compilerStatus.texlive.available
         ? compilerStatus.texlive.engines?.[0] || "TeXLive"
-        : "Not found";
+        : t("welcome.status.compilerMissing");
     setItems((prev) =>
       prev.map((item) =>
         item.id === "compiler"
           ? {
               ...item,
+              label: t("welcome.status.compiler"),
               state: ready ? "ok" : "warn",
               detail,
             }
           : item,
       ),
     );
-  }, [compilerStatus]);
+  }, [compilerStatus, t]);
 
   const overall: CheckState = items.some((i) => i.state === "loading")
     ? "loading"
@@ -206,7 +241,47 @@ function WelcomeStatusChecks() {
         ? "warn"
         : "ok";
 
-  const text = items
+  const onOneClickUpdate = async () => {
+    setUpdateBusy(true);
+    try {
+      const current = await window.electronAPI.updateStatus();
+      let result = current;
+      if (current.status !== "downloaded") {
+        setUpdateUi((prev) => ({
+          kind: "downloading",
+          currentVersion:
+            "currentVersion" in prev ? prev.currentVersion : current.currentVersion,
+          latestVersion:
+            ("latestVersion" in prev ? prev.latestVersion : undefined) ??
+            current.latestVersion,
+          percent: 0,
+          downloadPath:
+            ("downloadPath" in prev ? prev.downloadPath : undefined) ??
+            current.latest?.path,
+        }));
+        result = await window.electronAPI.updateDownload();
+        setUpdateUi(mapUpdaterStatus(result));
+      }
+      if (result.status !== "downloaded") {
+        setUpdateBusy(false);
+        return;
+      }
+      await window.electronAPI.updateInstall();
+    } catch (err) {
+      setUpdateBusy(false);
+      setUpdateUi({
+        kind: "error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
+  const appUpdateClickable =
+    updateUi.kind === "available" ||
+    updateUi.kind === "downloading" ||
+    updateUi.kind === "downloaded";
+
+  const title = items
     .map((item) => {
       const detail = item.detail?.trim();
       return detail ? `${item.label} ${detail}` : item.label;
@@ -215,13 +290,42 @@ function WelcomeStatusChecks() {
 
   return (
     <div
-      className="mt-4 flex w-full items-start justify-start gap-2 text-[length:var(--font-size-11)] text-muted-foreground"
-      title={text}
+      className="mt-4 flex w-full items-center justify-center gap-2 text-[length:var(--font-size-11)] text-muted-foreground"
+      title={title}
     >
       <StatusDot state={overall} />
-      <span className="min-w-0 flex-1 text-left leading-relaxed text-foreground/75">
-        {text}
-      </span>
+      <div className="flex min-w-0 flex-wrap items-center justify-center gap-x-1.5 gap-y-1 text-left leading-relaxed text-foreground/75">
+        {items.map((item, index) => {
+          const detail = item.detail?.trim();
+          const label = detail ? `${item.label} ${detail}` : item.label;
+          const isAppUpdate = item.id === "app" && appUpdateClickable;
+
+          return (
+            <span key={item.id} className="inline-flex items-center gap-x-1.5">
+              {index > 0 ? <span className="text-muted-foreground/50">·</span> : null}
+              {isAppUpdate ? (
+                <button
+                  type="button"
+                  disabled={updateBusy || updateUi.kind === "downloading"}
+                  onClick={() => void onOneClickUpdate()}
+                  className={cn(
+                    "inline-flex h-5 items-center gap-1 rounded border border-border bg-background px-1.5",
+                    "font-medium text-foreground hover:bg-accent hover:text-accent-foreground",
+                    "transition-colors disabled:opacity-60",
+                  )}
+                >
+                  {updateBusy || updateUi.kind === "downloading" ? (
+                    <Loader2Icon className="size-2.5 animate-spin text-muted-foreground" />
+                  ) : null}
+                  {label}
+                </button>
+              ) : (
+                <span>{label}</span>
+              )}
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 }

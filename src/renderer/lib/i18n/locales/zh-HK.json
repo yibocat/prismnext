@@ -359,8 +359,9 @@
       "updateSource": "更新來源",
       "checkForUpdates": "檢查更新",
       "subtitle": "版本資訊與更新檢查。",
-      "appName": "prismnext",
+      "appName": "PrismNext",
       "appDesc": "已安裝的應用版本。",
+      "installedVsLatest": "目前 {{current}} · 最新 {{latest}}",
       "opencode": "OpenCode",
       "opencodeDesc": "用於聊天的捆綁 Agent 二進位制（ACP）。",
       "notFound": "未找到",
@@ -379,6 +380,10 @@
       "manifestDesc": "打包版使用 HTTPS 更新源根位址；本地 QA 可用 version.json 路徑。留空則使用內建預設（若有）。",
       "manifestPlaceholder": "https://releases.example.com  或  /path/to/version.json",
       "checkDesc": "將已安裝版本與更新源比對。打包版可在應用內下載並安裝。",
+      "checkDescShort": "使用內建發佈源，無需設定。",
+      "updatesStatus": "軟體更新",
+      "oneClickUpdate": "一鍵更新",
+      "oneClickUpdatingHint": "正在下載，完成後將自動重新啟動安裝。",
       "checkButton": "檢查更新",
       "upToDateDetail": "已是最新版本（{{version}}）。",
       "availableLabel": "有新版本 {{version}}",
@@ -396,8 +401,9 @@
       "unskip": "取消跳過",
       "checkFailedLabel": "檢查失敗",
       "retry": "重試",
-      "noSourceLabel": "未配置更新來源",
-      "noSourceDetail": "請在上方設定更新源 URL 或本地路徑以啟用更新檢查。"
+      "noSourceLabel": "暫無可用更新源",
+      "noSourceDetail": "請在上方設定更新源 URL 或本地路徑以啟用更新檢查。",
+      "noSourceDevOnly": "一般只會出現在未寫入發佈位址的本地開發建置。"
     },
     "compiler": {
       "title": "編譯器",
@@ -1154,7 +1160,7 @@
     }
   },
   "welcome": {
-    "brand": "prismnext",
+    "brand": "PrismNext",
     "newProject": "新建專案",
     "open": "開啟",
     "recent": "最近",
@@ -1169,6 +1175,11 @@
       "agent": "OpenCode",
       "compiler": "編譯器",
       "updateAvailable": "有可用更新 {{version}}",
+      "updateDownloading": "正在下載 {{version}}… {{percent}}%",
+      "updateReady": "更新 {{version}} 已就緒，可安裝",
+      "updateHint": "點「一鍵更新」即可下載並自動重新啟動安裝。",
+      "openAbout": "關於",
+      "agentReady": "就緒",
       "agentMissing": "未找到",
       "compilerMissing": "未檢測到"
     }
@@ -1335,6 +1346,7 @@
     "templates": "模板",
     "texWorkspace": "TeX 工作區",
     "settings": "設定",
+    "updateToVersion": "更新到 {{version}}",
     "sessions": {
       "pinned": "已固定",
       "sessions": "會話",

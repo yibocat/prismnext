@@ -21,21 +21,17 @@ Schemes name the **surface**. P1–P6 remain swappable.
 | File | Use |
 |------|-----|
 | `ribbon-p5-light.svg` / `ribbon-p5-dark.svg` | Color mark alone |
-| `app-icon-light.svg` / `app-icon-dark.svg` | App icon masters (1024) |
+| `app-icon-light.svg` / `app-icon-dark.svg` | App icon masters (1024); mark `scale(15)` for Dock weight |
 | `app-icon-light.png` / `app-icon-dark.png` | 1024 PNG exports |
 | `icon.icns` | macOS Dock / About (electron-builder) |
 | `icon.ico` | Windows (electron-builder) |
 | `../tray/*Template.svg` | Menu bar (16 / @2x 32, mono, A silhouette) |
 
-## Regenerate PNGs
+## Regenerate PNGs + macOS/Windows icons
 ```bash
 cd resources/brand
 rsvg-convert -w 1024 -h 1024 app-icon-light.svg -o app-icon-light.png
 rsvg-convert -w 1024 -h 1024 app-icon-dark.svg -o app-icon-dark.png
-
-cd ../tray
-for name in idleTemplate busyTemplate attentionTemplate; do
-  rsvg-convert -w 22 -h 22 "${name}.svg" -o "${name}.png"
-  rsvg-convert -w 44 -h 44 "${name}.svg" -o "${name}@2x.png"
-done
+cp app-icon-dark.png icon.png
+# then rebuild icon.icns via iconutil iconset (16…1024) and icon.ico via Pillow
 ```

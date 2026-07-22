@@ -113,8 +113,49 @@ export function resolveDefaultFeedUrl(): string {
 /** Settings override, else default feed. Empty → no update source. */
 export function resolveFeedUrl(): string {
   const override = getSettings().updateSource?.trim();
-  if (override) return override.replace(/\/$/, "");
+  if (override && isUsableUpdateSourceOverride(override, { packaged: app.isPackaged })) {
+    return override.replace(/\/$/, "");
+  }
   return resolveDefaultFeedUrl();
+}
+
+/**
+ * Whether a persisted `updateSource` may override the baked R2 feed.
+ * Rejects the obsolete local `update-channel/` fixture and missing files;
+ * packaged builds only accept HTTPS overrides (local QA paths never ship).
+ */
+export function isUsableUpdateSourceOverride(
+  source: string,
+  opts?: {
+    packaged?: boolean;
+    existsSync?: (p: string) => boolean;
+  },
+): boolean {
+  const s = source.trim();
+  if (!s) return false;
+  // Deleted sample fixture — must never win over R2 / electron-updater.
+  if (/update-channel(\/|\\|$)/i.test(s)) return false;
+
+  if (/^https?:\/\//i.test(s)) return true;
+
+  const packaged = opts?.packaged ?? false;
+  if (packaged) return false;
+
+  const exists = opts?.existsSync ?? ((p: string) => fs.existsSync(p));
+  try {
+    return exists(path.resolve(s));
+  } catch {
+    return false;
+  }
+}
+
+/** Clear dead / obsolete updateSource so About uses the baked release feed. */
+export function migrateStaleUpdateSource(): void {
+  const src = getSettings().updateSource?.trim();
+  if (!src) return;
+  if (isUsableUpdateSourceOverride(src, { packaged: app.isPackaged })) return;
+  updateSettings({ updateSource: "" });
+  log.info(`Cleared stale updateSource override: ${src}`);
 }
 
 /**
@@ -244,6 +285,8 @@ export function initAppUpdater(): void {
 
   cachedStatus = { status: "idle", currentVersion: currentVersion() };
 
+  migrateStaleUpdateSource();
+
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
 
@@ -300,6 +343,7 @@ export function initAppUpdater(): void {
   log.info("App updater initialized", {
     packaged: app.isPackaged,
     feed: feed || "(none)",
+    path: app.isPackaged ? "electron-updater" : "version.json (dev)",
   });
 }
 
