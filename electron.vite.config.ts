@@ -2,8 +2,17 @@ import { resolve } from "path";
 import { defineConfig } from "electron-vite";
 import react from "@vitejs/plugin-react";
 
+/** Baked into main bundle when `PRISM_UPDATER_BASE_URL` is set at build time. */
+function bakedUpdaterBaseUrl(): string {
+  const raw = process.env.PRISM_UPDATER_BASE_URL?.trim() ?? "";
+  return raw ? raw.replace(/\/$/, "") : "";
+}
+
 export default defineConfig({
   main: {
+    define: {
+      __PRISM_UPDATER_BASE_URL__: JSON.stringify(bakedUpdaterBaseUrl()),
+    },
     resolve: {
       alias: {
         "@shared": resolve("src/main/services"),

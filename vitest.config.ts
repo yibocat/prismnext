@@ -2,6 +2,9 @@ import { defineConfig } from "vitest/config";
 import path from "node:path";
 
 export default defineConfig({
+  define: {
+    __PRISM_UPDATER_BASE_URL__: '""',
+  },
   test: {
     globals: true,
     environment: "jsdom",

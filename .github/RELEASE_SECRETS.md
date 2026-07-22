@@ -17,6 +17,16 @@
 | `R2_BUCKET` | Bucket name |
 | `R2_PUBLIC_BASE_URL` | HTTPS root electron-updater + website links, no trailing slash — e.g. `https://pub-xxx.r2.dev` or `https://releases.example.com` |
 
+### Updater feed URL at build time
+
+Packaged apps resolve the default electron-updater generic feed from a **build-time** constant (`__PRISM_UPDATER_BASE_URL__`), not from user settings.
+
+- **Release workflow:** sets `PRISM_UPDATER_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}` on build/package steps (same value as `R2_PUBLIC_BASE_URL`).
+- **Local dist:** export the same URL before `pnpm build` / `pnpm dist`, e.g. `PRISM_UPDATER_BASE_URL=https://pub-xxx.r2.dev pnpm dist:mac`.
+- **Runtime override:** Settings → About **Update source** (`updateSource`) still overrides the baked default for advanced QA.
+
+When both the baked default and `updateSource` are empty (typical unsigned local dev without env), About shows **no-source**.
+
 ## Optional (P4 signing)
 
 | Name | Purpose |

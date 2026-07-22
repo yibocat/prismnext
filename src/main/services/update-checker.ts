@@ -98,11 +98,14 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-/** Default generic feed root (no trailing slash). Task 7 may bake a build-time URL. */
+/** Build-time default feed root (electron-vite `define`; empty when unset). */
+declare const __PRISM_UPDATER_BASE_URL__: string;
+
+/** Default generic feed root (no trailing slash). Packaged builds bake URL at compile time. */
 export function resolveDefaultFeedUrl(): string {
   const fromEnv = process.env.PRISM_UPDATER_BASE_URL?.trim();
   if (fromEnv) return fromEnv.replace(/\/$/, "");
-  const baked = (globalThis as { __PRISM_UPDATER_BASE_URL__?: string }).__PRISM_UPDATER_BASE_URL__;
+  const baked = __PRISM_UPDATER_BASE_URL__;
   if (typeof baked === "string" && baked.trim()) return baked.trim().replace(/\/$/, "");
   return "";
 }
