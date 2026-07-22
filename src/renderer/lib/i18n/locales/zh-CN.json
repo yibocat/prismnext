@@ -396,6 +396,9 @@
       "downloadedLabel": "版本 {{version}} 已就绪，可以安装",
       "restartToInstall": "重启并安装",
       "restartToInstallDetail": "应用将退出并应用更新。",
+      "autoDownload": "自动下载更新",
+      "autoDownloadDesc": "发现新版本后在后台下载；安装仍需你确认（或退出应用时顺带安装）。",
+      "installDidNotRestart": "已下载完成，但未能重启安装。未签名的 macOS 包常见此情况 — 请从下载页安装新包，或完成代码签名后再使用一键安装。",
       "skipVersion": "跳过此版本",
       "skippedDetail": "你已跳过此版本。",
       "unskip": "取消跳过",
@@ -427,8 +430,6 @@
         "idleCleanupDesc": "在超过此时长未查看该会话后，自动关闭空闲的 ✨ AI 终端标签页（宽限期之后）。",
         "closeCancels": "关闭标签页取消命令",
         "closeCancelsDesc": "启用后，在 bash 运行时关闭 ✨ AI 终端标签页也会取消命令。默认仅关闭视图，命令继续运行。",
-        "sessionStatus": "会话标题显示终端状态",
-        "sessionStatusDesc": "在会话标题悬停卡片中显示 AI 终端运行/空闲状态。",
         "optPty": "PTY 流（默认）",
         "optMirror": "Mirror（回退）",
         "optAutoOpen": "自动打开",
@@ -1180,6 +1181,7 @@
       "updateHint": "点「一键更新」即可下载并自动重启安装。",
       "openAbout": "关于",
       "agentReady": "就绪",
+      "agentStarting": "启动中…",
       "agentMissing": "未找到",
       "compilerMissing": "未检测到"
     }
@@ -1281,7 +1283,8 @@
       "acceptChange": "接受当前更改",
       "rejectChange": "拒绝当前更改",
       "acceptAll": "接受全部更改",
-      "rejectAll": "拒绝全部更改"
+      "rejectAll": "拒绝全部更改",
+      "togglePlanMode": "切换 Plan 模式"
     }
   },
   "shell": {
@@ -1322,10 +1325,24 @@
     "status": {
       "system": "系统状态",
       "agent": "Agent",
+      "agentAria": "Agent {{status}}",
+      "agentError": "启动失败",
+      "projectWarm": "项目",
+      "projectWarmReady": "工具已就绪",
+      "projectWarmPending": "预热中…",
+      "projectWarmError": "预热失败",
+      "retry": "重试 Agent",
+      "retrying": "重试中…",
+      "latex": "LaTeX",
+      "checking": "检测中…",
+      "latexReady": "{{backend}} · 就绪",
+      "latexReadyAuto": "{{backend}} · 自动编译",
+      "latexMissing": "未检测到",
       "aiTerminal": "AI 终端",
+      "aiTerminalRunning": "{{running}} 运行中 · {{open}} 已打开",
+      "aiTerminalOpen": "{{open}} 已打开",
       "terminal": "终端",
-      "mcp": "MCP",
-      "lsp": "LSP",
+      "terminalBusy": "{{count}} 忙碌",
       "connecting": "连接中…",
       "running": "运行中",
       "stopped": "已停止"
@@ -1404,7 +1421,9 @@
       "worktreeRemoved": "Worktree 已移除 — 会话保留在项目上",
       "citationsCount": "{{count}} 条暂存引用",
       "citationsCount_plural": "{{count}} 条暂存引用",
-      "citationsNone": "暂无暂存引用"
+      "citationsNone": "暂无暂存引用",
+      "intensiveCount": "{{count}} 篇精读",
+      "intensiveCount_plural": "{{count}} 篇精读"
     },
     "aibar": {
       "done": "完成",
@@ -1425,12 +1444,13 @@
       "zoomIn": "放大",
       "zoomOut": "缩小",
       "placeholder": "@ 专家、文件、文献或实验 · / 命令、技能、MCP",
-      "archivedReadonly": "此对话已归档。恢复后可继续聊天。"
+      "archivedReadonly": "此对话已归档。恢复后可继续聊天。",
+      "stop": "停止"
     },
     "toolbar": {
       "local": "本地",
       "suggestions": "建议",
-      "planNewIdea": "Plan a new idea",
+      "planNewIdea": "规划一个新想法",
       "initGit": "初始化 Git 仓库",
       "initGitShort": "初始化 Git"
     },
@@ -1546,6 +1566,18 @@
       "creating_session": "正在创建会话…",
       "connecting_mcp": "正在连接工具…",
       "starting_model": "正在启动模型…"
+    },
+    "turnFooter": {
+      "justNow": "刚刚",
+      "minutesAgo": "{{count}} 分钟前",
+      "hoursAgo": "{{count}} 小时前",
+      "daysAgo": "{{count}} 天前",
+      "copy": "复制本轮回复",
+      "restore": "将工作区文件恢复到本轮结束时",
+      "restored": "已恢复 {{count}} 个文件到本轮结束时",
+      "restored_plural": "已恢复 {{count}} 个文件到本轮结束时",
+      "restoredDesc": "工作区文件与聊天历史已回退到本轮。",
+      "restoreFailed": "恢复失败：{{message}}"
     }
   },
   "modes": {

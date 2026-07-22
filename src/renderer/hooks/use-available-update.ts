@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { mapUpdaterStatus } from "@/lib/updates/map-updater-status";
+import { requestUpdateInstall } from "@/lib/updates/request-update-install";
 import type { UpdaterStatus } from "@/types/electron";
 
 export type AvailableUpdateState = {
@@ -8,8 +9,11 @@ export type AvailableUpdateState = {
   downloading: boolean;
   percent: number;
   busy: boolean;
+  /** True when download finished and install can proceed. */
+  readyToInstall: boolean;
   /** True when the sidebar update affordance should show. */
   visible: boolean;
+  /** Download if needed, then install when ready. */
   oneClickUpdate: () => Promise<void>;
 };
 
@@ -34,22 +38,33 @@ export function useAvailableUpdate(): AvailableUpdateState {
   const [downloading, setDownloading] = useState(false);
   const [percent, setPercent] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [readyToInstall, setReadyToInstall] = useState(false);
 
   const apply = useCallback((result: UpdaterStatus | null | undefined) => {
     const ui = mapUpdaterStatus(result);
     if (ui.kind === "downloading") {
       setDownloading(true);
+      setReadyToInstall(false);
       setPercent(ui.percent);
       setLatestVersion(ui.latestVersion?.trim() || null);
       return;
     }
-    if (ui.kind === "available" || ui.kind === "downloaded") {
+    if (ui.kind === "downloaded") {
       setDownloading(false);
-      setPercent(ui.kind === "downloaded" ? 100 : 0);
+      setReadyToInstall(true);
+      setPercent(100);
+      setLatestVersion(ui.latestVersion?.trim() || null);
+      return;
+    }
+    if (ui.kind === "available") {
+      setDownloading(false);
+      setReadyToInstall(false);
+      setPercent(0);
       setLatestVersion(ui.latestVersion?.trim() || null);
       return;
     }
     setDownloading(false);
+    setReadyToInstall(false);
     setPercent(0);
     setLatestVersion(null);
   }, []);
@@ -74,20 +89,24 @@ export function useAvailableUpdate(): AvailableUpdateState {
 
     void run();
 
-    const unsub = window.electronAPI.onUpdateProgress(({ percent: p }) => {
+    const unsubProgress = window.electronAPI.onUpdateProgress(({ percent: p }) => {
       setDownloading(true);
+      setReadyToInstall(false);
       setPercent(p);
+    });
+    const unsubChanged = window.electronAPI.onUpdateChanged((raw) => {
+      apply(raw as UpdaterStatus);
     });
 
     return () => {
       cancelled = true;
-      unsub?.();
+      unsubProgress?.();
+      unsubChanged?.();
     };
   }, [apply]);
 
   const oneClickUpdate = useCallback(async () => {
     setBusy(true);
-    setDownloading(true);
     try {
       const current = await window.electronAPI.updateStatus();
       let result = current;
@@ -96,6 +115,7 @@ export function useAvailableUpdate(): AvailableUpdateState {
           const v = versionFromStatus(current);
           if (v) setLatestVersion(v);
         }
+        setDownloading(true);
         result = await window.electronAPI.updateDownload();
         apply(result);
       }
@@ -103,7 +123,11 @@ export function useAvailableUpdate(): AvailableUpdateState {
         setBusy(false);
         return;
       }
-      await window.electronAPI.updateInstall();
+      const install = await requestUpdateInstall();
+      if (!install.ok) {
+        setBusy(false);
+        setReadyToInstall(true);
+      }
     } catch {
       setBusy(false);
       setDownloading(false);
@@ -115,6 +139,7 @@ export function useAvailableUpdate(): AvailableUpdateState {
     downloading,
     percent,
     busy,
+    readyToInstall,
     visible: Boolean(latestVersion) || downloading,
     oneClickUpdate,
   };

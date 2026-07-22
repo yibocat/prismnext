@@ -1,31 +1,51 @@
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { CopyIcon, CheckIcon, HistoryIcon, Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import { useCheckpointStore } from "@/stores/checkpoint-store";
 import { useChatStore } from "@/stores/chat-store";
+import { formatRelativeTimeMs } from "@/lib/chat/relative-time";
 
 interface TurnFooterProps {
   turnIndex: number;
   copyText: string;
-  metaText?: string;
   isComplete: boolean;
+  completedAt?: number | null;
+  modelLabel?: string | null;
+  /** Duration / token summary — shown as hint on the time label. */
+  detailHint?: string | null;
 }
+
+const ICON_BTN =
+  "flex size-6 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-accent-foreground";
 
 export const TurnFooter = memo(function TurnFooter({
   turnIndex,
   copyText,
-  metaText,
   isComplete,
+  completedAt,
+  modelLabel,
+  detailHint,
 }: TurnFooterProps) {
+  const { t } = useTranslation();
   const activeTabId = useChatStore((s) => s.activeTabId);
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const checkpoint = useCheckpointStore((s) => s.byTab[activeTabId]?.checkpoints.find((c) => c.turnIndex === turnIndex));
+  const checkpoint = useCheckpointStore((s) =>
+    s.byTab[activeTabId]?.checkpoints.find((c) => c.turnIndex === turnIndex),
+  );
   const canRestore = useCheckpointStore((s) => s.canRestoreToTurn(activeTabId, turnIndex));
 
   const [copied, setCopied] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!completedAt || !isComplete) return;
+    const id = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, [completedAt, isComplete]);
 
   const handleCopy = useCallback(async () => {
     if (!copyText.trim()) return;
@@ -39,65 +59,80 @@ export const TurnFooter = memo(function TurnFooter({
     setRestoring(true);
     try {
       const count = await useCheckpointStore.getState().restoreToTurn(activeTabId, turnIndex);
-      toast.success(`Restored ${count} file${count === 1 ? "" : "s"} to the end of this turn`, {
-        description: "Workspace files and chat history were rolled back to this turn.",
-      });
+      toast.success(
+        t("chat.turnFooter.restored", {
+          count,
+          defaultValue: `Restored ${count} file${count === 1 ? "" : "s"} to the end of this turn`,
+        }),
+        {
+          description: t("chat.turnFooter.restoredDesc", {
+            defaultValue: "Workspace files and chat history were rolled back to this turn.",
+          }),
+        },
+      );
     } catch (err) {
-      toast.error(`Restore failed: ${(err as Error).message}`);
+      toast.error(
+        t("chat.turnFooter.restoreFailed", {
+          message: (err as Error).message,
+          defaultValue: `Restore failed: ${(err as Error).message}`,
+        }),
+      );
     } finally {
       setRestoring(false);
     }
-  }, [activeTabId, canRestore, isStreaming, restoring, turnIndex]);
+  }, [activeTabId, canRestore, isStreaming, restoring, t, turnIndex]);
 
   if (!isComplete) return null;
 
-  const touchedCount = checkpoint?.touchedThisTurn.length ?? 0;
-  const showActions = copyText.trim().length > 0 || canRestore;
+  const showCopy = copyText.trim().length > 0;
+  const showRestore = canRestore && !isStreaming;
+  const relative =
+    completedAt != null && completedAt > 0
+      ? formatRelativeTimeMs(completedAt, now)
+      : null;
 
-  if (!showActions && !metaText) return null;
+  if (!showCopy && !showRestore && !relative && !modelLabel) return null;
 
   return (
-    <div className="group/footer flex items-center gap-2 py-1.5 mt-0.5">
-      {copyText.trim().length > 0 && (
-        <Hint label="Copy this turn">
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 opacity-0 transition-all hover:bg-accent hover:text-accent-foreground group-hover/footer:opacity-100"
-          >
-            {copied ? <CheckIcon className="size-3 text-success" /> : <CopyIcon className="size-3" />}
-          </button>
+    <div className="flex items-center justify-end gap-1.5 pt-1 pb-1 mb-3">
+      {relative ? (
+        <Hint label={detailHint || relative}>
+          <span className="px-1 text-[length:var(--font-chat-meta)] text-muted-foreground/55 tabular-nums">
+            {relative}
+          </span>
         </Hint>
-      )}
-      {canRestore && !isStreaming && (
-        <Hint label="Restore workspace files to the end of this turn">
+      ) : null}
+      {modelLabel ? (
+        <span
+          className="max-w-[9rem] truncate px-1 text-[length:var(--font-chat-meta)] text-muted-foreground/55"
+          title={modelLabel}
+        >
+          {modelLabel}
+        </span>
+      ) : null}
+      {showRestore ? (
+        <Hint label={t("chat.turnFooter.restore", { defaultValue: "Restore workspace files to the end of this turn" })}>
           <button
             type="button"
             onClick={handleRestore}
             disabled={restoring}
-            className={cn(
-              "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[length:var(--font-chat-meta)]",
-              "text-muted-foreground/70 opacity-0 transition-all hover:bg-accent hover:text-accent-foreground",
-              "group-hover/footer:opacity-100 disabled:opacity-50",
-            )}
+            className={cn(ICON_BTN, "disabled:opacity-50")}
           >
             {restoring ? (
               <Loader2Icon className="size-3 animate-spin" />
             ) : (
               <HistoryIcon className="size-3" />
             )}
-            <span>Restore here</span>
-            {touchedCount > 0 && (
-              <span className="text-muted-foreground/50 tabular-nums">({touchedCount} file{touchedCount === 1 ? "" : "s"})</span>
-            )}
           </button>
         </Hint>
-      )}
-      {metaText && (
-        <span className="ml-auto text-[length:var(--font-chat-meta)] text-muted-foreground/50 tabular-nums">
-          {metaText}
-        </span>
-      )}
+      ) : null}
+      {showCopy ? (
+        <Hint label={t("chat.turnFooter.copy", { defaultValue: "Copy this turn" })}>
+          <button type="button" onClick={handleCopy} className={ICON_BTN}>
+            {copied ? <CheckIcon className="size-3 text-success" /> : <CopyIcon className="size-3" />}
+          </button>
+        </Hint>
+      ) : null}
     </div>
   );
 });

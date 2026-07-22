@@ -1,15 +1,16 @@
 /**
- * Jump to a staged citation in the Literature "Session citations" subview.
+ * Jump to Session citations in the Literature library.
  *
  * Expands RightArea, activates Literature mode, switches to Session citations,
- * and scrolls/expands the matching row.
+ * and optionally scrolls/expands a matching staged citation row.
  */
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useCitationStagingStore } from "@/stores/citation-staging-store";
 
-export function jumpToStagedCitation(sessionId: string, refId: number): void {
+/** Open Literature → Session citations for a chat session (no row jump). */
+export function openSessionCitations(sessionId: string): void {
   useCitationStagingStore.getState().setActiveSession(sessionId);
   useCitationStagingStore.getState().revealPanelForSession(sessionId);
 
@@ -32,7 +33,11 @@ export function jumpToStagedCitation(sessionId: string, refId: number): void {
     rightPanel.setActiveTab(litTab.id);
   }
 
-  const litStore = useLiteratureStore.getState();
-  litStore.setLibrarySubview("session-citations");
-  litStore.setPendingCitationJump(refId);
+  useLiteratureStore.getState().setLibrarySubview("session-citations");
+}
+
+/** Open Session citations and scroll/expand the matching staged citation. */
+export function jumpToStagedCitation(sessionId: string, refId: number): void {
+  openSessionCitations(sessionId);
+  useLiteratureStore.getState().setPendingCitationJump(refId);
 }

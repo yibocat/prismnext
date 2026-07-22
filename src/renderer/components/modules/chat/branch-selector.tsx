@@ -94,9 +94,9 @@ export function BranchSelector() {
             onMouseDown={(e) => e.preventDefault()}
             disabled={locked}
           >
-            <GitBranchIcon className="size-3.5 shrink-0" />
+            <GitBranchIcon className="size-3 shrink-0" />
             <span className="max-w-[100px] truncate hidden @md:inline">{buttonLabel}</span>
-            {locked && <LockIcon className="size-3" />}
+            {locked && <LockIcon className="size-2.5" />}
           </button>
         </AppMenuTrigger>
       </Hint>

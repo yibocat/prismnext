@@ -6,23 +6,31 @@
     <meta name="prismnext-version" content="0.0.0-dev" />
     <meta
       name="description"
-      content="PrismNext — collaborative AI scientist workspace. Literature, design, experiments, and LaTeX in one local app."
+      content="PrismNext — Co-driven AI science, gated and complete. From hypothesis to manuscript in one local Agent workspace."
     />
-    <meta name="theme-color" content="#F4EFE8" />
+    <meta name="theme-color" content="#0b0f14" />
     <title>PrismNext — Download</title>
     <link rel="icon" type="image/png" href="./assets/favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Sora:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="atmosphere" aria-hidden="true"></div>
-
     <header class="topbar">
+      <a class="wordmark" href="./" aria-label="PrismNext">
+        <img
+          class="wordmark-icon"
+          src="./assets/app-icon-light.png"
+          width="28"
+          height="28"
+          alt=""
+        />
+        <span>PrismNext</span>
+      </a>
       <div class="lang" role="group" aria-label="Language">
         <button type="button" class="lang-btn is-active" data-lang="en" aria-pressed="true">
           EN
@@ -32,51 +40,60 @@
     </header>
 
     <main class="hero">
-      <div class="mark-wrap">
-        <img
-          class="mark mark-light"
-          src="./assets/ribbon-light.svg"
-          width="88"
-          height="88"
-          alt=""
-        />
-        <img
-          class="mark mark-dark"
-          src="./assets/ribbon-dark.svg"
-          width="88"
-          height="88"
-          alt=""
-        />
+      <div class="hero-copy">
+        <p class="eyebrow reveal" data-i18n="eyebrow">Early Access</p>
+        <h1 class="brand reveal reveal-delay-1">PrismNext</h1>
+        <p class="lede reveal reveal-delay-2" data-i18n="lede">
+          Co-driven AI science — gated, rigorous, complete.
+        </p>
+        <p class="sub reveal reveal-delay-3" data-i18n="sub">
+          From hypothesis to manuscript: ideation · literature · experiment ·
+          writing — one local Agent workspace.
+        </p>
+
+        <div class="downloads reveal reveal-delay-4" role="group" aria-label="Downloads">
+          <a id="dl-mac" class="dl" href="#" data-platform="mac">
+            <span class="dl-os" data-i18n="osMac">macOS</span>
+            <span class="dl-fmt" data-i18n="fmtMac">.dmg</span>
+          </a>
+          <a id="dl-win" class="dl" href="#" data-platform="win">
+            <span class="dl-os" data-i18n="osWin">Windows</span>
+            <span class="dl-fmt" data-i18n="fmtWin">.exe</span>
+          </a>
+          <a id="dl-linux" class="dl" href="#" data-platform="linux">
+            <span class="dl-os" data-i18n="osLinux">Linux</span>
+            <span class="dl-fmt" data-i18n="fmtLinux">AppImage</span>
+          </a>
+        </div>
+
+        <p class="meta reveal reveal-delay-5">
+          <span data-i18n="versionLabel">Version</span>
+          <span id="version" class="meta-strong">…</span>
+          <span class="dot" aria-hidden="true">·</span>
+          <span data-i18n="pillars">Local-first · Bring your own API key</span>
+        </p>
+        <p class="notes" id="notes"></p>
       </div>
 
-      <p class="eyebrow" data-i18n="eyebrow">Early Access</p>
-      <h1 class="brand">PrismNext</h1>
-      <p class="lede" data-i18n="lede">
-        Your collaborative AI scientist — on your desk.
-      </p>
-      <p class="sub" data-i18n="sub">
-        Literature · design · experiments · LaTeX — one local workspace. The agent can drive; you keep the gates.
-      </p>
-
-      <div class="downloads">
-        <a id="dl-primary" class="btn btn-primary" href="#">Download for macOS</a>
-        <a id="dl-secondary" class="btn btn-ghost" href="#">Windows</a>
+      <div class="hero-visual reveal reveal-delay-2">
+        <figure class="shot">
+          <img
+            id="product-shot"
+            class="shot-img"
+            src="./assets/product-shot-en.png"
+            width="3394"
+            height="2428"
+            alt="PrismNext workspace"
+            data-shot-en="./assets/product-shot-en.png"
+            data-shot-zh="./assets/product-shot-zh.png"
+          />
+        </figure>
       </div>
-
-      <p class="meta">
-        <span data-i18n="versionLabel">Version</span>
-        <span id="version">…</span>
-        <span class="dot" aria-hidden="true">·</span>
-        <span data-i18n="pillars">Local-first · BYOK</span>
-        <span class="dot" aria-hidden="true">·</span>
-        <span data-i18n="platforms">macOS · Windows</span>
-      </p>
-      <p class="notes" id="notes"></p>
     </main>
 
     <footer class="foot">
       <p data-i18n="foot">
-        Apache-2.0 · Not an unsupervised paper factory — serious co-driving, locally.
+        Apache-2.0 · Local-first collaborative AI Scientist
       </p>
     </footer>
 

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Hint } from "@/components/ui/hint";
+import { COMPOSER_TOOLBAR_TRIGGER } from "../worktree-selector";
 
 const SESSION_AGENT_OPTIONS: SessionAgent[] = ["build", "plan"];
 
@@ -71,11 +72,11 @@ export function SessionAgentSelect({ compact }: SessionAgentSelectProps) {
           <button
             type="button"
             className={cn(
-              "flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
-              compact && "size-7 justify-center px-0",
+              COMPOSER_TOOLBAR_TRIGGER,
+              compact && "size-6 justify-center px-0",
             )}
           >
-            <CurrentIcon className="size-3.5 shrink-0" />
+            <CurrentIcon className="size-3 shrink-0" />
             {!compact && (
               <>
                 <span>{t(currentKeys.short)}</span>

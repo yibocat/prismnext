@@ -15,6 +15,8 @@ import {
   mapUpdaterStatus,
   type UpdateUiStatus,
 } from "@/lib/updates/map-updater-status";
+import { requestUpdateInstall } from "@/lib/updates/request-update-install";
+import type { UpdaterStatus } from "@/types/electron";
 import {
   FolderOpenIcon,
   FolderPlusIcon,
@@ -104,9 +106,15 @@ function WelcomeStatusChecks() {
   }, [t]);
 
   useEffect(() => {
-    return window.electronAPI.onUpdateProgress(({ percent }) => {
+    const unsubProgress = window.electronAPI.onUpdateProgress(({ percent }) => {
       setUpdateUi((prev) => {
-        if (prev.kind !== "downloading" && prev.kind !== "available") return prev;
+        if (
+          prev.kind !== "downloading" &&
+          prev.kind !== "available" &&
+          prev.kind !== "downloaded"
+        ) {
+          return prev;
+        }
         return {
           kind: "downloading",
           currentVersion: prev.currentVersion,
@@ -116,6 +124,13 @@ function WelcomeStatusChecks() {
         };
       });
     });
+    const unsubChanged = window.electronAPI.onUpdateChanged((raw) => {
+      setUpdateUi(mapUpdaterStatus(raw as UpdaterStatus));
+    });
+    return () => {
+      unsubProgress?.();
+      unsubChanged?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -176,8 +191,7 @@ function WelcomeStatusChecks() {
       applyAppUpdate(appVersion, cachedUpdate);
       setUpdateUi(mapUpdaterStatus(cachedUpdate));
 
-      const agentAvailable =
-        Boolean(chat?.available) || Boolean(versions?.opencode?.available);
+      const agentAvailable = Boolean(chat?.available);
 
       setItems((prev) =>
         prev.map((item) =>
@@ -185,10 +199,18 @@ function WelcomeStatusChecks() {
             ? {
                 ...item,
                 label: t("welcome.status.agent"),
-                state: agentAvailable ? "ok" : "error",
-                detail: agentAvailable
-                  ? t("welcome.status.agentReady")
-                  : t("welcome.status.agentMissing"),
+                state:
+                  chat?.phase === "starting"
+                    ? "warn"
+                    : agentAvailable
+                      ? "ok"
+                      : "error",
+                detail:
+                  chat?.phase === "starting"
+                    ? t("welcome.status.agentStarting")
+                    : agentAvailable
+                      ? t("welcome.status.agentReady")
+                      : chat?.error || t("welcome.status.agentMissing"),
               }
             : item,
         ),
@@ -266,7 +288,17 @@ function WelcomeStatusChecks() {
         setUpdateBusy(false);
         return;
       }
-      await window.electronAPI.updateInstall();
+      const install = await requestUpdateInstall();
+      if (!install.ok) {
+        setUpdateBusy(false);
+        setUpdateUi({
+          kind: "error",
+          message:
+            install.error === "install-did-not-restart"
+              ? t("settings.about.installDidNotRestart")
+              : install.error,
+        });
+      }
     } catch (err) {
       setUpdateBusy(false);
       setUpdateUi({

@@ -56,17 +56,21 @@ describe("normalizeVersionManifest", () => {
     });
   });
 
-  it("maps macUrl/winUrl to path by platform when path is missing", () => {
+  it("maps macUrl/winUrl/linuxUrl to path by platform when path is missing", () => {
     const r2 = {
       version: "0.5.15",
       macUrl: "https://cdn.example/app.dmg",
       winUrl: "https://cdn.example/app.exe",
+      linuxUrl: "https://cdn.example/app.AppImage",
     };
     expect(normalizeVersionManifest(r2, "darwin")?.path).toBe(
       "https://cdn.example/app.dmg",
     );
     expect(normalizeVersionManifest(r2, "win32")?.path).toBe(
       "https://cdn.example/app.exe",
+    );
+    expect(normalizeVersionManifest(r2, "linux")?.path).toBe(
+      "https://cdn.example/app.AppImage",
     );
   });
 

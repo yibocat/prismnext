@@ -67,7 +67,7 @@ export function IntensiveReadingListButton({
             aria-label={t("chat.intensive.listWithCount", { count })}
             className={triggerClass}
           >
-            <BookOpenIcon className="size-3.5 shrink-0" />
+            <BookOpenIcon className={cn("shrink-0", isCapsule ? "size-3.5" : "size-3")} />
             <span className="max-w-[5rem] truncate hidden @md:inline">
               {count === 1 ? t("chat.intensive.short") : t("chat.intensive.count", { count })}
             </span>

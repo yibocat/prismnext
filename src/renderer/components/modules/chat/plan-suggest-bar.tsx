@@ -5,6 +5,7 @@ import { useChatStore } from "@/stores/chat-store";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { PLAN_SUGGEST_TIMEOUT_MS } from "../../../../shared/plan-suggest";
+import { CHAT_CHROME_BUTTON_TEXT } from "./worktree-selector";
 
 export function PlanSuggestBar({ className }: { className?: string }) {
   const { t } = useTranslation();
@@ -68,14 +69,19 @@ export function PlanSuggestBar({ className }: { className?: string }) {
             {t("chat.planWorkflow.suggestCountdown", { seconds: secondsLeft })}
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <Button type="button" size="xs" onClick={() => acceptPlanSuggest()}>
+            <Button
+              type="button"
+              size="xs"
+              className={CHAT_CHROME_BUTTON_TEXT}
+              onClick={() => acceptPlanSuggest()}
+            >
               {t("chat.planWorkflow.enterPlan")}
             </Button>
             <Button
               type="button"
               size="xs"
               variant="ghost"
-              className="text-muted-foreground"
+              className={cn(CHAT_CHROME_BUTTON_TEXT, "text-muted-foreground")}
               onClick={() => dismissPlanSuggest()}
             >
               {t("chat.planWorkflow.dismiss")}

@@ -38,12 +38,23 @@ function cycleChatTab(delta: 1 | -1): boolean {
  * - product.nextChat / product.prevChat
  * - product.compile
  * - product.acceptAll / product.rejectAll
+ * - product.togglePlanMode — ⌥P / Alt+P
  *
  * Single accept/reject (product.acceptChange / rejectChange) stay in the editor host.
  */
 export function useProductShortcuts() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      // ⌥P must run before the alt-only early-return (macOS Option glyphs / menu mnemonics).
+      if (matchesShortcut("product.togglePlanMode", e)) {
+        const { activeTabId, tabs, requestSetSessionAgent } = useChatStore.getState();
+        if (!activeTabId || !tabs.some((t) => t.id === activeTabId)) return;
+        e.preventDefault();
+        const agent = tabs.find((t) => t.id === activeTabId)?.sessionAgent ?? "build";
+        requestSetSessionAgent(agent === "plan" ? "build" : "plan");
+        return;
+      }
+
       if (e.altKey && !e.metaKey && !e.ctrlKey) return;
 
       // ⌘I → focus Chat composer. Skip when maximized (AiBar capture handler) or

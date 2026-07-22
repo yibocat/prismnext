@@ -15,7 +15,7 @@ function chordKeyNormalized(key: string): string {
 
 function matchesChordKey(
   chord: ShortcutChord,
-  event: Pick<KeyboardEvent, "key" | "code">,
+  event: Pick<KeyboardEvent, "key" | "code" | "altKey">,
 ): boolean {
   const want = chordKeyNormalized(chord.key);
   const got = eventKeyNormalized(event.key);
@@ -30,6 +30,11 @@ function matchesChordKey(
   // Digit chords must use `code` when Shift is held — `key` becomes @ # $ % ^ etc.
   if (/^[0-9]$/.test(want)) {
     return event.code === `Digit${want}` || got === want;
+  }
+
+  // Option/Alt + letter: macOS remaps `key` (e.g. ⌥P → "π"); match physical key.
+  if (/^[a-z]$/.test(want) && event.altKey) {
+    return event.code === `Key${want.toUpperCase()}` || got === want;
   }
 
   return got === want;

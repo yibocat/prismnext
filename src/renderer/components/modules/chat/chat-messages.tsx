@@ -146,8 +146,9 @@ const UserHeader = memo(function UserHeader({
     >
       <div
         className={cn(
+          // Opaque bg — /50 hover looked “transparent” over glass chat surfaces.
           "rounded-lg border border-input bg-muted px-4 py-2 shadow-[0_0_6px_rgba(0,0,0,0.06)]",
-          long && !expanded && "cursor-pointer hover:bg-muted/50",
+          long && !expanded && "cursor-pointer transition-colors hover:bg-accent",
         )}
         onClick={long && !expanded ? () => setExpanded(true) : undefined}
       >
@@ -434,6 +435,7 @@ export const ChatMessages = memo(function ChatMessages() {
   const isLoadingSession = useChatStore((s) => s.isLoadingSession);
   const activeTabId = useChatStore((s) => s.activeTabId);
   const chatSessionId = useChatStore((s) => s.sessionId);
+  const turnMeta = useChatStore((s) => s.turnMeta);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const streamingLabel = preparePhase
     ? t(`chat.prepare.${preparePhase}`, { defaultValue: t("chat.prepare.thinking") })
@@ -1093,7 +1095,8 @@ export const ChatMessages = memo(function ChatMessages() {
             const isLastTurn = localIdx === visibleTurns.length - 1;
             const isTurnComplete = !isLastTurn || !isStreaming;
             const lastAsst = [...turn.responses].reverse().find((r) => r.msg.type === "assistant");
-            const turnMeta = lastAsst ? metaMap.get(lastAsst.displayIdx) : undefined;
+            const turnMetaText = lastAsst ? metaMap.get(lastAsst.displayIdx) : undefined;
+            const turnStamp = turnMeta[turnIdx];
 
             return (
             <section
@@ -1157,8 +1160,10 @@ export const ChatMessages = memo(function ChatMessages() {
                 <TurnFooter
                   turnIndex={turnIdx}
                   copyText={extractTurnCopyText(turn.responses)}
-                  metaText={turnMeta}
                   isComplete={isTurnComplete}
+                  completedAt={turnStamp?.completedAt}
+                  modelLabel={turnStamp?.modelLabel}
+                  detailHint={turnStamp?.summary ?? turnMetaText}
                 />
               </div>
             </section>

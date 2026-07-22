@@ -1,7 +1,8 @@
 # Changelog
 
 > Per-minor-series changelogs live in [`changelog/`](./):
-> - [`changelog/0.5.x.md`](./0.5.x.md) — 0.5.0 through 0.5.12
+> - [`changelog/0.6.x.md`](./0.6.x.md) — 0.6.* (current)
+> - [`changelog/0.5.x.md`](./0.5.x.md) — 0.5.*
 >
 > This file retains 0.4.x and earlier.
 

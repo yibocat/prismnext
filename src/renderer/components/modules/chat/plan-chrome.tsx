@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { CHAT_CHROME_BUTTON_TEXT } from "./worktree-selector";
 
 const NARROW_PANEL_PX = 420;
 
@@ -127,6 +128,7 @@ export function PlanChrome({ className }: { className?: string }) {
                   <Button
                     type="button"
                     size="xs"
+                    className={CHAT_CHROME_BUTTON_TEXT}
                     onClick={() => void approveAndExecutePlan()}
                   >
                     {t("chat.planWorkflow.approveExecute")}
@@ -135,7 +137,7 @@ export function PlanChrome({ className }: { className?: string }) {
                     type="button"
                     size="xs"
                     variant="ghost"
-                    className="text-muted-foreground"
+                    className={cn(CHAT_CHROME_BUTTON_TEXT, "text-muted-foreground")}
                     onClick={() => void exitPlanDiscardAndBuild()}
                   >
                     {t("chat.planWorkflow.rejectPlan")}

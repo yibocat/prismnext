@@ -394,6 +394,15 @@ export const SHORTCUT_REGISTRY: readonly ShortcutDef[] = [
     labelKey: "shortcuts.product.rejectAll",
     implemented: true,
   },
+  {
+    id: "product.togglePlanMode",
+    category: "product",
+    remappable: true,
+    scope: "app",
+    defaultChord: { key: "p", alt: true },
+    labelKey: "shortcuts.product.togglePlanMode",
+    implemented: true,
+  },
 ] as const;
 
 const BY_ID = new Map(SHORTCUT_REGISTRY.map((d) => [d.id, d]));

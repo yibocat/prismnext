@@ -616,13 +616,15 @@ export interface ElectronAPI {
   /** Download the pending update (packaged builds). */
   updateDownload: () => Promise<UpdaterStatus>;
   /** Quit and install a downloaded update. */
-  updateInstall: () => Promise<{ ok: true }>;
+  updateInstall: () => Promise<{ ok: true } | { ok: false; error: string }>;
   /** Suppress a version from surfacing as an update. */
   updateIgnore: (version: string) => Promise<UpdaterStatus>;
   /** Clear the ignored-version flag. */
   updateUnignore: () => Promise<UpdaterStatus>;
   /** Download progress from main (`update:progress`). */
   onUpdateProgress: (callback: (data: { percent: number }) => void) => () => void;
+  /** Full updater status pushes from main (`update:changed`). */
+  onUpdateChanged: (callback: (status: UpdaterStatus) => void) => () => void;
   /** prismnext app version + bundled OpenCode agent binary version. */
   aboutGetVersions: () => Promise<AboutVersions>;
   projectEnsure: (rootPath: string) => Promise<{ success: boolean }>;
@@ -1222,7 +1224,16 @@ export interface ElectronAPI {
 
   // OpenCode chat operations
   chatDispose: () => Promise<{ success: boolean }>;
-  chatPrewarm: (projectPath: string) => Promise<{ sessionId: string | null }>;
+  chatPrewarm: (projectPath: string) => Promise<{
+    ok: boolean;
+    error?: string;
+  }>;
+  /** Retry ACP spawn + optional project prewarm after failure. */
+  chatEnsureAgent: (projectPath?: string) => Promise<import("../../shared/agent-status").AgentStatusSnapshot>;
+  /** ACP lifecycle pushes (`chat:agentStatus`). */
+  onAgentStatusChanged: (
+    callback: (status: import("../../shared/agent-status").AgentStatusSnapshot) => void,
+  ) => () => void;
   mcpEnsure: (projectPath: string) => Promise<{
     ok: boolean;
     health: {
@@ -1624,7 +1635,7 @@ export interface ElectronAPI {
     toolCallId?: string,
     opts?: { always?: boolean },
   ) => Promise<void>;
-  chatStatus: () => Promise<{ available: boolean; version: string }>;
+  chatStatus: (projectPath?: string) => Promise<import("../../shared/agent-status").AgentStatusSnapshot>;
   sessionList: (projectPath?: string) => Promise<Array<{ id: string; title: string; lastModified: number; createdAt: number; directory?: string }>>;
   sessionLoad: (sessionId: string, projectPath?: string, cwd?: string) => Promise<any[]>;
   sessionLoadWindow: (sessionId: string, projectPath: string | undefined, cwd: string | undefined, offset: number, limit: number) => Promise<{ messages: any[]; totalMessages: number }>;
@@ -1653,6 +1664,16 @@ export interface ElectronAPI {
     projectPath: string,
     sessionId: string,
   ) => Promise<import("@/lib/chat/plan-ui-events").PlanUiEvent[]>;
+  sessionGetTurnMetas: (
+    projectPath: string,
+    sessionId: string,
+  ) => Promise<Record<number, import("@/stores/chat-store").TurnMessageMeta>>;
+  sessionUpsertTurnMeta: (
+    projectPath: string,
+    sessionId: string,
+    turnIndex: number,
+    meta: import("@/stores/chat-store").TurnMessageMeta,
+  ) => Promise<{ success: boolean }>;
   sessionUpsertPlanArtifact: (
     projectPath: string,
     sessionId: string,

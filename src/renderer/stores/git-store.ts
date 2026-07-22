@@ -10,6 +10,7 @@ import type {
 } from "@/types/electron";
 import { useDocumentStore } from "./document-store";
 import { useWorktreeStore } from "./worktree-store";
+import { useGitDiffPrefsStore } from "./git-diff-prefs-store";
 
 const log = createLogger("git-store", "git");
 
@@ -187,7 +188,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   branch: "",
   branches: [],
   files: [],
-  filterMode: "all",
+  filterMode: useGitDiffPrefsStore.getState().filterMode,
   loading: false,
   error: null,
   pendingBranch: null,
@@ -568,6 +569,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── setFilterMode ──
   setFilterMode: (mode: GitFilterMode) =>
     set((s) => {
+      useGitDiffPrefsStore.getState().setFilterMode(mode);
       const visible = idsForFilterMode(s.files, mode);
       return {
         filterMode: mode,
@@ -845,11 +847,13 @@ export const useGitStore = create<GitState>()((set, get) => ({
   clearAll: () => {
     const timer = get()._autoRefreshTimer;
     if (timer) clearTimeout(timer);
+    // Preserve filterMode — it is a UI preference (also mirrored in git-diff-prefs).
+    const filterMode = get().filterMode;
     set({
       branch: "",
       branches: [],
       files: [],
-      filterMode: "all",
+      filterMode,
       loading: false,
       error: null,
       isGitRepo: false,
@@ -869,3 +873,13 @@ export const useGitStore = create<GitState>()((set, get) => ({
     });
   },
 }));
+
+/** Persist hydrates async — sync filterMode once localStorage is ready. */
+function syncFilterModeFromPrefs() {
+  useGitStore.setState({ filterMode: useGitDiffPrefsStore.getState().filterMode });
+}
+if (useGitDiffPrefsStore.persist.hasHydrated()) {
+  syncFilterModeFromPrefs();
+} else {
+  useGitDiffPrefsStore.persist.onFinishHydration(syncFilterModeFromPrefs);
+}

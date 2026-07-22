@@ -9,7 +9,7 @@ The Release workflow extracts the section for the tagged version via
 | Versions | File |
 |----------|------|
 | `0.5.*` | [`0.5.x.md`](./0.5.x.md) |
-| `0.6.*` | `0.6.x.md` (create when that minor starts) |
+| `0.6.*` | [`0.6.x.md`](./0.6.x.md) |
 | `2.1.*` | `2.1.x.md` |
 
 Rule: version **`X.Y.Z` → `X.Y.x.md`**.

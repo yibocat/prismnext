@@ -60,8 +60,6 @@ export interface AppSettings {
   aiTerminalIdleCloseMs?: number;
   /** Closing AI terminal tab while running also cancels the command. */
   aiTerminalCloseTabKillsProcess?: boolean;
-  /** Show AI terminal status in session title hover card. */
-  aiTerminalShowSessionIndicator?: boolean;
 
   /** When true (default), agent PDF body reads require intensive-reading list membership. */
   literatureStrictIntensivePdf?: boolean;
@@ -75,6 +73,11 @@ export interface AppSettings {
   updateSource?: string;
   /** A version the user dismissed; suppressed from "available" until unignored. */
   ignoredUpdateVersion?: string;
+  /**
+   * When true (default), packaged builds download updates in the background after a check
+   * finds a newer version. Install still requires an explicit user action (or quit).
+   */
+  autoDownloadUpdates?: boolean;
   /** Optional helper model ref (`provider/model`) used for image fallback. */
   aiVisionFallbackModel?: string | null;
 
@@ -146,6 +149,7 @@ const defaults: AppSettings = {
   agentTerminalMode: "pty",
   agentSystemPrompt: "",
   permissionModeSchemaVersion: PERMISSION_MODE_SCHEMA_VERSION,
+  autoDownloadUpdates: true,
   promptModules: {
     "workspace-folders": true,
     "chat-citation-staging": true,

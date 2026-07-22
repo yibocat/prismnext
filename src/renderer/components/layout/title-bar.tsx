@@ -4,8 +4,8 @@ import { useTranslation } from "react-i18next";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLayoutStore } from "@/stores/layout-store";
-import { SIDEBAR_LEFT_DEFAULT, SIDEBAR_OVERLAY_THRESHOLD } from "@/styles/constants";
 import { openRightArea, closeRightArea } from "@/lib/workspace/right-area-layout";
+import { toggleLeftSidebarPanel } from "@/lib/workspace/left-sidebar-panel";
 import { cn } from "@/lib/utils";
 import { Hint } from "@/components/ui/hint";
 import { Kbd } from "@/components/ui/kbd";
@@ -83,30 +83,13 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
               "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
               sidebarExpanded && "bg-muted text-foreground",
             )}
-            onClick={() => {
-              const st = useLayoutStore.getState();
-              if (st.leftSidebarOverlay) {
-                st.setLeftSidebarOverlay(false);
-                return;
-              }
-              const p = leftSidebarRef.current;
-              if (!p) return;
-              if (p.isCollapsed()) {
-                if (window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD) {
-                  st.setLeftSidebarOverlay(true);
-                } else {
-                  st.setLeftSidebarOverlay(false);
-                  st.setSidebarExpanded(true);
-                  st.setSidebarFullyCollapsed(false);
-                  p.expand();
-                  p.resize(st.sidebarWidth || SIDEBAR_LEFT_DEFAULT);
-                }
-              } else {
-                st.setSidebarExpanded(false);
-                st.setSidebarFullyCollapsed(true);
-                p.collapse();
-              }
-            }}
+            onClick={() =>
+              toggleLeftSidebarPanel(leftSidebarRef, {
+                centerRef,
+                rightAreaRef,
+                isMobile,
+              })
+            }
           >
             <PanelLeft className="size-3.5" />
           </button>

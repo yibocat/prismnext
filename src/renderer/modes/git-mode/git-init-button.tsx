@@ -72,9 +72,9 @@ export function GitInitButton({
         )}
       >
         {loading ? (
-          <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
+          <Loader2Icon className="size-3 shrink-0 animate-spin" />
         ) : (
-          <GitBranchIcon className="size-3.5 shrink-0" />
+          <GitBranchIcon className="size-3 shrink-0" />
         )}
         <span className="max-w-[100px] truncate hidden @md:inline">
           {t("chat.toolbar.initGitShort")}

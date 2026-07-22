@@ -1,7 +1,8 @@
 // prism-next/src/main/services/update-checker.ts
 // App updater — electron-updater (generic → R2 feed) when packaged;
 // JSON version.json / local path remains for unpackaged local QA.
-// autoDownload is off: renderer confirms before download (Task 6 UI).
+// electron-updater autoDownload stays false; Prism may background-download after check
+// when settings.autoDownloadUpdates is enabled (default true).
 
 import { app, BrowserWindow } from "electron";
 import { autoUpdater } from "electron-updater";
@@ -73,7 +74,54 @@ function currentVersion(): string {
 
 function setStatus(next: UpdaterStatus): UpdaterStatus {
   cachedStatus = next;
+  broadcastUpdaterChanged(next);
   return next;
+}
+
+function broadcastProgress(percent: number): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send("update:progress", { percent });
+    }
+  }
+}
+
+function broadcastUpdaterChanged(status: UpdaterStatus): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send("update:changed", status);
+    }
+  }
+}
+
+/** Default on — empty/undefined means auto-download after a successful check. */
+export function isAutoDownloadUpdatesEnabled(): boolean {
+  return getSettings().autoDownloadUpdates !== false;
+}
+
+let autoDownloadInFlight: Promise<void> | null = null;
+
+/**
+ * After a check finds `available`, optionally start a background download.
+ * Does not block the check IPC; skips when already downloading/downloaded.
+ */
+function maybeAutoDownloadAfterCheck(status: UpdaterStatus): void {
+  if (!app.isPackaged) return;
+  if (!isAutoDownloadUpdatesEnabled()) return;
+  if (status.status !== "available") return;
+  if (autoDownloadInFlight) return;
+
+  autoDownloadInFlight = downloadUpdate()
+    .then((after) => {
+      log.info(`Background update download finished: ${after.status}`);
+    })
+    .catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      log.warn(`Background update download failed: ${message}`);
+    })
+    .finally(() => {
+      autoDownloadInFlight = null;
+    });
 }
 
 /**
@@ -160,7 +208,7 @@ export function migrateStaleUpdateSource(): void {
 
 /**
  * Normalize a version.json payload into VersionInfo.
- * Accepts classic `{version, path}` and R2 website shape `{version, macUrl, winUrl}`
+ * Accepts classic `{version, path}` and R2 website shape `{version, macUrl, winUrl, linuxUrl}`
  * (maps platform URL → `path` when `path` is absent).
  */
 export function normalizeVersionManifest(
@@ -177,8 +225,10 @@ export function normalizeVersionManifest(
   } else {
     const macUrl = typeof o.macUrl === "string" ? o.macUrl.trim() : "";
     const winUrl = typeof o.winUrl === "string" ? o.winUrl.trim() : "";
+    const linuxUrl = typeof o.linuxUrl === "string" ? o.linuxUrl.trim() : "";
     if (platform === "darwin" && macUrl) pathValue = macUrl;
     else if (platform === "win32" && winUrl) pathValue = winUrl;
+    else if (platform === "linux" && linuxUrl) pathValue = linuxUrl;
   }
 
   if (!pathValue) return null;
@@ -251,7 +301,7 @@ async function fetchManifest(source: string): Promise<VersionInfo> {
   const raw: unknown = JSON.parse(text);
   const normalized = normalizeVersionManifest(raw);
   if (!normalized) {
-    throw new Error("Manifest is missing required fields (version, path or macUrl/winUrl)");
+    throw new Error("Manifest is missing required fields (version, path or macUrl/winUrl/linuxUrl)");
   }
   return normalized;
 }
@@ -260,14 +310,6 @@ async function fetchManifest(source: string): Promise<VersionInfo> {
 function looksLikeManifestSource(source: string): boolean {
   if (!/^https?:\/\//i.test(source)) return true;
   return /\.json(\?|$)/i.test(source);
-}
-
-function broadcastProgress(percent: number): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send("update:progress", { percent });
-    }
-  }
 }
 
 function applyFeedUrl(feed: string): void {
@@ -429,6 +471,7 @@ async function checkViaElectronUpdater(feed: string): Promise<UpdaterStatus> {
 /** Perform a check against the configured feed. */
 export async function checkForUpdates(): Promise<UpdaterStatus> {
   const cv = currentVersion();
+  const previous = getUpdaterStatus();
   setStatus({ status: "checking", currentVersion: cv });
 
   const feed = resolveFeedUrl();
@@ -441,7 +484,25 @@ export async function checkForUpdates(): Promise<UpdaterStatus> {
     return checkViaManifest(feed);
   }
 
-  return checkViaElectronUpdater(feed);
+  const result = await checkViaElectronUpdater(feed);
+
+  // Keep a finished download if the feed still reports the same newer version.
+  if (
+    previous.status === "downloaded" &&
+    result.status === "available" &&
+    previous.latestVersion &&
+    previous.latestVersion === result.latestVersion
+  ) {
+    return setStatus({
+      ...previous,
+      status: "downloaded",
+      currentVersion: cv,
+      progress: { percent: 100 },
+    });
+  }
+
+  maybeAutoDownloadAfterCheck(result);
+  return result;
 }
 
 /** Download the pending update (requires a prior successful check). */
@@ -513,8 +574,16 @@ export async function downloadUpdate(): Promise<UpdaterStatus> {
 }
 
 /** Restart and install a downloaded update. */
-export function quitAndInstall(): void {
-  autoUpdater.quitAndInstall(false, true);
+export function quitAndInstall(): { ok: true } | { ok: false; error: string } {
+  try {
+    // isSilent=false, isForceRunAfter=true — return immediately; app should quit shortly.
+    autoUpdater.quitAndInstall(false, true);
+    return { ok: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    log.warn(`quitAndInstall failed: ${message}`);
+    return { ok: false, error: message };
+  }
 }
 
 /** Last known status without re-hitting the network. */

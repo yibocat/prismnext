@@ -14,12 +14,15 @@ import {
   deleteSessionDisplays,
   getPlanEvents,
   getSessionDisplayBackup,
+  getTurnMetas,
   getUserDisplays,
   markLatestPlanArtifactDiscarded,
   restoreSessionDisplayEntry,
   truncateUserDisplays,
   upsertPlanArtifactEvent,
+  upsertTurnMeta,
   type PlanUiEvent,
+  type SessionTurnMeta,
   type UserDisplayContent,
 } from "../services/session-display-store";
 import { cancelAiCommandForSession } from "../services/ai-pty";
@@ -512,8 +515,7 @@ export function registerChatHandlers(): void {
           ? formatOpenCodeModelRef(provider, modelId)
           : modelId || undefined;
         try {
-          // createSession attaches MCP servers (e.g. paper-search via npx) — often
-          // the slow part of first-message wait after project sync.
+          // ACP standard: session/new connects MCP — only when the user sends.
           emitChatPrepare(tabId, "creating_session");
           emitChatPrepare(tabId, "connecting_mcp");
           const session = await service.createSession(
@@ -961,9 +963,8 @@ export function registerChatHandlers(): void {
   );
 
   // ─── Pre-warm ───
-  // At project open: ensure ACP process alive + pre-scan agent config
-  // (skills dirs, MCP servers). Session creation is deferred to first
-  // prompt to avoid polluting the session list with empty entries.
+  // Industry model: warm ACP + project config (skills/experts/prompts).
+  // Do NOT mint empty sessions — session/new happens on first chat:send.
   ipcMain.handle(
     "chat:prewarm",
     async (_event, args: { projectPath?: string }) => {
@@ -975,27 +976,69 @@ export function registerChatHandlers(): void {
           const { commandRegistry } = await import("../commands/registry");
           commandRegistry.setProjectRoot(args.projectPath);
           commandRegistry.reload();
+          const { emitAgentStatusChanged } = await import("../services/agent-status-notify");
+          emitAgentStatusChanged(getService().getStatusSnapshot(args.projectPath));
         }
-      } catch (err: any) {
-        log.debug(`OpenCode pre-warm skipped: ${err.message}`);
+        return { ok: true as const };
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(`OpenCode pre-warm failed: ${message}`);
+        if (args.projectPath) {
+          try {
+            const { emitAgentStatusChanged } = await import("../services/agent-status-notify");
+            emitAgentStatusChanged(getService().getStatusSnapshot(args.projectPath));
+          } catch { /* ignore */ }
+        }
+        return { ok: false as const, error: message };
       }
-      return { sessionId: null };
     },
   );
 
   // ─── Status ───
-  ipcMain.handle("chat:status", async () => {
-    const service = getService();
-    if (service.getConnection()) {
-      const health = await service.healthCheck();
-      return { available: health.healthy, version: health.version };
-    }
-    const binaryAvailable = service.isBinaryAvailable();
-    return {
-      available: binaryAvailable,
-      version: binaryAvailable ? "available" : "",
-    };
-  });
+  // available === ACP connected+healthy only (never binary-on-disk alone).
+  ipcMain.handle(
+    "chat:status",
+    async (_event, args?: { projectPath?: string }) => {
+      const service = getService();
+      const snap = service.getStatusSnapshot(args?.projectPath);
+      if (snap.available) {
+        const health = await service.healthCheck();
+        return {
+          ...snap,
+          available: health.healthy,
+          phase: health.healthy ? "ready" : "error",
+          version: health.version || snap.version,
+          error: health.healthy ? null : (snap.error || "Agent health check failed"),
+        };
+      }
+      return snap;
+    },
+  );
+
+  // Retry ACP spawn after failure (status-dot Retry).
+  ipcMain.handle(
+    "chat:ensureAgent",
+    async (_event, args?: { projectPath?: string }) => {
+      try {
+        await ensureConnected();
+        if (args?.projectPath) {
+          const {
+            ensureProjectChatPrewarm,
+            invalidateProjectChatPrewarm,
+            getProjectWarmPhase,
+          } = await import("../services/project-chat-prewarm");
+          if (getProjectWarmPhase(args.projectPath) === "error") {
+            invalidateProjectChatPrewarm(args.projectPath);
+          }
+          await ensureProjectChatPrewarm(args.projectPath);
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(`chat:ensureAgent failed: ${message}`);
+      }
+      return getService().getStatusSnapshot(args?.projectPath);
+    },
+  );
 
   // ─── Session Management ───
 
@@ -1207,6 +1250,29 @@ export function registerChatHandlers(): void {
     "session:getPlanEvents",
     async (_event, args: { projectPath: string; sessionId: string }) => {
       return getPlanEvents(args.projectPath, args.sessionId);
+    },
+  );
+
+  ipcMain.handle(
+    "session:getTurnMetas",
+    async (_event, args: { projectPath: string; sessionId: string }) => {
+      return getTurnMetas(args.projectPath, args.sessionId);
+    },
+  );
+
+  ipcMain.handle(
+    "session:upsertTurnMeta",
+    async (
+      _event,
+      args: {
+        projectPath: string;
+        sessionId: string;
+        turnIndex: number;
+        meta: SessionTurnMeta;
+      },
+    ) => {
+      upsertTurnMeta(args.projectPath, args.sessionId, args.turnIndex, args.meta);
+      return { success: true };
     },
   );
 

@@ -104,8 +104,6 @@ export interface AppSettings {
   aiTerminalIdleCloseMs?: number;
   /** Closing AI terminal tab while running also cancels the command (default false). */
   aiTerminalCloseTabKillsProcess?: boolean;
-  /** Show AI terminal status in session title hover card (default true). */
-  aiTerminalShowSessionIndicator?: boolean;
   /** User-added custom API providers */
   aiCustomProviders?: { id: string; name: string; baseUrl: string }[];
   /** MinerU cloud API token for precision PDF extraction */
@@ -124,6 +122,8 @@ export interface AppSettings {
   updateSource?: string;
   /** A version the user dismissed; suppressed from "available" until unignored. */
   ignoredUpdateVersion?: string;
+  /** Background-download updates after check (default true). Install still needs a click / quit. */
+  autoDownloadUpdates?: boolean;
 }
 
 const defaults: AppSettings = {
@@ -148,7 +148,6 @@ const defaults: AppSettings = {
   aiTerminalPostExitGraceMs: 60_000,
   aiTerminalIdleCloseMs: 600_000,
   aiTerminalCloseTabKillsProcess: false,
-  aiTerminalShowSessionIndicator: true,
 };
 
 interface SettingsState {

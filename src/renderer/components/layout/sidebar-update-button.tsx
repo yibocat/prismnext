@@ -10,14 +10,22 @@ import { cn } from "@/lib/utils";
  */
 export function SidebarUpdateButton({ className }: { className?: string }) {
   const { t } = useTranslation();
-  const { visible, latestVersion, downloading, busy, oneClickUpdate } =
-    useAvailableUpdate();
+  const {
+    visible,
+    latestVersion,
+    downloading,
+    busy,
+    readyToInstall,
+    oneClickUpdate,
+  } = useAvailableUpdate();
 
   if (!visible) return null;
 
-  const label = latestVersion
-    ? t("nav.updateToVersion", { version: latestVersion })
-    : t("settings.about.oneClickUpdate");
+  const label = readyToInstall
+    ? t("settings.about.restartToInstall")
+    : latestVersion
+      ? t("nav.updateToVersion", { version: latestVersion })
+      : t("settings.about.oneClickUpdate");
 
   return (
     <Hint label={label} side="top" delayDuration={200}>

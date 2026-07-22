@@ -38,8 +38,6 @@ export function AiTerminalSettingsFields({ hideExecutionMode = true }: AiTermina
     useSettingsStore((s) => s.settings.aiTerminalIdleCloseMs ?? 600_000);
   const aiTerminalCloseTabKillsProcess =
     useSettingsStore((s) => s.settings.aiTerminalCloseTabKillsProcess === true);
-  const aiTerminalShowSessionIndicator =
-    useSettingsStore((s) => s.settings.aiTerminalShowSessionIndicator !== false);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
 
   return (
@@ -148,26 +146,6 @@ export function AiTerminalSettingsFields({ hideExecutionMode = true }: AiTermina
           <AppSelectContent>
             <AppSelectItem value="keep">{t("settings.terminalPage.ai.optKeep")}</AppSelectItem>
             <AppSelectItem value="kill">{t("settings.terminalPage.ai.optCancel")}</AppSelectItem>
-          </AppSelectContent>
-        </AppSelect>
-      </div>
-      <div className={SETTINGS_ROW}>
-        <div className="min-w-0">
-          <span className={SETTINGS_ROW_LABEL}>{t("settings.terminalPage.ai.sessionStatus")}</span>
-          <p className={SETTINGS_ROW_DESC}>{t("settings.terminalPage.ai.sessionStatusDesc")}</p>
-        </div>
-        <AppSelect
-          value={aiTerminalShowSessionIndicator ? "show" : "hide"}
-          onValueChange={(value: "show" | "hide") =>
-            void updateSettings({ aiTerminalShowSessionIndicator: value === "show" })
-          }
-        >
-          <AppSelectTrigger variant="wide">
-            <AppSelectValue />
-          </AppSelectTrigger>
-          <AppSelectContent>
-            <AppSelectItem value="show">{t("common.show")}</AppSelectItem>
-            <AppSelectItem value="hide">{t("common.hide")}</AppSelectItem>
           </AppSelectContent>
         </AppSelect>
       </div>

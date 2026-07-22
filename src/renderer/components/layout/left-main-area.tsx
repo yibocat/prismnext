@@ -17,6 +17,7 @@ import { GitBranchIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChatFileDrop } from "@/lib/chat/use-chat-file-drop";
 import { chatFileDropZoneClass } from "@/lib/chat/chat-file-drag-overlay";
+import { ShortcutKbdChips } from "@/lib/shortcuts";
 
 import {
   GeneralSettings,
@@ -37,7 +38,7 @@ import {
 } from "@/components/modules/settings";
 import { TemplateCenter } from "@/components/modules/templates/template-center";
 import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator, RestoreUndoBar } from "@/components/modules/chat";
-import { WorktreeSelector } from "@/components/modules/chat/worktree-selector";
+import { WorktreeSelector, CHAT_PANEL_TOOLBAR_BUTTON } from "@/components/modules/chat/worktree-selector";
 import { BranchSelector } from "@/components/modules/chat/branch-selector";
 import { WorktreeActions } from "@/components/modules/chat/worktree-actions";
 import { isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
@@ -85,7 +86,7 @@ export function LeftMainArea() {
   });
   const setSessionAgent = useChatStore((s) => s.setSessionAgent);
   const showHomepage =
-    messages.length === 0 && !isStreaming && !isLoadingSession && !sessionId;
+    messages.length === 0 && !isStreaming && !isLoadingSession;
   /** New empty session shortcut — same as slash Modes → Plan; hide once in Plan. */
   const showPlanNewIdea = showHomepage && sessionAgent !== "plan";
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
@@ -203,8 +204,8 @@ export function LeftMainArea() {
                 {t("chat.aibar.dropFiles")}
               </span>
             ) : null}
-            {/* Top toolbar — branch & worktree selectors */}
-            <div className="w-full max-w-3xl flex items-center gap-1.5 py-1.5 px-3">
+            {/* Top toolbar — branch & worktree (gap to composer = composer py) */}
+            <div className="mx-auto flex h-6 w-full max-w-3xl items-center gap-1.5 px-3">
               <BranchSelector />
 
               <WorktreeSelector />
@@ -216,18 +217,19 @@ export function LeftMainArea() {
                 <ChatComposer />
               </div>
             )}
-            {/* Suggestion chips under homepage composer */}
-            <div className="mb-2 flex h-7 w-full max-w-3xl items-center gap-1.5 px-3 mx-auto text-[length:var(--font-chat-meta)] text-muted-foreground/70">
+            {/* Suggestion chips under homepage composer (gap from composer = composer py) */}
+            <div className="mb-2 flex h-6 w-full max-w-3xl items-center gap-1.5 px-3 mx-auto text-[length:var(--font-chat-meta)] text-muted-foreground/70">
               {showPlanNewIdea ? (
                 <button
                   type="button"
                   className={cn(
-                    "rounded px-1.5 py-0.5 text-muted-foreground/70 transition-colors",
-                    "hover:bg-accent hover:text-accent-foreground",
+                    CHAT_PANEL_TOOLBAR_BUTTON,
+                    "text-muted-foreground/70 hover:text-accent-foreground",
                   )}
                   onClick={() => setSessionAgent("plan")}
                 >
-                  {t("chat.toolbar.planNewIdea")}
+                  <span>{t("chat.toolbar.planNewIdea")}</span>
+                  <ShortcutKbdChips id="product.togglePlanMode" />
                 </button>
               ) : null}
               <span className="flex-1" />
@@ -252,7 +254,7 @@ export function LeftMainArea() {
             <RestoreUndoBar />
             {/* Worktree actions above composer — only when worktree is active */}
             {showWorktreeActions && (
-              <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-7 px-3 mb-1.5">
+              <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-6 px-3">
                 <WorktreeActions />
               </div>
             )}
@@ -260,7 +262,7 @@ export function LeftMainArea() {
               {!editorMaximized && <ChatComposer />}
             </div>
             {/* Bottom bar: branch / worktree on left (git only), context ring on right */}
-            <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-7 px-3 mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
+            <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-6 px-3 mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
               {isGitRepo && (
                 <>
                   <span className="flex items-center gap-1">

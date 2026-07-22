@@ -14,6 +14,7 @@ import { injectDiffOverrides } from "@/lib/editor-themes/diff-overrides";
 import { registerAllModes } from "@/modes/_register";
 import { AppCommandPalette, GlobalErrorBoundary } from "@/components/modules/shared";
 import { ProjectSetupDialog, WelcomePage } from "@/components/modules/project";
+import { PrismRibbonMark } from "@/components/brand/prism-ribbon-mark";
 import { Toaster } from "@/components/ui/sonner";
 import { TabCloseConfirmDialog } from "@/components/layout/tab-close-confirm-dialog";
 import { LeftSidebar } from "@/components/layout/left-sidebar";
@@ -182,7 +183,8 @@ export function App() {
     });
   }, [projectRoot]);
 
-  // Sidebar overlay threshold: below 500px, sidebar opens as fullscreen overlay.
+  // Sidebar overlay: below SIDEBAR_OVERLAY_THRESHOLD (sidebar+main mins), open as
+  // fullscreen overlay — inline expand would exceed panel minSizes and collapse the shell.
   // Throttled via requestAnimationFrame — the native resize event can fire faster
   // than 60fps during a window corner drag, causing unnecessary panel API calls
   // and layout thrashing. Coalescing to one check per frame eliminates this.
@@ -415,7 +417,10 @@ export function App() {
       try {
         const exists = await window.electronAPI.fsExists(path);
         if (exists) {
+          // Keep splash (#L) up — do not flip showWelcome yet (avoids blank/welcome flash).
+          useDocumentStore.setState({ isOpeningProject: true });
           await useDocumentStore.getState().openProject(path);
+          setAutoOpenChecked(true);
         } else {
           setAutoOpenChecked(true); // path doesn't exist → show welcome
         }
@@ -426,14 +431,18 @@ export function App() {
   }, []);
 
   // ── Startup loading screen lifecycle ──
-  // The loading screen stays visible until ONE of these is true:
-  //   a) Welcome page is shown AND auto-open has confirmed no project
-  //   b) A project has finished loading (projectRoot set, isOpeningProject false)
+  // Stay on splash until Agent+project warm finishes for auto-open, or welcome
+  // is confirmed (no last project / skip). Never treat "left welcome" alone as
+  // ready — that used to dismiss splash while Project was still Warming.
   const settingsLoaded = useSettingsStore((s) => s.loaded);
   const [autoOpenChecked, setAutoOpenChecked] = useState(false);
   const appReady =
     settingsLoaded &&
-    ((showWelcome && autoOpenChecked) || !showWelcome || (projectRoot && !isOpeningProject));
+    (
+      (showWelcome && autoOpenChecked)
+      || (Boolean(projectRoot) && !isOpeningProject)
+      || (!showWelcome && !projectRoot && autoOpenChecked)
+    );
 
   useEffect(() => {
     if (!appReady) return;
@@ -443,6 +452,9 @@ export function App() {
     if (!el) return;
     el.remove();
   }, [appReady]);
+
+  // While restoring last project, keep splash only — never mount Welcome (flash).
+  const showWelcomeUi = showWelcome && autoOpenChecked && !isOpeningProject && !projectRoot;
 
   return (
     <GlobalErrorBoundary>
@@ -458,17 +470,36 @@ export function App() {
           richColors
         />
         <TabCloseConfirmDialog />
-        {showWelcome ? (
-          <WelcomePage onSkip={() => setShowWelcome(false)} />
+        {/* Full-screen warm splash when #L already dismissed (e.g. open from Welcome / switch). */}
+        {isOpeningProject && appReady ? (
+          <div
+            className="fixed inset-0 z-[99999] flex items-center justify-center bg-background"
+            aria-busy
+            aria-label="Loading project"
+          >
+            <div className="flex flex-col items-center gap-3.5">
+              <div className="flex size-14 items-center justify-center rounded-[14px] border border-border bg-card shadow-sm">
+                <PrismRibbonMark className="size-8" />
+              </div>
+              <div className="text-[22px] font-semibold tracking-tight text-foreground">
+                PrismNext
+              </div>
+              <div className="mt-1 h-[3px] w-40 overflow-hidden rounded-sm bg-muted">
+                <div
+                  className="h-full w-[35%] rounded-sm bg-foreground/50"
+                  style={{ animation: "loading-bar 1.2s ease-in-out infinite" }}
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {showWelcomeUi ? (
+          <WelcomePage onSkip={() => {
+            setShowWelcome(false);
+            setAutoOpenChecked(true);
+          }} />
         ) : projectRoot ? (
           <div className="flex h-full flex-col" key={projectRoot}>
-            {/* Subtle loading bar during project open / switch */}
-            {isOpeningProject && (
-              <div className="h-0.5 w-full bg-muted overflow-hidden shrink-0">
-                <div className="h-full w-1/3 bg-primary rounded-r-full"
-                  style={{ animation: "loading-bar 1.2s ease-in-out infinite" }} />
-              </div>
-            )}
             <Group
               id="main-layout"
               orientation="horizontal"

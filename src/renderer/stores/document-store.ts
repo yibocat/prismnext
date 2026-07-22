@@ -257,16 +257,16 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       // Ensure .prismnext/ data hub exists before any agent operations.
       window.electronAPI.projectEnsure(rootPath).catch(() => {});
 
-      // Pre-warm OpenCode: spawn the persistent process ahead of time
-      // so the first sendPrompt skips ~200ms of process startup latency.
-      // Session creation is NOT done here — sessions are created on first
-      // prompt to avoid polluting the session list with empty entries.
-      window.electronAPI.chatPrewarm(rootPath).then(() => {
-        if (generation !== openProjectGeneration) return;
+      // Warm Agent process + project config in parallel with fs scan. Do NOT
+      // commit projectRoot until warm finishes — keeps the startup splash up
+      // instead of flashing the shell with a thin top loading bar.
+      const warmPromise = window.electronAPI.chatPrewarm(rootPath).then((result) => {
+        if (generation !== openProjectGeneration) return result;
         import("./command-store").then(({ useCommandStore }) => {
           useCommandStore.getState().reloadCommands();
         });
-      }).catch(() => {});
+        return result;
+      });
 
       const result = await window.electronAPI.fsScanMetadata(rootPath);
       if (generation !== openProjectGeneration) return;
@@ -280,7 +280,6 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         fileSize: f.fileSize,
       }));
 
-      // Build fileMetadata map (all files, no content)
       const fileMetadata = new Map<string, FileMeta>();
       for (const file of files) {
         fileMetadata.set(file.id, {
@@ -292,13 +291,56 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         });
       }
 
-      // ── Fire-and-forget warmup BEFORE set() so it enters the serial
-      // queue ahead of subsequent git calls (selectUnit, etc.). We
-      // intentionally do NOT await — the warmup runs in the background
-      // while the file tree renders immediately. Git operations auto-queue
-      // behind it via the _pending serial chain in git.ts.
       window.electronAPI.gitWarmup?.(rootPath).catch(() => {});
 
+      // Workspace / prefs can load from path without committing projectRoot yet.
+      const workspaceStore = useWorkspaceConfigStore.getState();
+      await workspaceStore.loadConfig(rootPath);
+      if (generation !== openProjectGeneration) return;
+
+      import("./literature-store").then(({ useLiteratureStore }) => {
+        if (generation !== openProjectGeneration) return;
+        void useLiteratureStore.getState().refresh(rootPath);
+      });
+
+      const lastActiveFileId = getProjectLastActiveFileId(rootPath);
+      const expandedFolders = (() => {
+        if (!lastActiveFileId) return [] as string[];
+        const parts = lastActiveFileId.split("/");
+        const ancestors: string[] = [];
+        for (let i = 1; i < parts.length; i++) {
+          ancestors.push(parts.slice(0, i).join("/"));
+        }
+        return ancestors.filter((f) => result.folders.includes(f));
+      })();
+
+      useProjectStore.getState().addRecentProject(rootPath);
+      window.electronAPI.settingsSet({ lastProjectPath: rootPath } as any);
+
+      import("./git-store").then(({ useGitStore }) => {
+        useGitStore.getState().clearAll();
+        useGitStore.getState().selectUnit(rootPath);
+      });
+
+      // Block until Agent + project config (skills/experts/prompts) are warm.
+      const warm = await warmPromise.catch((err: unknown) => ({
+        ok: false as const,
+        error: err instanceof Error ? err.message : String(err),
+      }));
+      if (generation !== openProjectGeneration) return;
+      console.log(
+        `[openProject] chatPrewarm: ${Math.round(performance.now() - t2)}ms` +
+          (warm && "ok" in warm && warm.ok === false ? ` (failed: ${warm.error ?? "?"})` : ""),
+      );
+      if (warm && "ok" in warm && warm.ok === false) {
+        toast.error(
+          warm.error
+            ? `Agent project warm-up failed: ${warm.error}`
+            : "Agent project warm-up failed",
+        );
+      }
+
+      // Commit UI only when ready — splash stays up until this point.
       set({
         projectRoot: rootPath,
         checkoutRoot: rootPath,
@@ -312,46 +354,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       });
 
       loadSessionUiPrefsIntoLayout(rootPath);
-
-      // Load workspace configuration
-      const workspaceStore = useWorkspaceConfigStore.getState();
-      await workspaceStore.loadConfig(rootPath);
-      if (generation !== openProjectGeneration) return;
-
-      // Preload literature library for @ mentions (fire-and-forget)
-      import("./literature-store").then(({ useLiteratureStore }) => {
-        if (generation !== openProjectGeneration) return;
-        void useLiteratureStore.getState().refresh(rootPath);
-      });
-
-      // ── Smart expand: only expand folders on the path to the last active file ──
-      const lastActiveFileId = getProjectLastActiveFileId(rootPath);
-      if (lastActiveFileId) {
-        const parts = lastActiveFileId.split("/");
-        const ancestors: string[] = [];
-        for (let i = 1; i < parts.length; i++) {
-          ancestors.push(parts.slice(0, i).join("/"));
-        }
-        const currentFolders = get().folders;
-        const valid = ancestors.filter((f) => currentFolders.includes(f));
-        useLayoutStore.getState().setExpandedFileTreeFolders(valid);
-      } else {
-        useLayoutStore.getState().setExpandedFileTreeFolders([]);
-      }
-
-      // Add to recent projects
-      useProjectStore.getState().addRecentProject(rootPath);
-
-      // Persist last project path so it auto-restores on next launch
-      window.electronAPI.settingsSet({ lastProjectPath: rootPath } as any);
-
-      // ── Eagerly preload git status + branches (queues behind warmup) ──
-      import("./git-store").then(({ useGitStore }) => {
-        useGitStore.getState().clearAll();
-        useGitStore.getState().selectUnit(rootPath);
-      });
-
-      // OpenCode service auto-starts on first prompt; no explicit prewarm needed.
+      useLayoutStore.getState().setExpandedFileTreeFolders(expandedFolders);
     } catch (error) {
       toast.error(`Failed to open project: ${error}`);
       throw error;

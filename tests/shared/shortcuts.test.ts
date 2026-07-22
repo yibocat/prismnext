@@ -211,6 +211,25 @@ describe("resolveChord", () => {
     ).toBe(true);
   });
 
+  it("matches alt+p on darwin when Option remaps key to π", () => {
+    expect(
+      chordMatchesEvent(
+        { key: "p", alt: true },
+        { key: "π", code: "KeyP", metaKey: false, ctrlKey: false, shiftKey: false, altKey: true },
+        "darwin",
+      ),
+    ).toBe(true);
+  });
+
+  it("formats alt+p as ⌥P on darwin", () => {
+    expect(formatChord({ key: "p", alt: true }, "darwin")).toBe("⌥P");
+  });
+
+  it("registers product.togglePlanMode", () => {
+    expect(listShortcuts().some((d) => d.id === "product.togglePlanMode")).toBe(true);
+    expect(resolveChord("product.togglePlanMode")?.chord).toEqual({ key: "p", alt: true });
+  });
+
   it("ignores overrides for non-remappable shell/editor", () => {
     const r = resolveChord("shell.toggleLeftSidebar", {
       "shell.toggleLeftSidebar": { key: "k", primary: true },

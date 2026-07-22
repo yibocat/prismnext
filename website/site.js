@@ -3,31 +3,33 @@
     en: {
       title: "PrismNext — Download",
       eyebrow: "Early Access",
-      lede: "Your collaborative AI scientist — on your desk.",
-      sub: "Literature · design · experiments · LaTeX — one local workspace. The agent can drive; you keep the gates.",
+      lede: "Co-driven AI science — gated, rigorous, complete.",
+      sub: "From hypothesis to manuscript: ideation · literature · experiment · writing — one local Agent workspace.",
       versionLabel: "Version",
-      pillars: "Local-first · BYOK",
-      platforms: "macOS · Windows",
-      foot: "Apache-2.0 · Not an unsupervised paper factory — serious co-driving, locally.",
-      downloadMac: "Download for macOS",
-      downloadWin: "Download for Windows",
-      otherMac: "macOS",
-      otherWin: "Windows",
+      pillars: "Local-first · Bring your own API key",
+      foot: "Apache-2.0 · Local-first collaborative AI Scientist",
+      osMac: "macOS",
+      osWin: "Windows",
+      osLinux: "Linux",
+      fmtMac: ".dmg",
+      fmtWin: ".exe",
+      fmtLinux: "AppImage",
       metaUnavailable: "Release metadata unavailable.",
     },
     zh: {
       title: "PrismNext — 下载",
       eyebrow: "Early Access",
-      lede: "你的协作式 AI 科学家 — 就在桌面上。",
-      sub: "文献 · 设计 · 实验 · LaTeX — 一个本地工作区。Agent 可驱动；闸门在你手里。",
+      lede: "AI 共驾科研 — 有闸门，有严谨，闭环一体。",
+      sub: "从假设到成文：构思 · 文献 · 实验 · 撰写 — 本地 Agent 一站完成。",
       versionLabel: "版本",
-      pillars: "本地优先 · BYOK",
-      platforms: "macOS · Windows",
-      foot: "Apache-2.0 · 不是无人发论文引擎 — 在本地做严肃共驾。",
-      downloadMac: "下载 macOS 版",
-      downloadWin: "下载 Windows 版",
-      otherMac: "macOS",
-      otherWin: "Windows",
+      pillars: "本地优先 · 自备 API Key",
+      foot: "Apache-2.0 · 本地优先的协作式 AI Scientist",
+      osMac: "macOS",
+      osWin: "Windows",
+      osLinux: "Linux",
+      fmtMac: ".dmg",
+      fmtWin: ".exe",
+      fmtLinux: "AppImage",
       metaUnavailable: "暂时无法加载发布信息。",
     },
   };
@@ -43,6 +45,9 @@
     const ua = navigator.userAgent || "";
     const platform = navigator.platform || "";
     if (/Windows/i.test(ua) || /Win/i.test(platform)) return "win";
+    // Android UA contains "Linux" — exclude before Linux desktop match.
+    if (/Android/i.test(ua)) return "other";
+    if (/Linux/i.test(ua) || /Linux/i.test(platform)) return "linux";
     if (/Mac|iPhone|iPad|iPod/i.test(ua) || /Mac/i.test(platform)) return "mac";
     return "other";
   }
@@ -80,6 +85,7 @@
     version: defaultVersion(),
     macUrl: "#",
     winUrl: "#",
+    linuxUrl: "#",
     notes: "",
   };
 
@@ -99,29 +105,43 @@
       btn.setAttribute("aria-pressed", active ? "true" : "false");
     });
 
+    const shot = document.getElementById("product-shot");
+    if (shot) {
+      const next =
+        lang === "zh"
+          ? shot.getAttribute("data-shot-zh")
+          : shot.getAttribute("data-shot-en");
+      if (next && shot.getAttribute("src") !== next) shot.src = next;
+      shot.alt =
+        lang === "zh" ? "PrismNext 工作区截图" : "PrismNext workspace screenshot";
+    }
+
     wireDownloads();
   }
 
   function wireDownloads() {
     const t = STRINGS[lang];
-    const primary = document.getElementById("dl-primary");
-    const secondary = document.getElementById("dl-secondary");
-    if (!primary || !secondary) return;
+    const mac = document.getElementById("dl-mac");
+    const win = document.getElementById("dl-win");
+    const linux = document.getElementById("dl-linux");
+    if (!mac || !win || !linux) return;
+
+    mac.href = release.macUrl || "#";
+    win.href = release.winUrl || "#";
+    linux.href = release.linuxUrl || "#";
+
+    mac.querySelector(".dl-os").textContent = t.osMac;
+    win.querySelector(".dl-os").textContent = t.osWin;
+    linux.querySelector(".dl-os").textContent = t.osLinux;
+    mac.querySelector(".dl-fmt").textContent = t.fmtMac;
+    win.querySelector(".dl-fmt").textContent = t.fmtWin;
+    linux.querySelector(".dl-fmt").textContent = t.fmtLinux;
 
     const platform = detectPlatform();
-    const preferWin = platform === "win";
-
-    if (preferWin) {
-      primary.href = release.winUrl || "#";
-      primary.textContent = t.downloadWin;
-      secondary.href = release.macUrl || "#";
-      secondary.textContent = t.otherMac;
-    } else {
-      primary.href = release.macUrl || "#";
-      primary.textContent = t.downloadMac;
-      secondary.href = release.winUrl || "#";
-      secondary.textContent = t.otherWin;
-    }
+    [mac, win, linux].forEach((el) => el.classList.remove("is-primary"));
+    if (platform === "win") win.classList.add("is-primary");
+    else if (platform === "linux") linux.classList.add("is-primary");
+    else mac.classList.add("is-primary");
   }
 
   document.querySelectorAll(".lang-btn").forEach((btn) => {
@@ -144,6 +164,7 @@
         version: v.version || defaultVersion(),
         macUrl: v.macUrl || "#",
         winUrl: v.winUrl || "#",
+        linuxUrl: v.linuxUrl || "#",
         notes: v.notes || "",
       };
       document.getElementById("version").textContent = release.version;

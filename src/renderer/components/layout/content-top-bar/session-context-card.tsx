@@ -6,19 +6,26 @@ import {
   HoverCardContent,
 } from "@/components/ui/hover-card";
 import { useWorktreeStore } from "@/stores/worktree-store";
-import { useTerminalAiStore } from "@/stores/terminal-ai-store";
-import { useSettingsStore } from "@/stores/settings-store";
 import { useCitationStagingStore } from "@/stores/citation-staging-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { formatAiTerminalStatus } from "@/lib/terminal/ai-terminal-lifecycle";
-import { resolveAiMirrorKey } from "@/lib/terminal/mirror-key";
+import { useChatStore } from "@/stores/chat-store";
 import { resolveSessionWorktreeContext } from "@/lib/git/session-worktree-context";
+import { openSessionCitations } from "@/lib/literature/jump-to-staged-citation";
+import type { SessionAgent } from "../../../../../shared/session-agent";
 import {
-  GitBranchIcon,
-  TerminalIcon,
-  WorkflowIcon,
   BookMarkedIcon,
+  BookOpenIcon,
+  GitBranchIcon,
+  HammerIcon,
+  ListTodoIcon,
+  WorkflowIcon,
+  type LucideIcon,
 } from "lucide-react";
+
+const SESSION_AGENT_ICONS: Record<SessionAgent, LucideIcon> = {
+  build: HammerIcon,
+  plan: ListTodoIcon,
+};
 
 interface SessionContextCardProps {
   tabId: string;
@@ -31,7 +38,7 @@ interface SessionContextCardProps {
 
 /**
  * Hover panel for a chat tab / session title.
- * Prefers session-scoped facts (checkout, citations, AI terminal) over project chrome.
+ * Session-scoped facts only: title, checkout, mode, citations, intensive.
  */
 export function SessionContextCard({
   tabId,
@@ -49,14 +56,15 @@ export function SessionContextCard({
     worktrees,
   );
 
-  const mirrorKey = tabId ? resolveAiMirrorKey(tabId) : "";
-  const sessionState = useTerminalAiStore((s) =>
-    mirrorKey ? s.sessionStates[mirrorKey] : undefined,
-  );
-  const showIndicator =
-    useSettingsStore((s) => s.settings.aiTerminalShowSessionIndicator !== false);
-  const terminalStatus = showIndicator ? formatAiTerminalStatus(sessionState) : null;
-  const focusOrOpen = useTerminalAiStore((s) => s.focusOrOpenAiTerminal);
+  const sessionAgent = useChatStore((s) => {
+    const tab = s.tabs.find((t) => t.id === tabId);
+    return tab?.sessionAgent ?? "build";
+  });
+  const intensiveCount = useChatStore((s) => {
+    const tab = s.tabs.find((t) => t.id === tabId);
+    return tab?.intensivePaperIds.length ?? 0;
+  });
+  const ModeIcon = SESSION_AGENT_ICONS[sessionAgent] ?? HammerIcon;
 
   const citationCount = useCitationStagingStore((s) =>
     sessionId ? s.getCitationsForSession(sessionId).length : 0,
@@ -71,15 +79,6 @@ export function SessionContextCard({
             <div className="text-[length:var(--font-chat-meta)] text-foreground truncate font-medium">
               {title}
             </div>
-            {sessionId ? (
-              <div className="text-[length:var(--font-hint)] text-muted-foreground/70 truncate font-mono">
-                {sessionId.slice(0, 12)}…
-              </div>
-            ) : (
-              <div className="text-[length:var(--font-hint)] text-muted-foreground">
-                {t("chat.openTabs.unsavedSession")}
-              </div>
-            )}
           </div>
 
           <div className="flex items-center gap-2 min-w-0">
@@ -104,28 +103,37 @@ export function SessionContextCard({
             </div>
           </div>
 
+          <div className="flex items-center gap-2 min-w-0">
+            <ModeIcon className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="text-[length:var(--font-chat-meta)] text-foreground truncate">
+              {sessionAgent === "plan"
+                ? t("chat.sessionAgent.plan")
+                : t("chat.sessionAgent.build")}
+            </span>
+          </div>
+
           {sessionId ? (
-            <div className="flex items-center gap-2 min-w-0">
+            <button
+              type="button"
+              className="flex items-center gap-2 w-full min-w-0 text-left rounded-sm cursor-pointer transition-colors -mx-1 px-1 py-0.5 text-foreground hover:bg-accent/50"
+              onClick={() => openSessionCitations(sessionId)}
+            >
               <BookMarkedIcon className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="text-[length:var(--font-chat-meta)] text-foreground truncate">
+              <span className="text-[length:var(--font-chat-meta)] truncate">
                 {citationCount > 0
                   ? t("chat.openTabs.citationsCount", { count: citationCount })
                   : t("chat.openTabs.citationsNone")}
               </span>
-            </div>
+            </button>
           ) : null}
 
-          {terminalStatus ? (
-            <button
-              type="button"
-              className="flex items-center gap-2 w-full pt-1 border-t border-border/60 text-left rounded-sm cursor-pointer transition-colors -mx-1 px-1 py-1 text-muted-foreground hover:bg-accent/50 hover:text-warning group/term"
-              onClick={() => focusOrOpen(tabId)}
-            >
-              <TerminalIcon className="size-3.5 shrink-0 text-warning/80 group-hover/term:text-warning transition-colors" />
-              <span className="min-w-0 flex-1 text-[length:var(--font-chat-meta)] truncate group-hover/term:text-warning transition-colors">
-                {terminalStatus}
+          {intensiveCount > 0 ? (
+            <div className="flex items-center gap-2 min-w-0">
+              <BookOpenIcon className="size-3.5 shrink-0 text-muted-foreground" />
+              <span className="text-[length:var(--font-chat-meta)] text-foreground truncate">
+                {t("chat.openTabs.intensiveCount", { count: intensiveCount })}
               </span>
-            </button>
+            </div>
           ) : null}
         </div>
       </HoverCardContent>

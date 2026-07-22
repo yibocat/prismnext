@@ -7,6 +7,8 @@ import {
   draftPlanPathBelongsToSession,
   isResearchPlanDraftPath,
 } from "../../../../shared/research-plan";
+import { CHAT_CHROME_BUTTON_TEXT } from "./worktree-selector";
+import { cn } from "@/lib/utils";
 
 /**
  * Dedicated research-plan mode toolbar — Approve & Build / Deny for a pending draft
@@ -45,7 +47,7 @@ export function PlanDraftToolbar({ filePath }: { filePath?: string | null }) {
           type="button"
           size="xs"
           variant="ghost"
-          className="h-6 gap-1 px-2 text-muted-foreground"
+          className={cn(CHAT_CHROME_BUTTON_TEXT, "h-6 gap-1 px-2 text-muted-foreground")}
           onClick={() => void exitPlanDiscardAndBuild(ownerTabId)}
         >
           <XIcon className="size-3" />
@@ -56,7 +58,7 @@ export function PlanDraftToolbar({ filePath }: { filePath?: string | null }) {
         <Button
           type="button"
           size="xs"
-          className="h-6 gap-1 px-2"
+          className={cn(CHAT_CHROME_BUTTON_TEXT, "h-6 gap-1 px-2")}
           onClick={() => void approveAndExecutePlan(ownerTabId)}
         >
           <CheckIcon className="size-3" />

@@ -27,7 +27,16 @@ export type PlanUiEvent =
 interface SessionDisplayEntry {
   userDisplays: UserDisplayContent[];
   planEvents?: PlanUiEvent[];
+  /** Per-turn footer meta (time / model), keyed by turnIndex string. */
+  turnMetas?: Record<string, SessionTurnMeta>;
   updatedAt: number;
+}
+
+/** Prism-local turn footer stamp (not in OpenCode history). */
+export interface SessionTurnMeta {
+  completedAt?: number;
+  modelLabel?: string;
+  summary?: string;
 }
 
 type SessionDisplayStore = Record<string, SessionDisplayEntry>;
@@ -57,7 +66,7 @@ function ensureEntry(
   store: SessionDisplayStore,
   sessionId: string,
 ): SessionDisplayEntry {
-  return store[sessionId] ?? { userDisplays: [], planEvents: [], updatedAt: Date.now() };
+  return store[sessionId] ?? { userDisplays: [], planEvents: [], turnMetas: {}, updatedAt: Date.now() };
 }
 
 export function appendUserDisplay(
@@ -88,6 +97,44 @@ export function getPlanEvents(
 ): PlanUiEvent[] {
   if (!projectRoot || !sessionId) return [];
   return readStore(projectRoot)[sessionId]?.planEvents ?? [];
+}
+
+export function getTurnMetas(
+  projectRoot: string,
+  sessionId: string,
+): Record<number, SessionTurnMeta> {
+  if (!projectRoot || !sessionId) return {};
+  const raw = readStore(projectRoot)[sessionId]?.turnMetas ?? {};
+  const out: Record<number, SessionTurnMeta> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const idx = Number(key);
+    if (!Number.isFinite(idx) || idx < 0 || !value) continue;
+    out[idx] = value;
+  }
+  return out;
+}
+
+export function upsertTurnMeta(
+  projectRoot: string,
+  sessionId: string,
+  turnIndex: number,
+  meta: SessionTurnMeta,
+): void {
+  if (!projectRoot || !sessionId || turnIndex < 0) return;
+  const store = readStore(projectRoot);
+  const entry = ensureEntry(store, sessionId);
+  const prev = entry.turnMetas?.[String(turnIndex)] ?? {};
+  entry.turnMetas = {
+    ...(entry.turnMetas ?? {}),
+    [String(turnIndex)]: {
+      completedAt: meta.completedAt ?? prev.completedAt,
+      modelLabel: meta.modelLabel ?? prev.modelLabel,
+      summary: meta.summary ?? prev.summary,
+    },
+  };
+  entry.updatedAt = Date.now();
+  store[sessionId] = entry;
+  writeStore(projectRoot, store);
 }
 
 /** Upsert the latest living plan-artifact, or append a new one. */
@@ -169,6 +216,14 @@ export function truncateUserDisplays(
   if (entry.planEvents?.length) {
     entry.planEvents = entry.planEvents.filter((e) => e.afterIndex <= maxAfter);
   }
+  if (entry.turnMetas) {
+    const kept: Record<string, SessionTurnMeta> = {};
+    for (const [key, value] of Object.entries(entry.turnMetas)) {
+      const idx = Number(key);
+      if (Number.isFinite(idx) && idx <= turnIndex) kept[key] = value;
+    }
+    entry.turnMetas = kept;
+  }
   entry.updatedAt = Date.now();
   store[sessionId] = entry;
   writeStore(projectRoot, store);
@@ -195,6 +250,7 @@ export function restoreUserDisplays(
   store[sessionId] = {
     userDisplays: displays,
     planEvents: planEvents ?? prev?.planEvents ?? [],
+    turnMetas: prev?.turnMetas ?? {},
     updatedAt: Date.now(),
   };
   writeStore(projectRoot, store);

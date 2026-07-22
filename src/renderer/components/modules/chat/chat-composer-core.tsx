@@ -26,6 +26,7 @@ import { PlanModeChip } from "./plan-mode-chip";
 import { useChatComposer } from "@/hooks/use-chat-composer";
 import { useChatStore } from "@/stores/chat-store";
 import type { ComposerAttachment } from "@/lib/chat/composer-attach-file";
+import { COMPOSER_TOOLBAR_ICON_BUTTON } from "./worktree-selector";
 
 export type ChatComposerVariant = "panel" | "capsule-compact" | "capsule-expanded";
 
@@ -150,13 +151,11 @@ export function ChatComposerCore({
           <button
             type="button"
             className={cn(
-              "flex items-center justify-center text-muted-foreground transition-colors hover:text-foreground shrink-0",
-              isCompact
-                ? "size-7 rounded-full bg-muted-foreground/20 hover:bg-muted-foreground/30"
-                : "size-7 rounded-md hover:bg-accent hover:text-accent-foreground",
+              COMPOSER_TOOLBAR_ICON_BUTTON,
+              isCompact && "rounded-full bg-muted-foreground/20 hover:bg-muted-foreground/30 hover:text-foreground",
             )}
           >
-            <PlusIcon className="size-4" />
+            <PlusIcon className="size-3" />
           </button>
         </AppMenuTrigger>
       </Hint>
@@ -180,13 +179,16 @@ export function ChatComposerCore({
   );
 
   const sendControls = composer.isStreaming ? (
-    <button
-      type="button"
-      onClick={composer.cancelExecution}
-      className="flex size-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90"
-    >
-      <SquareIcon className="size-3 fill-current" />
-    </button>
+    <Hint label={t("chat.composer.stop")}>
+      <button
+        type="button"
+        onClick={composer.cancelExecution}
+        aria-label={t("chat.composer.stop")}
+        className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+      >
+        <SquareIcon className="size-3 fill-current" />
+      </button>
+    </Hint>
   ) : (
     <button
       type="button"
@@ -316,7 +318,7 @@ export function ChatComposerCore({
     <div
       className={cn(
         "relative mx-auto w-full min-w-0 max-w-3xl",
-        variant === "panel" ? "px-3 pt-1 pb-1 overflow-hidden" : className,
+        variant === "panel" ? "px-3 py-1.5 overflow-hidden" : className,
       )}
     >
       <div className="flex w-full flex-col">

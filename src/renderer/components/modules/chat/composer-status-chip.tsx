@@ -5,10 +5,10 @@ import { cn } from "@/lib/utils";
 
 /**
  * Shared density for composer toolbar status chips (next to +).
- * Matches ModelThoughtSelect trigger: meta font, py-1, no border — not h-7 bordered pills.
+ * Same chrome step as model / permission triggers (`h-6` + meta).
  */
 export const COMPOSER_STATUS_CHIP =
-  "inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 " +
+  "inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 " +
   "text-[length:var(--font-chat-meta)] text-muted-foreground " +
   "bg-muted";
 

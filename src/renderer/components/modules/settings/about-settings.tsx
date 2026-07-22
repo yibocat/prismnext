@@ -9,10 +9,14 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
 import {
   mapUpdaterStatus,
   type UpdateUiStatus,
 } from "@/lib/updates/map-updater-status";
+import { requestUpdateInstall } from "@/lib/updates/request-update-install";
+import { useSettingsStore } from "@/stores/settings-store";
+import type { UpdaterStatus } from "@/types/electron";
 import {
   SETTINGS_CARD,
   SETTINGS_CATEGORY_HEADER,
@@ -39,12 +43,28 @@ function formatOpencodeVersion(info: OpencodeInfo, t: TFunction): string {
   return info.error ? t("common.unavailable") : "—";
 }
 
+function installErrorMessage(error: string, t: TFunction): string {
+  if (error === "install-did-not-restart") {
+    return t("settings.about.installDidNotRestart");
+  }
+  return error;
+}
+
 export function AboutSettings() {
   const { t } = useTranslation();
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [appVersion, setAppVersion] = useState<string>("—");
   const [opencodeInfo, setOpencodeInfo] = useState<OpencodeInfo | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const autoDownloadUpdates = useSettingsStore(
+    (s) => s.settings.autoDownloadUpdates !== false,
+  );
+  const updateSettings = useSettingsStore((s) => s.updateSettings);
+
+  const applyRaw = useCallback((result: UpdaterStatus | null | undefined) => {
+    setStatus(mapUpdaterStatus(result));
+  }, []);
 
   useEffect(() => {
     window.electronAPI
@@ -60,9 +80,15 @@ export function AboutSettings() {
   }, []);
 
   useEffect(() => {
-    return window.electronAPI.onUpdateProgress(({ percent }) => {
+    const unsubProgress = window.electronAPI.onUpdateProgress(({ percent }) => {
       setStatus((prev) => {
-        if (prev.kind !== "downloading" && prev.kind !== "available") return prev;
+        if (
+          prev.kind !== "downloading" &&
+          prev.kind !== "available" &&
+          prev.kind !== "downloaded"
+        ) {
+          return prev;
+        }
         return {
           kind: "downloading",
           currentVersion: prev.currentVersion,
@@ -72,53 +98,66 @@ export function AboutSettings() {
         };
       });
     });
-  }, []);
+    const unsubChanged = window.electronAPI.onUpdateChanged((raw) => {
+      applyRaw(raw as UpdaterStatus);
+    });
+    return () => {
+      unsubProgress?.();
+      unsubChanged?.();
+    };
+  }, [applyRaw]);
 
   const doCheck = useCallback(async () => {
     setStatus({ kind: "checking" });
     try {
       const result = await window.electronAPI.updateCheck();
-      setStatus(mapUpdaterStatus(result));
+      applyRaw(result);
     } catch (err) {
       setStatus({
         kind: "error",
         message: err instanceof Error ? err.message : String(err),
       });
     }
-  }, []);
+  }, [applyRaw]);
 
-  // Open About → soft auto-check against baked default feed.
   useEffect(() => {
     void doCheck();
   }, [doCheck]);
 
-  /** One-click: download then quit-and-install. */
-  const onOneClickUpdate = useCallback(async () => {
+  const onDownload = useCallback(async () => {
     setBusy(true);
     try {
-      const current = await window.electronAPI.updateStatus();
-      let result = current;
-      if (current.status !== "downloaded") {
-        setStatus((prev) => ({
-          kind: "downloading",
-          currentVersion:
-            "currentVersion" in prev ? prev.currentVersion : current.currentVersion,
-          latestVersion:
-            ("latestVersion" in prev ? prev.latestVersion : undefined) ??
-            current.latestVersion,
-          percent: 0,
-          downloadPath:
-            ("downloadPath" in prev ? prev.downloadPath : undefined) ??
-            current.latest?.path,
-        }));
-        result = await window.electronAPI.updateDownload();
-        setStatus(mapUpdaterStatus(result));
-      }
-      if (result.status !== "downloaded") {
+      setStatus((prev) => ({
+        kind: "downloading",
+        currentVersion: "currentVersion" in prev ? prev.currentVersion : appVersion,
+        latestVersion: "latestVersion" in prev ? prev.latestVersion : undefined,
+        percent: 0,
+        downloadPath: "downloadPath" in prev ? prev.downloadPath : undefined,
+      }));
+      const result = await window.electronAPI.updateDownload();
+      applyRaw(result);
+    } catch (err) {
+      setStatus({
+        kind: "error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setBusy(false);
+    }
+  }, [appVersion, applyRaw]);
+
+  const onInstall = useCallback(async () => {
+    setBusy(true);
+    try {
+      const result = await requestUpdateInstall();
+      if (!result.ok) {
         setBusy(false);
-        return;
+        setStatus({
+          kind: "error",
+          message: installErrorMessage(result.error, t),
+        });
       }
-      await window.electronAPI.updateInstall();
+      // If ok, app should quit — leave busy spinner until exit.
     } catch (err) {
       setBusy(false);
       setStatus({
@@ -126,7 +165,7 @@ export function AboutSettings() {
         message: err instanceof Error ? err.message : String(err),
       });
     }
-  }, []);
+  }, [t]);
 
   const displayAppVersion =
     appVersion !== "—"
@@ -144,10 +183,8 @@ export function AboutSettings() {
       ? status.latestVersion
       : undefined;
 
-  const canOneClick =
-    status.kind === "available" || status.kind === "downloaded";
-
-
+  const showReleaseNotes =
+    status.kind === "available" && Boolean(status.releaseNotes);
 
   return (
     <div className="flex-1 overflow-auto">
@@ -165,6 +202,19 @@ export function AboutSettings() {
           <h3 className={CATEGORY_HEADER}>{t("settings.about.checkForUpdates")}</h3>
           <div className={CARD}>
             <div className="flex items-center justify-between gap-3 py-2.5">
+              <div className="min-w-0 flex-1 pr-4">
+                <p className={ROW_LABEL}>{t("settings.about.autoDownload")}</p>
+                <p className={ROW_DESC}>{t("settings.about.autoDownloadDesc")}</p>
+              </div>
+              <Switch
+                checked={autoDownloadUpdates}
+                onCheckedChange={(checked) => {
+                  void updateSettings({ autoDownloadUpdates: checked });
+                }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-3 py-2.5 border-t border-border/60">
               <div className="min-w-0 flex-1 pr-4">
                 {status.kind === "checking" ? (
                   <>
@@ -189,7 +239,16 @@ export function AboutSettings() {
                     <p className={ROW_LABEL}>{t("settings.about.noSourceLabel")}</p>
                     <p className={ROW_DESC}>{t("settings.about.noSourceDevOnly")}</p>
                   </>
-                ) : canOneClick ? (
+                ) : status.kind === "downloaded" ? (
+                  <>
+                    <p className={ROW_LABEL}>
+                      {t("settings.about.downloadedLabel", {
+                        version: latestVersion ?? "",
+                      })}
+                    </p>
+                    <p className={ROW_DESC}>{t("settings.about.restartToInstallDetail")}</p>
+                  </>
+                ) : status.kind === "available" ? (
                   <>
                     <p className={ROW_LABEL}>
                       {t("settings.about.availableLabel", {
@@ -227,21 +286,30 @@ export function AboutSettings() {
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
-                {canOneClick || status.kind === "downloading" ? (
+                {status.kind === "downloaded" ? (
                   <Button
                     variant="default"
                     size="xs"
-                    onClick={() => void onOneClickUpdate()}
-                    disabled={busy || status.kind === "downloading"}
+                    onClick={() => void onInstall()}
+                    disabled={busy}
                   >
-                    {busy || status.kind === "downloading" ? (
-                      <Loader2Icon className="animate-spin" />
-                    ) : (
-                      <RocketIcon />
-                    )}
-                    {status.kind === "downloading"
-                      ? t("settings.about.downloading")
-                      : t("settings.about.oneClickUpdate")}
+                    {busy ? <Loader2Icon className="animate-spin" /> : <RocketIcon />}
+                    {t("settings.about.restartToInstall")}
+                  </Button>
+                ) : status.kind === "available" ? (
+                  <Button
+                    variant="default"
+                    size="xs"
+                    onClick={() => void onDownload()}
+                    disabled={busy}
+                  >
+                    {busy ? <Loader2Icon className="animate-spin" /> : <RocketIcon />}
+                    {t("settings.about.downloadUpdate")}
+                  </Button>
+                ) : status.kind === "downloading" ? (
+                  <Button variant="default" size="xs" disabled>
+                    <Loader2Icon className="animate-spin" />
+                    {t("settings.about.downloading")}
                   </Button>
                 ) : (
                   <Button
@@ -261,7 +329,7 @@ export function AboutSettings() {
               </div>
             </div>
 
-            {canOneClick && status.kind === "available" && status.releaseNotes ? (
+            {showReleaseNotes && status.kind === "available" ? (
               <div className="border-t border-border/60 py-2.5">
                 <p className={ROW_DESC + " whitespace-pre-wrap mt-0"}>{status.releaseNotes}</p>
               </div>

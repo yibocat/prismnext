@@ -401,6 +401,24 @@ app.whenReady().then(async () => {
     console.log("[prismnext] OpenCode ACP ready");
     log.info("OpenCode ACP server ready");
 
+    // Eagerly warm last project tools/skills while the window loads, so
+    // auto-open often finds prewarm already done (or in flight).
+    const lastProjectPath =
+      typeof (settings as { lastProjectPath?: unknown }).lastProjectPath === "string"
+        ? (settings as { lastProjectPath: string }).lastProjectPath.trim()
+        : "";
+    if (lastProjectPath) {
+      void import("./services/project-chat-prewarm")
+        .then(({ ensureProjectChatPrewarm }) => ensureProjectChatPrewarm(lastProjectPath))
+        .then(() => {
+          log.info("Eager last-project config prewarm complete", { path: lastProjectPath });
+        })
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          log.warn("Eager last-project chat prewarm failed", { error: message });
+        });
+    }
+
     // Register non-bundled providers (DeepSeek, OpenRouter, custom) via ACP
     // Built-in providers (anthropic, openai, google) are already recognized.
     for (const [provider] of Object.entries(aiApiKeys)) {
@@ -421,8 +439,12 @@ app.whenReady().then(async () => {
         log.warn(`Failed to register provider ${provider}`, { error: err.message });
       }
     }
-  } catch {
-    // Pre-warm is best-effort — app still works, initialize retries on first use
+  } catch (err: unknown) {
+    // Pre-warm is best-effort — app still works; initialize already marks
+    // lifecycle error so the status dot can show Retry.
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[prismnext] OpenCode ACP warm-up failed: ${message}`);
+    log.warn("OpenCode ACP warm-up failed", { error: message });
   }
 });
 

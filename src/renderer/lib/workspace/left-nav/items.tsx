@@ -172,6 +172,7 @@ const settingsNav: LeftNavDefinition = {
     }
     st.setLeftSidebarView("sessions");
   },
+  trailing: <ShortcutKbdChips id="shell.openSettings" />,
 };
 
 /** 应用启动时注册所有左侧栏入口（在 App.tsx 与 registerAllModes 一并调用） */

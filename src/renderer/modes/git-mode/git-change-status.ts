@@ -49,9 +49,16 @@ export function resolveGitChangeStatusBadge(file: GitFileItem): GitChangeStatusB
 /** Whether the Changes list should show the "New" label (untracked or pure add). */
 export function isGitChangeNewFile(file: GitFileItem): boolean {
   if (file.untracked) return true;
-  if (file.deleted > 0) return false;
+  if (isGitChangeDeletedFile(file)) return false;
   const { tone } = resolveGitChangeStatusBadge(file);
   return tone === "added";
+}
+
+/** Whether the Changes list should show the "Deleted" label. */
+export function isGitChangeDeletedFile(file: GitFileItem): boolean {
+  if (file.untracked) return false;
+  const { tone } = resolveGitChangeStatusBadge(file);
+  return tone === "deleted";
 }
 
 export function gitChangeStatusTextClass(tone: GitChangeStatusTone): string {

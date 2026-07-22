@@ -19,6 +19,7 @@ import {
 import { ChevronDownIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
+import { COMPOSER_TOOLBAR_TRIGGER } from "../worktree-selector";
 
 export function ModelSelect() {
   const settings = useSettingsStore((s) => s.settings);
@@ -68,7 +69,7 @@ export function ModelSelect() {
         <AppMenuTrigger asChild>
           <button
             type="button"
-            className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors max-w-56"
+            className={cn(COMPOSER_TOOLBAR_TRIGGER, "max-w-56")}
           >
             <span className="truncate">{displayName}</span>
             <ChevronDownIcon className="size-3 shrink-0" />

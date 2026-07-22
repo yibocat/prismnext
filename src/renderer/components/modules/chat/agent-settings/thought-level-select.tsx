@@ -10,6 +10,7 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { getThoughtLevels } from "@/lib/providers";
 import { ChevronDownIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
+import { COMPOSER_TOOLBAR_TRIGGER } from "../worktree-selector";
 
 export function ThoughtLevelSelect() {
   const aiProvider = useSettingsStore((s) => s.settings.aiProvider) || "anthropic";
@@ -23,10 +24,7 @@ export function ThoughtLevelSelect() {
     <AppMenu>
       <Hint label="Reasoning depth">
         <AppMenuTrigger asChild>
-          <button
-            type="button"
-            className="flex items-center gap-1 rounded px-2 py-1 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          >
+          <button type="button" className={COMPOSER_TOOLBAR_TRIGGER}>
             <span>{current?.label || "Default"}</span>
             <ChevronDownIcon className="size-3" />
           </button>

@@ -50,6 +50,19 @@ export function GitChangeNewLabel() {
   );
 }
 
+export function GitChangeDeletedLabel() {
+  return (
+    <span
+      className={cn(
+        "shrink-0 font-medium text-red-500 dark:text-red-400",
+        "text-[length:var(--font-size-11)]",
+      )}
+    >
+      Deleted
+    </span>
+  );
+}
+
 export function GitChangeLineCounts({
   added,
   deleted,

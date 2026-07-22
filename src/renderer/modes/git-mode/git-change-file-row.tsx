@@ -12,6 +12,7 @@ import {
   GitChangeDiscardSlot,
   GitChangeLineCounts,
   GitChangeNewLabel,
+  GitChangeDeletedLabel,
   GitChangeStageCheckbox,
   gitChangeRowShellClass,
   gitChangeRowTextClass,
@@ -19,7 +20,7 @@ import {
   gitPanelListRowClass,
   gitPanelExpandedDiffClass,
 } from "./git-change-row-chrome";
-import { isGitChangeNewFile } from "./git-change-status";
+import { isGitChangeDeletedFile, isGitChangeNewFile } from "./git-change-status";
 import { preserveGitChangesScroll } from "./git-changes-tree";
 import { navigateFileTreeToPath } from "@/lib/files/navigate-file-tree";
 
@@ -103,6 +104,7 @@ export const GitChangeFileRow = memo(function GitChangeFileRow({
   const isChecked = file.staged;
   const showDiscard = !file.staged && (file.unstaged || file.untracked);
   const showNew = isGitChangeNewFile(file);
+  const showDeleted = !showNew && isGitChangeDeletedFile(file);
 
   return (
     <div
@@ -148,6 +150,7 @@ export const GitChangeFileRow = memo(function GitChangeFileRow({
         </div>
 
         {showNew ? <GitChangeNewLabel /> : null}
+        {showDeleted ? <GitChangeDeletedLabel /> : null}
 
         <GitChangeDiscardSlot>
           {showDiscard && (

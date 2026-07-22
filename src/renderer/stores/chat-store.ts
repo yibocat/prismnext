@@ -10,7 +10,7 @@ import { isWorktreeCheckoutOnDisk } from "@/lib/git/worktree-present";
 import { rehomeWorktreeSessions } from "@/lib/git/worktree-sessions";
 import { useGitStore } from "./git-store";
 import { useSettingsStore } from "./settings-store";
-import { truncateChatMessagesToTurn, applyUserDisplaySnapshots, isToolResultUserMessage } from "@/components/modules/chat/chat-turns";
+import { truncateChatMessagesToTurn, applyUserDisplaySnapshots, isToolResultUserMessage, countUserTurns } from "@/components/modules/chat/chat-turns";
 import { mapOpenCodePartToBlocks } from "@/lib/chat/message-parts";
 import { hydrateSessionMessages } from "@/lib/chat/session-message-hydrate";
 import {
@@ -25,6 +25,7 @@ import {
   isGenericSessionTitle,
   pruneDisposableEmptyChatTabs,
 } from "@/lib/chat/session-title";
+import { resolveTurnModelLabel } from "@/lib/chat/turn-model-label";
 import {
   persistAndSyncIntensiveReading,
   resolveIntensivePaperIdsForSession,
@@ -96,6 +97,15 @@ export interface ContentBlock {
 }
 
 
+export interface TurnMessageMeta {
+  /** Wall-clock when the assistant turn finished (ms). */
+  completedAt?: number;
+  /** Display name for the model used on this turn. */
+  modelLabel?: string;
+  /** Optional duration / token summary (hint only). */
+  summary?: string;
+}
+
 export interface ChatStreamMessage {
   type: "system" | "assistant" | "user" | "result" | "action-status" | "plan-decision" | "plan-artifact";
   subtype?: string;
@@ -162,10 +172,10 @@ interface TabState {
   isStreaming: boolean;
   error: string | null;
   draft: TabDraft;
-  /** Message index → meta text (completion time + tokens). Key is the
-   *  index of the assistant message in this.messages. Indices are stable
-   *  because messages are only ever appended, never removed/reordered. */
-  messageMeta: Record<number, string>;
+  /** Turn index → footer meta (time, model, optional summary). */
+  turnMeta: Record<number, TurnMessageMeta>;
+  /** Model label for the in-flight turn — stamped onto turnMeta on complete. */
+  pendingTurnMeta: { modelLabel: string } | null;
   /** Per-tab context token total — persisted alongside breakdown. Source of
    *  truth for the context ring. Set by _setContextTokens (live) or restored
    *  from sessions-context.json (loaded). */
@@ -257,7 +267,8 @@ function makeDefaultTab(id: string): TabState {
     isStreaming: false,
     error: null,
     draft: { input: "" },
-    messageMeta: {},
+    turnMeta: {},
+    pendingTurnMeta: null,
     contextTokens: null,
     contextBreakdown: null,
     categorySchema: null,
@@ -431,7 +442,7 @@ interface ChatState {
   // Projected fields (from active tab) — for backward compat
   messages: ChatStreamMessage[];
   streamingMessage: ChatStreamMessage | null;
-  messageMeta: Record<number, string>;
+  turnMeta: Record<number, TurnMessageMeta>;
   sessionId: string | null;
   isStreaming: boolean;
   error: string | null;
@@ -614,13 +625,65 @@ function extractPersistedBreakdown(messages: ChatStreamMessage[]): {
   return { contextBreakdown: null, categorySchema: null };
 }
 
+function mergeTurnMeta(
+  tab: Pick<TabState, "turnMeta" | "pendingTurnMeta">,
+  messages: ChatStreamMessage[],
+  patch: TurnMessageMeta,
+): { turnIndex: number; turnMeta: Record<number, TurnMessageMeta>; meta: TurnMessageMeta } {
+  const turnIndex = Math.max(0, countUserTurns(messages) - 1);
+  const prev = tab.turnMeta[turnIndex];
+  const meta: TurnMessageMeta = {
+    completedAt: patch.completedAt ?? prev?.completedAt ?? Date.now(),
+    modelLabel: patch.modelLabel ?? prev?.modelLabel ?? tab.pendingTurnMeta?.modelLabel,
+    summary: patch.summary ?? prev?.summary,
+  };
+  return {
+    turnIndex,
+    meta,
+    turnMeta: { ...tab.turnMeta, [turnIndex]: meta },
+  };
+}
+
+function persistTurnMetaToDisk(
+  sessionId: string | null | undefined,
+  turnIndex: number,
+  meta: TurnMessageMeta,
+): void {
+  const projectRoot = useDocumentStore.getState().projectRoot;
+  if (!projectRoot || !sessionId || turnIndex < 0) return;
+  void window.electronAPI
+    .sessionUpsertTurnMeta(projectRoot, sessionId, turnIndex, meta)
+    .catch(() => {});
+}
+
+async function hydrateTurnMetaForTab(
+  tabId: string,
+  projectPath: string,
+  sessionId: string,
+): Promise<void> {
+  if (!projectPath || !sessionId) return;
+  try {
+    const metas = await window.electronAPI.sessionGetTurnMetas(projectPath, sessionId);
+    useChatStore.setState((s) => {
+      const tabs = s.tabs.map((t) =>
+        t.id === tabId ? { ...t, turnMeta: metas ?? {} } : t,
+      );
+      return s.activeTabId === tabId
+        ? { tabs, ...projectActiveTab(tabs, tabId) }
+        : { tabs };
+    });
+  } catch {
+    /* best-effort */
+  }
+}
+
 function projectActiveTab(tabs: TabState[], activeTabId: string) {
   const tab = tabs.find((t) => t.id === activeTabId);
   if (!tab) {
     return {
       messages: [] as ChatStreamMessage[],
       streamingMessage: null as ChatStreamMessage | null,
-      messageMeta: {} as Record<number, string>,
+      turnMeta: {} as Record<number, TurnMessageMeta>,
       sessionId: null as string | null,
       isStreaming: false,
       error: null as string | null,
@@ -651,7 +714,7 @@ function projectActiveTab(tabs: TabState[], activeTabId: string) {
   return {
     messages: tab.messages,
     streamingMessage: tab.streamingMessage,
-    messageMeta: tab.messageMeta,
+    turnMeta: tab.turnMeta,
     sessionId: tab.sessionId,
     isStreaming: tab.isStreaming,
     error: tab.error,
@@ -766,7 +829,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   // Projected
   ...projectActiveTab([initialTab], initialTabId),
-  messageMeta: {} as Record<number, string>,
   streamTick: 0,
 
   // ─── Tab Management ───
@@ -1476,7 +1538,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const tabId = get().activeTabId;
 
     const tabBeforePrompt = get().tabs.find((t) => t.id === tabId);
-    const isFirstTurn = !tabBeforePrompt?.sessionId;
+    // First message on a tab (session is created on send when still unbound).
+    const isFirstTurn = (tabBeforePrompt?.messages.length ?? 0) === 0;
 
     // ── 1. Add user message (unless skipped — caller already inserted it) ──
     const userMessage: ChatStreamMessage | null = skipUserMessage
@@ -1579,6 +1642,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         undefined;
 
       const sessionAgent = activeTab?.sessionAgent ?? "build";
+      const modelLabel = resolveTurnModelLabel(provider, model, persistedSettings);
+      set((s) => ({
+        tabs: s.tabs.map((t) =>
+          t.id === tabId ? { ...t, pendingTurnMeta: { modelLabel } } : t,
+        ),
+      }));
       await window.electronAPI.chatSend({
         projectPath,
         worktreePath: worktreePath || undefined,
@@ -1848,6 +1917,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       if (existingTab.messages.length === 0 && projectPath) {
         void get().resyncTabMessagesFromDisk(existingTab.id);
       }
+      void hydrateTurnMetaForTab(existingTab.id, projectPath, sessionId);
       void get().restorePendingPlanModeIfNeeded(existingTab.id);
       return;
     }
@@ -1913,6 +1983,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         useCheckpointStore.getState().initSession(tabId, sessionId);
       });
       hydrateSessionContext();
+      void hydrateTurnMetaForTab(tabId, projectPath, sessionId);
       syncCitationStagingForTab(hydratedTab);
       void (async () => {
         try {
@@ -2011,6 +2082,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         sessionCwd,
         intensivePaperIds: storedIntensiveIds,
       });
+      await hydrateTurnMetaForTab(tabId, projectPath, sessionId);
       void get().restorePendingPlanModeIfNeeded(tabId);
     } catch (err: any) {
       set((s) => {
@@ -2031,13 +2103,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   // ─── Internal ───
 
   _appendMessage: (tabId: string, msg: ChatStreamMessage) => {
+    let stamped: { sessionId: string | null; turnIndex: number; meta: TurnMessageMeta } | null = null;
     set((s) => {
       const tabIdx = s.tabs.findIndex((t) => t.id === tabId);
       if (tabIdx === -1) return {};
 
       const tab = s.tabs[tabIdx];
       let msgs = tab.messages;
-      let meta = tab.messageMeta;
+      let turnMeta = tab.turnMeta;
+      let pendingTurnMeta = tab.pendingTurnMeta;
 
       // Commit streaming message before appending non-assistant event
       const finalized = finalizeStreamingForMutation(tab);
@@ -2045,8 +2119,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         msgs = finalized.messages;
       }
 
-      // Attach completion/token meta when a result arrives right after assistant
-      if (msg.type === "result" && !msg.is_error && (msg.duration_ms != null || msg.usage)) {
+      // Attach completion meta when a result arrives right after assistant
+      if (msg.type === "result" && !msg.is_error && (msg.duration_ms != null || msg.usage || tab.pendingTurnMeta)) {
         const parts: string[] = [];
         if (msg.duration_ms != null) {
           parts.push(`Completed in ${(msg.duration_ms / 1000).toFixed(1)}s`);
@@ -2061,14 +2135,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             : `${usage.output_tokens}`;
           parts.push(`↑${input} ↓${output}`);
         }
-        if (parts.length > 0) {
-          for (let i = msgs.length - 1; i >= 0; i--) {
-            if (msgs[i].type === "assistant") {
-              meta = { ...meta, [i]: parts.join(" · ") };
-              break;
-            }
-          }
-        }
+        const merged = mergeTurnMeta(tab, msgs, {
+          summary: parts.length > 0 ? parts.join(" · ") : undefined,
+        });
+        turnMeta = merged.turnMeta;
+        pendingTurnMeta = null;
+        stamped = {
+          sessionId: tab.sessionId,
+          turnIndex: merged.turnIndex,
+          meta: merged.meta,
+        };
       }
 
       msgs = [...msgs, msg];
@@ -2087,12 +2163,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       newTabs[tabIdx] = {
         ...tab,
         messages: msgs,
-        messageMeta: meta,
+        turnMeta,
+        pendingTurnMeta,
         streamingMessage: finalized.streamingMessage,
         title,
       };
       return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
     });
+    if (stamped) {
+      persistTurnMetaToDisk(stamped.sessionId, stamped.turnIndex, stamped.meta);
+    }
   },
 
   _upsertLastMessage: (tabId: string, msg: ChatStreamMessage, messageId?: string) => {
@@ -2280,31 +2360,55 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   _setStreaming: (tabId: string, isStreaming: boolean) => {
+    let stamped: { sessionId: string | null; turnIndex: number; meta: TurnMessageMeta } | null = null;
     set((s) => {
       const tabs = s.tabs.map((t) => {
         if (t.id !== tabId) return t;
         if (!isStreaming) {
+          let messages = t.messages;
+          let streamingMessage = t.streamingMessage;
+          let streamingPartMessageId = t.streamingPartMessageId;
+          let settledStreamMessageIds = t.settledStreamMessageIds;
+          let turnMeta = t.turnMeta;
+          let pendingTurnMeta = t.pendingTurnMeta;
+
           if (t.isStreaming && t.streamingMessage) {
-            return {
-              ...t,
-              isStreaming: false,
-              preparePhase: null,
-              messages: [...t.messages, t.streamingMessage],
-              streamingMessage: null,
-              streamingPartMessageId: null,
-              settledStreamMessageIds: withSettledStreamMessageId(t, t.streamingPartMessageId),
+            messages = [...t.messages, t.streamingMessage];
+            streamingMessage = null;
+            streamingPartMessageId = null;
+            settledStreamMessageIds = withSettledStreamMessageId(t, t.streamingPartMessageId);
+          } else if (t.streamingMessage) {
+            streamingMessage = null;
+            streamingPartMessageId = null;
+          }
+
+          // Ensure footer stamp even when no result event carried usage.
+          if (pendingTurnMeta) {
+            const merged = mergeTurnMeta(
+              { turnMeta, pendingTurnMeta },
+              messages,
+              {},
+            );
+            turnMeta = merged.turnMeta;
+            pendingTurnMeta = null;
+            stamped = {
+              sessionId: t.sessionId,
+              turnIndex: merged.turnIndex,
+              meta: merged.meta,
             };
           }
-          if (t.streamingMessage) {
-            return {
-              ...t,
-              isStreaming: false,
-              preparePhase: null,
-              streamingMessage: null,
-              streamingPartMessageId: null,
-            };
-          }
-          return { ...t, isStreaming: false, preparePhase: null };
+
+          return {
+            ...t,
+            isStreaming: false,
+            preparePhase: null,
+            messages,
+            streamingMessage,
+            streamingPartMessageId,
+            settledStreamMessageIds,
+            turnMeta,
+            pendingTurnMeta,
+          };
         }
         return { ...t, isStreaming: true };
       });
@@ -2316,6 +2420,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }
       return { tabs, ...projected };
     });
+    if (stamped) {
+      persistTurnMetaToDisk(stamped.sessionId, stamped.turnIndex, stamped.meta);
+    }
     if (!isStreaming) {
       const tab = get().tabs.find((t) => t.id === tabId);
       cacheTabMessages(tab?.sessionId, tab?.messages ?? []);

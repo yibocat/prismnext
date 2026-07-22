@@ -167,6 +167,11 @@ export class AcpService {
   private lastExtraEnv: Record<string, string> = {};
   /** Env actually baked into the running OpenCode child (keys only take effect at spawn). */
   private bakedExtraEnv: Record<string, string> = {};
+  /** ACP lifecycle for status dot / welcome — never “available” from binary alone. */
+  private lifecyclePhase: import("../../shared/agent-status").AgentLifecyclePhase = "starting";
+  private lastInitError: string | null = null;
+  /** Suppress exit-handler lifecycle updates while we intentionally replace the child. */
+  private suppressExitLifecycle = false;
   /** Cached agent config from project prewarm — avoids re-reading on session create. */
   private cachedAgentConfig: {
     projectRoot: string;
@@ -244,6 +249,90 @@ export class AcpService {
 
   getConnection(): ClientSideConnection | null {
     return this.conn;
+  }
+
+  getLifecyclePhase(): import("../../shared/agent-status").AgentLifecyclePhase {
+    return this.lifecyclePhase;
+  }
+
+  getLastInitError(): string | null {
+    return this.lastInitError;
+  }
+
+  /**
+   * Snapshot for chat:status / chat:agentStatus. `available` requires a live
+   * connection — binary-on-disk alone is never enough.
+   */
+  getStatusSnapshot(projectPath?: string): import("../../shared/agent-status").AgentStatusSnapshot {
+    const binaryPresent = this.isBinaryAvailable();
+    const connected = Boolean(this.conn && this.proc);
+    let phase = this.lifecyclePhase;
+    if (connected && phase !== "starting") {
+      phase = "ready";
+    } else if (!connected && phase === "ready") {
+      phase = this.lastInitError ? "error" : "stopped";
+    }
+    const available = connected && phase === "ready";
+    let projectWarm: boolean | null = null;
+    let projectWarmPhase: import("../../shared/agent-status").ProjectWarmPhase | null = null;
+    let projectWarmError: string | null = null;
+    if (projectPath?.trim()) {
+      try {
+        // Lazy require avoids circular import with project-chat-prewarm → AcpService.
+        const prewarm = require("../services/project-chat-prewarm") as {
+          getProjectWarmPhase: (root: string) => import("../../shared/agent-status").ProjectWarmPhase;
+          getProjectWarmError: (root: string) => string | null;
+        };
+        projectWarmPhase = prewarm.getProjectWarmPhase(projectPath.trim());
+        projectWarm = projectWarmPhase === "ready";
+        projectWarmError = prewarm.getProjectWarmError(projectPath.trim());
+      } catch {
+        projectWarmPhase = "none";
+        projectWarm = false;
+        projectWarmError = null;
+      }
+    }
+    return {
+      phase,
+      available,
+      version: available ? "connected" : "",
+      error: phase === "error" ? this.lastInitError : null,
+      binaryPresent,
+      projectWarm,
+      projectWarmPhase,
+      projectWarmError,
+    };
+  }
+
+  private setLifecycle(
+    phase: import("../../shared/agent-status").AgentLifecyclePhase,
+    error: string | null = null,
+  ): void {
+    const prev = this.lifecyclePhase;
+    const prevErr = this.lastInitError;
+    this.lifecyclePhase = phase;
+    this.lastInitError = phase === "error" ? error : null;
+    if (prev === phase && prevErr === this.lastInitError) return;
+    try {
+      const { emitAgentStatusChanged } = require("../services/agent-status-notify") as {
+        emitAgentStatusChanged: (s: import("../../shared/agent-status").AgentStatusSnapshot) => void;
+      };
+      emitAgentStatusChanged(this.getStatusSnapshot());
+    } catch {
+      /* windows may not be ready yet */
+    }
+  }
+
+  /** Public retry entry for status-dot / IPC — clears error and re-initializes. */
+  async ensureAgentRunning(extraEnv?: Record<string, string>): Promise<import("../../shared/agent-status").AgentStatusSnapshot> {
+    try {
+      await this.initialize(extraEnv);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.setLifecycle("error", message);
+      throw err;
+    }
+    return this.getStatusSnapshot();
   }
 
   getProjectPath(): string {
@@ -412,6 +501,7 @@ export class AcpService {
     );
 
     if (this.conn && this.proc && !credentialDelta) {
+      this.setLifecycle("ready");
       return;
     }
 
@@ -419,26 +509,35 @@ export class AcpService {
       log.info("Restarting OpenCode to apply updated provider credentials");
     }
 
-    await this.shutdown();
+    this.setLifecycle("starting");
+    this.suppressExitLifecycle = true;
+    try {
+      await this.shutdown();
+    } catch {
+      /* best-effort before respawn */
+    }
 
+    try {
     // Resolve the opencode binary — use full path for reliability
     const binaryPath = this.resolveBinaryPath();
 
     if (!existsSync(binaryPath)) {
-      throw new Error(
+      const msg =
         `OpenCode binary not found at ${binaryPath}. ` +
-        "Install it from https://opencode.ai"
-      );
+        "Install it from https://opencode.ai";
+      this.setLifecycle("error", msg);
+      throw new Error(msg);
     }
 
     // Verify the binary is executable (existsSync doesn't check +x)
     try {
       accessSync(binaryPath, constants.X_OK);
     } catch {
-      throw new Error(
+      const msg =
         `OpenCode binary is not executable: ${binaryPath}\n` +
-        "Fix: chmod +x " + binaryPath
-      );
+        "Fix: chmod +x " + binaryPath;
+      this.setLifecycle("error", msg);
+      throw new Error(msg);
     }
 
     // Load previously persisted sub-agent session IDs
@@ -501,6 +600,7 @@ export class AcpService {
       log.error(`Failed to spawn opencode: ${err.message}`);
       this.proc = null;
       this.bakedExtraEnv = {};
+      this.setLifecycle("error", `Failed to start OpenCode: ${err.message}`);
       throw new Error(`Failed to start OpenCode: ${err.message}`);
     }
 
@@ -511,6 +611,9 @@ export class AcpService {
       this.conn = null;
       this.proc = null;
       this.bakedExtraEnv = {};
+      if (!this.suppressExitLifecycle) {
+        this.setLifecycle("error", err.message);
+      }
     });
 
     // Pipe stderr through for debugging
@@ -864,15 +967,21 @@ export class AcpService {
       this.proc = null;
       this.opencodeHydratedSessions.clear();
 
+      if (this.suppressExitLifecycle) {
+        return;
+      }
+
       const wasUnexpected = code !== 0 && code !== null;
       if (!wasUnexpected) {
         this.reconnectAttempts = 0;
+        this.setLifecycle("stopped");
         return;
       }
 
       if (this.reconnectAttempts >= this.maxReconnectAttempts) {
         log.error("Max reconnect attempts reached — giving up");
         this.reconnectAttempts = 0;
+        this.setLifecycle("error", "OpenCode process crashed and could not be restarted");
         this.emitNotification("agent/connectionLost", {
           error: "OpenCode process crashed and could not be restarted",
         });
@@ -881,6 +990,7 @@ export class AcpService {
 
       const delay = this.reconnectBaseDelay * Math.pow(2, this.reconnectAttempts);
       this.reconnectAttempts++;
+      this.setLifecycle("starting");
       log.warn(
         `OpenCode crashed — reconnecting in ${delay}ms ` +
         `(attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`,
@@ -894,6 +1004,7 @@ export class AcpService {
         this.emitNotification("agent/reconnected", {});
       } catch (err: any) {
         log.error(`Reconnect attempt ${this.reconnectAttempts} failed: ${err.message}`);
+        this.setLifecycle("error", `Reconnection failed: ${err.message}`);
         this.emitNotification("agent/connectionLost", {
           error: `Reconnection failed: ${err.message}`,
         });
@@ -916,10 +1027,21 @@ export class AcpService {
         },
       });
       log.info(`OpenCode ACP initialized: ${JSON.stringify(result).slice(0, 200)}`);
+      this.setLifecycle("ready");
     } catch (err: any) {
       log.error(`ACP initialize failed: ${err.message}`);
       await this.shutdown();
+      this.setLifecycle("error", `OpenCode ACP handshake failed: ${err.message}`);
       throw new Error(`OpenCode ACP handshake failed: ${err.message}`);
+    }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (this.lifecyclePhase !== "error") {
+        this.setLifecycle("error", message);
+      }
+      throw err instanceof Error ? err : new Error(message);
+    } finally {
+      this.suppressExitLifecycle = false;
     }
   }
 
@@ -1157,16 +1279,26 @@ export class AcpService {
   async reloadAfterSkillsIntegration(): Promise<void> {
     if (!this.conn) return;
     log.info("Restarting OpenCode to apply skills integration");
-    await this.shutdown();
-    await this.initialize();
+    this.suppressExitLifecycle = true;
+    try {
+      await this.shutdown();
+      await this.initialize();
+    } finally {
+      this.suppressExitLifecycle = false;
+    }
   }
 
   /** Restart OpenCode so synced expert/orchestrator agent definitions are picked up. */
   async reloadAfterExpertsIntegration(): Promise<void> {
     if (!this.conn) return;
     log.info("Restarting OpenCode to apply experts integration");
-    await this.shutdown();
-    await this.initialize();
+    this.suppressExitLifecycle = true;
+    try {
+      await this.shutdown();
+      await this.initialize();
+    } finally {
+      this.suppressExitLifecycle = false;
+    }
   }
 
   /**
@@ -1771,13 +1903,15 @@ export class AcpService {
     const dir = projectPath || this.projectPath;
     try {
       return await this.withDb((db) => {
+        // UX: only list sessions that have at least one message (empty drafts stay off history).
         const rows = db.prepare(
-          `SELECT id, title, time_created, time_updated
-           FROM session
-           WHERE directory = ?
-             AND time_archived IS NULL
-             AND parent_id IS NULL
-           ORDER BY time_updated DESC`,
+          `SELECT s.id, s.title, s.time_created, s.time_updated
+           FROM session s
+           WHERE s.directory = ?
+             AND s.time_archived IS NULL
+             AND s.parent_id IS NULL
+             AND EXISTS (SELECT 1 FROM message m WHERE m.session_id = s.id)
+           ORDER BY s.time_updated DESC`,
         ).all(dir) as Array<{
           id: string; title: string; time_created: number; time_updated: number;
         }>;
@@ -1795,6 +1929,41 @@ export class AcpService {
       log.warn(`Failed to list sessions from SQLite: ${err.message}`);
       return [];
     }
+  }
+
+  /** Empty (no messages), non-archived parent sessions for a directory. */
+  private async listEmptySessionIds(projectPath: string): Promise<string[]> {
+    const dir = projectPath;
+    try {
+      return await this.withDb((db) => {
+        const rows = db.prepare(
+          `SELECT s.id FROM session s
+           WHERE s.directory = ?
+             AND s.time_archived IS NULL
+             AND s.parent_id IS NULL
+             AND NOT EXISTS (SELECT 1 FROM message m WHERE m.session_id = s.id)
+           ORDER BY s.time_updated DESC`,
+        ).all(dir) as Array<{ id: string }>;
+        return rows.map((r) => r.id).filter((id) => !this.subAgentSessions.has(id));
+      }, { readonly: true });
+    } catch (err: any) {
+      log.warn(`Failed to list empty sessions: ${err.message}`);
+      return [];
+    }
+  }
+
+  /** Delete leftover empty sessions so they never clutter history. */
+  async purgeEmptySessions(projectPath: string): Promise<number> {
+    const empties = await this.listEmptySessionIds(projectPath);
+    let n = 0;
+    for (const id of empties) {
+      const result = await this.deleteSession(id);
+      if (result.success) n++;
+    }
+    if (n > 0) {
+      log.info("Purged unused empty sessions", { projectPath, purged: n });
+    }
+    return n;
   }
 
   /** List sessions for the project root and every prismnext worktree checkout. */

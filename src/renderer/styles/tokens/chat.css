@@ -10,12 +10,18 @@
    ============================================================ */
 
 :root {
-  /* ── Font tokens ── */
-  --font-session-item: var(--font-size-12);  /* session list items */
-  --font-chat-meta:    var(--font-size-12);  /* "Thinking...", elapsed, labels */
-  --font-chat-message: var(--font-size-14);  /* chat message body — matches UI reading size */
-  --font-composer:     var(--font-size-13);  /* composer textarea, @mention items */
-  --font-code:         var(--font-size-13);  /* inline code — slightly below body */
+  /*
+   * Chat typography — two rem steps only (both scale with Appearance → UI Font):
+   *   body   (14) — message text, tool titles, thinking
+   *   chrome (13) — composer, toolbar, meta labels, inline/code, session list
+   * Hierarchy inside chrome uses color / weight, not a third size.
+   * Micro badges (10) stay on shared layout tokens outside this ladder.
+   */
+  --font-chat-message: var(--font-size-14);
+  --font-chat-meta:    var(--font-size-13);
+  --font-composer:     var(--font-chat-meta);
+  --font-code:         var(--font-chat-meta);
+  --font-session-item: var(--font-chat-meta);
 
   /* Permission ask — uses theme primary + accent (updated by Appearance settings) */
   --permission-ask-border: color-mix(in oklch, var(--primary) 28%, var(--border));

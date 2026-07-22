@@ -210,9 +210,96 @@ jobs:
             dist/*.blockmap
           if-no-files-found: error
 
+  linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_name: ${{ steps.artifact.outputs.name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Linux packaging deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fakeroot dpkg rpm libfuse2
+
+      - name: Download OpenCode binary
+        shell: bash
+        run: ./scripts/download-opencode.sh
+
+      - name: Build app
+        run: pnpm build
+
+      - name: Package (Linux)
+        shell: bash
+        env:
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        run: |
+          pnpm exec electron-builder --linux --publish never --config.publish.url="$R2_PUBLIC_BASE_URL"
+
+      - name: Capture artifact name
+        id: artifact
+        shell: bash
+        run: |
+          name="$(basename "$(ls dist/*.AppImage | head -1)")"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Install AWS CLI
+        run: |
+          if ! command -v aws >/dev/null 2>&1; then
+            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+            unzip -q /tmp/awscliv2.zip -d /tmp
+            sudo /tmp/aws/install
+          fi
+          aws --version
+
+      - name: Configure AWS CLI for R2
+        run: |
+          aws configure set aws_access_key_id "${{ secrets.R2_ACCESS_KEY_ID }}"
+          aws configure set aws_secret_access_key "${{ secrets.R2_SECRET_ACCESS_KEY }}"
+          aws configure set region auto
+
+      - name: Upload Linux artifacts to R2
+        shell: bash
+        env:
+          ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        run: |
+          shopt -s nullglob
+          for f in dist/*.AppImage dist/*.yml dist/*.blockmap; do
+            aws s3 cp "$f" "s3://${{ secrets.R2_BUCKET }}/$(basename "$f")" \
+              --endpoint-url "$ENDPOINT"
+          done
+
+      - name: Upload Linux artifacts for GitHub Release
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-release
+          path: |
+            dist/*.AppImage
+            dist/*.yml
+            dist/*.blockmap
+          if-no-files-found: error
+
   publish:
     name: Publish version.json + GitHub Release
-    needs: [mac, win]
+    needs: [mac, win, linux]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -228,6 +315,12 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: win-release
+          path: release-assets
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: linux-release
           path: release-assets
 
       - name: Install AWS CLI
@@ -252,9 +345,10 @@ jobs:
           VERSION: ${{ needs.mac.outputs.version }}
           MAC_ARTIFACT: ${{ needs.mac.outputs.artifact_name }}
           WIN_ARTIFACT: ${{ needs.win.outputs.artifact_name }}
+          LINUX_ARTIFACT: ${{ needs.linux.outputs.artifact_name }}
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
         run: |
-          node -e "const fs=require('fs');fs.writeFileSync('version.json',JSON.stringify({version:process.env.VERSION,macUrl:\`\${process.env.R2_PUBLIC_BASE_URL}/\${process.env.MAC_ARTIFACT}\`,winUrl:\`\${process.env.R2_PUBLIC_BASE_URL}/\${process.env.WIN_ARTIFACT}\`,notes:''},null,2));"
+          node -e "const fs=require('fs');fs.writeFileSync('version.json',JSON.stringify({version:process.env.VERSION,macUrl:\`\${process.env.R2_PUBLIC_BASE_URL}/\${process.env.MAC_ARTIFACT}\`,winUrl:\`\${process.env.R2_PUBLIC_BASE_URL}/\${process.env.WIN_ARTIFACT}\`,linuxUrl:\`\${process.env.R2_PUBLIC_BASE_URL}/\${process.env.LINUX_ARTIFACT}\`,notes:''},null,2));"
           cp version.json release-assets/version.json
           aws s3 cp version.json "s3://${{ secrets.R2_BUCKET }}/version.json" \
             --endpoint-url "$ENDPOINT" \
@@ -268,6 +362,7 @@ jobs:
           VERSION: ${{ needs.mac.outputs.version }}
           MAC_ARTIFACT: ${{ needs.mac.outputs.artifact_name }}
           WIN_ARTIFACT: ${{ needs.win.outputs.artifact_name }}
+          LINUX_ARTIFACT: ${{ needs.linux.outputs.artifact_name }}
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
         run: |
           set -euo pipefail
@@ -282,6 +377,7 @@ jobs:
             echo ""
             echo "- **macOS:** \`${MAC_ARTIFACT}\`"
             echo "- **Windows:** \`${WIN_ARTIFACT}\`"
+            echo "- **Linux:** \`${LINUX_ARTIFACT}\`"
             echo ""
             echo "Mirrored on R2 (in-app updates + download site):"
             echo ""

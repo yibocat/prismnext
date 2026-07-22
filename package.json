@@ -1,7 +1,7 @@
 {
   "name": "prism-next",
   "productName": "PrismNext",
-  "version": "0.5.17",
+  "version": "0.6.0",
   "description": "AI-powered LaTeX writing workspace",
   "license": "Apache-2.0",
   "author": "yibocat",
@@ -21,6 +21,7 @@
     "dist": "pnpm build && electron-builder --publish never",
     "dist:mac": "pnpm build && electron-builder --mac --publish never",
     "dist:win": "pnpm build && electron-builder --win --publish never",
+    "dist:linux": "pnpm build && electron-builder --linux --publish never",
     "dist:dir": "pnpm build && electron-builder --dir --publish never"
   },
   "dependencies": {

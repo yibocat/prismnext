@@ -25,12 +25,28 @@ import { useChatStore } from "@/stores/chat-store";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 
-/** AI Chat panel toolbar above composer — ghost button (hover bg only). */
+/**
+ * AI Chat panel toolbar (branch / worktree / actions) — `h-6` like Plan
+ * `Button size="xs"`, type via `--font-chat-meta` (chat chrome step).
+ */
 export const CHAT_PANEL_TOOLBAR_BUTTON =
-  "inline-flex h-7 shrink-0 items-center gap-0 @md:gap-1.5 rounded-md border-0 bg-transparent px-1.5 @md:px-2.5 text-[length:var(--font-chat-meta)] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground";
+  "inline-flex h-6 shrink-0 items-center gap-1 rounded-md border-0 bg-transparent px-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground";
 
 export const CHAT_PANEL_TOOLBAR_BUTTON_PRIMARY =
-  "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border-0 bg-transparent px-2.5 text-[length:var(--font-chat-meta)] text-primary transition-colors hover:bg-primary/10 hover:text-primary";
+  "inline-flex h-6 shrink-0 items-center gap-1 rounded-md border-0 bg-transparent px-1.5 text-[length:var(--font-chat-meta)] text-primary transition-colors hover:bg-primary/10 hover:text-primary";
+
+/**
+ * Composer inner triggers (model / permission / +) — same chrome density as
+ * `CHAT_PANEL_TOOLBAR_BUTTON` (h-6 + meta). Not for AiBar capsule pills.
+ */
+export const COMPOSER_TOOLBAR_TRIGGER =
+  "inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground outline-hidden focus-visible:ring-1 focus-visible:ring-ring";
+
+export const COMPOSER_TOOLBAR_ICON_BUTTON =
+  "inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground";
+
+/** Override `Button size="xs"` default 12px so Plan / tool actions use chat chrome. */
+export const CHAT_CHROME_BUTTON_TEXT = "text-[length:var(--font-chat-meta)]";
 
 /** Capsule AiBar only — dedicated pill, not Appearance border radius. */
 export const CAPSULE_TOOLBAR_PILL =
@@ -127,7 +143,11 @@ export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps)
         )}
         title={t("chat.worktree.lockedWithLabel", { label: triggerLabel })}
       >
-        {mode === "local" ? <LaptopIcon className="size-3.5 shrink-0" /> : <GitBranchIcon className="size-3.5 shrink-0" />}
+        {mode === "local" ? (
+          <LaptopIcon className={cn("shrink-0", isCapsule ? "size-3.5" : "size-3")} />
+        ) : (
+          <GitBranchIcon className={cn("shrink-0", isCapsule ? "size-3.5" : "size-3")} />
+        )}
         <span className="max-w-[100px] truncate hidden @md:inline">{triggerLabel}</span>
         <LockIcon className="size-3 text-muted-foreground/50" />
       </span>
@@ -152,7 +172,11 @@ export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps)
             )}
             onMouseDown={(e) => e.preventDefault()}
           >
-            {mode === "local" ? <LaptopIcon className="size-3.5 shrink-0" /> : <GitBranchIcon className="size-3.5 shrink-0" />}
+            {mode === "local" ? (
+              <LaptopIcon className={cn("shrink-0", isCapsule ? "size-3.5" : "size-3")} />
+            ) : (
+              <GitBranchIcon className={cn("shrink-0", isCapsule ? "size-3.5" : "size-3")} />
+            )}
             <span className="max-w-[100px] truncate hidden @md:inline">{triggerLabel}</span>
           </button>
         </AppMenuTrigger>

@@ -66,7 +66,11 @@ export function useAppShellShortcuts(
       if (matchesShortcut("shell.toggleLeftSidebar", e)) {
         if (eventTargetInCodeMirror(e.target)) return;
         e.preventDefault();
-        toggleLeftSidebarPanel(leftSidebarRef);
+        toggleLeftSidebarPanel(leftSidebarRef, {
+          centerRef,
+          rightAreaRef,
+          isMobile,
+        });
         return;
       }
 

@@ -27,8 +27,7 @@ export function registerUpdateHandlers(): void {
   });
 
   ipcMain.handle("update:install", async () => {
-    quitAndInstall();
-    return { ok: true as const };
+    return quitAndInstall();
   });
 
   ipcMain.handle("update:ignore", async (_event, args: { version: string }) => {

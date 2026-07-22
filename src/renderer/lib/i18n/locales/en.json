@@ -396,6 +396,9 @@
       "downloadedLabel": "Version {{version}} is ready to install",
       "restartToInstall": "Restart to install",
       "restartToInstallDetail": "Prism will quit and apply the update.",
+      "autoDownload": "Download updates automatically",
+      "autoDownloadDesc": "When a newer build is found, download it in the background. Installing still needs your confirmation (or quitting the app).",
+      "installDidNotRestart": "Download finished, but the app did not restart to install. On unsigned macOS builds this is common — open the new installer from the download site, or enable code signing for one-click install.",
       "skipVersion": "Skip this version",
       "skippedDetail": "You've skipped this version.",
       "unskip": "Unskip",
@@ -427,8 +430,6 @@
         "idleCleanupDesc": "Auto-close an idle ✨ AI terminal tab when you have not viewed that session for this long (after the post-exit grace).",
         "closeCancels": "Close tab cancels command",
         "closeCancelsDesc": "When enabled, closing a ✨ AI terminal tab while bash is running also cancels the command. Default: close the view only; the command keeps running.",
-        "sessionStatus": "Session title terminal status",
-        "sessionStatusDesc": "Show AI terminal running / idle status in the session title hover card.",
         "optPty": "PTY stream (default)",
         "optMirror": "Mirror (fallback)",
         "optAutoOpen": "Auto open",
@@ -1180,6 +1181,7 @@
       "updateHint": "Click Update now — download and restart automatically.",
       "openAbout": "About",
       "agentReady": "ready",
+      "agentStarting": "Starting…",
       "agentMissing": "Not found",
       "compilerMissing": "Not detected"
     }
@@ -1281,7 +1283,8 @@
       "acceptChange": "Accept current change",
       "rejectChange": "Reject current change",
       "acceptAll": "Accept all changes",
-      "rejectAll": "Reject all changes"
+      "rejectAll": "Reject all changes",
+      "togglePlanMode": "Toggle Plan mode"
     }
   },
   "shell": {
@@ -1322,10 +1325,24 @@
     "status": {
       "system": "System status",
       "agent": "Agent",
+      "agentAria": "Agent {{status}}",
+      "agentError": "Failed",
+      "projectWarm": "Project",
+      "projectWarmReady": "Tools ready",
+      "projectWarmPending": "Warming…",
+      "projectWarmError": "Warm-up failed",
+      "retry": "Retry Agent",
+      "retrying": "Retrying…",
+      "latex": "LaTeX",
+      "checking": "Checking…",
+      "latexReady": "{{backend}} · ready",
+      "latexReadyAuto": "{{backend}} · auto-compile",
+      "latexMissing": "Not detected",
       "aiTerminal": "AI Terminal",
+      "aiTerminalRunning": "{{running}} running · {{open}} open",
+      "aiTerminalOpen": "{{open}} open",
       "terminal": "Terminal",
-      "mcp": "MCP",
-      "lsp": "LSP",
+      "terminalBusy": "{{count}} busy",
       "connecting": "Connecting…",
       "running": "Running",
       "stopped": "Stopped"
@@ -1404,7 +1421,9 @@
       "worktreeRemoved": "Worktree removed — session kept on project",
       "citationsCount": "{{count}} staged citation",
       "citationsCount_plural": "{{count}} staged citations",
-      "citationsNone": "No staged citations"
+      "citationsNone": "No staged citations",
+      "intensiveCount": "{{count}} intensive paper",
+      "intensiveCount_plural": "{{count}} intensive papers"
     },
     "aibar": {
       "done": "Done",
@@ -1425,7 +1444,8 @@
       "zoomIn": "Zoom in",
       "zoomOut": "Zoom out",
       "placeholder": "@ expert, file, paper, or experiment · / commands, skills, MCP",
-      "archivedReadonly": "This conversation is archived. Restore it to continue chatting."
+      "archivedReadonly": "This conversation is archived. Restore it to continue chatting.",
+      "stop": "Stop"
     },
     "toolbar": {
       "local": "Local",
@@ -1546,6 +1566,18 @@
       "creating_session": "Creating chat session…",
       "connecting_mcp": "Connecting tools…",
       "starting_model": "Starting model…"
+    },
+    "turnFooter": {
+      "justNow": "just now",
+      "minutesAgo": "{{count}}m ago",
+      "hoursAgo": "{{count}}h ago",
+      "daysAgo": "{{count}}d ago",
+      "copy": "Copy this turn",
+      "restore": "Restore workspace files to the end of this turn",
+      "restored": "Restored {{count}} file to the end of this turn",
+      "restored_plural": "Restored {{count}} files to the end of this turn",
+      "restoredDesc": "Workspace files and chat history were rolled back to this turn.",
+      "restoreFailed": "Restore failed: {{message}}"
     }
   },
   "modes": {

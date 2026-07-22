@@ -280,6 +280,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			ipcRenderer.on("update:progress", handler);
 			return () => ipcRenderer.removeListener("update:progress", handler);
 		},
+		onUpdateChanged: (callback: (status: unknown) => void) => {
+			const handler = (_event: Electron.IpcRendererEvent, status: unknown) =>
+				callback(status);
+			ipcRenderer.on("update:changed", handler);
+			return () => ipcRenderer.removeListener("update:changed", handler);
+		},
 		aboutGetVersions: () => ipcRenderer.invoke("about:getVersions"),
 
 	// Window operations
@@ -714,6 +720,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	// OpenCode agent operations
 	chatDispose: () => ipcRenderer.invoke("chat:dispose"),
 	chatPrewarm: (projectPath: string) => ipcRenderer.invoke("chat:prewarm", { projectPath }),
+	chatEnsureAgent: (projectPath?: string) =>
+		ipcRenderer.invoke("chat:ensureAgent", { projectPath }),
+	onAgentStatusChanged: (callback: (status: unknown) => void) => {
+		const handler = (_event: Electron.IpcRendererEvent, status: unknown) =>
+			callback(status);
+		ipcRenderer.on("chat:agentStatus", handler);
+		return () => ipcRenderer.removeListener("chat:agentStatus", handler);
+	},
 	mcpEnsure: (projectPath: string) =>
 		ipcRenderer.invoke("mcp:ensure", { projectPath }) as Promise<{
 			ok: boolean;
@@ -925,7 +939,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 				toolCallId,
 				always: opts?.always,
 			}),
-	chatStatus: () => ipcRenderer.invoke("chat:status"),
+	chatStatus: (projectPath?: string) =>
+		ipcRenderer.invoke("chat:status", { projectPath }),
 	sessionList: (projectPath?: string) => ipcRenderer.invoke("session:list", { projectPath }),
 	sessionLoad: (sessionId: string, projectPath?: string, cwd?: string) =>
 		ipcRenderer.invoke("session:load", { sessionId, projectPath, cwd }),
@@ -959,6 +974,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	) => ipcRenderer.invoke("session:appendUserDisplay", { projectPath, sessionId, content }),
 	sessionGetPlanEvents: (projectPath: string, sessionId: string) =>
 		ipcRenderer.invoke("session:getPlanEvents", { projectPath, sessionId }),
+	sessionGetTurnMetas: (projectPath: string, sessionId: string) =>
+		ipcRenderer.invoke("session:getTurnMetas", { projectPath, sessionId }) as Promise<
+			Record<number, { completedAt?: number; modelLabel?: string; summary?: string }>
+		>,
+	sessionUpsertTurnMeta: (
+		projectPath: string,
+		sessionId: string,
+		turnIndex: number,
+		meta: { completedAt?: number; modelLabel?: string; summary?: string },
+	) => ipcRenderer.invoke("session:upsertTurnMeta", { projectPath, sessionId, turnIndex, meta }),
 	sessionUpsertPlanArtifact: (
 		projectPath: string,
 		sessionId: string,

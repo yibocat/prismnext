@@ -396,6 +396,9 @@
       "downloadedLabel": "版本 {{version}} 已就緒，可以安裝",
       "restartToInstall": "重新啟動並安裝",
       "restartToInstallDetail": "應用將退出並套用更新。",
+      "autoDownload": "自動下載更新",
+      "autoDownloadDesc": "發現新版本後在背景下載；安裝仍需你確認（或退出應用時一併安裝）。",
+      "installDidNotRestart": "已下載完成，但未能重新啟動安裝。未簽名的 macOS 套件常見此情況 — 請從下載頁安裝新套件，或完成代碼簽名後再使用一鍵安裝。",
       "skipVersion": "跳過此版本",
       "skippedDetail": "你已跳過此版本。",
       "unskip": "取消跳過",
@@ -427,8 +430,6 @@
         "idleCleanupDesc": "在超過此時長未檢視該會話後，自動關閉空閒的 ✨ AI 終端分頁（寬限期之後）。",
         "closeCancels": "關閉分頁取消命令",
         "closeCancelsDesc": "啟用後，在 bash 執行時關閉 ✨ AI 終端分頁也會取消命令。預設僅關閉檢視，命令繼續執行。",
-        "sessionStatus": "會話標題顯示終端狀態",
-        "sessionStatusDesc": "在會話標題懸停卡片中顯示 AI 終端執行/空閒狀態。",
         "optPty": "PTY 流（預設）",
         "optMirror": "Mirror（回退）",
         "optAutoOpen": "自動開啟",
@@ -1180,6 +1181,7 @@
       "updateHint": "點「一鍵更新」即可下載並自動重新啟動安裝。",
       "openAbout": "關於",
       "agentReady": "就緒",
+      "agentStarting": "啟動中…",
       "agentMissing": "未找到",
       "compilerMissing": "未檢測到"
     }
@@ -1281,7 +1283,8 @@
       "acceptChange": "接受當前更改",
       "rejectChange": "拒絕當前更改",
       "acceptAll": "接受全部更改",
-      "rejectAll": "拒絕全部更改"
+      "rejectAll": "拒絕全部更改",
+      "togglePlanMode": "切換 Plan 模式"
     }
   },
   "shell": {
@@ -1322,10 +1325,24 @@
     "status": {
       "system": "系統狀態",
       "agent": "Agent",
+      "agentAria": "Agent {{status}}",
+      "agentError": "啟動失敗",
+      "projectWarm": "專案",
+      "projectWarmReady": "工具已就緒",
+      "projectWarmPending": "預熱中…",
+      "projectWarmError": "預熱失敗",
+      "retry": "重試 Agent",
+      "retrying": "重試中…",
+      "latex": "LaTeX",
+      "checking": "偵測中…",
+      "latexReady": "{{backend}} · 就緒",
+      "latexReadyAuto": "{{backend}} · 自動編譯",
+      "latexMissing": "未偵測到",
       "aiTerminal": "AI 終端",
+      "aiTerminalRunning": "{{running}} 執行中 · {{open}} 已開啟",
+      "aiTerminalOpen": "{{open}} 已開啟",
       "terminal": "終端",
-      "mcp": "MCP",
-      "lsp": "LSP",
+      "terminalBusy": "{{count}} 忙碌",
       "connecting": "連線中…",
       "running": "執行中",
       "stopped": "已停止"
@@ -1404,7 +1421,9 @@
       "worktreeRemoved": "Worktree 已移除 — 會話保留在專案上",
       "citationsCount": "{{count}} 條暫存引用",
       "citationsCount_plural": "{{count}} 條暫存引用",
-      "citationsNone": "暫無暫存引用"
+      "citationsNone": "暫無暫存引用",
+      "intensiveCount": "{{count}} 篇精讀",
+      "intensiveCount_plural": "{{count}} 篇精讀"
     },
     "aibar": {
       "done": "完成",
@@ -1425,12 +1444,13 @@
       "zoomIn": "放大",
       "zoomOut": "縮小",
       "placeholder": "@ 專家、檔案、文獻或實驗 · / 命令、技能、MCP",
-      "archivedReadonly": "此對話已歸檔。恢復後可繼續聊天。"
+      "archivedReadonly": "此對話已歸檔。恢復後可繼續聊天。",
+      "stop": "停止"
     },
     "toolbar": {
       "local": "本地",
       "suggestions": "建議",
-      "planNewIdea": "Plan a new idea",
+      "planNewIdea": "規劃一個新想法",
       "initGit": "初始化 Git 倉庫",
       "initGitShort": "初始化 Git"
     },
@@ -1546,6 +1566,18 @@
       "creating_session": "正在建立會話…",
       "connecting_mcp": "正在連接工具…",
       "starting_model": "正在啟動模型…"
+    },
+    "turnFooter": {
+      "justNow": "剛剛",
+      "minutesAgo": "{{count}} 分鐘前",
+      "hoursAgo": "{{count}} 小時前",
+      "daysAgo": "{{count}} 天前",
+      "copy": "複製本輪回覆",
+      "restore": "將工作區檔案還原到本輪結束時",
+      "restored": "已還原 {{count}} 個檔案到本輪結束時",
+      "restored_plural": "已還原 {{count}} 個檔案到本輪結束時",
+      "restoredDesc": "工作區檔案與聊天歷史已回退到本輪。",
+      "restoreFailed": "還原失敗：{{message}}"
     }
   },
   "modes": {
