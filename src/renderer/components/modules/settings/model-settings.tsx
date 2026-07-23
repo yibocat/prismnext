@@ -59,8 +59,8 @@ function connectionMeta(
     case "verified":
       return {
         label: t("settings.models.connected"),
-        dotClass: "bg-emerald-500",
-        textClass: "text-emerald-600 dark:text-emerald-400",
+        dotClass: "bg-success",
+        textClass: "text-success",
       };
     case "failed":
       return {
@@ -71,8 +71,8 @@ function connectionMeta(
     case "untested":
       return {
         label: t("settings.models.keySet"),
-        dotClass: "bg-amber-500",
-        textClass: "text-amber-600 dark:text-amber-400",
+        dotClass: "bg-warning",
+        textClass: "text-warning",
       };
     default:
       return {
@@ -179,12 +179,12 @@ export function ModelSettings() {
             </div>
           </div>
           {visionCandidates.length === 0 ? (
-            <p className={cn(SETTINGS_ROW_DESC, "mt-1.5 text-amber-600 dark:text-amber-400")}>
+            <p className={cn(SETTINGS_ROW_DESC, "mt-1.5 text-warning")}>
               {t("settings.models.noVisionCandidates")}
             </p>
           ) : null}
           {!visionFallbackValid && selectedVisionFallback !== "__none__" ? (
-            <p className={cn(SETTINGS_ROW_DESC, "mt-1.5 text-amber-600 dark:text-amber-400")}>
+            <p className={cn(SETTINGS_ROW_DESC, "mt-1.5 text-warning")}>
               {t("settings.models.visionInvalid")}
             </p>
           ) : null}

@@ -12,6 +12,7 @@ import { useTheme } from "next-themes";
 import { RotateCcwIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 import { useThemeStore } from "@/stores/theme-store";
+import { useSettingsStore } from "@/stores/settings-store";
 import { getDefaultThemeConfig } from "@/lib/theme/theme-generator";
 import { GLASS_TIER_LABELS, type GlassTier } from "@/lib/theme/glass-system";
 import {
@@ -23,10 +24,13 @@ import {
 } from "@/components/ui/app-select";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import { EditorThemePicker } from "./editor-theme-picker";
-import { PRIMARY_COLORS } from "@/lib/theme/primary-colors";
+import {
+  THEME_PACK_IDS,
+  getThemePack,
+  type ThemePackId,
+} from "@/lib/theme/theme-packs";
 import { SANS_FONTS, MONO_FONTS } from "@/lib/theme/font-options";
 import {
   SETTINGS_CARD,
@@ -42,8 +46,16 @@ const RADIUS_LEVELS = [
   { value: "0", labelKey: "settings.appearance.radius.sharp" },
   { value: "0.375", labelKey: "settings.appearance.radius.small" },
   { value: "0.525", labelKey: "settings.appearance.radius.medium" },
+  { value: "0.625", labelKey: "settings.appearance.radius.default" },
   { value: "0.775", labelKey: "settings.appearance.radius.large" },
   { value: "0.975", labelKey: "settings.appearance.radius.full" },
+];
+
+type MessageWidth = "narrow" | "balanced" | "wide";
+const MESSAGE_WIDTH_TIERS: { value: MessageWidth; labelKey: string }[] = [
+  { value: "narrow", labelKey: "settings.appearance.messageWidthNarrow" },
+  { value: "balanced", labelKey: "settings.appearance.messageWidthBalanced" },
+  { value: "wide", labelKey: "settings.appearance.messageWidthWide" },
 ];
 
 const UI_FONT_SIZES = ["14px", "15px", "16px", "17px", "18px", "19px", "20px"] as const;
@@ -72,6 +84,8 @@ export function AppearanceSettings() {
   const updateConfig = useThemeStore((s) => s.updateConfig);
   const glassEffect = config.glassEffect;
   const defaults = getDefaultThemeConfig();
+  const messageWidth = useSettingsStore((s) => s.settings.messageWidth ?? "balanced");
+  const updateSettings = useSettingsStore((s) => s.updateSettings);
 
   // ── CodeMirror preview (read-only Python sample) ──
   const previewCode = `import numpy as np\nx=np.array([1, 2])\nx=np.array([1, 2, 3])`;
@@ -179,80 +193,95 @@ export function AppearanceSettings() {
               </div>
             </div>
 
-            {/* Theme Color */}
+            {/* Theme Pack */}
             <div className="flex items-center justify-between py-2.5 group">
               <div>
-                <p className={ROW_LABEL}>{t("settings.appearance.themeColor")}</p>
-                <p className={ROW_DESC}>{t("settings.appearance.themeColorDesc")}</p>
+                <p className={ROW_LABEL}>{t("settings.appearance.themePack")}</p>
+                <p className={ROW_DESC}>{t("settings.appearance.themePackDesc")}</p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <Hint label={t("settings.appearance.resetDefault")}>
                   <button
                     className={RESET_ICON}
-                  onClick={() => updateConfig({ primaryColor: defaults.primaryColor })}
-                >
+                    onClick={() => updateConfig({ themePack: defaults.themePack })}
+                  >
                     <RotateCcwIcon className="size-3" />
                   </button>
                 </Hint>
-                <AppSelect value={config.primaryColor} onValueChange={(v) => updateConfig({ primaryColor: v })}>
-                  <AppSelectTrigger className="w-32">
+                <AppSelect
+                  value={config.themePack}
+                  onValueChange={(v) => updateConfig({ themePack: v as ThemePackId })}
+                >
+                  <AppSelectTrigger className="w-44">
                     <AppSelectValue />
                   </AppSelectTrigger>
                   <AppSelectContent>
-                    {PRIMARY_COLORS.map((p) => (
-                      <AppSelectItem key={p.id} value={p.id}>
-                        <span className="flex items-center gap-2">
-                          <span
-                            className="inline-block size-3 rounded-full"
-                            style={{ backgroundColor: p.primaryLight }}
-                          />
-                          {p.label}
-                        </span>
-                      </AppSelectItem>
-                    ))}
+                    {THEME_PACK_IDS.map((id) => {
+                      const pack = getThemePack(id);
+                      return (
+                        <AppSelectItem key={id} value={id}>
+                          <span className="flex items-center gap-2">
+                            <span className="flex gap-0.5">
+                              {pack.swatches.light.slice(0, 4).map((c, i) => (
+                                <span
+                                  key={i}
+                                  className="inline-block size-2.5 rounded-sm"
+                                  style={{ backgroundColor: c }}
+                                />
+                              ))}
+                            </span>
+                            {t(pack.labelKey)}
+                          </span>
+                        </AppSelectItem>
+                      );
+                    })}
                   </AppSelectContent>
                 </AppSelect>
               </div>
             </div>
 
-            {/* Base Intensity */}
-            <div className="py-2.5 group">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className={ROW_LABEL}>{t("settings.appearance.baseIntensity")}</p>
-                  <p className={ROW_DESC}>{t("settings.appearance.baseIntensityDesc")}</p>
-                </div>
-                <div className="flex items-start gap-1.5 shrink-0">
-                  <Hint label={t("settings.appearance.resetDefault")}>
-                    <button
-                      className={RESET_ICON}
-                    onClick={() => updateConfig({ baseIntensity: defaults.baseIntensity })}
+            {/* Intensity tiers removed - each pack is a single designed palette */}
+          </div>
+        </div>
+
+        {/* ── Chat Layout ── */}
+        <div>
+          <h3 className={CATEGORY_HEADER}>{t("settings.appearance.chatLayout")}</h3>
+          <div className={CARD}>
+            {/* Message Width — 3 tiers (narrow 42rem / balanced 48rem / wide 64rem) */}
+            <div className="flex items-center justify-between py-2.5 group">
+              <div>
+                <p className={ROW_LABEL}>{t("settings.appearance.messageWidth")}</p>
+                <p className={ROW_DESC}>{t("settings.appearance.messageWidthDesc")}</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Hint label={t("settings.appearance.resetDefault")}>
+                  <button
+                    className={RESET_ICON}
+                    onClick={() =>
+                      void updateSettings({ messageWidth: "balanced" })
+                    }
                   >
-                      <RotateCcwIcon className="size-3" />
-                    </button>
-                  </Hint>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <Slider
-                        value={[config.baseIntensity * 100]}
-                        min={0}
-                        max={100}
-                        step={5}
-                        className="w-36 [&>span:first-child]:!h-[3px]"
-                        onValueChange={([v]: number[]) => {
-                          if (v !== undefined) updateConfig({ baseIntensity: v / 100 });
-                        }}
-                      />
-                      <span className="text-[length:var(--font-size-12)] text-muted-foreground tabular-nums w-8 text-right">
-                        {Math.round(config.baseIntensity * 100)}%
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-[length:var(--font-size-10)] text-muted-foreground/50 mt-0.5">
-                      <span>{t("settings.appearance.clean")}</span>
-                      <span>{t("settings.appearance.deep")}</span>
-                    </div>
-                  </div>
-                </div>
+                    <RotateCcwIcon className="size-3" />
+                  </button>
+                </Hint>
+                <AppSelect
+                  value={messageWidth}
+                  onValueChange={(v) =>
+                    void updateSettings({ messageWidth: v as MessageWidth })
+                  }
+                >
+                  <AppSelectTrigger className="w-32">
+                    <AppSelectValue />
+                  </AppSelectTrigger>
+                  <AppSelectContent>
+                    {MESSAGE_WIDTH_TIERS.map((tier) => (
+                      <AppSelectItem key={tier.value} value={tier.value}>
+                        {t(tier.labelKey)}
+                      </AppSelectItem>
+                    ))}
+                  </AppSelectContent>
+                </AppSelect>
               </div>
             </div>
           </div>
@@ -525,6 +554,7 @@ export function AppearanceSettings() {
             </div>
           </div>
         </div>
+
       </div>
     </div>
   );

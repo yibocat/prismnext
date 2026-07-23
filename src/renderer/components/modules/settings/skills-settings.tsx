@@ -288,7 +288,7 @@ export function SkillsSettings() {
                             </span>
                           )}
                           {hasUpdate && (
-                            <span className={cn(BADGE, "bg-amber-500/15 text-amber-700 dark:text-amber-400")}>
+                            <span className={cn(BADGE, "bg-secondary text-warning")}>
                               update
                             </span>
                           )}

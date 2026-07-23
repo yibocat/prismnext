@@ -308,7 +308,7 @@ export function LiteratureSettings() {
                 {testingMineru ? (
                   <Loader2Icon className="size-3 animate-spin mr-1" />
                 ) : mineruTestOk === true ? (
-                  <CheckCircle2Icon className="size-3 mr-1 text-green-600" />
+                  <CheckCircle2Icon className="size-3 mr-1 text-success" />
                 ) : mineruTestOk === false ? (
                   <XCircleIcon className="size-3 mr-1 text-destructive" />
                 ) : null}
@@ -426,7 +426,7 @@ export function LiteratureSettings() {
                 {testing ? (
                   <Loader2Icon className="size-3 animate-spin mr-1" />
                 ) : status?.mode !== "offline" ? (
-                  <CheckCircle2Icon className="size-3 mr-1 text-green-600" />
+                  <CheckCircle2Icon className="size-3 mr-1 text-success" />
                 ) : status ? (
                   <XCircleIcon className="size-3 mr-1 text-destructive" />
                 ) : null}

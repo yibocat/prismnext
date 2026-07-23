@@ -1048,7 +1048,7 @@ export const ChatMessages = memo(function ChatMessages() {
         data-chat-scroll
         className="absolute inset-0 overflow-y-auto overflow-x-hidden"
       >
-        <div ref={contentRef} className="w-full min-w-0 max-w-3xl mx-auto">
+        <div ref={contentRef} data-chat-width className="w-full min-w-0">
           {windowStart > 0 && (
             <div
               ref={topSentinelRef}
@@ -1174,7 +1174,7 @@ export const ChatMessages = memo(function ChatMessages() {
 
       {/* Scroll to bottom FAB */}
       <div className="absolute inset-x-0 bottom-4 pointer-events-none z-10">
-        <div className="max-w-3xl mx-auto flex justify-end px-4">
+        <div data-chat-width className="flex justify-end px-4">
           {showScrollButton && (
             <button
               type="button"

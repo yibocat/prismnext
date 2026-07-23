@@ -88,7 +88,7 @@ export function GitChangesTreeSidebar({ files }: GitChangesTreeSidebarProps) {
                 )}
               />
               <Icon
-                icon={isOpen ? getFolderOpenIconName() : getFolderIconName()}
+                icon={isOpen ? getFolderOpenIconName(row.name) : getFolderIconName(row.name)}
                 className="size-3.5 shrink-0 opacity-70"
               />
               <span className="truncate">{row.name}</span>

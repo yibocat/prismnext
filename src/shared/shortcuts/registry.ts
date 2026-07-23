@@ -403,6 +403,15 @@ export const SHORTCUT_REGISTRY: readonly ShortcutDef[] = [
     labelKey: "shortcuts.product.togglePlanMode",
     implemented: true,
   },
+  {
+    id: "product.cycleMessageWidth",
+    category: "product",
+    remappable: true,
+    scope: "chat",
+    defaultChord: { key: "w", primary: true, shift: true },
+    labelKey: "shortcuts.product.cycleMessageWidth",
+    implemented: true,
+  },
 ] as const;
 
 const BY_ID = new Map(SHORTCUT_REGISTRY.map((d) => [d.id, d]));

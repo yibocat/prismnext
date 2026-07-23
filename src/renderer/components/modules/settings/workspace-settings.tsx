@@ -8,6 +8,7 @@ import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useWorkspaceProjectAutosave } from "@/hooks/use-workspace-project-autosave";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   DEFAULT_FUNCTION_DESCRIPTIONS,
   type WorkspaceFolder,
@@ -170,14 +171,12 @@ export function WorkspaceSettings() {
   const templateDirs = settings.defaultWorkspaceDirs ?? [];
   const defaultInitGit = settings.defaultInitGit !== false;
 
-  const syncTemplateFromProject = () => {
-    if (!projectRoot || workspaceDirs.length === 0) {
-      toast.error(t("settings.workspace.toast.openProjectSync"));
-      return;
-    }
-    updateSettings({ defaultWorkspaceDirs: [...workspaceDirs] });
-    toast.success(t("settings.workspace.toast.templateUpdated"));
-  };
+  // Default to the project tab when a project is open (project-first mental
+  // model); fall back to the template tab when no project is open, since the
+  // project tab has nothing to show.
+  const [tab, setTab] = useState<"project" | "template">(
+    projectRoot ? "project" : "template",
+  );
 
   const resetTemplateToAppDefault = () => {
     updateSettings({
@@ -219,134 +218,144 @@ export function WorkspaceSettings() {
           </p>
         </div>
 
-        {projectRoot ? (
-          <div>
-            <p className={CATEGORY_HEADER}>{t("settings.workspace.thisProject")}</p>
-            <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-2">
-              <span className="font-medium text-foreground">{projectDisplayName(projectRoot)}</span>
-              {statusLabel ? (
-                <>
-                  <span className="text-muted-foreground/40 mx-1.5">·</span>
-                  {statusLabel}
-                </>
-              ) : null}
-            </p>
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <Button variant="outline" size="xs" onClick={() => openAddFolder("project")}>
-                <PlusIcon className="size-3 mr-1" />
-                {t("settings.workspace.addFolder")}
-              </Button>
-            </div>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as "project" | "template")}>
+          <TabsList className="bg-transparent p-0 h-auto gap-4 border-b border-border w-full justify-start rounded-none">
+            <TabsTrigger
+              value="project"
+              className="bg-transparent shadow-none rounded-none border-b-2 border-transparent data-[state=active]:bg-transparent data-[state=active]:border-primary data-[state=active]:shadow-none px-1 pb-2 pt-1 text-muted-foreground data-[state=active]:text-foreground"
+            >
+              {t("settings.workspace.tabProject")}
+            </TabsTrigger>
+            <TabsTrigger
+              value="template"
+              className="bg-transparent shadow-none rounded-none border-b-2 border-transparent data-[state=active]:bg-transparent data-[state=active]:border-primary data-[state=active]:shadow-none px-1 pb-2 pt-1 text-muted-foreground data-[state=active]:text-foreground"
+            >
+              {t("settings.workspace.tabTemplate")}
+            </TabsTrigger>
+          </TabsList>
 
-            <div className={CARD}>
-              {workspaceDirs.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 py-10 text-center">
-                  <FolderIcon className="size-8 text-muted-foreground/30" />
-                  <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-                    {t("settings.workspace.empty")}
-                  </p>
+          {/* ── This project (project-scoped, lives in <project>/.prismnext) ── */}
+          <TabsContent value="project" className="mt-6 focus-visible:ring-0">
+            {projectRoot ? (
+              <div>
+                <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-2">
+                  <span className="font-medium text-foreground">{projectDisplayName(projectRoot)}</span>
+                  {statusLabel ? (
+                    <>
+                      <span className="text-muted-foreground/40 mx-1.5">·</span>
+                      {statusLabel}
+                    </>
+                  ) : null}
+                </p>
+                <div className="flex flex-wrap items-center gap-2 mb-2">
                   <Button variant="outline" size="xs" onClick={() => openAddFolder("project")}>
                     <PlusIcon className="size-3 mr-1" />
                     {t("settings.workspace.addFolder")}
                   </Button>
                 </div>
-              ) : (
-                workspaceDirs.map((folder, i) => (
-                  <FolderSummaryRow
-                    key={`project:${folder.function}:${folder.name}:${i}`}
-                    folder={folder}
-                    index={i}
-                    scope="project"
-                    projectRoot={projectRoot}
-                    showDisk
-                  />
-                ))
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className={CARD}>
-            <div className="py-4 px-1">
-              <p className={ROW_DESC}>{t("settings.workspace.openProjectHint")}</p>
-            </div>
-          </div>
-        )}
 
-        <div>
-          <p className={CATEGORY_HEADER}>{t("settings.workspace.newProjectTemplate")}</p>
-          <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-2 leading-relaxed">
-            {t("settings.workspace.templateDesc")}
-          </p>
-
-          <div className={cn(CARD, "mb-3")}>
-            <div className={ROW}>
-              <div className="min-w-0">
-                <span className={ROW_LABEL}>{t("settings.workspace.initGit")}</span>
-                <p className={ROW_DESC}>{t("settings.workspace.initGitDesc")}</p>
+                <div className={CARD}>
+                  {workspaceDirs.length === 0 ? (
+                    <div className="flex flex-col items-center gap-3 py-10 text-center">
+                      <FolderIcon className="size-8 text-muted-foreground/30" />
+                      <p className="text-[length:var(--font-size-13)] text-muted-foreground">
+                        {t("settings.workspace.empty")}
+                      </p>
+                      <Button variant="outline" size="xs" onClick={() => openAddFolder("project")}>
+                        <PlusIcon className="size-3 mr-1" />
+                        {t("settings.workspace.addFolder")}
+                      </Button>
+                    </div>
+                  ) : (
+                    workspaceDirs.map((folder, i) => (
+                      <FolderSummaryRow
+                        key={`project:${folder.function}:${folder.name}:${i}`}
+                        folder={folder}
+                        index={i}
+                        scope="project"
+                        projectRoot={projectRoot}
+                        showDisk
+                      />
+                    ))
+                  )}
+                </div>
               </div>
-              <Switch
-                checked={defaultInitGit}
-                onCheckedChange={(checked) => {
-                  void updateSettings({ defaultInitGit: checked });
-                }}
-              />
-            </div>
-          </div>
+            ) : (
+              <div className={CARD}>
+                <div className="py-4 px-1">
+                  <p className={ROW_DESC}>{t("settings.workspace.tabProjectHint")}</p>
+                </div>
+              </div>
+            )}
+          </TabsContent>
 
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            {projectRoot ? (
-              <Hint label={t("settings.workspace.syncTitle")}>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  className="text-muted-foreground"
-                  onClick={syncTemplateFromProject}
-                >
-                  {t("common.sync")}
-                </Button>
-              </Hint>
-            ) : null}
-            <Hint label={t("settings.workspace.resetTitle")}>
-              <Button
-                variant="ghost"
-                size="xs"
-                className="text-muted-foreground"
-                onClick={resetTemplateToAppDefault}
-              >
-                <RotateCcwIcon className="size-3 mr-1" />
-                {t("common.reset")}
-              </Button>
-            </Hint>
-            <Button variant="outline" size="xs" onClick={() => openAddFolder("template")}>
-              <PlusIcon className="size-3 mr-1" />
-              {t("settings.workspace.addFolder")}
-            </Button>
-          </div>
+          {/* ── New project template (app-scoped, global default) ── */}
+          <TabsContent value="template" className="mt-6 focus-visible:ring-0">
+            <div>
+              <p className={CATEGORY_HEADER}>{t("settings.workspace.newProjectTemplate")}</p>
+              <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-2 leading-relaxed">
+                {t("settings.workspace.templateDesc")}
+              </p>
 
-          <div className={CARD}>
-            {templateDirs.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 py-10 text-center">
-                <FolderIcon className="size-8 text-muted-foreground/30" />
-                <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-                  {t("settings.workspace.emptyTemplate")}
-                </p>
+              <div className={cn(CARD, "mb-3")}>
+                <div className={ROW}>
+                  <div className="min-w-0">
+                    <span className={ROW_LABEL}>{t("settings.workspace.initGit")}</span>
+                    <p className={ROW_DESC}>{t("settings.workspace.initGitDesc")}</p>
+                  </div>
+                  <Switch
+                    checked={defaultInitGit}
+                    onCheckedChange={(checked) => {
+                      void updateSettings({ defaultInitGit: checked });
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <Hint label={t("settings.workspace.resetTitle")}>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="text-muted-foreground"
+                    onClick={resetTemplateToAppDefault}
+                  >
+                    <RotateCcwIcon className="size-3 mr-1" />
+                    {t("common.reset")}
+                  </Button>
+                </Hint>
                 <Button variant="outline" size="xs" onClick={() => openAddFolder("template")}>
                   <PlusIcon className="size-3 mr-1" />
                   {t("settings.workspace.addFolder")}
                 </Button>
               </div>
-            ) : (
-              templateDirs.map((folder, i) => (
-                <FolderSummaryRow
-                  key={`template:${folder.function}:${folder.name}:${i}`}
-                  folder={folder}
-                  index={i}
-                  scope="template"
-                />
-              ))
-            )}
-          </div>
-        </div>
+
+              <div className={CARD}>
+                {templateDirs.length === 0 ? (
+                  <div className="flex flex-col items-center gap-3 py-10 text-center">
+                    <FolderIcon className="size-8 text-muted-foreground/30" />
+                    <p className="text-[length:var(--font-size-13)] text-muted-foreground">
+                      {t("settings.workspace.emptyTemplate")}
+                    </p>
+                    <Button variant="outline" size="xs" onClick={() => openAddFolder("template")}>
+                      <PlusIcon className="size-3 mr-1" />
+                      {t("settings.workspace.addFolder")}
+                    </Button>
+                  </div>
+                ) : (
+                  templateDirs.map((folder, i) => (
+                    <FolderSummaryRow
+                      key={`template:${folder.function}:${folder.name}:${i}`}
+                      folder={folder}
+                      index={i}
+                      scope="template"
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

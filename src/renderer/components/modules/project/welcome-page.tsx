@@ -67,16 +67,16 @@ function StatusDot({ state }: { state: CheckState }) {
   }
   if (state === "ok") {
     return (
-      <span className="flex size-3.5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+      <span className="flex size-3.5 shrink-0 items-center justify-center rounded-full bg-success text-success-foreground">
         <CheckIcon className="size-2.5 stroke-[3]" />
       </span>
     );
   }
   if (state === "warn") {
-    return <span className="size-3.5 shrink-0 rounded-full bg-amber-500" title={t("common.warning")} />;
+    return <span className="size-3.5 shrink-0 rounded-full bg-warning" title={t("common.warning")} />;
   }
   return (
-    <span className="flex size-3.5 shrink-0 items-center justify-center rounded-full bg-red-500 text-white">
+    <span className="flex size-3.5 shrink-0 items-center justify-center rounded-full bg-destructive text-destructive-foreground">
       <XIcon className="size-2.5 stroke-[3]" />
     </span>
   );

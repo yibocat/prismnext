@@ -175,7 +175,7 @@ function RunRow({
   const exitClass = cancelled
     ? "text-muted-foreground"
     : exit === 0
-      ? "text-emerald-600 dark:text-emerald-400"
+      ? "text-success"
       : "text-destructive";
 
   return (
@@ -338,7 +338,7 @@ function RunDetailPanel({
             {t("experiments.artifacts")}
           </div>
           {workingCopyNewer ? (
-            <p className="mb-1.5 text-[length:var(--font-size-11)] text-amber-600 dark:text-amber-400">
+            <p className="mb-1.5 text-[length:var(--font-size-11)] text-warning">
               {t("experiments.runs.workingCopyNewer")}
             </p>
           ) : null}

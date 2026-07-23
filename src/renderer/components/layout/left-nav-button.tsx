@@ -31,7 +31,12 @@ export function LeftNavButton({ item, panelRefs, onPressed }: LeftNavButtonProps
         onPressed?.();
       }}
     >
-      <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+      <Icon
+        className={cn(
+          "size-3.5 shrink-0",
+          active ? "text-primary" : "text-muted-foreground",
+        )}
+      />
       <span className="flex-1 text-left">{label}</span>
       {item.trailing}
     </button>

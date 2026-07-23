@@ -4,21 +4,13 @@
 :root {
   --height-preview-toolbar:      var(--height-base-32);
   --height-preview-thin-toolbar: var(--height-base-32);
-  /* Light: gray reading well (white page must not sit on white). */
-  --pdf-canvas: oklch(0.90 0.004 286);
+  /* PDF canvas always follows the app theme. The PDF light/dark toggle only
+     inverts the page content (filter), never the canvas behind it. */
+  --pdf-canvas: var(--muted);
 }
 
 .dark {
-  --pdf-canvas: var(--background);
-}
-
-/* PDF dark mode on while app is still light — dark well behind inverted pages. */
-.prism-pdf-pages--dark {
-  --pdf-canvas: oklch(0.18 0 0);
-}
-
-.dark .prism-pdf-pages--dark {
-  --pdf-canvas: var(--background);
+  --pdf-canvas: var(--muted);
 }
 
 .textLayer span::selection {
@@ -33,7 +25,8 @@
 }
 
 /*
- * Lector scroll fix — do not remove overflow:hidden on the wrapper.
+ * Lector scroll fix - overflow:hidden on the inner wrapper MUST stay; removing
+ * it makes the canvas scroll infinitely.
  */
 .prism-pdf-pages {
   background-color: var(--pdf-canvas);
@@ -52,11 +45,29 @@
   top: 0 !important;
 }
 
-/* Light mode only — standard shadow-md; inverted pages skip shadow (see --inverted). */
+/* PDF page sheets - a tight, subtle drop shadow gives just enough edge
+ * definition for the page to read as a sheet. Kept compact (small blur/spread)
+ * so it never looks like a "smudge" above/below the page.
+ *
+ * Non-inverted pages only. Inverted pages carry an invert() filter that would
+ * reverse any black shadow/outline/border to white, so they are force-reset
+ * below with !important - no edge effect, no white bar.
+ *
+ * Light canvas. */
 .prism-pdf-page {
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.10);
 }
 
-.prism-pdf-page--inverted {
-  box-shadow: none;
+/* Dark canvas, non-inverted white pages: deepen just enough to read. */
+.dark .prism-pdf-page {
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.50);
+}
+
+/* Inverted (dark) pages: the invert() filter reverses any black edge effect
+ * to white, so NONE. !important wins over the .dark .prism-pdf-page rule
+ * above regardless of source-order/specificity quirks. */
+.prism-pdf-page--inverted,
+.dark .prism-pdf-page--inverted {
+  box-shadow: none !important;
+  outline: none !important;
 }

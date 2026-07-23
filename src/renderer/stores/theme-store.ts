@@ -7,6 +7,7 @@ import {
   getDefaultThemeConfig,
   generateThemeCSS,
 } from "@/lib/theme/theme-generator";
+import { migrateToThemePackConfig } from "@/lib/theme/theme-migrate";
 
 // Debounce state for _regenerate — batches rapid CSS injections (e.g. slider drags)
 // into at most one DOM update per frame to avoid style-recalc thrashing.
@@ -42,12 +43,8 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
 
   _regenerate: (config: ThemeConfig) => {
     const cssText = generateThemeCSS(config);
-    // Update Zustand state immediately — consumers read from here for UI
     set({ config, cssText });
 
-    // Debounce the actual DOM style injection.
-    // Rapid calls (e.g. slider drag at 60fps) batch into one injection per frame,
-    // preventing style-recalculation thrashing.
     _pendingCSS = cssText;
     if (!_regenerateTimer) {
       _regenerateTimer = setTimeout(() => {
@@ -55,46 +52,30 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
         const latest = _pendingCSS;
         _pendingCSS = null;
         if (latest !== null) _injectCSS(latest);
-      }, 16); // ~1 frame at 60fps
+      }, 16);
     }
   },
 
   loadConfig: async () => {
     try {
-      const raw = await window.electronAPI.settingsGet();
-      // Migrate legacy themeColor if present — just use defaults with the primary color
-      if ((raw as any).themeColor && !(raw as any)._themeMigrated) {
-        const defaults = getDefaultThemeConfig();
-        const legacy = (raw as any).themeColor as string;
-        const primaryMap: Record<string, string> = {
-          "academic-blue": "blue",
-          "teal": "teal",
-          "ink-green": "green",
-          "rose": "rose",
-          "violet": "violet",
-          "amber": "amber",
-          "mono": "blue",
-        };
-        const migrated: ThemeConfig = {
-          ...defaults,
-          primaryColor: primaryMap[legacy] ?? defaults.primaryColor,
-          glassEffect: (raw as any).glassEffect ?? defaults.glassEffect,
-          glassIntensity: (raw as any).glassIntensity ?? defaults.glassIntensity,
-        };
-        get()._regenerate(migrated);
-        await window.electronAPI.settingsSet({ _themeMigrated: true });
-        return;
-      }
+      const raw = (await window.electronAPI.settingsGet()) as Record<string, unknown>;
+      const saved = (raw._themeConfig ?? {}) as Record<string, unknown>;
+      const migrated = migrateToThemePackConfig({
+        ...saved,
+        themeColor: raw.themeColor,
+      });
+      get()._regenerate(migrated);
 
-      if ((raw as any)._themeConfig) {
-        const saved = (raw as any)._themeConfig as ThemeConfig;
-        get()._regenerate(saved);
-        return;
+      if (!raw._themePackMigrated) {
+        await window.electronAPI.settingsSet({
+          _themeConfig: migrated,
+          _themePackMigrated: true,
+        });
       }
+      return;
     } catch {
       // electron-store read failed — use defaults below
     }
-    // Always inject the style tag with current config (saved or default)
     get()._regenerate(get().config);
   },
 
@@ -111,22 +92,17 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
     const config = { ...get().config, ...patch };
     await get().saveConfig(config);
 
-    // Sync native vibrancy to match the effective theme mode.
-    // Theme mode (dark/light/system) is managed by next-themes ThemeProvider,
-    // not by ThemeConfig. Detect effective mode from the DOM:
-    // next-themes adds .dark class to <html> based on user choice or system preference.
     if (config.glassEffect) {
       const isDark = document.documentElement.classList.contains("dark");
       const effectiveMode = isDark ? "dark" : "light";
       try {
         await window.electronAPI.themeSetGlassMode(
-          effectiveMode as "light" | "dark" | "system"
+          effectiveMode as "light" | "dark" | "system",
         );
       } catch {
         // Non-critical — glass still works with CSS vars alone
       }
     } else {
-      // Glass off: revert to default vibrancy (system-following)
       try {
         await window.electronAPI.themeSetGlassMode("system");
       } catch {

@@ -1,6 +1,7 @@
 // prism-next/src/renderer/components/modules/settings/editor-theme-picker.tsx
 
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { CheckIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -149,22 +150,22 @@ export function EditorThemePicker() {
   const editorSyntaxTheme = useSettingsStore((s) => s.settings.editorSyntaxTheme) ?? DEFAULT_SYNTAX_THEME;
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const themes = useMemo(() => getAllThemeDefs(), []);
+  const { t } = useTranslation();
 
   return (
     <div>
       <h3 className="text-[length:var(--font-size-12)] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1">
-        Editor
+        {t("settings.appearance.editor")}
       </h3>
       <div className="rounded-lg border border-border px-4 divide-y divide-border">
         <div className="py-2.5">
           <div className="flex items-start justify-between">
             <div>
               <p className="text-[length:var(--font-size-13)] font-medium">
-                Editor Syntax Theme
+                {t("settings.appearance.editorTheme")}
               </p>
               <p className="text-[length:var(--font-size-12)] text-muted-foreground mt-0.5">
-                Choose how code and LaTeX syntax is colored.
-                Editor background always matches your app theme.
+                {t("settings.appearance.editorThemeDesc")}
               </p>
             </div>
           </div>

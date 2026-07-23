@@ -49,7 +49,7 @@ export const RestoreUndoBar = memo(function RestoreUndoBar() {
   if (!canUndo || dismissed || isStreaming) return null;
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-3 pb-2">
+    <div data-chat-width className="w-full px-3 pb-2">
       <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[length:var(--font-chat-meta)]">
         <RotateCcwIcon className="size-3.5 shrink-0 text-amber-700 dark:text-amber-400" />
         <span className="flex-1 text-foreground/80">

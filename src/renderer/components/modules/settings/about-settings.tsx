@@ -225,7 +225,7 @@ export function AboutSettings() {
                   <>
                     <p className={ROW_LABEL}>{t("settings.about.updatesStatus")}</p>
                     <p className={`${ROW_DESC} flex items-center gap-1.5`}>
-                      <CheckCircle2Icon className="size-3 shrink-0 text-emerald-500" />
+                      <CheckCircle2Icon className="size-3 shrink-0 text-success" />
                       {t("settings.about.upToDateDetail", { version: status.currentVersion })}
                     </p>
                   </>

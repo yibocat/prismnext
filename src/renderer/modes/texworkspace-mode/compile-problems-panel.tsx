@@ -51,7 +51,7 @@ function ProblemRow({
       className={cn(
         "w-full text-left rounded-md px-3 py-2 transition-colors",
         "hover:bg-accent/60 border border-transparent hover:border-border/40",
-        isError ? "text-destructive" : "text-amber-600 dark:text-amber-500",
+        isError ? "text-destructive" : "text-warning",
       )}
     >
       <div className="flex items-start gap-2">

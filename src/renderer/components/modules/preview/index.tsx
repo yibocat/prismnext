@@ -24,7 +24,6 @@ import "pdfjs-dist/web/pdf_viewer.css";
 import {
   PDFJS_DOCUMENT_OPTIONS,
   PDF_PAGES_CLASS,
-  PDF_PAGES_DARK_CLASS,
   PDF_PAGES_STYLE,
   PDF_PAGE_CLASS,
   PDF_PAGE_DARK_FILTER,
@@ -568,7 +567,7 @@ export function PdfViewerInner({
       <PdfLinkCapture />
       {/* Toolbar — omitted for chat lightbox / compact peeks */}
       {!hideToolbar ? (
-        <div className="flex h-[var(--height-right-area-subtoolbar)] shrink-0 items-center gap-0.5 border-b border-border bg-card px-2 text-[length:var(--font-toolbar-label)]">
+        <div data-surface="content" className="flex h-[var(--height-right-area-subtoolbar)] shrink-0 items-center gap-0.5 border-b border-border bg-background px-2 text-[length:var(--font-toolbar-label)]">
           {/* Left: side panel toggles */}
           <div className="flex items-center gap-0.5">
             {PANEL_TOGGLES.map((t) => (
@@ -711,7 +710,7 @@ export function PdfViewerInner({
       {/* Body: Side Panel + Pages */}
       <div className="relative flex flex-1 min-h-0">
         {!hideToolbar && panelOpen && (
-          <div className="shrink-0 border-r border-border bg-card overflow-hidden" style={{ width: PANEL_WIDTH }}>
+          <div data-surface="sidebar" className="shrink-0 border-r border-border bg-sidebar overflow-hidden" style={{ width: PANEL_WIDTH }}>
             {sidePanel === "outline" && <OutlinePanel onJump={() => setSidePanel(null)} />}
             {sidePanel === "search" && <SearchPanel />}
             {sidePanel === "thumbnails" && <ThumbnailsPanel />}
@@ -722,7 +721,7 @@ export function PdfViewerInner({
             We pass scroll + click props directly to Pages rather than wrapping in
             an extra div, which would interfere with the virtualizer's height calc. */}
         <Pages
-          className={`${PDF_PAGES_CLASS}${pdfDarkActive ? ` ${PDF_PAGES_DARK_CLASS}` : ""}`}
+          className={PDF_PAGES_CLASS}
           style={PDF_PAGES_STYLE}
           gap={16}
         >

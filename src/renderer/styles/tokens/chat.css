@@ -27,3 +27,42 @@
   --permission-ask-border: color-mix(in oklch, var(--primary) 28%, var(--border));
   --permission-ask-bg: color-mix(in oklch, var(--primary) 8%, var(--accent));
 }
+
+/* ============================================================
+   Chat message-width tiers
+
+   The tier is set as `data-message-width="narrow|balanced|wide"`
+   on <html> by App.tsx (mirrors the glassEffect sync pattern).
+   Each chat column / composer container carries `data-chat-width`
+   instead of a hard-coded `max-w-3xl`. The bare fallback below
+   keeps the chat correctly capped before App.tsx's first effect
+   fires (e.g. during SSR-style initial paint).
+   ============================================================ */
+
+[data-chat-width] {
+  max-width: 48rem;
+  margin-inline: auto;
+}
+
+html[data-message-width="narrow"]   [data-chat-width] { max-width: 42rem; }
+html[data-message-width="balanced"] [data-chat-width] { max-width: 48rem; }
+html[data-message-width="wide"]     [data-chat-width] { max-width: 64rem; }
+
+/* --chat-max-w mirrors the active tier for components that can't
+ * use [data-chat-width] because they need an *explicit* length
+ * (e.g. the AiBar capsule morph animation transitions max-width
+ * and CSS can't interpolate to `none`). Read with
+ * `max-w-[var(--chat-max-w)]` in Tailwind. */
+:root { --chat-max-w: 48rem; }
+html[data-message-width="narrow"]   { --chat-max-w: 42rem; }
+html[data-message-width="balanced"] { --chat-max-w: 48rem; }
+html[data-message-width="wide"]     { --chat-max-w: 64rem; }
+
+/* --chat-input-h tracks the chat composer font so the AiBar capsule
+ * input phase grows with the user's font-size pick.
+ * Formula: font * 3 + 0.5rem padding.
+ *   uiFontSize 14px  -> composer 11.375px -> 41.1px height
+ *   uiFontSize 16px  -> composer 13px     -> 47px    height (current)
+ *   uiFontSize 20px  -> composer 16.25px  -> 58.75px height
+ * Read with `h-[var(--chat-input-h)]` in Tailwind. */
+:root { --chat-input-h: calc(var(--font-composer) * 3 + 0.5rem); }

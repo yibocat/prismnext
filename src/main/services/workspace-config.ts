@@ -42,11 +42,15 @@ export function readWorkspaceDirs(prismDir: string): WorkspaceFolder[] {
   const settings = readProjectSettings(prismDir);
 
   if (Array.isArray(settings.workspaceDirs)) {
-    // Return as-is — even empty array means user explicitly removed all folders
+    // Non-empty array: trust it (user's real configuration).
     if (settings.workspaceDirs.length > 0) {
       return settings.workspaceDirs;
     }
-    return [];
+    // Empty array: this is the data-loss signature from a previous autosave bug
+    // (project-switch cleanup overwrote settings.json with []). An empty config
+    // is never a valid intent - a project needs at least a manuscript folder.
+    // Fall through to default instead of returning [], so the project recovers
+    // its functional folders instead of staying permanently empty.
   }
 
   // Migrate from old format: { manuscript: { dir, main } }
@@ -75,6 +79,13 @@ export function writeWorkspaceDirs(
   prismDir: string,
   dirs: WorkspaceFolder[],
 ): void {
+  // Guard against the data-loss signature: never persist an empty folder list.
+  // A project must keep at least one workspace folder (the manuscript). The
+  // IPC layer (validateWorkspaceDirs) already rejects [], but writeWorkspaceDirs
+  // is also called directly by migrations; this is the hard backstop.
+  if (!Array.isArray(dirs) || dirs.length === 0) {
+    return;
+  }
   const settings = readProjectSettings(prismDir);
   settings.workspaceDirs = dirs;
   writeProjectSettings(prismDir, settings);
@@ -82,6 +93,18 @@ export function writeWorkspaceDirs(
 
 export function validateWorkspaceDirs(dirs: WorkspaceFolder[]): string[] {
   const errors: string[] = [];
+
+  // Reject empty - a project must keep at least one workspace folder. This is
+  // the data-loss guardrail: autosave cleanup during project switch used to read
+  // a reset (empty) store and overwrite the old project's settings.json with [],
+  // permanently losing notes/literature/experiments. Even though the autosave
+  // hook now snapshots, this server-side check stops any other path from
+  // writing an empty array. To remove all folders the user edits in the dialog
+  // and saves via a code path that bypasses validation; that's acceptable - the
+  // realistic intent is always "keep at least the manuscript".
+  if (!Array.isArray(dirs) || dirs.length === 0) {
+    return ["At least one workspace folder is required."];
+  }
 
   // Check duplicate names
   const names = new Set<string>();

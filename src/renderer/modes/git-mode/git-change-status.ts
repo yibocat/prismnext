@@ -65,12 +65,20 @@ export function gitChangeStatusTextClass(tone: GitChangeStatusTone): string {
   switch (tone) {
     case "added":
     case "untracked":
-      return "text-emerald-600 dark:text-emerald-400";
+      // success stays green-family across all 5 theme packs, so "added"
+      // can follow the theme without breaking the convention.
+      return "text-success";
     case "modified":
+      // modified is *not* a warning semantically; keep the conventional
+      // amber so it reads the same way across packs.
       return "text-amber-600 dark:text-amber-400";
     case "deleted":
-      return "text-red-500 dark:text-red-400";
+      // destructive stays red-family across all 5 packs.
+      return "text-destructive";
     case "renamed":
+      // primary IS the brand color and varies wildly per pack (blue/violet/
+      // green/terracotta/black). Keep conventional violet so "renamed"
+      // doesn't get confused with the brand CTA color.
       return "text-violet-600 dark:text-violet-400";
   }
 }

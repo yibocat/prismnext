@@ -21,10 +21,10 @@ import { isAgentLifecyclePhase, isProjectWarmPhase } from "../../shared/agent-st
 import { Button } from "@/components/ui/button";
 
 const AGENT_COLORS: Record<AgentLifecyclePhase, string> = {
-  starting: "text-yellow-500",
-  ready: "text-green-500",
-  error: "text-red-500",
-  stopped: "text-red-500",
+  starting: "text-warning",
+  ready: "text-success",
+  error: "text-destructive",
+  stopped: "text-destructive",
 };
 
 function StatusRow({
@@ -201,10 +201,10 @@ export function ServerStatusDot() {
 
   const projectWarmColor =
     warmPhase === "ready"
-      ? "text-green-500"
+      ? "text-success"
       : warmPhase === "error"
-        ? "text-red-500"
-        : "text-yellow-500";
+        ? "text-destructive"
+        : "text-warning";
 
   const showAiTerminal = activity.aiRunning > 0 || activity.aiOpen > 0;
   const showUserTerminal = activity.userBusy > 0;
@@ -279,7 +279,7 @@ export function ServerStatusDot() {
             icon={
               <FileTypeIcon
                 className={`size-3 shrink-0 ${
-                  latexReady ? "text-emerald-500" : "text-muted-foreground/40"
+                  latexReady ? "text-success" : "text-muted-foreground/40"
                 }`}
               />
             }

@@ -33,7 +33,7 @@ export const CHAT_PANEL_TOOLBAR_BUTTON =
   "inline-flex h-6 shrink-0 items-center gap-1 rounded-md border-0 bg-transparent px-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground";
 
 export const CHAT_PANEL_TOOLBAR_BUTTON_PRIMARY =
-  "inline-flex h-6 shrink-0 items-center gap-1 rounded-md border-0 bg-transparent px-1.5 text-[length:var(--font-chat-meta)] text-primary transition-colors hover:bg-primary/10 hover:text-primary";
+  "inline-flex h-6 shrink-0 items-center gap-1 rounded-md border-0 bg-transparent px-1.5 text-[length:var(--font-chat-meta)] text-primary transition-colors hover:bg-accent hover:text-accent-foreground";
 
 /**
  * Composer inner triggers (model / permission / +) — same chrome density as
@@ -138,7 +138,7 @@ export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps)
           "cursor-default",
           !isCapsule && "hover:bg-transparent hover:text-muted-foreground",
           mode === "worktree" && !isCapsule && "text-primary hover:text-primary",
-          isCapsule && mode === "worktree" && "bg-primary/10 text-primary border-primary/30",
+          isCapsule && mode === "worktree" && "bg-accent text-accent-foreground border-border",
           isCapsule && mode !== "worktree" && "bg-card text-muted-foreground",
         )}
         title={t("chat.worktree.lockedWithLabel", { label: triggerLabel })}
@@ -164,8 +164,8 @@ export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps)
               isCapsule ? CAPSULE_TOOLBAR_PILL : CHAT_PANEL_TOOLBAR_BUTTON,
               mode === "worktree"
                 ? isCapsule
-                  ? "bg-primary/10 text-primary border-primary/30 hover:bg-primary/15"
-                  : "text-primary hover:bg-primary/10 hover:text-primary"
+                  ? "bg-accent text-accent-foreground border-border hover:bg-accent"
+                  : "text-primary hover:bg-accent hover:text-accent-foreground"
                 : isCapsule
                   ? "bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                   : undefined,

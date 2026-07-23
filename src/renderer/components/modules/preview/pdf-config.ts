@@ -52,8 +52,6 @@ export function pdfDataUrlToUint8Array(dataUrl: string): Uint8Array {
 export const PDF_PAGES_CLASS =
   "prism-pdf-pages flex-1 min-w-0 overflow-auto overscroll-contain select-text";
 
-export const PDF_PAGES_DARK_CLASS = "prism-pdf-pages--dark";
-
 export const PDF_PAGES_STYLE = { justifyContent: "flex-start" } as const;
 
 export const PDF_PAGE_CLASS = "prism-pdf-page bg-white";

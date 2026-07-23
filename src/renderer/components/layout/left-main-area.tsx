@@ -205,7 +205,7 @@ export function LeftMainArea() {
               </span>
             ) : null}
             {/* Top toolbar — branch & worktree (gap to composer = composer py) */}
-            <div className="mx-auto flex h-6 w-full max-w-3xl items-center gap-1.5 px-3">
+            <div data-chat-width className="flex h-6 w-full items-center gap-1.5 px-3">
               <BranchSelector />
 
               <WorktreeSelector />
@@ -213,12 +213,12 @@ export function LeftMainArea() {
 
             {/* Composer */}
             {!editorMaximized && (
-              <div className="w-full max-w-3xl mx-auto">
+              <div data-chat-width className="w-full">
                 <ChatComposer />
               </div>
             )}
             {/* Suggestion chips under homepage composer (gap from composer = composer py) */}
-            <div className="mb-2 flex h-6 w-full max-w-3xl items-center gap-1.5 px-3 mx-auto text-[length:var(--font-chat-meta)] text-muted-foreground/70">
+            <div data-chat-width className="mb-2 flex h-6 w-full items-center gap-1.5 px-3 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
               {showPlanNewIdea ? (
                 <button
                   type="button"
@@ -254,15 +254,15 @@ export function LeftMainArea() {
             <RestoreUndoBar />
             {/* Worktree actions above composer — only when worktree is active */}
             {showWorktreeActions && (
-              <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-6 px-3">
+              <div data-chat-width className="w-full flex items-center gap-1.5 h-6 px-3">
                 <WorktreeActions />
               </div>
             )}
-            <div className="w-full max-w-3xl mx-auto">
+            <div data-chat-width className="w-full">
               {!editorMaximized && <ChatComposer />}
             </div>
             {/* Bottom bar: branch / worktree on left (git only), context ring on right */}
-            <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 h-6 px-3 mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
+            <div data-chat-width className="w-full flex items-center gap-1.5 h-6 px-3 mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
               {isGitRepo && (
                 <>
                   <span className="flex items-center gap-1">

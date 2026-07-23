@@ -84,7 +84,7 @@ export const FolderVirtRow = memo(function FolderVirtRow({
             )}
           />
           <Icon
-            icon={isExpanded ? getFolderOpenIconName(workspaceFunction) : getFolderIconName(workspaceFunction)}
+            icon={isExpanded ? getFolderOpenIconName(item.name, workspaceFunction) : getFolderIconName(item.name, workspaceFunction)}
             className="size-3.5 shrink-0"
           />
           <span className="truncate">{item.name}</span>
@@ -259,7 +259,7 @@ export const InlineEditRow = memo(function InlineEditRow({
       {type === "file" && iconName ? (
         <Icon icon={iconName} className="size-3.5 shrink-0" />
       ) : (
-        <Icon icon={getFolderIconName()} className="size-3 shrink-0 text-muted-foreground" />
+        <Icon icon={getFolderIconName(name)} className="size-3 shrink-0 text-muted-foreground" />
       )}
       <Input
         autoFocus

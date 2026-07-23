@@ -2,13 +2,13 @@ import { describe, it, expect } from "vitest";
 import { buildCsp } from "../../src/main/lib/csp";
 
 describe("csp buildCsp", () => {
-  it("prod policy locks script-src to 'self' (no unsafe-inline/eval)", () => {
+  it("prod policy locks script-src to 'self' + wasm-unsafe-eval (Shiki), no full unsafe-eval", () => {
     const csp = buildCsp(true);
-    expect(csp).toContain("script-src 'self';");
-    expect(csp).not.toContain("unsafe-eval");
-    // script-src must not include unsafe-inline in prod (style-src may)
     const scriptSrc = csp.match(/script-src ([^;]+);/)?.[1] ?? "";
-    expect(scriptSrc).toBe("'self'");
+    expect(scriptSrc).toContain("'self'");
+    expect(scriptSrc).toContain("'wasm-unsafe-eval'");
+    expect(scriptSrc.split(/\s+/)).not.toContain("'unsafe-eval'");
+    expect(scriptSrc).not.toContain("'unsafe-inline'");
   });
 
   it("prod policy blocks plugins, framing, form submission off-origin", () => {

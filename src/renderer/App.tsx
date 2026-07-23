@@ -273,6 +273,15 @@ export function App() {
     }
   }, [resolvedTheme, glassEffect]);
 
+  // Reflect chat message-width tier on <html> so [data-chat-width] containers can react.
+  // CSS rules live in styles/tokens/chat.css. Effect runs once settings load; falls back
+  // to "balanced" (the pre-feature default) when the value is missing.
+  const messageWidth = useSettingsStore((s) => s.settings.messageWidth);
+  useEffect(() => {
+    if (!messageWidth) return;
+    document.documentElement.setAttribute("data-message-width", messageWidth);
+  }, [messageWidth]);
+
   // Auto-collapse RightArea when entering immersive center views (leftNavRegistry.isImmersiveCenterView)
   useEffect(() => {
     const r = rightAreaRef.current;

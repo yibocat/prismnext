@@ -7,7 +7,6 @@ import { MarkdownDocumentPreview } from "@/components/modules/shared/markdown-do
 import { AppBrowserLink } from "@/components/modules/shared/app-browser-link";
 import {
   MARKDOWN_COMPONENTS,
-  isScientificExtractPath,
   markdownPreviewProfileForPath,
 } from "@/lib/markdown/markdown-config";
 import { ExtractMarkdownImage } from "@/lib/markdown/extract-markdown-images";
@@ -69,12 +68,21 @@ export const MarkdownPreview = memo(function MarkdownPreview() {
   const previewProfile = markdownPreviewProfileForPath(filePath);
 
   const markdownComponents = useMemo(() => {
-    if (!isScientificExtractPath(filePath)) return WIKILINK_COMPONENTS;
     return {
       ...WIKILINK_COMPONENTS,
-      img: ({ src, alt }: React.ComponentProps<"img">) => (
-        <ExtractMarkdownImage src={src} alt={alt} mdFilePath={filePath} />
-      ),
+      img: ({ src, alt }: React.ComponentProps<"img">) => {
+        if (src && /^(https?:|data:|blob:)/i.test(src.trim())) {
+          return (
+            <img
+              src={src}
+              alt={alt ?? ""}
+              className="my-2 max-w-full h-auto rounded border border-border/40"
+              loading="lazy"
+            />
+          );
+        }
+        return <ExtractMarkdownImage src={src} alt={alt} mdFilePath={filePath} />;
+      },
     } satisfies Components;
   }, [filePath]);
 

@@ -23,7 +23,8 @@ import type { Session } from "electron";
 function prodCsp(): string {
   return [
     "default-src 'self'",
-    "script-src 'self'",
+    // wasm-unsafe-eval: Shiki Oniguruma WASM (chat code highlighting). Not full unsafe-eval.
+    "script-src 'self' 'wasm-unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: literature-pdf: http: https:",
     "connect-src 'self' literature-pdf: blob:",

@@ -41,7 +41,9 @@ export function GitChangeNewLabel() {
   return (
     <span
       className={cn(
-        "shrink-0 font-medium text-emerald-600 dark:text-emerald-400",
+        // "added" maps cleanly to the universal green semantic; all 5 packs
+        // keep success in the green family, so this is safe to theme.
+        "shrink-0 font-medium text-success",
         "text-[length:var(--font-size-11)]",
       )}
     >
@@ -54,7 +56,9 @@ export function GitChangeDeletedLabel() {
   return (
     <span
       className={cn(
-        "shrink-0 font-medium text-red-500 dark:text-red-400",
+        // "deleted" maps cleanly to the universal red semantic; destructive
+        // stays red-family across all 5 packs.
+        "shrink-0 font-medium text-destructive",
         "text-[length:var(--font-size-11)]",
       )}
     >
@@ -77,8 +81,8 @@ export function GitChangeLineCounts({
         "text-[length:var(--font-size-11)]",
       )}
     >
-      {added > 0 && <span className="text-emerald-500">+{added}</span>}
-      {deleted > 0 && <span className="text-red-400">-{deleted}</span>}
+      {added > 0 && <span className="text-success">+{added}</span>}
+      {deleted > 0 && <span className="text-destructive">-{deleted}</span>}
     </span>
   );
 }

@@ -33,14 +33,14 @@ const CAPSULE_TOOLBAR_PILL =
   "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-border px-2.5 text-[length:var(--font-chat-meta)] transition-colors";
 
 /** Capsule outer shell — neutral gray border (not theme accent). */
-const CAPSULE_SHELL_BORDER = "border-neutral-400/55 dark:border-neutral-600/70";
-const CAPSULE_SHELL_BORDER_IDLE = "border-neutral-400/35 dark:border-neutral-600/45";
+const CAPSULE_SHELL_BORDER = "border-border";
+const CAPSULE_SHELL_BORDER_IDLE = "border-border/70";
 
 /** idle: hover pill · input: compact capsule · expanded: full composer */
 type Phase = "idle" | "input" | "expanded";
 
 /** idle / half-input share one radius so size morph doesn't fight 9999px→16px radius jumps. */
-const CAPSULE_PILL_RADIUS = "rounded-[1.5rem]"; // 24px ≈ half of h-12
+const CAPSULE_PILL_RADIUS = "rounded-[1.5rem]"; // 24px — half of the default --chat-input-h (~47px)
 const CAPSULE_EXPANDED_RADIUS = "rounded-2xl"; // 16px — small delta from 24px, interpolates smoothly
 
 const CAPSULE_MORPH_TRANSITION =
@@ -303,8 +303,9 @@ export function AiBar() {
     <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center pb-5 pointer-events-none z-10">
       {(isPanelOpen || panelClosing) && (
         <div
+          data-chat-width
           className={cn(
-            "w-full max-w-3xl mx-auto pointer-events-none mb-2",
+            "w-full pointer-events-none mb-2",
             panelClosing
               ? "animate-out fade-out slide-out-to-bottom-2 duration-150"
               : "animate-in fade-in slide-in-from-bottom-2 duration-200",
@@ -353,7 +354,8 @@ export function AiBar() {
       <div
         ref={composerShellRef}
         data-ai-bar-capsule
-        className="relative w-full max-w-3xl mx-auto pointer-events-none @container"
+        data-chat-width
+        className="relative w-full pointer-events-none @container"
       >
         {/* Idle pill is tiny — only while OS file-dragging, accept drops on a bottom strip (no layout change when idle). */}
         {phase === "idle" ? (
@@ -369,8 +371,8 @@ export function AiBar() {
         ) : null}
         <div className="px-3 w-full">
           {toolbar}
-          {/* Outside morph shell: compact capsule is fixed h-12; idle still needs Approve when draft is ready. */}
-          <div className="pointer-events-auto w-full max-w-3xl mx-auto">
+          {/* Outside morph shell: compact capsule height is font-driven (h-[var(--chat-input-h)]); idle still needs Approve when draft is ready. */}
+          <div data-chat-width className="pointer-events-auto w-full">
             <PlanSuggestBar />
             <PlanChrome />
           </div>
@@ -387,19 +389,26 @@ export function AiBar() {
                 cn(
                   "group flex items-center bg-muted-foreground/75 h-1.5 max-h-1.5 max-w-30 px-0 cursor-pointer hover:h-8 hover:max-h-8 hover:max-w-[220px] hover:bg-muted hover:delay-0 delay-100",
                   CAPSULE_SHELL_BORDER_IDLE,
-                  "hover:border-neutral-400/55 dark:hover:border-neutral-600/70",
+                  "hover:border-border",
                 ),
               phase === "input" &&
                 cn(
-                  "flex items-center h-12 max-h-12 max-w-3xl px-3 bg-card cursor-text",
+                  "flex items-center h-[var(--chat-input-h)] max-h-[var(--chat-input-h)] max-w-[var(--chat-max-w)] w-full px-3 bg-card cursor-text",
                   CAPSULE_SHELL_BORDER,
                 ),
               phase === "expanded" &&
                 cn(
                   CAPSULE_EXPANDED_RADIUS,
-                  "max-h-[min(60vh,480px)] max-w-3xl bg-card",
+                  "max-h-[min(60vh,480px)] max-w-[var(--chat-max-w)] bg-card",
                   CAPSULE_SHELL_BORDER,
                 ),
+              // idle pill keeps max-w-30 (trigger chip, not the chat column).
+              // input + expanded use an explicit max-w-[var(--chat-max-w)] so the
+              // morph animation can interpolate max-width from the idle 7.5rem up
+              // to the active tier — CSS cannot transition max-width to `none`.
+              // input height also tracks --chat-input-h (font-size driven) so the
+              // morph's height animation ends at the right size for the chosen
+              // font.
             )}
             onClick={phase === "idle" ? openInput : undefined}
             {...(phase !== "idle" ? capsuleDrop.dropHandlers : {})}

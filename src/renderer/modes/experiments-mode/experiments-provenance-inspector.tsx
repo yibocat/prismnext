@@ -126,11 +126,11 @@ export function ExperimentsProvenanceInspector({
       : resolved.linkMethod === "explicit"
         ? {
             label: t("experiments.provenance.declared"),
-            tone: "text-emerald-600 dark:text-emerald-400",
+            tone: "text-success",
           }
         : {
             label: t("experiments.provenance.inferred"),
-            tone: "text-amber-600 dark:text-amber-400",
+            tone: "text-warning",
           };
 
   const handleOpenInFiles = () => {
@@ -252,7 +252,7 @@ export function ExperimentsProvenanceInspector({
                     experimentsUiValueClass,
                     "tabular-nums",
                     run.exitCode === 0
-                      ? "text-emerald-600 dark:text-emerald-400"
+                      ? "text-success"
                       : "text-destructive",
                   )}
                 >

@@ -31,6 +31,17 @@ function cycleChatTab(delta: 1 | -1): boolean {
   return true;
 }
 
+const MESSAGE_WIDTH_ORDER = ["narrow", "balanced", "wide"] as const;
+type MessageWidth = (typeof MESSAGE_WIDTH_ORDER)[number];
+
+export function cycleMessageWidth(current: string | undefined): MessageWidth {
+  const idx = current ? MESSAGE_WIDTH_ORDER.indexOf(current as MessageWidth) : -1;
+  // Unknown value (or undefined) defaults to "balanced" so the next press
+  // always lands on a defined tier.
+  const safe = idx < 0 ? 1 : idx;
+  return MESSAGE_WIDTH_ORDER[(safe + 1) % MESSAGE_WIDTH_ORDER.length];
+}
+
 /**
  * Product shortcuts (registry-driven):
  * - product.focusAiBar — focus chat composer (panel); AiBar owns chord when maximized
@@ -107,6 +118,13 @@ export function useProductShortcuts() {
         if (changes.length === 0) return;
         e.preventDefault();
         void rejectAll();
+      }
+
+      if (matchesShortcut("product.cycleMessageWidth", e)) {
+        const current = useSettingsStore.getState().settings.messageWidth;
+        const next = cycleMessageWidth(current);
+        e.preventDefault();
+        void useSettingsStore.getState().updateSettings({ messageWidth: next });
       }
     };
 

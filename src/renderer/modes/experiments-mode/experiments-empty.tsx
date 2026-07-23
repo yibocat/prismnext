@@ -92,13 +92,13 @@ export function ExperimentsCorruptMetaBanner({
     <div
       role="status"
       className={cn(
-        "flex items-start gap-2 border-b border-amber-500/30 bg-amber-500/10 px-3 py-2",
-        "text-[length:var(--font-size-12)] text-foreground/85",
+        "flex items-start gap-2 border-b border-warning bg-muted px-3 py-2",
+        "text-[length:var(--font-size-12)] text-foreground",
         className,
       )}
     >
       <AlertTriangleIcon
-        className="mt-0.5 size-3.5 shrink-0 text-amber-700 dark:text-amber-400"
+        className="mt-0.5 size-3.5 shrink-0 text-warning"
         aria-hidden
       />
       <div className="min-w-0 space-y-0.5">

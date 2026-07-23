@@ -67,7 +67,7 @@ export const TabToolbar = memo(function TabToolbar({
   );
 
   return (
-    <div className="flex h-[var(--height-right-area-subtoolbar)] min-w-0 shrink-0 items-center gap-0.5 overflow-hidden border-t border-border px-2 select-none text-[length:var(--font-size-12)] text-muted-foreground">
+    <div data-surface="content" className="flex h-[var(--height-right-area-subtoolbar)] min-w-0 shrink-0 items-center gap-0.5 overflow-hidden border-t border-border bg-background px-2 select-none text-[length:var(--font-size-12)] text-muted-foreground">
       {/* Breadcrumb can shrink/truncate; do not wrap mode toolbars (they rely on flex-1). */}
       {!hideBreadcrumb && hasBreadcrumb && (
         <Breadcrumb className="min-w-0 shrink overflow-hidden">

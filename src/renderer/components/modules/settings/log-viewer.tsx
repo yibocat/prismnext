@@ -38,23 +38,23 @@ const LEVEL_VALUES: Array<LogLevel | "all"> = ["all", "debug", "info", "warn", "
 
 const LEVEL_BADGE: Record<LogLevel, string> = {
   debug: "bg-muted text-muted-foreground",
-  info: "bg-blue-500/10 text-blue-500",
-  warn: "bg-amber-500/10 text-amber-600 dark:text-amber-500",
-  error: "bg-red-500/10 text-red-500",
+  info: "bg-secondary text-secondary-foreground",
+  warn: "bg-warning text-warning-foreground",
+  error: "bg-destructive text-destructive-foreground",
 };
 
 const LEVEL_ROW_ACCENT: Record<LogLevel, string> = {
   debug: "",
   info: "",
-  warn: "border-l-2 border-l-amber-500/40",
-  error: "border-l-2 border-l-red-500/50 bg-red-500/[0.03]",
+  warn: "border-l-2 border-l-warning",
+  error: "border-l-2 border-l-destructive",
 };
 
 const LEVEL_DOT: Record<LogLevel, string> = {
-  debug: "bg-muted-foreground/40",
-  info: "bg-blue-500",
-  warn: "bg-amber-500",
-  error: "bg-red-500",
+  debug: "bg-muted-foreground",
+  info: "bg-primary",
+  warn: "bg-warning",
+  error: "bg-destructive",
 };
 
 function logEntryKey(entry: LogEntry): string {
@@ -332,14 +332,14 @@ export function LogViewer() {
         {(errorCount > 0 || warnCount > 0) && filterLevel === "all" && (
           <div className="flex items-center gap-3 text-[length:var(--font-size-11)]">
             {errorCount > 0 && (
-              <span className="inline-flex items-center gap-1 text-red-500">
-                <span className="size-1.5 rounded-full bg-red-500" />
+              <span className="inline-flex items-center gap-1 text-destructive">
+                <span className="size-1.5 rounded-full bg-destructive" />
                 {t("settings.editor.logs.errors", { count: errorCount })}
               </span>
             )}
             {warnCount > 0 && (
-              <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-500">
-                <span className="size-1.5 rounded-full bg-amber-500" />
+              <span className="inline-flex items-center gap-1 text-warning">
+                <span className="size-1.5 rounded-full bg-warning" />
                 {t("settings.editor.logs.warnings", { count: warnCount })}
               </span>
             )}

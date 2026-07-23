@@ -17,7 +17,7 @@ interface RightPaneProps {
 export function RightPane({ tabs, activeTabId }: RightPaneProps) {
   if (tabs.length === 0) {
     return (
-      <div className="flex h-full flex-col min-w-0 bg-background">
+      <div data-surface="content" className="flex h-full flex-col min-w-0">
         <div className="flex flex-1 items-center justify-center">
           <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
             Open a file to get started
@@ -28,7 +28,7 @@ export function RightPane({ tabs, activeTabId }: RightPaneProps) {
   }
 
   return (
-    <div className="relative isolate flex h-full min-w-0 flex-col overflow-hidden bg-background">
+    <div data-surface="content" className="relative isolate flex h-full min-w-0 flex-col overflow-hidden">
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId;
         return (

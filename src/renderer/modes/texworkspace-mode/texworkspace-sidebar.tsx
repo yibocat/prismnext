@@ -78,8 +78,8 @@ const LABEL_ICON: Record<LabelEntry["kind"], React.ReactNode> = {
 };
 
 const TODO_COLORS: Record<TodoEntry["kind"], string> = {
-  TODO: "text-amber-500",
-  FIXME: "text-red-500",
+  TODO: "text-warning",
+  FIXME: "text-destructive",
   HACK: "text-violet-500",
 };
 
@@ -253,7 +253,7 @@ export function TexworkspaceSidebar() {
             <Hint key={tab.key} label={t(tab.labelKey)}>
               <button type="button"
                 className={cn("flex size-5 items-center justify-center rounded transition-colors shrink-0",
-                  activeTab === tab.key ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground")}
+                  activeTab === tab.key ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground")}
                 onClick={() => { setActiveTab(tab.key); setAccordionValue([]); }}>
                 {tab.icon}
               </button>

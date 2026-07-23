@@ -178,7 +178,7 @@ export function RightMainArea({ tabs, activeTabId }: RightMainAreaProps) {
     !literaturePaper;
 
   return mainWrapper(
-    <div className="relative isolate h-full min-h-0 bg-background">
+    <div data-surface="content" className="relative isolate h-full min-h-0">
       {literatureShells}
 
       {hasTexTab ? (

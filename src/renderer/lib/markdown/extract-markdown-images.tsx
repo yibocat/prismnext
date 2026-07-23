@@ -21,6 +21,25 @@ export function resolveExtractRelativeAssetPath(
   return mdDir ? `${mdDir}/${norm}` : norm;
 }
 
+/**
+ * Resolve a local markdown image for any project document (extract, notes, …).
+ * - `.prismnext/…` → project-root relative (notes that embed extract figures)
+ * - otherwise → relative to the markdown file (MinerU `images/` next to extract md)
+ */
+export function resolveDocumentMarkdownImageRel(
+  mdRelativePath: string,
+  assetSrc: string,
+): string | null {
+  if (!assetSrc) return null;
+  if (/^(https?:|data:|file:|blob:)/i.test(assetSrc.trim())) return null;
+
+  const norm = assetSrc.trim().replace(/\\/g, "/").replace(/^\.\//, "");
+  if (norm.startsWith("/") || norm.includes("..")) return null;
+  if (norm.startsWith(".prismnext/")) return norm;
+
+  return resolveExtractRelativeAssetPath(mdRelativePath, assetSrc);
+}
+
 export function ExtractMarkdownImage({
   src,
   alt,
@@ -38,7 +57,7 @@ export function ExtractMarkdownImage({
       setDataUrl(null);
       return;
     }
-    const rel = resolveExtractRelativeAssetPath(mdFilePath, src);
+    const rel = resolveDocumentMarkdownImageRel(mdFilePath, src);
     if (!rel) {
       setDataUrl(null);
       return;

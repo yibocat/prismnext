@@ -65,8 +65,8 @@ function connectionMeta(
     case "verified":
       return {
         label: t("settings.editor.provider.statusConnected"),
-        dotClass: "bg-emerald-500",
-        textClass: "text-emerald-600 dark:text-emerald-400",
+        dotClass: "bg-success",
+        textClass: "text-success",
       };
     case "failed":
       return {
@@ -77,8 +77,8 @@ function connectionMeta(
     case "untested":
       return {
         label: t("settings.editor.provider.statusKeySet"),
-        dotClass: "bg-amber-500",
-        textClass: "text-amber-600 dark:text-amber-400",
+        dotClass: "bg-warning",
+        textClass: "text-warning",
       };
     default:
       return {

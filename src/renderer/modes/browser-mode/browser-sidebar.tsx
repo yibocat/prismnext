@@ -231,7 +231,7 @@ export function BrowserSidebar() {
                           className={cn(
                             "[&>svg]:!size-3 h-6 py-0.5 text-[length:var(--font-size-12)] rounded-sm text-muted-foreground pl-3",
                             "group/bookmark",
-                            isCurrentPage(b.url) && "bg-muted text-foreground",
+                            isCurrentPage(b.url) && "bg-sidebar-accent text-sidebar-accent-foreground",
                           )}
                         >
                           <BrowserFavicon key={`${b.id}-${refreshKey}`} url={b.url} />
@@ -345,7 +345,7 @@ export function BrowserSidebar() {
                         className={cn(
                           "[&>svg]:!size-3 h-6 py-0.5 text-[length:var(--font-size-12)] rounded-sm text-muted-foreground pl-3",
                           "group/recent",
-                          isCurrentPage(v.url) && "bg-muted text-foreground",
+                          isCurrentPage(v.url) && "bg-sidebar-accent text-sidebar-accent-foreground",
                         )}
                       >
                         <BrowserFavicon key={`${v.url}-${refreshKey}`} url={v.url} />

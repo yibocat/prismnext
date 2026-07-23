@@ -1,31 +1,26 @@
 // lib/theme/theme-generator.ts
-// Core engine: ThemeConfig → CSS text string for <style> injection.
+// Core engine: ThemeConfig -> CSS text string for <style> injection.
 
-import { generateNeutralVars, DEFAULT_INTENSITY } from "./color-palettes";
-import { PRIMARY_COLORS, type PrimaryColorDef } from "./primary-colors";
-import { CHART_PALETTES, type ChartSchemeId } from "./chart-palettes";
 import { getFontById, getDefaultSansFont, getDefaultMonoFont } from "./font-options";
 import { generateGlassCSS, type GlassTier } from "./glass-system";
+import { getThemePack, type ThemeAnchors, type ThemePackId } from "./theme-packs";
 
 export interface ThemeConfig {
-  baseIntensity: number;  // 0-1, replaces baseColor
-  primaryColor: string;
+  themePack: ThemePackId;
   radius: number;
   fontSans: string;
   fontMono: string;
   uiFontSize: string;
   editorFontFamily: string;
   editorFontSize: string;
-  chartScheme?: ChartSchemeId;
   glassEffect: boolean;
   glassIntensity: GlassTier;
 }
 
 export function getDefaultThemeConfig(): ThemeConfig {
   return {
-    baseIntensity: DEFAULT_INTENSITY,  // 25% default
-    primaryColor: "blue",
-    radius: 0.525,
+    themePack: "academic",
+    radius: 0.625,
     fontSans: "system-ui",
     fontMono: "system-mono",
     uiFontSize: "16px",
@@ -36,76 +31,81 @@ export function getDefaultThemeConfig(): ThemeConfig {
   };
 }
 
-function resolvePrimary(config: ThemeConfig): PrimaryColorDef {
-  const preset = PRIMARY_COLORS.find((p) => p.id === config.primaryColor);
-  if (preset) return preset;
-  return PRIMARY_COLORS[0]; // fallback to blue
-}
-
-function buildSidebarVars(
-  vars: Record<string, string>,
-  mode: "light" | "dark"
-): string {
-  return `
-  --sidebar: ${vars["--sidebar"]};
-  --sidebar-foreground: ${vars["--sidebar-foreground"]};
-  --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: ${vars["--sidebar-accent"]};
-  --sidebar-accent-foreground: ${vars["--sidebar-accent-foreground"]};
-  --sidebar-border: ${vars["--sidebar-border"]};
-  --sidebar-ring: ${vars["--sidebar-ring"]};`;
+export function mapAnchorsToCssVars(anchors: ThemeAnchors): Record<string, string> {
+  return {
+    "--background": anchors.neutral.background,
+    "--foreground": anchors.neutral.foreground,
+    "--card": anchors.neutral.card,
+    "--card-foreground": anchors.neutral.cardForeground,
+    "--popover": anchors.neutral.popover,
+    "--popover-foreground": anchors.neutral.popoverForeground,
+    "--primary": anchors.brand.base,
+    "--primary-foreground": anchors.brand.foreground,
+    "--secondary": anchors.secondary.base,
+    "--secondary-foreground": anchors.secondary.foreground,
+    "--muted": anchors.neutral.muted,
+    "--muted-foreground": anchors.neutral.mutedForeground,
+    "--accent": anchors.accent.base,
+    "--accent-foreground": anchors.accent.foreground,
+    "--border": anchors.neutral.border,
+    "--input": anchors.neutral.input,
+    "--ring": anchors.brand.ring,
+    "--destructive": anchors.semantic.destructive,
+    "--destructive-foreground": anchors.semantic.destructiveForeground,
+    "--success": anchors.semantic.success,
+    "--success-foreground": anchors.semantic.successForeground,
+    "--warning": anchors.semantic.warning,
+    "--warning-foreground": anchors.semantic.warningForeground,
+    "--sidebar": anchors.neutral.sidebar,
+    "--sidebar-foreground": anchors.neutral.sidebarForeground,
+    "--sidebar-primary": anchors.brand.base,
+    "--sidebar-primary-foreground": anchors.brand.foreground,
+    "--sidebar-accent": anchors.neutral.sidebarAccent,
+    "--sidebar-accent-foreground": anchors.neutral.sidebarAccentForeground,
+    "--sidebar-border": anchors.neutral.sidebarBorder,
+    "--sidebar-ring": anchors.neutral.sidebarRing,
+  };
 }
 
 function resolveFontSize(v: string): string {
-  // Direct px values ("13px"–"18px"), or legacy ids ("small"/"medium"/"large")
   if (v.endsWith("px")) return v;
   const legacy: Record<string, string> = { small: "14px", medium: "16px", large: "18px" };
   return legacy[v] ?? "15px";
 }
 
 function generateEditorSyntaxVars(
-  primary: PrimaryColorDef,
-  neutralVars: Record<string, string>,
-  mode: "light" | "dark"
+  brandBase: string,
+  vars: Record<string, string>,
+  mode: "light" | "dark",
 ): string {
-  const editorBg = neutralVars["--background"];
-  const editorFg = neutralVars["--foreground"];
-  const editorGutterBg = neutralVars["--background"];  // same as editor bg — seamless
-  const editorGutterFg = neutralVars["--muted-foreground"];
-  // Subtle gray band — must stay weaker than selection so partial-line select reads clearly.
-  const editorActiveLine =
-    mode === "dark"
-      ? "color-mix(in oklch, var(--muted) 55%, transparent)"
-      : "color-mix(in oklch, var(--muted) 55%, transparent)";
-  const primaryColor = mode === "light" ? primary.primaryLight : primary.primaryDark;
+  const editorBg = vars["--card"];
+  const editorFg = vars["--foreground"];
+  const editorGutterBg = vars["--muted"];
+  const editorGutterFg = vars["--muted-foreground"];
+  const editorActiveLine = "color-mix(in oklch, var(--muted) 55%, transparent)";
 
-  // Build the selection background by injecting alpha into the oklch color.
-  // oklch values look like "oklch(0.55 0.18 250)" and need the form
-  // "oklch(L C H / alpha)" for proper transparency.
-  // Dark mode gets a slightly higher alpha so the selection reads against
-  // dark backgrounds.
   const selAlpha = mode === "dark" ? 0.35 : 0.36;
-  const selColor = primaryColor.replace(")", ` / ${selAlpha})`);
+  const selColor = brandBase.includes("/")
+    ? brandBase
+    : brandBase.replace(")", ` / ${selAlpha})`);
 
-  // In dark mode, syntax colors should be brighter (higher lightness).
-  // In light mode, they should be darker (lower lightness).
   const L = mode === "dark" ? 0.72 : 0.42;
-  const Lcomment = mode === "dark" ? 0.50 : 0.55;
+  const Lcomment = mode === "dark" ? 0.5 : 0.55;
 
-  // Use fixed semantic hues — NOT derived from primary hue.
-  // Only keyword/tag use the primary brand color.
   return `
-  /* Editor chrome */
+  /* Editor chrome - card paper on quiet shell; gutter uses muted well */
   --editor-bg: ${editorBg};
   --editor-fg: ${editorFg};
   --editor-gutter-bg: ${editorGutterBg};
   --editor-gutter-fg: ${editorGutterFg};
   --editor-selection: ${selColor};
   --editor-active-line: ${editorActiveLine};
-  --editor-cursor: ${primaryColor};
+  --editor-cursor: ${brandBase};
 
-  /* Diff colors — unified across all themes */
+  /* PDF reading well - muted stage behind white pages */
+  --pdf-canvas: ${vars["--muted"]};
+
+  /* Diff colors - unified across all themes */
   --editor-diff-deleted-bg: ${mode === "dark" ? "rgba(248,81,81,0.18)" : "rgba(239,68,68,0.20)"};
   --editor-diff-inserted-bg: ${mode === "dark" ? "rgba(52,211,110,0.18)" : "rgba(34,197,94,0.20)"};
   --editor-diff-deleted-text: ${mode === "dark" ? "rgba(248,81,81,0.24)" : "rgba(239,68,68,0.22)"};
@@ -113,16 +113,16 @@ function generateEditorSyntaxVars(
   --editor-diff-deleted-fg: ${mode === "dark" ? "oklch(0.72 0.17 25)" : "oklch(0.55 0.2 25)"};
   --editor-diff-inserted-fg: ${mode === "dark" ? "oklch(0.78 0.15 145)" : "oklch(0.52 0.16 145)"};
 
-  /* Syntax token colors — prismnext custom theme
+  /* Syntax token colors - prismnext custom theme
      Semantic hues: keyword=brand, string=green, number=amber,
      function=blue, type=teal, regexp=rose, comment=gray */
-  --syntax-keyword: ${primaryColor};
+  --syntax-keyword: ${brandBase};
   --syntax-comment: oklch(${Lcomment} 0.03 270);
   --syntax-string: oklch(${L} 0.14 155);
   --syntax-number: oklch(${L} 0.16 75);
   --syntax-function: oklch(${L} 0.14 250);
   --syntax-type: oklch(${L} 0.14 190);
-  --syntax-tag: ${primaryColor};
+  --syntax-tag: ${brandBase};
   --syntax-operator: oklch(${L} 0.04 270);
   --syntax-regexp: oklch(${L} 0.16 20);
   --syntax-bracket: ${editorFg}80;
@@ -134,80 +134,85 @@ function generateEditorSyntaxVars(
   --syntax-link: oklch(${L} 0.14 250);`;
 }
 
+function emitModeBlock(vars: Record<string, string>, indent = "  "): string {
+  const keys = [
+    "--background",
+    "--foreground",
+    "--card",
+    "--card-foreground",
+    "--popover",
+    "--popover-foreground",
+    "--primary",
+    "--primary-foreground",
+    "--secondary",
+    "--secondary-foreground",
+    "--muted",
+    "--muted-foreground",
+    "--accent",
+    "--accent-foreground",
+    "--border",
+    "--input",
+    "--ring",
+    "--destructive",
+    "--destructive-foreground",
+    "--success",
+    "--success-foreground",
+    "--warning",
+    "--warning-foreground",
+    "--sidebar",
+    "--sidebar-foreground",
+    "--sidebar-primary",
+    "--sidebar-primary-foreground",
+    "--sidebar-accent",
+    "--sidebar-accent-foreground",
+    "--sidebar-border",
+    "--sidebar-ring",
+  ] as const;
+
+  return keys.map((k) => `${indent}${k}: ${vars[k]};`).join("\n");
+}
+
 export function generateThemeCSS(config: ThemeConfig): string {
-  const primary = resolvePrimary(config);
-  const { light: lightVars, dark: darkVars } = generateNeutralVars(config.baseIntensity, primary.hue);
-  const chart = CHART_PALETTES[config.chartScheme ?? "default"];
+  const pack = getThemePack(config.themePack);
+  const lightAnchors = pack.balanced.light;
+  const darkAnchors = pack.balanced.dark;
+
+  const lightVars = mapAnchorsToCssVars(lightAnchors);
+  const darkVars = mapAnchorsToCssVars(darkAnchors);
+
+  const chart = pack.chart;
   const sansFont = getFontById(config.fontSans) ?? getDefaultSansFont();
   const monoFont = getFontById(config.fontMono) ?? getDefaultMonoFont();
   const editorFont = getFontById(config.editorFontFamily) ?? getDefaultMonoFont();
 
-  const radius = config.radius;
-
-  // Generate glass CSS if enabled — produces {root, dark} for :root and .dark blocks
   const glassCSS = config.glassEffect
     ? generateGlassCSS({ tier: config.glassIntensity })
     : { root: "", dark: "" };
 
-  // Build :root block
-  let css = `/* PrismNext Theme — generated */
+  return `/* PrismNext Theme - generated */
 :root {
-  --radius: ${radius}rem;
-  --background: ${lightVars["--background"]};
-  --foreground: ${lightVars["--foreground"]};
-  --card: ${lightVars["--card"]};
-  --card-foreground: ${lightVars["--card-foreground"]};
-  --popover: ${lightVars["--popover"]};
-  --popover-foreground: ${lightVars["--popover-foreground"]};
-  --primary: ${primary.primaryLight};
-  --primary-foreground: ${primary.primaryLightForeground};
-  --secondary: ${lightVars["--secondary"]};
-  --secondary-foreground: ${lightVars["--secondary-foreground"]};
-  --muted: ${lightVars["--muted"]};
-  --muted-foreground: ${lightVars["--muted-foreground"]};
-  --accent: ${lightVars["--accent"]};
-  --accent-foreground: ${lightVars["--accent-foreground"]};
-  --border: ${lightVars["--border"]};
-  --input: ${lightVars["--input"]};
-  --ring: ${primary.ringLight};
+  --radius: ${config.radius}rem;
+${emitModeBlock(lightVars)}
   --chart-1: ${chart.light[0]};
   --chart-2: ${chart.light[1]};
   --chart-3: ${chart.light[2]};
   --chart-4: ${chart.light[3]};
-  --chart-5: ${chart.light[4]};${buildSidebarVars(lightVars, "light")}
+  --chart-5: ${chart.light[4]};
   --font-sans: ${sansFont.family};
   --font-mono: ${monoFont.family};
   --font-ui-size: ${resolveFontSize(config.uiFontSize)};
   --font-editor: ${editorFont.family};
   --font-editor-size: ${resolveFontSize(config.editorFontSize)};
-  ${generateEditorSyntaxVars(primary, lightVars, "light")}${glassCSS.root}
+  ${generateEditorSyntaxVars(lightAnchors.brand.base, lightVars, "light")}${glassCSS.root}
 }
 
 .dark {
-  --background: ${darkVars["--background"]};
-  --foreground: ${darkVars["--foreground"]};
-  --card: ${darkVars["--card"]};
-  --card-foreground: ${darkVars["--card-foreground"]};
-  --popover: ${darkVars["--popover"]};
-  --popover-foreground: ${darkVars["--popover-foreground"]};
-  --primary: ${primary.primaryDark};
-  --primary-foreground: ${primary.primaryDarkForeground};
-  --secondary: ${darkVars["--secondary"]};
-  --secondary-foreground: ${darkVars["--secondary-foreground"]};
-  --muted: ${darkVars["--muted"]};
-  --muted-foreground: ${darkVars["--muted-foreground"]};
-  --accent: ${darkVars["--accent"]};
-  --accent-foreground: ${darkVars["--accent-foreground"]};
-  --border: ${darkVars["--border"]};
-  --input: ${darkVars["--input"]};
-  --ring: ${primary.ringDark};
+${emitModeBlock(darkVars)}
   --chart-1: ${chart.dark[0]};
   --chart-2: ${chart.dark[1]};
   --chart-3: ${chart.dark[2]};
   --chart-4: ${chart.dark[3]};
-  --chart-5: ${chart.dark[4]};${buildSidebarVars(darkVars, "dark")}
-  ${generateEditorSyntaxVars(primary, darkVars, "dark")}${glassCSS.dark}
+  --chart-5: ${chart.dark[4]};
+  ${generateEditorSyntaxVars(darkAnchors.brand.base, darkVars, "dark")}${glassCSS.dark}
 }`;
-
-  return css;
 }

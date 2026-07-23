@@ -113,7 +113,7 @@ export function LiteraturePaperUserTags({
           {!disabled ? (
             <button
               type="button"
-              className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:bg-black/5 hover:opacity-100 dark:hover:bg-white/10 group-hover/tag:opacity-100 focus-visible:opacity-100"
+              className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:bg-muted hover:opacity-100 group-hover/tag:opacity-100 focus-visible:opacity-100"
               aria-label={`Remove tag ${tag}`}
               disabled={saving}
               onClick={() => void removeTag(tag)}

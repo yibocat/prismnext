@@ -118,7 +118,7 @@ export const TabBar = memo(function TabBar({
                 "text-[length:var(--font-toolbar-tab)] cursor-default select-none transition-colors",
                 "border-r border-border/50 last:border-r-0",
                 tab.id === activeTabId
-                  ? "bg-muted text-foreground"
+                  ? "bg-accent text-accent-foreground"
                   : "bg-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground",
                 dragging && "opacity-40",
               )}

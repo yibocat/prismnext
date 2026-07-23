@@ -110,9 +110,9 @@ export const experimentsGridClass =
 
 /** Flat experiment card — quiet chrome; hover is fill-only (no border flash). */
 export const experimentsCardShellClass = cn(
-  "flex h-full min-h-[7.5rem] w-full flex-col rounded-md border border-border/50 bg-transparent p-3 text-left shadow-none",
-  "transition-colors hover:bg-muted/40",
-  "focus-visible:outline-none focus-visible:bg-muted/50",
+  "flex h-full min-h-[7.5rem] w-full flex-col rounded-md border border-border/50 bg-card p-3 text-left shadow-none",
+  "transition-colors hover:bg-muted",
+  "focus-visible:outline-none focus-visible:bg-accent",
 );
 
 export const experimentsCardTitleClass =

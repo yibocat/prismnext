@@ -63,7 +63,10 @@ describe("workspace-config — readConfig", () => {
     expect(result[1]).toMatchObject({ function: "literature", name: "lit" });
   });
 
-  it("returns empty array when workspaceDirs is explicitly empty", () => {
+  it("recovers default instead of returning [] when workspaceDirs is empty (data-loss guard)", () => {
+    // An empty array on disk is the data-loss signature from the old autosave
+    // project-switch bug. readWorkspaceDirs must NOT return [] - it falls
+    // through to the default so the project recovers its functional folders.
     const prismDir = makePrismDir(tmpDir);
     writeSettings(prismDir, {
       version: 1,
@@ -72,7 +75,9 @@ describe("workspace-config — readConfig", () => {
     });
 
     const result = readWorkspaceDirs(prismDir);
-    expect(result).toEqual([]);
+    expect(result).not.toEqual([]);
+    expect(result.length).toBeGreaterThanOrEqual(1);
+    expect(result.some((d) => d.function === "manuscript")).toBe(true);
   });
 });
 
@@ -91,6 +96,26 @@ describe("workspace-config — writeConfig", () => {
     const written = readSettings(prismDir);
     expect(written.workspaceDirs).toHaveLength(1);
     expect(written.workspaceDirs[0].name).toBe("paper");
+  });
+
+  it("refuses to write an empty folder list (data-loss backstop)", () => {
+    // writeWorkspaceDirs is the hard backstop: even if a caller bypasses
+    // validateWorkspaceDirs, an empty array must never be persisted.
+    const prismDir = makePrismDir(tmpDir);
+    writeSettings(prismDir, {
+      version: 1,
+      compiler: "tectonic",
+      workspaceDirs: [
+        { function: "manuscript", name: "paper", mainTex: "main.tex" },
+      ],
+    });
+
+    writeWorkspaceDirs(prismDir, []);
+
+    // The existing non-empty config is preserved - [] did not overwrite it.
+    const written = readSettings(prismDir);
+    expect(written.workspaceDirs).not.toEqual([]);
+    expect(written.workspaceDirs?.length).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -123,8 +148,8 @@ describe("workspace-config — validate", () => {
     expect(errors).toHaveLength(0);
   });
 
-  it("accepts empty list", () => {
+  it("rejects empty list (requires at least one folder - data-loss guard)", () => {
     const errors = validateWorkspaceDirs([]);
-    expect(errors).toHaveLength(0);
+    expect(errors.length).toBeGreaterThan(0);
   });
 });

@@ -22,11 +22,19 @@ export function useWorkspaceProjectAutosave(projectRoot: string | null, loaded: 
   useEffect(() => {
     if (!loaded || !projectRoot) return;
     const capturedRoot = projectRoot;
+    // Snapshot the dirs that triggered this save. The cleanup flush below MUST
+    // use this snapshot, NOT the live store - otherwise a reset() during project
+    // switch would read `[]` from the store and overwrite the old project's
+    // settings.json with an empty array, permanently losing all folders.
+    const capturedDirs = useWorkspaceConfigStore.getState().workspaceDirs;
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setStatus("saving");
 
     debounceRef.current = setTimeout(async () => {
+      // Clear the pending flag FIRST so cleanup no longer thinks there is an
+      // unsaved change to flush (this timer is handling it).
+      debounceRef.current = null;
       const dirs = useWorkspaceConfigStore.getState().workspaceDirs;
       const ok = await saveConfig(capturedRoot);
       if (ok) {
@@ -58,7 +66,13 @@ export function useWorkspaceProjectAutosave(projectRoot: string | null, loaded: 
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
         debounceRef.current = null;
-        if (capturedRoot) saveConfig(capturedRoot).catch(() => {});
+        // Flush the snapshot captured when this change was scheduled. Never read
+        // the live store here - a project-switch reset() may have already emptied
+        // it. Also guard against flushing an empty snapshot: an empty dirs array
+        // is the data-loss signature, and the server-side guard rejects it too.
+        if (capturedRoot && capturedDirs.length > 0) {
+          saveConfig(capturedRoot).catch(() => {});
+        }
       }
     };
   }, [workspaceDirs, loaded, projectRoot, saveConfig]);

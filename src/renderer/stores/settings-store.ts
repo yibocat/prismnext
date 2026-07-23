@@ -124,6 +124,8 @@ export interface AppSettings {
   ignoredUpdateVersion?: string;
   /** Background-download updates after check (default true). Install still needs a click / quit. */
   autoDownloadUpdates?: boolean;
+  /** Chat message + composer width tier. narrow 42rem | balanced 48rem (default) | wide 64rem. */
+  messageWidth?: "narrow" | "balanced" | "wide";
 }
 
 const defaults: AppSettings = {
@@ -148,6 +150,7 @@ const defaults: AppSettings = {
   aiTerminalPostExitGraceMs: 60_000,
   aiTerminalIdleCloseMs: 600_000,
   aiTerminalCloseTabKillsProcess: false,
+  messageWidth: "balanced",
 };
 
 interface SettingsState {

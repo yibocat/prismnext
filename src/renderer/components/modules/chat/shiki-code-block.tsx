@@ -53,7 +53,7 @@ const CopyButton = memo(({ text }: { text: string }) => {
       <button
         type="button"
         onClick={handleCopy}
-        className="flex size-6 items-center justify-center rounded text-muted-foreground/60 hover:bg-white/10 hover:text-muted-foreground transition-colors"
+        className="flex size-6 items-center justify-center rounded text-muted-foreground/60 hover:bg-muted hover:text-muted-foreground transition-colors"
       >
         {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
       </button>
@@ -129,9 +129,10 @@ const ShikiHighlightedCode = memo(function ShikiHighlightedCode({
           setHtml(result);
           setLines(code.split("\n").length);
         }
-      } catch {
-        // Shiki failed (e.g. WASM load error) — fall back to plain-text display.
-        // The escapeHtml fallback below handles rendering without syntax highlighting.
+      } catch (err) {
+        // Packaged builds used to fail here when CSP blocked Oniguruma WASM
+        // (no 'wasm-unsafe-eval'). Fall back to plain text so chat still works.
+        console.warn("[ShikiCodeBlock] highlight failed", err);
         if (!cancelled && mountedRef.current) {
           setLines(code.split("\n").length);
         }

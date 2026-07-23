@@ -78,7 +78,7 @@ export function WorkspaceFolderIconPicker({
         <div className="max-h-[380px] overflow-y-auto overscroll-contain">
           {FOLDER_ICON_CATEGORIES.map((cat) => (
             <div key={cat.label}>
-              <div className="sticky top-0 z-10 border-b border-border/50 bg-popover px-3 py-1 text-[length:var(--font-size-12)] font-medium text-muted-foreground backdrop-blur-sm">
+              <div className="sticky top-0 z-10 border-b border-border/50 bg-popover px-3 py-1 text-[length:var(--font-size-12)] font-medium text-muted-foreground">
                 {cat.label}
               </div>
               <div className="grid grid-cols-8 gap-px px-1.5 py-1.5">

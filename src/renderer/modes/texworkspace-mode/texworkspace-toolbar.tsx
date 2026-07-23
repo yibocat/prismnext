@@ -56,7 +56,7 @@ const VIEW_SEG_BTN =
 const VIEW_SEG_BTN_ACTIVE = "bg-background text-foreground shadow-sm";
 
 const VIEW_SEG_BTN_IDLE =
-  "text-muted-foreground hover:bg-background/50 hover:text-foreground";
+  "text-muted-foreground hover:bg-muted hover:text-foreground";
 
 /** Ghost icon button used across compile cluster + right tools. */
 const TOOL_BTN =
@@ -241,7 +241,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
                 ? VIEW_SEG_BTN_ACTIVE
                 : isSplit
                   ? VIEW_SEG_BTN_IDLE
-                  : "text-muted-foreground/70 hover:bg-background/50 hover:text-foreground",
+                  : "text-muted-foreground/70 hover:bg-muted hover:text-foreground",
             )}
           >
             <ArrowLeftRightIcon className="size-3.5" />
@@ -375,7 +375,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
           <div className="max-h-[380px] overflow-y-auto overscroll-contain">
             {SYMBOL_CATEGORIES.map((cat) => (
               <div key={cat.label}>
-                <div className="sticky top-0 z-10 border-b border-border/50 bg-popover px-3 py-1 text-[length:var(--font-size-12)] font-medium text-muted-foreground backdrop-blur-sm">
+                <div className="sticky top-0 z-10 border-b border-border/50 bg-popover px-3 py-1 text-[length:var(--font-size-12)] font-medium text-muted-foreground">
                   {cat.label}
                 </div>
                 <div className="grid grid-cols-8 gap-px px-1.5 py-1.5">

@@ -230,7 +230,7 @@ export function ChatComposerCore({
 
   if (composer.isArchived) {
     return (
-      <div className={cn("relative mx-auto w-full min-w-0 max-w-3xl", className)}>
+      <div data-chat-width className={cn("relative w-full min-w-0", className)}>
         <div className="px-4 py-3 text-center text-[length:var(--font-chat-meta)] text-muted-foreground">
           {t("chat.composer.archivedReadonly")}
         </div>
@@ -241,8 +241,9 @@ export function ChatComposerCore({
   if (isCapsule) {
     return (
       <div
+        data-chat-width
         className={cn(
-          "relative mx-auto w-full min-w-0 max-w-3xl",
+          "relative w-full min-w-0",
           isCompact ? "h-full" : className,
         )}
       >
@@ -316,8 +317,9 @@ export function ChatComposerCore({
 
   return (
     <div
+      data-chat-width
       className={cn(
-        "relative mx-auto w-full min-w-0 max-w-3xl",
+        "relative w-full min-w-0",
         variant === "panel" ? "px-3 py-1.5 overflow-hidden" : className,
       )}
     >
