@@ -35,7 +35,7 @@ export function isCitationInLibrary(
  * Citation staging — AI-referenced papers held for user confirmation
  * before being added to the project literature library.
  *
- * See `docs/superpowers/specs/2026-07-01-chat-citation-staging-design.md`.
+ * See `docs-private/superpowers/specs/2026-07-01-chat-citation-staging-design.md`.
  *
  * Lifecycle: each chat tab owns a `sessionId`; staged citations are kept
  * per session in memory + localStorage. Clearing happens on chat-tab

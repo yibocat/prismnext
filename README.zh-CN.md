@@ -1,7 +1,7 @@
 # PrismNext
 
 <p align="center">
-  <img src="./docs/readme/app-icon.png" alt="PrismNext" width="96" height="96" />
+  <img src="./assets/app-icon.png" alt="PrismNext" width="96" height="96" />
 </p>
 
 <p align="center">
@@ -58,7 +58,7 @@ PrismNext 是面向学术写作与研究实践的 **本地优先** 桌面工作�
 原则：**Agent 往前推，你始终能踩刹车。**
 
 <p align="center">
-  <img src="./docs/readme/research-loop-zh.svg" alt="PrismNext 科研闭环" width="640" />
+  <img src="./assets/research-loop-zh.svg" alt="PrismNext 科研闭环" width="640" />
 </p>
 
 ---
@@ -160,7 +160,7 @@ PrismNext 是面向学术写作与研究实践的 **本地优先** 桌面工作�
 
 ## 界面预览
 
-产品截图将放在 [`docs/readme/screenshots/`](./docs/readme/)。品牌与闭环示意图见 [`docs/readme/`](./docs/readme/)。
+产品截图将放在 [`assets/screenshots/`](./assets/)。品牌与闭环示意图见 [`assets/`](./assets/)。
 
 > 欢迎贡献真实界面截图（欢迎页、TeX+PDF、文献库、Plan 同意条等）。
 

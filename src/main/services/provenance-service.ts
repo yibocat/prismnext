@@ -10,7 +10,7 @@
  * Best-effort: write helpers never throw to the caller - a provenance failure
  * must not break run accounting. Read helpers skip corrupt lines silently.
  *
- * Design: docs/superpowers/specs/2026-07-11-provenance-lite-design.md
+ * Design: docs-private/superpowers/specs/2026-07-11-provenance-lite-design.md
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { execSync } from "node:child_process";

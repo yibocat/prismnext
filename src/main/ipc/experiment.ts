@@ -12,6 +12,7 @@ import { cancelAiCommandForSession } from "../services/ai-pty";
 import { getSettings } from "../services/settings";
 import {
   archiveExperiment,
+  createExperiment,
   deleteExperiment,
   detectEnvForIsland,
   generateRunId,
@@ -98,6 +99,23 @@ export function registerExperimentHandlers(): void {
         reason: "archive",
       });
       return { ok: true as const, meta: result.meta };
+    },
+  );
+
+  ipcMain.handle(
+    "experiment:create",
+    async (_event, args: { projectRoot: string; title: string }) => {
+      const ctxResult = resolveExperimentCtx(args.projectRoot);
+      if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+      const result = createExperiment(ctxResult, { title: args.title });
+      if (!result.ok) return { ok: false as const, error: result.error };
+      broadcastExperimentChanged({
+        projectRoot: ctxResult.projectRoot,
+        id: result.id,
+        reason: "create",
+        focus: true,
+      });
+      return { ok: true as const, id: result.id, path: result.path, meta: result.meta };
     },
   );
 
@@ -266,7 +284,7 @@ export function registerExperimentHandlers(): void {
  * IPC-handler time and calling `sender.send(...)` later from an async
  * callback — that dropped the event if the renderer reloaded (Cmd-R)
  * between kickoff and completion (Bug #4 in
- * docs/audit/experiment-agent-architecture-analysis.md).
+ * docs-private/audit/experiment-agent-architecture-analysis.md).
  *
  * The originating sender is still called so the caller is guaranteed its
  * own events regardless of how the broadcast iterates. Other windows

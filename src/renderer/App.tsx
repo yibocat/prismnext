@@ -470,7 +470,7 @@ export function App() {
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <LocaleSync />
         <ProjectSetupDialog />
-        <AppCommandPalette />
+        <AppCommandPalette panelRefs={{ leftSidebarRef, centerRef, rightAreaRef }} isMobile={isMobile} />
         <Toaster
           position="bottom-right"
           duration={5000}

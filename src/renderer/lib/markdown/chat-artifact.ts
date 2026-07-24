@@ -1,6 +1,6 @@
 /**
  * Chat artifact fence helpers — explicit ```artifact blocks in AI replies.
- * See docs/superpowers/specs/2026-07-18-chat-artifact-block-design.md
+ * See docs-private/superpowers/specs/2026-07-18-chat-artifact-block-design.md
  */
 import {
   artifactBasename,

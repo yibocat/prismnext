@@ -2,7 +2,7 @@
  * experiment-log-bridge — dispatch() schema validation tests.
  *
  * Covers the append_run input validation added in
- * docs/audit/experiment-agent-architecture-analysis.md Bug #3. The
+ * docs-private/audit/experiment-agent-architecture-analysis.md Bug #3. The
  * bridge is the LLM-facing entry point for `experiment-log
  * action=append_run`, so it must reject records that would corrupt
  * runs.jsonl (a paper-trace file) — hallucinated `exitCode: 0`,

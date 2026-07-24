@@ -5,7 +5,7 @@
  *
  * Lives only in the renderer store (+ localStorage persistence);
  * never written to SQLite. See
- * `docs/superpowers/specs/2026-07-01-chat-citation-staging-design.md`.
+ * `docs-private/superpowers/specs/2026-07-01-chat-citation-staging-design.md`.
  */
 export type StagedCitationDiscovery =
   | "paper-search-mcp"

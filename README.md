@@ -1,7 +1,7 @@
 # PrismNext
 
 <p align="center">
-  <img src="./docs/readme/app-icon.png" alt="PrismNext" width="96" height="96" />
+  <img src="./assets/app-icon.png" alt="PrismNext" width="96" height="96" />
 </p>
 
 <p align="center">
@@ -58,7 +58,7 @@ If you want a tool **open all day while you work**, that is the intended use.
 One principle: **the agent advances; you keep the veto.**
 
 <p align="center">
-  <img src="./docs/readme/research-loop.svg" alt="PrismNext research loop" width="640" />
+  <img src="./assets/research-loop.svg" alt="PrismNext research loop" width="640" />
 </p>
 
 ---
@@ -160,7 +160,7 @@ Designed for unpublished data, sensitive drafts, and authors who do not want an 
 
 ## Screenshots
 
-Product screenshots will live under [`docs/readme/screenshots/`](./docs/readme/). Brand and loop diagrams are already in [`docs/readme/`](./docs/readme/).
+Product screenshots will live under [`assets/screenshots/`](./assets/). Brand and loop diagrams are already in [`assets/`](./assets/).
 
 > Pull requests with real UI captures (welcome, TeX + PDF, library, Plan consent) are welcome.
 

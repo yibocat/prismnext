@@ -203,6 +203,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("experiment:getPaths", args),
 	experimentArchive: (args: { projectRoot: string; id: string }) =>
 		ipcRenderer.invoke("experiment:archive", args),
+	experimentCreate: (args: { projectRoot: string; title: string }) =>
+		ipcRenderer.invoke("experiment:create", args),
 	experimentRestore: (args: { projectRoot: string; id: string }) =>
 		ipcRenderer.invoke("experiment:restore", args),
 	experimentDelete: (args: { projectRoot: string; id: string; removeLab?: boolean }) =>

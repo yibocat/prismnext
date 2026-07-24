@@ -269,7 +269,7 @@ function dispatchExperimentLog(
       // `exitCode` (including faking success), or inject arbitrary `artifacts`.
       // In a paper-trace context, runs.jsonl is the "did this experiment
       // actually run" record — the JSONL must not be trust-the-agent
-      // (Bug #3 from docs/audit/experiment-agent-architecture-analysis.md).
+      // (Bug #3 from docs-private/audit/experiment-agent-architecture-analysis.md).
       const validation = validateAppendRunInput(run);
       if (!validation.ok) {
         return {
@@ -389,7 +389,7 @@ export function dispatchProvenanceQuery(
 // paper-trace context, runs.jsonl is the "did this experiment actually
 // run" record, and a hallucinated entry would silently corrupt the
 // experiment log — see Bug #3 in
-// docs/audit/experiment-agent-architecture-analysis.md.
+// docs-private/audit/experiment-agent-architecture-analysis.md.
 //
 // We validate field-by-field and return a precise error rather than
 // silently coercing, so the model gets feedback it can correct from. The

@@ -28,7 +28,8 @@ import {
   TURN_WINDOW_LOAD_PULL_PX,
   TURN_WINDOW_SENTINEL_SUPPRESS_MS,
 } from "@/lib/chat/turn-window";
-import { isToolResultUserMessage } from "./chat-turns";
+import { isToolResultUserMessage, extractTurnUserPreview } from "./chat-turns";
+import { TurnRail } from "./turn-rail";
 import { buildToolResultMap, contentBlocks } from "./tools/tool-result-map";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
@@ -479,6 +480,7 @@ export const ChatMessages = memo(function ChatMessages() {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [viewportHeight, setViewportHeight] = useState(0);
   const [isActiveTurnMode, setIsActiveTurnMode] = useState(true);
+  const pendingJumpTurnRef = useRef<number | null>(null);
 
   const pinToActiveTurn = useCallback((smooth = false) => {
     const container = scrollRef.current;
@@ -608,6 +610,16 @@ export const ChatMessages = memo(function ChatMessages() {
     }
     return result;
   }, [displayMessages]);
+
+  // Per-turn previews for the right-edge TurnRail (user message text + meta).
+  const turnPreviews = useMemo(
+    () =>
+      turns.map((turn, idx) => {
+        const p = extractTurnUserPreview(turn.userMessage);
+        return { text: p.text, hasAttachments: p.hasAttachments, meta: turnMeta[idx] };
+      }),
+    [turns, turnMeta],
+  );
 
   // Placeholder "Thinking…" until the assistant emits real content (text,
   // thinking widget, or a tool call). Hide for the rest of the turn once seen.
@@ -928,6 +940,42 @@ export const ChatMessages = memo(function ChatMessages() {
     return () => ro.disconnect();
   }, [syncRunwayMinHeight]);
 
+  const jumpToTurn = useCallback(
+    (turnIndex: number) => {
+      const container = scrollRef.current;
+      if (!container || !activeTabId) return;
+      // User navigated away from the active tail - do not auto-scroll.
+      shouldAutoScrollRef.current = false;
+      setIsActiveTurnMode(false);
+      if (turnIndex >= windowStartRef.current) {
+        const sec = container.querySelector(`[data-chat-turn-index="${turnIndex}"]`);
+        if (sec instanceof HTMLElement) {
+          pinActiveTurnTop(container, sec, true);
+          return;
+        }
+      }
+      // Turn is outside the virtual window - expand it, then pin in layout effect.
+      pendingJumpTurnRef.current = turnIndex;
+      setTurnWindowStart(activeTabId, turnIndex);
+      windowStartRef.current = turnIndex;
+      setWindowStartState(turnIndex);
+    },
+    [activeTabId],
+  );
+
+  // After expanding the turn window for a jump, pin to the target turn section.
+  useLayoutEffect(() => {
+    const target = pendingJumpTurnRef.current;
+    if (target == null) return;
+    const container = scrollRef.current;
+    if (!container) return;
+    const sec = container.querySelector(`[data-chat-turn-index="${target}"]`);
+    if (sec instanceof HTMLElement) {
+      pinActiveTurnTop(container, sec, true);
+      pendingJumpTurnRef.current = null;
+    }
+  }, [windowStart, turns.length]);
+
   // ── Scroll: pin user message on new turn; follow tail while streaming ──
 
   useEffect(() => {
@@ -1171,6 +1219,13 @@ export const ChatMessages = memo(function ChatMessages() {
           })}
         </div>
       </div>
+
+      <TurnRail
+        previews={turnPreviews}
+        windowStart={windowStart}
+        scrollContainerRef={scrollRef}
+        onJump={jumpToTurn}
+      />
 
       {/* Scroll to bottom FAB */}
       <div className="absolute inset-x-0 bottom-4 pointer-events-none z-10">

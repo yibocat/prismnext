@@ -106,7 +106,8 @@ export function useAppShellShortcuts(
 
       if (matchesShortcut("shell.commandPalette", e)) {
         e.preventDefault();
-        useLayoutStore.getState().setCommandPaletteOpen(true);
+        const st = useLayoutStore.getState();
+        st.setCommandPaletteOpen(!st.commandPaletteOpen);
       }
     };
 

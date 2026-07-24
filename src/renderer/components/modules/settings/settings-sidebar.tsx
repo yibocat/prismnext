@@ -34,7 +34,7 @@ import {
 const SECTION_LABEL =
   "text-[length:var(--font-hint)] font-medium uppercase tracking-wider text-muted-foreground/50";
 
-const SETTINGS_GROUPS = [
+export const SETTINGS_GROUPS = [
   {
     labelKey: "settings.nav.application",
     items: [

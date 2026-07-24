@@ -6,7 +6,7 @@
  * handlers return `ProvenanceRunRecorded | null` directly rather than an
  * ok-union (there is no failure mode to express).
  *
- * Design: docs/superpowers/specs/2026-07-11-provenance-lite-design.md §6
+ * Design: docs-private/superpowers/specs/2026-07-11-provenance-lite-design.md §6
  */
 import { ipcMain } from "electron";
 import {

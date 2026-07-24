@@ -752,6 +752,15 @@ export interface ElectronAPI {
     | { ok: true; meta: import("../../shared/experiment-log").ExperimentMeta }
     | { ok: false; error: string; hint?: string }
   >;
+  experimentCreate: (args: { projectRoot: string; title: string }) => Promise<
+    | {
+        ok: true;
+        id: string;
+        path: string;
+        meta: import("../../shared/experiment-log").ExperimentMeta;
+      }
+    | { ok: false; error: string; hint?: string }
+  >;
   experimentRestore: (args: { projectRoot: string; id: string }) => Promise<
     | { ok: true; meta: import("../../shared/experiment-log").ExperimentMeta }
     | { ok: false; error: string; hint?: string }

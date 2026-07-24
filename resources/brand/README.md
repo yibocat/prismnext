@@ -7,7 +7,7 @@
 - Stroke ≈ 7.2 · UI scale ≈ 1.18 · D2 shadow · **no gloss**
 - Round caps; endpoints inset so caps are not clipped
 - React: `src/renderer/components/brand/prism-ribbon-mark.tsx`
-- Spec: `docs/superpowers/specs/2026-07-17-brand-system.md`
+- Spec: `docs-private/superpowers/specs/2026-07-17-brand-system.md`
 
 ## Default color — P5 Warm Graphite
 | Surface | Face (upper) | Under (lower) |

@@ -226,7 +226,7 @@ function kickoffWithEnv(
   // reach the renderer (avoids losing early chunks before runInFlight is set).
   setImmediate(() => {
     // Allocate a temp file for stderr capture (Bug #11 — see
-    // docs/audit/experiment-agent-architecture-analysis.md). A PTY merges
+    // docs-private/audit/experiment-agent-architecture-analysis.md). A PTY merges
     // stdout+stderr onto a single stream; the only way to get a clean
     // stderr record without sacrificing the live PTY stream for stdout
     // is to redirect the *command's* stderr to a file via a subshell

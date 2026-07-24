@@ -9,7 +9,7 @@
  * Renderer-safe (no node:fs / crypto). Appending lives in the main-process
  * `provenance-service`; this module only defines the shape + pure helpers.
  *
- * Design: docs/superpowers/specs/2026-07-11-provenance-lite-design.md
+ * Design: docs-private/superpowers/specs/2026-07-11-provenance-lite-design.md
  */
 
 /** Project-relative path to the append-only event log. */

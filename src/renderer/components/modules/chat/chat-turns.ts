@@ -1,4 +1,6 @@
 import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
+import { contentBlocks } from "./tools/tool-result-map";
+import { partsToPlainText, type ComposerPart } from "@/lib/chat/composer-parts";
 
 /** Restore prismnext UI display (inline @ / tokens) over OpenCode-stored user text. */
 export function applyUserDisplaySnapshots(
@@ -43,4 +45,49 @@ export function truncateChatMessagesToTurn(
     kept.push(msg);
   }
   return kept;
+}
+
+/** Short preview of a turn's user message - mirrors UserHeader extraction logic
+ *  (inline @ tokens -> plain text, filters system-injected Role/Core Rules blocks). */
+export interface TurnUserPreview {
+  text: string;
+  hasAttachments: boolean;
+}
+
+export function extractTurnUserPreview(
+  userMessage: ChatStreamMessage | null | undefined,
+): TurnUserPreview {
+  if (!userMessage) return { text: "", hasAttachments: false };
+  const allBlocks = contentBlocks(userMessage.message?.content);
+  const inlineParts: ComposerPart[] = [];
+  let hasAttachments = false;
+  for (const b of allBlocks) {
+    if (b.type === "text" && b.inlineParts?.length) {
+      inlineParts.push(...b.inlineParts);
+    }
+    if (b.type === "text" && b.attachments?.length) {
+      hasAttachments = true;
+    }
+  }
+  const hasInline = inlineParts.length > 0;
+  const text = hasInline
+    ? partsToPlainText(inlineParts)
+    : allBlocks
+        .filter((b) => {
+          if (b.type !== "text" || !b.text) return false;
+          const t = b.text;
+          if (
+            t.startsWith("## Role") &&
+            (t.includes("integrated into prismnext") ||
+              t.includes("integrated into Prism") ||
+              t.includes("LaTeX academic paper writing workspace") ||
+              t.includes("## Core Rules"))
+          ) {
+            return false;
+          }
+          return true;
+        })
+        .map((b) => b.text)
+        .join("\n");
+  return { text: text ?? "", hasAttachments };
 }

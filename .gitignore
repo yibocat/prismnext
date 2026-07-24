@@ -11,12 +11,12 @@ src/renderer/public/pdfjs-dist/
 bin/opencode/
 .cursor/
 
-# Internal Document
-docs/audit/
-docs/internal/
+# Private / internal docs (specs, plans, audits) — not for open source
+docs-private/
 
 .pnpm-store/
 .vscode/
 
 # Brainstorm mockups
 .superpowers/
+.claude/

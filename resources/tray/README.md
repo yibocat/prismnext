@@ -32,4 +32,4 @@ for name in idleTemplate busyTemplate attentionTemplate; do
 done
 ```
 
-Spec: `docs/superpowers/specs/2026-07-17-tray-circular-mark-design.md`
+Spec: `docs-private/superpowers/specs/2026-07-17-tray-circular-mark-design.md`

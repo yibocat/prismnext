@@ -1,6 +1,6 @@
 /**
  * Research-scenario contract tests for Prompt Hard/Soft architecture (P0–P3).
- * Manual checklist: docs/superpowers/verification/2026-07-21-prompt-hard-soft-scenarios.md
+ * Manual checklist: docs-private/superpowers/verification/2026-07-21-prompt-hard-soft-scenarios.md
  */
 import { describe, expect, it } from "vitest";
 import { ALL_MODULES } from "../../src/main/prompts/modules";
