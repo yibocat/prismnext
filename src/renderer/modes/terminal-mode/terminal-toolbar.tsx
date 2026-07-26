@@ -119,10 +119,12 @@ export function TerminalToolbar({
           {displayLabel}
         </span>
         <span className="shrink-0 rounded border border-border/60 bg-muted/30 px-1.5 py-px text-[length:var(--font-hint)] text-muted-foreground">
-          read-only · {aiModeBadge}
+          {t("modes.terminal.readOnlyLive", {
+            mode: t(aiModeBadge === "live" ? "modes.terminal.live" : "modes.terminal.replay"),
+          })}
         </span>
         <div className="flex-1" />
-        <Hint label={sessionState?.pinned ? "Unpin tab (allow idle cleanup)" : "Pin tab (skip idle cleanup)"}>
+        <Hint label={sessionState?.pinned ? t("modes.terminal.unpinTab") : t("modes.terminal.pinTab")}>
           <button
             type="button"
             className={cn(
@@ -137,7 +139,7 @@ export function TerminalToolbar({
             <PinIcon className="size-3.5" />
           </button>
         </Hint>
-        <Hint label="Copy output">
+        <Hint label={t("modes.terminal.copyOutput")}>
           <button
             type="button"
             className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
@@ -176,7 +178,7 @@ export function TerminalToolbar({
       <div className="flex-1" />
 
       {session?.cwd ? (
-        <Hint label="Copy working directory">
+        <Hint label={t("modes.terminal.copyCwd")}>
           <button
             type="button"
             className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
@@ -221,7 +223,7 @@ export function TerminalToolbar({
         </Hint>
       )}
 
-      <Hint label={`New ${shellLabel} tab`}>
+      <Hint label={t("modes.terminal.newShellTab", { shell: shellLabel })}>
         <button
           type="button"
           className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"

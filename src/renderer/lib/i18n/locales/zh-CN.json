@@ -38,7 +38,9 @@
     "unavailable": "不可用",
     "noDescription": "暂无说明。",
     "creating": "正在创建…",
-    "ok": "确定"
+    "ok": "确定",
+    "addToChat": "添加到聊天",
+    "more": "更多"
   },
   "menu": {
     "file": "文件",
@@ -63,6 +65,7 @@
       "skills": "技能",
       "texWorkspace": "TeX 工作区",
       "terminal": "终端",
+      "browser": "浏览器",
       "literature": "文献"
     },
     "general": {
@@ -78,7 +81,7 @@
       "trayIconDesc": "在菜单栏（macOS）或系统托盘（Windows/Linux）显示状态图标。关闭窗口会隐藏应用，从托盘菜单退出。",
       "shortcuts": "快捷键",
       "keyboardShortcuts": "键盘快捷键",
-      "keyboardShortcutsDesc": "已接入与计划中的快捷键参考。macOS 为 ⌘；Windows/Linux 为 Ctrl。",
+      "keyboardShortcutsDesc": "已接入与计划中的快捷键参考。macOS：⌘ = Command，⌥ = Option；Windows/Linux：Ctrl / Alt。",
       "logs": "日志",
       "applicationLogs": "应用日志",
       "applicationLogsDesc": "浏览、筛选、搜索并导出应用日志（主进程与界面）。",
@@ -532,6 +535,21 @@
         "collectionEditsOk": "可编辑集合",
         "readOnlyBbt": "集合只读（请添加 Web API 或 debug-bridge 插件）",
         "readOnlyWeb": "集合只读（请添加 Web API）"
+      }
+    },
+    "browserPage": {
+      "title": "浏览器",
+      "pageDesc": "地址栏与应用内浏览器默认设置。",
+      "search": "搜索",
+      "defaultSearchEngine": "默认搜索引擎",
+      "defaultSearchEngineDesc": "地址栏输入不是 URL 时（没有协议头、没有域名、含空格等）走所选搜索引擎。",
+      "urlVsSearchHint": "提示：含协议头（https://…）或裸域名（example.com、localhost:3000）的输入按 URL 加载；其余走搜索引擎。",
+      "searchEngine": {
+        "duckduckgo": "DuckDuckGo",
+        "google": "Google",
+        "brave": "Brave Search",
+        "bing": "Bing",
+        "ecosia": "Ecosia"
       }
     },
     "skillsPage": {
@@ -1302,7 +1320,8 @@
       "acceptAll": "接受全部更改",
       "rejectAll": "拒绝全部更改",
       "togglePlanMode": "切换 Plan 模式",
-      "cycleMessageWidth": "循环切换消息宽度"
+      "cycleMessageWidth": "循环切换消息宽度",
+      "undoRename": "撤销会话重命名"
     }
   },
   "shell": {
@@ -1402,7 +1421,10 @@
       "openTabs": "打开的标签",
       "closePanel": "关闭面板",
       "maximizePanel": "最大化面板",
-      "restorePanel": "还原面板"
+      "restorePanel": "还原面板",
+      "openFileToStart": "打开文件以开始",
+      "openFileOrWorkspace": "打开文件或切换到工作区",
+      "openFileOrWorkspaceHint": "使用上方工具栏浏览文件、查看 Git 历史，或在 TeX 工作区开始写作。"
     }
   },
   "nav": {
@@ -1472,7 +1494,9 @@
       "citationsCount_plural": "{{count}} 条暂存引用",
       "citationsNone": "暂无暂存引用",
       "intensiveCount": "{{count}} 篇精读",
-      "intensiveCount_plural": "{{count}} 篇精读"
+      "intensiveCount_plural": "{{count}} 篇精读",
+      "renameHint": "点击重命名",
+      "renamePlaceholder": "未命名对话"
     },
     "aibar": {
       "done": "完成",
@@ -1644,7 +1668,11 @@
       "gitClean": "干净",
       "previewInBrowser": "在浏览器中预览",
       "rename": "重命名",
-      "deleteFolder": "删除文件夹"
+      "deleteFolder": "删除文件夹",
+      "noOpenFiles": "没有打开的文件",
+      "recent": "最近",
+      "noFilesYet": "暂无文件",
+      "openProjectToStart": "打开项目以开始"
     },
     "researchPlan": {
       "label": "Plan",
@@ -1660,7 +1688,8 @@
       "noRepoHintInit": "初始化 Git 后即可跟踪更改、分支与 worktree。",
       "emptyChanges": "无更改 — 工作区干净",
       "selectCommit": "选择提交以查看详情",
-      "commitNotFound": "未找到该提交"
+      "commitNotFound": "未找到该提交",
+      "noCommitsYet": "暂无提交"
     },
     "browser": {
       "label": "浏览器",
@@ -1689,7 +1718,18 @@
       "justNow": "刚刚",
       "minutesAgo": "{{count}} 分钟前",
       "hoursAgo": "{{count}} 小时前",
-      "daysAgo": "{{count}} 天前"
+      "daysAgo": "{{count}} 天前",
+      "more": "更多",
+      "homeHint": "在上方输入网址或搜索词",
+      "willAppearHere": "浏览器将显示在此处",
+      "comingSoon": "即将推出",
+      "searchEngine": {
+        "duckduckgo": "DuckDuckGo",
+        "google": "Google",
+        "brave": "Brave Search",
+        "bing": "Bing",
+        "ecosia": "Ecosia"
+      }
     },
     "terminal": {
       "label": "终端",
@@ -1709,7 +1749,18 @@
       "shells": "Shell",
       "noCommands": "暂无已保存命令",
       "noSessions": "暂无打开的终端",
-      "replay": "回放"
+      "replay": "回放",
+      "readOnlyLive": "只读 · {{mode}}",
+      "pinTab": "固定标签（跳过空闲清理）",
+      "unpinTab": "取消固定（允许空闲清理）",
+      "copyOutput": "复制输出",
+      "copyCwd": "复制工作目录",
+      "newShellTab": "新建 {{shell}} 标签",
+      "addCommand": "添加命令",
+      "removeCommand": "移除命令",
+      "closeTab": "关闭终端标签",
+      "closeView": "关闭视图（命令会继续运行，除非已配置为取消）",
+      "closeReplay": "关闭回放视图（保留输出日志）"
     },
     "texworkspace": {
       "label": "TeX 工作区",
@@ -1752,7 +1803,23 @@
       "insertSymbol": "插入符号",
       "insertEnv": "插入环境",
       "noResults": "无结果",
-      "noSections": "未找到章节"
+      "noSections": "未找到章节",
+      "selectCompiler": "选择编译器",
+      "compileNoFile": "没有打开的文件可编译。请先打开一个 .tex 文件。",
+      "compileNoTarget": "无法确定要编译的文件。请确认文档包含 \\documentclass 声明。",
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "zoom": "缩放",
+      "prevPage": "上一页",
+      "nextPage": "下一页",
+      "lightMode": "浅色模式",
+      "darkMode": "深色模式",
+      "followTheme": "跟随应用主题",
+      "noManuscript": "未配置 manuscript 文件夹",
+      "noManuscriptHint": "TeX 编辑、PDF 预览、大纲导航和编译需要配置 manuscript 文件夹。请在 设置 → TeX 工作区 中配置以开始。",
+      "openSettings": "打开 TeX 工作区设置",
+      "noFilesInManuscript": "manuscript 文件夹中没有文件",
+      "wordCount": "{{count}} 词"
     },
     "literature": {
       "label": "文献",
@@ -1782,7 +1849,48 @@
       "importPdf": "导入 PDF…",
       "connectZotero": "连接 Zotero…",
       "collections": "集合",
-      "newCollection": "新建本地集合"
+      "newCollection": "新建本地集合",
+      "openNotes": "打开阅读笔记",
+      "closeNotes": "关闭阅读笔记",
+      "addAllPendingHint": "将所有待处理引用添加到文献库",
+      "clearCitationsHint": "清除本会话中的全部引用",
+      "citationHealthHint": "文稿引用健康检查（.tex ↔ .bib ↔ 文献库）",
+      "importBibTeX": "导入 BibTeX（可选 .json）…",
+      "refreshZotero": "从 Zotero 刷新",
+      "refreshingZotero": "正在从 Zotero 刷新…",
+      "addByIdentifier": "通过标识符添加（DOI、arXiv、ISBN、PMID、ADS）",
+      "refreshZoteroLastSync": "从 Zotero 刷新（上次同步 {{time}}）",
+      "refreshCitations": "刷新引文",
+      "selectAll": "全选",
+      "moreActions": "更多操作",
+      "showInLibraryHint": "在主文献库列表中显示此条目",
+      "openInLibrary": "在文献库中打开",
+      "inLibrary": "已在文献库",
+      "deleteHighlight": "删除高亮",
+      "noNotesYet": "暂无笔记。",
+      "filterByTag": "按标签筛选",
+      "filterTag": "筛选：{{tag}}",
+      "filterTagCount": "筛选：{{tag}}（{{count}}）",
+      "blockPickMode": "块选取模式 — 点击块以切换（随时可用 Shift+点击；支持多选）",
+      "blocks": "块",
+      "unsavedChanges": "未保存的更改",
+      "removeHighlight": "移除高亮",
+      "selectEntry": "选择条目",
+      "journalLabelsSoon": "期刊标签（即将推出）",
+      "pdfCacheOutdated": "PDF 缓存已过期 — 请从 Zotero 刷新",
+      "pdfCacheOutdatedDetail": "PDF 缓存已过期 — 请从 Zotero 刷新或重新打开 PDF",
+      "pdfCachedLocally": "PDF 已本地缓存",
+      "pdfNotCached": "PDF 未缓存 — 打开时将下载",
+      "pdfNotCachedAria": "PDF 未本地缓存",
+      "copySummary": "复制摘要",
+      "linkedZoteroCollection": "已关联的 Zotero 集合",
+      "alreadyInLibrary": "已在项目文献库中",
+      "identifierVerified": "标识符已对照外部目录验证",
+      "catalogSource": "目录来源",
+      "openProjectFirst": "请先打开项目。",
+      "bbtBanner": "安装 Better BibTeX 以获得稳定的引用键",
+      "getBbt": "获取 BBT",
+      "dismiss": "关闭"
     },
     "settingsEditor": {
       "label": "设置",
@@ -1849,7 +1957,53 @@
       "push": "推送",
       "moreActions": "更多 Git 操作",
       "createBranch": "创建",
-      "creating": "正在创建…"
+      "creating": "正在创建…",
+      "switching": "正在切换…",
+      "newBranch": "新建分支",
+      "noBranchesFound": "未找到分支",
+      "local": "本地",
+      "selectBranchToMerge": "选择要合并到 {{branch}} 的分支",
+      "noOtherBranches": "没有其他分支",
+      "noMatches": "无匹配项"
+    },
+    "overflow": {
+      "changesOptions": "更改视图选项",
+      "historyOptions": "历史视图选项",
+      "layout": "布局",
+      "unified": "统一",
+      "split": "左右分栏",
+      "ignoreWhitespace": "忽略空白",
+      "ignoreWhitespaceTitle": "比较时忽略行尾空格与纯缩进差异",
+      "wordWrap": "自动换行",
+      "collapseAll": "全部折叠",
+      "refreshChanges": "刷新更改",
+      "refreshHistory": "刷新历史"
+    },
+    "filter": {
+      "uncommitted": "未提交",
+      "staged": "已暂存",
+      "unstaged": "未暂存",
+      "uncommittedChanges": "未提交更改",
+      "stagedChanges": "已暂存更改",
+      "unstagedChanges": "未暂存更改",
+      "uncommittedChangesCount": "{{count}} 项未提交更改",
+      "stagedChangesCount": "{{count}} 项已暂存更改",
+      "unstagedChangesCount": "{{count}} 项未暂存更改"
+    },
+    "changes": {
+      "new": "新增",
+      "deleted": "已删除",
+      "discard": "丢弃更改",
+      "discardAllUnstaged": "丢弃全部未暂存更改",
+      "discardConfirm": "丢弃 {{count}} 个文件中的更改？",
+      "discardConfirmOne": "丢弃 {{count}} 个文件中的更改？",
+      "stage": "暂存",
+      "unstage": "取消暂存",
+      "stageAll": "全部暂存",
+      "unstageAll": "全部取消暂存",
+      "openInEditor": "在编辑器中打开 {{path}}",
+      "loadingDiff": "正在加载差异…",
+      "noDiff": "无可用差异"
     }
   },
   "dialogs": {

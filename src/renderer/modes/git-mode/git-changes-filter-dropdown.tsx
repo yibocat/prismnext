@@ -1,4 +1,6 @@
+import { useTranslation } from "react-i18next";
 import { ChevronDownIcon } from "lucide-react";
+import { i18n } from "@/lib/i18n";
 import { useGitStore, type GitFilterMode } from "@/stores/git-store";
 import { cn } from "@/lib/utils";
 import { gitChangeRowTextClass } from "./git-change-row-chrome";
@@ -15,11 +17,17 @@ export function filterModeTriggerLabel(
 ): string {
   switch (mode) {
     case "staged":
-      return count === 0 ? "Staged Changes" : `${count} Staged Changes`;
+      return count === 0
+        ? i18n.t("git.filter.stagedChanges")
+        : i18n.t("git.filter.stagedChangesCount", { count });
     case "unstaged":
-      return count === 0 ? "Unstaged Changes" : `${count} Unstaged Changes`;
+      return count === 0
+        ? i18n.t("git.filter.unstagedChanges")
+        : i18n.t("git.filter.unstagedChangesCount", { count });
     case "all":
-      return count === 0 ? "Uncommitted Changes" : `${count} Uncommitted Changes`;
+      return count === 0
+        ? i18n.t("git.filter.uncommittedChanges")
+        : i18n.t("git.filter.uncommittedChangesCount", { count });
   }
 }
 
@@ -32,6 +40,7 @@ export function GitChangesFilterDropdown({
   fileCount,
   className,
 }: GitChangesFilterDropdownProps) {
+  const { t } = useTranslation();
   const filterMode = useGitStore((s) => s.filterMode);
   const setFilterMode = useGitStore((s) => s.setFilterMode);
 
@@ -55,19 +64,19 @@ export function GitChangesFilterDropdown({
           selected={filterMode === "all"}
           onClick={() => setFilterMode("all")}
         >
-          Uncommitted
+          {t("git.filter.uncommitted")}
         </AppMenuCheckItem>
         <AppMenuCheckItem
           selected={filterMode === "staged"}
           onClick={() => setFilterMode("staged")}
         >
-          Staged
+          {t("git.filter.staged")}
         </AppMenuCheckItem>
         <AppMenuCheckItem
           selected={filterMode === "unstaged"}
           onClick={() => setFilterMode("unstaged")}
         >
-          Unstaged
+          {t("git.filter.unstaged")}
         </AppMenuCheckItem>
       </AppMenuContent>
     </AppMenu>

@@ -6,9 +6,11 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { useTranslation } from "react-i18next";
 import type { Terminal } from "@xterm/xterm";
 import { SelectionInsertAction } from "@/components/modules/shared/selection-insert-action";
 import { insertTerminalToChat } from "@/lib/chat/insert-to-chat";
+import { matchesShortcutEvent, shortcutChordLabel } from "@/lib/shortcuts";
 import {
   getTerminalSelectionAnchor,
   type TerminalSelectionAnchor,
@@ -31,6 +33,7 @@ export function TerminalInsertHost({
   termReadySignal = 0,
   children,
 }: TerminalInsertHostProps) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectionAnchor, setSelectionAnchor] = useState<TerminalSelectionAnchor | null>(null);
   const [chipPos, setChipPos] = useState<{ left: number; top: number } | null>(null);
@@ -116,13 +119,14 @@ export function TerminalInsertHost({
   useEffect(() => {
     if (!selectionAnchor) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "l") {
-        e.preventDefault();
-        runInsert();
-      }
+      // ⌥L / Alt+L — capture so Win/Linux terminals do not eat Alt+letter.
+      if (!matchesShortcutEvent("workspace.insertToChat", e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      runInsert();
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [selectionAnchor, runInsert]);
 
   return (
@@ -134,8 +138,8 @@ export function TerminalInsertHost({
         y={chipPos?.top ?? 0}
         anchor="parent"
         placement="selection-top-right"
-        shortcut="⌘L"
-        label="Add to Chat"
+        shortcut={shortcutChordLabel("workspace.insertToChat")}
+        label={t("common.addToChat")}
         onInsert={runInsert}
         onDismiss={dismissAction}
       />

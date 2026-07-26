@@ -2,6 +2,8 @@ import { useState, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useBrowserStore } from "@/stores/browser-store";
+import { useSettingsStore } from "@/stores/settings-store";
+import { toUrlOrSearch } from "@/lib/browser/search-engines";
 import { getWebview } from "./webview-registry";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
@@ -60,15 +62,15 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
 
   const navigate = useCallback(
     (targetUrl: string) => {
-      let finalUrl = targetUrl.trim();
-      if (!finalUrl) return;
-      if (!/^https?:\/\//i.test(finalUrl)) {
-        finalUrl = "https://" + finalUrl;
-      }
+      const s = targetUrl.trim();
+      if (!s) return;
+      const { searchEngine } = useSettingsStore.getState().settings;
+      const finalUrl = toUrlOrSearch(searchEngine, s);
       setInputValue(finalUrl);
       navigateBrowserTab(tabId, finalUrl);
-      const wv = getWebview(tabId);
-      if (wv) (wv as any).loadURL(finalUrl);
+      // navigateBrowserTab already drives the webview via store; no second
+      // loadURL() — that would cause a GUEST_VIEW_MANAGER_CALL ERR_ABORTED
+      // race in the console when the second navigation cancels the first.
     },
     [tabId, navigateBrowserTab],
   );
@@ -181,7 +183,7 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
 
       {/* Three-dot menu */}
       <AppMenu open={menuOpen} onOpenChange={setMenuOpen}>
-        <Hint label="More">
+        <Hint label={t("common.more")}>
           <AppMenuTrigger asChild>
             <button
               type="button"

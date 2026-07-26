@@ -163,6 +163,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const setSessionSort = useLayoutStore((s) => s.setSessionSort);
 
   const sessionId = useChatStore((s) => s.sessionId);
+  const tabs = useChatStore((s) => s.tabs);
   const streamingSessionKey = useChatStore(selectStreamingSessionKey);
   const streamingSessionIds = useMemo(
     () => new Set(streamingSessionKey ? streamingSessionKey.split("\0") : []),
@@ -222,8 +223,16 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
       const chatStore = useChatStore.getState();
       const tabs = chatStore.tabs;
       const merged = result.map((s) => {
-        if ((s.title.startsWith("New Chat") || s.title.startsWith("New session"))) {
-          const tab = tabs.find((t) => t.sessionId === s.id);
+        const tab = tabs.find((t) => t.sessionId === s.id);
+        // Always honor the user's explicit rename for an open tab, even if
+        // the DB has since been overwritten by OpenCode's auto-derived title.
+        if (tab?.userTitleSet && tab.title) {
+          return { ...s, title: tab.title };
+        }
+        // Otherwise, only inject the local tab title when the DB still has
+        // a generic OpenCode default — that's the "first send" race window
+        // where listSessions fires before OpenCode finalizes a derived title.
+        if (s.title.startsWith("New Chat") || s.title.startsWith("New session")) {
           if (tab?.title && tab.title !== "New Chat") {
             return { ...s, title: tab.title };
           }
@@ -231,11 +240,13 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
         return s;
       });
 
-      // Sync OpenCode-generated titles back to open tabs
+      // Sync OpenCode-generated titles back to open tabs.
+      // Skip tabs the user has explicitly renamed (userTitleSet=true) so the
+      // user-set title sticks even if OpenCode later generates a different one.
       for (const s of result) {
         if (!(s.title.startsWith("New Chat") || s.title.startsWith("New session"))) {
           const tab = tabs.find((t) => t.sessionId === s.id);
-          if (tab && tab.title !== s.title) {
+          if (tab && !tab.userTitleSet && tab.title !== s.title) {
             chatStore._setTitle(tab.id, s.title);
           }
         }
@@ -360,15 +371,25 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   // OpenCode defaults. Because this is a useMemo on both sessions AND tab titles,
   // titles update instantly when the tab's sessionId + title are set —
   // no need to wait for the next fetchSessions round-trip.
+  //
+  // Also honor userTitleSet unconditionally: when the user has explicitly
+  // renamed a tab, prefer the local title over whatever the DB now holds
+  // (OpenCode may have written its own auto-derived title back into the
+  // session row after our rename).
   const enrichedSessions = useMemo(() => {
+    const tabsBySession = tabs;
     return sessions.map((s) => {
-      if ((s.title.startsWith("New Chat") || s.title.startsWith("New session"))) {
+      const tab = tabsBySession.find((t) => t.sessionId === s.id);
+      if (tab?.userTitleSet && tab.title) {
+        return { ...s, title: tab.title };
+      }
+      if (s.title.startsWith("New Chat") || s.title.startsWith("New session")) {
         const tabTitle = tabTitlesBySession.get(s.id);
         if (tabTitle) return { ...s, title: tabTitle };
       }
       return s;
     });
-  }, [sessions, tabTitlesBySession]);
+  }, [sessions, tabTitlesBySession, tabs]);
 
   const sortedSessions = [...enrichedSessions].sort((a, b) => {
     if (sessionSort === "created") return b.createdAt - a.createdAt;

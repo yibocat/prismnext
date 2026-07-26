@@ -57,7 +57,9 @@ export function GitChangesDiffList({ files, gitRoot }: GitChangesDiffListProps) 
     if (targets.length === 0) return;
     if (
       !confirm(
-        `Discard changes in ${targets.length} file${targets.length !== 1 ? "s" : ""}?`,
+        targets.length === 1
+          ? t("git.changes.discardConfirmOne", { count: targets.length })
+          : t("git.changes.discardConfirm", { count: targets.length }),
       )
     ) {
       return;
@@ -74,7 +76,7 @@ export function GitChangesDiffList({ files, gitRoot }: GitChangesDiffListProps) 
         ),
       ),
     );
-  }, [files, gitRoot]);
+  }, [files, gitRoot, t]);
 
   return (
     <div
@@ -93,7 +95,7 @@ export function GitChangesDiffList({ files, gitRoot }: GitChangesDiffListProps) 
           checked={allStaged}
           indeterminate={someStaged}
           onClick={handleStageAllToggle}
-          title={allStaged ? "Unstage all" : "Stage all"}
+          title={allStaged ? t("git.changes.unstageAll") : t("git.changes.stageAll")}
         />
       </div>
 

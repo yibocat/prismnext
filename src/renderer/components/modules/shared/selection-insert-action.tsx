@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { MessageSquarePlusIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,13 +20,15 @@ export function SelectionInsertAction({
   open,
   x,
   y,
-  label = "Add to Chat",
+  label,
   placement = "selection-top-right",
   anchor = "parent",
   shortcut,
   onInsert,
   onDismiss,
 }: SelectionInsertActionProps) {
+  const { t } = useTranslation();
+  const resolvedLabel = label ?? t("common.addToChat");
   const ref = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -86,7 +89,7 @@ export function SelectionInsertAction({
       }}
     >
       <MessageSquarePlusIcon className="size-3.5 shrink-0 text-primary" />
-      <span>{label}</span>
+      <span>{resolvedLabel}</span>
       {shortcut ? (
         <kbd className="ml-0.5 rounded border border-border/60 bg-muted px-1 font-mono text-[10px] leading-none text-muted-foreground">
           {shortcut}

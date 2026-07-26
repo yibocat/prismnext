@@ -318,6 +318,7 @@ export function ChatComposerCore({
   return (
     <div
       data-chat-width
+      data-chat-composer={variant === "panel" ? "true" : undefined}
       className={cn(
         "relative w-full min-w-0",
         variant === "panel" ? "px-3 py-1.5 overflow-hidden" : className,

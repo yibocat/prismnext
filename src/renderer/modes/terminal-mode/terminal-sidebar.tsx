@@ -134,8 +134,8 @@ function AiSessionRow({
         <Hint
           label={
             isLive
-              ? "Close view (command keeps running unless configured to cancel)"
-              : "Close replay view (output log is kept)"
+              ? i18n.t("modes.terminal.closeView")
+              : i18n.t("modes.terminal.closeReplay")
           }
         >
           <button
@@ -274,7 +274,7 @@ export function TerminalSidebar() {
               label={t("modes.terminal.quickCommands")}
               count={quickCommands.length}
               extraAction={
-                <Hint label="Add command">
+                <Hint label={t("modes.terminal.addCommand")}>
                   <button
                     type="button"
                     className="flex size-4 items-center justify-center rounded-sm text-muted-foreground/40 hover:text-muted-foreground hover:bg-accent transition-colors"
@@ -309,7 +309,7 @@ export function TerminalSidebar() {
                         >
                           <PlayIcon className="size-3 shrink-0 text-muted-foreground/40 group-hover/cmd:text-foreground" />
                           <span className="truncate flex-1">{cmd.label}</span>
-                          <Hint label="Remove command">
+                          <Hint label={t("modes.terminal.removeCommand")}>
                             <button
                               type="button"
                               className="size-4 shrink-0 rounded-sm opacity-0 group-hover/cmd:opacity-100 hover:bg-muted-foreground/20 flex items-center justify-center transition-opacity"
@@ -392,7 +392,7 @@ export function TerminalSidebar() {
                           {item.busy ? "busy" : item.shellLabel}
                         </span>
                       </button>
-                      <Hint label="Close terminal tab">
+                      <Hint label={t("modes.terminal.closeTab")}>
                         <button
                           type="button"
                           className="size-5 shrink-0 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/15 flex items-center justify-center"

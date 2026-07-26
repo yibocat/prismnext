@@ -6,6 +6,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { useTranslation } from "react-i18next";
 import type { MergeView } from "@codemirror/merge";
 import type { EditorView } from "@codemirror/view";
 import { toast } from "sonner";
@@ -17,6 +18,7 @@ import {
   resolveFromSplit,
   resolveFromUnified,
 } from "@/lib/git/diff-hunk-snippet";
+import { matchesShortcutEvent, shortcutChordLabel } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
 export interface GitDiffInsertHostProps {
@@ -71,6 +73,7 @@ export function GitDiffInsertHost({
   viewReadySignal = 0,
   children,
 }: GitDiffInsertHostProps) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [hasSelection, setHasSelection] = useState(false);
   const [chipPos, setChipPos] = useState<{ left: number; top: number } | null>(null);
@@ -252,13 +255,14 @@ export function GitDiffInsertHost({
   useEffect(() => {
     if (!hasSelection) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "l") {
-        e.preventDefault();
-        runInsert();
-      }
+      // ⌥L / Alt+L — capture so the chord does not leak to the focused editor.
+      if (!matchesShortcutEvent("workspace.insertToChat", e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      runInsert();
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [hasSelection, runInsert]);
 
   return (
@@ -270,8 +274,8 @@ export function GitDiffInsertHost({
         y={chipPos?.top ?? 0}
         anchor="parent"
         placement="selection-top-right"
-        shortcut="⌘L"
-        label="Add to Chat"
+        shortcut={shortcutChordLabel("workspace.insertToChat")}
+        label={t("common.addToChat")}
         onInsert={runInsert}
         onDismiss={dismissAction}
       />

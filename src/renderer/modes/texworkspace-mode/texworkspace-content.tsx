@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { NoFileOpen } from "@/components/modules/editor/no-file-open";
 import { TabContext, type TabContextValue } from "@/lib/workspace/tab-context";
@@ -10,6 +11,7 @@ import { FileTextIcon } from "lucide-react";
 import { TexworkspaceToolbar } from "./texworkspace-toolbar";
 
 export function TexworkspaceContent({ tab, isActive }: { tab: RightTab; isActive: boolean }) {
+  const { t } = useTranslation();
   const manuscriptConfig = useWorkspaceConfigStore((s) => s.manuscriptConfig);
 
   const ctx: TabContextValue = useMemo(
@@ -25,12 +27,10 @@ export function TexworkspaceContent({ tab, isActive }: { tab: RightTab; isActive
         <FileTextIcon className="size-12 text-muted-foreground/20" />
         <div className="space-y-1.5 text-center">
           <p className="text-[length:var(--font-placeholder)] text-muted-foreground font-medium">
-            No manuscript folder configured
+            {t("modes.texworkspace.noManuscript")}
           </p>
           <p className="text-sm text-muted-foreground/60 max-w-[320px]">
-            A manuscript folder is required for TeX editing, PDF preview,
-            outline navigation, and compilation. Configure one in Settings →
-            TeX Workspace to get started.
+            {t("modes.texworkspace.noManuscriptHint")}
           </p>
         </div>
         <Button
@@ -41,7 +41,7 @@ export function TexworkspaceContent({ tab, isActive }: { tab: RightTab; isActive
             useLayoutStore.getState().setSettingsCategory("texworkspace");
           }}
         >
-          Open TeX Workspace Settings
+          {t("modes.texworkspace.openSettings")}
         </Button>
       </div>,
     );

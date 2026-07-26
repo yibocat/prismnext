@@ -1124,6 +1124,34 @@ export function registerChatHandlers(): void {
   });
 
   ipcMain.handle(
+    "session:rename",
+    async (_event, args: { tabId: string; title: string; sessionId: string }) => {
+      if (
+        !args ||
+        typeof args.tabId !== "string" ||
+        typeof args.title !== "string" ||
+        typeof args.sessionId !== "string" ||
+        !args.sessionId
+      ) {
+        throw new Error(
+          "session:rename requires { tabId: string; title: string; sessionId: string }",
+        );
+      }
+      const service = getService();
+      if (!service.getConnection()) {
+        try {
+          await service.initialize();
+        } catch (err: any) {
+          throw new Error(
+            `Cannot rename session: OpenCode is not available — ${err.message}`,
+          );
+        }
+      }
+      await service.renameSession(args.sessionId, args.title);
+    },
+  );
+
+  ipcMain.handle(
     "session:reassignDirectory",
     async (_event, args: { fromDirectory: string; toDirectory: string }) => {
       const service = getService();

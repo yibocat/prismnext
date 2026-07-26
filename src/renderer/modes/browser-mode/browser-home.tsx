@@ -1,5 +1,6 @@
+import { useTranslation } from "react-i18next";
 import { useBrowserStore } from "@/stores/browser-store";
-import { navigateBrowserUrl, openUrlInBrowser } from "@/lib/browser-link";
+import { navigateBrowserUrl } from "@/lib/browser-link";
 import { BrowserFavicon } from "./browser-favicon";
 
 interface BrowserHomeProps {
@@ -7,6 +8,7 @@ interface BrowserHomeProps {
 }
 
 export function BrowserHome({ tabId }: BrowserHomeProps) {
+  const { t } = useTranslation();
   const recentVisits = useBrowserStore((s) => s.recentVisits);
   const recent = recentVisits.slice(0, 8);
 
@@ -18,7 +20,7 @@ export function BrowserHome({ tabId }: BrowserHomeProps) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
-          Enter a URL or search term above
+          {t("modes.browser.homeHint")}
         </p>
       </div>
     );
@@ -27,11 +29,11 @@ export function BrowserHome({ tabId }: BrowserHomeProps) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6">
       <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
-        Enter a URL or search term above
+        {t("modes.browser.homeHint")}
       </p>
       <div className="w-full max-w-md space-y-1">
         <p className="text-[length:var(--font-hint)] text-muted-foreground text-center">
-          Recent
+          {t("modes.browser.recent")}
         </p>
         {recent.map((visit, i) => (
           <button

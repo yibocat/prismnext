@@ -950,6 +950,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("session:loadWindow", { sessionId, projectPath, cwd, offset, limit }),
 	sessionGetDirectory: (sessionId: string) =>
 		ipcRenderer.invoke("session:getDirectory", { sessionId }),
+	sessionRename: (args: { tabId: string; title: string; sessionId: string }) =>
+		ipcRenderer.invoke("session:rename", args),
 	sessionReassignDirectory: (fromDirectory: string, toDirectory: string) =>
 		ipcRenderer.invoke("session:reassignDirectory", { fromDirectory, toDirectory }),
 	sessionDelete: (sessionId: string, projectPath?: string) =>

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { TagIcon } from "lucide-react";
 import {
   AppMenu,
@@ -11,6 +12,7 @@ import {
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { collectProjectTags } from "@/lib/literature/paper-tag-utils";
+import { i18n } from "@/lib/i18n";
 import { paperTagDotClass, paperTagToneClass } from "../../../shared/paper-tags";
 import { cn } from "@/lib/utils";
 
@@ -25,12 +27,15 @@ const tagPillClass =
   "inline-flex shrink-0 rounded-full border px-1.5 py-0 text-[length:var(--font-size-11)] leading-5";
 
 function tagFilterTitle(tag: string | null, count: number | undefined): string {
-  if (!tag) return "Filter by tag";
-  return count != null ? `Filter: ${tag} (${count})` : `Filter: ${tag}`;
+  if (!tag) return i18n.t("modes.literature.filterByTag");
+  return count != null
+    ? i18n.t("modes.literature.filterTagCount", { tag, count })
+    : i18n.t("modes.literature.filterTag", { tag });
 }
 
 /** Library toolbar — filter entries by user tag (shown when any tag exists). */
 export function LiteratureTagFilterDropdown({ compact = false }: { compact?: boolean }) {
+  const { t } = useTranslation();
   const papers = useLiteratureStore((s) => s.papers);
   const libraryTagFilter = useLiteratureStore((s) => s.libraryTagFilter);
   const setLibraryTagFilter = useLiteratureStore((s) => s.setLibraryTagFilter);
@@ -93,7 +98,7 @@ export function LiteratureTagFilterDropdown({ compact = false }: { compact?: boo
         </button>
       </AppMenuTrigger>
       <AppMenuContent align="start" className="min-w-[10rem]">
-        <AppMenuLabel>Filter by tag</AppMenuLabel>
+        <AppMenuLabel>{t("modes.literature.filterByTag")}</AppMenuLabel>
         <AppMenuCheckItem selected={!libraryTagFilter} onClick={() => handleSelect(null)}>
           All entries
         </AppMenuCheckItem>

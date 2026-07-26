@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -9,6 +10,7 @@ import {
 import { isExternalFileId, resolveExternalPath } from "@/lib/files/external-file";
 
 export function NoFileOpen() {
+  const { t } = useTranslation();
   const openExternalFile = useDocumentStore((s) => s.openExternalFile);
   const openFile = useRightPanelStore((s) => s.openFile);
   const setActiveFile = useDocumentStore((s) => s.setActiveFile);
@@ -35,7 +37,7 @@ export function NoFileOpen() {
     return (
       <div className="flex flex-1 items-center justify-center">
         <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
-          No open files
+          {t("modes.files.noOpenFiles")}
         </p>
       </div>
     );
@@ -44,11 +46,11 @@ export function NoFileOpen() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6">
       <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
-        No open files
+        {t("modes.files.noOpenFiles")}
       </p>
       <div className="w-full max-w-xs space-y-1">
         <p className="text-[length:var(--font-hint)] text-muted-foreground text-center">
-          Recent
+          {t("modes.files.recent")}
         </p>
         {recent.map((entry) => (
           <button

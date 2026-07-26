@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   FileTextIcon,
   FolderOpenIcon,
@@ -73,6 +74,7 @@ function PaperNoteRow({
   onOpen: () => void;
   onOpenInFiles: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <AppContextMenu>
       <AppContextMenuTrigger asChild>
@@ -87,7 +89,10 @@ function PaperNoteRow({
           <FileTextIcon className="size-3 shrink-0 opacity-60" />
           <span className="min-w-0 flex-1 truncate">{noteLabel(note.name)}</span>
           {isDirty ? (
-            <span className="size-2 shrink-0 rounded-full bg-info" title="Unsaved changes" />
+            <span
+              className="size-2 shrink-0 rounded-full bg-info"
+              title={t("modes.literature.unsavedChanges")}
+            />
           ) : null}
         </button>
       </AppContextMenuTrigger>
@@ -102,6 +107,7 @@ function PaperNoteRow({
 }
 
 export function LiteraturePaperWorkspaceSidebar({ paper }: { paper: LiteraturePaper }) {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const files = useDocumentStore((s) => s.files);
   const openedContents = useDocumentStore((s) => s.openedContents);
@@ -207,7 +213,7 @@ export function LiteraturePaperWorkspaceSidebar({ paper }: { paper: LiteraturePa
         />
         <div className="flex-1" />
         {citationTabActive ? (
-          <Hint label="Refresh citations">
+          <Hint label={t("modes.literature.refreshCitations")}>
             <button
               type="button"
               className={headerBtn}
@@ -240,7 +246,7 @@ export function LiteraturePaperWorkspaceSidebar({ paper }: { paper: LiteraturePa
               >
                 {notesFolder.split("/").pop()}
               </span>
-              <Hint label="New note">
+              <Hint label={t("literature.notes.newNote")}>
                 <button
                   type="button"
                   className={headerBtn}
@@ -258,7 +264,7 @@ export function LiteraturePaperWorkspaceSidebar({ paper }: { paper: LiteraturePa
 
             {notes.length === 0 ? (
               <p className="px-2 py-3 text-[length:var(--font-size-11)] text-muted-foreground/55">
-                No notes yet.
+                {t("modes.literature.noNotesYet")}
               </p>
             ) : (
               <ul className="flex flex-col gap-0.5">
@@ -309,7 +315,7 @@ export function LiteraturePaperWorkspaceSidebar({ paper }: { paper: LiteraturePa
                             : "(highlight)"}
                         </span>
                       </button>
-                      <Hint label="Delete highlight">
+                      <Hint label={t("modes.literature.deleteHighlight")}>
                         <button
                           type="button"
                           className={cn(

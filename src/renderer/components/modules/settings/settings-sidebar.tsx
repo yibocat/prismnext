@@ -60,6 +60,7 @@ export const SETTINGS_GROUPS = [
     items: [
       { id: "texworkspace", labelKey: "settings.nav.texWorkspace", icon: FileTextIcon },
       { id: "terminal", labelKey: "settings.nav.terminal", icon: TerminalIcon },
+      { id: "browser", labelKey: "settings.nav.browser", icon: GlobeIcon },
       { id: "literature", labelKey: "settings.nav.literature", icon: BookOpenIcon },
     ],
   },

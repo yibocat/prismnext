@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { MoreHorizontalIcon, Loader2Icon } from "lucide-react";
 import { useGitStore } from "@/stores/git-store";
 import { useGitDiffPrefsStore } from "@/stores/git-diff-prefs-store";
@@ -28,6 +29,7 @@ export function GitPanelOverflowMenu({
   projectRoot,
   variant,
 }: GitPanelOverflowMenuProps) {
+  const { t } = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
 
   const layout = useGitDiffPrefsStore((s) => s.layout);
@@ -79,40 +81,44 @@ export function GitPanelOverflowMenu({
         <button
           type="button"
           className={toolbarBtn}
-          aria-label={isChanges ? "Changes view options" : "History view options"}
+          aria-label={
+            isChanges
+              ? t("git.overflow.changesOptions")
+              : t("git.overflow.historyOptions")
+          }
         >
           <MoreHorizontalIcon className="size-3.5" />
         </button>
       </AppMenuTrigger>
       <AppMenuContent align="end">
-        <AppMenuLabel>Layout</AppMenuLabel>
+        <AppMenuLabel>{t("git.overflow.layout")}</AppMenuLabel>
         <AppMenuCheckItem
           selected={layout === "unified"}
           onClick={() => setLayout("unified")}
         >
-          Unified
+          {t("git.overflow.unified")}
         </AppMenuCheckItem>
         <AppMenuCheckItem selected={layout === "split"} onClick={() => setLayout("split")}>
-          Split
+          {t("git.overflow.split")}
         </AppMenuCheckItem>
 
         <AppMenuSeparator />
 
         <AppMenuSwitchRow
-          label="Ignore whitespace"
+          label={t("git.overflow.ignoreWhitespace")}
           checked={ignoreWhitespace}
           onCheckedChange={(v) => void handleIgnoreWhitespaceChange(v)}
-          title="比较时忽略行尾空格与纯缩进差异"
+          title={t("git.overflow.ignoreWhitespaceTitle")}
         />
         <AppMenuSwitchRow
-          label="Word wrap"
+          label={t("git.overflow.wordWrap")}
           checked={wordWrap}
           onCheckedChange={setWordWrap}
         />
 
         <AppMenuSeparator />
 
-        <AppMenuItem onClick={handleCollapseAll}>Collapse all</AppMenuItem>
+        <AppMenuItem onClick={handleCollapseAll}>{t("git.overflow.collapseAll")}</AppMenuItem>
 
         <AppMenuItem
           disabled={refreshing}
@@ -125,7 +131,9 @@ export function GitPanelOverflowMenu({
             ) : null
           }
         >
-          {isChanges ? "Refresh changes" : "Refresh history"}
+          {isChanges
+            ? t("git.overflow.refreshChanges")
+            : t("git.overflow.refreshHistory")}
         </AppMenuItem>
       </AppMenuContent>
     </AppMenu>

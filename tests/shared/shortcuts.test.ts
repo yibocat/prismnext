@@ -230,6 +230,55 @@ describe("resolveChord", () => {
     expect(resolveChord("product.togglePlanMode")?.chord).toEqual({ key: "p", alt: true });
   });
 
+  it("registers product.cycleMessageWidth as ⌘L and workspace.insertToChat as ⌥L", () => {
+    expect(resolveChord("product.cycleMessageWidth")?.chord).toEqual({ key: "l", primary: true });
+    expect(resolveChord("workspace.insertToChat")?.chord).toEqual({ key: "l", alt: true });
+    expect(formatChord({ key: "l", primary: true }, "darwin")).toBe("⌘L");
+    expect(formatChord({ key: "l", primary: true }, "win32")).toBe("Ctrl+L");
+    expect(formatChord({ key: "l", primary: true }, "linux")).toBe("Ctrl+L");
+    expect(formatChord({ key: "l", alt: true }, "darwin")).toBe("⌥L");
+    expect(formatChord({ key: "l", alt: true }, "win32")).toBe("Alt+L");
+    expect(formatChord({ key: "l", alt: true }, "linux")).toBe("Alt+L");
+  });
+
+  it("matches alt+l on darwin when Option remaps key", () => {
+    expect(
+      chordMatchesEvent(
+        { key: "l", alt: true },
+        { key: "¬", code: "KeyL", metaKey: false, ctrlKey: false, shiftKey: false, altKey: true },
+        "darwin",
+      ),
+    ).toBe(true);
+  });
+
+  it("matches Ctrl+L cycle width and Alt+L insert on win32/linux", () => {
+    const width = { key: "l", primary: true };
+    const insert = { key: "l", alt: true };
+    const ctrlL = {
+      key: "l",
+      code: "KeyL",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+    };
+    const altL = {
+      key: "l",
+      code: "KeyL",
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+    };
+    for (const platform of ["win32", "linux"] as const) {
+      expect(chordMatchesEvent(width, ctrlL, platform)).toBe(true);
+      expect(chordMatchesEvent(insert, altL, platform)).toBe(true);
+      // Crossed modifiers must not match.
+      expect(chordMatchesEvent(width, altL, platform)).toBe(false);
+      expect(chordMatchesEvent(insert, ctrlL, platform)).toBe(false);
+    }
+  });
+
   it("ignores overrides for non-remappable shell/editor", () => {
     const r = resolveChord("shell.toggleLeftSidebar", {
       "shell.toggleLeftSidebar": { key: "k", primary: true },

@@ -171,6 +171,7 @@ function HistoryList({
   selectedCommitHash: string | null;
   onSelect: (hash: string) => void;
 }) {
+  const { t } = useTranslation();
   const dateGroups = useMemo(() => groupByDate(commits), [commits]);
 
   if (commitsLoading) {
@@ -185,7 +186,7 @@ function HistoryList({
     return (
       <div className="px-3 py-8 text-center">
         <p className="text-[length:var(--font-hint)] text-muted-foreground/60">
-          No commits yet
+          {t("modes.git.noCommitsYet")}
         </p>
       </div>
     );

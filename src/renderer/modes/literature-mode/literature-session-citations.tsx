@@ -32,6 +32,7 @@ function StatusChip({
   inLibrary: boolean;
   progress?: StagedAddProgressEvent;
 }) {
+  const { t } = useTranslation();
   if (progress && progress.phase !== "done") {
     return (
       <span
@@ -47,7 +48,7 @@ function StatusChip({
     return (
       <span
         className="inline-flex shrink-0 items-center rounded-full border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium text-primary/80"
-        title="Already in project library"
+        title={t("modes.literature.alreadyInLibrary")}
       >
         In library
       </span>
@@ -57,7 +58,7 @@ function StatusChip({
     return (
       <span
         className="inline-flex shrink-0 items-center rounded-full border border-emerald-500/35 bg-emerald-500/10 px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium text-emerald-700 dark:text-emerald-400"
-        title="Identifier verified against external catalog"
+        title={t("modes.literature.identifierVerified")}
       >
         Pending
       </span>

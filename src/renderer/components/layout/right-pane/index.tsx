@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { PaneContent } from "./content";
@@ -15,12 +16,14 @@ interface RightPaneProps {
  * that forced active-only mounting in v0.4.4.
  */
 export function RightPane({ tabs, activeTabId }: RightPaneProps) {
+  const { t } = useTranslation();
+
   if (tabs.length === 0) {
     return (
       <div data-surface="content" className="flex h-full flex-col min-w-0">
         <div className="flex flex-1 items-center justify-center">
           <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
-            Open a file to get started
+            {t("shell.rightArea.openFileToStart")}
           </p>
         </div>
       </div>

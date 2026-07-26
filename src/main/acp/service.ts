@@ -2095,6 +2095,23 @@ export class AcpService {
     }
   }
 
+  /**
+   * Persist a new title for an OpenCode session.
+   *
+   * Goes through `this.withDb` — the same path `listSessions` and
+   * `reassignSessionsDirectory` use — so all session-table mutations stay
+   * in one place. `time_updated` is bumped so the renamed session floats
+   * to the top of the sidebar list (matches user intent: this is the one
+   * they just cared about).
+   */
+  async renameSession(sessionId: string, title: string): Promise<void> {
+    await this.withDb((db) => {
+      db
+        .prepare("UPDATE session SET title = ?, time_updated = ? WHERE id = ?")
+        .run(title, Date.now(), sessionId);
+    });
+  }
+
   /** Fire-and-forget ACP session/load to init session state for continued conversation. */
   async initSession(sessionId: string, cwd: string, projectRoot?: string): Promise<void> {
     if (!this.conn) return;

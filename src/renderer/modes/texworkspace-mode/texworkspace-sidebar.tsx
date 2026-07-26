@@ -276,11 +276,10 @@ export function TexworkspaceSidebar() {
             <FileTextIcon className="size-8 text-muted-foreground/30" />
             <div className="space-y-1">
               <p className="text-sm font-medium text-muted-foreground">
-                No manuscript folder configured
+                {t("modes.texworkspace.noManuscript")}
               </p>
               <p className="text-xs text-muted-foreground/60 max-w-[220px]">
-                Configure a manuscript folder in Settings → TeX Workspace to
-                enable TeX editing, outline navigation, and compilation.
+                {t("modes.texworkspace.noManuscriptHint")}
               </p>
             </div>
             <Button
@@ -292,7 +291,7 @@ export function TexworkspaceSidebar() {
                 useLayoutStore.getState().setSettingsCategory("texworkspace");
               }}
             >
-              Open Workspace Settings
+              {t("modes.texworkspace.openSettings")}
             </Button>
           </div>
         </SidebarContent>
@@ -416,7 +415,7 @@ export function TexworkspaceSidebar() {
           <div>
             {manuscriptTree.length === 0 ? (
               <p className="px-3 py-2 text-[length:var(--font-hint)] text-muted-foreground/60">
-                No files in manuscript folder
+                {t("modes.texworkspace.noFilesInManuscript")}
               </p>
             ) : (
               <TexFileTree tree={manuscriptTree} depth={0} onSelect={handleFileSelect} />
@@ -430,7 +429,9 @@ export function TexworkspaceSidebar() {
       {/* Footer: word count (Outline tab, not searching) — only when manuscript is configured */}
       {manuscriptConfig && !isSearching && activeTab === "outline" && (
         <SidebarFooter className="flex-row h-6 shrink-0 items-center justify-end px-3 py-0 gap-0 pb-1">
-          <span className="text-[length:var(--font-hint)] text-muted-foreground/60 tabular-nums">{wordCount.toLocaleString()} words</span>
+          <span className="text-[length:var(--font-hint)] text-muted-foreground/60 tabular-nums">
+            {t("modes.texworkspace.wordCount", { count: wordCount.toLocaleString() })}
+          </span>
         </SidebarFooter>
       )}
     </>

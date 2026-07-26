@@ -148,7 +148,7 @@ function LibraryTableHeader({
           literatureListHeaderLabelClass,
           "text-muted-foreground",
         )}
-        title="Journal labels (coming soon)"
+        title={t("modes.literature.journalLabelsSoon")}
       >
         Labels
       </span>
@@ -167,7 +167,7 @@ function LibraryTableHeader({
         className={LITERATURE_COL_UPDATED}
       />
       <span className={LITERATURE_COL_CHECK}>
-        <Hint label="Select all">
+        <Hint label={t("modes.literature.selectAll")}>
           <input
             type="checkbox"
             checked={allChecked}
@@ -206,6 +206,7 @@ function LibraryTableRow({
   onToggleCheck: () => void;
   suppressRowClickRef: RefObject<boolean>;
 }) {
+  const { t } = useTranslation();
   const openLiteraturePaper = useRightPanelStore((s) => s.openLiteraturePaper);
   const pdfCacheState = useLiteratureStore((s) => s.pdfCacheStatus[paper.id]);
   const extractStates = useLiteratureExtractStore((s) => s.statesByPaper);
@@ -305,24 +306,24 @@ function LibraryTableRow({
         >
           {hasPdf ? (
             pdfStale ? (
-              <span title="PDF cache outdated — refresh from Zotero">
+              <span title={t("modes.literature.pdfCacheOutdated")}>
                 <HardDriveIcon
                   className="size-3 shrink-0 text-amber-600/85 dark:text-amber-500/85"
-                  aria-label="PDF cache outdated"
+                  aria-label={t("modes.literature.pdfCacheOutdated")}
                 />
               </span>
             ) : pdfCached ? (
-              <span title="PDF cached locally">
+              <span title={t("modes.literature.pdfCachedLocally")}>
                 <HardDriveIcon
                   className="size-3 shrink-0 text-emerald-600/80 dark:text-emerald-500/80"
-                  aria-label="PDF cached locally"
+                  aria-label={t("modes.literature.pdfCachedLocally")}
                 />
               </span>
             ) : (
-              <span title="PDF not cached — will download when opened">
+              <span title={t("modes.literature.pdfNotCached")}>
                 <FileTextIcon
                   className="size-3 shrink-0 text-muted-foreground/45"
-                  aria-label="PDF not cached locally"
+                  aria-label={t("modes.literature.pdfNotCachedAria")}
                 />
               </span>
             )
@@ -375,7 +376,7 @@ function LibraryTableRow({
         </span>
         <span
           className={cn(LITERATURE_COL_VENUE_LABELS, "min-w-0")}
-          title="Journal labels (coming soon)"
+          title={t("modes.literature.journalLabelsSoon")}
         >
           —
         </span>
@@ -398,7 +399,7 @@ function LibraryTableRow({
             onChange={onToggleCheck}
             onClick={(e) => e.stopPropagation()}
             className="size-3 cursor-pointer accent-primary rounded-sm"
-            title="Select entry"
+            title={t("modes.literature.selectEntry")}
           />
         </span>
       </div>

@@ -95,6 +95,7 @@ function libraryBackgroundBusyTitle(
 }
 
 function LiteratureReaderToolbar({ paper, tab }: { paper: LiteraturePaper; tab: RightTab }) {
+  const { t } = useTranslation();
   const notesOpen = useLiteratureReaderStore(
     (s) => s.notesPaneOpenByPaper[paper.id] ?? false,
   );
@@ -117,7 +118,7 @@ function LiteratureReaderToolbar({ paper, tab }: { paper: LiteraturePaper; tab: 
         />
       ) : null}
       <LiteratureReaderExtractToolbar paper={paper} />
-      <Hint label={notesOpen ? "Close reading notes" : "Open reading notes"}>
+      <Hint label={notesOpen ? t("modes.literature.closeNotes") : t("modes.literature.openNotes")}>
         <button
           type="button"
           className={cn(
@@ -339,7 +340,7 @@ function LiteratureLibraryToolbar() {
                 </span>
               </span>
             ) : null}
-            <Hint label="Add all pending citations to the library">
+            <Hint label={t("modes.literature.addAllPendingHint")}>
               <Button
                 size="xs"
                 variant="ghost"
@@ -355,7 +356,7 @@ function LiteratureLibraryToolbar() {
                 {!compact ? <span className="ml-1">{t("modes.literature.addAll")}</span> : null}
               </Button>
             </Hint>
-            <Hint label="Clear all citations in this session">
+            <Hint label={t("modes.literature.clearCitationsHint")}>
               <Button
                 size="xs"
                 variant="ghost"
@@ -373,7 +374,7 @@ function LiteratureLibraryToolbar() {
           </>
         ) : (
           <>
-            <Hint label="Manuscript citation health (.tex ↔ .bib ↔ library)">
+            <Hint label={t("modes.literature.citationHealthHint")}>
               <button
                 type="button"
                 className={cn(toolbarBtn, "shrink-0 size-6 justify-center px-0")}
@@ -419,7 +420,7 @@ function LiteratureLibraryToolbar() {
                 {t("modes.literature.importPdf")}
               </AppMenuItem>
               <AppMenuItem disabled={!projectRoot || busy} onClick={() => void handleImportBibTeX()}>
-                Import BibTeX (+ optional .json)…
+                {t("modes.literature.importBibTeX")}
               </AppMenuItem>
               <AppMenuSeparator />
               <AppMenuItem
@@ -436,7 +437,9 @@ function LiteratureLibraryToolbar() {
                     void pullFromZotero(projectRoot);
                   }}
                 >
-                  {pullingFromZotero ? "Refreshing from Zotero…" : "Refresh from Zotero"}
+                  {pullingFromZotero
+                    ? t("modes.literature.refreshingZotero")
+                    : t("modes.literature.refreshZotero")}
                 </AppMenuItem>
               ) : null}
             </AppMenuContent>

@@ -705,9 +705,9 @@ export function FilesSidebar() {
                     EmptyPlaceholder: () => (
                       <div className="flex flex-1 items-center justify-center px-4 py-8">
                         <p className="text-center text-[length:var(--font-empty-state)] leading-relaxed text-muted-foreground">
-                          No files yet
+                          {t("modes.files.noFilesYet")}
                           <span className="mt-1 block text-[length:var(--font-hint)] opacity-60">
-                            Open a project to get started
+                            {t("modes.files.openProjectToStart")}
                           </span>
                         </p>
                       </div>
@@ -721,10 +721,10 @@ export function FilesSidebar() {
             </AppContextMenuTrigger>
             <AppContextMenuContent>
               <AppContextMenuItem onClick={() => setEditing({ type: "file", parentPath: resolveCreateFolder() })}>
-                New File
+                {t("modes.files.newFile")}
               </AppContextMenuItem>
               <AppContextMenuItem onClick={() => setEditing({ type: "folder", parentPath: resolveCreateFolder() })}>
-                New Folder
+                {t("modes.files.newFolder")}
               </AppContextMenuItem>
             </AppContextMenuContent>
           </AppContextMenu>

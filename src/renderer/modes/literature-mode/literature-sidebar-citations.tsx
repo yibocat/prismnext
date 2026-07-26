@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   BookPlusIcon,
   ExternalLinkIcon,
@@ -73,6 +74,7 @@ function CitationRow({
   onOpenInLibrary: (paperId: string) => void;
   onAddToLibrary: (entry: PaperCitationEntry) => void;
 }) {
+  const { t } = useTranslation();
   const externalUrl = entry.doi
     ? `https://doi.org/${entry.doi}`
     : entry.arxivId
@@ -103,10 +105,10 @@ function CitationRow({
         </button>
         {libraryPaperId ? (
           <span className="mt-0.5 inline-flex shrink-0 items-center rounded-full border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium text-primary/80">
-            In library
+            {t("modes.literature.inLibrary")}
           </span>
         ) : entry.doi || entry.arxivId ? (
-          <Hint label="Add to library">
+          <Hint label={t("modes.literature.addToLibrary")}>
             <button
               type="button"
               className={cn(headerBtn, "mt-0.5 size-6 shrink-0")}

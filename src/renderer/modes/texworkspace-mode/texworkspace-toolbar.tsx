@@ -116,7 +116,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
     }
     if (!compileFile) {
       console.warn("[texworkspace-toolbar] Compile blocked: no file open in texworkspace tab");
-      toast.error("No file open to compile. Open a .tex file first.");
+      toast.error(t("modes.texworkspace.compileNoFile"));
       return;
     }
     const resolved = resolveCompileTarget(compileFile, files, getContent);
@@ -124,7 +124,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
       await compile(projectRoot, resolved.targetPath);
     } else {
       console.warn("[texworkspace-toolbar] Compile blocked: could not resolve compile target from file", compileFile);
-      toast.error("Could not determine which file to compile. Make sure your document has a \\documentclass declaration.");
+      toast.error(t("modes.texworkspace.compileNoTarget"));
     }
   };
 
@@ -273,7 +273,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
         </Hint>
 
         <AppMenu>
-          <Hint label="Select compiler">
+          <Hint label={t("modes.texworkspace.selectCompiler")}>
             <AppMenuTrigger asChild>
               <button
                 type="button"

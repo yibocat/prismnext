@@ -33,6 +33,7 @@ import {
   WorkspaceSettings,
   TerminalSettings,
   TexworkspaceSettings,
+  BrowserSettings,
   LiteratureSettings,
   AboutSettings,
 } from "@/components/modules/settings";
@@ -167,6 +168,7 @@ export function LeftMainArea() {
       models: ModelSettings,
       agent: AgentSettings,
       terminal: TerminalSettings,
+      browser: BrowserSettings,
       "prompts-rules": PromptsRulesSettings,
       "prompts-rules-commands": PromptsRulesSettings,
       commands: SlashCommandsSettings,

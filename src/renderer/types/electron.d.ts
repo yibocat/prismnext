@@ -1649,6 +1649,7 @@ export interface ElectronAPI {
   sessionLoad: (sessionId: string, projectPath?: string, cwd?: string) => Promise<any[]>;
   sessionLoadWindow: (sessionId: string, projectPath: string | undefined, cwd: string | undefined, offset: number, limit: number) => Promise<{ messages: any[]; totalMessages: number }>;
   sessionGetDirectory: (sessionId: string) => Promise<string | null>;
+  sessionRename: (args: { tabId: string; title: string; sessionId: string }) => Promise<void>;
   sessionReassignDirectory: (fromDirectory: string, toDirectory: string) => Promise<number>;
   sessionDelete: (sessionId: string, projectPath?: string) => Promise<{ success: boolean; error?: string }>;
   sessionTruncateToTurn: (args: {

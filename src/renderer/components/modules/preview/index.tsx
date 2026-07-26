@@ -379,6 +379,7 @@ export function PdfViewerInner({
   documentLayers,
   hideToolbar = false,
 }: PdfViewerInnerProps) {
+  const { t } = useTranslation();
   const [sidePanel, setSidePanel] = useState<SidePanel>(null);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const pdfDarkFromSettings = useSettingsStore((s) => s.settings.pdfDarkMode);
@@ -609,7 +610,7 @@ export function PdfViewerInner({
 
           {/* Zoom controls */}
           <div className="flex items-center">
-            <Hint label="Zoom out">
+            <Hint label={t("modes.texworkspace.zoomOut")}>
               <Button
                 variant="ghost" size="icon" className="size-6 rounded-r-none"
                 onClick={handleZoomOut}
@@ -618,7 +619,7 @@ export function PdfViewerInner({
               </Button>
             </Hint>
             <AppMenu>
-              <Hint label="Zoom">
+              <Hint label={t("modes.texworkspace.zoom")}>
                 <AppMenuTrigger asChild>
                   <button
                     className="h-6 min-w-[4.5rem] px-1 tabular-nums text-muted-foreground hover:text-foreground rounded transition-colors cursor-pointer select-none text-center"
@@ -653,7 +654,7 @@ export function PdfViewerInner({
                 ))}
               </AppMenuContent>
             </AppMenu>
-            <Hint label="Zoom in">
+            <Hint label={t("modes.texworkspace.zoomIn")}>
               <Button
                 variant="ghost" size="icon" className="size-6 rounded-l-none"
                 onClick={handleZoomIn}
@@ -667,7 +668,7 @@ export function PdfViewerInner({
 
           {/* Page navigation */}
           <div className="flex items-center">
-            <Hint label="Previous page">
+            <Hint label={t("modes.texworkspace.prevPage")}>
               <Button
                 variant="ghost" size="icon" className="size-6 rounded-r-none"
                 disabled={currentPage <= 1}
@@ -679,7 +680,7 @@ export function PdfViewerInner({
             <span className="inline-flex items-center h-6 px-0.5 tabular-nums text-muted-foreground select-none min-w-[3rem] justify-center">
               {currentPage}<span className="text-border mx-px">/</span>{totalPages}
             </span>
-            <Hint label="Next page">
+            <Hint label={t("modes.texworkspace.nextPage")}>
               <Button
                 variant="ghost" size="icon" className="size-6 rounded-l-none"
                 disabled={currentPage >= totalPages}
@@ -693,7 +694,7 @@ export function PdfViewerInner({
           <span className="mx-0.5 h-3 w-px bg-border shrink-0" />
 
           {/* PDF dark mode toggle */}
-          <Hint label={pdfDark === "on" ? "Light mode" : pdfDark === "follow" ? "Following app theme" : "Dark mode"}>
+          <Hint label={pdfDark === "on" ? t("modes.texworkspace.lightMode") : pdfDark === "follow" ? t("modes.texworkspace.followTheme") : t("modes.texworkspace.darkMode")}>
             <button
               type="button"
               className={`flex size-6 items-center justify-center rounded transition-colors ${

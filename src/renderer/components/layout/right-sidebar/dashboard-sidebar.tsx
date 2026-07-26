@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useDocumentStore } from "@/stores/document-store";
 import { FolderOpenIcon } from "lucide-react";
 import {
@@ -6,6 +7,7 @@ import {
 } from "@/components/ui/sidebar";
 
 export function DashboardSidebar() {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const projectName = projectRoot?.split(/[/\\]/).pop() ?? "Project";
 
@@ -20,11 +22,10 @@ export function DashboardSidebar() {
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-12 text-center">
           <FolderOpenIcon className="size-8 text-muted-foreground/40" />
           <p className="text-[length:var(--font-empty-state)] text-muted-foreground">
-            Open a file or switch to a workspace
+            {t("shell.rightArea.openFileOrWorkspace")}
           </p>
           <p className="text-[length:var(--font-hint)] text-muted-foreground/60">
-            Use the toolbar above to browse files, view git history, or start
-            writing in the texworkspace.
+            {t("shell.rightArea.openFileOrWorkspaceHint")}
           </p>
         </div>
       </SidebarContent>

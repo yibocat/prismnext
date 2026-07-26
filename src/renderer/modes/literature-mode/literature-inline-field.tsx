@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 import { openUrlInBrowser } from "@/lib/browser-link";
@@ -364,6 +365,7 @@ export function CopyFeedbackButton({
   children: ReactNode;
   className?: string;
 }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<number | null>(null);
 
@@ -391,7 +393,7 @@ export function CopyFeedbackButton({
         onClick={handleClick}
       >
         {copied ? (
-          <CheckIcon className="size-3 text-success" aria-label="Copied" />
+          <CheckIcon className="size-3 text-success" aria-label={t("common.copied")} />
         ) : (
           children
         )}

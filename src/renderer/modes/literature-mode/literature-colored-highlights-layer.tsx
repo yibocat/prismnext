@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { usePDFPageNumber, usePdf } from "@anaralabs/lector";
 import type { ColoredHighlight } from "@anaralabs/lector";
 import { Trash2Icon } from "lucide-react";
@@ -27,6 +28,7 @@ export function LiteratureColoredHighlightsLayer() {
 }
 
 function ColoredHighlightRects({ selection }: { selection: ColoredHighlight }) {
+  const { t } = useTranslation();
   const pageNumber = usePDFPageNumber();
   const deleteColoredHighlight = usePdf((s) => s.deleteColoredHighlight);
   const [showDelete, setShowDelete] = useState(false);
@@ -62,8 +64,8 @@ function ColoredHighlightRects({ selection }: { selection: ColoredHighlight }) {
       {showDelete ? (
         <button
           type="button"
-          title="Remove highlight"
-          aria-label="Remove highlight"
+          title={t("modes.literature.removeHighlight")}
+          aria-label={t("modes.literature.removeHighlight")}
           className="absolute z-30 flex size-6 items-center justify-center rounded-md border border-border bg-popover text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground"
           style={{
             top: last.top + last.height / 2,

@@ -1,8 +1,10 @@
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useLiteratureBlocks } from "./literature-block-context";
 
 /** Toolbar toggle for block-pick mode (single-click select). */
 export function LiteratureBlockPickToggle() {
+  const { t } = useTranslation();
   const { hasBlocks, blockPickMode, setBlockPickMode } = useLiteratureBlocks();
   if (!hasBlocks) return null;
 
@@ -15,10 +17,10 @@ export function LiteratureBlockPickToggle() {
           ? "bg-primary/15 text-primary"
           : "text-muted-foreground hover:text-foreground hover:bg-muted",
       )}
-      title="Block pick mode — click blocks to toggle (Shift+Click works anytime; multi-select)"
+      title={t("modes.literature.blockPickMode")}
       onClick={() => setBlockPickMode(!blockPickMode)}
     >
-      Blocks
+      {t("modes.literature.blocks")}
     </button>
   );
 }

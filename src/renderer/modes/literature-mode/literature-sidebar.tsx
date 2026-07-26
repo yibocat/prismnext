@@ -153,6 +153,7 @@ function CollectionRow({
   onNewSubcollection: () => void;
   onExtractAll: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <AppContextMenu>
       <AppContextMenuTrigger asChild>
@@ -179,7 +180,7 @@ function CollectionRow({
           {isZoteroBound ? (
             <span
               className="shrink-0 rounded px-1 py-px text-[length:var(--font-size-10)] font-medium uppercase tracking-wide text-muted-foreground/70 bg-muted/60"
-              title="Linked Zotero collection"
+              title={t("modes.literature.linkedZoteroCollection")}
             >
               Zotero
             </span>
@@ -411,15 +412,17 @@ function LiteratureLibrarySidebar() {
     <>
       <SidebarHeader className="flex h-[var(--height-mode-selector)] shrink-0 flex-row items-center justify-between px-3">
         <span className="truncate text-[length:var(--font-size-12)] font-medium text-muted-foreground">
-          Library
+          {t("modes.literature.initialTitle")}
         </span>
         <div className="flex items-center gap-0.5 shrink-0">
           {boundCollectionId ? (
             <Hint
               label={
                 lastZoteroSyncAt
-                  ? `Refresh from Zotero (last sync ${new Date(lastZoteroSyncAt).toLocaleString()})`
-                  : "Refresh from Zotero"
+                  ? t("modes.literature.refreshZoteroLastSync", {
+                      time: new Date(lastZoteroSyncAt).toLocaleString(),
+                    })
+                  : t("modes.literature.refreshZotero")
               }
             >
               <button

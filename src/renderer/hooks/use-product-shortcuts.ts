@@ -4,7 +4,6 @@ import {
   detectShortcutPlatform,
   resolveChord,
 } from "../../shared/shortcuts";
-import { eventTargetInCodeMirror } from "@/lib/editor/keymap";
 import { pressLeftNav } from "@/lib/workspace/left-nav";
 import { getLeftNavPanelRefs } from "@/lib/workspace/left-nav/panel-refs";
 import { compileCurrentDocument } from "@/stores/compile-store";
@@ -50,6 +49,8 @@ export function cycleMessageWidth(current: string | undefined): MessageWidth {
  * - product.compile
  * - product.acceptAll / product.rejectAll
  * - product.togglePlanMode — ⌥P / Alt+P
+ * - product.cycleMessageWidth — ⌘L / Ctrl+L (pairs with focus-input)
+ * - workspace.insertToChat (hosts) — ⌥L / Alt+L
  *
  * Single accept/reject (product.acceptChange / rejectChange) stay in the editor host.
  */
@@ -68,12 +69,55 @@ export function useProductShortcuts() {
 
       if (e.altKey && !e.metaKey && !e.ctrlKey) return;
 
-      // ⌘I → focus Chat composer. Skip when maximized (AiBar capture handler) or
-      // when CodeMirror has focus (editor.italic wins).
+      // ⌘L / Ctrl+L → cycle chat message width (narrow → balanced → wide).
+      if (matchesShortcut("product.cycleMessageWidth", e)) {
+        const current = useSettingsStore.getState().settings.messageWidth;
+        const next = cycleMessageWidth(current);
+        e.preventDefault();
+        void useSettingsStore.getState().updateSettings({ messageWidth: next });
+        return;
+      }
+
+      // ⌘Z / Ctrl+Z → undo the most recent session rename on the active tab.
+      // Skip when focus is in an editable element so the composer's native
+      // undo behavior keeps working.
+      if (matchesShortcut("product.undoRename", e)) {
+        const active = document.activeElement as HTMLElement | null;
+        const tag = active?.tagName;
+        const editable =
+          active?.isContentEditable ||
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          tag === "SELECT";
+        if (editable) return;
+        const { activeTabId, lastTitleByTab, undoRenameSession } = useChatStore.getState();
+        if (!activeTabId || lastTitleByTab[activeTabId] === undefined) return;
+        e.preventDefault();
+        void undoRenameSession(activeTabId);
+        return;
+      }
+
+      // ⌘I → focus Chat composer (or blur it if already focused — toggle).
+      // Skip when maximized (AiBar capture handler) or when the LaTeX editor
+      // has focus (editor.italic wins). The composer itself is also a CM
+      // editor, so we exclude any CM nested inside [data-chat-composer].
       if (matchesShortcut("product.focusAiBar", e)) {
         if (useLayoutStore.getState().editorMaximized) return;
-        if (eventTargetInCodeMirror(e.target)) return;
+        const target = e.target as Element | null;
+        if (
+          target &&
+          target.closest(".cm-editor") &&
+          !target.closest("[data-chat-composer]")
+        ) {
+          return;
+        }
         e.preventDefault();
+        const active = document.activeElement as HTMLElement | null;
+        if (active?.closest("[data-chat-composer]")) {
+          // Composer already has focus — leave it.
+          active.blur();
+          return;
+        }
         const layout = useLayoutStore.getState();
         layout.setLeftSidebarView("sessions");
         layout.requestCenterExpand();
@@ -118,13 +162,6 @@ export function useProductShortcuts() {
         if (changes.length === 0) return;
         e.preventDefault();
         void rejectAll();
-      }
-
-      if (matchesShortcut("product.cycleMessageWidth", e)) {
-        const current = useSettingsStore.getState().settings.messageWidth;
-        const next = cycleMessageWidth(current);
-        e.preventDefault();
-        void useSettingsStore.getState().updateSettings({ messageWidth: next });
       }
     };
 

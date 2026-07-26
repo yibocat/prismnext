@@ -1,6 +1,7 @@
 import { i18n } from "@/lib/i18n";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
+  chordMatchesEvent,
   detectShortcutPlatform,
   formatChord,
   resolveChord,
@@ -58,4 +59,14 @@ export function shortcutTooltip(id: string): string {
 
 export function shortcutChordLabel(id: string): string {
   return resolveShortcut(id)?.chordLabel ?? "";
+}
+
+/** Whether a keyboard event matches the resolved chord for `id` (incl. overrides). */
+export function matchesShortcutEvent(id: string, e: KeyboardEvent): boolean {
+  const resolved = resolveChord(id, readOverrides());
+  if (!resolved) return false;
+  const platform = detectShortcutPlatform(
+    typeof window !== "undefined" ? (window.electronAPI?.platform ?? "darwin") : "darwin",
+  );
+  return chordMatchesEvent(resolved.chord, e, platform);
 }

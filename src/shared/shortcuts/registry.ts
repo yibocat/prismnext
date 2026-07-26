@@ -177,7 +177,10 @@ export const SHORTCUT_REGISTRY: readonly ShortcutDef[] = [
     category: "workspace",
     remappable: true,
     scope: "app",
-    defaultChord: { key: "l", primary: true },
+    // ⌥L / Alt+L — also bound by CodeMirrorInsertHost, TerminalInsertHost,
+    // and GitDiffInsertHost (capture-phase). ⌘L / Ctrl+L is taken by
+    // product.cycleMessageWidth.
+    defaultChord: { key: "l", alt: true },
     labelKey: "shortcuts.workspace.insertToChat",
     implemented: true,
   },
@@ -408,8 +411,19 @@ export const SHORTCUT_REGISTRY: readonly ShortcutDef[] = [
     category: "product",
     remappable: true,
     scope: "chat",
-    defaultChord: { key: "w", primary: true, shift: true },
+    // ⌘L / Ctrl+L — pairs physically with focus composer (⌘I / Ctrl+I).
+    // (workspace.insertToChat is ⌥L / Alt+L.)
+    defaultChord: { key: "l", primary: true },
     labelKey: "shortcuts.product.cycleMessageWidth",
+    implemented: true,
+  },
+  {
+    id: "product.undoRename",
+    category: "product",
+    remappable: true,
+    scope: "app",
+    defaultChord: { key: "z", primary: true },
+    labelKey: "shortcuts.product.undoRename",
     implemented: true,
   },
 ] as const;

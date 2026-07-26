@@ -3,6 +3,7 @@ import { isToolResultUserMessage } from "@/components/modules/chat/chat-turns";
 import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
 
 export function isGenericSessionTitle(title: string): boolean {
+  if (title === "") return true;
   return title === "New Chat" || title.startsWith("New session");
 }
 

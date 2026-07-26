@@ -155,6 +155,9 @@ interface TabDraft {
 interface TabState {
   id: string;
   title: string;
+  /** True once the user has explicitly renamed this tab. Blocks OpenCode auto-overwrite
+   *  in left-sidebar's fetchSessions sync so user-set titles stick. */
+  userTitleSet: boolean;
   sessionId: string | null;
   /** Committed messages — immutable once added. Never modified in-place. */
   messages: ChatStreamMessage[];
@@ -259,6 +262,7 @@ function makeDefaultTab(id: string): TabState {
   return {
     id,
     title: "New Chat",
+    userTitleSet: false,
     sessionId: null,
     messages: [],
     streamingMessage: null,
@@ -294,6 +298,13 @@ function makeDefaultTab(id: string): TabState {
     planConfirmSuppressed: false,
     planExitDialogOpen: false,
   };
+}
+
+/** Return a new lastTitleByTab map with the entry for `tabId` removed. */
+function dropTitle(map: Record<string, string>, tabId: string): Record<string, string> {
+  if (!(tabId in map)) return map;
+  const { [tabId]: _drop, ...rest } = map;
+  return rest;
 }
 
 function withSettledStreamMessageId(tab: TabState, messageId: string | null | undefined): string[] {
@@ -438,6 +449,9 @@ interface ChatState {
   // Multi-tab state
   tabs: TabState[];
   activeTabId: string;
+  /** Per-tab single-step undo buffer for session rename. Keyed by tabId.
+   *  Cleared on closeTab or on successful undoRenameSession. */
+  lastTitleByTab: Record<string, string>;
 
   // Projected fields (from active tab) — for backward compat
   messages: ChatStreamMessage[];
@@ -466,6 +480,13 @@ interface ChatState {
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   moveTab: (fromIndex: number, toIndex: number) => void;
+  /** Rename the session for a tab. Persists via session:rename IPC when the tab
+   *  has a sessionId; otherwise updates only the local title. Sets userTitleSet:true
+   *  and records the previous title in lastTitleByTab so Cmd+Z can undo. */
+  renameSession: (tabId: string, title: string) => Promise<void>;
+  /** Restore the previous title recorded by renameSession. No-op if no buffer
+   *  entry exists. Clears the buffer on successful restore. */
+  undoRenameSession: (tabId: string) => Promise<void>;
   saveDraft: (tabId: string, draft: TabDraft) => void;
 
   // Intensive reading list (per-tab)
@@ -826,6 +847,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   // Multi-tab
   tabs: [initialTab],
   activeTabId: initialTabId,
+  lastTitleByTab: {},
 
   // Projected
   ...projectActiveTab([initialTab], initialTabId),
@@ -877,6 +899,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     set({
       tabs: hydratedTabs,
       activeTabId: newActiveId,
+      lastTitleByTab: dropTitle(get().lastTitleByTab, id),
       ...projectActiveTab(hydratedTabs, newActiveId),
     });
     syncCheckoutForTab(hydratedTabs.find((t) => t.id === newActiveId));
@@ -893,6 +916,45 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
         useTerminalAiStore.getState().removeAiTabsForChat(id);
       });
+  },
+
+  renameSession: async (tabId, title) => {
+    const tab = get().tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+    const nextTitle = title.trim();
+    if (tab.sessionId) {
+      await window.electronAPI.sessionRename({
+        tabId,
+        title: nextTitle,
+        sessionId: tab.sessionId,
+      });
+    }
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId ? { ...t, title: nextTitle, userTitleSet: true } : t,
+      ),
+      lastTitleByTab: { ...s.lastTitleByTab, [tabId]: tab.title },
+    }));
+  },
+
+  undoRenameSession: async (tabId) => {
+    const previous = get().lastTitleByTab[tabId];
+    if (previous === undefined) return;
+    const tab = get().tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+    if (tab.sessionId) {
+      await window.electronAPI.sessionRename({
+        tabId,
+        title: previous,
+        sessionId: tab.sessionId,
+      });
+    }
+    set((s) => {
+      const updated = s.tabs.map((t) =>
+        t.id === tabId ? { ...t, title: previous, userTitleSet: true } : t,
+      );
+      return { tabs: updated, lastTitleByTab: dropTitle(s.lastTitleByTab, tabId) };
+    });
   },
 
   moveTab: (fromIndex: number, toIndex: number) => {
@@ -1756,7 +1818,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (tab?.isStreaming) return; // Never clear a tab with an active agent
     set((s) => {
       const tabs = s.tabs.map((t) =>
-        t.id === tabId ? { ...t, messages: [], streamingMessage: null, sessionId: null, sessionCwd: null, title: "New Chat", error: null, isStreaming: false, promptStale: false, isLoadingSession: false } : t,
+        t.id === tabId ? { ...t, messages: [], streamingMessage: null, sessionId: null, sessionCwd: null, title: "New Chat", userTitleSet: false, error: null, isStreaming: false, promptStale: false, isLoadingSession: false } : t,
       );
       return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
     });
@@ -2041,7 +2103,24 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const filtered = await hydrateSessionMessages(raw, projectPath, sessionId);
       msgCacheSet(sessionId, filtered);
 
-      const title = extractSessionTitle(filtered) || "New Chat";
+      // Prefer the title from the OpenCode session row — this preserves the
+      // user's rename (which we wrote via session:rename). Fall back to
+      // deriving from the first user message only when the row's title is
+      // still a generic OpenCode default.
+      let dbTitle: string | null = null;
+      try {
+        const all = await window.electronAPI.sessionList(projectPath);
+        dbTitle = all.find((s) => s.id === sessionId)?.title ?? null;
+      } catch {
+        /* best-effort — derive below */
+      }
+      const title =
+        dbTitle && !isGenericSessionTitle(dbTitle)
+          ? dbTitle
+          : extractSessionTitle(filtered) || "New Chat";
+      // If the title came from the DB, treat it as user-set so future
+      // fetchSessions writes from OpenCode don't clobber it.
+      const userTitleSet = !!(dbTitle && !isGenericSessionTitle(dbTitle));
 
       let ctxData: { tokens: number; breakdown: Record<string, number>; schema: any[] } | null = null;
       try {
@@ -2056,6 +2135,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                 messages: filtered,
                 streamingMessage: null,
                 title,
+                userTitleSet,
                 sessionId,
                 sessionCwd,
                 error: null,

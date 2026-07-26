@@ -132,14 +132,14 @@ export function StagedCitationEntryPanel({
                 </span>
               ) : null}
               {sourceLabel ? (
-                <span className={DETAIL_BADGE_CLASS} title="Catalog source">
+                <span className={DETAIL_BADGE_CLASS} title={t("modes.literature.catalogSource")}>
                   {sourceLabel}
                 </span>
               ) : null}
               {citation.catalogVerified ? (
                 <span
                   className="inline-flex shrink-0 items-center rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2 py-0.5 text-[length:var(--font-size-11)] text-emerald-700 dark:text-emerald-400"
-                  title="Identifier verified against external catalog"
+                  title={t("modes.literature.identifierVerified")}
                 >
                   Verified
                 </span>
@@ -154,7 +154,7 @@ export function StagedCitationEntryPanel({
               {inLibrary ? (
                 <span
                   className="inline-flex shrink-0 items-center rounded-full border border-primary/35 bg-primary/10 px-2 py-0.5 text-[length:var(--font-size-11)] text-primary/80"
-                  title="Already in project library"
+                  title={t("modes.literature.alreadyInLibrary")}
                 >
                   In library
                 </span>
@@ -256,7 +256,7 @@ export function StagedCitationEntryPanel({
           <div className="flex flex-wrap items-center gap-2 pt-1">
             {inLibrary ? (
               <>
-                <Hint label="Show this entry in the main Library list">
+                <Hint label={t("modes.literature.showInLibraryHint")}>
                   <Button
                     type="button"
                     variant="secondary"
@@ -265,7 +265,7 @@ export function StagedCitationEntryPanel({
                     disabled={!inLibrary || !citation.libraryPaperId}
                   >
                     <FolderOpenIcon className="size-3.5" />
-                    Open in library
+                    {t("modes.literature.openInLibrary")}
                   </Button>
                 </Hint>
                 {hasPdf ? (

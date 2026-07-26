@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, memo } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronRightIcon, Undo2Icon } from "lucide-react";
 import { Icon } from "@iconify/react/offline";
 import { useGitStore, type GitFileItem } from "@/stores/git-store";
@@ -35,6 +36,7 @@ export const GitChangeFileRow = memo(function GitChangeFileRow({
   file,
   isExpanded,
 }: GitChangeFileRowProps) {
+  const { t } = useTranslation();
   const loadDiff = useGitStore((s) => s.loadDiff);
   const toggleChangeExpanded = useGitStore((s) => s.toggleChangeExpanded);
   const iconName = getFileIconName(file.path.split("/").pop() || file.path);
@@ -134,7 +136,7 @@ export const GitChangeFileRow = memo(function GitChangeFileRow({
           className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 overflow-hidden"
           onClick={handleRowClick}
         >
-          <Hint label={`Open ${file.path} in editor`}>
+          <Hint label={t("git.changes.openInEditor", { path: file.path })}>
             <button
               type="button"
               className={cn(
@@ -154,7 +156,7 @@ export const GitChangeFileRow = memo(function GitChangeFileRow({
 
         <GitChangeDiscardSlot>
           {showDiscard && (
-            <Hint label="Discard changes">
+            <Hint label={t("git.changes.discard")}>
               <button
                 type="button"
                 onClick={handleDiscard}
@@ -169,7 +171,7 @@ export const GitChangeFileRow = memo(function GitChangeFileRow({
         <GitChangeStageCheckbox
           checked={isChecked}
           onClick={handleStageToggle}
-          title={isChecked ? "Unstage" : "Stage"}
+          title={isChecked ? t("git.changes.unstage") : t("git.changes.stage")}
         />
       </div>
 
@@ -177,7 +179,7 @@ export const GitChangeFileRow = memo(function GitChangeFileRow({
         <div className={gitPanelExpandedDiffClass}>
           {file.diffLoading ? (
             <div className="flex items-center justify-center h-24 text-xs text-muted-foreground">
-              Loading diff...
+              {t("git.changes.loadingDiff")}
             </div>
           ) : file.diff ? (
             <GitDiffView
@@ -188,7 +190,7 @@ export const GitChangeFileRow = memo(function GitChangeFileRow({
             />
           ) : (
             <div className="flex items-center justify-center h-24 text-xs text-muted-foreground">
-              No diff available
+              {t("git.changes.noDiff")}
             </div>
           )}
         </div>

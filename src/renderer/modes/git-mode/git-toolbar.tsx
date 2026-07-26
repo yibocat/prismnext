@@ -208,7 +208,7 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
             ) : (
               <GitBranchIcon className="size-3.5 shrink-0" />
             )}
-            <span className="truncate">{switching ? "Switching…" : branchLabel}</span>
+            <span className="truncate">{switching ? t("git.toolbar.switching") : branchLabel}</span>
           </button>
         </AppMenuTrigger>
         <AppMenuContent align="start" className="w-56">
@@ -226,7 +226,7 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
           <div className="max-h-48 overflow-y-auto">
             {filteredBranches.length === 0 ? (
               <p className={cn("px-2 py-3 text-center text-muted-foreground", appMenuFontClass)}>
-                No branches found
+                {t("git.toolbar.noBranchesFound")}
               </p>
             ) : (
               filteredBranches.map((b) => (
@@ -248,7 +248,7 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
               setBranchDialogOpen(true);
             }}
           >
-            New Branch
+            {t("git.toolbar.newBranch")}
           </AppMenuItem>
         </AppMenuContent>
       </AppMenu>
@@ -274,7 +274,7 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
                 if (projectRoot) void applyCheckoutTransition({ type: "local" });
               }}
             >
-              Local
+              {t("git.toolbar.local")}
             </AppMenuItem>
             {otherWorktrees.length > 0 && (
               <>
@@ -298,7 +298,7 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
           <AppMenuTrigger asChild>
             <button type="button" className={cn(toolbarBtn, "px-1 gap-1")}>
               <LaptopIcon className="size-3.5 shrink-0" />
-              <span>Local</span>
+              <span>{t("git.toolbar.local")}</span>
             </button>
           </AppMenuTrigger>
           <AppMenuContent align="start" className="min-w-[8rem]">
@@ -317,7 +317,7 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
       ) : (
         <button type="button" className={cn(toolbarBtn, "px-1 gap-1")}>
           <LaptopIcon className="size-3.5 shrink-0" />
-          <span>Local</span>
+          <span>{t("git.toolbar.local")}</span>
         </button>
       )}
 
@@ -425,8 +425,7 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
                     </DialogHeader>
                     <div className="space-y-3">
                       <p className="text-xs text-muted-foreground text-center">
-                        Select a branch to merge into{" "}
-                        <span className="font-medium text-foreground">{branchLabel}</span>
+                        {t("git.toolbar.selectBranchToMerge", { branch: branchLabel })}
                       </p>
                       <div className="flex items-center gap-1.5 rounded-md border bg-muted/50 px-3 py-2">
                         <SearchIcon className="size-3.5 text-muted-foreground" />
@@ -441,7 +440,9 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
                       <div className="max-h-48 overflow-y-auto rounded-md border">
                         {filteredMergeCandidates.length === 0 ? (
                           <p className="px-3 py-6 text-xs text-center text-muted-foreground">
-                            {mergeCandidates.length === 0 ? "No other branches" : "No matches"}
+                            {mergeCandidates.length === 0
+                              ? t("git.toolbar.noOtherBranches")
+                              : t("git.toolbar.noMatches")}
                           </p>
                         ) : (
                           filteredMergeCandidates.map((b) => (

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Undo2Icon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,7 @@ export const gitPanelListRowClass = "flex flex-col";
 export const gitPanelExpandedDiffClass = "border-b border-border/60";
 
 export function GitChangeNewLabel() {
+  const { t } = useTranslation();
   return (
     <span
       className={cn(
@@ -47,12 +49,13 @@ export function GitChangeNewLabel() {
         "text-[length:var(--font-size-11)]",
       )}
     >
-      New
+      {t("git.changes.new")}
     </span>
   );
 }
 
 export function GitChangeDeletedLabel() {
+  const { t } = useTranslation();
   return (
     <span
       className={cn(
@@ -62,7 +65,7 @@ export function GitChangeDeletedLabel() {
         "text-[length:var(--font-size-11)]",
       )}
     >
-      Deleted
+      {t("git.changes.deleted")}
     </span>
   );
 }
@@ -135,10 +138,11 @@ export function GitChangeHeaderDiscardButton({
   visible: boolean;
   onClick: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <GitChangeDiscardSlot>
       {visible && (
-        <Hint label="Discard all unstaged changes">
+        <Hint label={t("git.changes.discardAllUnstaged")}>
           <button
             type="button"
             onClick={(e) => {

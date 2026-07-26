@@ -38,7 +38,9 @@
     "unavailable": "Unavailable",
     "noDescription": "No description.",
     "creating": "Creating…",
-    "ok": "OK"
+    "ok": "OK",
+    "addToChat": "Add to Chat",
+    "more": "More"
   },
   "menu": {
     "file": "File",
@@ -63,6 +65,7 @@
       "skills": "Skills",
       "texWorkspace": "TeX Workspace",
       "terminal": "Terminal",
+      "browser": "Browser",
       "literature": "Literature"
     },
     "general": {
@@ -78,7 +81,7 @@
       "trayIconDesc": "Show a status icon in the menu bar (macOS) or system tray (Windows/Linux). Closing the window hides the app; quit from the tray menu.",
       "shortcuts": "Shortcuts",
       "keyboardShortcuts": "Keyboard shortcuts",
-      "keyboardShortcutsDesc": "Reference for wired shortcuts and planned bindings. ⌘ = Command on macOS; Ctrl on Windows/Linux.",
+      "keyboardShortcutsDesc": "Reference for wired shortcuts and planned bindings. ⌘ = Command and ⌥ = Option on macOS; Ctrl and Alt on Windows/Linux.",
       "logs": "Logs",
       "applicationLogs": "Application logs",
       "applicationLogsDesc": "Browse, filter, search, and export app logs (main + UI).",
@@ -532,6 +535,21 @@
         "collectionEditsOk": "collection edits OK",
         "readOnlyBbt": "read-only collections (add Web API or debug-bridge plugin)",
         "readOnlyWeb": "read-only collections (add Web API)"
+      }
+    },
+    "browserPage": {
+      "title": "Browser",
+      "pageDesc": "Address bar and in-app browser defaults.",
+      "search": "Search",
+      "defaultSearchEngine": "Default search engine",
+      "defaultSearchEngineDesc": "Used when the address bar input is not a URL (no scheme, no domain, contains spaces, etc.).",
+      "urlVsSearchHint": "Tip: inputs with a scheme (https://…) or a bare domain (example.com, localhost:3000) load as URLs; everything else goes to the selected search engine.",
+      "searchEngine": {
+        "duckduckgo": "DuckDuckGo",
+        "google": "Google",
+        "brave": "Brave Search",
+        "bing": "Bing",
+        "ecosia": "Ecosia"
       }
     },
     "skillsPage": {
@@ -1302,7 +1320,8 @@
       "acceptAll": "Accept all changes",
       "rejectAll": "Reject all changes",
       "togglePlanMode": "Toggle Plan mode",
-      "cycleMessageWidth": "Cycle message width"
+      "cycleMessageWidth": "Cycle message width",
+      "undoRename": "Undo session rename"
     }
   },
   "shell": {
@@ -1402,7 +1421,10 @@
       "openTabs": "Open tabs",
       "closePanel": "Close Panel",
       "maximizePanel": "Maximize panel",
-      "restorePanel": "Restore panel"
+      "restorePanel": "Restore panel",
+      "openFileToStart": "Open a file to get started",
+      "openFileOrWorkspace": "Open a file or switch to a workspace",
+      "openFileOrWorkspaceHint": "Use the toolbar above to browse files, view git history, or start writing in the TeX workspace."
     }
   },
   "nav": {
@@ -1472,7 +1494,9 @@
       "citationsCount_plural": "{{count}} staged citations",
       "citationsNone": "No staged citations",
       "intensiveCount": "{{count}} intensive paper",
-      "intensiveCount_plural": "{{count}} intensive papers"
+      "intensiveCount_plural": "{{count}} intensive papers",
+      "renameHint": "Click to rename",
+      "renamePlaceholder": "Untitled chat"
     },
     "aibar": {
       "done": "Done",
@@ -1644,7 +1668,11 @@
       "gitClean": "clean",
       "previewInBrowser": "Preview in Browser",
       "rename": "Rename",
-      "deleteFolder": "Delete Folder"
+      "deleteFolder": "Delete Folder",
+      "noOpenFiles": "No open files",
+      "recent": "Recent",
+      "noFilesYet": "No files yet",
+      "openProjectToStart": "Open a project to get started"
     },
     "researchPlan": {
       "label": "Plan",
@@ -1660,7 +1688,8 @@
       "noRepoHintInit": "Initialize Git to track changes, branches, and worktrees for this project.",
       "emptyChanges": "No changes — working tree clean",
       "selectCommit": "Select a commit to view details",
-      "commitNotFound": "Commit not found"
+      "commitNotFound": "Commit not found",
+      "noCommitsYet": "No commits yet"
     },
     "browser": {
       "label": "Browser",
@@ -1689,7 +1718,18 @@
       "justNow": "Just now",
       "minutesAgo": "{{count}}m ago",
       "hoursAgo": "{{count}}h ago",
-      "daysAgo": "{{count}}d ago"
+      "daysAgo": "{{count}}d ago",
+      "more": "More",
+      "homeHint": "Enter a URL or search term above",
+      "willAppearHere": "Browser will appear here",
+      "comingSoon": "Coming soon",
+      "searchEngine": {
+        "duckduckgo": "DuckDuckGo",
+        "google": "Google",
+        "brave": "Brave Search",
+        "bing": "Bing",
+        "ecosia": "Ecosia"
+      }
     },
     "terminal": {
       "label": "Terminal",
@@ -1709,7 +1749,18 @@
       "shells": "Shells",
       "noCommands": "No saved commands",
       "noSessions": "No open terminals",
-      "replay": "Replay"
+      "replay": "Replay",
+      "readOnlyLive": "read-only · {{mode}}",
+      "pinTab": "Pin tab (skip idle cleanup)",
+      "unpinTab": "Unpin tab (allow idle cleanup)",
+      "copyOutput": "Copy output",
+      "copyCwd": "Copy working directory",
+      "newShellTab": "New {{shell}} tab",
+      "addCommand": "Add command",
+      "removeCommand": "Remove command",
+      "closeTab": "Close terminal tab",
+      "closeView": "Close view (command keeps running unless configured to cancel)",
+      "closeReplay": "Close replay view (output log is kept)"
     },
     "texworkspace": {
       "label": "TeX Workspace",
@@ -1752,7 +1803,23 @@
       "insertSymbol": "Insert Symbol",
       "insertEnv": "Insert Environment",
       "noResults": "No results",
-      "noSections": "No sections found"
+      "noSections": "No sections found",
+      "selectCompiler": "Select compiler",
+      "compileNoFile": "No file open to compile. Open a .tex file first.",
+      "compileNoTarget": "Could not determine which file to compile. Make sure your document has a \\documentclass declaration.",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "zoom": "Zoom",
+      "prevPage": "Previous page",
+      "nextPage": "Next page",
+      "lightMode": "Light mode",
+      "darkMode": "Dark mode",
+      "followTheme": "Following app theme",
+      "noManuscript": "No manuscript folder configured",
+      "noManuscriptHint": "A manuscript folder is required for TeX editing, PDF preview, outline navigation, and compilation. Configure one in Settings → TeX Workspace to get started.",
+      "openSettings": "Open TeX Workspace Settings",
+      "noFilesInManuscript": "No files in manuscript folder",
+      "wordCount": "{{count}} words"
     },
     "literature": {
       "label": "Literature",
@@ -1782,7 +1849,48 @@
       "importPdf": "Import PDF…",
       "connectZotero": "Connect Zotero…",
       "collections": "Collections",
-      "newCollection": "New local collection"
+      "newCollection": "New local collection",
+      "openNotes": "Open reading notes",
+      "closeNotes": "Close reading notes",
+      "addAllPendingHint": "Add all pending citations to the library",
+      "clearCitationsHint": "Clear all citations in this session",
+      "citationHealthHint": "Manuscript citation health (.tex ↔ .bib ↔ library)",
+      "importBibTeX": "Import BibTeX (+ optional .json)…",
+      "refreshZotero": "Refresh from Zotero",
+      "refreshingZotero": "Refreshing from Zotero…",
+      "refreshZoteroLastSync": "Refresh from Zotero (last sync {{time}})",
+      "addByIdentifier": "Add by identifier (DOI, arXiv, ISBN, PMID, ADS)",
+      "refreshCitations": "Refresh citations",
+      "selectAll": "Select all",
+      "moreActions": "More actions",
+      "showInLibraryHint": "Show this entry in the main Library list",
+      "openInLibrary": "Open in library",
+      "inLibrary": "In library",
+      "deleteHighlight": "Delete highlight",
+      "noNotesYet": "No notes yet.",
+      "filterByTag": "Filter by tag",
+      "filterTag": "Filter: {{tag}}",
+      "filterTagCount": "Filter: {{tag}} ({{count}})",
+      "blockPickMode": "Block pick mode — click blocks to toggle (Shift+Click works anytime; multi-select)",
+      "blocks": "Blocks",
+      "unsavedChanges": "Unsaved changes",
+      "removeHighlight": "Remove highlight",
+      "selectEntry": "Select entry",
+      "journalLabelsSoon": "Journal labels (coming soon)",
+      "pdfCacheOutdated": "PDF cache outdated — refresh from Zotero",
+      "pdfCacheOutdatedDetail": "PDF cache is outdated — refresh from Zotero or reopen the PDF",
+      "pdfCachedLocally": "PDF cached locally",
+      "pdfNotCached": "PDF not cached — will download when opened",
+      "pdfNotCachedAria": "PDF not cached locally",
+      "copySummary": "Copy summary",
+      "linkedZoteroCollection": "Linked Zotero collection",
+      "alreadyInLibrary": "Already in project library",
+      "identifierVerified": "Identifier verified against external catalog",
+      "catalogSource": "Catalog source",
+      "openProjectFirst": "Open a project first.",
+      "bbtBanner": "Install Better BibTeX for stable citekeys",
+      "getBbt": "Get BBT",
+      "dismiss": "Dismiss"
     },
     "settingsEditor": {
       "label": "Settings",
@@ -1849,7 +1957,53 @@
       "push": "Push",
       "moreActions": "More git actions",
       "createBranch": "Create",
-      "creating": "Creating…"
+      "creating": "Creating…",
+      "switching": "Switching…",
+      "newBranch": "New Branch",
+      "noBranchesFound": "No branches found",
+      "local": "Local",
+      "selectBranchToMerge": "Select a branch to merge into {{branch}}",
+      "noOtherBranches": "No other branches",
+      "noMatches": "No matches"
+    },
+    "overflow": {
+      "changesOptions": "Changes view options",
+      "historyOptions": "History view options",
+      "layout": "Layout",
+      "unified": "Unified",
+      "split": "Split",
+      "ignoreWhitespace": "Ignore whitespace",
+      "ignoreWhitespaceTitle": "Ignore trailing whitespace and indentation-only changes when comparing",
+      "wordWrap": "Word wrap",
+      "collapseAll": "Collapse all",
+      "refreshChanges": "Refresh changes",
+      "refreshHistory": "Refresh history"
+    },
+    "filter": {
+      "uncommitted": "Uncommitted",
+      "staged": "Staged",
+      "unstaged": "Unstaged",
+      "uncommittedChanges": "Uncommitted Changes",
+      "stagedChanges": "Staged Changes",
+      "unstagedChanges": "Unstaged Changes",
+      "uncommittedChangesCount": "{{count}} Uncommitted Changes",
+      "stagedChangesCount": "{{count}} Staged Changes",
+      "unstagedChangesCount": "{{count}} Unstaged Changes"
+    },
+    "changes": {
+      "new": "New",
+      "deleted": "Deleted",
+      "discard": "Discard changes",
+      "discardAllUnstaged": "Discard all unstaged changes",
+      "discardConfirm": "Discard changes in {{count}} files?",
+      "discardConfirmOne": "Discard changes in {{count}} file?",
+      "stage": "Stage",
+      "unstage": "Unstage",
+      "stageAll": "Stage all",
+      "unstageAll": "Unstage all",
+      "openInEditor": "Open {{path}} in editor",
+      "loadingDiff": "Loading diff…",
+      "noDiff": "No diff available"
     }
   },
   "dialogs": {

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2Icon, Wand2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { useLiteratureStore } from "@/stores/literature-store";
@@ -28,6 +29,7 @@ export function LiteratureAddByIdentifierButton({
   projectRoot: string | null;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation();
   const addByIdentifier = useLiteratureStore((s) => s.addByIdentifier);
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
@@ -55,7 +57,7 @@ export function LiteratureAddByIdentifierButton({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <Hint label="Add by identifier (DOI, arXiv, ISBN, PMID, ADS)">
+      <Hint label={t("modes.literature.addByIdentifier")}>
         <PopoverTrigger asChild>
           <button
             type="button"

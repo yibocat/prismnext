@@ -5,6 +5,11 @@ import {
   DEFAULT_PERMISSION_MODE,
   type PermissionMode,
 } from "@shared/permission-modes";
+import {
+  DEFAULT_SEARCH_ENGINE,
+  isSearchEngineId,
+  type SearchEngineId,
+} from "@/lib/browser/search-engines";
 import type { LiteratureUiPrefs } from "@/lib/literature/library-ui-prefs";
 import {
   migrateOpenCodeEnabledModelIds,
@@ -126,6 +131,8 @@ export interface AppSettings {
   autoDownloadUpdates?: boolean;
   /** Chat message + composer width tier. narrow 42rem | balanced 48rem (default) | wide 64rem. */
   messageWidth?: "narrow" | "balanced" | "wide";
+  /** Default search engine for the in-app browser address bar. */
+  searchEngine?: SearchEngineId;
 }
 
 const defaults: AppSettings = {
@@ -151,6 +158,7 @@ const defaults: AppSettings = {
   aiTerminalIdleCloseMs: 600_000,
   aiTerminalCloseTabKillsProcess: false,
   messageWidth: "balanced",
+  searchEngine: DEFAULT_SEARCH_ENGINE,
 };
 
 interface SettingsState {
@@ -272,6 +280,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
           ...defaults,
           ...remote,
           theme: (remote.theme as AppSettings["theme"]) || defaults.theme,
+          searchEngine: isSearchEngineId(remote.searchEngine)
+            ? remote.searchEngine
+            : defaults.searchEngine,
         },
         loaded: true,
       });

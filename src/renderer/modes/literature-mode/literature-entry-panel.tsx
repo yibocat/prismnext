@@ -284,7 +284,7 @@ export function LiteratureEntryPanel({
               </Hint>
             ) : null}
             <AppMenu>
-              <Hint label="More actions">
+              <Hint label={t("modes.literature.moreActions")}>
                 <AppMenuTrigger asChild>
                   <Button
                     size="xs"
@@ -381,7 +381,7 @@ export function LiteratureEntryPanel({
           {pdfStale ? (
             <span
               className="inline-flex shrink-0 items-center rounded-full border border-amber-500/35 bg-amber-500/10 px-2 py-0.5 text-[length:var(--font-size-11)] text-amber-700 dark:text-amber-400"
-              title="PDF cache is outdated — refresh from Zotero or reopen the PDF"
+              title={t("modes.literature.pdfCacheOutdatedDetail")}
             >
               {t("literature.detail.pdfOutdated")}
             </span>
@@ -511,7 +511,7 @@ export function LiteratureEntryPanel({
                     toast.error("Could not copy summary");
                   });
                 }}
-                title="Copy summary"
+                title={t("modes.literature.copySummary")}
                 className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground/45 hover:bg-muted hover:text-foreground transition-colors"
               >
                 <CopyIcon className="size-3" />

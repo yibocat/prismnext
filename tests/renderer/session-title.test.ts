@@ -11,6 +11,7 @@ import type { ChatStreamMessage } from "../../src/renderer/stores/chat-store";
 
 describe("session-title", () => {
   it("detects generic OpenCode defaults", () => {
+    expect(isGenericSessionTitle("")).toBe(true);
     expect(isGenericSessionTitle("New Chat")).toBe(true);
     expect(isGenericSessionTitle("New session 1")).toBe(true);
     expect(isGenericSessionTitle("Review @main.tex")).toBe(false);

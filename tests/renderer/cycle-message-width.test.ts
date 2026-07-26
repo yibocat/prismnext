@@ -1,6 +1,6 @@
 // tests/renderer/cycle-message-width.test.ts
 // Unit test for the cycleMessageWidth helper used by the
-// "product.cycleMessageWidth" shortcut (Cmd/Ctrl+Shift+W).
+// "product.cycleMessageWidth" shortcut (Cmd/Ctrl+L).
 //
 // The helper is a pure function — three tiers, cycles forward, and tolerates
 // any stale / missing value by snapping to "wide" next (the most useful land

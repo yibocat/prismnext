@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   HoverCard,
@@ -11,6 +12,8 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useChatStore } from "@/stores/chat-store";
 import { resolveSessionWorktreeContext } from "@/lib/git/session-worktree-context";
 import { openSessionCitations } from "@/lib/literature/jump-to-staged-citation";
+import { InlineEditableField } from "@/modes/literature-mode/literature-inline-field";
+import { cn } from "@/lib/utils";
 import type { SessionAgent } from "../../../../../shared/session-agent";
 import {
   BookMarkedIcon,
@@ -70,15 +73,58 @@ export function SessionContextCard({
     sessionId ? s.getCitationsForSession(sessionId).length : 0,
   );
 
+  // Keep the panel open while the title InlineEditableField has focus. Without
+  // this, a trackpad or hand movement during typing can move the cursor out
+  // of the panel, the 100ms closeDelay fires, and the input unmounts mid-type.
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isInlineEditing, setIsInlineEditing] = useState(false);
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    const onFocusIn = (e: FocusEvent) => {
+      if ((e.target as HTMLElement | null)?.closest("[data-lit-inline-editor]")) {
+        setIsInlineEditing(true);
+      }
+    };
+    const onFocusOut = (e: FocusEvent) => {
+      const next = e.relatedTarget as Node | null;
+      if (!next || !content.contains(next)) {
+        setIsInlineEditing(false);
+      }
+    };
+    content.addEventListener("focusin", onFocusIn);
+    content.addEventListener("focusout", onFocusOut);
+    return () => {
+      content.removeEventListener("focusin", onFocusIn);
+      content.removeEventListener("focusout", onFocusOut);
+    };
+  }, []);
+
   return (
-    <HoverCard openDelay={300} closeDelay={100}>
+    <HoverCard
+      openDelay={300}
+      closeDelay={100}
+      open={isInlineEditing || undefined}
+      onOpenChange={(open) => {
+        if (!open) setIsInlineEditing(false);
+      }}
+    >
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
-      <HoverCardContent side="bottom" align="start" className="w-64 p-3">
+      <HoverCardContent ref={contentRef} side="bottom" align="start" className="w-64 p-3">
         <div className="space-y-2">
           <div className="min-w-0">
-            <div className="text-[length:var(--font-chat-meta)] text-foreground truncate font-medium">
-              {title}
-            </div>
+            <InlineEditableField
+              value={title}
+              onSave={async (next) => {
+                await useChatStore.getState().renameSession(tabId, next);
+              }}
+              displayClassName={cn(
+                "text-[length:var(--font-chat-meta)] text-foreground truncate font-medium",
+                "block w-full min-w-0 cursor-pointer rounded-[3px] px-1 py-0.5 -mx-1",
+                "hover:bg-muted/50 transition-colors",
+              )}
+              placeholder={t("chat.openTabs.renamePlaceholder")}
+            />
           </div>
 
           <div className="flex items-center gap-2 min-w-0">
