@@ -7,6 +7,8 @@ import {
   kindDisplayLabel,
   type InteractionSpec,
 } from "../../../shared/interaction-spec";
+import { isInteractionPlotKind } from "../../../shared/interaction-plot";
+import { InteractionPlotView } from "@/lib/interaction/plot/interaction-plot-view";
 import { cn } from "@/lib/utils";
 
 function Badge({
@@ -28,14 +30,24 @@ function Badge({
   );
 }
 
-function PanelBody({ spec }: { spec: InteractionSpec }) {
+function PanelBody({
+  spec,
+  projectRoot,
+}: {
+  spec: InteractionSpec;
+  projectRoot: string;
+}) {
   const { t } = useTranslation();
   const bindingKeys = Object.keys(spec.bindings ?? {});
   const resources = spec.resources ?? [];
+  const showPlot = isInteractionPlotKind(spec.kind);
 
   return (
     <div className="space-y-6 px-6 py-5 font-sans @md:px-8">
       <header className="space-y-2">
+        <h2 className="text-[length:var(--font-size-15)] font-medium text-foreground">
+          {spec.title}
+        </h2>
         <div className="flex flex-wrap items-center gap-2">
           <Badge className="bg-muted text-muted-foreground">
             {kindDisplayLabel(spec.kind)}
@@ -55,17 +67,25 @@ function PanelBody({ spec }: { spec: InteractionSpec }) {
             r{spec.revision}
           </span>
         </div>
-        <p className={SETTINGS_ROW_DESC}>{t("interaction.panel.intro")}</p>
+        <p className={SETTINGS_ROW_DESC}>
+          {showPlot
+            ? t("interaction.panel.introPlot")
+            : t("interaction.panel.intro")}
+        </p>
       </header>
 
-      <section className="rounded-md border border-border bg-muted px-4 py-6 text-center">
-        <p className="text-[length:var(--font-size-13)] text-foreground">
-          {t("interaction.panel.placeholderTitle")}
-        </p>
-        <p className="mt-1 text-[length:var(--font-size-12)] text-muted-foreground">
-          {t("interaction.panel.placeholderBody", { kind: spec.kind })}
-        </p>
-      </section>
+      {showPlot ? (
+        <InteractionPlotView spec={spec} projectRoot={projectRoot} />
+      ) : (
+        <section className="rounded-md border border-border bg-muted px-4 py-6 text-center">
+          <p className="text-[length:var(--font-size-13)] text-foreground">
+            {t("interaction.panel.placeholderTitle")}
+          </p>
+          <p className="mt-1 text-[length:var(--font-size-12)] text-muted-foreground">
+            {t("interaction.panel.placeholderBody", { kind: spec.kind })}
+          </p>
+        </section>
+      )}
 
       {bindingKeys.length > 0 ? (
         <section className="space-y-2">
@@ -159,7 +179,7 @@ export function InteractionContent({
 
   return (
     <div className="h-full min-h-0 overflow-auto">
-      <PanelBody spec={spec} />
+      <PanelBody spec={spec} projectRoot={projectRoot!} />
     </div>
   );
 }

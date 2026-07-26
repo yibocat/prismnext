@@ -2244,7 +2244,9 @@
     "panel": {
       "empty": "未選擇互動物件。",
       "loadError": "無法載入「{{id}}」：{{error}}",
-      "intro": "互動式科研物件（P0 殼層 — 真實渲染將在後續版本提供）。",
+      "intro": "互動式科研物件 — 數學與敘事渲染將在後續版本提供。",
+      "introPlot": "圖表預覽 — 本地模式使用內建示意數據；綁定模式從 resources 讀取 csv。",
+      "plotErrorTitle": "無法渲染圖表",
       "placeholderTitle": "預覽暫不可用",
       "placeholderBody": "類型「{{kind}}」將在後續版本中在此渲染。",
       "bindings": "綁定",
