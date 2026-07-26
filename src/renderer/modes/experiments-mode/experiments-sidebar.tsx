@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { FlaskConicalIcon, Loader2Icon } from "lucide-react";
+import { Loader2Icon } from "lucide-react";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import {
@@ -50,19 +50,12 @@ function ExperimentListRow({
       data-experiment-id={experiment.id}
       aria-current={active ? "true" : undefined}
     >
-      <span className="flex min-w-0 items-start gap-1.5">
-        <FlaskConicalIcon
-          className="mt-0.5 size-3.5 shrink-0 opacity-70"
-          aria-hidden
-        />
-        <span className="min-w-0 flex-1 truncate font-sans text-[length:var(--font-size-12)] font-medium">
-          {experiment.title}
-        </span>
+      <span className="min-w-0 truncate font-sans text-[length:var(--font-size-12)] font-medium">
+        {experiment.title}
       </span>
       <span
         className={cn(
           experimentsCardMetaClass,
-          "pl-5",
           active && "text-sidebar-accent-foreground/75",
         )}
       >
@@ -72,7 +65,7 @@ function ExperimentListRow({
         <span
           className={cn(
             experimentsPathCompactClass,
-            "pl-5 opacity-70",
+            "opacity-70",
             active && "text-sidebar-accent-foreground/65",
           )}
         >

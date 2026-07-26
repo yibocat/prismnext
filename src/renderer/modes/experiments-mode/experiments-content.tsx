@@ -10,7 +10,7 @@
 
 import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { FlaskConicalIcon, Loader2Icon } from "lucide-react";
+import { Loader2Icon } from "lucide-react";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
@@ -97,8 +97,7 @@ function ExperimentsHome({ projectRoot }: { projectRoot: string }) {
   if (recent.length === 0) {
     return (
       <div className="flex h-full min-h-0 flex-1 items-center justify-center px-6 font-sans">
-        <div className="flex max-w-sm flex-col items-center gap-3 text-center">
-          <FlaskConicalIcon className="size-8 text-muted-foreground/60" aria-hidden />
+        <div className="flex max-w-sm flex-col items-center gap-2 text-center">
           <p className="text-[length:var(--font-size-13)] text-foreground">
             {t("experiments.content.pickFromSidebar")}
           </p>
@@ -112,7 +111,6 @@ function ExperimentsHome({ projectRoot }: { projectRoot: string }) {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 font-sans">
-      <FlaskConicalIcon className="size-8 text-muted-foreground/60" aria-hidden />
       <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
         {t("experiments.content.pickFromSidebar")}
       </p>

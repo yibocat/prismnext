@@ -58,7 +58,8 @@ import { useExperimentProjectRoot } from "./experiments-project-root";
 export interface ExperimentsRunsTableProps {
   runs: ExperimentRunEntry[];
   workspacePath?: string;
-  onOpenResults?: () => void;
+  /** Jump to Results and expand this run's declared artifacts. */
+  onOpenResults?: (runId: string) => void;
 }
 
 /** Artifacts shown before the list collapses into "+N more". */
@@ -343,7 +344,7 @@ function RunDetailPanel({
   workspacePath?: string;
   experimentId?: string | null;
   onInspectArtifact?: (path: string) => void;
-  onOpenResults?: () => void;
+  onOpenResults?: (runId: string) => void;
 }) {
   const { t } = useTranslation();
   const projectRoot = useExperimentProjectRoot();
@@ -536,7 +537,7 @@ function RunDetailPanel({
             {onOpenResults ? (
               <button
                 type="button"
-                onClick={onOpenResults}
+                onClick={() => onOpenResults(run.runId)}
                 className="mt-1.5 inline-flex h-6 items-center gap-1 text-[length:var(--font-size-11)] text-muted-foreground transition-colors hover:text-foreground"
               >
                 <SquareArrowOutUpRightIcon className="size-3 shrink-0" aria-hidden />
