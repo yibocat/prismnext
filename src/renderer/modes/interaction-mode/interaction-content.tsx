@@ -8,7 +8,9 @@ import {
   type InteractionSpec,
 } from "../../../shared/interaction-spec";
 import { isInteractionPlotKind } from "../../../shared/interaction-plot";
+import { isInteractionMathKind } from "../../../shared/interaction-math";
 import { InteractionPlotView } from "@/lib/interaction/plot/interaction-plot-view";
+import { InteractionMathView } from "@/lib/interaction/math/interaction-math-view";
 import { cn } from "@/lib/utils";
 
 function Badge({
@@ -41,6 +43,7 @@ function PanelBody({
   const bindingKeys = Object.keys(spec.bindings ?? {});
   const resources = spec.resources ?? [];
   const showPlot = isInteractionPlotKind(spec.kind);
+  const showMath = isInteractionMathKind(spec.kind);
 
   return (
     <div className="space-y-6 px-6 py-5 font-sans @md:px-8">
@@ -70,12 +73,16 @@ function PanelBody({
         <p className={SETTINGS_ROW_DESC}>
           {showPlot
             ? t("interaction.panel.introPlot")
-            : t("interaction.panel.intro")}
+            : showMath
+              ? t("interaction.panel.introMath")
+              : t("interaction.panel.intro")}
         </p>
       </header>
 
       {showPlot ? (
         <InteractionPlotView spec={spec} projectRoot={projectRoot} />
+      ) : showMath ? (
+        <InteractionMathView spec={spec} />
       ) : (
         <section className="rounded-md border border-border bg-muted px-4 py-6 text-center">
           <p className="text-[length:var(--font-size-13)] text-foreground">
@@ -87,7 +94,7 @@ function PanelBody({
         </section>
       )}
 
-      {bindingKeys.length > 0 ? (
+      {bindingKeys.length > 0 && !showMath ? (
         <section className="space-y-2">
           <h3 className="text-[length:var(--font-size-11)] font-medium text-muted-foreground">
             {t("interaction.panel.bindings")}
