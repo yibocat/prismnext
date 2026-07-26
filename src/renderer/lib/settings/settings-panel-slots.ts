@@ -29,7 +29,7 @@ export type SettingsPanelSlot =
   | { kind: "agent-orchestrator"; mode: "customize-builtin"; orchestratorId: string; title?: string }
   | { kind: "prompt-markdown"; doc: "system-prompt" | "agents-md" }
   | { kind: "prompt-stack-preview" }
-  | { kind: "research-brief" }
+  | { kind: "research-brief"; focusSection?: string }
   | { kind: "agent-tools" }
   | { kind: "knowledge-modules" }
   | { kind: "builtin-commands" }

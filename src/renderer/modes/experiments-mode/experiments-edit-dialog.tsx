@@ -17,8 +17,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useExperimentProjectRoot } from "./experiments-project-root";
 import { ExperimentsBriefSectionPicker } from "./experiments-brief-section-picker";
+import { openExperimentResearchBrief } from "./experiments-open-brief";
 import type { ExperimentBriefLinks, ExperimentMeta } from "../../../shared/experiment-log";
-import type { ResearchBriefSection } from "../../../shared/research-brief";
+import {
+  experimentExcerptsFromBriefSections,
+  type ResearchBriefSection,
+} from "../../../shared/research-brief";
 
 export function ExperimentsBriefEditDialog({
   meta,
@@ -36,6 +40,7 @@ export function ExperimentsBriefEditDialog({
   const [rq, setRq] = useState("");
   const [sections, setSections] = useState<ResearchBriefSection[]>([]);
   const [busy, setBusy] = useState(false);
+  const [filling, setFilling] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -44,7 +49,29 @@ export function ExperimentsBriefEditDialog({
     setRq(links?.researchQuestionExcerpt ?? "");
     setSections((links?.sections ?? []) as ResearchBriefSection[]);
     setBusy(false);
+    setFilling(false);
   }, [meta, open]);
+
+  const handleFillFromBrief = useCallback(async () => {
+    if (!projectRoot || filling) return;
+    setFilling(true);
+    try {
+      const brief = await window.electronAPI.researchBriefRead(projectRoot);
+      const { hypothesisExcerpt, researchQuestionExcerpt } =
+        experimentExcerptsFromBriefSections(brief.sections ?? {});
+      if (!hypothesisExcerpt && !researchQuestionExcerpt) {
+        toast.message(t("experiments.brief.fillEmpty"));
+        return;
+      }
+      if (hypothesisExcerpt) setHypothesis(hypothesisExcerpt);
+      if (researchQuestionExcerpt) setRq(researchQuestionExcerpt);
+      toast.success(t("experiments.brief.fillDone"));
+    } catch {
+      toast.error(t("experiments.brief.fillFailed"));
+    } finally {
+      setFilling(false);
+    }
+  }, [filling, projectRoot, t]);
 
   const handleSubmit = useCallback(async () => {
     if (!projectRoot || busy) return;
@@ -76,6 +103,27 @@ export function ExperimentsBriefEditDialog({
         <p className="text-[length:var(--font-size-12)] text-muted-foreground">
           {t("experiments.brief.editDesc")}
         </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="xs"
+            variant="secondary"
+            disabled={busy || filling || !projectRoot}
+            onClick={() => void handleFillFromBrief()}
+          >
+            {filling ? t("experiments.brief.filling") : t("experiments.brief.fillFromBrief")}
+          </Button>
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            disabled={busy}
+            className="text-muted-foreground"
+            onClick={() => void openExperimentResearchBrief(sections[0])}
+          >
+            {t("experiments.brief.openBrief")}
+          </Button>
+        </div>
         <div className="flex flex-col gap-3 py-1">
           <div className="flex flex-col gap-1.5">
             <label className="text-[length:var(--font-size-12)] font-medium text-foreground">

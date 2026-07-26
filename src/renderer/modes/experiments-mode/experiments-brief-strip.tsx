@@ -1,12 +1,13 @@
 /**
  * experiments-brief-strip — Research brief excerpts (hypothesis, RQ, linked sections).
- * Editable via dialog; empty state invites create/edit.
+ * Editable via dialog; section pills + Open Brief jump to the Research Brief panel.
  */
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { PencilIcon } from "lucide-react";
+import { BookOpenIcon, PencilIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import type { ExperimentBriefLinks, ExperimentMeta } from "../../../shared/experiment-log";
 import {
@@ -15,6 +16,7 @@ import {
   experimentsSubsectionLabelClass,
 } from "./experiments-detail-chrome";
 import { ExperimentsBriefEditDialog } from "./experiments-edit-dialog";
+import { openExperimentResearchBrief } from "./experiments-open-brief";
 
 function hasContent(briefLinks: ExperimentBriefLinks | undefined): boolean {
   if (!briefLinks) return false;
@@ -76,9 +78,18 @@ export function ExperimentsBriefStrip({
                     </span>
                     <div className="flex flex-wrap gap-1.5">
                       {sections.map((section) => (
-                        <span key={section} className={experimentsBriefSectionPillClass}>
-                          {section}
-                        </span>
+                        <Hint key={section} label={t("experiments.brief.openSectionHint", { section })}>
+                          <button
+                            type="button"
+                            className={cn(
+                              experimentsBriefSectionPillClass,
+                              "cursor-pointer transition-colors hover:bg-accent hover:text-foreground",
+                            )}
+                            onClick={() => void openExperimentResearchBrief(section)}
+                          >
+                            {section}
+                          </button>
+                        </Hint>
                       ))}
                     </div>
                   </div>
@@ -86,20 +97,36 @@ export function ExperimentsBriefStrip({
               </>
             )}
           </div>
-          <Button
-            type="button"
-            size="xs"
-            variant="ghost"
-            className="h-6 shrink-0 gap-1 px-1.5 text-muted-foreground hover:text-foreground"
-            onClick={() => setEditOpen(true)}
-          >
-            <PencilIcon className="size-3" aria-hidden />
-            <span>
-              {filled
-                ? t("common.edit", { defaultValue: "Edit" })
-                : t("experiments.brief.add", { defaultValue: "Add" })}
-            </span>
-          </Button>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <Hint label={t("experiments.brief.openBriefHint")}>
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                className="h-6 gap-1 px-1.5 text-muted-foreground hover:text-foreground"
+                onClick={() => void openExperimentResearchBrief(sections[0])}
+              >
+                <BookOpenIcon className="size-3" aria-hidden />
+                <span className="text-[length:var(--font-size-11)]">
+                  {t("experiments.brief.openBrief")}
+                </span>
+              </Button>
+            </Hint>
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              className="h-6 shrink-0 gap-1 px-1.5 text-muted-foreground hover:text-foreground"
+              onClick={() => setEditOpen(true)}
+            >
+              <PencilIcon className="size-3" aria-hidden />
+              <span>
+                {filled
+                  ? t("common.edit", { defaultValue: "Edit" })
+                  : t("experiments.brief.add", { defaultValue: "Add" })}
+              </span>
+            </Button>
+          </div>
         </div>
       </section>
 

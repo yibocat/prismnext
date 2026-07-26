@@ -2356,7 +2356,16 @@
       "rqPlaceholder": "本實驗要回答的研究問題…",
       "sectionsLabel": "關聯簡報章節",
       "sectionsPlaceholder": "例如：Methods, Related Work（逗號分隔）",
-      "sectionsHint": "從專案研究簡報（Research Brief）的固定章節中多選關聯。"
+      "sectionsHint": "從專案研究簡報（Research Brief）的固定章節中多選關聯。",
+      "openBrief": "開啟簡報",
+      "openBriefHint": "在檔案中開啟專案研究簡報",
+      "openSectionHint": "開啟簡報檔案並跳到「{{section}}」",
+      "openFailed": "無法開啟研究簡報",
+      "fillFromBrief": "從簡報填入",
+      "filling": "填入中…",
+      "fillDone": "已從研究簡報填入摘錄",
+      "fillEmpty": "研究簡報裡還沒有可填的研究問題或假設正文",
+      "fillFailed": "無法讀取研究簡報"
     },
     "tags": {
       "add": "+ 標籤",
@@ -2465,6 +2474,18 @@
       "venv": "venv",
       "exitCodeTitle": "退出碼 {{code}}",
       "cancelledExitTitle": "已取消（退出碼 {{code}}）"
+    },
+    "compare": {
+      "action": "對比",
+      "hint": "並排對比勾選的執行",
+      "title": "對比執行",
+      "desc": "正在對比 {{count}} 次執行",
+      "truncated": "（最多顯示 {{max}} 欄）",
+      "field": "欄位",
+      "git": "Git",
+      "metrics": "指標",
+      "metricKey": "{{key}}",
+      "metricsHint": "指標來自執行登記的 JSON 產物（如 metrics.json）。若工作區檔案已被後續執行覆蓋，數值可能不是該次執行當時的快照。"
     },
     "provenance": {
       "title": "產物溯源",

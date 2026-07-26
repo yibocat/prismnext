@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
+import { useSettingsEditorSlotOfKind } from "@/hooks/use-settings-editor";
 import { SettingsMarkdownEditor } from "./settings-markdown-editor";
 import { MarkdownContentPreview } from "./markdown-content-preview";
 import { SettingsMarkdownToolbar } from "./settings-markdown-toolbar";
@@ -11,6 +12,9 @@ export function ResearchBriefPanel() {
   const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const slot = useSettingsEditorSlotOfKind("research-brief");
+  const focusSection = slot?.focusSection;
+  const previewRef = useRef<HTMLDivElement>(null);
 
   const [content, setContent] = useState("");
   const [savedContent, setSavedContent] = useState("");
@@ -62,6 +66,25 @@ export function ResearchBriefPanel() {
     void loadContent();
   }, [loadContent]);
 
+  // Scroll preview toward the linked ## section when opened from an experiment.
+  useEffect(() => {
+    if (!focusSection || loading || viewMode !== "preview") return;
+    const root = previewRef.current;
+    if (!root) return;
+    const target = focusSection.toLowerCase();
+    const id = window.setTimeout(() => {
+      const headings = root.querySelectorAll("h1, h2, h3");
+      for (const el of headings) {
+        const text = (el.textContent ?? "").trim().toLowerCase();
+        if (text === target || text.includes(target)) {
+          el.scrollIntoView({ block: "start", behavior: "smooth" });
+          break;
+        }
+      }
+    }, 80);
+    return () => window.clearTimeout(id);
+  }, [focusSection, loading, viewMode, content]);
+
   const handleSave = async () => {
     if (!projectRoot || !briefPath) return;
     setSaving(true);
@@ -105,7 +128,7 @@ export function ResearchBriefPanel() {
           saving,
         }}
       />
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0" ref={previewRef}>
         {viewMode === "source" ? (
           <SettingsMarkdownEditor value={content} onChange={setContent} className="h-full" />
         ) : (

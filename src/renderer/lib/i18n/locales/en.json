@@ -2356,7 +2356,16 @@
       "rqPlaceholder": "The research question this experiment addresses…",
       "sectionsLabel": "Linked brief sections",
       "sectionsPlaceholder": "e.g. Methods, Related Work (comma-separated)",
-      "sectionsHint": "Pick from this project's Research Brief canonical sections."
+      "sectionsHint": "Pick from this project's Research Brief canonical sections.",
+      "openBrief": "Open brief",
+      "openBriefHint": "Open the project Research Brief as a file",
+      "openSectionHint": "Open the brief file and jump to “{{section}}”",
+      "openFailed": "Could not open the Research Brief",
+      "fillFromBrief": "Fill from brief",
+      "filling": "Filling…",
+      "fillDone": "Filled excerpts from the Research Brief",
+      "fillEmpty": "Research Brief has no Research question or Hypotheses text yet",
+      "fillFailed": "Could not read the Research Brief"
     },
     "tags": {
       "add": "+ Tag",
@@ -2465,6 +2474,18 @@
       "venv": "venv",
       "exitCodeTitle": "exit code {{code}}",
       "cancelledExitTitle": "cancelled (exit {{code}})"
+    },
+    "compare": {
+      "action": "Compare",
+      "hint": "Compare selected runs side by side",
+      "title": "Compare runs",
+      "desc": "Comparing {{count}} runs",
+      "truncated": "(showing at most {{max}} columns)",
+      "field": "Field",
+      "git": "Git",
+      "metrics": "Metrics",
+      "metricKey": "{{key}}",
+      "metricsHint": "Metrics come from JSON artifacts listed on each run (e.g. metrics.json). If the working-copy file was overwritten by a later run, values may not be that run’s frozen snapshot."
     },
     "provenance": {
       "title": "Artifact provenance",

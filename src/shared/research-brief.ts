@@ -60,3 +60,43 @@ export function resolveResearchBriefSection(raw: string): ResearchBriefSection |
   }
   return null;
 }
+
+/** Strip HTML comments / excess blank lines from a brief section body for UI excerpts. */
+export function cleanResearchBriefExcerpt(body: string, maxLen = 800): string {
+  const cleaned = body
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (cleaned.length <= maxLen) return cleaned;
+  return `${cleaned.slice(0, maxLen).trimEnd()}…`;
+}
+
+/**
+ * Pull Research question + Hypotheses excerpts from parsed brief sections
+ * (keys are ## titles as stored in the file).
+ */
+export function experimentExcerptsFromBriefSections(
+  sections: Record<string, string>,
+): { hypothesisExcerpt?: string; researchQuestionExcerpt?: string } {
+  const rqRaw = sections["Research question"] ?? "";
+  const hypRaw = sections["Hypotheses / claims"] ?? "";
+  const researchQuestionExcerpt = cleanResearchBriefExcerpt(rqRaw) || undefined;
+  const hypothesisExcerpt = cleanResearchBriefExcerpt(hypRaw) || undefined;
+  return { hypothesisExcerpt, researchQuestionExcerpt };
+}
+
+/** 1-based line of `## <section>` in brief markdown, or null if missing. */
+export function findResearchBriefHeadingLine(
+  markdown: string,
+  section: ResearchBriefSection,
+): number | null {
+  const target = section.toLowerCase();
+  const lines = markdown.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i]!.match(/^##\s+(.+?)\s*$/);
+    if (!m) continue;
+    if (m[1]!.trim().toLowerCase() === target) return i + 1;
+  }
+  return null;
+}

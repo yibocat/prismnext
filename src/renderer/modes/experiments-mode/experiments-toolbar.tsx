@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import {
   ArchiveIcon,
   ChevronDownIcon,
+  Columns2Icon,
   FolderOpenIcon,
   ListFilterIcon,
   Loader2Icon,
@@ -50,6 +51,11 @@ import {
 import { useExperimentProjectRoot } from "./experiments-project-root";
 import { ExperimentsCreateDialog } from "./experiments-create-dialog";
 import { ExperimentsRunDialog } from "./experiments-run-panel";
+import {
+  ExperimentsCompareDialog,
+  EXPERIMENTS_COMPARE_CAP,
+  pickRunsForCompare,
+} from "./experiments-compare-dialog";
 import type {
   RunsKindFilter,
   RunsSortOrder,
@@ -162,6 +168,7 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
   const checkedRunIds = useExperimentStore((s) => s.checkedRunIds);
   const clearCheckedRuns = useExperimentStore((s) => s.clearCheckedRuns);
   const detailRuns = useExperimentStore((s) => s.detail?.runs);
+  const workspacePath = useExperimentStore((s) => s.detail?.meta.workspacePath);
   const runInFlight = useExperimentStore((s) => s.runInFlight);
   const cancelRun = useExperimentStore((s) => s.cancelRun);
   const inDetail = Boolean(tab.experimentId ?? selectedId);
@@ -173,6 +180,7 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
   );
   const [createOpen, setCreateOpen] = useState(false);
   const [runDialogOpen, setRunDialogOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
   const [paneMenuOpen, setPaneMenuOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -410,6 +418,23 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
               </button>
             </Hint>
           ) : null}
+          {checkedRunIds.length >= 2 ? (
+            <Hint label={t("experiments.compare.hint")}>
+              <button
+                type="button"
+                className={cn(compact ? toolbarIconBtn : toolbarBtn, "shrink-0")}
+                onClick={() => setCompareOpen(true)}
+              >
+                <Columns2Icon className="size-3.5" />
+                {!compact ? (
+                  <span>
+                    {t("experiments.compare.action")}
+                    {` (${Math.min(checkedRunIds.length, EXPERIMENTS_COMPARE_CAP)})`}
+                  </span>
+                ) : null}
+              </button>
+            </Hint>
+          ) : null}
           {isInFlightForCurrent ? (
             <Hint label={t("experiments.runPanel.cancelRun")}>
               <button
@@ -510,6 +535,12 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
 
       <ExperimentsCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
       <ExperimentsRunDialog open={runDialogOpen} onOpenChange={setRunDialogOpen} />
+      <ExperimentsCompareDialog
+        open={compareOpen}
+        onOpenChange={setCompareOpen}
+        runs={pickRunsForCompare(detailRuns, checkedRunIds)}
+        workspacePath={workspacePath}
+      />
     </div>
   );
 }

@@ -18,7 +18,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useExperimentProjectRoot } from "./experiments-project-root";
 import { ExperimentsBriefSectionPicker } from "./experiments-brief-section-picker";
-import type { ResearchBriefSection } from "../../../shared/research-brief";
+import {
+  experimentExcerptsFromBriefSections,
+  type ResearchBriefSection,
+} from "../../../shared/research-brief";
 
 export function ExperimentsCreateDialog({
   open,
@@ -36,6 +39,7 @@ export function ExperimentsCreateDialog({
   const [rq, setRq] = useState("");
   const [sections, setSections] = useState<ResearchBriefSection[]>([]);
   const [busy, setBusy] = useState(false);
+  const [filling, setFilling] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -45,8 +49,30 @@ export function ExperimentsCreateDialog({
       setRq("");
       setSections([]);
       setBusy(false);
+      setFilling(false);
     }
   }, [open]);
+
+  const handleFillFromBrief = useCallback(async () => {
+    if (!projectRoot || filling) return;
+    setFilling(true);
+    try {
+      const brief = await window.electronAPI.researchBriefRead(projectRoot);
+      const { hypothesisExcerpt, researchQuestionExcerpt } =
+        experimentExcerptsFromBriefSections(brief.sections ?? {});
+      if (!hypothesisExcerpt && !researchQuestionExcerpt) {
+        toast.message(t("experiments.brief.fillEmpty"));
+        return;
+      }
+      if (hypothesisExcerpt) setHypothesis(hypothesisExcerpt);
+      if (researchQuestionExcerpt) setRq(researchQuestionExcerpt);
+      toast.success(t("experiments.brief.fillDone"));
+    } catch {
+      toast.error(t("experiments.brief.fillFailed"));
+    } finally {
+      setFilling(false);
+    }
+  }, [filling, projectRoot, t]);
 
   const handleSubmit = useCallback(async () => {
     const trimmedTitle = title.trim();
@@ -135,9 +161,21 @@ export function ExperimentsCreateDialog({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-[length:var(--font-size-12)] font-medium text-foreground">
-              {t("experiments.brief.hypothesisLabel")}
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-[length:var(--font-size-12)] font-medium text-foreground">
+                {t("experiments.brief.hypothesisLabel")}
+              </label>
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                className="h-6 px-1.5 text-muted-foreground"
+                disabled={busy || filling || !projectRoot}
+                onClick={() => void handleFillFromBrief()}
+              >
+                {filling ? t("experiments.brief.filling") : t("experiments.brief.fillFromBrief")}
+              </Button>
+            </div>
             <Textarea
               value={hypothesis}
               disabled={busy}

@@ -2356,7 +2356,16 @@
       "rqPlaceholder": "本实验要回答的研究问题…",
       "sectionsLabel": "关联简报章节",
       "sectionsPlaceholder": "例如：Methods, Related Work（逗号分隔）",
-      "sectionsHint": "从项目研究简报（Research Brief）的固定章节中多选关联。"
+      "sectionsHint": "从项目研究简报（Research Brief）的固定章节中多选关联。",
+      "openBrief": "打开简报",
+      "openBriefHint": "在文件中打开项目研究简报",
+      "openSectionHint": "打开简报文件并跳到「{{section}}」",
+      "openFailed": "无法打开研究简报",
+      "fillFromBrief": "从简报填入",
+      "filling": "填入中…",
+      "fillDone": "已从研究简报填入摘录",
+      "fillEmpty": "研究简报里还没有可填的研究问题或假设正文",
+      "fillFailed": "无法读取研究简报"
     },
     "tags": {
       "add": "+ 标签",
@@ -2465,6 +2474,18 @@
       "venv": "venv",
       "exitCodeTitle": "退出码 {{code}}",
       "cancelledExitTitle": "已取消（退出码 {{code}}）"
+    },
+    "compare": {
+      "action": "对比",
+      "hint": "并排对比勾选的运行",
+      "title": "对比运行",
+      "desc": "正在对比 {{count}} 次运行",
+      "truncated": "（最多显示 {{max}} 列）",
+      "field": "字段",
+      "git": "Git",
+      "metrics": "指标",
+      "metricKey": "{{key}}",
+      "metricsHint": "指标来自运行登记的 JSON 产物（如 metrics.json）。若工作区文件已被后续运行覆盖，数值可能不是该次运行当时的快照。"
     },
     "provenance": {
       "title": "产物溯源",
