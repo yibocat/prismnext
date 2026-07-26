@@ -1,17 +1,11 @@
 /**
- * experiments-detail — Detail view for an experiment tab.
- * Temporarily hosts Overview + Environment (moved out of the mode sidebar);
- * layout of this page will be redesigned later.
+ * experiments-detail — Overview / Execution / Results panes.
+ * Title + brief strip only on Overview. Execution is history-first (run via toolbar dialog).
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  CheckIcon,
-  ChevronDownIcon,
-  CopyIcon,
-  MoreHorizontalIcon,
-} from "lucide-react";
+import { MoreHorizontalIcon, SquareIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/hint";
@@ -32,9 +26,10 @@ import {
   AppMenuTrigger,
 } from "@/components/ui/app-menu";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
-import { cn } from "@/lib/utils";
+import type { RightTab } from "@/lib/workspace/mode-registry";
 import { useExperimentProjectRoot } from "./experiments-project-root";
 import { useExperimentStore } from "@/stores/experiment-store";
+import { useRightPanelStore } from "@/stores/right-panel-store";
 import { literatureDetailBadgeClass } from "@/modes/literature-mode/literature-list-chrome";
 import {
   experimentStatusOf,
@@ -48,121 +43,146 @@ import {
 } from "./experiments-overview";
 import {
   experimentsDetailTitleClass,
-  experimentsPathCompactClass,
-  experimentsSectionHeaderRowClass,
-  experimentsSectionLabelClass,
-  experimentsSubsectionLabelClass,
-  experimentsUiValueClass,
 } from "./experiments-detail-chrome";
-import { ExperimentsRunPanel } from "./experiments-run-panel";
 import { ExperimentsRunsTable } from "./experiments-runs-table";
+import { ExperimentsResultsPanel } from "./experiments-results-panel";
 
-const COPY_FEEDBACK_MS = 1500;
-
-function CopyableText({
-  text,
-  copyText,
-  className,
-}: {
-  text: string;
-  copyText?: string;
-  className?: string;
-}) {
-  const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
-  const timerRef = useRef<number | null>(null);
-  const payload = copyText ?? text;
-
-  useEffect(
-    () => () => {
-      if (timerRef.current != null) window.clearTimeout(timerRef.current);
-    },
-    [],
-  );
-
-  const handleCopy = () => {
-    void navigator.clipboard.writeText(payload).then(() => {
-      setCopied(true);
-      if (timerRef.current != null) window.clearTimeout(timerRef.current);
-      timerRef.current = window.setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
-    });
-  };
-
-  return (
-    <Hint
-      label={
-        copied
-          ? t("common.copied")
-          : t("experiments.detail.clickToCopy", { text: payload })
-      }
-    >
-      <button
-        type="button"
-        onClick={handleCopy}
-        className={cn(
-          "group inline-flex max-w-full items-baseline gap-1.5 text-left transition-colors",
-          experimentsUiValueClass,
-          "rounded-[3px] hover:text-foreground",
-          className,
-        )}
-      >
-        <span className="min-w-0 break-all">{text}</span>
-        {copied ? (
-          <CheckIcon
-            className="size-3 shrink-0 self-center text-success"
-            aria-label={t("common.copied")}
-          />
-        ) : (
-          <CopyIcon
-            className="size-3 shrink-0 self-center text-muted-foreground/45 opacity-0 transition-opacity group-hover:opacity-100"
-            aria-hidden
-          />
-        )}
-      </button>
-    </Hint>
-  );
-}
+type DetailPane = "overview" | "run" | "results";
 
 function HistorySection({
-  runCount,
   runs,
   workspacePath,
+  onOpenResults,
 }: {
   runCount: number;
   runs: ExperimentRunEntry[];
   workspacePath: string;
+  onOpenResults?: () => void;
 }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(true);
+  const projectRoot = useExperimentProjectRoot();
+  const selectedId = useExperimentStore((s) => s.selectedId);
+  const runInFlight = useExperimentStore((s) => s.runInFlight);
+  const cancelRun = useExperimentStore((s) => s.cancelRun);
+  const live =
+    runInFlight && selectedId && runInFlight.id === selectedId ? runInFlight : null;
 
   return (
-    <div className="space-y-2">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 text-left"
-        aria-expanded={open}
-      >
-        <ChevronDownIcon
-          className={cn(
-            "size-3 shrink-0 text-muted-foreground/60 transition-transform",
-            open ? "rotate-0" : "-rotate-90",
-          )}
-          aria-hidden
-        />
-        <span className={experimentsSubsectionLabelClass}>
-          {t("experiments.history")}
-          <span className="ml-1.5 tabular-nums text-muted-foreground/65">({runCount})</span>
-        </span>
-      </button>
-      {open ? (
-        <ExperimentsRunsTable runs={runs} workspacePath={workspacePath} />
+    <div className="flex min-h-0 flex-col">
+      {live ? (
+        <div className="border-b border-border/60">
+          <div className="flex h-[var(--height-right-area-subtoolbar)] items-center gap-2 px-3">
+            <span className="text-[length:var(--font-size-11)] font-medium text-info">
+              {t("experiments.running")}
+            </span>
+            <span className="min-w-0 flex-1 truncate font-mono text-[length:var(--font-code)] text-foreground/85">
+              {live.command}
+            </span>
+            <Hint label={t("experiments.runPanel.cancelRun")}>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                className="h-6 shrink-0 gap-1 px-2"
+                onClick={() => {
+                  if (!projectRoot || !selectedId) return;
+                  void cancelRun(projectRoot, selectedId, live.runId);
+                }}
+              >
+                <SquareIcon className="size-3" aria-hidden />
+                {t("experiments.cancel")}
+              </Button>
+            </Hint>
+          </div>
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words border-t border-border/40 px-3 py-2 font-mono text-[length:var(--font-code)] text-foreground/80">
+            {live.liveOutput.trim()
+              ? live.liveOutput
+              : t("experiments.runPanel.waitingOutput")}
+          </pre>
+        </div>
       ) : null}
+      <ExperimentsRunsTable
+        runs={runs}
+        workspacePath={workspacePath}
+        onOpenResults={onOpenResults}
+      />
     </div>
   );
 }
 
-export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
+function DeleteExperimentDialog({
+  open,
+  onOpenChange,
+  title,
+  workspacePath,
+  removeLab,
+  setRemoveLab,
+  deleting,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  workspacePath: string;
+  removeLab: boolean;
+  setRemoveLab: (v: boolean) => void;
+  deleting: boolean;
+  onConfirm: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next);
+        if (!next) setRemoveLab(false);
+      }}
+    >
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{t("dialogs.experiments.deleteTitle")}</DialogTitle>
+        </DialogHeader>
+        <p className={SETTINGS_ROW_DESC}>
+          {t("experiments.detail.deleteBody", { title })}
+        </p>
+        <label className="flex items-start gap-2 text-[length:var(--font-size-12)] text-muted-foreground">
+          <Checkbox
+            checked={removeLab}
+            onCheckedChange={(v) => setRemoveLab(v === true)}
+            className="mt-0.5"
+          />
+          <span>{t("experiments.detail.deleteLab", { path: workspacePath })}</span>
+        </label>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+            disabled={deleting}
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={onConfirm}
+            disabled={deleting}
+          >
+            {deleting ? t("common.deleting") : t("common.delete")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function ExperimentsDetail({
+  meta,
+  tab,
+}: {
+  meta: ExperimentMeta;
+  tab?: RightTab;
+}) {
   const { t } = useTranslation();
   const projectRoot = useExperimentProjectRoot();
   const selectedId = useExperimentStore((s) => s.selectedId);
@@ -231,135 +251,119 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
     }
   }, [projectRoot, selectExperiment, selectedId]);
 
+  const pane: DetailPane = tab?.experimentsDetailTab ?? "overview";
+
+  const deleteDialog = (
+    <DeleteExperimentDialog
+      open={deleteOpen}
+      onOpenChange={setDeleteOpen}
+      title={meta.title}
+      workspacePath={meta.workspacePath}
+      removeLab={removeLab}
+      setRemoveLab={setRemoveLab}
+      deleting={deleting}
+      onConfirm={() => void handleDelete()}
+    />
+  );
+
+  if (pane === "run") {
+    return (
+      <div className="@container flex h-full min-h-0 flex-col font-sans">
+        <div className="min-h-0 flex-1 overflow-auto">
+          <HistorySection
+            runCount={runCount}
+            workspacePath={meta.workspacePath}
+            runs={runs}
+            onOpenResults={
+              tab
+                ? () => {
+                    useRightPanelStore
+                      .getState()
+                      .updateTab(tab.id, { experimentsDetailTab: "results" });
+                  }
+                : undefined
+            }
+          />
+        </div>
+        {deleteDialog}
+      </div>
+    );
+  }
+
   return (
     <div className="@container flex h-full min-h-0 flex-col overflow-auto px-6 py-5 font-sans @md:px-8 @md:py-6">
       <div className="space-y-6">
-        <header className="space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <h2 className={experimentsDetailTitleClass}>{meta.title}</h2>
-              {archived ? (
-                <span className={literatureDetailBadgeClass}>{t("experiments.archived")}</span>
-              ) : null}
-            </div>
-            <AppMenu>
-              <Hint label={t("experiments.moreActions")}>
-                <AppMenuTrigger asChild>
-                  <Button
-                    size="xs"
-                    variant="ghost"
-                    className="size-6 shrink-0 px-0"
-                  >
-                    <MoreHorizontalIcon className="size-3.5" />
-                  </Button>
-                </AppMenuTrigger>
-              </Hint>
-              <AppMenuContent align="end">
-                <AppMenuItem onSelect={() => void handleArchiveToggle()}>
-                  {archived ? t("experiments.restore") : t("experiments.archive")}
-                </AppMenuItem>
-                <AppMenuSeparator />
-                <AppMenuDestructiveItem
-                  onSelect={() => {
-                    setRemoveLab(false);
-                    setDeleteOpen(true);
-                  }}
-                >
-                  {t("common.delete")}
-                </AppMenuDestructiveItem>
-              </AppMenuContent>
-            </AppMenu>
-          </div>
-          <ExperimentsBriefStrip briefLinks={meta.briefLinks} />
-        </header>
-
-        <section className="space-y-3">
-          <ExperimentsOverviewPanel
-            meta={meta}
-            runCount={runCount}
-            lastRunAt={lastRunAt ?? lastRun?.finishedAt ?? null}
-            lastExitCode={lastRun?.exitCode ?? null}
-          />
-        </section>
-
-        <section className="space-y-3 border-t border-border pt-4">
-          <ExperimentsEnvironmentPanel
-            env={env}
-            reloading={envReloading}
-            onRefresh={() => void handleRefreshEnv()}
-          />
-        </section>
-
-        <Dialog
-          open={deleteOpen}
-          onOpenChange={(open) => {
-            setDeleteOpen(open);
-            if (!open) setRemoveLab(false);
-          }}
-        >
-          <DialogContent className="sm:max-w-sm">
-            <DialogHeader>
-              <DialogTitle>{t("dialogs.experiments.deleteTitle")}</DialogTitle>
-            </DialogHeader>
-            <p className={SETTINGS_ROW_DESC}>
-              {t("experiments.detail.deleteBody", { title: meta.title })}
-            </p>
-            <label className="flex items-start gap-2 text-[length:var(--font-size-12)] text-muted-foreground">
-              <Checkbox
-                checked={removeLab}
-                onCheckedChange={(v) => setRemoveLab(v === true)}
-                className="mt-0.5"
-              />
-              <span>
-                {t("experiments.detail.deleteLab", { path: meta.workspacePath })}
-              </span>
-            </label>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDeleteOpen(false)}
-                disabled={deleting}
-              >
-                {t("common.cancel")}
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => void handleDelete()}
-                disabled={deleting}
-              >
-                {deleting ? t("common.deleting") : t("common.delete")}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        <section className="space-y-4 border-t border-border pt-4">
-          <div className={cn(experimentsSectionHeaderRowClass, "items-baseline")}>
-            <h3 className={experimentsSectionLabelClass}>{t("experiments.execution")}</h3>
-            {meta.workspacePath ? (
-              <div className="flex min-w-0 max-w-[55%] items-baseline justify-end gap-1.5">
-                <span className="shrink-0 text-[length:var(--font-path)] text-muted-foreground/60">
-                  cwd
-                </span>
-                <CopyableText
-                  text={meta.workspacePath}
-                  className={cn(
-                    experimentsPathCompactClass,
-                    "min-w-0 text-muted-foreground/75",
-                  )}
-                />
+        {pane === "overview" ? (
+          <>
+            <header className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <h2 className={experimentsDetailTitleClass}>{meta.title}</h2>
+                  {archived ? (
+                    <span className={literatureDetailBadgeClass}>
+                      {t("experiments.archived")}
+                    </span>
+                  ) : null}
+                </div>
+                <AppMenu>
+                  <Hint label={t("experiments.moreActions")}>
+                    <AppMenuTrigger asChild>
+                      <Button size="xs" variant="ghost" className="size-6 shrink-0 px-0">
+                        <MoreHorizontalIcon className="size-3.5" />
+                      </Button>
+                    </AppMenuTrigger>
+                  </Hint>
+                  <AppMenuContent align="end">
+                    <AppMenuItem onSelect={() => void handleArchiveToggle()}>
+                      {archived ? t("experiments.restore") : t("experiments.archive")}
+                    </AppMenuItem>
+                    <AppMenuSeparator />
+                    <AppMenuDestructiveItem
+                      onSelect={() => {
+                        setRemoveLab(false);
+                        setDeleteOpen(true);
+                      }}
+                    >
+                      {t("common.delete")}
+                    </AppMenuDestructiveItem>
+                  </AppMenuContent>
+                </AppMenu>
               </div>
-            ) : null}
-          </div>
+              <ExperimentsBriefStrip meta={meta} />
+            </header>
 
-          <ExperimentsRunPanel />
+            <div className="space-y-8">
+              <ExperimentsOverviewPanel
+                meta={meta}
+                runCount={runCount}
+                lastRunAt={lastRunAt ?? lastRun?.finishedAt ?? null}
+                lastExitCode={lastRun?.exitCode ?? null}
+                onOpenExecution={
+                  tab
+                    ? () => {
+                        useRightPanelStore
+                          .getState()
+                          .updateTab(tab.id, { experimentsDetailTab: "run" });
+                      }
+                    : undefined
+                }
+              />
+              <ExperimentsEnvironmentPanel
+                env={env}
+                reloading={envReloading}
+                onRefresh={() => void handleRefreshEnv()}
+              />
+            </div>
+          </>
+        ) : null}
 
-          <div className="space-y-2">
-            <HistorySection runCount={runCount} workspacePath={meta.workspacePath} runs={runs} />
-          </div>
-        </section>
+        {pane === "results" ? (
+          <section className="space-y-3">
+            <ExperimentsResultsPanel workspacePath={meta.workspacePath} runs={runs} />
+          </section>
+        ) : null}
+
+        {deleteDialog}
       </div>
     </div>
   );

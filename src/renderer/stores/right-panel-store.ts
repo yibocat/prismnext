@@ -24,6 +24,7 @@ import { deactivateModeByTabKind } from "@/lib/workspace/deactivate-mode";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import { settingsPanelSlotKey } from "@/lib/settings/settings-panel-slot-key";
 import { settingsPanelSlotTitle } from "@/lib/settings/settings-panel-slots";
+import { trackRecentOpenedExperiment } from "@/modes/experiments-mode/experiments-recent";
 
 // ─── Re-exports ───
 
@@ -46,6 +47,7 @@ interface RightPanelState {
   openLiteraturePaper: (paperId: string, title: string, view?: "grid" | "reader" | "notes") => string;
   /** Open / focus a detail tab for one experiment (browse home tab stays). */
   openExperimentTab: (experimentId: string, title: string) => string;
+  updateExperimentTabTitle: (experimentId: string, title: string) => void;
   /** Remove detail tabs for a deleted experiment id. */
   closeExperimentTabs: (experimentId: string) => void;
   /** Activate the Experiments home (browse grid) tab. */
@@ -106,7 +108,7 @@ interface RightPanelState {
   closeLiteraturePaperTabs: (paperId: string) => void;
   setActiveTab: (id: string) => void;
   setTabViewMode: (id: string, mode: string) => void;
-  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title" | "terminalSource" | "terminalCwd" | "linkedChatTabId" | "linkedToolCallId" | "settingsSlot" | "settingsSlotKey" | "literaturePaperId" | "literatureView" | "experimentId" | "experimentsView">>) => void;
+  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title" | "terminalSource" | "terminalCwd" | "linkedChatTabId" | "linkedToolCallId" | "settingsSlot" | "settingsSlotKey" | "literaturePaperId" | "literatureView" | "experimentId" | "experimentsView" | "experimentsDetailTab">>) => void;
   moveTab: (fromIndex: number, toIndex: number) => void;
 }
 
@@ -158,7 +160,10 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   },
 
   openExperimentTab: (experimentId, title) => {
-    useLayoutStore.getState().activateMode("experiments");
+    const layout = useLayoutStore.getState();
+    layout.activateMode("experiments");
+    // Files-like: show experiment list beside detail (deferred until RightArea has width).
+    layout.revealRightSidebar();
     // Keep a browse home tab around so closing detail doesn't lose the grid.
     get().ensureTab("experiments");
     const { tabs } = get();
@@ -167,6 +172,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     );
     if (existing) {
       set({ activeTabId: existing.id });
+      void trackRecentOpenedExperiment(experimentId, title);
       return existing.id;
     }
     const id = nextTabId();
@@ -179,7 +185,18 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       experimentsView: "detail",
     };
     set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
+    void trackRecentOpenedExperiment(experimentId, title);
     return id;
+  },
+
+  updateExperimentTabTitle: (experimentId, title) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.kind === "experiments" && t.experimentId === experimentId
+          ? { ...t, title: title.slice(0, 48) }
+          : t,
+      ),
+    }));
   },
 
   closeExperimentTabs: (experimentId) => {

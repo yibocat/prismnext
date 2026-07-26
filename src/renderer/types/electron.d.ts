@@ -752,13 +752,47 @@ export interface ElectronAPI {
     | { ok: true; meta: import("../../shared/experiment-log").ExperimentMeta }
     | { ok: false; error: string; hint?: string }
   >;
-  experimentCreate: (args: { projectRoot: string; title: string }) => Promise<
+  experimentCreate: (args: {
+    projectRoot: string;
+    title: string;
+    tags?: string[];
+    description?: string;
+    briefLinks?: {
+      sections?: string[];
+      hypothesisExcerpt?: string;
+      researchQuestionExcerpt?: string;
+    };
+  }) => Promise<
     | {
         ok: true;
         id: string;
         path: string;
         meta: import("../../shared/experiment-log").ExperimentMeta;
       }
+    | { ok: false; error: string; hint?: string }
+  >;
+  experimentUpdate: (args: {
+    projectRoot: string;
+    id: string;
+    title?: string;
+    tags?: string[];
+    description?: string;
+    briefLinks?: {
+      sections?: string[];
+      hypothesisExcerpt?: string;
+      researchQuestionExcerpt?: string;
+    } | null;
+  }) => Promise<
+    | { ok: true; meta: import("../../shared/experiment-log").ExperimentMeta }
+    | { ok: false; error: string; hint?: string }
+  >;
+  experimentUpdateRun: (args: {
+    projectRoot: string;
+    id: string;
+    runId: string;
+    notes: string;
+  }) => Promise<
+    | { ok: true; run: import("../../shared/experiment-log").ExperimentRunEntry }
     | { ok: false; error: string; hint?: string }
   >;
   experimentRestore: (args: { projectRoot: string; id: string }) => Promise<
@@ -796,6 +830,20 @@ export interface ElectronAPI {
     | { ok: false; error: string; hint?: string }
   >;
   experimentCancelRun: (args: { projectRoot: string; id: string; runId: string }) => Promise<{ ok: true }>;
+  experimentSnapshot: (args: {
+    projectRoot: string;
+    id: string;
+    scanDirs?: string[];
+    metricsFiles?: string[];
+    maxFiles?: number;
+    maxDepth?: number;
+  }) => Promise<
+    | {
+        ok: true;
+        snapshot: import("../../main/services/experiment-results-snapshot").ExperimentResultsSnapshot;
+      }
+    | { ok: false; error: string; hint?: string }
+  >;
   /** Registry changed (create/run/append) or Agent requested UI focus. */
   onExperimentChanged: (
     callback: (data: {
@@ -808,8 +856,11 @@ export interface ElectronAPI {
   onExperimentRunComplete: (
     callback: (data: import("../../shared/experiment-log").ExperimentRunCompleteEvent) => void,
   ) => () => void;
+  onExperimentRunStarted: (
+    callback: (data: import("../../shared/experiment-log").ExperimentRunStartedEvent) => void,
+  ) => () => void;
   onExperimentRunOutput: (
-    callback: (data: { id: string; runId: string; chunk: string }) => void,
+    callback: (data: import("../../shared/experiment-log").ExperimentRunOutputEvent) => void,
   ) => () => void;
 
   // Provenance - trace a claimed artifact / run back to its generating command.

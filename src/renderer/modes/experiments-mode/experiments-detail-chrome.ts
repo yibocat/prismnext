@@ -45,9 +45,9 @@ export const experimentsMonoValueClass = experimentsCodeClass;
 export const experimentsRunRowShellClass =
   "flex items-center gap-2 px-3 h-[var(--height-right-area-subtoolbar)] shrink-0 min-w-0 border-b border-border/60 text-left w-full";
 
-/** Runs list column header row (static — no sticky; avoids covering AiBar z-10). */
+/** Runs list column header — Literature-style sticky strip (no card shell). */
 export const experimentsRunsListHeaderShellClass =
-  "shrink-0 h-[var(--height-right-area-subtoolbar)] bg-muted/20 border-b border-border/60 px-3";
+  "shrink-0 h-[var(--height-right-area-subtoolbar)] bg-background border-b border-border/50 px-3 sticky top-0 z-[1]";
 
 export const experimentsRunsListHeaderLabelClass =
   "font-sans text-[length:var(--font-size-11)] font-medium tracking-[0.01em] text-muted-foreground/75";
@@ -56,28 +56,26 @@ export const experimentsRunsListHeaderLabelClass =
 export const experimentsRunRowTextClass =
   "font-sans text-[length:var(--font-toolbar-tab)]";
 
-/** Bordered runs table shell. */
-export const experimentsRunsTableShellClass =
-  "overflow-hidden rounded-md border border-border/60";
+/** @deprecated Prefer flush Literature-style list (no outer card). */
+export const experimentsRunsTableShellClass = "min-w-0";
 
 /** Unified command + live output console (Execution section). */
 export const experimentsRunConsoleShellClass =
   "overflow-hidden rounded-md border border-border bg-card shadow-none";
 
 /**
- * Selected-run detail pane — right of the list (master–detail split).
- * Own scroll surface so long output does not push the list.
+ * Expanded run detail under a list row (Literature accordion).
+ * Left inset matches list title column (px-3 + checkbox + icon + gaps).
  */
 export const experimentsRunDetailPanelClass =
-  "min-h-0 flex-1 space-y-2.5 overflow-auto bg-muted/15 px-3 py-2.5";
+  "space-y-2 bg-background pl-8 pr-3 py-2.5 border-b border-border/60";
 
 /** Empty detail hint when no run is selected. */
 export const experimentsRunDetailEmptyClass =
-  "flex flex-1 items-center justify-center bg-muted/10 px-4 py-8";
+  "flex flex-1 items-center justify-center px-4 py-8";
 
-/** Outer shell for list | detail split (@container for narrow → stack). */
-export const experimentsRunsSplitShellClass =
-  "@container overflow-hidden rounded-md border border-border/60";
+/** @deprecated Split shell — Execution now uses flush list + row expand. */
+export const experimentsRunsSplitShellClass = "min-w-0";
 
 /** @deprecated Accordion expand chrome — use experimentsRunDetailPanelClass. */
 export const experimentsRunExpandedClass = experimentsRunDetailPanelClass;
@@ -90,9 +88,9 @@ export const experimentsBriefBoxClass =
 export const experimentsBriefSectionPillClass =
   "inline-flex shrink-0 items-center rounded-full border border-dashed border-border/70 bg-background/50 px-2 py-0.5 text-[length:var(--font-size-11)] text-muted-foreground";
 
-/** Metadata label | value — fixed label column for side-by-side Overview / Environment. */
+/** Metadata label | value — fixed label column; labels vertically centered with values. */
 export const experimentsMetadataRowClass =
-  "grid grid-cols-[5.25rem_minmax(0,1fr)] items-baseline gap-x-3 py-1.5";
+  "grid grid-cols-[5.25rem_minmax(0,1fr)] items-center gap-x-3 py-1.5";
 
 export const experimentsMetadataLabelClass =
   "text-[length:var(--font-size-11)] text-muted-foreground/65";

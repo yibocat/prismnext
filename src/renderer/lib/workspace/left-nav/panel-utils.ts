@@ -8,6 +8,7 @@ import type { RightToolbarTab } from "@/stores/layout-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useLiteratureStore } from "@/stores/literature-store";
+import { modeRegistry } from "@/lib/workspace/mode-registry";
 import { deactivateModeFromToolbar } from "@/lib/workspace/deactivate-mode";
 import {
   openRightArea,
@@ -93,6 +94,13 @@ export function focusModeInRightArea(
   rps.ensureTab(modeId);
   st.setLeftSidebarView("sessions");
   st.activateMode(modeId as RightToolbarTab);
+
+  const def = modeRegistry.get(modeId);
+  def?.onActivate?.();
+  // Modes with a list sidebar (Files / Literature / Experiments / …) open it by default.
+  if (def?.Sidebar && !def.hideRightSidebar) {
+    st.revealRightSidebar();
+  }
 
   const layoutCtx = rightAreaCtxFromLeftNav(ctx, options?.layout);
   if (options?.maximize) {

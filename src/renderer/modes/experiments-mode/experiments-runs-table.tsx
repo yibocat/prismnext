@@ -1,39 +1,31 @@
 /**
- * experiments-runs-table — Run history for the Experiments detail view.
+ * experiments-runs-table — Run history for the Experiments Execution pane.
  *
- * Master–detail: compact list (left) + detail pane (right); stacks on
- * narrow containers. ↑/↓ or j/k move selection; Enter selects; Esc clears.
+ * Literature/Git-style flush list: click a row to expand detail inline.
+ * Filter/sort live in the mode toolbar (store.runsQuery). No pagination.
  */
 
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   BanIcon,
+  CheckIcon,
   ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   CircleCheckIcon,
   CircleXIcon,
   CopyIcon,
   FileIcon,
   FileTextIcon,
   Link2Icon,
-  PenLineIcon,
+  SquareArrowOutUpRightIcon,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/hint";
-import { Input } from "@/components/ui/input";
-import {
-  AppSelect,
-  AppSelectContent,
-  AppSelectItem,
-  AppSelectTrigger,
-  AppSelectValue,
-} from "@/components/ui/app-select";
 import { cn } from "@/lib/utils";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
-import { CopyFeedbackButton } from "@/modes/literature-mode/literature-inline-field";
-import { insertExperimentRunToChat } from "@/lib/chat/insert-to-chat";
+import {
+  CopyFeedbackButton,
+  InlineEditableField,
+} from "@/modes/literature-mode/literature-inline-field";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { artifactFullPath, openArtifactPathInFiles, resolveRunImagePathsForDisplay } from "./experiments-artifact-nav";
 import { ChatProjectImage } from "@/lib/markdown/extract-markdown-images";
@@ -42,45 +34,39 @@ import { resolveProjectRelativePath } from "@/lib/files/project-path";
 import { isImageArtifactPath } from "../../../shared/artifact-path";
 import { ExperimentsProvenanceInspector } from "./experiments-provenance-inspector";
 import {
-  DEFAULT_RUNS_QUERY,
+  experimentRunListTitle,
   queryExperimentRuns,
   stepFocusIndex,
-  type RunsKindFilter,
-  type RunsQuery,
-  type RunsSortOrder,
-  type RunsStatusFilter,
 } from "./experiments-runs-query";
 import {
-  EXPERIMENT_RUN_KINDS,
   type ExperimentEnv,
   type ExperimentRunEntry,
 } from "../../../shared/experiment-log";
-import { literatureDetailBadgeClass } from "@/modes/literature-mode/literature-list-chrome";
 import {
   experimentsCodeClass,
-  experimentsRunDetailEmptyClass,
+  experimentsMetadataLabelClass,
+  experimentsMetadataRowClass,
   experimentsRunDetailPanelClass,
   experimentsRunRowTextClass,
   experimentsRunsListHeaderLabelClass,
   experimentsRunsListHeaderShellClass,
-  experimentsRunsSplitShellClass,
-  experimentsSubsectionLabelClass,
+  experimentsUiValueClass,
   formatExperimentRelativeTime,
 } from "./experiments-detail-chrome";
+import { useExperimentProjectRoot } from "./experiments-project-root";
 
 export interface ExperimentsRunsTableProps {
   runs: ExperimentRunEntry[];
   workspacePath?: string;
+  onOpenResults?: () => void;
 }
-
-const PAGE_SIZE = 10;
 
 /** Artifacts shown before the list collapses into "+N more". */
 const ARTIFACT_PREVIEW = 8;
 
-/** Compact list columns: status · command · exit · time. */
+/** icon · title · kind · status · duration · finished · checkbox (trailing) */
 const HISTORY_GRID_CLASS =
-  "grid grid-cols-[0.75rem_minmax(0,1fr)_2.5rem_4rem] gap-x-2";
+  "grid grid-cols-[0.75rem_minmax(0,1fr)_3.5rem_3rem_3.25rem_4rem_1rem] gap-x-2";
 
 function formatTime(iso: string): string {
   if (!iso) return "—";
@@ -101,13 +87,87 @@ function formatDuration(startedAt: string, finishedAt: string): string | null {
 function envSummary(env: ExperimentEnv, noPython: string, venvLabel: string): string {
   const bits: string[] = [];
   if (env.pythonVersion) bits.push(`py ${env.pythonVersion}`);
-  else if (env.python) bits.push("py");
+  else if (env.python) bits.push("python");
   else bits.push(noPython);
   if (env.rVersion) bits.push(`R ${env.rVersion}`);
   else if (env.rscript) bits.push("R");
   if (env.gitCommit) bits.push(`git ${env.gitCommit}`);
   if (env.venvPath) bits.push(venvLabel);
+  if (env.platform) bits.push(env.platform);
   return bits.join(" · ");
+}
+
+function RunMetaRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className={experimentsMetadataRowClass}>
+      <span className={cn(experimentsMetadataLabelClass, "leading-5")}>{label}</span>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
+
+const COPY_FEEDBACK_MS = 1500;
+
+/** Same pattern as Overview `CopyableText`: click text or hover icon; checkmark feedback. */
+function InlineCopyValue({
+  text,
+  className,
+  mono = false,
+}: {
+  text: string;
+  className?: string;
+  mono?: boolean;
+}) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current != null) window.clearTimeout(timerRef.current);
+    },
+    [],
+  );
+
+  return (
+    <Hint
+      label={
+        copied
+          ? t("common.copied")
+          : t("experiments.detail.clickToCopy", { text })
+      }
+    >
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard.writeText(text).then(() => {
+            setCopied(true);
+            if (timerRef.current != null) window.clearTimeout(timerRef.current);
+            timerRef.current = window.setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
+          });
+        }}
+        className={cn(
+          "group inline-flex max-w-full items-baseline gap-1.5 text-left transition-colors",
+          mono ? experimentsCodeClass : experimentsUiValueClass,
+          "rounded-[3px] hover:text-foreground",
+          className,
+        )}
+      >
+        <span className="min-w-0 break-all">{text}</span>
+        {copied ? (
+          <CheckIcon
+            className="size-3 shrink-0 self-center text-success"
+            aria-label={t("common.copied")}
+          />
+        ) : (
+          <CopyIcon
+            className="size-3 shrink-0 self-center text-muted-foreground/45 opacity-0 transition-opacity group-hover:opacity-100"
+            aria-hidden
+          />
+        )}
+      </button>
+    </Hint>
+  );
 }
 
 function ArtifactChip({
@@ -124,15 +184,18 @@ function ArtifactChip({
   const name = path.split("/").pop() ?? path;
 
   return (
-    <span className="inline-flex items-center gap-0.5">
+    <div className="flex min-w-0 items-center gap-1.5 py-0.5">
+      <FileIcon className="size-3 shrink-0 text-muted-foreground/55" aria-hidden />
       <Hint label={fullPath}>
         <button
           type="button"
           onClick={() => void openArtifactPathInFiles(path, workspacePath)}
-          className="inline-flex h-6 items-center gap-1 rounded-md border border-border/55 bg-background px-2 text-[length:var(--font-menu-item)] text-foreground/90 transition-colors hover:bg-accent hover:text-foreground"
+          className={cn(
+            "min-w-0 truncate text-left text-[length:var(--font-size-13)] text-foreground/90",
+            "hover:underline underline-offset-2",
+          )}
         >
-          <FileIcon className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
-          <span className="max-w-[14rem] truncate">{name}</span>
+          {name}
         </button>
       </Hint>
       {onInspect ? (
@@ -141,13 +204,13 @@ function ArtifactChip({
             type="button"
             onClick={() => onInspect(path)}
             aria-label={`${t("experiments.runs.viewProvenance")}: ${name}`}
-            className="inline-flex h-6 items-center rounded-md border border-border/55 bg-background px-1 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+            className="inline-flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground/55 transition-colors hover:bg-accent hover:text-foreground"
           >
             <Link2Icon className="size-3" aria-hidden />
           </button>
         </Hint>
       ) : null}
-    </span>
+    </div>
   );
 }
 
@@ -155,14 +218,18 @@ function RunRow({
   run,
   selected,
   focused,
+  checked,
   onSelect,
   onFocus,
+  onCheckedChange,
 }: {
   run: ExperimentRunEntry;
   selected: boolean;
   focused: boolean;
+  checked: boolean;
   onSelect: () => void;
   onFocus: () => void;
+  onCheckedChange: (checked: boolean) => void;
 }) {
   const { t } = useTranslation();
   const exit = run.exitCode;
@@ -177,50 +244,91 @@ function RunRow({
     : exit === 0
       ? "text-success"
       : "text-destructive";
+  const title = experimentRunListTitle(run);
+  const duration = formatDuration(run.startedAt, run.finishedAt);
+  const statusLabel = cancelled
+    ? t("experiments.runs.cancelledShort")
+    : exit === 0
+      ? t("experiments.runs.successShort")
+      : t("experiments.runs.failedShort");
+  const kindLabel = run.kind || t("experiments.untyped");
+  const metaClass = cn(
+    "truncate",
+    experimentsRunRowTextClass,
+    "text-muted-foreground",
+  );
 
   return (
-    <li data-run-row={run.runId} id={`run-row-${run.runId}`}>
-      <button
-        type="button"
-        role="option"
-        aria-selected={selected}
-        onClick={onSelect}
-        onFocus={onFocus}
-        tabIndex={focused ? 0 : -1}
-        className={cn(
-          HISTORY_GRID_CLASS,
-          "w-full items-center px-2.5",
-          "h-[var(--height-right-area-subtoolbar)] shrink-0 min-w-0 border-b border-border/60 text-left",
-          "border-l-2 border-l-transparent",
-          experimentsRunRowTextClass,
-          "cursor-pointer hover:bg-muted/40",
-          selected && "border-l-foreground/50 bg-muted/40",
-          focused && !selected && "bg-muted/25",
-        )}
+    <div
+      id={`run-row-${run.runId}`}
+      role="option"
+      aria-selected={selected}
+      aria-expanded={selected}
+      tabIndex={focused ? 0 : -1}
+      onFocus={onFocus}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      className={cn(
+        HISTORY_GRID_CLASS,
+        "w-full items-center px-3",
+        "h-[var(--height-right-area-subtoolbar)] shrink-0 min-w-0 border-b border-border/60 text-left box-border",
+        experimentsRunRowTextClass,
+        "cursor-pointer hover:bg-muted",
+        selected && "bg-muted",
+        focused && !selected && "bg-accent",
+      )}
+    >
+      <ExitIcon className={cn("size-3 shrink-0", exitClass)} aria-hidden />
+      <span className="min-w-0 truncate text-foreground" title={run.command || title}>
+        {title}
+      </span>
+      <span className={metaClass} title={t("experiments.type")}>
+        {kindLabel}
+      </span>
+      <span
+        className={cn(metaClass, exitClass)}
+        title={
+          cancelled
+            ? t("experiments.runs.cancelledExitTitle", { code: exit })
+            : t("experiments.runs.exitCodeTitle", { code: exit })
+        }
       >
-        <ExitIcon className={cn("size-3 shrink-0", exitClass)} aria-hidden />
-        <span className={cn("min-w-0 truncate text-foreground/90", experimentsCodeClass)} title={run.command}>
-          {run.command}
-        </span>
-        <span
-          className={cn("text-right tabular-nums", exitClass)}
-          title={
-            cancelled
-              ? t("experiments.runs.cancelledExitTitle", { code: exit })
-              : t("experiments.runs.exitCodeTitle", { code: exit })
-          }
-        >
-          {exit}
-        </span>
-        <time
-          dateTime={run.finishedAt}
-          className="text-right tabular-nums text-muted-foreground/70"
-          title={run.finishedAt}
-        >
-          {formatTime(run.finishedAt)}
-        </time>
-      </button>
-    </li>
+        {statusLabel}
+      </span>
+      <span
+        className={cn(metaClass, "text-right tabular-nums")}
+        title={t("experiments.provenance.duration")}
+      >
+        {duration ?? "—"}
+      </span>
+      <time
+        dateTime={run.finishedAt}
+        className={cn(metaClass, "text-right tabular-nums")}
+        title={run.finishedAt}
+      >
+        {formatTime(run.finishedAt)}
+      </time>
+      <span
+        className="flex items-center justify-center"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onCheckedChange(e.target.checked)}
+          onClick={(e) => e.stopPropagation()}
+          className="size-3 shrink-0 cursor-pointer rounded-sm accent-primary"
+          title={t("experiments.runs.selectRunAria", { title })}
+          aria-label={t("experiments.runs.selectRunAria", { title })}
+        />
+      </span>
+    </div>
   );
 }
 
@@ -229,20 +337,24 @@ function RunDetailPanel({
   workspacePath,
   experimentId,
   onInspectArtifact,
+  onOpenResults,
 }: {
   run: ExperimentRunEntry;
   workspacePath?: string;
   experimentId?: string | null;
   onInspectArtifact?: (path: string) => void;
+  onOpenResults?: () => void;
 }) {
   const { t } = useTranslation();
+  const projectRoot = useExperimentProjectRoot();
+  const updateRunNotes = useExperimentStore((s) => s.updateRunNotes);
   const hasTail = Boolean(run.stdoutTail?.trim());
   const hasArtifacts = run.artifacts.length > 0;
-  const hasNote = Boolean(run.notes?.trim());
-  const noteText = hasNote ? run.notes!.trim() : "";
+  const noteText = run.notes?.trim() ?? "";
   const duration = formatDuration(run.startedAt, run.finishedAt);
 
   const [artifactsExpanded, setArtifactsExpanded] = useState(false);
+  const [outputOpen, setOutputOpen] = useState(false);
   const showArtifactFold = hasArtifacts && run.artifacts.length > ARTIFACT_PREVIEW;
   const visibleArtifacts =
     hasArtifacts && showArtifactFold && !artifactsExpanded
@@ -253,24 +365,24 @@ function RunDetailPanel({
     { artifacts: run.artifacts, artifactSnapshots: run.artifactSnapshots },
     workspacePath,
   ).filter((p) => (run.artifactSnapshots?.length ? true : isImageArtifactPath(p)));
-  const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const docRoot = useDocumentStore((s) => s.projectRoot);
   const [workingCopyNewer, setWorkingCopyNewer] = useState(false);
 
-  // Reset fold when switching runs so a long list does not stay expanded.
   useEffect(() => {
     setArtifactsExpanded(false);
+    setOutputOpen(false);
   }, [run.runId]);
 
   useEffect(() => {
     setWorkingCopyNewer(false);
-    if (!projectRoot || !run.artifactSnapshots?.length || !run.finishedAt) return;
+    if (!docRoot || !run.artifactSnapshots?.length || !run.finishedAt) return;
     const finishedMs = Date.parse(run.finishedAt) || 0;
     if (!finishedMs) return;
     let cancelled = false;
     void (async () => {
       for (const art of run.artifacts) {
         if (!isImageArtifactPath(art)) continue;
-        const abs = resolveProjectRelativePath(projectRoot, artifactFullPath(art, workspacePath));
+        const abs = resolveProjectRelativePath(docRoot, artifactFullPath(art, workspacePath));
         if (!abs) continue;
         try {
           const st = await window.electronAPI.fsStat(abs);
@@ -286,172 +398,183 @@ function RunDetailPanel({
     return () => {
       cancelled = true;
     };
-  }, [projectRoot, run.runId, run.finishedAt, run.artifacts, run.artifactSnapshots, workspacePath]);
+  }, [docRoot, run.runId, run.finishedAt, run.artifacts, run.artifactSnapshots, workspacePath]);
+
+  const exitLabel = run.cancelled
+    ? t("experiments.runs.cancelledExitTitle", { code: run.exitCode })
+    : t("experiments.runs.exitCodeTitle", { code: run.exitCode });
 
   return (
     <div className={experimentsRunDetailPanelClass} data-run-detail={run.runId}>
-      <div className="flex min-w-0 items-baseline justify-between gap-2">
-        <p className={experimentsSubsectionLabelClass}>{t("experiments.runs.selectedRun")}</p>
-        <span className={cn("min-w-0 truncate text-foreground/85", experimentsCodeClass)} title={run.command}>
-          {run.command}
-        </span>
+      <div className="space-y-0.5">
+        <RunMetaRow label={t("experiments.note")}>
+          <InlineEditableField
+            value={noteText}
+            multiline
+            fitContent
+            minRows={1}
+            maxRows={8}
+            placeholder={t("experiments.runs.notePlaceholder")}
+            displayClassName={cn(experimentsUiValueClass, "whitespace-pre-wrap")}
+            onSave={async (next) => {
+              if (!projectRoot || !experimentId) throw new Error("no experiment");
+              const ok = await updateRunNotes(projectRoot, experimentId, run.runId, next);
+              if (!ok) throw new Error("save failed");
+            }}
+          />
+        </RunMetaRow>
+
+        <RunMetaRow label={t("experiments.command")}>
+          <InlineCopyValue text={run.command} mono />
+        </RunMetaRow>
+
+        <RunMetaRow label={t("experiments.type")}>
+          <span className={experimentsUiValueClass}>
+            {run.kind || t("experiments.untyped")}
+          </span>
+        </RunMetaRow>
+
+        <RunMetaRow label={t("experiments.exit")}>
+          <span className={experimentsUiValueClass}>{exitLabel}</span>
+        </RunMetaRow>
+
+        <RunMetaRow label={t("experiments.provenance.duration")}>
+          <span className={experimentsUiValueClass}>{duration ?? "—"}</span>
+        </RunMetaRow>
+
+        <RunMetaRow label={t("experiments.overview.environment")}>
+          <span className={experimentsUiValueClass}>
+            {envSummary(run.env, t("experiments.runs.noPython"), t("experiments.runs.venv"))}
+          </span>
+        </RunMetaRow>
+
+        <RunMetaRow label={t("experiments.overview.id")}>
+          <InlineCopyValue text={run.runId} />
+        </RunMetaRow>
       </div>
 
-      {hasNote ? (
-        <p className="text-[length:var(--font-size-13)] text-foreground/85">
-          <span className="font-medium text-muted-foreground">{t("experiments.note")}</span>
-          {" — "}
-          {noteText}
-        </p>
-      ) : null}
-
       {hasTail ? (
-        <div>
-          <div className="mb-1 text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/60">
-            {t("experiments.output")}
-          </div>
-          <div className="relative">
-            <pre
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={() => setOutputOpen((v) => !v)}
+            aria-expanded={outputOpen}
+            className="inline-flex h-6 items-center gap-1 text-[length:var(--font-size-11)] font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ChevronDownIcon
               className={cn(
-                "max-h-64 overflow-auto rounded-sm border border-border/60 bg-background",
-                "px-2 py-1.5 pr-8 text-foreground/85",
-                experimentsCodeClass,
-                "whitespace-pre-wrap break-words",
+                "size-3 shrink-0 transition-transform",
+                outputOpen && "rotate-180",
               )}
-            >
-              {run.stdoutTail}
-            </pre>
-            <CopyFeedbackButton
-              onCopy={() => navigator.clipboard.writeText(run.stdoutTail)}
-              title={t("experiments.runs.copyOutput")}
-              className="absolute top-1.5 right-1.5 rounded bg-background/90 p-0.5 text-muted-foreground/60 hover:bg-muted hover:text-foreground"
-            >
-              <CopyIcon className="size-3" aria-hidden />
-            </CopyFeedbackButton>
-          </div>
-        </div>
-      ) : null}
-
-      {hasArtifacts ? (
-        <div>
-          <div className="mb-1.5 text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/60">
-            {t("experiments.artifacts")}
-          </div>
-          {workingCopyNewer ? (
-            <p className="mb-1.5 text-[length:var(--font-size-11)] text-warning">
-              {t("experiments.runs.workingCopyNewer")}
-            </p>
-          ) : null}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {visibleArtifacts.map((artifact) => (
-              <ArtifactChip
-                key={artifact}
-                path={artifact}
-                workspacePath={workspacePath}
-                onInspect={onInspectArtifact}
-              />
-            ))}
-            {showArtifactFold ? (
-              <Hint
-                label={
-                  artifactsExpanded
-                    ? t("experiments.runs.showLess")
-                    : t("experiments.runs.showMoreArtifacts", { count: hiddenArtifactCount })
-                }
+              aria-hidden
+            />
+            {outputOpen
+              ? t("experiments.runs.hideOutput")
+              : t("experiments.runs.showOutput")}
+          </button>
+          {outputOpen ? (
+            <div className="relative mt-1.5">
+              <pre
+                className={cn(
+                  "max-h-64 overflow-auto rounded-sm border border-border bg-background",
+                  "px-2 py-1.5 pr-8 text-foreground/85",
+                  experimentsCodeClass,
+                  "whitespace-pre-wrap break-words",
+                )}
               >
-                <button
-                  type="button"
-                  onClick={() => setArtifactsExpanded((v) => !v)}
-                  aria-expanded={artifactsExpanded}
-                  className="inline-flex h-6 items-center gap-1 rounded-md border border-border/55 bg-background px-2 text-[length:var(--font-menu-item)] text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
-                >
-                  <ChevronDownIcon
-                    className={cn(
-                      "size-3 shrink-0 text-muted-foreground/60 transition-transform",
-                      artifactsExpanded && "rotate-180",
-                    )}
-                    aria-hidden
-                  />
-                  {artifactsExpanded
-                    ? t("experiments.runs.showLess")
-                    : t("experiments.runs.moreArtifactsShort", { count: hiddenArtifactCount })}
-                </button>
-              </Hint>
-            ) : null}
-          </div>
-          {snapshotImages.length > 0 && (run.artifactSnapshots?.length ?? 0) > 0 ? (
-            <div className="mt-2 space-y-2">
-              <div className="text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground/60">
-                {t("experiments.runs.runSnapshot")}
-              </div>
-              {snapshotImages.slice(0, 3).map((rel) => (
-                <ChatProjectImage
-                  key={rel}
-                  src={rel}
-                  alt={rel.split("/").pop() || "snapshot"}
-                />
-              ))}
+                {run.stdoutTail}
+              </pre>
+              <CopyFeedbackButton
+                onCopy={() => navigator.clipboard.writeText(run.stdoutTail)}
+                title={t("experiments.runs.copyOutput")}
+                className="absolute top-1.5 right-1.5 rounded bg-background p-0.5 text-muted-foreground/55 hover:bg-accent hover:text-foreground"
+              >
+                <CopyIcon className="size-3" aria-hidden />
+              </CopyFeedbackButton>
             </div>
           ) : null}
         </div>
       ) : null}
 
-      {!hasNote && !hasTail && !hasArtifacts ? (
-        <p className={SETTINGS_ROW_DESC}>{t("experiments.runs.noOutput")}</p>
+      {hasArtifacts ? (
+        <RunMetaRow label={t("experiments.artifacts")}>
+          <div>
+            {workingCopyNewer ? (
+              <p className="mb-1 text-[length:var(--font-size-11)] text-warning">
+                {t("experiments.runs.workingCopyNewer")}
+              </p>
+            ) : null}
+            <div className="flex flex-col">
+              {visibleArtifacts.map((artifact) => (
+                <ArtifactChip
+                  key={artifact}
+                  path={artifact}
+                  workspacePath={workspacePath}
+                  onInspect={onInspectArtifact}
+                />
+              ))}
+            </div>
+            {showArtifactFold ? (
+              <button
+                type="button"
+                onClick={() => setArtifactsExpanded((v) => !v)}
+                aria-expanded={artifactsExpanded}
+                className="mt-1 inline-flex h-6 items-center gap-1 text-[length:var(--font-size-11)] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ChevronDownIcon
+                  className={cn(
+                    "size-3 shrink-0 transition-transform",
+                    artifactsExpanded && "rotate-180",
+                  )}
+                  aria-hidden
+                />
+                {artifactsExpanded
+                  ? t("experiments.runs.showLess")
+                  : t("experiments.runs.moreArtifactsShort", { count: hiddenArtifactCount })}
+              </button>
+            ) : null}
+            {onOpenResults ? (
+              <button
+                type="button"
+                onClick={onOpenResults}
+                className="mt-1.5 inline-flex h-6 items-center gap-1 text-[length:var(--font-size-11)] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <SquareArrowOutUpRightIcon className="size-3 shrink-0" aria-hidden />
+                {t("experiments.runs.openInResults")}
+              </button>
+            ) : null}
+            {snapshotImages.length > 0 && (run.artifactSnapshots?.length ?? 0) > 0 ? (
+              <div className="mt-2 space-y-2">
+                <div className="text-[length:var(--font-size-11)] text-muted-foreground">
+                  {t("experiments.runs.runSnapshot")}
+                </div>
+                {snapshotImages.slice(0, 3).map((rel) => (
+                  <ChatProjectImage
+                    key={rel}
+                    src={rel}
+                    alt={rel.split("/").pop() || "snapshot"}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </RunMetaRow>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--font-size-11)] text-muted-foreground/55">
-        {run.kind ? (
-          <span className={literatureDetailBadgeClass} title={t("experiments.type")}>
-            {run.kind}
-          </span>
-        ) : null}
-        <span className="text-[length:var(--font-path)]">{run.runId}</span>
-        {duration ? <span>{duration}</span> : null}
-        <span>
-          {envSummary(run.env, t("experiments.runs.noPython"), t("experiments.runs.venv"))}
-        </span>
-        <Hint label={t("experiments.runs.sendToChat")}>
-          <button
-            type="button"
-            className="inline-flex h-6 items-center gap-1 rounded-md border border-border/55 bg-background px-2 text-[length:var(--font-menu-item)] text-foreground/85 transition-colors hover:bg-accent hover:text-foreground"
-            onClick={() =>
-              insertExperimentRunToChat({
-                runId: run.runId,
-                experimentId: experimentId ?? undefined,
-                command: run.command,
-                exitCode: run.exitCode,
-                startedAt: run.startedAt,
-                finishedAt: run.finishedAt,
-                artifacts: run.artifacts ?? [],
-                artifactSnapshots: run.artifactSnapshots,
-                env: run.env,
-                chatSessionId: run.chatSessionId ?? null,
-                workspacePath,
-                runKind: run.kind,
-                notes: run.notes,
-                logPath: run.logPath ?? null,
-                intent: "cite-in-paper",
-              })
-            }
-          >
-            <PenLineIcon className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
-            {t("experiments.runs.useInPaper")}
-          </button>
-        </Hint>
-        {run.logPath ? (
+      {run.logPath ? (
+        <div className="pt-1">
           <Hint label={artifactFullPath(run.logPath, workspacePath)}>
             <button
               type="button"
-              className="inline-flex h-6 items-center gap-1 rounded-md border border-border/55 bg-background px-2 text-[length:var(--font-menu-item)] text-foreground/85 transition-colors hover:bg-accent hover:text-foreground"
+              className="inline-flex h-6 items-center gap-1 text-[length:var(--font-size-11)] text-muted-foreground transition-colors hover:text-foreground"
               onClick={() => void openArtifactPathInFiles(run.logPath!, workspacePath)}
             >
-              <FileTextIcon className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
+              <FileTextIcon className="size-3 shrink-0" aria-hidden />
               {t("experiments.runs.openFullLog")}
             </button>
           </Hint>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -459,74 +582,80 @@ function RunDetailPanel({
 export function ExperimentsRunsTable({
   runs,
   workspacePath,
+  onOpenResults,
 }: ExperimentsRunsTableProps) {
   const { t } = useTranslation();
   const experimentId = useExperimentStore((s) => s.selectedId);
+  const query = useExperimentStore((s) => s.runsQuery);
+  const checkedRunIds = useExperimentStore((s) => s.checkedRunIds);
+  const setCheckedRunIds = useExperimentStore((s) => s.setCheckedRunIds);
+  const toggleRunChecked = useExperimentStore((s) => s.toggleRunChecked);
+  const clearCheckedRuns = useExperimentStore((s) => s.clearCheckedRuns);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
   const [inspect, setInspect] = useState<{ path: string } | null>(null);
-  const [query, setQuery] = useState<RunsQuery>(DEFAULT_RUNS_QUERY);
   const [focusIndex, setFocusIndex] = useState(0);
 
   const ordered = useMemo(() => queryExperimentRuns(runs, query), [runs, query]);
-  const totalPages = Math.max(1, Math.ceil(ordered.length / PAGE_SIZE));
+  const headerCheckRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setPage(0);
     setSelectedRunId(null);
     setFocusIndex(0);
-  }, [runs.length, workspacePath, query.status, query.text, query.sort, query.kind]);
+    clearCheckedRuns();
+  }, [runs.length, workspacePath, query.status, query.text, query.sort, query.kind, clearCheckedRuns]);
 
-  useEffect(() => {
-    if (page > totalPages - 1) {
-      setPage(Math.max(0, totalPages - 1));
-    }
-  }, [page, totalPages]);
-
-  const pageRuns = useMemo(() => {
-    const start = page * PAGE_SIZE;
-    return ordered.slice(start, start + PAGE_SIZE);
-  }, [ordered, page]);
-
-  // Clear selection when the selected run leaves the current page.
   useEffect(() => {
     if (!selectedRunId) return;
-    if (!pageRuns.some((r) => r.runId === selectedRunId)) {
+    if (!ordered.some((r) => r.runId === selectedRunId)) {
       setSelectedRunId(null);
     }
-  }, [pageRuns, selectedRunId]);
+  }, [ordered, selectedRunId]);
 
-  const rangeStart = ordered.length === 0 ? 0 : page * PAGE_SIZE + 1;
-  const rangeEnd = Math.min((page + 1) * PAGE_SIZE, ordered.length);
+  useEffect(() => {
+    if (checkedRunIds.length === 0) return;
+    const visible = new Set(ordered.map((r) => r.runId));
+    const next = checkedRunIds.filter((id) => visible.has(id));
+    if (next.length !== checkedRunIds.length) setCheckedRunIds(next);
+  }, [ordered, checkedRunIds, setCheckedRunIds]);
+
   const safeFocus =
-    pageRuns.length === 0 ? -1 : Math.min(focusIndex, pageRuns.length - 1);
+    ordered.length === 0 ? -1 : Math.min(focusIndex, ordered.length - 1);
 
-  const selectedRun =
-    selectedRunId != null
-      ? (pageRuns.find((r) => r.runId === selectedRunId) ?? null)
-      : null;
+  const allVisibleChecked =
+    ordered.length > 0 && ordered.every((r) => checkedRunIds.includes(r.runId));
+  const someVisibleChecked = ordered.some((r) => checkedRunIds.includes(r.runId));
 
-  const selectAt = (index: number) => {
-    const run = pageRuns[index];
-    if (!run) return;
-    setFocusIndex(index);
-    setSelectedRunId(run.runId);
+  useEffect(() => {
+    if (headerCheckRef.current) {
+      headerCheckRef.current.indeterminate = someVisibleChecked && !allVisibleChecked;
+    }
+  }, [someVisibleChecked, allVisibleChecked]);
+
+  const toggleAllVisible = (checked: boolean) => {
+    if (checked) {
+      setCheckedRunIds([...new Set([...checkedRunIds, ...ordered.map((r) => r.runId)])]);
+    } else {
+      const drop = new Set(ordered.map((r) => r.runId));
+      setCheckedRunIds(checkedRunIds.filter((id) => !drop.has(id)));
+    }
   };
 
-  const goToPage = (nextPage: number) => {
-    setPage(nextPage);
-    setSelectedRunId(null);
-    setFocusIndex(0);
+  const selectAt = (index: number) => {
+    const run = ordered[index];
+    if (!run) return;
+    setFocusIndex(index);
+    setSelectedRunId((prev) => (prev === run.runId ? null : run.runId));
   };
 
   const handleListKeyDown = (e: KeyboardEvent) => {
-    if (pageRuns.length === 0) return;
+    if (ordered.length === 0) return;
     const target = e.target as HTMLElement | null;
     if (
       target &&
       (target.tagName === "INPUT" ||
         target.tagName === "SELECT" ||
         target.tagName === "TEXTAREA" ||
+        target.tagName === "BUTTON" ||
         target.closest("[data-slot=select-trigger]"))
     ) {
       return;
@@ -534,11 +663,11 @@ export function ExperimentsRunsTable({
 
     if (e.key === "ArrowDown" || e.key === "j") {
       e.preventDefault();
-      const next = stepFocusIndex(safeFocus < 0 ? 0 : safeFocus, 1, pageRuns.length);
+      const next = stepFocusIndex(safeFocus < 0 ? 0 : safeFocus, 1, ordered.length);
       selectAt(next);
     } else if (e.key === "ArrowUp" || e.key === "k") {
       e.preventDefault();
-      const next = stepFocusIndex(safeFocus < 0 ? 0 : safeFocus, -1, pageRuns.length);
+      const next = stepFocusIndex(safeFocus < 0 ? 0 : safeFocus, -1, ordered.length);
       selectAt(next);
     } else if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -546,18 +675,19 @@ export function ExperimentsRunsTable({
     } else if (e.key === "Escape") {
       e.preventDefault();
       setSelectedRunId(null);
+      clearCheckedRuns();
     } else if (e.key === "Home") {
       e.preventDefault();
       selectAt(0);
     } else if (e.key === "End") {
       e.preventDefault();
-      selectAt(pageRuns.length - 1);
+      selectAt(ordered.length - 1);
     }
   };
 
   if (runs.length === 0) {
     return (
-      <div className="rounded-md border border-dashed border-border/60 px-4 py-8 text-center">
+      <div className="px-4 py-10 text-center">
         <p className={SETTINGS_ROW_DESC}>{t("experiments.runs.noRunsYet")}</p>
         <p className="mt-1 text-[length:var(--font-size-11)] text-muted-foreground/50">
           {t("experiments.runs.enterCommandHint")}
@@ -567,203 +697,98 @@ export function ExperimentsRunsTable({
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2 font-sans">
-        <Input
-          value={query.text}
-          onChange={(e) => setQuery((q) => ({ ...q, text: e.target.value }))}
-          placeholder={t("experiments.runs.filterPlaceholder")}
-          className="h-6 max-w-xs text-[length:var(--font-size-11)]"
-          aria-label={t("experiments.runs.filterAria")}
-        />
-        <AppSelect
-          value={query.status}
-          onValueChange={(v) =>
-            setQuery((q) => ({ ...q, status: v as RunsStatusFilter }))
-          }
-        >
-          <AppSelectTrigger variant="wide" aria-label={t("experiments.runs.exitFilterAria")}>
-            <AppSelectValue />
-          </AppSelectTrigger>
-          <AppSelectContent>
-            <AppSelectItem value="all">{t("experiments.runs.allExits")}</AppSelectItem>
-            <AppSelectItem value="success">{t("experiments.runs.success")}</AppSelectItem>
-            <AppSelectItem value="failed">{t("experiments.runs.failed")}</AppSelectItem>
-            <AppSelectItem value="cancelled">{t("experiments.runs.cancelled")}</AppSelectItem>
-          </AppSelectContent>
-        </AppSelect>
-        <AppSelect
-          value={query.kind}
-          onValueChange={(v) =>
-            setQuery((q) => ({ ...q, kind: v as RunsKindFilter }))
-          }
-        >
-          <AppSelectTrigger variant="wide" aria-label={t("experiments.runs.typeFilterAria")}>
-            <AppSelectValue />
-          </AppSelectTrigger>
-          <AppSelectContent>
-            <AppSelectItem value="all">{t("experiments.runs.allTypes")}</AppSelectItem>
-            {EXPERIMENT_RUN_KINDS.map((k) => (
-              <AppSelectItem key={k} value={k}>
-                {k}
-              </AppSelectItem>
-            ))}
-            <AppSelectItem value="untagged">{t("experiments.untyped")}</AppSelectItem>
-          </AppSelectContent>
-        </AppSelect>
-        <AppSelect
-          value={query.sort}
-          onValueChange={(v) =>
-            setQuery((q) => ({ ...q, sort: v as RunsSortOrder }))
-          }
-        >
-          <AppSelectTrigger variant="wide" aria-label={t("experiments.runs.sortAria")}>
-            <AppSelectValue />
-          </AppSelectTrigger>
-          <AppSelectContent>
-            <AppSelectItem value="newest">{t("experiments.runs.newestFirst")}</AppSelectItem>
-            <AppSelectItem value="oldest">{t("experiments.runs.oldestFirst")}</AppSelectItem>
-          </AppSelectContent>
-        </AppSelect>
-        <span className="tabular-nums text-[length:var(--font-size-11)] text-muted-foreground/55">
-          {ordered.length === runs.length
-            ? `${ordered.length}`
-            : `${ordered.length} / ${runs.length}`}
-        </span>
-      </div>
-
+    <div className="flex min-h-0 flex-col">
       {ordered.length === 0 ? (
-        <div className="rounded-md border border-dashed border-border/60 px-4 py-6 text-center">
+        <div className="px-4 py-8 text-center">
           <p className={SETTINGS_ROW_DESC}>{t("experiments.runs.noMatch")}</p>
         </div>
       ) : (
         <div
-          className={cn(
-            experimentsRunsSplitShellClass,
-            "flex min-h-[16rem] flex-col @md:min-h-[20rem] @md:flex-row",
-          )}
+          className="min-w-0 outline-none"
+          tabIndex={0}
+          role="listbox"
+          aria-label={t("experiments.runs.historyAria")}
+          aria-activedescendant={
+            selectedRunId ? `run-row-${selectedRunId}` : undefined
+          }
+          onKeyDown={handleListKeyDown}
         >
           <div
             className={cn(
-              "flex min-h-0 min-w-0 flex-col",
-              "@md:w-[min(22rem,42%)] @md:shrink-0 @md:border-r @md:border-border/60",
+              HISTORY_GRID_CLASS,
+              experimentsRunsListHeaderShellClass,
+              "items-center",
             )}
+            role="row"
           >
-            <div
-              className="min-h-0 flex-1 overflow-auto outline-none"
-              tabIndex={0}
-              role="listbox"
-              aria-label={t("experiments.runs.historyAria")}
-              aria-activedescendant={
-                selectedRunId ? `run-row-${selectedRunId}` : undefined
-              }
-              onKeyDown={handleListKeyDown}
+            <span aria-hidden />
+            <span className={experimentsRunsListHeaderLabelClass} role="columnheader">
+              {t("experiments.runs.listRun")}
+            </span>
+            <span className={experimentsRunsListHeaderLabelClass} role="columnheader">
+              {t("experiments.type")}
+            </span>
+            <span className={experimentsRunsListHeaderLabelClass} role="columnheader">
+              {t("experiments.runs.listStatus")}
+            </span>
+            <span
+              className={cn(experimentsRunsListHeaderLabelClass, "text-right")}
+              role="columnheader"
             >
-              <div
-                className={cn(
-                  HISTORY_GRID_CLASS,
-                  experimentsRunsListHeaderShellClass,
-                  "sticky top-0 z-[1] items-center border-l-2 border-l-transparent px-2.5",
-                )}
-                role="row"
-              >
-                <span aria-hidden />
-                <span className={experimentsRunsListHeaderLabelClass} role="columnheader">
-                  {t("experiments.command")}
-                </span>
-                <span
-                  className={cn(experimentsRunsListHeaderLabelClass, "text-right")}
-                  role="columnheader"
-                >
-                  {t("experiments.exit")}
-                </span>
-                <span
-                  className={cn(experimentsRunsListHeaderLabelClass, "text-right")}
-                  role="columnheader"
-                >
-                  {t("experiments.time")}
-                </span>
-              </div>
-              <ul>
-                {pageRuns.map((run, index) => (
-                  <RunRow
-                    key={run.runId}
-                    run={run}
-                    selected={selectedRunId === run.runId}
-                    focused={index === safeFocus}
-                    onSelect={() => selectAt(index)}
-                    onFocus={() => setFocusIndex(index)}
-                  />
-                ))}
-              </ul>
-            </div>
-            {totalPages > 1 ? (
-              <div
-                className={cn(
-                  "flex shrink-0 items-center justify-between gap-2 border-t border-border/60 px-2.5 py-1.5",
-                  "bg-muted/15 text-[length:var(--font-size-11)] text-muted-foreground",
-                )}
-              >
-                <span className="tabular-nums">
-                  {t("experiments.runs.pageRange", {
-                    from: rangeStart,
-                    to: rangeEnd,
-                    total: ordered.length,
-                  })}
-                </span>
-                <div className="flex items-center gap-0.5">
-                  <Hint label={t("experiments.runs.prevPage")}>
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="ghost"
-                      className="h-6 gap-0.5 px-1.5"
-                      disabled={page <= 0}
-                      onClick={() => goToPage(Math.max(0, page - 1))}
-                    >
-                      <ChevronLeftIcon className="size-3" aria-hidden />
-                    </Button>
-                  </Hint>
-                  <span className="min-w-[3rem] text-center tabular-nums">
-                    {page + 1}/{totalPages}
-                  </span>
-                  <Hint label={t("experiments.runs.nextPage")}>
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="ghost"
-                      className="h-6 gap-0.5 px-1.5"
-                      disabled={page >= totalPages - 1}
-                      onClick={() => goToPage(Math.min(totalPages - 1, page + 1))}
-                    >
-                      <ChevronRightIcon className="size-3" aria-hidden />
-                    </Button>
-                  </Hint>
-                </div>
-              </div>
-            ) : null}
+              {t("experiments.runs.listDuration")}
+            </span>
+            <span
+              className={cn(experimentsRunsListHeaderLabelClass, "text-right")}
+              role="columnheader"
+            >
+              {t("experiments.time")}
+            </span>
+            <span className="flex items-center justify-center">
+              <input
+                ref={headerCheckRef}
+                type="checkbox"
+                checked={allVisibleChecked}
+                onChange={(e) => toggleAllVisible(e.target.checked)}
+                className="size-3 shrink-0 cursor-pointer rounded-sm accent-primary"
+                aria-label={t("experiments.runs.selectAllAria")}
+                title={t("experiments.runs.selectAllAria")}
+              />
+            </span>
           </div>
 
-          <div
-            className={cn(
-              "flex min-h-0 min-w-0 flex-1 flex-col border-t border-border/60",
-              "@md:border-t-0",
-            )}
-          >
-            {selectedRun ? (
-              <RunDetailPanel
-                run={selectedRun}
-                workspacePath={workspacePath}
-                experimentId={experimentId}
-                onInspectArtifact={(p) => setInspect({ path: p })}
-              />
-            ) : (
-              <div className={experimentsRunDetailEmptyClass}>
-                <p className="text-center text-[length:var(--font-size-12)] text-muted-foreground/60">
-                  {t("experiments.runs.selectRunHint")}
-                </p>
-              </div>
-            )}
+          <div className="flex flex-col">
+            {ordered.map((run, index) => {
+              const expanded = selectedRunId === run.runId;
+              return (
+                <div
+                  key={run.runId}
+                  className="flex flex-col"
+                  data-run-row={run.runId}
+                >
+                  <RunRow
+                    run={run}
+                    selected={expanded}
+                    focused={index === safeFocus}
+                    checked={checkedRunIds.includes(run.runId)}
+                    onSelect={() => selectAt(index)}
+                    onFocus={() => setFocusIndex(index)}
+                    onCheckedChange={(c) => {
+                      const has = checkedRunIds.includes(run.runId);
+                      if (c !== has) toggleRunChecked(run.runId);
+                    }}
+                  />
+                  {expanded ? (
+                    <RunDetailPanel
+                      run={run}
+                      workspacePath={workspacePath}
+                      experimentId={experimentId}
+                      onInspectArtifact={(p) => setInspect({ path: p })}
+                      onOpenResults={onOpenResults}
+                    />
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

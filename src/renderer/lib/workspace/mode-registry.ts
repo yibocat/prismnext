@@ -61,6 +61,8 @@ export interface RightTab {
   experimentId?: string;
   /** Experiments mode: list | detail (P0 = list always, detail inlined) */
   experimentsView?: "list" | "detail";
+  /** Experiments mode: active detail tab pane (overview | run | results) */
+  experimentsDetailTab?: "overview" | "run" | "results";
 }
 
 // ── Mode Definition ──

@@ -38,7 +38,6 @@ import {
   computeEffectiveSidebarWidth,
   shouldAutoCloseSplitSidebar,
   shouldExitFullMode,
-  canAutoOpenSplitSidebar,
   RIGHT_AREA_SPLIT_THRESHOLD,
 } from "@/lib/workspace/right-area-sidebar-layout";
 import { SIDEBAR_RIGHT_MIN } from "@/styles/constants";
@@ -459,6 +458,38 @@ function RightAreaWorkspace({
     }
   }, [isTooNarrowForSplit]);
 
+  // Fulfill revealRightSidebar() after RightArea has a measurable width
+  // (left-nav / openExperimentTab used to race auto-close at width 0).
+  const rightSidebarRevealNonce = useLayoutStore((s) => s.rightSidebarRevealNonce);
+  useEffect(() => {
+    if (rightSidebarRevealNonce <= 0) return;
+    if (compactModesRef.current) return;
+
+    const apply = (): boolean => {
+      const cw = containerElRef.current?.clientWidth ?? 0;
+      if (cw <= 0) return false;
+      if (isTooNarrowForSplit(cw)) {
+        setSidebarFullMode(true);
+      } else {
+        setSidebarFullMode(false);
+      }
+      useLayoutStore.getState().setRightSidebarOpen(true);
+      setContainerWidth(cw);
+      return true;
+    };
+
+    if (apply()) return;
+    let tries = 0;
+    let raf = 0;
+    const tick = () => {
+      tries += 1;
+      if (apply() || tries > 45) return;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [rightSidebarRevealNonce, isTooNarrowForSplit]);
+
   // ── Mode button: per-mode lifecycle (registry-driven) ──
   const handleModeClick = useCallback(
     (target: string) => {
@@ -485,14 +516,9 @@ function RightAreaWorkspace({
           }
           def.onActivate?.();
         }
-        // Auto-open sidebar only when there is room for sidebar + content.
+        // Auto-open mode sidebar (split or narrow full-overlay) once container is ready.
         if (!compactModesRef.current) {
-          const cw = containerElRef.current?.clientWidth ?? Infinity;
-          if (isFinite(cw)) setContainerWidth(cw);
-          if (canAutoOpenSplitSidebar(cw)) {
-            setRightSidebarOpen(true);
-            setSidebarFullMode(false);
-          }
+          useLayoutStore.getState().revealRightSidebar();
         }
       } else if (focusedMode === target) {
         // ── Deactivate mode (Terminal keeps tabs/PTY; others close tabs) ──

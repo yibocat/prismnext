@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ExperimentRunEntry } from "../../src/shared/experiment-log";
 import {
+  experimentRunListTitle,
   queryExperimentRuns,
+  shortExperimentCommandTitle,
   stepFocusIndex,
   type RunsQuery,
 } from "../../src/renderer/modes/experiments-mode/experiments-runs-query";
@@ -134,5 +136,24 @@ describe("stepFocusIndex", () => {
 
   it("returns -1 for empty lists", () => {
     expect(stepFocusIndex(0, 1, 0)).toBe(-1);
+  });
+});
+
+describe("experimentRunListTitle", () => {
+  it("prefers the note first line", () => {
+    expect(
+      experimentRunListTitle({
+        notes: "Phase 1 — Full benchmark\nmore detail",
+        command: "python3 benchmark.py",
+      }),
+    ).toBe("Phase 1 — Full benchmark");
+  });
+
+  it("falls back to script basename from the command", () => {
+    expect(shortExperimentCommandTitle("python3 benchmark.py 2>&1")).toBe("benchmark.py");
+    expect(
+      shortExperimentCommandTitle(".venv/bin/python3 scripts/train.py --epochs 50"),
+    ).toBe("train.py");
+    expect(shortExperimentCommandTitle('python3 -c "print(1)"')).toBe("python3 -c");
   });
 });

@@ -25,6 +25,8 @@ type RunCompleteHandler = (data: {
 const runCompleteHandlers: RunCompleteHandler[] = [];
 type RunOutputHandler = (data: { id: string; runId: string; chunk: string }) => void;
 const runOutputHandlers: RunOutputHandler[] = [];
+type RunStartedHandler = (data: { id: string; runId: string; command: string }) => void;
+const runStartedHandlers: RunStartedHandler[] = [];
 
 const electronAPI = {
   experimentList: vi.fn(),
@@ -37,11 +39,32 @@ const electronAPI = {
   experimentRestore: vi.fn(),
   experimentDelete: vi.fn(),
   experimentCreate: vi.fn(),
+  experimentUpdate: vi.fn(),
+  experimentSnapshot: vi.fn().mockResolvedValue({
+    ok: true,
+    snapshot: {
+      id: "exp",
+      workspacePath: "experiment/exp",
+      figures: [],
+      tables: [],
+      metrics: [],
+      textSummary: "",
+      unparsed: [],
+      warnings: [],
+    },
+  }),
   onExperimentRunComplete: vi.fn((cb: RunCompleteHandler) => {
     runCompleteHandlers.push(cb);
     return () => {
       const idx = runCompleteHandlers.indexOf(cb);
       if (idx >= 0) runCompleteHandlers.splice(idx, 1);
+    };
+  }),
+  onExperimentRunStarted: vi.fn((cb: RunStartedHandler) => {
+    runStartedHandlers.push(cb);
+    return () => {
+      const idx = runStartedHandlers.indexOf(cb);
+      if (idx >= 0) runStartedHandlers.splice(idx, 1);
     };
   }),
   onExperimentRunOutput: vi.fn((cb: RunOutputHandler) => {
@@ -64,6 +87,12 @@ vi.mock("../../src/renderer/stores/chat-store", () => ({
   },
 }));
 
+vi.mock("../../src/renderer/stores/document-store", () => ({
+  useDocumentStore: {
+    getState: () => ({ projectRoot: "/projects/demo" }),
+  },
+}));
+
 vi.mock("../../src/renderer/stores/layout-store", () => ({
   useLayoutStore: {
     getState: () => ({
@@ -79,6 +108,7 @@ vi.mock("../../src/renderer/stores/right-panel-store", () => ({
       closeExperimentTabs: vi.fn(),
       ensureTab: vi.fn(),
       openExperimentTab: vi.fn(),
+      updateExperimentTabTitle: vi.fn(),
       tabs: [],
       activeTabId: null,
       updateTab: vi.fn(),
@@ -108,6 +138,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   runCompleteHandlers.length = 0;
   runOutputHandlers.length = 0;
+  runStartedHandlers.length = 0;
   useExperimentStore.getState().reset();
 });
 
@@ -687,6 +718,38 @@ describe("experiment-store", () => {
     });
   });
 
+  describe("handleRunStarted", () => {
+    it("lifts runInFlight for agent/UI kickoff announcements", () => {
+      useExperimentStore.getState().handleRunStarted({
+        id: "exp-a",
+        runId: "run-agent-1",
+        command: "python train.py",
+      });
+
+      expect(useExperimentStore.getState().runInFlight).toEqual({
+        id: "exp-a",
+        runId: "run-agent-1",
+        command: "python train.py",
+        liveOutput: "",
+      });
+    });
+
+    it("merges early buffered chunks into liveOutput", () => {
+      useExperimentStore.setState({
+        runOutputBuffer: { "run-agent-1": "epoch 0\n" },
+      });
+
+      useExperimentStore.getState().handleRunStarted({
+        id: "exp-a",
+        runId: "run-agent-1",
+        command: "python train.py",
+      });
+
+      expect(useExperimentStore.getState().runInFlight?.liveOutput).toBe("epoch 0\n");
+      expect(useExperimentStore.getState().runOutputBuffer["run-agent-1"]).toBeUndefined();
+    });
+  });
+
   describe("handleRunOutput", () => {
     it("appends chunks to liveOutput for the matching in-flight run", () => {
       useExperimentStore.setState({
@@ -1022,6 +1085,68 @@ describe("experiment-store", () => {
       const id = await useExperimentStore.getState().createExperiment(PROJECT, "   ");
       expect(id).toBeNull();
       expect(electronAPI.experimentCreate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("updateExperiment", () => {
+    it("updates metadata via IPC and refreshes detail state", async () => {
+      const initialMeta = {
+        id: "exp-20260726-new-a1b2",
+        title: "Old title",
+        createdAt: "2026-07-26T00:00:00Z",
+        workspacePath: "experiment/exp-20260726-new-a1b2",
+      };
+      const updatedMeta = {
+        ...initialMeta,
+        title: "Updated title",
+        tags: ["tag1", "tag2"],
+        description: "New description",
+      };
+
+      useExperimentStore.setState({
+        selectedId: initialMeta.id,
+        detail: {
+          meta: initialMeta,
+          runs: [],
+          runCount: 0,
+          lastRunAt: null,
+        },
+      });
+
+      electronAPI.experimentUpdate.mockResolvedValueOnce({
+        ok: true,
+        meta: updatedMeta,
+      });
+      electronAPI.experimentList.mockResolvedValueOnce({
+        ok: true,
+        experimentRoot: "experiment",
+        registryRoot: ".prismnext/experiments",
+        experiments: [
+          makeSummary({
+            id: updatedMeta.id,
+            title: updatedMeta.title,
+            workspacePath: updatedMeta.workspacePath,
+          }),
+        ],
+      });
+
+      const ok = await useExperimentStore.getState().updateExperiment(PROJECT, initialMeta.id, {
+        title: "Updated title",
+        tags: ["tag1", "tag2"],
+        description: "New description",
+      });
+
+      expect(ok).toBe(true);
+      expect(electronAPI.experimentUpdate).toHaveBeenCalledWith({
+        projectRoot: PROJECT,
+        id: initialMeta.id,
+        title: "Updated title",
+        tags: ["tag1", "tag2"],
+        description: "New description",
+      });
+      expect(useExperimentStore.getState().detail?.meta.title).toBe("Updated title");
+      expect(useExperimentStore.getState().detail?.meta.tags).toEqual(["tag1", "tag2"]);
+      expect(useExperimentStore.getState().detail?.meta.description).toBe("New description");
     });
   });
 });

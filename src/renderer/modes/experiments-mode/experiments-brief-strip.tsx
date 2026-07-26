@@ -1,18 +1,20 @@
 /**
  * experiments-brief-strip — Research brief excerpts (hypothesis, RQ, linked sections).
- *
- * Rendered inside a bordered box under the experiment title. Section pills
- * (`briefLinks.sections`) are NOT the same as `meta.tags` — see detail Overview.
+ * Editable via dialog; empty state invites create/edit.
  */
 
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { PencilIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { ExperimentBriefLinks } from "../../../shared/experiment-log";
+import type { ExperimentBriefLinks, ExperimentMeta } from "../../../shared/experiment-log";
 import {
   experimentsBriefBoxClass,
   experimentsBriefSectionPillClass,
   experimentsSubsectionLabelClass,
 } from "./experiments-detail-chrome";
+import { ExperimentsBriefEditDialog } from "./experiments-edit-dialog";
 
 function hasContent(briefLinks: ExperimentBriefLinks | undefined): boolean {
   if (!briefLinks) return false;
@@ -25,59 +27,87 @@ function hasContent(briefLinks: ExperimentBriefLinks | undefined): boolean {
 }
 
 export function ExperimentsBriefStrip({
-  briefLinks,
+  meta,
   className,
 }: {
-  briefLinks: ExperimentBriefLinks | undefined;
+  meta: ExperimentMeta;
   className?: string;
 }) {
   const { t } = useTranslation();
-  if (!hasContent(briefLinks)) {
-    return (
-      <div className={cn(experimentsBriefBoxClass, className)}>
-        <p className="font-sans text-[length:var(--font-size-12)] text-muted-foreground">
-          {t("experiments.brief.placeholder")}
-        </p>
-      </div>
-    );
-  }
+  const [editOpen, setEditOpen] = useState(false);
+  const briefLinks = meta.briefLinks;
+  const filled = hasContent(briefLinks);
 
-  const hypothesis = briefLinks!.hypothesisExcerpt?.trim() ?? "";
-  const rq = briefLinks!.researchQuestionExcerpt?.trim() ?? "";
-  const sections = Array.isArray(briefLinks!.sections)
+  const hypothesis = briefLinks?.hypothesisExcerpt?.trim() ?? "";
+  const rq = briefLinks?.researchQuestionExcerpt?.trim() ?? "";
+  const sections = Array.isArray(briefLinks?.sections)
     ? briefLinks!.sections.filter((s) => s?.trim())
     : [];
 
   return (
-    <section
-      aria-label={t("experiments.brief.excerpts")}
-      className={cn(experimentsBriefBoxClass, className)}
-    >
-      {hypothesis ? (
-        <p className="text-[length:var(--font-size-13)] italic leading-snug text-foreground/85">
-          {hypothesis}
-        </p>
-      ) : null}
-      {rq ? (
-        <p className="text-[length:var(--font-size-13)] leading-snug text-muted-foreground/85">
-          <span className="font-medium text-foreground/80">{t("experiments.brief.rq")}</span>{" "}
-          {rq}
-        </p>
-      ) : null}
-      {sections.length > 0 ? (
-        <div className="space-y-1.5">
-          <span className={experimentsSubsectionLabelClass}>
-            {t("experiments.brief.linked")}
-          </span>
-          <div className="flex flex-wrap gap-1.5">
-            {sections.map((section) => (
-              <span key={section} className={experimentsBriefSectionPillClass}>
-                {section}
-              </span>
-            ))}
+    <>
+      <section
+        aria-label={t("experiments.brief.excerpts")}
+        className={cn(experimentsBriefBoxClass, className)}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1 space-y-2">
+            {!filled ? (
+              <p className="font-sans text-[length:var(--font-size-12)] text-muted-foreground">
+                {t("experiments.brief.placeholder")}
+              </p>
+            ) : (
+              <>
+                {hypothesis ? (
+                  <p className="text-[length:var(--font-size-13)] italic leading-snug text-foreground/85">
+                    {hypothesis}
+                  </p>
+                ) : null}
+                {rq ? (
+                  <p className="text-[length:var(--font-size-13)] leading-snug text-muted-foreground/85">
+                    <span className="font-medium text-foreground/80">{t("experiments.brief.rq")}</span>{" "}
+                    {rq}
+                  </p>
+                ) : null}
+                {sections.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <span className={experimentsSubsectionLabelClass}>
+                      {t("experiments.brief.linked")}
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {sections.map((section) => (
+                        <span key={section} className={experimentsBriefSectionPillClass}>
+                          {section}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            )}
           </div>
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            className="h-6 shrink-0 gap-1 px-1.5 text-muted-foreground hover:text-foreground"
+            onClick={() => setEditOpen(true)}
+          >
+            <PencilIcon className="size-3" aria-hidden />
+            <span>
+              {filled
+                ? t("common.edit", { defaultValue: "Edit" })
+                : t("experiments.brief.add", { defaultValue: "Add" })}
+            </span>
+          </Button>
         </div>
-      ) : null}
-    </section>
+      </section>
+
+      <ExperimentsBriefEditDialog
+        meta={meta}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
+    </>
   );
 }

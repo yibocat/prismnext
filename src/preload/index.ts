@@ -203,8 +203,35 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("experiment:getPaths", args),
 	experimentArchive: (args: { projectRoot: string; id: string }) =>
 		ipcRenderer.invoke("experiment:archive", args),
-	experimentCreate: (args: { projectRoot: string; title: string }) =>
-		ipcRenderer.invoke("experiment:create", args),
+	experimentCreate: (args: {
+		projectRoot: string;
+		title: string;
+		tags?: string[];
+		description?: string;
+		briefLinks?: {
+			sections?: string[];
+			hypothesisExcerpt?: string;
+			researchQuestionExcerpt?: string;
+		};
+	}) => ipcRenderer.invoke("experiment:create", args),
+	experimentUpdate: (args: {
+		projectRoot: string;
+		id: string;
+		title?: string;
+		tags?: string[];
+		description?: string;
+		briefLinks?: {
+			sections?: string[];
+			hypothesisExcerpt?: string;
+			researchQuestionExcerpt?: string;
+		} | null;
+	}) => ipcRenderer.invoke("experiment:update", args),
+	experimentUpdateRun: (args: {
+		projectRoot: string;
+		id: string;
+		runId: string;
+		notes: string;
+	}) => ipcRenderer.invoke("experiment:updateRun", args),
 	experimentRestore: (args: { projectRoot: string; id: string }) =>
 		ipcRenderer.invoke("experiment:restore", args),
 	experimentDelete: (args: { projectRoot: string; id: string; removeLab?: boolean }) =>
@@ -220,6 +247,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	}) => ipcRenderer.invoke("experiment:run", args),
 	experimentCancelRun: (args: { projectRoot: string; id: string; runId: string }) =>
 		ipcRenderer.invoke("experiment:cancelRun", args),
+	experimentSnapshot: (args: {
+		projectRoot: string;
+		id: string;
+		scanDirs?: string[];
+		metricsFiles?: string[];
+		maxFiles?: number;
+		maxDepth?: number;
+	}) => ipcRenderer.invoke("experiment:snapshot", args),
 	onExperimentChanged: (
 		callback: (data: {
 			projectRoot: string;
@@ -250,12 +285,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("experiment:runComplete", handler);
 		return () => ipcRenderer.removeListener("experiment:runComplete", handler);
 	},
-	onExperimentRunOutput: (
-		callback: (data: { id: string; runId: string; chunk: string }) => void,
+	onExperimentRunStarted: (
+		callback: (data: import("../shared/experiment-log").ExperimentRunStartedEvent) => void,
 	) => {
 		const handler = (
 			_event: Electron.IpcRendererEvent,
-			data: { id: string; runId: string; chunk: string },
+			data: import("../shared/experiment-log").ExperimentRunStartedEvent,
+		) => callback(data);
+		ipcRenderer.on("experiment:runStarted", handler);
+		return () => ipcRenderer.removeListener("experiment:runStarted", handler);
+	},
+	onExperimentRunOutput: (
+		callback: (data: import("../shared/experiment-log").ExperimentRunOutputEvent) => void,
+	) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			data: import("../shared/experiment-log").ExperimentRunOutputEvent,
 		) => callback(data);
 		ipcRenderer.on("experiment:runOutput", handler);
 		return () => ipcRenderer.removeListener("experiment:runOutput", handler);

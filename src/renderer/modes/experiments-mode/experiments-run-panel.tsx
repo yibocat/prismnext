@@ -1,11 +1,9 @@
 /**
- * experiments-run-panel — Unified command + live output console.
- *
- * One bordered shell: command input on top, streaming output in the middle
- * (while running), action bar at the bottom.
+ * experiments-run-panel — Lightweight Run dialog for the Execution pane.
+ * Opened from the mode toolbar; history stays full-bleed underneath.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   HistoryIcon,
@@ -19,6 +17,14 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/hint";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AppSelect,
   AppSelectContent,
@@ -38,14 +44,8 @@ import {
   parseExperimentRunKind,
   type ExperimentRunKind,
 } from "../../../shared/experiment-log";
-import {
-  experimentsCodeClass,
-  experimentsCommandInputClass,
-  experimentsRunConsoleShellClass,
-  experimentsSubsectionLabelClass,
-} from "./experiments-detail-chrome";
+import { experimentsCodeClass } from "./experiments-detail-chrome";
 import { useExperimentProjectRoot } from "./experiments-project-root";
-
 import {
   ExperimentsRunConfirmModal,
   type ExperimentsRunConfirmDenyReason,
@@ -53,35 +53,13 @@ import {
 
 const KIND_UNTYPED = "__untyped__";
 
-function RunConsoleOutput({ output, running }: { output: string; running: boolean }) {
-  const { t } = useTranslation();
-  const preRef = useRef<HTMLPreElement>(null);
-  const hasOutput = output.trim().length > 0;
-
-  useEffect(() => {
-    const el = preRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [output]);
-
-  return (
-    <pre
-      ref={preRef}
-      className={cn(
-        "max-h-52 min-h-[7rem] overflow-auto px-3 py-2 leading-relaxed",
-        experimentsCodeClass,
-        hasOutput ? "text-foreground/85" : "text-muted-foreground/45",
-        "whitespace-pre-wrap break-words bg-muted/15",
-      )}
-      aria-live="polite"
-      aria-label={t("experiments.output")}
-    >
-      {hasOutput ? output : running ? t("experiments.runPanel.waitingOutput") : ""}
-    </pre>
-  );
-}
-
-export function ExperimentsRunPanel() {
+export function ExperimentsRunDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const { t } = useTranslation();
   const projectRoot = useExperimentProjectRoot();
   const selectedId = useExperimentStore((s) => s.selectedId);
@@ -105,19 +83,53 @@ export function ExperimentsRunPanel() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingCommand, setPendingCommand] = useState("");
   const [pendingKind, setPendingKind] = useState<ExperimentRunKind | "">("");
+  const [starting, setStarting] = useState(false);
 
   const isInFlightForCurrent = Boolean(
     runInFlight && selectedId && runInFlight.id === selectedId,
   );
 
-  // Only block Run when *this* experiment is in flight. Another island's
-  // run must not freeze the whole mode (Bug 8.8.1 / Phase 3).
+  useEffect(() => {
+    if (!open) {
+      setConfirmOpen(false);
+      setPendingCommand("");
+      setPendingKind("");
+      setStarting(false);
+    }
+  }, [open]);
+
   const canRun =
     Boolean(projectRoot) &&
     Boolean(selectedId) &&
     command.trim().length > 0 &&
     !isInFlightForCurrent &&
-    !isReadonly;
+    !isReadonly &&
+    !starting;
+
+  const startRun = useCallback(
+    async (cmd: string, runKind: ExperimentRunKind | undefined) => {
+      if (!projectRoot || !selectedId) return;
+      setStarting(true);
+      try {
+        const runId = await runCommand(
+          projectRoot,
+          selectedId,
+          cmd,
+          undefined,
+          undefined,
+          runKind,
+        );
+        if (runId) {
+          onOpenChange(false);
+        } else {
+          toast.error(t("experiments.runPanel.startFailed"));
+        }
+      } finally {
+        setStarting(false);
+      }
+    },
+    [onOpenChange, projectRoot, runCommand, selectedId, t],
+  );
 
   const handleRunClick = useCallback(() => {
     if (!canRun || !projectRoot || !selectedId) return;
@@ -129,22 +141,23 @@ export function ExperimentsRunPanel() {
       setConfirmOpen(true);
       return;
     }
-    void runCommand(projectRoot, selectedId, trimmed, undefined, undefined, runKind);
-  }, [canRun, command, kind, permissionMode, projectRoot, runCommand, selectedId]);
+    void startRun(trimmed, runKind);
+  }, [
+    canRun,
+    command,
+    kind,
+    permissionMode,
+    projectRoot,
+    selectedId,
+    startRun,
+  ]);
 
   const handleAllow = useCallback(() => {
     if (!projectRoot || !selectedId) return;
     setConfirmOpen(false);
     setKind(pendingKind);
-    void runCommand(
-      projectRoot,
-      selectedId,
-      pendingCommand,
-      undefined,
-      undefined,
-      parseExperimentRunKind(pendingKind),
-    );
-  }, [pendingCommand, pendingKind, projectRoot, runCommand, selectedId]);
+    void startRun(pendingCommand, parseExperimentRunKind(pendingKind));
+  }, [pendingCommand, pendingKind, projectRoot, selectedId, startRun]);
 
   const handleDeny = useCallback(
     (reason: ExperimentsRunConfirmDenyReason) => {
@@ -159,7 +172,9 @@ export function ExperimentsRunPanel() {
   );
 
   const handleCancel = useCallback(() => {
-    if (!projectRoot || !selectedId || !runInFlight || runInFlight.id !== selectedId) return;
+    if (!projectRoot || !selectedId || !runInFlight || runInFlight.id !== selectedId) {
+      return;
+    }
     void cancelRun(projectRoot, selectedId, runInFlight.runId);
   }, [cancelRun, projectRoot, runInFlight, selectedId]);
 
@@ -179,172 +194,174 @@ export function ExperimentsRunPanel() {
   }, [projectRoot, selectedId, getPaths, t]);
 
   const cwd = useExperimentStore((s) => s.detail?.meta.workspacePath) ?? "";
-  const liveOutput = isInFlightForCurrent ? (runInFlight?.liveOutput ?? "") : "";
+  const liveCommand = isInFlightForCurrent ? (runInFlight?.command ?? command) : command;
 
   return (
-    <div className="space-y-2">
-      {isReadonly && !isInFlightForCurrent ? (
-        <p className={SETTINGS_ROW_DESC}>{t("experiments.runPanel.readOnly")}</p>
-      ) : null}
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("experiments.runPanel.dialogTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("experiments.runPanel.dialogDesc")}
+            </DialogDescription>
+          </DialogHeader>
 
-      <div className={experimentsRunConsoleShellClass}>
-        <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-1.5">
-          <span className={experimentsSubsectionLabelClass}>{t("experiments.command")}</span>
-          <span className="font-sans text-[length:var(--font-size-10)] text-muted-foreground/55">
-            {t("experiments.runPanel.enterToRun")}
-          </span>
-        </div>
-        <Textarea
-          aria-label={t("experiments.command")}
-          value={command}
-          onChange={(e) => setCommand(e.target.value)}
-          placeholder="python train.py --epochs 50"
-          spellCheck={false}
-          disabled={isInFlightForCurrent}
-          rows={isInFlightForCurrent ? 2 : 3}
-          className={cn(
-            experimentsCommandInputClass,
-            experimentsCodeClass,
-            isInFlightForCurrent && "cursor-not-allowed text-muted-foreground/70",
-          )}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              if (canRun) handleRunClick();
-            }
-          }}
-        />
+          {isReadonly && !isInFlightForCurrent ? (
+            <p className={SETTINGS_ROW_DESC}>{t("experiments.runPanel.readOnly")}</p>
+          ) : null}
 
-        {isInFlightForCurrent ? (
-          <>
-            <div className="border-t border-border/60" aria-hidden />
-            <RunConsoleOutput output={liveOutput} running />
-          </>
-        ) : null}
-
-        <div
-          className={cn(
-            "flex flex-wrap items-center gap-1.5 border-t border-border/60 px-2 py-1.5",
-            "bg-muted/25",
-          )}
-        >
-          <AppSelect
-            value={kind || KIND_UNTYPED}
-            disabled={isInFlightForCurrent}
-            onValueChange={(v) =>
-              setKind(v === KIND_UNTYPED ? "" : (v as ExperimentRunKind))
-            }
-          >
-            <AppSelectTrigger
-              variant="wide"
-              aria-label={t("experiments.type")}
-              title={t("experiments.runPanel.typeTitle")}
-              className="min-w-[7.5rem]"
-            >
-              <AppSelectValue placeholder={t("experiments.type")} />
-            </AppSelectTrigger>
-            <AppSelectContent>
-              <AppSelectItem value={KIND_UNTYPED}>{t("experiments.type")}</AppSelectItem>
-              {EXPERIMENT_RUN_KINDS.map((k) => (
-                <AppSelectItem key={k} value={k}>
-                  {k}
-                </AppSelectItem>
-              ))}
-            </AppSelectContent>
-          </AppSelect>
-          <Hint
-            label={
-              isReadonly
-                ? t("experiments.runPanel.permissionReadonly")
-                : !projectRoot || !selectedId
-                  ? t("experiments.runPanel.selectExperiment")
-                  : isInFlightForCurrent
-                    ? t("experiments.runPanel.runInProgress")
-                    : command.trim().length === 0
-                      ? t("experiments.runPanel.enterCommand")
-                      : t("experiments.runPanel.runInLab")
-            }
-          >
-            <Button
-              type="button"
-              size="sm"
-              variant="default"
-              onClick={handleRunClick}
-              disabled={!canRun}
-              className="h-7 gap-1 px-2.5"
-            >
-              <PlayIcon className="size-3" aria-hidden />
-              {t("experiments.run")}
-            </Button>
-          </Hint>
-          {isInFlightForCurrent ? (
-            <Hint label={t("experiments.runPanel.cancelRun")}>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={handleCancel}
-                className="h-7 gap-1 px-2.5"
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <AppSelect
+                value={kind || KIND_UNTYPED}
+                disabled={isInFlightForCurrent || starting}
+                onValueChange={(v) =>
+                  setKind(v === KIND_UNTYPED ? "" : (v as ExperimentRunKind))
+                }
               >
-                <SquareIcon className="size-3" aria-hidden />
-                {t("experiments.cancel")}
-              </Button>
-            </Hint>
-          ) : null}
-          <Hint
-            label={
-              lastCommand == null
-                ? t("experiments.runPanel.noPrior")
-                : t("experiments.runPanel.populateLast")
-            }
-          >
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={handleReuseLast}
-              disabled={lastCommand == null || isInFlightForCurrent}
-              className="h-7 gap-1 px-2"
-            >
-              <HistoryIcon className="size-3" aria-hidden />
-              {t("experiments.reuseLast")}
-            </Button>
-          </Hint>
-          <Hint label={t("experiments.runPanel.openTerminal")}>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => void handleOpenTerminal()}
-              disabled={!projectRoot || !selectedId}
-              className="h-7 gap-1 px-2"
-            >
-              <TerminalIcon className="size-3" aria-hidden />
-              {t("experiments.terminal")}
-            </Button>
-          </Hint>
+                <AppSelectTrigger
+                  variant="wide"
+                  aria-label={t("experiments.type")}
+                  title={t("experiments.runPanel.typeTitle")}
+                  className="h-7 min-w-[6.5rem]"
+                >
+                  <AppSelectValue placeholder={t("experiments.type")} />
+                </AppSelectTrigger>
+                <AppSelectContent>
+                  <AppSelectItem value={KIND_UNTYPED}>{t("experiments.type")}</AppSelectItem>
+                  {EXPERIMENT_RUN_KINDS.map((k) => (
+                    <AppSelectItem key={k} value={k}>
+                      {k}
+                    </AppSelectItem>
+                  ))}
+                </AppSelectContent>
+              </AppSelect>
 
-          {isInFlightForCurrent ? (
-            <span
-              className="ml-auto flex min-w-0 items-center gap-1.5 text-[length:var(--font-size-11)] text-info"
-              aria-live="polite"
-            >
-              <Loader2Icon className="size-3 shrink-0 animate-spin" aria-hidden />
-              <span className="shrink-0 font-medium">{t("experiments.running")}</span>
-            </span>
-          ) : null}
-        </div>
-      </div>
+              <Hint
+                label={
+                  lastCommand == null
+                    ? t("experiments.runPanel.noPrior")
+                    : t("experiments.runPanel.populateLast")
+                }
+              >
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  onClick={handleReuseLast}
+                  disabled={lastCommand == null || isInFlightForCurrent || starting}
+                  className="h-7 gap-1 px-1.5"
+                >
+                  <HistoryIcon className="size-3" aria-hidden />
+                  <span>{t("experiments.reuseLast")}</span>
+                </Button>
+              </Hint>
+
+              <Hint label={t("experiments.runPanel.openTerminal")}>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => void handleOpenTerminal()}
+                  disabled={!projectRoot || !selectedId}
+                  className="h-7 gap-1 px-1.5"
+                >
+                  <TerminalIcon className="size-3" aria-hidden />
+                  <span>{t("experiments.terminal")}</span>
+                </Button>
+              </Hint>
+            </div>
+
+            <Textarea
+              aria-label={t("experiments.command")}
+              value={liveCommand}
+              onChange={(e) => setCommand(e.target.value)}
+              placeholder="python train.py --epochs 50"
+              spellCheck={false}
+              disabled={isInFlightForCurrent || starting}
+              rows={4}
+              className={cn(
+                "min-h-[5.5rem] w-full resize-y",
+                experimentsCodeClass,
+                isInFlightForCurrent && "cursor-not-allowed text-muted-foreground/70",
+              )}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  if (canRun) handleRunClick();
+                }
+              }}
+            />
+            <p className={SETTINGS_ROW_DESC}>{t("experiments.runPanel.enterToRun")}</p>
+          </div>
+
+          <DialogFooter className="gap-2 sm:justify-between">
+            {isInFlightForCurrent ? (
+              <div className="flex w-full items-center justify-between gap-2">
+                <span
+                  className="flex items-center gap-1.5 text-[length:var(--font-size-11)] text-info"
+                  aria-live="polite"
+                >
+                  <Loader2Icon className="size-3 shrink-0 animate-spin" aria-hidden />
+                  <span className="font-medium">{t("experiments.running")}</span>
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleCancel}
+                  className="gap-1"
+                >
+                  <SquareIcon className="size-3" aria-hidden />
+                  {t("experiments.cancel")}
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Button type="button" size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
+                  {t("experiments.close")}
+                </Button>
+                <Hint
+                  label={
+                    isReadonly
+                      ? t("experiments.runPanel.permissionReadonly")
+                      : !projectRoot || !selectedId
+                        ? t("experiments.runPanel.selectExperiment")
+                        : command.trim().length === 0
+                          ? t("experiments.runPanel.enterCommand")
+                          : t("experiments.runPanel.runInLab")
+                  }
+                >
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="default"
+                    onClick={handleRunClick}
+                    disabled={!canRun}
+                    className="gap-1"
+                  >
+                    {starting ? (
+                      <Loader2Icon className="size-3 animate-spin" aria-hidden />
+                    ) : (
+                      <PlayIcon className="size-3" aria-hidden />
+                    )}
+                    {t("experiments.run")}
+                  </Button>
+                </Hint>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ExperimentsRunConfirmModal
         open={confirmOpen}
         command={pendingCommand}
         cwd={cwd}
-        kind={pendingKind}
-        onKindChange={setPendingKind}
         onAllow={handleAllow}
         onDeny={handleDeny}
       />
-    </div>
+    </>
   );
 }

@@ -180,6 +180,36 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
     expect(result).toMatchObject({ ok: false, error: "experiment_not_found" });
   });
 
+  it("create and update IPC modifies experiment title, tags, and description", async () => {
+    setupWithExperimentFolder();
+    const createHandler = handlers.get("experiment:create")!;
+    const created = (await createHandler(makeEvent(), {
+      projectRoot: root,
+      title: "Initial Title",
+      tags: ["baseline"],
+      description: "Initial description",
+    })) as Record<string, unknown>;
+    expect(created.ok).toBe(true);
+    const meta = created.meta as { id: string; title: string; tags?: string[]; description?: string };
+    expect(meta.title).toBe("Initial Title");
+    expect(meta.tags).toEqual(["baseline"]);
+    expect(meta.description).toBe("Initial description");
+
+    const updateHandler = handlers.get("experiment:update")!;
+    const updated = (await updateHandler(makeEvent(), {
+      projectRoot: root,
+      id: created.id as string,
+      title: "Updated Title",
+      tags: ["resnet", "v2"],
+      description: "New notes",
+    })) as Record<string, unknown>;
+    expect(updated.ok).toBe(true);
+    const updatedMeta = updated.meta as { title: string; tags?: string[]; description?: string };
+    expect(updatedMeta.title).toBe("Updated Title");
+    expect(updatedMeta.tags).toEqual(["resnet", "v2"]);
+    expect(updatedMeta.description).toBe("New notes");
+  });
+
   it("run returns {status:'started'} and emits experiment:runComplete with the appended run", async () => {
     const c = setupWithExperimentFolder();
     const created = createExperiment(c, { title: "Run test" }, { ensureVenv: false });
@@ -349,6 +379,39 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
     const result = (handler(makeEvent(), { projectRoot: root, id, runId }) as Record<string, unknown>);
     expect(result).toEqual({ ok: true });
     expect(_hasActiveAiPtyForSession(sessionId)).toBe(false);
+  });
+
+  it("snapshot returns figures/tables from the experiment workspace", async () => {
+    const c = setupWithExperimentFolder();
+    const created = createExperiment(c, { title: "Results scan" }, { ensureVenv: false });
+    if (!created.ok) throw new Error("create failed");
+
+    const island = join(root, "experiment", created.id);
+    mkdirSync(join(island, "figures"), { recursive: true });
+    writeFileSync(join(island, "figures", "loss.png"), "fake-png");
+    writeFileSync(join(island, "metrics.json"), JSON.stringify({ acc: 0.9, loss: 0.1 }));
+    writeFileSync(join(island, "out.csv"), "a,b\n1,2\n3,4\n");
+
+    const handler = handlers.get("experiment:snapshot")!;
+    const result = (await handler(makeEvent(), {
+      projectRoot: root,
+      id: created.id,
+    })) as {
+      ok: boolean;
+      snapshot?: {
+        figures: Array<{ path: string }>;
+        tables: Array<{ path: string; rowCount: number }>;
+        metrics: Array<{ path: string; values: Record<string, number | string> }>;
+      };
+      error?: string;
+    };
+
+    expect(result.ok).toBe(true);
+    expect(result.snapshot?.figures.some((f) => f.path.includes("loss.png"))).toBe(true);
+    expect(result.snapshot?.tables.some((t) => t.path.endsWith("out.csv") && t.rowCount === 2)).toBe(
+      true,
+    );
+    expect(result.snapshot?.metrics.some((m) => m.path.endsWith("metrics.json"))).toBe(true);
   });
 });
 

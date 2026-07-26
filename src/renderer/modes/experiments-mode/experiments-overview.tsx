@@ -1,18 +1,18 @@
 /**
- * Experiment sidebar panels — Overview + Environment for detail tabs.
- * Main detail pane stays Execution-focused.
+ * Experiment Overview & Environment — sparse label|value rows
+ * (literature / Settings style). Tags use Literature-style chips.
+ * Brief / hypothesis editing lives in the header brief strip, not here.
  */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { CheckIcon, CopyIcon, Loader2Icon, RefreshCwIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, Loader2Icon, PlayIcon, RefreshCwIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
-import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
-import { literatureDetailBadgeClass } from "@/modes/literature-mode/literature-list-chrome";
 import {
   experimentEnvDisplayRows,
+  experimentStatusOf,
   type ExperimentEnv,
   type ExperimentMeta,
 } from "../../../shared/experiment-log";
@@ -23,6 +23,7 @@ import {
   experimentsUiValueClass,
   formatExperimentRelativeTime,
 } from "./experiments-detail-chrome";
+import { ExperimentsTags } from "./experiments-tags";
 
 const COPY_FEEDBACK_MS = 1500;
 
@@ -33,10 +34,15 @@ function formatDateTime(iso: string): string {
   return new Date(t).toLocaleString();
 }
 
-function OverviewRow({ label, children }: { label: string; children: ReactNode }) {
+function MetaRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="space-y-0.5 py-1.5">
-      <div className={experimentsMetadataLabelClass}>{label}</div>
+    <div
+      className={cn(
+        "grid grid-cols-1 gap-x-3 gap-y-0.5 py-1.5",
+        "@md:grid-cols-[5.25rem_minmax(0,1fr)] @md:items-center @md:gap-y-0",
+      )}
+    >
+      <span className={experimentsMetadataLabelClass}>{label}</span>
       <div className="min-w-0">{children}</div>
     </div>
   );
@@ -109,62 +115,83 @@ export function ExperimentsOverviewPanel({
   runCount,
   lastRunAt,
   lastExitCode,
-  compact,
+  onOpenExecution,
 }: {
   meta: ExperimentMeta;
   runCount: number;
   lastRunAt: string | null;
   lastExitCode: number | null;
-  /** Tighter vertical rhythm for the mode sidebar. */
-  compact?: boolean;
+  onOpenExecution?: () => void;
 }) {
   const { t } = useTranslation();
+  const archived = experimentStatusOf(meta) === "archived";
+
+  const runsLine = (() => {
+    let line = String(runCount);
+    if (lastRunAt) {
+      line += ` ${t("experiments.overview.lastRun", {
+        when: formatExperimentRelativeTime(lastRunAt),
+      })}`;
+      if (lastExitCode != null && lastExitCode !== 0) {
+        line += ` ${t("experiments.overview.lastExit", { code: lastExitCode })}`;
+      }
+    }
+    return line;
+  })();
+
   return (
-    <section className={cn("min-w-0", compact ? "space-y-1 px-1" : "space-y-2")}>
-      {!compact ? (
+    <section className="min-w-0 space-y-2">
+      <div className={experimentsSectionHeaderRowClass}>
         <h3 className={experimentsSectionLabelClass}>{t("experiments.overview.label")}</h3>
-      ) : null}
-      <div className="space-y-0 divide-y divide-border/40">
-        <OverviewRow label={t("experiments.overview.id")}>
+        {onOpenExecution ? (
+          <Hint label={t("experiments.overview.openExecutionHint")}>
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              className="h-6 gap-1 px-1.5 text-muted-foreground hover:text-foreground"
+              onClick={onOpenExecution}
+            >
+              <PlayIcon className="size-3" aria-hidden />
+              <span className="text-[length:var(--font-size-11)]">
+                {t("experiments.overview.openExecution")}
+              </span>
+            </Button>
+          </Hint>
+        ) : null}
+      </div>
+
+      <div className="divide-y divide-border/40">
+        <MetaRow label={t("experiments.sidebar.status")}>
+          <span className={experimentsUiValueClass}>
+            {archived ? t("experiments.sidebar.archived") : t("experiments.sidebar.active")}
+          </span>
+        </MetaRow>
+
+        <MetaRow label={t("experiments.overview.id")}>
           <CopyableText text={meta.id} />
-        </OverviewRow>
-        <OverviewRow label={t("experiments.overview.created")}>
+        </MetaRow>
+
+        <MetaRow label={t("experiments.overview.created")}>
           <span className={experimentsUiValueClass}>
             {formatDateTime(meta.createdAt)}
-            <span className="ml-1 text-muted-foreground/70">
+            <span className="ml-1.5 text-muted-foreground/70">
               ({formatExperimentRelativeTime(meta.createdAt)})
             </span>
           </span>
-        </OverviewRow>
-        <OverviewRow label={t("experiments.overview.runs")}>
-          <span className={cn(experimentsUiValueClass, "tabular-nums")}>
-            {runCount}
-            {lastRunAt ? (
-              <span className="ml-1.5 text-[length:var(--font-size-12)] text-muted-foreground/80">
-                {t("experiments.overview.lastRun", {
-                  when: formatExperimentRelativeTime(lastRunAt),
-                })}
-                {lastExitCode === 0 || lastExitCode == null
-                  ? ""
-                  : t("experiments.overview.lastExit", { code: lastExitCode })}
-              </span>
-            ) : null}
-          </span>
-        </OverviewRow>
-        <OverviewRow label={t("experiments.overview.labPath")}>
+        </MetaRow>
+
+        <MetaRow label={t("experiments.overview.runs")}>
+          <span className={cn(experimentsUiValueClass, "tabular-nums")}>{runsLine}</span>
+        </MetaRow>
+
+        <MetaRow label={t("experiments.overview.labPath")}>
           <CopyableText text={meta.workspacePath} />
-        </OverviewRow>
-        {meta.tags && meta.tags.length > 0 ? (
-          <OverviewRow label={t("experiments.overview.tags")}>
-            <div className="flex flex-wrap gap-1.5">
-              {meta.tags.map((tag) => (
-                <span key={tag} className={literatureDetailBadgeClass}>
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </OverviewRow>
-        ) : null}
+        </MetaRow>
+
+        <MetaRow label={t("experiments.overview.tags")}>
+          <ExperimentsTags experimentId={meta.id} tags={meta.tags ?? []} />
+        </MetaRow>
       </div>
     </section>
   );
@@ -174,22 +201,18 @@ export function ExperimentsEnvironmentPanel({
   env,
   reloading,
   onRefresh,
-  compact,
 }: {
   env: ExperimentEnv | null;
   reloading: boolean;
   onRefresh: () => void;
-  compact?: boolean;
 }) {
   const { t } = useTranslation();
   const rows = experimentEnvDisplayRows(env);
 
   return (
-    <section className={cn("min-w-0", compact ? "space-y-1 px-1" : "space-y-2")}>
+    <section className="min-w-0 space-y-2">
       <div className={experimentsSectionHeaderRowClass}>
-        <h3 className={experimentsSectionLabelClass}>
-          {t("experiments.overview.environment")}
-        </h3>
+        <h3 className={experimentsSectionLabelClass}>{t("experiments.overview.environment")}</h3>
         <Hint label={t("experiments.overview.redetect")}>
           <Button
             type="button"
@@ -210,54 +233,55 @@ export function ExperimentsEnvironmentPanel({
       </div>
 
       {!env ? (
-        <p className={cn(SETTINGS_ROW_DESC, compact && "px-0 text-[length:var(--font-size-11)]")}>
+        <p className="py-1 text-[length:var(--font-size-12)] text-muted-foreground">
           {t("experiments.overview.envNotDetected")}
         </p>
-      ) : null}
+      ) : (
+        <div className="divide-y divide-border/40">
+          {rows.map((row) => {
+            const labelKey =
+              row.label === "Python"
+                ? "experiments.env.python"
+                : row.label === "Platform"
+                  ? "experiments.env.platform"
+                  : row.label === "Venv"
+                    ? "experiments.env.venv"
+                    : row.label === "R"
+                      ? "experiments.env.r"
+                      : row.label === "Git"
+                        ? "experiments.env.git"
+                        : null;
+            const placeholderKey =
+              row.placeholder === "not detected"
+                ? "experiments.env.notDetected"
+                : row.placeholder === "unknown"
+                  ? "experiments.env.unknown"
+                  : row.placeholder === "no .venv"
+                    ? "experiments.env.noVenv"
+                    : null;
+            const label = labelKey ? t(labelKey) : row.label;
+            const placeholder = placeholderKey ? t(placeholderKey) : row.placeholder;
+            const value = row.display?.trim() || placeholder;
 
-      <div className="space-y-0 divide-y divide-border/40">
-        {rows.map((row) => {
-          const labelKey =
-            row.label === "Python"
-              ? "experiments.env.python"
-              : row.label === "Platform"
-                ? "experiments.env.platform"
-                : row.label === "Venv"
-                  ? "experiments.env.venv"
-                  : row.label === "R"
-                    ? "experiments.env.r"
-                    : row.label === "Git"
-                      ? "experiments.env.git"
-                      : null;
-          const placeholderKey =
-            row.placeholder === "not detected"
-              ? "experiments.env.notDetected"
-              : row.placeholder === "unknown"
-                ? "experiments.env.unknown"
-                : row.placeholder === "no .venv"
-                  ? "experiments.env.noVenv"
-                  : null;
-          const label = labelKey ? t(labelKey) : row.label;
-          const placeholder = placeholderKey ? t(placeholderKey) : row.placeholder;
-          const value = row.display?.trim() || placeholder;
-          return (
-            <OverviewRow key={row.label} label={label}>
-              {row.copyText ? (
-                <CopyableText text={value} copyText={row.copyText} />
-              ) : (
-                <span
-                  className={cn(
-                    experimentsUiValueClass,
-                    !(row.display?.trim()) && "text-muted-foreground/60",
-                  )}
-                >
-                  {value}
-                </span>
-              )}
-            </OverviewRow>
-          );
-        })}
-      </div>
+            return (
+              <MetaRow key={row.label} label={label}>
+                {row.copyText ? (
+                  <CopyableText text={value} copyText={row.copyText} />
+                ) : (
+                  <span
+                    className={cn(
+                      experimentsUiValueClass,
+                      !(row.display?.trim()) && "text-muted-foreground/60",
+                    )}
+                  >
+                    {value}
+                  </span>
+                )}
+              </MetaRow>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

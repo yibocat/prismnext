@@ -93,6 +93,13 @@ interface LayoutState {
   rightSidebarOpen: boolean;
   toggleRightSidebar: () => void;
   setRightSidebarOpen: (open: boolean) => void;
+  /**
+   * Bumped to ask RightArea to open the mode sidebar once the container has
+   * a real width (split when roomy, full overlay when narrow) — avoids races
+   * where setRightSidebarOpen(true) is immediately auto-closed at width 0.
+   */
+  rightSidebarRevealNonce: number;
+  revealRightSidebar: () => void;
 
   sidebarExpanded: boolean;
   sidebarWidth: number;
@@ -267,8 +274,14 @@ export const useLayoutStore = create<LayoutState>()(
         set((s) => (s.commandPaletteOpen === open ? s : { commandPaletteOpen: open })),
 
       rightSidebarOpen: false,
+      rightSidebarRevealNonce: 0,
       toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
       setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
+      revealRightSidebar: () =>
+        set((s) => ({
+          rightSidebarOpen: true,
+          rightSidebarRevealNonce: s.rightSidebarRevealNonce + 1,
+        })),
 
       sidebarExpanded: true,
       sidebarWidth: SIDEBAR_LEFT_DEFAULT,

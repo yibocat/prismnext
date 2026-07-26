@@ -85,3 +85,66 @@ export function stepFocusIndex(
   if (current < 0) return delta > 0 ? 0 : length - 1;
   return Math.max(0, Math.min(length - 1, current + delta));
 }
+
+const SCRIPT_EXT =
+  /\.(?:py|sh|bash|zsh|r|R|jl|m|ipynb|pl|rb|js|ts|tsx|mjs|cjs|go|rs|cpp|cc|c)$/i;
+
+function clipTitle(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return `${s.slice(0, Math.max(0, max - 1))}…`;
+}
+
+function basenamePath(path: string): string {
+  const clean = path.replace(/^['"]|['"]$/g, "");
+  const parts = clean.split(/[/\\]/);
+  return parts[parts.length - 1] || clean;
+}
+
+/**
+ * Short human title from a shell command (script basename or command head).
+ * Used when a run has no note.
+ */
+export function shortExperimentCommandTitle(command: string): string {
+  const trimmed = command.trim().replace(/\s+/g, " ");
+  if (!trimmed) return "—";
+
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  for (const tok of tokens) {
+    const clean = tok.replace(/^['"]|['"]$/g, "");
+    if (SCRIPT_EXT.test(clean) && !clean.includes("=")) {
+      return basenamePath(clean);
+    }
+  }
+
+  let i = 0;
+  while (i < tokens.length && /^[A-Za-z_][\w]*=/.test(tokens[i]!)) i++;
+  const rest = tokens.slice(i);
+  if (rest.length === 0) return clipTitle(trimmed, 48);
+
+  const bin = basenamePath(rest[0]!);
+  if (/^python\d*(?:\.\d+)?$/i.test(bin)) {
+    const arg1 = rest[1];
+    if (arg1 === "-c") return clipTitle(`${bin} -c`, 48);
+    if (arg1 === "-m" && rest[2]) return clipTitle(`${bin} -m ${rest[2]}`, 48);
+    if (arg1) {
+      const a = arg1.replace(/^['"]|['"]$/g, "");
+      if (SCRIPT_EXT.test(a)) return basenamePath(a);
+      return clipTitle([bin, arg1].join(" "), 48);
+    }
+  }
+
+  return clipTitle(rest.slice(0, 3).join(" "), 48);
+}
+
+/** List primary title: note first line, else short command title. */
+export function experimentRunListTitle(run: {
+  notes?: string | null;
+  command: string;
+}): string {
+  const note = run.notes?.trim();
+  if (note) {
+    const first = note.split(/\r?\n/)[0]!.trim();
+    return clipTitle(first, 80);
+  }
+  return shortExperimentCommandTitle(run.command);
+}

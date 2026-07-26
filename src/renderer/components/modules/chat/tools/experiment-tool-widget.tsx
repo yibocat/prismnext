@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useState, type ReactNode } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { ExternalLinkIcon, FlaskConicalIcon } from "lucide-react";
 import { ToolCard, Field } from "./shared";
@@ -9,10 +9,12 @@ import {
   resolveExperimentIdFromTool,
 } from "@/modes/experiments-mode/open-experiment";
 import { Hint } from "@/components/ui/hint";
+import { useExperimentStore } from "@/stores/experiment-store";
+import { cn } from "@/lib/utils";
 
 const LABELS: Record<string, string> = {
-  "experiment-log": "Experiment log",
-  "experiment-run": "Experiment run",
+  "experiment-log": "Experiment",
+  "experiment-run": "Run experiment",
   "results-snapshot": "Results snapshot",
 };
 
@@ -20,7 +22,7 @@ const ACTION_LABELS: Record<string, string> = {
   list: "list",
   create: "create",
   read: "read",
-  append_run: "append run",
+  append_run: "record run",
   detect_env: "detect env",
   open: "open",
   run: "run",
@@ -93,6 +95,159 @@ function asStringArray(v: unknown): string[] {
   return v.filter((x): x is string => typeof x === "string");
 }
 
+function isCancelledRunPayload(data: Record<string, unknown>): boolean {
+  if (data.error === "experiment_run_aborted") return true;
+  const run = data.run as Record<string, unknown> | undefined;
+  if (run?.cancelled === true) return true;
+  if (typeof run?.notes === "string" && run.notes.includes("Cancelled by user")) {
+    return true;
+  }
+  return false;
+}
+
+/** One-line command for chat — long `-c` scripts stay readable. */
+function shortCommand(cmd: string, max = 88): string {
+  const one = cmd.replace(/\s+/g, " ").trim();
+  if (one.length <= max) return one;
+  return `${one.slice(0, max - 1)}…`;
+}
+
+function runStatusLabel(opts: {
+  cancelled: boolean;
+  exitRaw: number | null;
+}): { text: string; className: string } {
+  if (opts.cancelled) {
+    return { text: "Cancelled", className: "text-warning" };
+  }
+  if (opts.exitRaw === 0) {
+    return { text: "Succeeded", className: "text-success" };
+  }
+  if (opts.exitRaw != null) {
+    return { text: `Failed · exit ${opts.exitRaw}`, className: "text-destructive" };
+  }
+  return { text: "Finished", className: "text-muted-foreground" };
+}
+
+function OutputTail({ text, emptyHint }: { text: string; emptyHint?: string }) {
+  if (!text.trim()) {
+    return emptyHint ? (
+      <p className="text-[length:var(--font-chat-meta)] text-muted-foreground">{emptyHint}</p>
+    ) : null;
+  }
+  return (
+    <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted px-2.5 py-2 font-mono text-[length:var(--font-size-11)] leading-relaxed text-foreground/85">
+      {text}
+    </pre>
+  );
+}
+
+function ExperimentRunFinishedBody({
+  toolUse,
+  data,
+  suppressArtifactPaths,
+}: {
+  toolUse: ContentBlock;
+  data: Record<string, unknown>;
+  suppressArtifactPaths?: readonly string[];
+}) {
+  const [showDetails, setShowDetails] = useState(false);
+  const input = (toolUse.input ?? {}) as Record<string, unknown>;
+  const run = data.run as Record<string, unknown> | undefined;
+  const cancelled = isCancelledRunPayload(data);
+  const exitRaw =
+    typeof data.exitCode === "number"
+      ? data.exitCode
+      : typeof run?.exitCode === "number"
+        ? run.exitCode
+        : null;
+  const artifacts = asStringArray(run?.artifacts ?? data.artifacts);
+  const artifactSnapshots = asStringArray(run?.artifactSnapshots ?? data.artifactSnapshots);
+  const cwd = typeof run?.cwd === "string" ? run.cwd : undefined;
+  const workspaceHint =
+    cwd ||
+    (typeof data.workspacePath === "string" ? data.workspacePath : undefined) ||
+    (typeof input.id === "string" && typeof data.experimentRoot === "string"
+      ? `${data.experimentRoot}/${input.id}`
+      : undefined);
+  const inputArtifacts = asStringArray(input.artifacts);
+  const mergedArtifacts = artifacts.length ? artifacts : inputArtifacts;
+  const command =
+    (typeof run?.command === "string" && run.command) ||
+    (typeof input.command === "string" ? input.command : "");
+  const kind =
+    (typeof run?.kind === "string" && run.kind) ||
+    (typeof input.kind === "string" ? input.kind : "");
+  const duration = formatDurationMs(run?.startedAt, run?.finishedAt);
+  const stdoutPreview = lastStdoutLines(run?.stdoutTail ?? data.stdoutTail, 24);
+  const status = runStatusLabel({ cancelled, exitRaw });
+  const runId = typeof run?.runId === "string" ? run.runId : "";
+  const logPath = typeof run?.logPath === "string" ? run.logPath : "";
+
+  const metaBits = [duration, kind || null].filter(Boolean);
+
+  return (
+    <div className="space-y-2 text-[length:var(--font-chat-meta)]">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <span className={status.className}>{status.text}</span>
+        {metaBits.length > 0 ? (
+          <span className="text-muted-foreground">{metaBits.join(" · ")}</span>
+        ) : null}
+      </div>
+
+      {cancelled ? (
+        <p className="text-muted-foreground">
+          Chat stopped waiting; a run record was still written when the process stopped.
+        </p>
+      ) : null}
+
+      {command ? (
+        <p
+          className="truncate font-mono text-[length:var(--font-size-11)] text-foreground/80"
+          title={command}
+        >
+          {shortCommand(command)}
+        </p>
+      ) : null}
+
+      <OutputTail text={stdoutPreview} />
+
+      {mergedArtifacts.length > 0 ? (
+        <ChatArtifactGallery
+          paths={pathsForRunChatDisplay({
+            artifacts: mergedArtifacts,
+            artifactSnapshots,
+            workspacePath: workspaceHint,
+          })}
+          suppressPaths={suppressArtifactPaths}
+        />
+      ) : null}
+
+      {(runId || cwd || logPath || exitRaw != null) && (
+        <div>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDetails((v) => !v);
+            }}
+          >
+            {showDetails ? "Hide details" : "Details"}
+          </button>
+          {showDetails ? (
+            <div className="mt-1.5 space-y-0.5 text-muted-foreground">
+              {exitRaw != null ? <Field label="exit" value={String(exitRaw)} /> : null}
+              {runId ? <Field label="run id" value={runId} /> : null}
+              {cwd ? <Field label="cwd" value={cwd} /> : null}
+              {logPath ? <Field label="log" value={logPath} /> : null}
+            </div>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ExperimentSummary({
   toolName,
   toolUse,
@@ -105,11 +260,23 @@ function ExperimentSummary({
   suppressArtifactPaths?: readonly string[];
 }) {
   if (data.error && typeof data.error === "string") {
+    const aborted = data.error === "experiment_run_aborted";
     return (
-      <p className="text-[length:var(--font-chat-meta)] text-destructive">
-        {data.error}
-        {typeof data.hint === "string" ? ` - ${data.hint}` : ""}
-      </p>
+      <div className="space-y-1 text-[length:var(--font-chat-meta)]">
+        <p className="text-destructive">
+          {aborted
+            ? "Session cancelled while the experiment was running"
+            : data.error}
+        </p>
+        {aborted ? (
+          <p className="text-muted-foreground">
+            Cancel stops waiting in Chat; the process may still finish and append a run
+            record. Open the experiment detail to confirm.
+          </p>
+        ) : typeof data.hint === "string" ? (
+          <p className="text-muted-foreground">{data.hint}</p>
+        ) : null}
+      </div>
     );
   }
   if (data.ok === false) {
@@ -131,14 +298,14 @@ function ExperimentSummary({
     const unparsed = asStringArray(data.unparsed);
     return (
       <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
-        <Field label="lab" value={String(data.workspacePath ?? "")} />
+        <Field label="workspace" value={String(data.workspacePath ?? "")} />
         <Field
           label="found"
           value={`${figures.length} figures · ${tables.length} tables · ${metrics.length} metrics`}
         />
         {unparsed.length ? <Field label="unparsed" value={String(unparsed.length)} /> : null}
         {typeof data.textSummary === "string" && data.textSummary.trim() ? (
-          <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-muted/40 p-2 text-[length:var(--font-size-11)]">
+          <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-muted p-2 text-[length:var(--font-size-11)]">
             {data.textSummary}
           </pre>
         ) : null}
@@ -153,7 +320,7 @@ function ExperimentSummary({
       const more = experiments.length - preview.length;
       return (
         <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
-          <Field label="experiment root" value={String(data.experimentRoot ?? "")} />
+          <Field label="experiments root" value={String(data.experimentRoot ?? "")} />
           <Field label="experiments" value={String(experiments.length)} />
           {preview.length > 0 ? (
             <ul className="mt-1 space-y-0.5 pl-0.5">
@@ -194,7 +361,7 @@ function ExperimentSummary({
         <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
           <Field label="title" value={String(meta?.title ?? data.id ?? "")} />
           <Field
-            label="runs"
+            label="run records"
             value={String(data.runCount ?? runs.length)}
           />
           {recent.length > 0 ? (
@@ -276,81 +443,36 @@ function ExperimentSummary({
     );
   }
 
-  // experiment-run (default) — thick card
-  const run = data.run as Record<string, unknown> | undefined;
-  const exitRaw =
-    typeof data.exitCode === "number"
-      ? data.exitCode
-      : typeof run?.exitCode === "number"
-        ? run.exitCode
-        : null;
-  const exitLabel = exitRaw != null ? String(exitRaw) : "";
-  const artifacts = asStringArray(run?.artifacts ?? data.artifacts);
-  const artifactSnapshots = asStringArray(run?.artifactSnapshots ?? data.artifactSnapshots);
-  const cwd = typeof run?.cwd === "string" ? run.cwd : undefined;
-  const workspaceHint =
-    cwd ||
-    (typeof data.workspacePath === "string" ? data.workspacePath : undefined) ||
-    (typeof input.id === "string" && typeof data.experimentRoot === "string"
-      ? `${data.experimentRoot}/${input.id}`
-      : undefined);
-  const inputArtifacts = asStringArray(input.artifacts);
-  const mergedArtifacts = artifacts.length ? artifacts : inputArtifacts;
-  const command =
-    (typeof run?.command === "string" && run.command) ||
-    (typeof input.command === "string" ? input.command : "");
-  const kind =
-    (typeof run?.kind === "string" && run.kind) ||
-    (typeof input.kind === "string" ? input.kind : "");
-  const duration = formatDurationMs(run?.startedAt, run?.finishedAt);
-  const stdoutPreview = lastStdoutLines(run?.stdoutTail ?? data.stdoutTail, 20);
-
+  // experiment-run (default) — narrative run card (not a raw field dump)
   return (
-    <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
-      {command ? <Field label="command" value={command} /> : null}
-      {cwd ? <Field label="cwd" value={cwd} /> : null}
-      {run ? <Field label="run id" value={String(run.runId ?? "")} /> : null}
-      {typeof run?.startedAt === "string" || typeof run?.finishedAt === "string" ? (
-        <Field
-          label="time"
-          value={[
-            typeof run?.startedAt === "string" ? run.startedAt : null,
-            typeof run?.finishedAt === "string" ? run.finishedAt : null,
-            duration,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        />
+    <ExperimentRunFinishedBody
+      toolUse={toolUse}
+      data={data}
+      suppressArtifactPaths={suppressArtifactPaths}
+    />
+  );
+}
+
+function ExperimentRunLiveBody({
+  command,
+  liveOutput,
+}: {
+  command: string;
+  liveOutput: string;
+}) {
+  const tail = lastStdoutLines(liveOutput, 30);
+  return (
+    <div className="space-y-2 text-[length:var(--font-chat-meta)]">
+      <p className="text-muted-foreground">Streaming output…</p>
+      {command ? (
+        <p
+          className="truncate font-mono text-[length:var(--font-size-11)] text-foreground/80"
+          title={command}
+        >
+          {shortCommand(command)}
+        </p>
       ) : null}
-      <p className="flex gap-2">
-        <span className="text-muted-foreground/70">exit</span>
-        <span className={exitToneClass(exitRaw)}>{exitLabel || "—"}</span>
-        {kind ? (
-          <>
-            <span className="text-muted-foreground/40">·</span>
-            <span>{kind}</span>
-          </>
-        ) : null}
-      </p>
-      {mergedArtifacts.length ? (
-        <Field label="artifacts" value={mergedArtifacts.join(", ")} />
-      ) : null}
-      {typeof run?.logPath === "string" && run.logPath ? (
-        <Field label="full log" value={run.logPath} />
-      ) : null}
-      {stdoutPreview ? (
-        <pre className="mt-1 max-h-36 overflow-auto whitespace-pre-wrap break-words rounded bg-muted/40 p-2 font-mono text-[length:var(--font-size-11)] text-foreground/80">
-          {stdoutPreview}
-        </pre>
-      ) : null}
-      <ChatArtifactGallery
-        paths={pathsForRunChatDisplay({
-          artifacts: mergedArtifacts,
-          artifactSnapshots,
-          workspacePath: workspaceHint,
-        })}
-        suppressPaths={suppressArtifactPaths}
-      />
+      <OutputTail text={tail} emptyHint="Waiting for the first lines…" />
     </div>
   );
 }
@@ -374,12 +496,35 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
 
   const input = (toolUse.input ?? {}) as Record<string, unknown>;
   const action = typeof input.action === "string" ? input.action : "run";
+  const inputCommand = typeof input.command === "string" ? input.command : "";
+  const finishedRun = data?.run as Record<string, unknown> | undefined;
+  const finishedCommand =
+    (typeof finishedRun?.command === "string" && finishedRun.command) || inputCommand;
+  const finishedDuration = formatDurationMs(finishedRun?.startedAt, finishedRun?.finishedAt);
+  const finishedExit =
+    typeof data?.exitCode === "number"
+      ? data.exitCode
+      : typeof finishedRun?.exitCode === "number"
+        ? finishedRun.exitCode
+        : null;
+  const finishedCancelled = data ? isCancelledRunPayload(data) : false;
+
   const label =
     toolName === "experiment-run"
-      ? LABELS["experiment-run"]
+      ? (
+          <span className="truncate font-medium" title={finishedCommand || undefined}>
+            {finishedCommand
+              ? shortCommand(finishedCommand, 64)
+              : LABELS["experiment-run"]}
+          </span>
+        )
       : toolName === "results-snapshot"
-        ? LABELS["results-snapshot"]
-        : `${LABELS["experiment-log"] ?? toolName} · ${ACTION_LABELS[action] ?? action}`;
+        ? <span className="truncate font-medium">{LABELS["results-snapshot"]}</span>
+        : (
+            <span className="truncate font-medium">
+              {`${LABELS["experiment-log"] ?? toolName} · ${ACTION_LABELS[action] ?? action}`}
+            </span>
+          );
 
   const rawFallback =
     !data && resultContent
@@ -395,16 +540,54 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
       : "";
 
   const experimentId = resolveExperimentIdFromTool(input, data);
-  const canOpenInExperiments = Boolean(experimentId) && !isLoading && !isError;
+  const runInFlight = useExperimentStore((s) => s.runInFlight);
+  const liveForThis =
+    isLoading &&
+    toolName === "experiment-run" &&
+    experimentId &&
+    runInFlight &&
+    runInFlight.id === experimentId
+      ? runInFlight
+      : null;
+
+  useEffect(() => {
+    if (liveForThis) setExpanded(true);
+  }, [liveForThis?.runId]);
+
+  const canOpenInExperiments = Boolean(experimentId) && !isError;
+  const openHint = liveForThis ? "Open live output in Experiments" : "Open in Experiments";
+
+  let headerMeta: ReactNode = null;
+  if (liveForThis) {
+    headerMeta = (
+      <span className="shrink-0 text-[length:var(--font-chat-meta)] text-muted-foreground">
+        Running
+      </span>
+    );
+  } else if (toolName === "experiment-run" && data && !isLoading) {
+    const status = runStatusLabel({
+      cancelled: finishedCancelled,
+      exitRaw: finishedExit,
+    });
+    headerMeta = (
+      <span className={cn("shrink-0 text-[length:var(--font-chat-meta)]", status.className)}>
+        {status.text}
+        {finishedDuration ? (
+          <span className="text-muted-foreground"> · {finishedDuration}</span>
+        ) : null}
+      </span>
+    );
+  }
 
   return (
     <ToolCard
       toolName={toolName}
       icon={<FlaskConicalIcon className="size-3.5 text-info" />}
-      label={<span className="truncate font-medium">{label}</span>}
+      label={label}
+      meta={headerMeta}
       headerEnd={
         canOpenInExperiments ? (
-          <Hint label="Open in Experiments">
+          <Hint label={openHint}>
             <button
               type="button"
               className="inline-flex items-center gap-1 shrink-0 text-[length:var(--font-chat-meta)] text-muted-foreground hover:text-foreground transition-colors"
@@ -414,7 +597,7 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
               }}
             >
               <ExternalLinkIcon className="size-3" />
-              Experiments
+              {liveForThis ? "Live" : "Open"}
             </button>
           </Hint>
         ) : null
@@ -423,10 +606,17 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
       onToggle={() => setExpanded(!expanded)}
       isLoading={isLoading}
       isError={isError}
-      hasContent={!!data || !!rawFallback}
+      hasContent={!!data || !!rawFallback || !!liveForThis}
     >
       {() =>
-        data ? (
+        liveForThis ? (
+          <ExperimentRunLiveBody
+            command={
+              liveForThis.command || inputCommand
+            }
+            liveOutput={liveForThis.liveOutput}
+          />
+        ) : data ? (
           <ExperimentSummary
             toolName={toolName}
             toolUse={toolUse}
@@ -434,7 +624,7 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
             suppressArtifactPaths={suppressArtifactPaths}
           />
         ) : rawFallback ? (
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-muted/40 p-2 text-[length:var(--font-size-12)] text-muted-foreground">
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-[length:var(--font-size-12)] text-muted-foreground">
             {rawFallback}
           </pre>
         ) : null

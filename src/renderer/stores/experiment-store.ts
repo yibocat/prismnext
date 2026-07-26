@@ -20,28 +20,36 @@ import type {
   ExperimentRunCompleteEvent,
   ExperimentRunEntry,
   ExperimentRunKind,
+  ExperimentRunOutputEvent as SharedExperimentRunOutputEvent,
   ExperimentRunResult,
+  ExperimentRunStartedEvent,
   ExperimentSummary,
 } from "../../shared/experiment-log";
 import { RUN_OUTPUT_TAIL_BYTES, stripAnsi, tailBytes } from "../../shared/experiment-log";
+import type { ExperimentResultsSnapshot } from "../../main/services/experiment-results-snapshot";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useChatStore } from "@/stores/chat-store";
+import { useDocumentStore } from "@/stores/document-store";
 import { navigateFileTreeToPath } from "@/lib/files/navigate-file-tree";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 // Side-effect: subscribe to experiment:changed (auto-refresh + Agent open).
 import "@/modes/experiments-mode/open-experiment";
+import {
+  DEFAULT_RUNS_QUERY,
+  type RunsQuery,
+} from "@/modes/experiments-mode/experiments-runs-query";
 
 /**
  * Max runs loaded per experiment detail. The service default is 20 (tail-newest);
- * we raise it here so the paginated runs history (PAGE_SIZE = 10 in the table)
- * can show more than 2 pages instead of silently hiding older runs.
+ * raise it so Execution can flat-list a longer history (Git-style, no pagination).
  */
 const RUNS_LOAD_LIMIT = 200;
 
 /** @deprecated Use `ExperimentRunResult` from `shared/experiment-log`. */
 export type ExperimentRunResultPayload = ExperimentRunResult;
 
-export type { ExperimentRunCompleteEvent };
+export type { ExperimentRunCompleteEvent, ExperimentRunStartedEvent };
+export type { ExperimentResultsSnapshot };
 
 /** Result of `experimentGetPaths` (success branch). */
 export interface ExperimentPaths {
@@ -51,11 +59,7 @@ export interface ExperimentPaths {
 }
 
 /** Event argument shape for the `onExperimentRunOutput` subscription. */
-export interface ExperimentRunOutputEvent {
-  id: string;
-  runId: string;
-  chunk: string;
-}
+export type ExperimentRunOutputEvent = SharedExperimentRunOutputEvent;
 
 /** In-flight UI run state — mirrors the executor's started state. */
 export interface ExperimentRunInFlight {
@@ -84,14 +88,25 @@ export interface ExperimentState {
   runInFlight: ExperimentRunInFlight | null;
   /** Output chunks that arrived before runInFlight was set (keyed by runId). */
   runOutputBuffer: Record<string, string>;
+  /** Station 3 — last workspace scan for the selected experiment. */
+  resultsSnapshot: ExperimentResultsSnapshot | null;
+  resultsSnapshotLoading: boolean;
   loading: boolean;
   error: string | null;
   /** Human browse: include archived islands in the list (toolbar toggle). */
   showArchived: boolean;
+  /** Execution pane filter/sort (toolbar when view = Execution). */
+  runsQuery: RunsQuery;
+  /** Multi-select for "Use in paper" (Execution list). */
+  checkedRunIds: string[];
 
   /** Reload the experiment list for `projectRoot` (respects `showArchived`). */
   refreshList: (projectRoot: string) => Promise<void>;
   setShowArchived: (projectRoot: string, show: boolean) => Promise<void>;
+  setRunsQuery: (patch: Partial<RunsQuery>) => void;
+  setCheckedRunIds: (ids: string[]) => void;
+  toggleRunChecked: (runId: string) => void;
+  clearCheckedRuns: () => void;
   archiveExperiment: (projectRoot: string, id: string) => Promise<boolean>;
   restoreExperiment: (projectRoot: string, id: string) => Promise<boolean>;
   deleteExperiment: (
@@ -103,7 +118,40 @@ export interface ExperimentState {
    * Create an experiment via IPC, refresh the list, and open its detail tab.
    * Returns the new id on success, or null on failure (error stored on state).
    */
-  createExperiment: (projectRoot: string, title: string) => Promise<string | null>;
+  createExperiment: (
+    projectRoot: string,
+    title: string,
+    opts?: {
+      tags?: string[];
+      description?: string;
+      briefLinks?: {
+        sections?: string[];
+        hypothesisExcerpt?: string;
+        researchQuestionExcerpt?: string;
+      };
+    },
+  ) => Promise<string | null>;
+  updateExperiment: (
+    projectRoot: string,
+    id: string,
+    input: {
+      title?: string;
+      tags?: string[];
+      description?: string;
+      briefLinks?: {
+        sections?: string[];
+        hypothesisExcerpt?: string;
+        researchQuestionExcerpt?: string;
+      } | null;
+    },
+  ) => Promise<boolean>;
+  /** Patch notes on a recorded run (runs.jsonl). */
+  updateRunNotes: (
+    projectRoot: string,
+    id: string,
+    runId: string,
+    notes: string,
+  ) => Promise<boolean>;
   /**
    * Select an experiment by id, then fetch its detail (meta + runs) and
    * cached env detection. Returns the detail on success, or `null` if the
@@ -134,10 +182,17 @@ export interface ExperimentState {
    * Always clears the matching in-flight marker.
    */
   handleRunComplete: (data: ExperimentRunCompleteEvent) => void;
+  /**
+   * Lift `runInFlight` when any kickoff announces (Agent bridge or Human UI).
+   * Merges any early `runOutputBuffer` chunks for the same runId.
+   */
+  handleRunStarted: (data: ExperimentRunStartedEvent) => void;
   /** Append a live PTY chunk to the matching in-flight run. */
   handleRunOutput: (data: ExperimentRunOutputEvent) => void;
   /** Cancel an in-flight run via IPC. */
   cancelRun: (projectRoot: string, id: string, runId: string) => Promise<void>;
+  /** Read-only workspace scan for the Results panel (Station 3). */
+  loadResultsSnapshot: (projectRoot: string, id: string) => Promise<void>;
   /** Resolve the on-disk paths for an experiment (used by Files/Terminal buttons). */
   getPaths: (
     projectRoot: string,
@@ -166,9 +221,13 @@ const INITIAL_STATE = {
   env: null as ExperimentEnv | null,
   runInFlight: null as ExperimentRunInFlight | null,
   runOutputBuffer: {} as Record<string, string>,
+  resultsSnapshot: null as ExperimentResultsSnapshot | null,
+  resultsSnapshotLoading: false,
   loading: false,
   error: null as string | null,
   showArchived: false,
+  runsQuery: { ...DEFAULT_RUNS_QUERY },
+  checkedRunIds: [] as string[],
 };
 
 export const useExperimentStore = create<ExperimentState>((set, get) => ({
@@ -208,6 +267,29 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   setShowArchived: async (projectRoot, show) => {
     set({ showArchived: show });
     await get().refreshList(projectRoot);
+  },
+
+  setRunsQuery: (patch) => {
+    set((s) => ({ runsQuery: { ...s.runsQuery, ...patch } }));
+  },
+
+  setCheckedRunIds: (ids) => {
+    set({ checkedRunIds: ids });
+  },
+
+  toggleRunChecked: (runId) => {
+    set((s) => {
+      const has = s.checkedRunIds.includes(runId);
+      return {
+        checkedRunIds: has
+          ? s.checkedRunIds.filter((id) => id !== runId)
+          : [...s.checkedRunIds, runId],
+      };
+    });
+  },
+
+  clearCheckedRuns: () => {
+    set({ checkedRunIds: [] });
   },
 
   archiveExperiment: async (projectRoot, id) => {
@@ -272,7 +354,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
     }
   },
 
-  createExperiment: async (projectRoot, title) => {
+  createExperiment: async (projectRoot, title, opts) => {
     const trimmed = (title || "").trim();
     if (!projectRoot || !trimmed) {
       set({ error: "missing_title" });
@@ -282,6 +364,9 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       const res = await window.electronAPI.experimentCreate({
         projectRoot,
         title: trimmed,
+        tags: opts?.tags,
+        description: opts?.description,
+        briefLinks: opts?.briefLinks,
       });
       if (!res.ok) {
         set({ error: res.hint || res.error });
@@ -298,14 +383,91 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
     }
   },
 
+  updateExperiment: async (projectRoot, id, input) => {
+    if (!projectRoot || !id) return false;
+    try {
+      const res = await window.electronAPI.experimentUpdate({
+        projectRoot,
+        id,
+        ...input,
+      });
+      if (!res.ok) {
+        set({ error: res.hint || res.error });
+        return false;
+      }
+      await get().refreshList(projectRoot);
+      if (get().selectedId === id && get().detail) {
+        set({
+          detail: {
+            ...get().detail!,
+            meta: res.meta,
+          },
+        });
+        useRightPanelStore.getState().updateExperimentTabTitle(id, res.meta.title);
+      }
+      return true;
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
+  updateRunNotes: async (projectRoot, id, runId, notes) => {
+    if (!projectRoot || !id || !runId) return false;
+    try {
+      const res = await window.electronAPI.experimentUpdateRun({
+        projectRoot,
+        id,
+        runId,
+        notes,
+      });
+      if (!res.ok) {
+        set({ error: res.hint || res.error });
+        return false;
+      }
+      const detail = get().detail;
+      if (detail && detail.meta.id === id) {
+        set({
+          detail: {
+            ...detail,
+            runs: detail.runs.map((r) =>
+              r.runId === runId
+                ? { ...r, notes: res.run.notes }
+                : r,
+            ),
+          },
+          error: null,
+        });
+      }
+      return true;
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  },
+
   clearSelection: () => {
-    set({ selectedId: null, detail: null, env: null });
+    set({
+      selectedId: null,
+      detail: null,
+      env: null,
+      resultsSnapshot: null,
+      resultsSnapshotLoading: false,
+      checkedRunIds: [],
+    });
     useRightPanelStore.getState().activateExperimentsHomeTab();
   },
 
   selectExperiment: async (projectRoot, id) => {
     if (!projectRoot || !id) return null;
-    set({ selectedId: id, error: null });
+    const prevId = get().selectedId;
+    set({
+      selectedId: id,
+      error: null,
+      resultsSnapshot: null,
+      resultsSnapshotLoading: false,
+      ...(prevId !== id ? { runsQuery: { ...DEFAULT_RUNS_QUERY }, checkedRunIds: [] } : {}),
+    });
     try {
       const [readRes, envRes] = await Promise.all([
         window.electronAPI.experimentRead({ projectRoot, id, runsLimit: RUNS_LOAD_LIMIT }),
@@ -327,6 +489,8 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       // Env detection is best-effort — keep the detail even if env probe fails.
       const env = envRes.ok ? envRes.env : null;
       set({ detail, env, error: null });
+      // Warm Results scan in the background (Station 3).
+      void get().loadResultsSnapshot(projectRoot, id);
       return detail;
     } catch (err) {
       get().clearSelection();
@@ -419,6 +583,31 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       }
       return { runInFlight: nextInflight, runOutputBuffer: restBuffer };
     });
+    if (data.result.run && get().selectedId === data.id) {
+      const projectRoot = useDocumentStore.getState().projectRoot;
+      if (projectRoot) void get().loadResultsSnapshot(projectRoot, data.id);
+    }
+  },
+
+  handleRunStarted: (data) => {
+    const id = (data.id || "").trim();
+    const runId = (data.runId || "").trim();
+    const command = typeof data.command === "string" ? data.command : "";
+    if (!id || !runId) return;
+    set((state) => {
+      const buffered = state.runOutputBuffer[runId] ?? "";
+      const { [runId]: _removed, ...restBuffer } = state.runOutputBuffer;
+      return {
+        runInFlight: {
+          id,
+          runId,
+          command,
+          liveOutput: tailBytes(buffered, RUN_OUTPUT_TAIL_BYTES),
+        },
+        runOutputBuffer: restBuffer,
+        error: null,
+      };
+    });
   },
 
   handleRunOutput: (data) => {
@@ -467,6 +656,30 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
     });
   },
 
+  loadResultsSnapshot: async (projectRoot, id) => {
+    if (!projectRoot || !id) return;
+    set({ resultsSnapshotLoading: true });
+    try {
+      const res = await window.electronAPI.experimentSnapshot({ projectRoot, id });
+      if (get().selectedId !== id) {
+        set({ resultsSnapshotLoading: false });
+        return;
+      }
+      if (!res?.ok) {
+        // Background scan — don't clobber the detail view with a global error.
+        set({ resultsSnapshotLoading: false });
+        return;
+      }
+      set({ resultsSnapshot: res.snapshot, resultsSnapshotLoading: false });
+    } catch {
+      if (get().selectedId !== id) {
+        set({ resultsSnapshotLoading: false });
+        return;
+      }
+      set({ resultsSnapshotLoading: false });
+    }
+  },
+
   getPaths: async (projectRoot, id) => {
     if (!projectRoot || !id) return null;
     try {
@@ -505,6 +718,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
 // Unsub via globalThis so Vite HMR does not stack listeners (Bug #13 family).
 const gRunEvents = globalThis as typeof globalThis & {
   __prismExperimentRunCompleteUnsub?: (() => void) | null;
+  __prismExperimentRunStartedUnsub?: (() => void) | null;
   __prismExperimentRunOutputUnsub?: (() => void) | null;
 };
 if (typeof window !== "undefined" && window.electronAPI?.onExperimentRunComplete) {
@@ -512,6 +726,14 @@ if (typeof window !== "undefined" && window.electronAPI?.onExperimentRunComplete
   gRunEvents.__prismExperimentRunCompleteUnsub = window.electronAPI.onExperimentRunComplete(
     (data) => {
       useExperimentStore.getState().handleRunComplete(data);
+    },
+  );
+}
+if (typeof window !== "undefined" && window.electronAPI?.onExperimentRunStarted) {
+  gRunEvents.__prismExperimentRunStartedUnsub?.();
+  gRunEvents.__prismExperimentRunStartedUnsub = window.electronAPI.onExperimentRunStarted(
+    (data) => {
+      useExperimentStore.getState().handleRunStarted(data);
     },
   );
 }

@@ -32,7 +32,12 @@ import {
   type ExperimentRunResult,
 } from "../../shared/experiment-log";
 import { createLogger } from "./logger";
-import { broadcastExperimentChanged } from "./experiment-ui-events";
+import {
+  broadcastExperimentChanged,
+  broadcastExperimentRunComplete,
+  broadcastExperimentRunOutput,
+  broadcastExperimentRunStarted,
+} from "./experiment-ui-events";
 
 const log = createLogger("experiment-run-executor", "agent");
 
@@ -142,8 +147,14 @@ export interface KickoffExperimentRunArgs {
   resPath?: string;
   /** UI completion callback — fires after the run finishes (or fails). */
   onComplete?: (result: ExperimentRunResult) => void;
-  /** Live PTY output chunks (UI stream). */
+  /** Live PTY output chunks (UI stream). Prefer IPC broadcast; optional for tests. */
   onOutputChunk?: (chunk: string) => void;
+  /**
+   * Originating renderer webContents (Human UI `experiment:run`). When set,
+   * run stream events are delivered origin-first then broadcast (Bug #4).
+   * Agent bridge leaves this unset — broadcast-only still reaches Chat.
+   */
+  originSender?: { send: (channel: string, payload: unknown) => void };
   /**
    * OpenCode chat session that triggered the run (best-effort provenance link).
    * NOT the PTY session id built below - kept separate to avoid collision.
@@ -221,6 +232,11 @@ function kickoffWithEnv(
   const cwd = island;
   const workspacePath = `${ctx.workspaceRel}/${id}`;
   const kind = parseExperimentRunKind(args.kind);
+  const origin = args.originSender;
+
+  // Announce before PTY so Chat / panel can lift runInFlight (Station 2).
+  // Agent bridge and Human UI share this path.
+  broadcastExperimentRunStarted({ id, runId, command }, origin);
 
   // Defer PTY spawn so the IPC handler returns runId before output chunks
   // reach the renderer (avoids losing early chunks before runInFlight is set).
@@ -244,9 +260,11 @@ function kickoffWithEnv(
       envExtra,
       captureStderr: stderrPath,
       onChunk: (chunk) => {
+        const cleaned = stripAnsi(chunk);
+        broadcastExperimentRunOutput({ id, runId, chunk: cleaned }, origin);
         if (args.onOutputChunk) {
           try {
-            args.onOutputChunk(stripAnsi(chunk));
+            args.onOutputChunk(cleaned);
           } catch {
             // ignore callback errors
           }
@@ -279,17 +297,21 @@ function kickoffWithEnv(
           logPath,
         }, { chatSessionId: args.chatSessionId ?? null });
         if (!append.ok) {
-          reportResult(args, { ok: false, error: append.error });
+          reportResult(args, { ok: false, error: append.error }, runId);
           return;
         }
         const run: ExperimentRunEntry = append.run;
-        reportResult(args, {
-          ok: true,
-          run,
-          exitCode: run.exitCode,
-          stdoutTail: run.stdoutTail,
-          stderrTail: run.stderrTail,
-        });
+        reportResult(
+          args,
+          {
+            ok: true,
+            run,
+            exitCode: run.exitCode,
+            stdoutTail: run.stdoutTail,
+            stderrTail: run.stderrTail,
+          },
+          runId,
+        );
       })
       .catch((err: unknown) => {
         const finishedAt = new Date().toISOString();
@@ -315,16 +337,24 @@ function kickoffWithEnv(
           logPath,
         }, { chatSessionId: args.chatSessionId ?? null });
         const run: ExperimentRunEntry | null = append.ok ? append.run : null;
-        reportResult(args, {
-          ok: false,
-          error: message,
-          run: run ?? undefined,
-        });
+        reportResult(
+          args,
+          {
+            ok: false,
+            error: message,
+            run: run ?? undefined,
+          },
+          runId,
+        );
       });
   });
 }
 
-function reportResult(args: KickoffExperimentRunArgs, data: ExperimentRunResult): void {
+function reportResult(
+  args: KickoffExperimentRunArgs,
+  data: ExperimentRunResult,
+  runId?: string,
+): void {
   if (args.resPath) {
     try {
       writeFileSync(args.resPath, JSON.stringify(data), "utf-8");
@@ -341,6 +371,13 @@ function reportResult(args: KickoffExperimentRunArgs, data: ExperimentRunResult)
     id: args.id,
     reason: "run_complete",
   });
+  const resolvedRunId = runId ?? data.run?.runId ?? args.runId;
+  if (resolvedRunId) {
+    broadcastExperimentRunComplete(
+      { id: args.id, runId: resolvedRunId, result: data },
+      args.originSender,
+    );
+  }
   if (args.onComplete) {
     try {
       args.onComplete(data);

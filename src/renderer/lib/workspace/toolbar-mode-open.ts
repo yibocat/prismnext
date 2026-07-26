@@ -44,6 +44,10 @@ export function activateToolbarMode(modeId: string): void {
     }
   }
   def.onActivate?.();
+  const hasSidebar = Boolean(def.Sidebar && !def.hideRightSidebar);
+  if (hasSidebar) {
+    useLayoutStore.getState().revealRightSidebar();
+  }
 }
 
 /** Split open (toggle off when already split + focused). */

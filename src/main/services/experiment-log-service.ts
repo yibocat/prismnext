@@ -50,6 +50,7 @@ import {
   type ExperimentRunInput,
   type ExperimentSummary,
 } from "../../shared/experiment-log";
+import { resolveResearchBriefSection } from "../../shared/research-brief";
 
 /** Hint surfaced to UI / agent when the project has no Workspace Experiment folder configured. */
 export const NO_EXPERIMENT_FOLDER_HINT =
@@ -731,6 +732,7 @@ export function listExperiments(
       lastRunAt,
       status,
       archivedAt: meta.archivedAt ?? null,
+      tags: meta.tags,
     });
   }
   experiments.sort((a, b) => b.id.localeCompare(a.id));
@@ -788,6 +790,78 @@ export function restoreExperiment(
   return { ok: true, meta: next };
 }
 
+export interface UpdateExperimentInput {
+  title?: string;
+  tags?: string[];
+  description?: string;
+  /** Pass `null` to clear all brief links. */
+  briefLinks?: ExperimentBriefLinks | null;
+}
+
+function normalizeBriefLinks(
+  input: ExperimentBriefLinks | null | undefined,
+): ExperimentBriefLinks | undefined {
+  if (input === null) return undefined;
+  if (input === undefined) return undefined;
+  const seen = new Set<string>();
+  const sections: string[] = [];
+  if (Array.isArray(input.sections)) {
+    for (const raw of input.sections) {
+      const resolved = resolveResearchBriefSection(raw);
+      if (!resolved || seen.has(resolved)) continue;
+      seen.add(resolved);
+      sections.push(resolved);
+    }
+  }
+  const hypothesisExcerpt = input.hypothesisExcerpt?.trim() || undefined;
+  const researchQuestionExcerpt = input.researchQuestionExcerpt?.trim() || undefined;
+  if (!hypothesisExcerpt && !researchQuestionExcerpt && sections.length === 0) {
+    return undefined;
+  }
+  const out: ExperimentBriefLinks = {};
+  if (hypothesisExcerpt) out.hypothesisExcerpt = hypothesisExcerpt;
+  if (researchQuestionExcerpt) out.researchQuestionExcerpt = researchQuestionExcerpt;
+  if (sections.length > 0) out.sections = sections;
+  return out;
+}
+
+export function updateExperiment(
+  ctx: ExperimentStorageContext,
+  id: string,
+  input: UpdateExperimentInput,
+): { ok: true; meta: ExperimentMeta } | { ok: false; error: string } {
+  if (!isSafeExperimentId(id)) return { ok: false, error: "invalid_id" };
+  const meta = readMeta(ctx, id);
+  if (!meta) return { ok: false, error: "experiment_not_found" };
+
+  const next: ExperimentMeta = {
+    ...meta,
+  };
+  if (input.title !== undefined) {
+    const trimmed = input.title.trim();
+    if (!trimmed) return { ok: false, error: "missing_title" };
+    next.title = trimmed;
+  }
+  if (input.tags !== undefined) {
+    next.tags = input.tags.map((t) => t.trim()).filter(Boolean);
+  }
+  if (input.description !== undefined) {
+    next.description = input.description.trim() || undefined;
+  }
+  if (input.briefLinks !== undefined) {
+    const normalized = normalizeBriefLinks(input.briefLinks);
+    if (normalized) next.briefLinks = normalized;
+    else delete next.briefLinks;
+  }
+
+  try {
+    writeMeta(ctx, next);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+  return { ok: true, meta: next };
+}
+
 export interface DeleteExperimentOptions {
   /** When true, also rm the lab island under the Experiment workspace. */
   removeLab?: boolean;
@@ -834,6 +908,7 @@ export interface CreateExperimentInput {
   title: string;
   briefLinks?: ExperimentBriefLinks;
   tags?: string[];
+  description?: string;
 }
 
 export interface CreateExperimentOptions {
@@ -877,10 +952,14 @@ export function createExperiment(
     workspacePath,
   };
   if (input.briefLinks && Object.keys(input.briefLinks).length > 0) {
-    meta.briefLinks = input.briefLinks;
+    const normalized = normalizeBriefLinks(input.briefLinks);
+    if (normalized) meta.briefLinks = normalized;
   }
   if (input.tags && input.tags.length > 0) {
     meta.tags = input.tags;
+  }
+  if (input.description && input.description.trim()) {
+    meta.description = input.description.trim();
   }
 
   writeFileSync(metaPath(ctx, id), JSON.stringify(meta, null, 2) + "\n", "utf-8");
@@ -1272,6 +1351,66 @@ export function appendRun(
   }
   bumpRunsStats(ctx, id, run);
   return { ok: true, run, path: join(EXPERIMENT_REGISTRY_REL, id, EXPERIMENT_RUNS_FILENAME) };
+}
+
+/**
+ * Patch `notes` on an existing run line in `runs.jsonl` (Human UI edit).
+ * Empty / whitespace clears the field.
+ */
+export function updateRunNotes(
+  ctx: ExperimentStorageContext,
+  id: string,
+  runId: string,
+  notes: string,
+): { ok: true; run: ExperimentRunEntry } | { ok: false; error: string } {
+  const trimmedId = (id || "").trim();
+  const trimmedRunId = (runId || "").trim();
+  if (!isSafeExperimentId(trimmedId) || !trimmedRunId) {
+    return { ok: false, error: "invalid_id" };
+  }
+  const meta = readMeta(ctx, trimmedId);
+  if (!meta) {
+    return { ok: false, error: "experiment_not_found" };
+  }
+  const rp = runsPath(ctx, trimmedId);
+  if (!existsSync(rp)) {
+    return { ok: false, error: "run_not_found" };
+  }
+  let raw: string;
+  try {
+    raw = readFileSync(rp, "utf-8");
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+  const lines = raw.split("\n").filter((l) => l.trim().length > 0);
+  let updated: ExperimentRunEntry | null = null;
+  const nextLines: string[] = [];
+  for (const line of lines) {
+    try {
+      const entry = JSON.parse(line) as ExperimentRunEntry;
+      if (entry.runId === trimmedRunId) {
+        const next: ExperimentRunEntry = { ...entry };
+        const note = notes.trim();
+        if (note) next.notes = note;
+        else delete next.notes;
+        updated = next;
+        nextLines.push(JSON.stringify(next));
+      } else {
+        nextLines.push(line);
+      }
+    } catch {
+      nextLines.push(line);
+    }
+  }
+  if (!updated) {
+    return { ok: false, error: "run_not_found" };
+  }
+  try {
+    writeFileSync(rp, nextLines.length > 0 ? `${nextLines.join("\n")}\n` : "", "utf-8");
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+  return { ok: true, run: updated };
 }
 
 // ─── helpers for run wrapper ────────────────────────────────────────────────

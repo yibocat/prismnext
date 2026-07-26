@@ -91,6 +91,7 @@ export interface ExperimentMeta {
   workspacePath: string;
   briefLinks?: ExperimentBriefLinks;
   tags?: string[];
+  description?: string;
   /** `archived` hides from human browse by default; Agent list still includes it. */
   status?: ExperimentStatus;
   /** ISO timestamp when archived; cleared on restore. */
@@ -175,6 +176,7 @@ export interface ExperimentSummary {
   lastRunAt: string | null;
   status: ExperimentStatus;
   archivedAt: string | null;
+  tags?: string[];
 }
 
 /** Input shape for `append_run` (server fills runId / timestamps / env when omitted). */
@@ -217,6 +219,20 @@ export interface ExperimentRunCompleteEvent {
   id: string;
   runId: string;
   result: ExperimentRunResult;
+}
+
+/** Renderer / preload payload for `experiment:runStarted` (Agent + UI kickoff). */
+export interface ExperimentRunStartedEvent {
+  id: string;
+  runId: string;
+  command: string;
+}
+
+/** Renderer / preload payload for `experiment:runOutput`. */
+export interface ExperimentRunOutputEvent {
+  id: string;
+  runId: string;
+  chunk: string;
 }
 
 /**

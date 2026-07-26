@@ -41,6 +41,11 @@ export interface AppSettings {
   lastActiveFileId?: string | null;
   /** Recently opened files per project root */
   recentOpenedFilesByProject?: Record<string, Array<{ id: string; name: string; lastOpened: number }>>;
+  /** Recently opened experiments per project root */
+  recentOpenedExperimentsByProject?: Record<
+    string,
+    Array<{ id: string; name: string; lastOpened: number }>
+  >;
   /** Last opened file per project root */
   lastActiveFileIdByProject?: Record<string, string | null>;
   /** Archived chat session ids per project root */
