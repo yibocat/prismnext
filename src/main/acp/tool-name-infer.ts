@@ -134,6 +134,7 @@ const PRISM_TOOL_NAMES = new Set([
   "literature-read", "literature-read-pdf", "literature-intensive-reading", "literature-export-bib",
   "literature-delete", "citation-health", "latex-root", "latex-compile",
   "experiment-log", "experiment-run", "results-snapshot", "provenance-query",
+  "interaction-list", "interaction-read", "interaction-write", "interaction-open",
 ]);
 
 export function resolvePrismToolTitle(title: string): string | null {

@@ -13,7 +13,8 @@ export type RightTabKind =
   | "terminal"
   | "settings-editor"
   | "literature"
-  | "experiments";
+  | "experiments"
+  | "interaction";
 
 /** Tabs that host an editable project file buffer (Files / TeX / Plan). */
 export function isEditableFileTabKind(kind: RightTabKind): boolean {
@@ -63,6 +64,8 @@ export interface RightTab {
   experimentsView?: "list" | "detail";
   /** Experiments mode: active detail tab pane (overview | run | results) */
   experimentsDetailTab?: "overview" | "run" | "results";
+  /** Interaction mode: persisted object id under .prismnext/artifacts/<id>/ */
+  interactionId?: string;
 }
 
 // ── Mode Definition ──

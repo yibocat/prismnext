@@ -1900,6 +1900,10 @@
       "label": "实验",
       "initialTitle": "实验"
     },
+    "interaction": {
+      "label": "交互",
+      "initialTitle": "交互"
+    },
     "closeMode": "关闭 {{label}}",
     "on": "开"
   },
@@ -2223,6 +2227,28 @@
       "markdown": "Markdown",
       "openMarkdown": "打开 Markdown",
       "convert": "将 PDF 转为 Markdown"
+    }
+  },
+  "interaction": {
+    "badge": {
+      "local": "本地",
+      "bound": "绑定"
+    },
+    "card": {
+      "loading": "正在加载交互对象…",
+      "unavailable": "找不到或无效的交互对象「{{id}}」。",
+      "invalidFence": "无效的 ```interaction 代码块。",
+      "open": "打开",
+      "openPanel": "在面板中打开"
+    },
+    "panel": {
+      "empty": "未选择交互对象。",
+      "loadError": "无法加载「{{id}}」：{{error}}",
+      "intro": "交互式科研对象（P0 壳层 — 真实渲染将在后续版本提供）。",
+      "placeholderTitle": "预览暂不可用",
+      "placeholderBody": "类型「{{kind}}」将在后续版本中在此渲染。",
+      "bindings": "绑定",
+      "resources": "资源"
     }
   },
   "experiments": {

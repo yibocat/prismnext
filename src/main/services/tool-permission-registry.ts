@@ -97,6 +97,10 @@ export const TOOL_PERMISSION_REGISTRY: Record<string, ToolPermissionEntry> = {
   "experiment-run": { permissionGroup: "shell", confirmUx: "command", rules: SHELL },
   "results-snapshot": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "provenance-query": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
+  "interaction-list": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
+  "interaction-read": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
+  "interaction-write": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
+  "interaction-open": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
 };
 
 export function getToolPermissionEntry(toolName: string): ToolPermissionEntry | undefined {

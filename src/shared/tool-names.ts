@@ -25,6 +25,10 @@ export const TOOL_NAMES = {
   experimentRun: "experiment-run",
   resultsSnapshot: "results-snapshot",
   provenanceQuery: "provenance-query",
+  interactionList: "interaction-list",
+  interactionRead: "interaction-read",
+  interactionWrite: "interaction-write",
+  interactionOpen: "interaction-open",
 } as const;
 
 export type ToolNameKey = keyof typeof TOOL_NAMES;

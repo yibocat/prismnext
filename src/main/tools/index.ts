@@ -419,6 +419,60 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "Not finding a file in provenance usually means it was manually copied or the run predates provenance.",
     ],
   },
+  {
+    name: TOOL_NAMES.interactionList,
+    label: "Interaction List",
+    description:
+      "List Interactive Research Artifacts in `.prismnext/artifacts/` (summaries: id, title, kind, compute, revision).",
+    category: "project",
+    usageHint:
+      "Discover which interactive objects exist before read/update, or when the user asks what instruments are in the project.",
+    workflowRules: [
+      "Read-only — never writes spec.json.",
+      "Do not grep the repo for interaction ids — use this tool or interaction-read.",
+    ],
+  },
+  {
+    name: TOOL_NAMES.interactionRead,
+    label: "Interaction Read",
+    description:
+      "Read one Interaction spec from `.prismnext/artifacts/<id>/spec.json` (full JSON + fenceMarkdown for Chat embed).",
+    category: "project",
+    usageHint: "Before updating an object, or to re-embed a card in chat after changes.",
+    workflowRules: [
+      "Read-only — use interaction-write to mutate.",
+      "Do not use generic read on `.prismnext/artifacts/**/spec.json` — use this tool.",
+    ],
+  },
+  {
+    name: TOOL_NAMES.interactionWrite,
+    label: "Interaction Write",
+    description:
+      "Create or update an Interaction spec (plot.* / math.*). Persists to `.prismnext/artifacts/<id>/spec.json`. " +
+      "Returns fenceMarkdown — embed it in your assistant reply after success.",
+    category: "project",
+    usageHint:
+      "When the user needs an interactive plot/surface (local sketch or bound to experiment csv), or after experiment-run when an interactive view beats a static file card.",
+    workflowRules: [
+      "Do NOT use ```artifact for interactive objects — use interaction-write then ```interaction fence in your reply.",
+      "Do NOT edit spec.json with generic write/edit — use this tool only.",
+      "bound compute: set resources[] to real project-relative paths from experiment outputs.",
+      "Allowed kinds (P0/P1): plot.line, plot.series, plot.scatter, math.surface, math.field.",
+      "After ok:true, you MUST embed fenceMarkdown in the assistant message (not only in tool output).",
+    ],
+  },
+  {
+    name: TOOL_NAMES.interactionOpen,
+    label: "Interaction Open",
+    description:
+      "Open the Interaction panel in RightArea for a persisted id (read-only UI focus).",
+    category: "project",
+    usageHint: "When the user asks to open/show the interactive instrument in the side panel.",
+    workflowRules: [
+      "Does not write disk — use interaction-write to create or update.",
+      "Still prefer embedding fenceMarkdown in chat so the user has a card entry.",
+    ],
+  },
 ];
 
 // ─── Tool file loading (used by AcpService.syncBuiltinTools) ──────

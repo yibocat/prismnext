@@ -47,6 +47,8 @@ interface RightPanelState {
   openLiteraturePaper: (paperId: string, title: string, view?: "grid" | "reader" | "notes") => string;
   /** Open / focus a detail tab for one experiment (browse home tab stays). */
   openExperimentTab: (experimentId: string, title: string) => string;
+  /** Open/focus an Interaction panel tab for a persisted object id. */
+  openInteractionTab: (interactionId: string, title: string) => string;
   updateExperimentTabTitle: (experimentId: string, title: string) => void;
   /** Remove detail tabs for a deleted experiment id. */
   closeExperimentTabs: (experimentId: string) => void;
@@ -108,7 +110,7 @@ interface RightPanelState {
   closeLiteraturePaperTabs: (paperId: string) => void;
   setActiveTab: (id: string) => void;
   setTabViewMode: (id: string, mode: string) => void;
-  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title" | "terminalSource" | "terminalCwd" | "linkedChatTabId" | "linkedToolCallId" | "settingsSlot" | "settingsSlotKey" | "literaturePaperId" | "literatureView" | "experimentId" | "experimentsView" | "experimentsDetailTab">>) => void;
+  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title" | "terminalSource" | "terminalCwd" | "linkedChatTabId" | "linkedToolCallId" | "settingsSlot" | "settingsSlotKey" | "literaturePaperId" | "literatureView" | "experimentId" | "experimentsView" | "experimentsDetailTab" | "interactionId">>) => void;
   moveTab: (fromIndex: number, toIndex: number) => void;
 }
 
@@ -186,6 +188,29 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     };
     set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
     void trackRecentOpenedExperiment(experimentId, title);
+    return id;
+  },
+
+  openInteractionTab: (interactionId, title) => {
+    const layout = useLayoutStore.getState();
+    layout.activateMode("interaction");
+    const { tabs } = get();
+    const existing = tabs.find(
+      (t) => t.kind === "interaction" && t.interactionId === interactionId,
+    );
+    if (existing) {
+      set({ activeTabId: existing.id });
+      return existing.id;
+    }
+    const id = nextTabId();
+    const tab: RightTab = {
+      id,
+      kind: "interaction",
+      title: title.slice(0, 48),
+      isInitial: false,
+      interactionId,
+    };
+    set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
     return id;
   },
 

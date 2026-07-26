@@ -10,6 +10,7 @@ import { REPLY_DEPTH_PROMPT } from "./reply-depth";
 import { PROACTIVE_SCHEDULING_PROMPT } from "./proactive-scheduling";
 import { RESEARCH_DESIGN_PROMPT } from "./research-design";
 import { EXPERIMENTS_PROMPT } from "./experiments";
+import { INTERACTION_PROMPT } from "./interaction";
 import { buildLatexWorkspacePrompt } from "./latex-workspace";
 import { buildWorkspacePrompt } from "./workspace-folders";
 
@@ -134,5 +135,15 @@ export const ALL_MODULES: PromptModule[] = [
     profileOnly: true,
     source: "app",
     prompt: EXPERIMENTS_PROMPT,
+  },
+  {
+    key: "interaction",
+    label: "Interaction (interactive objects)",
+    description:
+      "Interactive Research Artifacts — plot/math instruments in .prismnext/artifacts; interaction-* tools + ```interaction fence.",
+    enabled: true,
+    profileOnly: true,
+    source: "app",
+    prompt: INTERACTION_PROMPT,
   },
 ];

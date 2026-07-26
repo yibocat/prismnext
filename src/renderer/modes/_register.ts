@@ -8,6 +8,8 @@ import { texworkspaceMode } from "./texworkspace-mode";
 import { settingsEditorMode } from "./settings-editor-mode";
 import { literatureMode } from "./literature-mode";
 import { experimentsMode } from "./experiments-mode";
+import { interactionMode } from "./interaction-mode";
+import "@/lib/interaction/open-interaction-panel";
 
 export function registerAllModes(): void {
   modeRegistry.register(filesMode);
@@ -19,4 +21,5 @@ export function registerAllModes(): void {
   modeRegistry.register(settingsEditorMode);
   modeRegistry.register(literatureMode);
   modeRegistry.register(experimentsMode);
+  modeRegistry.register(interactionMode);
 }

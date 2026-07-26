@@ -24,7 +24,8 @@ export type RightToolbarTab =
   | "texworkspace"
   | "terminal"
   | "literature"
-  | "experiments";
+  | "experiments"
+  | "interaction";
 export type TexworkspaceViewMode = "split" | "tex" | "pdf";
 
 export type TabType = "file" | "pdf";

@@ -844,6 +844,24 @@ export interface ElectronAPI {
       }
     | { ok: false; error: string; hint?: string }
   >;
+  interactionGet: (
+    projectRoot: string,
+    id: string,
+  ) => Promise<{ spec: import("../../shared/interaction-spec").InteractionSpec | null; error?: string }>;
+  interactionList: (projectRoot: string) => Promise<{ ids: string[] }>;
+  interactionWrite: (args: {
+    projectRoot: string;
+    spec: import("../../shared/interaction-spec").InteractionSpec;
+  }) => Promise<{ ok: boolean; error?: string }>;
+  onInteractionChanged: (
+    callback: (data: {
+      projectRoot: string;
+      id: string;
+      title?: string;
+      reason: string;
+      focus?: boolean;
+    }) => void,
+  ) => () => void;
   /** Registry changed (create/run/append) or Agent requested UI focus. */
   onExperimentChanged: (
     callback: (data: {

@@ -24,6 +24,7 @@ import { registerResearchPlanHandlers } from "./research-plan";
 import { registerExperimentHandlers } from "./experiment";
 import { registerProvenanceHandlers } from "./provenance";
 import { registerMcpHandlers } from "./mcp";
+import { registerInteractionHandlers } from "./interaction";
 
 export function registerIpcHandlers(): void {
   registerFsHandlers();
@@ -52,6 +53,7 @@ export function registerIpcHandlers(): void {
   registerResearchPlanHandlers();
   registerExperimentHandlers();
   registerProvenanceHandlers();
+  registerInteractionHandlers();
 }
 
 export { disposeChat };

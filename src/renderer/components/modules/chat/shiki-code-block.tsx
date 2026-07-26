@@ -4,6 +4,7 @@ import { CheckIcon, CopyIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-reac
 import { useSettingsStore } from "@/stores/settings-store";
 import { Hint } from "@/components/ui/hint";
 import { ChatArtifactFence } from "@/lib/markdown/chat-artifact-block";
+import { ChatInteractionFence } from "@/lib/markdown/chat-interaction-block";
 
 // ── Map app syntax themes to Shiki theme names ──
 // Keys match EditorSyntaxThemeId from src/renderer/lib/editor-themes/types.ts
@@ -74,6 +75,9 @@ export const ShikiCodeBlock = memo(function ShikiCodeBlock({
   const code = String(children).replace(/\n$/, "");
   if (lang === "artifact") {
     return <ChatArtifactFence raw={code} />;
+  }
+  if (lang === "interaction") {
+    return <ChatInteractionFence raw={code} />;
   }
   return <ShikiHighlightedCode className={className} code={code} lang={lang} />;
 });

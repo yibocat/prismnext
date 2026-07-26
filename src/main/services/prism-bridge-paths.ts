@@ -47,6 +47,10 @@ export function getExperimentLogBridgeRoot(): string {
   return process.env.PRISM_EXPERIMENT_LOG_BRIDGE_ROOT || join(getPrismBridgeRoot(), "experiment-log");
 }
 
+export function getInteractionBridgeRoot(): string {
+  return process.env.PRISM_INTERACTION_BRIDGE_ROOT || join(getPrismBridgeRoot(), "interaction");
+}
+
 /** Inject into OpenCode child env so synced tools use the same paths as main. */
 export function getPrismBridgeEnv(): Record<string, string> {
   return {
@@ -58,5 +62,6 @@ export function getPrismBridgeEnv(): Record<string, string> {
     PRISM_RESEARCH_BRIEF_BRIDGE_ROOT: getResearchBriefBridgeRoot(),
     PRISM_PLAN_SUGGEST_BRIDGE_ROOT: getPlanSuggestBridgeRoot(),
     PRISM_EXPERIMENT_LOG_BRIDGE_ROOT: getExperimentLogBridgeRoot(),
+    PRISM_INTERACTION_BRIDGE_ROOT: getInteractionBridgeRoot(),
   };
 }

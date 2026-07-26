@@ -1900,6 +1900,10 @@
       "label": "實驗",
       "initialTitle": "實驗"
     },
+    "interaction": {
+      "label": "互動",
+      "initialTitle": "互動"
+    },
     "closeMode": "關閉 {{label}}",
     "on": "開"
   },
@@ -2223,6 +2227,28 @@
       "markdown": "Markdown",
       "openMarkdown": "開啟 Markdown",
       "convert": "將 PDF 轉為 Markdown"
+    }
+  },
+  "interaction": {
+    "badge": {
+      "local": "本地",
+      "bound": "綁定"
+    },
+    "card": {
+      "loading": "正在載入互動物件…",
+      "unavailable": "找不到或無效的互動物件「{{id}}」。",
+      "invalidFence": "無效的 ```interaction 程式碼區塊。",
+      "open": "開啟",
+      "openPanel": "在面板中開啟"
+    },
+    "panel": {
+      "empty": "未選擇互動物件。",
+      "loadError": "無法載入「{{id}}」：{{error}}",
+      "intro": "互動式科研物件（P0 殼層 — 真實渲染將在後續版本提供）。",
+      "placeholderTitle": "預覽暫不可用",
+      "placeholderBody": "類型「{{kind}}」將在後續版本中在此渲染。",
+      "bindings": "綁定",
+      "resources": "資源"
     }
   },
   "experiments": {

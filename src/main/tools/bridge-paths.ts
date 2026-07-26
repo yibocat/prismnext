@@ -43,3 +43,7 @@ export function planSuggestBridgeRoot(): string {
 export function experimentLogBridgeRoot(): string {
   return process.env.PRISM_EXPERIMENT_LOG_BRIDGE_ROOT || path.join(bridgeRoot(), "experiment-log");
 }
+
+export function interactionBridgeRoot(): string {
+  return process.env.PRISM_INTERACTION_BRIDGE_ROOT || path.join(bridgeRoot(), "interaction");
+}

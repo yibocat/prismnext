@@ -21,6 +21,7 @@ export const EXPERIMENTS_PROMPT = [
   `- Scaffold under \`meta.workspacePath\` with normal file tools.`,
   `- **Runs**: use \`${TOOL_NAMES.experimentRun}\` (not bare bash for experiment Python scripts). Env/venv rules are platform-enforced — if bash is blocked, follow the tool error.`,
   `- Pass real result paths in \`artifacts\`. Summarize with \`\`\`artifact fences or images as needed.`,
+  `- For **interactive** curves/surfaces (adjustable instrument, not just a file preview): \`${TOOL_NAMES.interactionWrite}\` then embed \`\`\`interaction in your reply — see Interaction module.`,
   `- Complementary: \`${TOOL_NAMES.resultsSnapshot}\` for lab files; \`${TOOL_NAMES.experimentLog}\` read for run history (\`oldestRun\` / \`latestRun\` for first/latest).`,
   `- Provenance: \`${TOOL_NAMES.provenanceQuery}\` when Methods need the real command behind an artifact.`,
   "- Do not Task-delegate experiment reads/writes/runs — run tools in this conversation.",

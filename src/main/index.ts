@@ -24,6 +24,7 @@ import { startLatexBridge, stopLatexBridge } from "./services/latex-bridge";
 import { startResearchBriefBridge, stopResearchBriefBridge } from "./services/research-brief-bridge";
 import { startPlanSuggestBridge, stopPlanSuggestBridge } from "./services/plan-suggest-bridge";
 import { startExperimentLogBridge, stopExperimentLogBridge } from "./services/experiment-log-bridge";
+import { startInteractionBridge, stopInteractionBridge } from "./services/interaction-bridge";
 import { installMainProcessNetwork } from "./lib/main-network";
 import { registerCrashHandlers } from "./lib/crash-handler";
 import { installCsp } from "./lib/csp";
@@ -187,6 +188,7 @@ function disposeGlobalsWhenNoWindows(): void {
   stopResearchBriefBridge();
   stopPlanSuggestBridge();
   stopExperimentLogBridge();
+  stopInteractionBridge();
   setTerminalBridgeWindow(null);
   void import("./ipc/log").then((m) => m.disposeLogger());
   mainWindow = null;
@@ -338,6 +340,7 @@ app.whenReady().then(async () => {
   startResearchBriefBridge();
   startPlanSuggestBridge();
   startExperimentLogBridge();
+  startInteractionBridge();
 
   try {
     const { initAppUpdater } = await import("./services/update-checker");
