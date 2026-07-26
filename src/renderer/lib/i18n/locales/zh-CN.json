@@ -1172,7 +1172,7 @@
         "resetDefault": "恢复默认",
         "functions": {
           "manuscript": "文稿",
-          "experiment": "实验",
+          "experiment": "实验工作区",
           "literature": "文献",
           "notebook": "笔记本",
           "custom": "自定义"
@@ -1180,7 +1180,7 @@
         "descPlaceholder": "说明此文件夹应存放什么内容，以便智能体正确使用。",
         "functionDesc": {
           "manuscript": "存放撰写学术论文的 LaTeX 文稿文件。主入口为 `main.tex`。此文件夹绑定到 TeX 工作区（编辑器 + PDF 预览）。",
-          "experiment": "存放实验相关文件，如数据、脚本、结果与分析。",
+          "experiment": "实验工作区根目录。每个实验会在此下建立子文件夹（代码、数据、结果）。运行记录由应用自动记账，无需单独配置「注册表」文件夹。",
           "literature": "存放学术研究与引用所需的文献与参考 PDF。",
           "notebook": "存放各类笔记，如 Markdown 或 Jupyter 笔记本。"
         }
@@ -1364,7 +1364,7 @@
       "create": "创建",
       "createFile": "创建新文件",
       "createSession": "创建新会话",
-      "createIsland": "创建实验岛",
+      "createIsland": "新建实验",
       "openInBrowser": "在浏览器打开",
       "cat": {
         "all": "全部",
@@ -2232,8 +2232,8 @@
     "overview": {
       "id": "ID",
       "created": "创建时间",
-      "runs": "运行次数",
-      "labPath": "实验室路径",
+      "runs": "运行记录",
+      "labPath": "工作目录",
       "tags": "标签",
       "environment": "环境",
       "envNotDetected": "尚未检测。刷新将探测 Python、可选的 R、git 与 venv。",
@@ -2244,9 +2244,9 @@
     },
     "browse": "浏览",
     "execution": "执行",
-    "history": "历史",
+    "history": "运行记录",
     "refresh": "刷新",
-    "openLab": "打开实验室",
+    "openLab": "打开工作目录",
     "restore": "恢复",
     "archive": "归档",
     "moreActions": "更多操作",
@@ -2266,13 +2266,13 @@
     "untyped": "未分类",
     "close": "关闭",
     "empty": {
-      "noFolderTitle": "尚未配置实验文件夹。",
-      "noFolderDesc": "请在「设置 → 工作区」中添加。该文件夹存放实验注册表（meta + runs）以及你工作的实验室目录。",
+      "noFolderTitle": "尚未配置实验工作区根目录。",
+      "noFolderDesc": "请在「设置 → 工作区」添加文件夹，并将类型设为「实验工作区」。每个实验会在此下拥有子文件夹存放代码与结果；运行记录由应用自动记账。",
       "addFolder": "在设置中添加文件夹",
       "noExperiments": "暂无实验。",
-      "noExperimentsDesc": "可在聊天中让 Agent 创建。Agent 会阅读研究简报、搭建注册表条目并关联实验室文件夹。",
-      "noArchived": "暂无已归档实验。",
-      "noArchivedDesc": "可在详情菜单中归档实验（⋯ → 归档）。",
+      "noExperimentsDesc": "可在此新建，或在聊天中让 Agent 创建（可关联研究简报）。",
+      "noArchived": "当前视图中没有已归档实验。",
+      "noArchivedDesc": "你正在查看「仅已归档」。可从详情菜单归档（⋯ → 归档），或切换回进行中的实验。",
       "loadError": "无法加载实验。",
       "corruptOne": "有 1 个实验的元数据损坏或缺失，已跳过。",
       "corruptMany": "有 {{count}} 个实验的元数据损坏或缺失，已跳过。",
@@ -2282,18 +2282,25 @@
     },
     "toolbar": {
       "back": "返回实验列表",
-      "archivedCount": "{{count}} 个已归档",
-      "noArchived": "暂无已归档实验",
+      "archivedCount": "正在查看已归档 · {{count}}",
+      "noArchived": "正在查看已归档 · 无",
       "experimentCount": "{{count}} 个实验",
       "experimentCount_plural": "{{count}} 个实验",
-      "showActive": "显示进行中的实验",
-      "showArchivedOnly": "仅显示已归档实验",
+      "showActive": "返回进行中的实验",
+      "showArchivedOnly": "仅显示已归档（隐藏进行中）",
+      "viewingArchived": "已归档视图",
       "refreshTitle": "刷新实验列表",
-      "openLabTitle": "在「文件」中打开实验的实验室文件夹",
+      "openLabTitle": "在「文件」中打开此实验的工作目录",
       "resolveFailed": "无法解析实验路径。"
     },
     "sidebar": {
-      "hint": "从网格打开实验 — 每个实验会打开独立标签页。当前标签的概览与环境信息显示在此。"
+      "hint": "从列表打开实验 — 每个实验会打开独立标签页。当前标签的概览与环境信息显示在此。",
+      "status": "状态",
+      "active": "进行中",
+      "archived": "已归档",
+      "list": "实验",
+      "archivedList": "已归档",
+      "emptyList": "暂无实验。请用工具栏的「新建实验」。"
     },
     "grid": {
       "oneRun": "1 次运行",
@@ -2302,11 +2309,13 @@
     },
     "content": {
       "loadingExperiment": "正在加载实验",
-      "loadingExperiments": "正在加载实验列表"
+      "loadingExperiments": "正在加载实验列表",
+      "pickFromSidebar": "请选择一个实验",
+      "pickFromSidebarDesc": "在左侧列表中点选。每个实验会打开独立标签页，可同时开多个。"
     },
     "detail": {
-      "deleteBody": "将移除「{{title}}」的注册元数据与运行历史。此操作无法撤销。",
-      "deleteLab": "同时删除实验室文件夹 {{path}}",
+      "deleteBody": "将移除「{{title}}」及其运行记录。此操作无法撤销。",
+      "deleteLab": "同时删除工作目录 {{path}}",
       "restoreFailed": "无法恢复实验。",
       "archiveFailed": "无法归档实验。",
       "deleteFailed": "无法删除实验。",
@@ -2315,7 +2324,17 @@
     "brief": {
       "excerpts": "研究简报摘录",
       "rq": "研究问题：",
-      "linked": "已关联简报章节"
+      "linked": "已关联简报章节",
+      "placeholder": "尚未关联设计 — 后续版本可连接研究简报。"
+    },
+    "create": {
+      "new": "新建实验",
+      "title": "新建实验",
+      "desc": "将在实验工作区根目录下创建工作目录，并开始空的运行记录。",
+      "placeholder": "例如 lr-ablation",
+      "submit": "创建",
+      "creating": "创建中…",
+      "failed": "无法创建实验。"
     },
     "runPanel": {
       "readOnly": "只读模式 — 已禁用运行。",
@@ -2326,17 +2345,17 @@
       "selectExperiment": "请选择一个实验以运行命令。",
       "runInProgress": "此实验已有运行正在进行。",
       "enterCommand": "请输入要运行的命令。",
-      "runInLab": "在实验室中运行命令",
+      "runInLab": "在工作目录中运行命令",
       "cancelRun": "取消进行中的运行",
       "noPrior": "没有可复用的历史运行。",
       "populateLast": "填入最近一次运行的命令",
-      "openTerminal": "在实验的实验室文件夹中打开终端",
+      "openTerminal": "在此实验的工作目录中打开终端",
       "typeTitle": "可选的运行分类（不确定时可省略）",
-      "labTab": "实验室：{{name}}"
+      "labTab": "目录：{{name}}"
     },
     "runConfirm": {
       "title": "确认实验运行",
-      "body": "将在实验实验室目录中执行 Shell 命令。本次运行会连同当前环境快照记录到 runs.jsonl。",
+      "body": "将在该实验的工作目录中执行 Shell 命令，并记录本次运行与当前环境快照。",
       "workingDir": "工作目录",
       "empty": "（空）",
       "deny": "拒绝",

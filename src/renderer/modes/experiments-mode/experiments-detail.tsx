@@ -1,7 +1,7 @@
 /**
  * experiments-detail — Detail view for an experiment tab.
- * Overview + Environment live in the mode sidebar; this pane focuses on
- * Execution + History.
+ * Temporarily hosts Overview + Environment (moved out of the mode sidebar);
+ * layout of this page will be redesigned later.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -42,6 +42,10 @@ import {
   type ExperimentRunEntry,
 } from "../../../shared/experiment-log";
 import { ExperimentsBriefStrip } from "./experiments-brief-strip";
+import {
+  ExperimentsEnvironmentPanel,
+  ExperimentsOverviewPanel,
+} from "./experiments-overview";
 import {
   experimentsDetailTitleClass,
   experimentsPathCompactClass,
@@ -210,7 +214,22 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
   }, [deleteExperiment, projectRoot, removeLab, selectedId, t]);
 
   const detailRunCount = useExperimentStore((s) => s.detail?.runCount);
+  const lastRunAt = useExperimentStore((s) => s.detail?.lastRunAt ?? null);
   const runCount = detailRunCount ?? runs.length;
+  const lastRun = runs.length > 0 ? runs[runs.length - 1] : null;
+  const env = useExperimentStore((s) => s.env);
+  const selectExperiment = useExperimentStore((s) => s.selectExperiment);
+  const [envReloading, setEnvReloading] = useState(false);
+
+  const handleRefreshEnv = useCallback(async () => {
+    if (!projectRoot || !selectedId) return;
+    setEnvReloading(true);
+    try {
+      await selectExperiment(projectRoot, selectedId);
+    } finally {
+      setEnvReloading(false);
+    }
+  }, [projectRoot, selectExperiment, selectedId]);
 
   return (
     <div className="@container flex h-full min-h-0 flex-col overflow-auto px-6 py-5 font-sans @md:px-8 @md:py-6">
@@ -253,6 +272,23 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
           </div>
           <ExperimentsBriefStrip briefLinks={meta.briefLinks} />
         </header>
+
+        <section className="space-y-3">
+          <ExperimentsOverviewPanel
+            meta={meta}
+            runCount={runCount}
+            lastRunAt={lastRunAt ?? lastRun?.finishedAt ?? null}
+            lastExitCode={lastRun?.exitCode ?? null}
+          />
+        </section>
+
+        <section className="space-y-3 border-t border-border pt-4">
+          <ExperimentsEnvironmentPanel
+            env={env}
+            reloading={envReloading}
+            onRefresh={() => void handleRefreshEnv()}
+          />
+        </section>
 
         <Dialog
           open={deleteOpen}
@@ -299,7 +335,7 @@ export function ExperimentsDetail({ meta }: { meta: ExperimentMeta }) {
           </DialogContent>
         </Dialog>
 
-        <section className="space-y-4">
+        <section className="space-y-4 border-t border-border pt-4">
           <div className={cn(experimentsSectionHeaderRowClass, "items-baseline")}>
             <h3 className={experimentsSectionLabelClass}>{t("experiments.execution")}</h3>
             {meta.workspacePath ? (

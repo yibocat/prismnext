@@ -1,9 +1,9 @@
 /**
- * experiments-sidebar — Detail properties (Overview + Environment) when an
- * experiment tab is active; browse hint on the home tab.
+ * experiments-sidebar — Experiment list (Files-like). Click opens/focuses a
+ * detail tab (multi-tab). New / status filters live in the toolbar.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { FlaskConicalIcon, Loader2Icon } from "lucide-react";
 import { useExperimentStore } from "@/stores/experiment-store";
@@ -12,104 +12,145 @@ import {
   SidebarContent,
   SidebarHeader,
 } from "@/components/ui/sidebar";
-import { experimentStatusOf } from "../../../shared/experiment-log";
-import { literatureDetailBadgeClass } from "@/modes/literature-mode/literature-list-chrome";
+import { cn } from "@/lib/utils";
 import {
-  ExperimentsEnvironmentPanel,
-  ExperimentsOverviewPanel,
-} from "./experiments-overview";
-import { experimentsSectionLabelClass } from "./experiments-detail-chrome";
+  experimentsCardMetaClass,
+  experimentsPathCompactClass,
+  formatExperimentRelativeTime,
+} from "./experiments-detail-chrome";
 import { useExperimentProjectRoot } from "./experiments-project-root";
+import type { ExperimentSummary } from "../../../shared/experiment-log";
+
+const ROW =
+  "flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors";
+const ROW_IDLE = "hover:bg-accent text-muted-foreground hover:text-foreground";
+const ROW_ACTIVE = "bg-sidebar-accent text-sidebar-accent-foreground";
+
+function ExperimentListRow({
+  experiment,
+  active,
+  onSelect,
+}: {
+  experiment: ExperimentSummary;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const { t } = useTranslation();
+  const runLabel =
+    experiment.runCount === 1
+      ? t("experiments.grid.oneRun")
+      : t("experiments.grid.nRuns", { count: experiment.runCount });
+
+  return (
+    <button
+      type="button"
+      className={cn(ROW, active ? ROW_ACTIVE : ROW_IDLE)}
+      onClick={onSelect}
+      title={experiment.title}
+      data-experiment-id={experiment.id}
+      aria-current={active ? "true" : undefined}
+    >
+      <span className="flex min-w-0 items-start gap-1.5">
+        <FlaskConicalIcon
+          className="mt-0.5 size-3.5 shrink-0 opacity-70"
+          aria-hidden
+        />
+        <span className="min-w-0 flex-1 truncate font-sans text-[length:var(--font-size-12)] font-medium">
+          {experiment.title}
+        </span>
+      </span>
+      <span
+        className={cn(
+          experimentsCardMetaClass,
+          "pl-5",
+          active && "text-sidebar-accent-foreground/75",
+        )}
+      >
+        {formatExperimentRelativeTime(experiment.lastRunAt)} · {runLabel}
+      </span>
+      {experiment.workspacePath ? (
+        <span
+          className={cn(
+            experimentsPathCompactClass,
+            "pl-5 opacity-70",
+            active && "text-sidebar-accent-foreground/65",
+          )}
+        >
+          {experiment.workspacePath}
+        </span>
+      ) : null}
+    </button>
+  );
+}
 
 export function ExperimentsSidebar() {
   const { t } = useTranslation();
   const projectRoot = useExperimentProjectRoot();
   const activeTabId = useRightPanelStore((s) => s.activeTabId);
   const tabs = useRightPanelStore((s) => s.tabs);
+  const openExperimentTab = useRightPanelStore((s) => s.openExperimentTab);
   const activeTab = tabs.find((tab) => tab.id === activeTabId);
-  const experimentId =
+  const activeExperimentId =
     activeTab?.kind === "experiments" ? activeTab.experimentId : undefined;
 
   const loading = useExperimentStore((s) => s.loading);
-  const detail = useExperimentStore((s) => s.detail);
-  const env = useExperimentStore((s) => s.env);
-  const selectedId = useExperimentStore((s) => s.selectedId);
+  const experiments = useExperimentStore((s) => s.experiments);
+  const showArchived = useExperimentStore((s) => s.showArchived);
+  const refreshList = useExperimentStore((s) => s.refreshList);
   const selectExperiment = useExperimentStore((s) => s.selectExperiment);
-  const runs = detail?.runs ?? [];
-  const [envReloading, setEnvReloading] = useState(false);
 
-  const showingDetail =
-    Boolean(experimentId) && detail?.meta.id === experimentId && selectedId === experimentId;
+  useEffect(() => {
+    if (!projectRoot) return;
+    void refreshList(projectRoot);
+  }, [projectRoot, refreshList, showArchived]);
 
-  const runCount = detail?.runCount ?? runs.length;
-  const lastRun = runs.length > 0 ? runs[runs.length - 1] : null;
-  const archived =
-    showingDetail && detail ? experimentStatusOf(detail.meta) === "archived" : false;
-
-  const handleRefreshEnv = useCallback(async () => {
-    if (!projectRoot || !selectedId) return;
-    setEnvReloading(true);
-    try {
-      await selectExperiment(projectRoot, selectedId);
-    } finally {
-      setEnvReloading(false);
-    }
-  }, [projectRoot, selectExperiment, selectedId]);
+  const handleSelect = useCallback(
+    (exp: ExperimentSummary) => {
+      if (!projectRoot) return;
+      openExperimentTab(exp.id, exp.title);
+      void selectExperiment(projectRoot, exp.id);
+    },
+    [openExperimentTab, projectRoot, selectExperiment],
+  );
 
   return (
     <>
       <SidebarHeader className="flex h-[var(--height-mode-selector)] shrink-0 flex-row items-center justify-between gap-2 px-3">
         <span className="truncate font-sans text-[length:var(--font-size-12)] font-medium text-muted-foreground">
-          {showingDetail ? t("experiments.details") : t("experiments.title")}
+          {showArchived
+            ? t("experiments.sidebar.archivedList")
+            : t("experiments.sidebar.list")}
         </span>
         {loading ? (
           <Loader2Icon className="size-3.5 shrink-0 animate-spin text-muted-foreground/60" />
-        ) : showingDetail && archived ? (
-          <span className={literatureDetailBadgeClass}>{t("experiments.archived")}</span>
-        ) : null}
+        ) : (
+          <span className="shrink-0 tabular-nums font-sans text-[length:var(--font-size-11)] text-muted-foreground/70">
+            {experiments.length}
+          </span>
+        )}
       </SidebarHeader>
 
       <SidebarContent className="gap-0 overflow-auto px-2 py-2">
-        {showingDetail && detail ? (
-          <div className="space-y-4">
-            <div className="flex items-start gap-2 px-1">
-              <FlaskConicalIcon
-                className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/55"
-                aria-hidden
-              />
-              <div className="min-w-0">
-                <p className="font-sans text-[length:var(--font-size-13)] font-medium leading-snug text-foreground">
-                  {detail.meta.title}
-                </p>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <h3 className={experimentsSectionLabelClass}>
-                {t("experiments.overview.label")}
-              </h3>
-              <ExperimentsOverviewPanel
-                meta={detail.meta}
-                runCount={runCount}
-                lastRunAt={detail.lastRunAt ?? lastRun?.finishedAt ?? null}
-                lastExitCode={lastRun?.exitCode ?? null}
-                compact
-              />
-            </div>
-            <div className="border-t border-border/40 pt-3">
-              <ExperimentsEnvironmentPanel
-                env={env}
-                reloading={envReloading}
-                onRefresh={() => void handleRefreshEnv()}
-                compact
-              />
-            </div>
-          </div>
+        {!projectRoot ? (
+          <p className="px-2 py-1 font-sans text-[length:var(--font-size-12)] text-muted-foreground">
+            {t("experiments.empty.openProject")}
+          </p>
+        ) : experiments.length === 0 && !loading ? (
+          <p className="px-2 py-1 font-sans text-[length:var(--font-size-12)] leading-relaxed text-muted-foreground">
+            {showArchived
+              ? t("experiments.empty.noArchived")
+              : t("experiments.sidebar.emptyList")}
+          </p>
         ) : (
-          <div className="space-y-2 px-1 py-1">
-            <p className={experimentsSectionLabelClass}>{t("experiments.browse")}</p>
-            <p className="font-sans text-[length:var(--font-size-12)] leading-relaxed text-muted-foreground/75">
-              {t("experiments.sidebar.hint")}
-            </p>
+          <div className="flex flex-col gap-0.5">
+            {experiments.map((exp) => (
+              <ExperimentListRow
+                key={exp.id}
+                experiment={exp}
+                active={activeExperimentId === exp.id}
+                onSelect={() => handleSelect(exp)}
+              />
+            ))}
           </div>
         )}
       </SidebarContent>

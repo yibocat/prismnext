@@ -1,10 +1,10 @@
 /**
  * experiments-empty — Empty-state surfaces for the Experiments RightArea
  * mode (Sprint 0.7). Two workspace-scoped cases per the product spec:
- *   1. No Experiment folder configured (button → Settings Workspace).
- *   2. Empty list (folder configured but no experiments).
+ *   1. No Experiments workspace root configured (button → Settings Workspace).
+ *   2. Empty list (root configured but no experiments).
  * Plus a load-error surface so IPC failures are not mistaken for an empty
- * registry.
+ * experiment list.
  *
  * The "no project" case is rendered inline by `ExperimentsContent` (mirrors
  * the literature-mode "Open a project first." pattern) and is not in this
@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EXPERIMENT_REGISTRY_REL } from "../../../shared/experiment-log";
+import { ExperimentsNewButton } from "./experiments-new-button";
 
 /**
  * No experiment folder configured. Offer a button that opens the Settings
@@ -68,6 +69,7 @@ export function ExperimentsEmptyListEmpty({ archivedOnly = false }: { archivedOn
             ? t("experiments.empty.noArchivedDesc")
             : t("experiments.empty.noExperimentsDesc")}
         </p>
+        {!archivedOnly ? <ExperimentsNewButton className="mt-1" /> : null}
       </div>
     </div>
   );

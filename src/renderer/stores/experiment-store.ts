@@ -100,6 +100,11 @@ export interface ExperimentState {
     opts?: { removeLab?: boolean },
   ) => Promise<boolean>;
   /**
+   * Create an experiment via IPC, refresh the list, and open its detail tab.
+   * Returns the new id on success, or null on failure (error stored on state).
+   */
+  createExperiment: (projectRoot: string, title: string) => Promise<string | null>;
+  /**
    * Select an experiment by id, then fetch its detail (meta + runs) and
    * cached env detection. Returns the detail on success, or `null` if the
    * experiment was not found / the project has no Experiment folder.
@@ -264,6 +269,32 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
       return false;
+    }
+  },
+
+  createExperiment: async (projectRoot, title) => {
+    const trimmed = (title || "").trim();
+    if (!projectRoot || !trimmed) {
+      set({ error: "missing_title" });
+      return null;
+    }
+    try {
+      const res = await window.electronAPI.experimentCreate({
+        projectRoot,
+        title: trimmed,
+      });
+      if (!res.ok) {
+        set({ error: res.hint || res.error });
+        return null;
+      }
+      // Broadcast focus:true usually opens the tab; still refresh + open as fallback.
+      await get().refreshList(projectRoot);
+      useRightPanelStore.getState().openExperimentTab(res.id, res.meta.title);
+      await get().selectExperiment(projectRoot, res.id);
+      return res.id;
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : String(err) });
+      return null;
     }
   },
 

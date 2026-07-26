@@ -1,21 +1,18 @@
 /**
- * experiments-toolbar — Mode toolbar for the Experiments RightArea mode
- * (Sprint 0.7).
+ * experiments-toolbar — Mode toolbar for the Experiments RightArea mode.
  *
- * Per the product spec, P0 toolbar = Refresh + Open lab. New experiment,
- * run / cancel, and other actions land in Tasks 5–7.
- *
- * Mirrors the literature-mode `LiteratureToolbar` shape (receives `tab`,
- * pulls the rest from stores via hooks).
+ * Home: New experiment · Archived view toggle · Refresh
+ * Detail: Back · working-dir path · Open working directory · Refresh
  */
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ArchiveIcon,
   ArrowLeftIcon,
   FolderOpenIcon,
   Loader2Icon,
+  PlusIcon,
   RefreshCwIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,8 +21,12 @@ import { Button } from "@/components/ui/button";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
-import { experimentsPathCompactClass, experimentsToolbarContextClass } from "./experiments-detail-chrome";
+import {
+  experimentsPathCompactClass,
+  experimentsToolbarContextClass,
+} from "./experiments-detail-chrome";
 import { useExperimentProjectRoot } from "./experiments-project-root";
+import { ExperimentsCreateDialog } from "./experiments-create-dialog";
 
 const toolbarBtn = cn(
   "flex items-center gap-1.5 h-6 px-2 rounded text-[length:var(--font-menu-item)]",
@@ -45,6 +46,7 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
   const experimentCount = useExperimentStore((s) => s.experiments.length);
   const workspacePath = useExperimentStore((s) => s.detail?.meta.workspacePath);
   const inDetail = Boolean(tab.experimentId ?? selectedId);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const handleRefresh = useCallback(() => {
     if (!projectRoot) return;
@@ -57,17 +59,12 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
   }, [projectRoot, setShowArchived, showArchived]);
 
   const handleOpenLab = useCallback(async () => {
-    // Prefer the tab's experimentId (Task 5 wires it on selection); fall back
-    // to the store's selectedId so the button works in Task 4 already.
     const id = selectedId ?? tab.experimentId;
     if (!projectRoot || !id) return;
     const paths = await openLabInFiles(projectRoot, id);
     if (!paths) {
       toast.error(t("experiments.toolbar.resolveFailed"));
     }
-    // Task 7 will additionally call navigateFileTreeToPath(paths.workspaceRel)
-    // from a component layer hook. The store-level action is intentionally
-    // minimal: it switches to Files mode and returns the paths.
   }, [projectRoot, selectedId, tab.experimentId, openLabInFiles, t]);
 
   const contextLabel = showArchived
@@ -108,6 +105,19 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
         </span>
       )}
       {!inDetail ? (
+        <Hint label={t("experiments.create.new")}>
+          <button
+            type="button"
+            className={cn(toolbarBtn, "shrink-0")}
+            disabled={!projectRoot || loading || showArchived}
+            onClick={() => setCreateOpen(true)}
+          >
+            <PlusIcon className="size-3.5" />
+            <span>{t("experiments.create.new")}</span>
+          </button>
+        </Hint>
+      ) : null}
+      {!inDetail ? (
         <Hint
           label={
             showArchived
@@ -120,14 +130,18 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
             className={cn(
               toolbarBtn,
               "shrink-0",
-              showArchived && "bg-accent/60 text-foreground",
+              showArchived && "bg-accent text-foreground",
             )}
             disabled={!projectRoot || loading}
             aria-pressed={showArchived}
             onClick={handleToggleArchived}
           >
             <ArchiveIcon className="size-3.5" />
-            <span>{t("experiments.archived")}</span>
+            <span>
+              {showArchived
+                ? t("experiments.toolbar.viewingArchived")
+                : t("experiments.archived")}
+            </span>
           </button>
         </Hint>
       ) : null}
@@ -159,6 +173,8 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
           <span className="ml-1">{t("experiments.openLab")}</span>
         </Button>
       </Hint>
+
+      <ExperimentsCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }

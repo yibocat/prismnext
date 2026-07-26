@@ -2,21 +2,20 @@
  * experiments-content — Content area for the Experiments RightArea mode.
  *
  * Routes:
- *   - Home tab (no experimentId) → browse grid
- *   - Detail tab (experimentId) → ExperimentsDetail for that island
+ *   - Home tab (no experimentId) → empty / pick-from-sidebar hint
+ *   - Detail tab (experimentId) → ExperimentsDetail (multi-tab)
  *
- * Each experiment opens as its own RightArea tab (like Literature papers).
+ * Experiment list lives in the mode sidebar (Files-like).
  */
 
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2Icon } from "lucide-react";
+import { FlaskConicalIcon, Loader2Icon } from "lucide-react";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { cn } from "@/lib/utils";
 import { ExperimentsDetail } from "./experiments-detail";
-import { ExperimentsGrid } from "./experiments-grid";
 import {
   ExperimentsCorruptMetaBanner,
   ExperimentsEmptyListEmpty,
@@ -30,8 +29,6 @@ function useExperimentsTabTitleSync(tab: RightTab) {
   const updateTab = useRightPanelStore((s) => s.updateTab);
   const experiments = useExperimentStore((s) => s.experiments);
   const detailTitle = useExperimentStore((s) => {
-    // Home tabs have no experimentId (`undefined`). Do not treat
-    // `detail?.meta.id === undefined` as a match when detail is null.
     if (!tab.experimentId || !s.detail || s.detail.meta.id !== tab.experimentId) {
       return null;
     }
@@ -74,6 +71,23 @@ function useExperimentsTabTitleSync(tab: RightTab) {
   ]);
 }
 
+function ExperimentsHomeHint() {
+  const { t } = useTranslation();
+  return (
+    <div className="flex h-full min-h-0 flex-1 items-center justify-center px-6 font-sans">
+      <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+        <FlaskConicalIcon className="size-8 text-muted-foreground/60" aria-hidden />
+        <p className="text-[length:var(--font-size-13)] text-foreground">
+          {t("experiments.content.pickFromSidebar")}
+        </p>
+        <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+          {t("experiments.content.pickFromSidebarDesc")}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function ExperimentsContent({
   tab,
   isActive,
@@ -100,7 +114,6 @@ export function ExperimentsContent({
     void refreshList(projectRoot);
   }, [projectRoot, refreshList, showArchived]);
 
-  // Detail tabs drive store selection when focused.
   useEffect(() => {
     if (!projectRoot || !isActive) return;
     if (!tab.experimentId) return;
@@ -122,7 +135,6 @@ export function ExperimentsContent({
 
   const shellClass = cn("flex h-full min-h-0 flex-col font-sans", !isActive && "hidden");
 
-  // Detail tab
   if (tab.experimentId) {
     if (error && !detail) {
       return (
@@ -152,7 +164,6 @@ export function ExperimentsContent({
     );
   }
 
-  // Home / browse tab
   if (error && experiments.length === 0 && !detail) {
     return (
       <ExperimentsLoadError
@@ -185,9 +196,7 @@ export function ExperimentsContent({
   return (
     <div className={shellClass}>
       <ExperimentsCorruptMetaBanner corruptIds={corruptIds} />
-      <div className="min-h-0 flex-1">
-        <ExperimentsGrid />
-      </div>
+      <ExperimentsHomeHint />
     </div>
   );
 }

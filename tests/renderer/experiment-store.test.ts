@@ -36,6 +36,7 @@ const electronAPI = {
   experimentArchive: vi.fn(),
   experimentRestore: vi.fn(),
   experimentDelete: vi.fn(),
+  experimentCreate: vi.fn(),
   onExperimentRunComplete: vi.fn((cb: RunCompleteHandler) => {
     runCompleteHandlers.push(cb);
     return () => {
@@ -962,6 +963,65 @@ describe("experiment-store", () => {
       });
       expect(useExperimentStore.getState().selectedId).toBeNull();
       expect(useExperimentStore.getState().detail).toBeNull();
+    });
+  });
+
+  describe("createExperiment", () => {
+    it("creates via IPC, refreshes, selects, and opens the tab", async () => {
+      const meta = {
+        id: "exp-20260726-new-a1b2",
+        title: "New probe",
+        createdAt: "2026-07-26T00:00:00Z",
+        workspacePath: "experiment/exp-20260726-new-a1b2",
+      };
+      electronAPI.experimentCreate.mockResolvedValueOnce({
+        ok: true,
+        id: meta.id,
+        path: meta.workspacePath,
+        meta,
+      });
+      electronAPI.experimentList.mockResolvedValueOnce({
+        ok: true,
+        experimentRoot: "experiment",
+        registryRoot: ".prismnext/experiments",
+        experiments: [
+          makeSummary({
+            id: meta.id,
+            title: meta.title,
+            workspacePath: meta.workspacePath,
+          }),
+        ],
+      });
+      electronAPI.experimentRead.mockResolvedValueOnce({
+        ok: true,
+        meta,
+        runs: [],
+        runCount: 0,
+        lastRunAt: null,
+      });
+      electronAPI.experimentDetectEnv.mockResolvedValueOnce({
+        ok: true,
+        env: { python: null, r: null, git: null, venv: null },
+        workspacePath: meta.workspacePath,
+      });
+
+      const id = await useExperimentStore
+        .getState()
+        .createExperiment(PROJECT, "  New probe  ");
+      expect(id).toBe(meta.id);
+      expect(electronAPI.experimentCreate).toHaveBeenCalledWith({
+        projectRoot: PROJECT,
+        title: "New probe",
+      });
+      expect(useExperimentStore.getState().selectedId).toBe(meta.id);
+      expect(useExperimentStore.getState().detail?.meta.id).toBe(meta.id);
+    });
+
+    it("returns null when title is empty", async () => {
+      electronAPI.experimentCreate.mockClear();
+      const id = await useExperimentStore.getState().createExperiment(PROJECT, "   ");
+      expect(id).toBeNull();
+      expect(electronAPI.experimentCreate).not.toHaveBeenCalled();
     });
   });
 });

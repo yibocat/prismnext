@@ -32,7 +32,15 @@ export function ExperimentsBriefStrip({
   className?: string;
 }) {
   const { t } = useTranslation();
-  if (!hasContent(briefLinks)) return null;
+  if (!hasContent(briefLinks)) {
+    return (
+      <div className={cn(experimentsBriefBoxClass, className)}>
+        <p className="font-sans text-[length:var(--font-size-12)] text-muted-foreground">
+          {t("experiments.brief.placeholder")}
+        </p>
+      </div>
+    );
+  }
 
   const hypothesis = briefLinks!.hypothesisExcerpt?.trim() ?? "";
   const rq = briefLinks!.researchQuestionExcerpt?.trim() ?? "";
