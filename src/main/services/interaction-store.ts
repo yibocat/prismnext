@@ -32,6 +32,10 @@ import {
   isInteractionPlotlyKind,
   resolvePlotlyFigureSource,
 } from "../../shared/interaction-plotly";
+import {
+  isInteractionInstrumentKind,
+  validateInstrumentSpec,
+} from "../../shared/interaction-instrument";
 
 const ARTIFACTS_REL = join(".prismnext", "artifacts");
 const LAST_ERROR_FILE = ".last-error.json";
@@ -348,6 +352,11 @@ export function upsertInteractionSpec(
           `resources: [{ role: "figure", path: "<filename>.png" }]`,
       };
     }
+  }
+
+  if (isInteractionInstrumentKind(parsed.kind)) {
+    const inst = validateInstrumentSpec(parsed);
+    if (!inst.ok) return { ok: false, error: inst.error };
   }
 
   if (isInteractionPlotlyKind(parsed.kind)) {

@@ -105,6 +105,7 @@ export const INTERACTION_KINDS_AGENT = [
   "math.field",
   "figure.static",
   "figure.plotly",
+  "instrument",
   "scene.ir",
   "scene.program",
 ] as const;

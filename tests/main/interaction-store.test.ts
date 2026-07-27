@@ -11,6 +11,7 @@ import {
   writeInteractionSceneSource,
 } from "../../src/main/services/interaction-store";
 import { SCENE_PROGRAM_SAMPLE } from "../../src/shared/interaction-scene-contract";
+import { INSTRUMENT_SAMPLE_MODEL } from "../../src/shared/interaction-instrument";
 
 describe("interaction-store upsert", () => {
   let root: string;
@@ -161,6 +162,45 @@ describe("interaction-store upsert", () => {
       resources: [{ role: "figure-json", path: "experiment/exp-1/results/field.json" }],
     });
     expect(bound.ok).toBe(true);
+
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("accepts a well-formed instrument, rejects bound compute and bad expressions", () => {
+    root = mkdtempSync(join(tmpdir(), "ix-instrument-"));
+    const ok = upsertInteractionSpec(root, {
+      id: "demo.instrument",
+      title: "Saddle instrument",
+      kind: "instrument",
+      compute: "local",
+      revision: 1,
+      model: INSTRUMENT_SAMPLE_MODEL as unknown as Record<string, unknown>,
+      bindings: { R: { min: 0.2, max: 3, default: 1, label: "R" } },
+    });
+    expect(ok.ok).toBe(true);
+
+    const bound = upsertInteractionSpec(root, {
+      id: "demo.instrument.bound",
+      title: "Bound instrument",
+      kind: "instrument",
+      compute: "bound",
+      revision: 1,
+      model: INSTRUMENT_SAMPLE_MODEL as unknown as Record<string, unknown>,
+    });
+    expect(bound.ok).toBe(false);
+
+    const badExpr = upsertInteractionSpec(root, {
+      id: "demo.instrument.bad",
+      title: "Bad instrument",
+      kind: "instrument",
+      compute: "local",
+      revision: 1,
+      model: {
+        runtimeVersion: 1,
+        figureTemplate: { data: [{ type: "scatter", x: [{ $expr: "eval('1')" }] }] },
+      },
+    });
+    expect(badExpr.ok).toBe(false);
 
     rmSync(root, { recursive: true, force: true });
   });
