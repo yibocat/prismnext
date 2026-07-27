@@ -101,19 +101,31 @@ export const INTERACTION_KINDS_AGENT = [
   "plot.line",
   "plot.series",
   "plot.scatter",
-  "math.surface",
-  "math.field",
   "figure.static",
   "figure.plotly",
   "instrument",
-  "scene.ir",
-  "scene.program",
 ] as const;
 
 export type InteractionKindAgent = (typeof INTERACTION_KINDS_AGENT)[number];
 
 export function isAllowedInteractionKind(kind: string): boolean {
   return (INTERACTION_KINDS_AGENT as readonly string[]).includes(kind.trim());
+}
+
+/**
+ * Retired kinds (V4-A) — no longer writable, but existing on-disk specs
+ * still resolve to a read-only "migration" view instead of failing silently.
+ * See docs-private/superpowers/plans/2026-07-27-interaction-plotly-v4a.md.
+ */
+export const INTERACTION_KINDS_DEPRECATED = [
+  "scene.ir",
+  "math.surface",
+  "math.field",
+  "scene.program",
+] as const;
+
+export function isDeprecatedInteractionKind(kind: string): boolean {
+  return (INTERACTION_KINDS_DEPRECATED as readonly string[]).includes(kind.trim());
 }
 
 export function buildInteractionFenceMarkdown(id: string, title?: string): string {

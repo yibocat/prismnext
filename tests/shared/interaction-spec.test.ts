@@ -6,6 +6,7 @@ import {
   buildInteractionFenceMarkdown,
   interactionFenceHint,
   isAllowedInteractionKind,
+  isDeprecatedInteractionKind,
 } from "../../src/shared/interaction-spec";
 import {
   resolveFigureDisplay,
@@ -14,11 +15,6 @@ import {
   injectFigureHtmlCsp,
   FIGURE_MAX_BYTES,
 } from "../../src/shared/interaction-figure";
-import {
-  resolveSceneEntry,
-  isBuiltinSceneEntry,
-  BUILTIN_SCENE_LORENZ,
-} from "../../src/shared/interaction-scene";
 
 describe("isValidInteractionId", () => {
   it("accepts safe ids and rejects traversal", () => {
@@ -95,9 +91,22 @@ describe("interaction agent helpers", () => {
   it("validates allowed kinds for agent write", () => {
     expect(isAllowedInteractionKind("plot.line")).toBe(true);
     expect(isAllowedInteractionKind("figure.static")).toBe(true);
-    expect(isAllowedInteractionKind("scene.program")).toBe(true);
-    expect(isAllowedInteractionKind("scene.ir")).toBe(true);
+    expect(isAllowedInteractionKind("figure.plotly")).toBe(true);
+    expect(isAllowedInteractionKind("instrument")).toBe(true);
+    expect(isAllowedInteractionKind("scene.program")).toBe(false);
+    expect(isAllowedInteractionKind("scene.ir")).toBe(false);
+    expect(isAllowedInteractionKind("math.surface")).toBe(false);
+    expect(isAllowedInteractionKind("math.field")).toBe(false);
     expect(isAllowedInteractionKind("custom.widget")).toBe(false);
+  });
+
+  it("flags retired kinds as deprecated (still readable, not writable)", () => {
+    expect(isDeprecatedInteractionKind("scene.ir")).toBe(true);
+    expect(isDeprecatedInteractionKind("scene.program")).toBe(true);
+    expect(isDeprecatedInteractionKind("math.surface")).toBe(true);
+    expect(isDeprecatedInteractionKind("math.field")).toBe(true);
+    expect(isDeprecatedInteractionKind("figure.plotly")).toBe(false);
+    expect(isDeprecatedInteractionKind("instrument")).toBe(false);
   });
 });
 
@@ -167,36 +176,5 @@ describe("figure resources", () => {
   it("caps figure resource size to a sane bound", () => {
     expect(FIGURE_MAX_BYTES).toBeGreaterThan(1024 * 1024);
     expect(FIGURE_MAX_BYTES).toBeLessThanOrEqual(64 * 1024 * 1024);
-  });
-});
-
-describe("scene entry", () => {
-  it("defaults to scene.js (not Lorenz) and rejects traversal", () => {
-    const base = {
-      id: "turbulence.karman",
-      title: "Karman",
-      kind: "scene.program",
-      compute: "local" as const,
-      revision: 1,
-    };
-    expect(resolveSceneEntry(base)).toBe("scene.js");
-    expect(resolveSceneEntry({ ...base, entry: "builtin:lorenz" })).toBe("builtin:lorenz");
-    expect(isBuiltinSceneEntry("builtin:lorenz")).toBe(true);
-    expect(resolveSceneEntry({ ...base, entry: "../evil.js" })).toBeNull();
-    expect(resolveSceneEntry({ ...base, entry: "scene.js" })).toBe("scene.js");
-    expect(resolveSceneEntry({ ...base, entry: "scene.ts" })).toBeNull();
-  });
-
-  it("infers script path from resources when entry omitted", () => {
-    expect(
-      resolveSceneEntry({
-        id: "x",
-        title: "X",
-        kind: "scene.program",
-        compute: "local",
-        revision: 1,
-        resources: [{ role: "script", path: "scene.js" }],
-      }),
-    ).toBe("scene.js");
   });
 });
