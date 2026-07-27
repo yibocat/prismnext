@@ -2250,6 +2250,7 @@
       "plotErrorTitle": "Could not render plot",
       "mathErrorTitle": "Could not render math view",
       "figureErrorTitle": "Could not render figure",
+      "plotlyErrorTitle": "Figure could not be rendered",
       "sceneErrorTitle": "Could not render scene",
       "mathHint": "Drag to orbit · scroll to zoom · adjust bindings above to reshape the scene.",
       "scenePaused": "Scene paused (tab inactive — GPU released)",

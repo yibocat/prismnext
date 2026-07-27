@@ -2250,6 +2250,7 @@
       "plotErrorTitle": "无法渲染图表",
       "mathErrorTitle": "无法渲染数学视图",
       "figureErrorTitle": "无法渲染图件",
+      "plotlyErrorTitle": "图表无法渲染",
       "sceneErrorTitle": "无法渲染场景",
       "mathHint": "拖动旋转 · 滚轮缩放 · 上方滑条可实时调参。",
       "scenePaused": "场景已暂停（非当前标签，已释放 GPU）",
