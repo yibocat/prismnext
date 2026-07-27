@@ -273,4 +273,76 @@ describe("interaction-bridge", () => {
     ) as Record<string, unknown>;
     expect(ok.ok).toBe(true);
   });
+
+  it("rejects invalid figure.plotly with a copyable sample and does not write spec.json", async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ix-bridge-plotly-"));
+    projectRoots.push(projectRoot);
+    const sessionId = "test-session-plotly";
+    const sessionDir = path.join(getInteractionBridgeRoot(), sessionId);
+    fs.mkdirSync(sessionDir, { recursive: true });
+
+    const requestId = "req-plotly-bad";
+    fs.writeFileSync(
+      path.join(sessionDir, `${requestId}.request.json`),
+      JSON.stringify({
+        action: "write",
+        sessionId,
+        projectRoot,
+        spec: {
+          id: "demo.bad",
+          title: "Bad",
+          kind: "figure.plotly",
+          compute: "local",
+          revision: 1,
+          model: { figure: { data: [] } },
+        },
+      }),
+      "utf-8",
+    );
+    await processInteractionBridgeOnceForTests();
+    const result = JSON.parse(
+      fs.readFileSync(path.join(sessionDir, `${requestId}.result.json`), "utf-8"),
+    ) as Record<string, unknown>;
+    expect(result.ok).toBe(false);
+    expect(result.phase).toBe("compile-preview");
+    expect(result.sample).toBeTruthy();
+    expect(
+      fs.existsSync(path.join(projectRoot, ".prismnext", "artifacts", "demo.bad", "spec.json")),
+    ).toBe(false);
+  });
+
+  it("rejects sceneSource on figure.plotly writes", async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ix-bridge-plotly-src-"));
+    projectRoots.push(projectRoot);
+    const sessionId = "test-session-plotly-src";
+    const sessionDir = path.join(getInteractionBridgeRoot(), sessionId);
+    fs.mkdirSync(sessionDir, { recursive: true });
+
+    const requestId = "req-plotly-scenesource";
+    fs.writeFileSync(
+      path.join(sessionDir, `${requestId}.request.json`),
+      JSON.stringify({
+        action: "write",
+        sessionId,
+        projectRoot,
+        spec: {
+          id: "demo.saddle",
+          title: "Saddle",
+          kind: "figure.plotly",
+          compute: "local",
+          revision: 1,
+          model: { figure: { data: [{ type: "surface", z: [[0, 1]] }] } },
+        },
+        sceneSource: "export async function mount() {}",
+      }),
+      "utf-8",
+    );
+    await processInteractionBridgeOnceForTests();
+    const result = JSON.parse(
+      fs.readFileSync(path.join(sessionDir, `${requestId}.result.json`), "utf-8"),
+    ) as Record<string, unknown>;
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toMatch(/sceneSource/);
+    expect(result.sample).toBeTruthy();
+  });
 });

@@ -32,6 +32,11 @@ import {
   buildSceneIr,
 } from "../../shared/interaction-scene-ir";
 import { initialBindingValues, parseMathBindings } from "../../shared/interaction-math";
+import {
+  isInteractionPlotlyKind,
+  PLOTLY_SAMPLE_FIGURE,
+  resolvePlotlyFigureSource,
+} from "../../shared/interaction-plotly";
 import { broadcastInteractionChanged } from "./interaction-ui-events";
 
 const log = createLogger("interaction-bridge", "agent");
@@ -130,6 +135,25 @@ function dispatch(req: InteractionBridgeRequest): Record<string, unknown> {
             error: preview.error,
             phase: "compile-preview",
             sample: SCENE_IR_SAMPLE_MODEL,
+          };
+        }
+      }
+
+      if (isInteractionPlotlyKind(parsed.kind)) {
+        if (sceneSource != null) {
+          return {
+            ok: false,
+            error: "figure.plotly does not use sceneSource. Put Plotly JSON in spec.model.figure.",
+            sample: PLOTLY_SAMPLE_FIGURE,
+          };
+        }
+        const src = resolvePlotlyFigureSource(parsed);
+        if (!src.ok) {
+          return {
+            ok: false,
+            error: src.error,
+            phase: "compile-preview",
+            sample: PLOTLY_SAMPLE_FIGURE,
           };
         }
       }
