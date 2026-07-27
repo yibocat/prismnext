@@ -10,7 +10,7 @@ import {
 } from "../../../../shared/interaction-plotly";
 import { loadPlotly } from "./load-plotly";
 
-function resolveIsDark(resolvedTheme: string | undefined): boolean {
+export function resolveIsDark(resolvedTheme: string | undefined): boolean {
   if (resolvedTheme === "dark") return true;
   if (resolvedTheme === "light") return false;
   return document.documentElement.classList.contains("dark");
@@ -22,7 +22,7 @@ function resolveProjectAbsPath(projectRoot: string, relPath: string): string {
   return `${projectRoot.replace(/\/$/, "")}/${p}`;
 }
 
-function themedLayout(
+export function themedLayout(
   base: Record<string, unknown> | undefined,
   isDark: boolean,
 ): Record<string, unknown> {
