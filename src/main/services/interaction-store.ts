@@ -29,11 +29,12 @@ import {
 
 const ARTIFACTS_REL = join(".prismnext", "artifacts");
 const LAST_ERROR_FILE = ".last-error.json";
+const THUMBNAIL_FILE = ".thumbnail.png";
 
 export type InteractionLastError = {
   at: string;
   message: string;
-  phase?: "load" | "mount" | "update";
+  phase?: "load" | "mount" | "update" | "thumbnail";
 };
 
 export function interactionArtifactsDir(projectRoot: string): string {
@@ -46,6 +47,47 @@ export function interactionSpecPath(projectRoot: string, id: string): string {
 
 export function interactionLastErrorPath(projectRoot: string, id: string): string {
   return join(interactionArtifactsDir(projectRoot), id, LAST_ERROR_FILE);
+}
+
+export function interactionThumbnailPath(projectRoot: string, id: string): string {
+  return join(interactionArtifactsDir(projectRoot), id, THUMBNAIL_FILE);
+}
+
+/** Offscreen-rendered `figure.plotly`/`instrument` screenshot (V4-B). Atomic write. */
+export function writeInteractionThumbnail(
+  projectRoot: string,
+  id: string,
+  png: Buffer,
+): { ok: boolean; error?: string } {
+  if (!isValidInteractionId(id)) return { ok: false, error: "invalid id" };
+  const dir = join(interactionArtifactsDir(projectRoot), id);
+  mkdirSync(dir, { recursive: true });
+  const abs = interactionThumbnailPath(projectRoot, id);
+  const tmp = join(dir, `.thumbnail.${process.pid}.${Date.now()}.tmp`);
+  try {
+    writeFileSync(tmp, png);
+    renameSync(tmp, abs);
+    return { ok: true };
+  } catch (e) {
+    try {
+      if (existsSync(tmp)) unlinkSync(tmp);
+    } catch {
+      /* ignore cleanup failure */
+    }
+    return { ok: false, error: e instanceof Error ? e.message : "write failed" };
+  }
+}
+
+export function deleteInteractionThumbnail(projectRoot: string, id: string): { ok: boolean } {
+  if (!isValidInteractionId(id)) return { ok: false };
+  const abs = interactionThumbnailPath(projectRoot, id);
+  if (!existsSync(abs)) return { ok: true };
+  try {
+    unlinkSync(abs);
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
 }
 
 export function readInteractionLastError(
@@ -64,7 +106,10 @@ export function readInteractionLastError(
         ? raw.at.trim()
         : new Date().toISOString();
     const phase =
-      raw.phase === "load" || raw.phase === "mount" || raw.phase === "update"
+      raw.phase === "load" ||
+      raw.phase === "mount" ||
+      raw.phase === "update" ||
+      raw.phase === "thumbnail"
         ? raw.phase
         : undefined;
     return { at, message, ...(phase ? { phase } : {}) };

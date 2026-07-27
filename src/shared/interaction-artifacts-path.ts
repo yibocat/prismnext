@@ -5,9 +5,15 @@
  */
 
 const ARTIFACTS_SEG = ".prismnext/artifacts";
+const THUMBNAIL_FILE = ".thumbnail.png";
 
 function normalizePath(filePath: string): string {
   return (filePath || "").trim().replace(/\\/g, "/");
+}
+
+/** Host-generated thumbnail (offscreen-rendered `figure.plotly`/`instrument` screenshot). */
+export function interactionThumbnailRelPath(id: string): string {
+  return `${ARTIFACTS_SEG}/${id.trim()}/${THUMBNAIL_FILE}`;
 }
 
 /** True when path is anywhere under `.prismnext/artifacts/` (any OS separators). */

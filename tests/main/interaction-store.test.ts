@@ -1,13 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   clearInteractionLastError,
+  interactionThumbnailPath,
   listInteractionSummaries,
   readInteractionLastError,
   upsertInteractionSpec,
   writeInteractionLastError,
+  writeInteractionThumbnail,
 } from "../../src/main/services/interaction-store";
 import { INSTRUMENT_SAMPLE_MODEL } from "../../src/shared/interaction-instrument";
 
@@ -227,6 +237,47 @@ describe("interaction-store upsert", () => {
     expect(readInteractionLastError(root, "err.demo")?.message).toBe("boom");
     expect(clearInteractionLastError(root, "err.demo").ok).toBe(true);
     expect(readInteractionLastError(root, "err.demo")).toBeNull();
+
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("persists and round-trips a last-error with phase thumbnail", () => {
+    root = mkdtempSync(join(tmpdir(), "ix-store-"));
+    expect(
+      writeInteractionLastError(root, "err.thumb", {
+        message: "capture failed",
+        phase: "thumbnail",
+      }).ok,
+    ).toBe(true);
+    const err = readInteractionLastError(root, "err.thumb");
+    expect(err?.message).toBe("capture failed");
+    expect(err?.phase).toBe("thumbnail");
+
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("writes a thumbnail PNG atomically and reads it back byte-for-byte", () => {
+    root = mkdtempSync(join(tmpdir(), "ix-store-"));
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+    const result = writeInteractionThumbnail(root, "demo.thumb", png);
+    expect(result.ok).toBe(true);
+
+    const abs = interactionThumbnailPath(root, "demo.thumb");
+    expect(existsSync(abs)).toBe(true);
+    expect(readFileSync(abs)).toEqual(png);
+
+    // No leftover tmp file.
+    const dir = join(root, ".prismnext", "artifacts", "demo.thumb");
+    const leftovers = readdirSync(dir).filter((f) => f.includes(".tmp"));
+    expect(leftovers).toHaveLength(0);
+
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("rejects writing a thumbnail for an invalid id", () => {
+    root = mkdtempSync(join(tmpdir(), "ix-store-"));
+    const result = writeInteractionThumbnail(root, "../evil", Buffer.from("x"));
+    expect(result.ok).toBe(false);
 
     rmSync(root, { recursive: true, force: true });
   });
