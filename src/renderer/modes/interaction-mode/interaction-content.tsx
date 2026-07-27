@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
@@ -7,16 +7,7 @@ import {
   kindDisplayLabel,
   type InteractionSpec,
 } from "../../../shared/interaction-spec";
-import { isInteractionPlotKind } from "../../../shared/interaction-plot";
-import { isInteractionMathKind } from "../../../shared/interaction-math";
-import { isInteractionFigureKind } from "../../../shared/interaction-figure";
-import { isInteractionSceneKind } from "../../../shared/interaction-scene";
-import { isInteractionSceneIrKind } from "../../../shared/interaction-scene-ir";
-import { InteractionPlotView } from "@/lib/interaction/plot/interaction-plot-view";
-import { InteractionMathView } from "@/lib/interaction/math/interaction-math-view";
-import { InteractionFigureView } from "@/lib/interaction/figure/interaction-figure-view";
-import { InteractionSceneView } from "@/lib/interaction/scene/interaction-scene-view";
-import { InteractionIrView } from "@/lib/interaction/scene/interaction-ir-view";
+import { resolveInteractionRenderer } from "@/lib/interaction/renderer-registry";
 import { cn } from "@/lib/utils";
 
 function Badge({
@@ -50,13 +41,10 @@ function PanelBody({
   const { t } = useTranslation();
   const bindingKeys = Object.keys(spec.bindings ?? {});
   const resources = spec.resources ?? [];
-  const showPlot = isInteractionPlotKind(spec.kind);
-  const showMath = isInteractionMathKind(spec.kind);
-  const showFigure = isInteractionFigureKind(spec.kind);
-  const showIr = isInteractionSceneIrKind(spec.kind);
-  const showScene = isInteractionSceneKind(spec.kind) && !showIr;
-  const fillViewport = showPlot || showMath || showFigure || showScene || showIr;
-  const hideMetaBindings = showMath || showScene || showIr;
+  const renderer = resolveInteractionRenderer(spec.kind);
+  const fillViewport = renderer?.fillViewport ?? false;
+  const hideMetaBindings = renderer?.hideBindings ?? false;
+  const hideResources = renderer?.hideResources ?? false;
 
   return (
     <div
@@ -99,29 +87,11 @@ function PanelBody({
           fillViewport ? "flex flex-1 flex-col pb-3 pt-3" : "space-y-6 py-5",
         )}
       >
-        {showPlot ? (
+        {renderer ? (
           <div className="min-h-0 flex-1">
-            <InteractionPlotView spec={spec} projectRoot={projectRoot} />
-          </div>
-        ) : showMath ? (
-          <div className="min-h-0 flex-1">
-            <InteractionMathView spec={spec} isActive={isActive} />
-          </div>
-        ) : showFigure ? (
-          <div className="min-h-0 flex-1">
-            <InteractionFigureView spec={spec} projectRoot={projectRoot} />
-          </div>
-        ) : showIr ? (
-          <div className="min-h-0 flex-1">
-            <InteractionIrView spec={spec} projectRoot={projectRoot} isActive={isActive} />
-          </div>
-        ) : showScene ? (
-          <div className="min-h-0 flex-1">
-            <InteractionSceneView
-              spec={spec}
-              projectRoot={projectRoot}
-              isActive={isActive}
-            />
+            <Suspense fallback={<div className="min-h-[280px]" />}>
+              <renderer.Component spec={spec} projectRoot={projectRoot} isActive={isActive} />
+            </Suspense>
           </div>
         ) : (
           <section className="rounded-md border border-border bg-muted px-4 py-6 text-center">
@@ -147,7 +117,7 @@ function PanelBody({
           </section>
         ) : null}
 
-        {resources.length > 0 && !showFigure ? (
+        {resources.length > 0 && !hideResources ? (
           <section className="shrink-0 space-y-2">
             <h3 className="text-[length:var(--font-size-11)] font-medium text-muted-foreground">
               {t("interaction.panel.resources")}
