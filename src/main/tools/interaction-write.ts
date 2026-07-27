@@ -76,6 +76,11 @@ export default tool({
     "For scientific 2D/3D prefer kind figure.plotly: spec.model.figure = Plotly JSON { data, layout } (inline), " +
     "or resources: [{ role: \"figure-json\", path: \"figure.json\" }] for large/Python-generated figures. " +
     "Python: fig.write_json('.prismnext/artifacts/<id>/figure.json') — do NOT export PNG when an interactive figure is possible. " +
+    "matplotlib -> plotly quick map: ax.plot/plt.plot -> {type:'scatter',mode:'lines'}; " +
+    "ax.scatter -> {type:'scatter',mode:'markers'}; ax.bar -> {type:'bar'}; " +
+    "ax.plot_surface -> {type:'surface'}; ax.contour/contourf -> {type:'contour'}; " +
+    "ax.imshow/pcolormesh -> {type:'heatmap'}; ax.quiver (2D) -> scatter+annotations, or a 3D field -> {type:'cone'}/{type:'streamtube'}. " +
+    "Keep colorbars via trace.colorbar, not a separate axis. " +
     "Step-through demos: include figure.frames plus layout.sliders / layout.updatemenus — each slider step advances one iteration and Play animates. " +
     "Sample figure:\n" +
     JSON.stringify(PLOTLY_SAMPLE_FIGURE, null, 2) +
