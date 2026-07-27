@@ -15,6 +15,7 @@ import { isInteractionFigureKind } from "../../../shared/interaction-figure";
 import { isInteractionPlotlyKind } from "../../../shared/interaction-plotly";
 import { isInteractionInstrumentKind } from "../../../shared/interaction-instrument";
 import { isInteractionScriptKind } from "../../../shared/interaction-script";
+import { isInteractionDiagramKind } from "../../../shared/interaction-diagram";
 
 export type InteractionRendererProps = {
   spec: InteractionSpec;
@@ -88,6 +89,19 @@ export const INTERACTION_RENDERERS: InteractionRenderer[] = [
       import("./script/interaction-script-view").then((m) => ({
         default: ((props: InteractionRendererProps) => (
           <m.InteractionScriptView spec={props.spec} projectRoot={props.projectRoot} />
+        )) as ComponentType<InteractionRendererProps>,
+      })),
+    ),
+  },
+  {
+    key: "diagram",
+    matches: isInteractionDiagramKind,
+    fillViewport: true,
+    hideResources: true,
+    Component: lazy(() =>
+      import("./diagram/interaction-diagram-view").then((m) => ({
+        default: ((props: InteractionRendererProps) => (
+          <m.InteractionDiagramView spec={props.spec} projectRoot={props.projectRoot} />
         )) as ComponentType<InteractionRendererProps>,
       })),
     ),

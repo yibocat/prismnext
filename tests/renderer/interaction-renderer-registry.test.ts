@@ -34,6 +34,10 @@ describe("interaction renderer registry", () => {
     expect(resolveInteractionRenderer("figure.script")?.key).toBe("script");
   });
 
+  it("routes diagram.mermaid to the diagram renderer", () => {
+    expect(resolveInteractionRenderer("diagram.mermaid")?.key).toBe("diagram");
+  });
+
   it("routes retired legacy kinds to the deprecated view", () => {
     expect(resolveInteractionRenderer("scene.ir")?.key).toBe("deprecated");
     expect(resolveInteractionRenderer("scene.program")?.key).toBe("deprecated");
