@@ -8,6 +8,12 @@ import { interactionBridgeRoot } from "./bridge-paths";
 import { PLOTLY_SAMPLE_FIGURE } from "../../shared/interaction-plotly";
 import { INSTRUMENT_SAMPLE_MODEL } from "../../shared/interaction-instrument";
 import { SCRIPT_SAMPLE_JS, SCRIPT_SAMPLE_SPEC } from "../../shared/interaction-script";
+import {
+  DIAGRAM_MAX_FILE_BYTES,
+  DIAGRAM_MAX_INLINE_BYTES,
+  DIAGRAM_SAMPLE_DOT_SPEC,
+  DIAGRAM_SAMPLE_MERMAID_SPEC,
+} from "../../shared/interaction-diagram";
 
 const BRIDGE_ROOT = interactionBridgeRoot();
 const TIMEOUT_MS = 30_000;
@@ -73,7 +79,7 @@ async function bridgeCall(
 export default tool({
   description:
     "Create or update an Interactive Research Artifact at `.prismnext/artifacts/<id>/spec.json`. " +
-    "Kinds: plot.*, figure.plotly (scientific 2D/3D, default), instrument (live recompute / true step iteration), figure.static, figure.script (sandboxed JS, last resort). " +
+    "Kinds: plot.*, figure.plotly (scientific 2D/3D, default), instrument (live recompute / true step iteration), figure.static, figure.script (sandboxed JS, last resort), diagram.mermaid (structural/flow diagrams). " +
     "scene.ir / math.surface / math.field / scene.program are RETIRED — writes are rejected; existing on-disk artifacts of those kinds still open read-only with a migration hint. Use figure.plotly or instrument instead. " +
     "For scientific 2D/3D prefer kind figure.plotly: spec.model.figure = Plotly JSON { data, layout } (inline), " +
     "or resources: [{ role: \"figure-json\", path: \"figure.json\" }] for large/Python-generated figures. " +
@@ -110,7 +116,16 @@ export default tool({
     JSON.stringify(SCRIPT_SAMPLE_SPEC, null, 2) +
     "\n" +
     SCRIPT_SAMPLE_JS +
-    "After success, embed fenceMarkdown in your assistant reply.",
+    "\ndiagram.mermaid is for structural/flow diagrams (flowcharts, DAGs, proof trees, call graphs) — a plain-text contract, not JSON and not a code sandbox: do NOT put executable code or HTML expecting to be executed inside spec.model.source. " +
+    'spec.model.engine selects the dialect: "mermaid" (default — richer diagram types: flowchart, sequence, class, state, etc.) or "dot" (Graphviz layout — good for large auto-laid-out graphs). ' +
+    'Inline: spec.model.source = "<Mermaid or DOT text>" (<= ' + DIAGRAM_MAX_INLINE_BYTES + ' bytes). ' +
+    'File (e.g. program-generated): resources: [{ role: "diagram-source", path: "<file>.mmd|.dot" }] (<= ' + DIAGRAM_MAX_FILE_BYTES + ' bytes); for bound compute point at an experiment-run output path, same convention as figure.static/figure.plotly file mode. ' +
+    "No bindings/live updates — this is a static render (step-through network demos are a future kind, not this one). " +
+    "Sample mermaid spec:\n" +
+    JSON.stringify(DIAGRAM_SAMPLE_MERMAID_SPEC, null, 2) +
+    "\nSample dot spec:\n" +
+    JSON.stringify(DIAGRAM_SAMPLE_DOT_SPEC, null, 2) +
+    "\nAfter success, embed fenceMarkdown in your assistant reply.",
   args: {
     spec: tool.schema
       .string()

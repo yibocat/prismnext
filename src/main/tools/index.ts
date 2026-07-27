@@ -448,7 +448,7 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     name: TOOL_NAMES.interactionWrite,
     label: "Interaction Write",
     description:
-      "Create or update an Interaction spec (figure.plotly / instrument / figure.static / figure.script / plot.*). Persists to `.prismnext/artifacts/<id>/spec.json`. " +
+      "Create or update an Interaction spec (figure.plotly / instrument / figure.static / figure.script / diagram.mermaid / plot.*). Persists to `.prismnext/artifacts/<id>/spec.json`. " +
       "Scientific 2D/3D → figure.plotly (Plotly JSON). sceneSource is rejected. " +
       "Returns fenceMarkdown — embed it in your assistant reply after success.",
     category: "project",
@@ -458,10 +458,11 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "Do NOT use ```artifact for interactive objects — use interaction-write then ```interaction fence in your reply.",
       "Do NOT edit spec.json or root scene.js with generic write/edit — those paths under `.prismnext/artifacts/<id>/` are denied; use this tool. Nested sidecar resources (e.g. figure.json, PNG/HTML) are allowed via write/edit.",
       "bound compute: set resources[] to real project-relative paths from experiment outputs.",
-      "Allowed kinds: figure.plotly, instrument, figure.static, figure.script, plot.line, plot.series, plot.scatter. scene.ir/math.surface/math.field/scene.program are retired — writes rejected, old artifacts read-only.",
+      "Allowed kinds: figure.plotly, instrument, figure.static, figure.script, diagram.mermaid, plot.line, plot.series, plot.scatter. scene.ir/math.surface/math.field/scene.program are retired — writes rejected, old artifacts read-only.",
       "Scientific 2D/3D (surfaces, vector fields, heatmaps, step-through demos) → figure.plotly with spec.model.figure.",
       "Parametric surface/field needing LIVE recompute on binding change, or TRUE step-by-step iteration → instrument.",
       "Plotly/instrument can't express it (molecule, custom geometry) → figure.script (sandboxed JS, last resort, no live bindings).",
+      "Structural/flow diagram (flowchart, DAG, proof tree, call graph) → diagram.mermaid with model.source text (model.engine: mermaid|dot).",
       "After ok:true, you MUST embed fenceMarkdown in the assistant message (not only in tool output).",
     ],
   },

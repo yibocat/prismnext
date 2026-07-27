@@ -18,6 +18,7 @@ export const INTERACTION_PROMPT = [
   "- **instrument** — like figure.plotly but with *live* recompute on binding change, or true step-by-step iteration (Newton/EM/BFS-style).",
   "- **figure.static** — figure.plotly vocabulary too narrow (LaTeX axes, multi-panel figures) → generate via Python; or an existing PNG/SVG/HTML.",
   "- **figure.script** — last resort when figure.plotly/instrument truly can't express it (molecule structures, custom geometry). Agent writes a real JS module executed in a locked-down sandbox; no live binding updates. Prefer figure.plotly/instrument for anything they can express.",
+  '- **diagram.mermaid** — structural/flow diagrams (flowcharts, DAGs, proof trees, call graphs). model.engine: "mermaid" (default) or "dot" (Graphviz). Plain text contract, no live bindings.',
   `- **bound vs local** — after ${TOOL_NAMES.experimentRun} already produced a chart/table, bind to its real output instead of regenerating it.`,
   "- **scene.ir / math.surface / math.field / scene.program are retired** — read-only now (old artifacts show a migration card). Do not write these kinds; use figure.plotly/instrument.",
   "",

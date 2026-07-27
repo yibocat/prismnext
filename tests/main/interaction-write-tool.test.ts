@@ -40,4 +40,17 @@ describe("interaction-write tool description", () => {
     expect(SOURCE).toMatch(/256KB/);
     expect(SOURCE).toMatch(/8MB/);
   });
+
+  it("carries the diagram.mermaid contract (dual engine, text-only, byte caps, samples)", () => {
+    expect(SOURCE).toMatch(/diagram\.mermaid/);
+    expect(SOURCE).toMatch(/model\.engine/);
+    expect(SOURCE).toMatch(/model\.source/);
+    expect(SOURCE).toMatch(/"mermaid"/);
+    expect(SOURCE).toMatch(/"dot"/);
+    expect(SOURCE).toMatch(/role:\s*\\?"diagram-source\\?"/);
+    expect(SOURCE).toMatch(/not a code sandbox/i);
+    expect(SOURCE).toMatch(/No bindings\/live updates/i);
+    expect(SOURCE).toMatch(/DIAGRAM_SAMPLE_MERMAID_SPEC|graph TD/);
+    expect(SOURCE).toMatch(/DIAGRAM_SAMPLE_DOT_SPEC|digraph/);
+  });
 });
