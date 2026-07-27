@@ -6,6 +6,10 @@ import { useDocumentStore } from "@/stores/document-store";
 export function openInteractionPanel(interactionId: string, title?: string): void {
   const layout = useLayoutStore.getState();
   layout.activateMode("interaction");
+  // Same as Literature / Files: open the tab and ensure RightArea is visible.
+  if (!layout.editorMaximized && !layout.rightAreaExpanded) {
+    layout.requestRightAreaExpand();
+  }
   useRightPanelStore.getState().openInteractionTab(interactionId, title ?? interactionId);
 }
 

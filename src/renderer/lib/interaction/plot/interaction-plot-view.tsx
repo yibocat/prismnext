@@ -63,7 +63,10 @@ export function InteractionPlotView({
       if (cancelled || !node) return;
 
       const width = Math.max(320, node.clientWidth || 640);
-      const height = Math.min(420, Math.max(280, Math.round(width * 0.52)));
+      const height = Math.max(
+        280,
+        node.clientHeight || Math.min(420, Math.round(width * 0.52)),
+      );
       const isScatter = spec.kind === "plot.scatter";
 
       const mark = isScatter
@@ -114,7 +117,7 @@ export function InteractionPlotView({
   return (
     <div
       ref={containerRef}
-      className="w-full min-h-[280px] overflow-x-auto rounded-md border border-border bg-card px-2 py-3"
+      className="h-full min-h-[280px] w-full overflow-x-auto rounded-md border border-border bg-card px-2 py-3"
       aria-label={spec.title}
     />
   );

@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "next-themes";
 import type { InteractionSpec } from "../../../../shared/interaction-spec";
 import {
   buildMathScene,
   initialBindingValues,
   parseMathBindings,
 } from "../../../../shared/interaction-math";
+import {
+  createThreeMathHost,
+  type MathScenePayload,
+  type ThreeMathHost,
+} from "./math-three-host";
+import { useThemeStore } from "@/stores/theme-store";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 
@@ -37,7 +44,7 @@ function BindingSliders({
   if (keys.length === 0) return null;
 
   return (
-    <section className="space-y-4 rounded-md border border-border bg-card px-4 py-4">
+    <section className="shrink-0 space-y-3 rounded-md border border-border bg-card px-4 py-3">
       {keys.map((key) => {
         const b = bindings[key]!;
         const value = values[key] ?? b.default;
@@ -64,13 +71,39 @@ function BindingSliders({
   );
 }
 
+function toScenePayload(
+  scene: Extract<ReturnType<typeof buildMathScene>, { ok: true }>,
+): MathScenePayload {
+  if (scene.kind === "math.surface") {
+    return { kind: "math.surface", mesh: scene.mesh };
+  }
+  return { kind: "math.field", arrows: scene.arrows };
+}
+
+/** Match Settings → Appearance theme mode (next-themes). */
+function resolveIsDark(resolvedTheme: string | undefined): boolean {
+  if (resolvedTheme === "dark") return true;
+  if (resolvedTheme === "light") return false;
+  return document.documentElement.classList.contains("dark");
+}
+
 export function InteractionMathView({ spec }: { spec: InteractionSpec }) {
   const { t } = useTranslation();
+  const { resolvedTheme } = useTheme();
+  const themeConfig = useThemeStore((s) => s.config);
+  const isDark = resolveIsDark(resolvedTheme);
+  const isDarkRef = useRef(isDark);
+  isDarkRef.current = isDark;
+
   const containerRef = useRef<HTMLDivElement>(null);
+  const hostRef = useRef<ThreeMathHost | null>(null);
+  const mountGenRef = useRef(0);
   const bindingDefs = useMemo(() => parseMathBindings(spec.bindings), [spec.bindings]);
   const [bindingValues, setBindingValues] = useState(() =>
     initialBindingValues(bindingDefs),
   );
+  const [mountError, setMountError] = useState<string | null>(null);
+  const [hostReady, setHostReady] = useState(0);
 
   useEffect(() => {
     setBindingValues(initialBindingValues(bindingDefs));
@@ -81,138 +114,80 @@ export function InteractionMathView({ spec }: { spec: InteractionSpec }) {
     [spec, bindingValues],
   );
 
+  const scenePayload = useMemo(
+    () => (scene.ok ? toScenePayload(scene) : null),
+    [scene],
+  );
+  const scenePayloadRef = useRef(scenePayload);
+  scenePayloadRef.current = scenePayload;
+
   useEffect(() => {
     if (!scene.ok || !containerRef.current) return;
 
-    let disposed = false;
-    let frameId = 0;
-    let renderer: import("three").WebGLRenderer | null = null;
-
+    const mountGen = ++mountGenRef.current;
     const node = containerRef.current;
-
-    let resizeCleanup: (() => void) | undefined;
+    setMountError(null);
+    setHostReady(0);
+    hostRef.current = null;
 
     void (async () => {
-      const THREE = await import("three");
-      const { OrbitControls } = await import(
-        "three/examples/jsm/controls/OrbitControls.js"
-      );
-      if (disposed || !node) return;
-
-      const width = Math.max(320, node.clientWidth || 640);
-      const height = Math.min(440, Math.max(300, Math.round(width * 0.58)));
-
-      const scene3 = new THREE.Scene();
-      scene3.background = null;
-
-      const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-      camera.position.set(3.5, 2.8, 3.5);
-
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      renderer.setSize(width, height);
-      node.replaceChildren(renderer.domElement);
-
-      const controls = new OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true;
-      controls.target.set(0, 0, 0);
-
-      scene3.add(new THREE.AmbientLight(0xffffff, 0.65));
-      const dir = new THREE.DirectionalLight(0xffffff, 0.85);
-      dir.position.set(4, 6, 3);
-      scene3.add(dir);
-
-      const content = new THREE.Group();
-      scene3.add(content);
-
-      if (scene.kind === "math.surface") {
-        const geom = new THREE.BufferGeometry();
-        geom.setAttribute("position", new THREE.BufferAttribute(scene.mesh.positions, 3));
-        geom.setAttribute("color", new THREE.BufferAttribute(scene.mesh.colors, 3));
-        geom.setIndex(new THREE.BufferAttribute(scene.mesh.indices, 1));
-        geom.computeVertexNormals();
-        const mat = new THREE.MeshStandardMaterial({
-          vertexColors: true,
-          roughness: 0.55,
-          metalness: 0.05,
-          side: THREE.DoubleSide,
-        });
-        content.add(new THREE.Mesh(geom, mat));
-        const box = new THREE.Box3().setFromObject(content);
-        const center = box.getCenter(new THREE.Vector3());
-        content.position.sub(center);
-        controls.target.copy(new THREE.Vector3(0, 0, 0));
-      } else {
-        const origin = new THREE.Group();
-        for (const arrow of scene.arrows) {
-          const dirVec = new THREE.Vector3(...arrow.direction);
-          const len = dirVec.length();
-          if (len < 1e-8) continue;
-          const helper = new THREE.ArrowHelper(
-            dirVec.normalize(),
-            new THREE.Vector3(...arrow.origin),
-            len,
-            0x5b8def,
-            0.08,
-            0.05,
-          );
-          origin.add(helper);
+      try {
+        const host = await createThreeMathHost(node, isDarkRef.current);
+        if (mountGen !== mountGenRef.current || !node.isConnected) {
+          host.dispose();
+          return;
         }
-        content.add(origin);
-        camera.position.set(0, 4.5, 4.5);
-        controls.target.set(0, 0, 0);
+        hostRef.current = host;
+        const payload = scenePayloadRef.current;
+        if (payload) host.setScene(payload);
+        // Re-sync in case Appearance theme settled during async import.
+        host.syncTheme(isDarkRef.current);
+        setHostReady((n) => n + 1);
+      } catch (err) {
+        if (mountGen !== mountGenRef.current) return;
+        setMountError(err instanceof Error ? err.message : "Three.js failed to load");
       }
-
-      scene3.add(new THREE.GridHelper(6, 12, 0x666666, 0x333333));
-
-      const renderLoop = () => {
-        if (disposed) return;
-        controls.update();
-        renderer!.render(scene3, camera);
-        frameId = requestAnimationFrame(renderLoop);
-      };
-      renderLoop();
-
-      const onResize = () => {
-        if (!node || !renderer) return;
-        const w = Math.max(320, node.clientWidth || width);
-        const h = Math.min(440, Math.max(300, Math.round(w * 0.58)));
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
-        renderer.setSize(w, h);
-      };
-      const ro = new ResizeObserver(onResize);
-      ro.observe(node);
-      resizeCleanup = () => ro.disconnect();
     })();
 
     return () => {
-      disposed = true;
-      cancelAnimationFrame(frameId);
-      resizeCleanup?.();
-      if (renderer) {
-        renderer.dispose();
-        renderer.domElement.remove();
-      }
+      mountGenRef.current += 1;
+      hostRef.current?.dispose();
+      hostRef.current = null;
     };
-  }, [scene]);
+  }, [spec.id, spec.revision, scene.ok]);
+
+  useEffect(() => {
+    if (!scenePayload || hostReady === 0 || !hostRef.current) return;
+    hostRef.current.setScene(scenePayload);
+  }, [scenePayload, hostReady]);
+
+  useEffect(() => {
+    if (hostReady === 0 || !hostRef.current) return;
+    // Theme mode (Appearance) + theme pack both change --card; re-sample after CSS settles.
+    hostRef.current.syncTheme(isDark);
+  }, [isDark, hostReady, themeConfig]);
 
   if (!scene.ok) {
     return <MathError message={scene.error} />;
   }
 
+  if (mountError) {
+    return <MathError message={mountError} />;
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       <BindingSliders spec={spec} values={bindingValues} onChange={setBindingValues} />
       <div
         ref={containerRef}
         className={cn(
-          "w-full min-h-[300px] overflow-hidden rounded-md border border-border bg-card",
+          "relative min-h-[240px] w-full flex-1 overflow-hidden rounded-md border border-border bg-card",
+          "[&_canvas]:block [&_canvas]:h-full [&_canvas]:w-full",
         )}
         aria-label={spec.title}
         role="img"
       />
-      <p className="text-[length:var(--font-size-11)] text-muted-foreground">
+      <p className="shrink-0 text-[length:var(--font-size-11)] text-muted-foreground">
         {t("interaction.panel.mathHint")}
       </p>
     </div>

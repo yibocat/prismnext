@@ -48,6 +48,7 @@ import {
 } from "@/lib/workspace/layout-constants";
 import { isProgrammaticCenterResize, isWindowLayoutResizing, runDuringWindowLayoutResize } from "@/lib/workspace/layout-resize-guard";
 import {
+  fitSplitRightWidthPx,
   measureMainAreaWidthPx,
   openRightArea,
   reconcileRightAreaOnMainAreaResize,
@@ -159,17 +160,18 @@ export function App() {
 
   // Sync the react-resizable-panels layout to the editorMaximized boolean.
   // When store flips editorMaximized false, expand center + restore the right
-  // area to its persisted split width. Mirrors how openRightArea does it.
+  // area to a width that still leaves MAIN_AREA_MIN for Chat (same as openRightArea).
   const rightAreaUnmaxNonce = useLayoutStore((s) => s.rightAreaUnmaxNonce);
   useLayoutEffect(() => {
     if (rightAreaUnmaxNonce === 0) return;
     const r = rightAreaRef.current;
     if (!r) return;
-    const w = useLayoutStore.getState().rightAreaWidth;
-    const wClamped = Math.min(Math.max(w, RIGHT_AREA_MIN), RIGHT_AREA_MAX);
+    const preferred = useLayoutStore.getState().rightAreaWidth || RIGHT_AREA_DEFAULT;
+    const main = measureMainAreaWidthPx(leftSidebarRef.current);
+    const w = fitSplitRightWidthPx(main, preferred);
     runWithProgrammaticCenterResize(() => {
       if (r.isCollapsed()) r.expand();
-      r.resize(wClamped);
+      r.resize(w);
       centerRef.current?.expand();
     });
   }, [rightAreaUnmaxNonce]);

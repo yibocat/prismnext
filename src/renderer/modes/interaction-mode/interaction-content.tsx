@@ -44,10 +44,16 @@ function PanelBody({
   const resources = spec.resources ?? [];
   const showPlot = isInteractionPlotKind(spec.kind);
   const showMath = isInteractionMathKind(spec.kind);
+  const fillViewport = showPlot || showMath;
 
   return (
-    <div className="space-y-6 px-6 py-5 font-sans @md:px-8">
-      <header className="space-y-2">
+    <div
+      className={cn(
+        "flex min-h-0 flex-col font-sans",
+        fillViewport ? "h-full" : "space-y-6",
+      )}
+    >
+      <header className="shrink-0 space-y-2 px-6 pt-5 @md:px-8">
         <h2 className="text-[length:var(--font-size-15)] font-medium text-foreground">
           {spec.title}
         </h2>
@@ -70,59 +76,66 @@ function PanelBody({
             r{spec.revision}
           </span>
         </div>
-        <p className={SETTINGS_ROW_DESC}>
-          {showPlot
-            ? t("interaction.panel.introPlot")
-            : showMath
-              ? t("interaction.panel.introMath")
-              : t("interaction.panel.intro")}
-        </p>
+        {!fillViewport ? (
+          <p className={SETTINGS_ROW_DESC}>{t("interaction.panel.intro")}</p>
+        ) : null}
       </header>
 
-      {showPlot ? (
-        <InteractionPlotView spec={spec} projectRoot={projectRoot} />
-      ) : showMath ? (
-        <InteractionMathView spec={spec} />
-      ) : (
-        <section className="rounded-md border border-border bg-muted px-4 py-6 text-center">
-          <p className="text-[length:var(--font-size-13)] text-foreground">
-            {t("interaction.panel.placeholderTitle")}
-          </p>
-          <p className="mt-1 text-[length:var(--font-size-12)] text-muted-foreground">
-            {t("interaction.panel.placeholderBody", { kind: spec.kind })}
-          </p>
-        </section>
-      )}
+      <div
+        className={cn(
+          "min-h-0 px-6 @md:px-8",
+          fillViewport ? "flex flex-1 flex-col pb-3 pt-3" : "space-y-6 py-5",
+        )}
+      >
+        {showPlot ? (
+          <div className="min-h-0 flex-1">
+            <InteractionPlotView spec={spec} projectRoot={projectRoot} />
+          </div>
+        ) : showMath ? (
+          <div className="min-h-0 flex-1">
+            <InteractionMathView spec={spec} />
+          </div>
+        ) : (
+          <section className="rounded-md border border-border bg-muted px-4 py-6 text-center">
+            <p className="text-[length:var(--font-size-13)] text-foreground">
+              {t("interaction.panel.placeholderTitle")}
+            </p>
+            <p className="mt-1 text-[length:var(--font-size-12)] text-muted-foreground">
+              {t("interaction.panel.placeholderBody", { kind: spec.kind })}
+            </p>
+          </section>
+        )}
 
-      {bindingKeys.length > 0 && !showMath ? (
-        <section className="space-y-2">
-          <h3 className="text-[length:var(--font-size-11)] font-medium text-muted-foreground">
-            {t("interaction.panel.bindings")}
-          </h3>
-          <ul className="space-y-1 font-mono text-[length:var(--font-size-11)] text-muted-foreground">
-            {bindingKeys.map((k) => (
-              <li key={k}>{k}</li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+        {bindingKeys.length > 0 && !showMath ? (
+          <section className="shrink-0 space-y-2">
+            <h3 className="text-[length:var(--font-size-11)] font-medium text-muted-foreground">
+              {t("interaction.panel.bindings")}
+            </h3>
+            <ul className="space-y-1 font-mono text-[length:var(--font-size-11)] text-muted-foreground">
+              {bindingKeys.map((k) => (
+                <li key={k}>{k}</li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
-      {resources.length > 0 ? (
-        <section className="space-y-2">
-          <h3 className="text-[length:var(--font-size-11)] font-medium text-muted-foreground">
-            {t("interaction.panel.resources")}
-          </h3>
-          <ul className="space-y-1 font-mono text-[length:var(--font-size-11)] text-muted-foreground">
-            {resources.map((r, i) => (
-              <li key={`${r.path ?? r.runId ?? i}`}>
-                {r.path ?? r.artifactPath ?? "—"}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+        {resources.length > 0 ? (
+          <section className="shrink-0 space-y-2">
+            <h3 className="text-[length:var(--font-size-11)] font-medium text-muted-foreground">
+              {t("interaction.panel.resources")}
+            </h3>
+            <ul className="space-y-1 font-mono text-[length:var(--font-size-11)] text-muted-foreground">
+              {resources.map((r, i) => (
+                <li key={`${r.path ?? r.runId ?? i}`}>
+                  {r.path ?? r.artifactPath ?? "—"}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+      </div>
 
-      <section className="space-y-1 border-t border-border pt-4">
+      <section className="shrink-0 space-y-1 border-t border-border px-6 py-3 @md:px-8">
         <p className="font-mono text-[length:var(--font-size-10)] text-muted-foreground">
           .prismnext/artifacts/{spec.id}/spec.json
         </p>
@@ -185,7 +198,7 @@ export function InteractionContent({
   }
 
   return (
-    <div className="h-full min-h-0 overflow-auto">
+    <div className="h-full min-h-0 overflow-hidden">
       <PanelBody spec={spec} projectRoot={projectRoot!} />
     </div>
   );

@@ -17,11 +17,13 @@ export function PaneContent({ activeTab, isActive }: PaneContentProps) {
 
   return (
     <Suspense fallback={
-      <div className="flex-1 flex items-center justify-center">
-        <div className="w-32 h-4 rounded bg-muted animate-pulse" />
+      <div className="flex h-full flex-1 items-center justify-center">
+        <div className="h-4 w-32 animate-pulse rounded bg-muted" />
       </div>
     }>
-      <Content tab={activeTab} isActive={isActive} />
+      <div className="flex h-full min-h-0 flex-1 flex-col">
+        <Content tab={activeTab} isActive={isActive} />
+      </div>
     </Suspense>
   );
 }

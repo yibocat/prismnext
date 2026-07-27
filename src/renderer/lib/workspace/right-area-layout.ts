@@ -32,6 +32,9 @@ export type RightAreaLayoutCtx = RightAreaPanelRefs & {
 
 export type RightAreaVisualState = "closed" | "split" | "maximize";
 
+/** Minimum main-area width that can host center + right at their mins. */
+export const SPLIT_MAIN_MIN_PX = MAIN_AREA_MIN + RIGHT_AREA_MIN + SPLIT_MARGIN_PX;
+
 export function deriveRightAreaVisualState(
   expanded: boolean,
   maximized: boolean,
@@ -58,12 +61,22 @@ export function measureMainAreaWidthPx(
   return Math.max(window.innerWidth - leftSidebarPx(leftSidebarRef), 0);
 }
 
+/**
+ * Fit a preferred RightArea width into the current main-area so center keeps
+ * MAIN_AREA_MIN (+ SPLIT_MARGIN). Without this, opening split with a large
+ * persisted `rightAreaWidth` (e.g. 500) on a medium main (~720) crushes center
+ * to ~0 → looks maximized and trips editorMaximized via onResize.
+ */
+export function fitSplitRightWidthPx(mainPx: number, preferredPx: number): number {
+  const maxRight = Math.max(RIGHT_AREA_MIN, mainPx - MAIN_AREA_MIN - SPLIT_MARGIN_PX);
+  return Math.min(clampRightWidth(preferredPx), maxRight);
+}
+
 /** Split mode needs center ≥ MAIN_AREA_MIN and right ≥ RIGHT_AREA_MIN (+ margin). */
 export function computeCanSplitRightArea(
   leftSidebarRef?: PanelImperativeHandle | null,
 ): boolean {
-  const main = measureMainAreaWidthPx(leftSidebarRef);
-  return main >= MAIN_AREA_MIN + RIGHT_AREA_MIN + SPLIT_MARGIN_PX;
+  return measureMainAreaWidthPx(leftSidebarRef) >= SPLIT_MAIN_MIN_PX;
 }
 
 function saveSplitRightWidth(rightAreaRef: PanelImperativeHandle | null | undefined): void {
@@ -91,7 +104,8 @@ function applySplitPanels(
   refs: RightAreaPanelRefs,
   widthPx: number = useLayoutStore.getState().rightAreaWidth || RIGHT_AREA_DEFAULT,
 ): void {
-  const w = clampRightWidth(widthPx);
+  const main = measureMainAreaWidthPx(refs.leftSidebarRef);
+  const w = fitSplitRightWidthPx(main, widthPx);
   runWithProgrammaticCenterResize(() => {
     if (refs.rightAreaRef?.isCollapsed()) {
       refs.rightAreaRef.expand();
