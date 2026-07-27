@@ -345,4 +345,92 @@ describe("interaction-bridge", () => {
     expect(String(result.error)).toMatch(/sceneSource/);
     expect(result.sample).toBeTruthy();
   });
+
+  it("rejects invalid instrument with a copyable sample and does not write spec.json", async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ix-bridge-instrument-"));
+    projectRoots.push(projectRoot);
+    const sessionId = "test-session-instrument";
+    const sessionDir = path.join(getInteractionBridgeRoot(), sessionId);
+    fs.mkdirSync(sessionDir, { recursive: true });
+
+    const requestId = "req-instrument-bad";
+    fs.writeFileSync(
+      path.join(sessionDir, `${requestId}.request.json`),
+      JSON.stringify({
+        action: "write",
+        sessionId,
+        projectRoot,
+        spec: {
+          id: "demo.bad",
+          title: "Bad",
+          kind: "instrument",
+          compute: "local",
+          revision: 1,
+          model: {
+            runtimeVersion: 1,
+            figureTemplate: { data: [{ type: "scatter", x: [{ $expr: "eval('1')" }] }] },
+          },
+        },
+      }),
+      "utf-8",
+    );
+    await processInteractionBridgeOnceForTests();
+    const result = JSON.parse(
+      fs.readFileSync(path.join(sessionDir, `${requestId}.result.json`), "utf-8"),
+    ) as Record<string, unknown>;
+    expect(result.ok).toBe(false);
+    expect(result.phase).toBe("compile-preview");
+    expect(result.sample).toBeTruthy();
+    expect(
+      fs.existsSync(path.join(projectRoot, ".prismnext", "artifacts", "demo.bad", "spec.json")),
+    ).toBe(false);
+  });
+
+  it("rejects sceneSource on instrument writes", async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ix-bridge-instrument-src-"));
+    projectRoots.push(projectRoot);
+    const sessionId = "test-session-instrument-src";
+    const sessionDir = path.join(getInteractionBridgeRoot(), sessionId);
+    fs.mkdirSync(sessionDir, { recursive: true });
+
+    const requestId = "req-instrument-scenesource";
+    fs.writeFileSync(
+      path.join(sessionDir, `${requestId}.request.json`),
+      JSON.stringify({
+        action: "write",
+        sessionId,
+        projectRoot,
+        spec: {
+          id: "demo.saddle-instrument",
+          title: "Saddle instrument",
+          kind: "instrument",
+          compute: "local",
+          revision: 1,
+          model: {
+            runtimeVersion: 1,
+            domain: { uMin: -2, uMax: 2, vMin: -2, vMax: 2, resolution: 48 },
+            figureTemplate: {
+              data: [
+                {
+                  type: "surface",
+                  x: { $grid: "u" },
+                  y: { $grid: "v" },
+                  z: { $exprGrid: "sin(u) * cos(v)" },
+                },
+              ],
+            },
+          },
+        },
+        sceneSource: "export async function mount() {}",
+      }),
+      "utf-8",
+    );
+    await processInteractionBridgeOnceForTests();
+    const result = JSON.parse(
+      fs.readFileSync(path.join(sessionDir, `${requestId}.result.json`), "utf-8"),
+    ) as Record<string, unknown>;
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toMatch(/sceneSource/);
+    expect(result.sample).toBeTruthy();
+  });
 });
