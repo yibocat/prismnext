@@ -31,6 +31,10 @@ describe("interaction renderer registry", () => {
     expect(resolveInteractionRenderer("math.field")?.key).toBe("math");
   });
 
+  it("routes instrument to the instrument renderer", () => {
+    expect(resolveInteractionRenderer("instrument")?.key).toBe("instrument");
+  });
+
   it("prefers scene.ir over the legacy scene.program renderer", () => {
     expect(resolveInteractionRenderer("scene.ir")?.key).toBe("scene-ir");
     expect(resolveInteractionRenderer("scene.program")?.key).toBe("scene-program");

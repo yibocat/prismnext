@@ -11,6 +11,7 @@ import { isInteractionMathKind } from "../../../shared/interaction-math";
 import { isInteractionFigureKind } from "../../../shared/interaction-figure";
 import { isInteractionPlotlyKind } from "../../../shared/interaction-plotly";
 import { isInteractionSceneIrKind } from "../../../shared/interaction-scene-ir";
+import { isInteractionInstrumentKind } from "../../../shared/interaction-instrument";
 
 export type InteractionRendererProps = {
   spec: InteractionSpec;
@@ -70,6 +71,19 @@ export const INTERACTION_RENDERERS: InteractionRenderer[] = [
       import("./math/interaction-math-view").then((m) => ({
         default: ((props: InteractionRendererProps) => (
           <m.InteractionMathView spec={props.spec} isActive={props.isActive} />
+        )) as ComponentType<InteractionRendererProps>,
+      })),
+    ),
+  },
+  {
+    key: "instrument",
+    matches: isInteractionInstrumentKind,
+    fillViewport: true,
+    hideBindings: true,
+    Component: lazy(() =>
+      import("./instrument/interaction-instrument-view").then((m) => ({
+        default: ((props: InteractionRendererProps) => (
+          <m.InteractionInstrumentView spec={props.spec} isActive={props.isActive} />
         )) as ComponentType<InteractionRendererProps>,
       })),
     ),
