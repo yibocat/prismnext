@@ -29,6 +29,7 @@ import {
   validateInstrumentSpec,
 } from "../../shared/interaction-instrument";
 import { broadcastInteractionChanged } from "./interaction-ui-events";
+import { scheduleInteractionThumbnail } from "./interaction-thumbnail";
 
 const log = createLogger("interaction-bridge", "agent");
 
@@ -165,6 +166,12 @@ function dispatch(req: InteractionBridgeRequest): Record<string, unknown> {
         reason: "write",
         focus: true,
       });
+      // Fire-and-forget (V4-B) — background offscreen render + thumbnail,
+      // never blocks the Agent's write response. scheduleInteractionThumbnail
+      // swallows its own errors into .last-error.json (phase: "thumbnail").
+      if (isInteractionPlotlyKind(result.spec.kind) || isInteractionInstrumentKind(result.spec.kind)) {
+        void scheduleInteractionThumbnail(projectRoot, result.spec);
+      }
       return body;
     }
     case "open": {

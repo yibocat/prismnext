@@ -12,6 +12,13 @@ vi.mock("electron", () => ({
   },
 }));
 
+const { scheduleInteractionThumbnailMock } = vi.hoisted(() => ({
+  scheduleInteractionThumbnailMock: vi.fn(),
+}));
+vi.mock("../../src/main/services/interaction-thumbnail", () => ({
+  scheduleInteractionThumbnail: scheduleInteractionThumbnailMock,
+}));
+
 import { processInteractionBridgeOnceForTests } from "../../src/main/services/interaction-bridge";
 import { getInteractionBridgeRoot } from "../../src/main/services/prism-bridge-paths";
 
@@ -21,6 +28,7 @@ const projectRoots: string[] = [];
 beforeEach(() => {
   process.env.PRISM_INTERACTION_BRIDGE_ROOT = bridgeRoot;
   fs.mkdirSync(bridgeRoot, { recursive: true });
+  scheduleInteractionThumbnailMock.mockClear();
 });
 
 afterEach(() => {
@@ -66,6 +74,67 @@ describe("interaction-bridge", () => {
     expect(result.fenceMarkdown).toContain("```interaction");
     expect(result.fenceMarkdown).toContain("id: demo.plot");
     expect(result.relativePath).toBe(".prismnext/artifacts/demo.plot/spec.json");
+  });
+
+  it("schedules a thumbnail capture after a successful figure.plotly/instrument write, not for plot.*/figure.static", async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ix-bridge-thumb-"));
+    projectRoots.push(projectRoot);
+    const sessionId = "test-session-thumb";
+    const sessionDir = path.join(getInteractionBridgeRoot(), sessionId);
+    fs.mkdirSync(sessionDir, { recursive: true });
+
+    async function write(requestId: string, spec: Record<string, unknown>) {
+      fs.writeFileSync(
+        path.join(sessionDir, `${requestId}.request.json`),
+        JSON.stringify({ action: "write", sessionId, projectRoot, spec }),
+        "utf-8",
+      );
+      await processInteractionBridgeOnceForTests();
+      return JSON.parse(
+        fs.readFileSync(path.join(sessionDir, `${requestId}.result.json`), "utf-8"),
+      ) as Record<string, unknown>;
+    }
+
+    const plotly = await write("req-thumb-plotly", {
+      id: "demo.thumb.plotly",
+      title: "Plotly",
+      kind: "figure.plotly",
+      compute: "local",
+      revision: 1,
+      model: { figure: { data: [{ type: "scatter", x: [1], y: [1] }] } },
+    });
+    expect(plotly.ok).toBe(true);
+    expect(scheduleInteractionThumbnailMock).toHaveBeenCalledTimes(1);
+    expect(scheduleInteractionThumbnailMock.mock.calls[0]![0]).toBe(projectRoot);
+    expect((scheduleInteractionThumbnailMock.mock.calls[0]![1] as { id: string }).id).toBe(
+      "demo.thumb.plotly",
+    );
+
+    scheduleInteractionThumbnailMock.mockClear();
+    const instrument = await write("req-thumb-instrument", {
+      id: "demo.thumb.instrument",
+      title: "Instrument",
+      kind: "instrument",
+      compute: "local",
+      revision: 1,
+      model: {
+        runtimeVersion: 1,
+        figureTemplate: { data: [{ type: "scatter", x: [1], y: [{ $expr: "1" }] }] },
+      },
+    });
+    expect(instrument.ok).toBe(true);
+    expect(scheduleInteractionThumbnailMock).toHaveBeenCalledTimes(1);
+
+    scheduleInteractionThumbnailMock.mockClear();
+    const plot = await write("req-thumb-plot", {
+      id: "demo.thumb.plot",
+      title: "Plot",
+      kind: "plot.line",
+      compute: "local",
+      revision: 1,
+    });
+    expect(plot.ok).toBe(true);
+    expect(scheduleInteractionThumbnailMock).not.toHaveBeenCalled();
   });
 
   it("rejects retired legacy kinds (scene.ir, scene.program, math.surface, math.field) with a migration hint and does not write spec.json", async () => {
