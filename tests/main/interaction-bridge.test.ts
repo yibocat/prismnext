@@ -400,4 +400,109 @@ describe("interaction-bridge", () => {
     expect(String(result.error)).toMatch(/sceneSource/);
     expect(result.sample).toBeTruthy();
   });
+
+  it("rejects figure.script with a missing script resource, with a copyable sample", async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ix-bridge-script-"));
+    projectRoots.push(projectRoot);
+    const sessionId = "test-session-script-bad";
+    const sessionDir = path.join(getInteractionBridgeRoot(), sessionId);
+    fs.mkdirSync(sessionDir, { recursive: true });
+
+    const requestId = "req-script-bad";
+    fs.writeFileSync(
+      path.join(sessionDir, `${requestId}.request.json`),
+      JSON.stringify({
+        action: "write",
+        sessionId,
+        projectRoot,
+        spec: {
+          id: "demo.script.bad",
+          title: "Bad script",
+          kind: "figure.script",
+          compute: "local",
+          revision: 1,
+        },
+      }),
+      "utf-8",
+    );
+    await processInteractionBridgeOnceForTests();
+    const result = JSON.parse(
+      fs.readFileSync(path.join(sessionDir, `${requestId}.result.json`), "utf-8"),
+    ) as Record<string, unknown>;
+    expect(result.ok).toBe(false);
+    expect(result.phase).toBe("compile-preview");
+    expect(result.sample).toBeTruthy();
+    expect(
+      fs.existsSync(
+        path.join(projectRoot, ".prismnext", "artifacts", "demo.script.bad", "spec.json"),
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects sceneSource on figure.script writes, accepts a valid one", async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ix-bridge-script-src-"));
+    projectRoots.push(projectRoot);
+    const artifactDir = path.join(projectRoot, ".prismnext", "artifacts", "demo.script.good");
+    fs.mkdirSync(artifactDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(artifactDir, "script.js"),
+      "export function render(ctx) { return ctx.Plotly.newPlot(ctx.el, [], {}); }",
+      "utf-8",
+    );
+    const sessionId = "test-session-script-src";
+    const sessionDir = path.join(getInteractionBridgeRoot(), sessionId);
+    fs.mkdirSync(sessionDir, { recursive: true });
+
+    const rejectedId = "req-script-scenesource";
+    fs.writeFileSync(
+      path.join(sessionDir, `${rejectedId}.request.json`),
+      JSON.stringify({
+        action: "write",
+        sessionId,
+        projectRoot,
+        spec: {
+          id: "demo.script.good",
+          title: "Good script",
+          kind: "figure.script",
+          compute: "local",
+          revision: 1,
+          resources: [{ role: "script", path: "script.js" }],
+        },
+        sceneSource: "export async function mount() {}",
+      }),
+      "utf-8",
+    );
+    await processInteractionBridgeOnceForTests();
+    const rejected = JSON.parse(
+      fs.readFileSync(path.join(sessionDir, `${rejectedId}.result.json`), "utf-8"),
+    ) as Record<string, unknown>;
+    expect(rejected.ok).toBe(false);
+    expect(String(rejected.error)).toMatch(/sceneSource/);
+
+    const okId = "req-script-ok";
+    fs.writeFileSync(
+      path.join(sessionDir, `${okId}.request.json`),
+      JSON.stringify({
+        action: "write",
+        sessionId,
+        projectRoot,
+        spec: {
+          id: "demo.script.good",
+          title: "Good script",
+          kind: "figure.script",
+          compute: "local",
+          revision: 1,
+          resources: [{ role: "script", path: "script.js" }],
+        },
+      }),
+      "utf-8",
+    );
+    await processInteractionBridgeOnceForTests();
+    const ok = JSON.parse(
+      fs.readFileSync(path.join(sessionDir, `${okId}.result.json`), "utf-8"),
+    ) as Record<string, unknown>;
+    expect(ok.ok).toBe(true);
+    // Thumbnail scheduling for figure.script lands in V5 Task 5 (offscreen
+    // capture support) — not wired here yet, so no scheduling assertion.
+  });
 });

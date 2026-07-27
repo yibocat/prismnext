@@ -104,6 +104,7 @@ export const INTERACTION_KINDS_AGENT = [
   "figure.static",
   "figure.plotly",
   "instrument",
+  "figure.script",
 ] as const;
 
 export type InteractionKindAgent = (typeof INTERACTION_KINDS_AGENT)[number];

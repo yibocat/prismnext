@@ -20,6 +20,7 @@ import {
   writeInteractionThumbnail,
 } from "../../src/main/services/interaction-store";
 import { INSTRUMENT_SAMPLE_MODEL } from "../../src/shared/interaction-instrument";
+import { SCRIPT_SAMPLE_JS } from "../../src/shared/interaction-script";
 
 describe("interaction-store upsert", () => {
   let root: string;
@@ -209,6 +210,53 @@ describe("interaction-store upsert", () => {
       },
     });
     expect(badExpr.ok).toBe(false);
+
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("accepts a figure.script with a valid script resource, rejects a missing/banned one", () => {
+    root = mkdtempSync(join(tmpdir(), "ix-script-"));
+    const dir = join(root, ".prismnext", "artifacts", "demo.script");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "script.js"), SCRIPT_SAMPLE_JS, "utf8");
+
+    const ok = upsertInteractionSpec(root, {
+      id: "demo.script",
+      title: "Custom scatter",
+      kind: "figure.script",
+      compute: "local",
+      revision: 1,
+      resources: [{ role: "script", path: "script.js" }],
+    });
+    expect(ok.ok).toBe(true);
+
+    const missing = upsertInteractionSpec(root, {
+      id: "demo.script.missing",
+      title: "Missing script",
+      kind: "figure.script",
+      compute: "local",
+      revision: 1,
+      resources: [{ role: "script", path: "nope.js" }],
+    });
+    expect(missing.ok).toBe(false);
+
+    const bannedDir = join(root, ".prismnext", "artifacts", "demo.script.banned");
+    mkdirSync(bannedDir, { recursive: true });
+    writeFileSync(
+      join(bannedDir, "script.js"),
+      "export function render(ctx) { fetch('https://x.com'); }",
+      "utf8",
+    );
+    const banned = upsertInteractionSpec(root, {
+      id: "demo.script.banned",
+      title: "Banned script",
+      kind: "figure.script",
+      compute: "local",
+      revision: 1,
+      resources: [{ role: "script", path: "script.js" }],
+    });
+    expect(banned.ok).toBe(false);
+    expect(String(banned.error)).toMatch(/fetch/i);
 
     rmSync(root, { recursive: true, force: true });
   });

@@ -26,6 +26,7 @@ import {
   isInteractionInstrumentKind,
   validateInstrumentSpec,
 } from "../../shared/interaction-instrument";
+import { isInteractionScriptKind, validateScriptSpec } from "../../shared/interaction-script";
 
 const ARTIFACTS_REL = join(".prismnext", "artifacts");
 const LAST_ERROR_FILE = ".last-error.json";
@@ -307,6 +308,11 @@ export function upsertInteractionSpec(
   if (isInteractionInstrumentKind(parsed.kind)) {
     const inst = validateInstrumentSpec(parsed);
     if (!inst.ok) return { ok: false, error: inst.error };
+  }
+
+  if (isInteractionScriptKind(parsed.kind)) {
+    const script = validateScriptSpec(projectRoot, parsed);
+    if (!script.ok) return { ok: false, error: script.error };
   }
 
   if (isInteractionPlotlyKind(parsed.kind)) {

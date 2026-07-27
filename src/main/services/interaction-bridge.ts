@@ -28,6 +28,11 @@ import {
   INSTRUMENT_SAMPLE_MODEL,
   validateInstrumentSpec,
 } from "../../shared/interaction-instrument";
+import {
+  isInteractionScriptKind,
+  SCRIPT_SAMPLE_SPEC,
+  validateScriptSpec,
+} from "../../shared/interaction-script";
 import { broadcastInteractionChanged } from "./interaction-ui-events";
 import { scheduleInteractionThumbnail } from "./interaction-thumbnail";
 
@@ -147,6 +152,25 @@ function dispatch(req: InteractionBridgeRequest): Record<string, unknown> {
             error: src.error,
             phase: "compile-preview",
             sample: PLOTLY_SAMPLE_FIGURE,
+          };
+        }
+      }
+
+      if (isInteractionScriptKind(parsed.kind)) {
+        if (sceneSource != null) {
+          return {
+            ok: false,
+            error: 'figure.script does not use sceneSource. Write the script to resources: [{ role: "script", path: "script.js" }] instead.',
+            sample: SCRIPT_SAMPLE_SPEC,
+          };
+        }
+        const script = validateScriptSpec(projectRoot, parsed);
+        if (!script.ok) {
+          return {
+            ok: false,
+            error: script.error,
+            phase: "compile-preview",
+            sample: SCRIPT_SAMPLE_SPEC,
           };
         }
       }
