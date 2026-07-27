@@ -30,6 +30,10 @@ describe("interaction renderer registry", () => {
     expect(resolveInteractionRenderer("instrument")?.key).toBe("instrument");
   });
 
+  it("routes figure.script to the script renderer", () => {
+    expect(resolveInteractionRenderer("figure.script")?.key).toBe("script");
+  });
+
   it("routes retired legacy kinds to the deprecated view", () => {
     expect(resolveInteractionRenderer("scene.ir")?.key).toBe("deprecated");
     expect(resolveInteractionRenderer("scene.program")?.key).toBe("deprecated");

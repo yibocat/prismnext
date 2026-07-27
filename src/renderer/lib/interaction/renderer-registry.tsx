@@ -14,6 +14,7 @@ import { isInteractionPlotKind } from "../../../shared/interaction-plot";
 import { isInteractionFigureKind } from "../../../shared/interaction-figure";
 import { isInteractionPlotlyKind } from "../../../shared/interaction-plotly";
 import { isInteractionInstrumentKind } from "../../../shared/interaction-instrument";
+import { isInteractionScriptKind } from "../../../shared/interaction-script";
 
 export type InteractionRendererProps = {
   spec: InteractionSpec;
@@ -73,6 +74,20 @@ export const INTERACTION_RENDERERS: InteractionRenderer[] = [
       import("./instrument/interaction-instrument-view").then((m) => ({
         default: ((props: InteractionRendererProps) => (
           <m.InteractionInstrumentView spec={props.spec} isActive={props.isActive} />
+        )) as ComponentType<InteractionRendererProps>,
+      })),
+    ),
+  },
+  {
+    key: "script",
+    matches: isInteractionScriptKind,
+    fillViewport: true,
+    hideBindings: true,
+    hideResources: true,
+    Component: lazy(() =>
+      import("./script/interaction-script-view").then((m) => ({
+        default: ((props: InteractionRendererProps) => (
+          <m.InteractionScriptView spec={props.spec} projectRoot={props.projectRoot} />
         )) as ComponentType<InteractionRendererProps>,
       })),
     ),

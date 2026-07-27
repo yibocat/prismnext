@@ -2251,6 +2251,7 @@
       "figureErrorTitle": "無法渲染圖件",
       "plotlyErrorTitle": "圖表無法渲染",
       "instrumentErrorTitle": "儀器視圖無法渲染",
+      "scriptErrorTitle": "腳本無法渲染",
       "stepPrev": "上一步",
       "stepNext": "下一步",
       "stepReset": "重置到第 0 步",
