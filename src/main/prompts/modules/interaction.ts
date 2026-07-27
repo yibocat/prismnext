@@ -15,6 +15,7 @@ export const INTERACTION_PROMPT = [
   "",
   "- **plot.*** — csv curves/scatter.",
   "- **figure.plotly** — default for scientific 2D/3D (surfaces, vector fields, heatmaps, step-through demos). Agent writes Plotly JSON; host renders.",
+  "- **instrument** — like figure.plotly but with *live* recompute on binding change, or true step-by-step iteration (Newton/EM/BFS-style). Prefer over scene.ir/math.* for new parametric work.",
   "- **math.surface / math.field** — simple explicit `z=f(u,v)` or planar vector fields only.",
   "- **scene.ir** — legacy declarative 3D (parametric surface + metric probe). Prefer figure.plotly for new work.",
   "- **figure.static** — scene.ir/figure.plotly vocabulary too narrow (LaTeX axes, multi-panel figures) → generate via Python; or an existing PNG/SVG/HTML.",
@@ -29,6 +30,6 @@ export const INTERACTION_PROMPT = [
   "",
   "### Do not",
   "",
-  "- Pass sceneSource for scene.program, scene.ir, or figure.plotly (rejected) — they use spec.model instead.",
+  "- Pass sceneSource for scene.program, scene.ir, figure.plotly, or instrument (rejected) — they use spec.model instead.",
   "- Build DOM/HUD in scripts — host owns UI.",
 ].join("\n");

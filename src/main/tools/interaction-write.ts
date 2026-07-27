@@ -7,6 +7,7 @@ import * as path from "path";
 import { interactionBridgeRoot } from "./bridge-paths";
 import { SCENE_IR_SAMPLE_MODEL } from "../../shared/interaction-scene-ir";
 import { PLOTLY_SAMPLE_FIGURE } from "../../shared/interaction-plotly";
+import { INSTRUMENT_SAMPLE_MODEL } from "../../shared/interaction-instrument";
 
 const BRIDGE_ROOT = interactionBridgeRoot();
 const TIMEOUT_MS = 30_000;
@@ -72,7 +73,7 @@ async function bridgeCall(
 export default tool({
   description:
     "Create or update an Interactive Research Artifact at `.prismnext/artifacts/<id>/spec.json`. " +
-    "Kinds: plot.*, figure.plotly (scientific 2D/3D, default), math.surface/field, figure.static, scene.ir (legacy declarative 3D), scene.program (legacy builtin only). " +
+    "Kinds: plot.*, figure.plotly (scientific 2D/3D, default), instrument (live recompute / true step iteration), math.surface/field, figure.static, scene.ir (legacy declarative 3D), scene.program (legacy builtin only). " +
     "For scientific 2D/3D prefer kind figure.plotly: spec.model.figure = Plotly JSON { data, layout } (inline), " +
     "or resources: [{ role: \"figure-json\", path: \"figure.json\" }] for large/Python-generated figures. " +
     "Python: fig.write_json('.prismnext/artifacts/<id>/figure.json') — do NOT export PNG when an interactive figure is possible. " +
@@ -85,7 +86,15 @@ export default tool({
     "Sample figure:\n" +
     JSON.stringify(PLOTLY_SAMPLE_FIGURE, null, 2) +
     "\nsceneSource is rejected for figure.plotly — put the JSON in spec.model.figure or a resource file. " +
-    "For 3D manifolds / Riemann metrics / tangent probes (legacy, prefer figure.plotly for new work): use kind scene.ir with spec.model (runtimeVersion 1, parametric x/y/z, probe, metric, layers). " +
+    "For LIVE recompute on binding change, or TRUE step-by-step iteration (Newton/EM/BFS-style demos), use kind instrument instead of figure.plotly: " +
+    "spec.model.figureTemplate is Plotly JSON like figure.plotly, but leaf values may be evaluation markers resolved against spec.bindings (same shape as math.surface bindings) before Plotly.react runs — no remount, no flicker. " +
+    "Markers: {\"$grid\":\"u\"|\"v\"} -> sampled coordinate array (needs model.domain); {\"$exprGrid\":\"<expr>\"} -> 2D array sampled over domain (u,v,bindings in scope); " +
+    "{\"$expr\":\"<expr>\"} -> scalar from bindings only (no u/v); {\"$state\":\"<name>\"}/{\"$stateTrail\":\"<name>\"} -> current/0..current step value(s) from model.step (needs model.step). " +
+    "model.step = { init: {name: \"<expr over bindings>\"}, next: {name: \"<expr over bindings + prior state + step index var `step`>\"}, max: <int, hard ceiling 2000> } — true recurrence x_(n+1)=g(x_n), replayed from 0 every time (always reproducible). " +
+    "Host renders Prev/Next/Reset/Play controls automatically when model.step is present — do not build your own. instrument is local-only (no bound compute yet). Sample instrument model:\n" +
+    JSON.stringify(INSTRUMENT_SAMPLE_MODEL, null, 2) +
+    "\nsceneSource is rejected for instrument too. " +
+    "For 3D manifolds / Riemann metrics / tangent probes (legacy, prefer figure.plotly/instrument for new work): use kind scene.ir with spec.model (runtimeVersion 1, parametric x/y/z, probe, metric, layers). " +
     "Canvas framing defaults to mathematical origin — model.view.frame \"origin\" (default) keeps (0,0,0); use \"bbox\" only to center on the mesh AABB. orbitTarget \"origin\"|\"probe\". " +
     "Do NOT pass sceneSource — arbitrary scene.js is rejected. Host renders surface, wireframe, tangents, metric status, bindings. Sample scene.ir model:\n" +
     JSON.stringify(SCENE_IR_SAMPLE_MODEL, null, 2) +

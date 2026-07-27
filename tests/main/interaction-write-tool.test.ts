@@ -22,4 +22,10 @@ describe("interaction-write tool description", () => {
     expect(SOURCE).toMatch(/ax\.plot_surface.*surface/i);
     expect(SOURCE).toMatch(/imshow|pcolormesh.*heatmap/i);
   });
+
+  it("carries the instrument marker syntax (figureTemplate + $exprGrid/$stateTrail)", () => {
+    expect(SOURCE).toMatch(/figureTemplate/);
+    expect(SOURCE).toMatch(/\$exprGrid/);
+    expect(SOURCE).toMatch(/\$stateTrail/);
+  });
 });
