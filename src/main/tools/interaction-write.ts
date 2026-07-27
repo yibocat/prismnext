@@ -7,6 +7,7 @@ import * as path from "path";
 import { interactionBridgeRoot } from "./bridge-paths";
 import { PLOTLY_SAMPLE_FIGURE } from "../../shared/interaction-plotly";
 import { INSTRUMENT_SAMPLE_MODEL } from "../../shared/interaction-instrument";
+import { SCRIPT_SAMPLE_JS, SCRIPT_SAMPLE_SPEC } from "../../shared/interaction-script";
 
 const BRIDGE_ROOT = interactionBridgeRoot();
 const TIMEOUT_MS = 30_000;
@@ -72,7 +73,7 @@ async function bridgeCall(
 export default tool({
   description:
     "Create or update an Interactive Research Artifact at `.prismnext/artifacts/<id>/spec.json`. " +
-    "Kinds: plot.*, figure.plotly (scientific 2D/3D, default), instrument (live recompute / true step iteration), figure.static. " +
+    "Kinds: plot.*, figure.plotly (scientific 2D/3D, default), instrument (live recompute / true step iteration), figure.static, figure.script (sandboxed JS, last resort). " +
     "scene.ir / math.surface / math.field / scene.program are RETIRED — writes are rejected; existing on-disk artifacts of those kinds still open read-only with a migration hint. Use figure.plotly or instrument instead. " +
     "For scientific 2D/3D prefer kind figure.plotly: spec.model.figure = Plotly JSON { data, layout } (inline), " +
     "or resources: [{ role: \"figure-json\", path: \"figure.json\" }] for large/Python-generated figures. " +
@@ -97,6 +98,18 @@ export default tool({
     "Agent-generated (Python): `uv venv .prismnext/artifacts/.venv && uv pip install --python .prismnext/artifacts/.venv/bin/python matplotlib plotly numpy`, save PNG/HTML there, then write with resources: [{ role: \"figure\", path: \"<file>.png\" }]. " +
     "HTML must be fully self-contained — the preview iframe blocks all network access: Plotly `fig.write_html(path, include_plotlyjs=True, full_html=True)`, never `include_plotlyjs=\"cdn\"`; no external `<script src=\"http...\">` / fonts / images. " +
     "For bound plots/figures, set resources[] to project-relative paths — e.g. an existing experiment-run output at `experiment/<id>/results/loss.png` or `experiment/<id>/results/metrics.csv`. Bound resources are read at their real path (not copied), so don't re-render or re-plot something a run already produced. " +
+    "figure.script is the LAST RESORT — only when figure.plotly/instrument truly cannot express the visualization (e.g. a molecule structure, custom non-Plotly geometry). " +
+    "Write a real JS file first (fs write tool), then reference it: resources: [{ role: \"script\", path: \"script.js\" }] — no sceneSource parameter. " +
+    "The file MUST `export function render(ctx) { ... }` (async ok) — no other export name is accepted. " +
+    "ctx keys (read-only, nothing else exists): el (mount DOM node), Plotly (already loaded), three ({THREE} only when spec.model.three === true — set it to opt in), " +
+    "resource(role) -> {text?, json?, dataUrl?} for any other resources[] entry you declare (e.g. { role: \"data\", path: \"atoms.json\" }), " +
+    "bindings (plain numbers from spec.bindings defaults), size ({width,height} of the mount area), theme ({isDark}), setStatus(msg) for a one-line progress note. " +
+    "CRITICAL: bindings/size/theme are a ONE-TIME SNAPSHOT taken when the panel mounts — there is NO live re-render on binding change (dragging a slider does nothing here). If the user wants live parameter exploration, use instrument instead. " +
+    "Banned in script.js (write is rejected if found): import, require(), eval(), new Function(), document.cookie, window.parent/window.top, fetch(), XMLHttpRequest, WebSocket, localStorage, indexedDB — network access is fully blocked; get all data via resources[]/ctx.resource(). " +
+    "Caps: script.js <= 256KB, all other declared resources combined <= 8MB. Sample spec + script.js:\n" +
+    JSON.stringify(SCRIPT_SAMPLE_SPEC, null, 2) +
+    "\n" +
+    SCRIPT_SAMPLE_JS +
     "After success, embed fenceMarkdown in your assistant reply.",
   args: {
     spec: tool.schema

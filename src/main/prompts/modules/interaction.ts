@@ -17,6 +17,7 @@ export const INTERACTION_PROMPT = [
   "- **figure.plotly** — default for scientific 2D/3D (surfaces, vector fields, heatmaps, step-through demos). Agent writes Plotly JSON; host renders.",
   "- **instrument** — like figure.plotly but with *live* recompute on binding change, or true step-by-step iteration (Newton/EM/BFS-style).",
   "- **figure.static** — figure.plotly vocabulary too narrow (LaTeX axes, multi-panel figures) → generate via Python; or an existing PNG/SVG/HTML.",
+  "- **figure.script** — last resort when figure.plotly/instrument truly can't express it (molecule structures, custom geometry). Agent writes a real JS module executed in a locked-down sandbox; no live binding updates. Prefer figure.plotly/instrument for anything they can express.",
   `- **bound vs local** — after ${TOOL_NAMES.experimentRun} already produced a chart/table, bind to its real output instead of regenerating it.`,
   "- **scene.ir / math.surface / math.field / scene.program are retired** — read-only now (old artifacts show a migration card). Do not write these kinds; use figure.plotly/instrument.",
   "",

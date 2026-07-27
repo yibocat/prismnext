@@ -28,4 +28,16 @@ describe("interaction-write tool description", () => {
     expect(SOURCE).toMatch(/\$exprGrid/);
     expect(SOURCE).toMatch(/\$stateTrail/);
   });
+
+  it("carries the figure.script contract (ctx keys, last-resort framing, ban list, no live bindings)", () => {
+    expect(SOURCE).toMatch(/LAST RESORT/);
+    expect(SOURCE).toMatch(/export function render\(ctx\)/);
+    expect(SOURCE).toMatch(/role:\s*\\?"script\\?"/);
+    expect(SOURCE).toMatch(/ctx\.resource/);
+    expect(SOURCE).toMatch(/no live re-render/i);
+    expect(SOURCE).toMatch(/eval\(\)/);
+    expect(SOURCE).toMatch(/fetch\(\)/);
+    expect(SOURCE).toMatch(/256KB/);
+    expect(SOURCE).toMatch(/8MB/);
+  });
 });
