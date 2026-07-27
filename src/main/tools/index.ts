@@ -448,19 +448,19 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     name: TOOL_NAMES.interactionWrite,
     label: "Interaction Write",
     description:
-      "Create or update an Interaction spec (plot.* / math.* / figure.static / scene.program). Persists to `.prismnext/artifacts/<id>/spec.json`. " +
-      "For scene.program also pass sceneSource (full scene.js, no import — use await ctx.three.ensure()). " +
+      "Create or update an Interaction spec (figure.plotly / figure.static / plot.* / math.* ). Persists to `.prismnext/artifacts/<id>/spec.json`. " +
+      "Scientific 2D/3D → figure.plotly (Plotly JSON). sceneSource is rejected. " +
       "Returns fenceMarkdown — embed it in your assistant reply after success.",
     category: "project",
     usageHint:
       "When the user needs an interactive plot/surface/figure/scene (local sketch, programmable canvas, or bound to experiment outputs), or after experiment-run when an interactive view beats a static file card.",
     workflowRules: [
       "Do NOT use ```artifact for interactive objects — use interaction-write then ```interaction fence in your reply.",
-      "Do NOT edit spec.json or root scene.js with generic write/edit — those paths under `.prismnext/artifacts/<id>/` are denied; use this tool (pass sceneSource). Nested sidecar resources are allowed via write/edit.",
+      "Do NOT edit spec.json or root scene.js with generic write/edit — those paths under `.prismnext/artifacts/<id>/` are denied; use this tool. Nested sidecar resources (e.g. figure.json, PNG/HTML) are allowed via write/edit.",
       "bound compute: set resources[] to real project-relative paths from experiment outputs.",
-      "Allowed kinds: plot.line, plot.series, plot.scatter, math.surface, math.field, figure.static, scene.ir, scene.program (legacy).",
-      "3D manifold / Riemann metric / tangent plane → scene.ir with spec.model (no sceneSource).",
-      "Simple z=f(u,v) heightfield only → math.surface. sceneSource is rejected.",
+      "Allowed kinds: figure.plotly, figure.static, plot.line, plot.series, plot.scatter, math.surface, math.field, scene.ir (legacy), scene.program (legacy builtin only).",
+      "Scientific 2D/3D (surfaces, vector fields, heatmaps, step-through demos) → figure.plotly with spec.model.figure.",
+      "3D manifold / Riemann metric / tangent plane (legacy) → scene.ir with spec.model. Simple z=f(u,v) heightfield only → math.surface. sceneSource is rejected for all of these.",
       "After ok:true, you MUST embed fenceMarkdown in the assistant message (not only in tool output).",
     ],
   },

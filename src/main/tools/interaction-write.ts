@@ -6,6 +6,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { interactionBridgeRoot } from "./bridge-paths";
 import { SCENE_IR_SAMPLE_MODEL } from "../../shared/interaction-scene-ir";
+import { PLOTLY_SAMPLE_FIGURE } from "../../shared/interaction-plotly";
 
 const BRIDGE_ROOT = interactionBridgeRoot();
 const TIMEOUT_MS = 30_000;
@@ -71,8 +72,15 @@ async function bridgeCall(
 export default tool({
   description:
     "Create or update an Interactive Research Artifact at `.prismnext/artifacts/<id>/spec.json`. " +
-    "Kinds: plot.*, math.surface/field, figure.static, scene.ir (declarative 3D), scene.program (legacy builtin only). " +
-    "For 3D manifolds / Riemann metrics / tangent probes: use kind scene.ir with spec.model (runtimeVersion 1, parametric x/y/z, probe, metric, layers). " +
+    "Kinds: plot.*, figure.plotly (scientific 2D/3D, default), math.surface/field, figure.static, scene.ir (legacy declarative 3D), scene.program (legacy builtin only). " +
+    "For scientific 2D/3D prefer kind figure.plotly: spec.model.figure = Plotly JSON { data, layout } (inline), " +
+    "or resources: [{ role: \"figure-json\", path: \"figure.json\" }] for large/Python-generated figures. " +
+    "Python: fig.write_json('.prismnext/artifacts/<id>/figure.json') — do NOT export PNG when an interactive figure is possible. " +
+    "Step-through demos: include figure.frames plus layout.sliders / layout.updatemenus — each slider step advances one iteration and Play animates. " +
+    "Sample figure:\n" +
+    JSON.stringify(PLOTLY_SAMPLE_FIGURE, null, 2) +
+    "\nsceneSource is rejected for figure.plotly — put the JSON in spec.model.figure or a resource file. " +
+    "For 3D manifolds / Riemann metrics / tangent probes (legacy, prefer figure.plotly for new work): use kind scene.ir with spec.model (runtimeVersion 1, parametric x/y/z, probe, metric, layers). " +
     "Canvas framing defaults to mathematical origin — model.view.frame \"origin\" (default) keeps (0,0,0); use \"bbox\" only to center on the mesh AABB. orbitTarget \"origin\"|\"probe\". " +
     "Do NOT pass sceneSource — arbitrary scene.js is rejected. Host renders surface, wireframe, tangents, metric status, bindings. Sample scene.ir model:\n" +
     JSON.stringify(SCENE_IR_SAMPLE_MODEL, null, 2) +
@@ -86,12 +94,12 @@ export default tool({
     spec: tool.schema
       .string()
       .describe(
-        "InteractionSpec JSON. For paraboloid + metric use kind scene.ir with bindings + model (see tool description sample).",
+        "InteractionSpec JSON. For scientific 2D/3D use kind figure.plotly with spec.model.figure (see tool description sample).",
       ),
     sceneSource: tool.schema
       .string()
       .optional()
-      .describe("Deprecated — rejected. Use scene.ir with spec.model instead."),
+      .describe("Deprecated — rejected. Use figure.plotly (spec.model.figure) or scene.ir (spec.model) instead."),
   },
   async execute(args, context) {
     const raw = typeof args.spec === "string" ? args.spec.trim() : "";
