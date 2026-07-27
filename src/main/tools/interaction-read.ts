@@ -71,7 +71,7 @@ export default tool({
   description:
     "Read a persisted Interaction spec from `.prismnext/artifacts/<id>/spec.json`. " +
     "Returns the full spec plus fenceMarkdown to embed in your assistant reply. " +
-    "For scene.program, may also return lastError (panel mount failure) — fix via interaction-write sceneSource. " +
+    "May also return lastError if the panel's render self-check failed previously — fix via interaction-write and re-open. " +
     "Use interaction-list to discover ids; use interaction-write to create or update.",
   args: {
     id: tool.schema.string().describe("Interaction object id (directory name under .prismnext/artifacts/)"),

@@ -5,7 +5,6 @@ import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
 import * as path from "path";
 import { interactionBridgeRoot } from "./bridge-paths";
-import { SCENE_IR_SAMPLE_MODEL } from "../../shared/interaction-scene-ir";
 import { PLOTLY_SAMPLE_FIGURE } from "../../shared/interaction-plotly";
 import { INSTRUMENT_SAMPLE_MODEL } from "../../shared/interaction-instrument";
 
@@ -73,7 +72,8 @@ async function bridgeCall(
 export default tool({
   description:
     "Create or update an Interactive Research Artifact at `.prismnext/artifacts/<id>/spec.json`. " +
-    "Kinds: plot.*, figure.plotly (scientific 2D/3D, default), instrument (live recompute / true step iteration), math.surface/field, figure.static, scene.ir (legacy declarative 3D), scene.program (legacy builtin only). " +
+    "Kinds: plot.*, figure.plotly (scientific 2D/3D, default), instrument (live recompute / true step iteration), figure.static. " +
+    "scene.ir / math.surface / math.field / scene.program are RETIRED — writes are rejected; existing on-disk artifacts of those kinds still open read-only with a migration hint. Use figure.plotly or instrument instead. " +
     "For scientific 2D/3D prefer kind figure.plotly: spec.model.figure = Plotly JSON { data, layout } (inline), " +
     "or resources: [{ role: \"figure-json\", path: \"figure.json\" }] for large/Python-generated figures. " +
     "Python: fig.write_json('.prismnext/artifacts/<id>/figure.json') — do NOT export PNG when an interactive figure is possible. " +
@@ -85,20 +85,14 @@ export default tool({
     "Step-through demos: include figure.frames plus layout.sliders / layout.updatemenus — each slider step advances one iteration and Play animates. " +
     "Sample figure:\n" +
     JSON.stringify(PLOTLY_SAMPLE_FIGURE, null, 2) +
-    "\nsceneSource is rejected for figure.plotly — put the JSON in spec.model.figure or a resource file. " +
-    "For LIVE recompute on binding change, or TRUE step-by-step iteration (Newton/EM/BFS-style demos), use kind instrument instead of figure.plotly: " +
-    "spec.model.figureTemplate is Plotly JSON like figure.plotly, but leaf values may be evaluation markers resolved against spec.bindings (same shape as math.surface bindings) before Plotly.react runs — no remount, no flicker. " +
+    "\nFor LIVE recompute on binding change, or TRUE step-by-step iteration (Newton/EM/BFS-style demos), use kind instrument instead of figure.plotly: " +
+    "spec.model.figureTemplate is Plotly JSON like figure.plotly, but leaf values may be evaluation markers resolved against spec.bindings (continuous sliders — min/max/step/default/label) before Plotly.react runs — no remount, no flicker. " +
     "Markers: {\"$grid\":\"u\"|\"v\"} -> sampled coordinate array (needs model.domain); {\"$exprGrid\":\"<expr>\"} -> 2D array sampled over domain (u,v,bindings in scope); " +
     "{\"$expr\":\"<expr>\"} -> scalar from bindings only (no u/v); {\"$state\":\"<name>\"}/{\"$stateTrail\":\"<name>\"} -> current/0..current step value(s) from model.step (needs model.step). " +
     "model.step = { init: {name: \"<expr over bindings>\"}, next: {name: \"<expr over bindings + prior state + step index var `step`>\"}, max: <int, hard ceiling 2000> } — true recurrence x_(n+1)=g(x_n), replayed from 0 every time (always reproducible). " +
     "Host renders Prev/Next/Reset/Play controls automatically when model.step is present — do not build your own. instrument is local-only (no bound compute yet). Sample instrument model:\n" +
     JSON.stringify(INSTRUMENT_SAMPLE_MODEL, null, 2) +
-    "\nsceneSource is rejected for instrument too. " +
-    "For 3D manifolds / Riemann metrics / tangent probes (legacy, prefer figure.plotly/instrument for new work): use kind scene.ir with spec.model (runtimeVersion 1, parametric x/y/z, probe, metric, layers). " +
-    "Canvas framing defaults to mathematical origin — model.view.frame \"origin\" (default) keeps (0,0,0); use \"bbox\" only to center on the mesh AABB. orbitTarget \"origin\"|\"probe\". " +
-    "Do NOT pass sceneSource — arbitrary scene.js is rejected. Host renders surface, wireframe, tangents, metric status, bindings. Sample scene.ir model:\n" +
-    JSON.stringify(SCENE_IR_SAMPLE_MODEL, null, 2) +
-    "\nSimple heightfields only: math.surface with model.z. " +
+    "\nNo kind accepts a sceneSource/scene.js argument anymore — everything is spec.model. " +
     "For figure.static: resources[] is **required** — point at PNG/SVG/HTML (artifact-relative filename OK, e.g. curvature_heatmap.png under .prismnext/artifacts/<id>/); write is rejected if the file is missing. " +
     "Agent-generated (Python): `uv venv .prismnext/artifacts/.venv && uv pip install --python .prismnext/artifacts/.venv/bin/python matplotlib plotly numpy`, save PNG/HTML there, then write with resources: [{ role: \"figure\", path: \"<file>.png\" }]. " +
     "HTML must be fully self-contained — the preview iframe blocks all network access: Plotly `fig.write_html(path, include_plotlyjs=True, full_html=True)`, never `include_plotlyjs=\"cdn\"`; no external `<script src=\"http...\">` / fonts / images. " +
@@ -110,10 +104,6 @@ export default tool({
       .describe(
         "InteractionSpec JSON. For scientific 2D/3D use kind figure.plotly with spec.model.figure (see tool description sample).",
       ),
-    sceneSource: tool.schema
-      .string()
-      .optional()
-      .describe("Deprecated — rejected. Use figure.plotly (spec.model.figure) or scene.ir (spec.model) instead."),
   },
   async execute(args, context) {
     const raw = typeof args.spec === "string" ? args.spec.trim() : "";
@@ -127,12 +117,9 @@ export default tool({
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return toolOutput({ ok: false, error: "spec must be a JSON object." });
     }
-    const sceneSource =
-      typeof args.sceneSource === "string" ? args.sceneSource : undefined;
     return bridgeCall(context as Record<string, unknown>, {
       action: "write",
       spec: parsed,
-      ...(sceneSource != null ? { sceneSource } : {}),
     });
   },
 });
