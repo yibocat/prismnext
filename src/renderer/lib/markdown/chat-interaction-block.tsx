@@ -12,8 +12,20 @@ import {
   kindDisplayLabel,
   type InteractionSpec,
 } from "../../../shared/interaction-spec";
+import { isInteractionPlotlyKind } from "../../../shared/interaction-plotly";
+import { isInteractionInstrumentKind } from "../../../shared/interaction-instrument";
+import { interactionThumbnailRelPath } from "../../../shared/interaction-artifacts-path";
 import { openInteractionPanel } from "@/lib/interaction/open-interaction-panel";
 import { parseInteractionFenceContent } from "./chat-interaction";
+
+function normalizeRoot(p: string): string {
+  return p.replace(/\\/g, "/").replace(/\/$/, "");
+}
+
+function resolveProjectAbsPath(projectRoot: string, relPath: string): string {
+  const root = normalizeRoot(projectRoot);
+  return `${root}/${relPath}`;
+}
 
 function ComputeBadge({ compute }: { compute: InteractionSpec["compute"] }) {
   const { t } = useTranslation();
@@ -47,6 +59,7 @@ export function ChatInteractionBlock({
   const [spec, setSpec] = useState<InteractionSpec | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [thumbnailDataUrl, setThumbnailDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -77,6 +90,36 @@ export function ChatInteractionBlock({
   const title = titleOverride?.trim() || spec?.title || id;
   const kind = spec?.kind ?? "…";
   const compute = spec?.compute ?? "local";
+  const hasThumbnail =
+    !!spec && (isInteractionPlotlyKind(spec.kind) || isInteractionInstrumentKind(spec.kind));
+
+  // Soft enhancement: the host renders a thumbnail in the background after a
+  // successful figure.plotly/instrument write (V4-B). No error state on miss —
+  // the Sparkles icon fallback stays until the capture lands.
+  useEffect(() => {
+    if (!projectRoot || !hasThumbnail) {
+      setThumbnailDataUrl(null);
+      return;
+    }
+    let cancelled = false;
+    const fetchThumbnail = () => {
+      const abs = resolveProjectAbsPath(projectRoot, interactionThumbnailRelPath(id));
+      void window.electronAPI.fsReadImage(abs).then((res) => {
+        if (cancelled) return;
+        setThumbnailDataUrl(res.dataUrl ?? null);
+      });
+    };
+    fetchThumbnail();
+    const unsub = window.electronAPI.onInteractionChanged?.((data) => {
+      if (normalizeRoot(data.projectRoot || "") !== normalizeRoot(projectRoot)) return;
+      if (data.id !== id) return;
+      fetchThumbnail();
+    });
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, [projectRoot, id, hasThumbnail]);
 
   const open = useCallback(() => {
     openInteractionPanel(id, title);
@@ -104,8 +147,16 @@ export function ChatInteractionBlock({
       onClick={open}
       className="my-2 flex w-full max-w-full items-stretch gap-2 rounded-lg border border-border bg-muted p-2 text-left transition-colors hover:bg-accent"
     >
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-background text-primary">
-        <SparklesIcon className="size-4" aria-hidden />
+      <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-background text-primary">
+        {thumbnailDataUrl ? (
+          <img
+            src={thumbnailDataUrl}
+            alt={title}
+            className="size-9 shrink-0 rounded-md object-cover"
+          />
+        ) : (
+          <SparklesIcon className="size-4" aria-hidden />
+        )}
       </div>
       <div className="min-w-0 flex-1 py-0.5">
         <div className="truncate text-[length:var(--font-chat-message)] font-medium text-foreground">
