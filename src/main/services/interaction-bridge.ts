@@ -10,28 +10,14 @@ import {
   listInteractionSummaries,
   readInteractionLastError,
   readInteractionSpec,
-  sceneProgramNeedsSource,
-  sceneSourceExists,
   upsertInteractionSpec,
-  writeInteractionSceneSource,
 } from "./interaction-store";
 import {
   interactionFenceHint,
+  isDeprecatedInteractionKind,
   parseInteractionSpec,
   type InteractionSpec,
 } from "../../shared/interaction-spec";
-import {
-  DEFAULT_SCENE_ENTRY,
-  resolveSceneEntry,
-} from "../../shared/interaction-scene";
-import { SCENE_PROGRAM_SAMPLE } from "../../shared/interaction-scene-contract";
-import {
-  isInteractionSceneIrKind,
-  SCENE_IR_SAMPLE_MODEL,
-  validateSceneIrSpec,
-  buildSceneIr,
-} from "../../shared/interaction-scene-ir";
-import { initialBindingValues, parseMathBindings } from "../../shared/interaction-math";
 import {
   isInteractionPlotlyKind,
   PLOTLY_SAMPLE_FIGURE,
@@ -53,7 +39,7 @@ type InteractionBridgeRequest = {
   id?: string;
   kindPrefix?: string;
   spec?: InteractionSpec;
-  /** Full scene.js source for scene.program (required on create unless entry is builtin:*) */
+  /** Deprecated — rejected for every current kind, kept only so stray legacy calls get a clear error. */
   sceneSource?: string;
   focus?: boolean;
 };
@@ -80,7 +66,7 @@ function specResponse(projectRoot: string, spec: InteractionSpec) {
       ? {
           lastError,
           lastErrorHint:
-            "Panel mount failed previously. Fix sceneSource via interaction-write, then re-open.",
+            "Panel self-check failed previously. Fix the artifact via interaction-write, then re-open.",
         }
       : {}),
   };
@@ -113,36 +99,18 @@ function dispatch(req: InteractionBridgeRequest): Record<string, unknown> {
       const parsed = parseInteractionSpec(raw);
       if (!parsed) return { ok: false, error: "invalid_spec" };
 
+      if (isDeprecatedInteractionKind(parsed.kind)) {
+        return {
+          ok: false,
+          error:
+            `kind "${parsed.kind}" is retired and no longer accepts writes — ` +
+            "use figure.plotly (2D/3D Plotly JSON) or instrument (live recompute / step iteration) instead.",
+          sample: PLOTLY_SAMPLE_FIGURE,
+        };
+      }
+
       const sceneSource =
         typeof req.sceneSource === "string" ? req.sceneSource : undefined;
-
-      if (isInteractionSceneIrKind(parsed.kind)) {
-        if (sceneSource != null) {
-          return {
-            ok: false,
-            error: "scene.ir does not use sceneSource. Put declarative model in spec.model.",
-            sample: SCENE_IR_SAMPLE_MODEL,
-          };
-        }
-        const ir = validateSceneIrSpec(parsed);
-        if (!ir.ok) {
-          return {
-            ok: false,
-            error: ir.error,
-            sample: SCENE_IR_SAMPLE_MODEL,
-          };
-        }
-        const previewBindings = initialBindingValues(parseMathBindings(parsed.bindings));
-        const preview = buildSceneIr(parsed, previewBindings);
-        if (!preview.ok) {
-          return {
-            ok: false,
-            error: preview.error,
-            phase: "compile-preview",
-            sample: SCENE_IR_SAMPLE_MODEL,
-          };
-        }
-      }
 
       if (isInteractionInstrumentKind(parsed.kind)) {
         if (sceneSource != null) {
@@ -182,48 +150,6 @@ function dispatch(req: InteractionBridgeRequest): Record<string, unknown> {
         }
       }
 
-      if (parsed.kind === "scene.program" && sceneSource != null) {
-        return {
-          ok: false,
-          error:
-            "scene.program no longer accepts sceneSource (arbitrary JS). Use kind scene.ir with spec.model for surfaces, metrics, and tangent layers.",
-          sample: SCENE_IR_SAMPLE_MODEL,
-        };
-      }
-
-      const entry = resolveSceneEntry(parsed) ?? DEFAULT_SCENE_ENTRY;
-      const needsScript = sceneProgramNeedsSource(parsed);
-      const hasExistingScript =
-        needsScript && sceneSourceExists(projectRoot, parsed.id, entry);
-
-      if (needsScript && sceneSource == null && !hasExistingScript) {
-        return {
-          ok: false,
-          error:
-            "scene.program requires sceneSource (full scene.js text). Do not use import — copy the sample API.",
-          hint: "Pass sceneSource with export async function mount(ctx) { const handle = await ctx.three.ensure(); ... }",
-          sample: SCENE_PROGRAM_SAMPLE,
-        };
-      }
-
-      let sceneRelativePath: string | undefined;
-      if (needsScript && sceneSource != null) {
-        const sceneWrite = writeInteractionSceneSource(
-          projectRoot,
-          parsed.id,
-          sceneSource,
-          entry.startsWith("builtin:") ? DEFAULT_SCENE_ENTRY : entry,
-        );
-        if (!sceneWrite.ok) {
-          return {
-            ok: false,
-            error: sceneWrite.error ?? "scene_write_failed",
-            sample: SCENE_PROGRAM_SAMPLE,
-          };
-        }
-        sceneRelativePath = sceneWrite.relativePath;
-      }
-
       const result = upsertInteractionSpec(projectRoot, parsed);
       if (!result.ok || !result.spec) {
         return { ok: false, error: result.error ?? "write_failed" };
@@ -231,7 +157,6 @@ function dispatch(req: InteractionBridgeRequest): Record<string, unknown> {
       const body = {
         ...specResponse(projectRoot, result.spec),
         created: result.created === true,
-        ...(sceneRelativePath ? { sceneRelativePath } : {}),
       };
       broadcastInteractionChanged({
         projectRoot,

@@ -14,16 +14,6 @@ import {
   parseInteractionSpec,
   type InteractionSpec,
 } from "../../shared/interaction-spec";
-import { dryRunSceneSource } from "../../shared/interaction-scene-eval";
-import {
-  isBuiltinSceneEntry,
-  resolveSceneEntry,
-  DEFAULT_SCENE_ENTRY,
-} from "../../shared/interaction-scene";
-import {
-  isInteractionSceneIrKind,
-  validateSceneIrSpec,
-} from "../../shared/interaction-scene-ir";
 import {
   isInteractionFigureKind,
   resolveFigureDisplay,
@@ -56,14 +46,6 @@ export function interactionSpecPath(projectRoot: string, id: string): string {
 
 export function interactionLastErrorPath(projectRoot: string, id: string): string {
   return join(interactionArtifactsDir(projectRoot), id, LAST_ERROR_FILE);
-}
-
-export function interactionScenePath(
-  projectRoot: string,
-  id: string,
-  entry = DEFAULT_SCENE_ENTRY,
-): string {
-  return join(interactionArtifactsDir(projectRoot), id, entry);
 }
 
 export function readInteractionLastError(
@@ -187,78 +169,6 @@ export function writeInteractionSpec(
   }
 }
 
-/**
- * Persist artifact-relative scene.js (or custom entry). Validates hard bans first.
- */
-export function writeInteractionSceneSource(
-  projectRoot: string,
-  id: string,
-  source: string,
-  entry = DEFAULT_SCENE_ENTRY,
-): { ok: boolean; error?: string; relativePath?: string } {
-  if (!isValidInteractionId(id)) {
-    return { ok: false, error: "invalid id" };
-  }
-  const file = (entry || DEFAULT_SCENE_ENTRY).trim().replace(/\\/g, "/").replace(/^\.\//, "");
-  if (
-    !file ||
-    file.includes("..") ||
-    file.startsWith("/") ||
-    /^[A-Za-z]:/.test(file) ||
-    !/\.(mjs|js|cjs)$/i.test(file) ||
-    file.startsWith("builtin:")
-  ) {
-    return { ok: false, error: "invalid scene entry path" };
-  }
-  const text = typeof source === "string" ? source : "";
-  if (!text.trim()) {
-    return { ok: false, error: "sceneSource is empty" };
-  }
-  const dry = dryRunSceneSource(text);
-  if (!dry.ok) {
-    return { ok: false, error: dry.error };
-  }
-
-  const dir = join(interactionArtifactsDir(projectRoot), id);
-  mkdirSync(dir, { recursive: true });
-  const abs = join(dir, file);
-  try {
-    writeFileSync(abs, text.endsWith("\n") ? text : `${text}\n`, "utf8");
-    clearInteractionLastError(projectRoot, id);
-    return {
-      ok: true,
-      relativePath: `.prismnext/artifacts/${id}/${file}`,
-    };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "write scene failed" };
-  }
-}
-
-export function sceneSourceExists(
-  projectRoot: string,
-  id: string,
-  entry = DEFAULT_SCENE_ENTRY,
-): boolean {
-  if (!isValidInteractionId(id)) return false;
-  const file = (entry || DEFAULT_SCENE_ENTRY).trim();
-  if (!file || file.startsWith("builtin:")) return false;
-  const abs = interactionScenePath(projectRoot, id, file);
-  if (!existsSync(abs)) return false;
-  try {
-    return readFileSync(abs, "utf8").trim().length > 0;
-  } catch {
-    return false;
-  }
-}
-
-/** True when scene.program needs a custom script on disk (not a builtin entry). */
-export function sceneProgramNeedsSource(spec: InteractionSpec): boolean {
-  if (spec.kind !== "scene.program") return false;
-  const entry = resolveSceneEntry(spec);
-  if (!entry) return true;
-  return !isBuiltinSceneEntry(entry);
-}
-
 export function listInteractionIds(projectRoot: string): string[] {
   const root = interactionArtifactsDir(projectRoot);
   if (!existsSync(root)) return [];
@@ -333,11 +243,6 @@ export function upsertInteractionSpec(
 
   const parsed = parseInteractionSpec(merged);
   if (!parsed) return { ok: false, error: "invalid spec" };
-
-  if (isInteractionSceneIrKind(parsed.kind)) {
-    const ir = validateSceneIrSpec(parsed);
-    if (!ir.ok) return { ok: false, error: ir.error };
-  }
 
   if (isInteractionFigureKind(parsed.kind)) {
     const fig = resolveFigureDisplay(parsed);

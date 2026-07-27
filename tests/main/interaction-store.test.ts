@@ -8,9 +8,7 @@ import {
   readInteractionLastError,
   upsertInteractionSpec,
   writeInteractionLastError,
-  writeInteractionSceneSource,
 } from "../../src/main/services/interaction-store";
-import { SCENE_PROGRAM_SAMPLE } from "../../src/shared/interaction-scene-contract";
 import { INSTRUMENT_SAMPLE_MODEL } from "../../src/shared/interaction-instrument";
 
 describe("interaction-store upsert", () => {
@@ -205,60 +203,24 @@ describe("interaction-store upsert", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("accepts scene.program builtin", () => {
+  it("rejects retired legacy kinds (scene.ir, scene.program, math.surface, math.field)", () => {
     root = mkdtempSync(join(tmpdir(), "ix-store-"));
-    const scene = upsertInteractionSpec(root, {
-      id: "demo.lorenz",
-      title: "Lorenz",
-      kind: "scene.program",
-      compute: "local",
-      revision: 1,
-      entry: "builtin:lorenz",
-    });
-    expect(scene.ok).toBe(true);
-    expect(scene.spec?.entry).toBe("builtin:lorenz");
+    for (const kind of ["scene.ir", "scene.program", "math.surface", "math.field"]) {
+      const result = upsertInteractionSpec(root, {
+        id: `demo.${kind.replace(".", "-")}`,
+        title: "Legacy",
+        kind,
+        compute: "local",
+        revision: 1,
+      });
+      expect(result.ok, `expected ${kind} to be rejected`).toBe(false);
+    }
 
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("writes scene.js next to the artifact; strips three imports via soft-compat", () => {
+  it("persists and clears last-error independent of any prior spec write", () => {
     root = mkdtempSync(join(tmpdir(), "ix-store-"));
-    const ok = writeInteractionSceneSource(root, "cube.demo", SCENE_PROGRAM_SAMPLE);
-    expect(ok.ok).toBe(true);
-    expect(ok.relativePath).toBe(".prismnext/artifacts/cube.demo/scene.js");
-    const abs = join(root, ".prismnext", "artifacts", "cube.demo", "scene.js");
-    expect(existsSync(abs)).toBe(true);
-    expect(readFileSync(abs, "utf8")).toContain("ctx.three.ensure");
-
-    const soft = writeInteractionSceneSource(
-      root,
-      "cube.soft",
-      `import * as THREE from "three";\nexport function mount(ctx) { void THREE; void ctx; }`,
-    );
-    expect(soft.ok).toBe(true);
-
-    const bad = writeInteractionSceneSource(
-      root,
-      "cube.bad",
-      `import foo from "not-three";\nexport function mount() {}`,
-    );
-    expect(bad.ok).toBe(false);
-    expect(bad.error).toMatch(/cannot use import/);
-    expect(bad.error).not.toMatch(/lorenz/i);
-
-    rmSync(root, { recursive: true, force: true });
-  });
-
-  it("persists and clears scene last-error", () => {
-    root = mkdtempSync(join(tmpdir(), "ix-store-"));
-    upsertInteractionSpec(root, {
-      id: "err.demo",
-      title: "Err",
-      kind: "scene.program",
-      compute: "local",
-      revision: 1,
-      entry: "builtin:lorenz",
-    });
     expect(
       writeInteractionLastError(root, "err.demo", { message: "boom", phase: "mount" }).ok,
     ).toBe(true);

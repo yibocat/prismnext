@@ -68,145 +68,43 @@ describe("interaction-bridge", () => {
     expect(result.relativePath).toBe(".prismnext/artifacts/demo.plot/spec.json");
   });
 
-  it("rejects scene.program sceneSource and accepts scene.ir model", async () => {
+  it("rejects retired legacy kinds (scene.ir, scene.program, math.surface, math.field) with a migration hint and does not write spec.json", async () => {
     const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ix-bridge-proj-"));
     projectRoots.push(projectRoot);
-    const sessionId = "test-session-scene";
+    const sessionId = "test-session-legacy";
     const sessionDir = path.join(getInteractionBridgeRoot(), sessionId);
     fs.mkdirSync(sessionDir, { recursive: true });
 
-    const rejectJsId = "req-scene-js";
-    fs.writeFileSync(
-      path.join(sessionDir, `${rejectJsId}.request.json`),
-      JSON.stringify({
-        action: "write",
-        sessionId,
-        projectRoot,
-        spec: {
-          id: "cube.simple",
-          title: "Cube",
-          kind: "scene.program",
-          compute: "local",
-          revision: 1,
-        },
-        sceneSource: `export async function mount(ctx) {
-  const handle = await ctx.three.ensure();
-  const { THREE, content } = handle;
-  content.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0x3366ff })));
-}
-`,
-      }),
-      "utf-8",
-    );
-    await processInteractionBridgeOnceForTests();
-    const rejected = JSON.parse(
-      fs.readFileSync(path.join(sessionDir, `${rejectJsId}.result.json`), "utf-8"),
-    ) as Record<string, unknown>;
-    expect(rejected.ok).toBe(false);
-    expect(String(rejected.error)).toMatch(/scene\.ir|no longer accepts sceneSource/i);
-
-    const irId = "req-scene-ir";
-    fs.writeFileSync(
-      path.join(sessionDir, `${irId}.request.json`),
-      JSON.stringify({
-        action: "write",
-        sessionId,
-        projectRoot,
-        spec: {
-          id: "demo.paraboloid",
-          title: "Paraboloid",
-          kind: "scene.ir",
-          compute: "local",
-          revision: 1,
-          bindings: {
-            R: { min: 0.5, max: 5, step: 0.1, default: 2, label: "R" },
-            sampleU: { min: -1.4, max: 1.4, step: 0.05, default: 0.5, label: "u" },
-            sampleV: { min: -1.4, max: 1.4, step: 0.05, default: 0.5, label: "v" },
-            metricType: { min: 0, max: 2, step: 1, default: 0, label: "metric" },
-            lambda: { min: 0.1, max: 5, step: 0.1, default: 1.5, label: "lambda" },
+    for (const kind of ["scene.ir", "scene.program", "math.surface", "math.field"]) {
+      const requestId = `req-${kind.replace(".", "-")}`;
+      const id = `demo.${kind.replace(".", "-")}`;
+      fs.writeFileSync(
+        path.join(sessionDir, `${requestId}.request.json`),
+        JSON.stringify({
+          action: "write",
+          sessionId,
+          projectRoot,
+          spec: {
+            id,
+            title: "Legacy",
+            kind,
+            compute: "local",
+            revision: 1,
           },
-          model: {
-            runtimeVersion: 1,
-            surface: {
-              type: "parametric",
-              domain: { uMin: -1.4, uMax: 1.4, vMin: -1.4, vMax: 1.4, resolution: 32 },
-              x: "u",
-              y: "(u*u + v*v) / R",
-              z: "v",
-            },
-            probe: { uKey: "sampleU", vKey: "sampleV" },
-            metric: { modeKey: "metricType", modes: ["induced", "conformal", "spherical"] },
-          },
-        },
-      }),
-      "utf-8",
-    );
-    await processInteractionBridgeOnceForTests();
-    const ir = JSON.parse(
-      fs.readFileSync(path.join(sessionDir, `${irId}.result.json`), "utf-8"),
-    ) as Record<string, unknown>;
-    expect(ir.ok).toBe(true);
-    expect(
-      fs.existsSync(path.join(projectRoot, ".prismnext", "artifacts", "demo.paraboloid", "spec.json")),
-    ).toBe(true);
-    const written = JSON.parse(
-      fs.readFileSync(
-        path.join(projectRoot, ".prismnext", "artifacts", "demo.paraboloid", "spec.json"),
+        }),
         "utf-8",
-      ),
-    ) as Record<string, unknown>;
-    expect(written.kind).toBe("scene.ir");
-    expect(written.id).toBe("demo.paraboloid");
-  });
-
-  it("rejects scene.ir when compile-preview fails and does not write spec.json", async () => {
-    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ix-bridge-proj-"));
-    projectRoots.push(projectRoot);
-    const sessionId = "test-session-ir-preview-fail";
-    const sessionDir = path.join(getInteractionBridgeRoot(), sessionId);
-    fs.mkdirSync(sessionDir, { recursive: true });
-    const requestId = "req-ir-preview-fail";
-    fs.writeFileSync(
-      path.join(sessionDir, `${requestId}.request.json`),
-      JSON.stringify({
-        action: "write",
-        sessionId,
-        projectRoot,
-        spec: {
-          id: "bad.preview",
-          title: "Bad preview",
-          kind: "scene.ir",
-          compute: "local",
-          revision: 1,
-          bindings: {
-            sampleU: { min: -1, max: 1, step: 0.1, default: 0, label: "u" },
-            sampleV: { min: -1, max: 1, step: 0.1, default: 0, label: "v" },
-          },
-          model: {
-            runtimeVersion: 1,
-            surface: {
-              type: "parametric",
-              domain: { uMin: -1, uMax: 1, vMin: -1, vMax: 1, resolution: 8 },
-              x: "u",
-              y: "1/0",
-              z: "v",
-            },
-            probe: { uKey: "sampleU", vKey: "sampleV" },
-          },
-        },
-      }),
-      "utf-8",
-    );
-    await processInteractionBridgeOnceForTests();
-    const result = JSON.parse(
-      fs.readFileSync(path.join(sessionDir, `${requestId}.result.json`), "utf-8"),
-    ) as Record<string, unknown>;
-    expect(result.ok).toBe(false);
-    expect(result.phase).toBe("compile-preview");
-    expect(String(result.error)).toMatch(/finite number/i);
-    expect(
-      fs.existsSync(path.join(projectRoot, ".prismnext", "artifacts", "bad.preview", "spec.json")),
-    ).toBe(false);
+      );
+      await processInteractionBridgeOnceForTests();
+      const result = JSON.parse(
+        fs.readFileSync(path.join(sessionDir, `${requestId}.result.json`), "utf-8"),
+      ) as Record<string, unknown>;
+      expect(result.ok, `expected ${kind} write to be rejected`).toBe(false);
+      expect(String(result.error)).toMatch(/retired|figure\.plotly|instrument/i);
+      expect(result.sample).toBeTruthy();
+      expect(
+        fs.existsSync(path.join(projectRoot, ".prismnext", "artifacts", id, "spec.json")),
+      ).toBe(false);
+    }
   });
 
   it("rejects figure.static without resources and accepts when PNG exists", async () => {
