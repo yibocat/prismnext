@@ -68,6 +68,7 @@ vi.mock("electron", () => {
 import {
   resolveFigureForThumbnail,
   resolveScriptForThumbnail,
+  resolveDiagramForThumbnail,
   renderFigureToPngBuffer,
   captureInteractionThumbnail,
   scheduleInteractionThumbnail,
@@ -229,6 +230,63 @@ describe("resolveScriptForThumbnail", () => {
   });
 });
 
+describe("resolveDiagramForThumbnail", () => {
+  it("builds self-contained HTML for an inline mermaid spec", () => {
+    const spec = baseSpec({
+      id: "demo.diagram.mermaid",
+      kind: "diagram.mermaid",
+      model: { source: "graph TD; A-->B;" },
+    });
+    const result = resolveDiagramForThumbnail("/tmp/does-not-matter", spec);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.html).toContain("mermaid.render");
+      expect(result.html).toContain("graph TD");
+    }
+  });
+
+  it("builds self-contained HTML for a file-mode dot spec, reading real file content", () => {
+    const root = mkdtempSync(join(tmpdir(), "ix-thumb-diagram-"));
+    const dir = join(root, ".prismnext", "artifacts", "demo.diagram.dot");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "flow.dot"), "digraph { a -> b; }", "utf8");
+
+    const spec = baseSpec({
+      id: "demo.diagram.dot",
+      kind: "diagram.mermaid",
+      model: { engine: "dot" },
+      resources: [{ role: "diagram-source", path: "flow.dot" }],
+    });
+    const result = resolveDiagramForThumbnail(root, spec);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.html).toContain("Graphviz");
+      expect(result.html).toContain("digraph { a -> b; }");
+    }
+
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("fails closed when the diagram source cannot be resolved", () => {
+    const spec = baseSpec({ id: "demo.diagram.bad", kind: "diagram.mermaid" });
+    const result = resolveDiagramForThumbnail("/tmp/does-not-matter", spec);
+    expect(result.ok).toBe(false);
+  });
+
+  it("fails closed when a file-mode resource is missing on disk", () => {
+    const root = mkdtempSync(join(tmpdir(), "ix-thumb-diagram-"));
+    const spec = baseSpec({
+      id: "demo.diagram.missing",
+      kind: "diagram.mermaid",
+      resources: [{ role: "diagram-source", path: "nope.dot" }],
+    });
+    const result = resolveDiagramForThumbnail(root, spec);
+    expect(result.ok).toBe(false);
+
+    rmSync(root, { recursive: true, force: true });
+  });
+});
+
 describe("renderFigureToPngBuffer (mocked electron)", () => {
   beforeEach(() => {
     mockWindows = [];
@@ -321,6 +379,17 @@ describe("captureInteractionThumbnail (mocked electron)", () => {
       id: "demo.thumb.script",
       kind: "figure.script",
       resources: [{ role: "script", path: "script.js" }],
+    });
+    const result = await captureInteractionThumbnail(root, spec);
+    expect(result.ok).toBe(true);
+    expect(existsSync(interactionStore.interactionThumbnailPath(root, spec.id))).toBe(true);
+  });
+
+  it("captures a diagram.mermaid thumbnail via resolveDiagramForThumbnail", async () => {
+    const spec = baseSpec({
+      id: "demo.thumb.diagram",
+      kind: "diagram.mermaid",
+      model: { source: "graph TD; A-->B;" },
     });
     const result = await captureInteractionThumbnail(root, spec);
     expect(result.ok).toBe(true);

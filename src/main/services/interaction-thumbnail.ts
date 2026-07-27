@@ -32,6 +32,10 @@ import {
   validateScriptSpec,
   type ScriptResourceEmbed,
 } from "../../shared/interaction-script";
+import {
+  isInteractionDiagramKind,
+  resolveDiagramSource,
+} from "../../shared/interaction-diagram";
 import type { InteractionSpec } from "../../shared/interaction-spec";
 import { broadcastInteractionChanged } from "./interaction-ui-events";
 import {
@@ -130,6 +134,119 @@ function loadThreeModuleBundleText(): string {
     cachedThreeModuleJs = readFileSync(join(dirname(cjsEntry), "three.module.js"), "utf8");
   }
   return cachedThreeModuleJs;
+}
+
+let cachedMermaidJs: string | null = null;
+
+/** Read once, cache in memory — the UMD bundle is ~3.5MB of text. */
+function loadMermaidBundleText(): string {
+  if (cachedMermaidJs == null) {
+    // Kept out of rollupOptions.external the same way as plotly/three — we
+    // want the raw file on disk, not inlined/rebundled.
+    cachedMermaidJs = readFileSync(require.resolve("mermaid/dist/mermaid.min.js"), "utf8");
+  }
+  return cachedMermaidJs;
+}
+
+let cachedGraphvizJs: string | null = null;
+
+/**
+ * `@hpcc-js/wasm/graphviz`'s `require` condition resolves to `dist/graphviz.cjs`
+ * (not a self-contained UMD bundle with the WASM inlined as base64) — the
+ * actual self-contained file is `dist/graphviz.umd.js`, a sibling not
+ * directly exposed by the package's exports map. Same trick as
+ * `loadThreeModuleBundleText`: resolve any exported entry to find the
+ * package's real `dist/` directory, then read the sibling file off disk.
+ */
+function loadGraphvizBundleText(): string {
+  if (cachedGraphvizJs == null) {
+    const anchor = require.resolve("@hpcc-js/wasm/graphviz");
+    cachedGraphvizJs = readFileSync(join(dirname(anchor), "graphviz.umd.js"), "utf8");
+  }
+  return cachedGraphvizJs;
+}
+
+/**
+ * Resolve a `diagram.mermaid` spec into a fully self-contained HTML document
+ * for offscreen capture. Unlike write-time `validateDiagramSpec` (existence
+ * check only), this reads the real file content for file-mode sources.
+ * No CSP is needed here (unlike figure.script's sandbox HTML) — this is
+ * trusted-library rendering of declarative text, not Agent code execution,
+ * same posture as figure.plotly's offscreen HTML.
+ */
+export function resolveDiagramForThumbnail(
+  projectRoot: string,
+  spec: InteractionSpec,
+): { ok: true; html: string } | { ok: false; error: string } {
+  const src = resolveDiagramSource(spec);
+  if (!src.ok) return { ok: false, error: src.error };
+
+  let sourceText: string;
+  if (src.mode === "inline") {
+    sourceText = src.source;
+  } else {
+    const abs = resolveProjectAbsPath(projectRoot, src.path);
+    try {
+      sourceText = readFileSync(abs, "utf8");
+    } catch {
+      return { ok: false, error: `could not read diagram resource "${src.path}"` };
+    }
+  }
+
+  if (src.engine === "dot") {
+    const html = `<!doctype html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#fff;">
+<div id="dgm" style="width:${THUMBNAIL_WIDTH}px;height:${THUMBNAIL_HEIGHT}px;overflow:hidden;"></div>
+<script>${loadGraphvizBundleText()}</script>
+<script>
+window.__prismThumb = { ready: false, error: null };
+(async function () {
+  try {
+    var mod = window["@hpcc-js/wasm/graphviz"];
+    var graphviz = await mod.Graphviz.load();
+    var svg = graphviz.dot(${embedJson(sourceText)});
+    svg = svg
+      .replace(/<script[\\s\\S]*?<\\/script>/gi, "")
+      .replace(/\\s+on[a-z]+\\s*=\\s*"(?:[^"\\\\]|\\\\.)*"/gi, "")
+      .replace(/\\s+on[a-z]+\\s*=\\s*'(?:[^'\\\\]|\\\\.)*'/gi, "")
+      .replace(/(href|xlink:href)\\s*=\\s*"javascript:[^"]*"/gi, '$1="#"')
+      .replace(/(href|xlink:href)\\s*=\\s*'javascript:[^']*'/gi, "$1='#'");
+    document.getElementById("dgm").innerHTML = svg;
+    window.__prismThumb.ready = true;
+  } catch (e) {
+    window.__prismThumb.error = String((e && e.message) || e);
+  }
+})();
+</script>
+</body>
+</html>`;
+    return { ok: true, html };
+  }
+
+  const html = `<!doctype html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#fff;">
+<div id="dgm" style="width:${THUMBNAIL_WIDTH}px;height:${THUMBNAIL_HEIGHT}px;overflow:hidden;"></div>
+<script>${loadMermaidBundleText()}</script>
+<script>
+window.__prismThumb = { ready: false, error: null };
+(async function () {
+  try {
+    mermaid.initialize({ startOnLoad: false, securityLevel: "strict" });
+    var result = await mermaid.render("dgm-svg", ${embedJson(sourceText)});
+    document.getElementById("dgm").innerHTML = result.svg;
+    window.__prismThumb.ready = true;
+  } catch (e) {
+    window.__prismThumb.error = String((e && e.message) || e);
+  }
+})();
+</script>
+</body>
+</html>`;
+  return { ok: true, html };
 }
 
 function scriptResourceEmbedResourcePath(r: {
@@ -336,6 +453,10 @@ export async function captureInteractionThumbnail(
   let rendered: RenderFigureResult;
   if (isInteractionScriptKind(spec.kind)) {
     const resolved = resolveScriptForThumbnail(projectRoot, spec);
+    if (!resolved.ok) return { ok: false, error: resolved.error };
+    rendered = await renderPreparedHtmlToPngBuffer(resolved.html);
+  } else if (isInteractionDiagramKind(spec.kind)) {
+    const resolved = resolveDiagramForThumbnail(projectRoot, spec);
     if (!resolved.ok) return { ok: false, error: resolved.error };
     rendered = await renderPreparedHtmlToPngBuffer(resolved.html);
   } else {
