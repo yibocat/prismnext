@@ -250,9 +250,16 @@ export async function createThreeMathHost(
       disposed = true;
       cancelAnimationFrame(frameId);
       cancelAnimationFrame(themeRaf);
+      frameId = 0;
+      themeRaf = 0;
       ro.disconnect();
       clearContent();
       disposeObject3D(grid);
+      try {
+        (renderer as { forceContextLoss?: () => void }).forceContextLoss?.();
+      } catch {
+        /* ignore */
+      }
       renderer.dispose();
       container.replaceChildren();
     },
@@ -288,11 +295,7 @@ function mountSurface(
       }),
     ),
   );
-  const box = new THREE.Box3().setFromObject(content);
-  const center = box.getCenter(new THREE.Vector3());
-  if (Number.isFinite(center.x) && Number.isFinite(center.y) && Number.isFinite(center.z)) {
-    content.position.sub(center);
-  }
+  // Keep mathematical coordinates — do not auto-center on AABB (that hid the origin).
 }
 
 function mountField(

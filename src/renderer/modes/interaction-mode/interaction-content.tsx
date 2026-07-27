@@ -9,8 +9,14 @@ import {
 } from "../../../shared/interaction-spec";
 import { isInteractionPlotKind } from "../../../shared/interaction-plot";
 import { isInteractionMathKind } from "../../../shared/interaction-math";
+import { isInteractionFigureKind } from "../../../shared/interaction-figure";
+import { isInteractionSceneKind } from "../../../shared/interaction-scene";
+import { isInteractionSceneIrKind } from "../../../shared/interaction-scene-ir";
 import { InteractionPlotView } from "@/lib/interaction/plot/interaction-plot-view";
 import { InteractionMathView } from "@/lib/interaction/math/interaction-math-view";
+import { InteractionFigureView } from "@/lib/interaction/figure/interaction-figure-view";
+import { InteractionSceneView } from "@/lib/interaction/scene/interaction-scene-view";
+import { InteractionIrView } from "@/lib/interaction/scene/interaction-ir-view";
 import { cn } from "@/lib/utils";
 
 function Badge({
@@ -35,16 +41,22 @@ function Badge({
 function PanelBody({
   spec,
   projectRoot,
+  isActive,
 }: {
   spec: InteractionSpec;
   projectRoot: string;
+  isActive: boolean;
 }) {
   const { t } = useTranslation();
   const bindingKeys = Object.keys(spec.bindings ?? {});
   const resources = spec.resources ?? [];
   const showPlot = isInteractionPlotKind(spec.kind);
   const showMath = isInteractionMathKind(spec.kind);
-  const fillViewport = showPlot || showMath;
+  const showFigure = isInteractionFigureKind(spec.kind);
+  const showIr = isInteractionSceneIrKind(spec.kind);
+  const showScene = isInteractionSceneKind(spec.kind) && !showIr;
+  const fillViewport = showPlot || showMath || showFigure || showScene || showIr;
+  const hideMetaBindings = showMath || showScene || showIr;
 
   return (
     <div
@@ -93,7 +105,23 @@ function PanelBody({
           </div>
         ) : showMath ? (
           <div className="min-h-0 flex-1">
-            <InteractionMathView spec={spec} />
+            <InteractionMathView spec={spec} isActive={isActive} />
+          </div>
+        ) : showFigure ? (
+          <div className="min-h-0 flex-1">
+            <InteractionFigureView spec={spec} projectRoot={projectRoot} />
+          </div>
+        ) : showIr ? (
+          <div className="min-h-0 flex-1">
+            <InteractionIrView spec={spec} projectRoot={projectRoot} isActive={isActive} />
+          </div>
+        ) : showScene ? (
+          <div className="min-h-0 flex-1">
+            <InteractionSceneView
+              spec={spec}
+              projectRoot={projectRoot}
+              isActive={isActive}
+            />
           </div>
         ) : (
           <section className="rounded-md border border-border bg-muted px-4 py-6 text-center">
@@ -106,7 +134,7 @@ function PanelBody({
           </section>
         )}
 
-        {bindingKeys.length > 0 && !showMath ? (
+        {bindingKeys.length > 0 && !hideMetaBindings ? (
           <section className="shrink-0 space-y-2">
             <h3 className="text-[length:var(--font-size-11)] font-medium text-muted-foreground">
               {t("interaction.panel.bindings")}
@@ -119,7 +147,7 @@ function PanelBody({
           </section>
         ) : null}
 
-        {resources.length > 0 ? (
+        {resources.length > 0 && !showFigure ? (
           <section className="shrink-0 space-y-2">
             <h3 className="text-[length:var(--font-size-11)] font-medium text-muted-foreground">
               {t("interaction.panel.resources")}
@@ -144,8 +172,13 @@ function PanelBody({
   );
 }
 
+function normalizeRoot(p: string): string {
+  return p.replace(/\\/g, "/").replace(/\/$/, "");
+}
+
 export function InteractionContent({
   tab,
+  isActive,
 }: {
   tab: RightTab;
   isActive: boolean;
@@ -155,6 +188,7 @@ export function InteractionContent({
   const interactionId = tab.interactionId;
   const [spec, setSpec] = useState<InteractionSpec | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     setSpec(null);
@@ -168,6 +202,19 @@ export function InteractionContent({
     });
     return () => {
       cancelled = true;
+    };
+  }, [projectRoot, interactionId, reloadToken]);
+
+  // Refetch when Agent rewrites this artifact (write used to leave open tabs stale).
+  useEffect(() => {
+    if (!projectRoot || !interactionId) return;
+    const unsub = window.electronAPI.onInteractionChanged?.((data) => {
+      if (normalizeRoot(data.projectRoot || "") !== normalizeRoot(projectRoot)) return;
+      if (data.id !== interactionId) return;
+      setReloadToken((n) => n + 1);
+    });
+    return () => {
+      unsub?.();
     };
   }, [projectRoot, interactionId]);
 
@@ -199,7 +246,7 @@ export function InteractionContent({
 
   return (
     <div className="h-full min-h-0 overflow-hidden">
-      <PanelBody spec={spec} projectRoot={projectRoot!} />
+      <PanelBody spec={spec} projectRoot={projectRoot!} isActive={isActive} />
     </div>
   );
 }

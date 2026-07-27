@@ -20,7 +20,9 @@ describe("prompt modules registry", () => {
   });
 
   it("global static modules stay under interim budget (P2 target ≤800)", () => {
-    // research-reasoning + reply-depth still dominate; plan-consent removed (~230 tok).
+    // research-reasoning + reply-depth still dominate; plan-consent removed (~230 tok),
+    // interaction trimmed to a judgment table (~1300 -> ~300 tok, how-to moved to
+    // interaction-write tool description). Remaining gap is research-reasoning + reply-depth.
     // Spec target ≤800 after P2 judgment-module trim.
     const staticGlobals = resolveStableSystemModules().filter((m) => m.prompt);
     const sum = staticGlobals.reduce((a, m) => a + approxTokens(m.prompt!), 0);

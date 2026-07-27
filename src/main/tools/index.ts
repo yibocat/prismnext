@@ -448,16 +448,19 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     name: TOOL_NAMES.interactionWrite,
     label: "Interaction Write",
     description:
-      "Create or update an Interaction spec (plot.* / math.*). Persists to `.prismnext/artifacts/<id>/spec.json`. " +
+      "Create or update an Interaction spec (plot.* / math.* / figure.static / scene.program). Persists to `.prismnext/artifacts/<id>/spec.json`. " +
+      "For scene.program also pass sceneSource (full scene.js, no import — use await ctx.three.ensure()). " +
       "Returns fenceMarkdown — embed it in your assistant reply after success.",
     category: "project",
     usageHint:
-      "When the user needs an interactive plot/surface (local sketch or bound to experiment csv), or after experiment-run when an interactive view beats a static file card.",
+      "When the user needs an interactive plot/surface/figure/scene (local sketch, programmable canvas, or bound to experiment outputs), or after experiment-run when an interactive view beats a static file card.",
     workflowRules: [
       "Do NOT use ```artifact for interactive objects — use interaction-write then ```interaction fence in your reply.",
-      "Do NOT edit spec.json with generic write/edit — use this tool only.",
+      "Do NOT edit spec.json or root scene.js with generic write/edit — those paths under `.prismnext/artifacts/<id>/` are denied; use this tool (pass sceneSource). Nested sidecar resources are allowed via write/edit.",
       "bound compute: set resources[] to real project-relative paths from experiment outputs.",
-      "Allowed kinds (P0/P1): plot.line, plot.series, plot.scatter, math.surface, math.field.",
+      "Allowed kinds: plot.line, plot.series, plot.scatter, math.surface, math.field, figure.static, scene.ir, scene.program (legacy).",
+      "3D manifold / Riemann metric / tangent plane → scene.ir with spec.model (no sceneSource).",
+      "Simple z=f(u,v) heightfield only → math.surface. sceneSource is rejected.",
       "After ok:true, you MUST embed fenceMarkdown in the assistant message (not only in tool output).",
     ],
   },

@@ -35,22 +35,47 @@ export type FieldArrow = {
   direction: [number, number, number];
 };
 
-const ALLOWED_MATH_IDENTIFIERS = new Set([
-  "Math",
-  "sin",
-  "cos",
-  "tan",
-  "exp",
-  "sqrt",
-  "abs",
-  "pow",
-  "min",
-  "max",
-  "PI",
-  "E",
-  "u",
-  "v",
-]);
+/**
+ * Single source of truth for safe `Math.*` members — used to (1) allow-list
+ * identifiers in `isMathExpressionAllowed` and (2) bind bare names (`cos`,
+ * not just `Math.cos`) as locals in `evaluateMathExpression`. These used to
+ * be separate lists that drifted: bare `cos`/`sin` were allow-listed but
+ * never bound at eval time, so any formula not `Math.`-prefixed — e.g. a
+ * natural sphere/torus/geodesic parametrization like `cos(u)*sin(v)` —
+ * crashed with `ReferenceError: cos is not defined`. Add new functions here
+ * only — nowhere else needs to change.
+ */
+const MATH_SAFE_MEMBERS: Record<string, unknown> = {
+  sin: Math.sin,
+  cos: Math.cos,
+  tan: Math.tan,
+  asin: Math.asin,
+  acos: Math.acos,
+  atan: Math.atan,
+  atan2: Math.atan2,
+  sinh: Math.sinh,
+  cosh: Math.cosh,
+  tanh: Math.tanh,
+  exp: Math.exp,
+  log: Math.log,
+  log2: Math.log2,
+  log10: Math.log10,
+  sqrt: Math.sqrt,
+  cbrt: Math.cbrt,
+  hypot: Math.hypot,
+  abs: Math.abs,
+  pow: Math.pow,
+  min: Math.min,
+  max: Math.max,
+  floor: Math.floor,
+  ceil: Math.ceil,
+  round: Math.round,
+  sign: Math.sign,
+  PI: Math.PI,
+  E: Math.E,
+};
+
+const ALLOWED_MATH_IDENTIFIERS = new Set(["Math", "u", "v", ...Object.keys(MATH_SAFE_MEMBERS)]);
 
 const FORBIDDEN_EXPR =
   /\b(eval|Function|import|require|window|global|this|constructor|prototype|process|fetch|XMLHttpRequest)\b/i;
@@ -146,7 +171,6 @@ export function isMathExpressionAllowed(expr: string, extraVars: string[] = []):
     if (/^\d/.test(token) || token === "." ) continue;
     if (/^[+\-*/(),]$/.test(token)) continue;
     if (token === "Math") continue;
-    if (/^Math\.(sin|cos|tan|exp|sqrt|abs|pow|min|max|PI|E)$/.test(token)) continue;
     if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(token) && allowed.has(token)) continue;
     return false;
   }
@@ -161,10 +185,19 @@ export function evaluateMathExpression(
   if (!isMathExpressionAllowed(expr, varNames)) {
     throw new Error("expression not allowed");
   }
+  // A binding/param with the same name (e.g. a variable literally called
+  // `E`) takes precedence — skip the math local so `varNames` supplies it.
+  const localNames = Object.keys(MATH_SAFE_MEMBERS).filter((k) => !(k in variables));
   const varValues = varNames.map((k) => variables[k]!);
+  const localValues = localNames.map((k) => MATH_SAFE_MEMBERS[k]);
   // eslint-disable-next-line no-new-func
-  const fn = new Function(...varNames, "Math", `"use strict"; return (${expr});`);
-  const result = fn(...varValues, Math) as unknown;
+  const fn = new Function(
+    ...localNames,
+    ...varNames,
+    "Math",
+    `"use strict"; return (${expr});`,
+  );
+  const result = fn(...localValues, ...varValues, Math) as unknown;
   if (typeof result !== "number" || !Number.isFinite(result)) {
     throw new Error("expression did not return a finite number");
   }

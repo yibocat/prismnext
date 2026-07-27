@@ -1,36 +1,33 @@
 import { TOOL_NAMES } from "../../../shared/tool-names";
 
 /**
- * Interaction — when/how to create Interactive Research Artifacts.
- * Tool how-to: interaction-list / interaction-read / interaction-write / interaction-open descriptions.
+ * Interaction — when to create Interactive Research Artifacts (judgment map only).
+ * How-to (schema, samples, Python/bound recipes) lives in the interaction-write
+ * tool description — see src/main/tools/interaction-write.ts (R2/R3: tool owns
+ * "how", module owns "when").
  */
 export const INTERACTION_PROMPT = [
   "## Interaction (interactive research objects)",
   "",
-  "Applies when the user needs **adjustable** plots, loss landscapes, or interactive views of data — not plain file preview.",
+  "Applies when the user needs **adjustable** plots, figures, math scenes, or 3D manifolds — not plain file preview.",
   "",
-  "### vs file artifact fence",
+  "### Which kind to use (pick the narrowest that fits)",
   "",
-  "- **Result files** (png/csv/pdf paths) → artifact fence with path: (see Reply depth).",
-  "- **Persistent interactive objects** (spec on disk) → interaction-* tools, then an **interaction** fence (id: …) in your **assistant** reply.",
+  "- **plot.*** — csv curves/scatter.",
+  "- **math.surface / math.field** — simple explicit `z=f(u,v)` or planar vector fields only.",
+  "- **scene.ir** — default for 3D manifolds + metrics + tangent probes. Declarative only — no scene.js.",
+  "- **figure.static** — scene.ir vocabulary too narrow (colorbar, LaTeX axes, heatmaps, multi-panel figures) → generate via Python; or an existing PNG/SVG/HTML.",
+  "- **scene.program** — legacy; only `builtin:lorenz` still runs. Do **not** write new scene.js.",
+  `- **bound vs local** — after ${TOOL_NAMES.experimentRun} already produced a chart/table, bind to its real output instead of regenerating it.`,
   "",
-  "### vs experiments",
+  "### Workflow",
   "",
-  "- experiment-run = real execution + runs.jsonl.",
-  "- **bound** interaction = read-only interactive instrument over run outputs (csv in resources[]).",
-  "- **local** interaction = sketch/simulation without a run (math.surface, demo plot.line).",
-  "",
-  "### Workflow (judgment)",
-  "",
-  `- Discover: ${TOOL_NAMES.interactionList} (optional kindPrefix).`,
-  `- Update: ${TOOL_NAMES.interactionRead} first, then ${TOOL_NAMES.interactionWrite} with full spec JSON.`,
-  `- Create: ${TOOL_NAMES.interactionWrite} → embed returned fenceMarkdown in your assistant message.`,
-  `- Open panel: ${TOOL_NAMES.interactionOpen} when the user asks to show it in RightArea (card in chat still helps).`,
-  `- After ${TOOL_NAMES.experimentRun} with metrics csv → bound plot.* + resources[] is often better than only an artifact fence.`,
+  `- Discover: ${TOOL_NAMES.interactionList}. Update: ${TOOL_NAMES.interactionRead} (check lastError).`,
+  `- ${TOOL_NAMES.interactionWrite} carries the schema, samples, and Python/bound recipes for each kind.`,
+  "- Embed fenceMarkdown after success.",
   "",
   "### Do not",
   "",
-  "- Grep/read the project hunting for interaction ids — use interaction-list/read.",
-  "- Use generic read/write/edit on .prismnext/artifacts/<id>/spec.json.",
-  "- Use artifact fences for interactive objects.",
+  "- Pass sceneSource for scene.program or scene.ir (rejected) — scene.ir uses spec.model instead.",
+  "- Build DOM/HUD in scripts — host owns UI.",
 ].join("\n");

@@ -87,7 +87,13 @@ function resolveIsDark(resolvedTheme: string | undefined): boolean {
   return document.documentElement.classList.contains("dark");
 }
 
-export function InteractionMathView({ spec }: { spec: InteractionSpec }) {
+export function InteractionMathView({
+  spec,
+  isActive = true,
+}: {
+  spec: InteractionSpec;
+  isActive?: boolean;
+}) {
   const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
   const themeConfig = useThemeStore((s) => s.config);
@@ -122,6 +128,14 @@ export function InteractionMathView({ spec }: { spec: InteractionSpec }) {
   scenePayloadRef.current = scenePayload;
 
   useEffect(() => {
+    if (!isActive) {
+      mountGenRef.current += 1;
+      hostRef.current?.dispose();
+      hostRef.current = null;
+      setHostReady(0);
+      return;
+    }
+
     if (!scene.ok || !containerRef.current) return;
 
     const mountGen = ++mountGenRef.current;
@@ -140,7 +154,6 @@ export function InteractionMathView({ spec }: { spec: InteractionSpec }) {
         hostRef.current = host;
         const payload = scenePayloadRef.current;
         if (payload) host.setScene(payload);
-        // Re-sync in case Appearance theme settled during async import.
         host.syncTheme(isDarkRef.current);
         setHostReady((n) => n + 1);
       } catch (err) {
@@ -154,21 +167,28 @@ export function InteractionMathView({ spec }: { spec: InteractionSpec }) {
       hostRef.current?.dispose();
       hostRef.current = null;
     };
-  }, [spec.id, spec.revision, scene.ok]);
+  }, [spec.id, spec.revision, scene.ok, isActive]);
 
   useEffect(() => {
-    if (!scenePayload || hostReady === 0 || !hostRef.current) return;
+    if (!isActive || !scenePayload || hostReady === 0 || !hostRef.current) return;
     hostRef.current.setScene(scenePayload);
-  }, [scenePayload, hostReady]);
+  }, [scenePayload, hostReady, isActive]);
 
   useEffect(() => {
-    if (hostReady === 0 || !hostRef.current) return;
-    // Theme mode (Appearance) + theme pack both change --card; re-sample after CSS settles.
+    if (!isActive || hostReady === 0 || !hostRef.current) return;
     hostRef.current.syncTheme(isDark);
-  }, [isDark, hostReady, themeConfig]);
+  }, [isDark, hostReady, themeConfig, isActive]);
 
   if (!scene.ok) {
     return <MathError message={scene.error} />;
+  }
+
+  if (!isActive) {
+    return (
+      <div className="flex h-full min-h-0 items-center justify-center rounded-md border border-border bg-muted text-[length:var(--font-size-11)] text-muted-foreground">
+        {t("interaction.panel.scenePaused")}
+      </div>
+    );
   }
 
   if (mountError) {

@@ -853,6 +853,12 @@ export interface ElectronAPI {
     projectRoot: string;
     spec: import("../../shared/interaction-spec").InteractionSpec;
   }) => Promise<{ ok: boolean; error?: string }>;
+  interactionReportSceneError: (args: {
+    projectRoot: string;
+    id: string;
+    error: string | null;
+    phase?: "load" | "mount" | "update";
+  }) => Promise<{ ok: boolean; error?: string }>;
   onInteractionChanged: (
     callback: (data: {
       projectRoot: string;

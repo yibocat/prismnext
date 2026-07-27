@@ -5,6 +5,7 @@ import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
 import * as path from "path";
 import { interactionBridgeRoot } from "./bridge-paths";
+import { SCENE_IR_SAMPLE_MODEL } from "../../shared/interaction-scene-ir";
 
 const BRIDGE_ROOT = interactionBridgeRoot();
 const TIMEOUT_MS = 30_000;
@@ -70,16 +71,27 @@ async function bridgeCall(
 export default tool({
   description:
     "Create or update an Interactive Research Artifact at `.prismnext/artifacts/<id>/spec.json`. " +
-    "Required JSON fields: id, title, kind (plot.line | plot.series | plot.scatter | math.surface | math.field), compute (local | bound). " +
-    "Optional: revision (auto-increments on update), params, model, bindings, view, resources. " +
-    "For bound plots, set resources[] to project-relative csv paths from experiment outputs. " +
-    "After success, embed the returned fenceMarkdown in your assistant reply — do NOT use ```artifact for interactive objects.",
+    "Kinds: plot.*, math.surface/field, figure.static, scene.ir (declarative 3D), scene.program (legacy builtin only). " +
+    "For 3D manifolds / Riemann metrics / tangent probes: use kind scene.ir with spec.model (runtimeVersion 1, parametric x/y/z, probe, metric, layers). " +
+    "Canvas framing defaults to mathematical origin — model.view.frame \"origin\" (default) keeps (0,0,0); use \"bbox\" only to center on the mesh AABB. orbitTarget \"origin\"|\"probe\". " +
+    "Do NOT pass sceneSource — arbitrary scene.js is rejected. Host renders surface, wireframe, tangents, metric status, bindings. Sample scene.ir model:\n" +
+    JSON.stringify(SCENE_IR_SAMPLE_MODEL, null, 2) +
+    "\nSimple heightfields only: math.surface with model.z. " +
+    "For figure.static: resources[] is **required** — point at PNG/SVG/HTML (artifact-relative filename OK, e.g. curvature_heatmap.png under .prismnext/artifacts/<id>/); write is rejected if the file is missing. " +
+    "Agent-generated (Python): `uv venv .prismnext/artifacts/.venv && uv pip install --python .prismnext/artifacts/.venv/bin/python matplotlib plotly numpy`, save PNG/HTML there, then write with resources: [{ role: \"figure\", path: \"<file>.png\" }]. " +
+    "HTML must be fully self-contained — the preview iframe blocks all network access: Plotly `fig.write_html(path, include_plotlyjs=True, full_html=True)`, never `include_plotlyjs=\"cdn\"`; no external `<script src=\"http...\">` / fonts / images. " +
+    "For bound plots/figures, set resources[] to project-relative paths — e.g. an existing experiment-run output at `experiment/<id>/results/loss.png` or `experiment/<id>/results/metrics.csv`. Bound resources are read at their real path (not copied), so don't re-render or re-plot something a run already produced. " +
+    "After success, embed fenceMarkdown in your assistant reply.",
   args: {
     spec: tool.schema
       .string()
       .describe(
-        "InteractionSpec as a JSON string. Example: {\"id\":\"demo.plot\",\"title\":\"Loss curve\",\"kind\":\"plot.line\",\"compute\":\"local\",\"revision\":1}",
+        "InteractionSpec JSON. For paraboloid + metric use kind scene.ir with bindings + model (see tool description sample).",
       ),
+    sceneSource: tool.schema
+      .string()
+      .optional()
+      .describe("Deprecated — rejected. Use scene.ir with spec.model instead."),
   },
   async execute(args, context) {
     const raw = typeof args.spec === "string" ? args.spec.trim() : "";
@@ -93,6 +105,12 @@ export default tool({
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return toolOutput({ ok: false, error: "spec must be a JSON object." });
     }
-    return bridgeCall(context as Record<string, unknown>, { action: "write", spec: parsed });
+    const sceneSource =
+      typeof args.sceneSource === "string" ? args.sceneSource : undefined;
+    return bridgeCall(context as Record<string, unknown>, {
+      action: "write",
+      spec: parsed,
+      ...(sceneSource != null ? { sceneSource } : {}),
+    });
   },
 });

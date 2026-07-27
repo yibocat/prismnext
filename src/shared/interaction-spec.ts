@@ -1,9 +1,22 @@
 /**
- * Interactive Research Artifact — Scene Spec (P0 shell).
+ * Interactive Research Artifact — Scene Spec.
  * True source lives at `.prismnext/artifacts/<id>/spec.json`.
  */
 
 export type InteractionCompute = "local" | "bound";
+
+/** Known resource roles (agents may still use other role strings). */
+export const INTERACTION_RESOURCE_ROLES = [
+  "data",
+  "figure",
+  "html",
+  "mesh",
+  "field",
+  "graph",
+  "steps",
+] as const;
+
+export type InteractionResourceRole = (typeof INTERACTION_RESOURCE_ROLES)[number];
 
 export type InteractionResource = {
   role?: string;
@@ -18,6 +31,8 @@ export type InteractionSpec = {
   kind: string;
   compute: InteractionCompute;
   revision: number;
+  /** Scene program entry: artifact-relative `scene.js` or `builtin:<name>`. */
+  entry?: string;
   params?: Record<string, unknown>;
   model?: Record<string, unknown>;
   bindings?: Record<string, Record<string, unknown>>;
@@ -49,6 +64,9 @@ export function parseInteractionSpec(raw: unknown): InteractionSpec | null {
 
   const spec: InteractionSpec = { id, title, kind, compute, revision };
 
+  if (typeof o.entry === "string" && o.entry.trim()) {
+    spec.entry = o.entry.trim();
+  }
   if (o.params && typeof o.params === "object" && !Array.isArray(o.params)) {
     spec.params = o.params as Record<string, unknown>;
   }
@@ -73,16 +91,21 @@ export function kindDisplayLabel(kind: string): string {
   const base = kind.split(".")[0] ?? kind;
   if (base === "plot") return "Plot";
   if (base === "math") return "Math";
+  if (base === "figure") return "Figure";
+  if (base === "scene") return "Scene";
   return base.charAt(0).toUpperCase() + base.slice(1);
 }
 
-/** P0/P1 kinds agents may write before dedicated runtimes ship. */
+/** Kinds agents may write (declarative + programmable canvas). */
 export const INTERACTION_KINDS_AGENT = [
   "plot.line",
   "plot.series",
   "plot.scatter",
   "math.surface",
   "math.field",
+  "figure.static",
+  "scene.ir",
+  "scene.program",
 ] as const;
 
 export type InteractionKindAgent = (typeof INTERACTION_KINDS_AGENT)[number];

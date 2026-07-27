@@ -11,8 +11,8 @@ import { EXPERIMENTS_PROMPT } from "../../src/main/prompts/modules/experiments";
 describe("resolve-active-modules", () => {
   it("stable system modules include workspace and cognitive baselines", () => {
     const keys = resolveStableSystemModules().map((m) => m.key);
-    // workspace-folders (project structure) + cognitive baselines (always-on for every agent)
-    expect(keys).toEqual(["workspace-folders", "research-reasoning", "reply-depth"]);
+    // workspace-folders (project structure) + cognitive baselines + interaction (always-on for every agent)
+    expect(keys).toEqual(["workspace-folders", "research-reasoning", "reply-depth", "interaction"]);
   });
 
   it("profile-selectable modules exclude workspace", () => {
@@ -39,11 +39,13 @@ describe("resolve-active-modules", () => {
 
   it("resolveActiveModuleKeys includes global baselines plus profile picks", () => {
     expect(resolveActiveModuleKeys({})).toEqual([
+      "interaction",
       "reply-depth",
       "research-reasoning",
       "workspace-folders",
     ]);
     expect(resolveActiveModuleKeys({ profileModules: ["literature-library", "bogus"] })).toEqual([
+      "interaction",
       "literature-library",
       "reply-depth",
       "research-reasoning",
@@ -57,6 +59,7 @@ describe("resolve-active-modules", () => {
     });
     expect(keys).toEqual([
       "chat-citation-staging",
+      "interaction",
       "literature-library",
       "reply-depth",
       "research-reasoning",
