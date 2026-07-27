@@ -26,18 +26,15 @@ describe("interaction renderer registry", () => {
     expect(resolveInteractionRenderer("plot.scatter")?.key).toBe("plot");
   });
 
-  it("routes math.* kinds to the math renderer", () => {
-    expect(resolveInteractionRenderer("math.surface")?.key).toBe("math");
-    expect(resolveInteractionRenderer("math.field")?.key).toBe("math");
-  });
-
   it("routes instrument to the instrument renderer", () => {
     expect(resolveInteractionRenderer("instrument")?.key).toBe("instrument");
   });
 
-  it("prefers scene.ir over the legacy scene.program renderer", () => {
-    expect(resolveInteractionRenderer("scene.ir")?.key).toBe("scene-ir");
-    expect(resolveInteractionRenderer("scene.program")?.key).toBe("scene-program");
+  it("routes retired legacy kinds to the deprecated view", () => {
+    expect(resolveInteractionRenderer("scene.ir")?.key).toBe("deprecated");
+    expect(resolveInteractionRenderer("scene.program")?.key).toBe("deprecated");
+    expect(resolveInteractionRenderer("math.surface")?.key).toBe("deprecated");
+    expect(resolveInteractionRenderer("math.field")?.key).toBe("deprecated");
   });
 
   it("returns null for unknown kinds", () => {

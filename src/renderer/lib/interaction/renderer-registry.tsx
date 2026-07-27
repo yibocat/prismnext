@@ -5,12 +5,14 @@
  * adding a row here.
  */
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
-import type { InteractionSpec } from "../../../shared/interaction-spec";
+import { useTranslation } from "react-i18next";
+import {
+  isDeprecatedInteractionKind,
+  type InteractionSpec,
+} from "../../../shared/interaction-spec";
 import { isInteractionPlotKind } from "../../../shared/interaction-plot";
-import { isInteractionMathKind } from "../../../shared/interaction-math";
 import { isInteractionFigureKind } from "../../../shared/interaction-figure";
 import { isInteractionPlotlyKind } from "../../../shared/interaction-plotly";
-import { isInteractionSceneIrKind } from "../../../shared/interaction-scene-ir";
 import { isInteractionInstrumentKind } from "../../../shared/interaction-instrument";
 
 export type InteractionRendererProps = {
@@ -63,19 +65,6 @@ export const INTERACTION_RENDERERS: InteractionRenderer[] = [
     ),
   },
   {
-    key: "math",
-    matches: isInteractionMathKind,
-    fillViewport: true,
-    hideBindings: true,
-    Component: lazy(() =>
-      import("./math/interaction-math-view").then((m) => ({
-        default: ((props: InteractionRendererProps) => (
-          <m.InteractionMathView spec={props.spec} isActive={props.isActive} />
-        )) as ComponentType<InteractionRendererProps>,
-      })),
-    ),
-  },
-  {
     key: "instrument",
     matches: isInteractionInstrumentKind,
     fillViewport: true,
@@ -102,40 +91,39 @@ export const INTERACTION_RENDERERS: InteractionRenderer[] = [
     ),
   },
   {
-    key: "scene-ir",
-    matches: isInteractionSceneIrKind,
-    fillViewport: true,
+    key: "deprecated",
+    matches: isDeprecatedInteractionKind,
+    fillViewport: false,
     hideBindings: true,
-    Component: lazy(() =>
-      import("./scene/interaction-ir-view").then((m) => ({
-        default: ((props: InteractionRendererProps) => (
-          <m.InteractionIrView
-            spec={props.spec}
-            projectRoot={props.projectRoot}
-            isActive={props.isActive}
-          />
-        )) as ComponentType<InteractionRendererProps>,
-      })),
-    ),
-  },
-  {
-    key: "scene-program",
-    matches: (kind) => kind.trim() === "scene.program",
-    fillViewport: true,
-    hideBindings: true,
-    Component: lazy(() =>
-      import("./scene/interaction-scene-view").then((m) => ({
-        default: ((props: InteractionRendererProps) => (
-          <m.InteractionSceneView
-            spec={props.spec}
-            projectRoot={props.projectRoot}
-            isActive={props.isActive}
-          />
-        )) as ComponentType<InteractionRendererProps>,
-      })),
-    ),
+    hideResources: true,
+    Component: lazy(() => Promise.resolve({ default: DeprecatedKindView })),
   },
 ];
+
+/**
+ * Retired kinds (scene.ir/math.surface/math.field/scene.program, V4-A) no
+ * longer render — this is the "not silent failure" fallback: read-only
+ * model dump so the Agent has enough context to rebuild the artifact with
+ * figure.plotly/instrument. See interaction-plotly-runtime-design.md §7.
+ */
+function DeprecatedKindView({ spec }: InteractionRendererProps) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-muted px-4 py-5">
+      <p className="text-[length:var(--font-size-13)] text-foreground">
+        {t("interaction.panel.deprecatedKindTitle")}
+      </p>
+      <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+        {t("interaction.panel.deprecatedKindBody", { kind: spec.kind })}
+      </p>
+      {spec.model ? (
+        <pre className="max-h-64 overflow-auto rounded-md border border-border bg-card p-3 font-mono text-[length:var(--font-size-11)] text-muted-foreground">
+          {JSON.stringify(spec.model, null, 2)}
+        </pre>
+      ) : null}
+    </div>
+  );
+}
 
 export function resolveInteractionRenderer(kind: string): InteractionRenderer | null {
   return INTERACTION_RENDERERS.find((r) => r.matches(kind)) ?? null;
