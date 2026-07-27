@@ -28,6 +28,10 @@ import {
   isInteractionFigureKind,
   resolveFigureDisplay,
 } from "../../shared/interaction-figure";
+import {
+  isInteractionPlotlyKind,
+  resolvePlotlyFigureSource,
+} from "../../shared/interaction-plotly";
 
 const ARTIFACTS_REL = join(".prismnext", "artifacts");
 const LAST_ERROR_FILE = ".last-error.json";
@@ -343,6 +347,22 @@ export function upsertInteractionSpec(
           `Save PNG/HTML under .prismnext/artifacts/${parsed.id}/ first, then ` +
           `resources: [{ role: "figure", path: "<filename>.png" }]`,
       };
+    }
+  }
+
+  if (isInteractionPlotlyKind(parsed.kind)) {
+    const src = resolvePlotlyFigureSource(parsed);
+    if (!src.ok) return { ok: false, error: src.error };
+    if (src.mode === "file") {
+      const abs = join(projectRoot, src.path);
+      if (!existsSync(abs)) {
+        return {
+          ok: false,
+          error:
+            `figure json not found on disk: ${src.path}. ` +
+            `Write the Plotly JSON first (python: fig.write_json(path)), then reference it in resources[].`,
+        };
+      }
     }
   }
 

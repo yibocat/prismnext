@@ -123,6 +123,48 @@ describe("interaction-store upsert", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
+  it("accepts inline figure.plotly and rejects missing json resource", () => {
+    root = mkdtempSync(join(tmpdir(), "ix-plotly-"));
+    const inline = upsertInteractionSpec(root, {
+      id: "demo.saddle",
+      title: "Saddle",
+      kind: "figure.plotly",
+      compute: "local",
+      revision: 1,
+      model: { figure: { data: [{ type: "surface", z: [[0, 1]] }] } },
+    });
+    expect(inline.ok).toBe(true);
+
+    const missing = upsertInteractionSpec(root, {
+      id: "demo.field",
+      title: "Field",
+      kind: "figure.plotly",
+      compute: "bound",
+      revision: 1,
+      resources: [{ role: "figure-json", path: "experiment/exp-1/results/field.json" }],
+    });
+    expect(missing.ok).toBe(false);
+    expect(missing.error).toMatch(/not found on disk/);
+
+    mkdirSync(join(root, "experiment", "exp-1", "results"), { recursive: true });
+    writeFileSync(
+      join(root, "experiment", "exp-1", "results", "field.json"),
+      JSON.stringify({ data: [{ type: "cone" }] }),
+      "utf8",
+    );
+    const bound = upsertInteractionSpec(root, {
+      id: "demo.field",
+      title: "Field",
+      kind: "figure.plotly",
+      compute: "bound",
+      revision: 1,
+      resources: [{ role: "figure-json", path: "experiment/exp-1/results/field.json" }],
+    });
+    expect(bound.ok).toBe(true);
+
+    rmSync(root, { recursive: true, force: true });
+  });
+
   it("accepts scene.program builtin", () => {
     root = mkdtempSync(join(tmpdir(), "ix-store-"));
     const scene = upsertInteractionSpec(root, {
