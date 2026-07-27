@@ -27,6 +27,7 @@ import {
   validateInstrumentSpec,
 } from "../../shared/interaction-instrument";
 import { isInteractionScriptKind, validateScriptSpec } from "../../shared/interaction-script";
+import { isInteractionDiagramKind, validateDiagramSpec } from "../../shared/interaction-diagram";
 
 const ARTIFACTS_REL = join(".prismnext", "artifacts");
 const LAST_ERROR_FILE = ".last-error.json";
@@ -313,6 +314,11 @@ export function upsertInteractionSpec(
   if (isInteractionScriptKind(parsed.kind)) {
     const script = validateScriptSpec(projectRoot, parsed);
     if (!script.ok) return { ok: false, error: script.error };
+  }
+
+  if (isInteractionDiagramKind(parsed.kind)) {
+    const diagram = validateDiagramSpec(projectRoot, parsed);
+    if (!diagram.ok) return { ok: false, error: diagram.error };
   }
 
   if (isInteractionPlotlyKind(parsed.kind)) {

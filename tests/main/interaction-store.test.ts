@@ -21,6 +21,7 @@ import {
 } from "../../src/main/services/interaction-store";
 import { INSTRUMENT_SAMPLE_MODEL } from "../../src/shared/interaction-instrument";
 import { SCRIPT_SAMPLE_JS } from "../../src/shared/interaction-script";
+import { DIAGRAM_SAMPLE_DOT_SPEC } from "../../src/shared/interaction-diagram";
 
 describe("interaction-store upsert", () => {
   let root: string;
@@ -257,6 +258,59 @@ describe("interaction-store upsert", () => {
     });
     expect(banned.ok).toBe(false);
     expect(String(banned.error)).toMatch(/fetch/i);
+
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("accepts a diagram.mermaid with inline/file sources, rejects bad engine/missing file", () => {
+    root = mkdtempSync(join(tmpdir(), "ix-diagram-"));
+
+    const inline = upsertInteractionSpec(root, {
+      id: "demo.diagram.inline",
+      title: "Retry flow",
+      kind: "diagram.mermaid",
+      compute: "local",
+      revision: 1,
+      model: { source: "graph TD; A-->B;" },
+    });
+    expect(inline.ok).toBe(true);
+
+    const dot = upsertInteractionSpec(root, DIAGRAM_SAMPLE_DOT_SPEC as Parameters<typeof upsertInteractionSpec>[1]);
+    expect(dot.ok).toBe(true);
+
+    const dir = join(root, ".prismnext", "artifacts", "demo.diagram.file");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "flow.dot"), "digraph { a -> b; }", "utf8");
+    const fileOk = upsertInteractionSpec(root, {
+      id: "demo.diagram.file",
+      title: "Call graph",
+      kind: "diagram.mermaid",
+      compute: "local",
+      revision: 1,
+      model: { engine: "dot" },
+      resources: [{ role: "diagram-source", path: "flow.dot" }],
+    });
+    expect(fileOk.ok).toBe(true);
+
+    const badEngine = upsertInteractionSpec(root, {
+      id: "demo.diagram.badengine",
+      title: "Bad engine",
+      kind: "diagram.mermaid",
+      compute: "local",
+      revision: 1,
+      model: { engine: "neato", source: "digraph { a -> b; }" },
+    });
+    expect(badEngine.ok).toBe(false);
+
+    const missingFile = upsertInteractionSpec(root, {
+      id: "demo.diagram.missing",
+      title: "Missing file",
+      kind: "diagram.mermaid",
+      compute: "local",
+      revision: 1,
+      resources: [{ role: "diagram-source", path: "nope.dot" }],
+    });
+    expect(missingFile.ok).toBe(false);
 
     rmSync(root, { recursive: true, force: true });
   });

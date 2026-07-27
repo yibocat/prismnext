@@ -33,6 +33,11 @@ import {
   SCRIPT_SAMPLE_SPEC,
   validateScriptSpec,
 } from "../../shared/interaction-script";
+import {
+  isInteractionDiagramKind,
+  DIAGRAM_SAMPLE_MERMAID_SPEC,
+  validateDiagramSpec,
+} from "../../shared/interaction-diagram";
 import { broadcastInteractionChanged } from "./interaction-ui-events";
 import { scheduleInteractionThumbnail } from "./interaction-thumbnail";
 
@@ -175,6 +180,25 @@ function dispatch(req: InteractionBridgeRequest): Record<string, unknown> {
         }
       }
 
+      if (isInteractionDiagramKind(parsed.kind)) {
+        if (sceneSource != null) {
+          return {
+            ok: false,
+            error: "diagram.mermaid does not use sceneSource. Put Mermaid/DOT text in spec.model.source.",
+            sample: DIAGRAM_SAMPLE_MERMAID_SPEC,
+          };
+        }
+        const diagram = validateDiagramSpec(projectRoot, parsed);
+        if (!diagram.ok) {
+          return {
+            ok: false,
+            error: diagram.error,
+            phase: "compile-preview",
+            sample: DIAGRAM_SAMPLE_MERMAID_SPEC,
+          };
+        }
+      }
+
       const result = upsertInteractionSpec(projectRoot, parsed);
       if (!result.ok || !result.spec) {
         return { ok: false, error: result.error ?? "write_failed" };
@@ -196,7 +220,8 @@ function dispatch(req: InteractionBridgeRequest): Record<string, unknown> {
       if (
         isInteractionPlotlyKind(result.spec.kind) ||
         isInteractionInstrumentKind(result.spec.kind) ||
-        isInteractionScriptKind(result.spec.kind)
+        isInteractionScriptKind(result.spec.kind) ||
+        isInteractionDiagramKind(result.spec.kind)
       ) {
         void scheduleInteractionThumbnail(projectRoot, result.spec);
       }

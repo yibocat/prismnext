@@ -145,6 +145,18 @@ describe("interaction-bridge", () => {
     expect(scheduleInteractionThumbnailMock).toHaveBeenCalledTimes(1);
 
     scheduleInteractionThumbnailMock.mockClear();
+    const diagram = await write("req-thumb-diagram", {
+      id: "demo.thumb.diagram",
+      title: "Diagram",
+      kind: "diagram.mermaid",
+      compute: "local",
+      revision: 1,
+      model: { source: "graph TD; A-->B;" },
+    });
+    expect(diagram.ok).toBe(true);
+    expect(scheduleInteractionThumbnailMock).toHaveBeenCalledTimes(1);
+
+    scheduleInteractionThumbnailMock.mockClear();
     const plot = await write("req-thumb-plot", {
       id: "demo.thumb.plot",
       title: "Plot",
@@ -512,6 +524,103 @@ describe("interaction-bridge", () => {
           compute: "local",
           revision: 1,
           resources: [{ role: "script", path: "script.js" }],
+        },
+      }),
+      "utf-8",
+    );
+    await processInteractionBridgeOnceForTests();
+    const ok = JSON.parse(
+      fs.readFileSync(path.join(sessionDir, `${okId}.result.json`), "utf-8"),
+    ) as Record<string, unknown>;
+    expect(ok.ok).toBe(true);
+    expect(scheduleInteractionThumbnailMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects diagram.mermaid with no source, with a copyable sample", async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ix-bridge-diagram-"));
+    projectRoots.push(projectRoot);
+    const sessionId = "test-session-diagram-bad";
+    const sessionDir = path.join(getInteractionBridgeRoot(), sessionId);
+    fs.mkdirSync(sessionDir, { recursive: true });
+
+    const requestId = "req-diagram-bad";
+    fs.writeFileSync(
+      path.join(sessionDir, `${requestId}.request.json`),
+      JSON.stringify({
+        action: "write",
+        sessionId,
+        projectRoot,
+        spec: {
+          id: "demo.diagram.bad",
+          title: "Bad diagram",
+          kind: "diagram.mermaid",
+          compute: "local",
+          revision: 1,
+        },
+      }),
+      "utf-8",
+    );
+    await processInteractionBridgeOnceForTests();
+    const result = JSON.parse(
+      fs.readFileSync(path.join(sessionDir, `${requestId}.result.json`), "utf-8"),
+    ) as Record<string, unknown>;
+    expect(result.ok).toBe(false);
+    expect(result.phase).toBe("compile-preview");
+    expect(result.sample).toBeTruthy();
+    expect(
+      fs.existsSync(
+        path.join(projectRoot, ".prismnext", "artifacts", "demo.diagram.bad", "spec.json"),
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects sceneSource on diagram.mermaid writes, accepts a valid one", async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ix-bridge-diagram-src-"));
+    projectRoots.push(projectRoot);
+    const sessionId = "test-session-diagram-src";
+    const sessionDir = path.join(getInteractionBridgeRoot(), sessionId);
+    fs.mkdirSync(sessionDir, { recursive: true });
+
+    const rejectedId = "req-diagram-scenesource";
+    fs.writeFileSync(
+      path.join(sessionDir, `${rejectedId}.request.json`),
+      JSON.stringify({
+        action: "write",
+        sessionId,
+        projectRoot,
+        spec: {
+          id: "demo.diagram.good",
+          title: "Good diagram",
+          kind: "diagram.mermaid",
+          compute: "local",
+          revision: 1,
+          model: { source: "graph TD; A-->B;" },
+        },
+        sceneSource: "export async function mount() {}",
+      }),
+      "utf-8",
+    );
+    await processInteractionBridgeOnceForTests();
+    const rejected = JSON.parse(
+      fs.readFileSync(path.join(sessionDir, `${rejectedId}.result.json`), "utf-8"),
+    ) as Record<string, unknown>;
+    expect(rejected.ok).toBe(false);
+    expect(String(rejected.error)).toMatch(/sceneSource/);
+
+    const okId = "req-diagram-ok";
+    fs.writeFileSync(
+      path.join(sessionDir, `${okId}.request.json`),
+      JSON.stringify({
+        action: "write",
+        sessionId,
+        projectRoot,
+        spec: {
+          id: "demo.diagram.good",
+          title: "Good diagram",
+          kind: "diagram.mermaid",
+          compute: "local",
+          revision: 1,
+          model: { source: "graph TD; A-->B;" },
         },
       }),
       "utf-8",
