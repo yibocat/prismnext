@@ -20,10 +20,11 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        // plotly.js-dist-min: read as a raw text asset at runtime for offscreen
-        // thumbnail capture (interaction-thumbnail.ts) — must not be bundled/
-        // inlined, only resolved via require.resolve() against real node_modules.
-        external: ["electron", "node-pty", "@napi-rs/canvas", "plotly.js-dist-min"],
+        // plotly.js-dist-min / three: read as raw text assets at runtime for
+        // offscreen thumbnail capture (interaction-thumbnail.ts, figure.script's
+        // optional THREE injection) — must not be bundled/inlined, only
+        // resolved via require.resolve() against real node_modules.
+        external: ["electron", "node-pty", "@napi-rs/canvas", "plotly.js-dist-min", "three"],
       },
     },
   },

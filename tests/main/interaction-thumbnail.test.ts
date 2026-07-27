@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { PLOTLY_SAMPLE_FIGURE } from "../../src/shared/interaction-plotly";
 import { INSTRUMENT_SAMPLE_MODEL } from "../../src/shared/interaction-instrument";
+import { SCRIPT_SAMPLE_JS } from "../../src/shared/interaction-script";
 import type { InteractionSpec } from "../../src/shared/interaction-spec";
 
 const { thumbTempDir } = vi.hoisted(() => {
@@ -66,6 +67,7 @@ vi.mock("electron", () => {
 
 import {
   resolveFigureForThumbnail,
+  resolveScriptForThumbnail,
   renderFigureToPngBuffer,
   captureInteractionThumbnail,
   scheduleInteractionThumbnail,
@@ -174,6 +176,59 @@ describe("resolveFigureForThumbnail", () => {
   });
 });
 
+describe("resolveScriptForThumbnail", () => {
+  it("builds sandbox HTML for a valid figure.script spec", () => {
+    const root = mkdtempSync(join(tmpdir(), "ix-thumb-script-"));
+    const dir = join(root, ".prismnext", "artifacts", "demo.script");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "script.js"), SCRIPT_SAMPLE_JS, "utf8");
+
+    const spec = baseSpec({
+      id: "demo.script",
+      kind: "figure.script",
+      resources: [{ role: "script", path: "script.js" }],
+    });
+    const result = resolveScriptForThumbnail(root, spec);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.html).toContain("render");
+      expect(result.html).toContain('<script type="module">');
+    }
+
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("fails closed when the spec fails validateScriptSpec", () => {
+    const root = mkdtempSync(join(tmpdir(), "ix-thumb-script-"));
+    const spec = baseSpec({ id: "demo.script.missing", kind: "figure.script" });
+    const result = resolveScriptForThumbnail(root, spec);
+    expect(result.ok).toBe(false);
+
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("embeds THREE's module bundle when model.three is true", () => {
+    const root = mkdtempSync(join(tmpdir(), "ix-thumb-script-"));
+    const dir = join(root, ".prismnext", "artifacts", "demo.script.three");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "script.js"), SCRIPT_SAMPLE_JS, "utf8");
+
+    const spec = baseSpec({
+      id: "demo.script.three",
+      kind: "figure.script",
+      model: { three: true },
+      resources: [{ role: "script", path: "script.js" }],
+    });
+    const result = resolveScriptForThumbnail(root, spec);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.html).toMatch(/export\s*\{/);
+    }
+
+    rmSync(root, { recursive: true, force: true });
+  });
+});
+
 describe("renderFigureToPngBuffer (mocked electron)", () => {
   beforeEach(() => {
     mockWindows = [];
@@ -252,6 +307,21 @@ describe("captureInteractionThumbnail (mocked electron)", () => {
 
   it("success writes a real PNG thumbnail file", async () => {
     const spec = baseSpec({ model: { figure: PLOTLY_SAMPLE_FIGURE } });
+    const result = await captureInteractionThumbnail(root, spec);
+    expect(result.ok).toBe(true);
+    expect(existsSync(interactionStore.interactionThumbnailPath(root, spec.id))).toBe(true);
+  });
+
+  it("captures a figure.script thumbnail via resolveScriptForThumbnail", async () => {
+    const dir = join(root, ".prismnext", "artifacts", "demo.thumb.script");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "script.js"), SCRIPT_SAMPLE_JS, "utf8");
+
+    const spec = baseSpec({
+      id: "demo.thumb.script",
+      kind: "figure.script",
+      resources: [{ role: "script", path: "script.js" }],
+    });
     const result = await captureInteractionThumbnail(root, spec);
     expect(result.ok).toBe(true);
     expect(existsSync(interactionStore.interactionThumbnailPath(root, spec.id))).toBe(true);

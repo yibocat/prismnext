@@ -76,7 +76,7 @@ describe("interaction-bridge", () => {
     expect(result.relativePath).toBe(".prismnext/artifacts/demo.plot/spec.json");
   });
 
-  it("schedules a thumbnail capture after a successful figure.plotly/instrument write, not for plot.*/figure.static", async () => {
+  it("schedules a thumbnail capture after a successful figure.plotly/instrument/figure.script write, not for plot.*/figure.static", async () => {
     const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ix-bridge-thumb-"));
     projectRoots.push(projectRoot);
     const sessionId = "test-session-thumb";
@@ -123,6 +123,25 @@ describe("interaction-bridge", () => {
       },
     });
     expect(instrument.ok).toBe(true);
+    expect(scheduleInteractionThumbnailMock).toHaveBeenCalledTimes(1);
+
+    scheduleInteractionThumbnailMock.mockClear();
+    const scriptDir = path.join(projectRoot, ".prismnext", "artifacts", "demo.thumb.script");
+    fs.mkdirSync(scriptDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(scriptDir, "script.js"),
+      "export function render(ctx) { return ctx.Plotly.newPlot(ctx.el, [], {}); }",
+      "utf-8",
+    );
+    const script = await write("req-thumb-script", {
+      id: "demo.thumb.script",
+      title: "Script",
+      kind: "figure.script",
+      compute: "local",
+      revision: 1,
+      resources: [{ role: "script", path: "script.js" }],
+    });
+    expect(script.ok).toBe(true);
     expect(scheduleInteractionThumbnailMock).toHaveBeenCalledTimes(1);
 
     scheduleInteractionThumbnailMock.mockClear();
@@ -502,7 +521,6 @@ describe("interaction-bridge", () => {
       fs.readFileSync(path.join(sessionDir, `${okId}.result.json`), "utf-8"),
     ) as Record<string, unknown>;
     expect(ok.ok).toBe(true);
-    // Thumbnail scheduling for figure.script lands in V5 Task 5 (offscreen
-    // capture support) — not wired here yet, so no scheduling assertion.
+    expect(scheduleInteractionThumbnailMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -9,7 +9,7 @@
  * §10 (D25–D28) for the full design rationale.
  */
 import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { app, BrowserWindow } from "electron";
 import {
   isInteractionInstrumentKind,
@@ -17,6 +17,7 @@ import {
   resolveInstrumentFigure,
 } from "../../shared/interaction-instrument";
 import { initialBindingValues, parseMathBindings } from "../../shared/interaction-math";
+import { normalizeFigureResourceProjectPath } from "../../shared/interaction-figure";
 import {
   PLOTLY_MAX_JSON_BYTES,
   isInteractionPlotlyKind,
@@ -24,6 +25,13 @@ import {
   validatePlotlyFigure,
   type PlotlyFigure,
 } from "../../shared/interaction-plotly";
+import {
+  buildScriptSandboxHtml,
+  classifyResourceEmbedKind,
+  isInteractionScriptKind,
+  validateScriptSpec,
+  type ScriptResourceEmbed,
+} from "../../shared/interaction-script";
 import type { InteractionSpec } from "../../shared/interaction-spec";
 import { broadcastInteractionChanged } from "./interaction-ui-events";
 import {
@@ -105,6 +113,100 @@ function loadPlotlyBundleText(): string {
   return cachedPlotlyJs;
 }
 
+let cachedThreeModuleJs: string | null = null;
+
+/**
+ * `three`'s package.json `exports` map only exposes the root ESM entry
+ * (`.` -> `build/three.module.js`) and a short allow-list of subpaths — it
+ * does *not* expose a deep `build/three.module.min.js` specifier, so
+ * `require.resolve("three/build/...")` fails the same way Vite's `?raw`
+ * resolver does (both honor Node's exports encapsulation). Resolve the
+ * package's real `build/` directory via the CJS entry instead, then read
+ * the (non-minified) ESM sibling file directly off disk.
+ */
+function loadThreeModuleBundleText(): string {
+  if (cachedThreeModuleJs == null) {
+    const cjsEntry = require.resolve("three");
+    cachedThreeModuleJs = readFileSync(join(dirname(cjsEntry), "three.module.js"), "utf8");
+  }
+  return cachedThreeModuleJs;
+}
+
+function scriptResourceEmbedResourcePath(r: {
+  role?: string;
+  path?: string;
+  artifactPath?: string;
+}): string | null {
+  const p = (r.path ?? r.artifactPath)?.trim();
+  return p || null;
+}
+
+/**
+ * Resolve a `figure.script` spec into the fully assembled sandbox HTML for
+ * offscreen capture — reads the script + declared resources off disk
+ * (main-process fs, mirroring resolveFigureForThumbnail's file-mode reads)
+ * and, unlike write-time validateScriptSpec, actually embeds their content.
+ * Theme is hardcoded light and bindings use their declared defaults —
+ * thumbnails are small proof-of-render images, not theme-accurate previews.
+ */
+export function resolveScriptForThumbnail(
+  projectRoot: string,
+  spec: InteractionSpec,
+): { ok: true; html: string } | { ok: false; error: string } {
+  const validated = validateScriptSpec(projectRoot, spec);
+  if (!validated.ok) return { ok: false, error: validated.error };
+
+  const scriptAbs = join(projectRoot, validated.scriptPath);
+  let scriptText: string;
+  try {
+    scriptText = readFileSync(scriptAbs, "utf8");
+  } catch {
+    return { ok: false, error: `could not read script resource: ${validated.scriptPath}` };
+  }
+
+  const resources: ScriptResourceEmbed[] = [];
+  for (const r of spec.resources ?? []) {
+    if (r.role === "script") continue;
+    const rawPath = scriptResourceEmbedResourcePath(r);
+    if (!rawPath) continue;
+    const role = r.role ?? rawPath;
+    const abs = join(projectRoot, normalizeFigureResourceProjectPath(spec, rawPath));
+    const kind = classifyResourceEmbedKind(rawPath);
+    try {
+      if (kind === "image") {
+        const bytes = readFileSync(abs);
+        const ext = rawPath.split(".").pop()?.toLowerCase() ?? "png";
+        const mime = ext === "svg" ? "image/svg+xml" : `image/${ext === "jpg" ? "jpeg" : ext}`;
+        resources.push({ role, dataUrl: `data:${mime};base64,${bytes.toString("base64")}` });
+        continue;
+      }
+      const text = readFileSync(abs, "utf8");
+      if (kind === "json") {
+        try {
+          resources.push({ role, json: JSON.parse(text), text });
+          continue;
+        } catch {
+          // fall through to text-only
+        }
+      }
+      resources.push({ role, text });
+    } catch {
+      return { ok: false, error: `resource not found on disk: ${rawPath}` };
+    }
+  }
+
+  const html = buildScriptSandboxHtml({
+    plotlyJs: loadPlotlyBundleText(),
+    threeModuleJs: validated.threeEnabled ? loadThreeModuleBundleText() : undefined,
+    scriptText,
+    resources,
+    bindings: initialBindingValues(parseMathBindings(spec.bindings)),
+    size: { width: THUMBNAIL_WIDTH, height: THUMBNAIL_HEIGHT },
+    theme: { isDark: false },
+  });
+  return { ok: true, html };
+}
+
 /** Escape `</script>` breakout when embedding JSON inside an inline <script>. */
 function embedJson(value: unknown): string {
   return JSON.stringify(value ?? null).replace(/</g, "\\u003c");
@@ -156,13 +258,16 @@ function delayResult(ms: number, value: { error: string }): Promise<{ error: str
 export type RenderFigureResult = { ok: true; png: Buffer } | { ok: false; error: string };
 
 /**
- * Render a Plotly figure once in a hidden window and capture a screenshot.
- * Per D26, the window is `show:true` but positioned off-screen — `show:false`
- * windows can end up with no GPU/WebGL context on some platforms, silently
- * producing blank frames for 3D traces (surface/scatter3d/mesh3d/cone).
+ * Core hidden-window lifecycle: write a prepared HTML document to a temp
+ * file, load it in an off-screen `BrowserWindow`, poll `window.__prismThumb`
+ * (both `buildThumbnailHtml` and `buildScriptSandboxHtml` set this global on
+ * completion — see D28/D34), capture a screenshot, and always clean up the
+ * window + temp file. Per D26, the window is `show:true` but positioned
+ * off-screen — `show:false` windows can end up with no GPU/WebGL context on
+ * some platforms, silently producing blank frames for 3D content.
  */
-export async function renderFigureToPngBuffer(
-  figure: PlotlyFigure,
+async function renderPreparedHtmlToPngBuffer(
+  html: string,
   opts?: { timeoutMs?: number },
 ): Promise<RenderFigureResult> {
   const timeoutMs = opts?.timeoutMs ?? DEFAULT_RENDER_TIMEOUT_MS;
@@ -170,7 +275,7 @@ export async function renderFigureToPngBuffer(
     app.getPath("temp"),
     `prism-interaction-thumb-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.html`,
   );
-  writeFileSync(tmpPath, buildThumbnailHtml(figure, loadPlotlyBundleText()), "utf8");
+  writeFileSync(tmpPath, html, "utf8");
 
   let win: BrowserWindow | null = null;
   try {
@@ -215,15 +320,29 @@ export async function renderFigureToPngBuffer(
   }
 }
 
-/** Resolve the figure, render it offscreen, and persist the PNG. No side effects on failure. */
+/** Render a Plotly figure once in a hidden window and capture a screenshot. */
+export async function renderFigureToPngBuffer(
+  figure: PlotlyFigure,
+  opts?: { timeoutMs?: number },
+): Promise<RenderFigureResult> {
+  return renderPreparedHtmlToPngBuffer(buildThumbnailHtml(figure, loadPlotlyBundleText()), opts);
+}
+
+/** Resolve the figure/script, render it offscreen, and persist the PNG. No side effects on failure. */
 export async function captureInteractionThumbnail(
   projectRoot: string,
   spec: InteractionSpec,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const resolved = resolveFigureForThumbnail(projectRoot, spec);
-  if (!resolved.ok) return { ok: false, error: resolved.error };
-
-  const rendered = await renderFigureToPngBuffer(resolved.figure);
+  let rendered: RenderFigureResult;
+  if (isInteractionScriptKind(spec.kind)) {
+    const resolved = resolveScriptForThumbnail(projectRoot, spec);
+    if (!resolved.ok) return { ok: false, error: resolved.error };
+    rendered = await renderPreparedHtmlToPngBuffer(resolved.html);
+  } else {
+    const resolved = resolveFigureForThumbnail(projectRoot, spec);
+    if (!resolved.ok) return { ok: false, error: resolved.error };
+    rendered = await renderFigureToPngBuffer(resolved.figure);
+  }
   if (!rendered.ok) return { ok: false, error: rendered.error };
 
   const written = writeInteractionThumbnail(projectRoot, spec.id, rendered.png);

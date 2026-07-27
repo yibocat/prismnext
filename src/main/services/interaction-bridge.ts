@@ -193,7 +193,11 @@ function dispatch(req: InteractionBridgeRequest): Record<string, unknown> {
       // Fire-and-forget (V4-B) — background offscreen render + thumbnail,
       // never blocks the Agent's write response. scheduleInteractionThumbnail
       // swallows its own errors into .last-error.json (phase: "thumbnail").
-      if (isInteractionPlotlyKind(result.spec.kind) || isInteractionInstrumentKind(result.spec.kind)) {
+      if (
+        isInteractionPlotlyKind(result.spec.kind) ||
+        isInteractionInstrumentKind(result.spec.kind) ||
+        isInteractionScriptKind(result.spec.kind)
+      ) {
         void scheduleInteractionThumbnail(projectRoot, result.spec);
       }
       return body;
