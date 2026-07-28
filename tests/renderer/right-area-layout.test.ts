@@ -4,6 +4,7 @@ import { useLayoutStore } from "@/stores/layout-store";
 import {
   computeCanSplitRightArea,
   deriveRightAreaVisualState,
+  fitSplitRightWidthPx,
   measureMainAreaWidthPx,
   openRightArea,
   closeRightArea,
@@ -11,6 +12,7 @@ import {
   reconcileRightAreaOnMainAreaResize,
 } from "@/lib/workspace/right-area-layout";
 import { RESIZE_FILL_PX } from "@/lib/workspace/layout-constants";
+import { MAIN_AREA_MIN, RIGHT_AREA_MIN } from "@/styles/constants";
 
 function mockPanel(state: { px: number; collapsed: boolean }): PanelImperativeHandle {
   return {
@@ -66,6 +68,33 @@ describe("right-area-layout", () => {
     expect(st.editorMaximized).toBe(false);
     expect(right.resize).toHaveBeenCalledWith(500);
     expect(center.expand).toHaveBeenCalled();
+  });
+
+  it("fitSplitRightWidthPx never leaves center below MAIN_AREA_MIN", () => {
+    // Medium main that canSplit (720) but preferred 500 would crush center to 220.
+    expect(fitSplitRightWidthPx(720, 500)).toBe(RIGHT_AREA_MIN);
+    expect(720 - fitSplitRightWidthPx(720, 500)).toBeGreaterThanOrEqual(MAIN_AREA_MIN);
+    expect(fitSplitRightWidthPx(1200, 500)).toBe(500);
+  });
+
+  it("openRightArea clamps preferred width on medium main (does not fake-maximize)", () => {
+    // window 1000 − left 280 = main 720 = SPLIT_MAIN_MIN; preferred 500 must clamp to 280.
+    vi.stubGlobal("innerWidth", 1000);
+    useLayoutStore.setState({ rightAreaWidth: 500 });
+    const left = mockPanel({ px: 280, collapsed: false });
+    const center = mockPanel({ px: 720, collapsed: false });
+    const right = mockPanel({ px: 0, collapsed: true });
+    openRightArea({
+      centerRef: center,
+      rightAreaRef: right,
+      leftSidebarRef: left,
+    });
+    const st = useLayoutStore.getState();
+    expect(st.rightAreaExpanded).toBe(true);
+    expect(st.editorMaximized).toBe(false);
+    expect(right.resize).toHaveBeenCalledWith(RIGHT_AREA_MIN);
+    expect(center.expand).toHaveBeenCalled();
+    expect(center.collapse).not.toHaveBeenCalled();
   });
 
   it("openRightArea maximizes on narrow main-area", () => {

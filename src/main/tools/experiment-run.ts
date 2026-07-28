@@ -2,7 +2,7 @@
  * experiment-run — Run a shell command inside an experiment island and record it.
  *
  * Fixed pipeline (executed by the bridge executor): resolve island → ensure
- * shared workspace `.venv` (uv/python) → detect_env → run command via PTY
+ * shared `.prismnext/.venv` (uv/python) → detect_env → run command via PTY
  * (venv on PATH) → append a runs.jsonl entry → return the run.
  *
  * There is NO wall-clock timeout on the tool poll: training jobs may run for

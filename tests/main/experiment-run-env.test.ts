@@ -27,13 +27,13 @@ describe("buildPythonEnvExtra", () => {
   it("prepends the venv bin to PATH and sets VIRTUAL_ENV when a venv exists", () => {
     const env: ExperimentEnv = {
       ...baseEnv,
-      python: "/tmp/proj/.venv/bin/python",
+      python: "/tmp/proj/.prismnext/.venv/bin/python",
       pythonVersion: "3.12",
-      venvPath: ".venv",
+      venvPath: ".prismnext/.venv",
     };
     const extra = buildPythonEnvExtra(env);
-    expect(extra.VIRTUAL_ENV).toBe("/tmp/proj/.venv");
-    expect(extra.PATH?.startsWith("/tmp/proj/.venv/bin")).toBe(true);
+    expect(extra.VIRTUAL_ENV).toBe("/tmp/proj/.prismnext/.venv");
+    expect(extra.PATH?.startsWith("/tmp/proj/.prismnext/.venv/bin")).toBe(true);
     expect(extra.PATH).toContain(process.env.PATH ?? "");
   });
 
@@ -43,11 +43,11 @@ describe("buildPythonEnvExtra", () => {
     try {
       const env: ExperimentEnv = {
         ...baseEnv,
-        python: "/tmp/proj/.venv/bin/python",
-        venvPath: ".venv",
+        python: "/tmp/proj/.prismnext/.venv/bin/python",
+        venvPath: ".prismnext/.venv",
       };
       const extra = buildPythonEnvExtra(env);
-      expect(extra.PATH).toBe("/tmp/proj/.venv/bin");
+      expect(extra.PATH).toBe("/tmp/proj/.prismnext/.venv/bin");
     } finally {
       if (previous !== undefined) process.env.PATH = previous;
     }

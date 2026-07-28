@@ -7,7 +7,7 @@ import {
   isForbiddenSystemPythonInstall,
   isExperimentPythonSetupCommand,
   isExperimentPythonScriptCommand,
-  EXPERIMENT_VENV_DIR,
+  PRISMNEXT_VENV_REL,
 } from "../../src/shared/experiment-log";
 import {
   gateExperimentPythonExecution,
@@ -58,7 +58,7 @@ describe("isForbiddenSystemPythonInstall", () => {
   });
 });
 
-describe("gateExperimentPythonExecution (shared workspace venv)", () => {
+describe("gateExperimentPythonExecution (project .prismnext/.venv)", () => {
   let root: string;
 
   beforeEach(() => {
@@ -78,10 +78,9 @@ describe("gateExperimentPythonExecution (shared workspace venv)", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  function stubSharedVenv(): ExperimentVenvRunner {
-    const workspace = join(root, "labs");
+  function stubProjectVenv(): ExperimentVenvRunner {
     return () => {
-      const bin = join(workspace, EXPERIMENT_VENV_DIR, "bin");
+      const bin = join(root, ".prismnext", ".venv", "bin");
       mkdirSync(bin, { recursive: true });
       const py = join(bin, "python");
       writeFileSync(py, "#!/bin/sh\necho ok\n");
@@ -103,44 +102,49 @@ describe("gateExperimentPythonExecution (shared workspace venv)", () => {
     expect(gate.action).toBe("passthrough");
   });
 
-  it("passthrough for python outside the Experiment workspace folder", () => {
+  it("applies project venv for python outside the Experiment workspace folder", () => {
     mkdirSync(join(root, "other"), { recursive: true });
     const gate = gateExperimentPythonExecution({
       projectRoot: root,
       cwd: join(root, "other"),
       command: "python3 plot.py",
+      ensureOpts: { runner: stubProjectVenv() },
     });
-    expect(gate.action).toBe("passthrough");
+    expect(gate.action).toBe("apply");
+    if (gate.action !== "apply") return;
+    expect(gate.envExtra.VIRTUAL_ENV).toMatch(/\.prismnext[/\\]\.venv/);
   });
 
-  it("applies shared workspace venv when python runs inside an island", () => {
+  it("applies project venv when python runs inside an island", () => {
     const island = join(root, "labs", "exp-demo");
     const gate = gateExperimentPythonExecution({
       projectRoot: root,
       cwd: island,
       command: "python3 plot.py",
-      ensureOpts: { runner: stubSharedVenv() },
+      ensureOpts: { runner: stubProjectVenv() },
     });
     expect(gate.action).toBe("apply");
     if (gate.action !== "apply") return;
-    expect(gate.envExtra.VIRTUAL_ENV).toContain(join("labs", ".venv"));
+    expect(gate.envExtra.VIRTUAL_ENV).toMatch(/\.prismnext[/\\]\.venv/);
     expect(gate.envExtra.VIRTUAL_ENV).not.toContain("exp-demo");
+    expect(gate.envExtra.VIRTUAL_ENV).not.toMatch(/labs[/\\]\.venv$/);
     expect(
-      gate.envExtra.PATH?.includes(`${EXPERIMENT_VENV_DIR}/bin`) ||
-        gate.envExtra.PATH?.includes(`${EXPERIMENT_VENV_DIR}\\Scripts`),
+      gate.envExtra.PATH?.includes(`${PRISMNEXT_VENV_REL}/bin`) ||
+        gate.envExtra.PATH?.includes(".prismnext") ||
+        gate.envExtra.PATH?.includes(".venv"),
     ).toBe(true);
   });
 
-  it("allows uv pip setup at Experiment folder root (shared venv)", () => {
+  it("allows uv pip setup at Experiment folder root (shared project venv)", () => {
     const gate = gateExperimentPythonExecution({
       projectRoot: root,
       cwd: join(root, "labs"),
       command: "uv pip install matplotlib",
-      ensureOpts: { runner: stubSharedVenv() },
+      ensureOpts: { runner: stubProjectVenv() },
     });
     expect(gate.action).toBe("apply");
     if (gate.action !== "apply") return;
-    expect(gate.envExtra.VIRTUAL_ENV).toContain(join("labs", ".venv"));
+    expect(gate.envExtra.VIRTUAL_ENV).toMatch(/\.prismnext[/\\]\.venv/);
   });
 
   it("blocks python scripts at Experiment folder root (no island)", () => {
@@ -148,14 +152,14 @@ describe("gateExperimentPythonExecution (shared workspace venv)", () => {
       projectRoot: root,
       cwd: join(root, "labs"),
       command: "python3 plot.py",
-      ensureOpts: { runner: stubSharedVenv() },
+      ensureOpts: { runner: stubProjectVenv() },
     });
     expect(gate.action).toBe("block");
     if (gate.action !== "block") return;
     expect(gate.error).toMatch(/island|experiment-run/i);
   });
 
-  it("blocks when shared workspace venv cannot be created", () => {
+  it("blocks when project venv cannot be created", () => {
     const gate = gateExperimentPythonExecution({
       projectRoot: root,
       cwd: join(root, "labs", "exp-demo"),
@@ -164,7 +168,7 @@ describe("gateExperimentPythonExecution (shared workspace venv)", () => {
     });
     expect(gate.action).toBe("block");
     if (gate.action !== "block") return;
-    expect(gate.error).toMatch(/\.venv|venv/i);
+    expect(gate.error).toMatch(/\.venv|venv|prismnext/i);
   });
 
   it("blocks uv pip --system inside island", () => {
@@ -173,7 +177,7 @@ describe("gateExperimentPythonExecution (shared workspace venv)", () => {
       projectRoot: root,
       cwd: island,
       command: "uv pip install matplotlib --system",
-      ensureOpts: { runner: stubSharedVenv() },
+      ensureOpts: { runner: stubProjectVenv() },
     });
     expect(gate.action).toBe("block");
     if (gate.action !== "block") return;
@@ -197,7 +201,7 @@ describe("gateExperimentPythonExecution (shared workspace venv)", () => {
       projectRoot: root,
       cwd: root,
       command: "cd labs/exp-demo && python3 plot.py",
-      ensureOpts: { runner: stubSharedVenv() },
+      ensureOpts: { runner: stubProjectVenv() },
     });
     expect(gate.action).toBe("apply");
   });
@@ -208,7 +212,7 @@ describe("gateExperimentPythonExecution (shared workspace venv)", () => {
       projectRoot: root,
       cwd: island,
       command: "python plot.py",
-      ensureOpts: { runner: stubSharedVenv() },
+      ensureOpts: { runner: stubProjectVenv() },
     });
     expect(gate.action).toBe("apply");
   });
@@ -219,7 +223,7 @@ describe("gateExperimentPythonExecution (shared workspace venv)", () => {
       projectRoot: root,
       cwd: island,
       command: "python3 plot_v2.py",
-      ensureOpts: { runner: stubSharedVenv() },
+      ensureOpts: { runner: stubProjectVenv() },
       blockBashPythonScripts: true,
     });
     expect(blocked.action).toBe("block");
@@ -231,7 +235,7 @@ describe("gateExperimentPythonExecution (shared workspace venv)", () => {
       projectRoot: root,
       cwd: island,
       command: "uv pip install matplotlib numpy",
-      ensureOpts: { runner: stubSharedVenv() },
+      ensureOpts: { runner: stubProjectVenv() },
       blockBashPythonScripts: true,
     });
     expect(setup.action).toBe("apply");

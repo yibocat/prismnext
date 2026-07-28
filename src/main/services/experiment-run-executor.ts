@@ -160,7 +160,7 @@ export interface KickoffExperimentRunArgs {
    * NOT the PTY session id built below - kept separate to avoid collision.
    */
   chatSessionId?: string | null;
-  /** Default true — ensure shared Experiment workspace `.venv` before detect/run. */
+  /** Default true — ensure shared project `.prismnext/.venv` before detect/run. */
   ensureVenv?: boolean;
   venvRunner?: ExperimentVenvRunner;
 }
@@ -172,6 +172,7 @@ function detectIslandEnv(
   return detectEnv(island, {
     workspaceAbs: ctx.workspaceAbs,
     workspaceRel: ctx.workspaceRel,
+    projectRoot: ctx.projectRoot,
   });
 }
 
@@ -190,7 +191,7 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
     return;
   }
 
-  // Hard gate: Python under Experiment uses the shared workspace `.venv`.
+  // Hard gate: Python under Experiment uses the shared project `.prismnext/.venv`.
   if (isPythonRelatedCommand(command) && args.ensureVenv !== false) {
     const gate = gateExperimentPythonExecution({
       projectRoot: ctx.projectRoot,
@@ -208,10 +209,9 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
       return;
     }
   } else if (args.ensureVenv !== false) {
-    // Non-Python: best-effort ensure so later Python runs share the workspace venv.
-    ensureExperimentPythonVenv(ctx.workspaceAbs, {
+    // Non-Python: best-effort ensure so later Python runs share the project venv.
+    ensureExperimentPythonVenv(ctx.projectRoot, {
       runner: args.venvRunner,
-      workspaceRel: ctx.workspaceRel,
     });
   }
 
@@ -391,7 +391,7 @@ function reportResult(
 
 /**
  * Build PTY env vars so the run uses the detected python interpreter:
- *  - If `env.python` points at the shared Experiment workspace venv, prepend its
+ *  - If `env.python` points at the shared project `.prismnext/.venv`, prepend its
  *    `bin` dir to PATH (so `python` / `pip` resolve to the venv).
  *  - Set `VIRTUAL_ENV` to the venv root so `pip` / `python` / `uv pip` self-identify it.
  *  - Always set `PYTHONUNBUFFERED=1` for streaming output.
@@ -401,7 +401,7 @@ function reportResult(
 export function buildPythonEnvExtra(env: ExperimentEnv): Record<string, string> {
   const extra: Record<string, string> = { PYTHONUNBUFFERED: "1" };
   if (env.python && env.venvPath) {
-    // env.python is `<experiment-dir>/.venv/bin/python` (posix) or
+    // env.python is `.prismnext/.venv/bin/python` (posix) or
     // `…/Scripts/python.exe` (windows). dirname gives the bin dir.
     const venvBin = dirname(env.python);
     const venvRoot = pathResolve(venvBin, "..");

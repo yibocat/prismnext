@@ -33,6 +33,7 @@ import {
   EXPERIMENT_RUNS_FILENAME,
   EXPERIMENT_RUNS_STATS_FILENAME,
   EXPERIMENT_VENV_DIR,
+  PRISMNEXT_VENV_REL,
   experimentStatusOf,
   isSafeExperimentId,
   RUN_OUTPUT_TAIL_BYTES,
@@ -288,18 +289,33 @@ function whichProbe(binary: string, cwd: string): string | null {
 }
 
 /**
- * Absolute path to the shared Experiment-workspace venv Python interpreter
- * (`<workspaceAbs>/.venv/bin/python` — may not exist yet).
+ * Absolute paths for the project-scoped shared Python venv
+ * (`.prismnext/.venv` — may not exist yet).
  */
-export function resolveWorkspaceExperimentVenvPython(workspaceAbs: string): string {
-  return IS_WIN
-    ? join(workspaceAbs, EXPERIMENT_VENV_DIR, "Scripts", "python.exe")
-    : join(workspaceAbs, EXPERIMENT_VENV_DIR, "bin", "python");
+export function resolveProjectPythonVenv(projectRoot: string): {
+  venvAbs: string;
+  venvRel: string;
+  python: string;
+} {
+  const root = pathResolve(projectRoot);
+  const venvAbs = join(root, ".prismnext", EXPERIMENT_VENV_DIR);
+  const python = IS_WIN
+    ? join(venvAbs, "Scripts", "python.exe")
+    : join(venvAbs, "bin", "python");
+  return { venvAbs, venvRel: PRISMNEXT_VENV_REL, python };
 }
 
-/** @deprecated Use `resolveWorkspaceExperimentVenvPython` (shared workspace venv). */
-export function resolveIslandVenvPython(workspaceAbs: string): string {
-  return resolveWorkspaceExperimentVenvPython(workspaceAbs);
+/**
+ * Absolute path to the shared project venv Python interpreter.
+ * `projectRoot` is the Prism project root (directory that contains `.prismnext/`).
+ */
+export function resolveWorkspaceExperimentVenvPython(projectRoot: string): string {
+  return resolveProjectPythonVenv(projectRoot).python;
+}
+
+/** @deprecated Use `resolveWorkspaceExperimentVenvPython` / `resolveProjectPythonVenv`. */
+export function resolveIslandVenvPython(projectRoot: string): string {
+  return resolveWorkspaceExperimentVenvPython(projectRoot);
 }
 
 /** Injectable shell runner for `ensureExperimentPythonVenv` (tests + production). */
@@ -312,7 +328,7 @@ export interface EnsureExperimentPythonVenvResult {
   ok: boolean;
   /** True when this call created the venv (false if it already existed). */
   created: boolean;
-  /** Project-relative venv path when `workspaceRel` is known, else `.venv`. */
+  /** Project-relative venv path (always `.prismnext/.venv` when present). */
   venvPath: string | null;
   python: string | null;
   method?: "uv" | "venv" | "existing";
@@ -338,23 +354,45 @@ function defaultVenvRunner(cmd: string, cwd: string): { ok: boolean; stderr?: st
   }
 }
 
-function workspaceVenvRel(workspaceRel?: string): string {
-  const rel = (workspaceRel || "").replace(/\\/g, "/").replace(/\/$/, "");
-  return rel ? `${rel}/${EXPERIMENT_VENV_DIR}` : EXPERIMENT_VENV_DIR;
+function ensurePrismVenvGitignored(projectRoot: string): void {
+  if (!existsSync(join(projectRoot, ".git"))) return;
+  const gitignorePath = join(projectRoot, ".gitignore");
+  let content = "";
+  if (existsSync(gitignorePath)) {
+    try {
+      content = readFileSync(gitignorePath, "utf-8");
+    } catch {
+      return;
+    }
+  }
+  const line = ".prismnext/.venv/";
+  if (content.includes(line) || content.includes(".prismnext/.venv")) return;
+  const prefix = content.length > 0 && !content.endsWith("\n") ? "\n" : "";
+  writeFileSync(
+    gitignorePath,
+    content + prefix + "\n# prismnext shared Python venv\n" + line + "\n",
+    "utf-8",
+  );
 }
 
 /**
- * Ensure one shared `<Experiment workspace>/.venv` for all islands.
- * Prefer `uv venv`, fall back to `python3 -m venv`. Idempotent when the
- * interpreter already exists. Never installs packages into system Python.
+ * Ensure one shared project venv at `.prismnext/.venv` for Experiment,
+ * Interaction, and other project Python. Prefer `uv venv`, fall back to
+ * `python3 -m venv`. Idempotent when the interpreter already exists.
+ * Never installs packages into system Python. Lazy — call on first need.
+ *
+ * @param projectRoot Prism project root (contains `.prismnext/`). Callers that
+ *   only have an experiment workspace path should pass `ctx.projectRoot` or
+ *   resolve via `findPrismProjectRoot`.
  */
 export function ensureExperimentPythonVenv(
-  workspaceAbs: string,
+  projectRoot: string,
   opts?: { runner?: ExperimentVenvRunner; workspaceRel?: string },
 ): EnsureExperimentPythonVenvResult {
+  void opts?.workspaceRel; // retained for call-site compatibility
   const runner = opts?.runner ?? defaultVenvRunner;
-  const venvRel = workspaceVenvRel(opts?.workspaceRel);
-  const python = resolveWorkspaceExperimentVenvPython(workspaceAbs);
+  const root = pathResolve(projectRoot);
+  const { venvAbs, venvRel, python } = resolveProjectPythonVenv(root);
 
   if (existsSync(python)) {
     return {
@@ -366,10 +404,11 @@ export function ensureExperimentPythonVenv(
     };
   }
 
-  mkdirSync(workspaceAbs, { recursive: true });
+  mkdirSync(join(root, ".prismnext"), { recursive: true });
+  ensurePrismVenvGitignored(root);
 
-  const uvCmd = `uv venv ${EXPERIMENT_VENV_DIR}`;
-  const uvResult = runner(uvCmd, workspaceAbs);
+  const uvCmd = `uv venv ${PRISMNEXT_VENV_REL}`;
+  const uvResult = runner(uvCmd, root);
   if (uvResult.ok && existsSync(python)) {
     return {
       ok: true,
@@ -381,8 +420,8 @@ export function ensureExperimentPythonVenv(
   }
 
   const pyBin = IS_WIN ? "python" : "python3";
-  const venvCmd = `${pyBin} -m venv ${EXPERIMENT_VENV_DIR}`;
-  const venvResult = runner(venvCmd, workspaceAbs);
+  const venvCmd = `${pyBin} -m venv ${PRISMNEXT_VENV_REL}`;
+  const venvResult = runner(venvCmd, root);
   if (venvResult.ok && existsSync(python)) {
     return {
       ok: true,
@@ -400,11 +439,14 @@ export function ensureExperimentPythonVenv(
   return {
     ok: false,
     created: false,
-    venvPath: existsSync(join(workspaceAbs, EXPERIMENT_VENV_DIR)) ? venvRel : null,
+    venvPath: existsSync(venvAbs) ? venvRel : null,
     python: null,
-    error: `failed to create shared Experiment workspace venv (${detail})`,
+    error: `failed to create shared project venv at ${PRISMNEXT_VENV_REL} (${detail})`,
   };
 }
+
+/** Alias — same as {@link ensureExperimentPythonVenv}. */
+export const ensureProjectPythonVenv = ensureExperimentPythonVenv;
 
 /** Walk up from a path looking for a `.prismnext` directory (project root). */
 export function findPrismProjectRoot(start: string): string | null {
@@ -495,16 +537,16 @@ function buildWorkspaceVenvEnvExtra(pythonAbs: string): Record<string, string> {
 }
 
 /**
- * Hard gate for Python under the Workspace Experiment function folder
- * (whatever name the user configured — not only `experiment/`).
+ * Hard gate for Python under a Prism project.
  *
- * Shared venv: `<experiment-dir>/.venv` (all islands reuse it).
+ * Shared venv: `.prismnext/.venv` (Experiment + Interaction + other project Python).
  *
  * - Non-Python → passthrough
- * - Python outside that folder → passthrough
- * - Scripts inside folder but not in an island → block (use experiment-run in an island)
- * - Env setup (`uv pip` / `uv venv`) at workspace root or island → apply shared venv
- * - Scripts in an island → ensure shared venv + inject PATH / VIRTUAL_ENV
+ * - No project root → passthrough
+ * - Forbidden system pip → block
+ * - Scripts inside Experiment folder but not in an island → block (use experiment-run)
+ * - Env setup (`uv pip` / `uv venv`) at workspace root or island → apply project venv
+ * - Scripts in an island / elsewhere in project → ensure project venv + inject PATH
  * - `--system` / bare pip installs → block
  */
 export function gateExperimentPythonExecution(opts: {
@@ -526,7 +568,7 @@ export function gateExperimentPythonExecution(opts: {
       action: "block",
       error:
         `prismnext: refuse \`pip\` / \`pip3\` / \`python -m pip\` install via bash — that installs into **system Python**. ` +
-        `From the Experiment workspace (or any island), run \`uv pip install <pkg>\` so packages land in the shared \`<experiment-dir>/.venv\` only.`,
+        `Run \`uv pip install <pkg>\` so packages land in the shared \`${PRISMNEXT_VENV_REL}\` only.`,
     };
   }
 
@@ -542,9 +584,28 @@ export function gateExperimentPythonExecution(opts: {
     return { action: "passthrough" };
   }
 
+  const applyProjectVenv = (): ExperimentPythonGate => {
+    const ensured = ensureExperimentPythonVenv(projectRoot, opts.ensureOpts);
+    if (!ensured.ok || !ensured.python) {
+      return {
+        action: "block",
+        error:
+          `prismnext: Python in this project requires the shared \`${PRISMNEXT_VENV_REL}\`. ` +
+          `Could not create it: ${ensured.error ?? "unknown error"}. Install uv or python3, then retry.`,
+      };
+    }
+    return {
+      action: "apply",
+      islandAbs: opts.cwd,
+      python: ensured.python,
+      envExtra: buildWorkspaceVenvEnvExtra(ensured.python),
+    };
+  };
+
   const resolved = resolveExperimentDir(projectRoot, join(projectRoot, ".prismnext"));
   if ("error" in resolved) {
-    return { action: "passthrough" };
+    // No Experiment folder configured — still use the project venv.
+    return applyProjectVenv();
   }
 
   const workspaceAbs = normalizeAbs(join(projectRoot, resolved.rel));
@@ -566,7 +627,7 @@ export function gateExperimentPythonExecution(opts: {
   }
 
   if (!sawUnderExperiment) {
-    return { action: "passthrough" };
+    return applyProjectVenv();
   }
 
   const isSetup = isExperimentPythonSetupCommand(command);
@@ -578,7 +639,7 @@ export function gateExperimentPythonExecution(opts: {
       error:
         `prismnext: Python scripts under the Experiment workspace (\`${resolved.rel}/\`) must run inside an experiment island ` +
         `(\`${resolved.rel}/<id>/\`) via \`experiment-run\`. Env setup (\`uv pip install\`) may run from \`${resolved.rel}/\` ` +
-        `and installs into the shared \`${resolved.rel}/${EXPERIMENT_VENV_DIR}\`.`,
+        `and installs into the shared \`${PRISMNEXT_VENV_REL}\`.`,
     };
   }
 
@@ -588,7 +649,7 @@ export function gateExperimentPythonExecution(opts: {
       error:
         `prismnext: do not run Python scripts via bash inside the Experiment workspace. ` +
         `Use the \`experiment-run\` tool (id + command, pass image paths in \`artifacts\`) so the run is logged and figures appear in chat. ` +
-        `Bash is only allowed for env setup (\`uv pip install\`, \`uv venv\` into \`${resolved.rel}/${EXPERIMENT_VENV_DIR}\`).`,
+        `Bash is only allowed for env setup (\`uv pip install\`, \`uv venv\` into \`${PRISMNEXT_VENV_REL}\`).`,
     };
   }
 
@@ -596,20 +657,17 @@ export function gateExperimentPythonExecution(opts: {
     return {
       action: "block",
       error:
-        `prismnext: refuse system Python installs. Use \`uv pip install <pkg>\` from the Experiment workspace ` +
-        `so packages land in the shared \`${resolved.rel}/${EXPERIMENT_VENV_DIR}\` — never \`pip3\` / \`pip\` / \`python -m pip\`.`,
+        `prismnext: refuse system Python installs. Use \`uv pip install <pkg>\` ` +
+        `so packages land in the shared \`${PRISMNEXT_VENV_REL}\` — never \`pip3\` / \`pip\` / \`python -m pip\`.`,
     };
   }
 
-  const ensured = ensureExperimentPythonVenv(workspaceAbs, {
-    ...opts.ensureOpts,
-    workspaceRel: resolved.rel,
-  });
+  const ensured = ensureExperimentPythonVenv(projectRoot, opts.ensureOpts);
   if (!ensured.ok || !ensured.python) {
     return {
       action: "block",
       error:
-        `prismnext: Python under Experiment requires the shared \`${resolved.rel}/${EXPERIMENT_VENV_DIR}\`. ` +
+        `prismnext: Python under Experiment requires the shared \`${PRISMNEXT_VENV_REL}\`. ` +
         `Could not create it: ${ensured.error ?? "unknown error"}. Install uv or python3, then retry.`,
     };
   }
@@ -622,23 +680,30 @@ export function gateExperimentPythonExecution(opts: {
   };
 }
 
-/** Detect runtime environment; Python prefers the shared Experiment workspace venv. */
+/** Detect runtime environment; Python prefers the shared project `.prismnext/.venv`. */
 export function detectEnv(
   probeCwd: string,
-  workspace?: { workspaceAbs: string; workspaceRel: string },
+  workspace?: { workspaceAbs: string; workspaceRel: string; projectRoot?: string },
 ): ExperimentEnv {
-  const workspaceAbs = workspace?.workspaceAbs ?? probeCwd;
-  const workspaceRel = workspace?.workspaceRel;
-  const venvBin = resolveWorkspaceExperimentVenvPython(workspaceAbs);
-  const venvExists = existsSync(join(workspaceAbs, EXPERIMENT_VENV_DIR));
-  const venvRel = workspaceVenvRel(workspaceRel);
+  const projectRoot =
+    (workspace?.projectRoot && workspace.projectRoot.trim()) ||
+    findPrismProjectRoot(probeCwd) ||
+    (workspace?.workspaceAbs ? findPrismProjectRoot(workspace.workspaceAbs) : null);
 
   let python: string | null = null;
   let pythonVersion: string | null = null;
-  if (venvExists && existsSync(venvBin)) {
-    python = venvBin;
-    pythonVersion = runShell(`"${venvBin}" --version`, probeCwd)?.replace(/^Python\s+/i, "") ?? null;
+  let venvPath: string | null = null;
+
+  if (projectRoot) {
+    const resolved = resolveProjectPythonVenv(projectRoot);
+    if (existsSync(resolved.python)) {
+      python = resolved.python;
+      venvPath = resolved.venvRel;
+      pythonVersion =
+        runShell(`"${resolved.python}" --version`, probeCwd)?.replace(/^Python\s+/i, "") ?? null;
+    }
   }
+
   if (!python) {
     const pyBin = IS_WIN ? "python" : "python3";
     const resolvedPy = whichProbe(pyBin, probeCwd);
@@ -666,7 +731,7 @@ export function detectEnv(
     rVersion,
     platform: process.platform,
     gitCommit,
-    venvPath: venvExists && existsSync(venvBin) ? venvRel : null,
+    venvPath,
   };
 }
 
@@ -912,7 +977,7 @@ export interface CreateExperimentInput {
 }
 
 export interface CreateExperimentOptions {
-  /** Default true — best-effort shared `uv venv` / `python -m venv` under the Experiment workspace. */
+  /** Default true — best-effort shared `uv venv` / `python -m venv` at `.prismnext/.venv`. */
   ensureVenv?: boolean;
   venvRunner?: ExperimentVenvRunner;
 }
@@ -938,10 +1003,9 @@ export function createExperiment(
   mkdirSync(workspaceIsland, { recursive: true });
 
   if (opts?.ensureVenv !== false) {
-    // Best-effort shared workspace venv — create still succeeds if no Python runtime.
-    ensureExperimentPythonVenv(ctx.workspaceAbs, {
+    // Best-effort shared project venv — create still succeeds if no Python runtime.
+    ensureExperimentPythonVenv(ctx.projectRoot, {
       runner: opts?.venvRunner,
-      workspaceRel: ctx.workspaceRel,
     });
   }
 
@@ -1426,9 +1490,8 @@ export function detectEnvForIsland(
   }
   const island = workspaceIslandAbs(ctx, meta);
   if (opts?.ensureVenv !== false) {
-    ensureExperimentPythonVenv(ctx.workspaceAbs, {
+    ensureExperimentPythonVenv(ctx.projectRoot, {
       runner: opts?.venvRunner,
-      workspaceRel: ctx.workspaceRel,
     });
   }
   return {
@@ -1436,6 +1499,7 @@ export function detectEnvForIsland(
     env: detectEnv(island, {
       workspaceAbs: ctx.workspaceAbs,
       workspaceRel: ctx.workspaceRel,
+      projectRoot: ctx.projectRoot,
     }),
     workspacePath: meta.workspacePath,
   };
