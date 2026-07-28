@@ -27,8 +27,15 @@ export const EXPERIMENT_RUNS_FILENAME = "runs.jsonl";
 export const EXPERIMENT_RUNS_STATS_FILENAME = "runs.stats.json";
 
 /**
- * Shared Python venv directory name under the Workspace Experiment folder
- * (e.g. `labs/.venv`) — one venv for all islands, not per-island.
+ * Project-scoped shared Python venv — one env for Experiment islands,
+ * Interaction artifact generation, and other project Python packages.
+ * Created lazily on first Python need (not on project open).
+ */
+export const PRISMNEXT_VENV_REL = ".prismnext/.venv";
+
+/**
+ * Basename of the venv directory (for filesystem walk skip lists).
+ * Prefer {@link PRISMNEXT_VENV_REL} for the full project-relative path.
  */
 export const EXPERIMENT_VENV_DIR = ".venv";
 
@@ -113,7 +120,7 @@ export function isSafeExperimentId(id: string): boolean {
 
 /** Best-effort runtime snapshot (optional; returned by `detect_env` / auto-filled on runs). */
 export interface ExperimentEnv {
-  /** Resolved python interpreter, if any (prefers shared workspace `.venv/bin/python`). */
+  /** Resolved python interpreter, if any (prefers `.prismnext/.venv/bin/python`). */
   python: string | null;
   pythonVersion: string | null;
   /** Resolved Rscript path, if R is available. */
@@ -123,8 +130,8 @@ export interface ExperimentEnv {
   /** Short git commit hash at run time, or null if not a repo / git missing. */
   gitCommit: string | null;
   /**
-   * Project-relative path to the shared Experiment workspace venv
-   * (e.g. `labs/.venv`), or null when missing.
+   * Project-relative path to the shared project venv
+   * (`.prismnext/.venv`), or null when missing.
    */
   venvPath: string | null;
 }

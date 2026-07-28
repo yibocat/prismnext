@@ -5,6 +5,13 @@
 
 import { normalizeFigureResourceProjectPath } from "./interaction-figure";
 import type { InteractionResource, InteractionSpec } from "./interaction-spec";
+import {
+  buildDomainGrids,
+  checkNoLiteralGridArrays,
+  parseComputeDomain,
+  parseModelParams,
+  walkResolveMarkers,
+} from "./interaction-compute";
 
 export const INTERACTION_PLOTLY_KIND = "figure.plotly" as const;
 
@@ -60,7 +67,7 @@ export function validatePlotlyFigure(raw: unknown): PlotlyFigureResult {
   return { ok: true, figure };
 }
 
-function jsonResourcePath(resources?: InteractionResource[]): string | null {
+export function jsonResourcePath(resources?: InteractionResource[]): string | null {
   if (!resources?.length) return null;
   for (const r of resources) {
     const p = (r.path ?? r.artifactPath)?.trim();
@@ -96,27 +103,155 @@ export function resolvePlotlyFigureSource(spec: InteractionSpec): PlotlyFigureSo
   };
 }
 
-/** Minimal legal figure — returned as a copyable hint on validation failure. */
+export type PlotlyInlineBakeResult =
+  | { ok: true; figure: PlotlyFigure }
+  | { ok: false; error: string };
+
+/**
+ * Write-time only: gate hand-typed literal arrays on continuous-domain trace
+ * types and resolve compute markers (`$grid`/`$exprGrid`/`$exprSeries`/`$expr`)
+ * in `model.figure` against `model.domain` + `model.params`.
+ *
+ * Must run on the AUTHOR-WRITTEN model, before the result is persisted
+ * (baked) into `spec.model.figure`. Never re-run this on an already-baked
+ * spec — the persisted figure legitimately contains literal numbers computed
+ * by this function, and re-gating it would reject its own output.
+ */
+export function resolveInlinePlotlyModel(model: unknown): PlotlyInlineBakeResult {
+  const wrapped = isPlainObject(model) && model.figure !== undefined;
+  const figureLike = wrapped ? (model as Record<string, unknown>).figure : model;
+
+  const gate = checkNoLiteralGridArrays(figureLike);
+  if (!gate.ok) return { ok: false, error: gate.error };
+
+  const domainRaw = isPlainObject(model) ? model.domain : undefined;
+  const domain = parseComputeDomain(domainRaw);
+  if (domain === null) {
+    return {
+      ok: false,
+      error: "model.domain must be an object like { uMin, uMax, vMin, vMax, resolution }",
+    };
+  }
+  const domainGrids = domain ? buildDomainGrids(domain) : null;
+
+  const paramsRaw = isPlainObject(model) ? model.params : undefined;
+  const varContext = parseModelParams(paramsRaw);
+  if (varContext === null) {
+    return { ok: false, error: "model.params must be an object of { name: number }" };
+  }
+
+  try {
+    const resolved = walkResolveMarkers(figureLike, { domain, domainGrids, varContext });
+    return validatePlotlyFigure(resolved);
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "figure.plotly marker resolution failed",
+    };
+  }
+}
+
+/** Minimal legal figure (unit sphere, computed via markers — not hand-typed). */
+export const PLOTLY_SAMPLE_FIGURE_MODEL = {
+  domain: {
+    axes: [
+      { name: "theta", min: 0, max: Math.PI, resolution: 40 },
+      { name: "phi", min: 0, max: 2 * Math.PI, resolution: 40 },
+    ],
+  },
+  figure: {
+    data: [
+      {
+        type: "surface",
+        x: { $exprGrid: { over: ["theta", "phi"], expr: "sin(theta) * cos(phi)" } },
+        y: { $exprGrid: { over: ["theta", "phi"], expr: "sin(theta) * sin(phi)" } },
+        z: { $exprGrid: { over: ["theta", "phi"], expr: "cos(theta)" } },
+        colorbar: { title: { text: "z" } },
+      },
+    ],
+    layout: {
+      scene: {
+        xaxis: { title: { text: "x" } },
+        yaxis: { title: { text: "y" } },
+        zaxis: { title: { text: "z" } },
+        aspectmode: "cube",
+      },
+      margin: { l: 0, r: 0, t: 32, b: 0 },
+    },
+  },
+};
+
+/**
+ * Sample step-through animation (x^2 on [-2,2], 5 frames coarse -> fine),
+ * computed via `$exprSeries` with a per-frame `resolution` override —
+ * demonstrates figure.plotly frames + slider without any hand-typed arrays.
+ */
+export const PLOTLY_SAMPLE_CURVE_ANIMATION_MODEL = {
+  domain: {
+    axes: [{ name: "x", min: -2, max: 2, resolution: 200 }],
+  },
+  figure: {
+    data: [
+      {
+        type: "scatter",
+        mode: "lines+markers",
+        x: { $exprSeries: { over: "x", expr: "x", resolution: 3 } },
+        y: { $exprSeries: { over: "x", expr: "x*x", resolution: 3 } },
+        name: "3 points",
+      },
+    ],
+    layout: {
+      xaxis: { title: { text: "x" }, range: [-2, 2] },
+      yaxis: { title: { text: "y = x^2" } },
+      margin: { l: 40, r: 0, t: 32, b: 32 },
+      sliders: [
+        {
+          active: 0,
+          steps: [3, 6, 12, 25, 50].map((n, i) => ({
+            label: `${n} pts`,
+            method: "animate",
+            args: [[`f${i}`], { mode: "immediate", frame: { duration: 0, redraw: true } }],
+          })),
+        },
+      ],
+      updatemenus: [
+        {
+          type: "buttons",
+          buttons: [
+            {
+              label: "Play",
+              method: "animate",
+              args: [null, { fromcurrent: true, frame: { duration: 500, redraw: true } }],
+            },
+          ],
+        },
+      ],
+    },
+    frames: [3, 6, 12, 25, 50].map((n, i) => ({
+      name: `f${i}`,
+      data: [
+        {
+          x: { $exprSeries: { over: "x", expr: "x", resolution: n } },
+          y: { $exprSeries: { over: "x", expr: "x*x", resolution: n } },
+        },
+      ],
+    })),
+  },
+};
+
+/** Legacy alias kept for existing structural-validation tests (literal, not marker-based). */
 export const PLOTLY_SAMPLE_FIGURE: PlotlyFigure = {
   data: [
     {
-      type: "surface",
+      type: "scatter",
+      mode: "markers",
       x: [-1, 0, 1],
-      y: [-1, 0, 1],
-      z: [
-        [1, 0, 1],
-        [0, -1, 0],
-        [1, 0, 1],
-      ],
-      colorbar: { title: { text: "z" } },
+      y: [1, 0, 1],
     },
   ],
   layout: {
-    scene: {
-      xaxis: { title: { text: "u" } },
-      yaxis: { title: { text: "v" } },
-      zaxis: { title: { text: "z" } },
-    },
+    xaxis: { title: { text: "u" } },
+    yaxis: { title: { text: "z" } },
     margin: { l: 0, r: 0, t: 32, b: 0 },
   },
 };

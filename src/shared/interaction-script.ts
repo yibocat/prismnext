@@ -5,13 +5,15 @@
  * infrastructure), not the host's own JS realm. This is the last-resort kind
  * — prefer figure.plotly/instrument for anything they can express.
  *
+ * Browser-safe: no `node:fs`. Disk validation is
+ * `src/main/services/interaction-script-validate.ts` (same split as
+ * figure.static: shared resolves contract, main touches the filesystem).
+ *
  * See docs-private/superpowers/specs/2026-07-27-interaction-plotly-runtime-design.md
  * §11 (D29–D35) for the full design rationale.
  */
-import { readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
-import { injectFigureHtmlCsp, normalizeFigureResourceProjectPath } from "./interaction-figure";
-import type { InteractionResource, InteractionSpec } from "./interaction-spec";
+import { injectFigureHtmlCsp } from "./interaction-figure";
+import type { InteractionResource } from "./interaction-spec";
 
 export const INTERACTION_SCRIPT_KIND = "figure.script" as const;
 
@@ -86,94 +88,6 @@ const RENDER_EXPORT_RE =
 /** No mount/setup/main alias fallback — `render` only. */
 export function hasRenderExport(source: string): boolean {
   return RENDER_EXPORT_RE.test(source);
-}
-
-export type ScriptValidationResult =
-  | { ok: true; scriptPath: string; threeEnabled: boolean }
-  | { ok: false; error: string };
-
-/**
- * Reads resources[role="script"] off disk (<=SCRIPT_MAX_BYTES), runs the
- * static ban-scan, requires an exported `render`, and sums declared resource
- * file sizes against SCRIPT_RESOURCES_MAX_BYTES (stat only — content is read
- * later, per render path in the panel view / offscreen thumbnail capture).
- */
-export function validateScriptSpec(
-  projectRoot: string,
-  spec: InteractionSpec,
-): ScriptValidationResult {
-  if (!isInteractionScriptKind(spec.kind)) {
-    return { ok: false, error: `unsupported kind "${spec.kind}"` };
-  }
-
-  const rawPath = scriptResourcePath(spec.resources);
-  if (!rawPath) {
-    return {
-      ok: false,
-      error:
-        'figure.script requires resources[] with a script path (e.g. resources: [{ role: "script", path: "script.js" }] after saving the file under .prismnext/artifacts/<id>/)',
-    };
-  }
-
-  const relPath = normalizeFigureResourceProjectPath(spec, rawPath);
-  const abs = join(projectRoot, relPath);
-  let stat: ReturnType<typeof statSync>;
-  try {
-    stat = statSync(abs);
-  } catch {
-    return { ok: false, error: `script resource not found on disk: ${relPath}` };
-  }
-  if (!stat.isFile()) {
-    return { ok: false, error: `script resource is not a file: ${relPath}` };
-  }
-  if (stat.size > SCRIPT_MAX_BYTES) {
-    return {
-      ok: false,
-      error: `figure.script script.js too large (${stat.size} > ${SCRIPT_MAX_BYTES} bytes limit): ${relPath}`,
-    };
-  }
-
-  let text: string;
-  try {
-    text = readFileSync(abs, "utf8");
-  } catch {
-    return { ok: false, error: `could not read script resource: ${relPath}` };
-  }
-
-  try {
-    assertScriptHardBans(text);
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "script contains a banned construct" };
-  }
-
-  if (!hasRenderExport(stripScriptComments(text))) {
-    return {
-      ok: false,
-      error: "figure.script must export function render(ctx) { ... } — no mount/setup/main alias is accepted.",
-    };
-  }
-
-  let othersBytes = 0;
-  for (const r of spec.resources ?? []) {
-    if (r.role === "script") continue;
-    const p = resourcePath(r);
-    if (!p) continue;
-    const otherAbs = join(projectRoot, normalizeFigureResourceProjectPath(spec, p));
-    try {
-      othersBytes += statSync(otherAbs).size;
-    } catch {
-      return { ok: false, error: `resource not found on disk: ${p}` };
-    }
-  }
-  if (othersBytes > SCRIPT_RESOURCES_MAX_BYTES) {
-    return {
-      ok: false,
-      error: `figure.script resources too large combined (${othersBytes} > ${SCRIPT_RESOURCES_MAX_BYTES} bytes limit)`,
-    };
-  }
-
-  const threeEnabled = spec.model?.three === true;
-  return { ok: true, scriptPath: relPath, threeEnabled };
 }
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;

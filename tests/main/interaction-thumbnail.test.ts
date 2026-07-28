@@ -108,7 +108,7 @@ describe("resolveFigureForThumbnail", () => {
     const result = resolveFigureForThumbnail(root, spec);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.figure.data[0]?.type).toBe("surface");
+      expect(result.figure.data[0]?.type).toBe("scatter");
     }
 
     rmSync(root, { recursive: true, force: true });

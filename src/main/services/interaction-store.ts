@@ -4,34 +4,61 @@ import {
   readdirSync,
   readFileSync,
   renameSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import {
   isValidInteractionId,
   isAllowedInteractionKind,
   parseInteractionSpec,
   type InteractionSpec,
 } from "../../shared/interaction-spec";
-import {
-  isInteractionFigureKind,
-  resolveFigureDisplay,
-} from "../../shared/interaction-figure";
-import {
-  isInteractionPlotlyKind,
-  resolvePlotlyFigureSource,
-} from "../../shared/interaction-plotly";
-import {
-  isInteractionInstrumentKind,
-  validateInstrumentSpec,
-} from "../../shared/interaction-instrument";
-import { isInteractionScriptKind, validateScriptSpec } from "../../shared/interaction-script";
-import { isInteractionDiagramKind, validateDiagramSpec } from "../../shared/interaction-diagram";
+import { validateInteractionForWrite } from "./interaction-validate";
 
 const ARTIFACTS_REL = join(".prismnext", "artifacts");
 const LAST_ERROR_FILE = ".last-error.json";
 const THUMBNAIL_FILE = ".thumbnail.png";
+
+function stampBoundResources(
+  projectRoot: string,
+  spec: InteractionSpec,
+): { ok: true; spec: InteractionSpec } | { ok: false; error: string } {
+  if (spec.compute !== "bound" || !spec.resources?.length) return { ok: true, spec };
+
+  const resources = [];
+  for (const resource of spec.resources) {
+    const rawPath = (resource.path ?? resource.artifactPath)?.trim();
+    if (!rawPath) {
+      return { ok: false, error: "bound resources require a project-relative path" };
+    }
+    const absolute = resolve(projectRoot, rawPath);
+    const projectRelative = relative(projectRoot, absolute);
+    if (!projectRelative || projectRelative.startsWith("..") || isAbsolute(projectRelative)) {
+      return { ok: false, error: `bound resource path escapes the project: ${JSON.stringify(rawPath)}` };
+    }
+    let data: Buffer;
+    try {
+      const stat = statSync(absolute);
+      if (!stat.isFile()) return { ok: false, error: `bound resource is not a file: ${rawPath}` };
+      data = readFileSync(absolute);
+    } catch {
+      return { ok: false, error: `bound resource not found on disk: ${rawPath}` };
+    }
+    resources.push({
+      ...resource,
+      path: projectRelative.replace(/\\/g, "/"),
+      fingerprint: {
+        algorithm: "sha256" as const,
+        bytes: data.byteLength,
+        digest: createHash("sha256").update(data).digest("hex"),
+      },
+    });
+  }
+  return { ok: true, spec: { ...spec, resources } };
+}
 
 export type InteractionLastError = {
   at: string;
@@ -162,6 +189,17 @@ export function clearInteractionLastError(
   }
 }
 
+function readInteractionSpecUnchecked(projectRoot: string, id: string): InteractionSpec | null {
+  const abs = interactionSpecPath(projectRoot, id);
+  if (!existsSync(abs)) return null;
+  try {
+    const spec = parseInteractionSpec(JSON.parse(readFileSync(abs, "utf8")));
+    return spec?.id === id ? spec : null;
+  } catch {
+    return null;
+  }
+}
+
 export function readInteractionSpec(
   projectRoot: string,
   id: string,
@@ -170,19 +208,30 @@ export function readInteractionSpec(
     return { spec: null, error: "invalid id" };
   }
   const abs = interactionSpecPath(projectRoot, id);
-  if (!existsSync(abs)) {
-    return { spec: null, error: "not found" };
-  }
-  let raw: unknown;
-  try {
-    raw = JSON.parse(readFileSync(abs, "utf8"));
-  } catch {
-    return { spec: null, error: "invalid json" };
-  }
-  const spec = parseInteractionSpec(raw);
+  if (!existsSync(abs)) return { spec: null, error: "not found" };
+  const spec = readInteractionSpecUnchecked(projectRoot, id);
   if (!spec) return { spec: null, error: "invalid spec" };
-  if (spec.id !== id) {
-    return { spec: null, error: "id mismatch" };
+  if (spec.compute === "bound" && spec.resources?.length) {
+    const stamped = stampBoundResources(projectRoot, spec);
+    if (!stamped.ok) return { spec: null, error: stamped.error };
+    for (let i = 0; i < spec.resources.length; i++) {
+      const expected = spec.resources[i]?.fingerprint;
+      const actual = stamped.spec.resources?.[i]?.fingerprint;
+      if (
+        expected &&
+        actual &&
+        (expected.algorithm !== actual.algorithm ||
+          expected.bytes !== actual.bytes ||
+          expected.digest !== actual.digest)
+      ) {
+        return {
+          spec: null,
+          error:
+            `bound resource changed: ${spec.resources[i]?.path ?? spec.resources[i]?.artifactPath}. ` +
+            "Rewrite the Interaction to acknowledge the new resource revision.",
+        };
+      }
+    }
   }
   return { spec };
 }
@@ -270,74 +319,43 @@ export function upsertInteractionSpec(
   }
 
   const existing = readInteractionSpec(projectRoot, incoming.id);
+  // A changed bound resource makes the artifact unreadable to consumers until
+  // explicitly rewritten, but it must still participate in revision bumping.
+  const existingSpec =
+    existing.spec ??
+    (existing.error?.startsWith("bound resource changed")
+      ? readInteractionSpecUnchecked(projectRoot, incoming.id)
+      : null);
   let revision = incoming.revision;
-  if (existing.spec) {
-    if (!revision || revision <= existing.spec.revision) {
-      revision = existing.spec.revision + 1;
+  if (existingSpec) {
+    if (!revision || revision <= existingSpec.revision) {
+      revision = existingSpec.revision + 1;
     }
   } else if (!revision || revision < 1) {
     revision = 1;
   }
 
-  const merged: InteractionSpec = existing.spec
+  const merged: InteractionSpec = existingSpec
     ? {
-        ...existing.spec,
+        ...existingSpec,
         ...incoming,
         id: incoming.id,
         revision,
       }
     : { ...incoming, revision };
 
-  const parsed = parseInteractionSpec(merged);
+  let parsed = parseInteractionSpec(merged);
   if (!parsed) return { ok: false, error: "invalid spec" };
 
-  if (isInteractionFigureKind(parsed.kind)) {
-    const fig = resolveFigureDisplay(parsed);
-    if (!fig.ok) return { ok: false, error: fig.error };
-    const abs = join(projectRoot, fig.path);
-    if (!existsSync(abs)) {
-      return {
-        ok: false,
-        error:
-          `figure resource not found on disk: ${fig.path}. ` +
-          `Save PNG/HTML under .prismnext/artifacts/${parsed.id}/ first, then ` +
-          `resources: [{ role: "figure", path: "<filename>.png" }]`,
-      };
-    }
-  }
+  const validated = validateInteractionForWrite(projectRoot, parsed);
+  if (!validated.ok) return validated;
+  parsed = validated.spec;
 
-  if (isInteractionInstrumentKind(parsed.kind)) {
-    const inst = validateInstrumentSpec(parsed);
-    if (!inst.ok) return { ok: false, error: inst.error };
-  }
-
-  if (isInteractionScriptKind(parsed.kind)) {
-    const script = validateScriptSpec(projectRoot, parsed);
-    if (!script.ok) return { ok: false, error: script.error };
-  }
-
-  if (isInteractionDiagramKind(parsed.kind)) {
-    const diagram = validateDiagramSpec(projectRoot, parsed);
-    if (!diagram.ok) return { ok: false, error: diagram.error };
-  }
-
-  if (isInteractionPlotlyKind(parsed.kind)) {
-    const src = resolvePlotlyFigureSource(parsed);
-    if (!src.ok) return { ok: false, error: src.error };
-    if (src.mode === "file") {
-      const abs = join(projectRoot, src.path);
-      if (!existsSync(abs)) {
-        return {
-          ok: false,
-          error:
-            `figure json not found on disk: ${src.path}. ` +
-            `Write the Plotly JSON first (python: fig.write_json(path)), then reference it in resources[].`,
-        };
-      }
-    }
-  }
+  const stamped = stampBoundResources(projectRoot, parsed);
+  if (!stamped.ok) return { ok: false, error: stamped.error };
+  parsed = stamped.spec;
 
   const write = writeInteractionSpec(projectRoot, parsed);
   if (!write.ok) return { ok: false, error: write.error };
-  return { ok: true, spec: parsed, created: !existing.spec };
+  return { ok: true, spec: parsed, created: !existingSpec };
 }

@@ -36,8 +36,11 @@ export default tool({
   description:
     "Ask the user a question and wait for their answer before continuing. " +
     "Use this when you need clarification, a choice between options, or " +
-    "confirmation before proceeding. The user can select from the provided " +
-    "options or type a custom response.",
+    "confirmation before proceeding. " +
+    "If the question presents 2+ discrete choices (e.g. 'A or B?', 'which one — X, Y, Z?'), " +
+    "you MUST pass each choice as a separate entry in `options` — never list choices only " +
+    "inside the `question` text with no `options` array. Only omit `options` for genuinely " +
+    "open-ended questions (e.g. 'what should the title be?').",
 
   args: {
     question: tool.schema
@@ -45,7 +48,10 @@ export default tool({
       .describe("The question to ask the user"),
     options: tool.schema
       .array(tool.schema.string())
-      .describe("Available choices for the user to pick from")
+      .describe(
+        "Required whenever the question offers discrete choices — one entry per choice, " +
+          "in the exact wording the user should see. Omit only for open-ended free-text questions.",
+      )
       .optional(),
     multiSelect: tool.schema
       .boolean()

@@ -597,7 +597,7 @@ describe("experimentEnvDisplayRows", () => {
       rVersion: "4.4.0",
       platform: "darwin",
       gitCommit: "abc1234",
-      venvPath: ".venv",
+      venvPath: ".prismnext/.venv",
     });
     expect(rows.map((r) => r.label)).toEqual([
       "Python",

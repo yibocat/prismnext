@@ -23,6 +23,44 @@ function baseSpec(overrides: Partial<InteractionSpec> = {}): InteractionSpec {
   };
 }
 
+describe("validateInstrumentSpec rejects hand-typed literal grid arrays", () => {
+  it("rejects a literal surface z array even with model.domain present", () => {
+    const spec = baseSpec({
+      model: {
+        runtimeVersion: 1,
+        domain: { uMin: -2, uMax: 2, vMin: -2, vMax: 2, resolution: 8 },
+        figureTemplate: {
+          data: [
+            {
+              type: "surface",
+              x: { $grid: "u" },
+              y: { $grid: "v" },
+              z: [
+                [1, 0, 1],
+                [0, -1, 0],
+                [1, 0, 1],
+              ],
+            },
+          ],
+        },
+      } as unknown as Record<string, unknown>,
+    });
+    const result = validateInstrumentSpec(spec);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/literal array/);
+  });
+
+  it("accepts an all-markers surface (no literal coordinate arrays)", () => {
+    const result = validateInstrumentSpec(
+      baseSpec({
+        model: INSTRUMENT_SAMPLE_MODEL as unknown as Record<string, unknown>,
+        bindings: { R: { min: 0.2, max: 3, default: 1, label: "R" } },
+      }),
+    );
+    expect(result.ok).toBe(true);
+  });
+});
+
 describe("isInteractionInstrumentKind", () => {
   it("matches only 'instrument' (trimmed)", () => {
     expect(isInteractionInstrumentKind("instrument")).toBe(true);
@@ -211,6 +249,7 @@ describe("nested marker resolution", () => {
 
 describe("INSTRUMENT_SAMPLE_MODEL", () => {
   it("resolves and passes validatePlotlyFigure", () => {
+    expect(INSTRUMENT_SAMPLE_MODEL.domain?.axes?.map((axis) => axis.name)).toEqual(["x", "y"]);
     const result = resolveInstrumentFigure(INSTRUMENT_SAMPLE_MODEL, { R: 1 }, 0);
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -220,6 +259,38 @@ describe("INSTRUMENT_SAMPLE_MODEL", () => {
 });
 
 describe("validateInstrumentSpec", () => {
+  it("accepts model.params constants in $exprGrid (same as bindings)", () => {
+    const spec = baseSpec({
+      model: {
+        runtimeVersion: 1,
+        domain: { uMin: 0, uMax: Math.PI, vMin: 0, vMax: Math.PI, resolution: 8 },
+        params: { R: 2 },
+        figureTemplate: {
+          data: [
+            {
+              type: "surface",
+              x: { $grid: "u" },
+              y: { $grid: "v" },
+              z: { $exprGrid: "sin(u) * cos(v) * R" },
+            },
+          ],
+        },
+      } as unknown as Record<string, unknown>,
+      bindings: { phase: { min: 0, max: 1, default: 0, label: "phase" } },
+    });
+    const result = validateInstrumentSpec(spec);
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects an instrument with no spec.bindings (no adjustable parameters)", () => {
+    const spec = baseSpec({
+      model: INSTRUMENT_SAMPLE_MODEL as unknown as Record<string, unknown>,
+    });
+    const result = validateInstrumentSpec(spec);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/spec\.bindings/);
+  });
+
   it("rejects bound compute", () => {
     const spec = baseSpec({ compute: "bound", model: INSTRUMENT_SAMPLE_MODEL as unknown as Record<string, unknown> });
     const result = validateInstrumentSpec(spec);

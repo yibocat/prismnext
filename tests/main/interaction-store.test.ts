@@ -15,6 +15,7 @@ import {
   interactionThumbnailPath,
   listInteractionSummaries,
   readInteractionLastError,
+  readInteractionSpec,
   upsertInteractionSpec,
   writeInteractionLastError,
   writeInteractionThumbnail,
@@ -142,7 +143,19 @@ describe("interaction-store upsert", () => {
       kind: "figure.plotly",
       compute: "local",
       revision: 1,
-      model: { figure: { data: [{ type: "surface", z: [[0, 1]] }] } },
+      model: {
+        domain: { uMin: -2, uMax: 2, vMin: -2, vMax: 2, resolution: 6 },
+        figure: {
+          data: [
+            {
+              type: "surface",
+              x: { $grid: "u" },
+              y: { $grid: "v" },
+              z: { $exprGrid: "u*u - v*v" },
+            },
+          ],
+        },
+      },
     });
     expect(inline.ok).toBe(true);
 
@@ -172,6 +185,132 @@ describe("interaction-store upsert", () => {
       resources: [{ role: "figure-json", path: "experiment/exp-1/results/field.json" }],
     });
     expect(bound.ok).toBe(true);
+    expect(bound.spec?.resources?.[0]?.fingerprint).toMatchObject({
+      algorithm: "sha256",
+      bytes: expect.any(Number),
+      digest: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+    writeFileSync(
+      join(root, "experiment", "exp-1", "results", "field.json"),
+      JSON.stringify({ data: [{ type: "surface" }] }),
+      "utf8",
+    );
+    expect(readInteractionSpec(root, "demo.field")).toEqual(
+      expect.objectContaining({
+        spec: null,
+        error: expect.stringMatching(/resource changed/),
+      }),
+    );
+    const rewritten = upsertInteractionSpec(root, {
+      id: "demo.field",
+      title: "Field",
+      kind: "figure.plotly",
+      compute: "bound",
+      revision: 1,
+      resources: [{ role: "figure-json", path: "experiment/exp-1/results/field.json" }],
+    });
+    expect(rewritten.spec?.revision).toBe(2);
+    expect(readInteractionSpec(root, "demo.field").spec).toEqual(
+      expect.objectContaining({ revision: 2 }),
+    );
+
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("rejects a hand-typed literal grid array on an inline figure.plotly surface", () => {
+    root = mkdtempSync(join(tmpdir(), "ix-plotly-gate-"));
+    const result = upsertInteractionSpec(root, {
+      id: "demo.sphere.bad",
+      title: "Bad sphere",
+      kind: "figure.plotly",
+      compute: "local",
+      revision: 1,
+      model: {
+        figure: {
+          data: [
+            {
+              type: "surface",
+              x: [-1, 0, 1],
+              y: [-1, 0, 1],
+              z: [
+                [1, 0, 1],
+                [0, -1, 0],
+                [1, 0, 1],
+              ],
+            },
+          ],
+        },
+      },
+    });
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toMatch(/literal array/);
+
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("bakes resolved marker figures into literal numbers persisted on disk", () => {
+    root = mkdtempSync(join(tmpdir(), "ix-plotly-bake-"));
+    const result = upsertInteractionSpec(root, {
+      id: "demo.sphere.ok",
+      title: "Unit sphere",
+      kind: "figure.plotly",
+      compute: "local",
+      revision: 1,
+      model: {
+        domain: { uMin: 0, uMax: Math.PI, vMin: 0, vMax: 2 * Math.PI, resolution: 4 },
+        figure: {
+          data: [
+            {
+              type: "surface",
+              x: { $exprGrid: "sin(u) * cos(v)" },
+              y: { $exprGrid: "sin(u) * sin(v)" },
+              z: { $exprGrid: "cos(u)" },
+            },
+          ],
+        },
+      },
+    });
+    expect(result.ok).toBe(true);
+    const specPath = join(root, ".prismnext", "artifacts", "demo.sphere.ok", "spec.json");
+    const persisted = JSON.parse(readFileSync(specPath, "utf8")) as {
+      model: { figure: { data: { x: unknown; type: string }[] } };
+    };
+    const trace = persisted.model.figure.data[0]!;
+    expect(trace.type).toBe("surface");
+    expect(Array.isArray(trace.x)).toBe(true);
+    expect(Array.isArray((trace.x as unknown[])[0])).toBe(true);
+    const x00 = (trace.x as number[][])[0]![0]!;
+    expect(x00).toBeCloseTo(0, 5); // sin(0) * cos(0) = 0
+
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("rejects malformed model.domain / model.params on inline figure.plotly", () => {
+    root = mkdtempSync(join(tmpdir(), "ix-plotly-domain-"));
+    const badDomain = upsertInteractionSpec(root, {
+      id: "demo.baddomain",
+      title: "Bad domain",
+      kind: "figure.plotly",
+      compute: "local",
+      revision: 1,
+      model: { domain: "nope", figure: { data: [{ type: "scatter", mode: "markers", x: { $expr: "1" } }] } },
+    });
+    expect(badDomain.ok).toBe(false);
+    expect(String(badDomain.error)).toMatch(/domain/);
+
+    const badParams = upsertInteractionSpec(root, {
+      id: "demo.badparams",
+      title: "Bad params",
+      kind: "figure.plotly",
+      compute: "local",
+      revision: 1,
+      model: {
+        params: { R: "not-a-number" },
+        figure: { data: [{ type: "scatter", mode: "markers", x: { $expr: "R" } }] },
+      },
+    });
+    expect(badParams.ok).toBe(false);
+    expect(String(badParams.error)).toMatch(/params/);
 
     rmSync(root, { recursive: true, force: true });
   });
@@ -188,6 +327,30 @@ describe("interaction-store upsert", () => {
       bindings: { R: { min: 0.2, max: 3, default: 1, label: "R" } },
     });
     expect(ok.ok).toBe(true);
+    const legacyDomain = upsertInteractionSpec(root, {
+      id: "demo.instrument.legacy-domain",
+      title: "Legacy domain",
+      kind: "instrument",
+      compute: "local",
+      revision: 1,
+      model: {
+        runtimeVersion: 1,
+        domain: { uMin: -1, uMax: 1, vMin: -1, vMax: 1, resolution: 4 },
+        figureTemplate: {
+          data: [
+            {
+              type: "surface",
+              x: { $grid: "u" },
+              y: { $grid: "v" },
+              z: { $exprGrid: "u * v * scale" },
+            },
+          ],
+        },
+      },
+      bindings: { scale: { min: 0.5, max: 2, default: 1, label: "scale" } },
+    });
+    expect(legacyDomain.ok).toBe(true);
+    expect((legacyDomain.spec?.model?.domain as { axes?: unknown[] } | undefined)?.axes).toHaveLength(2);
 
     const bound = upsertInteractionSpec(root, {
       id: "demo.instrument.bound",

@@ -1,9 +1,7 @@
 /**
- * Shared bindings parsing + sandboxed expression evaluator, originally built
- * for math.surface/math.field (retired in V4-A — see
- * docs-private/superpowers/plans/2026-07-27-interaction-plotly-v4a.md) and
- * now reused by `instrument` (interaction-instrument.ts) for its `$expr`/
- * `$exprGrid` markers and continuous-parameter sliders.
+ * Shared bindings parsing + sandboxed expression evaluator.
+ * Used by the Interaction compute layer (`$expr` / `$exprGrid` / `$exprSeries`)
+ * and by `instrument` step recurrence.
  */
 
 export type MathBindingDef = {
@@ -15,14 +13,8 @@ export type MathBindingDef = {
 };
 
 /**
- * Single source of truth for safe `Math.*` members — used to (1) allow-list
- * identifiers in `isMathExpressionAllowed` and (2) bind bare names (`cos`,
- * not just `Math.cos`) as locals in `evaluateMathExpression`. These used to
- * be separate lists that drifted: bare `cos`/`sin` were allow-listed but
- * never bound at eval time, so any formula not `Math.`-prefixed — e.g. a
- * natural sphere/torus/geodesic parametrization like `cos(u)*sin(v)` —
- * crashed with `ReferenceError: cos is not defined`. Add new functions here
- * only — nowhere else needs to change.
+ * Safe `Math.*` members — single source for allow-list + eval locals.
+ * Add new functions here only.
  */
 const MATH_SAFE_MEMBERS: Record<string, unknown> = {
   sin: Math.sin,
@@ -52,12 +44,20 @@ const MATH_SAFE_MEMBERS: Record<string, unknown> = {
   sign: Math.sign,
   PI: Math.PI,
   E: Math.E,
+  // Lowercase aliases — agents write `pi`/`e` more often than `PI`/`E`.
+  pi: Math.PI,
+  e: Math.E,
 };
 
-const ALLOWED_MATH_IDENTIFIERS = new Set(["Math", "u", "v", ...Object.keys(MATH_SAFE_MEMBERS)]);
+const BUILTIN_IDENTIFIERS = new Set(["Math", ...Object.keys(MATH_SAFE_MEMBERS)]);
 
 const FORBIDDEN_EXPR =
   /\b(eval|Function|import|require|window|global|this|constructor|prototype|process|fetch|XMLHttpRequest)\b/i;
+
+/** Operators / punctuation allowed in expressions (`^` = power, rewritten to `**` before eval). */
+const ALLOWED_OPS = new Set(["+", "-", "*", "/", "^", "(", ")", ",", "**"]);
+
+const TOKEN_RE = /[A-Za-z_][A-Za-z0-9_]*|\d+\.\d+|\d+|\*\*|[^\s\w.]/g;
 
 export function parseMathBindings(
   bindings?: Record<string, Record<string, unknown>>,
@@ -93,24 +93,62 @@ export function initialBindingValues(
   return out;
 }
 
-/** Whitelist identifiers + safe chars before sandboxed eval. */
-export function isMathExpressionAllowed(expr: string, extraVars: string[] = []): boolean {
+/**
+ * Why an expression would be rejected, or `null` if it is allowed.
+ * Messages are actionable (unknown name → declare in bindings/params) —
+ * not opaque "not allowed".
+ */
+export function diagnoseMathExpression(expr: string, extraVars: string[] = []): string | null {
   const trimmed = expr.trim();
-  if (!trimmed || trimmed.length > 500) return false;
-  if (FORBIDDEN_EXPR.test(trimmed)) return false;
+  if (!trimmed) return "expression is empty";
+  if (trimmed.length > 500) return "expression too long (max 500 chars)";
+  if (FORBIDDEN_EXPR.test(trimmed)) {
+    return `expression contains a forbidden identifier (eval/Function/import/…): ${trimmed}`;
+  }
 
-  const allowed = new Set([...ALLOWED_MATH_IDENTIFIERS, ...extraVars]);
-  const tokens = trimmed.match(/[A-Za-z_][A-Za-z0-9_]*|\d+\.\d+|\d+|[^\s\w.]/g);
-  if (!tokens) return false;
+  const allowed = new Set([...BUILTIN_IDENTIFIERS, ...extraVars]);
+  const tokens = trimmed.match(TOKEN_RE);
+  if (!tokens) return `expression has no recognizable tokens: ${trimmed}`;
+
+  const unknownIds: string[] = [];
+  const badOps: string[] = [];
 
   for (const token of tokens) {
-    if (/^\d/.test(token) || token === "." ) continue;
-    if (/^[+\-*/(),]$/.test(token)) continue;
-    if (token === "Math") continue;
-    if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(token) && allowed.has(token)) continue;
-    return false;
+    if (/^\d/.test(token) || token === ".") continue;
+    if (ALLOWED_OPS.has(token)) continue;
+    if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(token)) {
+      if (!allowed.has(token)) unknownIds.push(token);
+      continue;
+    }
+    badOps.push(token);
   }
-  return true;
+
+  if (unknownIds.length > 0) {
+    const uniq = [...new Set(unknownIds)];
+    return (
+      `unknown identifier(s) ${uniq.map((n) => JSON.stringify(n)).join(", ")} — ` +
+      `declare as a number in model.params, or as a live slider in spec.bindings ` +
+      `(min/max/step/default). expression: ${trimmed}`
+    );
+  }
+  if (badOps.length > 0) {
+    const uniq = [...new Set(badOps)];
+    return (
+      `unsupported token(s) ${uniq.map((t) => JSON.stringify(t)).join(", ")} — ` +
+      `allowed ops: + - * / ^ ** ( ) , . expression: ${trimmed}`
+    );
+  }
+  return null;
+}
+
+/** Whitelist identifiers + safe chars before sandboxed eval. */
+export function isMathExpressionAllowed(expr: string, extraVars: string[] = []): boolean {
+  return diagnoseMathExpression(expr, extraVars) === null;
+}
+
+/** `^` is power in this dialect (not JS bitwise XOR) — rewrite before `new Function`. */
+function rewritePowerOps(expr: string): string {
+  return expr.replace(/\^/g, "**");
 }
 
 export function evaluateMathExpression(
@@ -118,9 +156,11 @@ export function evaluateMathExpression(
   variables: Record<string, number>,
 ): number {
   const varNames = Object.keys(variables);
-  if (!isMathExpressionAllowed(expr, varNames)) {
-    throw new Error("expression not allowed");
+  const diagnosis = diagnoseMathExpression(expr, varNames);
+  if (diagnosis) {
+    throw new Error(diagnosis);
   }
+  const jsExpr = rewritePowerOps(expr.trim());
   // A binding/param with the same name (e.g. a variable literally called
   // `E`) takes precedence — skip the math local so `varNames` supplies it.
   const localNames = Object.keys(MATH_SAFE_MEMBERS).filter((k) => !(k in variables));
@@ -131,7 +171,7 @@ export function evaluateMathExpression(
     ...localNames,
     ...varNames,
     "Math",
-    `"use strict"; return (${expr});`,
+    `"use strict"; return (${jsExpr});`,
   );
   const result = fn(...localValues, ...varValues, Math) as unknown;
   if (typeof result !== "number" || !Number.isFinite(result)) {

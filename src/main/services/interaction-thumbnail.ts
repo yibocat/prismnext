@@ -29,9 +29,9 @@ import {
   buildScriptSandboxHtml,
   classifyResourceEmbedKind,
   isInteractionScriptKind,
-  validateScriptSpec,
   type ScriptResourceEmbed,
 } from "../../shared/interaction-script";
+import { validateScriptSpec } from "./interaction-script-validate";
 import {
   isInteractionDiagramKind,
   resolveDiagramSource,

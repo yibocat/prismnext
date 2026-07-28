@@ -12,31 +12,31 @@ import {
   readInteractionSpec,
   upsertInteractionSpec,
 } from "./interaction-store";
+import { validateInteractionForWrite } from "./interaction-validate";
 import {
   interactionFenceHint,
   isDeprecatedInteractionKind,
+  diagnoseInteractionSpecParse,
+  normalizeInteractionSpecForWrite,
   parseInteractionSpec,
   type InteractionSpec,
 } from "../../shared/interaction-spec";
 import {
   isInteractionPlotlyKind,
   PLOTLY_SAMPLE_FIGURE,
-  resolvePlotlyFigureSource,
+  PLOTLY_SAMPLE_FIGURE_MODEL,
 } from "../../shared/interaction-plotly";
 import {
   isInteractionInstrumentKind,
   INSTRUMENT_SAMPLE_MODEL,
-  validateInstrumentSpec,
 } from "../../shared/interaction-instrument";
 import {
   isInteractionScriptKind,
   SCRIPT_SAMPLE_SPEC,
-  validateScriptSpec,
 } from "../../shared/interaction-script";
 import {
   isInteractionDiagramKind,
   DIAGRAM_SAMPLE_MERMAID_SPEC,
-  validateDiagramSpec,
 } from "../../shared/interaction-diagram";
 import { broadcastInteractionChanged } from "./interaction-ui-events";
 import { scheduleInteractionThumbnail } from "./interaction-thumbnail";
@@ -54,6 +54,31 @@ type InteractionBridgeRequest = {
   sceneSource?: string;
   focus?: boolean;
 };
+
+type InteractionDiagnostic = {
+  code: string;
+  phase: "parse" | "validate";
+  fieldPath: string;
+  message: string;
+};
+
+function envelopeDiagnostic(raw: unknown, message: string): InteractionDiagnostic {
+  const spec = raw && typeof raw === "object" && !Array.isArray(raw)
+    ? raw as Record<string, unknown>
+    : {};
+  const fieldPath =
+    typeof spec.id !== "string" || !spec.id.trim() ? "id"
+      : typeof spec.title !== "string" || !spec.title.trim() ? "title"
+        : typeof spec.kind !== "string" || !spec.kind.trim() ? "kind"
+          : spec.compute !== "local" && spec.compute !== "bound" ? "compute"
+            : typeof spec.revision !== "number" ? "revision"
+              : "spec";
+  return { code: "invalid_spec", phase: "parse", fieldPath, message };
+}
+
+function validationDiagnostic(message: string, fieldPath = "model"): InteractionDiagnostic {
+  return { code: "invalid_interaction_model", phase: "validate", fieldPath, message };
+}
 
 function bridgeRoot(): string {
   return getInteractionBridgeRoot();
@@ -106,9 +131,24 @@ function dispatch(req: InteractionBridgeRequest): Record<string, unknown> {
       return specResponse(projectRoot, spec);
     }
     case "write": {
-      const raw = req.spec;
+      const raw = normalizeInteractionSpecForWrite(req.spec);
       const parsed = parseInteractionSpec(raw);
-      if (!parsed) return { ok: false, error: "invalid_spec" };
+      if (!parsed) {
+        const error = diagnoseInteractionSpecParse(raw) ?? "invalid InteractionSpec";
+        return {
+          ok: false,
+          error,
+          diagnostic: envelopeDiagnostic(raw, error),
+          sampleEnvelope: {
+            id: "demo.example",
+            title: "Example",
+            kind: "figure.plotly",
+            compute: "local",
+            revision: 1,
+            model: PLOTLY_SAMPLE_FIGURE_MODEL,
+          },
+        };
+      }
 
       if (isDeprecatedInteractionKind(parsed.kind)) {
         return {
@@ -123,80 +163,55 @@ function dispatch(req: InteractionBridgeRequest): Record<string, unknown> {
       const sceneSource =
         typeof req.sceneSource === "string" ? req.sceneSource : undefined;
 
-      if (isInteractionInstrumentKind(parsed.kind)) {
-        if (sceneSource != null) {
-          return {
-            ok: false,
-            error: "instrument does not use sceneSource. Put the figure template in spec.model.figureTemplate.",
-            sample: INSTRUMENT_SAMPLE_MODEL,
-          };
-        }
-        const inst = validateInstrumentSpec(parsed);
-        if (!inst.ok) {
-          return {
-            ok: false,
-            error: inst.error,
-            phase: "compile-preview",
-            sample: INSTRUMENT_SAMPLE_MODEL,
-          };
-        }
+      if (sceneSource != null && isInteractionInstrumentKind(parsed.kind)) {
+        return {
+          ok: false,
+          error: "instrument does not use sceneSource. Put the figure template in spec.model.figureTemplate.",
+          sample: INSTRUMENT_SAMPLE_MODEL,
+        };
+      }
+      if (sceneSource != null && isInteractionPlotlyKind(parsed.kind)) {
+        return {
+          ok: false,
+          error: "figure.plotly does not use sceneSource. Put Plotly JSON in spec.model.figure.",
+          sample: PLOTLY_SAMPLE_FIGURE_MODEL,
+        };
+      }
+      if (sceneSource != null && isInteractionScriptKind(parsed.kind)) {
+        return {
+          ok: false,
+          error: 'figure.script does not use sceneSource. Write the script to resources: [{ role: "script", path: "script.js" }] instead.',
+          sample: SCRIPT_SAMPLE_SPEC,
+        };
+      }
+      if (sceneSource != null && isInteractionDiagramKind(parsed.kind)) {
+        return {
+          ok: false,
+          error: "diagram.mermaid does not use sceneSource. Put Mermaid/DOT text in spec.model.source.",
+          sample: DIAGRAM_SAMPLE_MERMAID_SPEC,
+        };
       }
 
-      if (isInteractionPlotlyKind(parsed.kind)) {
-        if (sceneSource != null) {
-          return {
-            ok: false,
-            error: "figure.plotly does not use sceneSource. Put Plotly JSON in spec.model.figure.",
-            sample: PLOTLY_SAMPLE_FIGURE,
-          };
-        }
-        const src = resolvePlotlyFigureSource(parsed);
-        if (!src.ok) {
-          return {
-            ok: false,
-            error: src.error,
-            phase: "compile-preview",
-            sample: PLOTLY_SAMPLE_FIGURE,
-          };
-        }
-      }
-
-      if (isInteractionScriptKind(parsed.kind)) {
-        if (sceneSource != null) {
-          return {
-            ok: false,
-            error: 'figure.script does not use sceneSource. Write the script to resources: [{ role: "script", path: "script.js" }] instead.',
-            sample: SCRIPT_SAMPLE_SPEC,
-          };
-        }
-        const script = validateScriptSpec(projectRoot, parsed);
-        if (!script.ok) {
-          return {
-            ok: false,
-            error: script.error,
-            phase: "compile-preview",
-            sample: SCRIPT_SAMPLE_SPEC,
-          };
-        }
-      }
-
-      if (isInteractionDiagramKind(parsed.kind)) {
-        if (sceneSource != null) {
-          return {
-            ok: false,
-            error: "diagram.mermaid does not use sceneSource. Put Mermaid/DOT text in spec.model.source.",
-            sample: DIAGRAM_SAMPLE_MERMAID_SPEC,
-          };
-        }
-        const diagram = validateDiagramSpec(projectRoot, parsed);
-        if (!diagram.ok) {
-          return {
-            ok: false,
-            error: diagram.error,
-            phase: "compile-preview",
-            sample: DIAGRAM_SAMPLE_MERMAID_SPEC,
-          };
-        }
+      const validation = validateInteractionForWrite(projectRoot, parsed);
+      if (!validation.ok) {
+        const sample =
+          isInteractionInstrumentKind(parsed.kind) ? INSTRUMENT_SAMPLE_MODEL :
+            isInteractionPlotlyKind(parsed.kind) ? PLOTLY_SAMPLE_FIGURE_MODEL :
+              isInteractionScriptKind(parsed.kind) ? SCRIPT_SAMPLE_SPEC :
+                isInteractionDiagramKind(parsed.kind) ? DIAGRAM_SAMPLE_MERMAID_SPEC :
+                  undefined;
+        return {
+          ok: false,
+          error: validation.error,
+          phase: "compile-preview",
+          diagnostic: validationDiagnostic(
+            validation.error,
+            isInteractionPlotlyKind(parsed.kind) && validation.error.includes("not found on disk")
+              ? "resources"
+              : "model",
+          ),
+          ...(sample ? { sample } : {}),
+        };
       }
 
       const result = upsertInteractionSpec(projectRoot, parsed);

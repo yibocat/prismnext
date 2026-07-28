@@ -18,11 +18,19 @@ export const INTERACTION_RESOURCE_ROLES = [
 
 export type InteractionResourceRole = (typeof INTERACTION_RESOURCE_ROLES)[number];
 
+export type InteractionResourceFingerprint = {
+  algorithm: "sha256";
+  bytes: number;
+  digest: string;
+};
+
 export type InteractionResource = {
   role?: string;
   path?: string;
   runId?: string;
   artifactPath?: string;
+  /** Host-written identity for versioned (`compute: "bound"`) resources. */
+  fingerprint?: InteractionResourceFingerprint;
 };
 
 export type InteractionSpec = {
@@ -45,6 +53,68 @@ const ID_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
 export function isValidInteractionId(id: string): boolean {
   const s = (id || "").trim();
   return Boolean(s) && ID_RE.test(s) && !s.includes("..");
+}
+
+/**
+ * Explain why `parseInteractionSpec` would reject `raw`. Used by the write
+ * bridge so agents see a field-level message instead of opaque `invalid_spec`.
+ */
+export function diagnoseInteractionSpecParse(raw: unknown): string | null {
+  if (raw === null || raw === undefined) return "spec is null/undefined";
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    return "spec must be a JSON object (not an array or primitive)";
+  }
+  const o = raw as Record<string, unknown>;
+  const problems: string[] = [];
+
+  const id = typeof o.id === "string" ? o.id.trim() : "";
+  if (!id) {
+    problems.push('missing or empty "id" (e.g. "demo.sphere")');
+  } else if (!isValidInteractionId(id)) {
+    problems.push(
+      `"id" is invalid (${JSON.stringify(o.id)}) — use letters/digits/._- , max 128, no ".." or "/"`,
+    );
+  }
+
+  const title = typeof o.title === "string" ? o.title.trim() : "";
+  if (!title) problems.push('missing or empty "title"');
+
+  const kind = typeof o.kind === "string" ? o.kind.trim() : "";
+  if (!kind) problems.push('missing or empty "kind" (e.g. "figure.plotly")');
+
+  if (o.compute === undefined) {
+    problems.push('missing "compute" — use "local" (default for agent-authored) or "bound"');
+  } else if (o.compute !== "local" && o.compute !== "bound") {
+    problems.push(`"compute" must be "local" or "bound", got ${JSON.stringify(o.compute)}`);
+  }
+
+  if (o.revision === undefined) {
+    problems.push(
+      'missing "revision" — on create send 1 (host bumps it on later writes; do not invent other numbers)',
+    );
+  } else if (typeof o.revision !== "number" || !Number.isFinite(o.revision)) {
+    problems.push(`"revision" must be a finite number, got ${JSON.stringify(o.revision)}`);
+  }
+
+  if (problems.length === 0) return null;
+  return (
+    "invalid InteractionSpec envelope — " +
+    problems.join("; ") +
+    '. Required top-level shape: { id, title, kind, compute: "local"|"bound", revision: 1, model?: {...}, resources?: [...] }'
+  );
+}
+
+/**
+ * Normalize agent write payloads before parse: default `compute: "local"` and
+ * `revision: 1` when omitted. Upsert still owns revision bumping on update.
+ * Does not invent id/title/kind — those must be explicit.
+ */
+export function normalizeInteractionSpecForWrite(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const o = { ...(raw as Record<string, unknown>) };
+  if (o.compute === undefined) o.compute = "local";
+  if (o.revision === undefined) o.revision = 1;
+  return o;
 }
 
 export function parseInteractionSpec(raw: unknown): InteractionSpec | null {

@@ -47,6 +47,17 @@ describe("buildOpencodeToolDescription", () => {
     expect(text).toContain("duplicateKeys");
     expect(text).toContain("Task tool or subagents");
   });
+
+  it("generates interaction-write guidance from the shared capability contract", () => {
+    const interaction = BUILTIN_TOOLS.find((t) => t.name === TOOL_NAMES.interactionWrite)!;
+    const text = buildOpencodeToolDescription(interaction);
+    expect(text).toContain("Choose an Interaction by capability");
+    expect(text).toContain("data source");
+    expect(text).toContain("time behavior");
+    expect(text).toContain("figure.plotly");
+    expect(text).toContain("instrument");
+    expect(text).toContain("does not auto-refresh");
+  });
 });
 
 describe("patchToolDescription", () => {

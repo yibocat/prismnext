@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { app } from "electron";
 import { TOOL_NAMES } from "../../shared/tool-names";
+import { buildInteractionWriteGuidance } from "../../shared/interaction-capabilities";
 
 /**
  * # prism‑next Built‑in Custom Tools Registry
@@ -350,16 +351,16 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "Workspace lab: `<experiment-dir>/<id>/` (clean folder — agent-owned layout).",
     category: "project",
     usageHint:
-      "action=create opens a new experiment (registry + workspace folder + best-effort shared `<experiment-dir>/.venv`); action=list lists experiments; " +
+      "action=create opens a new experiment (registry + workspace folder + best-effort shared `.prismnext/.venv`); action=list lists experiments; " +
       "action=read returns meta + lean recent runs (no stdout/stderr by default) plus oldestRun/latestRun; " +
       "action=append_run logs a run you describe; " +
-      "action=detect_env / open ensure shared `.venv` then snapshot or focus UI. Requires a configured Experiment folder.",
+      "action=detect_env / open ensure shared `.prismnext/.venv` then snapshot or focus UI. Requires a configured Experiment folder.",
     workflowRules: [
       "Do NOT use generic read/write/edit on `.prismnext/experiments/**/meta.json` or runs.jsonl — use this tool only.",
       "Do not write meta.json or runs.jsonl under the Workspace experiment folder — registry only.",
       "Before create, call research-brief-read and pass briefLinks (sections + hypothesis excerpt).",
-      "Python packages: one shared `<experiment-dir>/.venv` for all islands — `uv pip install` from workspace or island cwd. " +
-      "Never system Python; never create a separate `.venv` under each island.",
+      "Python packages: one shared `.prismnext/.venv` for Experiment + Interaction + other project Python — `uv pip install` from project, workspace, or island cwd. " +
+      "Never system Python; never create `.venv` under islands, the experiment folder, or `.prismnext/artifacts/`.",
       "Workspace layout inside `<experiment-dir>/<id>/` is agent-owned — no prescribed scripts/results dirs.",
       "If no_experiment_folder is returned, ask the user to add an Experiment folder in Settings → Workspace.",
       "Do not delegate experiment reads/writes via Task — run this tool in the orchestrator conversation.",
@@ -371,7 +372,7 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     name: TOOL_NAMES.experimentRun,
     label: "Experiment Run",
     description:
-      "Run a shell command in the experiment island cwd (ensures shared Experiment `.venv`, injects it on PATH) " +
+      "Run a shell command in the experiment island cwd (ensures shared `.prismnext/.venv`, injects it on PATH) " +
       "and append a structured run record to the registry.",
     category: "project",
     usageHint:
@@ -381,7 +382,7 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     workflowRules: [
       "The experiment must already exist — call experiment-log action=create first.",
       "Use when you want execution plus structured logging in one step.",
-      "Python: shared `<experiment-dir>/.venv` is ensured before run; install with `uv pip install` — never system pip.",
+      "Python: shared `.prismnext/.venv` is ensured before run; install with `uv pip install` — never system pip.",
       "Pass artifacts/notes/kind when they matter for provenance — list every important result path (any file kind), not only images.",
       "After long runs, check run.logPath for the full log under the lab folder.",
       "When showing historical run figures, prefer run.artifactSnapshots (frozen images) over mutable working paths.",
@@ -448,21 +449,12 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     name: TOOL_NAMES.interactionWrite,
     label: "Interaction Write",
     description:
-      "Create or update an Interaction spec (figure.plotly / instrument / figure.static / figure.script / diagram.mermaid / plot.*). Persists to `.prismnext/artifacts/<id>/spec.json`. " +
-      "Scientific 2D/3D → figure.plotly (Plotly JSON). sceneSource is rejected. " +
-      "Returns fenceMarkdown — embed it in your assistant reply after success.",
+      "Create or update an Interaction spec. Persists to `.prismnext/artifacts/<id>/spec.json` and returns fenceMarkdown after success.",
     category: "project",
-    usageHint:
-      "When the user needs an interactive plot/surface/figure/scene (local sketch, programmable canvas, or bound to experiment outputs), or after experiment-run when an interactive view beats a static file card.",
+    usageHint: buildInteractionWriteGuidance(),
     workflowRules: [
       "Do NOT use ```artifact for interactive objects — use interaction-write then ```interaction fence in your reply.",
       "Do NOT edit spec.json or root scene.js with generic write/edit — those paths under `.prismnext/artifacts/<id>/` are denied; use this tool. Nested sidecar resources (e.g. figure.json, PNG/HTML) are allowed via write/edit.",
-      "bound compute: set resources[] to real project-relative paths from experiment outputs.",
-      "Allowed kinds: figure.plotly, instrument, figure.static, figure.script, diagram.mermaid, plot.line, plot.series, plot.scatter. scene.ir/math.surface/math.field/scene.program are retired — writes rejected, old artifacts read-only.",
-      "Scientific 2D/3D (surfaces, vector fields, heatmaps, step-through demos) → figure.plotly with spec.model.figure.",
-      "Parametric surface/field needing LIVE recompute on binding change, or TRUE step-by-step iteration → instrument.",
-      "Plotly/instrument can't express it (molecule, custom geometry) → figure.script (sandboxed JS, last resort, no live bindings).",
-      "Structural/flow diagram (flowchart, DAG, proof tree, call graph) → diagram.mermaid with model.source text (model.engine: mermaid|dot).",
       "After ok:true, you MUST embed fenceMarkdown in the assistant message (not only in tool output).",
     ],
   },

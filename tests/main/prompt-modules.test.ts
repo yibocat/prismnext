@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ALL_MODULES } from "../../src/main/prompts/modules";
 import { resolveStableSystemModules } from "../../src/main/prompts/resolve-active-modules";
+import { INTERACTION_PROMPT } from "../../src/main/prompts/modules/interaction";
 
 function approxTokens(s: string): number {
   return Math.round(s.length / 4);
@@ -28,5 +29,13 @@ describe("prompt modules registry", () => {
     const sum = staticGlobals.reduce((a, m) => a + approxTokens(m.prompt!), 0);
     expect(sum).toBeLessThanOrEqual(1100);
     expect(sum).toBeLessThan(1200);
+  });
+
+  it("keeps Interaction prompt at capability selection, not kind-by-case routing", () => {
+    expect(INTERACTION_PROMPT).toContain("data source");
+    expect(INTERACTION_PROMPT).toContain("time behavior");
+    expect(INTERACTION_PROMPT).toContain("interaction-write");
+    expect(INTERACTION_PROMPT).not.toContain("first match wins");
+    expect(INTERACTION_PROMPT).not.toContain("u/v");
   });
 });

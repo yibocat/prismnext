@@ -5,12 +5,14 @@
  * Agent write what it already knows" principle as figure.plotly's Plotly
  * JSON contract.
  *
+ * Browser-safe: no `node:fs`. Disk validation is
+ * `src/main/services/interaction-diagram-validate.ts` (same split as
+ * figure.static: shared resolves contract, main touches the filesystem).
+ *
  * See docs-private/superpowers/specs/2026-07-27-interaction-plotly-runtime-design.md
  * §12 (D36–D42) for the full design rationale.
  */
 
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 import { normalizeFigureResourceProjectPath } from "./interaction-figure";
 import type { InteractionResource, InteractionSpec } from "./interaction-spec";
 
@@ -90,46 +92,6 @@ export function resolveDiagramSource(spec: InteractionSpec): DiagramSource {
       "diagram.mermaid needs model.source (Mermaid/DOT text) or a file resource " +
       '(resources: [{ role: "diagram-source", path: "diagram.mmd" }])',
   };
-}
-
-export type DiagramValidationResult =
-  | { ok: true; engine: DiagramEngine; mode: "inline" | "file" }
-  | { ok: false; error: string };
-
-/**
- * Write-time structural validation only — no parse/compile, no async (D38).
- * Real syntax validation happens at panel mount time and via the offscreen
- * thumbnail self-check, both of which reuse the existing .last-error.json
- * pipeline instead of a new validation tier.
- */
-export function validateDiagramSpec(
-  projectRoot: string,
-  spec: InteractionSpec,
-): DiagramValidationResult {
-  const resolved = resolveDiagramSource(spec);
-  if (!resolved.ok) return resolved;
-
-  if (resolved.mode === "inline") {
-    const bytes = Buffer.byteLength(resolved.source, "utf8");
-    if (bytes > DIAGRAM_MAX_INLINE_BYTES) {
-      return {
-        ok: false,
-        error: `diagram source too large (${bytes} bytes > ${DIAGRAM_MAX_INLINE_BYTES} byte limit) — move it to a file resource instead`,
-      };
-    }
-    return { ok: true, engine: resolved.engine, mode: "inline" };
-  }
-
-  const abs = join(projectRoot, resolved.path);
-  if (!existsSync(abs)) {
-    return {
-      ok: false,
-      error:
-        `diagram resource not found on disk: ${resolved.path}. ` +
-        `Write the Mermaid/DOT text first, then resources: [{ role: "diagram-source", path: "<filename>" }]`,
-    };
-  }
-  return { ok: true, engine: resolved.engine, mode: "file" };
 }
 
 /** Minimal legal diagram.mermaid spec (Mermaid engine, inline source). */

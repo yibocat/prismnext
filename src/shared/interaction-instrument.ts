@@ -8,27 +8,33 @@
  * §9 (D22–D24) for the full design rationale.
  */
 
-import { evaluateMathExpression, isMathExpressionAllowed } from "./interaction-math";
+import { evaluateMathExpression } from "./interaction-math";
 import { validatePlotlyFigure, type PlotlyFigure } from "./interaction-plotly";
 import type { InteractionSpec } from "./interaction-spec";
 import { parseMathBindings, initialBindingValues } from "./interaction-math";
+import {
+  buildDomainGrids,
+  checkNoLiteralGridArrays,
+  parseComputeDomain,
+  parseModelParams,
+  walkResolveMarkers,
+  type ComputeDomain,
+} from "./interaction-compute";
 
 export const INTERACTION_INSTRUMENT_KIND = "instrument" as const;
 
 /** Hard ceiling on `model.step.max` — rejected outright at validation, never silently clamped. */
 export const INSTRUMENT_STEP_HARD_CEILING = 2000;
 
+/** Extra markers beyond the shared base set ($grid/$exprGrid/$exprSeries/$expr). */
+const INSTRUMENT_EXTRA_MARKER_KEYS = ["$state", "$stateTrail"] as const;
+
 export function isInteractionInstrumentKind(kind: string): boolean {
   return kind.trim() === INTERACTION_INSTRUMENT_KIND;
 }
 
-export type InstrumentDomain = {
-  uMin: number;
-  uMax: number;
-  vMin: number;
-  vMax: number;
-  resolution: number;
-};
+/** @deprecated Use `ComputeDomain` from `interaction-compute` (same shape). */
+export type InstrumentDomain = ComputeDomain;
 
 export type InstrumentStepModel = {
   /** state var name -> initial-value expression (sees bindings only). */
@@ -41,28 +47,11 @@ export type InstrumentStepModel = {
 export type InstrumentModel = {
   runtimeVersion: 1;
   domain?: InstrumentDomain;
+  /** Numeric constants merged into marker expression scope (same role as spec.bindings). */
+  params?: Record<string, number>;
   step?: InstrumentStepModel;
   figureTemplate: Record<string, unknown>;
 };
-
-function num(v: unknown, fallback: number): number {
-  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
-}
-
-function parseInstrumentDomain(raw: unknown): InstrumentDomain | null | undefined {
-  if (raw === undefined) return undefined;
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const o = raw as Record<string, unknown>;
-  const resolutionRaw = num(o.resolution, 48);
-  const resolution = Math.min(128, Math.max(4, Math.floor(resolutionRaw)));
-  return {
-    uMin: num(o.uMin, -2),
-    uMax: num(o.uMax, 2),
-    vMin: num(o.vMin, -2),
-    vMax: num(o.vMax, 2),
-    resolution,
-  };
-}
 
 function parseExprMap(raw: unknown): Record<string, string> | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
@@ -96,8 +85,10 @@ export function parseInstrumentModel(raw: unknown): InstrumentModel | null {
     return null;
   }
 
-  const domain = parseInstrumentDomain(o.domain);
+  const domain = parseComputeDomain(o.domain);
   if (domain === null) return null;
+  const params = parseModelParams(o.params);
+  if (params === null) return null;
   const step = parseInstrumentStep(o.step);
   if (step === null) return null;
 
@@ -106,6 +97,7 @@ export function parseInstrumentModel(raw: unknown): InstrumentModel | null {
     figureTemplate: o.figureTemplate as Record<string, unknown>,
   };
   if (domain !== undefined) model.domain = domain;
+  if (params && Object.keys(params).length > 0) model.params = params;
   if (step !== undefined) model.step = step;
   return model;
 }
@@ -142,20 +134,6 @@ export function computeStepStates(
   return trail;
 }
 
-function buildDomainGrids(domain: InstrumentDomain): { u: number[]; v: number[] } {
-  const { uMin, uMax, vMin, vMax, resolution } = domain;
-  const n = Math.max(1, resolution);
-  const axis = (min: number, max: number) =>
-    Array.from({ length: n }, (_, i) => min + ((max - min) * i) / Math.max(1, n - 1));
-  return { u: axis(uMin, uMax), v: axis(vMin, vMax) };
-}
-
-function isMarkerCandidate(node: unknown): node is Record<string, unknown> {
-  return Boolean(node) && typeof node === "object" && !Array.isArray(node);
-}
-
-const MARKER_KEYS = ["$grid", "$exprGrid", "$expr", "$state", "$stateTrail"] as const;
-
 export type InstrumentFigureResult =
   | { ok: true; figure: PlotlyFigure }
   | { ok: false; error: string };
@@ -164,6 +142,9 @@ export type InstrumentFigureResult =
  * Resolve every marker in `model.figureTemplate` against the current bindings
  * and step, then validate the result as a Plotly figure. Does not mutate the
  * input template (Agent-authored JSON must stay reusable across re-renders).
+ * `$grid`/`$exprGrid`/`$exprSeries`/`$expr` are handled by the shared compute
+ * layer (`interaction-compute.ts`); `$state`/`$stateTrail` are instrument-only
+ * (need step context) and resolved here.
  */
 export function resolveInstrumentFigure(
   model: InstrumentModel,
@@ -177,65 +158,35 @@ export function resolveInstrumentFigure(
     trail = computeStepStates(model.step, bindingValues, clampedStep);
     stateContext = trail[trail.length - 1] ?? {};
   }
-  const varContext: Record<string, number> = { ...bindingValues, ...stateContext };
+  const params = model.params ?? {};
+  // Constants first, then live bindings / step state (bindings win on name clash).
+  const varContext: Record<string, number> = { ...params, ...bindingValues, ...stateContext };
   const domainGrids = model.domain ? buildDomainGrids(model.domain) : null;
 
-  function resolveNode(node: unknown): unknown {
-    if (Array.isArray(node)) return node.map(resolveNode);
-    if (isMarkerCandidate(node)) {
-      const keys = Object.keys(node);
-      const markerKeys = keys.filter((k) => (MARKER_KEYS as readonly string[]).includes(k));
-      if (markerKeys.length > 1) {
-        throw new Error(`ambiguous marker object with keys: ${markerKeys.join(", ")}`);
+  function resolveStepMarker(key: string, raw: unknown): unknown {
+    if (key === "$state") {
+      if (!model.step) throw new Error("$state requires model.step");
+      if (typeof raw !== "string" || !(raw in stateContext)) {
+        throw new Error(`unknown state variable: ${JSON.stringify(raw)}`);
       }
-      if (markerKeys.length === 1) {
-        const mk = markerKeys[0] as (typeof MARKER_KEYS)[number];
-        const raw = node[mk];
-        if (mk === "$grid") {
-          if (!domainGrids) throw new Error("$grid requires model.domain");
-          if (raw === "u") return [...domainGrids.u];
-          if (raw === "v") return [...domainGrids.v];
-          throw new Error(`$grid must be "u" or "v", got ${JSON.stringify(raw)}`);
-        }
-        if (mk === "$exprGrid") {
-          if (!domainGrids) throw new Error("$exprGrid requires model.domain");
-          if (typeof raw !== "string") throw new Error("$exprGrid value must be a string expression");
-          const vars = [...Object.keys(varContext), "u", "v"];
-          if (!isMathExpressionAllowed(raw, vars)) throw new Error(`expression not allowed: ${raw}`);
-          return domainGrids.v.map((v) =>
-            domainGrids.u.map((u) => evaluateMathExpression(raw, { ...varContext, u, v })),
-          );
-        }
-        if (mk === "$expr") {
-          if (typeof raw !== "string") throw new Error("$expr value must be a string expression");
-          const vars = Object.keys(varContext);
-          if (!isMathExpressionAllowed(raw, vars)) throw new Error(`expression not allowed: ${raw}`);
-          return evaluateMathExpression(raw, varContext);
-        }
-        if (mk === "$state") {
-          if (!model.step) throw new Error("$state requires model.step");
-          if (typeof raw !== "string" || !(raw in stateContext)) {
-            throw new Error(`unknown state variable: ${JSON.stringify(raw)}`);
-          }
-          return stateContext[raw];
-        }
-        // $stateTrail
-        if (!model.step) throw new Error("$stateTrail requires model.step");
-        if (typeof raw !== "string") throw new Error("$stateTrail value must be a string");
-        return trail.map((s) => {
-          if (!(raw in s)) throw new Error(`unknown state variable: ${JSON.stringify(raw)}`);
-          return s[raw];
-        });
-      }
-      const out: Record<string, unknown> = {};
-      for (const k of keys) out[k] = resolveNode(node[k]);
-      return out;
+      return stateContext[raw];
     }
-    return node;
+    // $stateTrail
+    if (!model.step) throw new Error("$stateTrail requires model.step");
+    if (typeof raw !== "string") throw new Error("$stateTrail value must be a string");
+    return trail.map((s) => {
+      if (!(raw in s)) throw new Error(`unknown state variable: ${JSON.stringify(raw)}`);
+      return s[raw];
+    });
   }
 
   try {
-    const resolved = resolveNode(model.figureTemplate);
+    const resolved = walkResolveMarkers(
+      model.figureTemplate,
+      { domain: model.domain ?? null, domainGrids, varContext },
+      INSTRUMENT_EXTRA_MARKER_KEYS,
+      resolveStepMarker,
+    );
     const validated = validatePlotlyFigure(resolved);
     if (!validated.ok) return { ok: false, error: validated.error };
     return { ok: true, figure: validated.figure };
@@ -260,6 +211,18 @@ export function validateInstrumentSpec(
       error: "invalid instrument model — require model.runtimeVersion=1 and model.figureTemplate",
     };
   }
+  const fieldSourceCheck = checkNoLiteralGridArrays(model.figureTemplate, INSTRUMENT_EXTRA_MARKER_KEYS);
+  if (!fieldSourceCheck.ok) {
+    return { ok: false, error: fieldSourceCheck.error };
+  }
+  const bindingCount = spec.bindings ? Object.keys(spec.bindings).length : 0;
+  if (bindingCount === 0) {
+    return {
+      ok: false,
+      error:
+        "instrument requires at least one entry in spec.bindings — live bindings are this kind's defining capability; use figure.plotly for a static (non-adjustable) figure",
+    };
+  }
   if (model.step && model.step.max > INSTRUMENT_STEP_HARD_CEILING) {
     return {
       ok: false,
@@ -275,21 +238,31 @@ export function validateInstrumentSpec(
 /** Minimal legal instrument model (saddle-like surface with a live `R` binding). */
 export const INSTRUMENT_SAMPLE_MODEL: InstrumentModel = {
   runtimeVersion: 1,
-  domain: { uMin: -2, uMax: 2, vMin: -2, vMax: 2, resolution: 48 },
+  domain: {
+    axes: [
+      { name: "x", min: -2, max: 2, resolution: 48 },
+      { name: "y", min: -2, max: 2, resolution: 48 },
+    ],
+    uMin: -2,
+    uMax: 2,
+    vMin: -2,
+    vMax: 2,
+    resolution: 48,
+  },
   figureTemplate: {
     data: [
       {
         type: "surface",
-        x: { $grid: "u" },
-        y: { $grid: "v" },
-        z: { $exprGrid: "sin(u) * cos(v) * R" },
+        x: { $grid: { axis: "x" } },
+        y: { $grid: { axis: "y" } },
+        z: { $exprGrid: { over: ["x", "y"], expr: "sin(x) * cos(y) * R" } },
         colorbar: { title: { text: "z" } },
       },
     ],
     layout: {
       scene: {
-        xaxis: { title: { text: "u" } },
-        yaxis: { title: { text: "v" } },
+        xaxis: { title: { text: "x" } },
+        yaxis: { title: { text: "y" } },
         zaxis: { title: { text: "z" } },
       },
       margin: { l: 0, r: 0, t: 32, b: 0 },

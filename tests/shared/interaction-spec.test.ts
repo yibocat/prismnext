@@ -3,6 +3,8 @@ import {
   isValidInteractionId,
   kindDisplayLabel,
   parseInteractionSpec,
+  diagnoseInteractionSpecParse,
+  normalizeInteractionSpecForWrite,
   buildInteractionFenceMarkdown,
   interactionFenceHint,
   isAllowedInteractionKind,
@@ -67,6 +69,46 @@ describe("parseInteractionSpec", () => {
     expect(parseInteractionSpec(null)).toBeNull();
     expect(parseInteractionSpec({ id: "x", title: "", kind: "plot", compute: "local", revision: 1 })).toBeNull();
     expect(parseInteractionSpec({ id: "x", title: "T", kind: "plot", compute: "remote", revision: 1 })).toBeNull();
+  });
+});
+
+describe("diagnoseInteractionSpecParse / normalizeInteractionSpecForWrite", () => {
+  it("explains missing revision and compute instead of a silent null", () => {
+    const msg = diagnoseInteractionSpecParse({
+      id: "demo.x2",
+      title: "x²",
+      kind: "figure.plotly",
+    });
+    expect(msg).toMatch(/missing "compute"/);
+    expect(msg).toMatch(/missing "revision"/);
+    expect(msg).not.toBeNull();
+  });
+
+  it("defaults compute/revision on write so agents need not invent them", () => {
+    const normalized = normalizeInteractionSpecForWrite({
+      id: "demo.x2",
+      title: "x²",
+      kind: "figure.plotly",
+      model: { figure: { data: [{ type: "scatter", mode: "markers", x: [0], y: [0] }] } },
+    });
+    const parsed = parseInteractionSpec(normalized);
+    expect(parsed).toEqual(
+      expect.objectContaining({
+        id: "demo.x2",
+        compute: "local",
+        revision: 1,
+      }),
+    );
+  });
+
+  it("still rejects a blank title after normalize", () => {
+    const normalized = normalizeInteractionSpecForWrite({
+      id: "demo.x2",
+      title: "  ",
+      kind: "figure.plotly",
+    });
+    expect(parseInteractionSpec(normalized)).toBeNull();
+    expect(diagnoseInteractionSpecParse(normalized)).toMatch(/title/);
   });
 });
 

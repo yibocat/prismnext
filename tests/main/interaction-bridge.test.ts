@@ -119,8 +119,9 @@ describe("interaction-bridge", () => {
       revision: 1,
       model: {
         runtimeVersion: 1,
-        figureTemplate: { data: [{ type: "scatter", x: [1], y: [{ $expr: "1" }] }] },
+        figureTemplate: { data: [{ type: "scatter", x: [1], y: [{ $expr: "R" }] }] },
       },
+      bindings: { R: { min: 0, max: 2, default: 1, label: "R" } },
     });
     expect(instrument.ok).toBe(true);
     expect(scheduleInteractionThumbnailMock).toHaveBeenCalledTimes(1);
@@ -631,5 +632,109 @@ describe("interaction-bridge", () => {
     ) as Record<string, unknown>;
     expect(ok.ok).toBe(true);
     expect(scheduleInteractionThumbnailMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a write missing compute/revision (defaults applied) and rejects envelope gaps with a field-level error, never opaque invalid_spec", async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ix-bridge-envelope-"));
+    projectRoots.push(projectRoot);
+    const sessionId = "test-session-envelope";
+    const sessionDir = path.join(getInteractionBridgeRoot(), sessionId);
+    fs.mkdirSync(sessionDir, { recursive: true });
+
+    async function write(requestId: string, spec: Record<string, unknown>) {
+      fs.writeFileSync(
+        path.join(sessionDir, `${requestId}.request.json`),
+        JSON.stringify({ action: "write", sessionId, projectRoot, spec }),
+        "utf-8",
+      );
+      await processInteractionBridgeOnceForTests();
+      return JSON.parse(
+        fs.readFileSync(path.join(sessionDir, `${requestId}.result.json`), "utf-8"),
+      ) as Record<string, unknown>;
+    }
+
+    const ok = await write("req-defaults", {
+      id: "demo.x2.approx",
+      title: "x² approx",
+      kind: "figure.plotly",
+      // no compute, no revision
+      model: {
+        domain: { uMin: -2, uMax: 2, vMin: 0, vMax: 1, resolution: 5 },
+        figure: {
+          data: [
+            {
+              type: "scatter",
+              mode: "lines",
+              x: { $exprSeries: { over: "u", expr: "u" } },
+              y: { $exprSeries: { over: "u", expr: "u*u" } },
+            },
+          ],
+        },
+      },
+    });
+    expect(ok.ok).toBe(true);
+    expect(ok.spec).toEqual(expect.objectContaining({ compute: "local", revision: 1 }));
+
+    const bad = await write("req-no-title", {
+      id: "demo.notitle",
+      title: "",
+      kind: "figure.plotly",
+    });
+    expect(bad.ok).toBe(false);
+    expect(String(bad.error)).toMatch(/title/);
+    expect(String(bad.error)).not.toBe("invalid_spec");
+    expect(bad.sampleEnvelope).toBeTruthy();
+    expect(bad.diagnostic).toEqual(
+      expect.objectContaining({
+        code: "invalid_spec",
+        phase: "parse",
+        fieldPath: "title",
+      }),
+    );
+  });
+
+  it("rejects hand-typed literal arrays on figure.plotly lines/surface with a clear compute-marker error", async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ix-bridge-literal-"));
+    projectRoots.push(projectRoot);
+    const sessionId = "test-session-literal";
+    const sessionDir = path.join(getInteractionBridgeRoot(), sessionId);
+    fs.mkdirSync(sessionDir, { recursive: true });
+
+    const requestId = "req-literal";
+    fs.writeFileSync(
+      path.join(sessionDir, `${requestId}.request.json`),
+      JSON.stringify({
+        action: "write",
+        sessionId,
+        projectRoot,
+        spec: {
+          id: "demo.literal",
+          title: "Literal",
+          kind: "figure.plotly",
+          compute: "local",
+          revision: 1,
+          model: {
+            figure: {
+              data: [{ type: "scatter", mode: "lines", x: [0, 1, 2], y: [0, 1, 4] }],
+            },
+          },
+        },
+      }),
+      "utf-8",
+    );
+    await processInteractionBridgeOnceForTests();
+    const result = JSON.parse(
+      fs.readFileSync(path.join(sessionDir, `${requestId}.result.json`), "utf-8"),
+    ) as Record<string, unknown>;
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toMatch(/literal array/);
+    expect(result.sample).toBeTruthy();
+    expect(result.diagnostic).toEqual(
+      expect.objectContaining({
+        code: "invalid_interaction_model",
+        phase: "validate",
+        fieldPath: "model",
+      }),
+    );
   });
 });

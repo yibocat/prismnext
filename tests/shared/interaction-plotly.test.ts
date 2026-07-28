@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   isInteractionPlotlyKind,
   PLOTLY_MAX_JSON_BYTES,
+  PLOTLY_SAMPLE_CURVE_ANIMATION_MODEL,
   PLOTLY_SAMPLE_FIGURE,
+  PLOTLY_SAMPLE_FIGURE_MODEL,
+  resolveInlinePlotlyModel,
   resolvePlotlyFigureSource,
   validatePlotlyFigure,
 } from "../../src/shared/interaction-plotly";
@@ -44,7 +47,7 @@ describe("figure.plotly contract", () => {
     const src = resolvePlotlyFigureSource(plotlySpec());
     expect(src.ok).toBe(true);
     if (src.ok && src.mode === "inline") {
-      expect(src.figure.data[0]?.type).toBe("surface");
+      expect(src.figure.data[0]?.type).toBe("scatter");
     }
   });
 
@@ -150,6 +153,45 @@ describe("figure.plotly contract", () => {
       expect(result.figure.frames?.length).toBe(2);
       expect(result.figure.layout?.sliders).toBeTruthy();
       expect(result.figure.layout?.updatemenus).toBeTruthy();
+    }
+  });
+});
+
+describe("resolveInlinePlotlyModel — sample models used in tool description", () => {
+  it("resolves the unit-sphere sample (all coordinates computed, none guessed)", () => {
+    expect(PLOTLY_SAMPLE_FIGURE_MODEL.domain.axes?.map((axis) => axis.name)).toEqual([
+      "theta",
+      "phi",
+    ]);
+    const result = resolveInlinePlotlyModel(PLOTLY_SAMPLE_FIGURE_MODEL);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const trace = result.figure.data[0]!;
+    expect(trace.type).toBe("surface");
+    const x = trace.x as number[][];
+    const y = trace.y as number[][];
+    const z = trace.z as number[][];
+    // Every point must sit on the unit sphere: x^2 + y^2 + z^2 == 1.
+    for (let i = 0; i < x.length; i++) {
+      for (let j = 0; j < x[i]!.length; j++) {
+        const r2 = x[i]![j]! ** 2 + y[i]![j]! ** 2 + z[i]![j]! ** 2;
+        expect(r2).toBeCloseTo(1, 6);
+      }
+    }
+  });
+
+  it("resolves the x^2 coarse->fine animation sample with per-frame resolution", () => {
+    const result = resolveInlinePlotlyModel(PLOTLY_SAMPLE_CURVE_ANIMATION_MODEL);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.figure.data[0]!.x).toHaveLength(3);
+    expect(result.figure.frames).toHaveLength(5);
+    const pointCounts = result.figure.frames!.map((f) => (f.data as { x: unknown[] }[])[0]!.x.length);
+    expect(pointCounts).toEqual([3, 6, 12, 25, 50]);
+    // Spot-check the finest frame actually satisfies y = x^2.
+    const last = result.figure.frames![4]!.data as { x: number[]; y: number[] }[];
+    for (let i = 0; i < last[0]!.x.length; i++) {
+      expect(last[0]!.y[i]).toBeCloseTo(last[0]!.x[i]! ** 2, 6);
     }
   });
 });

@@ -1,34 +1,21 @@
 import { TOOL_NAMES } from "../../../shared/tool-names";
 
 /**
- * Interaction — when to create Interactive Research Artifacts (judgment map only).
- * How-to (schema, samples, Python/bound recipes) lives in the interaction-write
- * tool description — see src/main/tools/interaction-write.ts (R2/R3: tool owns
- * "how", module owns "when").
+ * Interaction — when to create artifacts (judgment only).
+ * Schema and samples: interaction-write tool description.
  */
 export const INTERACTION_PROMPT = [
-  "## Interaction (interactive research objects)",
+  "## Interaction",
   "",
-  "Applies when the user needs **adjustable** plots, figures, math scenes, or 3D manifolds — not plain file preview.",
+  "Create a persistent Interaction only when the user needs an interactive research object, not a normal file preview.",
   "",
-  "### Which kind to use (pick the narrowest that fits)",
+  "### Decide before writing",
   "",
-  "- **plot.*** — csv curves/scatter.",
-  "- **figure.plotly** — default for scientific 2D/3D (surfaces, vector fields, heatmaps, step-through demos). Agent writes Plotly JSON; host renders.",
-  "- **instrument** — like figure.plotly but with *live* recompute on binding change, or true step-by-step iteration (Newton/EM/BFS-style).",
-  "- **figure.static** — figure.plotly vocabulary too narrow (LaTeX axes, multi-panel figures) → generate via Python; or an existing PNG/SVG/HTML.",
-  "- **figure.script** — last resort when figure.plotly/instrument truly can't express it (molecule structures, custom geometry). Agent writes a real JS module executed in a locked-down sandbox; no live binding updates. Prefer figure.plotly/instrument for anything they can express.",
-  '- **diagram.mermaid** — structural/flow diagrams (flowcharts, DAGs, proof trees, call graphs). model.engine: "mermaid" (default) or "dot" (Graphviz). Plain text contract, no live bindings.',
-  `- **bound vs local** — after ${TOOL_NAMES.experimentRun} already produced a chart/table, bind to its real output instead of regenerating it.`,
-  "- **scene.ir / math.surface / math.field / scene.program are retired** — read-only now (old artifacts show a migration card). Do not write these kinds; use figure.plotly/instrument.",
+  "Identify the data source, time behavior, and rendering capability required. " +
+    "The `interaction-write` tool defines the available runtimes and their constraints.",
+  `Existing ${TOOL_NAMES.experimentRun} output is a real resource: reference it; do not regenerate or invent data.`,
   "",
   "### Workflow",
   "",
-  `- Discover: ${TOOL_NAMES.interactionList}. Update: ${TOOL_NAMES.interactionRead} (check lastError).`,
-  `- ${TOOL_NAMES.interactionWrite} carries the schema, samples, and Python/bound recipes for each kind.`,
-  "- Embed fenceMarkdown after success.",
-  "",
-  "### Do not",
-  "",
-  "- Build DOM/HUD in scripts — host owns UI.",
+  `${TOOL_NAMES.interactionWrite} → on failure read \`error\` and fix that (same kind). Success → fenceMarkdown.`,
 ].join("\n");
