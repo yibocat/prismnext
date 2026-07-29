@@ -3,7 +3,7 @@
  */
 import { BrowserWindow } from "electron";
 
-export type InteractionChangedReason = "write" | "open";
+export type InteractionChangedReason = "write" | "open" | "thumbnail";
 
 export interface InteractionChangedEvent {
   projectRoot: string;

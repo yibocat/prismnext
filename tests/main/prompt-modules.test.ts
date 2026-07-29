@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ALL_MODULES } from "../../src/main/prompts/modules";
 import { resolveStableSystemModules } from "../../src/main/prompts/resolve-active-modules";
+import { INTERACTION_PROMPT } from "../../src/main/prompts/modules/interaction";
 
 function approxTokens(s: string): number {
   return Math.round(s.length / 4);
@@ -20,11 +21,21 @@ describe("prompt modules registry", () => {
   });
 
   it("global static modules stay under interim budget (P2 target ≤800)", () => {
-    // research-reasoning + reply-depth still dominate; plan-consent removed (~230 tok).
+    // research-reasoning + reply-depth still dominate; plan-consent removed (~230 tok),
+    // interaction trimmed to a judgment table (~1300 -> ~300 tok, how-to moved to
+    // interaction-write tool description). Remaining gap is research-reasoning + reply-depth.
     // Spec target ≤800 after P2 judgment-module trim.
     const staticGlobals = resolveStableSystemModules().filter((m) => m.prompt);
     const sum = staticGlobals.reduce((a, m) => a + approxTokens(m.prompt!), 0);
     expect(sum).toBeLessThanOrEqual(1100);
     expect(sum).toBeLessThan(1200);
+  });
+
+  it("keeps Interaction prompt at capability selection, not kind-by-case routing", () => {
+    expect(INTERACTION_PROMPT).toContain("data source");
+    expect(INTERACTION_PROMPT).toContain("time behavior");
+    expect(INTERACTION_PROMPT).toContain("interaction-write");
+    expect(INTERACTION_PROMPT).not.toContain("first match wins");
+    expect(INTERACTION_PROMPT).not.toContain("u/v");
   });
 });

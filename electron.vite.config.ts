@@ -20,7 +20,20 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        external: ["electron", "node-pty", "@napi-rs/canvas"],
+        // plotly.js-dist-min / three / mermaid / @hpcc-js/wasm: read as raw
+        // text assets at runtime for offscreen thumbnail capture
+        // (interaction-thumbnail.ts, figure.script's optional THREE
+        // injection) — must not be bundled/inlined, only resolved via
+        // require.resolve() against real node_modules.
+        external: [
+          "electron",
+          "node-pty",
+          "@napi-rs/canvas",
+          "plotly.js-dist-min",
+          "three",
+          "mermaid",
+          "@hpcc-js/wasm",
+        ],
       },
     },
   },

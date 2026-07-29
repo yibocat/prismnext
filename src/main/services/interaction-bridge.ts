@@ -8,15 +8,38 @@ import { getInteractionBridgeRoot } from "./prism-bridge-paths";
 import { getSessionProjectRoot } from "./chat-session-registry";
 import {
   listInteractionSummaries,
+  readInteractionLastError,
   readInteractionSpec,
   upsertInteractionSpec,
 } from "./interaction-store";
+import { validateInteractionForWrite } from "./interaction-validate";
 import {
   interactionFenceHint,
+  isDeprecatedInteractionKind,
+  diagnoseInteractionSpecParse,
+  normalizeInteractionSpecForWrite,
   parseInteractionSpec,
   type InteractionSpec,
 } from "../../shared/interaction-spec";
+import {
+  isInteractionPlotlyKind,
+  PLOTLY_SAMPLE_FIGURE,
+  PLOTLY_SAMPLE_FIGURE_MODEL,
+} from "../../shared/interaction-plotly";
+import {
+  isInteractionInstrumentKind,
+  INSTRUMENT_SAMPLE_MODEL,
+} from "../../shared/interaction-instrument";
+import {
+  isInteractionScriptKind,
+  SCRIPT_SAMPLE_SPEC,
+} from "../../shared/interaction-script";
+import {
+  isInteractionDiagramKind,
+  DIAGRAM_SAMPLE_MERMAID_SPEC,
+} from "../../shared/interaction-diagram";
 import { broadcastInteractionChanged } from "./interaction-ui-events";
+import { scheduleInteractionThumbnail } from "./interaction-thumbnail";
 
 const log = createLogger("interaction-bridge", "agent");
 
@@ -27,8 +50,35 @@ type InteractionBridgeRequest = {
   id?: string;
   kindPrefix?: string;
   spec?: InteractionSpec;
+  /** Deprecated — rejected for every current kind, kept only so stray legacy calls get a clear error. */
+  sceneSource?: string;
   focus?: boolean;
 };
+
+type InteractionDiagnostic = {
+  code: string;
+  phase: "parse" | "validate";
+  fieldPath: string;
+  message: string;
+};
+
+function envelopeDiagnostic(raw: unknown, message: string): InteractionDiagnostic {
+  const spec = raw && typeof raw === "object" && !Array.isArray(raw)
+    ? raw as Record<string, unknown>
+    : {};
+  const fieldPath =
+    typeof spec.id !== "string" || !spec.id.trim() ? "id"
+      : typeof spec.title !== "string" || !spec.title.trim() ? "title"
+        : typeof spec.kind !== "string" || !spec.kind.trim() ? "kind"
+          : spec.compute !== "local" && spec.compute !== "bound" ? "compute"
+            : typeof spec.revision !== "number" ? "revision"
+              : "spec";
+  return { code: "invalid_spec", phase: "parse", fieldPath, message };
+}
+
+function validationDiagnostic(message: string, fieldPath = "model"): InteractionDiagnostic {
+  return { code: "invalid_interaction_model", phase: "validate", fieldPath, message };
+}
 
 function bridgeRoot(): string {
   return getInteractionBridgeRoot();
@@ -41,12 +91,20 @@ function resolveProjectRoot(req: InteractionBridgeRequest): string {
 
 function specResponse(projectRoot: string, spec: InteractionSpec) {
   const hint = interactionFenceHint(spec.id, spec.title);
+  const lastError = readInteractionLastError(projectRoot, spec.id);
   return {
     ok: true,
     spec,
     relativePath: `.prismnext/artifacts/${spec.id}/spec.json`,
     fenceMarkdown: hint.fenceMarkdown,
     replyRule: hint.replyRule,
+    ...(lastError
+      ? {
+          lastError,
+          lastErrorHint:
+            "Panel self-check failed previously. Fix the artifact via interaction-write, then re-open.",
+        }
+      : {}),
   };
 }
 
@@ -73,9 +131,89 @@ function dispatch(req: InteractionBridgeRequest): Record<string, unknown> {
       return specResponse(projectRoot, spec);
     }
     case "write": {
-      const raw = req.spec;
+      const raw = normalizeInteractionSpecForWrite(req.spec);
       const parsed = parseInteractionSpec(raw);
-      if (!parsed) return { ok: false, error: "invalid_spec" };
+      if (!parsed) {
+        const error = diagnoseInteractionSpecParse(raw) ?? "invalid InteractionSpec";
+        return {
+          ok: false,
+          error,
+          diagnostic: envelopeDiagnostic(raw, error),
+          sampleEnvelope: {
+            id: "demo.example",
+            title: "Example",
+            kind: "figure.plotly",
+            compute: "local",
+            revision: 1,
+            model: PLOTLY_SAMPLE_FIGURE_MODEL,
+          },
+        };
+      }
+
+      if (isDeprecatedInteractionKind(parsed.kind)) {
+        return {
+          ok: false,
+          error:
+            `kind "${parsed.kind}" is retired and no longer accepts writes — ` +
+            "use figure.plotly (2D/3D Plotly JSON) or instrument (live recompute / step iteration) instead.",
+          sample: PLOTLY_SAMPLE_FIGURE,
+        };
+      }
+
+      const sceneSource =
+        typeof req.sceneSource === "string" ? req.sceneSource : undefined;
+
+      if (sceneSource != null && isInteractionInstrumentKind(parsed.kind)) {
+        return {
+          ok: false,
+          error: "instrument does not use sceneSource. Put the figure template in spec.model.figureTemplate.",
+          sample: INSTRUMENT_SAMPLE_MODEL,
+        };
+      }
+      if (sceneSource != null && isInteractionPlotlyKind(parsed.kind)) {
+        return {
+          ok: false,
+          error: "figure.plotly does not use sceneSource. Put Plotly JSON in spec.model.figure.",
+          sample: PLOTLY_SAMPLE_FIGURE_MODEL,
+        };
+      }
+      if (sceneSource != null && isInteractionScriptKind(parsed.kind)) {
+        return {
+          ok: false,
+          error: 'figure.script does not use sceneSource. Write the script to resources: [{ role: "script", path: "script.js" }] instead.',
+          sample: SCRIPT_SAMPLE_SPEC,
+        };
+      }
+      if (sceneSource != null && isInteractionDiagramKind(parsed.kind)) {
+        return {
+          ok: false,
+          error: "diagram.mermaid does not use sceneSource. Put Mermaid/DOT text in spec.model.source.",
+          sample: DIAGRAM_SAMPLE_MERMAID_SPEC,
+        };
+      }
+
+      const validation = validateInteractionForWrite(projectRoot, parsed);
+      if (!validation.ok) {
+        const sample =
+          isInteractionInstrumentKind(parsed.kind) ? INSTRUMENT_SAMPLE_MODEL :
+            isInteractionPlotlyKind(parsed.kind) ? PLOTLY_SAMPLE_FIGURE_MODEL :
+              isInteractionScriptKind(parsed.kind) ? SCRIPT_SAMPLE_SPEC :
+                isInteractionDiagramKind(parsed.kind) ? DIAGRAM_SAMPLE_MERMAID_SPEC :
+                  undefined;
+        return {
+          ok: false,
+          error: validation.error,
+          phase: "compile-preview",
+          diagnostic: validationDiagnostic(
+            validation.error,
+            isInteractionPlotlyKind(parsed.kind) && validation.error.includes("not found on disk")
+              ? "resources"
+              : "model",
+          ),
+          ...(sample ? { sample } : {}),
+        };
+      }
+
       const result = upsertInteractionSpec(projectRoot, parsed);
       if (!result.ok || !result.spec) {
         return { ok: false, error: result.error ?? "write_failed" };
@@ -89,8 +227,19 @@ function dispatch(req: InteractionBridgeRequest): Record<string, unknown> {
         id: result.spec.id,
         title: result.spec.title,
         reason: "write",
-        focus: false,
+        focus: true,
       });
+      // Fire-and-forget (V4-B) — background offscreen render + thumbnail,
+      // never blocks the Agent's write response. scheduleInteractionThumbnail
+      // swallows its own errors into .last-error.json (phase: "thumbnail").
+      if (
+        isInteractionPlotlyKind(result.spec.kind) ||
+        isInteractionInstrumentKind(result.spec.kind) ||
+        isInteractionScriptKind(result.spec.kind) ||
+        isInteractionDiagramKind(result.spec.kind)
+      ) {
+        void scheduleInteractionThumbnail(projectRoot, result.spec);
+      }
       return body;
     }
     case "open": {

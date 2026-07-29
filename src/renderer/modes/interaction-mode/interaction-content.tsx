@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
@@ -7,6 +7,7 @@ import {
   kindDisplayLabel,
   type InteractionSpec,
 } from "../../../shared/interaction-spec";
+import { resolveInteractionRenderer } from "@/lib/interaction/renderer-registry";
 import { cn } from "@/lib/utils";
 
 function Badge({
@@ -28,14 +29,34 @@ function Badge({
   );
 }
 
-function PanelBody({ spec }: { spec: InteractionSpec }) {
+function PanelBody({
+  spec,
+  projectRoot,
+  isActive,
+}: {
+  spec: InteractionSpec;
+  projectRoot: string;
+  isActive: boolean;
+}) {
   const { t } = useTranslation();
   const bindingKeys = Object.keys(spec.bindings ?? {});
   const resources = spec.resources ?? [];
+  const renderer = resolveInteractionRenderer(spec.kind);
+  const fillViewport = renderer?.fillViewport ?? false;
+  const hideMetaBindings = renderer?.hideBindings ?? false;
+  const hideResources = renderer?.hideResources ?? false;
 
   return (
-    <div className="space-y-6 px-6 py-5 font-sans @md:px-8">
-      <header className="space-y-2">
+    <div
+      className={cn(
+        "flex min-h-0 flex-col font-sans",
+        fillViewport ? "h-full" : "space-y-6",
+      )}
+    >
+      <header className="shrink-0 space-y-2 px-6 pt-5 @md:px-8">
+        <h2 className="text-[length:var(--font-size-15)] font-medium text-foreground">
+          {spec.title}
+        </h2>
         <div className="flex flex-wrap items-center gap-2">
           <Badge className="bg-muted text-muted-foreground">
             {kindDisplayLabel(spec.kind)}
@@ -55,47 +76,64 @@ function PanelBody({ spec }: { spec: InteractionSpec }) {
             r{spec.revision}
           </span>
         </div>
-        <p className={SETTINGS_ROW_DESC}>{t("interaction.panel.intro")}</p>
+        {!fillViewport ? (
+          <p className={SETTINGS_ROW_DESC}>{t("interaction.panel.intro")}</p>
+        ) : null}
       </header>
 
-      <section className="rounded-md border border-border bg-muted px-4 py-6 text-center">
-        <p className="text-[length:var(--font-size-13)] text-foreground">
-          {t("interaction.panel.placeholderTitle")}
-        </p>
-        <p className="mt-1 text-[length:var(--font-size-12)] text-muted-foreground">
-          {t("interaction.panel.placeholderBody", { kind: spec.kind })}
-        </p>
-      </section>
+      <div
+        className={cn(
+          "min-h-0 px-6 @md:px-8",
+          fillViewport ? "flex flex-1 flex-col pb-3 pt-3" : "space-y-6 py-5",
+        )}
+      >
+        {renderer ? (
+          <div className="min-h-0 flex-1">
+            <Suspense fallback={<div className="min-h-[280px]" />}>
+              <renderer.Component spec={spec} projectRoot={projectRoot} isActive={isActive} />
+            </Suspense>
+          </div>
+        ) : (
+          <section className="rounded-md border border-border bg-muted px-4 py-6 text-center">
+            <p className="text-[length:var(--font-size-13)] text-foreground">
+              {t("interaction.panel.placeholderTitle")}
+            </p>
+            <p className="mt-1 text-[length:var(--font-size-12)] text-muted-foreground">
+              {t("interaction.panel.placeholderBody", { kind: spec.kind })}
+            </p>
+          </section>
+        )}
 
-      {bindingKeys.length > 0 ? (
-        <section className="space-y-2">
-          <h3 className="text-[length:var(--font-size-11)] font-medium text-muted-foreground">
-            {t("interaction.panel.bindings")}
-          </h3>
-          <ul className="space-y-1 font-mono text-[length:var(--font-size-11)] text-muted-foreground">
-            {bindingKeys.map((k) => (
-              <li key={k}>{k}</li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+        {bindingKeys.length > 0 && !hideMetaBindings ? (
+          <section className="shrink-0 space-y-2">
+            <h3 className="text-[length:var(--font-size-11)] font-medium text-muted-foreground">
+              {t("interaction.panel.bindings")}
+            </h3>
+            <ul className="space-y-1 font-mono text-[length:var(--font-size-11)] text-muted-foreground">
+              {bindingKeys.map((k) => (
+                <li key={k}>{k}</li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
-      {resources.length > 0 ? (
-        <section className="space-y-2">
-          <h3 className="text-[length:var(--font-size-11)] font-medium text-muted-foreground">
-            {t("interaction.panel.resources")}
-          </h3>
-          <ul className="space-y-1 font-mono text-[length:var(--font-size-11)] text-muted-foreground">
-            {resources.map((r, i) => (
-              <li key={`${r.path ?? r.runId ?? i}`}>
-                {r.path ?? r.artifactPath ?? "—"}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+        {resources.length > 0 && !hideResources ? (
+          <section className="shrink-0 space-y-2">
+            <h3 className="text-[length:var(--font-size-11)] font-medium text-muted-foreground">
+              {t("interaction.panel.resources")}
+            </h3>
+            <ul className="space-y-1 font-mono text-[length:var(--font-size-11)] text-muted-foreground">
+              {resources.map((r, i) => (
+                <li key={`${r.path ?? r.runId ?? i}`}>
+                  {r.path ?? r.artifactPath ?? "—"}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+      </div>
 
-      <section className="space-y-1 border-t border-border pt-4">
+      <section className="shrink-0 space-y-1 border-t border-border px-6 py-3 @md:px-8">
         <p className="font-mono text-[length:var(--font-size-10)] text-muted-foreground">
           .prismnext/artifacts/{spec.id}/spec.json
         </p>
@@ -104,8 +142,13 @@ function PanelBody({ spec }: { spec: InteractionSpec }) {
   );
 }
 
+function normalizeRoot(p: string): string {
+  return p.replace(/\\/g, "/").replace(/\/$/, "");
+}
+
 export function InteractionContent({
   tab,
+  isActive,
 }: {
   tab: RightTab;
   isActive: boolean;
@@ -115,6 +158,7 @@ export function InteractionContent({
   const interactionId = tab.interactionId;
   const [spec, setSpec] = useState<InteractionSpec | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     setSpec(null);
@@ -128,6 +172,19 @@ export function InteractionContent({
     });
     return () => {
       cancelled = true;
+    };
+  }, [projectRoot, interactionId, reloadToken]);
+
+  // Refetch when Agent rewrites this artifact (write used to leave open tabs stale).
+  useEffect(() => {
+    if (!projectRoot || !interactionId) return;
+    const unsub = window.electronAPI.onInteractionChanged?.((data) => {
+      if (normalizeRoot(data.projectRoot || "") !== normalizeRoot(projectRoot)) return;
+      if (data.id !== interactionId) return;
+      setReloadToken((n) => n + 1);
+    });
+    return () => {
+      unsub?.();
     };
   }, [projectRoot, interactionId]);
 
@@ -158,8 +215,8 @@ export function InteractionContent({
   }
 
   return (
-    <div className="h-full min-h-0 overflow-auto">
-      <PanelBody spec={spec} />
+    <div className="h-full min-h-0 overflow-hidden">
+      <PanelBody spec={spec} projectRoot={projectRoot!} isActive={isActive} />
     </div>
   );
 }

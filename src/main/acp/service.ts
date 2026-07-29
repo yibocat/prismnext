@@ -63,6 +63,10 @@ import {
   latexCompileBashBlockMessage,
   latexCompileBashRedirectNote,
 } from "../../shared/latex-compile-bash";
+import {
+  interactionArtifactsWriteDeniedMessage,
+  isInteractionManagedArtifactPath,
+} from "../../shared/interaction-artifacts-path";
 import { resolveOpencodeBinaryPath } from "../services/opencode-binary";
 import {
   getPlanPermissionOverride,
@@ -800,6 +804,31 @@ export class AcpService {
           const editFilePath = this.extractFilePathFromPermissionParams(
             params as Record<string, unknown>,
           );
+
+          // Hard block: Interaction artifacts must go through interaction-write.
+          if (
+            editFilePath
+            && isInteractionManagedArtifactPath(editFilePath)
+            && (
+              toolName === "write"
+              || toolName === "edit"
+              || toolName === "apply_patch"
+              || toolName === "delete"
+              || toolName === "move"
+              || toolName.startsWith("write")
+              || toolName.startsWith("edit")
+            )
+          ) {
+            const denyMsg = interactionArtifactsWriteDeniedMessage(editFilePath);
+            log.info(
+              `permission:interaction-artifacts-deny id=${permissionId} tool=${toolName} path=${editFilePath.slice(0, 120)}`,
+            );
+            if (sessionId) {
+              this.pendingTaskDenialRedirect.set(sessionId, denyMsg);
+            }
+            return buildPermissionOutcome(options, false);
+          }
+
           const planPermCtx = {
             filePath: editFilePath,
             projectRoot: this.projectPath,

@@ -263,6 +263,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		projectRoot: string;
 		spec: import("../../shared/interaction-spec").InteractionSpec;
 	}) => ipcRenderer.invoke("interaction:write", args),
+	interactionReportSceneError: (args: {
+		projectRoot: string;
+		id: string;
+		error: string | null;
+		phase?: "load" | "mount" | "update";
+	}) => ipcRenderer.invoke("interaction:reportSceneError", args),
 	onInteractionChanged: (
 		callback: (data: {
 			projectRoot: string;

@@ -1,36 +1,21 @@
 import { TOOL_NAMES } from "../../../shared/tool-names";
 
 /**
- * Interaction — when/how to create Interactive Research Artifacts.
- * Tool how-to: interaction-list / interaction-read / interaction-write / interaction-open descriptions.
+ * Interaction — when to create artifacts (judgment only).
+ * Schema and samples: interaction-write tool description.
  */
 export const INTERACTION_PROMPT = [
-  "## Interaction (interactive research objects)",
+  "## Interaction",
   "",
-  "Applies when the user needs **adjustable** plots, loss landscapes, or interactive views of data — not plain file preview.",
+  "Create a persistent Interaction only when the user needs an interactive research object, not a normal file preview.",
   "",
-  "### vs file artifact fence",
+  "### Decide before writing",
   "",
-  "- **Result files** (png/csv/pdf paths) → artifact fence with path: (see Reply depth).",
-  "- **Persistent interactive objects** (spec on disk) → interaction-* tools, then an **interaction** fence (id: …) in your **assistant** reply.",
+  "Identify the data source, time behavior, and rendering capability required. " +
+    "The `interaction-write` tool defines the available runtimes and their constraints.",
+  `Existing ${TOOL_NAMES.experimentRun} output is a real resource: reference it; do not regenerate or invent data.`,
   "",
-  "### vs experiments",
+  "### Workflow",
   "",
-  "- experiment-run = real execution + runs.jsonl.",
-  "- **bound** interaction = read-only interactive instrument over run outputs (csv in resources[]).",
-  "- **local** interaction = sketch/simulation without a run (math.surface, demo plot.line).",
-  "",
-  "### Workflow (judgment)",
-  "",
-  `- Discover: ${TOOL_NAMES.interactionList} (optional kindPrefix).`,
-  `- Update: ${TOOL_NAMES.interactionRead} first, then ${TOOL_NAMES.interactionWrite} with full spec JSON.`,
-  `- Create: ${TOOL_NAMES.interactionWrite} → embed returned fenceMarkdown in your assistant message.`,
-  `- Open panel: ${TOOL_NAMES.interactionOpen} when the user asks to show it in RightArea (card in chat still helps).`,
-  `- After ${TOOL_NAMES.experimentRun} with metrics csv → bound plot.* + resources[] is often better than only an artifact fence.`,
-  "",
-  "### Do not",
-  "",
-  "- Grep/read the project hunting for interaction ids — use interaction-list/read.",
-  "- Use generic read/write/edit on .prismnext/artifacts/<id>/spec.json.",
-  "- Use artifact fences for interactive objects.",
+  `${TOOL_NAMES.interactionWrite} → on failure read \`error\` and fix that (same kind). Success → fenceMarkdown.`,
 ].join("\n");

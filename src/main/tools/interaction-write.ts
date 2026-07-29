@@ -69,17 +69,12 @@ async function bridgeCall(
 
 export default tool({
   description:
-    "Create or update an Interactive Research Artifact at `.prismnext/artifacts/<id>/spec.json`. " +
-    "Required JSON fields: id, title, kind (plot.line | plot.series | plot.scatter | math.surface | math.field), compute (local | bound). " +
-    "Optional: revision (auto-increments on update), params, model, bindings, view, resources. " +
-    "For bound plots, set resources[] to project-relative csv paths from experiment outputs. " +
-    "After success, embed the returned fenceMarkdown in your assistant reply — do NOT use ```artifact for interactive objects.",
+    "Upsert an Interaction spec. Runtime guidance is injected from the prismnext Interaction capability contract during tool sync. " +
+    "Pass the spec as a JSON string; returned diagnostics identify invalid fields and include a same-kind recovery sample.",
   args: {
     spec: tool.schema
       .string()
-      .describe(
-        "InteractionSpec as a JSON string. Example: {\"id\":\"demo.plot\",\"title\":\"Loss curve\",\"kind\":\"plot.line\",\"compute\":\"local\",\"revision\":1}",
-      ),
+      .describe("InteractionSpec JSON: id, title, kind required. See the tool capability contract."),
   },
   async execute(args, context) {
     const raw = typeof args.spec === "string" ? args.spec.trim() : "";
@@ -93,6 +88,9 @@ export default tool({
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return toolOutput({ ok: false, error: "spec must be a JSON object." });
     }
-    return bridgeCall(context as Record<string, unknown>, { action: "write", spec: parsed });
+    return bridgeCall(context as Record<string, unknown>, {
+      action: "write",
+      spec: parsed,
+    });
   },
 });
