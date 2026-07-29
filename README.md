@@ -120,7 +120,7 @@ One principle: **the agent advances; you keep the veto.**
 
 ### 1. Install
 
-Download **macOS**, **Windows**, or **Linux** (AppImage) builds from the [download page](./website/) (or your release channel).
+Download **macOS**, **Windows**, or **Linux** (AppImage) builds from [GitHub Releases](https://github.com/yibocat/prismnext/releases) (or the [download page](./website/) when hosted).
 
 > On macOS, if Gatekeeper reports the app as “damaged,” clear quarantine once, then reopen:
 >
@@ -160,9 +160,9 @@ Designed for unpublished data, sensitive drafts, and authors who do not want an 
 
 ## Screenshots
 
-Product screenshots will live under [`assets/screenshots/`](./assets/). Brand and loop diagrams are already in [`assets/`](./assets/).
+Brand and loop diagrams live under [`assets/`](./assets/). Product shots used by the download site are under [`website/assets/`](./website/assets/).
 
-> Pull requests with real UI captures (welcome, TeX + PDF, library, Plan consent) are welcome.
+> Pull requests with additional UI captures (welcome, TeX + PDF, library, Plan consent) are welcome.
 
 ---
 

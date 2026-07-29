@@ -50,10 +50,8 @@ Participation is governed by [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md).
 
 By contributing, you agree that your contributions are licensed under the [Apache License 2.0](./LICENSE).
 
-Copyright is stated in [NOTICE](./NOTICE) (currently provisional: **yibocat**). Keep the official `LICENSE` text unchanged. When applying the Apache APPENDIX boilerplate to new source files, use:
+Copyright is stated in [NOTICE](./NOTICE). Keep the official `LICENSE` text unchanged. When applying the Apache APPENDIX boilerplate to new source files, use:
 
 ```text
 Copyright 2026 yibocat
 ```
-
-**Before public open source:** revisit copyright holder in `NOTICE`, `package.json` `author`, README license lines, and file headers — they may switch from `yibocat` to a legal name / company / foundation.

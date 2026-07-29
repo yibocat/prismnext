@@ -2,9 +2,17 @@
   "name": "prism-next",
   "productName": "PrismNext",
   "version": "0.6.5",
-  "description": "AI-powered LaTeX writing workspace",
+  "description": "Local-first collaborative AI scientist — literature, experiments, and LaTeX in one desktop workspace",
   "license": "Apache-2.0",
   "author": "yibocat",
+  "homepage": "https://github.com/yibocat/prismnext#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yibocat/prismnext.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yibocat/prismnext/issues"
+  },
   "main": "./out/main/index.js",
   "scripts": {
     "copy-pdfjs-assets": "node scripts/copy-pdfjs-assets.mjs",

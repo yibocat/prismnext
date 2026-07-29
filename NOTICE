@@ -3,13 +3,3 @@ Copyright 2026 yibocat
 
 This product includes software developed for PrismNext.
 Licensed under the Apache License, Version 2.0; see LICENSE.
-
----
-
-Maintainer note (pre–public open source):
-The copyright holder above is a provisional personal identifier (`yibocat`).
-Before or when making the repository publicly open source, review and update
-as needed: NOTICE, package.json `author`, README license blurb, and any
-Apache file-header boilerplate (APPENDIX in LICENSE — keep LICENSE body
-unchanged; replace [yyyy] / [name of copyright owner] only in source headers).
-Possible future holders: legal name, company, or foundation — decide then.
