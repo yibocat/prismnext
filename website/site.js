@@ -15,6 +15,39 @@
       fmtWin: ".exe",
       fmtLinux: "AppImage",
       metaUnavailable: "Release metadata unavailable.",
+      themeGroup: "Theme",
+      langGroup: "Language",
+      downloadsLabel: "Downloads",
+      loopKicker: "The loop",
+      loopTitle: "One workspace from hypothesis to manuscript",
+      loopLede:
+        "Ideation, literature, experiments, and writing stay in the same local Agent surface — not four disconnected tools.",
+      loopIdeation: "Ideation",
+      loopLiterature: "Literature",
+      loopExperiment: "Experiment",
+      loopWriting: "Writing",
+      capsKicker: "Capabilities",
+      capsTitle: "Built for serious research work",
+      capAgentTitle: "Agent chat with gates",
+      capAgentText:
+        "Local Agent sessions with permission gates — you keep control over tools, files, and what runs.",
+      capLitTitle: "Literature library",
+      capLitText:
+        "Ingest papers, search your collection, and cite into writing without leaving the workspace.",
+      capTexTitle: "LaTeX workspace",
+      capTexText:
+        "Edit, compile, and preview PDF in one place — SyncTeX-ready academic writing.",
+      capExpTitle: "Experiments workbench",
+      capExpText:
+        "Track experiment files, runs, and results beside chat — overview, execution, and outcomes in one panel.",
+      principlesKicker: "Principles",
+      principlesTitle: "Local-first by design",
+      pLocalTitle: "Local-first",
+      pLocalText: "Your projects stay on your machine.",
+      pKeyTitle: "Bring your key",
+      pKeyText: "Use your own model API keys.",
+      pOpenTitle: "Apache-2.0",
+      pOpenText: "Open source collaborative AI Scientist.",
     },
     zh: {
       title: "PrismNext — 下载",
@@ -31,6 +64,34 @@
       fmtWin: ".exe",
       fmtLinux: "AppImage",
       metaUnavailable: "暂时无法加载发布信息。",
+      themeGroup: "主题",
+      langGroup: "语言",
+      downloadsLabel: "下载",
+      loopKicker: "闭环",
+      loopTitle: "从假设到成文，同一工作区",
+      loopLede: "构思、文献、实验、撰写留在同一个本地 Agent 界面里——不是四个割裂的工具。",
+      loopIdeation: "构思",
+      loopLiterature: "文献",
+      loopExperiment: "实验",
+      loopWriting: "撰写",
+      capsKicker: "能力",
+      capsTitle: "为严肃科研工作而建",
+      capAgentTitle: "有闸门的 Agent 聊天",
+      capAgentText: "本地 Agent 会话 + 权限闸门——工具、文件与执行仍由你掌控。",
+      capLitTitle: "文献库",
+      capLitText: "入库、检索，并直接引用进写作，无需离开工作区。",
+      capTexTitle: "LaTeX 工作区",
+      capTexText: "编辑、编译、PDF 预览一体——面向学术写作的 SyncTeX 体验。",
+      capExpTitle: "Experiments 工作台",
+      capExpText: "实验文件、运行与结果与聊天并列——概览、执行、结果同屏。",
+      principlesKicker: "原则",
+      principlesTitle: "本地优先，写进产品",
+      pLocalTitle: "本地优先",
+      pLocalText: "项目数据留在你的机器上。",
+      pKeyTitle: "自备 Key",
+      pKeyText: "使用你自己的模型 API Key。",
+      pOpenTitle: "Apache-2.0",
+      pOpenText: "开源的协作式 AI Scientist。",
     },
   };
 
@@ -39,6 +100,12 @@
     if (saved === "en" || saved === "zh") return saved;
     const nav = (navigator.language || "en").toLowerCase();
     return nav.startsWith("zh") ? "zh" : "en";
+  }
+
+  function detectTheme() {
+    const saved = localStorage.getItem("prismnext-theme");
+    if (saved === "light" || saved === "dark") return saved;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
 
   function detectPlatform() {
@@ -54,8 +121,7 @@
 
   function defaultVersion() {
     return (
-      document.querySelector('meta[name="prismnext-version"]')?.content ||
-      "0.0.0-dev"
+      document.querySelector('meta[name="prismnext-version"]')?.content || "0.0.0-dev"
     );
   }
 
@@ -81,6 +147,7 @@
   }
 
   let lang = detectLang();
+  let theme = detectTheme();
   let release = {
     version: defaultVersion(),
     macUrl: "#",
@@ -88,6 +155,29 @@
     linuxUrl: "#",
     notes: "",
   };
+
+  function applyTheme() {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("prismnext-theme", theme);
+
+    const meta = document.getElementById("theme-color");
+    if (meta) meta.setAttribute("content", theme === "dark" ? "#0a0e13" : "#eef2f6");
+
+    document.querySelectorAll(".theme-btn").forEach((btn) => {
+      const active = btn.getAttribute("data-theme-set") === theme;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+
+    const icon = document.getElementById("wordmark-icon");
+    if (icon) {
+      const next =
+        theme === "dark"
+          ? icon.getAttribute("data-icon-dark")
+          : icon.getAttribute("data-icon-light");
+      if (next && icon.getAttribute("src") !== next) icon.src = next;
+    }
+  }
 
   function applyI18n() {
     const t = STRINGS[lang];
@@ -103,6 +193,14 @@
       const active = btn.getAttribute("data-lang") === lang;
       btn.classList.toggle("is-active", active);
       btn.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+
+    const themeGroup = document.querySelector(".theme-toggle");
+    if (themeGroup) themeGroup.setAttribute("aria-label", t.themeGroup);
+    const langGroup = document.querySelector(".lang");
+    if (langGroup) langGroup.setAttribute("aria-label", t.langGroup);
+    document.querySelectorAll(".downloads").forEach((el) => {
+      el.setAttribute("aria-label", t.downloadsLabel);
     });
 
     const shot = document.getElementById("product-shot");
@@ -121,27 +219,62 @@
 
   function wireDownloads() {
     const t = STRINGS[lang];
-    const mac = document.getElementById("dl-mac");
-    const win = document.getElementById("dl-win");
-    const linux = document.getElementById("dl-linux");
-    if (!mac || !win || !linux) return;
-
-    mac.href = release.macUrl || "#";
-    win.href = release.winUrl || "#";
-    linux.href = release.linuxUrl || "#";
-
-    mac.querySelector(".dl-os").textContent = t.osMac;
-    win.querySelector(".dl-os").textContent = t.osWin;
-    linux.querySelector(".dl-os").textContent = t.osLinux;
-    mac.querySelector(".dl-fmt").textContent = t.fmtMac;
-    win.querySelector(".dl-fmt").textContent = t.fmtWin;
-    linux.querySelector(".dl-fmt").textContent = t.fmtLinux;
-
+    const urls = {
+      mac: release.macUrl || "#",
+      win: release.winUrl || "#",
+      linux: release.linuxUrl || "#",
+    };
     const platform = detectPlatform();
-    [mac, win, linux].forEach((el) => el.classList.remove("is-primary"));
-    if (platform === "win") win.classList.add("is-primary");
-    else if (platform === "linux") linux.classList.add("is-primary");
-    else mac.classList.add("is-primary");
+    const primary =
+      platform === "win" ? "win" : platform === "linux" ? "linux" : "mac";
+
+    document.querySelectorAll(".dl[data-platform]").forEach((el) => {
+      const key = el.getAttribute("data-platform");
+      if (!key || !(key in urls)) return;
+      el.href = urls[key];
+      el.classList.toggle("is-primary", key === primary);
+      const os = el.querySelector(".dl-os");
+      const fmt = el.querySelector(".dl-fmt");
+      if (os) {
+        if (key === "mac") os.textContent = t.osMac;
+        if (key === "win") os.textContent = t.osWin;
+        if (key === "linux") os.textContent = t.osLinux;
+      }
+      if (fmt) {
+        if (key === "mac") fmt.textContent = t.fmtMac;
+        if (key === "win") fmt.textContent = t.fmtWin;
+        if (key === "linux") fmt.textContent = t.fmtLinux;
+      }
+    });
+  }
+
+  function setVersion(text) {
+    document.querySelectorAll(".version").forEach((el) => {
+      el.textContent = text;
+    });
+  }
+
+  function setupScrollReveal() {
+    const nodes = document.querySelectorAll(".reveal-on-scroll");
+    if (!nodes.length) return;
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      nodes.forEach((el) => el.classList.add("is-visible"));
+      return;
+    }
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add("is-visible");
+          io.unobserve(entry.target);
+        });
+      },
+      { rootMargin: "0px 0px -8% 0px", threshold: 0.12 }
+    );
+
+    nodes.forEach((el) => io.observe(el));
   }
 
   document.querySelectorAll(".lang-btn").forEach((btn) => {
@@ -154,9 +287,26 @@
     });
   });
 
+  document.querySelectorAll(".theme-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const next = btn.getAttribute("data-theme-set");
+      if (next !== "light" && next !== "dark") return;
+      theme = next;
+      applyTheme();
+    });
+  });
+
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+    if (localStorage.getItem("prismnext-theme")) return;
+    theme = e.matches ? "dark" : "light";
+    applyTheme();
+  });
+
   async function boot() {
-    document.getElementById("version").textContent = defaultVersion();
+    applyTheme();
+    setVersion(defaultVersion());
     applyI18n();
+    setupScrollReveal();
 
     try {
       const v = await loadVersionJson();
@@ -167,7 +317,7 @@
         linuxUrl: v.linuxUrl || "#",
         notes: v.notes || "",
       };
-      document.getElementById("version").textContent = release.version;
+      setVersion(release.version);
       const notesEl = document.getElementById("notes");
       if (notesEl) notesEl.textContent = release.notes;
       wireDownloads();
