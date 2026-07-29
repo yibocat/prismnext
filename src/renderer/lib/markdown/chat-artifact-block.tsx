@@ -73,7 +73,7 @@ export function ChatArtifactBlock({
           <button
             type="button"
             onClick={open}
-            className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             aria-label={t("chat.artifact.openInFiles", { defaultValue: "Open in Files" })}
           >
             <FolderOpenIcon className="size-3.5" aria-hidden />
@@ -89,7 +89,7 @@ export function ChatArtifactBlock({
           <button
             type="button"
             onClick={() => void copyPath()}
-            className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             aria-label={t("chat.artifact.copyPath", { defaultValue: "Copy path" })}
           >
             <CopyIcon className="size-3.5" aria-hidden />

@@ -6,6 +6,8 @@ import {
   buildInteractionFenceMarkdown,
   interactionFenceHint,
   isAllowedInteractionKind,
+  interactionSpecRelativePath,
+  legacyInteractionSpecRelativePath,
 } from "../../src/shared/interaction-spec";
 
 describe("isValidInteractionId", () => {
@@ -62,6 +64,7 @@ describe("parseInteractionSpec", () => {
 
 describe("kindDisplayLabel", () => {
   it("maps known prefixes", () => {
+    expect(kindDisplayLabel("figure.static")).toBe("Figure");
     expect(kindDisplayLabel("plot.line")).toBe("Plot");
     expect(kindDisplayLabel("math.surface")).toBe("Math");
     expect(kindDisplayLabel("custom")).toBe("Custom");
@@ -70,14 +73,29 @@ describe("kindDisplayLabel", () => {
 
 describe("interaction agent helpers", () => {
   it("builds fence markdown and hint", () => {
-    expect(buildInteractionFenceMarkdown("demo.plot", "Demo")).toContain("id: demo.plot");
-    const hint = interactionFenceHint("demo.plot", "Demo");
+    expect(buildInteractionFenceMarkdown("fig.loss", "Demo")).toContain("id: fig.loss");
+    const hint = interactionFenceHint("fig.loss", "Demo");
     expect(hint.fenceMarkdown).toContain("```interaction");
     expect(hint.replyRule).toMatch(/assistant/i);
   });
 
   it("validates allowed kinds for agent write", () => {
+    expect(isAllowedInteractionKind("figure.static")).toBe(true);
     expect(isAllowedInteractionKind("plot.line")).toBe(true);
+    expect(isAllowedInteractionKind("plot.series")).toBe(true);
+    expect(isAllowedInteractionKind("plot.scatter")).toBe(true);
     expect(isAllowedInteractionKind("custom.widget")).toBe(false);
+    expect(isAllowedInteractionKind("diagram.mermaid")).toBe(false);
+  });
+});
+
+describe("interaction spec paths", () => {
+  it("uses interactions dir for canonical relative path", () => {
+    expect(interactionSpecRelativePath("plot.loss")).toBe(
+      ".prismnext/interactions/plot.loss/spec.json",
+    );
+    expect(legacyInteractionSpecRelativePath("plot.loss")).toBe(
+      ".prismnext/artifacts/plot.loss/spec.json",
+    );
   });
 });

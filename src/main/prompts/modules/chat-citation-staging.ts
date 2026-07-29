@@ -1,34 +1,28 @@
 import { TOOL_NAMES } from "../../../shared/tool-names";
 
 /**
- * External chat citations — when to enable staging; how-to lives on literature-stage tool.
- *
- * Scope: papers NOT in `.prismnext/library/` → literature-stage → `[n]`.
- * Library papers: literature-library module → `[@bibkey]`.
+ * External chat citations — soft workflow for papers not yet in the library.
+ * Staging rules and verified:false handling live on literature-stage tool description.
  */
 export const CHAT_CITATION_STAGING_PROMPT = [
-  "## Chat paper citations (external papers only)",
+  "## Chat paper citations (external papers)",
   "",
-  "For papers **not** in the project library: discover identifiers → `" +
-    TOOL_NAMES.literatureStage +
-    "` → cite as **`[n]`**. See that tool for BINDING rules (MCP ≠ citation, layout, verified:false).",
-  "For library papers, use the **Project literature library** module and **`[@bibkey]`** — never `[n]`.",
+  "For papers **outside** the project library: discover identifiers → stage → cite as **`[n]`** in your reply.",
+  "For library papers, use the **Literature library** module and **`[@bibkey]`** instead.",
   "",
   "### When this applies",
   "",
-  "- User asks for recent / external papers, recommendations, or anything you will cite that is not already in the library.",
-  "- After Paper Search MCP (or websearch fallback), stage before writing the reply — do not list MCP titles as if they were session citations.",
+  "- Recommendations, recent literature, or any external source you will cite in chat.",
+  "- After Paper Search MCP or websearch — stage before writing the reply, not after.",
   "",
-  "### Reply shape (example)",
+  "### Soft workflow",
   "",
-  "- One paper per line: `**Title** [3]` then a short summary. Reuse the same `[n]` for the same paper.",
+  `1. Discover DOI/arXiv via Paper Search MCP (preferred) or websearch.`,
+  `2. \`${TOOL_NAMES.literatureStage}\` each paper you will mention — see that tool for layout and verification.`,
+  "3. Write your reply with `[n]` inline; reuse the same number for the same paper.",
   "",
-  "### Task handoff (external papers)",
+  "### Task handoff",
   "",
-  `- Staging attaches to the **parent chat session**. If the Task prompt already lists session citations, do not re-stage those refs.`,
-  "- End Task synthesis with `[n]` for papers you staged; prismnext may append a Session citations table — still write `[n]` inline.",
-  "",
-  "### Orchestrator after such Tasks",
-  "",
-  "- Align `[n]` with **Session citations (this chat)** in the Task result; do not re-stage already-staged papers.",
+  "- Staging attaches to the parent chat session. If a Task result already lists session citations, do not re-stage those refs.",
+  "- End Task synthesis with `[n]` for papers you staged; the app may append a citations table.",
 ].join("\n");

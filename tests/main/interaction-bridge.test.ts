@@ -36,6 +36,15 @@ describe("interaction-bridge", () => {
   it("writes spec and returns fence hint", async () => {
     const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ix-bridge-proj-"));
     projectRoots.push(projectRoot);
+    const figRel = "results/loss.png";
+    fs.mkdirSync(path.join(projectRoot, "results"), { recursive: true });
+    fs.writeFileSync(
+      path.join(projectRoot, figRel),
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    );
     const sessionId = "test-session";
     const sessionDir = path.join(getInteractionBridgeRoot(), sessionId);
     fs.mkdirSync(sessionDir, { recursive: true });
@@ -47,11 +56,12 @@ describe("interaction-bridge", () => {
         sessionId,
         projectRoot,
         spec: {
-          id: "demo.plot",
+          id: "fig.loss",
           title: "Demo loss",
-          kind: "plot.line",
+          kind: "figure.static",
           compute: "local",
           revision: 1,
+          resources: [{ role: "figure", path: figRel }],
         },
       }),
       "utf-8",
@@ -64,7 +74,7 @@ describe("interaction-bridge", () => {
     ) as Record<string, unknown>;
     expect(result.ok).toBe(true);
     expect(result.fenceMarkdown).toContain("```interaction");
-    expect(result.fenceMarkdown).toContain("id: demo.plot");
-    expect(result.relativePath).toBe(".prismnext/artifacts/demo.plot/spec.json");
+    expect(result.fenceMarkdown).toContain("id: fig.loss");
+    expect(result.relativePath).toBe(".prismnext/interactions/fig.loss/spec.json");
   });
 });

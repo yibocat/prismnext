@@ -68,14 +68,12 @@ describe("builtin instructions audit (Phase 1.3)", () => {
     }
   });
 
-  it("knowledge modules cover citation and Task handoff bindings", () => {
+  it("knowledge modules cover citation and Task handoff workflows", () => {
     expect(LITERATURE_LIBRARY_PROMPT).toContain("[@bibkey]");
-    expect(LITERATURE_LIBRARY_PROMPT).toContain("Task expert handoff (library papers)");
-    expect(LITERATURE_LIBRARY_PROMPT).toContain("Orchestrator after library Tasks");
+    expect(LITERATURE_LIBRARY_PROMPT).toContain("Task handoff");
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("[n]");
-    expect(CHAT_CITATION_STAGING_PROMPT).toContain("Task handoff (external papers)");
-    expect(CHAT_CITATION_STAGING_PROMPT).toContain("Orchestrator after such Tasks");
-    expect(CHAT_CITATION_STAGING_PROMPT).toContain("See that tool for BINDING");
+    expect(CHAT_CITATION_STAGING_PROMPT).toContain("Task handoff");
+    expect(CHAT_CITATION_STAGING_PROMPT).toContain("see that tool");
     expect(TASK_DELEGATION_PROMPT).toContain("Available experts (via Task)");
     expect(TASK_DELEGATION_PROMPT).not.toContain("@peer-reviewer");
     expect(CITATION_AUDIT_PROMPT).toContain("When this applies");
@@ -83,19 +81,20 @@ describe("builtin instructions audit (Phase 1.3)", () => {
     expect(CITATION_AUDIT_PROMPT).toContain("peer-reviewer");
     expect(RESEARCH_DESIGN_PROMPT).toContain("research-brief-read");
     expect(RESEARCH_DESIGN_PROMPT).toContain("research-design-coach");
-    expect(EXPERIMENTS_PROMPT).toContain("### Workflow (judgment)");
+    expect(RESEARCH_DESIGN_PROMPT).toContain("Soft workflow");
+    expect(EXPERIMENTS_PROMPT).toContain("Soft workflow");
     expect(EXPERIMENTS_PROMPT).toContain("experiment-log");
     expect(EXPERIMENTS_PROMPT).toContain("experiment-run");
     expect(EXPERIMENTS_PROMPT).toContain("results-snapshot");
     expect(EXPERIMENTS_PROMPT).toContain("methodology-auditor");
-    expect(EXPERIMENTS_PROMPT).toContain("platform-enforced");
     expect(EXPERIMENTS_PROMPT).not.toContain("uv pip --system");
+    expect(EXPERIMENTS_PROMPT).not.toContain("### Workflow (binding)");
     const latex = buildLatexWorkspacePrompt({} as PromptContext);
-    expect(latex).toContain("### Agent compile chain (binding)");
-    expect(latex).toContain("### Shell compile — forbidden");
+    expect(latex).toContain("Soft workflow");
     expect(latex).toContain("latex-compile");
-    expect(latex).toContain("pdflatex");
     expect(latex).toContain(".prismnext/compile/");
+    expect(latex).not.toContain("pdflatex");
+    expect(latex).not.toContain("forbidden");
   });
 
   it("no instructions.md under bundled resources duplicates removed academic modules", () => {

@@ -22,7 +22,7 @@ export const appSelectContentClass = cn(selectViewportClass, appMenuFontClass);
 
 export const appSelectItemClass = cn(
   appMenuItemClass,
-  "cursor-default pr-8 pl-2",
+  "cursor-pointer pr-8 pl-2",
   "[&_[data-slot=select-item-indicator]]:right-2 [&_[data-slot=select-item-indicator]_svg]:size-3",
 );
 

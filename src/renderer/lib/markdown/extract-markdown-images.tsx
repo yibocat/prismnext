@@ -106,7 +106,16 @@ export function ExtractMarkdownImage({
  * against known experiment workspaces; missing candidates fall back to a
  * project-wide basename search (no hardcoded folder names).
  */
-export function ChatProjectImage({ src, alt }: { src?: string; alt?: string }) {
+export function ChatProjectImage({
+  src,
+  alt,
+  variant = "inline",
+}: {
+  src?: string;
+  alt?: string;
+  /** `inline` = chat embed with zoom; `panel` = fill Interaction / preview viewport. */
+  variant?: "inline" | "panel";
+}) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const workspaceHintsKey = useExperimentStore((s) => {
@@ -224,14 +233,33 @@ export function ChatProjectImage({ src, alt }: { src?: string; alt?: string }) {
 
   if (!src) return null;
   if (!dataUrl) {
-    return (
-      <span className="my-2 block text-[length:var(--font-size-12)] text-muted-foreground">
+    const unavailable = (
+      <span className="text-[length:var(--font-size-12)] text-muted-foreground">
         [Image unavailable: {alt?.trim() || src}]
       </span>
     );
+    if (variant === "panel") {
+      return (
+        <div className="flex h-full min-h-0 w-full items-center justify-center px-4 text-center">
+          {unavailable}
+        </div>
+      );
+    }
+    return <span className="my-2 block">{unavailable}</span>;
   }
 
   const previewName = alt?.trim() || artifactBasename(src) || t("chat.composer.imagePreview");
+
+  if (variant === "panel") {
+    return (
+      <img
+        src={dataUrl}
+        alt={alt ?? ""}
+        className="block h-full w-full min-h-0 object-contain object-center"
+        loading="lazy"
+      />
+    );
+  }
 
   return (
     <>

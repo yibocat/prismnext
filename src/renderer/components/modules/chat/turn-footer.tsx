@@ -19,7 +19,7 @@ interface TurnFooterProps {
 }
 
 const ICON_BTN =
-  "flex size-6 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-accent-foreground";
+  "flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-accent-foreground";
 
 export const TurnFooter = memo(function TurnFooter({
   turnIndex,

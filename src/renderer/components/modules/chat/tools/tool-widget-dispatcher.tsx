@@ -19,6 +19,7 @@ import { LiteratureToolWidget } from "./literature-tool-widget";
 import { LatexToolWidget } from "./latex-tool-widget";
 import { ResearchBriefToolWidget } from "./research-brief-tool-widget";
 import { ExperimentToolWidget } from "./experiment-tool-widget";
+import { InteractionToolWidget } from "./interaction-tool-widget";
 import { LspWidget } from "./lsp-widget";
 import { GenericWidget } from "./generic-widget";
 
@@ -76,6 +77,10 @@ const CUSTOM_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
   "experiment-log": ExperimentToolWidget,
   "experiment-run": ExperimentToolWidget,
   "results-snapshot": ExperimentToolWidget,
+  "interaction-list": InteractionToolWidget,
+  "interaction-read": InteractionToolWidget,
+  "interaction-write": InteractionToolWidget,
+  "interaction-open": InteractionToolWidget,
 };
 
 function parseToolResultContent(content: unknown): Record<string, unknown> | null {

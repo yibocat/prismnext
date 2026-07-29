@@ -69,16 +69,17 @@ async function bridgeCall(
 
 export default tool({
   description:
-    "Create or update an Interactive Research Artifact at `.prismnext/artifacts/<id>/spec.json`. " +
-    "Required JSON fields: id, title, kind (plot.line | plot.series | plot.scatter | math.surface | math.field), compute (local | bound). " +
-    "Optional: revision (auto-increments on update), params, model, bindings, view, resources. " +
-    "For bound plots, set resources[] to project-relative csv paths from experiment outputs. " +
-    "After success, embed the returned fenceMarkdown in your assistant reply — do NOT use ```artifact for interactive objects.",
+    "Create or update an Interaction at `.prismnext/interactions/<id>/spec.json`. " +
+    "Allowed kinds: figure.static (image) or plot.line | plot.series | plot.scatter (CSV). " +
+    "figure.static requires resources: [{ role: \"figure\", path: \"<png|svg|jpg|webp|gif>\" }]. " +
+    "plot.* requires resources: [{ role: \"data\", path: \"<.csv>\" }] and params: { x, y } column names. " +
+    "Files must already exist — do not invent numeric series. " +
+    "After success, embed the returned fenceMarkdown in your assistant reply — do NOT use ```artifact for Interaction objects.",
   args: {
     spec: tool.schema
       .string()
       .describe(
-        "InteractionSpec as a JSON string. Example: {\"id\":\"demo.plot\",\"title\":\"Loss curve\",\"kind\":\"plot.line\",\"compute\":\"local\",\"revision\":1}",
+        "InteractionSpec as a JSON string. Figure example: {\"id\":\"fig.loss\",\"title\":\"Loss\",\"kind\":\"figure.static\",\"compute\":\"bound\",\"revision\":1,\"resources\":[{\"role\":\"figure\",\"path\":\"experiments/demo/results/loss.png\"}]}. Plot example: {\"id\":\"plot.loss\",\"title\":\"Loss\",\"kind\":\"plot.series\",\"compute\":\"bound\",\"revision\":1,\"params\":{\"x\":\"epoch\",\"y\":[\"train_loss\",\"val_loss\"]},\"resources\":[{\"role\":\"data\",\"path\":\"experiments/demo/results/metrics.csv\"}]}",
       ),
   },
   async execute(args, context) {

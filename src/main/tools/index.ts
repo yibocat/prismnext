@@ -293,6 +293,7 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "Run `latex-root` first when main file is unknown.",
       "On failure, read errors/logTail before retrying — fix root cause, do not loop blindly.",
       "User can also compile via UI (Cmd+Enter) or `/compile` — this tool is for agent verification.",
+      "Shell engines (pdflatex, xelatex, lualatex, latexmk, tectonic) are blocked in bash — use this tool only.",
     ],
   },
   {
@@ -423,10 +424,10 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     name: TOOL_NAMES.interactionList,
     label: "Interaction List",
     description:
-      "List Interactive Research Artifacts in `.prismnext/artifacts/` (summaries: id, title, kind, compute, revision).",
+      "List Interaction objects in `.prismnext/interactions/` (summaries: id, title, kind, compute, revision).",
     category: "project",
     usageHint:
-      "Discover which interactive objects exist before read/update, or when the user asks what instruments are in the project.",
+      "Discover which figures/plots exist before read/update, or when the user asks what Interactions are in the project.",
     workflowRules: [
       "Read-only — never writes spec.json.",
       "Do not grep the repo for interaction ids — use this tool or interaction-read.",
@@ -436,38 +437,38 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     name: TOOL_NAMES.interactionRead,
     label: "Interaction Read",
     description:
-      "Read one Interaction spec from `.prismnext/artifacts/<id>/spec.json` (full JSON + fenceMarkdown for Chat embed).",
+      "Read one Interaction spec from `.prismnext/interactions/<id>/spec.json` (full JSON + fenceMarkdown for Chat embed).",
     category: "project",
     usageHint: "Before updating an object, or to re-embed a card in chat after changes.",
     workflowRules: [
       "Read-only — use interaction-write to mutate.",
-      "Do not use generic read on `.prismnext/artifacts/**/spec.json` — use this tool.",
+      "Do not use generic read on `.prismnext/interactions/**/spec.json` — use this tool.",
     ],
   },
   {
     name: TOOL_NAMES.interactionWrite,
     label: "Interaction Write",
     description:
-      "Create or update an Interaction spec (plot.* / math.*). Persists to `.prismnext/artifacts/<id>/spec.json`. " +
-      "Returns fenceMarkdown — embed it in your assistant reply after success.",
+      "Create or update an Interaction (figure.static or plot.line|plot.series|plot.scatter). Persists to `.prismnext/interactions/<id>/spec.json`. " +
+      "figure.static needs an existing image path; plot.* needs an existing CSV + params.x/y. Returns fenceMarkdown — embed it in your assistant reply after success.",
     category: "project",
     usageHint:
-      "When the user needs an interactive plot/surface (local sketch or bound to experiment csv), or after experiment-run when an interactive view beats a static file card.",
+      "When the user needs a saved figure or CSV chart in the RightArea panel (after savefig / experiment metrics CSV).",
     workflowRules: [
-      "Do NOT use ```artifact for interactive objects — use interaction-write then ```interaction fence in your reply.",
+      "Allowed kinds: figure.static, plot.line, plot.series, plot.scatter — no invented numeric series.",
+      "Write the image/CSV file to disk first; interaction-write rejects missing paths.",
+      "Do NOT use ```artifact for Interaction objects — use interaction-write then ```interaction fence in your reply.",
       "Do NOT edit spec.json with generic write/edit — use this tool only.",
-      "bound compute: set resources[] to real project-relative paths from experiment outputs.",
-      "Allowed kinds (P0/P1): plot.line, plot.series, plot.scatter, math.surface, math.field.",
-      "After ok:true, you MUST embed fenceMarkdown in the assistant message (not only in tool output).",
+      "After ok:true, embed fenceMarkdown in the assistant message (not only in tool output).",
     ],
   },
   {
     name: TOOL_NAMES.interactionOpen,
     label: "Interaction Open",
     description:
-      "Open the Interaction panel in RightArea for a persisted id (read-only UI focus).",
+      "Open an Interaction object in the RightArea panel (focus the tab).",
     category: "project",
-    usageHint: "When the user asks to open/show the interactive instrument in the side panel.",
+    usageHint: "When the user asks to open/show the figure or plot in the side panel.",
     workflowRules: [
       "Does not write disk — use interaction-write to create or update.",
       "Still prefer embedding fenceMarkdown in chat so the user has a card entry.",

@@ -9,6 +9,8 @@ import {
   resolveMissingArtifactPathsForReply,
   resolveSuppressArtifactPathsForToolCards,
 } from "@/lib/chat/experiment-run-figures";
+import { buildInteractionReplyFallbackMarkdown } from "@/lib/chat/interaction-fence-fallback";
+import { InteractionFenceDedupeProvider } from "@/lib/interaction/interaction-fence-dedupe";
 import { planPathFromToolUse } from "@/lib/chat/plan-artifact-ui";
 
 /** Shared assistant block renderer for main chat and Task expert activity. */
@@ -35,6 +37,9 @@ export const AssistantBlockList = memo(function AssistantBlockList({
     ? []
     : resolveMissingArtifactPathsForReply(blocks, toolResultMap);
   const fallbackReply = buildArtifactFallbackMarkdown(missingArtifacts);
+  const interactionFallbackReply = isStreamingMsg
+    ? ""
+    : buildInteractionReplyFallbackMarkdown(blocks, toolResultMap);
   // Hide the same files in tool-card galleries (reply body / fallback wins).
   const suppressArtifactPaths = isStreamingMsg
     ? []
@@ -45,7 +50,7 @@ export const AssistantBlockList = memo(function AssistantBlockList({
       );
 
   return (
-    <>
+    <InteractionFenceDedupeProvider messageKey={`${sessionId}:${msgIndex}`}>
       {blocks.map((block, i) => {
         if (block.type === "thinking" && block.thinking) {
           return (
@@ -98,6 +103,14 @@ export const AssistantBlockList = memo(function AssistantBlockList({
           <MarkdownRenderer content={fallbackReply} sessionId={sessionId} />
         </div>
       ) : null}
-    </>
+      {interactionFallbackReply ? (
+        <div
+          key="interaction-fence-reply"
+          className="min-w-0 max-w-full overflow-hidden text-[length:var(--font-chat-message)]"
+        >
+          <MarkdownRenderer content={interactionFallbackReply} sessionId={sessionId} />
+        </div>
+      ) : null}
+    </InteractionFenceDedupeProvider>
   );
 });

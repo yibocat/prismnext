@@ -30,27 +30,27 @@ import { cn } from "@/lib/utils";
  * `Button size="xs"`, type via `--font-chat-meta` (chat chrome step).
  */
 export const CHAT_PANEL_TOOLBAR_BUTTON =
-  "inline-flex h-6 shrink-0 items-center gap-1 rounded-md border-0 bg-transparent px-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground";
+  "inline-flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground";
 
 export const CHAT_PANEL_TOOLBAR_BUTTON_PRIMARY =
-  "inline-flex h-6 shrink-0 items-center gap-1 rounded-md border-0 bg-transparent px-1.5 text-[length:var(--font-chat-meta)] text-primary transition-colors hover:bg-accent hover:text-accent-foreground";
+  "inline-flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1.5 text-[length:var(--font-chat-meta)] text-primary transition-colors hover:bg-accent hover:text-accent-foreground";
 
 /**
  * Composer inner triggers (model / permission / +) — same chrome density as
  * `CHAT_PANEL_TOOLBAR_BUTTON` (h-6 + meta). Not for AiBar capsule pills.
  */
 export const COMPOSER_TOOLBAR_TRIGGER =
-  "inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground outline-hidden focus-visible:ring-1 focus-visible:ring-ring";
+  "inline-flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground outline-hidden focus-visible:ring-1 focus-visible:ring-ring";
 
 export const COMPOSER_TOOLBAR_ICON_BUTTON =
-  "inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground";
+  "inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground";
 
 /** Override `Button size="xs"` default 12px so Plan / tool actions use chat chrome. */
 export const CHAT_CHROME_BUTTON_TEXT = "text-[length:var(--font-chat-meta)]";
 
 /** Capsule AiBar only — dedicated pill, not Appearance border radius. */
 export const CAPSULE_TOOLBAR_PILL =
-  "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-border px-2.5 text-[length:var(--font-chat-meta)] transition-colors";
+  "inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border px-2.5 text-[length:var(--font-chat-meta)] transition-colors";
 
 interface WorktreeSelectorProps {
   /** `capsule` = AiBar toolbar pill; default = left chat panel (unchanged). */

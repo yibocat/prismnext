@@ -12,49 +12,38 @@ function manuscriptFolder(ctx: PromptContext): ManuscriptFolder | null {
 }
 
 /**
- * LaTeX workspace — build dir, compile chain, agent tool discipline.
- * Paths come from Workspace settings (functional folders), not hardcoded defaults.
+ * LaTeX workspace — soft workflow for writing and compile verification.
+ * Shell compile is blocked in main (bash permission bridge); tool how-to on latex-* tools.
  */
 export function buildLatexWorkspacePrompt(ctx: PromptContext): string {
   const manuscript = manuscriptFolder(ctx);
 
   const sourceLines = manuscript
     ? [
-        `LaTeX manuscript sources are in the configured folder **` +
-          `\`${manuscript.name}/\`** (main file: \`${manuscript.mainTex}\`).`,
-        "Folder roles and any custom descriptions are in **Workspace Folder Descriptions** — " +
-          "do not assume a fixed directory name like `manuscript/`.",
+        `Manuscript sources live in **\`${manuscript.name}/\`** (main: \`${manuscript.mainTex}\`).`,
+        "Folder roles are in **Workspace Folder Descriptions** — do not assume a fixed name like `manuscript/`.",
       ]
     : [
-        "This project has no manuscript folder in Workspace settings yet.",
-        "Use **Workspace Folder Descriptions** for configured folders; call `" +
-          `${TOOL_NAMES.latexRoot}\` to resolve the main .tex when writing.`,
+        "No manuscript folder is configured yet.",
+        `Use **Workspace Folder Descriptions** and \`${TOOL_NAMES.latexRoot}\` when you need the main .tex.`,
       ];
 
   return [
     "## LaTeX workspace (writing & compile)",
     "",
     ...sourceLines,
-    "Compilation output goes to **`.prismnext/compile/`** — sources are synced there before build; " +
-      "edit `.tex` / `.bib` in the manuscript folder, not in the compile folder.",
+    "Build output goes to **`.prismnext/compile/`** — edit `.tex` / `.bib` in the manuscript folder, not in the compile cache.",
     "",
-    "### Agent compile chain (binding)",
+    "### Soft workflow",
     "",
-    `- Run \`${TOOL_NAMES.latexRoot}\` and \`${TOOL_NAMES.latexCompile}\` **in this conversation** — do **not** wrap them in Task or sub-agents.`,
-    `1. \`${TOOL_NAMES.latexRoot}\` — resolve main .tex, engine, bib tool, and manuscript folder when unsure.`,
-    `2. Edit .tex / .bib under the configured manuscript folder with read/write/edit tools.`,
-    `3. \`${TOOL_NAMES.latexCompile}\` — verify the document builds; read structured errors on failure.`,
+    `1. \`${TOOL_NAMES.latexRoot}\` when the document root or engine is unclear.`,
+    "2. Edit sources under the configured manuscript folder.",
+    `3. \`${TOOL_NAMES.latexCompile}\` to verify the build — read structured errors on failure, then fix and retry.`,
     "",
-    "### Shell compile — forbidden",
+    "### Judgment",
     "",
-    "- **Never** run `pdflatex`, `xelatex`, `lualatex`, `latexmk`, or `tectonic` via `bash` (or any shell).",
-    `- Compiling outside \`${TOOL_NAMES.latexCompile}\` / the UI drops \`.aux\` / \`.log\` / \`.synctex\` into the manuscript folder and bypasses prismnext's build dir.`,
-    `- If a compile fails, fix sources and call \`${TOOL_NAMES.latexCompile}\` again — do not fall back to a shell engine.`,
-    "",
-    "### Notes",
-    "",
-    "- User can compile via UI (Cmd+Enter) or `/compile` — agent tools mirror that pipeline for verification.",
-    `- \`${TOOL_NAMES.literatureExportBib}\` writes **library** papers into the project .bib; \`${TOOL_NAMES.citationHealth}\` validates **manuscript** .tex ↔ .bib ↔ library.`,
-    "- Do not delete `.prismnext/compile/` manually — it is the incremental build cache.",
+    "- The UI (Cmd+Enter, `/compile`) and agent tools share the same compile pipeline.",
+    `- Citation integrity: \`${TOOL_NAMES.citationHealth}\`; library → .bib sync: \`${TOOL_NAMES.literatureExportBib}\`.`,
+    "- Project rules may specify naming, engine preference, or when to compile — defer to them.",
   ].join("\n");
 }

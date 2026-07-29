@@ -2239,14 +2239,21 @@
       "unavailable": "找不到或無效的互動物件「{{id}}」。",
       "invalidFence": "無效的 ```interaction 程式碼區塊。",
       "open": "開啟",
-      "openPanel": "在面板中開啟"
+      "openPanel": "在面板中開啟",
+      "previewLoading": "正在載入預覽…",
+      "previewUnavailable": "預覽不可用"
     },
     "panel": {
       "empty": "未選擇互動物件。",
       "loadError": "無法載入「{{id}}」：{{error}}",
-      "intro": "互動式科研物件（P0 殼層 — 真實渲染將在後續版本提供）。",
+      "intro": "科研產物 — 在此面板顯示靜態圖或 CSV 折線圖。",
       "placeholderTitle": "預覽暫不可用",
       "placeholderBody": "類型「{{kind}}」將在後續版本中在此渲染。",
+      "unsupportedTitle": "不支援該 Interaction 類型",
+      "unsupportedBody": "類型「{{kind}}」不可寫入。請使用 figure.static（圖像）或 plot.line / plot.series / plot.scatter（CSV）。",
+      "figureMissingPath": "resources[] 中沒有圖像路徑。請加入 png/svg 路徑後重新寫入。",
+      "figureLoadError": "無法載入圖像：{{path}}",
+      "plotErrorTitle": "無法渲染圖表",
       "bindings": "綁定",
       "resources": "資源"
     }

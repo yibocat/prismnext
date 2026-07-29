@@ -1,5 +1,8 @@
 /**
  * Chat artifact fence helpers — explicit ```artifact blocks in AI replies.
+ *
+ * Terminology: "artifact" here means **project file path embed**, not Interaction specs
+ * (`.prismnext/interactions/<id>/spec.json` — see interaction-spec.ts and ```interaction fences).
  * See docs-private/superpowers/specs/2026-07-18-chat-artifact-block-design.md
  */
 import {
@@ -8,6 +11,7 @@ import {
   isPdfArtifactPath,
   normalizeArtifactSlash,
 } from "../../../shared/artifact-path";
+import { parseKeyedFenceBody } from "../../../shared/chat-fence-parse";
 
 export type ChatArtifactKind = "image" | "pdf" | "generic";
 
@@ -30,28 +34,11 @@ export function classifyArtifactKind(path: string): ChatArtifactKind {
  * Fallback: first non-empty line is the path.
  */
 export function parseArtifactFenceContent(raw: string): ParsedArtifactFence | null {
-  const text = (raw || "").replace(/\r\n/g, "\n").trim();
-  if (!text) return null;
-
-  let path = "";
-  let title: string | undefined;
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const m = /^([A-Za-z][\w-]*)\s*:\s*(.+)$/.exec(trimmed);
-    if (m) {
-      const key = m[1]!.toLowerCase();
-      const val = m[2]!.trim();
-      if (key === "path" && val) path = val;
-      else if (key === "title" && val) title = val;
-      continue;
-    }
-    if (!path) path = trimmed;
-  }
-
-  path = normalizeArtifactSlash(path);
-  if (!path || path.includes("..")) return null;
-  return { path, title };
+  const parsed = parseKeyedFenceBody(raw, "path");
+  if (!parsed) return null;
+  const path = normalizeArtifactSlash(parsed.primary);
+  if (!path) return null;
+  return { path, title: parsed.title };
 }
 
 export function normalizeArtifactDisplayPath(path: string): string {

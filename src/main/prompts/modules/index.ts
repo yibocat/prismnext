@@ -138,11 +138,11 @@ export const ALL_MODULES: PromptModule[] = [
   },
   {
     key: "interaction",
-    label: "Interaction (interactive objects)",
+    label: "Interaction (figures & plots)",
     description:
-      "Interactive Research Artifacts — plot/math instruments in .prismnext/artifacts; interaction-* tools + ```interaction fence.",
+      "Figures and CSV plots in `.prismnext/interactions` — figure.static / plot.*, interaction-* tools + ```interaction fence.",
     enabled: true,
-    profileOnly: true,
+    profileOnly: false,
     source: "app",
     prompt: INTERACTION_PROMPT,
   },

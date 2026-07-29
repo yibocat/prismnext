@@ -69,11 +69,11 @@ async function bridgeCall(
 
 export default tool({
   description:
-    "Read a persisted Interaction spec from `.prismnext/artifacts/<id>/spec.json`. " +
+    "Read a persisted Interaction spec from `.prismnext/interactions/<id>/spec.json`. " +
     "Returns the full spec plus fenceMarkdown to embed in your assistant reply. " +
     "Use interaction-list to discover ids; use interaction-write to create or update.",
   args: {
-    id: tool.schema.string().describe("Interaction object id (directory name under .prismnext/artifacts/)"),
+    id: tool.schema.string().describe("Interaction object id (directory name under .prismnext/interactions/)"),
   },
   async execute(args, context) {
     const id = typeof args.id === "string" ? args.id.trim() : "";

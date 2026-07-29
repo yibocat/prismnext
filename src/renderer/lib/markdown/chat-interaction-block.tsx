@@ -1,39 +1,20 @@
 /**
- * ChatInteractionBlock — thumbnail card for ```interaction fences.
- * Opens the Interaction panel in RightArea (P0 shell).
+ * ChatInteractionBlock — panel entry with inline peek for ```interaction fences.
+ * Typography matches chat-artifact-pdf peek header (11/12, not chat-message ladder).
  */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { SparklesIcon } from "lucide-react";
-import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import { useDocumentStore } from "@/stores/document-store";
-import {
-  kindDisplayLabel,
-  type InteractionSpec,
-} from "../../../shared/interaction-spec";
+import { kindDisplayLabel } from "../../../shared/interaction-spec";
+import type { InteractionSpec } from "../../../shared/interaction-spec";
+import { InteractionChatThumbnail } from "@/lib/interaction/interaction-chat-thumbnail";
 import { openInteractionPanel } from "@/lib/interaction/open-interaction-panel";
 import { parseInteractionFenceContent } from "./chat-interaction";
+import { claimInteractionFenceSlot } from "@/lib/interaction/interaction-fence-dedupe";
 
-function ComputeBadge({ compute }: { compute: InteractionSpec["compute"] }) {
-  const { t } = useTranslation();
-  const label =
-    compute === "bound"
-      ? t("interaction.badge.bound")
-      : t("interaction.badge.local");
-  return (
-    <span
-      className={cn(
-        "rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium",
-        compute === "bound"
-          ? "bg-accent text-foreground"
-          : "bg-muted text-muted-foreground",
-      )}
-    >
-      {label}
-    </span>
-  );
-}
+const PEEK_CARD_SHELL =
+  "my-2 w-full max-w-full overflow-hidden rounded-lg border border-border/50 bg-muted/20 text-left";
 
 export function ChatInteractionBlock({
   id,
@@ -75,8 +56,6 @@ export function ChatInteractionBlock({
   }, [projectRoot, id]);
 
   const title = titleOverride?.trim() || spec?.title || id;
-  const kind = spec?.kind ?? "…";
-  const compute = spec?.compute ?? "local";
 
   const open = useCallback(() => {
     openInteractionPanel(id, title);
@@ -84,15 +63,25 @@ export function ChatInteractionBlock({
 
   if (loading) {
     return (
-      <div className="my-2 flex h-14 w-full max-w-full items-center gap-2 rounded-lg border border-border bg-muted px-3 text-[length:var(--font-size-11)] text-muted-foreground">
+      <div
+        className={cn(
+          PEEK_CARD_SHELL,
+          "px-2 py-1.5 text-[length:var(--font-size-11)] text-muted-foreground",
+        )}
+      >
         {t("interaction.card.loading")}
       </div>
     );
   }
 
-  if (error || !spec) {
+  if (error || !spec || !projectRoot) {
     return (
-      <div className="my-2 rounded-lg border border-border bg-muted px-3 py-2 text-[length:var(--font-size-12)] text-muted-foreground">
+      <div
+        className={cn(
+          PEEK_CARD_SHELL,
+          "px-2 py-1.5 text-[length:var(--font-size-11)] text-muted-foreground",
+        )}
+      >
         {t("interaction.card.unavailable", { id })}
       </div>
     );
@@ -102,30 +91,23 @@ export function ChatInteractionBlock({
     <button
       type="button"
       onClick={open}
-      className="my-2 flex w-full max-w-full items-stretch gap-2 rounded-lg border border-border bg-muted p-2 text-left transition-colors hover:bg-accent"
+      aria-label={t("interaction.card.openPanel")}
+      className={cn(PEEK_CARD_SHELL, "cursor-pointer transition-opacity hover:opacity-90")}
     >
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-background text-primary">
-        <SparklesIcon className="size-4" aria-hidden />
-      </div>
-      <div className="min-w-0 flex-1 py-0.5">
-        <div className="truncate text-[length:var(--font-chat-message)] font-medium text-foreground">
-          {title}
-        </div>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          <span className="rounded bg-background px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium text-muted-foreground">
-            {kindDisplayLabel(kind)}
-          </span>
-          <ComputeBadge compute={compute} />
-          <span className="font-mono text-[length:var(--font-size-10)] text-muted-foreground">
-            {id}
-          </span>
-        </div>
-      </div>
-      <Hint label={t("interaction.card.openPanel")}>
-        <span className="self-center pr-1 text-[length:var(--font-size-11)] text-muted-foreground">
-          {t("interaction.card.open")}
+      <div className="flex items-center gap-2 px-2 py-1.5">
+        <span className="shrink-0 text-[length:var(--font-size-11)] font-medium text-muted-foreground">
+          {kindDisplayLabel(spec.kind)}
         </span>
-      </Hint>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[length:var(--font-size-12)] font-medium text-foreground">
+            {title}
+          </div>
+          <div className="truncate font-mono text-[length:var(--font-size-11)] text-muted-foreground">
+            {spec.id}
+          </div>
+        </div>
+      </div>
+      <InteractionChatThumbnail spec={spec} projectRoot={projectRoot} />
     </button>
   );
 }
@@ -139,6 +121,9 @@ export function ChatInteractionFence({ raw }: { raw: string }) {
         {t("interaction.card.invalidFence")}
       </span>
     );
+  }
+  if (!claimInteractionFenceSlot(parsed.id)) {
+    return null;
   }
   return <ChatInteractionBlock id={parsed.id} titleOverride={parsed.title} />;
 }

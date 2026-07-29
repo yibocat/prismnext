@@ -263,6 +263,13 @@
   #root {
     @apply h-full min-w-0 overflow-hidden;
   }
+  button:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
 }
 
 /* macOS window drag region */

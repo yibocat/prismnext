@@ -1,7 +1,29 @@
 /**
  * Interactive Research Artifact — Scene Spec (P0 shell).
- * True source lives at `.prismnext/artifacts/<id>/spec.json`.
+ * True source lives at `.prismnext/interactions/<id>/spec.json`.
+ *
+ * Naming note (avoid confusion):
+ * - **Interaction spec** — this file; directory `.prismnext/interactions/` stores specs.
+ * - **Chat `artifact` fence** — embeds a project **file path** in chat (see chat-artifact.ts).
+ * - **Run `artifacts[]`** — experiment-run output paths in runs.jsonl / provenance.
+ * - **Legacy** — specs written before 0.6.6 may still be under `.prismnext/artifacts/` (auto-migrated on read/write).
  */
+
+/** Project-relative root for Interaction spec directories. */
+export const INTERACTION_SPEC_DIR_REL = ".prismnext/interactions";
+
+/** Pre-0.6.6 spec root — read + lazy migrate only. */
+export const LEGACY_INTERACTION_SPEC_DIR_REL = ".prismnext/artifacts";
+
+export function interactionSpecRelativePath(id: string): string {
+  const trimmed = (id || "").trim();
+  return `${INTERACTION_SPEC_DIR_REL}/${trimmed}/spec.json`;
+}
+
+export function legacyInteractionSpecRelativePath(id: string): string {
+  const trimmed = (id || "").trim();
+  return `${LEGACY_INTERACTION_SPEC_DIR_REL}/${trimmed}/spec.json`;
+}
 
 export type InteractionCompute = "local" | "bound";
 
@@ -71,18 +93,21 @@ export function parseInteractionSpec(raw: unknown): InteractionSpec | null {
 
 export function kindDisplayLabel(kind: string): string {
   const base = kind.split(".")[0] ?? kind;
+  if (base === "figure") return "Figure";
   if (base === "plot") return "Plot";
   if (base === "math") return "Math";
   return base.charAt(0).toUpperCase() + base.slice(1);
 }
 
-/** P0/P1 kinds agents may write before dedicated runtimes ship. */
+/**
+ * Agent-writable kinds (progressive).
+ * Roadmap (not yet writable): diagram.mermaid, formula.display — see changelog.
+ */
 export const INTERACTION_KINDS_AGENT = [
+  "figure.static",
   "plot.line",
   "plot.series",
   "plot.scatter",
-  "math.surface",
-  "math.field",
 ] as const;
 
 export type InteractionKindAgent = (typeof INTERACTION_KINDS_AGENT)[number];

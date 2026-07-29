@@ -2,10 +2,14 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useDocumentStore } from "@/stores/document-store";
 
-/** Focus Interaction mode and open/focus a tab for this object id. */
+/** Focus Interaction mode, expand RightArea, and open/focus a tab for this object id. */
 export function openInteractionPanel(interactionId: string, title?: string): void {
   const layout = useLayoutStore.getState();
   layout.activateMode("interaction");
+  // activateMode only switches mode chrome — RightArea may still be collapsed.
+  if (!layout.editorMaximized) {
+    layout.requestRightAreaExpand();
+  }
   useRightPanelStore.getState().openInteractionTab(interactionId, title ?? interactionId);
 }
 

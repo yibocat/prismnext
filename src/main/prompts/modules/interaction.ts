@@ -1,36 +1,33 @@
+/**
+ * Interaction — soft workflow for saved figures and CSV plots in RightArea.
+ *
+ * Scope: explain what Interaction is and the judgment path (chat preview vs panel object).
+ * Hard gates (file must exist, kind whitelist, path safety) live in main, not here.
+ * Tool args/examples live on interaction-* tool descriptions, not in this module.
+ */
 import { TOOL_NAMES } from "../../../shared/tool-names";
 
-/**
- * Interaction — when/how to create Interactive Research Artifacts.
- * Tool how-to: interaction-list / interaction-read / interaction-write / interaction-open descriptions.
- */
 export const INTERACTION_PROMPT = [
-  "## Interaction (interactive research objects)",
+  "## Interaction (figures & plots)",
   "",
-  "Applies when the user needs **adjustable** plots, loss landscapes, or interactive views of data — not plain file preview.",
+  "Interaction is a **reopenable research view** — a static figure or a CSV-backed chart rendered in the RightArea panel. It is not a live sandbox, and not a chat-only file peek.",
   "",
-  "### vs file artifact fence",
+  "### Concept boundary",
   "",
-  "- **Result files** (png/csv/pdf paths) → artifact fence with path: (see Reply depth).",
-  "- **Persistent interactive objects** (spec on disk) → interaction-* tools, then an **interaction** fence (id: …) in your **assistant** reply.",
+  "- **Chat preview of a file** → `artifact` fence (see Reply depth). Quick, no spec on disk.",
+  "- **Saved Interaction object** → `interaction-*` tools. The app keeps a spec so the panel can reopen the same figure/plot later.",
+  "- Choose the simplest thing that fits: if the user only needs to see an image once, `artifact` is usually enough; reach for Interaction when they expect a panel chart or you may revisit it.",
   "",
-  "### vs experiments",
+  "### Soft workflow",
   "",
-  "- experiment-run = real execution + runs.jsonl.",
-  "- **bound** interaction = read-only interactive instrument over run outputs (csv in resources[]).",
-  "- **local** interaction = sketch/simulation without a run (math.surface, demo plot.line).",
+  "1. **Decide what exists on disk.** A figure PNG/SVG or a metrics CSV must already be written (savefig, experiment output). Do not invent numeric series.",
+  "2. **Persist the object** with `${TOOL_NAMES.interactionWrite}`. The tool validates kinds and paths; concrete parameters and examples live on the tool description.",
+  "3. **Surface it in chat** by embedding the returned fence in your assistant reply, so the user has a clickable card.",
+  "4. Only focus the panel explicitly when the user asked to watch it.",
   "",
-  "### Workflow (judgment)",
+  "### Judgment",
   "",
-  `- Discover: ${TOOL_NAMES.interactionList} (optional kindPrefix).`,
-  `- Update: ${TOOL_NAMES.interactionRead} first, then ${TOOL_NAMES.interactionWrite} with full spec JSON.`,
-  `- Create: ${TOOL_NAMES.interactionWrite} → embed returned fenceMarkdown in your assistant message.`,
-  `- Open panel: ${TOOL_NAMES.interactionOpen} when the user asks to show it in RightArea (card in chat still helps).`,
-  `- After ${TOOL_NAMES.experimentRun} with metrics csv → bound plot.* + resources[] is often better than only an artifact fence.`,
-  "",
-  "### Do not",
-  "",
-  "- Grep/read the project hunting for interaction ids — use interaction-list/read.",
-  "- Use generic read/write/edit on .prismnext/artifacts/<id>/spec.json.",
-  "- Use artifact fences for interactive objects.",
+  "- Plot data must come from a real CSV in the project; the write step rejects missing paths.",
+  "- If write fails, fix the file or the spec rather than writing a chat `artifact` as a substitute.",
+  "- Project rules (`.prismnext/settings.json`) can tighten naming, folder layout, or when to prefer plots over static figures — defer to them.",
 ].join("\n");

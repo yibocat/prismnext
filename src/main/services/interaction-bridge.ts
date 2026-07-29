@@ -13,6 +13,7 @@ import {
 } from "./interaction-store";
 import {
   interactionFenceHint,
+  interactionSpecRelativePath,
   parseInteractionSpec,
   type InteractionSpec,
 } from "../../shared/interaction-spec";
@@ -44,7 +45,7 @@ function specResponse(projectRoot: string, spec: InteractionSpec) {
   return {
     ok: true,
     spec,
-    relativePath: `.prismnext/artifacts/${spec.id}/spec.json`,
+    relativePath: interactionSpecRelativePath(spec.id),
     fenceMarkdown: hint.fenceMarkdown,
     replyRule: hint.replyRule,
   };
@@ -89,6 +90,7 @@ function dispatch(req: InteractionBridgeRequest): Record<string, unknown> {
         id: result.spec.id,
         title: result.spec.title,
         reason: "write",
+        // Chat card / interaction-open handles focus — avoid jumping RightArea on every write.
         focus: false,
       });
       return body;

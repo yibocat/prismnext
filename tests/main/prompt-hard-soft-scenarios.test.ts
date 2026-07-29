@@ -104,9 +104,10 @@ describe("S3 — Approve seeds todowrite (prompt contract)", () => {
 });
 
 describe("S4 — external literature recommendations", () => {
-  it("module defers BINDING to literature-stage; tool keeps BINDING", () => {
+  it("module defers staging rules to literature-stage; tool keeps BINDING", () => {
     expect(CHAT_CITATION_STAGING_PROMPT).toContain(TOOL_NAMES.literatureStage);
-    expect(CHAT_CITATION_STAGING_PROMPT).toContain("See that tool for BINDING");
+    expect(CHAT_CITATION_STAGING_PROMPT).toContain("see that tool");
+    expect(CHAT_CITATION_STAGING_PROMPT).not.toContain("BINDING");
     expect(CHAT_CITATION_STAGING_PROMPT).not.toContain("search_arxiv");
     expect(CHAT_CITATION_STAGING_PROMPT).not.toContain("tool-output");
 
@@ -169,10 +170,10 @@ describe("S8 — Plan wrong drafts path is HARD-deny (covered in S2)", () => {
 });
 
 describe("S9 — experiments module does not restate HARD venv essay", () => {
-  it("points at platform enforcement instead of uv pip manuals", () => {
+  it("points at experiment-run tool instead of uv pip manuals", () => {
     expect(EXPERIMENTS_PROMPT).toContain(TOOL_NAMES.experimentRun);
-    expect(EXPERIMENTS_PROMPT).toContain("platform-enforced");
     expect(EXPERIMENTS_PROMPT).not.toContain("uv pip --system");
     expect(EXPERIMENTS_PROMPT).not.toContain("### Workflow (binding)");
+    expect(EXPERIMENTS_PROMPT).not.toContain("platform-enforced");
   });
 });

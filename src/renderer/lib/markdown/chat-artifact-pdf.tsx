@@ -92,7 +92,7 @@ function ArtifactActionButton({
         type="button"
         onClick={onClick}
         aria-label={label}
-        className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       >
         {children}
       </button>

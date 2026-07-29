@@ -1,43 +1,25 @@
 import { TOOL_NAMES } from "../../../shared/tool-names";
 
 /**
- * Research design workflow — project brief at `.prismnext/research/brief.md`.
- *
- * Scope: when to read/update the brief; Task handoff to research-design-coach.
- * Section schema lives in `src/shared/research-brief.ts`.
+ * Research design — soft workflow around `.prismnext/research/brief.md`.
+ * Section schema and tool args live in shared/research-brief.ts and brief tools.
  */
 export const RESEARCH_DESIGN_PROMPT = [
-  "## Research design (binding)",
+  "## Research design",
   "",
-  "This module applies when the user asks about research questions, hypotheses, contribution, scope,",
-  "FINER checks, gap analysis, or whether the design is ready before writing or experiments.",
+  "Applies when the user explores research questions, hypotheses, contribution, scope, or readiness before writing and experiments.",
   "",
-  "### Workflow (binding)",
+  "### Soft workflow",
   "",
-  `- Call \`${TOOL_NAMES.researchBriefRead}\` **first** — do not guess the project design from chat memory alone.`,
-  `- When the brief is empty or a section is placeholder-only, collaborate with the user to fill it before large edits.`,
-  `- After the user confirms design changes, call \`${TOOL_NAMES.researchBriefUpdate}\` for **changed sections only** — one section per call.`,
-  "- Do **not** use generic `edit` / `write` on `.prismnext/research/brief.md` — use the brief tools only.",
-  "- Do **not** delegate brief **reads or writes** via Task — run brief tools in this orchestrator conversation.",
+  `1. \`${TOOL_NAMES.researchBriefRead}\` first — ground the conversation in the on-disk brief, not chat memory alone.`,
+  "2. Collaborate to fill gaps when sections are empty or placeholder-only.",
+  `3. After the user confirms changes, \`${TOOL_NAMES.researchBriefUpdate}\` for changed sections — one section per call (see tool for names).`,
   "",
-  "### Plan mode",
+  "### Judgment",
   "",
-  `- Multi-step design (hypotheses, factors, protocol) → call \`${TOOL_NAMES.suggestPlan}\` first (see that tool). Plan covers design, not only execution; “think through” ≠ skip Plan for a chat-only dump.`,
-  "",
-  "### Task expert handoff (research design)",
-  "",
-  `- Delegate to \`research-design-coach\` with the **brief snapshot** (or relevant sections) in the Task prompt.`,
-  "- The coach is **diagnostic only** — it does not update the brief. You apply `research-brief-update` after synthesis.",
-  "- Instruct the coach not to re-read the file via bash/cat — the snapshot you provide is the source of truth for that Task.",
-  "",
-  "### Section names (for updates)",
-  "",
-  "Research question · Background & motivation · Hypotheses / claims · Contribution & novelty ·",
-  "Scope · Assumptions · Open questions · Risks & limitations · Related work gaps",
-  "",
-  "### Boundary with experiments",
-  "",
-  "Keep this module while the design is open. Once the hypothesis and analysis plan are frozen in the brief,",
-  "experiment execution moves to the **experiments** module — do not open experiment islands for an unfrozen design,",
-  "and if a run surfaces a design flaw, come back here and update the brief before more runs.",
+  `- Multi-step design (hypotheses, factors, protocol) → consider \`${TOOL_NAMES.suggestPlan}\` before a long chat dump.`,
+  "- Delegate diagnosis to `research-design-coach` with a brief snapshot; you apply brief updates after synthesis.",
+  "- While the design is still open, stay here. Once frozen in the brief, experiment execution moves to the **Experiments** module.",
+  "- If a run surfaces a design flaw, update the brief before more runs.",
+  "- Project rules may define section priorities or review gates — defer to them.",
 ].join("\n");

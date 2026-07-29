@@ -69,7 +69,7 @@ async function bridgeCall(
 
 export default tool({
   description:
-    "List Interactive Research Artifacts in `.prismnext/artifacts/` (id, title, kind, compute, revision summaries). " +
+    "List Interactive Research Artifacts in `.prismnext/interactions/` (id, title, kind, compute, revision summaries). " +
     "Use before updating an object or when the user asks what interactive instruments exist.",
   args: {
     kindPrefix: tool.schema
