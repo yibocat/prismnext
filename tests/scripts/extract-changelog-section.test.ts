@@ -87,4 +87,40 @@ describe("normalizeVersion", () => {
   it("strips v prefix", () => {
     expect(normalizeVersion("v2.1.0")).toBe("2.1.0");
   });
+
+  it("keeps prerelease identifiers", () => {
+    expect(normalizeVersion("0.6.6-alpha.1")).toBe("0.6.6-alpha.1");
+    expect(normalizeVersion("v0.6.6-alpha.1")).toBe("0.6.6-alpha.1");
+  });
+});
+
+describe("extractVersionSection prerelease", () => {
+  const sample = `# Changelog — 0.6.x
+
+## 0.6.6 (Unreleased)
+
+### Later
+- stable WIP
+
+## 0.6.6-alpha.1 — 2026-07-29
+
+### Alpha
+- interaction
+
+## 0.6.5 — 2026-07-28
+
+### Stable
+- shipped
+`;
+
+  it("extracts alpha section without matching bare 0.6.6", () => {
+    const body = extractVersionSection(sample, "0.6.6-alpha.1");
+    expect(body).toContain("interaction");
+    expect(body).not.toContain("stable WIP");
+    expect(body).not.toContain("shipped");
+  });
+
+  it("maps prerelease to the same series file", () => {
+    expect(seriesFileNameForVersion("0.6.6-alpha.1")).toBe("0.6.x.md");
+  });
 });

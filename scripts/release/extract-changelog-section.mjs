@@ -23,7 +23,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * @param {string} version e.g. "0.5.14" or "v0.5.14"
+ * @param {string} version e.g. "0.5.14", "v0.5.14", or "0.6.6-alpha.1"
  * @returns {string} e.g. "0.5.x.md"
  */
 export function seriesFileNameForVersion(version) {
@@ -37,11 +37,12 @@ export function seriesFileNameForVersion(version) {
 
 /**
  * @param {string} version
- * @returns {string} normalized "x.y.z" (no leading v)
+ * @returns {string} normalized "x.y.z" or "x.y.z-prerelease" (no leading v)
  */
 export function normalizeVersion(version) {
   const clean = String(version).replace(/^v/i, "").trim();
-  const m = clean.match(/^(\d+\.\d+\.\d+)/);
+  // Keep prerelease / build metadata so ## 0.6.6-alpha.1 matches the full tag.
+  const m = clean.match(/^(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)/);
   if (!m) {
     throw new Error(`Invalid semver version: ${version}`);
   }
@@ -51,13 +52,14 @@ export function normalizeVersion(version) {
 /**
  * Extract the markdown body under `## <version> …` until the next `## ` heading.
  * @param {string} markdown
- * @param {string} version normalized x.y.z
+ * @param {string} version normalized x.y.z or x.y.z-prerelease
  * @returns {string | null}
  */
 export function extractVersionSection(markdown, version) {
   const v = normalizeVersion(version);
-  const escaped = v.replace(/\./g, "\\.");
-  // ## 0.5.14 — date | ## 0.5.14 (Unreleased) | ## 0.5.14
+  const escaped = v.replace(/\./g, "\\.").replace(/\+/g, "\\+");
+  // Prefer an exact prerelease heading (## 0.6.6-alpha.1) over a bare ## 0.6.6.
+  // ## 0.5.14 — date | ## 0.5.14 (Unreleased) | ## 0.5.14 | ## 0.6.6-alpha.1 — date
   const headerRe = new RegExp(`^## ${escaped}(?:\\s|[—(]|$)`, "m");
   const match = headerRe.exec(markdown);
   if (!match || match.index === undefined) {

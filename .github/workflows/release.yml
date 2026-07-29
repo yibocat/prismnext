@@ -338,7 +338,20 @@ jobs:
           aws configure set aws_secret_access_key "${{ secrets.R2_SECRET_ACCESS_KEY }}"
           aws configure set region auto
 
-      - name: Write and upload version.json
+      - name: Detect prerelease
+        id: meta
+        shell: bash
+        env:
+          VERSION: ${{ needs.mac.outputs.version }}
+        run: |
+          if [[ "$VERSION" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write and upload version.json (stable only)
+        if: steps.meta.outputs.prerelease != 'true'
         shell: bash
         env:
           ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
@@ -354,6 +367,23 @@ jobs:
             --endpoint-url "$ENDPOINT" \
             --content-type "application/json"
 
+      - name: Write and upload version-alpha.json (prerelease)
+        if: steps.meta.outputs.prerelease == 'true'
+        shell: bash
+        env:
+          ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          VERSION: ${{ needs.mac.outputs.version }}
+          MAC_ARTIFACT: ${{ needs.mac.outputs.artifact_name }}
+          WIN_ARTIFACT: ${{ needs.win.outputs.artifact_name }}
+          LINUX_ARTIFACT: ${{ needs.linux.outputs.artifact_name }}
+          R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+        run: |
+          node -e "const fs=require('fs');fs.writeFileSync('version-alpha.json',JSON.stringify({version:process.env.VERSION,macUrl:\`\${process.env.R2_PUBLIC_BASE_URL}/\${process.env.MAC_ARTIFACT}\`,winUrl:\`\${process.env.R2_PUBLIC_BASE_URL}/\${process.env.WIN_ARTIFACT}\`,linuxUrl:\`\${process.env.R2_PUBLIC_BASE_URL}/\${process.env.LINUX_ARTIFACT}\`,notes:'Experimental alpha — Interaction stack. Stable channel remains version.json.'},null,2));"
+          cp version-alpha.json release-assets/version-alpha.json
+          aws s3 cp version-alpha.json "s3://${{ secrets.R2_BUCKET }}/version-alpha.json" \
+            --endpoint-url "$ENDPOINT" \
+            --content-type "application/json"
+
       # Body = changelog section for this version + fixed Downloads footer.
       # Series file: changelog/{major}.{minor}.x.md (e.g. 0.5.14 → 0.5.x.md, 2.1.0 → 2.1.x.md).
       - name: Write release notes
@@ -364,6 +394,7 @@ jobs:
           WIN_ARTIFACT: ${{ needs.win.outputs.artifact_name }}
           LINUX_ARTIFACT: ${{ needs.linux.outputs.artifact_name }}
           R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+          IS_PRERELEASE: ${{ steps.meta.outputs.prerelease }}
         run: |
           set -euo pipefail
           {
@@ -381,7 +412,12 @@ jobs:
             echo ""
             echo "Mirrored on R2 (in-app updates + download site):"
             echo ""
-            echo "- version.json: ${R2_PUBLIC_BASE_URL}/version.json"
+            if [ "$IS_PRERELEASE" = "true" ]; then
+              echo "- version-alpha.json: ${R2_PUBLIC_BASE_URL}/version-alpha.json"
+              echo "- Stable \`version.json\` is unchanged by this prerelease."
+            else
+              echo "- version.json: ${R2_PUBLIC_BASE_URL}/version.json"
+            fi
             echo ""
             echo "> Installers are also attached to this GitHub Release."
           } > RELEASE_NOTES.md
@@ -394,7 +430,8 @@ jobs:
           body_path: RELEASE_NOTES.md
           files: release-assets/*
           draft: false
-          make_latest: true
+          prerelease: ${{ steps.meta.outputs.prerelease == 'true' }}
+          make_latest: ${{ steps.meta.outputs.prerelease != 'true' }}
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
