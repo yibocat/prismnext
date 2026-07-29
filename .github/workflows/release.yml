@@ -21,6 +21,8 @@ permissions:
 env:
   R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
   PRISM_UPDATER_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+  # Interaction pulls plotly/three/mermaid into the Vite graph; default ~2GB heap OOMs on macos runners.
+  NODE_OPTIONS: --max-old-space-size=8192
 
 jobs:
   mac:

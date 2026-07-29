@@ -97,6 +97,22 @@ export default defineConfig({
             if (id.includes("node_modules/@xterm")) {
               return "xterm";
             }
+            // Interaction: keep heavy viz libs in separate async chunks to cut peak build RAM.
+            if (id.includes("node_modules/plotly.js") || id.includes("node_modules/plotly.js-dist-min")) {
+              return "plotly";
+            }
+            if (id.includes("node_modules/three")) {
+              return "three";
+            }
+            if (id.includes("node_modules/mermaid")) {
+              return "mermaid";
+            }
+            if (id.includes("node_modules/@hpcc-js")) {
+              return "graphviz";
+            }
+            if (id.includes("node_modules/@observablehq/plot")) {
+              return "observable-plot";
+            }
           },
         },
       },
