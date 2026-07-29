@@ -15,7 +15,7 @@
 | `R2_ACCESS_KEY_ID` | R2 token access key |
 | `R2_SECRET_ACCESS_KEY` | R2 token secret |
 | `R2_BUCKET` | Bucket name |
-| `R2_PUBLIC_BASE_URL` | HTTPS root electron-updater + website links, no trailing slash — e.g. `https://pub-xxx.r2.dev` or `https://releases.example.com` |
+| `R2_PUBLIC_BASE_URL` | HTTPS root electron-updater + website links, no trailing slash — e.g. `https://pub-c529ea6125f74485bddd4d8e4cfd2d44.r2.dev` |
 
 ### Updater feed URL at build time
 

@@ -383,7 +383,7 @@ jobs:
             echo ""
             echo "- version.json: ${R2_PUBLIC_BASE_URL}/version.json"
             echo ""
-            echo "> Private repository: only collaborators can see this Release."
+            echo "> Installers are also attached to this GitHub Release."
           } > RELEASE_NOTES.md
 
       - name: Create GitHub Release

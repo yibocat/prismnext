@@ -120,7 +120,7 @@ PrismNext 是面向学术写作与研究实践的 **本地优先** 桌面工作�
 
 ### 1. 安装
 
-从 [下载页](./website/)（或你的发布渠道）获取 **macOS** / **Windows** / **Linux**（AppImage）安装包。
+从 [GitHub Releases](https://github.com/yibocat/prismnext/releases)（或托管后的 [下载页](./website/)）获取 **macOS** / **Windows** / **Linux**（AppImage）安装包。
 
 > macOS 若提示「已损坏」，多为未签名隔离，对 `.app` 执行一次后再开：
 >
@@ -160,9 +160,9 @@ PrismNext 是面向学术写作与研究实践的 **本地优先** 桌面工作�
 
 ## 界面预览
 
-产品截图将放在 [`assets/screenshots/`](./assets/)。品牌与闭环示意图见 [`assets/`](./assets/)。
+品牌与闭环示意图见 [`assets/`](./assets/)。下载站所用产品截图见 [`website/assets/`](./website/assets/)。
 
-> 欢迎贡献真实界面截图（欢迎页、TeX+PDF、文献库、Plan 同意条等）。
+> 欢迎贡献更多真实界面截图（欢迎页、TeX+PDF、文献库、Plan 同意条等）。
 
 ---
 
