@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState, memo, useCallback, useMemo } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, memo, useCallback, useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useChatStore, type ChatStreamMessage, type ContentBlock } from "@/stores/chat-store";
 import { MarkdownRenderer } from "./markdown-renderer";
 import { AssistantBlockList } from "./assistant-block-list";
 export { AssistantBlockList } from "./assistant-block-list";
+import { TurnAssistantContent } from "./turn-assistant-content";
 import "./tools/task-widget-register";
 import { TurnFooter, extractTurnCopyText } from "./turn-footer";
 import { InlineRichText, InlineTokenChip } from "./inline-tokens";
@@ -28,7 +29,7 @@ import {
   TURN_WINDOW_LOAD_PULL_PX,
   TURN_WINDOW_SENTINEL_SUPPRESS_MS,
 } from "@/lib/chat/turn-window";
-import { isToolResultUserMessage, extractTurnUserPreview } from "./chat-turns";
+import { isToolResultUserMessage, extractTurnUserPreview, isHiddenToolResultCarrier } from "./chat-turns";
 import { TurnRail } from "./turn-rail";
 import { buildToolResultMap, contentBlocks } from "./tools/tool-result-map";
 import { useDocumentStore } from "@/stores/document-store";
@@ -436,6 +437,22 @@ export const ChatMessages = memo(function ChatMessages() {
   const isLoadingSession = useChatStore((s) => s.isLoadingSession);
   const activeTabId = useChatStore((s) => s.activeTabId);
   const chatSessionId = useChatStore((s) => s.sessionId);
+  const sessionAgent = useChatStore((s) => {
+    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    return tab?.sessionAgent ?? "build";
+  });
+  const planDraftFileReady = useChatStore((s) => {
+    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    return !!tab?.planDraftFileReady;
+  });
+  const planDraftSummary = useChatStore((s) => {
+    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    return tab?.planDraftSummary ?? null;
+  });
+  const planConfirmSuppressed = useChatStore((s) => {
+    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    return !!tab?.planConfirmSuppressed;
+  });
   const turnMeta = useChatStore((s) => s.turnMeta);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const streamingLabel = preparePhase
@@ -1142,6 +1159,14 @@ export const ChatMessages = memo(function ChatMessages() {
             const turnIdx = windowStart + localIdx;
             const isLastTurn = localIdx === visibleTurns.length - 1;
             const isTurnComplete = !isLastTurn || !isStreaming;
+            const planReplyFallbackSummary =
+              isLastTurn
+              && isTurnComplete
+              && sessionAgent === "plan"
+              && planDraftFileReady
+              && !planConfirmSuppressed
+                ? planDraftSummary
+                : null;
             const lastAsst = [...turn.responses].reverse().find((r) => r.msg.type === "assistant");
             const turnMetaText = lastAsst ? metaMap.get(lastAsst.displayIdx) : undefined;
             const turnStamp = turnMeta[turnIdx];
@@ -1164,47 +1189,53 @@ export const ChatMessages = memo(function ChatMessages() {
                 {isLastTurn && showStreamingIndicator && (
                   <StreamingIndicator label={streamingLabel} />
                 )}
-                {turn.responses.map(({ msg, displayIdx }) => {
-                  const idx = committed.idxMap.get(msg) ?? messages.length;
-                  const isStreamingMsg = msg === streamingMessage;
-                  if (msg.type === "assistant") {
-                    return (
-                      <AssistantMessage
-                        key={`asst-${idx}`}
-                        msg={msg}
+                {(() => {
+                  const nodes: ReactNode[] = [];
+                  let assistantBatch: typeof turn.responses = [];
+
+                  const flushAssistant = () => {
+                    if (assistantBatch.length === 0) return;
+                    nodes.push(
+                      <TurnAssistantContent
+                        key={`turn-asst-${assistantBatch[0]!.displayIdx}`}
+                        responses={assistantBatch}
                         toolResultMap={toolResultMap}
-                        msgIndex={idx}
-                        isStreamingMsg={isStreamingMsg}
                         sessionId={chatSessionId ?? ""}
-                      />
+                        turnIndex={turnIdx}
+                        streamingMessage={streamingMessage}
+                        planReplyFallbackSummary={planReplyFallbackSummary}
+                      />,
                     );
+                    assistantBatch = [];
+                  };
+
+                  for (const item of turn.responses) {
+                    if (item.msg.type === "assistant") {
+                      assistantBatch.push(item);
+                      continue;
+                    }
+                    // tool_result carriers are invisible — do not split assistant batch.
+                    if (isHiddenToolResultCarrier(item.msg)) {
+                      continue;
+                    }
+                    flushAssistant();
+                    const { msg, displayIdx } = item;
+                    const idx = committed.idxMap.get(msg) ?? messages.length;
+                    if (msg.type === "action-status") {
+                      nodes.push(
+                        <ActionStatusCard key={`action-${displayIdx}`} msg={msg} />,
+                      );
+                    } else if (msg.type === "plan-decision") {
+                      nodes.push(
+                        <PlanDecisionCard key={`plan-decision-${displayIdx}`} msg={msg} />,
+                      );
+                    } else if (msg.type === "result" && msg.is_error) {
+                      nodes.push(<ResultMessage key={`result-${idx}`} msg={msg} />);
+                    }
                   }
-                  if (msg.type === "action-status") {
-                    return (
-                      <ActionStatusCard
-                        key={`action-${displayIdx}`}
-                        msg={msg}
-                      />
-                    );
-                  }
-                  if (msg.type === "plan-decision") {
-                    return (
-                      <PlanDecisionCard
-                        key={`plan-decision-${displayIdx}`}
-                        msg={msg}
-                      />
-                    );
-                  }
-                  // Created Plan renders inline after write/edit tools (AssistantBlockList).
-                  if (msg.type === "plan-artifact") {
-                    return null;
-                  }
-                  if (msg.type === "result") {
-                    if (!msg.is_error) return null;
-                    return <ResultMessage key={`result-${idx}`} msg={msg} />;
-                  }
-                  return null;
-                })}
+                  flushAssistant();
+                  return nodes;
+                })()}
                 <TurnFooter
                   turnIndex={turnIdx}
                   copyText={extractTurnCopyText(turn.responses)}

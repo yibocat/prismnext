@@ -1,9 +1,13 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronRightIcon, FileTextIcon } from "lucide-react";
+import { CheckIcon, ChevronRightIcon, FileTextIcon, XIcon } from "lucide-react";
 import { useChatStore } from "@/stores/chat-store";
 import { cn } from "@/lib/utils";
 import { isResearchPlanDraftPath } from "../../../../shared/research-plan";
+import {
+  TOOL_INLINE_LABEL_CLASS,
+  TOOL_INLINE_ROW_CLASS,
+} from "./tools/shared";
 
 type PlanArtifactCardProps = {
   /** Fallback path from the write/edit tool when store path is empty. */
@@ -12,8 +16,7 @@ type PlanArtifactCardProps = {
 };
 
 /**
- * Created Plan card — click opens the plan in RightArea (Plan tab).
- * Discarded (Deny) is non-interactive and has no chevron.
+ * Created Plan — compact inline row (opens Plan tab). Discarded = muted one-liner.
  */
 export function PlanArtifactCard({ pathFallback, className }: PlanArtifactCardProps) {
   const { t } = useTranslation();
@@ -27,8 +30,8 @@ export function PlanArtifactCard({ pathFallback, className }: PlanArtifactCardPr
   const discarded = !!artifact?.discarded;
   const title = artifact?.title?.trim() || null;
   const path = (!discarded && (artifact?.path?.trim() || pathFallback?.trim())) || "";
+  const displayName = title || path.split("/").pop() || path;
 
-  // Agent may invent a drafts/* filename — claim/migrate so Approve chrome appears.
   useEffect(() => {
     if (!path || discarded || !isResearchPlanDraftPath(path)) return;
     void refreshPlanDraftFromDisk();
@@ -36,20 +39,20 @@ export function PlanArtifactCard({ pathFallback, className }: PlanArtifactCardPr
 
   if (discarded) {
     return (
-      <div className={cn("my-1.5", className)}>
-        <div className="flex w-full items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
-          <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground" />
-          <div className="min-w-0 flex-1">
-            <p className="text-[length:var(--font-chat-meta)] text-muted-foreground">
-              {t("chat.planWorkflow.createdPlanDiscarded")}
-            </p>
-            {title ? (
-              <p className="truncate text-[length:var(--font-chat-meta)] font-medium text-muted-foreground">
-                {title}
-              </p>
-            ) : null}
-          </div>
-        </div>
+      <div
+        className={cn(
+          TOOL_INLINE_ROW_CLASS,
+          "py-1 text-[length:var(--font-chat-message)] cursor-default",
+          className,
+        )}
+      >
+        <XIcon className="size-3.5 shrink-0 text-muted-foreground/60" />
+        <span className="shrink-0 text-muted-foreground/55">plan</span>
+        <FileTextIcon className="size-3.5 shrink-0 opacity-60" />
+        <span className={cn(TOOL_INLINE_LABEL_CLASS, "text-muted-foreground/70")}>
+          {t("chat.planWorkflow.createdPlanDiscarded")}
+          {title ? ` · ${title}` : ""}
+        </span>
       </div>
     );
   }
@@ -57,26 +60,23 @@ export function PlanArtifactCard({ pathFallback, className }: PlanArtifactCardPr
   if (!path) return null;
 
   return (
-    <div className={cn("my-1.5", className)}>
-      <button
-        type="button"
-        className={cn(
-          "flex w-full items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-left",
-          "transition-colors hover:bg-muted/50",
-        )}
-        onClick={() => void openPlanFileInEditor(path)}
-      >
-        <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <p className="text-[length:var(--font-chat-meta)] text-muted-foreground">
-            {t("chat.planWorkflow.createdPlan")}
-          </p>
-          <p className="truncate text-[length:var(--font-chat-meta)] font-medium text-foreground">
-            {title || path.split("/").pop() || path}
-          </p>
-        </div>
-        <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
-      </button>
-    </div>
+    <button
+      type="button"
+      className={cn(
+        TOOL_INLINE_ROW_CLASS,
+        "w-full max-w-full py-1 text-left text-[length:var(--font-chat-message)] cursor-pointer",
+        className,
+      )}
+      onClick={() => void openPlanFileInEditor(path)}
+    >
+      <CheckIcon className="size-3.5 shrink-0 text-success" />
+      <span className="shrink-0 text-muted-foreground/55">plan</span>
+      <FileTextIcon className="size-3.5 shrink-0 opacity-70" />
+      <span className={cn(TOOL_INLINE_LABEL_CLASS)}>
+        {t("chat.planWorkflow.createdPlanInline")}
+        {displayName ? ` · ${displayName}` : ""}
+      </span>
+      <ChevronRightIcon className="ml-auto size-3.5 shrink-0 text-muted-foreground/60" />
+    </button>
   );
 }

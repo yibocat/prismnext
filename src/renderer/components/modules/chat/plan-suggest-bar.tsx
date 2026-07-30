@@ -4,6 +4,7 @@ import { ListTodoIcon, XIcon } from "lucide-react";
 import { useChatStore } from "@/stores/chat-store";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ComposerChromeCard } from "./composer-chrome-card";
 import { PLAN_SUGGEST_TIMEOUT_MS } from "../../../../shared/plan-suggest";
 import { CHAT_CHROME_BUTTON_TEXT } from "./worktree-selector";
 
@@ -50,12 +51,7 @@ export function PlanSuggestBar({ className }: { className?: string }) {
   const secondsLeft = Math.ceil(remainingMs / 1000);
 
   return (
-    <div
-      className={cn(
-        "mb-2 overflow-hidden rounded-lg border border-border bg-card",
-        className,
-      )}
-    >
+    <ComposerChromeCard className="overflow-hidden">
       <div className="flex items-start gap-2 px-3 py-2">
         <ListTodoIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
@@ -103,6 +99,6 @@ export function PlanSuggestBar({ className }: { className?: string }) {
           style={{ width: `${progress * 100}%` }}
         />
       </div>
-    </div>
+    </ComposerChromeCard>
   );
 }

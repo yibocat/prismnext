@@ -3,8 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Hint } from "@/components/ui/hint";
 import { ChatComposerCore } from "./chat-composer-core";
 import { ChatMessages } from "./chat-messages";
-import { PlanChrome } from "./plan-chrome";
-import { PlanSuggestBar } from "./plan-suggest-bar";
+import { ComposerChromeStack } from "./composer-chrome-stack";
 import { RestoreUndoBar } from "./restore-undo-bar";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -373,8 +372,7 @@ export function AiBar() {
           {toolbar}
           {/* Outside morph shell: compact capsule height is font-driven (h-[var(--chat-input-h)]); idle still needs Approve when draft is ready. */}
           <div data-chat-width className="pointer-events-auto w-full">
-            <PlanSuggestBar />
-            <PlanChrome />
+            <ComposerChromeStack />
           </div>
           <div
             ref={(node) => {

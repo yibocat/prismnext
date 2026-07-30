@@ -7,15 +7,19 @@ import { shouldShowPermissionGate } from "../../src/renderer/components/modules/
 import { shouldTrackProposedChange } from "../../src/renderer/components/modules/chat/tools/tool-meta";
 
 describe("permission gate", () => {
-  it("ask mode shows gate for edit and bash", () => {
+  it("ask mode shows gate for edit, bash, delete, and move", () => {
     expect(shouldShowPermissionGate("ask", "edit")).toBe(true);
     expect(shouldShowPermissionGate("ask", "bash")).toBe(true);
+    expect(shouldShowPermissionGate("ask", "delete")).toBe(true);
+    expect(shouldShowPermissionGate("ask", "move")).toBe(true);
     expect(shouldShowPermissionGate("ask", "read")).toBe(false);
   });
 
   it("edit_auto mode shows gate only for tools that prompt", () => {
     expect(shouldShowPermissionGate("edit_auto", "edit")).toBe(false);
     expect(shouldShowPermissionGate("edit_auto", "bash")).toBe(true);
+    expect(shouldShowPermissionGate("edit_auto", "delete")).toBe(true);
+    expect(shouldShowPermissionGate("edit_auto", "move")).toBe(true);
     expect(shouldPromptForPermission("edit_auto", "bash")).toBe(true);
     expect(shouldPromptForPermission("edit_auto", "write")).toBe(false);
   });
@@ -35,10 +39,10 @@ describe("permission gate", () => {
     expect(resolvePermissionAction("readonly", "bash")).toBe("deny");
   });
 
-  it("delete and move use inline gate on tool row, not composer", () => {
-    expect(shouldShowPermissionGate("ask", "delete")).toBe(false);
-    expect(shouldShowPermissionGate("edit_auto", "delete")).toBe(false);
-    expect(shouldShowPermissionGate("edit_auto", "move")).toBe(false);
+  it("delete and move defer to composer gate instead of inline tool buttons", () => {
+    expect(shouldShowPermissionGate("ask", "delete")).toBe(true);
+    expect(shouldShowPermissionGate("edit_auto", "delete")).toBe(true);
+    expect(shouldShowPermissionGate("edit_auto", "move")).toBe(true);
     expect(shouldPromptForPermission("edit_auto", "delete")).toBe(true);
     expect(shouldPromptForPermission("ask", "delete")).toBe(true);
     expect(resolvePermissionAction("readonly", "delete")).toBe("deny");

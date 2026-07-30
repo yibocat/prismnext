@@ -923,6 +923,31 @@ export function registerChatHandlers(): void {
     },
   );
 
+  ipcMain.handle(
+    "chat:readPendingQuestion",
+    async (_event, args: { sessionId: string }) => {
+      const sid = args.sessionId?.trim();
+      if (!sid) return { ok: false as const };
+      const qFile = path.join(getQuestionsBridgeRoot(), `${sid}.json`);
+      try {
+        if (!fs.existsSync(qFile)) return { ok: false as const };
+        const raw = JSON.parse(fs.readFileSync(qFile, "utf-8")) as {
+          question?: string;
+          options?: unknown;
+          multiSelect?: boolean;
+        };
+        return {
+          ok: true as const,
+          question: typeof raw.question === "string" ? raw.question : "",
+          options: Array.isArray(raw.options) ? raw.options : [],
+          multiSelect: raw.multiSelect === true,
+        };
+      } catch {
+        return { ok: false as const };
+      }
+    },
+  );
+
   // ─── Cancel ───
   ipcMain.handle(
     "chat:cancel",

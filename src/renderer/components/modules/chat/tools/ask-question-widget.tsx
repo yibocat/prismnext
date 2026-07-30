@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, memo } from "react";
+import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "@/stores/chat-store";
 import { useChatStore } from "@/stores/chat-store";
 import {
@@ -8,20 +9,23 @@ import {
   SendIcon,
   XIcon,
   ChevronDownIcon,
+  Loader2Icon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useQuestionPromptView } from "@/hooks/use-question-prompt";
 import {
-  StatusIcon,
   TOOL_PANEL_CLASS,
   TOOL_PANEL_HEADER_CLASS,
   TOOL_INLINE_ROW_CLASS,
   TOOL_INLINE_LABEL_CLASS,
   TOOL_EXPANDED_CONTENT_CLASS,
+  StatusIcon,
 } from "./shared";
-import { extractQuestionPrompt } from "@/lib/chat/normalize-question-options";
+import { CHAT_CHROME_BUTTON_TEXT } from "../worktree-selector";
+import { ComposerChromeCard } from "../composer-chrome-card";
 
 /** Extract the human-readable answer string from toolResult.content. */
 function parseAnswer(content: unknown): string {
@@ -51,44 +55,62 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
   toolUse,
   toolResult,
   toolName,
+  surface = "inline",
+  hostedInComposer = false,
 }: {
   toolUse: ContentBlock;
   toolResult?: ContentBlock;
   toolName: string;
+  surface?: "inline" | "composer";
+  hostedInComposer?: boolean;
 }) {
+  const { t } = useTranslation();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [customText, setCustomText] = useState("");
   const [useCustom, setUseCustom] = useState(false);
   const [sending, setSending] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [allowOpenText, setAllowOpenText] = useState(false);
   const customInputRef = useRef<HTMLInputElement>(null);
 
   const isStreaming = useChatStore((s) => s.isStreaming);
   const isError = toolResult?.is_error;
   const hasResult = toolResult?.content != null;
-
-  const { question, options, multiSelect: isMulti } = extractQuestionPrompt(toolUse.input);
-
-  // Derived from persistent toolResult — survives tab switches / restart
   const isAlreadyAnswered = hasResult && !isError;
-  const persistedAnswer = isAlreadyAnswered ? parseAnswer(toolResult!.content) : "";
   const isPrismQuestion = (toolUse.name || "").toLowerCase() === "question";
   const needsUserAnswer = !isAlreadyAnswered && (isPrismQuestion || (!isStreaming && toolResult)) && !isError;
 
-  // Reset ephemeral selection when a new question arrives
+  const { question, options, multiSelect: isMulti } = useQuestionPromptView(
+    toolUse,
+    needsUserAnswer,
+  );
+
+  const isComposer = surface === "composer";
+  const waitingForChoices = needsUserAnswer && !question && options.length === 0;
+
   useEffect(() => {
     setSelected(new Set());
     setCustomText("");
     setUseCustom(false);
     setSending(false);
+    setAllowOpenText(false);
   }, [toolUse.id]);
 
-  // No choices → open Other so the user can type immediately
   useEffect(() => {
-    if (!needsUserAnswer || options.length > 0) return;
+    if (!needsUserAnswer) return;
+    if (options.length > 0) {
+      setAllowOpenText(true);
+      return;
+    }
+    const id = window.setTimeout(() => setAllowOpenText(true), 1200);
+    return () => window.clearTimeout(id);
+  }, [needsUserAnswer, options.length, toolUse.id]);
+
+  useEffect(() => {
+    if (!needsUserAnswer || options.length > 0 || !allowOpenText) return;
     setUseCustom(true);
     requestAnimationFrame(() => customInputRef.current?.focus());
-  }, [toolUse.id, needsUserAnswer, options.length]);
+  }, [toolUse.id, needsUserAnswer, options.length, allowOpenText]);
 
   const selectedLabels = options
     .filter((o) => selected.has(o.key))
@@ -96,13 +118,11 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
   const selectedLabel = isMulti
     ? selectedLabels.join(", ")
     : selectedLabels[0] || customText;
-  const answerLabel = isAlreadyAnswered ? persistedAnswer : selectedLabel;
+  const answerLabel = isAlreadyAnswered ? parseAnswer(toolResult!.content) : selectedLabel;
 
   const hasSelection = isMulti
     ? selected.size > 0
     : selected.size === 1 || (useCustom && customText.trim().length > 0);
-
-  // ── Handlers ──
 
   const toggleOption = (key: string) => {
     if (!needsUserAnswer || sending) return;
@@ -111,8 +131,11 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
       const next = new Set(prev);
       if (isMulti) {
         next.has(key) ? next.delete(key) : next.add(key);
+      } else if (next.has(key)) {
+        next.clear();
       } else {
-        if (next.has(key)) { next.clear(); } else { next.clear(); next.add(key); }
+        next.clear();
+        next.add(key);
       }
       return next;
     });
@@ -121,7 +144,7 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
   const handleCustomCheck = (checked: boolean | "indeterminate") => {
     if (!needsUserAnswer || sending) return;
     setUseCustom(!!checked);
-    if (checked) { setSelected(new Set()); }
+    if (checked) setSelected(new Set());
     requestAnimationFrame(() => customInputRef.current?.focus());
   };
 
@@ -133,7 +156,6 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
     if (!ok) setSending(false);
   };
 
-  /** Dismiss the question and unblock the polling tool (writes Cancelled). */
   const handleCancel = async () => {
     if (!needsUserAnswer || sending) return;
     setSending(true);
@@ -141,9 +163,27 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
     if (!ok) setSending(false);
   };
 
-  // ── Render ──
+  if (!question && !options.length && waitingForChoices) {
+    if (isComposer) {
+      return (
+        <ComposerChromeCard className="flex items-center gap-2 px-3 py-2.5">
+          <Loader2Icon className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+          <span className="text-[length:var(--font-chat-meta)] text-muted-foreground">
+            {t("chat.questionPanel.loading")}
+          </span>
+        </ComposerChromeCard>
+      );
+    }
+    return (
+      <div className={cn(TOOL_INLINE_ROW_CLASS, "text-[length:var(--font-chat-message)] py-1")}>
+        <StatusIcon isLoading />
+        <span className="shrink-0 text-muted-foreground/55">{toolName}</span>
+        <MessageCircleQuestionIcon className="size-3.5 shrink-0 text-info" />
+        <span className="text-muted-foreground truncate">{t("chat.questionPanel.loading")}</span>
+      </div>
+    );
+  }
 
-  // Compact loading / empty-question fallback
   if (!question && !options.length) {
     return (
       <div className={cn(TOOL_INLINE_ROW_CLASS, "text-[length:var(--font-chat-message)] py-1")}>
@@ -151,13 +191,26 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
         <span className="shrink-0 text-muted-foreground/55">{toolName}</span>
         <MessageCircleQuestionIcon className="size-3.5 shrink-0 text-info" />
         <span className="text-muted-foreground truncate">
-          {!hasResult ? "Waiting for question…" : isError ? "Question failed" : "Question asked"}
+          {!hasResult ? t("chat.questionPanel.loading") : isError ? t("chat.questionPanel.failed") : t("chat.questionPanel.asked")}
         </span>
       </div>
     );
   }
 
-  // ── Answered state (collapsible inline row) ──
+  if (hostedInComposer && !isComposer && needsUserAnswer) {
+    return (
+      <div className={cn(TOOL_INLINE_ROW_CLASS, "text-[length:var(--font-chat-message)] py-1")}>
+        <StatusIcon isLoading={!hasResult} isError={!!isError} />
+        <span className="shrink-0 text-muted-foreground/55">{toolName}</span>
+        <MessageCircleQuestionIcon className="size-3.5 shrink-0 text-info" />
+        <span className="text-muted-foreground truncate">
+          {question ? question.slice(0, 72) : t("chat.questionPanel.title")}
+          {(question?.length ?? 0) > 72 ? "…" : ""}
+        </span>
+      </div>
+    );
+  }
+
   if (isAlreadyAnswered) {
     return (
       <div>
@@ -181,48 +234,163 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
         </button>
         {expanded && (
           <div className={cn(TOOL_EXPANDED_CONTENT_CLASS, "text-[length:var(--font-chat-message)] space-y-1.5")}>
-            {question && (
+            {question ? (
               <>
-                <span className="text-[length:var(--font-chat-meta)] text-muted-foreground/70">Question</span>
+                <span className="text-[length:var(--font-chat-meta)] text-muted-foreground">{t("chat.questionPanel.questionLabel")}</span>
                 <p className="text-foreground">{question}</p>
               </>
-            )}
-            <span className="text-[length:var(--font-chat-meta)] text-muted-foreground/70">Answer</span>
-            <p className="text-foreground font-medium">{answerLabel}</p>
+            ) : null}
+            <span className="text-[length:var(--font-chat-meta)] text-muted-foreground">{t("chat.questionPanel.answerLabel")}</span>
+            <p className="font-medium text-foreground">{answerLabel}</p>
           </div>
         )}
       </div>
     );
   }
 
-  // ── Active (awaiting answer) state ──
+  if (isComposer) {
+    return (
+      <ComposerChromeCard className="px-3 py-2.5">
+        <div className="flex items-start gap-2">
+          <MessageCircleQuestionIcon className="mt-0.5 size-3.5 shrink-0 text-primary" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[length:var(--font-chat-meta)] font-medium text-foreground">
+              {t("chat.questionPanel.title")}
+            </p>
+            {question ? (
+              <p className="mt-1 text-[length:var(--font-chat-message)] leading-relaxed text-foreground">
+                {question}
+              </p>
+            ) : null}
+            {isMulti ? (
+              <p className="mt-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
+                {t("chat.questionPanel.multiHint")}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        {options.length > 0 ? (
+          <div className="mt-2.5 flex flex-col gap-1">
+            {options.map((opt) => {
+              const isSelected = selected.has(opt.key);
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  disabled={sending}
+                  className={cn(
+                    "flex w-full items-start gap-2 rounded-md border px-2.5 py-2 text-left transition-colors",
+                    isSelected
+                      ? "border-primary bg-accent"
+                      : "border-border bg-background hover:bg-muted",
+                    sending && "pointer-events-none opacity-60",
+                  )}
+                  onClick={() => toggleOption(opt.key)}
+                >
+                  {isMulti ? (
+                    <Checkbox checked={isSelected} className="mt-0.5 size-3.5 pointer-events-none" tabIndex={-1} />
+                  ) : isSelected ? (
+                    <CheckCircleIcon className="mt-0.5 size-4 shrink-0 text-primary" />
+                  ) : (
+                    <CircleIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className={cn("block text-[length:var(--font-chat-message)]", isSelected && "font-medium")}>
+                      {opt.label}
+                    </span>
+                    {opt.description ? (
+                      <span className="mt-0.5 block text-[length:var(--font-chat-meta)] text-muted-foreground">
+                        {opt.description}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {allowOpenText ? (
+          <div className="mt-2">
+            {options.length > 0 ? (
+              <button
+                type="button"
+                disabled={sending}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md border px-2.5 py-2 text-left transition-colors",
+                  useCustom ? "border-border bg-muted" : "border-border bg-background hover:bg-muted",
+                  sending && "pointer-events-none opacity-60",
+                )}
+                onClick={() => handleCustomCheck(!useCustom)}
+              >
+                <Checkbox checked={useCustom} className="size-3.5 pointer-events-none" tabIndex={-1} />
+                <span className="text-[length:var(--font-chat-meta)] text-muted-foreground">
+                  {t("chat.questionPanel.other")}
+                </span>
+              </button>
+            ) : null}
+            {(useCustom || options.length === 0) ? (
+              <Input
+                ref={customInputRef}
+                type="text"
+                value={customText}
+                disabled={sending}
+                onChange={(e) => setCustomText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && hasSelection) void handleSend();
+                }}
+                placeholder={t("chat.questionPanel.placeholder")}
+                className="mt-1.5 h-9 text-[length:var(--font-chat-message)]"
+              />
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="mt-2.5 flex flex-wrap items-center justify-end gap-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className={cn(CHAT_CHROME_BUTTON_TEXT, "text-muted-foreground")}
+            disabled={sending}
+            onClick={() => void handleCancel()}
+          >
+            {t("chat.questionPanel.cancel")}
+          </Button>
+          <Button
+            type="button"
+            size="xs"
+            className={CHAT_CHROME_BUTTON_TEXT}
+            disabled={!hasSelection || sending}
+            onClick={() => void handleSend()}
+          >
+            {sending ? t("chat.questionPanel.sending") : t("chat.questionPanel.send")}
+          </Button>
+        </div>
+      </ComposerChromeCard>
+    );
+  }
+
   return (
     <div className={cn("text-[length:var(--font-code)]", TOOL_PANEL_CLASS)}>
-      {/* Header */}
       <div className={cn("flex items-center gap-2 px-3 py-2", TOOL_PANEL_HEADER_CLASS)}>
         <StatusIcon isLoading={!hasResult} isError={!!isError} />
-        <span className="text-muted-foreground text-[length:var(--font-chat-meta)] shrink-0">{toolName}</span>
+        <span className="shrink-0 text-[length:var(--font-chat-meta)] text-muted-foreground">{toolName}</span>
         <MessageCircleQuestionIcon className="size-3.5 text-info" />
         <span className="font-medium text-foreground/90">
-          {options.length > 0 ? "Choose an option" : "Your answer"}
+          {options.length > 0 ? t("chat.questionPanel.choose") : t("chat.questionPanel.yourAnswer")}
         </span>
-        {isMulti && (
-          <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">
-            ({selected.size > 0 ? `${selected.size} selected` : "multi"})
-          </span>
-        )}
       </div>
 
-      {/* Question */}
-      {question && (
+      {question ? (
         <div className="px-3 pt-2 pb-1">
-          <p className="text-foreground leading-relaxed text-[length:var(--font-chat-message)]">{question}</p>
+          <p className="text-[length:var(--font-chat-message)] leading-relaxed text-foreground">{question}</p>
         </div>
-      )}
+      ) : null}
 
-      {/* Options */}
-      {options.length > 0 && (
-        <div className="px-3 py-1.5 flex flex-col gap-px">
+      {options.length > 0 ? (
+        <div className="flex flex-col gap-px px-3 py-1.5">
           {options.map((opt) => {
             const isSelected = selected.has(opt.key);
             return (
@@ -232,32 +400,25 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
                 disabled={sending}
                 className={cn(
                   "flex items-center gap-2 rounded-md px-2 py-1.5 text-left transition-all",
-                  "hover:bg-muted/50 cursor-pointer",
-                  isSelected && "bg-info/8 ring-1 ring-inset ring-info/25",
-                  sending && "opacity-60 pointer-events-none",
+                  "cursor-pointer hover:bg-muted",
+                  isSelected && "bg-accent ring-1 ring-inset ring-border",
+                  sending && "pointer-events-none opacity-60",
                 )}
                 onClick={() => toggleOption(opt.key)}
               >
                 {isMulti ? (
                   <Checkbox checked={isSelected} className="size-3.5 pointer-events-none" tabIndex={-1} />
+                ) : isSelected ? (
+                  <CheckCircleIcon className="size-4 shrink-0 text-primary" />
                 ) : (
-                  isSelected ? (
-                    <CheckCircleIcon className="size-4 shrink-0 text-info" />
-                  ) : (
-                    <CircleIcon className="size-4 shrink-0 text-muted-foreground/40" />
-                  )
+                  <CircleIcon className="size-4 shrink-0 text-muted-foreground" />
                 )}
                 <span className="min-w-0 flex-1">
-                  <span
-                    className={cn(
-                      "block select-none",
-                      isSelected ? "text-foreground font-medium" : "text-foreground/80",
-                    )}
-                  >
+                  <span className={cn("block select-none", isSelected ? "font-medium text-foreground" : "text-foreground/80")}>
                     {opt.label}
                   </span>
                   {opt.description ? (
-                    <span className="mt-0.5 block select-none text-[length:var(--font-chat-meta)] text-muted-foreground">
+                    <span className="mt-0.5 block text-[length:var(--font-chat-meta)] text-muted-foreground">
                       {opt.description}
                     </span>
                   ) : null}
@@ -266,60 +427,50 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
             );
           })}
         </div>
-      )}
+      ) : null}
 
-      {/* Custom answer */}
-      <div className="px-3 pb-1.5">
-        <div
-          className={cn(
-            "flex items-center gap-2 rounded-md px-2 py-1.5 transition-all",
-            "hover:bg-muted/50 cursor-pointer",
-            useCustom && "bg-muted/20",
-            sending && "opacity-60 pointer-events-none",
-          )}
-          onClick={() => handleCustomCheck(!useCustom)}
-        >
-          <Checkbox checked={useCustom} className="size-3.5 pointer-events-none" tabIndex={-1} />
-          <span className="text-muted-foreground">
-            {options.length > 0 ? "Other — type your own" : "Type your answer"}
-          </span>
+      {allowOpenText ? (
+        <div className="px-3 pb-1.5">
+          {options.length > 0 ? (
+            <div
+              className={cn(
+                "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-all hover:bg-muted",
+                useCustom && "bg-muted",
+                sending && "pointer-events-none opacity-60",
+              )}
+              onClick={() => handleCustomCheck(!useCustom)}
+            >
+              <Checkbox checked={useCustom} className="size-3.5 pointer-events-none" tabIndex={-1} />
+              <span className="text-muted-foreground">{t("chat.questionPanel.other")}</span>
+            </div>
+          ) : null}
+          {(useCustom || options.length === 0) ? (
+            <div className={options.length > 0 ? "mt-1 ml-8" : undefined}>
+              <Input
+                ref={customInputRef}
+                type="text"
+                value={customText}
+                disabled={sending}
+                onChange={(e) => setCustomText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && hasSelection) void handleSend();
+                }}
+                placeholder={t("chat.questionPanel.placeholder")}
+                className="h-8 text-[length:var(--font-code)]"
+              />
+            </div>
+          ) : null}
         </div>
-        {useCustom && (
-          <div className="mt-1 ml-8">
-            <Input
-              ref={customInputRef}
-              type="text"
-              value={customText}
-              disabled={sending}
-              onChange={(e) => setCustomText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && hasSelection) void handleSend(); }}
-              placeholder="Type your answer…"
-              className="h-8 text-[length:var(--font-code)]"
-            />
-          </div>
-        )}
-      </div>
+      ) : null}
 
-      {/* Action bar */}
       <div className={cn("flex items-center justify-end gap-1.5 px-3 py-1.5", TOOL_PANEL_HEADER_CLASS)}>
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          disabled={sending}
-          onClick={() => void handleCancel()}
-        >
+        <Button type="button" variant="ghost" size="xs" disabled={sending} onClick={() => void handleCancel()}>
           <XIcon className="size-3" />
-          Cancel
+          {t("chat.questionPanel.cancel")}
         </Button>
-        <Button
-          type="button"
-          size="xs"
-          disabled={!hasSelection || sending}
-          onClick={() => void handleSend()}
-        >
+        <Button type="button" size="xs" disabled={!hasSelection || sending} onClick={() => void handleSend()}>
           <SendIcon className="size-3" />
-          {sending ? "Sending…" : "Send"}
+          {sending ? t("chat.questionPanel.sending") : t("chat.questionPanel.send")}
         </Button>
       </div>
     </div>

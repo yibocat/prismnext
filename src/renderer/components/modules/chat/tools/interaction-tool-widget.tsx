@@ -181,10 +181,12 @@ export const InteractionToolWidget = memo(function InteractionToolWidget({
   toolUse,
   toolResult,
   toolName,
+  nestedInActivity,
 }: {
   toolUse: ContentBlock;
   toolResult?: ContentBlock;
   toolName: string;
+  nestedInActivity?: boolean;
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -216,7 +218,8 @@ export const InteractionToolWidget = memo(function InteractionToolWidget({
       : undefined;
 
   const showPeek =
-    !isLoading
+    !nestedInActivity
+    && !isLoading
     && !isError
     && !!spec?.id
     && toolName !== "interaction-list";

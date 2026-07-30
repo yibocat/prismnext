@@ -1,10 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ShieldIcon,
   TerminalIcon,
   FileEditIcon,
   FileDiffIcon,
+  ChevronDownIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Hint } from "@/components/ui/hint";
@@ -15,12 +16,13 @@ import { useSettingsStore } from "@/stores/settings-store";
 import {
   resolvePermissionMode,
   shouldPromptForPermission,
-  type PermissionMode,
+  extractPermissionToolName,
 } from "@shared/permission-modes";
 import { finalizePermissionAllow, finalizePermissionDeny } from "@/stores/permission-actions";
 import { isBashToolName } from "@/lib/terminal/ai-bridge";
 import { getToolMeta, extractPatchTargetPaths } from "./tools/tool-meta";
 import { param } from "./tools/shared";
+import { ComposerChromeCard } from "./composer-chrome-card";
 
 function findToolUseBlock(tabId: string, toolCallId?: string): ContentBlock | undefined {
   if (!toolCallId) return undefined;
@@ -55,11 +57,19 @@ export function shouldShowPermissionGate(
 ): boolean {
   const mode = resolvePermissionMode(permissionMode);
   const meta = getToolMeta(toolName);
-  if (meta.confirmUx === "none" || meta.confirmUx === "inline") return false;
+  if (meta.confirmUx === "none") return false;
   if (mode === "ask") return true;
   if (mode === "edit_auto") return shouldPromptForPermission(mode, toolName);
-  // Full auto / readonly: never show composer gate (readonly denies in main).
   return false;
+}
+
+/** Tool row should defer Allow/Deny to the composer permission card. */
+export function isComposerHostedPermission(
+  permissionMode: string | undefined,
+  toolName: string,
+  isAwaitingPermission: boolean,
+): boolean {
+  return isAwaitingPermission && shouldShowPermissionGate(permissionMode, toolName);
 }
 
 function pickActivePermission(
@@ -82,6 +92,25 @@ function permissionSummary(
   const input = toolUse?.input ?? {};
   const meta = getToolMeta(n);
   const awaiting = i18n.t("dialogs.permission.awaiting");
+
+  if (n === "delete") {
+    const path = param(input, "file_path", "filePath") || param(input, "path") || "";
+    return {
+      label: i18n.t("dialogs.permission.deleteFile"),
+      detail: path ? basename(path) : truncate(permission.message, 80) || awaiting,
+    };
+  }
+
+  if (n === "move") {
+    const src = param(input, "source_path", "sourcePath") || param(input, "path") || "";
+    const dst = param(input, "destination_path", "destinationPath") || "";
+    return {
+      label: i18n.t("dialogs.permission.moveFile"),
+      detail: dst
+        ? `${basename(src)} → ${basename(dst)}`
+        : basename(src) || truncate(permission.message, 80) || awaiting,
+    };
+  }
 
   if (meta.confirmUx === "command") {
     const command =
@@ -128,17 +157,6 @@ function permissionSummary(
         ? ` · ${delta >= 0 ? "+" : ""}${delta} chars`
         : "";
 
-    if (n === "delete") {
-      return { label: i18n.t("dialogs.permission.deleteFile"), detail: fileName };
-    }
-    if (n === "move") {
-      const src = param(input, "source_path", "sourcePath") || filePath;
-      const dst = param(input, "destination_path", "destinationPath") || "";
-      return {
-        label: i18n.t("dialogs.permission.moveFile"),
-        detail: dst ? `${basename(src)} → ${basename(dst)}` : basename(src),
-      };
-    }
     return {
       label: n.startsWith("write")
         ? i18n.t("dialogs.permission.writeFile")
@@ -153,6 +171,77 @@ function permissionSummary(
   };
 }
 
+/** Compact expand body: full path + short content peek. Nothing else. */
+function permissionExpandPeek(
+  permission: PendingPermission,
+  toolUse: ContentBlock | undefined,
+  toolName: string,
+): { path: string; preview: string } {
+  const n = toolName.toLowerCase();
+  const input = toolUse?.input ?? {};
+  const meta = getToolMeta(n);
+
+  if (n === "delete") {
+    const path =
+      param(input, "file_path", "filePath")
+      || param(input, "path")
+      || permission.message.trim();
+    return { path, preview: "" };
+  }
+
+  if (n === "move") {
+    const src =
+      param(input, "source_path", "sourcePath")
+      || param(input, "source", "src")
+      || param(input, "path")
+      || "";
+    const dst =
+      param(input, "destination_path", "destinationPath")
+      || param(input, "destination", "dst")
+      || "";
+    if (src || dst) return { path: dst ? `${src} → ${dst}` : src, preview: "" };
+    return { path: permission.message.trim(), preview: "" };
+  }
+
+  if (meta.confirmUx === "command") {
+    const command =
+      param(input, "command")
+      || (input as Record<string, unknown>)._title as string
+      || toolUse?.title
+      || permission.message
+      || "";
+    return { path: "", preview: truncate(command, 220) };
+  }
+
+  if (meta.confirmUx === "patch") {
+    const paths = extractPatchTargetPaths(input);
+    const path =
+      paths.length === 1
+        ? paths[0]!
+        : paths.length > 1
+          ? paths.map(basename).join(", ")
+          : param(input, "file_path", "filePath") || param(input, "path") || "";
+    const patch = param(input, "patch") || param(input, "content") || "";
+    return { path, preview: truncate(patch, 220) };
+  }
+
+  if (meta.confirmUx === "diff") {
+    const path =
+      param(input, "file_path", "filePath")
+      || param(input, "path")
+      || "";
+    const newStr =
+      param(input, "new_string", "newString")
+      ?? param(input, "content")
+      ?? "";
+    const oldStr = param(input, "old_string", "oldString") ?? "";
+    const preview = truncate(newStr || oldStr, 220);
+    return { path, preview };
+  }
+
+  return { path: "", preview: truncate(permission.message, 220) };
+}
+
 function PermissionIcon({ toolName }: { toolName: string }) {
   const n = toolName.toLowerCase();
   if (n === "bash") return <TerminalIcon className="size-3.5 shrink-0 text-warning" />;
@@ -165,42 +254,75 @@ function PermissionIcon({ toolName }: { toolName: string }) {
   return <ShieldIcon className="size-3.5 shrink-0 text-primary" />;
 }
 
-export function usePermissionGateOpen(): boolean {
-  const activeTabId = useChatStore((s) => s.activeTabId);
-  const permissionMode = useSettingsStore((s) => s.settings.permissionMode);
-  const permission = usePermissionStore((s) =>
-    pickActivePermission(activeTabId, s.permissions),
-  );
-  if (!permission) return false;
-  const toolName = permission.toolName || "";
-  return shouldShowPermissionGate(permissionMode, toolName);
-}
-
-/** @deprecated Use usePermissionGateOpen */
-export const usePermissionAskOpen = usePermissionGateOpen;
-
-export function PermissionGatePanel() {
-  const { t, i18n: i18nInstance } = useTranslation();
+function useActivePermissionGate() {
   const activeTabId = useChatStore((s) => s.activeTabId);
   const streamTick = useChatStore((s) => s.streamTick);
   const permissionMode = useSettingsStore((s) => s.settings.permissionMode);
   const permission = usePermissionStore((s) =>
     pickActivePermission(activeTabId, s.permissions),
   );
-  const [resolving, setResolving] = useState(false);
 
   const toolUse = useMemo(
     () => (permission ? findToolUseBlock(activeTabId, permission.toolCallId) : undefined),
     [activeTabId, permission, streamTick],
   );
 
-  const toolName = permission?.toolName || toolUse?.name || "";
-  const show = !!permission && shouldShowPermissionGate(permissionMode, toolName);
+  const toolName = useMemo(() => {
+    const fromPerm = permission?.toolName?.trim();
+    if (fromPerm) return fromPerm.toLowerCase();
+    const fromBlock = toolUse?.name?.trim();
+    if (fromBlock) return fromBlock.toLowerCase();
+    if (permission) {
+      return extractPermissionToolName({
+        message: permission.message,
+        toolName: permission.toolName,
+      });
+    }
+    return "";
+  }, [permission, toolUse]);
 
+  const show = !!permission && shouldShowPermissionGate(permissionMode, toolName);
   const summary = useMemo(
-    () => (permission ? permissionSummary(permission, toolUse, toolName) : null),
-    [permission, toolUse, toolName, i18nInstance.language],
+    () => (permission && show ? permissionSummary(permission, toolUse, toolName) : null),
+    [permission, show, toolUse, toolName, i18n.language],
   );
+
+  return { permission, toolName, show, summary, toolUse };
+}
+
+export function usePermissionGateOpen(): boolean {
+  return useActivePermissionGate().show;
+}
+
+export function usePermissionGatePeek(): string | null {
+  const { show, summary } = useActivePermissionGate();
+  if (!show || !summary) return null;
+  const detail = truncate(summary.detail, 48);
+  return detail ? `${summary.label} · ${detail}` : summary.label;
+}
+
+/** @deprecated Use usePermissionGateOpen */
+export const usePermissionAskOpen = usePermissionGateOpen;
+
+/**
+ * One-line permission card in the composer chrome stack.
+ * Whole card toggles expand; expanded shows path + short content peek only.
+ */
+export function PermissionGatePanel() {
+  const { t } = useTranslation();
+  const activeTabId = useChatStore((s) => s.activeTabId);
+  const { permission, toolName, show, summary, toolUse } = useActivePermissionGate();
+  const [resolving, setResolving] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const peek = useMemo(
+    () => (permission ? permissionExpandPeek(permission, toolUse, toolName) : null),
+    [permission, toolUse, toolName],
+  );
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [permission?.id]);
 
   const allow = useCallback(async (always = false) => {
     if (!permission || resolving) return;
@@ -233,77 +355,106 @@ export function PermissionGatePanel() {
     }
   }, [permission, resolving, activeTabId, toolName]);
 
-  if (!show || !permission || !summary) return null;
+  if (!show || !permission || !summary || !peek) return null;
 
-  const mode = resolvePermissionMode(permissionMode) as PermissionMode;
   const alwaysLabel = toolName
     ? isBashToolName(toolName) || toolName === "experiment-run"
       ? t("dialogs.permission.alwaysBash")
       : t("dialogs.permission.alwaysTool", { tool: toolName })
     : t("dialogs.permission.alwaysGeneric");
 
+  const hasExpandBody = !!(peek.path || peek.preview);
+
   return (
-    <div
+    <ComposerChromeCard
       className={cn(
-        "flex w-full items-center gap-2 rounded-t-lg border border-b-0 border-border bg-card px-3 py-2",
-        "text-[length:var(--font-chat-meta)]",
-        "animate-in slide-in-from-bottom-2 fade-in duration-200",
+        "overflow-hidden transition-colors",
+        hasExpandBody && "cursor-pointer hover:bg-muted",
       )}
+      onClick={() => {
+        if (hasExpandBody) setExpanded((v) => !v);
+      }}
     >
-      <PermissionIcon toolName={toolName} />
-
-      <p className="min-w-0 flex-1 truncate">
-        <span className="font-medium text-foreground">{summary.label}</span>
-        <span className="text-muted-foreground"> · {summary.detail}</span>
-        {mode === "edit_auto" && (
-          <span className="text-muted-foreground/70"> · {t("dialogs.permission.editAuto")}</span>
-        )}
-        {mode === "auto" && (
-          <span className="text-muted-foreground/70"> · {t("dialogs.permission.autoMode")}</span>
-        )}
-      </p>
-
-      <div className="flex shrink-0 items-center gap-0.5">
-        <button
-          type="button"
-          className={cn(
-            "rounded px-2 py-1 text-muted-foreground transition-colors",
-            "hover:bg-accent hover:text-accent-foreground",
-            "disabled:pointer-events-none disabled:opacity-40",
-          )}
-          onClick={deny}
-          disabled={resolving}
+      <div className="flex items-center gap-1.5 px-2.5 py-1.5 text-[length:var(--font-chat-meta)]">
+        <PermissionIcon toolName={toolName} />
+        <span className="min-w-0 flex-1 truncate text-left">
+          <span className="font-medium text-foreground">{summary.label}</span>
+          <span className="text-muted-foreground"> · {summary.detail}</span>
+        </span>
+        {hasExpandBody ? (
+          <ChevronDownIcon
+            className={cn(
+              "size-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
+              expanded ? "rotate-0" : "-rotate-90",
+            )}
+            aria-hidden
+          />
+        ) : null}
+        <div
+          className="flex shrink-0 items-center gap-0.5"
+          onClick={(e) => e.stopPropagation()}
         >
-          {t("dialogs.permission.deny")}
-        </button>
-        <Hint label={alwaysLabel}>
           <button
             type="button"
             className={cn(
-              "rounded px-2 py-1 text-muted-foreground transition-colors",
+              "rounded px-1.5 py-0.5 text-muted-foreground transition-colors",
               "hover:bg-accent hover:text-accent-foreground",
               "disabled:pointer-events-none disabled:opacity-40",
             )}
-            onClick={() => void allow(true)}
-            disabled={resolving || !toolName}
+            onClick={deny}
+            disabled={resolving}
           >
-            {t("dialogs.permission.always")}
+            {t("dialogs.permission.deny")}
           </button>
-        </Hint>
-        <button
-          type="button"
-          className={cn(
-            "rounded px-2 py-1 font-medium text-primary transition-colors",
-            "hover:bg-accent hover:text-accent-foreground",
-            "disabled:pointer-events-none disabled:opacity-40",
-          )}
-          onClick={() => void allow(false)}
-          disabled={resolving}
-        >
-          {t("dialogs.permission.allow")}
-        </button>
+          <button
+            type="button"
+            className={cn(
+              "rounded px-1.5 py-0.5 font-medium text-primary transition-colors",
+              "hover:bg-accent hover:text-accent-foreground",
+              "disabled:pointer-events-none disabled:opacity-40",
+            )}
+            onClick={() => void allow(false)}
+            disabled={resolving}
+          >
+            {t("dialogs.permission.allow")}
+          </button>
+        </div>
       </div>
-    </div>
+
+      {expanded && hasExpandBody ? (
+        <div className="space-y-1.5 border-t border-border px-2.5 py-2">
+          {peek.path ? (
+            <p className="break-all font-mono text-[length:var(--font-code)] text-muted-foreground">
+              {peek.path}
+            </p>
+          ) : null}
+          {peek.preview ? (
+            <p className="line-clamp-3 break-all font-mono text-[length:var(--font-code)] text-muted-foreground">
+              {peek.preview}
+            </p>
+          ) : null}
+          <div
+            className="flex justify-end"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Hint label={alwaysLabel}>
+              <button
+                type="button"
+                className={cn(
+                  "rounded px-2 py-0.5 text-[length:var(--font-chat-meta)] text-muted-foreground transition-colors",
+                  "hover:bg-accent hover:text-accent-foreground",
+                  "disabled:pointer-events-none disabled:opacity-40",
+                )}
+                onClick={() => void allow(true)}
+                disabled={resolving || !toolName}
+              >
+                {t("dialogs.permission.always")}
+              </button>
+            </Hint>
+          </div>
+        </div>
+      ) : null}
+    </ComposerChromeCard>
   );
 }
 

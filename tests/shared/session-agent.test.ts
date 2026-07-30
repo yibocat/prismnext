@@ -141,6 +141,31 @@ describe("session-agent (OpenCode-aligned Plan)", () => {
       }),
     ).toBe("allow");
   });
+
+  it("Plan denies further tools once draft pending (await Approve & Build)", () => {
+    expect(
+      resolveEffectivePermissionRule("auto", "plan", "read", {
+        projectRoot: "/proj",
+        sessionId: "ses_pending",
+        planDraftPending: true,
+      }),
+    ).toBe("deny");
+    expect(
+      resolveEffectivePermissionRule("auto", "plan", "grep", {
+        projectRoot: "/proj",
+        sessionId: "ses_pending",
+        planDraftPending: true,
+      }),
+    ).toBe("deny");
+    expect(
+      resolveEffectivePermissionRule("auto", "plan", "edit", {
+        filePath: sessionDraftPlanRel("ses_pending"),
+        projectRoot: "/proj",
+        sessionId: "ses_pending",
+        planDraftPending: true,
+      }),
+    ).toBe("allow");
+  });
 });
 
 describe("ensurePlanAgentPermissionConfig", () => {

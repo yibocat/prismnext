@@ -1467,6 +1467,14 @@
     }
   },
   "chat": {
+    "activity": {
+      "working": "Working…",
+      "thinking": "Thinking…",
+      "thoughtFor": "Thought for {{duration}}",
+      "workedFor": "Worked for {{duration}}",
+      "workedForWithTools": "Worked for {{duration}} · {{count}} tools",
+      "workedForWithTools_one": "Worked for {{duration}} · {{count}} tool"
+    },
     "artifact": {
       "openInFiles": "Open in Files",
       "copyPath": "Copy path",
@@ -1518,7 +1526,29 @@
       "zoomOut": "Zoom out",
       "placeholder": "@ expert, file, paper, or experiment · / commands, skills, MCP",
       "archivedReadonly": "This conversation is archived. Restore it to continue chatting.",
-      "stop": "Stop"
+      "stop": "Stop",
+      "taskPlanTitle": "Task plan",
+      "taskPlanInProgress": "In progress",
+      "experimentRunTitle": "Experiment run",
+      "experimentRunLive": "Running — open for live output",
+      "experimentRunOpen": "Open",
+      "permissionExpand": "Show permission details"
+    },
+    "questionPanel": {
+      "title": "Agent needs your input",
+      "loading": "Loading question…",
+      "failed": "Question failed",
+      "asked": "Question asked",
+      "choose": "Choose an option",
+      "yourAnswer": "Your answer",
+      "multiHint": "You can select more than one option.",
+      "other": "Other — type your own",
+      "placeholder": "Type your answer…",
+      "cancel": "Cancel",
+      "send": "Send",
+      "sending": "Sending…",
+      "questionLabel": "Question",
+      "answerLabel": "Answer"
     },
     "toolbar": {
       "local": "Local",
@@ -1602,6 +1632,7 @@
       "discardAndBuild": "Reject",
       "cancel": "Cancel",
       "createdPlan": "Created Plan",
+      "createdPlanInline": "Plan created",
       "createdPlanDiscarded": "Plan discarded",
       "draftDiscardedGone": "That plan draft was discarded and is no longer on disk.",
       "planFileMissing": "Plan file is missing — it may have been deleted.",
@@ -2047,7 +2078,16 @@
       "autoMode": "Auto mode",
       "alwaysBash": "Always allow similar commands (prefix match)",
       "alwaysTool": "Always allow {{tool}} without asking again",
-      "alwaysGeneric": "Always allow this tool"
+      "alwaysGeneric": "Always allow this tool",
+      "detailPath": "Path",
+      "detailFile": "File",
+      "detailCommand": "Command",
+      "detailSource": "Source",
+      "detailDestination": "Destination",
+      "detailTool": "Tool",
+      "detailMessage": "Details",
+      "detailChanges": "Changes",
+      "editAutoHint": "File edits run automatically in Edit auto mode; you are only prompted for shell and destructive actions."
     },
     "worktree": {
       "discardTitle": "Discard unmerged work?",

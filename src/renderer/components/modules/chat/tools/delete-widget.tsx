@@ -2,7 +2,6 @@ import { memo, useMemo, useState } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { Trash2Icon, ChevronDownIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import {
   StatusIcon,
   TOOL_PANEL_CLASS,
@@ -14,6 +13,8 @@ import {
 } from "./shared";
 import { ChatFileLink } from "../chat-file-link";
 import { useToolPermission } from "./use-tool-permission";
+import { isComposerHostedPermission } from "../permission-gate-panel";
+import { useSettingsStore } from "@/stores/settings-store";
 
 export const DeleteWidget = memo(function DeleteWidget({
   toolUse,
@@ -25,9 +26,15 @@ export const DeleteWidget = memo(function DeleteWidget({
   toolName: string;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const { isAwaitingPermission, isToolDenied, allow, deny, resolving } = useToolPermission(
+  const permissionMode = useSettingsStore((s) => s.settings.permissionMode);
+  const { isAwaitingPermission, isToolDenied } = useToolPermission(
     toolUse.id || "",
     toolName,
+  );
+  const composerHosted = isComposerHostedPermission(
+    permissionMode,
+    toolName,
+    isAwaitingPermission,
   );
   const filePath =
     param(toolUse.input, "file_path", "filePath")
@@ -52,6 +59,28 @@ export const DeleteWidget = memo(function DeleteWidget({
     if (filePath && resultText.startsWith("Failed")) return `Failed: ${basenamePath(filePath)}`;
     return resultText;
   }, [resultText, filePath]);
+
+  if (composerHosted) {
+    return (
+      <button
+        type="button"
+        className={cn(
+          TOOL_INLINE_ROW_CLASS,
+          "w-full cursor-default text-left text-[length:var(--font-chat-message)] py-1",
+        )}
+      >
+        <StatusIcon isLoading={false} isError={false} />
+        <span className="shrink-0 text-muted-foreground/55">{toolName}</span>
+        <Trash2Icon className="size-3.5 shrink-0 text-destructive" />
+        <span className={TOOL_INLINE_LABEL_CLASS}>
+          {filePath ? <ChatFileLink path={filePath} /> : fileName}
+        </span>
+        <span className="text-primary shrink-0 text-[length:var(--font-chat-meta)]">
+          Confirm above
+        </span>
+      </button>
+    );
+  }
 
   if (isDone || isToolDenied || (isError && !isAwaitingPermission)) {
     const summary = isToolDenied ? "Denied" : isError ? "Failed" : "Deleted";
@@ -122,19 +151,6 @@ export const DeleteWidget = memo(function DeleteWidget({
           "Delete this file?"
         )}
       </p>
-      {isAwaitingPermission && (
-        <div
-          className="flex shrink-0 items-center gap-0.5"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Button type="button" variant="ghost" size="xs" disabled={resolving} onClick={() => void deny()}>
-            Reject
-          </Button>
-          <Button type="button" size="xs" disabled={resolving} onClick={() => void allow()}>
-            {resolving ? "…" : "Accept"}
-          </Button>
-        </div>
-      )}
     </div>
   );
 });

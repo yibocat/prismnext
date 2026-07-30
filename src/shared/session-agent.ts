@@ -53,6 +53,8 @@ export type PlanPermissionContext = {
   projectRoot?: string | null;
   /** Owning chat session — hard-binds Plan draft writes to drafts/<sessionId>.md */
   sessionId?: string | null;
+  /** Set by main process when a non-empty draft awaits Approve & Build. */
+  planDraftPending?: boolean;
   /** @deprecated unused — kept so call sites compile; bash follows Permission Mode */
   bashCommand?: string | null;
 };
@@ -92,17 +94,18 @@ export function researchBriefEditRedirectNote(): string {
   );
 }
 
+/** Draft on disk is ready — user must Approve & Build; block further Plan-turn tools. */
+function planDraftAwaitingApproval(ctx?: PlanPermissionContext): boolean {
+  return ctx?.planDraftPending === true;
+}
+
 /** Absolute Plan overrides; undefined → fall through to Permission Mode. */
 export function getPlanPermissionOverride(
   toolName: string,
   ctx?: PlanPermissionContext,
 ): OpenCodePermissionRule | undefined {
   const key = toolName.toLowerCase();
-
-  // OpenCode plan: bash inherits allow — do not override here.
-  if (key.includes("bash") || key === "shell" || key === "terminal" || key === "execute") {
-    return undefined;
-  }
+  const draftAwaiting = planDraftAwaitingApproval(ctx);
 
   if (PLAN_EDIT_TOOLS.has(key)) {
     // Path unknown yet → ask (do not hard-deny; OpenCode also gates by path).
@@ -126,6 +129,16 @@ export function getPlanPermissionOverride(
     if (isResearchPlanDraftPath(ctx.filePath, ctx.projectRoot)) return "allow";
     if (isResearchPlansDirPath(ctx.filePath, ctx.projectRoot)) return "allow";
     return "deny";
+  }
+
+  // Draft ready — only canonical draft edits above; deny research/execution tools.
+  if (draftAwaiting) {
+    return "deny";
+  }
+
+  // OpenCode plan: bash inherits allow — do not override here.
+  if (key.includes("bash") || key === "shell" || key === "terminal" || key === "execute") {
+    return undefined;
   }
 
   if (PLAN_EXECUTION_DENY.has(key)) return "deny";

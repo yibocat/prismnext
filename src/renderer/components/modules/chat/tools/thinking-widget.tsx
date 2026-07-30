@@ -8,6 +8,7 @@ import {
   type ViewportAnchorCapture,
 } from "@/lib/chat/preserve-viewport-anchor";
 import { TOOL_EXPANDED_CONTENT_CLASS } from "./shared";
+import { MarkdownRenderer } from "../markdown-renderer";
 
 // ─── LocalStorage persistence ───
 
@@ -25,18 +26,59 @@ function saveThinkingState(key: string, open: boolean): void {
 
 // ─── Thinking Widget ───
 
+/** Tighter than assistant prose — thought is secondary chrome. */
+const THINKING_MARKDOWN_TYPOGRAPHY = cn(
+  "[&>div]:leading-normal",
+  "[&_p]:my-0.5 [&_p]:leading-normal",
+  "[&_ul]:my-0.5 [&_ol]:my-0.5",
+  "[&_li]:my-0 [&_li]:leading-normal",
+);
+
+function ThinkingMarkdownBody({
+  thinking,
+  isStreaming,
+  sessionId,
+  className,
+}: {
+  thinking: string;
+  isStreaming: boolean;
+  sessionId?: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "min-w-0 max-w-full overflow-hidden text-muted-foreground/75 [&>div]:text-muted-foreground/75",
+        THINKING_MARKDOWN_TYPOGRAPHY,
+        className,
+      )}
+    >
+      <MarkdownRenderer
+        content={thinking}
+        isAnimating={isStreaming}
+        sessionId={sessionId}
+      />
+    </div>
+  );
+}
+
 export function ThinkingWidget({
   thinking,
   duration,
   persistKey,
+  sessionId,
   isStreamingMsg,
   isProgress,
+  variant = "standalone",
 }: {
   thinking: string;
   duration?: number;
   persistKey?: string;
+  sessionId?: string;
   isStreamingMsg?: boolean;
   isProgress?: boolean;
+  /** Inside ActivityFold — no extra fold chrome. */
+  variant?: "standalone" | "nested";
 }) {
   const [expanded, setExpanded] = useState(
     () => isProgress ? false : (persistKey ? getThinkingState(persistKey) : false),
@@ -87,12 +129,62 @@ export function ThinkingWidget({
     ? duration
     : (elapsed > 0 ? Math.round(elapsed * 10) / 10 : Math.max(0.1, Math.round(thinking.length / 5) / 10));
 
+  if (variant === "nested") {
+    if (isProgress) {
+      return (
+        <div className="py-0.5">
+          <button
+            type="button"
+            className="flex items-center gap-2 py-0.5 text-[length:var(--font-chat-message)] text-muted-foreground/65"
+            disabled
+          >
+            <BrainIcon className="size-3 shrink-0 opacity-70" />
+            <span>Initialization</span>
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        <button
+          ref={toggleRef}
+          type="button"
+          className="flex w-full items-center gap-2 py-0 text-left text-[length:var(--font-chat-message)] text-muted-foreground/65 hover:text-muted-foreground/80 transition-colors"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={toggleExpanded}
+        >
+          <BrainIcon className="size-3 shrink-0 opacity-70" />
+          <span className="tabular-nums">
+            {isStreaming
+              ? (showTimer ? `Thinking… ${fmt(elapsed)}s` : "Thinking…")
+              : `Thought for ${fmt(frozenDuration)}s`}
+          </span>
+          <ChevronDownIcon
+            className={cn(
+              "size-3 shrink-0 text-muted-foreground/70 transition-transform duration-150",
+              expanded ? "rotate-0" : "-rotate-90",
+            )}
+          />
+        </button>
+        {expanded ? (
+          <ThinkingMarkdownBody
+            thinking={thinking}
+            isStreaming={isStreaming}
+            sessionId={sessionId}
+            className="pt-0 pb-0.5"
+          />
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div>
       <button
         ref={toggleRef}
         type="button"
-        className="flex items-center gap-2 py-1 text-[length:var(--font-chat-message)] text-muted-foreground/65 hover:text-muted-foreground/80 transition-colors group"
+        className="flex items-center gap-2 py-0.5 text-[length:var(--font-chat-message)] text-muted-foreground/65 hover:text-muted-foreground/80 transition-colors group"
         onMouseDown={(e) => e.preventDefault()}
         onClick={toggleExpanded}
       >
@@ -115,9 +207,12 @@ export function ThinkingWidget({
         />
       </button>
       {expanded && (
-        <div className={cn(TOOL_EXPANDED_CONTENT_CLASS, "text-muted-foreground whitespace-pre-wrap leading-relaxed")}>
-          {thinking}
-        </div>
+        <ThinkingMarkdownBody
+          thinking={thinking}
+          isStreaming={isStreaming}
+          sessionId={sessionId}
+          className={cn(TOOL_EXPANDED_CONTENT_CLASS, "py-1 text-[length:var(--font-chat-message)]")}
+        />
       )}
     </div>
   );

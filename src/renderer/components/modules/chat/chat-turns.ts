@@ -25,6 +25,15 @@ export function isToolResultUserMessage(msg: ChatStreamMessage): boolean {
   return content.every((b) => b.type === "tool_result");
 }
 
+/** Hidden `type: result` rows that only carry tool_result for toolResultMap. */
+export function isHiddenToolResultCarrier(msg: ChatStreamMessage): boolean {
+  if (msg.type !== "result" || msg.is_error) return false;
+  if (msg.usage || msg.result) return false;
+  const blocks = contentBlocks(msg.message?.content);
+  if (blocks.length === 0) return false;
+  return blocks.every((b) => b.type === "tool_result");
+}
+
 /** Count visible user turns (matches chat-messages turn grouping). */
 export function countUserTurns(messages: ChatStreamMessage[]): number {
   return messages.filter((m) => m.type === "user" && !isToolResultUserMessage(m)).length;

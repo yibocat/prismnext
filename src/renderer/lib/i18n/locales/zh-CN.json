@@ -1467,6 +1467,14 @@
     }
   },
   "chat": {
+    "activity": {
+      "working": "处理中…",
+      "thinking": "思考中…",
+      "thoughtFor": "思考 {{duration}}",
+      "workedFor": "已处理 {{duration}}",
+      "workedForWithTools": "已处理 {{duration}} · {{count}} 个工具",
+      "workedForWithTools_one": "已处理 {{duration}} · {{count}} 个工具"
+    },
     "artifact": {
       "openInFiles": "在文件中打开",
       "copyPath": "复制路径",
@@ -1518,7 +1526,29 @@
       "zoomOut": "缩小",
       "placeholder": "@ 专家、文件、文献或实验 · / 命令、技能、MCP",
       "archivedReadonly": "此对话已归档。恢复后可继续聊天。",
-      "stop": "停止"
+      "stop": "停止",
+      "taskPlanTitle": "任务计划",
+      "taskPlanInProgress": "进行中",
+      "experimentRunTitle": "实验运行",
+      "experimentRunLive": "运行中 — 点击打开实时输出",
+      "experimentRunOpen": "打开",
+      "permissionExpand": "展开权限详情"
+    },
+    "questionPanel": {
+      "title": "需要你确认",
+      "loading": "正在加载问题…",
+      "failed": "提问失败",
+      "asked": "已提问",
+      "choose": "请选择一项",
+      "yourAnswer": "请输入回答",
+      "multiHint": "可多选。",
+      "other": "其他 — 自行输入",
+      "placeholder": "输入你的回答…",
+      "cancel": "取消",
+      "send": "发送",
+      "sending": "发送中…",
+      "questionLabel": "问题",
+      "answerLabel": "回答"
     },
     "toolbar": {
       "local": "本地",
@@ -1602,6 +1632,7 @@
       "discardAndBuild": "拒绝",
       "cancel": "取消",
       "createdPlan": "已创建计划",
+      "createdPlanInline": "计划已创建",
       "createdPlanDiscarded": "计划已丢弃",
       "draftDiscardedGone": "该计划草稿已丢弃，磁盘上已不存在。",
       "planFileMissing": "计划文件不存在，可能已被删除。",
@@ -2047,7 +2078,16 @@
       "autoMode": "全自动",
       "alwaysBash": "始终允许类似命令（前缀匹配）",
       "alwaysTool": "始终允许 {{tool}}，不再询问",
-      "alwaysGeneric": "始终允许此工具"
+      "alwaysGeneric": "始终允许此工具",
+      "detailPath": "路径",
+      "detailFile": "文件",
+      "detailCommand": "命令",
+      "detailSource": "源路径",
+      "detailDestination": "目标路径",
+      "detailTool": "工具",
+      "detailMessage": "详情",
+      "detailChanges": "变更",
+      "editAutoHint": "编辑自动模式下文件编辑会自动执行；仅 Shell 与破坏性操作需要确认。"
     },
     "worktree": {
       "discardTitle": "丢弃未合并的工作？",

@@ -1004,6 +1004,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("chat:answer", { sessionId, answer }),
 		chatAnswerQuestion: (questionId: string, answer: string) =>
 			ipcRenderer.invoke("chat:answerQuestion", { questionId, answer }),
+		chatReadPendingQuestion: (sessionId: string) =>
+			ipcRenderer.invoke("chat:readPendingQuestion", { sessionId }),
 		chatAnswerPermission: (
 			permissionId: string,
 			approved: boolean,

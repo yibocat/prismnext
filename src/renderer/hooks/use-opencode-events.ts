@@ -28,6 +28,7 @@ import { shouldTrackProposedChange, isDiskMutationTool, isFileWriteTool, isPatch
 import { useCheckpointStore, resolveRelativeToolPath } from "@/stores/checkpoint-store";
 import { compileCurrentDocument, pauseAutoCompileForAi, resumeAutoCompileAfterAi } from "@/stores/compile-store";
 import { createLogger } from "@/services/logger";
+import { isPlanFileToolUse } from "@/lib/chat/plan-artifact-ui";
 import { parsePlanSteps } from "@/lib/chat/parse-plan-steps";
 import { isPrismSystemPromptText } from "@/lib/chat/session-message-hydrate";
 import { refreshGitStatusNow } from "@/lib/git/checkout-context";
@@ -715,6 +716,10 @@ export function useOpenCodeEvents() {
                   const toolUse = tabTools?.get(toolUseId);
                   if (toolUse) {
                     refreshAfterAutoDiskMutation(tabId, toolUse.name, toolUse.input);
+                    const chatTab = useChatStore.getState().tabs.find((t) => t.id === tabId);
+                    if (chatTab?.sessionAgent === "plan" && isPlanFileToolUse(toolUse)) {
+                      void useChatStore.getState().refreshPlanDraftFromDisk(tabId);
+                    }
                   }
                 }
               } else {

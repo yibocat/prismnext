@@ -5,8 +5,8 @@ import { ToolCard, DiffLines, DiffStatBadge, computePatchLineStats, param } from
 import { ChatFileLink } from "../chat-file-link";
 import { extractPatchTargetPaths } from "./tool-meta";
 import { useToolPermission } from "./use-tool-permission";
+import { isComposerHostedPermission } from "../permission-gate-panel";
 import { useSettingsStore } from "@/stores/settings-store";
-import { resolvePermissionMode } from "@shared/permission-modes";
 
 export const PatchWidget = memo(function PatchWidget({
   toolUse,
@@ -25,8 +25,11 @@ export const PatchWidget = memo(function PatchWidget({
     toolName,
   );
   const permissionMode = useSettingsStore((s) => s.settings.permissionMode);
-  const showPermissionAsk =
-    isAwaitingPermission && resolvePermissionMode(permissionMode) === "ask";
+  const showPermissionAsk = isComposerHostedPermission(
+    permissionMode,
+    toolName,
+    isAwaitingPermission,
+  );
   const isDenied = isToolDenied;
   const isLoading = !toolResult && !showPermissionAsk && !isDenied;
 

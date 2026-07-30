@@ -90,4 +90,30 @@ describe("extractQuestionPrompt", () => {
       expect.objectContaining({ label: "From nested", description: "yes" }),
     ]);
   });
+
+  it("reads choices alias and name on option objects", () => {
+    expect(
+      extractQuestionPrompt({
+        question: "Pick",
+        choices: ["A", "B"],
+      }).options,
+    ).toHaveLength(2);
+
+    expect(
+      extractQuestionPrompt({
+        questions: [{ question: "Pick", options: [{ name: "Fast path" }] }],
+      }).options[0]?.label,
+    ).toBe("Fast path");
+  });
+
+  it("parses bullet options embedded in question prose", () => {
+    const extracted = extractQuestionPrompt({
+      question: "Which path?\n\n- Fill brief first\n- Start build now",
+    });
+    expect(extracted.question).toBe("Which path?");
+    expect(extracted.options.map((o) => o.label)).toEqual([
+      "Fill brief first",
+      "Start build now",
+    ]);
+  });
 });

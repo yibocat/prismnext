@@ -1707,6 +1707,12 @@ export interface ElectronAPI {
   chatCompact: (sessionId: string, projectPath: string) => Promise<void>;
   chatAnswer: (sessionId: string, answer: string) => Promise<void>;
   chatAnswerQuestion: (questionId: string, answer: string) => Promise<{ success: boolean; error?: string }>;
+  chatReadPendingQuestion: (sessionId: string) => Promise<{
+    ok: boolean;
+    question?: string;
+    options?: unknown[];
+    multiSelect?: boolean;
+  }>;
   chatAnswerPermission: (
     permissionId: string,
     approved: boolean,

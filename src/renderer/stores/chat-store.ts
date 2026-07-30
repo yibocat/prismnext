@@ -18,6 +18,7 @@ import {
   planArtifactCardFromEvents,
 } from "@/lib/chat/plan-ui-events";
 import { clearTurnWindowState } from "@/lib/chat/turn-window";
+import { composerToolsSuppressedOnSessionHydrate } from "@/lib/chat/composer-pending-tools";
 import { contentBlocks } from "@/components/modules/chat/tools/tool-result-map";
 import {
   deriveSessionTitleForSend,
@@ -241,6 +242,11 @@ interface TabState {
    * Approve/Deny still available on RightArea draft toolbar.
    */
   planConfirmSuppressed: boolean;
+  /**
+   * When true, hide composer Question / TodoWrite chrome — set on session cold-load
+   * (tab reopen / history hydrate). Cleared on user send or live agent streaming.
+   */
+  composerToolsSuppressed: boolean;
   /** Soft-block dialog when leaving Plan with a dirty draft. */
   planExitDialogOpen: boolean;
 }
@@ -296,6 +302,7 @@ function makeDefaultTab(id: string): TabState {
     planDraftDirty: false,
     planDraftFileReady: false,
     planConfirmSuppressed: false,
+    composerToolsSuppressed: false,
     planExitDialogOpen: false,
   };
 }
@@ -1278,6 +1285,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return false;
     }
 
+    const wasReady = tab?.planDraftFileReady ?? false;
+
     const claimed = await window.electronAPI.researchPlanClaimDraft({
       projectRoot,
       sessionId,
@@ -1316,6 +1325,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         title: claimed.title,
         path: draftPath,
       });
+    }
+    const shouldAutoOpen =
+      ready
+      && !wasReady
+      && tab?.sessionAgent === "plan"
+      && !tab?.planConfirmSuppressed
+      && resolvedTabId === get().activeTabId;
+    if (shouldAutoOpen) {
+      void get().openPlanFileInEditor(draftPath);
     }
     return ready;
   },
@@ -1434,6 +1452,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
 
     get().setSessionAgent("build", resolvedTabId);
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === resolvedTabId ? { ...t, composerToolsSuppressed: false } : t,
+      ),
+    }));
     // Ensure OpenCode agent switch finishes before the silent execute turn.
     if (tab.sessionId) {
       await window.electronAPI
@@ -1625,6 +1648,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           messages: userMessage ? [...finalized.messages, userMessage] : finalized.messages,
           isStreaming: true,
           error: null,
+          composerToolsSuppressed: userMessage ? false : t.composerToolsSuppressed,
         };
       });
       return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
@@ -1906,6 +1930,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
               streamingMessage: null,
               isStreaming: false,
               error: null,
+              composerToolsSuppressed: composerToolsSuppressedOnSessionHydrate(filtered),
             }
           : t,
       );
@@ -2028,6 +2053,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         title,
         isLoadingSession: false,
         intensivePaperIds: storedIntensiveIds,
+        composerToolsSuppressed: composerToolsSuppressedOnSessionHydrate(cached),
       };
       set((s) => {
         const kept = pruneDisposableEmptyChatTabs(s.tabs);
@@ -2082,6 +2108,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       sessionCwd,
       isLoadingSession: true,
       intensivePaperIds: storedIntensiveIds,
+      composerToolsSuppressed: true,
     };
     set((s) => {
       const kept = pruneDisposableEmptyChatTabs(s.tabs);
@@ -2144,6 +2171,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                 contextTokens: ctxData?.tokens ?? null,
                 contextBreakdown: ctxData?.breakdown ?? null,
                 categorySchema: ctxData?.schema ?? null,
+                composerToolsSuppressed: composerToolsSuppressedOnSessionHydrate(filtered),
               }
             : t,
         );

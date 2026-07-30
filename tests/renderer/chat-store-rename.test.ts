@@ -68,6 +68,7 @@ const stubTab = (id: string, sessionId: string | null, title: string) => ({
   planDraftDirty: false,
   planDraftFileReady: false,
   planConfirmSuppressed: false,
+  composerToolsSuppressed: false,
   planExitDialogOpen: false,
   draft: { input: "" },
   turnMeta: {},

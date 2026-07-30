@@ -1,5 +1,12 @@
 import { memo, type ComponentType } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
+import {
+  isComposerHostedToolId,
+  selectComposerHostedQuestionId,
+  selectComposerHostedTodoId,
+} from "@/lib/chat/composer-pending-tools";
+import { selectComposerHostedExperimentRunId } from "@/lib/chat/composer-pending-experiment";
+import { useChatStore } from "@/stores/chat-store";
 import { EditWidget } from "./edit-widget";
 import { BashWidget } from "./bash-widget";
 import { TodoWriteWidget } from "./todo-widget";
@@ -29,6 +36,10 @@ export type ToolWidgetComponent = ComponentType<{
   toolName: string;
   /** Paths already shown (or about to be shown) in the assistant reply body. */
   suppressArtifactPaths?: readonly string[];
+  /** Inside ActivityFold expanded panel — hide heavy inline peeks. */
+  nestedInActivity?: boolean;
+  hostedInComposer?: boolean;
+  surface?: "inline" | "composer";
 }>;
 
 let registeredTaskWidget: ToolWidgetComponent | null = null;
@@ -133,11 +144,23 @@ export const ToolWidget = memo(function ToolWidget({
   toolUse,
   toolResult,
   suppressArtifactPaths,
+  nestedInActivity,
 }: {
   toolUse: ContentBlock;
   toolResult?: ContentBlock;
   suppressArtifactPaths?: readonly string[];
+  nestedInActivity?: boolean;
 }) {
+  const hostedQuestionId = useChatStore(selectComposerHostedQuestionId);
+  const hostedTodoId = useChatStore(selectComposerHostedTodoId);
+  const hostedExperimentRunId = useChatStore(selectComposerHostedExperimentRunId);
+  const hostedInComposer = isComposerHostedToolId(
+    toolUse.id,
+    hostedQuestionId,
+    hostedTodoId,
+    hostedExperimentRunId,
+  );
+
   const name = resolveToolWidgetName(toolUse, toolResult);
   const displayName = name === (toolUse.name || "").toLowerCase()
     ? (toolUse.name || "")
@@ -167,6 +190,9 @@ export const ToolWidget = memo(function ToolWidget({
       toolResult={toolResult}
       toolName={displayName}
       suppressArtifactPaths={suppressArtifactPaths}
+      nestedInActivity={nestedInActivity}
+      hostedInComposer={hostedInComposer}
+      surface="inline"
     />
   );
 });

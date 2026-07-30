@@ -18,10 +18,8 @@ import { cn } from "@/lib/utils";
 import { ChatImagePreviewDialog } from "@/lib/markdown/chat-image-preview";
 import { ComposerToolbar } from "./agent-settings/composer-toolbar";
 import { ModelThoughtSelect } from "./agent-settings/model-thought-select";
-import { PermissionGatePanel, usePermissionGateOpen } from "./permission-gate-panel";
 import { InlineComposerEditor } from "./inline-composer";
-import { PlanChrome } from "./plan-chrome";
-import { PlanSuggestBar } from "./plan-suggest-bar";
+import { ComposerChromeStack } from "./composer-chrome-stack";
 import { PlanModeChip } from "./plan-mode-chip";
 import { useChatComposer } from "@/hooks/use-chat-composer";
 import { useChatStore } from "@/stores/chat-store";
@@ -107,7 +105,6 @@ export function ChatComposerCore({
   onLayoutExpand,
 }: ChatComposerCoreProps) {
   const { t } = useTranslation();
-  const permissionGateOpen = usePermissionGateOpen();
   const composer = useChatComposer();
   const sessionAgent = useChatStore((s) => {
     const tab = s.tabs.find((x) => x.id === s.activeTabId);
@@ -247,8 +244,7 @@ export function ChatComposerCore({
           isCompact ? "h-full" : className,
         )}
       >
-        <PermissionGatePanel />
-        {/* PlanChrome lives on AiBar outside the morph shell — compact h-12 would clip it. */}
+        {/* Permission + plan/question/todo chrome lives on AiBar via ComposerChromeStack. */}
 
         <div
           className={cn(
@@ -325,15 +321,13 @@ export function ChatComposerCore({
       )}
     >
       <div className="flex w-full flex-col">
-        <PermissionGatePanel />
-        <PlanSuggestBar />
-        <PlanChrome />
+        <ComposerChromeStack />
 
         <div
           className={cn(
             "flex w-full flex-col overflow-hidden border border-border bg-card",
             "shadow-[0_0_2px_rgba(0,0,0,0.03)] transition-colors focus-within:border-ring",
-            permissionGateOpen ? "rounded-b-lg rounded-t-none" : isCapsule ? "rounded-2xl" : "rounded-lg",
+            isCapsule ? "rounded-2xl" : "rounded-lg",
           )}
         >
           {attachmentStrip}

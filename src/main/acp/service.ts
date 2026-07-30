@@ -76,6 +76,7 @@ import {
   isResearchPlanDraftPath,
   planDraftMissingRedirectNote,
 } from "../../shared/research-plan";
+import { sessionHasPendingPlanDraft } from "../services/research-plan-service";
 
 const CUSTOM_GATED_TOOLS = new Set(["delete", "move"]);
 
@@ -800,11 +801,18 @@ export class AcpService {
           const editFilePath = this.extractFilePathFromPermissionParams(
             params as Record<string, unknown>,
           );
+          const planDraftPending =
+            sessionAgent === "plan"
+            && sessionId
+            && this.projectPath
+              ? sessionHasPendingPlanDraft(this.projectPath, sessionId)
+              : false;
           const planPermCtx = {
             filePath: editFilePath,
             projectRoot: this.projectPath,
             sessionId: sessionId ?? null,
             bashCommand,
+            planDraftPending,
           };
           let action = resolvePermissionAction(mode, toolName, sessionAgent, planPermCtx);
           // Persisted "Allow always": bash uses command patterns; other tools use tool name.

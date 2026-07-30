@@ -4,8 +4,8 @@ import { FileEditIcon } from "lucide-react";
 import { ToolCard, DiffLines, DiffStatBadge, computeLineDiffStats, param } from "./shared";
 import { ChatFileLink } from "../chat-file-link";
 import { useToolPermission } from "./use-tool-permission";
+import { isComposerHostedPermission } from "../permission-gate-panel";
 import { useSettingsStore } from "@/stores/settings-store";
-import { resolvePermissionMode } from "@shared/permission-modes";
 
 export const EditWidget = memo(function EditWidget({
   toolUse,
@@ -20,8 +20,11 @@ export const EditWidget = memo(function EditWidget({
   const { isAwaitingPermission, isToolDenied } =
     useToolPermission(toolUse.id || "", toolName);
   const permissionMode = useSettingsStore((s) => s.settings.permissionMode);
-  const showPermissionGate =
-    isAwaitingPermission && resolvePermissionMode(permissionMode) === "ask";
+  const showPermissionGate = isComposerHostedPermission(
+    permissionMode,
+    toolName,
+    isAwaitingPermission,
+  );
   const isWrite = toolUse.name?.toLowerCase().startsWith("write");
 
   const activeFilePath =

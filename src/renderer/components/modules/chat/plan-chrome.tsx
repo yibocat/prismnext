@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { ComposerChromeCard } from "./composer-chrome-card";
 import { CHAT_CHROME_BUTTON_TEXT } from "./worktree-selector";
 
 const NARROW_PANEL_PX = 420;
@@ -81,11 +82,10 @@ export function PlanChrome({ className }: { className?: string }) {
   return (
     <>
       {showPanel ? (
-        <div
+        <ComposerChromeCard
           ref={panelRef}
           className={cn(
-            // Opaque bg-card — bg-muted/40 bleeds through over AiBar / editor.
-            "mb-2 flex items-start gap-2 rounded-lg border border-border bg-card px-3 py-2",
+            "flex items-start gap-2 px-3 py-2",
             className,
           )}
         >
@@ -146,7 +146,7 @@ export function PlanChrome({ className }: { className?: string }) {
               )}
             </div>
           </div>
-        </div>
+        </ComposerChromeCard>
       ) : null}
 
       <Dialog
