@@ -4,7 +4,6 @@ import {
   clampPlanSuggestReason,
   PLAN_SUGGEST_TIMEOUT_MS,
   resolvePlanSuggestGate,
-  resolvePlanSuggestToolStatus,
 } from "../../src/shared/plan-suggest";
 import { PLAN_DOC_STRUCTURE_HINTS, sessionDraftPlanRel } from "../../src/shared/research-plan";
 
@@ -14,12 +13,6 @@ describe("resolvePlanSuggestGate", () => {
     expect(resolvePlanSuggestGate({ tabId: "t1", dismissed: true })).toBe("dismissed");
     expect(resolvePlanSuggestGate({ tabId: null })).toBe("ignored");
     expect(resolvePlanSuggestGate({ tabId: "t1", sessionAgent: "build" })).toBe("show");
-  });
-});
-
-describe("resolvePlanSuggestToolStatus (compat)", () => {
-  it("maps show → shown", () => {
-    expect(resolvePlanSuggestToolStatus({ tabId: "t1", sessionAgent: "build" })).toBe("shown");
   });
 });
 

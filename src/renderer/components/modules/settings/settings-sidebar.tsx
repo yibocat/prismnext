@@ -28,6 +28,7 @@ import {
   PuzzleIcon,
   PlugIcon,
   SlashIcon,
+  ShieldIcon,
   InfoIcon,
 } from "lucide-react";
 
@@ -50,6 +51,7 @@ export const SETTINGS_GROUPS = [
       { id: "models", labelKey: "settings.nav.models", icon: GlobeIcon },
       { id: "agent", labelKey: "settings.nav.agent", icon: Bot },
       { id: "prompts-rules", labelKey: "settings.nav.promptsRules", icon: FileTextIcon },
+      { id: "permissions", labelKey: "settings.nav.permissions", icon: ShieldIcon },
       { id: "commands", labelKey: "settings.nav.commands", icon: SlashIcon },
       { id: "tools-mcp", labelKey: "settings.nav.mcp", icon: PlugIcon },
       { id: "skills", labelKey: "settings.nav.skills", icon: PuzzleIcon },

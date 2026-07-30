@@ -151,6 +151,7 @@ export const AssistantBlockList = memo(function AssistantBlockList({
                 sessionId={sessionId}
                 persistKey={`${foldPersistBase}:a${segIndex}`}
                 isStreamingSegment={isStreamingSegment}
+                messageThinkingComplete={thinkingComplete}
                 suppressArtifactPaths={suppressArtifactPaths}
               />
             );

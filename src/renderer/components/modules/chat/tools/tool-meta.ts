@@ -76,11 +76,3 @@ export function extractPatchTargetPaths(
   }
   return [...new Set(paths)];
 }
-
-/** Proposed-change review disabled — Ask mode uses permission gate only (scheme A). */
-export function shouldTrackProposedChange(
-  _permissionMode: string | undefined,
-  _toolName: string,
-): boolean {
-  return false;
-}

@@ -54,9 +54,3 @@ export function resolveActiveModuleKeys(
   return [...new Set(keys)].sort((a, b) => a.localeCompare(b));
 }
 
-/** @deprecated alias — stable system layer uses resolveStableSystemModules directly. */
-export function resolveActiveModules(
-  _ctx: Pick<PromptContext, "profileModules">,
-): PromptModule[] {
-  return resolveStableSystemModules();
-}

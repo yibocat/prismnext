@@ -21,10 +21,12 @@ export function bashAlwaysPatternFromCommand(command: string): string {
 }
 
 /** Simple glob: `*` → any chars, `?` → one char; match against full command. */
-export function bashCommandMatchesPattern(command: string, pattern: string): boolean {
-  const cmd = normalizeBashCommand(command);
-  const pat = normalizeBashCommand(pattern);
-  if (!cmd || !pat) return false;
+const MAX_PATTERN_CACHE = 1000;
+const bashPatternRegexCache = new Map<string, RegExp>();
+
+function bashPatternToRegex(pat: string): RegExp | null {
+  const cached = bashPatternRegexCache.get(pat);
+  if (cached) return cached;
   let reSource = "";
   for (let i = 0; i < pat.length; i++) {
     const ch = pat[i]!;
@@ -34,10 +36,21 @@ export function bashCommandMatchesPattern(command: string, pattern: string): boo
     else reSource += ch;
   }
   try {
-    return new RegExp(`^${reSource}$`).test(cmd);
+    const regex = new RegExp(`^${reSource}$`);
+    if (bashPatternRegexCache.size >= MAX_PATTERN_CACHE) bashPatternRegexCache.clear();
+    bashPatternRegexCache.set(pat, regex);
+    return regex;
   } catch {
-    return false;
+    return null;
   }
+}
+
+export function bashCommandMatchesPattern(command: string, pattern: string): boolean {
+  const cmd = normalizeBashCommand(command);
+  const pat = normalizeBashCommand(pattern);
+  if (!cmd || !pat) return false;
+  const regex = bashPatternToRegex(pat);
+  return regex ? regex.test(cmd) : false;
 }
 
 export function bashCommandMatchesAnyPattern(

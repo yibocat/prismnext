@@ -182,14 +182,6 @@ export function registerSettingsHandlers(): void {
     },
   );
 
-  ipcMain.handle(
-    "settings:getModules",
-    async (_event, args?: { projectRoot?: string }) => {
-      const ctx = args?.projectRoot ? await buildPromptContext(args.projectRoot) : {};
-      return promptManager.getKnowledgeModuleCatalog(ctx);
-    },
-  );
-
   ipcMain.handle("settings:getBuiltinTools", async () => {
     const { BUILTIN_TOOLS } = await import("../tools/index");
     const { buildOpencodeToolDescription } = await import("../tools/tool-description");

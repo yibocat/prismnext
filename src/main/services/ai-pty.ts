@@ -81,16 +81,6 @@ export function cancelAiCommandForSession(sessionId: string): void {
   activeBySession.delete(sessionId);
 }
 
-/** @deprecated Use cancelAiCommandForSession — resolves chatTabId via registry when needed. */
-export function cancelAiCommandForChat(chatTabId: string): void {
-  for (const [sessionId, active] of activeBySession.entries()) {
-    if (active.chatTabId === chatTabId) {
-      cancelAiCommandForSession(sessionId);
-      return;
-    }
-  }
-}
-
 export function runAiCommand(args: RunAiCommandArgs): Promise<RunAiCommandResult> {
   const { command, cwd, sessionId, chatTabId, requestId, onChunk, envExtra, captureStderr } = args;
   const trimmed = command.trim();

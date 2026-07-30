@@ -24,12 +24,13 @@ import * as fs from "fs";
 import * as path from "path";
 import { execSync } from "child_process";
 import { terminalBridgeRoot } from "./bridge-paths";
+import {
+  PERMISSION_TIMEOUT_MS,
+  pollUntilToolCallId,
+  waitForPermission,
+} from "./permission-bridge-poll";
 
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const BRIDGE_ROOT = terminalBridgeRoot();
-const ACTIVE_TOOL_FILE = ".active-tool.json";
-/** Keep in sync with `src/shared/permission-timeouts.ts` (tool file is copied standalone). */
-const PERMISSION_TIMEOUT_MS = 120_000;
 
 function shellQuote(value: string): string {
   return `"${value.replace(/"/g, '\\"')}"`;
@@ -76,66 +77,6 @@ function deleteFileAtPath(filePath: string): void {
   fs.unlinkSync(filePath);
 }
 
-function extractToolCallId(context: Record<string, unknown>): string | undefined {
-  const c = context as {
-    toolCallId?: string;
-    tool_call_id?: string;
-    callID?: string;
-    messageID?: string;
-  };
-  for (const v of [c.toolCallId, c.tool_call_id, c.callID, c.messageID]) {
-    if (typeof v === "string" && v.trim()) return v.trim();
-  }
-  return undefined;
-}
-
-function readActiveToolCallId(sessionDir: string): string | undefined {
-  const filePath = path.join(sessionDir, ACTIVE_TOOL_FILE);
-  if (!fs.existsSync(filePath)) return undefined;
-  try {
-    const data = JSON.parse(fs.readFileSync(filePath, "utf-8")) as { toolCallId?: string };
-    return typeof data.toolCallId === "string" && data.toolCallId.trim()
-      ? data.toolCallId.trim()
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function resolveToolCallId(sessionDir: string, context: Record<string, unknown>): string | undefined {
-  return extractToolCallId(context) ?? readActiveToolCallId(sessionDir);
-}
-
-function readPermissionStatus(
-  sessionDir: string,
-  toolCallId: string,
-): "approved" | "denied" | undefined {
-  const resPath = path.join(sessionDir, `${toolCallId}.permission.json`);
-  if (!fs.existsSync(resPath)) return undefined;
-  try {
-    const data = JSON.parse(fs.readFileSync(resPath, "utf-8")) as { status?: string };
-    if (data.status === "approved" || data.status === "denied") return data.status;
-    return undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-async function waitForPermission(
-  sessionDir: string,
-  toolCallId: string,
-  abort: AbortSignal,
-): Promise<"approved" | "denied" | "timeout"> {
-  const deadline = Date.now() + PERMISSION_TIMEOUT_MS;
-  while (!abort.aborted && Date.now() < deadline) {
-    const perm = readPermissionStatus(sessionDir, toolCallId);
-    if (perm === "denied") return "denied";
-    if (perm === "approved") return "approved";
-    await delay(50);
-  }
-  return readPermissionStatus(sessionDir, toolCallId) === "approved" ? "approved" : "timeout";
-}
-
 export default tool({
   description:
     "Delete a single file from the project workspace. " +
@@ -159,12 +100,12 @@ export default tool({
     const sessionDir = path.join(BRIDGE_ROOT, sessionId);
     fs.mkdirSync(sessionDir, { recursive: true });
 
-    let toolCallId = resolveToolCallId(sessionDir, context as Record<string, unknown>);
-    const deadline = Date.now() + PERMISSION_TIMEOUT_MS;
-    while (!toolCallId && !context.abort.aborted && Date.now() < deadline) {
-      await delay(50);
-      toolCallId = resolveToolCallId(sessionDir, context as Record<string, unknown>);
-    }
+    const toolCallId = await pollUntilToolCallId(
+      sessionDir,
+      context as Record<string, unknown>,
+      context.abort,
+      PERMISSION_TIMEOUT_MS,
+    );
 
     if (!toolCallId) {
       return {

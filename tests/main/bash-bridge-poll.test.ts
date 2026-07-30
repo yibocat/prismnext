@@ -8,7 +8,7 @@ import {
   readActiveToolRecord,
   readBashJobResult,
   resolveBashJobToolCallId,
-} from "../../src/main/services/bash-bridge-poll";
+} from "../../src/main/tools/permission-bridge-poll";
 
 describe("bash-bridge-poll (toolCallId)", () => {
   const root = join(tmpdir(), "bash-bridge-poll-test");

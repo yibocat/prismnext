@@ -4,6 +4,34 @@ import { join } from "node:path";
 /** Curated Paper Search MCP server id — prismnext built-in default. */
 export const PAPER_SEARCH_MCP_ID = "paper-search-mcp";
 
+/**
+ * MCP servers connected at session/new (before first model turn).
+ * Everything else loads on demand via session/load when @-mentioned or
+ * orchestrator/composer allowlist requires them.
+ *
+ * Paper Search stays eager until literature search is a native ACP tool.
+ */
+export const EAGER_MCP_SERVER_IDS = [PAPER_SEARCH_MCP_ID] as const;
+
+export function isEagerMcpServer(id: string): boolean {
+  return (EAGER_MCP_SERVER_IDS as readonly string[]).includes(id);
+}
+
+/** Union eager + explicit allowlist (deduped). */
+export function mergeMcpAllowlist(allowlist?: string[] | null): string[] {
+  const merged = new Set<string>(EAGER_MCP_SERVER_IDS);
+  for (const id of allowlist ?? []) {
+    if (id?.trim()) merged.add(id.trim());
+  }
+  return [...merged];
+}
+
+export function mcpAllowlistSetsEqual(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const setB = new Set(b);
+  return a.every((id) => setB.has(id));
+}
+
 /** Curated Paper Search MCP — Node.js via npx. No app-bundled package. */
 export const PAPER_SEARCH_MCP_COMMAND = ["npx", "-y", "paper-search-mcp-nodejs"] as const;
 

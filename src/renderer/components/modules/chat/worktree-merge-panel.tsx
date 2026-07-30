@@ -181,4 +181,3 @@ export function WorktreeMergePanel({ onClose }: WorktreeMergePanelProps) {
 }
 
 /** @deprecated Use WorktreeMergePanel */
-export const WorktreePushPanel = WorktreeMergePanel;

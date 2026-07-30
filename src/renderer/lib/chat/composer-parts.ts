@@ -160,6 +160,11 @@ export function isComposerEmpty(parts: ComposerPart[]): boolean {
   return parts.length === 0 || parts.every((p) => p.type === "text" && !p.text.trim());
 }
 
+/** Expand capsule layout only for explicit multi-line text — not @/ tokens alone. */
+export function composerNeedsExpandedLayout(parts: ComposerPart[]): boolean {
+  return parts.some((p) => p.type === "text" && p.text.includes("\n"));
+}
+
 export function createTokenId(): string {
   return `tok-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }

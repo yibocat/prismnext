@@ -63,18 +63,3 @@ export function resolvePlanSuggestGate(args: {
 /** User / timeout decision after the strip is shown. */
 export type PlanSuggestDecision = "accepted" | "dismissed" | "timed_out";
 
-/** @deprecated use resolvePlanSuggestGate — kept for older imports */
-export type PlanSuggestToolStatus =
-  | PlanSuggestGateStatus
-  | PlanSuggestDecision
-  | "shown";
-
-/** @deprecated */
-export function resolvePlanSuggestToolStatus(args: {
-  sessionAgent?: string | null;
-  dismissed?: boolean;
-  tabId?: string | null;
-}): PlanSuggestToolStatus {
-  const gate = resolvePlanSuggestGate(args);
-  return gate === "show" ? "shown" : gate;
-}

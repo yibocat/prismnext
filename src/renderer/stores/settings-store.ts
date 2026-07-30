@@ -102,6 +102,12 @@ export interface AppSettings {
   toolAllowAlways?: string[];
   /** Bash command patterns from "Always" (e.g. `git status*`). */
   bashAllowAlwaysPatterns?: string[];
+  /** Extra allowed absolute paths for permission policy. */
+  permissionAllowedPaths?: string[];
+  /** Stored allow rule lines (`ToolName(pattern)`). */
+  permissionAllowRules?: string[];
+  /** Stored deny rule lines (`ToolName(pattern)`). */
+  permissionDenyRules?: string[];
   /** Permission mode schema version (migration). */
   permissionModeSchemaVersion?: number;
   /** Agent shell execution: mirror (OpenCode bash + UI mirror) | pty (custom bash tool) */

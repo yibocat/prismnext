@@ -1,6 +1,7 @@
 import { resolve } from "path";
 import { defineConfig } from "electron-vite";
 import react from "@vitejs/plugin-react";
+import { sharedAliasPlugin } from "./scripts/vite-shared-alias-plugin";
 
 /** Baked into main bundle when `PRISM_UPDATER_BASE_URL` is set at build time. */
 function bakedUpdaterBaseUrl(): string {
@@ -13,11 +14,7 @@ export default defineConfig({
     define: {
       __PRISM_UPDATER_BASE_URL__: JSON.stringify(bakedUpdaterBaseUrl()),
     },
-    resolve: {
-      alias: {
-        "@shared": resolve("src/main/services"),
-      },
-    },
+    plugins: [sharedAliasPlugin(__dirname)],
     build: {
       rollupOptions: {
         external: ["electron", "node-pty", "@napi-rs/canvas"],
@@ -25,11 +22,7 @@ export default defineConfig({
     },
   },
   preload: {
-    resolve: {
-      alias: {
-        "@shared": resolve("src/main/services"),
-      },
-    },
+    plugins: [sharedAliasPlugin(__dirname)],
     build: {
       rollupOptions: {
         external: ["electron"],
@@ -37,11 +30,10 @@ export default defineConfig({
     },
   },
   renderer: {
-    plugins: [react()],
+    plugins: [react(), sharedAliasPlugin(__dirname)],
     resolve: {
       alias: {
         "@": resolve("src/renderer"),
-        "@shared": resolve("src/main/services"),
         "@commands": resolve("src/main/commands"),
       },
       dedupe: ["@codemirror/state", "@codemirror/view", "@codemirror/merge", "pdfjs-dist"],

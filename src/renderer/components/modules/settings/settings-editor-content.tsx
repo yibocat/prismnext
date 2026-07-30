@@ -25,6 +25,7 @@ import { BuiltinCommandsPanel } from "./builtin-commands-panel";
 import { ResearchBriefPanel } from "./research-brief-panel";
 import { ShortcutsSettings } from "./shortcuts-settings";
 import { LogViewer } from "./log-viewer";
+import { PermissionRulesEditorPanel } from "./permission-rules-editor-panel";
 
 function PlaceholderSlot({ slot }: { slot: Extract<SettingsPanelSlot, { kind: "placeholder" }> }) {
   const { t } = useTranslation();
@@ -81,6 +82,8 @@ export function renderSettingsPanelSlot(slot: SettingsPanelSlot): ReactNode {
       return <ShortcutsSettings />;
     case "logs":
       return <LogViewer />;
+    case "permission-rules":
+      return <PermissionRulesEditorPanel slot={slot} />;
   }
 }
 

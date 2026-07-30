@@ -36,9 +36,12 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import {
   AlertCircleIcon,
+  AlertTriangleIcon,
   CopyIcon,
   CheckIcon,
   ArrowDownIcon,
+  RotateCcwIcon,
+  XIcon,
   ZapIcon,
   Loader2Icon,
   CircleCheckIcon,
@@ -75,17 +78,61 @@ CopyButton.displayName = "CopyButton";
 // ─── Streaming Indicator ───
 
 // Parent turn column already applies px-6 — keep this flush with ThinkingWidget.
-const StreamingIndicator = memo(({ label }: { label: string }) => (
-  <div className="mb-2 flex items-center gap-2">
-    <div className="flex items-center gap-1">
-      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:0ms]" />
-      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:150ms]" />
-      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:300ms]" />
+const StreamingIndicator = memo(({ label }: { label: string }) => {
+  return (
+    <div className="mb-2 flex items-center gap-2">
+      <div className="flex items-center gap-1">
+        <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:0ms]" />
+        <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:150ms]" />
+        <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:300ms]" />
+      </div>
+      <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">
+        {label}
+      </span>
     </div>
-    <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">{label}</span>
-  </div>
-));
+  );
+});
 StreamingIndicator.displayName = "StreamingIndicator";
+
+// ─── Turn Error Banner ───
+// Persistent, dismissible error card at the end of a failed turn. Replaces the
+// transient toast as the source of truth for "what just went wrong".
+
+const TurnErrorBanner = memo(({ text, canRetry, onRetry, onDismiss }: {
+  text: string;
+  canRetry: boolean;
+  onRetry: () => void;
+  onDismiss: () => void;
+}) => {
+  const { t } = useTranslation();
+  return (
+    <div className="mx-6 mb-3 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
+      <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0 text-destructive" />
+      <span className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[length:var(--font-chat-meta)] text-destructive">
+        {text}
+      </span>
+      {canRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[length:var(--font-chat-meta)] font-medium text-destructive hover:bg-destructive/10 transition-colors"
+        >
+          <RotateCcwIcon className="size-3" />
+          {t("chat.errors.retry")}
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label={t("chat.errors.dismiss")}
+        className="shrink-0 rounded p-0.5 text-destructive/70 hover:text-destructive hover:bg-destructive/10 transition-colors"
+      >
+        <XIcon className="size-3.5" />
+      </button>
+    </div>
+  );
+});
+TurnErrorBanner.displayName = "TurnErrorBanner";
 
 // ─── User Header ───
 
@@ -433,7 +480,7 @@ export const ChatMessages = memo(function ChatMessages() {
   const messages = useChatStore((s) => s.messages);
   const streamingMessage = useChatStore((s) => s.streamingMessage);
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const preparePhase = useChatStore((s) => s.preparePhase);
+  const chatError = useChatStore((s) => s.error);
   const isLoadingSession = useChatStore((s) => s.isLoadingSession);
   const activeTabId = useChatStore((s) => s.activeTabId);
   const chatSessionId = useChatStore((s) => s.sessionId);
@@ -455,9 +502,9 @@ export const ChatMessages = memo(function ChatMessages() {
   });
   const turnMeta = useChatStore((s) => s.turnMeta);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const streamingLabel = preparePhase
-    ? t(`chat.prepare.${preparePhase}`, { defaultValue: t("chat.prepare.thinking") })
-    : t("chat.prepare.thinking");
+  // Only during main-process prepare phases (project sync, session/MCP connect,
+  // model spin-up) — NOT while Worked for / ThinkingWidget render reply content.
+  const streamingLabel = t("chat.prepare.planningNext");
 
   useEffect(() => {
     if (!projectRoot) return;
@@ -638,37 +685,62 @@ export const ChatMessages = memo(function ChatMessages() {
     [turns, turnMeta],
   );
 
-  // Placeholder "Thinking…" until the assistant emits real content (text,
-  // thinking widget, or a tool call). Hide for the rest of the turn once seen.
-  const [contentSeenThisTurn, setContentSeenThisTurn] = useState(false);
-  useEffect(() => {
-    if (!isStreaming) setContentSeenThisTurn(false);
-  }, [isStreaming]);
-  useEffect(() => {
-    if (!isStreaming || contentSeenThisTurn) return;
-    const hasContent = displayMessages.some(
-      (m) =>
-        m.type === "assistant" &&
-        m.message?.content?.some((b) => {
-          if (b.type === "text" && b.text?.trim()) return true;
-          if (
-            b.type === "thinking" &&
-            b.thinking?.trim() &&
-            !(b as { _progress?: boolean })._progress
-          ) {
-            return true;
-          }
-          if (b.type === "tool_use") return true;
-          return false;
-        }),
-    );
-    if (hasContent) setContentSeenThisTurn(true);
-  }, [displayMessages, isStreaming, contentSeenThisTurn]);
-  const showStreamingIndicator = isStreaming && !contentSeenThisTurn;
+  // Whether the *current* turn (after the last user message) has assistant
+  // content yet. Must NOT scan the full message list — turn 1 replies would
+  // otherwise hide the wait indicator on turn 2+ immediately.
+  const lastTurnForIndicator = turns[turns.length - 1];
+  const hasCurrentTurnAssistantContent = useMemo(() => {
+    const scanBlocks = (msg: ChatStreamMessage | null | undefined) => {
+      if (!msg || msg.type !== "assistant") return false;
+      return (msg.message?.content ?? []).some((b: ContentBlock) => {
+        if (b.type === "text" && b.text?.trim()) return true;
+        if (
+          b.type === "thinking" &&
+          b.thinking?.trim() &&
+          !(b as { _progress?: boolean })._progress
+        ) {
+          return true;
+        }
+        if (b.type === "tool_use") return true;
+        return false;
+      });
+    };
+    if (scanBlocks(streamingMessage)) return true;
+    for (const r of lastTurnForIndicator?.responses ?? []) {
+      if (scanBlocks(r.msg)) return true;
+    }
+    return false;
+  }, [lastTurnForIndicator, streamingMessage]);
+
+  // Show until THIS turn gets assistant content (then Activity fold takes over).
+  const showStreamingIndicator = isStreaming && !hasCurrentTurnAssistantContent;
 
   const lastTurnUserKey = turns[turns.length - 1]?.userMessage
     ? committed.idxMap.get(turns[turns.length - 1].userMessage!) ?? turns.length
     : turns.length;
+
+  // Text of the last user message — enables the error banner's retry action.
+  const lastTurnRetryText = useMemo(() => {
+    const msg = turns[turns.length - 1]?.userMessage;
+    if (!msg) return "";
+    return contentBlocks(msg.message?.content)
+      .filter((b) => b.type === "text")
+      .map((b) => (b as { text?: string }).text || "")
+      .join("\n")
+      .trim();
+  }, [turns]);
+
+  const handleRetryTurn = useCallback(() => {
+    if (!lastTurnRetryText) return;
+    const s = useChatStore.getState();
+    s._setError(s.activeTabId, null);
+    void s.sendPrompt(lastTurnRetryText);
+  }, [lastTurnRetryText]);
+
+  const handleDismissError = useCallback(() => {
+    const s = useChatStore.getState();
+    s._setError(s.activeTabId, null);
+  }, []);
 
   // Track the last user message OBJECT so we can distinguish between:
   //  - a genuinely new message appended at the tail (should reset auto-scroll)
@@ -1248,6 +1320,14 @@ export const ChatMessages = memo(function ChatMessages() {
             </section>
             );
           })}
+          {chatError && !isStreaming && (
+            <TurnErrorBanner
+              text={chatError}
+              canRetry={!!lastTurnRetryText}
+              onRetry={handleRetryTurn}
+              onDismiss={handleDismissError}
+            />
+          )}
         </div>
       </div>
 

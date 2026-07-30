@@ -9,7 +9,7 @@ import {
   ndJsonStream,
 } from "@agentclientprotocol/sdk";
 import { createLogger } from "../services/logger";
-import { getBuiltinToolFiles, BUILTIN_TOOLS, readBridgePathsSource } from "../tools";
+import { getBuiltinToolFiles, BUILTIN_TOOLS, readBridgePathsSource, readPermissionBridgePollSource } from "../tools";
 import {
   buildOpencodeToolDescription,
   patchToolDescription,
@@ -17,7 +17,7 @@ import {
 import { buildPermissionOutcome, type PermissionResponse } from "./permission";
 import { resolveChatTabId } from "../services/chat-session-registry";
 import { mcpJsonToAcpServers, type AcpMcpServer } from "./mcp-transform";
-import { ensureDefaultMcpServers } from "../services/project-mcp-defaults";
+import { ensureDefaultMcpServers, isEagerMcpServer, mergeMcpAllowlist, mcpAllowlistSetsEqual } from "../services/project-mcp-defaults";
 import {
   getPermissionRulesForMode,
   resolvePermissionMode,
@@ -25,6 +25,7 @@ import {
   extractPermissionToolName,
   resolvePermissionAction,
   resolveBridgeToolCallSyncAction,
+  buildPermissionRulesFromSettings,
   type PermissionMode,
 } from "../services/permission-modes";
 import {
@@ -34,7 +35,7 @@ import {
   shouldDenyOrchestratorBuiltinTask,
 } from "../services/task-orchestrator-gate";
 import { emitChatStream } from "../services/chat-stream-notify";
-import { addBashAllowAlwaysFromCommand, addToolAllowAlways, getSettings, isBashCommandAllowAlways, isToolAllowAlways } from "../services/settings";
+import { addBashAllowAlwaysFromCommand, addToolAllowAlways, getSettings } from "../services/settings";
 import { sanitizeSkillPermissionMap, skillPermissionNeedsRepair } from "../services/skills-sync";
 import { buildEnabledToolsConfig, ensurePlanAgentPermissionConfig } from "../services/opencode-tools-config";
 import {
@@ -164,6 +165,15 @@ export class AcpService {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectBaseDelay = 1000;
+  /**
+   * Last time any session/update frame arrived per session. OpenCode goes
+   * completely silent on the wire while it retries a failed provider call
+   * (rate limit / quota / 5xx) — these timestamps let the turn watchdog
+   * distinguish "model still working" from "upstream silently retrying".
+   */
+  private sessionActivityAt = new Map<string, number>();
+  /** MCP server names already pushed to OpenCode for each session (lazy-load dedupe). */
+  private sessionLoadedMcpNames = new Map<string, Set<string>>();
   /** Stored API keys from last chat:send — reused on reconnect. */
   private lastExtraEnv: Record<string, string> = {};
   /** Env actually baked into the running OpenCode child (keys only take effect at spawn). */
@@ -807,40 +817,29 @@ export class AcpService {
             && this.projectPath
               ? sessionHasPendingPlanDraft(this.projectPath, sessionId)
               : false;
+          const movePaths = this.extractMovePathsFromPermissionParams(
+            params as Record<string, unknown>,
+          );
           const planPermCtx = {
             filePath: editFilePath,
             projectRoot: this.projectPath,
             sessionId: sessionId ?? null,
             bashCommand,
+            bashCwd: bashCwd,
+            sourcePath: movePaths.source,
+            destinationPath: movePaths.destination,
             planDraftPending,
           };
-          let action = resolvePermissionAction(mode, toolName, sessionAgent, planPermCtx);
-          // Persisted "Allow always": bash uses command patterns; other tools use tool name.
-          // Plan ask overrides must still prompt — never skip via allow-always.
-          const planAskLocked =
-            sessionAgent === "plan"
-            && getPlanPermissionOverride(toolName, planPermCtx) === "ask";
-          if (action === "prompt" && !planAskLocked) {
-            const isBash =
-              this.isBashTool(toolName) ||
-              toolName === "experiment-run" ||
-              /bash|shell|terminal|command/.test(toolName);
-            if (
-              isBash &&
-              ((bashCommand && isBashCommandAllowAlways(bashCommand)) ||
-                isToolAllowAlways(toolName))
-            ) {
-              action = "allow";
-              log.debug(
-                `permission:bash-always-hit id=${permissionId} tool=${toolName || "?"} cmd=${(bashCommand || "").slice(0, 80)}`,
-              );
-            } else if (!isBash && isToolAllowAlways(toolName)) {
-              action = "allow";
-              log.debug(
-                `permission:allow-always-hit id=${permissionId} tool=${toolName || "?"}`,
-              );
-            }
-          }
+          const permRules = buildPermissionRulesFromSettings(
+            getSettings() as Record<string, unknown>,
+          );
+          let action = resolvePermissionAction(
+            mode,
+            toolName,
+            sessionAgent,
+            planPermCtx,
+            permRules,
+          );
           const tabId = sessionId ? resolveChatTabId(sessionId) : undefined;
           const toolCallId =
             (params as { toolCallId?: string }).toolCallId
@@ -1387,6 +1386,16 @@ export class AcpService {
       log.error("bridge-paths.ts missing from tools source — custom OpenCode tools will fail to load");
     }
 
+    const pollContent = readPermissionBridgePollSource();
+    if (pollContent) {
+      const pollDest = join(toolsDir, "permission-bridge-poll.ts");
+      if (!existsSync(pollDest) || readFileSync(pollDest, "utf-8") !== pollContent) {
+        writeFileSync(pollDest, pollContent, "utf-8");
+      }
+    } else {
+      log.error("permission-bridge-poll.ts missing from tools source — gated tools will fail to load");
+    }
+
     const files = getBuiltinToolFiles();
     if (files.length === 0) {
       log.debug("No built-in tools to sync — directory is empty");
@@ -1682,32 +1691,35 @@ export class AcpService {
   /** Load project-level agent config. Uses cache from prewarmProject when available. */
   private loadProjectAgentConfig(
     projectRoot: string,
-    options?: { mcpServerAllowlist?: string[] },
+    options?: { mcpServerAllowlist?: string[]; eagerOnly?: boolean },
   ): {
     mcpServers: AcpMcpServer[];
     additionalDirectories: string[];
   } {
-    const useCache = !options?.mcpServerAllowlist?.length;
-    if (useCache && this.cachedAgentConfig?.projectRoot === projectRoot) {
+    const base =
+      this.cachedAgentConfig?.projectRoot === projectRoot
+        ? {
+            mcpServers: this.cachedAgentConfig.mcpServers,
+            additionalDirectories: this.cachedAgentConfig.additionalDirectories,
+          }
+        : this.readAgentConfig(projectRoot);
+
+    if (options?.eagerOnly) {
       return {
-        mcpServers: this.cachedAgentConfig.mcpServers,
-        additionalDirectories: this.cachedAgentConfig.additionalDirectories,
+        ...base,
+        mcpServers: base.mcpServers.filter((s) => isEagerMcpServer(s.name)),
       };
     }
 
-    const config = this.readAgentConfig(projectRoot);
-    if (!options?.mcpServerAllowlist?.length) {
-      if (!this.cachedAgentConfig || this.cachedAgentConfig.projectRoot !== projectRoot) {
-        log.warn("Agent config cache miss — reading from disk", { projectRoot });
-      }
-      return config;
+    if (options?.mcpServerAllowlist?.length) {
+      const allow = new Set(options.mcpServerAllowlist);
+      return {
+        ...base,
+        mcpServers: base.mcpServers.filter((s) => allow.has(s.name)),
+      };
     }
 
-    const allow = new Set(options.mcpServerAllowlist);
-    return {
-      ...config,
-      mcpServers: config.mcpServers.filter((s) => allow.has(s.name)),
-    };
+    return base;
   }
 
   /**
@@ -1726,7 +1738,10 @@ export class AcpService {
 
     this.projectPath = cwd;
     const root = projectRoot || cwd;
-    const { mcpServers, additionalDirectories } = this.loadProjectAgentConfig(root, options);
+    // session/new: eager MCPs only (paper-search-mcp). Others load on @ / allowlist.
+    const { mcpServers, additionalDirectories } = this.loadProjectAgentConfig(root, {
+      eagerOnly: true,
+    });
 
     const params: any = { cwd, mcpServers };
     if (options?.agentId) {
@@ -1740,6 +1755,7 @@ export class AcpService {
       cwd,
       mcpCount: mcpServers.length,
       mcpNames: mcpServers.map((s) => s.name),
+      mcpMode: "eager-only",
     });
 
     const result = await this.conn.extMethod("session/new", params);
@@ -1747,6 +1763,7 @@ export class AcpService {
     const sessionId = (result as any)?.sessionId || (result as any)?.id;
     if (!sessionId) throw new Error("session/new did not return a sessionId");
     this.opencodeHydratedSessions.add(sessionId);
+    this.sessionLoadedMcpNames.set(sessionId, new Set(mcpServers.map((s) => s.name)));
 
     // Set the model via standard ACP session/set_model
     if (model) {
@@ -2149,6 +2166,25 @@ export class AcpService {
   async ensureSessionHydrated(sessionId: string, cwd: string, projectRoot?: string): Promise<void> {
     if (!this.conn || this.opencodeHydratedSessions.has(sessionId)) return;
     await this.initSession(sessionId, cwd, projectRoot);
+  }
+
+  /**
+   * Ensure the session has the requested MCP servers connected (lazy load).
+   * Skips session/load when the loaded set already matches.
+   */
+  async ensureSessionMcps(
+    sessionId: string,
+    cwd: string,
+    projectRoot: string,
+    allowlist?: string[] | null,
+  ): Promise<void> {
+    const desired = mergeMcpAllowlist(allowlist);
+    const loaded = this.sessionLoadedMcpNames.get(sessionId);
+    if (loaded && mcpAllowlistSetsEqual([...loaded], desired)) {
+      return;
+    }
+    await this.reloadSessionMcps(sessionId, cwd, projectRoot, desired);
+    this.sessionLoadedMcpNames.set(sessionId, new Set(desired));
   }
 
   /**
@@ -2863,8 +2899,18 @@ export class AcpService {
     const mode = resolvePermissionMode(
       (getSettings() as Record<string, unknown>).permissionMode as string | undefined,
     );
-    const syncAction = resolveBridgeToolCallSyncAction(mode, "bash", this.getSessionAgent(sessionId));
+    const permRules = buildPermissionRulesFromSettings(
+      getSettings() as Record<string, unknown>,
+    );
     const cwd = args.cwd || this.projectPath || process.cwd();
+    const action = resolvePermissionAction(mode, "bash", this.getSessionAgent(sessionId), {
+      projectRoot: this.projectPath || undefined,
+      bashCommand: command.trim(),
+      bashCwd: cwd,
+      sessionId,
+    }, permRules);
+    const syncAction =
+      action === "allow" ? "auto_allow" : action === "deny" ? "deny" : "prompt";
     const job: ApprovedBashJob = {
       sessionId,
       chatTabId: tabId,
@@ -2944,7 +2990,25 @@ export class AcpService {
     const mode = resolvePermissionMode(
       (getSettings() as Record<string, unknown>).permissionMode as string | undefined,
     );
-    const syncAction = resolveBridgeToolCallSyncAction(mode, normalized, this.getSessionAgent(sessionId));
+    const pick = (...keys: string[]) => {
+      for (const key of keys) {
+        const val = input?.[key];
+        if (typeof val === "string" && val.trim()) return val.trim();
+      }
+      return undefined;
+    };
+    const permRules = buildPermissionRulesFromSettings(
+      getSettings() as Record<string, unknown>,
+    );
+    const action = resolvePermissionAction(mode, normalized, this.getSessionAgent(sessionId), {
+      projectRoot: this.projectPath,
+      filePath: pick("file_path", "filePath", "path"),
+      sourcePath: pick("source_path", "sourcePath", "source", "src", "path"),
+      destinationPath: pick("destination_path", "destinationPath", "destination", "dst"),
+      sessionId,
+    }, permRules);
+    const syncAction =
+      action === "allow" ? "auto_allow" : action === "deny" ? "deny" : "prompt";
 
     if (syncAction === "auto_allow") {
       if (readBashPermissionStatus(sessionId, toolCallId)) return;
@@ -3086,6 +3150,29 @@ export class AcpService {
     return typeof msg === "string" ? msg.trim() : "";
   }
 
+  /** Best-effort paths for move permission gating. */
+  private extractMovePathsFromPermissionParams(params: Record<string, unknown>): {
+    source?: string;
+    destination?: string;
+  } {
+    const tc = (params.toolCall ?? params.tool_call) as Record<string, unknown> | undefined;
+    const input = (tc?.rawInput ?? tc?.raw_input ?? tc?.input ?? params.input) as
+      | Record<string, unknown>
+      | undefined;
+    if (!input || typeof input !== "object") return {};
+    const pick = (...keys: string[]) => {
+      for (const key of keys) {
+        const val = input[key];
+        if (typeof val === "string" && val.trim()) return val.trim();
+      }
+      return undefined;
+    };
+    return {
+      source: pick("source_path", "sourcePath", "source", "src", "path"),
+      destination: pick("destination_path", "destinationPath", "destination", "dst"),
+    };
+  }
+
   /** Best-effort path for edit/write/apply_patch permission gating (Plan draft allowlist). */
   private extractFilePathFromPermissionParams(params: Record<string, unknown>): string {
     const tc = (params.toolCall ?? params.tool_call) as Record<string, unknown> | undefined;
@@ -3191,6 +3278,12 @@ export class AcpService {
   }
 
   private emitNotification(method: string, params: any): void {
+    if (method === "session/update") {
+      const sid = params?.sessionId;
+      if (typeof sid === "string" && sid) {
+        this.sessionActivityAt.set(sid, Date.now());
+      }
+    }
     for (const handler of this.notificationHandlers) {
       try {
         handler(method, params);
@@ -3198,6 +3291,61 @@ export class AcpService {
         log.debug(`Notification handler error (${method}): ${err.message}`);
       }
     }
+  }
+
+  // ─── Turn Watchdog ─────────────────────────────────────────
+  //
+  // OpenCode emits NO ACP frames while its internal provider-retry loop is
+  // sleeping (rate limits, quota gates, 5xx), and halt() never notifies the
+  // client when retries are exhausted. Without a watchdog the chat UI stays
+  // in "streaming" forever with zero feedback.
+  //
+  // The watchdog is silence-based (not duration-based): a long agent turn
+  // keeps emitting frames, so only true upstream silence triggers it.
+
+  /** Warn the UI after this much upstream silence (provider likely retrying). */
+  static readonly TURN_STALL_WARN_MS = 30_000;
+  /** Auto-abort the turn after this much uninterrupted upstream silence. */
+  static readonly TURN_HARD_TIMEOUT_MS = 360_000;
+
+  startTurnWatchdog(
+    sessionId: string,
+    callbacks: {
+      onStall: (silentMs: number) => void;
+      onTimeout: (silentMs: number) => void;
+    },
+    opts?: { stallMs?: number; timeoutMs?: number; pollMs?: number },
+  ): () => void {
+    const stallMs = opts?.stallMs ?? AcpService.TURN_STALL_WARN_MS;
+    const timeoutMs = opts?.timeoutMs ?? AcpService.TURN_HARD_TIMEOUT_MS;
+    const startedAt = Date.now();
+    this.sessionActivityAt.set(sessionId, startedAt);
+    let stalled = false;
+    let fired = false;
+    const timer = setInterval(() => {
+      if (fired) return;
+      const last = Math.max(startedAt, this.sessionActivityAt.get(sessionId) ?? 0);
+      const silentMs = Date.now() - last;
+      if (silentMs >= timeoutMs) {
+        fired = true;
+        clearInterval(timer);
+        log.error(`turn watchdog hard timeout: sessionId=${sessionId} silentMs=${silentMs}`);
+        callbacks.onTimeout(silentMs);
+        return;
+      }
+      if (!stalled && silentMs >= stallMs) {
+        stalled = true;
+        log.warn(`turn watchdog stall: sessionId=${sessionId} silentMs=${silentMs}`);
+        callbacks.onStall(silentMs);
+      } else if (stalled && silentMs < stallMs) {
+        // Stream resumed — allow a future stall to warn again.
+        stalled = false;
+      }
+    }, opts?.pollMs ?? 2_000);
+    return () => {
+      fired = true;
+      clearInterval(timer);
+    };
   }
 
   // ─── Binary Discovery ───────────────────────────────────────

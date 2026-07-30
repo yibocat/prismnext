@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import { getMentionableFiles } from "@/lib/files/mentionable-files";
 import { pickComposerAttachments, projectFileToAttachment, attachmentsFromAbsolutePaths, type ComposerAttachment } from "@/lib/chat/composer-attach-file";
-import { isComposerEmpty, type ComposerPart, COMPOSER_PLACEHOLDER } from "@/lib/chat/composer-parts";
+import { isComposerEmpty, type ComposerPart, COMPOSER_PLACEHOLDER, composerNeedsExpandedLayout } from "@/lib/chat/composer-parts";
 import { loadSlashCatalog } from "@/lib/chat/slash-catalog";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -22,7 +22,6 @@ import {
   shouldSendPromptToAgent,
   buildComposerDisplayBlocks,
   loadDraftParts,
-  saveDraftFromParts,
   type InlineComposerEditorHandle,
 } from "@/components/modules/chat/inline-composer";
 
@@ -79,10 +78,8 @@ export interface PinnedContext {
   selectedText: string;
 }
 
-/** Expand capsule layout only for explicit multi-line text — not @/ tokens alone. */
-export function composerNeedsExpandedLayout(parts: ComposerPart[]): boolean {
-  return parts.some((p) => p.type === "text" && p.text.includes("\n"));
-}
+/** @deprecated import from `@/lib/chat/composer-parts` */
+export { composerNeedsExpandedLayout } from "@/lib/chat/composer-parts";
 
 export function useChatComposer() {
   const editorRef = useRef<InlineComposerEditorHandle>(null);
@@ -97,6 +94,7 @@ export function useChatComposer() {
   const tabDraft = useChatStore(
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.draft,
   );
+  const draftEmpty = useComposerEditorStore((s) => s.draftEmpty);
   const composerInsertNonce = useComposerInsertStore((s) => s.nonce);
   const composerAttachNonce = useComposerInsertStore((s) => s.attachNonce);
 
@@ -127,10 +125,27 @@ export function useChatComposer() {
 
   const draftParts = useMemo(() => loadDraftParts(tabDraft), [tabDraft]);
 
-  const setDraftParts = useCallback((parts: ComposerPart[]) => {
+  const setDraftParts = useCallback((parts: ComposerPart[], immediate = false) => {
     const tabId = useChatStore.getState().activeTabId;
-    useChatStore.getState().saveDraft(tabId, saveDraftFromParts(parts));
+    const editorStore = useComposerEditorStore.getState();
+    if (immediate) {
+      editorStore.replaceDraftNow(tabId, parts);
+    } else {
+      editorStore.scheduleDraftPersist(tabId, parts);
+    }
   }, []);
+
+  const activeTabId = useChatStore((s) => s.activeTabId);
+  useEffect(() => {
+    useComposerEditorStore.getState().flushDraftPersist();
+    const tab = useChatStore.getState().tabs.find((t) => t.id === activeTabId);
+    const parts = loadDraftParts(tab?.draft);
+    const empty = isComposerEmpty(parts);
+    useComposerEditorStore.setState({
+      draftEmpty: empty,
+      draftNeedsExpanded: composerNeedsExpandedLayout(parts),
+    });
+  }, [activeTabId]);
 
   const refreshSlashCatalog = useCallback(async () => {
     const { skills, mcps } = await loadSlashCatalog(projectRoot);
@@ -157,7 +172,6 @@ export function useChatComposer() {
     void refreshSlashCatalog();
   }, [projectRoot, refreshSlashCatalog]);
 
-  const activeTabId = useChatStore((s) => s.activeTabId);
   useEffect(() => {
     setPinnedContexts([]);
     setPendingAttachments([]);
@@ -238,7 +252,7 @@ export function useChatComposer() {
   }, [loadCommands]);
 
   const canSend =
-    !isComposerEmpty(draftParts) ||
+    !draftEmpty ||
     pinnedContexts.length > 0 ||
     pendingAttachments.length > 0;
 
@@ -266,6 +280,7 @@ export function useChatComposer() {
   }, []);
 
   const handleSend = useCallback(async () => {
+    useComposerEditorStore.getState().flushDraftPersist();
     const parts = editorRef.current?.getParts() ?? draftParts;
     const attachments = pendingAttachmentsRef.current;
     if (isComposerEmpty(parts) && pinnedContextsRef.current.length === 0 && attachments.length === 0) {
@@ -292,11 +307,11 @@ export function useChatComposer() {
           message: { content: quickDisplay },
         });
         store._setStreaming(tabId, true);
+        setDraftParts([{ type: "text", text: "" }], true);
+        setPinnedContexts([]);
+        setPendingAttachments([]);
       });
       skipUserAppend = true;
-      setDraftParts([{ type: "text", text: "" }]);
-      setPinnedContexts([]);
-      setPendingAttachments([]);
       editorRef.current?.focus();
     }
 
@@ -518,7 +533,7 @@ export function useChatComposer() {
     }
 
     if (!skipUserAppend) {
-      setDraftParts([{ type: "text", text: "" }]);
+      setDraftParts([{ type: "text", text: "" }], true);
       setPinnedContexts([]);
       setPendingAttachments([]);
       editorRef.current?.focus();

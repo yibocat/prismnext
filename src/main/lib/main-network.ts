@@ -51,6 +51,3 @@ export async function mainNetFetch(
 export function installMainProcessNetwork(): void {
   setCatalogFetch(mainNetFetch as typeof fetch);
 }
-
-/** @deprecated Use {@link mainNetFetch} — kept for incremental migration. */
-export const chromiumFetch = mainNetFetch;

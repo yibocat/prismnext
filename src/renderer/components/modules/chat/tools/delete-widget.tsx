@@ -13,8 +13,7 @@ import {
 } from "./shared";
 import { ChatFileLink } from "../chat-file-link";
 import { useToolPermission } from "./use-tool-permission";
-import { isComposerHostedPermission } from "../permission-gate-panel";
-import { useSettingsStore } from "@/stores/settings-store";
+import { useComposerHostedPermission } from "../permission-gate-panel";
 
 export const DeleteWidget = memo(function DeleteWidget({
   toolUse,
@@ -26,16 +25,11 @@ export const DeleteWidget = memo(function DeleteWidget({
   toolName: string;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const permissionMode = useSettingsStore((s) => s.settings.permissionMode);
   const { isAwaitingPermission, isToolDenied } = useToolPermission(
     toolUse.id || "",
     toolName,
   );
-  const composerHosted = isComposerHostedPermission(
-    permissionMode,
-    toolName,
-    isAwaitingPermission,
-  );
+  const composerHosted = useComposerHostedPermission(toolUse, toolName, isAwaitingPermission);
   const filePath =
     param(toolUse.input, "file_path", "filePath")
     || param(toolUse.input, "path") || "";
@@ -74,9 +68,6 @@ export const DeleteWidget = memo(function DeleteWidget({
         <Trash2Icon className="size-3.5 shrink-0 text-destructive" />
         <span className={TOOL_INLINE_LABEL_CLASS}>
           {filePath ? <ChatFileLink path={filePath} /> : fileName}
-        </span>
-        <span className="text-primary shrink-0 text-[length:var(--font-chat-meta)]">
-          Confirm above
         </span>
       </button>
     );

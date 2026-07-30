@@ -45,7 +45,8 @@ export type SettingsPanelSlot =
   | { kind: "skill-markdown"; mode: "edit"; skillId: string; title?: string }
   | { kind: "skill-library" }
   | { kind: "shortcuts" }
-  | { kind: "logs" };
+  | { kind: "logs" }
+  | { kind: "permission-rules"; field: "allowed-paths" | "allow-rules" | "deny-rules" };
 
 function tt(key: string, fallback: string): string {
   return i18n.t(key, { defaultValue: fallback });
@@ -126,6 +127,16 @@ export function settingsPanelSlotTitle(slot: SettingsPanelSlot | null): string |
       return tt("settings.slots.shortcuts", "Shortcuts");
     case "logs":
       return tt("settings.slots.logs", "Logs");
+    case "permission-rules": {
+      switch (slot.field) {
+        case "allowed-paths":
+          return tt("settings.permissions.allowedPaths", "Allowed paths");
+        case "allow-rules":
+          return tt("settings.permissions.allowRules", "Allow rules");
+        case "deny-rules":
+          return tt("settings.permissions.denyRules", "Deny rules");
+      }
+    }
     default:
       return null;
   }

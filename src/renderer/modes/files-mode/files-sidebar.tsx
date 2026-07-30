@@ -57,7 +57,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getModeDir, type SidebarMode, filterFilesByMode, filterFoldersByMode } from "./file-filter";
 import { trackRecentOpenedFile, setProjectLastActiveFileId } from "@/lib/files/recent-files";
-import { FolderVirtRow, FileVirtRow, InlineEditRow, type VirtTreeCallbacks } from "@/components/layout/right-sidebar/virtual-tree-rows";
+import { FolderVirtRow, FileVirtRow, InlineEditRow, FILE_TREE_ROW_ATTR, type VirtTreeCallbacks } from "@/components/layout/right-sidebar/virtual-tree-rows";
 import {
   pickGitFileItemForPath,
   resolveGitChangeBadgeForPath,
@@ -505,6 +505,20 @@ export function FilesSidebar() {
     setSelectedFolder(path);
     setActiveFile(""); // Clear file highlight when selecting a folder
   }, [setActiveFile]);
+
+  /** Blank tree area → project root (no folder/file selected; create at root in All mode). */
+  const handleSelectTreeRoot = useCallback(() => {
+    setSelectedFolder(null);
+    setActiveFile("");
+  }, [setActiveFile]);
+
+  const handleTreeBackgroundClick = useCallback(
+    (e: React.MouseEvent) => {
+      if ((e.target as HTMLElement).closest(`[${FILE_TREE_ROW_ATTR}]`)) return;
+      handleSelectTreeRoot();
+    },
+    [handleSelectTreeRoot],
+  );
   const handleEditingDone = useCallback(() => setEditing(null), []);
 
   // ─── Virtual tree: flat visible nodes + Virtuoso ref ───
@@ -693,7 +707,7 @@ export function FilesSidebar() {
               <div
                 className="flex-1 h-full min-h-0 px-1.5"
                 data-sidebar="content"
-                onClick={(e) => { if (e.target === e.currentTarget) { setSelectedFolder(null); setActiveFile(""); } }}
+                onClick={handleTreeBackgroundClick}
               >
                 <Virtuoso
                   ref={virtuosoRef}

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, memo } from "react";
 import { useTranslation } from "react-i18next";
 import { useChatStore } from "@/stores/chat-store";
 import { useExperimentStore } from "@/stores/experiment-store";
@@ -14,8 +14,7 @@ import {
 } from "@/lib/chat/composer-pending-experiment";
 import {
   PermissionGatePanel,
-  usePermissionGateOpen,
-  usePermissionGatePeek,
+  usePermissionGateState,
 } from "./permission-gate-panel";
 import { PlanSuggestBar } from "./plan-suggest-bar";
 import { PlanChrome } from "./plan-chrome";
@@ -46,8 +45,9 @@ function useComposerChromeStackItems(): ComposerChromeStackItem[] {
     const tab = s.tabs.find((x) => x.id === s.activeTabId);
     return !tab?.composerToolsSuppressed;
   });
-  const permissionOpen = usePermissionGateOpen();
-  const permissionPeek = usePermissionGatePeek();
+  const permissionGate = usePermissionGateState();
+  const permissionOpen = permissionGate.show;
+  const permissionPeek = permissionGate.peekLabel;
 
   const questionPeek = useMemo(() => {
     if (!questionId) return null;
@@ -87,10 +87,9 @@ function useComposerChromeStackItems(): ComposerChromeStackItem[] {
         id: "permission-gate",
         order: 0,
         peekLabel: permissionPeek,
-        content: <PermissionGatePanel />,
+        content: <PermissionGatePanel gate={permissionGate} />,
       });
-    }
-    if (planSuggestVisible) {
+    }    if (planSuggestVisible) {
       items.push({
         id: "plan-suggest",
         order: 10,
@@ -136,6 +135,7 @@ function useComposerChromeStackItems(): ComposerChromeStackItem[] {
 
     return items;
   }, [
+    permissionGate,
     permissionOpen,
     permissionPeek,
     planSuggestVisible,
@@ -153,10 +153,8 @@ function useComposerChromeStackItems(): ComposerChromeStackItem[] {
 }
 
 /** Stacked composer chrome — overlapping cards above the input (hover to expand). */
-export function ComposerChromeStack() {
+export const ComposerChromeStack = memo(function ComposerChromeStack() {
   const items = useComposerChromeStackItems();
   if (items.length === 0) return null;
   return <ComposerChromeStackBody items={items} />;
-}
-
-export { usePermissionGateOpen };
+});

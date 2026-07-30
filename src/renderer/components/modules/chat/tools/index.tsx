@@ -17,7 +17,7 @@ export { MoveWidget } from "./move-widget";
 export { LspWidget } from "./lsp-widget";
 export { GenericWidget } from "./generic-widget";
 export { ToolWidget } from "./tool-widget-dispatcher";
-export { getToolMeta, usesProposedChange, shouldTrackProposedChange, isFileWriteTool, isPatchTool, isDiskMutationTool, extractPatchTargetPaths } from "./tool-meta";
+export { getToolMeta, usesProposedChange, isFileWriteTool, isPatchTool, isDiskMutationTool, extractPatchTargetPaths } from "./tool-meta";
 export type { ToolMeta, PermissionConfirmUx, PermissionGroup } from "./tool-meta";
 export { ChangeReviewBar } from "./change-review-bar";
 export { useToolPermission } from "./use-tool-permission";

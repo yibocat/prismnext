@@ -9,9 +9,6 @@ import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useComposerInsertStore } from "@/stores/composer-insert-store";
 import { useComposerEditorStore } from "@/stores/composer-editor-store";
-import { composerNeedsExpandedLayout } from "@/hooks/use-chat-composer";
-import { isComposerEmpty } from "@/lib/chat/composer-parts";
-import { loadDraftParts } from "./inline-composer";
 import { XIcon } from "lucide-react";
 import { WorktreeSelector } from "./worktree-selector";
 import { IntensiveReadingListButton } from "./intensive-reading-list-button";
@@ -68,9 +65,8 @@ export function AiBar() {
 
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const tabDraft = useChatStore(
-    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.draft,
-  );
+  const draftEmpty = useComposerEditorStore((s) => s.draftEmpty);
+  const draftNeedsExpanded = useComposerEditorStore((s) => s.draftNeedsExpanded);
   const activeTabTitleRaw = useChatStore((s) => {
     const tab = s.tabs.find((t) => t.id === s.activeTabId);
     return tab?.title ?? "Chat";
@@ -82,8 +78,6 @@ export function AiBar() {
   const attachNonce = useComposerInsertStore((s) => s.attachNonce);
   const attachmentCount = useComposerInsertStore((s) => s.composerAttachmentCount);
 
-  const draftParts = loadDraftParts(tabDraft);
-  const draftEmpty = isComposerEmpty(draftParts);
   const draftEmptyRef = useRef(draftEmpty);
   draftEmptyRef.current = draftEmpty;
   const attachmentCountRef = useRef(attachmentCount);
@@ -155,10 +149,10 @@ export function AiBar() {
   // Expand only for explicit newlines in draft — line-full overflow handled in editor
   useEffect(() => {
     if (phase !== "input") return;
-    if (composerNeedsExpandedLayout(draftParts)) {
+    if (draftNeedsExpanded) {
       setPhase("expanded");
     }
-  }, [draftParts, phase]);
+  }, [draftNeedsExpanded, phase]);
 
   // Shrink back to compact capsule when expanded content is cleared.
   // Whitespace/newline-only drafts count as "empty" for send but still need expanded layout.
@@ -167,11 +161,11 @@ export function AiBar() {
       phase === "expanded" &&
       draftEmpty &&
       attachmentCount === 0 &&
-      !composerNeedsExpandedLayout(draftParts)
+      !draftNeedsExpanded
     ) {
       collapseToInput();
     }
-  }, [phase, draftEmpty, attachmentCount, draftParts, collapseToInput]);
+  }, [phase, draftEmpty, attachmentCount, draftNeedsExpanded, collapseToInput]);
 
   // Click outside → idle when compact capsule is empty (no draft, no attachments)
   useEffect(() => {

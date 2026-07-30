@@ -26,7 +26,7 @@ import {
   type UserDisplayContent,
 } from "../services/session-display-store";
 import { cancelAiCommandForSession } from "../services/ai-pty";
-import { setSessionProjectRoot, setSessionIntensiveBibkeys } from "../services/chat-session-registry";
+import { setSessionProjectRoot, setSessionIntensiveBibkeys, resolveChatTabId } from "../services/chat-session-registry";
 import { getPaper } from "../services/literature-service";
 import {
   buildIntensiveReadingInstruction,
@@ -55,6 +55,12 @@ import type { ChatPreparePhase } from "../../shared/chat-prepare-phases";
 import { resolveSessionAgent } from "../../shared/session-agent";
 
 const log = createLogger("chat-ipc", "agent");
+
+/** In-flight chat:send per tab — lets cancel complete the UI without waiting on prompt. */
+const inflightChatSend = new Map<
+  string,
+  { cancelled: boolean; sessionId: string; win: BrowserWindow }
+>();
 
 function emitChatPrepare(tabId: string, phase: ChatPreparePhase | null): void {
   emitChatStream(tabId, "system.prepare", { phase });
@@ -344,15 +350,27 @@ export function registerChatHandlers(): void {
       const win = BrowserWindow.fromWebContents(event.sender);
       if (!win) throw new Error("No window");
 
+      inflightChatSend.set(tabId, {
+        cancelled: false,
+        sessionId: args.sessionId || "",
+        win,
+      });
+      const isSendCancelled = () => inflightChatSend.get(tabId)?.cancelled === true;
+      const finishInflightSend = () => {
+        inflightChatSend.delete(tabId);
+      };
+
+      try {
       const service = getService();
       const cwd = args.worktreePath || args.projectPath || app.getPath("home");
       const isFirstSend = !args.sessionId;
       const clearPrepare = () => {
-        if (isFirstSend) emitChatPrepare(tabId, null);
+        emitChatPrepare(tabId, null);
       };
       // Surface progress immediately — otherwise the UI only shows bare "Thinking…"
-      // until the first await below finishes.
-      if (isFirstSend) emitChatPrepare(tabId, "syncing_project");
+      // until the first await below finishes. Every turn gets phase updates,
+      // not just the first: subsequent sends also hydrate/MCP-reload/wait.
+      emitChatPrepare(tabId, "syncing_project");
 
       // Build env vars for API keys — passed to opencode process on first init
       const extraEnv: Record<string, string> = {};
@@ -423,7 +441,7 @@ export function registerChatHandlers(): void {
         });
 
         const { ensureProjectChatPrewarm } = await import("../services/project-chat-prewarm");
-        if (isFirstSend) emitChatPrepare(tabId, "syncing_project");
+        emitChatPrepare(tabId, "syncing_project");
         await ensureProjectChatPrewarm(args.projectPath);
 
         const { refreshProjectExpertsIntegrationIfNeeded } = await import("../services/project-experts-refresh");
@@ -517,33 +535,25 @@ export function registerChatHandlers(): void {
         try {
           // ACP standard: session/new connects MCP — only when the user sends.
           emitChatPrepare(tabId, "creating_session");
-          emitChatPrepare(tabId, "connecting_mcp");
           const session = await service.createSession(
             cwd,
             model,
             args.projectPath,
-            {
-              mcpServerAllowlist: mcpServerAllowlist?.length ? mcpServerAllowlist : undefined,
-              agentId: orchestratorId,
-            },
+            { agentId: orchestratorId },
           );
           sessionId = session.id;
+          const inflight = inflightChatSend.get(tabId);
+          if (inflight) inflight.sessionId = sessionId;
           win.webContents.send("chat:sessionCreated", { tabId, sessionId });
         } catch (err: any) {
           log.error(`createSession failed: ${err.message}`);
           clearPrepare();
+          finishInflightSend();
           win.webContents.send("chat:complete", {
             tabId, sessionId: "", success: false, error: err.message,
           });
           return;
         }
-      } else if (sessionId && composerMcps.length > 0 && args.projectPath) {
-        await service.reloadSessionMcps(
-          sessionId,
-          cwd,
-          args.projectPath,
-          mcpServerAllowlist ?? composerMcps,
-        );
       }
 
       const bridge = getMapper(win);
@@ -651,8 +661,24 @@ export function registerChatHandlers(): void {
       if (!isFirstTurn && args.projectPath) {
         await service.ensureSessionHydrated(sessionId, cwd, args.projectPath);
       }
+      if (args.projectPath && sessionId) {
+        emitChatPrepare(tabId, "connecting_mcp");
+        await service.ensureSessionMcps(
+          sessionId,
+          cwd,
+          args.projectPath,
+          mcpServerAllowlist,
+        );
+      }
+      if (isSendCancelled()) {
+        clearPrepare();
+        return;
+      }
       let usage = null;
       let planDraftMissingThisTurn = false;
+      // Set by the turn watchdog's hard-timeout path (declared inside the try
+      // below via closure) — hoisted so the catch can skip double-reporting.
+      let turnSettledByWatchdog = false;
       try {
         let resources:
           | Array<
@@ -711,12 +737,46 @@ export function registerChatHandlers(): void {
         // After cancel, abort() clears the hydrate cache so sendPrompt's
         // internal session/load re-bind runs. Never mint a replacement
         // session here — interrupt must keep the same session/history.
-        if (isFirstSend) emitChatPrepare(tabId, "starting_model");
+        emitChatPrepare(tabId, isFirstSend ? "starting_model" : "waiting_model");
         const planDraftBefore =
           sessionAgent === "plan" && args.projectPath && sessionId
             ? snapshotSessionDraftMeta(args.projectPath, sessionId)
             : null;
-        const result = await service.sendPrompt(sessionId, promptForModel, promptOpts);
+
+        // Turn watchdog: OpenCode goes silent on the wire while retrying a
+        // failed provider call, and never notifies the client when retries
+        // are exhausted. Warn the UI on stall; auto-abort on hard timeout so
+        // the turn can never hang forever without feedback.
+        const stopWatchdog = service.startTurnWatchdog(sessionId!, {
+          onStall: () => {
+            emitChatPrepare(tabId, "stalled");
+          },
+          onTimeout: (silentMs) => {
+            turnSettledByWatchdog = true;
+            void service.abort(sessionId!).catch(() => {});
+            clearPrepare();
+            win.webContents.send("chat:complete", {
+              tabId,
+              sessionId,
+              success: false,
+              error: `No response from the model for ${Math.round(silentMs / 1000)}s — the turn was stopped.`,
+              errorCode: "turn_timeout",
+            });
+          },
+        });
+
+        let result: Awaited<ReturnType<typeof service.sendPrompt>>;
+        try {
+          result = await service.sendPrompt(sessionId, promptForModel, promptOpts);
+        } finally {
+          stopWatchdog();
+        }
+        if (turnSettledByWatchdog) {
+          // The watchdog already reported failure; skip the success path that
+          // would overwrite it when the aborted prompt finally resolves.
+          return;
+        }
+        if (isSendCancelled()) return;
         // Model may still be thinking — keep phase until first stream chunk
         // clears it in the renderer. Clear here only on hard failure paths.
         if (planDraftBefore && args.projectPath && sessionId) {
@@ -766,6 +826,7 @@ export function registerChatHandlers(): void {
           log.debug("No usage in PromptResponse — OpenCode/ACP may not support it yet");
         }
       } catch (err: any) {
+        if (turnSettledByWatchdog || isSendCancelled()) return;
         log.error(`sendPrompt failed: ${err.message}`);
         clearPrepare();
         win.webContents.send("chat:complete", {
@@ -886,13 +947,22 @@ export function registerChatHandlers(): void {
       // Renderer also clears prepare on first stream chunk; clear here so a
       // turn that finishes without visible parts does not leave a stuck label.
       clearPrepare();
+      if (isSendCancelled()) return;
+      // OpenCode can resolve a failed provider turn with a bare end_turn and
+      // ZERO stream frames — flag it so the renderer shows a real error
+      // instead of a fake-successful, silently empty turn.
+      const emptyTurn = !bridge.hadTurnContent();
       win.webContents.send("chat:complete", {
         tabId, sessionId, success: true, tokenUsage: effectiveUsage,
         contextBreakdown: fullBreakdown,
         categorySchema: CONTEXT_CATEGORY_SCHEMA,
         promptStale,
         planDraftMissing: planDraftMissingThisTurn,
+        emptyTurn,
       });
+      } finally {
+        finishInflightSend();
+      }
     },
   );
 
@@ -954,6 +1024,21 @@ export function registerChatHandlers(): void {
     async (_event, args: { sessionId: string }) => {
       cancelAiCommandForSession(args.sessionId);
       getService().releaseSessionPendingWork(args.sessionId);
+
+      for (const [tabId, inflight] of inflightChatSend.entries()) {
+        if (inflight.sessionId !== args.sessionId) continue;
+        inflight.cancelled = true;
+        emitChatPrepare(tabId, null);
+        inflight.win.webContents.send("chat:complete", {
+          tabId,
+          sessionId: args.sessionId,
+          success: false,
+          error: "Cancelled",
+          errorCode: "cancelled",
+        });
+        break;
+      }
+
       await getService().abort(args.sessionId);
     },
   );

@@ -20,12 +20,20 @@ export function syncComposerQueryState(
   view: EditorView,
   setQuery: (query: ComposerQuery | null) => void,
   setAnchor: (anchor: CursorAnchor | null) => void,
+  prevQueryKeyRef?: { current: string },
 ): ComposerQuery | null {
   const query = readComposerQuery(view);
-  setQuery(query);
+  const queryKey = query
+    ? `${query.kind}\x01${query.from}\x01${query.to}\x01${query.query}`
+    : "";
+  const prevKey = prevQueryKeyRef?.current ?? "";
+  if (queryKey !== prevKey) {
+    if (prevQueryKeyRef) prevQueryKeyRef.current = queryKey;
+    setQuery(query);
+  }
   if (query) {
     setAnchor(anchorForComposerQuery(view));
-  } else {
+  } else if (prevKey !== "") {
     setAnchor(null);
   }
   return query;

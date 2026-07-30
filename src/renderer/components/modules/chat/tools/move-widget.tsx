@@ -13,8 +13,7 @@ import {
 } from "./shared";
 import { ChatFileLink } from "../chat-file-link";
 import { useToolPermission } from "./use-tool-permission";
-import { isComposerHostedPermission } from "../permission-gate-panel";
-import { useSettingsStore } from "@/stores/settings-store";
+import { useComposerHostedPermission } from "../permission-gate-panel";
 
 export const MoveWidget = memo(function MoveWidget({
   toolUse,
@@ -26,16 +25,11 @@ export const MoveWidget = memo(function MoveWidget({
   toolName: string;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const permissionMode = useSettingsStore((s) => s.settings.permissionMode);
   const { isAwaitingPermission, isToolDenied } = useToolPermission(
     toolUse.id || "",
     toolName,
   );
-  const composerHosted = isComposerHostedPermission(
-    permissionMode,
-    toolName,
-    isAwaitingPermission,
-  );
+  const composerHosted = useComposerHostedPermission(toolUse, toolName, isAwaitingPermission);
   const srcPath =
     param(toolUse.input, "source_path", "sourcePath")
     || param(toolUse.input, "source", "src") || "";
@@ -82,9 +76,6 @@ export const MoveWidget = memo(function MoveWidget({
           {srcPath ? <ChatFileLink path={srcPath} /> : "…"}
           <ArrowRightIcon className="size-3 shrink-0 text-muted-foreground/60" />
           {dstPath ? <ChatFileLink path={dstPath} /> : "…"}
-        </span>
-        <span className="text-primary shrink-0 text-[length:var(--font-chat-meta)]">
-          Confirm above
         </span>
       </button>
     );

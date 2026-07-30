@@ -15,6 +15,7 @@ export { LogViewer } from "./log-viewer";
 export { BackupsSettings } from "./backups-settings";
 export { AgentSettings } from "./agent-settings";
 export { PromptsRulesSettings } from "./prompts-rules-settings";
+export { PermissionsSettings } from "./permissions-settings";
 export { SlashCommandsSettings } from "./slash-commands-settings";
 export { ToolsMcpSettings } from "./tools-mcp-settings";
 export { SkillsSettings } from "./skills-settings";

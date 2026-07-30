@@ -148,11 +148,6 @@ class PromptManager {
     });
   }
 
-  /** Legacy alias for getKnowledgeModuleCatalog. */
-  getModules(ctx: PromptContext = {}) {
-    return this.getKnowledgeModuleCatalog(ctx);
-  }
-
   /** Toggle a layer on/off. Only works for userToggleable layers. */
   setLayerEnabled(id: string, enabled: boolean): void {
     this.composer.setEnabled(id, enabled);

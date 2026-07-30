@@ -141,4 +141,3 @@ export function GitPanelOverflowMenu({
 }
 
 /** @deprecated Use GitPanelOverflowMenu */
-export const GitChangesOverflowMenu = GitPanelOverflowMenu;

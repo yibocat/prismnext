@@ -129,34 +129,37 @@ export async function finalizePermissionAllow(opts: {
   if (always && toolName?.trim()) {
     const { useSettingsStore } = await import("@/stores/settings-store");
     const n = toolName.trim().toLowerCase();
-    const isBash =
-      isBashToolName(n) || n === "experiment-run" || /bash|shell|terminal|command/.test(n);
-    if (isBash) {
-      const tab = useChatStore.getState().tabs.find((t) => t.id === tabId);
-      const toolUseMsg = [
-        ...(tab?.streamingMessage?.message?.content ?? []),
-        ...(tab?.messages.flatMap((m) => m.message?.content ?? []) ?? []),
-      ].find((b) => b.type === "tool_use" && b.id === toolCallId);
-      const input = (toolUseMsg?.input ?? {}) as Record<string, unknown>;
-      const command = String(input.command ?? input.cmd ?? "").trim();
-      if (command) {
-        const { bashAlwaysPatternFromCommand } = await import("../../shared/bash-allow-always");
-        const pattern = bashAlwaysPatternFromCommand(command);
-        if (pattern) {
-          const cur = useSettingsStore.getState().settings.bashAllowAlwaysPatterns ?? [];
-          if (!cur.includes(pattern)) {
-            await useSettingsStore.getState().updateSettings({
-              bashAllowAlwaysPatterns: [...cur.map(String), pattern],
-            });
+    const neverPersistAlways = n === "delete" || n === "move" || n === "literature-delete";
+    if (!neverPersistAlways) {
+      const isBash =
+        isBashToolName(n) || n === "experiment-run" || /bash|shell|terminal|command/.test(n);
+      if (isBash) {
+        const tab = useChatStore.getState().tabs.find((t) => t.id === tabId);
+        const toolUseMsg = [
+          ...(tab?.streamingMessage?.message?.content ?? []),
+          ...(tab?.messages.flatMap((m) => m.message?.content ?? []) ?? []),
+        ].find((b) => b.type === "tool_use" && b.id === toolCallId);
+        const input = (toolUseMsg?.input ?? {}) as Record<string, unknown>;
+        const command = String(input.command ?? input.cmd ?? "").trim();
+        if (command) {
+          const { bashAlwaysPatternFromCommand } = await import("../../shared/bash-allow-always");
+          const pattern = bashAlwaysPatternFromCommand(command);
+          if (pattern) {
+            const cur = useSettingsStore.getState().settings.bashAllowAlwaysPatterns ?? [];
+            if (!cur.includes(pattern)) {
+              await useSettingsStore.getState().updateSettings({
+                bashAllowAlwaysPatterns: [...cur.map(String), pattern],
+              });
+            }
           }
         }
-      }
-    } else {
-      const cur = useSettingsStore.getState().settings.toolAllowAlways ?? [];
-      if (!cur.some((t) => String(t).trim().toLowerCase() === n)) {
-        await useSettingsStore.getState().updateSettings({
-          toolAllowAlways: [...cur.map(String), n],
-        });
+      } else {
+        const cur = useSettingsStore.getState().settings.toolAllowAlways ?? [];
+        if (!cur.some((t) => String(t).trim().toLowerCase() === n)) {
+          await useSettingsStore.getState().updateSettings({
+            toolAllowAlways: [...cur.map(String), n],
+          });
+        }
       }
     }
   }

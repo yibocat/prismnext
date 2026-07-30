@@ -93,6 +93,15 @@ export interface AppSettings {
    */
   bashAllowAlwaysPatterns?: string[];
 
+  /** Extra directories where file/shell operations skip confirmation (absolute paths). */
+  permissionAllowedPaths?: string[];
+
+  /** Verdent-style allow rules (`ToolName(pattern)` per stored line). */
+  permissionAllowRules?: string[];
+
+  /** Verdent-style deny rules (`ToolName(pattern)` per stored line). */
+  permissionDenyRules?: string[];
+
   /**
    * Permission mode schema version. v1 stored `"auto"` as edit-auto semantics;
    * v2 renames that to `edit_auto` and makes `auto` full OpenCode-style auto.

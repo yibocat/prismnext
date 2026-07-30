@@ -49,7 +49,14 @@ vi.mock("../../src/main/services/bash-permission-bridge", async (importOriginal)
 
 import { AcpService } from "../../src/main/acp/service";
 
-describe("syncBashPermissionFromToolCall — Auto mode bridge unblock", () => {
+const ROOT = "/Users/me/paper";
+
+function withProjectPath(svc: AcpService, projectPath: string): AcpService {
+  (svc as unknown as { projectPath: string }).projectPath = projectPath;
+  return svc;
+}
+
+describe("syncBashPermissionFromToolCall — smart policy bridge", () => {
   beforeEach(() => {
     executeApprovedBashJob.mockClear();
     denyBashJob.mockClear();
@@ -57,15 +64,14 @@ describe("syncBashPermissionFromToolCall — Auto mode bridge unblock", () => {
     (AcpService as unknown as { instance: null }).instance = null;
   });
 
-  it("auto-executes custom bash when OpenCode skips ACP requestPermission", () => {
-    const svc = AcpService.getInstance();
+  it("auto-executes in-project git when OpenCode skips ACP requestPermission", () => {
+    const svc = withProjectPath(AcpService.getInstance(), ROOT);
     svc.syncBashPermissionFromToolCall({
       sessionId: "ses_auto_bash",
       tabId: "tab-1",
       toolCallId: "call_function_auto_1",
-      command:
-        'cd "/tmp/tool-output" && rg -o \'"paper_id"\' tool_f6f60871e001ArHISGb2G0neDo',
-      cwd: "/tmp",
+      command: "git commit -m test",
+      cwd: ROOT,
     });
 
     expect(executeApprovedBashJob).toHaveBeenCalledTimes(1);
@@ -74,13 +80,13 @@ describe("syncBashPermissionFromToolCall — Auto mode bridge unblock", () => {
         sessionId: "ses_auto_bash",
         chatTabId: "tab-1",
         toolCallId: "call_function_auto_1",
-        command: expect.stringContaining("tool_f6f60871e001ArHISGb2G0neDo"),
+        command: "git commit -m test",
       }),
     );
   });
 
-  it("auto-approves custom delete without emitting a prompt gate", () => {
-    const svc = AcpService.getInstance();
+  it("denies delete outside the project without auto-approve", () => {
+    const svc = withProjectPath(AcpService.getInstance(), ROOT);
     svc.syncCustomToolPermissionFromToolCall({
       sessionId: "ses_auto_del",
       tabId: "tab-1",
@@ -89,7 +95,21 @@ describe("syncBashPermissionFromToolCall — Auto mode bridge unblock", () => {
       input: { file_path: "/tmp/x.md" },
     });
 
-    expect(approveCustomToolJob).toHaveBeenCalledWith("ses_auto_del", "call_delete_1");
+    expect(denyBashJob).toHaveBeenCalledWith("ses_auto_del", "call_delete_1");
+    expect(approveCustomToolJob).not.toHaveBeenCalled();
+  });
+
+  it("does not auto-approve in-project delete (composer gate handles prompt)", () => {
+    const svc = withProjectPath(AcpService.getInstance(), ROOT);
+    svc.syncCustomToolPermissionFromToolCall({
+      sessionId: "ses_del_in",
+      tabId: "tab-1",
+      toolCallId: "call_delete_2",
+      toolName: "delete",
+      input: { file_path: "old.tex" },
+    });
+
+    expect(approveCustomToolJob).not.toHaveBeenCalled();
     expect(denyBashJob).not.toHaveBeenCalled();
   });
 });

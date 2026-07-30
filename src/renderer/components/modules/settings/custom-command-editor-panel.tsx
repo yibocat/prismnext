@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useDocumentStore } from "@/stores/document-store";
+import { useLayoutStore } from "@/stores/layout-store";
 import { useCommandStore } from "@/stores/command-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
 import { cn } from "@/lib/utils";
@@ -154,6 +155,19 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
     <div className="flex-1 overflow-auto">
       <div className={SETTINGS_DETAIL_SHELL}>
         <p className={SETTINGS_ROW_DESC}>{t("settings.editor.command.intro")}</p>
+
+        {/!`[^`]+`/.test(template) ? (
+          <p className="rounded-md border border-border bg-muted px-3 py-2 text-[length:var(--font-size-12)] text-muted-foreground">
+            {t("settings.editor.command.shellExpandWarning")}{" "}
+            <button
+              type="button"
+              className="text-primary underline-offset-2 hover:underline"
+              onClick={() => useLayoutStore.getState().setSettingsCategory("permissions")}
+            >
+              {t("settings.editor.command.openPermissions")}
+            </button>
+          </p>
+        ) : null}
 
         <div className={SETTINGS_DETAIL_SECTION}>
           <SettingsFormField

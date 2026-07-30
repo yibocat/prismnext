@@ -3,85 +3,22 @@
  * Execution is started by main after the user approves shell permission.
  *
  * IMPORTANT: Self-contained — copied to OpenCode's tools directory (Bun runtime).
- * Keep polling helpers in sync with src/main/services/bash-bridge-poll.ts
  */
 
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
 import * as path from "path";
 import { terminalBridgeRoot } from "./bridge-paths";
+import {
+  bridgeDelay,
+  pollUntilToolCallId,
+  readBashJobResult,
+  readPermissionDecision,
+  waitForPermission,
+} from "./permission-bridge-poll";
 
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const BRIDGE_ROOT = terminalBridgeRoot();
-const ACTIVE_TOOL_FILE = ".active-tool.json";
-
-function extractToolCallId(context: Record<string, unknown>): string | undefined {
-  const c = context as {
-    toolCallId?: string;
-    tool_call_id?: string;
-    callID?: string;
-    messageID?: string;
-  };
-  for (const v of [c.toolCallId, c.tool_call_id, c.callID, c.messageID]) {
-    if (typeof v === "string" && v.trim()) return v.trim();
-  }
-  return undefined;
-}
-
-function readActiveToolCallId(sessionDir: string): string | undefined {
-  const filePath = path.join(sessionDir, ACTIVE_TOOL_FILE);
-  if (!fs.existsSync(filePath)) return undefined;
-  try {
-    const data = JSON.parse(fs.readFileSync(filePath, "utf-8")) as { toolCallId?: string };
-    return typeof data.toolCallId === "string" && data.toolCallId.trim()
-      ? data.toolCallId.trim()
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function resolveToolCallId(sessionDir: string, context: Record<string, unknown>): string | undefined {
-  return extractToolCallId(context) ?? readActiveToolCallId(sessionDir);
-}
-
-function readPermission(
-  sessionDir: string,
-  toolCallId: string,
-): { status: "approved" | "denied"; reason?: string } | undefined {
-  const resPath = path.join(sessionDir, `${toolCallId}.permission.json`);
-  if (!fs.existsSync(resPath)) return undefined;
-  try {
-    const data = JSON.parse(fs.readFileSync(resPath, "utf-8")) as {
-      status?: string;
-      reason?: string;
-    };
-    if (data.status !== "approved" && data.status !== "denied") return undefined;
-    const reason =
-      typeof data.reason === "string" && data.reason.trim() ? data.reason.trim() : undefined;
-    return { status: data.status, reason };
-  } catch {
-    return undefined;
-  }
-}
-
-function readResult(
-  sessionDir: string,
-  toolCallId: string,
-): { output: string; exit: number; cwd?: string } | undefined {
-  const resPath = path.join(sessionDir, `${toolCallId}.result.json`);
-  if (!fs.existsSync(resPath)) return undefined;
-  try {
-    const result = JSON.parse(fs.readFileSync(resPath, "utf-8"));
-    return {
-      output: result.output ?? "",
-      exit: result.exitCode ?? result.exit ?? 1,
-      cwd: result.cwd,
-    };
-  } catch {
-    return undefined;
-  }
-}
+const BASH_JOB_TIMEOUT_MS = 130_000;
 
 export default tool({
   description:
@@ -99,13 +36,13 @@ export default tool({
     const sessionDir = path.join(BRIDGE_ROOT, sessionId);
     fs.mkdirSync(sessionDir, { recursive: true });
 
-    const deadline = Date.now() + 130_000;
-    let toolCallId = resolveToolCallId(sessionDir, context as Record<string, unknown>);
-
-    while (!toolCallId && !context.abort.aborted && Date.now() < deadline) {
-      await delay(50);
-      toolCallId = resolveToolCallId(sessionDir, context as Record<string, unknown>);
-    }
+    const ctx = context as Record<string, unknown>;
+    const toolCallId = await pollUntilToolCallId(
+      sessionDir,
+      ctx,
+      context.abort,
+      BASH_JOB_TIMEOUT_MS,
+    );
 
     if (!toolCallId) {
       return {
@@ -116,33 +53,35 @@ export default tool({
     }
 
     // Custom bash may start before ACP permission — block until prismnext writes decision.
-    while (!context.abort.aborted && Date.now() < deadline) {
-      const perm = readPermission(sessionDir, toolCallId);
-      if (perm?.status === "denied") {
-        return {
-          output: perm.reason || "Permission denied by user",
-          exit: 1,
-          cwd,
-        };
-      }
-      if (perm?.status === "approved") break;
-      await delay(50);
+    const perm = await waitForPermission(
+      sessionDir,
+      toolCallId,
+      context.abort,
+      BASH_JOB_TIMEOUT_MS,
+    );
+    if (perm === "denied") {
+      const reason = readPermissionDecision(sessionDir, toolCallId)?.reason;
+      return {
+        output: reason || "Permission denied by user",
+        exit: 1,
+        cwd,
+      };
     }
-
-    if (readPermission(sessionDir, toolCallId)?.status !== "approved") {
+    if (perm !== "approved") {
       return { output: "Permission timed out waiting for user approval", exit: 1, cwd };
     }
 
+    const deadline = Date.now() + BASH_JOB_TIMEOUT_MS;
     while (!context.abort.aborted && Date.now() < deadline) {
-      const result = readResult(sessionDir, toolCallId);
+      const result = readBashJobResult(sessionDir, toolCallId);
       if (result) {
         return {
           output: result.output,
-          exit: result.exit,
+          exit: result.exitCode,
           cwd: result.cwd ?? cwd,
         };
       }
-      await delay(50);
+      await bridgeDelay(50);
     }
 
     return {

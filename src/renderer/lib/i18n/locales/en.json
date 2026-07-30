@@ -60,6 +60,7 @@
       "models": "Models",
       "agent": "Agent",
       "promptsRules": "Prompts & Rules",
+      "permissions": "Permissions",
       "commands": "Commands",
       "mcp": "MCP",
       "skills": "Skills",
@@ -441,7 +442,7 @@
       "pageDesc": "AI agent terminal lifecycle and user shell defaults.",
       "ai": {
         "execution": "Agent terminal execution",
-        "executionDesc": "PTY stream shows live output while commands run. Mirror waits for completion then replays the log. In Ask and Auto permission modes, shell always uses PTY so commands run only after you Allow in the permission gate.",
+        "executionDesc": "PTY stream shows live output while commands run. Mirror waits for completion then replays the log. Shell commands use PTY and run only after you Allow in the permission gate.",
         "openOnBash": "Open AI terminal on bash",
         "openOnBashDesc": "Auto-focus the ✨ AI terminal tab when the agent runs bash. Output is always saved to the session log either way.",
         "keepTab": "Keep tab after command exits",
@@ -571,6 +572,122 @@
         "updateFailed": "Failed to update skill.",
         "reinstalled": "Reinstalled \"{{name}}\" — start a new chat to use it.",
         "removed": "Removed \"{{name}}\"."
+      }
+    },
+    "permissions": {
+      "title": "Permissions",
+      "subtitle": "Fine-tune when the agent can run tools without asking. Built-in smart policy handles most cases — use this page for exceptions.",
+      "overviewSection": "How it works",
+      "overviewIntro": "When the agent edits files, runs shell commands, or calls other tools, Prism decides whether to run automatically, show a confirmation card, or block the action.",
+      "overviewBulletDefault": "By default, smart policy applies: in-project edits and common dev commands (git, package managers) run without a prompt; deletes always ask; operations outside the project are restricted.",
+      "overviewBulletAllow": "Allow rules and allowed paths add exceptions — matching calls skip the confirmation card.",
+      "overviewBulletDeny": "Deny rules block matching operations even when smart policy would allow them. Some safety limits (e.g. deleting outside the project) cannot be overridden.",
+      "overviewBulletPrompt": "When nothing matches, you see the permission card in chat — Allow, Deny, or Always (Always adds an allow rule here).",
+      "modeSection": "Mode",
+      "rulesSection": "Custom rules",
+      "rulesSectionDesc": "Optional exceptions on top of built-in smart policy. Open a row to edit in the side panel.",
+      "allowedPathsListDesc": "Extra trusted directories outside the project root — not needed for paths inside the open project.",
+      "allowRulesListDesc": "Tool calls that match skip the confirmation card. Composer \"Always\" choices appear here.",
+      "denyRulesListDesc": "Matching operations are blocked even when smart policy would allow them.",
+      "summaryPaths": "{{count}} path(s) configured",
+      "summaryRules": "{{count}} rule(s) configured",
+      "summaryEmpty": "Not configured",
+      "referenceSection": "How it works & reference",
+      "noProjectHint": "Open a project to test path-based rules against a project root.",
+      "readonlyTitle": "Read-only mode",
+      "readonlyDesc": "Block file edits and shell commands. Reads and search still work.",
+      "projectRootHint": "Current project root (always trusted for in-project edits): {{path}}",
+      "allowedPaths": "Allowed paths",
+      "allowedPathsPlaceholder": "/Users/me/shared-data/\n/var/www/output/",
+      "allowRules": "Allow rules",
+      "allowRulesPlaceholder": "# Examples\nBash(git *)\nBash(pnpm install*)\nEdit(**/drafts/*)\nWebFetch(arxiv.org/*)",
+      "denyRules": "Deny rules",
+      "denyRulesPlaceholder": "Bash(curl *|*bash*)\nDelete(/tmp/*)\nWebFetch(*.internal.corp)",
+      "saveSuccess": "Permission rules saved.",
+      "saveErrorLine": "Line {{line}}: {{message}}",
+      "toolsCatalog": {
+        "section": "Rule tool names",
+        "sectionDesc": "Allow/Deny rules only matter for gated tools — file edits, shell, and network fetches that can trigger a confirmation card.",
+        "alwaysAllowedNote": "Always allowed (no rules needed): read, grep, glob, question, task, skill, todowrite.",
+        "groups": {
+          "file": "Files & patches",
+          "shell": "Shell",
+          "network": "Network"
+        },
+        "items": {
+          "edit": "Edit a file (proposed diff)",
+          "write": "Write or overwrite a file",
+          "apply_patch": "Apply a multi-file patch",
+          "delete": "Delete a file",
+          "move": "Move or rename a file",
+          "bash": "Run a shell command",
+          "webfetch": "Fetch a URL",
+          "websearch": "Web search"
+        }
+      },
+      "docsTitle": "Rule reference",
+      "docsSummary": "Syntax, priority, slash commands, and Expert presets",
+      "docsBuiltinTitle": "Built-in smart policy",
+      "docsBuiltin": "You do not need rules for everyday work inside the project. Smart policy already allows in-project edits, git, package managers, and experiment runs; prompts on delete; and blocks dangerous operations outside the project. This page is for exceptions only.",
+      "docsPriorityTitle": "Evaluation order",
+      "docsPriority": "Read-only mode → built-in safety deny → your deny rules → Plan agent overrides → your allow rules → allowed paths → built-in smart policy → confirmation card.",
+      "docsSyntaxTitle": "Rule syntax",
+      "docsSyntax": "Format: ToolName(pattern). Use * for one path segment, ** for recursive paths. For Bash, the pattern matches the full command string.",
+      "syntaxExampleGit": "Bash(git *) — any git subcommand",
+      "syntaxExampleEdit": "Edit(**/drafts/*) — edits under any drafts folder",
+      "syntaxExampleDelete": "Delete(*.log) — delete log files (still subject to safety limits)",
+      "syntaxExampleWeb": "WebFetch(arxiv.org/*) — fetch from arxiv.org",
+      "syntaxExampleDenyBash": "Bash(curl *|*bash*) — block curl or piped bash",
+      "syntaxExampleDenyDelete": "Delete(/tmp/*) — block deletes under /tmp",
+      "docsCommandsTitle": "Slash commands",
+      "docsCommands": "Action commands (/compile, /setup) run locally and bypass this gate. AI commands send instructions to the agent — subsequent tool calls follow these rules. Template !`cmd` snippets run during command expand and must pass Bash rules here.",
+      "docsExpertsTitle": "Expert presets",
+      "docsExperts": "Expert permission presets (Standard / Full / Read-only) are configured per expert profile and are separate from these global rules.",
+      "testerSection": "Rule tester",
+      "testerDesc": "Preview how saved rules would treat a tool call.",
+      "testerToolHint": "OpenCode tool name — see the list in Allow/Deny rule editors.",
+      "testerTargetHint": "Full bash command, or file path for Edit / Delete / Move.",
+      "testerRunLabel": "Preview result",
+      "testerIdleHint": "Enter a tool and path or command, then run preview.",
+      "testerTitle": "Rule tester",
+      "testerTool": "Tool",
+      "testerTarget": "Path or command",
+      "testerRun": "Test",
+      "testerResult": "Result: {{action}} — decided by {{source}}",
+      "testerAction": {
+        "allow": "Allow (no prompt)",
+        "prompt": "Prompt (confirmation card)",
+        "deny": "Deny (blocked)"
+      },
+      "testerSource": {
+        "hard_deny": "built-in safety",
+        "user_allow": "your allow rule",
+        "smart_default:allow": "built-in smart policy",
+        "smart_default:deny": "built-in smart policy",
+        "smart_default:prompt": "built-in smart policy",
+        "plan_override:allow": "Plan agent override",
+        "plan_override:deny": "Plan agent override",
+        "plan_override:ask": "Plan agent override",
+        "denyRule": "deny rule: {{rule}}"
+      },
+      "editor": {
+        "syntaxHint": "Format: ToolName(pattern). Use * for one path segment, ** for recursive paths. Lines starting with # are comments.",
+        "allowed-paths": {
+          "intro": "One absolute path per line — for directories outside the project root only.",
+          "helpTitle": "Allowed paths (outside project)",
+          "helpBody": "The open project root is already trusted: in-project edits do not need to be listed here. Use allowed paths when the agent must touch files elsewhere — shared data folders, external build output, a second library on disk, etc. Each line must be an absolute path. File tools (Edit, Delete, Move) treat paths under these directories like in-project paths. Shell (bash) is not controlled by this list — use Allow/Deny rules for commands instead.",
+          "helpNote": "Tip: use a trailing slash for directories (e.g. /Users/me/shared-data/). Listing a folder inside the project is redundant."
+        },
+        "allow-rules": {
+          "intro": "One rule per line. Matching tool calls run without a confirmation card.",
+          "helpTitle": "Allow rules",
+          "helpBody": "Use allow rules for commands or file patterns you want to auto-approve. Composer \"Always\" adds entries here. Allow rules cannot override built-in safety denies (e.g. deleting outside the project)."
+        },
+        "deny-rules": {
+          "intro": "One rule per line. Matching operations are blocked immediately.",
+          "helpTitle": "Deny rules",
+          "helpBody": "Deny rules take priority over allow rules and smart policy defaults. Use them to block specific commands, domains, or file patterns."
+        }
       }
     },
     "commandsPage": {
@@ -836,7 +953,9 @@
         "deleteDesc": "Remove this custom command from the project? This cannot be undone.",
         "validationName": "Enter a valid command name (lowercase letters, numbers, hyphens).",
         "validationTemplate": "Prompt template is required.",
-        "openProject": "Open a project to create custom commands."
+        "openProject": "Open a project to create custom commands.",
+        "shellExpandWarning": "This template runs shell commands during expand (!`cmd`). Those commands must pass Permissions → Allow rules.",
+        "openPermissions": "Open Permissions"
       },
       "backups": {
         "empty": "No backups yet",
@@ -1531,8 +1650,7 @@
       "taskPlanInProgress": "In progress",
       "experimentRunTitle": "Experiment run",
       "experimentRunLive": "Running — open for live output",
-      "experimentRunOpen": "Open",
-      "permissionExpand": "Show permission details"
+      "experimentRunOpen": "Open"
     },
     "questionPanel": {
       "title": "Agent needs your input",
@@ -1579,31 +1697,9 @@
       "reasoningDepth": "Reasoning Depth",
       "default": "Default"
     },
-    "permission": {
-      "label": "Permission Mode",
-      "modeTitle": "Permission mode: {{mode}}",
-      "ask": "Ask",
-      "askShort": "Ask",
-      "editAuto": "Edit auto",
-      "editAutoShort": "Edit",
-      "auto": "Auto",
-      "autoShort": "Auto",
-      "readonly": "Read-only",
-      "readonlyShort": "Read",
-      "askDesc": "Prompt before editing files or running shell commands. Shell runs in the PTY terminal only after you Allow.",
-      "editAutoDesc": "Allow file edits automatically; still ask for shell and destructive operations. Shell uses PTY after Allow.",
-      "autoDesc": "Fully automatic — approve edits, shell, and other tools without prompting (same idea as OpenCode --auto). Explicit denials still apply.",
-      "readonlyDesc": "Only read and search — block edits and shell commands. Mirror terminal mode is available in advanced settings."
-    },
     "sessionAgent": {
-      "label": "Session Agent",
       "build": "Build",
       "plan": "Plan",
-      "buildShort": "Build",
-      "planShort": "Plan",
-      "buildDesc": "Full agent — edits and tools follow Permission Mode",
-      "planDesc": "Plan only — write the draft plan file; no other edits or shell",
-      "planHint": "Plan mode — draft file only; no other edits or shell",
       "orchestratorCleared": "Plan mode cleared the expert orchestrator for this tab"
     },
     "planWorkflow": {
@@ -1665,11 +1761,23 @@
       "loadingOlder": "Loading…"
     },
     "prepare": {
+      "planningNext": "Planning next step…",
       "thinking": "Thinking…",
       "syncing_project": "Preparing project…",
       "creating_session": "Creating chat session…",
       "connecting_mcp": "Connecting tools…",
-      "starting_model": "Starting model…"
+      "starting_model": "Starting model…",
+      "waiting_model": "Waiting for model response…",
+      "stalled": "Connection slow — the model provider may be retrying…"
+    },
+    "errors": {
+      "retry": "Retry",
+      "dismiss": "Dismiss",
+      "sessionError": "The model session reported an error. Please try again.",
+      "emptyTurn": "The model returned no content. This is usually caused by rate limits or quota exhaustion — please try again.",
+      "turn_timeout": "No response from the model for a long time — the turn was stopped. The provider may be rate-limited or unavailable.",
+      "connectionLost": "Agent connection lost. Please try again.",
+      "cancelled": "Stopped."
     },
     "turnFooter": {
       "justNow": "just now",
@@ -2066,28 +2174,20 @@
       "applyPatch": "Apply patch",
       "deleteFile": "Delete file",
       "moveFile": "Move file",
+      "actionDelete": "Delete",
+      "actionMove": "Move",
       "writeFile": "Write file",
       "editFile": "Edit file",
       "required": "Permission required",
       "awaiting": "Awaiting approval",
       "filesCount": "{{count}} files",
       "deny": "Deny",
+      "skip": "Skip",
       "always": "Always",
       "allow": "Allow",
-      "editAuto": "Edit auto",
-      "autoMode": "Auto mode",
       "alwaysBash": "Always allow similar commands (prefix match)",
       "alwaysTool": "Always allow {{tool}} without asking again",
-      "alwaysGeneric": "Always allow this tool",
-      "detailPath": "Path",
-      "detailFile": "File",
-      "detailCommand": "Command",
-      "detailSource": "Source",
-      "detailDestination": "Destination",
-      "detailTool": "Tool",
-      "detailMessage": "Details",
-      "detailChanges": "Changes",
-      "editAutoHint": "File edits run automatically in Edit auto mode; you are only prompted for shell and destructive actions."
+      "alwaysGeneric": "Always allow this tool"
     },
     "worktree": {
       "discardTitle": "Discard unmerged work?",

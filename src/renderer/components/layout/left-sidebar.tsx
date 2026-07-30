@@ -112,6 +112,31 @@ function selectTabTitleKey(state: {
   return parts.join("\0");
 }
 
+/** Stable store selector — only changes when user-set tab titles change. */
+function selectTabUserTitleKey(state: {
+  tabs: { sessionId: string | null; title: string; userTitleSet?: boolean }[];
+}): string {
+  const parts: string[] = [];
+  for (const t of state.tabs) {
+    if (t.userTitleSet && t.sessionId && t.title) {
+      parts.push(`${t.sessionId}\x01${t.title}`);
+    }
+  }
+  parts.sort();
+  return parts.join("\0");
+}
+
+function tabUserTitlesFromKey(key: string): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!key) return map;
+  for (const part of key.split("\0")) {
+    const sep = part.indexOf("\x01");
+    if (sep <= 0) continue;
+    map.set(part.slice(0, sep), part.slice(sep + 1));
+  }
+  return map;
+}
+
 function tabTitlesFromKey(key: string): Map<string, string> {
   const map = new Map<string, string>();
   if (!key) return map;
@@ -163,7 +188,6 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const setSessionSort = useLayoutStore((s) => s.setSessionSort);
 
   const sessionId = useChatStore((s) => s.sessionId);
-  const tabs = useChatStore((s) => s.tabs);
   const streamingSessionKey = useChatStore(selectStreamingSessionKey);
   const streamingSessionIds = useMemo(
     () => new Set(streamingSessionKey ? streamingSessionKey.split("\0") : []),
@@ -171,6 +195,11 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   );
   const tabTitleKey = useChatStore(selectTabTitleKey);
   const tabTitlesBySession = useMemo(() => tabTitlesFromKey(tabTitleKey), [tabTitleKey]);
+  const tabUserTitleKey = useChatStore(selectTabUserTitleKey);
+  const tabUserTitlesBySession = useMemo(
+    () => tabUserTitlesFromKey(tabUserTitleKey),
+    [tabUserTitleKey],
+  );
   const sessionStates = useTerminalAiStore((s) => s.sessionStates);
   const aiTerminalRunningSessionIds = useMemo(
     () => new Set(
@@ -377,11 +406,10 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   // (OpenCode may have written its own auto-derived title back into the
   // session row after our rename).
   const enrichedSessions = useMemo(() => {
-    const tabsBySession = tabs;
     return sessions.map((s) => {
-      const tab = tabsBySession.find((t) => t.sessionId === s.id);
-      if (tab?.userTitleSet && tab.title) {
-        return { ...s, title: tab.title };
+      const userTitle = tabUserTitlesBySession.get(s.id);
+      if (userTitle) {
+        return { ...s, title: userTitle };
       }
       if (s.title.startsWith("New Chat") || s.title.startsWith("New session")) {
         const tabTitle = tabTitlesBySession.get(s.id);
@@ -389,7 +417,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
       }
       return s;
     });
-  }, [sessions, tabTitlesBySession, tabs]);
+  }, [sessions, tabTitlesBySession, tabUserTitlesBySession]);
 
   const sortedSessions = [...enrichedSessions].sort((a, b) => {
     if (sessionSort === "created") return b.createdAt - a.createdAt;

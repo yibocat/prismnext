@@ -61,9 +61,6 @@ export function formatCitationFetchError(message: string): string {
   return message;
 }
 
-/** @deprecated use formatCitationFetchError */
-export const formatOpenAlexFetchError = formatCitationFetchError;
-
 export function paperCitationSourceLabel(source: PaperCitationNetworkSource): string {
   return source === "openalex" ? "OpenAlex" : "Semantic Scholar";
 }

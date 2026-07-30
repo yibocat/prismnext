@@ -10,6 +10,7 @@ import {
 } from "@/lib/chat/preserve-viewport-anchor";
 import {
   buildActivitySummaryLine,
+  countActivityTools,
   isBridgeTextBlockExported as isBridgeTextBlock,
   sumThinkingDurations,
 } from "@/lib/chat/segment-assistant-blocks";
@@ -34,6 +35,7 @@ export const ActivityFold = memo(function ActivityFold({
   persistKey,
   sessionId,
   isStreamingSegment,
+  messageThinkingComplete,
   suppressArtifactPaths,
 }: {
   blocks: ContentBlock[];
@@ -42,6 +44,8 @@ export const ActivityFold = memo(function ActivityFold({
   persistKey?: string;
   sessionId?: string;
   isStreamingSegment: boolean;
+  /** Turn-level: trailing prose or tools started (unified fold excludes tail text). */
+  messageThinkingComplete?: boolean;
   suppressArtifactPaths?: readonly string[];
 }) {
   const { t } = useTranslation();
@@ -99,9 +103,25 @@ export const ActivityFold = memo(function ActivityFold({
         : t("chat.activity.workedFor", { duration }),
   };
 
+  const toolCount = countActivityTools(blocks);
+  const thinkingDone =
+    messageThinkingComplete
+    ?? blocks.some(
+      (b) => b.type === "tool_use" || (b.type === "text" && !isBridgeTextBlock(b)),
+    );
+  const summaryStreaming =
+    isStreamingSegment && !(thinkingDone && toolCount === 0);
+
+  useEffect(() => {
+    if (!thinkingDone || toolCount > 0) return;
+    if (frozenElapsedRef.current == null && elapsed > 0) {
+      frozenElapsedRef.current = elapsed;
+    }
+  }, [thinkingDone, toolCount, elapsed]);
+
   const thinkingDuration = sumThinkingDurations(blocks);
   const displayElapsed =
-    !isStreamingSegment && frozenElapsedRef.current != null
+    ((!isStreamingSegment || (thinkingDone && toolCount === 0)) && frozenElapsedRef.current != null)
       ? frozenElapsedRef.current
       : elapsed > 0
         ? elapsed
@@ -109,14 +129,10 @@ export const ActivityFold = memo(function ActivityFold({
 
   const summary = buildActivitySummaryLine({
     blocks: blocks.filter((b) => !isBridgeTextBlock(b)),
-    isStreaming: isStreamingSegment,
+    isStreaming: summaryStreaming,
     elapsedSec: displayElapsed,
     labels,
   });
-
-  const thinkingComplete = blocks.some(
-    (b) => b.type === "tool_use" || (b.type === "text" && !isBridgeTextBlock(b)),
-  );
 
   return (
     <div className="min-w-0 max-w-full">
@@ -134,7 +150,7 @@ export const ActivityFold = memo(function ActivityFold({
         <BrainIcon className="size-3.5 shrink-0 opacity-80" />
         <span
           className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden"
-          key={isStreamingSegment ? "live" : "done"}
+          key={summaryStreaming ? "live" : "done"}
         >
           <span className="min-w-0 truncate tabular-nums">{summary}</span>
           <ChevronDownIcon
@@ -170,7 +186,7 @@ export const ActivityFold = memo(function ActivityFold({
                   persistKey={
                     persistKey ? `${persistKey}:t${blockIndex}` : undefined
                   }
-                  isStreamingMsg={isStreamingSegment && !thinkingComplete}
+                  isStreamingMsg={isStreamingSegment && !thinkingDone}
                   isProgress={block._progress === true}
                 />
               );

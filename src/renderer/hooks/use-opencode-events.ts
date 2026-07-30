@@ -5,9 +5,7 @@ import { displayChatTitle } from "@/lib/i18n/display-chat-title";
 import { i18n } from "@/lib/i18n";
 
 import { useDocumentStore } from "@/stores/document-store";
-import { useChangesStore } from "@/stores/changes-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
-import { useRightPanelStore } from "@/stores/right-panel-store";
 import { usePermissionStore } from "@/stores/permission-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useCitationStagingStore } from "@/stores/citation-staging-store";
@@ -24,7 +22,7 @@ import {
 import { schedulePermissionTimeout, clearPermissionTimer } from "@/stores/permission-actions";
 import { handleBashToolUse, handleBashToolResult, handleBashPermissionDenied, isBashToolName } from "@/lib/terminal/ai-bridge";
 import { isFinalToolStatus, normalizeToolStatus } from "@/components/modules/chat/tools/tool-result-map";
-import { shouldTrackProposedChange, isDiskMutationTool, isFileWriteTool, isPatchTool, extractPatchTargetPaths } from "@/components/modules/chat/tools/tool-meta";
+import { isDiskMutationTool, isFileWriteTool, isPatchTool, extractPatchTargetPaths } from "@/components/modules/chat/tools/tool-meta";
 import { useCheckpointStore, resolveRelativeToolPath } from "@/stores/checkpoint-store";
 import { compileCurrentDocument, pauseAutoCompileForAi, resumeAutoCompileAfterAi } from "@/stores/compile-store";
 import { createLogger } from "@/services/logger";
@@ -80,21 +78,6 @@ export function useOpenCodeEvents() {
     aiSessionActiveRef.current.delete(tabId);
   }
 
-  function noteCheckpointMutation(
-    tabId: string,
-    filePath: string,
-    beforeContent: string,
-  ) {
-    const resolved = resolveRelativeToolPath(filePath);
-    if (!resolved) return;
-    useCheckpointStore.getState().noteFileMutation(
-      tabId,
-      resolved.relativePath,
-      resolved.absolutePath,
-      beforeContent,
-    );
-  }
-
   function noteCheckpointForDiskTool(
     tabId: string,
     toolName: string,
@@ -120,145 +103,6 @@ export function useOpenCodeEvents() {
         resolved.absolutePath,
         before,
       );
-    }
-  }
-
-  function registerProposedChange(
-    tabId: string,
-    filePath: string,
-    toolUseId: string,
-    toolName: string,
-    toolInput: any,
-    capturedOldContent: string,
-  ) {
-    if (!shouldTrackProposedChange(
-      useSettingsStore.getState().settings.permissionMode,
-      toolName,
-    )) {
-      return;
-    }
-
-    const docState = useDocumentStore.getState();
-    if (usePermissionStore.getState().isToolResolved(tabId, toolUseId)) {
-      return;
-    }
-
-    const projectRoot = docState.projectRoot;
-    const worktreeStore = useWorktreeStore.getState();
-    const activeWorktree = worktreeStore.activeWorktree;
-
-    let resolvedPath = filePath;
-    if (activeWorktree && filePath.startsWith(activeWorktree.path)) {
-      resolvedPath = filePath;
-    }
-
-    let relativePath = resolvedPath;
-    if (activeWorktree && resolvedPath.startsWith(activeWorktree.path)) {
-      relativePath = resolvedPath.slice(activeWorktree.path.length).replace(/^\//, "");
-    } else if (projectRoot && resolvedPath.startsWith(projectRoot)) {
-      relativePath = resolvedPath.slice(projectRoot.length).replace(/^\//, "");
-    }
-
-    const file = docState.files.find(
-      (f) => f.relativePath === relativePath || f.absolutePath === filePath,
-    );
-
-    const isNewFile = !file && toolName.toLowerCase().startsWith("write");
-    if (!file && !isNewFile) return;
-
-    const name = toolName.toLowerCase();
-    const oldStr: string = toolInput?.old_string ?? toolInput?.oldString ?? "";
-    const newStr: string = toolInput?.new_string ?? toolInput?.newString ?? "";
-
-    // ── Determine old and new content ──────────────────────────
-    // OpenCode ACP sends tool params in two phases:
-    //   1. tool_call (rawInput: {})        → empty input, no file path
-    //   2. tool_call_update (backfill)     → real params arrive here
-    //
-    // By the time backfill arrives, OpenCode MAY have already written the
-    // modified file to disk.  But this is NOT guaranteed — the file write
-    // might race with the ACP event.  We therefore try a DUAL-DIRECTION
-    // strategy that works whether the disk content is pre-edit or post-edit.
-    //
-    // Strategy (in priority order):
-    //   A. FORWARD:  if disk content contains oldStr → forward edit
-    //   B. REVERSE:  if disk content contains newStr → reverse edit
-    //   C. FALLBACK: use the file content tracker (captured at tool_use time)
-    let oldContent: string;
-    let newContent: string;
-
-    if (name.startsWith("write")) {
-      newContent = toolInput?.content ?? "";
-      oldContent = "";
-    } else {
-      // Read the current file content from tracker, doc store, or captured arg.
-      const diskContent =
-        fileContentTrackerRef.current.get(file?.relativePath || relativePath) ||
-        (file ? docState.getContent(file.id) : "") ||
-        capturedOldContent ||
-        "";
-
-      if (name.startsWith("edit") && oldStr !== "" && newStr !== "" && diskContent) {
-        const escapedOld = oldStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const escapedNew = newStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-        // Strategy A: FORWARD — disk still has pre-edit content
-        if (diskContent.includes(oldStr)) {
-          oldContent = diskContent;
-          newContent = diskContent.replace(new RegExp(escapedOld, "g"), newStr);
-        }
-        // Strategy B: REVERSE — disk already has post-edit content
-        else if (diskContent.includes(newStr)) {
-          newContent = diskContent;
-          oldContent = diskContent.replace(new RegExp(escapedNew, "g"), oldStr);
-        }
-        // Strategy C: FALLBACK — use captured content and forward edit
-        else {
-          oldContent = capturedOldContent ||
-            (file ? docState.getContent(file.id) : "") || "";
-          newContent = oldContent;
-          if (oldStr) {
-            newContent = oldContent.replace(new RegExp(escapedOld, "g"), newStr);
-          }
-        }
-      } else {
-        // Fallback: use captured/tracked content with forward edit
-        oldContent = capturedOldContent ||
-          (file ? docState.getContent(file.id) : "") || "";
-        newContent = oldContent;
-        if (name.startsWith("edit") && oldStr) {
-          const escaped = oldStr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          newContent = oldContent.replace(new RegExp(escaped, "g"), newStr);
-        }
-      }
-    }
-
-    if (oldContent !== newContent) {
-      if (file) {
-        noteCheckpointMutation(tabId, file.absolutePath, oldContent);
-      } else if (isNewFile) {
-        noteCheckpointMutation(tabId, resolvedPath, "");
-      }
-
-      if (file) {
-        fileContentTrackerRef.current.set(file.relativePath, newContent);
-      }
-
-      useChangesStore.getState().addChange({
-        id: toolUseId,
-        filePath: relativePath,
-        absolutePath: resolvedPath,
-        oldContent,
-        newContent,
-        toolName,
-      });
-
-      const rpState = useRightPanelStore.getState();
-      const existingTab = rpState.tabs.find((t) => t.filePath === relativePath);
-      if (!existingTab) {
-        const fileName = relativePath.split("/").pop() || relativePath;
-        rpState.openFile(relativePath, relativePath, fileName);
-      }
     }
   }
 
@@ -397,23 +241,33 @@ export function useOpenCodeEvents() {
     const unsubStream = window.electronAPI.onChatStream(({ tabId, type, data }) => {
       const chatStore = useChatStore.getState();
 
-      // Global agent lifecycle events (empty tabId) — broadcast to the active tab
+      // Global agent lifecycle events (empty tabId) — affect all streaming tabs
       if (type === "agent.reconnected" || type === "agent.connectionLost") {
-        const activeTab = chatStore.tabs.find((t) => t.id === chatStore.activeTabId);
-        if (!activeTab) return;
-        // Emit as a system message on the active tab so the user sees the status change
-        chatStore._appendMessage(chatStore.activeTabId, {
-          type: "system",
-          subtype: type === "agent.reconnected" ? "agent.reconnected" : "agent.connectionLost",
-          message: {
-            content: [{
-              type: "text",
-              text: type === "agent.reconnected"
-                ? "Agent reconnected successfully."
-                : `Agent connection lost: ${data?.error || "Unknown error"}`,
-            }],
-          },
-        });
+        if (type === "agent.connectionLost") {
+          const errText =
+            (typeof data?.error === "string" && data.error)
+            || i18n.t("chat.errors.connectionLost");
+          for (const tab of chatStore.tabs) {
+            if (!tab.isStreaming) continue;
+            chatStore._setError(tab.id, errText);
+            chatStore._setStreaming(tab.id, false);
+          }
+          toast.error(errText);
+        } else {
+          const activeTab = chatStore.tabs.find((t) => t.id === chatStore.activeTabId);
+          if (activeTab) {
+            chatStore._appendMessage(chatStore.activeTabId, {
+              type: "system",
+              subtype: "agent.reconnected",
+              message: {
+                content: [{
+                  type: "text",
+                  text: "Agent reconnected successfully.",
+                }],
+              },
+            });
+          }
+        }
         return;
       }
 
@@ -610,20 +464,6 @@ export function useOpenCodeEvents() {
                 // Convert to ContentBlock for storage + Widget matching
                 const block = convertPartToBlock(part);
                 if (block) toolResultBlocks.push(block);
-
-                // Register proposed file changes for edit/write tools
-                const tabTools = pendingToolUsesRef.current.get(tabId);
-                const toolUse = tabTools?.get(toolUseId);
-                if (toolUse) {
-                  const filePath = toolUse.input?.file_path || toolUse.input?.filePath || toolUse.input?.path || "";
-                  const projectRoot = useDocumentStore.getState().projectRoot || "";
-                  const oldContent = filePath
-                    ? fileContentTrackerRef.current.get(
-                        filePath.replace(projectRoot + "/", ""),
-                      ) || ""
-                    : "";
-                  registerProposedChange(tabId, filePath, toolUseId, toolUse.name, toolUse.input, oldContent);
-                }
               }
             }
 
@@ -783,31 +623,17 @@ export function useOpenCodeEvents() {
                     refreshAfterAutoDiskMutation(tabId, pendingTool.name, backfillInput);
                   }
 
-                  console.log(`[opencode-events] backfill registerProposedChange: toolName=${pendingTool.name} filePath=${filePath} inputKeys=${Object.keys(backfillInput).join(",")} oldStr=${(backfillInput.old_string || backfillInput.oldString || "").slice(0, 40)} newStr=${(backfillInput.new_string || backfillInput.newString || "").slice(0, 40)}`);
-
-                  // Read current file content from disk. registerProposedChange
-                  // uses dual-direction strategy (forward→reverse fallback).
                   const file = docState.files.find(
                     (f) => f.relativePath === relPath || f.absolutePath === filePath,
                   );
-                  const ensureContent = file
-                    ? (async () => {
-                        await docState.refreshFileContent(file.id);
-                        return docState.getContent(file.id) || "";
-                      })()
-                    : Promise.resolve("");
-
-                  ensureContent.then((diskContent) => {
-                    if (diskContent && relPath) {
-                      fileContentTrackerRef.current.set(relPath, diskContent);
-                      console.log(`[opencode-events] backfill loaded file content: ${relPath} len=${diskContent.length}`);
-                    }
-                    registerProposedChange(
-                      tabId, filePath, toolUseId, pendingTool.name, backfillInput,
-                      diskContent,
-                    );
-                    console.log(`[opencode-events] backfill registerProposedChange DONE: changesCount=${useChangesStore.getState().changes.length}`);
-                  });
+                  if (file) {
+                    void docState.refreshFileContent(file.id).then(() => {
+                      const diskContent = docState.getContent(file.id) || "";
+                      if (diskContent && relPath) {
+                        fileContentTrackerRef.current.set(relPath, diskContent);
+                      }
+                    });
+                  }
                 } else {
                   console.log(`[opencode-events] backfill FAILED: no pendingTool found for toolUseId=${toolUseId}`);
                 }
@@ -915,12 +741,38 @@ export function useOpenCodeEvents() {
           break;
         }
 
+        case "session.error": {
+          const detail =
+            (typeof data?.message === "string" && data.message)
+            || (typeof data?.error === "string" && data.error)
+            || "";
+          chatStore._setError(
+            tabId,
+            detail || i18n.t("chat.errors.sessionError"),
+          );
+          chatStore._setStreaming(tabId, false);
+          toast.error(detail || i18n.t("chat.errors.sessionError"));
+          break;
+        }
+
         case "session.status": {
           const status = String(data?.status ?? "").toLowerCase();
           if (status === "completed" || status === "idle" || status === "error") {
             const tab = chatStore.tabs.find((t) => t.id === tabId);
             if (tab?.sessionAgent === "plan") {
               void chatStore.refreshPlanDraftFromDisk(tabId);
+            }
+            // Surface upstream session errors — previously this silently
+            // cleared isStreaming with zero user feedback.
+            if (status === "error") {
+              const detail =
+                (typeof data?.message === "string" && data.message)
+                || (typeof data?.error === "string" && data.error)
+                || "";
+              chatStore._setError(
+                tabId,
+                detail || i18n.t("chat.errors.sessionError"),
+              );
             }
             // Backup path: if sendPrompt hung (tool blocked), chat:complete never
             // fires and isStreaming stays true — blocking the next user message.
@@ -985,13 +837,23 @@ export function useOpenCodeEvents() {
     });
 
     // ─── Chat Complete Handler ───
-    const unsubComplete = window.electronAPI.onChatComplete(({ tabId, success, error, tokenUsage, contextBreakdown, categorySchema, promptStale, planDraftMissing }) => {
+    const unsubComplete = window.electronAPI.onChatComplete(({ tabId, success, error, errorCode, emptyTurn, tokenUsage, contextBreakdown, categorySchema, promptStale, planDraftMissing }) => {
       const chatStore = useChatStore.getState();
 
       if (!success && error) {
-        chatStore._setError(tabId, error);
-        // Surface attachment / send failures that previously looked like a silent stop.
-        toast.error(error);
+        if (errorCode === "cancelled") {
+          // User-initiated stop — cancelExecution already committed partial reply.
+        } else {
+          // Known error codes carry localized copy; raw messages pass through.
+          const display = errorCode ? i18n.t(`chat.errors.${errorCode}`, { defaultValue: error }) : error;
+          chatStore._setError(tabId, display);
+          // Surface attachment / send failures that previously looked like a silent stop.
+          toast.error(display);
+        }
+      } else if (success && emptyTurn) {
+        // Provider turn failed upstream but resolved as a bare end_turn with
+        // zero frames (rate limit / quota / 5xx). Never fake-succeed silently.
+        chatStore._setError(tabId, i18n.t("chat.errors.emptyTurn"));
       } else {
         notifyDesktopForTab("turn_complete", tabId, "shell.notify.replyFinished");
       }

@@ -3,6 +3,12 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { execSync } from "node:child_process";
 import type { ParsedCommand } from "./types";
+import { getSettings } from "../services/settings";
+import {
+  buildPermissionRulesFromSettings,
+  resolvePermissionAction,
+  resolvePermissionMode,
+} from "../services/permission-modes";
 
 const MAX_SHELL_OUTPUT = 10_240; // 10KB
 const SHELL_TIMEOUT_MS = 5_000;
@@ -45,6 +51,28 @@ export function expandTemplate(
   return result;
 }
 
+/** Whether a slash-command shell snippet may run during template expand. */
+export function resolveCommandShellExpansionAction(
+  command: string,
+  projectRoot: string,
+): "allow" | "deny" {
+  const settings = getSettings() as Record<string, unknown>;
+  const mode = resolvePermissionMode(settings.permissionMode as string | undefined);
+  const rules = buildPermissionRulesFromSettings(settings);
+  const action = resolvePermissionAction(
+    mode,
+    "bash",
+    "build",
+    {
+      projectRoot,
+      bashCommand: command,
+      bashCwd: projectRoot,
+    },
+    rules,
+  );
+  return action === "allow" ? "allow" : "deny";
+}
+
 function resolveFileRef(filePath: string, projectRoot: string): string {
   const abs = resolve(projectRoot, filePath);
 
@@ -67,6 +95,9 @@ function resolveFileRef(filePath: string, projectRoot: string): string {
 }
 
 function execShellCommand(cmd: string, projectRoot: string): string {
+  if (resolveCommandShellExpansionAction(cmd, projectRoot) !== "allow") {
+    return "[Error: permission denied for shell expansion in slash command]";
+  }
   try {
     const stdout = execSync(cmd, {
       timeout: SHELL_TIMEOUT_MS,

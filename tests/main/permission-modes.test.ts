@@ -12,10 +12,12 @@ import {
   isEditAutoApplyMode,
 } from "../../src/main/services/permission-modes";
 
+const ROOT = "/Users/me/paper";
+
 describe("permission modes", () => {
-  it("defaults unknown values to ask", () => {
-    expect(resolvePermissionMode(undefined)).toBe("ask");
-    expect(resolvePermissionMode("bogus")).toBe("ask");
+  it("defaults unknown values to edit_auto", () => {
+    expect(resolvePermissionMode(undefined)).toBe("edit_auto");
+    expect(resolvePermissionMode("bogus")).toBe("edit_auto");
   });
 
   it("migrates legacy auto → edit_auto on schema v1", () => {
@@ -31,137 +33,92 @@ describe("permission modes", () => {
     });
   });
 
-  it("maps ask mode to interactive edit/bash rules", () => {
+  it("uses smart OpenCode rules for non-readonly modes", () => {
     expect(getPermissionRulesForMode("ask")).toMatchObject({
       edit: "ask",
       write: "ask",
-      apply_patch: "ask",
+      delete: "ask",
       bash: "ask",
       read: "allow",
       grep: "allow",
-      glob: "allow",
-      todowrite: "allow",
-      websearch: "allow",
-    });
-  });
-
-  it("does not emit ghost tool rules (multiedit/patch/list/plan)", () => {
-    const rules = getPermissionRulesForMode("ask");
-    expect(rules).not.toHaveProperty("multiedit");
-    expect(rules).not.toHaveProperty("patch");
-    expect(rules).not.toHaveProperty("list");
-    expect(rules).not.toHaveProperty("plan");
-  });
-
-  it("maps delete/move: ask in ask/edit_auto, allow in auto, deny in readonly", () => {
-    expect(getPermissionRulesForMode("ask")).toMatchObject({
-      delete: "ask",
-      move: "ask",
     });
     expect(getPermissionRulesForMode("edit_auto")).toMatchObject({
-      delete: "ask",
-      move: "ask",
+      edit: "ask",
+      bash: "ask",
+      read: "allow",
     });
     expect(getPermissionRulesForMode("auto")).toMatchObject({
-      delete: "allow",
-      move: "allow",
-    });
-    expect(getPermissionRulesForMode("readonly")).toMatchObject({
-      delete: "deny",
-      move: "deny",
-    });
-    expect(resolvePermissionAction("edit_auto", "delete")).toBe("prompt");
-    expect(resolvePermissionAction("auto", "delete")).toBe("allow");
-    expect(resolvePermissionAction("ask", "delete")).toBe("prompt");
-    expect(resolvePermissionAction("readonly", "delete")).toBe("deny");
-  });
-
-  it("maps edit_auto to allow edits but ask bash", () => {
-    expect(getPermissionRulesForMode("edit_auto")).toMatchObject({
-      edit: "allow",
-      write: "allow",
-      apply_patch: "allow",
+      edit: "ask",
       bash: "ask",
     });
   });
 
-  it("maps auto (full) to allow edits and bash", () => {
-    expect(getPermissionRulesForMode("auto")).toMatchObject({
-      edit: "allow",
-      write: "allow",
-      bash: "allow",
-      "experiment-run": "allow",
-    });
-  });
-
-  it("maps readonly mode to deny destructive tools", () => {
+  it("readonly keeps legacy deny rules", () => {
     expect(getPermissionRulesForMode("readonly")).toMatchObject({
       edit: "deny",
       write: "deny",
-      apply_patch: "deny",
       bash: "deny",
       read: "allow",
-      websearch: "allow",
     });
   });
 
-  it("resolves per-tool rules for edit_auto and auto", () => {
-    expect(getPermissionRuleForTool("edit_auto", "edit")).toBe("allow");
-    expect(getPermissionRuleForTool("edit_auto", "bash")).toBe("ask");
-    expect(shouldPromptForPermission("edit_auto", "write")).toBe(false);
-    expect(shouldPromptForPermission("edit_auto", "bash")).toBe(true);
-    expect(getPermissionRuleForTool("auto", "bash")).toBe("allow");
-    expect(shouldPromptForPermission("auto", "bash")).toBe(false);
+  it("smart policy prompts in-project delete and denies outside", () => {
+    expect(resolvePermissionAction("edit_auto", "delete", "build", {
+      projectRoot: ROOT,
+      filePath: "old.tex",
+    })).toBe("prompt");
+    expect(resolvePermissionAction("edit_auto", "delete", "build", {
+      projectRoot: ROOT,
+      filePath: "/tmp/x",
+    })).toBe("deny");
+    expect(resolvePermissionAction("readonly", "delete")).toBe("deny");
   });
 
-  it("extracts tool name from permission payload and resolves actions", () => {
+  it("smart policy allows in-project edits", () => {
+    expect(resolvePermissionAction("edit_auto", "edit", "build", {
+      projectRoot: ROOT,
+      filePath: "main.tex",
+    })).toBe("allow");
+    expect(shouldPromptForPermission("edit_auto", "write", {
+      projectRoot: ROOT,
+      filePath: "main.tex",
+    })).toBe(false);
+  });
+
+  it("extracts tool name from permission payload", () => {
     expect(extractPermissionToolName({ message: "Allow shell command?" })).toBe("bash");
     expect(extractPermissionToolName({ message: "Edit file main.tex" })).toBe("edit");
     expect(extractPermissionToolName({ kind: "execute" })).toBe("bash");
-    expect(extractPermissionToolName({ toolName: "task", message: "rm note/foo.md" })).toBe("bash");
     expect(extractPermissionToolName({ toolCall: { title: "delete" } })).toBe("delete");
-    expect(extractPermissionToolName({ toolCall: { title: "move" } })).toBe("move");
-    expect(extractPermissionToolName({ message: "Delete file note/rl-notes.md" })).toBe("delete");
-    expect(extractPermissionToolName({ message: "Move file a.tex -> b.tex" })).toBe("move");
-    expect(resolvePermissionAction("edit_auto", "edit")).toBe("allow");
-    expect(resolvePermissionAction("edit_auto", "unknown_tool")).toBe("deny");
-    expect(resolvePermissionAction("edit_auto", "grep")).toBe("allow");
-    expect(resolvePermissionAction("edit_auto", "bash")).toBe("prompt");
-    expect(resolvePermissionAction("auto", "bash")).toBe("allow");
-    expect(resolvePermissionAction("auto", "unknown_tool")).toBe("allow");
-    expect(resolvePermissionAction("ask", "edit")).toBe("prompt");
   });
 
   it("forces PTY bash when permission mode needs shell prompts", () => {
     expect(resolveEffectiveAgentTerminalMode("ask", "mirror")).toBe("pty");
     expect(resolveEffectiveAgentTerminalMode("edit_auto", "mirror")).toBe("pty");
     expect(resolveEffectiveAgentTerminalMode("auto", "mirror")).toBe("mirror");
-    expect(resolveEffectiveAgentTerminalMode("readonly", "mirror")).toBe("mirror");
   });
 
-  it("treats auto and edit_auto as edit auto-apply modes", () => {
+  it("treats non-readonly modes as edit auto-apply", () => {
     expect(isEditAutoApplyMode("auto")).toBe(true);
     expect(isEditAutoApplyMode("edit_auto")).toBe(true);
-    expect(isEditAutoApplyMode("ask")).toBe(false);
+    expect(isEditAutoApplyMode("ask")).toBe(true);
+    expect(isEditAutoApplyMode("readonly")).toBe(false);
   });
 
-  // Regression: Auto + PTY custom bash used to hit syncBashPermissionFromToolCall,
-  // see action!=="prompt", and return without writing permission.json — tool hung
-  // waiting for an approval UI that never appears.
-  it("bridge tool_call sync: auto allows bash/delete; edit_auto still prompts shell", () => {
-    expect(resolveBridgeToolCallSyncAction("auto", "bash")).toBe("auto_allow");
-    expect(resolveBridgeToolCallSyncAction("auto", "delete")).toBe("auto_allow");
-    expect(resolveBridgeToolCallSyncAction("edit_auto", "bash")).toBe("prompt");
-    expect(resolveBridgeToolCallSyncAction("edit_auto", "edit")).toBe("auto_allow");
-    expect(resolveBridgeToolCallSyncAction("ask", "bash")).toBe("prompt");
+  it("bridge sync auto-allows in-project git bash", () => {
+    expect(resolveBridgeToolCallSyncAction("edit_auto", "bash", "build")).toBe("auto_allow");
+    expect(resolveBridgeToolCallSyncAction("edit_auto", "bash", "build")).toBe("auto_allow");
     expect(resolveBridgeToolCallSyncAction("readonly", "bash")).toBe("deny");
   });
 
-  it("Plan session agent denies write/shell even in auto mode", () => {
-    expect(resolvePermissionAction("auto", "edit", "plan")).toBe("deny");
-    expect(resolvePermissionAction("auto", "bash", "plan")).toBe("deny");
+  it("Plan agent keeps plan overrides", () => {
+    expect(resolvePermissionAction("auto", "delete", "plan")).toBe("deny");
     expect(resolvePermissionAction("auto", "literature-search", "plan")).toBe("allow");
-    expect(resolveBridgeToolCallSyncAction("auto", "bash", "plan")).toBe("deny");
     expect(resolveBridgeToolCallSyncAction("auto", "delete", "plan")).toBe("deny");
+  });
+
+  it("legacy registry rules still resolve for readonly", () => {
+    expect(getPermissionRuleForTool("readonly", "edit")).toBe("deny");
+    expect(getPermissionRuleForTool("readonly", "bash")).toBe("deny");
   });
 });

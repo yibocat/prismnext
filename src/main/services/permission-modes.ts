@@ -3,9 +3,17 @@ import {
   type SessionAgent,
 } from "../../shared/session-agent";
 import {
-  buildPermissionRulesForMode,
+  buildPermissionRulesForMode as buildLegacyPermissionRulesForMode,
   getToolPermissionEntry,
 } from "./tool-permission-registry";
+import {
+  buildSmartOpenCodePermissionRules,
+  resolveSmartPermissionAction,
+  type SmartPermissionContext,
+  type PermissionRulesConfig,
+  buildPermissionRulesConfig,
+  emptyPermissionRulesConfig,
+} from "../../shared/smart-permission-policy";
 
 /**
  * Chat permission modes (prismnext):
@@ -18,48 +26,10 @@ export type PermissionMode = "ask" | "edit_auto" | "auto" | "readonly";
 
 export type OpenCodePermissionRule = "allow" | "ask" | "deny";
 
-export const DEFAULT_PERMISSION_MODE: PermissionMode = "ask";
+export const DEFAULT_PERMISSION_MODE: PermissionMode = "edit_auto";
 
 /** Bump when mode semantics change; used to migrate stored settings once. */
 export const PERMISSION_MODE_SCHEMA_VERSION = 2;
-
-export interface PermissionModeOption {
-  value: PermissionMode;
-  label: string;
-  shortLabel: string;
-  description: string;
-}
-
-export const PERMISSION_MODE_OPTIONS: PermissionModeOption[] = [
-  {
-    value: "ask",
-    label: "Ask",
-    shortLabel: "Ask",
-    description:
-      "Prompt before editing files or running shell commands. Shell runs in the PTY terminal only after you Allow.",
-  },
-  {
-    value: "edit_auto",
-    label: "Edit auto",
-    shortLabel: "Edit",
-    description:
-      "Allow file edits automatically; still ask for shell and destructive operations. Shell uses PTY after Allow.",
-  },
-  {
-    value: "auto",
-    label: "Auto",
-    shortLabel: "Auto",
-    description:
-      "Fully automatic — approve edits, shell, and other tools without prompting (same idea as OpenCode --auto). Explicit denials still apply.",
-  },
-  {
-    value: "readonly",
-    label: "Read-only",
-    shortLabel: "Read",
-    description:
-      "Only read and search — block edits and shell commands. Mirror terminal mode is available in advanced settings.",
-  },
-];
 
 export function resolvePermissionMode(mode?: string | null): PermissionMode {
   if (mode === "auto" || mode === "edit_auto" || mode === "readonly") return mode;
@@ -107,7 +77,10 @@ export function resolveEffectiveAgentTerminalMode(
 export function getPermissionRulesForMode(
   mode: PermissionMode,
 ): Record<string, OpenCodePermissionRule> {
-  return buildPermissionRulesForMode(mode);
+  if (resolvePermissionMode(mode) === "readonly") {
+    return buildLegacyPermissionRulesForMode("readonly");
+  }
+  return buildSmartOpenCodePermissionRules();
 }
 
 /** Resolve the effective permission rule for a tool under the given mode. */
@@ -175,43 +148,74 @@ function ruleToPermissionAction(rule: OpenCodePermissionRule): PermissionAction 
   return "prompt";
 }
 
-/** Decide how to handle a permission request for the current mode (and optional session agent). */
+export type { PermissionRulesConfig } from "../../shared/smart-permission-policy";
+export { buildPermissionRulesConfig, emptyPermissionRulesConfig } from "../../shared/smart-permission-policy";
+
+/** Build user permission rules from persisted app settings (main or renderer shape). */
+export function buildPermissionRulesFromSettings(
+  settings: Record<string, unknown> | null | undefined,
+): PermissionRulesConfig {
+  if (!settings) return emptyPermissionRulesConfig();
+  return buildPermissionRulesConfig({
+    permissionAllowedPaths: settings.permissionAllowedPaths as string[] | undefined,
+    permissionAllowRules: settings.permissionAllowRules as string[] | undefined,
+    permissionDenyRules: settings.permissionDenyRules as string[] | undefined,
+    bashAllowAlwaysPatterns: settings.bashAllowAlwaysPatterns as string[] | undefined,
+    toolAllowAlways: settings.toolAllowAlways as string[] | undefined,
+  });
+}
 export function resolvePermissionAction(
   mode: PermissionMode,
   toolName: string,
   agent?: SessionAgent,
-  ctx?: { filePath?: string | null; projectRoot?: string | null; bashCommand?: string | null },
+  ctx?: {
+    filePath?: string | null;
+    projectRoot?: string | null;
+    bashCommand?: string | null;
+    bashCwd?: string | null;
+    sourcePath?: string | null;
+    destinationPath?: string | null;
+    sessionId?: string | null;
+    planDraftPending?: boolean;
+  },
+  rules?: PermissionRulesConfig,
 ): PermissionAction {
-  if (agent && agent !== "build") {
-    return ruleToPermissionAction(resolveEffectivePermissionRule(mode, agent, toolName, ctx));
-  }
-
-  const rule = getPermissionRuleForTool(mode, toolName);
-  if (rule === "allow") return "allow";
-  if (rule === "deny") return "deny";
-  if (rule === "ask") return "prompt";
-
-  // OpenCode --auto: approve anything that is not explicitly denied.
-  if (mode === "auto") {
-    if (isReadOnlyToolName(toolName)) return "allow";
-    return "allow";
-  }
-
-  if (mode === "edit_auto") {
-    if (toolName === "bash" || /bash|shell|terminal|command/.test(toolName)) return "prompt";
-    if (isReadOnlyToolName(toolName)) return "allow";
+  if (resolvePermissionMode(mode) === "readonly") {
+    if (agent && agent !== "build") {
+      return ruleToPermissionAction(
+        resolveEffectivePermissionRule(mode, agent, toolName, ctx),
+      );
+    }
+    const rule = getPermissionRuleForTool("readonly", toolName);
+    if (rule === "allow") return "allow";
+    if (rule === "deny") return "deny";
     return "deny";
   }
-  if (mode === "readonly") return "deny";
-  return "prompt";
+
+  const smartCtx: SmartPermissionContext = {
+    toolName,
+    sessionAgent: agent,
+    filePath: ctx?.filePath,
+    projectRoot: ctx?.projectRoot,
+    bashCommand: ctx?.bashCommand,
+    bashCwd: ctx?.bashCwd,
+    sourcePath: ctx?.sourcePath,
+    destinationPath: ctx?.destinationPath,
+    sessionId: ctx?.sessionId,
+    planDraftPending: ctx?.planDraftPending,
+  };
+  return resolveSmartPermissionAction(smartCtx, rules ?? emptyPermissionRulesConfig());
 }
 
-/** Whether the UI should prompt the user (OpenCode sent ask, or rule is ask). */
+/** Whether the UI should prompt the user — smart policy: only explicit prompt actions. */
 export function shouldPromptForPermission(
   mode: PermissionMode,
   toolName: string,
+  ctx?: Omit<SmartPermissionContext, "toolName">,
+  rules?: PermissionRulesConfig,
 ): boolean {
-  return getPermissionRuleForTool(mode, toolName) === "ask";
+  if (resolvePermissionMode(mode) === "readonly") return false;
+  return resolveSmartPermissionAction({ toolName, ...ctx }, rules ?? emptyPermissionRulesConfig()) === "prompt";
 }
 
 /**
@@ -237,6 +241,5 @@ export function resolveBridgeToolCallSyncAction(
 
 /** Modes that auto-apply disk mutations without a proposed-change review. */
 export function isEditAutoApplyMode(mode: PermissionMode | string | undefined): boolean {
-  const m = resolvePermissionMode(mode);
-  return m === "auto" || m === "edit_auto";
+  return resolvePermissionMode(mode) !== "readonly";
 }

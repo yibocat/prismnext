@@ -31,7 +31,11 @@ import {
 import { snapshotExperiment } from "../services/experiment-results-snapshot";
 import { broadcastExperimentChanged } from "../services/experiment-ui-events";
 import { AcpService } from "../acp/service";
-import { resolvePermissionAction, resolvePermissionMode } from "../services/permission-modes";
+import {
+  buildPermissionRulesFromSettings,
+  resolvePermissionAction,
+  resolvePermissionMode,
+} from "../services/permission-modes";
 import {
   EXPERIMENT_REGISTRY_REL,
   parseExperimentRunKind,
@@ -295,13 +299,16 @@ export function registerExperimentHandlers(): void {
       typeof args.chatSessionId === "string" && args.chatSessionId.trim()
         ? args.chatSessionId.trim()
         : null;
-    const mode = resolvePermissionMode(
-      (getSettings() as Record<string, unknown>).permissionMode as string | undefined,
-    );
+    const settings = getSettings() as Record<string, unknown>;
+    const mode = resolvePermissionMode(settings.permissionMode as string | undefined);
+    const permRules = buildPermissionRulesFromSettings(settings);
     const sessionAgent = chatSessionId
       ? AcpService.getInstance().getSessionAgent(chatSessionId)
       : undefined;
-    const action = resolvePermissionAction(mode, "experiment-run", sessionAgent);
+    const action = resolvePermissionAction(mode, "experiment-run", sessionAgent, {
+      projectRoot: args.projectRoot,
+      bashCwd: args.projectRoot,
+    }, permRules);
     if (action === "deny") {
       const planBlocked = sessionAgent === "plan";
       return {

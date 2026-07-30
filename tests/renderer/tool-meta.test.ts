@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   getToolMeta,
   usesProposedChange,
-  shouldTrackProposedChange,
   isPatchTool,
   isFileWriteTool,
   isDiskMutationTool,
@@ -63,14 +62,6 @@ describe("tool-meta", () => {
     expect(usesProposedChange("edit")).toBe(false);
     expect(usesProposedChange("write")).toBe(false);
     expect(usesProposedChange("bash")).toBe(false);
-  });
-
-  it("tracks proposed changes is always false (scheme A)", () => {
-    expect(shouldTrackProposedChange("ask", "edit")).toBe(false);
-    expect(shouldTrackProposedChange("auto", "edit")).toBe(false);
-    expect(shouldTrackProposedChange("readonly", "write")).toBe(false);
-    expect(shouldTrackProposedChange("auto", "bash")).toBe(false);
-    expect(shouldTrackProposedChange("auto", "apply_patch")).toBe(false);
   });
 
   it("classifies file-write and patch tools", () => {

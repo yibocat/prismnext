@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef } from "react";
+import { memo, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,29 @@ import { Hint } from "@/components/ui/hint";
 import { SessionContextCard } from "./session-context-card";
 import { SortableTabStrip } from "@/components/layout/sortable-tab-strip";
 
+/** Re-render strip only when tab display fields change — not on draft edits. */
+function selectOpenTabsRenderKey(state: {
+  tabs: Array<{
+    id: string;
+    title: string;
+    isStreaming: boolean;
+    sessionId: string | null;
+    sessionCwd?: string | null;
+    messages: unknown[];
+  }>;
+  activeTabId: string;
+}): string {
+  const parts: string[] = [];
+  for (const t of state.tabs) {
+    const resolved = resolveSessionTitle(t) ?? "";
+    parts.push(
+      `${t.id}\x01${t.title}\x01${t.isStreaming ? 1 : 0}\x01${t.sessionId ?? ""}\x01${t.sessionCwd ?? ""}\x01${resolved}`,
+    );
+  }
+  parts.push(`active:${state.activeTabId}`);
+  return parts.join("\0");
+}
+
 /** Visible open-chat strip only when the user actually has parallel tabs. */
 export function shouldShowChatOpenTabs(tabCount: number): boolean {
   return tabCount >= 2;
@@ -16,7 +39,11 @@ export function shouldShowChatOpenTabs(tabCount: number): boolean {
 
 export const ChatOpenTabs = memo(function ChatOpenTabs() {
   const { t } = useTranslation();
-  const tabs = useChatStore((s) => s.tabs);
+  const tabsRenderKey = useChatStore(selectOpenTabsRenderKey);
+  const tabs = useMemo(
+    () => useChatStore.getState().tabs,
+    [tabsRenderKey],
+  );
   const activeTabId = useChatStore((s) => s.activeTabId);
   const setActiveTab = useChatStore((s) => s.setActiveTab);
   const closeTab = useChatStore((s) => s.closeTab);

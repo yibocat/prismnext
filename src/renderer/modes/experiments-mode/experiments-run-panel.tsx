@@ -37,8 +37,8 @@ import { cn } from "@/lib/utils";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import { buildPermissionRulesFromSettings, resolvePermissionMode } from "@shared/permission-modes";
 import { shouldShowPermissionGate } from "@/components/modules/chat/permission-gate-panel";
-import { resolvePermissionMode } from "@shared/permission-modes";
 import {
   EXPERIMENT_RUN_KINDS,
   parseExperimentRunKind,
@@ -70,6 +70,11 @@ export function ExperimentsRunDialog({
   const getPaths = useExperimentStore((s) => s.getPaths);
 
   const permissionMode = useSettingsStore((s) => s.settings.permissionMode);
+  const settings = useSettingsStore((s) => s.settings);
+  const permRules = useMemo(
+    () => buildPermissionRulesFromSettings(settings as Record<string, unknown>),
+    [settings],
+  );
   const resolvedMode = resolvePermissionMode(permissionMode);
   const isReadonly = resolvedMode === "readonly";
 
@@ -135,7 +140,10 @@ export function ExperimentsRunDialog({
     if (!canRun || !projectRoot || !selectedId) return;
     const trimmed = command.trim();
     const runKind = parseExperimentRunKind(kind);
-    if (shouldShowPermissionGate(permissionMode, "experiment-run")) {
+    if (shouldShowPermissionGate(permissionMode, "experiment-run", {
+      projectRoot,
+      bashCwd: projectRoot,
+    }, permRules)) {
       setPendingCommand(trimmed);
       setPendingKind(kind);
       setConfirmOpen(true);
@@ -147,6 +155,7 @@ export function ExperimentsRunDialog({
     command,
     kind,
     permissionMode,
+    permRules,
     projectRoot,
     selectedId,
     startRun,

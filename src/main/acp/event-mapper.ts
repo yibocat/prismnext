@@ -127,10 +127,23 @@ export class EventMapper {
     this.accumThinking.clear();
   }
 
+  /**
+   * Whether any session/update frame was forwarded for the current turn.
+   * OpenCode can resolve session/prompt with a bare end_turn and ZERO frames
+   * when the provider call fails (its internal error never reaches the wire)
+   * — chat:send uses this to flag the turn as "empty" instead of fake-success.
+   */
+  private turnEmittedContent = false;
+
+  hadTurnContent(): boolean {
+    return this.turnEmittedContent;
+  }
+
   /** Clear per-turn text/thinking accumulators before a new user prompt. */
   clearTurnAccumulators(): void {
     this.accumText.clear();
     this.accumThinking.clear();
+    this.turnEmittedContent = false;
   }
 
   // ─── Internal ──────────────────────────────────────────────
@@ -677,6 +690,24 @@ export class EventMapper {
   }
 
   private mapSessionUpdate(tabId: string, sessionId: string, params: any): void {
+    const update: any = params.update || params;
+    const chunkType = update.sessionUpdate;
+
+    if (chunkType === "agent_error") {
+      const detail =
+        (typeof update.message === "string" && update.message)
+        || (typeof update.error === "string" && update.error)
+        || (typeof update.content === "string" && update.content)
+        || "";
+      this.win.webContents.send("chat:stream", {
+        tabId,
+        type: "session.error",
+        data: { message: detail, raw: update },
+      });
+      return;
+    }
+
+    this.turnEmittedContent = true;
     // The ACP SDK's sessionUpdate callback delivers a JSON-RPC notification's
     // `params` field.  The exact shape depends on the SDK version:
     //
@@ -684,9 +715,7 @@ export class EventMapper {
     //   Shape B (flattened): { sessionId, sessionUpdate, content, tool_call, ... }
     //
     // We normalise both here: `update` = the inner bag of fields.
-    const update: any = params.update || params;
     const content = update.content;
-    const chunkType = update.sessionUpdate;
     const msgId = update.messageId;
 
     // Debug: log every session/update shape ONCE per new shape to aid diagnosis.

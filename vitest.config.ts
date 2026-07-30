@@ -1,7 +1,9 @@
 import { defineConfig } from "vitest/config";
 import path from "node:path";
+import { sharedAliasPlugin } from "./scripts/vite-shared-alias-plugin";
 
 export default defineConfig({
+  plugins: [sharedAliasPlugin(__dirname)],
   define: {
     __PRISM_UPDATER_BASE_URL__: '""',
   },
@@ -14,7 +16,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src/renderer"),
-      "@shared": path.resolve(__dirname, "src/main/services"),
     },
   },
 });

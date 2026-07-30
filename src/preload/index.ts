@@ -1121,8 +1121,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("settings:getDefaultPersona"),
 	settingsGetKnowledgeModules: (projectRoot?: string) =>
 		ipcRenderer.invoke("settings:getKnowledgeModules", { projectRoot }),
-	settingsGetModules: (projectRoot?: string) =>
-		ipcRenderer.invoke("settings:getModules", { projectRoot }),
 	settingsGetBuiltinTools: () =>
 		ipcRenderer.invoke("settings:getBuiltinTools"),
 	settingsGetLayers: () =>
@@ -1357,7 +1355,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("chat:stream", handler);
 		return () => ipcRenderer.removeListener("chat:stream", handler);
 	},
-	onChatComplete: (callback: (data: { tabId: string; sessionId: string; success: boolean; error?: string; tokenUsage?: any; planDraftMissing?: boolean }) => void) => {
+	onChatComplete: (callback: (data: { tabId: string; sessionId: string; success: boolean; error?: string; errorCode?: string; emptyTurn?: boolean; tokenUsage?: any; planDraftMissing?: boolean }) => void) => {
 		const handler = (_event: Electron.IpcRendererEvent, data: any) => callback(data);
 		ipcRenderer.on("chat:complete", handler);
 		return () => ipcRenderer.removeListener("chat:complete", handler);

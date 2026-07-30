@@ -511,6 +511,16 @@ export function readBridgePathsSource(): string | null {
   }
 }
 
+export function readPermissionBridgePollSource(): string | null {
+  const path = join(getToolsSourceDir(), "permission-bridge-poll.ts");
+  if (!existsSync(path)) return null;
+  try {
+    return readFileSync(path, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Collect all built-in tool files from the source directory.
  *
@@ -539,6 +549,7 @@ export function getBuiltinToolFiles(): ToolFile[] {
       if (entry.name === "index.ts") continue;
       if (entry.name === "tool-description.ts") continue;
       if (entry.name === "bridge-paths.ts") continue;
+      if (entry.name === "permission-bridge-poll.ts") continue;
 
       const name = entry.name.replace(/\.ts$/, "");
       const filePath = join(toolsDir, entry.name);

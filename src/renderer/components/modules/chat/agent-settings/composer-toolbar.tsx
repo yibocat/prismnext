@@ -1,6 +1,5 @@
 import { useRef, type ReactNode } from "react";
 import { ModelThoughtSelect } from "./model-thought-select";
-import { PermissionModeSelect } from "./permission-mode-select";
 import { PlanModeChip } from "../plan-mode-chip";
 import { IntensiveReadingListButton, useIntensiveReadingCount } from "../intensive-reading-list-button";
 import { useComposerCompact } from "./use-composer-compact";
@@ -47,7 +46,6 @@ export function ComposerToolbar({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
-        <PermissionModeSelect compact={compact} />
         {modelBesideSend ? (
           <ModelThoughtSelect presentation="capsule" />
         ) : null}

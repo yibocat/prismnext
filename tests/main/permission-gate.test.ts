@@ -4,47 +4,64 @@ import {
   shouldPromptForPermission,
 } from "../../src/main/services/permission-modes";
 import { shouldShowPermissionGate } from "../../src/renderer/components/modules/chat/permission-gate-panel";
-import { shouldTrackProposedChange } from "../../src/renderer/components/modules/chat/tools/tool-meta";
 
-describe("permission gate", () => {
-  it("ask mode shows gate for edit, bash, delete, and move", () => {
-    expect(shouldShowPermissionGate("ask", "edit")).toBe(true);
-    expect(shouldShowPermissionGate("ask", "bash")).toBe(true);
-    expect(shouldShowPermissionGate("ask", "delete")).toBe(true);
-    expect(shouldShowPermissionGate("ask", "move")).toBe(true);
-    expect(shouldShowPermissionGate("ask", "read")).toBe(false);
+const ROOT = "/Users/me/paper";
+
+describe("permission gate (smart policy)", () => {
+  it("prompts for delete inside project", () => {
+    expect(shouldShowPermissionGate(undefined, "delete", {
+      projectRoot: ROOT,
+      filePath: "old.tex",
+    })).toBe(true);
+    expect(resolvePermissionAction("edit_auto", "delete", "build", {
+      projectRoot: ROOT,
+      filePath: "old.tex",
+    })).toBe("prompt");
   });
 
-  it("edit_auto mode shows gate only for tools that prompt", () => {
-    expect(shouldShowPermissionGate("edit_auto", "edit")).toBe(false);
-    expect(shouldShowPermissionGate("edit_auto", "bash")).toBe(true);
-    expect(shouldShowPermissionGate("edit_auto", "delete")).toBe(true);
-    expect(shouldShowPermissionGate("edit_auto", "move")).toBe(true);
-    expect(shouldPromptForPermission("edit_auto", "bash")).toBe(true);
-    expect(shouldPromptForPermission("edit_auto", "write")).toBe(false);
+  it("denies delete outside project", () => {
+    expect(shouldShowPermissionGate(undefined, "delete", {
+      projectRoot: ROOT,
+      filePath: "/tmp/x",
+    })).toBe(false);
+    expect(resolvePermissionAction("edit_auto", "delete", "build", {
+      projectRoot: ROOT,
+      filePath: "/tmp/x",
+    })).toBe("deny");
   });
 
-  it("full auto mode never shows composer gate", () => {
-    expect(shouldShowPermissionGate("auto", "edit")).toBe(false);
-    expect(shouldShowPermissionGate("auto", "bash")).toBe(false);
-    expect(shouldPromptForPermission("auto", "bash")).toBe(false);
+  it("allows in-project edit without prompt", () => {
+    expect(shouldShowPermissionGate(undefined, "edit", {
+      projectRoot: ROOT,
+      filePath: "main.tex",
+    })).toBe(false);
   });
 
-  it("scheme A disables proposed-change review in ask", () => {
-    expect(shouldTrackProposedChange("ask", "edit")).toBe(false);
+  it("prompts for outside write", () => {
+    expect(shouldShowPermissionGate(undefined, "write", {
+      projectRoot: ROOT,
+      filePath: "/tmp/out.tex",
+    })).toBe(true);
   });
 
-  it("readonly denies edit and bash at main process", () => {
+  it("allows in-project move without prompt", () => {
+    expect(shouldShowPermissionGate(undefined, "move", {
+      projectRoot: ROOT,
+      sourcePath: "a.tex",
+      destinationPath: "drafts/a.tex",
+    })).toBe(false);
+  });
+
+  it("allows in-project git bash without prompt", () => {
+    expect(shouldPromptForPermission("edit_auto", "bash", {
+      projectRoot: ROOT,
+      bashCommand: "git commit -m x",
+      bashCwd: ROOT,
+    })).toBe(false);
+  });
+
+  it("readonly still denies edit and bash", () => {
     expect(resolvePermissionAction("readonly", "edit")).toBe("deny");
     expect(resolvePermissionAction("readonly", "bash")).toBe("deny");
-  });
-
-  it("delete and move defer to composer gate instead of inline tool buttons", () => {
-    expect(shouldShowPermissionGate("ask", "delete")).toBe(true);
-    expect(shouldShowPermissionGate("edit_auto", "delete")).toBe(true);
-    expect(shouldShowPermissionGate("edit_auto", "move")).toBe(true);
-    expect(shouldPromptForPermission("edit_auto", "delete")).toBe(true);
-    expect(shouldPromptForPermission("ask", "delete")).toBe(true);
-    expect(resolvePermissionAction("readonly", "delete")).toBe("deny");
   });
 });

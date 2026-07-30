@@ -192,9 +192,31 @@ function selectionExtensions(density: "default" | "compact"): Extension[] {
   return [drawSelection({ drawRangeCursor: false })];
 }
 
+function applyPartsToEditorView(view: EditorView, parts: ComposerPart[]): void {
+  const { doc, tokenMap } = partsToDoc(parts);
+  const currentDoc = view.state.doc.toString();
+  if (currentDoc !== doc && stripTokenSeparators(currentDoc) !== stripTokenSeparators(doc)) {
+    const sel = view.state.selection.main;
+    view.dispatch({
+      changes: { from: 0, to: currentDoc.length, insert: doc },
+      selection: selectionAfterDocReplace(
+        currentDoc,
+        doc,
+        sel.head,
+        (sel.assoc ?? 0) as -1 | 0 | 1,
+      ),
+      effects: setTokenMapEffect.of(tokenMap),
+    });
+  } else {
+    syncTokenMapFromParts(view, parts);
+  }
+}
+
 export interface InlineComposerEditorHandle {
   focus: () => void;
   getParts: () => ComposerPart[];
+  /** Replace editor document immediately (send/clear — bypasses debounced draft persist). */
+  replaceParts: (parts: ComposerPart[]) => void;
   insertFileMention: (file: ProjectFile) => void;
   /** Insert a context token from RightArea (terminal, editor, git diff, …). */
   insertContextPart: (part: Exclude<ComposerPart, { type: "text" }>) => boolean;
@@ -563,8 +585,10 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
     const expandedSlashSectionsRef = useRef(expandedSlashSections);
     expandedSlashSectionsRef.current = expandedSlashSections;
 
+    const queryKeyRef = useRef("");
+
     const syncQuery = useCallback((view: EditorView) => {
-      const query = syncComposerQueryState(view, setActiveQuery, setDropdownAnchor);
+      const query = syncComposerQueryState(view, setActiveQuery, setDropdownAnchor, queryKeyRef);
       activeQueryRef.current = query;
       return query;
     }, []);
@@ -1134,6 +1158,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       useComposerEditorStore.getState().register({
         focus: () => view.focus(),
         getParts: () => readPartsFromView(view),
+        replaceParts: (next) => applyPartsToEditorView(view, next),
         insertFileMention: (file: ProjectFile) => {
           const label = mentionFileLabel(file);
           const pos = view.state.selection.main.head;
@@ -1211,23 +1236,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         }
       }
 
-      const { doc, tokenMap } = partsToDoc(parts);
-      const currentDoc = view.state.doc.toString();
-      if (currentDoc !== doc && stripTokenSeparators(currentDoc) !== stripTokenSeparators(doc)) {
-        const sel = view.state.selection.main;
-        view.dispatch({
-          changes: { from: 0, to: currentDoc.length, insert: doc },
-          selection: selectionAfterDocReplace(
-            currentDoc,
-            doc,
-            sel.head,
-            (sel.assoc ?? 0) as -1 | 0 | 1,
-          ),
-          effects: setTokenMapEffect.of(tokenMap),
-        });
-      } else {
-        syncTokenMapFromParts(view, parts);
-      }
+      applyPartsToEditorView(view, parts);
       partsKeyRef.current = incomingKey;
     }, [parts]);
 
@@ -1268,6 +1277,10 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
     useImperativeHandle(ref, () => ({
       focus: () => viewRef.current?.focus(),
       getParts: () => (viewRef.current ? readPartsFromView(viewRef.current) : parts),
+      replaceParts: (next) => {
+        const view = viewRef.current;
+        if (view) applyPartsToEditorView(view, next);
+      },
       insertFileMention: (file: ProjectFile) => {
         const view = viewRef.current;
         if (!view) return;

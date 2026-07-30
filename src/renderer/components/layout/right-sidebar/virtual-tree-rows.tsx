@@ -43,6 +43,7 @@ import {
 const ROW_BASE = "flex h-6 items-center gap-2 rounded-sm px-2 text-[length:var(--font-size-12)] text-muted-foreground";
 const ROW_SELECTED = "bg-sidebar-accent text-sidebar-accent-foreground";
 const INDENT = (depth: number) => 8 + depth * 16;
+export const FILE_TREE_ROW_ATTR = "data-file-tree-row";
 
 // ─── Folder Virt Row ───
 
@@ -75,6 +76,7 @@ export const FolderVirtRow = memo(function FolderVirtRow({
         <div
           className={cn(ROW_BASE, "cursor-pointer", isSelected && ROW_SELECTED)}
           style={{ paddingLeft: INDENT(depth) }}
+          {...{ [FILE_TREE_ROW_ATTR]: "" }}
           onClick={onToggle}
         >
           <ChevronRightIcon
@@ -156,6 +158,7 @@ export const FileVirtRow = memo(function FileVirtRow({
             isActive && "bg-sidebar-accent text-sidebar-accent-foreground",
           )}
           style={{ paddingLeft: INDENT(depth) }}
+          {...{ [FILE_TREE_ROW_ATTR]: "" }}
           onClick={onSelect}
           onDoubleClick={(e) => {
             e.preventDefault();
@@ -255,6 +258,7 @@ export const InlineEditRow = memo(function InlineEditRow({
     <div
       className="flex h-6 items-center gap-2 rounded-sm px-2 text-[length:var(--font-size-12)]"
       style={{ paddingLeft: INDENT(depth) }}
+      {...{ [FILE_TREE_ROW_ATTR]: "" }}
     >
       {type === "file" && iconName ? (
         <Icon icon={iconName} className="size-3.5 shrink-0" />
