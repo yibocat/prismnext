@@ -4,6 +4,7 @@ import {
   RESEARCH_PLAN_DRAFTS_DIR_REL,
   RESEARCH_PLANS_DIR_REL,
 } from "../../shared/research-plan";
+import { OPEN_BUILTIN_TASK_SUBAGENTS } from "./task-orchestrator-gate";
 
 /** OpenCode built-ins prismnext always enables (privacy-first defaults otherwise hide them). */
 export const OPENCODE_STANDARD_TOOLS: Record<string, boolean> = {
@@ -92,4 +93,55 @@ export function ensurePlanAgentPermissionConfig(
       },
     },
   };
+}
+
+/** Nested Task is always denied on OpenCode built-in subagents. */
+const BUILTIN_SUBAGENT_TASK_DENY: Record<string, string> = { "*": "deny" };
+
+/**
+ * Pin OpenCode built-in Task subagents (explore/general/command/scout):
+ * - always inject `permission.task: { "*": "deny" }` (no nested Task)
+ * - optional global default `model`; when null/empty, remove managed `model`
+ */
+export function ensureSubagentModelConfig(
+  config: Record<string, unknown>,
+  model: string | null | undefined,
+): Record<string, unknown> {
+  const normalized =
+    typeof model === "string" && model.trim() ? model.trim() : null;
+  const agent = {
+    ...((config.agent as Record<string, unknown> | undefined) ?? {}),
+  };
+
+  for (const id of OPEN_BUILTIN_TASK_SUBAGENTS) {
+    const existing =
+      agent[id] && typeof agent[id] === "object" && !Array.isArray(agent[id])
+        ? { ...(agent[id] as Record<string, unknown>) }
+        : {};
+    const prevPermission =
+      existing.permission && typeof existing.permission === "object" && !Array.isArray(existing.permission)
+        ? { ...(existing.permission as Record<string, unknown>) }
+        : {};
+    const prevTask =
+      prevPermission.task && typeof prevPermission.task === "object" && !Array.isArray(prevPermission.task)
+        ? { ...(prevPermission.task as Record<string, unknown>) }
+        : typeof prevPermission.task === "string"
+          ? { "*": prevPermission.task }
+          : {};
+    const next: Record<string, unknown> = {
+      ...existing,
+      permission: {
+        ...prevPermission,
+        task: { ...prevTask, ...BUILTIN_SUBAGENT_TASK_DENY },
+      },
+    };
+    if (normalized) {
+      next.model = normalized;
+    } else {
+      delete next.model;
+    }
+    agent[id] = next;
+  }
+
+  return { ...config, agent };
 }

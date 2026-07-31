@@ -36,12 +36,10 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import {
   AlertCircleIcon,
-  AlertTriangleIcon,
   CopyIcon,
   CheckIcon,
   ArrowDownIcon,
   RotateCcwIcon,
-  XIcon,
   ZapIcon,
   Loader2Icon,
   CircleCheckIcon,
@@ -94,45 +92,25 @@ const StreamingIndicator = memo(({ label }: { label: string }) => {
 });
 StreamingIndicator.displayName = "StreamingIndicator";
 
-// ─── Turn Error Banner ───
-// Persistent, dismissible error card at the end of a failed turn. Replaces the
-// transient toast as the source of truth for "what just went wrong".
+// ─── Turn error retry ───
+// Error body lives in the assistant bubble (`turnError`); this is Retry only.
 
-const TurnErrorBanner = memo(({ text, canRetry, onRetry, onDismiss }: {
-  text: string;
-  canRetry: boolean;
-  onRetry: () => void;
-  onDismiss: () => void;
-}) => {
+const TurnErrorRetry = memo(({ onRetry }: { onRetry: () => void }) => {
   const { t } = useTranslation();
   return (
-    <div className="mx-6 mb-3 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
-      <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0 text-destructive" />
-      <span className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[length:var(--font-chat-meta)] text-destructive">
-        {text}
-      </span>
-      {canRetry && (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[length:var(--font-chat-meta)] font-medium text-destructive hover:bg-destructive/10 transition-colors"
-        >
-          <RotateCcwIcon className="size-3" />
-          {t("chat.errors.retry")}
-        </button>
-      )}
+    <div className="mx-6 mb-3 flex justify-end">
       <button
         type="button"
-        onClick={onDismiss}
-        aria-label={t("chat.errors.dismiss")}
-        className="shrink-0 rounded p-0.5 text-destructive/70 hover:text-destructive hover:bg-destructive/10 transition-colors"
+        onClick={onRetry}
+        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-muted px-2 py-1 text-[length:var(--font-chat-meta)] font-medium text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
       >
-        <XIcon className="size-3.5" />
+        <RotateCcwIcon className="size-3" />
+        {t("chat.errors.retry")}
       </button>
     </div>
   );
 });
-TurnErrorBanner.displayName = "TurnErrorBanner";
+TurnErrorRetry.displayName = "TurnErrorRetry";
 
 // ─── User Header ───
 
@@ -143,6 +121,7 @@ const UserHeader = memo(function UserHeader({
   msg: ChatStreamMessage;
   isActiveTurn?: boolean;
 }) {
+  const { t } = useTranslation();
   const allBlocks = contentBlocks(msg.message?.content);
   const commandBlocks = allBlocks.filter((b) => b.type === "command");
   const profileBlocks = allBlocks.filter((b) => b.type === "profile");
@@ -282,17 +261,28 @@ const UserHeader = memo(function UserHeader({
           </div>
           <CopyButton text={text} />
         </div>
-        {long && !expanded && (
-          <div className="text-[length:var(--font-chat-meta)] text-muted-foreground mt-0.5">Click to expand</div>
-        )}
-        {long && expanded && (
+        {long && !expanded ? (
+          <div className="mt-0.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
+            {t("chat.messages.expand")}
+          </div>
+        ) : null}
+        {/* Collapse at the bubble foot — full-width hit target, no divider. */}
+        {long && expanded ? (
           <button
-            onClick={(e) => { e.stopPropagation(); setExpanded(false); }}
-            className="text-[length:var(--font-chat-meta)] text-muted-foreground hover:text-foreground mt-0.5"
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpanded(false);
+            }}
+            className={cn(
+              "mt-1 -mx-4 -mb-2 w-[calc(100%+2rem)] rounded-b-lg px-4 pb-2 pt-1",
+              "text-left text-[length:var(--font-chat-meta)] text-muted-foreground",
+              "cursor-pointer transition-colors hover:bg-accent hover:text-foreground",
+            )}
           >
-            Collapse
+            {t("chat.messages.collapse")}
           </button>
-        )}
+        ) : null}
       </div>
       <ChatImagePreviewDialog
         open={imagePreview != null}
@@ -480,7 +470,6 @@ export const ChatMessages = memo(function ChatMessages() {
   const messages = useChatStore((s) => s.messages);
   const streamingMessage = useChatStore((s) => s.streamingMessage);
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const chatError = useChatStore((s) => s.error);
   const isLoadingSession = useChatStore((s) => s.isLoadingSession);
   const activeTabId = useChatStore((s) => s.activeTabId);
   const chatSessionId = useChatStore((s) => s.sessionId);
@@ -502,8 +491,8 @@ export const ChatMessages = memo(function ChatMessages() {
   });
   const turnMeta = useChatStore((s) => s.turnMeta);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  // Only during main-process prepare phases (project sync, session/MCP connect,
-  // model spin-up) — NOT while Worked for / ThinkingWidget render reply content.
+  // Intentional product copy while waiting for first assistant content —
+  // not a mistaken stand-in for preparePhase (create session / start model).
   const streamingLabel = t("chat.prepare.planningNext");
 
   useEffect(() => {
@@ -730,17 +719,15 @@ export const ChatMessages = memo(function ChatMessages() {
       .trim();
   }, [turns]);
 
+  const lastTurnHasError = useMemo(() => {
+    const responses = turns[turns.length - 1]?.responses ?? [];
+    return responses.some((r) => r.msg?.turnError);
+  }, [turns]);
+
   const handleRetryTurn = useCallback(() => {
     if (!lastTurnRetryText) return;
-    const s = useChatStore.getState();
-    s._setError(s.activeTabId, null);
-    void s.sendPrompt(lastTurnRetryText);
+    void useChatStore.getState().sendPrompt(lastTurnRetryText);
   }, [lastTurnRetryText]);
-
-  const handleDismissError = useCallback(() => {
-    const s = useChatStore.getState();
-    s._setError(s.activeTabId, null);
-  }, []);
 
   // Track the last user message OBJECT so we can distinguish between:
   //  - a genuinely new message appended at the tail (should reset auto-scroll)
@@ -1320,14 +1307,9 @@ export const ChatMessages = memo(function ChatMessages() {
             </section>
             );
           })}
-          {chatError && !isStreaming && (
-            <TurnErrorBanner
-              text={chatError}
-              canRetry={!!lastTurnRetryText}
-              onRetry={handleRetryTurn}
-              onDismiss={handleDismissError}
-            />
-          )}
+          {lastTurnHasError && !isStreaming && lastTurnRetryText ? (
+            <TurnErrorRetry onRetry={handleRetryTurn} />
+          ) : null}
         </div>
       </div>
 

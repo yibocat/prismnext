@@ -12,6 +12,8 @@ import {
   buildActivitySummaryLine,
   countActivityTools,
   isBridgeTextBlockExported as isBridgeTextBlock,
+  isThinkingBlockStreaming,
+  resolveActivityDurationSec,
   sumThinkingDurations,
 } from "@/lib/chat/segment-assistant-blocks";
 import { ToolWidget } from "./tool-widget-dispatcher";
@@ -119,16 +121,30 @@ export const ActivityFold = memo(function ActivityFold({
     }
   }, [thinkingDone, toolCount, elapsed]);
 
-  const thinkingDuration = sumThinkingDurations(blocks);
-  const displayElapsed =
-    ((!isStreamingSegment || (thinkingDone && toolCount === 0)) && frozenElapsedRef.current != null)
-      ? frozenElapsedRef.current
-      : elapsed > 0
-        ? elapsed
-        : thinkingDuration;
+  const activityBlocks = blocks.filter((b) => !isBridgeTextBlock(b));
+  const persistedDuration = resolveActivityDurationSec(activityBlocks);
+  const thinkingDuration = sumThinkingDurations(activityBlocks);
+  const authoritative = persistedDuration ?? (thinkingDuration > 0 ? thinkingDuration : undefined);
+
+  // Done: always prefer sealed / OpenCode durations so the fold header matches
+  // nested ThinkingWidget (live freeze often starts later → shorter).
+  // Live: wall clock while the segment is still streaming.
+  let displayElapsed = 0;
+  if (!summaryStreaming && authoritative != null) {
+    displayElapsed = authoritative;
+  } else if (
+    (!isStreamingSegment || (thinkingDone && toolCount === 0))
+    && frozenElapsedRef.current != null
+  ) {
+    displayElapsed = frozenElapsedRef.current;
+  } else if (elapsed > 0) {
+    displayElapsed = elapsed;
+  } else if (authoritative != null) {
+    displayElapsed = authoritative;
+  }
 
   const summary = buildActivitySummaryLine({
-    blocks: blocks.filter((b) => !isBridgeTextBlock(b)),
+    blocks: activityBlocks,
     isStreaming: summaryStreaming,
     elapsedSec: displayElapsed,
     labels,
@@ -186,7 +202,12 @@ export const ActivityFold = memo(function ActivityFold({
                   persistKey={
                     persistKey ? `${persistKey}:t${blockIndex}` : undefined
                   }
-                  isStreamingMsg={isStreamingSegment && !thinkingDone}
+                  isStreamingMsg={isThinkingBlockStreaming(
+                    blocks,
+                    i,
+                    isStreamingSegment,
+                    isBridgeTextBlock,
+                  )}
                   isProgress={block._progress === true}
                 />
               );

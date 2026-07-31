@@ -1,15 +1,15 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Hint } from "@/components/ui/hint";
 import { ChatComposerCore } from "./chat-composer-core";
 import { ChatMessages } from "./chat-messages";
 import { ComposerChromeStack } from "./composer-chrome-stack";
+import { SubAgentRunPanel, SUBAGENT_PANEL_EXIT_MS } from "./subagent-run-panel";
+import { ChatFloatPanel, CHAT_FLOAT_PANEL_HEIGHT } from "./chat-float-panel";
 import { RestoreUndoBar } from "./restore-undo-bar";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useComposerInsertStore } from "@/stores/composer-insert-store";
 import { useComposerEditorStore } from "@/stores/composer-editor-store";
-import { XIcon } from "lucide-react";
 import { WorktreeSelector } from "./worktree-selector";
 import { IntensiveReadingListButton } from "./intensive-reading-list-button";
 import { cn } from "@/lib/utils";
@@ -54,10 +54,10 @@ export function AiBar() {
   const closePanel = useCallback(() => {
     if (panelClosingRef.current) return;
     setPanelClosing(true);
-    setTimeout(() => {
+    window.setTimeout(() => {
       setIsPanelOpen(false);
       setPanelClosing(false);
-    }, 150);
+    }, SUBAGENT_PANEL_EXIT_MS);
   }, []);
 
   const composerShellRef = useRef<HTMLDivElement>(null);
@@ -65,6 +65,38 @@ export function AiBar() {
 
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
+  const openSubAgentId = useChatStore(
+    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.openSubAgentPanelToolUseId ?? null,
+  );
+  const closeSubAgentPanel = useChatStore((s) => s.closeSubAgentPanel);
+  const [displayedSubId, setDisplayedSubId] = useState<string | null>(null);
+  const [subClosing, setSubClosing] = useState(false);
+  const subClosingRef = useRef(false);
+  subClosingRef.current = subClosing;
+
+  // Only sync when store id changes — never clear `subClosing` just because it
+  // became true (that cancelled the exit animation and caused close jitter).
+  useEffect(() => {
+    if (openSubAgentId) {
+      setDisplayedSubId(openSubAgentId);
+      setSubClosing(false);
+      return;
+    }
+    if (!subClosingRef.current) setDisplayedSubId(null);
+  }, [openSubAgentId]);
+
+  const closeSubAnimated = useCallback(() => {
+    if (subClosingRef.current || !displayedSubId) return;
+    setSubClosing(true);
+    // Clear store id immediately (panel-chat scrim fades with exit); keep
+    // `displayedSubId` mounted until the animation finishes.
+    closeSubAgentPanel();
+    window.setTimeout(() => {
+      setDisplayedSubId(null);
+      setSubClosing(false);
+    }, SUBAGENT_PANEL_EXIT_MS);
+  }, [closeSubAgentPanel, displayedSubId]);
+
   const draftEmpty = useComposerEditorStore((s) => s.draftEmpty);
   const draftNeedsExpanded = useComposerEditorStore((s) => s.draftNeedsExpanded);
   const activeTabTitleRaw = useChatStore((s) => {
@@ -72,6 +104,15 @@ export function AiBar() {
     return tab?.title ?? "Chat";
   });
   const activeTabTitle = displayChatTitle(activeTabTitleRaw, t);
+  const subPanelOpen = !!displayedSubId;
+  /** Sub still covering the stack (excludes exit frames so main can un-peek smoothly). */
+  const subPanelFront = subPanelOpen && !subClosing;
+  const mainPanelVisible = isPanelOpen || panelClosing;
+  const stackVisible = mainPanelVisible || subPanelOpen;
+  /** Whole stack exits when the last visible panel is closing. */
+  const stackExiting =
+    (panelClosing && !subPanelOpen)
+    || (subClosing && !mainPanelVisible);
 
   const aiBarComposerFocusNonce = useLayoutStore((s) => s.aiBarComposerFocusNonce);
   const pendingInsert = useComposerInsertStore((s) => s.pendingInsert);
@@ -167,9 +208,15 @@ export function AiBar() {
     }
   }, [phase, draftEmpty, attachmentCount, draftNeedsExpanded, collapseToInput]);
 
+  // Opening a Task panel in AiBar also peels open the main run panel behind it.
+  useEffect(() => {
+    if (!openSubAgentId || !hasConversation || isPanelOpen) return;
+    openPanel();
+  }, [openSubAgentId, hasConversation, isPanelOpen, openPanel]);
+
   // Click outside → idle when compact capsule is empty (no draft, no attachments)
   useEffect(() => {
-    if (phase !== "input" || isPanelOpen) return;
+    if (phase !== "input" || stackVisible) return;
 
     const handleMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -180,22 +227,35 @@ export function AiBar() {
 
     document.addEventListener("mousedown", handleMouseDown, true);
     return () => document.removeEventListener("mousedown", handleMouseDown, true);
-  }, [phase, isPanelOpen, collapseToIdle]);
+  }, [phase, stackVisible, collapseToIdle]);
 
   useEffect(() => {
-    if (!isPanelOpen) return;
+    if (!stackVisible || stackExiting) return;
 
     const handleMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (target.closest("[data-ai-bar-panel]")) return;
-      if (composerShellRef.current?.contains(target)) return;
-      if (target.closest("[data-radix-menu-content]") || target.closest("[data-radix-popper-content-wrapper]")) return;
+      // Only the float panel bodies count as "inside". Composer / workspace /
+      // toolbar are outside and should dismiss (sub first, then main).
+      if (target.closest("[data-subagent-run-panel]") || target.closest("[data-ai-bar-panel]")) {
+        return;
+      }
+      if (
+        target.closest("[data-radix-menu-content]")
+        || target.closest("[data-radix-popper-content-wrapper]")
+      ) {
+        return;
+      }
+      if (subPanelFront) {
+        closeSubAnimated();
+        return;
+      }
+      if (subPanelOpen) return; // already exiting
       closePanel();
     };
 
     document.addEventListener("mousedown", handleMouseDown, true);
     return () => document.removeEventListener("mousedown", handleMouseDown, true);
-  }, [isPanelOpen, closePanel]);
+  }, [stackVisible, stackExiting, subPanelOpen, subPanelFront, closeSubAnimated, closePanel]);
 
   // ⌘I → open/focus capsule. AiBar only mounts when editor is maximized;
   // in that mode this chord prefers the capsule over editor.italic.
@@ -215,9 +275,9 @@ export function AiBar() {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, []);
 
-  // Esc → close message panel, then collapse capsule (empty → idle; else blur).
+  // Esc → close subagent panel, then main panel, then collapse capsule.
   useEffect(() => {
-    if (phase === "idle" && !isPanelOpen) return;
+    if (phase === "idle" && !stackVisible) return;
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
@@ -229,7 +289,17 @@ export function AiBar() {
         return;
       }
 
-      if (isPanelOpen) {
+      if (subPanelFront) {
+        e.preventDefault();
+        closeSubAnimated();
+        return;
+      }
+      if (subPanelOpen) {
+        e.preventDefault();
+        return; // already exiting
+      }
+
+      if (isPanelOpen && !panelClosing) {
         e.preventDefault();
         closePanel();
         return;
@@ -254,9 +324,20 @@ export function AiBar() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [phase, isPanelOpen, closePanel, collapseToIdle, collapseToInput]);
+  }, [
+    phase,
+    stackVisible,
+    subPanelOpen,
+    subPanelFront,
+    isPanelOpen,
+    panelClosing,
+    closeSubAnimated,
+    closePanel,
+    collapseToIdle,
+    collapseToInput,
+  ]);
 
-  const toolbar = !isPanelOpen && (
+  const toolbar = !stackVisible && (
     <div
       className={cn(
         "flex items-center gap-1 pointer-events-auto transition-all duration-200 ease-out",
@@ -294,50 +375,79 @@ export function AiBar() {
 
   return (
     <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center pb-5 pointer-events-none z-10">
-      {(isPanelOpen || panelClosing) && (
+      {stackVisible && (
         <div
           data-chat-width
           className={cn(
             "w-full pointer-events-none mb-2",
-            panelClosing
-              ? "animate-out fade-out slide-out-to-bottom-2 duration-150"
-              : "animate-in fade-in slide-in-from-bottom-2 duration-200",
+            // Transitions hold the end state (no snap when animate-out fill ends).
+            "transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]",
+            stackExiting
+              ? "opacity-0 translate-y-2"
+              : "opacity-100 translate-y-0 animate-in fade-in slide-in-from-bottom-2 duration-200",
           )}
         >
           <div className="px-3 w-full">
             <div
-              ref={panelDrop.zoneRef}
-              data-ai-bar-panel
-              className={cn(
-                "relative w-full pointer-events-auto rounded-lg border border-border bg-card shadow-lg overflow-hidden flex flex-col",
-                panelDrop.dragActive && chatFileDropZoneClass,
-              )}
-              style={{ height: "min(60vh, 600px)" }}
-              {...panelDrop.dropHandlers}
+              className="relative w-full pointer-events-auto"
+              style={{ height: CHAT_FLOAT_PANEL_HEIGHT }}
             >
-              {panelDrop.dragActive ? (
-                <span className="pointer-events-none absolute bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-md border border-primary/25 bg-background/95 px-3 py-1 text-[length:var(--font-size-11)] text-muted-foreground shadow-sm">
-                  {t("chat.aibar.dropFiles")}
-                </span>
+              {/* Main agent run panel — peeks behind when a subagent panel is open. */}
+              {mainPanelVisible ? (
+                <ChatFloatPanel
+                  ref={panelDrop.zoneRef}
+                  panelAttr="data-ai-bar-panel"
+                  title={activeTabTitle}
+                  fillHeight
+                  onClose={subPanelFront ? undefined : closePanel}
+                  closeLabel={t("chat.aibar.closePanel")}
+                  footer={<RestoreUndoBar />}
+                  className={cn(
+                    panelDrop.dragActive && chatFileDropZoneClass,
+                    "transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                    // Stay absolutely layered while the sub is still mounted so
+                    // un-peeking doesn't switch to relative and double the stack height.
+                    subPanelOpen
+                      ? cn(
+                          "absolute inset-0 z-0 origin-bottom pointer-events-none",
+                          subPanelFront
+                            ? "translate-y-[-10px] scale-[0.985] opacity-80"
+                            : "translate-y-0 scale-100 opacity-100",
+                        )
+                      : "relative z-10",
+                  )}
+                  {...panelDrop.dropHandlers}
+                >
+                  {panelDrop.dragActive ? (
+                    <span className="pointer-events-none absolute bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-md border border-border bg-card px-3 py-1 text-[length:var(--font-size-11)] text-muted-foreground shadow-sm">
+                      {t("chat.aibar.dropFiles")}
+                    </span>
+                  ) : null}
+                  <ChatMessages />
+                </ChatFloatPanel>
               ) : null}
-              <div className="flex items-center justify-between shrink-0 px-3 py-1.5">
-                <span className="text-[length:var(--font-chat-meta)] text-muted-foreground truncate">
-                  {activeTabTitle}
-                </span>
-                <Hint label={t("chat.aibar.closePanel")}>
-                  <button
-                    type="button"
-                    className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                    onClick={closePanel}
-                  >
-                    <XIcon className="size-3.5" />
-                  </button>
-                </Hint>
-              </div>
-              <div className="flex-1 min-h-0 flex flex-col">
-                <ChatMessages />
-              </div>
-              <RestoreUndoBar />
+
+              {/* Subagent run panel — same shell, front of the stack. */}
+              {subPanelOpen && displayedSubId ? (
+                <div
+                  className={cn(
+                    "relative z-10 h-full",
+                    "transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                    // When the whole stack is exiting, only the outer shell moves.
+                    stackExiting
+                      ? "opacity-100 translate-y-0"
+                      : subClosing
+                        ? "opacity-0 translate-y-2"
+                        : "opacity-100 translate-y-0 animate-in fade-in slide-in-from-bottom-2 duration-200",
+                  )}
+                >
+                  <SubAgentRunPanel
+                    taskToolUseId={displayedSubId}
+                    fillHeight
+                    onClose={closeSubAnimated}
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

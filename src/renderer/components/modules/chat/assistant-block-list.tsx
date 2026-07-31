@@ -14,7 +14,11 @@ import { buildInteractionReplyFallbackMarkdown } from "@/lib/chat/interaction-fe
 import { buildPlanReplyFallbackMarkdown } from "@/lib/chat/plan-reply-fallback";
 import { InteractionFenceDedupeProvider } from "@/lib/interaction/interaction-fence-dedupe";
 import { planPathFromToolUse } from "@/lib/chat/plan-artifact-ui";
-import { segmentAssistantBlocks } from "@/lib/chat/segment-assistant-blocks";
+import {
+  isThinkingBlockStreaming,
+  segmentAssistantBlocks,
+} from "@/lib/chat/segment-assistant-blocks";
+import { hasUnsettledTaskTool } from "./tools/tool-result-map";
 
 /** Shared assistant block renderer for main chat and Task expert activity. */
 export const AssistantBlockList = memo(function AssistantBlockList({
@@ -24,6 +28,7 @@ export const AssistantBlockList = memo(function AssistantBlockList({
   isStreamingMsg,
   sessionId,
   foldActivity = true,
+  suppressTailUntilTaskSettled: suppressTailOverride,
   turnKey,
   planReplyFallbackSummary,
 }: {
@@ -33,6 +38,11 @@ export const AssistantBlockList = memo(function AssistantBlockList({
   isStreamingMsg?: boolean;
   sessionId: string;
   foldActivity?: boolean;
+  /**
+   * When set, overrides Task-tail suppress. Subagent run panel passes false so
+   * trailing reply text streams outside the activity fold while live.
+   */
+  suppressTailUntilTaskSettled?: boolean;
   /** Stable key for activity-fold persistence (turn-level). */
   turnKey?: string;
   /** Frontmatter description when Plan draft awaits Approve & Build but model omitted chat prose. */
@@ -62,11 +72,16 @@ export const AssistantBlockList = memo(function AssistantBlockList({
       );
 
   const segments = useMemo(
-    () =>
-      foldActivity
-        ? segmentAssistantBlocks(blocks, { unifiedActivity: true })
-        : null,
-    [blocks, foldActivity],
+    () => {
+      if (!foldActivity) return null;
+      const suppressTailUntilTaskSettled =
+        suppressTailOverride ?? hasUnsettledTaskTool(blocks, toolResultMap);
+      return segmentAssistantBlocks(blocks, {
+        unifiedActivity: true,
+        suppressTailUntilTaskSettled,
+      });
+    },
+    [blocks, foldActivity, toolResultMap, suppressTailOverride],
   );
 
   const lastActivitySegmentIndex = useMemo(() => {
@@ -86,7 +101,11 @@ export const AssistantBlockList = memo(function AssistantBlockList({
           duration={block.duration}
           sessionId={sessionId}
           persistKey={sessionId ? `${sessionId}:${msgIndex}:${i}` : undefined}
-          isStreamingMsg={isStreamingMsg && !thinkingComplete}
+          isStreamingMsg={isThinkingBlockStreaming(
+            blocks,
+            i,
+            !!isStreamingMsg,
+          )}
           isProgress={block._progress === true}
         />
       );
@@ -140,8 +159,12 @@ export const AssistantBlockList = memo(function AssistantBlockList({
                 </div>
               );
             }
+            // Freeze activity timer once trailing prose exists — do not count
+            // final answer streaming toward Worked for.
             const isStreamingSegment =
-              !!isStreamingMsg && segIndex === lastActivitySegmentIndex;
+              !!isStreamingMsg
+              && segIndex === lastActivitySegmentIndex
+              && segments[segments.length - 1]?.kind === "activity";
             return (
               <ActivityFold
                 key={`activity-${segment.blockIndices[0] ?? segIndex}`}

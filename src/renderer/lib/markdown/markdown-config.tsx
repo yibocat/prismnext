@@ -179,21 +179,31 @@ export const MARKDOWN_KATEX_TYPOGRAPHY = cn(
   "[&_.katex-error]:text-foreground [&_.katex-error]:bg-muted/60 [&_.katex-error]:rounded [&_.katex-error]:px-1 [&_.katex-error]:font-mono [&_.katex-error]:text-[0.88em]",
 );
 
-/** Typography for file/document markdown preview — follows Appearance → Editor font. */
-export const DOCUMENT_MARKDOWN_TYPOGRAPHY = cn(
-  "font-[family-name:var(--font-editor)] text-[length:var(--font-editor-size)] leading-relaxed text-foreground",
-  "[&_h1]:text-[1.25em] [&_h1]:font-semibold [&_h1]:mt-6 [&_h1]:mb-2",
-  "[&_h2]:text-[1.125em] [&_h2]:font-semibold [&_h2]:mt-5 [&_h2]:mb-1",
-  "[&_h3]:text-[1.05em] [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1",
+/**
+ * Shared reading rhythm for chat replies + Files markdown preview.
+ * ~1.7 line-height with moderate block gaps — between chat’s old tight
+ * packing and a document that felt too airy.
+ */
+export const MARKDOWN_BODY_RHYTHM = cn(
+  "leading-[1.7]",
+  "[&_h1]:text-[1.2em] [&_h1]:font-semibold [&_h1]:mt-5 [&_h1]:mb-2",
+  "[&_h2]:text-[1.1em] [&_h2]:font-semibold [&_h2]:mt-4 [&_h2]:mb-1.5",
+  "[&_h3]:text-[1.05em] [&_h3]:font-semibold [&_h3]:mt-3.5 [&_h3]:mb-1",
   "[&_h4]:text-[1em] [&_h4]:font-semibold [&_h4]:mt-3 [&_h4]:mb-1",
-  "[&_p]:my-1 [&_p]:leading-relaxed",
-  "[&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-6",
-  "[&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-6",
-  "[&_li]:my-0.5 [&_li]:leading-relaxed",
-  "[&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_blockquote]:my-2 [&_blockquote]:text-muted-foreground",
+  "[&_p]:my-1.5 [&_p]:leading-[1.7]",
+  "[&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-6",
+  "[&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-6",
+  "[&_li]:my-1 [&_li]:leading-[1.7]",
+  "[&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_blockquote]:my-2.5 [&_blockquote]:text-muted-foreground",
   "[&_hr]:my-4 [&_hr]:border-border",
   "[&_th]:text-[0.92em] [&_th]:font-medium [&_th]:text-muted-foreground",
   "[&_td]:text-[1em]",
+);
+
+/** Typography for file/document markdown preview — follows Appearance → Editor font. */
+export const DOCUMENT_MARKDOWN_TYPOGRAPHY = cn(
+  "font-[family-name:var(--font-editor)] text-[length:var(--font-editor-size)] text-foreground",
+  MARKDOWN_BODY_RHYTHM,
   "[&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:bg-muted [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:py-0.5 [&_code:not(pre_code)]:font-mono [&_code:not(pre_code)]:text-[0.95em]",
   MARKDOWN_KATEX_TYPOGRAPHY,
   "[&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border [&_pre]:p-4 [&_pre]:overflow-x-auto [&_pre]:text-[0.95em] [&_pre]:font-mono",
@@ -308,19 +318,8 @@ export function normalizeMathDelimiters(text: string): string {
 // overrides with its own simpler code rendering.
 /** Typography for chat markdown — scales with Appearance → UI font via --font-chat-message. */
 export const CHAT_MARKDOWN_TYPOGRAPHY = cn(
-  "[&_h1]:text-[1.2em] [&_h1]:font-semibold [&_h1]:mt-6 [&_h1]:mb-2",
-  "[&_h2]:text-[1.1em] [&_h2]:font-semibold [&_h2]:mt-5 [&_h2]:mb-1",
-  "[&_h3]:text-[1.05em] [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-1",
-  "[&_h4]:text-[1em] [&_h4]:font-semibold [&_h4]:mt-3 [&_h4]:mb-1",
-  "[&_p]:my-1 [&_p]:leading-relaxed",
-  "[&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-6",
-  "[&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-6",
-  "[&_li]:my-0.5 [&_li]:leading-relaxed",
+  MARKDOWN_BODY_RHYTHM,
   "[&_a:not([data-inline-token])]:text-primary [&_a:not([data-inline-token])]:underline",
-  "[&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_blockquote]:my-2 [&_blockquote]:text-muted-foreground",
-  "[&_hr]:my-4 [&_hr]:border-border",
-  "[&_th]:text-[0.92em] [&_th]:font-medium [&_th]:text-muted-foreground",
-  "[&_td]:text-[1em]",
   "[&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:bg-muted [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:py-0.5 [&_code:not(pre_code)]:font-mono [&_code:not(pre_code)]:text-[length:var(--font-code)]",
   MARKDOWN_KATEX_TYPOGRAPHY,
 );

@@ -248,7 +248,7 @@ export function ToolsMcpSettings() {
                                 <span
                                   className={cn(
                                     BADGE,
-                                    "bg-primary/10 text-primary normal-case tracking-normal",
+                                    "bg-muted text-primary normal-case tracking-normal",
                                   )}
                                 >
                                   Built-in
@@ -258,11 +258,11 @@ export function ToolsMcpSettings() {
                                   {entry.type}
                                 </span>
                               )}
-                              {!entry.enabled && !builtin && (
+                              {!entry.enabled && (
                                 <span
                                   className={cn(
                                     BADGE,
-                                    "bg-muted/60 text-muted-foreground/70",
+                                    "bg-muted text-muted-foreground",
                                   )}
                                 >
                                   off
@@ -272,7 +272,7 @@ export function ToolsMcpSettings() {
                             <p className={ROW_DESC}>
                               {builtin
                                 ? paperHealth?.detail
-                                  ?? "Default academic discovery — always on for this project."
+                                  ?? "Default academic discovery — optional; disable or remove anytime."
                                 : serverSummary(entry)}
                             </p>
                           </div>
@@ -289,26 +289,20 @@ export function ToolsMcpSettings() {
                               </Button>
                             ) : null}
                             <Switch
-                              checked={builtin ? true : entry.enabled}
-                              disabled={builtin || saving}
+                              checked={entry.enabled}
+                              disabled={saving}
                               onCheckedChange={(v) =>
                                 void handleToggleEnabled(entry.name, v)
                               }
-                              aria-label={
-                                builtin
-                                  ? `${entry.name} is built-in and always enabled`
-                                  : `Enable ${entry.name}`
-                              }
+                              aria-label={`Enable ${entry.name}`}
                             />
-                            {!builtin ? (
-                              <InlineDeleteButton
-                                itemId={entry.name}
-                                pending={deleteConfirm.isPending(entry.name)}
-                                disabled={saving}
-                                onRequest={() => deleteConfirm.setPendingId(entry.name)}
-                                onConfirm={() => void handleDelete(entry.name)}
-                              />
-                            ) : null}
+                            <InlineDeleteButton
+                              itemId={entry.name}
+                              pending={deleteConfirm.isPending(entry.name)}
+                              disabled={saving}
+                              onRequest={() => deleteConfirm.setPendingId(entry.name)}
+                              onConfirm={() => void handleDelete(entry.name)}
+                            />
                           </div>
                         </div>
                       );

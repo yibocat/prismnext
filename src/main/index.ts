@@ -29,7 +29,6 @@ import { installMainProcessNetwork } from "./lib/main-network";
 import { registerCrashHandlers } from "./lib/crash-handler";
 import { installCsp } from "./lib/csp";
 import { createLogger } from "./services/logger";
-import { providerApiKeyEnvVar } from "../shared/opencode-provider";
 import { setDesktopNotificationWindowGetter } from "./services/desktop-notifications";
 import {
   getIsQuitting,
@@ -359,10 +358,11 @@ app.whenReady().then(async () => {
 
   createWindow();
 
-  // App-level ACP warm-up — spawn opencode once at startup.
-  // The same process serves all projects. First session/create is instant.
+  // App-level ACP warm-up — sync last-project config, then spawn OpenCode once.
+  // Same process serves all projects; first session/new should not restart it.
   try {
     const { AcpService } = await import("./acp/service");
+    const { buildOpenCodeCredentialEnv } = await import("./acp/credential-env");
     const { getSettings } = await import("./services/settings");
 
     const settings = getSettings() as Record<string, unknown>;
@@ -389,47 +389,52 @@ app.whenReady().then(async () => {
       log.warn("Prompt system init failed", { error: (err as Error).message });
     }
 
-    // Build env vars from ALL saved keys so OpenCode can use them
-    const extraEnv: Record<string, string> = {};
-    for (const [provider, apiKey] of Object.entries(aiApiKeys)) {
-      if (!apiKey) continue;
-      extraEnv[providerApiKeyEnvVar(provider)] = apiKey;
-      if (aiBaseUrls[provider] && provider !== "opencode-go" && provider !== "opencode-zen") {
-        extraEnv[`${provider.replace(/-/g, "_").toUpperCase()}_BASE_URL`] = aiBaseUrls[provider];
+    const lastProjectPath =
+      typeof (settings as { lastProjectPath?: unknown }).lastProjectPath === "string"
+        ? (settings as { lastProjectPath: string }).lastProjectPath.trim()
+        : "";
+
+    // Sync experts/skills/instructions to disk BEFORE the first spawn so the
+    // child reads the final config — avoids spawn → prewarm → reload churn.
+    if (lastProjectPath) {
+      try {
+        const { ensureProjectChatPrewarm } = await import("./services/project-chat-prewarm");
+        await ensureProjectChatPrewarm(lastProjectPath, { skipOpenCodeReload: true });
+        log.info("Last-project config synced before OpenCode spawn", { path: lastProjectPath });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn("Last-project config sync before spawn failed", { error: message });
       }
     }
 
+    const extraEnv = buildOpenCodeCredentialEnv();
     const service = AcpService.getInstance();
     await service.initialize(extraEnv);
     console.log("[prismnext] OpenCode ACP ready");
     log.info("OpenCode ACP server ready");
 
-    // Eagerly warm last project tools/skills while the window loads, so
-    // auto-open often finds prewarm already done (or in flight).
-    const lastProjectPath =
-      typeof (settings as { lastProjectPath?: unknown }).lastProjectPath === "string"
-        ? (settings as { lastProjectPath: string }).lastProjectPath.trim()
-        : "";
-    if (lastProjectPath) {
-      void import("./services/project-chat-prewarm")
-        .then(({ ensureProjectChatPrewarm }) => ensureProjectChatPrewarm(lastProjectPath))
-        .then(() => {
-          log.info("Eager last-project config prewarm complete", { path: lastProjectPath });
-        })
-        .catch((err: unknown) => {
-          const message = err instanceof Error ? err.message : String(err);
-          log.warn("Eager last-project chat prewarm failed", { error: message });
-        });
+    // Post-connect housekeeping for the last project (prewarm ran without a conn).
+    if (lastProjectPath && service.getConnection()) {
+      try {
+        await service.purgeEmptySessions(lastProjectPath);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn("purgeEmptySessions after startup spawn failed", { error: message });
+      }
+      void service.refreshEffortCatalog().catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        log.debug("refreshEffortCatalog after startup spawn failed", { error: message });
+      });
     }
 
     // Register non-bundled providers (DeepSeek, OpenRouter, custom) via ACP
     // Built-in providers (anthropic, openai, google) are already recognized.
     for (const [provider] of Object.entries(aiApiKeys)) {
-      if (!aiApiKeys[provider]) continue;
+      if (!aiApiKeys[provider]?.trim()) continue;
       try {
         const result = await service.setAuth(provider, {
-          apiKey: aiApiKeys[provider],
-          baseUrl: aiBaseUrls[provider] || "",
+          apiKey: aiApiKeys[provider].trim(),
+          baseUrl: (aiBaseUrls[provider] || "").trim(),
         });
         if (result.success) {
           console.log(`[prismnext] Provider registered: ${provider}`);

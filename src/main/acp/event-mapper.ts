@@ -9,7 +9,15 @@ function logToolDev(message: string) {
     console.log(`[tool] ${message}`);
   }
 }
-import { registerChatSession, unregisterChatSession, resolveChatTabId, getSessionProjectRoot } from "../services/chat-session-registry";
+import {
+  registerChatSession,
+  unregisterChatSession,
+  resolveChatTabId,
+  getSessionProjectRoot,
+  getSessionTaskAllowlist,
+  markSessionTaskAllowlistSatisfied,
+  flushDeferredTaskAllowlistFollowUp,
+} from "../services/chat-session-registry";
 import {
   inferToolNameFromInput,
   inferToolNameFromOutput,
@@ -25,9 +33,18 @@ import {
 import { buildTaskDelegationCiteAuditPreface } from "../services/session-cite-audit-context";
 import {
   formatOrchestratorBuiltinTaskDeniedMessage,
+  isOpaqueTaskCancelledResult,
   normalizeTaskSubagentId,
-  shouldDenyOrchestratorBuiltinTask,
+  resolveOpaqueTaskCancelledDisplay,
+  shouldDenyOutsideTaskAllowlist,
+  shouldDenyReservedTaskSubagent,
 } from "../services/task-orchestrator-gate";
+import { formatTaskError } from "../../shared/task-error-codes";
+import {
+  durationSecFromOpenCodeTime,
+  extractOpenCodeTime,
+} from "../../shared/opencode-part-time";
+import { buildSubAgentActivityBlocks } from "../../shared/opencode-session-activity";
 
 const log = createLogger("event-mapper", "agent");
 
@@ -49,26 +66,78 @@ export class EventMapper {
     string,
     Array<{ toolUseId: string; expertId: string; prompt: string }>
   >();
+  /** Task tool_use id → resolved subagent id (updated on backfill). */
+  private taskToolExpertById = new Map<string, string>();
+  /** Task tool_use id → parent tab while the OpenCode Task is still open. */
+  private openTaskToolToTab = new Map<string, string>();
   /** Subagent OpenCode session → parent Task tool_use id. */
   private subSessionToTaskTool = new Map<string, string>();
-  /** Task tool_use id → link watchdog timer. Prevents the parent turn from
-   *  hanging forever when a subagent session never links back to a chat tab
-   *  (e.g. OpenCode didn't write parent_id, or the child session/update
-   *  notifications arrive before the SQLite session row commits). On fire,
-   *  emits a visible error to the renderer so the user isn't left staring at a
-   *  "Waiting for expert session…" spinner. */
+  /** Task tool_use id → UI-degrade timer (soft hint only; does not fail Task). */
   private taskLinkTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
-  /** Grace period for a subagent session to link back to its parent tab.
-   *  Generous because OpenCode may take time to spawn the child and commit its
-   *  session row; the watchdog only fires when linking genuinely fails. */
-  private static readonly TASK_LINK_TIMEOUT_MS = 90_000;
+  /** Task tool_use id → await_timeout escalate timer (still unlinked after budget). */
+  private taskAwaitTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+  /**
+   * When to show the muted "activity stream not attached" hint.
+   * Kept short for UX — background orphan retries continue longer.
+   */
+  private static readonly TASK_LINK_UI_DEGRADE_MS = 12_000;
+  /**
+   * How long to keep retrying parent_id lookups for orphan child sessions.
+   * Covers late OpenCode SQLite commits; independent of UI degrade.
+   */
+  private static readonly ORPHAN_RETRY_BUDGET_MS = 90_000;
+  /** Escalate unlinked Task UI from link_degraded → await_timeout (does not abort parent). */
+  private static readonly TASK_AWAIT_TIMEOUT_MS = 90_000;
+  /** First window: poll parent_id densely (late commits usually land here). */
+  private static readonly ORPHAN_DENSE_WINDOW_MS = 5_000;
+  private static readonly ORPHAN_DENSE_DELAY_MS = 250;
   /**
    * Child sessions whose updates arrived before we could resolve parent_id /
    * pending Task. Retried when parent_id appears or a Task is enqueued.
    */
   private orphanSubSessions = new Map<string, { firstSeenAt: number; retries: number }>();
   private orphanRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  private static readonly ORPHAN_RETRY_DELAYS_MS = [400, 1500, 4000, 10_000] as const;
+  /**
+   * session/update payloads dropped while a child had no Task link yet.
+   * Replayed through mapSessionUpdate after linkSubAgentSession succeeds —
+   * otherwise the panel stays on “Working…” with an empty stream.
+   */
+  private orphanUpdateBuffer = new Map<string, any[]>();
+  private static readonly ORPHAN_UPDATE_MAX = 250;
+  /** While a tab has pending Task slots, poll SQLite for new child sessions. */
+  private childSessionPollTimers = new Map<string, ReturnType<typeof setInterval>>();
+  private static readonly CHILD_SESSION_POLL_MS = 500;
+  /**
+   * After Task↔child link: poll OpenCode SQLite for subagent parts.
+   * OpenCode often does not forward child session/update over ACP — without
+   * this the run panel stays on Working… / 暂无活动 despite real tool work.
+   */
+  private subAgentDbSyncTimers = new Map<string, ReturnType<typeof setInterval>>();
+  private subAgentDbSyncFingerprint = new Map<string, string>();
+  /** Faster than 400ms so SQLite-only text growth feels closer to streaming. */
+  private static readonly SUBAGENT_DB_SYNC_MS = 200;
+  /** Task tool_use ids the user stopped from the run panel (Stop). */
+  private userStoppedTasks = new Set<string>();
+  /**
+   * Waiters for Task Stop settlement — resolve when parent Task tool_result
+   * is rewritten to user_cancel (OpenCode truth), not when HTTP abort returns.
+   */
+  private userStoppedSettlement = new Map<
+    string,
+    {
+      resolve: (value: { settled: true }) => void;
+      reject: (reason: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+  /** Default budget for parent Task to finish after child HTTP abort. */
+  static readonly USER_STOP_SETTLEMENT_MS = 20_000;
+  /**
+   * Backoff after the dense window. Last delay repeats until ORPHAN_RETRY_BUDGET_MS.
+   */
+  private static readonly ORPHAN_RETRY_DELAYS_MS = [
+    1_000, 2_000, 5_000, 10_000, 15_000, 20_000,
+  ] as const;
 
   constructor(win: BrowserWindow) {
     this.win = win;
@@ -91,10 +160,19 @@ export class EventMapper {
     }
     this.sessionToTab.set(sessionId, tabId);
     this.tabToSession.set(tabId, sessionId);
+    // session/new can emit session/update before chat IPC registers the tab —
+    // clear false-orphan state and replay any buffered parent updates.
+    this.orphanSubSessions.delete(sessionId);
+    const orphanTimer = this.orphanRetryTimers.get(sessionId);
+    if (orphanTimer) {
+      clearTimeout(orphanTimer);
+      this.orphanRetryTimers.delete(sessionId);
+    }
     if (!unchanged) {
       this.accumText.clear();
       this.accumThinking.clear();
     }
+    this.flushOrphanUpdateBuffer(tabId, sessionId);
   }
 
   unregisterSession(sessionId: string): void {
@@ -143,7 +221,143 @@ export class EventMapper {
   clearTurnAccumulators(): void {
     this.accumText.clear();
     this.accumThinking.clear();
+    this.thinkingStartedAt.clear();
     this.turnEmittedContent = false;
+  }
+
+  /**
+   * Silently drop Task-link watchdogs for this tab (no UI error).
+   * Parent `end_turn` can finish while Prism still thinks a Task is "pending
+   * link" — the 90s timer must not survive into the next user message.
+   */
+  releasePendingTaskWatchdogsForTab(tabId: string): void {
+    const queue = this.pendingTasksByTab.get(tabId);
+    if (!queue?.length) return;
+    this.pendingTasksByTab.delete(tabId);
+    this.stopChildSessionPoll(tabId);
+    for (const pending of queue) {
+      this.clearTaskLinkWatchdog(pending.toolUseId);
+      this.clearTaskAwaitTimeout(pending.toolUseId);
+      log.warn(
+        `releasePendingTaskWatchdogsForTab: tab=${tabId} toolUse=${pending.toolUseId} expert=@${pending.expertId}`,
+      );
+    }
+  }
+
+  /**
+   * Fail + clear Tasks still waiting for a subagent link on this tab.
+   * Called when a new user prompt starts — otherwise a stale 90s watchdog from
+   * the previous turn can abort the new turn (opaque "Task cancelled").
+   */
+  clearPendingTasksForTab(tabId: string, reason?: string): void {
+    const queue = this.pendingTasksByTab.get(tabId);
+    if (!queue?.length) return;
+    this.pendingTasksByTab.delete(tabId);
+    this.stopChildSessionPoll(tabId);
+    for (const pending of queue) {
+      const msg =
+        reason?.trim()
+        || formatTaskError("superseded", { subagentId: pending.expertId });
+      this.clearTaskLinkWatchdog(pending.toolUseId);
+      this.clearTaskAwaitTimeout(pending.toolUseId);
+      this.openTaskToolToTab.delete(pending.toolUseId);
+      this.taskToolExpertById.delete(pending.toolUseId);
+      this.win.webContents.send("chat:stream", {
+        tabId,
+        type: "subAgent.completed",
+        data: {
+          taskToolUseId: pending.toolUseId,
+          status: "error",
+          error: msg,
+          code: "superseded",
+        },
+      });
+      // Same shape as handleTaskLinkTimeout — stream switch ignores top-level
+      // tool_result; UI gets the body via subAgent.completed → _injectToolResult.
+      this.win.webContents.send("chat:stream", {
+        tabId,
+        type: "tool_result",
+        data: {
+          tool_use_id: pending.toolUseId,
+          content: msg,
+          is_error: true,
+          status: "failed",
+          name: "task",
+        },
+      });
+      log.warn(
+        `clearPendingTasksForTab: tab=${tabId} toolUse=${pending.toolUseId} expert=@${pending.expertId}`,
+      );
+    }
+  }
+
+  /**
+   * When OpenCode backfills Task rawInput (subagent_type arrives late), update
+   * the pending slot so timeout / abandon messages name the real expert.
+   */
+  private refreshPendingTaskFromBackfill(
+    tabId: string,
+    toolUseId: string,
+    toolInput: Record<string, unknown>,
+  ): void {
+    const queue = this.pendingTasksByTab.get(tabId);
+    if (!queue?.length) return;
+    const pending = queue.find((t) => t.toolUseId === toolUseId);
+    if (!pending) return;
+    const explicit =
+      toolInput.subagent_type || toolInput.subagentType || toolInput.agent;
+    const expertId = normalizeTaskSubagentId(
+      typeof explicit === "string" ? explicit : undefined,
+    );
+    if (!expertId || expertId === pending.expertId) return;
+    pending.expertId = expertId;
+    this.taskToolExpertById.set(toolUseId, expertId);
+    const rawPrompt = String(toolInput.prompt || toolInput.description || pending.prompt || "");
+    if (rawPrompt && rawPrompt !== pending.prompt) pending.prompt = rawPrompt;
+    this.win.webContents.send("chat:stream", {
+      tabId,
+      type: "subAgent.linked",
+      data: {
+        taskToolUseId: toolUseId,
+        expertId,
+        prompt: pending.prompt,
+        rawPrompt,
+        hasStagingPreface: false,
+      },
+    });
+  }
+
+  /**
+   * Seal the current thinking segment with a duration before tools/prose start.
+   * Live path uses wall clock; hydrate prefers OpenCode `time` when present.
+   */
+  private sealThinkingDuration(
+    tabId: string,
+    sessionId: string,
+    msgId: string | undefined,
+  ): void {
+    const key = msgId || `${sessionId}-thinking`;
+    const full = this.accumThinking.get(key);
+    const started = this.thinkingStartedAt.get(key);
+    if (!full?.trim() || started == null) return;
+    const ended = Date.now();
+    const duration = Math.round(((ended - started) / 1000) * 10) / 10;
+    this.thinkingStartedAt.delete(key);
+    this.accumThinking.delete(key);
+    this.win.webContents.send("chat:stream", {
+      tabId,
+      type: "message.part.updated",
+      data: {
+        messageId: msgId,
+        part: {
+          type: "thinking",
+          thinking: full,
+          duration,
+          timeStart: started,
+          timeEnd: ended,
+        },
+      },
+    });
   }
 
   // ─── Internal ──────────────────────────────────────────────
@@ -181,10 +395,8 @@ export class EventMapper {
         });
       } else if (sessionId && method === "session/update") {
         // A subagent session/update that couldn't be mapped to a parent tab —
-        // its activity (text/thinking/tool_use) is silently dropped from the
-        // UI. This is the symptom of the "Task hangs invisibly" bug: OpenCode
-        // spawned the expert, but we can't tell which chat tab owns it. Log
-        // loudly so it's diagnosable — and keep retrying parent_id lookup.
+        // buffer it and keep retrying parent_id / Task-slot link. Without the
+        // buffer, late link leaves the run panel stuck on “Working…”.
         const pendingTabs = Array.from(this.pendingTasksByTab.keys());
         const hasParentId = !!AcpService.getInstance().getSessionParentId(sessionId);
         log.warn(`session/update dropped — no chat tab mapping`, {
@@ -194,6 +406,7 @@ export class EventMapper {
           hasParentId,
         });
         this.rememberOrphanSubSession(sessionId);
+        this.bufferOrphanUpdate(sessionId, params);
       }
       return;
     }
@@ -310,16 +523,24 @@ export class EventMapper {
         if (!this.subSessionToTaskTool.has(sessionId)) {
           this.linkSubAgentSession(parentTab, sessionId);
         }
-        if (!this.sessionToTab.has(sessionId)) {
-          registerChatSession(
-            sessionId,
-            parentTab,
-            getSessionProjectRoot(parentId),
-          );
-          this.sessionToTab.set(sessionId, parentTab);
-          AcpService.getInstance().markSubAgentSession(sessionId);
+        // Only route through the parent tab once the child is bound to a Task
+        // tool_use. Binding sessionToTab without subSessionToTaskTool caused
+        // activity to hit emitSubAgentActivity and drop (no taskToolUseId),
+        // while also skipping the orphan retry path — panel stuck on Working….
+        if (this.subSessionToTaskTool.has(sessionId)) {
+          if (!this.sessionToTab.has(sessionId)) {
+            registerChatSession(
+              sessionId,
+              parentTab,
+              getSessionProjectRoot(parentId),
+            );
+            this.sessionToTab.set(sessionId, parentTab);
+            AcpService.getInstance().markSubAgentSession(sessionId);
+          }
+          return parentTab;
         }
-        return parentTab;
+        this.rememberOrphanSubSession(sessionId);
+        return undefined;
       }
     }
 
@@ -338,6 +559,8 @@ export class EventMapper {
   private static readonly MAX_ACCUM_ENTRIES = 200;
   private accumText = new Map<string, string>();
   private accumThinking = new Map<string, string>();
+  /** Wall-clock start (ms) for the current thinking accum key. */
+  private thinkingStartedAt = new Map<string, number>();
   /** Track which session/update shapes we have already logged to avoid spam. */
   private _seenShapes = new Set<string>();
   private _missedShapes = new Set<string>();
@@ -380,7 +603,7 @@ export class EventMapper {
     // kind:"think" and an EMPTY rawInput — the subagent_type is only visible to
     // the permission layer (which already allowed it). Without an input we
     // cannot know the expert id yet, so we track with a placeholder and let the
-    // gate deny only when we CAN see the type AND it's a built-in. This avoids
+    // gate deny only when we CAN see the type AND it's reserved (plan/build).
     // wrongly denying a Task whose expert id is simply not yet visible.
     const explicitSubagent =
       toolInput?.subagent_type || toolInput?.subagentType || toolInput?.agent;
@@ -388,12 +611,12 @@ export class EventMapper {
       normalizeTaskSubagentId(explicitSubagent) || "expert";
     const inputIsEmpty = !toolInput
       || (typeof toolInput === "object" && Object.keys(toolInput).length === 0);
-    if (!inputIsEmpty && shouldDenyOrchestratorBuiltinTask(expertId)) {
+    if (!inputIsEmpty && shouldDenyReservedTaskSubagent(expertId)) {
       log.warn(`task-orchestrator-gate: skip Task @${expertId} tab=${tabId} toolUse=${toolUseId}`);
       return;
     }
-    const rawPrompt = String(toolInput?.prompt || toolInput?.description || "");
     const parentSessionId = this.tabToSession.get(tabId);
+    const rawPrompt = String(toolInput?.prompt || toolInput?.description || "");
     const prefaceParts: string[] = [];
     if (parentSessionId) {
       const stagingPreface = buildTaskDelegationStagingPreface(parentSessionId);
@@ -406,7 +629,10 @@ export class EventMapper {
     const queue = this.pendingTasksByTab.get(tabId) ?? [];
     queue.push({ toolUseId, expertId, prompt });
     this.pendingTasksByTab.set(tabId, queue);
+    this.taskToolExpertById.set(toolUseId, expertId);
+    this.openTaskToolToTab.set(toolUseId, tabId);
     this.startTaskLinkWatchdog(tabId, toolUseId, expertId);
+    this.startTaskAwaitTimeout(tabId, toolUseId, expertId);
     this.win.webContents.send("chat:stream", {
       tabId,
       type: "subAgent.linked",
@@ -414,12 +640,17 @@ export class EventMapper {
     });
     // Child session/update may have arrived (and been dropped) before this Task
     // was enqueued — try to bind orphans now that a pending slot exists.
-    this.tryLinkOrphanSubSessions(tabId);
+    this.tryLinkChildSessionsForTab(tabId);
+    this.startChildSessionPoll(tabId);
   }
 
   /** Remember an unmapped session and schedule parent_id re-lookups. */
   private rememberOrphanSubSession(sessionId: string): void {
-    if (this.sessionToTab.has(sessionId) || this.subSessionToTaskTool.has(sessionId)) return;
+    if (this.subSessionToTaskTool.has(sessionId)) return;
+    // Primary chat sessions are never orphans (session/new race).
+    for (const primary of this.tabToSession.values()) {
+      if (primary === sessionId) return;
+    }
     const prev = this.orphanSubSessions.get(sessionId);
     this.orphanSubSessions.set(sessionId, {
       firstSeenAt: prev?.firstSeenAt ?? Date.now(),
@@ -428,26 +659,156 @@ export class EventMapper {
     this.scheduleOrphanRetry(sessionId);
   }
 
+  /** Keep dropped child session/update payloads for replay after Task link. */
+  private bufferOrphanUpdate(sessionId: string, params: any): void {
+    const queue = this.orphanUpdateBuffer.get(sessionId) ?? [];
+    queue.push(params);
+    while (queue.length > EventMapper.ORPHAN_UPDATE_MAX) queue.shift();
+    this.orphanUpdateBuffer.set(sessionId, queue);
+  }
+
+  private flushOrphanUpdateBuffer(tabId: string, sessionId: string): void {
+    const queued = this.orphanUpdateBuffer.get(sessionId);
+    if (!queued?.length) {
+      this.orphanUpdateBuffer.delete(sessionId);
+      return;
+    }
+    this.orphanUpdateBuffer.delete(sessionId);
+    log.info(`replaying ${queued.length} buffered subagent update(s)`, { sessionId, tabId });
+    for (const params of queued) {
+      try {
+        this.mapSessionUpdate(tabId, sessionId, params);
+      } catch (err) {
+        log.warn(`buffered subagent update replay failed`, {
+          sessionId,
+          tabId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
+  private startChildSessionPoll(tabId: string): void {
+    if (this.childSessionPollTimers.has(tabId)) return;
+    if (!this.pendingTasksByTab.get(tabId)?.length) return;
+    const timer = setInterval(() => {
+      if (!this.pendingTasksByTab.get(tabId)?.length) {
+        this.stopChildSessionPoll(tabId);
+        return;
+      }
+      this.tryLinkChildSessionsForTab(tabId);
+    }, EventMapper.CHILD_SESSION_POLL_MS);
+    timer.unref?.();
+    this.childSessionPollTimers.set(tabId, timer);
+  }
+
+  private stopChildSessionPoll(tabId: string): void {
+    const timer = this.childSessionPollTimers.get(tabId);
+    if (!timer) return;
+    clearInterval(timer);
+    this.childSessionPollTimers.delete(tabId);
+  }
+
+  private findSubSessionForTaskTool(taskToolUseId: string): string | undefined {
+    for (const [sessionId, toolId] of this.subSessionToTaskTool) {
+      if (toolId === taskToolUseId) return sessionId;
+    }
+    return undefined;
+  }
+
+  /** Poll SQLite for subagent parts and push snapshots to the run panel. */
+  private startSubAgentDbSync(tabId: string, subSessionId: string): void {
+    if (this.subAgentDbSyncTimers.has(subSessionId)) {
+      this.syncSubAgentFromDb(tabId, subSessionId);
+      return;
+    }
+    this.syncSubAgentFromDb(tabId, subSessionId);
+    const timer = setInterval(() => {
+      if (!this.subSessionToTaskTool.has(subSessionId)) {
+        this.stopSubAgentDbSync(subSessionId);
+        return;
+      }
+      this.syncSubAgentFromDb(tabId, subSessionId);
+    }, EventMapper.SUBAGENT_DB_SYNC_MS);
+    timer.unref?.();
+    this.subAgentDbSyncTimers.set(subSessionId, timer);
+  }
+
+  private stopSubAgentDbSync(subSessionId: string): void {
+    const timer = this.subAgentDbSyncTimers.get(subSessionId);
+    if (timer) {
+      clearInterval(timer);
+      this.subAgentDbSyncTimers.delete(subSessionId);
+    }
+    this.subAgentDbSyncFingerprint.delete(subSessionId);
+  }
+
+  private syncSubAgentFromDb(tabId: string, subSessionId: string): void {
+    const taskToolUseId = this.subSessionToTaskTool.get(subSessionId);
+    if (!taskToolUseId) return;
+    if (this.isUserStoppedTask(taskToolUseId)) return;
+    const parts = AcpService.getInstance().listSessionActivityParts(subSessionId);
+    const blocks = buildSubAgentActivityBlocks(parts);
+    const fingerprint = JSON.stringify(blocks);
+    if (this.subAgentDbSyncFingerprint.get(subSessionId) === fingerprint) return;
+    this.subAgentDbSyncFingerprint.set(subSessionId, fingerprint);
+    if (blocks.length === 0) return;
+    this.win.webContents.send("chat:stream", {
+      tabId,
+      type: "subAgent.snapshot",
+      data: { taskToolUseId, blocks },
+    });
+  }
+
+  /** Next delay for orphan parent_id re-lookup (dense early, then backoff). */
+  private orphanRetryDelayMs(firstSeenAt: number, retries: number): number {
+    const ageMs = Date.now() - firstSeenAt;
+    if (ageMs < EventMapper.ORPHAN_DENSE_WINDOW_MS) {
+      return EventMapper.ORPHAN_DENSE_DELAY_MS;
+    }
+    // Count only post-dense retries for the backoff ladder index.
+    const denseRetries = Math.ceil(
+      EventMapper.ORPHAN_DENSE_WINDOW_MS / EventMapper.ORPHAN_DENSE_DELAY_MS,
+    );
+    const backoffIndex = Math.max(0, retries - denseRetries);
+    return (
+      EventMapper.ORPHAN_RETRY_DELAYS_MS[
+        Math.min(backoffIndex, EventMapper.ORPHAN_RETRY_DELAYS_MS.length - 1)
+      ] ?? 20_000
+    );
+  }
+
   private scheduleOrphanRetry(sessionId: string): void {
     if (this.orphanRetryTimers.has(sessionId)) return;
     const entry = this.orphanSubSessions.get(sessionId);
     if (!entry) return;
-    const delay =
-      EventMapper.ORPHAN_RETRY_DELAYS_MS[
-        Math.min(entry.retries, EventMapper.ORPHAN_RETRY_DELAYS_MS.length - 1)
-      ] ?? 10_000;
+    const delay = this.orphanRetryDelayMs(entry.firstSeenAt, entry.retries);
     const timer = setTimeout(() => {
       this.orphanRetryTimers.delete(sessionId);
       const cur = this.orphanSubSessions.get(sessionId);
       if (!cur) return;
-      if (this.sessionToTab.has(sessionId) || this.subSessionToTaskTool.has(sessionId)) {
+      if (this.subSessionToTaskTool.has(sessionId)) {
         this.orphanSubSessions.delete(sessionId);
         return;
       }
       cur.retries += 1;
       this.orphanSubSessions.set(sessionId, cur);
+      // Also scan pending tabs' SQLite children — covers races where we never
+      // saw a child update until parent_id / Task slot both exist.
+      for (const tabId of this.pendingTasksByTab.keys()) {
+        this.tryLinkChildSessionsForTab(tabId);
+        if (this.subSessionToTaskTool.has(sessionId)) {
+          log.info(`orphan sub-session linked on retry`, {
+            sessionId,
+            tabId,
+            retries: cur.retries,
+          });
+          this.orphanSubSessions.delete(sessionId);
+          return;
+        }
+      }
       const tabId = this.resolveTabForSession(sessionId);
-      if (tabId) {
+      if (tabId && this.subSessionToTaskTool.has(sessionId)) {
         log.info(`orphan sub-session linked on retry`, {
           sessionId,
           tabId,
@@ -456,35 +817,61 @@ export class EventMapper {
         this.orphanSubSessions.delete(sessionId);
         return;
       }
-      if (cur.retries < EventMapper.ORPHAN_RETRY_DELAYS_MS.length) {
+      const ageMs = Date.now() - cur.firstSeenAt;
+      if (ageMs < EventMapper.ORPHAN_RETRY_BUDGET_MS) {
         this.scheduleOrphanRetry(sessionId);
+      } else {
+        log.warn(
+          `orphan sub-session gave up after ${Math.round(ageMs / 1000)}s without parent_id`,
+          { sessionId, retries: cur.retries },
+        );
+        this.orphanSubSessions.delete(sessionId);
+        this.orphanUpdateBuffer.delete(sessionId);
       }
     }, delay);
     timer.unref?.();
     this.orphanRetryTimers.set(sessionId, timer);
   }
 
-  /** After a Task is queued, bind any orphan child sessions that now have parent_id. */
-  private tryLinkOrphanSubSessions(tabId: string): void {
+  /**
+   * Bind child sessions to pending Task slots for this tab:
+   * remembered orphans, half-linked sessionToTab rows, and SQLite children.
+   */
+  private tryLinkChildSessionsForTab(tabId: string): void {
     if (!this.pendingTasksByTab.get(tabId)?.length) return;
-    for (const sessionId of [...this.orphanSubSessions.keys()]) {
+    const parentSessionId = this.tabToSession.get(tabId);
+    const candidates = new Set<string>();
+
+    for (const sessionId of this.orphanSubSessions.keys()) {
+      candidates.add(sessionId);
+    }
+    if (parentSessionId) {
+      for (const [sessionId, mappedTab] of this.sessionToTab) {
+        if (mappedTab !== tabId) continue;
+        if (sessionId === parentSessionId) continue;
+        if (this.subSessionToTaskTool.has(sessionId)) continue;
+        candidates.add(sessionId);
+      }
+      for (const childId of AcpService.getInstance().listChildSessionIds(parentSessionId)) {
+        candidates.add(childId);
+      }
+    }
+
+    for (const sessionId of candidates) {
+      if (!this.pendingTasksByTab.get(tabId)?.length) break;
       if (this.subSessionToTaskTool.has(sessionId)) {
         this.orphanSubSessions.delete(sessionId);
         continue;
       }
       const parentId = AcpService.getInstance().getSessionParentId(sessionId);
       if (!parentId) continue;
+      if (parentSessionId && parentId !== parentSessionId) continue;
       const parentTab = this.resolveTabForSession(parentId);
       if (parentTab !== tabId) continue;
-      if (!this.pendingTasksByTab.get(tabId)?.length) break;
-      log.info(`linking orphan sub-session after Task enqueue`, { sessionId, tabId });
+      // Mark early so nested Task deny does not wait on link.
+      AcpService.getInstance().markSubAgentSession(sessionId);
+      log.info(`linking child sub-session to pending Task`, { sessionId, tabId });
       this.linkSubAgentSession(tabId, sessionId);
-      this.orphanSubSessions.delete(sessionId);
-      const t = this.orphanRetryTimers.get(sessionId);
-      if (t) {
-        clearTimeout(t);
-        this.orphanRetryTimers.delete(sessionId);
-      }
     }
   }
 
@@ -495,7 +882,22 @@ export class EventMapper {
     toolInput: Record<string, unknown>,
     subagentId: string,
   ): void {
-    const message = formatOrchestratorBuiltinTaskDeniedMessage(subagentId);
+    this.emitTaskDeniedMessage(
+      tabId,
+      msgId,
+      toolId,
+      toolInput,
+      formatOrchestratorBuiltinTaskDeniedMessage(subagentId),
+    );
+  }
+
+  private emitTaskDeniedMessage(
+    tabId: string,
+    msgId: string,
+    toolId: string,
+    toolInput: Record<string, unknown>,
+    message: string,
+  ): void {
     this.win.webContents.send("chat:stream", {
       tabId,
       type: "message.part.updated",
@@ -542,15 +944,70 @@ export class EventMapper {
     });
   }
 
-  private linkSubAgentSession(parentTabId: string, subSessionId: string): void {
+  /**
+   * Pick which pending Task a child session belongs to.
+   * Prefer session.agent / Task-index alignment; only use sole-pending when
+   * unambiguous. Never FIFO-guess when multiple Tasks are waiting.
+   */
+  private pickPendingTaskForChild(
+    parentTabId: string,
+    subSessionId: string,
+  ): { toolUseId: string; expertId: string; prompt: string } | null {
     const queue = this.pendingTasksByTab.get(parentTabId);
-    if (!queue?.length) return;
-    const pending = queue.shift()!;
-    if (queue.length === 0) this.pendingTasksByTab.delete(parentTabId);
-    else this.pendingTasksByTab.set(parentTabId, queue);
+    if (!queue?.length) return null;
+    const parentSessionId = this.tabToSession.get(parentTabId);
+    const service = AcpService.getInstance();
+    const agentName = normalizeTaskSubagentId(
+      typeof service.getSessionAgentName === "function"
+        ? service.getSessionAgentName(subSessionId)
+        : null,
+    );
+
+    const takeAt = (index: number) => {
+      const [pending] = queue.splice(index, 1);
+      if (queue.length === 0) {
+        this.pendingTasksByTab.delete(parentTabId);
+        this.stopChildSessionPoll(parentTabId);
+      } else {
+        this.pendingTasksByTab.set(parentTabId, queue);
+      }
+      return pending ?? null;
+    };
+
+    if (agentName) {
+      const byAgent = queue.findIndex((p) => p.expertId === agentName);
+      if (byAgent >= 0) return takeAt(byAgent);
+    }
+
+    if (parentSessionId) {
+      for (let i = 0; i < queue.length; i++) {
+        const candidate = queue[i]!;
+        const resolved = service.resolveChildSessionForTask(
+          parentSessionId,
+          candidate.toolUseId,
+          subSessionId,
+        );
+        if (resolved === subSessionId) return takeAt(i);
+      }
+    }
+
+    if (queue.length === 1) return takeAt(0);
+
+    log.warn(
+      `ambiguous Task bind skipped: tab=${parentTabId} child=${subSessionId} ` +
+        `pending=${queue.length} agent=${agentName ?? "(none)"}`,
+    );
+    return null;
+  }
+
+  private linkSubAgentSession(parentTabId: string, subSessionId: string): void {
+    if (this.subSessionToTaskTool.has(subSessionId)) return;
+    const pending = this.pickPendingTaskForChild(parentTabId, subSessionId);
+    if (!pending) return;
     // Linked successfully — the subagent is now running and will complete on
     // its own. Clear the link watchdog so it doesn't fire a false timeout.
     this.clearTaskLinkWatchdog(pending.toolUseId);
+    this.clearTaskAwaitTimeout(pending.toolUseId);
     this.subSessionToTaskTool.set(subSessionId, pending.toolUseId);
     this.sessionToTab.set(subSessionId, parentTabId);
     this.orphanSubSessions.delete(subSessionId);
@@ -576,6 +1033,10 @@ export class EventMapper {
         subSessionId,
       },
     });
+    // Replay text/thinking/tools that arrived before the Task slot existed.
+    this.flushOrphanUpdateBuffer(parentTabId, subSessionId);
+    // ACP often omits child session/update — keep the panel fed from SQLite.
+    this.startSubAgentDbSync(parentTabId, subSessionId);
   }
 
   /** Link sub-session to pending Task when parent_id is known but link not yet established. */
@@ -600,6 +1061,8 @@ export class EventMapper {
       this.subSessionToTaskTool.get(sessionId)
       ?? this.ensureSubAgentTaskLink(tabId, sessionId);
     if (!taskToolUseId) return;
+    // User Stop — do not keep streaming tools/text into the run panel.
+    if (this.isUserStoppedTask(taskToolUseId)) return;
     this.win.webContents.send("chat:stream", {
       tabId,
       type: "subAgent.activity",
@@ -607,28 +1070,179 @@ export class EventMapper {
     });
   }
 
-  private completeSubAgentTask(tabId: string, taskToolUseId: string, isError: boolean): void {
-    // The subagent finished (success or error) — no need for the link watchdog.
-    this.clearTaskLinkWatchdog(taskToolUseId);
-    this.win.webContents.send("chat:stream", {
-      tabId,
-      type: "subAgent.completed",
-      data: { taskToolUseId, status: isError ? "error" : "done" },
+  /** Mark a Task as user-stopped so cancel results are not rewritten as opencode_cancelled. */
+  markUserStoppedTask(taskToolUseId: string): void {
+    const id = taskToolUseId?.trim();
+    if (id) this.userStoppedTasks.add(id);
+  }
+
+  isUserStoppedTask(taskToolUseId: string): boolean {
+    return this.userStoppedTasks.has(taskToolUseId?.trim() || "");
+  }
+
+  /** Linked child session for a Task tool_use (authoritative over renderer memory). */
+  resolveSubSessionForTask(taskToolUseId: string): string | undefined {
+    return this.findSubSessionForTaskTool(taskToolUseId);
+  }
+
+  /**
+   * User Stop: freeze the run panel stream immediately. Keep the userStopped
+   * mark until OpenCode's Task tool_result arrives so it rewrites to user_cancel
+   * for the main agent (do not clear here).
+   */
+  freezeUserStoppedSubAgent(taskToolUseId: string): string | undefined {
+    const id = taskToolUseId?.trim();
+    if (!id) return undefined;
+    this.markUserStoppedTask(id);
+    this.clearTaskLinkWatchdog(id);
+    this.clearTaskAwaitTimeout(id);
+    const subSessionId = this.findSubSessionForTaskTool(id);
+    if (subSessionId) this.stopSubAgentDbSync(subSessionId);
+    return subSessionId;
+  }
+
+  /**
+   * Await OpenCode settling the parent Task after user Stop (tool_result →
+   * user_cancel rewrite). Rejects with code `abort_failed` on timeout.
+   */
+  waitForUserStoppedTaskSettlement(
+    taskToolUseId: string,
+    timeoutMs: number = EventMapper.USER_STOP_SETTLEMENT_MS,
+  ): Promise<{ settled: true }> {
+    const id = taskToolUseId?.trim();
+    if (!id) {
+      return Promise.reject(
+        Object.assign(new Error("missing_task_id"), { code: "missing_args" as const }),
+      );
+    }
+    const prev = this.userStoppedSettlement.get(id);
+    if (prev) {
+      clearTimeout(prev.timer);
+      prev.reject(
+        Object.assign(new Error("superseded"), { code: "superseded" as const }),
+      );
+      this.userStoppedSettlement.delete(id);
+    }
+    return new Promise<{ settled: true }>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.userStoppedSettlement.delete(id);
+        reject(
+          Object.assign(new Error("abort_failed"), { code: "abort_failed" as const }),
+        );
+      }, timeoutMs);
+      this.userStoppedSettlement.set(id, { resolve, reject, timer });
     });
   }
 
-  /** Start (or restart) the link watchdog for a Task tool_use. */
+  private settleUserStoppedTask(taskToolUseId: string): void {
+    const id = taskToolUseId?.trim();
+    if (!id) return;
+    const waiter = this.userStoppedSettlement.get(id);
+    if (!waiter) return;
+    clearTimeout(waiter.timer);
+    this.userStoppedSettlement.delete(id);
+    waiter.resolve({ settled: true });
+  }
+
+  /**
+   * Abort/settlement failed before OpenCode finished the Task — drop waiter +
+   * userStopped mark so Stop can be retried without a lying rewrite.
+   */
+  cancelUserStoppedSettlement(
+    taskToolUseId: string,
+    code: "abort_failed" | "superseded" = "abort_failed",
+  ): void {
+    const id = taskToolUseId?.trim();
+    if (!id) return;
+    const waiter = this.userStoppedSettlement.get(id);
+    if (waiter) {
+      clearTimeout(waiter.timer);
+      this.userStoppedSettlement.delete(id);
+      waiter.reject(Object.assign(new Error(code), { code }));
+    }
+    this.clearUserStoppedTask(id);
+  }
+
+  private clearUserStoppedTask(taskToolUseId: string): void {
+    this.userStoppedTasks.delete(taskToolUseId?.trim() || "");
+  }
+
+  private completeSubAgentTask(
+    tabId: string,
+    taskToolUseId: string,
+    isError: boolean,
+    error?: string,
+  ): void {
+    // The subagent finished (success or error) — no need for the link watchdog.
+    this.clearTaskLinkWatchdog(taskToolUseId);
+    this.clearTaskAwaitTimeout(taskToolUseId);
+    // Keep userStopped mark through the Task tool_result rewrite path; clear
+    // after rewrite in the tool_call_update handler (not here).
+    const subSessionId = this.findSubSessionForTaskTool(taskToolUseId);
+    if (subSessionId) {
+      // Final SQLite pull so the panel isn't empty when ACP never streamed.
+      // Skip when user-stopped — further DB growth must not revive the panel.
+      if (!this.isUserStoppedTask(taskToolUseId)) {
+        this.syncSubAgentFromDb(tabId, subSessionId);
+      }
+      this.stopSubAgentDbSync(subSessionId);
+    }
+    const queue = this.pendingTasksByTab.get(tabId);
+    let expertId = this.taskToolExpertById.get(taskToolUseId);
+    if (queue) {
+      const idx = queue.findIndex((t) => t.toolUseId === taskToolUseId);
+      if (idx !== -1) {
+        expertId = expertId || queue[idx]!.expertId;
+        queue.splice(idx, 1);
+        if (queue.length === 0) this.pendingTasksByTab.delete(tabId);
+        else this.pendingTasksByTab.set(tabId, queue);
+      }
+    }
+    this.taskToolExpertById.delete(taskToolUseId);
+    this.openTaskToolToTab.delete(taskToolUseId);
+    const parentSessionId = this.tabToSession.get(tabId);
+    if (!isError && expertId && expertId !== "expert") {
+      if (parentSessionId) {
+        markSessionTaskAllowlistSatisfied(parentSessionId, expertId);
+      }
+    }
+    const errorText =
+      isError && typeof error === "string" && error.trim() ? error.trim() : undefined;
+    this.win.webContents.send("chat:stream", {
+      tabId,
+      type: "subAgent.completed",
+      data: {
+        taskToolUseId,
+        status: isError ? "error" : "done",
+        ...(errorText ? { error: errorText } : {}),
+      },
+    });
+    // Parent may have end_turn'd while this Task was still open — flush @ nudge now.
+    if (parentSessionId && !this.hasOpenTaskToolsForTab(tabId)) {
+      void flushDeferredTaskAllowlistFollowUp(parentSessionId);
+    }
+  }
+
+  /** True while any Task for this tab has started and not yet completed. */
+  hasOpenTaskToolsForTab(tabId: string): boolean {
+    for (const t of this.openTaskToolToTab.values()) {
+      if (t === tabId) return true;
+    }
+    return (this.pendingTasksByTab.get(tabId)?.length ?? 0) > 0;
+  }
+
+  /** Start (or restart) the UI-degrade timer for a Task tool_use. */
   private startTaskLinkWatchdog(tabId: string, toolUseId: string, expertId: string): void {
     this.clearTaskLinkWatchdog(toolUseId);
     const timer = setTimeout(() => {
       this.taskLinkTimeouts.delete(toolUseId);
       this.handleTaskLinkTimeout(tabId, toolUseId, expertId);
-    }, EventMapper.TASK_LINK_TIMEOUT_MS);
+    }, EventMapper.TASK_LINK_UI_DEGRADE_MS);
     timer.unref?.();
     this.taskLinkTimeouts.set(toolUseId, timer);
   }
 
-  /** Clear the link watchdog (subagent linked or task completed). */
+  /** Clear the UI-degrade timer (subagent linked or task completed). */
   private clearTaskLinkWatchdog(toolUseId: string): void {
     const timer = this.taskLinkTimeouts.get(toolUseId);
     if (timer) {
@@ -637,56 +1251,81 @@ export class EventMapper {
     }
   }
 
+  private startTaskAwaitTimeout(tabId: string, toolUseId: string, expertId: string): void {
+    this.clearTaskAwaitTimeout(toolUseId);
+    const timer = setTimeout(() => {
+      this.taskAwaitTimeouts.delete(toolUseId);
+      this.handleTaskAwaitTimeout(tabId, toolUseId, expertId);
+    }, EventMapper.TASK_AWAIT_TIMEOUT_MS);
+    timer.unref?.();
+    this.taskAwaitTimeouts.set(toolUseId, timer);
+  }
+
+  private clearTaskAwaitTimeout(toolUseId: string): void {
+    const timer = this.taskAwaitTimeouts.get(toolUseId);
+    if (timer) {
+      clearTimeout(timer);
+      this.taskAwaitTimeouts.delete(toolUseId);
+    }
+  }
+
+  private isTaskStillUnlinked(tabId: string, toolUseId: string): boolean {
+    for (const boundId of this.subSessionToTaskTool.values()) {
+      if (boundId === toolUseId) return false;
+    }
+    return (
+      this.pendingTasksByTab.get(tabId)?.some((t) => t.toolUseId === toolUseId)
+      || this.openTaskToolToTab.get(toolUseId) === tabId
+    );
+  }
+
   /**
-   * Watchdog fired: the subagent session never linked back to a chat tab.
-   * Mark the Task UI as failed and abort the parent turn — otherwise OpenCode
-   * keeps waiting for a Task result that will never arrive (session appears stuck).
+   * UI degrade window elapsed without binding a child session.
+   * Soft hint only — keep the pending slot so late parent_id retries can still
+   * link. Task completion remains owned by OpenCode.
    */
   private handleTaskLinkTimeout(tabId: string, toolUseId: string, expertId: string): void {
-    const queue = this.pendingTasksByTab.get(tabId);
-    if (!queue) return; // already linked/completed
-    const idx = queue.findIndex((t) => t.toolUseId === toolUseId);
-    if (idx === -1) return; // already linked/completed
-    queue.splice(idx, 1);
-    if (queue.length === 0) this.pendingTasksByTab.delete(tabId);
-    else this.pendingTasksByTab.set(tabId, queue);
+    if (!this.isTaskStillUnlinked(tabId, toolUseId)) return;
 
-    const secs = EventMapper.TASK_LINK_TIMEOUT_MS / 1000;
-    const errorText =
-      `Expert @${expertId} did not start within ${secs}s — its session could not be linked to this chat. ` +
-      "The parent turn was stopped automatically; retry or run the work with platform tools instead of Task.";
+    const secs = EventMapper.TASK_LINK_UI_DEGRADE_MS / 1000;
     log.warn(
-      `task-link-timeout: expert=@${expertId} toolUse=${toolUseId} tab=${tabId} ` +
-        `— subagent session did not link within ${secs}s`,
+      `task-link-degraded: expert=@${expertId} toolUse=${toolUseId} tab=${tabId} ` +
+        `— no child session linked within ${secs}s; orphan retries continue; ` +
+        `Task still owned by OpenCode`,
     );
     this.win.webContents.send("chat:stream", {
       tabId,
-      type: "subAgent.completed",
+      type: "subAgent.linkDegraded",
       data: {
         taskToolUseId: toolUseId,
-        status: "error",
-        error: errorText,
+        expertId,
+        code: "link_degraded",
       },
     });
+  }
+
+  /**
+   * Still unlinked after the await budget — stronger UI signal (await_timeout).
+   * Does not abort the parent session; OpenCode still owns Task completion.
+   */
+  private handleTaskAwaitTimeout(tabId: string, toolUseId: string, expertId: string): void {
+    if (!this.isTaskStillUnlinked(tabId, toolUseId)) return;
+
+    const msg = formatTaskError("await_timeout", { subagentId: expertId });
+    log.warn(
+      `task-await-timeout: expert=@${expertId} toolUse=${toolUseId} tab=${tabId} ` +
+        `— still unlinked after ${EventMapper.TASK_AWAIT_TIMEOUT_MS / 1000}s`,
+    );
     this.win.webContents.send("chat:stream", {
       tabId,
-      type: "tool_result",
+      type: "subAgent.linkDegraded",
       data: {
-        tool_use_id: toolUseId,
-        content: errorText,
-        is_error: true,
-        status: "failed",
-        name: "task",
+        taskToolUseId: toolUseId,
+        expertId,
+        code: "await_timeout",
+        message: msg,
       },
     });
-
-    const parentSessionId = this.tabToSession.get(tabId);
-    if (parentSessionId) {
-      log.warn(
-        `task-link-timeout: aborting parent session ${parentSessionId} to unblock tab=${tabId}`,
-      );
-      void AcpService.getInstance().abort(parentSessionId);
-    }
   }
 
   private mapSessionUpdate(tabId: string, sessionId: string, params: any): void {
@@ -884,6 +1523,9 @@ export class EventMapper {
           line: loc.line || loc.startLine,
         }));
 
+      // Thinking segment ends when the first tool starts.
+      this.sealThinkingDuration(tabId, sessionId, msgId);
+
       if (AcpService.getInstance().isSubAgentSession(sessionId)) {
         this.emitSubAgentActivity(tabId, sessionId, {
           type: "tool_use",
@@ -923,10 +1565,9 @@ export class EventMapper {
         const subagentId = normalizeTaskSubagentId(explicitSubagent) || "expert";
         const inputIsEmpty = !toolInput
           || (typeof toolInput === "object" && Object.keys(toolInput).length === 0);
-        // Only enforce the built-in deny gate when we can actually see the
-        // subagent type. An empty input means the type isn't on this event
-        // (the permission layer already vetted it) — don't false-deny.
-        if (!inputIsEmpty && shouldDenyOrchestratorBuiltinTask(subagentId)) {
+        // Only enforce deny gates when we can actually see the subagent type.
+        // An empty input means the type isn't on this event — don't false-deny.
+        if (!inputIsEmpty && shouldDenyReservedTaskSubagent(subagentId)) {
           log.warn(
             `task-orchestrator-gate: blocked Task @${subagentId} tab=${tabId} toolUse=${toolId}`,
           );
@@ -936,6 +1577,32 @@ export class EventMapper {
             toolId,
             toolInput,
             subagentId,
+          );
+          return;
+        }
+        const parentSessionId = this.tabToSession.get(tabId);
+        const allowlist = parentSessionId
+          ? getSessionTaskAllowlist(parentSessionId)
+          : [];
+        // Use explicit type only — never the "expert" placeholder (type not visible yet).
+        const visibleId = normalizeTaskSubagentId(explicitSubagent);
+        if (
+          !inputIsEmpty
+          && visibleId
+          && shouldDenyOutsideTaskAllowlist(allowlist, visibleId)
+        ) {
+          log.warn(
+            `task-orchestrator-gate: blocked allowlist Task @${visibleId} tab=${tabId} toolUse=${toolId}`,
+          );
+          this.emitTaskDeniedMessage(
+            tabId,
+            msgId,
+            toolId,
+            toolInput,
+            formatTaskError("task_allowlist_denied", {
+              subagentId: visibleId,
+              allowlist,
+            }),
           );
           return;
         }
@@ -1042,6 +1709,12 @@ export class EventMapper {
 
       if (backfillInput) {
         const backfillToolName = (backfillName || "").toLowerCase();
+        if (
+          (backfillToolName === "task" || tuTitleLower === "task")
+          && updateId
+        ) {
+          this.refreshPendingTaskFromBackfill(tabId, updateId, backfillInput);
+        }
         const tuStatusLocal = String(tu.status || tu.state?.status || "").toLowerCase();
         const isTerminalStatus =
           tuStatusLocal === "completed"
@@ -1105,10 +1778,61 @@ export class EventMapper {
         || tuStatus === "success"
         || tuStatus === "finished"
         || tuStatus === "done";
-      const isError = tuStatus === "failed" || tu.state?.status === "failed";
-      const isTerminal = isTerminalSuccess || isError || tuStatus === "cancelled" || tuStatus === "canceled" || tuStatus === "aborted" || tuStatus === "error" || tuStatus === "timeout" || tuStatus === "timed_out";
+      const isCancelled =
+        tuStatus === "cancelled"
+        || tuStatus === "canceled"
+        || tuStatus === "aborted";
+      const isError =
+        tuStatus === "failed"
+        || tu.state?.status === "failed"
+        || isCancelled
+        || tuStatus === "error"
+        || tuStatus === "timeout"
+        || tuStatus === "timed_out";
+      const isTerminal = isTerminalSuccess || isError;
       const normalizedToolHint = (backfillName || toolNameHint || "").toLowerCase();
       const parentSessionId = this.tabToSession.get(tabId);
+
+      // Task failures: rewrite cancel so the main agent and UI share actionable text.
+      // User Stop must stay user_cancel — never the "not a user cancel" opaque rewrite.
+      let userStoppedTask = false;
+      let userStoppedError: string | undefined;
+      if (normalizedToolHint === "task" && isError && updateId) {
+        const subFromBackfill =
+          backfillInput && typeof backfillInput === "object"
+            ? normalizeTaskSubagentId(
+                (backfillInput as Record<string, unknown>).subagent_type
+                ?? (backfillInput as Record<string, unknown>).subagentType
+                ?? (backfillInput as Record<string, unknown>).agent,
+              )
+            : null;
+        const pendingId =
+          this.pendingTasksByTab.get(tabId)?.find((t) => t.toolUseId === updateId)?.expertId
+          ?? null;
+        let displayId = subFromBackfill || normalizeTaskSubagentId(pendingId);
+        if (!displayId || displayId === "expert") displayId = null;
+        userStoppedTask = this.isUserStoppedTask(updateId);
+        if (userStoppedTask) {
+          resultContent = formatTaskError("user_cancel", { subagentId: displayId });
+          userStoppedError =
+            typeof resultContent === "string" ? resultContent : String(resultContent);
+          if (parentSessionId) {
+            void AcpService.getInstance()
+              .patchSessionToolOutput(parentSessionId, updateId, resultContent)
+              .catch(() => {});
+          }
+        } else if (isOpaqueTaskCancelledResult(resultContent)) {
+          resultContent = resolveOpaqueTaskCancelledDisplay(displayId);
+          // Persist readable failure into OpenCode so later turns / hydration see it
+          // (live model may already have received opaque cancel from OpenCode).
+          if (parentSessionId) {
+            void AcpService.getInstance()
+              .patchSessionToolOutput(parentSessionId, updateId, resultContent)
+              .catch(() => {});
+          }
+        }
+      }
+
       let enrichedTaskForOpenCode = false;
       if (
         parentSessionId
@@ -1139,7 +1863,11 @@ export class EventMapper {
         && updateId
         && isTerminal
       ) {
-        this.completeSubAgentTask(tabId, updateId, isError);
+        this.completeSubAgentTask(tabId, updateId, isError, userStoppedError);
+        if (userStoppedTask || this.isUserStoppedTask(updateId)) {
+          this.settleUserStoppedTask(updateId);
+          this.clearUserStoppedTask(updateId);
+        }
       }
 
       if (
@@ -1169,14 +1897,25 @@ export class EventMapper {
       // forever and was orphan-synthesized as "No result received". Map all
       // success synonyms to `completed` here.
       const _rawSentStatus = tu.status || tu.state?.status || "";
-      const _sentStatus = /success|finished|done/i.test(_rawSentStatus)
-        ? "completed"
-        : (_rawSentStatus || "completed");
-      const _sentIsError = _rawSentStatus.toLowerCase() === "failed" || tu.state?.status === "failed";
+      const _sentStatus = isError
+        ? "failed"
+        : /success|finished|done/i.test(_rawSentStatus)
+          ? "completed"
+          : (_rawSentStatus || "completed");
       const toolResultMsg =
-        `${toolLabel} id=${updateId || "(none)"} status=${_sentStatus}${_sentIsError ? " error" : ""} contentLen=${typeof resultContent === "string" ? resultContent.length : -1}`;
+        `${toolLabel} id=${updateId || "(none)"} status=${_sentStatus}${isError ? " error" : ""} contentLen=${typeof resultContent === "string" ? resultContent.length : -1}`;
       log.debug(`tool_result ${toolResultMsg}`);
       logToolDev(`result ${toolResultMsg}`);
+      const ocTime = extractOpenCodeTime(tu) ?? extractOpenCodeTime({ state: tu.state });
+      const ocDuration = durationSecFromOpenCodeTime(ocTime);
+      const timeStart =
+        ocTime && typeof ocTime === "object" && typeof (ocTime as { start?: unknown }).start === "number"
+          ? (ocTime as { start: number }).start
+          : undefined;
+      const timeEnd =
+        ocTime && typeof ocTime === "object" && typeof (ocTime as { end?: unknown }).end === "number"
+          ? (ocTime as { end: number }).end
+          : undefined;
       this.win.webContents.send("chat:stream", {
         tabId,
         type: "message.updated",
@@ -1186,10 +1925,13 @@ export class EventMapper {
               type: "tool_result",
               tool_use_id: updateId,
               content: resultContent,
-              is_error: _sentIsError,
+              is_error: isError,
               status: _sentStatus,
               _backfillInput: backfillInput,
               _backfillName: backfillName,
+              ...(ocDuration != null ? { duration: ocDuration } : {}),
+              ...(timeStart != null ? { timeStart: timeStart } : {}),
+              ...(timeEnd != null ? { timeEnd: timeEnd } : {}),
             }],
           },
         },
@@ -1213,21 +1955,44 @@ export class EventMapper {
 
     if (content && content.type === "text" && content.text) {
       if (AcpService.getInstance().isSubAgentSession(sessionId)) {
-        const activityType =
-          chunkType === "agent_thought_chunk" || chunkType === "thought_message_chunk"
-            ? "thinking"
-            : "text";
-        this.emitSubAgentActivity(tabId, sessionId, {
-          type: activityType,
-          text: content.text,
-          thinking: activityType === "thinking" ? content.text : undefined,
-        });
+        // Same delta accumulation as the main session — otherwise upsert replaces
+        // the trailing text with each tiny chunk and the final reply looks non-streaming.
+        const isThinking =
+          chunkType === "agent_thought_chunk" || chunkType === "thought_message_chunk";
+        if (isThinking) {
+          const key = msgId || `${sessionId}-thinking`;
+          if (!this.thinkingStartedAt.has(key)) {
+            this.thinkingStartedAt.set(key, Date.now());
+          }
+          const delta = content.text;
+          const full = (this.accumThinking.get(key) || "") + delta;
+          this.accumThinking.set(key, full);
+          this.pruneAccum(this.accumThinking);
+          this.emitSubAgentActivity(tabId, sessionId, {
+            type: "thinking",
+            text: full,
+            thinking: full,
+          });
+        } else {
+          const key = msgId || `${sessionId}-text`;
+          const delta = content.text;
+          const full = (this.accumText.get(key) || "") + delta;
+          this.accumText.set(key, full);
+          this.pruneAccum(this.accumText);
+          this.emitSubAgentActivity(tabId, sessionId, {
+            type: "text",
+            text: full,
+          });
+        }
         return;
       }
 
       // ── Thinking chunks (agent_thought_chunk OR thought_message_chunk) ──
       if (chunkType === "agent_thought_chunk" || chunkType === "thought_message_chunk") {
         const key = msgId || `${sessionId}-thinking`;
+        if (!this.thinkingStartedAt.has(key)) {
+          this.thinkingStartedAt.set(key, Date.now());
+        }
         const delta = content.text;
         const full = (this.accumThinking.get(key) || "") + delta;
         this.accumThinking.set(key, full);
@@ -1246,6 +2011,8 @@ export class EventMapper {
         // stored user chunks (includes injected system prompt on session/load).
         return;
       } else if (chunkType === "agent_message_chunk") {
+        // Prose starts — seal any open thinking so Thought for / Worked for freeze.
+        this.sealThinkingDuration(tabId, sessionId, msgId);
         // ── Message text chunks (agent response or user echo) ──
         const key = msgId || `${sessionId}-text`;
         const delta = content.text;
@@ -1312,8 +2079,40 @@ export class EventMapper {
       // ── SDK-flattened format: { agent_message_chunk: "text", agent_thought_chunk: "text" } ──
       // Some SDK versions deliver text/thinking as top-level string fields
       // without a `content` wrapper or `sessionUpdate` marker.
+      if (AcpService.getInstance().isSubAgentSession(sessionId)) {
+        if (typeof update.agent_thought_chunk === "string" && update.agent_thought_chunk) {
+          const key = msgId || `${sessionId}-thinking`;
+          if (!this.thinkingStartedAt.has(key)) {
+            this.thinkingStartedAt.set(key, Date.now());
+          }
+          const delta = update.agent_thought_chunk;
+          const full = (this.accumThinking.get(key) || "") + delta;
+          this.accumThinking.set(key, full);
+          this.pruneAccum(this.accumThinking);
+          this.emitSubAgentActivity(tabId, sessionId, {
+            type: "thinking",
+            text: full,
+            thinking: full,
+          });
+        }
+        if (typeof update.agent_message_chunk === "string" && update.agent_message_chunk) {
+          const key = msgId || `${sessionId}-text`;
+          const delta = update.agent_message_chunk;
+          const full = (this.accumText.get(key) || "") + delta;
+          this.accumText.set(key, full);
+          this.pruneAccum(this.accumText);
+          this.emitSubAgentActivity(tabId, sessionId, {
+            type: "text",
+            text: full,
+          });
+        }
+        return;
+      }
       if (typeof update.agent_thought_chunk === "string" && update.agent_thought_chunk) {
         const key = msgId || `${sessionId}-thinking`;
+        if (!this.thinkingStartedAt.has(key)) {
+          this.thinkingStartedAt.set(key, Date.now());
+        }
         const delta = update.agent_thought_chunk;
         const full = (this.accumThinking.get(key) || "") + delta;
         this.accumThinking.set(key, full);
@@ -1325,6 +2124,7 @@ export class EventMapper {
         });
       }
       if (typeof update.agent_message_chunk === "string" && update.agent_message_chunk) {
+        this.sealThinkingDuration(tabId, sessionId, msgId);
         const key = msgId || `${sessionId}-text`;
         const delta = update.agent_message_chunk;
         const full = (this.accumText.get(key) || "") + delta;

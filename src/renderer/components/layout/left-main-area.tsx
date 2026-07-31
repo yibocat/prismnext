@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useOpenCodeEvents } from "@/hooks/use-opencode-events";
 import { useTrayStatusSync } from "@/hooks/use-tray-status-sync";
@@ -11,8 +11,11 @@ import { useGitStore } from "@/stores/git-store";
 import { clearPdfCache, useCompileStore } from "@/stores/compile-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
-import { getAllEnabledModels } from "@/lib/providers";
-import { parseContextWindow, DEFAULT_CONTEXT_WINDOW } from "@shared/context-constants";
+import {
+  prefetchOpenCodeModelsCatalog,
+  resolveSelectedModelContextTokens,
+  subscribeOpenCodeModelsCatalog,
+} from "@/lib/providers";
 import { GitBranchIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChatFileDrop } from "@/lib/chat/use-chat-file-drop";
@@ -43,6 +46,7 @@ import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator, 
 import { WorktreeSelector, CHAT_PANEL_TOOLBAR_BUTTON } from "@/components/modules/chat/worktree-selector";
 import { BranchSelector } from "@/components/modules/chat/branch-selector";
 import { WorktreeActions } from "@/components/modules/chat/worktree-actions";
+import { SUBAGENT_PANEL_EXIT_MS } from "@/components/modules/chat/subagent-run-panel";
 import { isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
 
 
@@ -76,6 +80,24 @@ export function LeftMainArea() {
 
   const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
+  const openSubAgentPanelToolUseId = useChatStore(
+    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.openSubAgentPanelToolUseId ?? null,
+  );
+  /** Smooth scrim enter/exit — keep mounted through opacity transition. */
+  const [subAgentScrimMounted, setSubAgentScrimMounted] = useState(false);
+  const [subAgentScrimOn, setSubAgentScrimOn] = useState(false);
+  useEffect(() => {
+    if (openSubAgentPanelToolUseId) {
+      setSubAgentScrimMounted(true);
+      const raf = requestAnimationFrame(() => {
+        requestAnimationFrame(() => setSubAgentScrimOn(true));
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+    setSubAgentScrimOn(false);
+    const t = window.setTimeout(() => setSubAgentScrimMounted(false), SUBAGENT_PANEL_EXIT_MS);
+    return () => window.clearTimeout(t);
+  }, [openSubAgentPanelToolUseId]);
   const contextTokens = useChatStore((s) => s.contextTokens);
   const contextBreakdown = useChatStore((s) => s.contextBreakdown);
   const categorySchema = useChatStore((s) => s.categorySchema);
@@ -110,19 +132,37 @@ export function LeftMainArea() {
   const aiEnabledModels = useSettingsStore((s) => s.settings.aiEnabledModels);
   const aiCustomModelsData = useSettingsStore((s) => s.settings.aiCustomModelsData);
   const aiCustomProviders = useSettingsStore((s) => s.settings.aiCustomProviders);
+  const [catalogTick, setCatalogTick] = useState(0);
+  useEffect(() => {
+    void prefetchOpenCodeModelsCatalog().then(() => {
+      setCatalogTick((n) => n + 1);
+    });
+    return subscribeOpenCodeModelsCatalog(() => {
+      setCatalogTick((n) => n + 1);
+    });
+  }, []);
   const contextTotal = useMemo(() => {
-    if (!aiModel) return DEFAULT_CONTEXT_WINDOW;
+    void catalogTick;
     const custom = aiCustomModelsData
       ? Object.fromEntries(
           Object.entries(aiCustomModelsData).map(([k, v]) => [k, v as any]),
         )
       : undefined;
-    const allModels = getAllEnabledModels(aiEnabledModels, custom, aiCustomProviders);
-    const found = allModels.find(
-      (m) => m.provider.id === aiProvider && m.model.id === aiModel,
+    return resolveSelectedModelContextTokens(
+      aiProvider,
+      aiModel,
+      aiEnabledModels,
+      custom,
+      aiCustomProviders,
     );
-    return parseContextWindow(found?.model.contextWindow);
-  }, [aiProvider, aiModel, aiEnabledModels, aiCustomModelsData, aiCustomProviders]);
+  }, [
+    aiProvider,
+    aiModel,
+    aiEnabledModels,
+    aiCustomModelsData,
+    aiCustomProviders,
+    catalogTick,
+  ]);
 
   // Branch + worktree label for chat view bottom bar
   const isGitRepo = useGitStore((s) => s.isGitRepo);
@@ -250,53 +290,78 @@ export function LeftMainArea() {
             {...chatFileDropHandlers}
           >
             {chatFileDragActive ? (
-              <span className="pointer-events-none absolute bottom-24 left-1/2 z-30 -translate-x-1/2 rounded-md border border-primary/25 bg-background/95 px-3 py-1 text-[length:var(--font-size-11)] text-muted-foreground shadow-sm">
+              <span className="pointer-events-none absolute bottom-24 left-1/2 z-[60] -translate-x-1/2 rounded-md border border-primary/25 bg-background/95 px-3 py-1 text-[length:var(--font-size-11)] text-muted-foreground shadow-sm">
                 {t("chat.aibar.dropFiles")}
               </span>
             ) : null}
+
             <ChatMessages />
             <RestoreUndoBar />
-            {/* Worktree actions above composer — only when worktree is active */}
             {showWorktreeActions && (
               <div data-chat-width className="w-full flex items-center gap-1.5 h-6 px-3">
                 <WorktreeActions />
               </div>
             )}
-            <div data-chat-width className="w-full">
-              {!editorMaximized && <ChatComposer />}
-            </div>
-            {/* Bottom bar: branch / worktree on left (git only), context ring on right */}
-            <div data-chat-width className="w-full flex items-center gap-1.5 h-6 px-3 mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
-              {isGitRepo && (
-                <>
-                  <span className="flex items-center gap-1">
-                    <GitBranchIcon className="size-3 shrink-0" />
-                    <span className="truncate max-w-[120px]">{displayBranch}</span>
-                  </span>
-                  {activeWorktree ? (
-                    <>
-                      <span className="opacity-40">·</span>
-                      <span className="truncate max-w-[80px]">{activeWorktree.name}</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="opacity-40">·</span>
-                      <span>{t("chat.toolbar.local")}</span>
-                    </>
-                  )}
-                </>
-              )}
-              <span className="flex-1" />
-              {contextTokens != null && (
-                <ContextWindowIndicator
-                  used={contextTokens}
-                  total={contextTotal}
-                  breakdown={contextBreakdown}
-                  schema={categorySchema}
-                  promptStale={promptStale}
-                  isStreaming={isStreaming}
-                />
-              )}
+
+            {/*
+              Full-bleed focus scrim over the chat column (covers sticky user
+              bubbles). Composer + Task panel sit above it — same layering as
+              Cursor: dim the transcript, keep the bottom shell crisp.
+              AiBar path never mounts this (editorMaximized).
+            */}
+            {subAgentScrimMounted ? (
+              <div
+                aria-hidden
+                className={cn(
+                  // Theme-aware scrim: light wash in light mode, soft dim in dark
+                  // (not a heavy always-black slab).
+                  "absolute inset-0 z-40 bg-background/55 backdrop-blur-[0.25px]",
+                  "transition-opacity ease-[cubic-bezier(0.22,1,0.36,1)]",
+                  subAgentScrimOn
+                    ? "pointer-events-auto opacity-100"
+                    : "pointer-events-none opacity-0",
+                )}
+                style={{ transitionDuration: `${SUBAGENT_PANEL_EXIT_MS}ms` }}
+              />
+            ) : null}
+
+            {/* Above scrim: Task panel + composer + status chrome */}
+            <div className="relative z-50 shrink-0">
+              <div data-chat-width className="w-full">
+                {!editorMaximized && <ChatComposer />}
+              </div>
+              <div data-chat-width className="w-full flex items-center gap-1.5 h-6 px-3 mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
+                {isGitRepo && (
+                  <>
+                    <span className="flex items-center gap-1">
+                      <GitBranchIcon className="size-3 shrink-0" />
+                      <span className="truncate max-w-[120px]">{displayBranch}</span>
+                    </span>
+                    {activeWorktree ? (
+                      <>
+                        <span className="opacity-40">·</span>
+                        <span className="truncate max-w-[80px]">{activeWorktree.name}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="opacity-40">·</span>
+                        <span>{t("chat.toolbar.local")}</span>
+                      </>
+                    )}
+                  </>
+                )}
+                <span className="flex-1" />
+                {contextTokens != null && (
+                  <ContextWindowIndicator
+                    used={contextTokens}
+                    total={contextTotal}
+                    breakdown={contextBreakdown}
+                    schema={categorySchema}
+                    promptStale={promptStale}
+                    isStreaming={isStreaming}
+                  />
+                )}
+              </div>
             </div>
           </div>
         )}

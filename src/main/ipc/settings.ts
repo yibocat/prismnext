@@ -50,6 +50,23 @@ export function registerSettingsHandlers(): void {
         await service.syncBuiltinTools();
         await service.reloadAfterToolsChange();
       }
+      if ("aiSubagentModel" in patch) {
+        const service = AcpService.getInstance();
+        // Pin built-in explore/general/… in opencode.json + rewrite expert agent.md.
+        service.applyBuiltinToolsConfig();
+        const lastProjectPath =
+          typeof getSettings().lastProjectPath === "string"
+            ? getSettings().lastProjectPath!.trim()
+            : "";
+        if (lastProjectPath) {
+          const { refreshProjectExpertsIntegration } = await import(
+            "../services/project-experts-refresh"
+          );
+          await refreshProjectExpertsIntegration(lastProjectPath);
+        }
+        // OpenCode reads agent model at process start — restart to apply.
+        await service.reloadAfterExpertsIntegration();
+      }
     },
   );
 

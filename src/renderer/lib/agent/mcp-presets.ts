@@ -25,8 +25,8 @@ export interface McpPreset {
   /** Shown first in Settings → MCP catalog (research / writing workflow). */
   recommended?: boolean;
   /**
-   * prismnext-shipped default: always seeded into project mcp.json, always enabled.
-   * Settings shows a Built-in badge; remove/disable are blocked in the UI.
+   * prismnext-shipped default preset (seeded into mcp.json on new projects only).
+   * Settings shows a Built-in badge; users may disable or remove it like any MCP.
    */
   builtin?: boolean;
 }

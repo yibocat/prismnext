@@ -35,7 +35,7 @@ import {
   normalizeAnthropicModelId,
   ANTHROPIC_PROVIDER_ID,
 } from "../../shared/anthropic-models";
-import { LEGACY_BUILTIN_PROVIDER_IDS } from "../../shared/lazy-provider-catalog";
+import { migrateLegacyBuiltinProviders } from "../../shared/lazy-provider-catalog";
 import { getModelEffortFallbackIds, getPreset } from "@/lib/providers";
 import { prefetchOpenCodeModelsCatalog } from "@/lib/providers/opencode-catalog-models";
 import { parseModelPreferenceKey } from "@/components/modules/chat/agent-settings/model-keys";
@@ -167,6 +167,8 @@ export interface AppSettings {
   aiEnabledModels?: Record<string, string[]>;
   /** Optional helper model used to describe images for text-only main models. */
   aiVisionFallbackModel?: string | null;
+  /** Optional default model for Task / subagents (`provider/model`). */
+  aiSubagentModel?: string | null;
   /** Per-model reasoning depth: key = `providerId/modelId` */
   aiModelThoughtLevels?: Record<string, string>;
   /** Pinned model keys (`providerId/modelId`) — shown at top of chat model picker. */
@@ -199,6 +201,11 @@ export interface AppSettings {
   aiTerminalCloseTabKillsProcess?: boolean;
   /** User-added custom API providers */
   aiCustomProviders?: { id: string; name: string; baseUrl: string }[];
+  /**
+   * One-shot: former built-ins (openai/google/deepseek) were promoted into
+   * `aiCustomProviders`. Once set, never re-promote — user remove must stick.
+   */
+  legacyBuiltinProvidersMigrated?: boolean;
   /** MinerU cloud API token for precision PDF extraction */
   mineruApiToken?: string;
   /** Default extract engine: pdfjs (local) | mineru (cloud) */
@@ -363,36 +370,38 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         }
       }
 
-      // Former built-in providers (openai/google/deepseek): promote into aiCustomProviders
+      // Former built-ins → aiCustomProviders (one-shot; never undo a user remove)
       {
-        const keys = (r.aiApiKeys || {}) as Record<string, string>;
-        const existing = Array.isArray(r.aiCustomProviders)
-          ? ([...r.aiCustomProviders] as Array<{ id: string; name: string; baseUrl: string }>)
-          : [];
-        const have = new Set(existing.map((p) => p.id));
-        let changed = false;
-        for (const id of LEGACY_BUILTIN_PROVIDER_IDS) {
-          if (have.has(id)) continue;
-          if (!keys[id]?.trim()) continue;
-          const preset = getPreset(id);
-          existing.push({
-            id,
-            name: preset?.name ?? id,
-            baseUrl: (r.aiBaseUrls as Record<string, string> | undefined)?.[id]
-              || preset?.defaultBaseUrl
-              || "",
-          });
-          have.add(id);
-          changed = true;
-        }
-        if (changed) {
-          r.aiCustomProviders = existing;
+        const migrated = migrateLegacyBuiltinProviders(
+          {
+            aiCustomProviders: r.aiCustomProviders,
+            aiApiKeys: r.aiApiKeys,
+            aiBaseUrls: r.aiBaseUrls,
+            legacyBuiltinProvidersMigrated: r.legacyBuiltinProvidersMigrated,
+          },
+          (id) => {
+            const preset = getPreset(id);
+            return preset
+              ? { name: preset.name, defaultBaseUrl: preset.defaultBaseUrl }
+              : undefined;
+          },
+        );
+        if (migrated) {
+          r.aiCustomProviders = migrated.aiCustomProviders;
+          r.legacyBuiltinProvidersMigrated = true;
           window.electronAPI
-            .settingsSet({ aiCustomProviders: existing })
+            .settingsSet({
+              aiCustomProviders: migrated.aiCustomProviders,
+              legacyBuiltinProvidersMigrated: true,
+            })
             .catch(() => {});
-          log.info("Migrated legacy built-in providers into aiCustomProviders", {
-            ids: existing.map((p) => p.id),
-          });
+          if (migrated.promoted) {
+            log.info("Migrated legacy built-in providers into aiCustomProviders", {
+              ids: migrated.aiCustomProviders.map((p) => p.id),
+            });
+          } else {
+            log.info("Marked legacy built-in provider migration complete (no promote)");
+          }
         }
       }
 

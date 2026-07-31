@@ -89,6 +89,22 @@ describe("segmentAssistantBlocks", () => {
     expect(segments).toHaveLength(1);
     expect(segments[0]?.kind).toBe("activity");
   });
+
+  it("unified: suppressTailUntilTaskSettled keeps interim prose in activity", () => {
+    const blocks: ContentBlock[] = [
+      { type: "tool_use", id: "task1", name: "task", input: { subagent_type: "explore" } },
+      { type: "text", text: "Premature answer before Task settles." },
+    ];
+    const segments = segmentAssistantBlocks(blocks, {
+      unifiedActivity: true,
+      suppressTailUntilTaskSettled: true,
+    });
+    expect(segments).toHaveLength(1);
+    expect(segments[0]?.kind).toBe("activity");
+    if (segments[0]?.kind === "activity") {
+      expect(segments[0].blocks.some((b) => b.type === "text")).toBe(true);
+    }
+  });
 });
 
 describe("describeLatestActivityBlock", () => {
@@ -127,14 +143,15 @@ describe("buildActivitySummaryLine", () => {
     const line = buildActivitySummaryLine({
       blocks: [
         { type: "thinking", thinking: "x", duration: 2 },
-        { type: "tool_use", id: "1", name: "read" },
-        { type: "tool_use", id: "2", name: "grep" },
+        { type: "tool_use", id: "1", name: "read", duration: 1 },
+        { type: "tool_use", id: "2", name: "grep", duration: 1.5 },
       ],
       isStreaming: false,
       labels,
     });
     expect(line).toContain("Worked for");
     expect(line).toContain("2 tools");
+    expect(line).toContain("4.5s");
   });
 
   it("uses thought-for when only thinking blocks", () => {
@@ -144,6 +161,43 @@ describe("buildActivitySummaryLine", () => {
       labels,
     });
     expect(line).toBe("Thought for 4.2s");
+  });
+
+  it("completed thinking-only never keeps live Thinking… when duration is missing", () => {
+    const line = buildActivitySummaryLine({
+      blocks: [{ type: "thinking", thinking: "brief" }],
+      isStreaming: false,
+      labels,
+    });
+    expect(line).toBe("Thought for 0.1s");
+    expect(line).not.toMatch(/Thinking/);
+  });
+
+  it("does not invent toolCount×0.4 when durations are missing", () => {
+    const line = buildActivitySummaryLine({
+      blocks: [
+        { type: "tool_use", id: "1", name: "read" },
+        { type: "tool_use", id: "2", name: "grep" },
+      ],
+      isStreaming: false,
+      labels,
+    });
+    expect(line).toContain("Worked for —");
+    expect(line).toContain("2 tools");
+    expect(line).not.toMatch(/0\.8s|0\.5s/);
+  });
+
+  it("prefers OpenCode wall span over summed block durations", () => {
+    const line = buildActivitySummaryLine({
+      blocks: [
+        { type: "thinking", thinking: "x", timeStart: 1000, timeEnd: 2000, duration: 1 },
+        { type: "tool_use", id: "1", name: "read", timeStart: 3000, timeEnd: 6000, duration: 3 },
+      ],
+      isStreaming: false,
+      labels,
+    });
+    // span 1000→6000 = 5.0s (not 1+3=4)
+    expect(line).toContain("5.0s");
   });
 });
 

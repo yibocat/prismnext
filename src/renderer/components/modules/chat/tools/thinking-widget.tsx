@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useChatStore } from "@/stores/chat-store";
 import { BrainIcon, ChevronDownIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -9,6 +10,7 @@ import {
 } from "@/lib/chat/preserve-viewport-anchor";
 import { TOOL_EXPANDED_CONTENT_CLASS } from "./shared";
 import { MarkdownRenderer } from "../markdown-renderer";
+import { formatActivityDuration } from "@/lib/chat/segment-assistant-blocks";
 
 // ─── LocalStorage persistence ───
 
@@ -80,6 +82,7 @@ export function ThinkingWidget({
   /** Inside ActivityFold — no extra fold chrome. */
   variant?: "standalone" | "nested";
 }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(
     () => isProgress ? false : (persistKey ? getThinkingState(persistKey) : false),
   );
@@ -118,16 +121,23 @@ export function ThinkingWidget({
     return () => clearInterval(timer);
   }, [isStreaming, isProgress]);
 
-  const fmt = (s: number) => s.toFixed(1);
-
   // Suppress fractional seconds for the first 0.8s to avoid jittery
   // "0.0s" → "0.2s" → "0.4s" flicker. Then smoothly show the live timer.
   const showTimer = elapsed >= 0.8;
 
-  // When done: prefer persisted duration, then frozen elapsed, then estimate.
+  // When done: prefer persisted OpenCode/sealed duration, then frozen elapsed.
+  // Do not invent duration from text length.
   const frozenDuration = duration != null
     ? duration
-    : (elapsed > 0 ? Math.round(elapsed * 10) / 10 : Math.max(0.1, Math.round(thinking.length / 5) / 10));
+    : (elapsed > 0 ? Math.round(elapsed * 10) / 10 : undefined);
+
+  const thinkingLiveLabel = showTimer
+    ? `${t("chat.activity.thinking")} ${formatActivityDuration(elapsed)}`
+    : t("chat.activity.thinking");
+  // Settled turns must never keep the live "Thinking…" label when duration is missing.
+  const thinkingDoneLabel = t("chat.activity.thoughtFor", {
+    duration: formatActivityDuration(frozenDuration ?? 0.1),
+  });
 
   if (variant === "nested") {
     if (isProgress) {
@@ -156,9 +166,7 @@ export function ThinkingWidget({
         >
           <BrainIcon className="size-3 shrink-0 opacity-70" />
           <span className="tabular-nums">
-            {isStreaming
-              ? (showTimer ? `Thinking… ${fmt(elapsed)}s` : "Thinking…")
-              : `Thought for ${fmt(frozenDuration)}s`}
+            {isStreaming ? thinkingLiveLabel : thinkingDoneLabel}
           </span>
           <ChevronDownIcon
             className={cn(
@@ -196,8 +204,8 @@ export function ThinkingWidget({
           {isProgress
             ? "Initialization"
             : isStreaming
-              ? (showTimer ? `Thinking… ${fmt(elapsed)}s` : "Thinking…")
-              : `Thought for ${fmt(frozenDuration)}s`}
+              ? thinkingLiveLabel
+              : thinkingDoneLabel}
         </span>
         <ChevronDownIcon
           className={cn(

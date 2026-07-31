@@ -6,20 +6,20 @@ export const PAPER_SEARCH_MCP_ID = "paper-search-mcp";
 
 /**
  * MCP servers connected at session/new (before first model turn).
- * Everything else loads on demand via session/load when @-mentioned or
- * orchestrator/composer allowlist requires them.
- *
- * Paper Search stays eager until literature search is a native ACP tool.
+ * Empty on purpose: built-in Paper Search used to be eager (`npx` cold start
+ * blocked session/new), which felt like a multi‑minute hang before the first
+ * Task. All MCP — including paper-search-mcp — now loads only via session/load
+ * when @-mentioned or composer/orchestrator allowlist requires them.
  */
-export const EAGER_MCP_SERVER_IDS = [PAPER_SEARCH_MCP_ID] as const;
+export const EAGER_MCP_SERVER_IDS = [] as const;
 
 export function isEagerMcpServer(id: string): boolean {
   return (EAGER_MCP_SERVER_IDS as readonly string[]).includes(id);
 }
 
-/** Union eager + explicit allowlist (deduped). */
+/** Dedupe explicit allowlist only — does not force built-in Paper Search. */
 export function mergeMcpAllowlist(allowlist?: string[] | null): string[] {
-  const merged = new Set<string>(EAGER_MCP_SERVER_IDS);
+  const merged = new Set<string>();
   for (const id of allowlist ?? []) {
     if (id?.trim()) merged.add(id.trim());
   }
@@ -49,7 +49,7 @@ export function buildDefaultPaperSearchServer(
 export interface EnsureDefaultMcpResult {
   added: boolean;
   migrated: boolean;
-  /** Was present but `enabled: false` → forced back on. */
+  /** @deprecated No longer force-reenables; always false. Kept for IPC shape. */
   reenabled: boolean;
   path: string;
 }
@@ -182,36 +182,40 @@ function writeMcpServers(
 }
 
 /**
- * When allowlist is non-empty, always keep the built-in Paper Search MCP.
+ * Pass-through. Built-in Paper Search is kept in mcp.json for discovery, but
+ * is no longer injected into every turn's allowlist (load only when requested).
  */
 export function ensureBuiltinMcpInAllowlist(
   allowlist: string[] | undefined | null,
 ): string[] | undefined {
   if (!allowlist?.length) return allowlist ?? undefined;
-  if (allowlist.includes(PAPER_SEARCH_MCP_ID)) return allowlist;
-  return [...allowlist, PAPER_SEARCH_MCP_ID];
+  return allowlist;
 }
 
 /**
- * Seed / repair the built-in Paper Search MCP:
- * - add when missing
- * - migrate legacy / mistaken bundled commands to npx
- * - force `enabled: true`
+ * Seed / repair Paper Search MCP (optional default, user-controllable):
+ * - seed only when mcp.json does not exist yet (new project)
+ * - if the entry exists with a legacy command, migrate to npx (keep enabled as-is)
+ * - never force `enabled: true` and never re-add after the user removes it
  */
 export function ensureDefaultMcpServers(agentDir: string): EnsureDefaultMcpResult {
   mkdirSync(agentDir, { recursive: true });
   const mcpPath = join(agentDir, "mcp.json");
+  const fileMissing = !existsSync(mcpPath);
   const { servers } = readMcpServers(mcpPath);
 
   let added = false;
   let migrated = false;
-  let reenabled = false;
   const existing = servers[PAPER_SEARCH_MCP_ID];
 
   if (!existing) {
-    servers[PAPER_SEARCH_MCP_ID] = buildDefaultPaperSearchServer();
-    writeMcpServers(mcpPath, servers);
-    return { added: true, migrated: false, reenabled: false, path: mcpPath };
+    // Only seed on a brand-new mcp.json — respect intentional removal otherwise.
+    if (fileMissing) {
+      servers[PAPER_SEARCH_MCP_ID] = buildDefaultPaperSearchServer();
+      writeMcpServers(mcpPath, servers);
+      return { added: true, migrated: false, reenabled: false, path: mcpPath };
+    }
+    return { added: false, migrated: false, reenabled: false, path: mcpPath };
   }
 
   let next = { ...existing };
@@ -220,17 +224,12 @@ export function ensureDefaultMcpServers(agentDir: string): EnsureDefaultMcpResul
   if (isLegacyPaperSearchCommand(existing.command)) {
     next = {
       type: existing.type ?? "local",
-      enabled: true,
+      // Preserve user disable across migration.
+      enabled: existing.enabled !== false,
       command: [...PAPER_SEARCH_MCP_COMMAND],
       environment: envFromRaw(existing),
     };
     migrated = true;
-    dirty = true;
-  }
-
-  if (next.enabled === false) {
-    next = { ...next, enabled: true };
-    reenabled = true;
     dirty = true;
   }
 
@@ -239,5 +238,5 @@ export function ensureDefaultMcpServers(agentDir: string): EnsureDefaultMcpResul
     writeMcpServers(mcpPath, servers);
   }
 
-  return { added, migrated, reenabled, path: mcpPath };
+  return { added, migrated, reenabled: false, path: mcpPath };
 }

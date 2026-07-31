@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import {
   resolveProviderConfig,
   getConfiguredVisionModels,
+  getAllEnabledModels,
   modelSupportsVision,
   prefetchOpenCodeModelsCatalog,
   type ProviderConfig,
@@ -112,6 +113,19 @@ export function ModelSettings() {
     );
   const visionFallbackValue = visionFallbackValid ? selectedVisionFallback : "__none__";
 
+  const subagentCandidates = getAllEnabledModels(
+    settings.aiEnabledModels,
+    settings.aiCustomModelsData,
+    customProviders,
+  );
+  const selectedSubagentModel = settings.aiSubagentModel ?? "__none__";
+  const subagentModelValid =
+    selectedSubagentModel === "__none__" ||
+    subagentCandidates.some(
+      ({ provider, model }) => `${provider.id}/${model.id}` === selectedSubagentModel,
+    );
+  const subagentModelValue = subagentModelValid ? selectedSubagentModel : "__none__";
+
   const openAddProvider = () => {
     openSettingsPanel({ kind: "ai-provider", mode: "new" });
   };
@@ -179,6 +193,53 @@ export function ModelSettings() {
           {!visionFallbackValid && selectedVisionFallback !== "__none__" ? (
             <p className={cn(SETTINGS_ROW_DESC, "mt-1.5 text-warning")}>
               {t("settings.models.visionInvalid")}
+            </p>
+          ) : null}
+        </section>
+
+        <section>
+          <h3 className={SETTINGS_CATEGORY_HEADER}>{t("settings.models.subagent")}</h3>
+          <div className={SETTINGS_CARD}>
+            <div className={SETTINGS_ROW}>
+              <div className="min-w-0 flex-1 pr-4">
+                <p className={SETTINGS_ROW_LABEL}>{t("settings.models.subagent")}</p>
+                <p className={SETTINGS_ROW_DESC}>
+                  {t("settings.models.subagentDesc")}
+                </p>
+              </div>
+              <AppSelect
+                value={subagentModelValue}
+                onValueChange={(value) =>
+                  void updateSettings({
+                    aiSubagentModel: value === "__none__" ? null : value,
+                  })
+                }
+              >
+                <AppSelectTrigger className="w-52 shrink-0">
+                  <AppSelectValue placeholder={t("settings.models.none")} />
+                </AppSelectTrigger>
+                <AppSelectContent className="max-h-72">
+                  <AppSelectItem value="__none__">{t("settings.models.inheritParent")}</AppSelectItem>
+                  {subagentCandidates.map(({ provider, model }) => (
+                    <AppSelectItem
+                      key={`${provider.id}/${model.id}`}
+                      value={`${provider.id}/${model.id}`}
+                    >
+                      {provider.name} / {model.name}
+                    </AppSelectItem>
+                  ))}
+                </AppSelectContent>
+              </AppSelect>
+            </div>
+          </div>
+          {subagentCandidates.length === 0 ? (
+            <p className={cn(SETTINGS_ROW_DESC, "mt-1.5 text-warning")}>
+              {t("settings.models.noSubagentCandidates")}
+            </p>
+          ) : null}
+          {!subagentModelValid && selectedSubagentModel !== "__none__" ? (
+            <p className={cn(SETTINGS_ROW_DESC, "mt-1.5 text-warning")}>
+              {t("settings.models.subagentInvalid")}
             </p>
           ) : null}
         </section>

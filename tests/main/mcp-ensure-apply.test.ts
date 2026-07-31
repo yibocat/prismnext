@@ -15,10 +15,6 @@ vi.mock("../../src/main/acp/service", () => ({
   },
 }));
 
-vi.mock("../../src/main/services/project-chat-prewarm", () => ({
-  invalidateProjectChatPrewarm: vi.fn(),
-}));
-
 vi.mock("electron", () => ({
   ipcMain: {
     handle: (channel: string, listener: (...args: unknown[]) => unknown) => {

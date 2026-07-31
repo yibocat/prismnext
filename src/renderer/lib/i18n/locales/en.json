@@ -180,9 +180,14 @@
       "addProvider": "Add provider",
       "multimodal": "Multimodal helper",
       "multimodalDesc": "When the main model lacks vision, use this helper to describe images before sending.",
+      "subagent": "Subagent model",
+      "subagentDesc": "Task / Explore / Expert subagents all use this model. Leave unset to inherit the main chat model.",
+      "inheritParent": "Inherit main chat",
       "none": "None",
       "noVisionCandidates": "No options yet. Add an API key below and enable a model marked Vision.",
+      "noSubagentCandidates": "No options yet. Enable models for chat under a provider below.",
       "visionInvalid": "The previously selected helper model is unavailable. Please choose another.",
+      "subagentInvalid": "The previously selected subagent model is unavailable. Please choose another.",
       "builtin": "Built-in",
       "addedProviders": "Providers",
       "noProvidersYet": "No providers yet. Add a provider, fetch its model catalog, and select models for chat.",
@@ -1657,6 +1662,23 @@
       "manageAssistants": "Manage AI Assistants",
       "placeholder": "Ask AI about your research..."
     },
+    "subagent": {
+      "running": "Running",
+      "stopping": "Stopping…",
+      "done": "Done",
+      "stopped": "Stopped",
+      "stop": "Stop",
+      "closePanel": "Close subagent panel",
+      "streaming": "Working…",
+      "empty": "No activity yet",
+      "openHint": "Open run panel",
+      "expandPrompt": "Click to expand",
+      "collapsePrompt": "Collapse",
+      "activityLinkingShort": "Linking…",
+      "activityLinking": "Activity stream not attached yet — the Task may still be running",
+      "activityMissing": "Expert finished, but the activity stream was not attached to this chat",
+      "scrollToBottom": "Scroll to bottom"
+    },
     "composer": {
       "addContext": "Add context",
       "addFile": "Add file",
@@ -1791,7 +1813,9 @@
       "loadMore": "Load earlier messages",
       "loadMoreArmed": "Scroll up again to load",
       "loadMorePulling": "Keep scrolling up…",
-      "loadingOlder": "Loading…"
+      "loadingOlder": "Loading…",
+      "expand": "Click to expand",
+      "collapse": "Collapse"
     },
     "prepare": {
       "planningNext": "Planning next step…",

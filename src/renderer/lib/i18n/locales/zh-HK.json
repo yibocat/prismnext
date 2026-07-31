@@ -180,9 +180,14 @@
       "addProvider": "新增 Provider",
       "multimodal": "多模態輔助",
       "multimodalDesc": "當主模型不支援視覺時，用此輔助模型先描述圖片再發送。",
+      "subagent": "Subagent 模型",
+      "subagentDesc": "Task / Explore / Expert 等子代理統一使用此模型；未設置時跟隨主會話模型。",
+      "inheritParent": "跟隨主會話",
       "none": "無",
       "noVisionCandidates": "暫無可用選項。請先在下方 Provider 填入 API Key，並啟用帶 Vision 標籤的模型。",
+      "noSubagentCandidates": "暫無可用選項。請先在下方 Provider 勾選要用於聊天的模型。",
       "visionInvalid": "之前選擇的輔助模型已不可用，請重新選擇。",
+      "subagentInvalid": "之前選擇的 Subagent 模型已不可用，請重新選擇。",
       "builtin": "內建",
       "addedProviders": "廠商",
       "noProvidersYet": "尚未新增廠商。請新增廠商、獲取模型目錄，並勾選要用於聊天的模型。",
@@ -1657,6 +1662,23 @@
       "manageAssistants": "管理 AI 助手",
       "placeholder": "向 AI 詢問你的研究…"
     },
+    "subagent": {
+      "running": "執行中",
+      "stopping": "正在停止…",
+      "done": "已完成",
+      "stopped": "已停止",
+      "stop": "停止",
+      "closePanel": "關閉子代理面板",
+      "streaming": "處理中…",
+      "empty": "暫無活動",
+      "openHint": "開啟執行面板",
+      "expandPrompt": "點擊展開",
+      "collapsePrompt": "收起",
+      "activityLinkingShort": "連接中…",
+      "activityLinking": "活動流尚未掛上 — 專家可能仍在執行",
+      "activityMissing": "專家已結束，但活動流未掛到此對話",
+      "scrollToBottom": "滾動到底部"
+    },
     "composer": {
       "addContext": "新增上下文",
       "addFile": "新增檔案",
@@ -1817,7 +1839,9 @@
       "loadMore": "載入更多歷史",
       "loadMoreArmed": "停穩後再向上滑載入",
       "loadMorePulling": "繼續向上滑…",
-      "loadingOlder": "載入中…"
+      "loadingOlder": "載入中…",
+      "expand": "點擊展開",
+      "collapse": "收起"
     },
     "prepare": {
       "planningNext": "正在規劃下一步…",

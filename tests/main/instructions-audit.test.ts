@@ -74,7 +74,7 @@ describe("builtin instructions audit (Phase 1.3)", () => {
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("[n]");
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("Task handoff");
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("see that tool");
-    expect(TASK_DELEGATION_PROMPT).toContain("Available experts (via Task)");
+    expect(TASK_DELEGATION_PROMPT).toContain("Available subagents (via Task)");
     expect(TASK_DELEGATION_PROMPT).not.toContain("@peer-reviewer");
     expect(CITATION_AUDIT_PROMPT).toContain("When this applies");
     expect(CITATION_AUDIT_PROMPT).toContain("citation-health");

@@ -1685,7 +1685,32 @@ export interface ElectronAPI {
     modelId: string;
     images: Array<{ name: string; mimeType: string; data: string; uri?: string }>;
   }) => Promise<{ descriptions: Array<{ name: string; text: string; cached: boolean }> }>;
-  chatCancel: (sessionId: string) => Promise<void>;
+  chatCancel: (
+    sessionId: string,
+    opts?: { childrenOnly?: boolean; excludeSessionIds?: string[] },
+  ) => Promise<{ aborted?: string[] } | void>;
+  chatStopSubAgent: (args: {
+    parentSessionId: string;
+    taskToolUseId: string;
+    subSessionId?: string;
+    message: string;
+    excludeSessionIds?: string[];
+  }) => Promise<{
+    ok: boolean;
+    settled?: boolean;
+    aborted?: string[];
+    error?: string;
+  }>;
+  chatGetSubAgentActivity: (args: {
+    parentSessionId: string;
+    taskToolUseId: string;
+    subSessionId?: string;
+  }) => Promise<{
+    subSessionId: string | null;
+    blocks: Array<Record<string, unknown>>;
+    status: "done" | "error" | "running";
+    error?: string;
+  }>;
   chatRegisterTab: (args: { tabId: string; sessionId: string; projectPath?: string }) => Promise<{ success: boolean }>;
   chatSyncIntensiveReading: (args: {
     sessionId: string;

@@ -4,15 +4,14 @@ import {
   mergeMcpAllowlist,
   mcpAllowlistSetsEqual,
   PAPER_SEARCH_MCP_ID,
+  ensureBuiltinMcpInAllowlist,
 } from "../../src/main/services/project-mcp-defaults";
 
 describe("project-mcp-defaults", () => {
-  it("always includes paper-search-mcp in merged allowlist", () => {
-    expect(mergeMcpAllowlist([])).toEqual([PAPER_SEARCH_MCP_ID]);
-    expect(mergeMcpAllowlist(["custom-mcp"])).toEqual([
-      PAPER_SEARCH_MCP_ID,
-      "custom-mcp",
-    ]);
+  it("does not force paper-search into empty / custom allowlists", () => {
+    expect(mergeMcpAllowlist([])).toEqual([]);
+    expect(mergeMcpAllowlist(undefined)).toEqual([]);
+    expect(mergeMcpAllowlist(["custom-mcp"])).toEqual(["custom-mcp"]);
   });
 
   it("dedupes explicit allowlist entries", () => {
@@ -27,7 +26,16 @@ describe("project-mcp-defaults", () => {
     expect(mcpAllowlistSetsEqual(["a"], ["a", "b"])).toBe(false);
   });
 
-  it("exports eager ids as paper-search only", () => {
-    expect(EAGER_MCP_SERVER_IDS).toEqual([PAPER_SEARCH_MCP_ID]);
+  it("has no eager MCP servers at session/new", () => {
+    expect(EAGER_MCP_SERVER_IDS).toEqual([]);
+  });
+
+  it("ensureBuiltinMcpInAllowlist is a pass-through (no forced inject)", () => {
+    expect(ensureBuiltinMcpInAllowlist(undefined)).toBeUndefined();
+    expect(ensureBuiltinMcpInAllowlist([])).toEqual([]);
+    expect(ensureBuiltinMcpInAllowlist(["memory", "github"])).toEqual([
+      "memory",
+      "github",
+    ]);
   });
 });

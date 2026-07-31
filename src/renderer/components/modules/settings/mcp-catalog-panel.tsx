@@ -143,11 +143,11 @@ export function McpCatalogPanel() {
                 {t(`settings.editor.mcp.category.${preset.category}`)}
               </span>
               {preset.builtin ? (
-                <span className={cn(BADGE, "bg-primary/10 text-primary normal-case tracking-normal")}>
+                <span className={cn(BADGE, "bg-muted text-primary normal-case tracking-normal")}>
                   {t("settings.editor.mcp.badgeBuiltin")}
                 </span>
               ) : preset.recommended ? (
-                <span className={cn(BADGE, "bg-primary/10 text-primary normal-case tracking-normal")}>
+                <span className={cn(BADGE, "bg-muted text-primary normal-case tracking-normal")}>
                   {t("settings.editor.mcp.badgeRecommended")}
                 </span>
               ) : null}
@@ -158,8 +158,8 @@ export function McpCatalogPanel() {
               })}
             </p>
           </div>
-          {installed || preset.builtin ? (
-            <span className={cn(BADGE, "bg-primary/10 text-primary")}>
+          {installed ? (
+            <span className={cn(BADGE, "bg-muted text-primary")}>
               {preset.builtin
                 ? t("settings.editor.mcp.badgeDefault")
                 : t("settings.editor.mcp.badgeInstalled")}

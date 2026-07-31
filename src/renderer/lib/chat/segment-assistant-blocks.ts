@@ -4,6 +4,7 @@
  */
 import type { ContentBlock } from "@/stores/chat-store";
 import { param, basenamePath } from "@/components/modules/chat/tools/shared";
+import { activitySpanSecFromBlocks } from "@shared/opencode-part-time";
 
 export type TextSegment = {
   kind: "text";
@@ -29,13 +30,19 @@ function hasTextContent(block: ContentBlock): boolean {
   return block.type === "text" && !!block.text?.trim();
 }
 
+export type SegmentAssistantBlocksOptions = {
+  unifiedActivity?: boolean;
+  /** While a Task tool_use has no terminal result, keep all prose inside the activity fold. */
+  suppressTailUntilTaskSettled?: boolean;
+};
+
 /** Ordered prose / activity segments preserving block order. */
 export function segmentAssistantBlocks(
   blocks: ContentBlock[],
-  options?: { unifiedActivity?: boolean },
+  options?: SegmentAssistantBlocksOptions,
 ): AssistantSegment[] {
   if (options?.unifiedActivity) {
-    return segmentAssistantBlocksUnified(blocks);
+    return segmentAssistantBlocksUnified(blocks, options);
   }
   const raw = segmentAssistantBlocksRaw(blocks);
   return coalesceActivitySegments(raw);
@@ -45,16 +52,21 @@ export function segmentAssistantBlocks(
  * One activity fold for the whole turn: everything before the trailing prose
  * suffix (interim text between tool bursts becomes bridge content inside).
  */
-function segmentAssistantBlocksUnified(blocks: ContentBlock[]): AssistantSegment[] {
+function segmentAssistantBlocksUnified(
+  blocks: ContentBlock[],
+  options?: SegmentAssistantBlocksOptions,
+): AssistantSegment[] {
   if (blocks.length === 0) return [];
 
   let tailTextStart = blocks.length;
-  for (let i = blocks.length - 1; i >= 0; i--) {
-    if (hasTextContent(blocks[i]!)) {
-      tailTextStart = i;
-      continue;
+  if (!options?.suppressTailUntilTaskSettled) {
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      if (hasTextContent(blocks[i]!)) {
+        tailTextStart = i;
+        continue;
+      }
+      break;
     }
-    break;
   }
 
   const head = blocks.slice(0, tailTextStart);
@@ -221,6 +233,51 @@ export function sumThinkingDurations(blocks: ContentBlock[]): number {
   return total;
 }
 
+/** Sum persisted tool + thinking durations (seconds). */
+export function sumActivityBlockDurations(blocks: ContentBlock[]): number {
+  let total = 0;
+  for (const block of blocks) {
+    if (block.type !== "thinking" && block.type !== "tool_use") continue;
+    if (typeof block.duration === "number" && Number.isFinite(block.duration)) {
+      total += block.duration;
+    }
+  }
+  return total;
+}
+
+/**
+ * Best available activity duration for a completed segment:
+ * OpenCode wall span → sum of block durations → undefined (no inventing).
+ */
+export function resolveActivityDurationSec(blocks: ContentBlock[]): number | undefined {
+  const span = activitySpanSecFromBlocks(blocks);
+  if (span != null && span > 0) return span;
+  const sum = sumActivityBlockDurations(blocks);
+  if (sum > 0) return sum;
+  const thinkingOnly = sumThinkingDurations(blocks);
+  return thinkingOnly > 0 ? thinkingOnly : undefined;
+}
+
+/** Whether this thinking block is still the open (live) one in a streaming activity segment. */
+export function isThinkingBlockStreaming(
+  blocks: ContentBlock[],
+  index: number,
+  segmentStreaming: boolean,
+  isBridgeText: (b: ContentBlock) => boolean = isBridgeTextBlock,
+): boolean {
+  if (!segmentStreaming) return false;
+  const block = blocks[index];
+  if (!block || block.type !== "thinking" || block._progress) return false;
+  if (typeof block.duration === "number" && Number.isFinite(block.duration)) return false;
+  for (let j = index + 1; j < blocks.length; j++) {
+    const b = blocks[j]!;
+    if (b.type === "tool_use") return false;
+    if (b.type === "thinking" && b.thinking?.trim()) return false;
+    if (b.type === "text" && !isBridgeText(b) && b.text?.trim()) return false;
+  }
+  return true;
+}
+
 export function formatActivityDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return "0.1s";
   if (seconds < 60) return `${seconds.toFixed(1)}s`;
@@ -303,22 +360,17 @@ export function buildActivitySummaryLine(input: ActivitySummaryInput): string {
   const last = blocks[blocks.length - 1];
   const lastHint = describeLatestActivityBlock(last);
 
-  const durationSec =
+  const resolved =
     typeof elapsedSec === "number" && elapsedSec > 0
       ? elapsedSec
-      : sumThinkingDurations(blocks);
-
-  const durationLabel =
-    durationSec > 0
-      ? formatActivityDuration(durationSec)
-      : toolCount > 0
-        ? formatActivityDuration(Math.max(0.5, toolCount * 0.4))
-        : "0.1s";
+      : resolveActivityDurationSec(blocks);
+  const durationSec = resolved ?? 0;
+  const durationLabel = durationSec > 0 ? formatActivityDuration(durationSec) : "";
 
   if (isStreaming) {
     const tail = lastHint ? ` · ${lastHint}` : "";
     if (toolCount === 0 && thinkingCount > 0) {
-      if (durationSec > 0.8) {
+      if (durationSec > 0.8 && durationLabel) {
         return `${labels.thinking} ${durationLabel}${tail}`;
       }
       return `${labels.thinking}${tail}`;
@@ -327,8 +379,11 @@ export function buildActivitySummaryLine(input: ActivitySummaryInput): string {
   }
 
   if (toolCount === 0 && thinkingCount > 0) {
-    return labels.thoughtFor(durationLabel);
+    // Never fall back to the live "Thinking…" copy after the turn settles —
+    // missing duration still shows Thought for (same 0.1s floor as formatActivityDuration).
+    return labels.thoughtFor(durationLabel || formatActivityDuration(0.1));
   }
 
-  return labels.workedFor(durationLabel, toolCount);
+  // No invented fallbacks (no toolCount×0.4 / text-length guesses).
+  return labels.workedFor(durationLabel || "—", toolCount);
 }

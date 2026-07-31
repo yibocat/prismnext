@@ -17,6 +17,25 @@ const CATALOG_PROVIDER_IDS = new Set([
 let catalogEntries: Record<string, CatalogModelRow[]> | null = null;
 let catalogFetchedAt = 0;
 let prefetchPromise: Promise<Record<string, CatalogModelRow[]> | null> | null = null;
+const catalogListeners = new Set<() => void>();
+
+/** Subscribe to cache fill / invalidate (e.g. context ring denominator). */
+export function subscribeOpenCodeModelsCatalog(listener: () => void): () => void {
+  catalogListeners.add(listener);
+  return () => {
+    catalogListeners.delete(listener);
+  };
+}
+
+function notifyOpenCodeModelsCatalogListeners(): void {
+  for (const listener of catalogListeners) {
+    try {
+      listener();
+    } catch {
+      /* ignore subscriber errors */
+    }
+  }
+}
 
 function isCatalogProvider(providerId: string): boolean {
   return CATALOG_PROVIDER_IDS.has(providerId);
@@ -54,6 +73,7 @@ export async function prefetchOpenCodeModelsCatalog(): Promise<
       const snapshot = await window.electronAPI.chatGetOpenCodeModelsCatalog();
       catalogEntries = snapshot.entries;
       catalogFetchedAt = snapshot.fetchedAt;
+      notifyOpenCodeModelsCatalogListeners();
       return catalogEntries;
     } catch {
       return null;
@@ -80,4 +100,13 @@ export function mergeProviderWithOpenCodeCatalog(
 export function invalidateOpenCodeModelsCatalogCache(): void {
   catalogEntries = null;
   catalogFetchedAt = 0;
+  notifyOpenCodeModelsCatalogListeners();
+}
+
+/** True when a contextWindow label is missing / placeholder (falls back to 128K). */
+export function isUnknownContextWindowLabel(label?: string | null): boolean {
+  if (label == null) return true;
+  const t = label.trim();
+  if (!t) return true;
+  return /^(unknown|—|–|-|n\/a)$/i.test(t);
 }

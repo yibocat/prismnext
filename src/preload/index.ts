@@ -981,8 +981,27 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		images: Array<{ name: string; mimeType: string; data: string; uri?: string }>;
 	}) =>
 		ipcRenderer.invoke("chat:describeImages", args),
-	chatCancel: (sessionId: string) =>
-		ipcRenderer.invoke("chat:cancel", { sessionId }),
+	chatCancel: (
+		sessionId: string,
+		opts?: { childrenOnly?: boolean; excludeSessionIds?: string[] },
+	) =>
+		ipcRenderer.invoke("chat:cancel", {
+			sessionId,
+			childrenOnly: opts?.childrenOnly,
+			excludeSessionIds: opts?.excludeSessionIds,
+		}),
+	chatStopSubAgent: (args: {
+		parentSessionId: string;
+		taskToolUseId: string;
+		subSessionId?: string;
+		message: string;
+		excludeSessionIds?: string[];
+	}) => ipcRenderer.invoke("chat:stopSubAgent", args),
+	chatGetSubAgentActivity: (args: {
+		parentSessionId: string;
+		taskToolUseId: string;
+		subSessionId?: string;
+	}) => ipcRenderer.invoke("chat:getSubAgentActivity", args),
 	chatRegisterTab: (args: { tabId: string; sessionId: string; projectPath?: string }) =>
 		ipcRenderer.invoke("chat:registerTab", args),
 	chatSyncIntensiveReading: (args: {

@@ -80,6 +80,12 @@ export interface AppSettings {
   autoDownloadUpdates?: boolean;
   /** Optional helper model ref (`provider/model`) used for image fallback. */
   aiVisionFallbackModel?: string | null;
+  /**
+   * Optional default model for Task / subagents (`provider/model`).
+   * Applied to OpenCode built-in subagents (explore/general/…) and Prism experts
+   * that do not set their own model. Null/unset → inherit parent session model.
+   */
+  aiSubagentModel?: string | null;
 
   /**
    * Tools the user pinned to "Allow always" from the permission gate.

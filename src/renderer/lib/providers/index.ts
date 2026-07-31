@@ -4,6 +4,8 @@ export {
   prefetchOpenCodeModelsCatalog,
   getCachedOpenCodeCatalogModels,
   mergeProviderWithOpenCodeCatalog,
+  subscribeOpenCodeModelsCatalog,
+  isUnknownContextWindowLabel,
 } from "./opencode-catalog-models";
 export { ALL_PROVIDERS, PROVIDER_PRESETS, CUSTOM_PRESET, getPreset } from "./presets";
 export {
@@ -22,13 +24,104 @@ export {
 
 import { ALL_PROVIDERS, getPreset, PROVIDER_PRESETS } from "./presets";
 import type { ProviderConfig, ModelConfig } from "./types";
-import { mergeProviderWithOpenCodeCatalog } from "./opencode-catalog-models";
+import {
+  getCachedOpenCodeCatalogModels,
+  isUnknownContextWindowLabel,
+  mergeProviderWithOpenCodeCatalog,
+} from "./opencode-catalog-models";
+import { parseContextWindow, DEFAULT_CONTEXT_WINDOW } from "@shared/context-constants";
 
 /** User-added provider entry from settings (`aiCustomProviders`). */
 export interface CustomProviderEntry {
   id: string;
   name: string;
   baseUrl: string;
+}
+
+/** Settings fields touched when removing an added provider (DeepSeek / OpenRouter / …). */
+export type RemovableProviderSettings = {
+  aiCustomProviders?: CustomProviderEntry[];
+  aiApiKeys?: Record<string, string>;
+  aiBaseUrls?: Record<string, string>;
+  aiEnabledModels?: Record<string, string[]>;
+  aiCustomModels?: Record<string, string[]>;
+  aiCustomModelsData?: Record<string, ModelConfig[]>;
+  aiVerifiedProviders?: string[];
+  aiPinnedModelKeys?: string[];
+  aiModelThoughtLevels?: Record<string, string>;
+  aiProvider?: string;
+  aiModel?: string | null;
+  aiVisionFallbackModel?: string | null;
+  aiSubagentModel?: string | null;
+};
+
+function omitProviderKey<V>(
+  map: Record<string, V> | undefined,
+  providerId: string,
+): Record<string, V> | undefined {
+  if (!map || !(providerId in map)) return map;
+  const next = { ...map };
+  delete next[providerId];
+  return next;
+}
+
+function modelRefForProvider(ref: string | null | undefined, providerId: string): boolean {
+  if (!ref) return false;
+  const slash = ref.indexOf("/");
+  if (slash <= 0) return false;
+  return ref.slice(0, slash) === providerId;
+}
+
+/**
+ * Full remove patch — drop the custom entry and all per-provider leftovers (keys, models, pins).
+ * Same semantics for DeepSeek as for OpenRouter / Zen: restart must not resurrect the vendor.
+ */
+export function buildRemoveCustomProviderPatch(
+  settings: RemovableProviderSettings,
+  providerId: string,
+): RemovableProviderSettings {
+  const patch: RemovableProviderSettings = {
+    aiCustomProviders: (settings.aiCustomProviders || []).filter((p) => p.id !== providerId),
+    aiApiKeys: omitProviderKey(settings.aiApiKeys, providerId),
+    aiBaseUrls: omitProviderKey(settings.aiBaseUrls, providerId),
+    aiEnabledModels: omitProviderKey(settings.aiEnabledModels, providerId),
+    aiCustomModels: omitProviderKey(settings.aiCustomModels, providerId),
+    aiCustomModelsData: omitProviderKey(settings.aiCustomModelsData, providerId),
+    aiVerifiedProviders: (settings.aiVerifiedProviders || []).filter((id) => id !== providerId),
+  };
+
+  if (settings.aiPinnedModelKeys?.length) {
+    patch.aiPinnedModelKeys = settings.aiPinnedModelKeys.filter(
+      (key) => !modelRefForProvider(key, providerId),
+    );
+  }
+
+  if (settings.aiModelThoughtLevels) {
+    const nextLevels = { ...settings.aiModelThoughtLevels };
+    let levelsChanged = false;
+    for (const key of Object.keys(nextLevels)) {
+      if (modelRefForProvider(key, providerId)) {
+        delete nextLevels[key];
+        levelsChanged = true;
+      }
+    }
+    if (levelsChanged) patch.aiModelThoughtLevels = nextLevels;
+  }
+
+  // Persist clears must be non-undefined (settingsSet skips undefined).
+  if (settings.aiProvider === providerId) {
+    patch.aiProvider = "";
+    patch.aiModel = null;
+  }
+
+  if (modelRefForProvider(settings.aiVisionFallbackModel, providerId)) {
+    patch.aiVisionFallbackModel = null;
+  }
+  if (modelRefForProvider(settings.aiSubagentModel, providerId)) {
+    patch.aiSubagentModel = null;
+  }
+
+  return patch;
 }
 
 export function getProvider(id: string): ProviderConfig | undefined {
@@ -376,4 +469,33 @@ export function buildCustomModelEntry(
   const name = (displayName || "").trim() || id;
   const ctx = (contextWindow || "").trim() || "Unknown";
   return { id, name, contextWindow: ctx, capabilities };
+}
+
+/**
+ * Context-ring denominator for the selected model.
+ * Prefers settings/catalog `contextWindow`; if Unknown/—, consults OpenCode
+ * Go/Zen memory catalog (after prefetch).
+ */
+export function resolveSelectedModelContextTokens(
+  providerId: string,
+  modelId: string | undefined,
+  enabledIds: Record<string, string[]> | undefined,
+  customModels: Record<string, ModelConfig[]> | undefined,
+  customProviders?: CustomProviderEntry[],
+): number {
+  if (!modelId) return DEFAULT_CONTEXT_WINDOW;
+  const allModels = getAllEnabledModels(enabledIds, customModels, customProviders);
+  const found = allModels.find(
+    (m) => m.provider.id === providerId && m.model.id === modelId,
+  );
+  let label = found?.model.contextWindow;
+  if (isUnknownContextWindowLabel(label)) {
+    const catalogRow = getCachedOpenCodeCatalogModels(providerId)?.find(
+      (m) => m.id === modelId,
+    );
+    if (catalogRow && !isUnknownContextWindowLabel(catalogRow.contextWindow)) {
+      label = catalogRow.contextWindow;
+    }
+  }
+  return parseContextWindow(label);
 }

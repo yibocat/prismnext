@@ -36,6 +36,7 @@ import { useCitationStagingStore } from "./citation-staging-store";
 import type { ChatPreparePhase } from "../../shared/chat-prepare-phases";
 import type { SessionAgent } from "../../shared/session-agent";
 import type { ResearchPlanStep } from "../../shared/research-plan";
+import { formatTaskError } from "../../shared/task-error-codes";
 import {
   buildApprovedPlanExecuteDisplayText,
   buildApprovedPlanExecutePrompt,
@@ -74,7 +75,12 @@ export interface ContentBlock {
   /** For "command" blocks: the action key if this is an action command */
   action?: string;
   thinking?: string;
-  duration?: number; // thinking duration in seconds (cached for old sessions)
+  /** Duration in seconds (thinking / tool) from OpenCode time or sealed live clock. */
+  duration?: number;
+  /** OpenCode time.start (ms epoch), when available. */
+  timeStart?: number;
+  /** OpenCode time.end (ms epoch), when available. */
+  timeEnd?: number;
   signature?: string;
   /** true = init progress, not real AI thinking. Rendered as collapsible
    *  "Initialization" block with no copy button. Committed to history on
@@ -142,6 +148,12 @@ export interface ChatStreamMessage {
    *  The partial reply is still committed to `messages` (rather than discarded)
    *  so the user keeps what streamed so far; this flag marks it as incomplete. */
   stopped?: boolean;
+  /**
+   * True when this assistant message is a turn-failure body (OpenCode/provider
+   * error or Prism turn failure) printed into the reply stream — enables Retry
+   * without a separate error banner.
+   */
+  turnError?: boolean;
 }
 
 interface TabDraft {
@@ -205,6 +217,11 @@ interface TabState {
   /** Live activity for OpenCode Task / subagent runs keyed by parent task tool_use id. */
   subAgentRuns: Record<string, SubAgentRun>;
   /**
+   * OpenCode Task tool_use id whose subagent run panel is open above the composer
+   * (null = closed). Panel chat and AiBar both read this.
+   */
+  openSubAgentPanelToolUseId: string | null;
+  /**
    * First-turn preparation stage from main (`system.prepare`) while there is
    * still no assistant content — shown instead of a bare "Thinking…".
    */
@@ -254,9 +271,14 @@ interface TabState {
 export interface SubAgentRun {
   expertId: string;
   prompt: string;
-  status: "running" | "done" | "error";
+  /** `stopping` = user Stop intent; settle to error/done only when parent Task finishes. */
+  status: "running" | "stopping" | "done" | "error";
   subSessionId?: string;
   blocks: ContentBlock[];
+  /** Real Task failure (OpenCode/ACP) — not link degrade. */
+  error?: string;
+  /** Child session never linked in time; Task may still complete via OpenCode. */
+  linkDegraded?: boolean;
 }
 
 let _nextTabId = 1;
@@ -289,6 +311,7 @@ function makeDefaultTab(id: string): TabState {
     sessionCwd: null,
     intensivePaperIds: [],
     subAgentRuns: {},
+    openSubAgentPanelToolUseId: null,
     preparePhase: null,
     planSuggestVisible: false,
     planSuggestDismissed: false,
@@ -318,6 +341,17 @@ function withSettledStreamMessageId(tab: TabState, messageId: string | null | un
   const id = messageId?.trim();
   if (!id || tab.settledStreamMessageIds.includes(id)) return tab.settledStreamMessageIds;
   return [...tab.settledStreamMessageIds, id];
+}
+
+function contentBlocksText(msg: ChatStreamMessage): string {
+  const blocks = msg.message?.content;
+  if (!Array.isArray(blocks)) return "";
+  return blocks
+    .filter((b): b is ContentBlock & { type: "text"; text: string } =>
+      b.type === "text" && typeof b.text === "string",
+    )
+    .map((b) => b.text)
+    .join("\n");
 }
 
 async function syncPlanArtifactCardForTab(
@@ -390,6 +424,31 @@ function collectCommittedToolUseIds(messages: ChatStreamMessage[]): Set<string> 
     }
   }
   return ids;
+}
+
+function collectSettledToolResultIds(messages: ChatStreamMessage[]): Set<string> {
+  const ids = new Set<string>();
+  for (const msg of messages) {
+    for (const block of msg.message?.content || []) {
+      if (block.type === "tool_result" && block.tool_use_id) {
+        ids.add(block.tool_use_id);
+      }
+    }
+  }
+  return ids;
+}
+
+function hasIncompleteTaskInBlocks(
+  blocks: ContentBlock[],
+  settledToolResultIds: Set<string>,
+): boolean {
+  return blocks.some(
+    (b) =>
+      b.type === "tool_use"
+      && (b.name || "").toLowerCase() === "task"
+      && !!b.id
+      && !settledToolResultIds.has(b.id),
+  );
 }
 
 /** Session history cache — LRU-capped so long chats cannot grow forever (Bug #23). */
@@ -562,6 +621,11 @@ interface ChatState {
     },
   ) => Promise<void>;
   cancelExecution: () => Promise<void>;
+  /** Open the composer-above subagent run panel for a Task tool_use. */
+  openSubAgentPanel: (taskToolUseId: string) => void;
+  closeSubAgentPanel: () => void;
+  /** Stop a running subagent; abort its session and inject a Task tool_result for the main agent. */
+  cancelSubAgentRun: (taskToolUseId: string) => Promise<void>;
   newSession: () => void;
   clearAllSessions: () => void;
   clearCurrentTab: () => void;
@@ -583,8 +647,15 @@ interface ChatState {
   _setStreaming: (tabId: string, streaming: boolean) => void;
   _setPreparePhase: (tabId: string, phase: ChatPreparePhase | null) => void;
   _setError: (tabId: string, error: string | null) => void;
+  /**
+   * Surface an unexpected turn failure as an assistant text bubble (like typical
+   * agent UIs). Commits any in-flight stream first; clears tab.error.
+   */
+  _appendAssistantError: (tabId: string, text: string) => void;
   _setContextTokens: (tabId: string, tokens: number, breakdown?: Record<string, number> | null, schema?: { key: string; label: string; color: string; description?: string; order?: number }[] | null) => void;
   _setPromptStale: (tabId: string, stale: boolean) => void;
+  /** Patch tool_use duration / OpenCode time range. */
+  _patchToolDuration: (tabId: string, toolUseId: string, duration: number, time?: { start?: number; end?: number }) => void;
   /** Patch the input (and optionally name) of a tool_use block in committed messages or streaming message. */
   _patchToolInput: (tabId: string, toolUseId: string, input: any, name?: string) => void;
   /** Inject a synthetic tool_result when permission is denied/timed out. */
@@ -594,8 +665,29 @@ interface ChatState {
     taskToolUseId: string,
     data: { expertId: string; prompt: string; subSessionId?: string },
   ) => void;
+  _markSubAgentLinkDegraded: (tabId: string, taskToolUseId: string) => void;
   _upsertSubAgentActivity: (tabId: string, taskToolUseId: string, block: ContentBlock) => void;
-  _completeSubAgentRun: (tabId: string, taskToolUseId: string, status: "done" | "error") => void;
+  /** Replace run.blocks from OpenCode SQLite sync (ACP often omits child streams). */
+  _setSubAgentSnapshot: (tabId: string, taskToolUseId: string, blocks: ContentBlock[]) => void;
+  /** History / reload: seed a SubAgentRun from SQLite activity. */
+  _hydrateSubAgentRun: (
+    tabId: string,
+    taskToolUseId: string,
+    data: {
+      expertId: string;
+      prompt: string;
+      subSessionId?: string | null;
+      status: "done" | "error" | "running";
+      blocks: ContentBlock[];
+      error?: string;
+    },
+  ) => void;
+  _completeSubAgentRun: (
+    tabId: string,
+    taskToolUseId: string,
+    status: "done" | "error",
+    error?: string,
+  ) => void;
 }
 
 /**
@@ -805,6 +897,62 @@ function upsertSubAgentBlock(blocks: ContentBlock[], incoming: ContentBlock): Co
     return [...blocks, incoming];
   }
   return [...blocks, incoming];
+}
+
+/**
+ * Prefer longer trailing text/thinking when a SQLite snapshot races behind
+ * live ACP accumulation (never shrink a reply that already streamed further).
+ */
+function mergeSubAgentSnapshotBlocks(
+  prev: ContentBlock[],
+  next: ContentBlock[],
+): ContentBlock[] {
+  if (!prev.length) return next;
+  if (!next.length) return prev;
+  const result = [...next];
+  const lastN = result[result.length - 1];
+  const lastP = prev[prev.length - 1];
+  if (lastN?.type === "text" && lastP?.type === "text") {
+    const a = String(lastP.text || "");
+    const b = String(lastN.text || "");
+    if (a.length > b.length && (b.length === 0 || a.startsWith(b))) {
+      result[result.length - 1] = { ...lastN, text: a };
+    }
+  } else if (lastN?.type === "thinking" && lastP?.type === "thinking") {
+    const a = String(lastP.thinking || lastP.text || "");
+    const b = String(lastN.thinking || lastN.text || "");
+    if (a.length > b.length && (b.length === 0 || a.startsWith(b))) {
+      result[result.length - 1] = { ...lastN, thinking: a, text: a };
+    }
+  }
+  return result;
+}
+
+function extractTaskMetaFromMessages(
+  messages: Array<{ message?: { content?: ContentBlock[] | string } } | null | undefined>,
+  taskToolUseId: string,
+): { expertId: string; prompt: string } {
+  for (const msg of messages) {
+    if (!msg) continue;
+    for (const block of contentBlocks(msg.message?.content)) {
+      if (block.type !== "tool_use" || block.id !== taskToolUseId) continue;
+      const input = (block.input && typeof block.input === "object"
+        ? block.input
+        : {}) as Record<string, unknown>;
+      const expertRaw =
+        input.subagent_type ?? input.subagentType ?? input.agent ?? "";
+      const expertId =
+        typeof expertRaw === "string" && expertRaw.trim()
+          ? expertRaw.trim().replace(/^@/, "").toLowerCase()
+          : "general";
+      const prompt =
+        (typeof input.prompt === "string" && input.prompt.trim())
+        || (typeof input.description === "string" && input.description.trim())
+        || "";
+      return { expertId, prompt };
+    }
+  }
+  return { expertId: "general", prompt: "" };
 }
 
 /** Tell main process which chat tab owns an OpenCode session (stream routing). */
@@ -1783,6 +1931,195 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
+  openSubAgentPanel: (taskToolUseId) => {
+    const id = taskToolUseId.trim();
+    if (!id) return;
+    const tabId = get().activeTabId;
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId ? { ...t, openSubAgentPanelToolUseId: id } : t,
+      ),
+    }));
+
+    // History / reload: subAgentRuns are memory-only — hydrate from OpenCode SQLite.
+    const tab = get().tabs.find((t) => t.id === tabId);
+    const run = tab?.subAgentRuns?.[id];
+    if (!run && tab) {
+      const meta = extractTaskMetaFromMessages(
+        [...(tab.messages ?? []), tab.streamingMessage],
+        id,
+      );
+      get()._hydrateSubAgentRun(tabId, id, {
+        expertId: meta.expertId,
+        prompt: meta.prompt,
+        status: "done",
+        blocks: [],
+      });
+    }
+    const needsHydrate = !run || run.blocks.length === 0;
+    if (!needsHydrate || !tab?.sessionId) return;
+
+    void (async () => {
+      try {
+        const result = await window.electronAPI.chatGetSubAgentActivity({
+          parentSessionId: tab.sessionId!,
+          taskToolUseId: id,
+          subSessionId: run?.subSessionId,
+        });
+        const stillOpen =
+          get().tabs.find((t) => t.id === tabId)?.openSubAgentPanelToolUseId === id;
+        if (!stillOpen) return;
+        const latest = get().tabs.find((t) => t.id === tabId);
+        const live = latest?.subAgentRuns?.[id];
+        // Live stream may have filled blocks while we awaited — don't clobber.
+        if (live?.blocks.length && live.status === "running") return;
+        if (live?.blocks.length && result.blocks.length === 0) return;
+        if (!result.blocks?.length && result.status === "running") return;
+        const meta = extractTaskMetaFromMessages(
+          [...(latest?.messages ?? []), latest?.streamingMessage],
+          id,
+        );
+        get()._hydrateSubAgentRun(tabId, id, {
+          expertId: meta.expertId || live?.expertId || "general",
+          prompt: meta.prompt || live?.prompt || "",
+          subSessionId: result.subSessionId ?? live?.subSessionId,
+          status: result.status,
+          blocks: (result.blocks ?? []) as ContentBlock[],
+          error: result.error,
+        });
+      } catch (err: unknown) {
+        console.error("[chat] Subagent activity hydrate failed:", err);
+      }
+    })();
+  },
+
+  closeSubAgentPanel: () => {
+    const tabId = get().activeTabId;
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId ? { ...t, openSubAgentPanelToolUseId: null } : t,
+      ),
+    }));
+  },
+
+  cancelSubAgentRun: async (taskToolUseId) => {
+    const tabId = get().activeTabId;
+    const tab = get().tabs.find((t) => t.id === tabId);
+    const run = tab?.subAgentRuns?.[taskToolUseId];
+    if (!run || run.status !== "running") return;
+    const expert = (run.expertId || "expert").replace(/^@/, "");
+    const forAgent = formatTaskError("user_cancel", { subagentId: expert });
+
+    // Phase 1: freeze UI immediately — do not claim Stopped until OpenCode settles.
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const prev = t.subAgentRuns[taskToolUseId];
+        if (!prev || prev.status !== "running") return t;
+        return {
+          ...t,
+          subAgentRuns: {
+            ...t.subAgentRuns,
+            [taskToolUseId]: { ...prev, status: "stopping" as const },
+          },
+        };
+      }),
+    }));
+
+    try {
+      if (tab?.sessionId) {
+        const excludeSessionIds = Object.entries(tab.subAgentRuns ?? {})
+          .filter(
+            ([id, r]) =>
+              id !== taskToolUseId
+              && (r.status === "running" || r.status === "stopping")
+              && r.subSessionId,
+          )
+          .map(([, r]) => r.subSessionId!)
+          .filter(Boolean);
+        const result = await window.electronAPI.chatStopSubAgent({
+          parentSessionId: tab.sessionId,
+          taskToolUseId,
+          subSessionId: run.subSessionId,
+          message: forAgent,
+          excludeSessionIds,
+        });
+        if (result?.ok && result.settled) {
+          // Settlement UI comes from subAgent.completed / message.updated.
+          return;
+        }
+        // Abort or settlement failed — be honest; keep Task open so Stop can retry.
+        const failMsg = formatTaskError("abort_failed", {
+          subagentId: expert,
+          detail: result?.error ? String(result.error) : undefined,
+        });
+        set((s) => ({
+          tabs: s.tabs.map((t) => {
+            if (t.id !== tabId) return t;
+            const prev = t.subAgentRuns[taskToolUseId];
+            if (!prev || prev.status !== "stopping") return t;
+            return {
+              ...t,
+              subAgentRuns: {
+                ...t.subAgentRuns,
+                [taskToolUseId]: {
+                  ...prev,
+                  status: "running" as const,
+                  error: failMsg,
+                },
+              },
+            };
+          }),
+        }));
+        return;
+      }
+      if (run.subSessionId) {
+        // No parent session — best-effort child cancel only (legacy path).
+        await window.electronAPI.chatCancel(run.subSessionId, { childrenOnly: false });
+        get()._injectToolResult(tabId, taskToolUseId, forAgent, true);
+        get()._completeSubAgentRun(tabId, taskToolUseId, "error", forAgent);
+        return;
+      }
+    } catch (err: unknown) {
+      console.error("[chat] Subagent cancel failed:", err);
+      const failMsg = formatTaskError("abort_failed", { subagentId: expert });
+      set((s) => ({
+        tabs: s.tabs.map((t) => {
+          if (t.id !== tabId) return t;
+          const prev = t.subAgentRuns[taskToolUseId];
+          if (!prev || prev.status !== "stopping") return t;
+          return {
+            ...t,
+            subAgentRuns: {
+              ...t.subAgentRuns,
+              [taskToolUseId]: {
+                ...prev,
+                status: "running" as const,
+                error: failMsg,
+              },
+            },
+          };
+        }),
+      }));
+      return;
+    }
+    // No session to abort — revert stopping.
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const prev = t.subAgentRuns[taskToolUseId];
+        if (!prev || prev.status !== "stopping") return t;
+        return {
+          ...t,
+          subAgentRuns: {
+            ...t.subAgentRuns,
+            [taskToolUseId]: { ...prev, status: "running" as const },
+          },
+        };
+      }),
+    }));
+  },
+
   cancelExecution: async () => {
     const tabId = get().activeTabId;
     const sessionId = get().tabs.find((t) => t.id === tabId)?.sessionId;
@@ -2384,8 +2721,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
       const lastHasToolUse = oldBlocks.some((b) => b.type === "tool_use");
       const newIsTextOrThink = newBlocks.every((b) => b.type === "text" || b.type === "thinking");
+      const settledToolResults = collectSettledToolResultIds([
+        ...baseTab.messages,
+        ...(baseTab.streamingMessage ? [baseTab.streamingMessage] : []),
+      ]);
+      const taskStillRunning = hasIncompleteTaskInBlocks(oldBlocks, settledToolResults);
 
-      if (lastHasToolUse && newIsTextOrThink) {
+      if (lastHasToolUse && newIsTextOrThink && !taskStillRunning) {
         const nextId = incomingMessageId ?? baseTab.streamingPartMessageId;
         const newTabs = [...s.tabs];
         newTabs[tabIdx] = {
@@ -2547,6 +2889,72 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
   },
 
+  _appendAssistantError: (tabId, text) => {
+    const body = typeof text === "string" ? text.trim() : "";
+    if (!body) return;
+    set((s) => {
+      const tabs = s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        let messages = t.messages;
+        let settledStreamMessageIds = t.settledStreamMessageIds;
+        if (t.streamingMessage) {
+          const committed: ChatStreamMessage = {
+            ...t.streamingMessage,
+            stopped: true,
+          };
+          messages = [...messages, committed];
+          settledStreamMessageIds = withSettledStreamMessageId(
+            t,
+            t.streamingPartMessageId,
+          );
+        }
+        // session.error + chat:complete often fire with the same body — keep one bubble.
+        const last = messages[messages.length - 1];
+        const lastText =
+          last?.turnError && last.type === "assistant"
+            ? contentBlocksText(last)
+            : "";
+        if (lastText && lastText.trim() === body) {
+          return {
+            ...t,
+            messages,
+            streamingMessage: null,
+            streamingPartMessageId: null,
+            settledStreamMessageIds,
+            isStreaming: false,
+            preparePhase: null,
+            error: null,
+          };
+        }
+        const errorMsg: ChatStreamMessage = {
+          type: "assistant",
+          turnError: true,
+          message: {
+            content: [{ type: "text", text: body }],
+          },
+        };
+        return {
+          ...t,
+          messages: [...messages, errorMsg],
+          streamingMessage: null,
+          streamingPartMessageId: null,
+          settledStreamMessageIds,
+          isStreaming: false,
+          preparePhase: null,
+          error: null,
+        };
+      });
+      const activeTab = tabs.find((t) => t.id === s.activeTabId);
+      return {
+        tabs,
+        ...projectActiveTab(tabs, s.activeTabId),
+        error: activeTab?.error ?? null,
+      };
+    });
+    const tab = get().tabs.find((t) => t.id === tabId);
+    cacheTabMessages(tab?.sessionId, tab?.messages ?? []);
+  },
+
   _setContextTokens: (tabId: string, tokens: number, breakdown?: Record<string, number> | null, schema?: { key: string; label: string; color: string; description?: string; order?: number }[] | null) => {
     set((s) => {
       // Store tokens, breakdown, and schema on the TAB — survives tab switches.
@@ -2620,19 +3028,56 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
   },
 
+  _patchToolDuration: (
+    tabId: string,
+    toolUseId: string,
+    duration: number,
+    time?: { start?: number; end?: number },
+  ) => {
+    if (!Number.isFinite(duration) || duration < 0) return;
+    set((s) => {
+      const tabIdx = s.tabs.findIndex((t) => t.id === tabId);
+      if (tabIdx === -1) return {};
+
+      const tab = s.tabs[tabIdx];
+      const patchBlock = (block: ContentBlock): ContentBlock => {
+        if (block.type !== "tool_use" || block.id !== toolUseId) return block;
+        return {
+          ...block,
+          duration,
+          ...(typeof time?.start === "number" ? { timeStart: time.start } : {}),
+          ...(typeof time?.end === "number" ? { timeEnd: time.end } : {}),
+        };
+      };
+
+      const patchedMessages = tab.messages.map((msg) => {
+        if (!msg.message?.content) return msg;
+        return { ...msg, message: { ...msg.message, content: msg.message.content.map(patchBlock) } };
+      });
+
+      let patchedStreaming = tab.streamingMessage;
+      if (patchedStreaming?.message?.content) {
+        patchedStreaming = {
+          ...patchedStreaming,
+          message: {
+            ...patchedStreaming.message,
+            content: patchedStreaming.message.content.map(patchBlock),
+          },
+        };
+      }
+
+      const newTabs = [...s.tabs];
+      newTabs[tabIdx] = { ...tab, messages: patchedMessages, streamingMessage: patchedStreaming };
+      return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
+    });
+  },
+
   _injectToolResult: (tabId: string, toolUseId: string, content: string, isError = true) => {
     set((s) => {
       const tabIdx = s.tabs.findIndex((t) => t.id === tabId);
       if (tabIdx === -1) return {};
 
       const tab = s.tabs[tabIdx];
-      const alreadyHasResult = tab.messages.some((msg) =>
-        msg.message?.content?.some(
-          (b) => b.type === "tool_result" && b.tool_use_id === toolUseId,
-        ),
-      );
-      if (alreadyHasResult) return {};
-
       const block: ContentBlock = {
         type: "tool_result",
         tool_use_id: toolUseId,
@@ -2640,6 +3085,38 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         is_error: isError,
         status: isError ? "failed" : "completed",
       };
+
+      const prior = tab.messages
+        .flatMap((msg) => msg.message?.content ?? [])
+        .find((b) => b.type === "tool_result" && b.tool_use_id === toolUseId);
+
+      if (prior) {
+        // Never downgrade a success to an error inject.
+        if (!prior.is_error && isError) return {};
+        // Same polarity already present — keep unless upgrading error → success.
+        if (!!prior.is_error === !!isError && prior.is_error) {
+          // Replace error body with newer error, or leave if identical path unused.
+        }
+        const patchedMessages = tab.messages.map((msg) => {
+          if (!msg.message?.content?.some(
+            (b) => b.type === "tool_result" && b.tool_use_id === toolUseId,
+          )) {
+            return msg;
+          }
+          return {
+            ...msg,
+            message: {
+              ...msg.message,
+              content: msg.message.content.map((b) =>
+                b.type === "tool_result" && b.tool_use_id === toolUseId ? block : b,
+              ),
+            },
+          };
+        });
+        const newTabs = [...s.tabs];
+        newTabs[tabIdx] = { ...tab, messages: patchedMessages };
+        return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
+      }
 
       let msgs = tab.messages;
       if (tab.streamingMessage) {
@@ -2661,23 +3138,51 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   _linkSubAgentRun: (tabId, taskToolUseId, data) => {
     set((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === tabId
-          ? {
-              ...t,
-              subAgentRuns: {
-                ...t.subAgentRuns,
-                [taskToolUseId]: {
-                  expertId: data.expertId,
-                  prompt: data.prompt,
-                  status: "running",
-                  subSessionId: data.subSessionId,
-                  blocks: t.subAgentRuns[taskToolUseId]?.blocks ?? [],
-                },
-              },
-            }
-          : t,
-      ),
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const prev = t.subAgentRuns[taskToolUseId];
+        const nextExpert =
+          data.expertId && data.expertId !== "expert"
+            ? data.expertId
+            : (prev?.expertId && prev.expertId !== "expert" ? prev.expertId : data.expertId);
+        const nextSubSessionId = data.subSessionId ?? prev?.subSessionId;
+        return {
+          ...t,
+          subAgentRuns: {
+            ...t.subAgentRuns,
+            [taskToolUseId]: {
+              expertId: nextExpert || data.expertId || "general",
+              prompt: data.prompt || prev?.prompt || "",
+              status: prev?.status === "done" || prev?.status === "error" ? prev.status : "running",
+              subSessionId: nextSubSessionId,
+              blocks: prev?.blocks ?? [],
+              // Late link after UI degrade — clear the muted empty-stream hint.
+              linkDegraded: nextSubSessionId ? false : prev?.linkDegraded,
+              error: prev?.error,
+            },
+          },
+        };
+      }),
+    }));
+  },
+
+  _markSubAgentLinkDegraded: (tabId, taskToolUseId) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const prev = t.subAgentRuns[taskToolUseId];
+        if (!prev || prev.status === "done" || prev.status === "error") return t;
+        return {
+          ...t,
+          subAgentRuns: {
+            ...t.subAgentRuns,
+            [taskToolUseId]: {
+              ...prev,
+              linkDegraded: true,
+            },
+          },
+        };
+      }),
     }));
   },
 
@@ -2686,14 +3191,22 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       tabs: s.tabs.map((t) => {
         if (t.id !== tabId) return t;
         const prev = t.subAgentRuns[taskToolUseId];
-        if (!prev) return t;
+        // Activity can race ahead of subAgent.linked — create a stub run so the
+        // panel isn't stuck on Working… with a discarded stream.
+        const base = prev ?? {
+          expertId: "expert",
+          prompt: "",
+          status: "running" as const,
+          blocks: [] as ContentBlock[],
+        };
         return {
           ...t,
           subAgentRuns: {
             ...t.subAgentRuns,
             [taskToolUseId]: {
-              ...prev,
-              blocks: upsertSubAgentBlock(prev.blocks, block),
+              ...base,
+              status: base.status === "done" || base.status === "error" ? base.status : "running",
+              blocks: upsertSubAgentBlock(base.blocks, block),
             },
           },
         };
@@ -2701,17 +3214,85 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }));
   },
 
-  _completeSubAgentRun: (tabId, taskToolUseId, status) => {
+  _setSubAgentSnapshot: (tabId, taskToolUseId, blocks) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const prev = t.subAgentRuns[taskToolUseId];
+        const base = prev ?? {
+          expertId: "expert",
+          prompt: "",
+          status: "running" as const,
+          blocks: [] as ContentBlock[],
+        };
+        return {
+          ...t,
+          subAgentRuns: {
+            ...t.subAgentRuns,
+            [taskToolUseId]: {
+              ...base,
+              blocks: mergeSubAgentSnapshotBlocks(base.blocks, blocks),
+            },
+          },
+        };
+      }),
+    }));
+  },
+
+  _hydrateSubAgentRun: (tabId, taskToolUseId, data) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const prev = t.subAgentRuns[taskToolUseId];
+        // Prefer live non-empty blocks over a late empty hydrate.
+        if (prev?.blocks.length && data.blocks.length === 0) return t;
+        const blocks = mergeSubAgentSnapshotBlocks(prev?.blocks ?? [], data.blocks);
+        const status =
+          prev?.status === "done"
+          || prev?.status === "error"
+          || prev?.status === "stopping"
+            ? prev.status
+            : data.status;
+        return {
+          ...t,
+          subAgentRuns: {
+            ...t.subAgentRuns,
+            [taskToolUseId]: {
+              expertId: data.expertId || prev?.expertId || "general",
+              prompt: data.prompt || prev?.prompt || "",
+              status,
+              subSessionId: data.subSessionId || prev?.subSessionId,
+              blocks,
+              linkDegraded: data.subSessionId ? false : prev?.linkDegraded,
+              error: status === "error" ? (data.error || prev?.error) : undefined,
+            },
+          },
+        };
+      }),
+    }));
+  },
+
+  _completeSubAgentRun: (tabId, taskToolUseId, status, error) => {
     set((s) => ({
       tabs: s.tabs.map((t) => {
         if (t.id !== tabId) return t;
         const prev = t.subAgentRuns[taskToolUseId];
         if (!prev) return t;
+        const next: SubAgentRun = {
+          ...prev,
+          status,
+          linkDegraded: status === "done" ? prev.linkDegraded : prev.linkDegraded,
+        };
+        if (status === "done") {
+          delete next.error;
+        } else if (typeof error === "string" && error.trim()) {
+          next.error = error.trim();
+        }
         return {
           ...t,
           subAgentRuns: {
             ...t.subAgentRuns,
-            [taskToolUseId]: { ...prev, status },
+            [taskToolUseId]: next,
           },
         };
       }),

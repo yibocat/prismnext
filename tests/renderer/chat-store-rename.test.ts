@@ -55,6 +55,7 @@ const stubTab = (id: string, sessionId: string | null, title: string) => ({
   sessionAgent: "build" as const,
   intensivePaperIds: [],
   subAgentRuns: {},
+  openSubAgentPanelToolUseId: null,
   preparePhase: null,
   planSuggestVisible: false,
   planSuggestDismissed: false,

@@ -26,7 +26,17 @@ import {
   type UserDisplayContent,
 } from "../services/session-display-store";
 import { cancelAiCommandForSession } from "../services/ai-pty";
-import { setSessionProjectRoot, setSessionIntensiveBibkeys, resolveChatTabId } from "../services/chat-session-registry";
+import {
+  setSessionProjectRoot,
+  setSessionIntensiveBibkeys,
+  resolveChatTabId,
+  setSessionTaskAllowlist,
+  clearSessionTaskAllowlist,
+  claimTaskAllowlistFollowUp,
+  getSessionMissingTaskAllowlist,
+  deferTaskAllowlistFollowUp,
+} from "../services/chat-session-registry";
+import { formatTaskError } from "../../shared/task-error-codes";
 import { getPaper } from "../services/literature-service";
 import {
   buildIntensiveReadingInstruction,
@@ -38,6 +48,7 @@ import {
   normalizeOpenCodeModelId,
   providerApiKeyEnvVar,
 } from "../../shared/opencode-provider";
+import { buildOpenCodeCredentialEnv } from "../acp/credential-env";
 import {
   OPENCODE_DEFAULT_VARIANT,
 } from "../../shared/opencode-effort";
@@ -53,7 +64,6 @@ import {
   snapshotSessionDraftMeta,
 } from "../services/research-plan-service";
 import { getQuestionsBridgeRoot } from "../services/prism-bridge-paths";
-import { getSettings } from "../services/settings";
 import { emitChatStream } from "../services/chat-stream-notify";
 import type { ChatPreparePhase } from "../../shared/chat-prepare-phases";
 import { resolveSessionAgent } from "../../shared/session-agent";
@@ -203,20 +213,13 @@ function registerTabSession(
  * Always merges settings credentials + call-site extraEnv — AcpService restarts
  * the child when credentials change (API keys are only applied at spawn).
  */
-async function ensureConnected(extraEnv?: Record<string, string>): Promise<void> {
-  const settings = getSettings() as Record<string, unknown>;
-  const aiApiKeys = (settings.aiApiKeys as Record<string, string>) || {};
-  const aiBaseUrls = (settings.aiBaseUrls as Record<string, string>) || {};
-  const fromSettings: Record<string, string> = {};
-  for (const [provider, apiKey] of Object.entries(aiApiKeys)) {
-    if (!apiKey?.trim()) continue;
-    fromSettings[providerApiKeyEnvVar(provider)] = apiKey.trim();
-    if (aiBaseUrls[provider] && !isOpenCodeCatalogProvider(provider)) {
-      fromSettings[`${provider.replace(/-/g, "_").toUpperCase()}_BASE_URL`] =
-        aiBaseUrls[provider];
-    }
-  }
-  await getService().initialize({ ...fromSettings, ...extraEnv });
+async function ensureConnected(
+  extraEnv?: Record<string, string>,
+  preferredCatalogProvider?: string,
+): Promise<void> {
+  await getService().initialize(
+    buildOpenCodeCredentialEnv(extraEnv, { preferredCatalogProvider }),
+  );
 }
 
 export function registerChatHandlers(): void {
@@ -376,9 +379,12 @@ export function registerChatHandlers(): void {
       // not just the first: subsequent sends also hydrate/MCP-reload/wait.
       emitChatPrepare(tabId, "syncing_project");
 
-      // Build env vars for API keys — passed to opencode process on first init
+      // Build env vars for API keys — passed to opencode process on first init.
+      // Catalog providers (go/zen) share OPENCODE_API_KEY and are resolved from
+      // settings with a stable preferred provider — do not overlay args.apiKey
+      // (that caused false credential restarts when Go ≠ Zen last-wins).
       const extraEnv: Record<string, string> = {};
-      if (args.apiKey) {
+      if (args.apiKey && !isOpenCodeCatalogProvider(args.provider || "")) {
         extraEnv[providerApiKeyEnvVar(args.provider || "anthropic")] = args.apiKey;
       }
       if (args.baseUrl && !isOpenCodeCatalogProvider(args.provider || "")) {
@@ -386,20 +392,10 @@ export function registerChatHandlers(): void {
         extraEnv[`${provider}_BASE_URL`] = args.baseUrl;
       }
 
-      // Auto-reconnect if process died (app-level ACP, normally already running).
-      // Pass extraEnv so API keys reach the opencode process on first init.
-      try {
-        await ensureConnected(extraEnv);
-      } catch (err: any) {
-        log.error(`OpenCode initialize failed: ${err.message}`);
-        clearPrepare();
-        win.webContents.send("chat:complete", {
-          tabId, sessionId: args.sessionId || "", success: false, error: err.message,
-        });
-        return;
-      }
-
       // ── Assemble system prompt (prismnext layers) ──
+      // Sync project agents/skills to disk BEFORE ensureConnected so a credential
+      // restart (if any) is the last OpenCode spawn — avoids sync→reload→spawn
+      // doubling first-send latency after app start.
       const intensivePapers = args.projectPath
         ? resolveIntensivePapers(args.projectPath, args.intensivePaperIds)
         : [];
@@ -448,7 +444,16 @@ export function registerChatHandlers(): void {
 
         const { ensureProjectChatPrewarm } = await import("../services/project-chat-prewarm");
         emitChatPrepare(tabId, "syncing_project");
-        await ensureProjectChatPrewarm(args.projectPath);
+        // If credentials will restart OpenCode next, sync-only here so we don't
+        // reload once for agents then again for API keys.
+        const credentialRestartPending = getService().wouldRestartForCredentials(
+          buildOpenCodeCredentialEnv(extraEnv, {
+            preferredCatalogProvider: provider,
+          }),
+        );
+        await ensureProjectChatPrewarm(args.projectPath, {
+          skipOpenCodeReload: credentialRestartPending,
+        });
 
         const { refreshProjectExpertsIntegrationIfNeeded } = await import("../services/project-experts-refresh");
         try {
@@ -465,9 +470,6 @@ export function registerChatHandlers(): void {
           });
           return;
         }
-
-        // Experts sync is write-only; re-ensure ACP after any concurrent reload paths.
-        await ensureConnected(extraEnv);
 
         const expertIds = args.selectedExpertIds?.filter(Boolean) ?? [];
         if (expertIds.length > 0) {
@@ -498,22 +500,44 @@ export function registerChatHandlers(): void {
         });
       }
 
+      // Connect / apply credentials last — at most one spawn before session/new.
+      try {
+        await ensureConnected(extraEnv, provider);
+      } catch (err: any) {
+        log.error(`OpenCode initialize failed: ${err.message}`);
+        clearPrepare();
+        win.webContents.send("chat:complete", {
+          tabId, sessionId: args.sessionId || "", success: false, error: err.message,
+        });
+        return;
+      }
+
+      const expertsSync = args.projectPath
+        ? await import("../services/experts-sync")
+        : null;
       const orchestratorMcpAllowlist =
-        orchestratorId && args.projectPath
-          ? (await import("../services/experts-sync")).getOrchestratorRuntimeFilters(
+        orchestratorId && args.projectPath && expertsSync
+          ? expertsSync.getOrchestratorRuntimeFilters(
               args.projectPath,
               orchestratorId,
             )?.mcpServers
           : undefined;
+      // @Expert MCP needs (e.g. literature-synthesizer → paper-search) load this
+      // turn only — not at session/new.
+      const expertMcpIds: string[] = [];
+      if (args.projectPath && expertsSync && args.selectedExpertIds?.length) {
+        for (const id of args.selectedExpertIds) {
+          const mcps = expertsSync.getExpertRuntimeFilters(args.projectPath, id)?.mcpServers;
+          if (mcps?.length) expertMcpIds.push(...mcps);
+        }
+      }
       const composerMcps = args.mcpServerAllowlist?.filter(Boolean) ?? [];
-      const { ensureBuiltinMcpInAllowlist } = await import(
-        "../services/project-mcp-defaults"
-      );
-      const mcpServerAllowlist = ensureBuiltinMcpInAllowlist(
-        composerMcps.length > 0
-          ? [...new Set([...(orchestratorMcpAllowlist ?? []), ...composerMcps])]
-          : orchestratorMcpAllowlist,
-      );
+      const mergedMcp = [...new Set([
+        ...(orchestratorMcpAllowlist ?? []),
+        ...expertMcpIds,
+        ...composerMcps,
+      ])];
+      const mcpServerAllowlist = mergedMcp.length > 0 ? mergedMcp : undefined;
 
       const assembledPrompt = promptManager.compose(promptCtx);
       const projectRulesPrompt = promptManager.composeProjectRules(promptCtx);
@@ -550,6 +574,9 @@ export function registerChatHandlers(): void {
           sessionId = session.id;
           const inflight = inflightChatSend.get(tabId);
           if (inflight) inflight.sessionId = sessionId;
+          // Register before sessionCreated / further awaits so early ACP
+          // session/update is not treated as an orphan subagent.
+          registerTabSession(win, tabId, sessionId, args.projectPath);
           win.webContents.send("chat:sessionCreated", { tabId, sessionId });
         } catch (err: any) {
           log.error(`createSession failed: ${err.message}`);
@@ -564,6 +591,15 @@ export function registerChatHandlers(): void {
 
       const bridge = getMapper(win);
       registerTabSession(win, tabId, sessionId, args.projectPath);
+      // @Expert = this turn's Task allowlist + must-invoke (who must be Task'd).
+      {
+        const expertIds = args.selectedExpertIds?.filter(Boolean) ?? [];
+        if (expertIds.length > 0) {
+          setSessionTaskAllowlist(sessionId, expertIds);
+        } else {
+          clearSessionTaskAllowlist(sessionId);
+        }
+      }
       if (args.projectPath && sessionId) {
         syncIntensiveBibkeysForSession(args.projectPath, sessionId, args.intensivePaperIds);
       }
@@ -644,12 +680,18 @@ export function registerChatHandlers(): void {
           syncProjectPromptFile(args.projectPath, promptCtx);
         }
         const { instructionsChanged } = service.applyProjectPromptIntegration(args.projectPath);
-        if (instructionsChanged) {
+        // Skip reload when we just spawned (credential ensure / prewarm) —
+        // the new process already reads instructions from disk.
+        if (instructionsChanged && !service.wasSpawnedRecently()) {
           try {
             await service.reloadAfterSkillsIntegration();
           } catch (err: any) {
             log.warn(`OpenCode reload after prompt integration failed: ${err.message}`);
           }
+        } else if (instructionsChanged) {
+          log.info("Skip OpenCode reload after prompt integration (just spawned)", {
+            spawnAgeMs: Date.now() - service.getLastSpawnAtMs(),
+          });
         }
       }
 
@@ -670,11 +712,16 @@ export function registerChatHandlers(): void {
         `provider=${provider}`,
       );
       getMapper(win).clearTurnAccumulators();
+      // Drop stale Task-link watchdogs from a prior turn — otherwise a 90s
+      // task-link-timeout can abort this new prompt with opaque "Task cancelled".
+      // Unlinked Tasks from a prior turn → structured superseded (not opaque cancel).
+      getMapper(win).clearPendingTasksForTab(tabId);
       if (!isFirstTurn && args.projectPath) {
         await service.ensureSessionHydrated(sessionId, cwd, args.projectPath);
       }
       if (args.projectPath && sessionId) {
-        emitChatPrepare(tabId, "connecting_mcp");
+        const wantsMcp = (mcpServerAllowlist?.length ?? 0) > 0;
+        if (wantsMcp) emitChatPrepare(tabId, "connecting_mcp");
         await service.ensureSessionMcps(
           sessionId,
           cwd,
@@ -766,7 +813,7 @@ export function registerChatHandlers(): void {
           },
           onTimeout: (silentMs) => {
             turnSettledByWatchdog = true;
-            void service.abort(sessionId!).catch(() => {});
+            void service.abortPrimarySession(sessionId!).catch(() => {});
             clearPrepare();
             win.webContents.send("chat:complete", {
               tabId,
@@ -947,6 +994,10 @@ export function registerChatHandlers(): void {
         ),
       });
 
+      // Parent turn can end_turn while a Task is still "pending link" in Prism.
+      // Drop that leftover 90s watchdog so it cannot abort the next message.
+      getMapper(win).releasePendingTaskWatchdogsForTab(tabId);
+
       // Persist context breakdown per session so it survives app restarts
       persistSessionContext(args.projectPath, sessionId, {
         tokens: totalUsed,
@@ -956,6 +1007,51 @@ export function registerChatHandlers(): void {
         hasSystemPromptBlock: false,
         promptFingerprint: currentFingerprint,
       });
+
+      // @ experts must be Task'd (orchestrator must not role-play as them).
+      // If a Task is still open at end_turn, defer the nudge until it settles.
+      if (!isSendCancelled()) {
+        const followUpOpts = {
+          tabId,
+          model: modelId ? formatOpenCodeModelRef(provider, modelId) : undefined,
+          provider,
+          cwd,
+          projectRoot: args.projectPath,
+          effort: effortForSend,
+        };
+        if (getMapper(win).hasOpenTaskToolsForTab(tabId)) {
+          deferTaskAllowlistFollowUp(sessionId, followUpOpts);
+          log.info(
+            `task-allowlist-follow-up: deferred until Tasks settle sessionId=${sessionId}`,
+          );
+        } else {
+          const missing = claimTaskAllowlistFollowUp(sessionId);
+          if (missing.length > 0) {
+            const followUp = formatTaskError("task_allowlist_not_invoked", {
+              allowlist: missing,
+            });
+            log.info(
+              `task-allowlist-follow-up: sessionId=${sessionId} missing=${missing.join(",")}`,
+            );
+            getMapper(win).clearTurnAccumulators();
+            try {
+              await service.sendPrompt(sessionId, followUp, followUpOpts);
+            } catch (err: unknown) {
+              const message = err instanceof Error ? err.message : String(err);
+              log.warn(`task-allowlist-follow-up failed: ${message}`);
+            }
+            const stillMissing = getSessionMissingTaskAllowlist(sessionId);
+            if (stillMissing.length > 0) {
+              service.setPendingTaskDenial(
+                sessionId,
+                formatTaskError("task_allowlist_not_invoked", {
+                  allowlist: stillMissing,
+                }),
+              );
+            }
+          }
+        }
+      }
 
       // Renderer also clears prepare on first stream chunk; clear here so a
       // turn that finishes without visible parts does not leave a stuck label.
@@ -1034,9 +1130,43 @@ export function registerChatHandlers(): void {
   // ─── Cancel ───
   ipcMain.handle(
     "chat:cancel",
-    async (_event, args: { sessionId: string }) => {
+    async (
+      _event,
+      args: {
+        sessionId: string;
+        /**
+         * Abort child Task sessions of `sessionId` only (do not cancel the
+         * parent turn). Used when Stop is pressed on a Task before Prism
+         * linked the child session id.
+         */
+        childrenOnly?: boolean;
+        /** Skip these child ids (other parallel Tasks still running). */
+        excludeSessionIds?: string[];
+      },
+    ) => {
+      const service = getService();
+
+      if (args.childrenOnly) {
+        const exclude = new Set(
+          (args.excludeSessionIds ?? []).map((id) => id.trim()).filter(Boolean),
+        );
+        const children = service
+          .listChildSessionIds(args.sessionId)
+          .filter((id) => !exclude.has(id));
+        for (const childId of children) {
+          cancelAiCommandForSession(childId);
+          service.releaseSessionPendingWork(childId);
+          await service.abortSubAgentSession(childId);
+        }
+        log.info("chat:cancel childrenOnly", {
+          parent: args.sessionId,
+          aborted: children.length,
+        });
+        return { aborted: children };
+      }
+
       cancelAiCommandForSession(args.sessionId);
-      getService().releaseSessionPendingWork(args.sessionId);
+      service.releaseSessionPendingWork(args.sessionId);
 
       for (const [tabId, inflight] of inflightChatSend.entries()) {
         if (inflight.sessionId !== args.sessionId) continue;
@@ -1052,7 +1182,163 @@ export function registerChatHandlers(): void {
         break;
       }
 
-      await getService().abort(args.sessionId);
+      // Whole-turn cancel: abort the parent orchestrator (never used by Task Stop).
+      await service.abortPrimarySession(args.sessionId);
+      return { aborted: [args.sessionId] };
+    },
+  );
+
+  /**
+   * User Stop on a Task run panel (two-phase):
+   * 1) Freeze panel + abort child via HTTP (never ACP-cancel / abort parent)
+   * 2) Await parent Task tool_result rewrite to user_cancel (settlement truth)
+   */
+  ipcMain.handle(
+    "chat:stopSubAgent",
+    async (
+      event,
+      args: {
+        parentSessionId: string;
+        taskToolUseId: string;
+        subSessionId?: string;
+        message: string;
+        excludeSessionIds?: string[];
+      },
+    ) => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const service = getService();
+      const parentSessionId = args.parentSessionId?.trim();
+      const taskToolUseId = args.taskToolUseId?.trim();
+      const message = args.message?.trim();
+      if (!parentSessionId || !taskToolUseId || !message) {
+        return { ok: false as const, settled: false, aborted: [] as string[], error: "missing_args" };
+      }
+
+      const mapper = win ? getMapper(win) : null;
+      if (!mapper) {
+        return { ok: false as const, settled: false, aborted: [] as string[], error: "abort_failed" };
+      }
+      // Freeze panel stream + keep userStopped until Task tool_result rewrite.
+      const linkedChild = mapper.freezeUserStoppedSubAgent(taskToolUseId);
+      // Register settlement waiter BEFORE abort — OpenCode may finish the
+      // parent Task immediately after HTTP abort (race if we wait afterward).
+      const settlement = mapper.waitForUserStoppedTaskSettlement(taskToolUseId);
+
+      const exclude = new Set(
+        (args.excludeSessionIds ?? []).map((id) => id.trim()).filter(Boolean),
+      );
+      const collectCandidates = (): Set<string> => {
+        const next = new Set<string>();
+        const hint = args.subSessionId?.trim();
+        if (hint) next.add(hint);
+        if (linkedChild) next.add(linkedChild);
+        const resolved = service.resolveChildSessionForTask(
+          parentSessionId,
+          taskToolUseId,
+          hint,
+        );
+        if (resolved) next.add(resolved);
+        if (next.size === 0) {
+          for (const id of service.listChildSessionIds(parentSessionId)) {
+            if (!exclude.has(id)) next.add(id);
+          }
+        }
+        // Never abort the parent orchestrator from Task Stop.
+        next.delete(parentSessionId);
+        for (const id of exclude) next.delete(id);
+        return next;
+      };
+
+      // Child session may not be in SQLite yet when Stop is pressed early.
+      let candidates = collectCandidates();
+      for (let attempt = 0; attempt < 5 && candidates.size === 0; attempt++) {
+        await new Promise((r) => setTimeout(r, 200));
+        candidates = collectCandidates();
+      }
+
+      const aborted: string[] = [];
+      let anyAbortOk = false;
+      for (const childId of candidates) {
+        cancelAiCommandForSession(childId);
+        service.releaseSessionPendingWork(childId);
+        const result = await service.abortSubAgentSession(childId);
+        if (result.ok) {
+          anyAbortOk = true;
+          aborted.push(childId);
+        } else {
+          log.warn("chat:stopSubAgent child abort failed", {
+            childId,
+            error: result.error ?? "abort_failed",
+          });
+        }
+      }
+
+      if (candidates.size === 0 || !anyAbortOk) {
+        mapper.cancelUserStoppedSettlement(taskToolUseId, "abort_failed");
+        void settlement.catch(() => {});
+        log.warn("chat:stopSubAgent abort_failed", {
+          parent: parentSessionId,
+          taskToolUseId,
+          candidates: [...candidates],
+        });
+        return {
+          ok: false as const,
+          settled: false,
+          aborted,
+          error: "abort_failed" as const,
+        };
+      }
+
+      // Best-effort pre-write only — not the completion signal.
+      void service
+        .patchSessionToolOutput(parentSessionId, taskToolUseId, message)
+        .catch(() => {});
+
+      let settled = false;
+      try {
+        await settlement;
+        settled = true;
+      } catch (err: unknown) {
+        const code =
+          err && typeof err === "object" && "code" in err
+            ? String((err as { code?: unknown }).code)
+            : "abort_failed";
+        log.warn("chat:stopSubAgent settlement failed", {
+          parent: parentSessionId,
+          taskToolUseId,
+          code,
+        });
+        return {
+          ok: false as const,
+          settled: false,
+          aborted,
+          error: "abort_failed" as const,
+        };
+      }
+
+      log.info("chat:stopSubAgent", {
+        parent: parentSessionId,
+        taskToolUseId,
+        linkedChild: linkedChild ?? null,
+        aborted,
+        settled,
+      });
+      return { ok: true as const, settled, aborted };
+    },
+  );
+
+  /** Hydrate Task run-panel blocks from OpenCode SQLite (history sessions). */
+  ipcMain.handle(
+    "chat:getSubAgentActivity",
+    async (
+      _event,
+      args: {
+        parentSessionId: string;
+        taskToolUseId: string;
+        subSessionId?: string;
+      },
+    ) => {
+      return getService().getSubAgentActivityForTask(args);
     },
   );
 

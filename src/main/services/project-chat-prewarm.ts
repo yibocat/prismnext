@@ -55,18 +55,30 @@ function emitWarmStatus(projectRoot: string): void {
   }
 }
 
+export type ProjectChatPrewarmOptions = {
+  /**
+   * Sync experts/skills/prompts to disk but do not restart OpenCode.
+   * Use when the caller will `ensureConnected` next and may credential-restart
+   * — the new process already picks up files from disk.
+   */
+  skipOpenCodeReload?: boolean;
+};
+
 /**
  * Ensure project experts/skills/prompt files are synced before first chat send.
  * Safe to call repeatedly — no-ops when prewarm already finished.
  */
-export async function ensureProjectChatPrewarm(projectRoot: string): Promise<void> {
+export async function ensureProjectChatPrewarm(
+  projectRoot: string,
+  options?: ProjectChatPrewarmOptions,
+): Promise<void> {
   const root = normalizeProjectRoot(projectRoot);
   if (readyProjects.has(root)) return;
 
   let pending = inflight.get(root);
   if (!pending) {
     warmErrors.delete(root);
-    pending = runProjectChatPrewarm(root)
+    pending = runProjectChatPrewarm(root, options)
       .then(() => {
         readyProjects.add(root);
         warmErrors.delete(root);
@@ -89,9 +101,13 @@ export async function ensureProjectChatPrewarm(projectRoot: string): Promise<voi
   await pending;
 }
 
-async function runProjectChatPrewarm(projectRoot: string): Promise<void> {
+async function runProjectChatPrewarm(
+  projectRoot: string,
+  options?: ProjectChatPrewarmOptions,
+): Promise<void> {
   const t0 = Date.now();
   const acp = AcpService.getInstance();
+  const skipReload = options?.skipOpenCodeReload === true;
 
   const {
     resolveOrchestratorId,
@@ -99,12 +115,16 @@ async function runProjectChatPrewarm(projectRoot: string): Promise<void> {
   } = await import("./experts-sync");
 
   const orchestratorId = resolveOrchestratorId(projectRoot, null);
-  const ruleAllowlist = getOrchestratorRuntimeFilters(projectRoot, orchestratorId)?.rules;
+  const runtimeFilters = getOrchestratorRuntimeFilters(projectRoot, orchestratorId);
+  const ruleAllowlist = runtimeFilters?.rules;
   const promptCtx = await buildPromptContext(projectRoot, { ruleAllowlist });
 
   const prevExpertsState = readPrismExpertsSyncState();
   const expertsResult = await refreshProjectExpertsIntegrationIfNeeded(projectRoot, { promptCtx });
-  const skillsResult = await refreshProjectSkillsIntegrationIfNeeded(projectRoot);
+  // Match first-send allowlist (orchestrator skills) so chat:send IfNeeded skips.
+  const skillsResult = await refreshProjectSkillsIntegrationIfNeeded(projectRoot, {
+    profileSkillAllowlist: runtimeFilters?.skills,
+  });
 
   syncProjectPromptFile(projectRoot, promptCtx);
   const { instructionsChanged } = acp.applyProjectPromptIntegration(projectRoot);
@@ -116,9 +136,20 @@ async function runProjectChatPrewarm(projectRoot: string): Promise<void> {
       || prevExpertsState.orchestratorContentHash !== expertsResult.orchestratorContentHash
     );
 
+  // Fresh OpenCode children already read agent/skill files from disk on
+  // session/new. Reloading right after a credential/skills spawn doubles
+  // first-send latency (~1s+) for no benefit. Same when credentials are about
+  // to force a restart — let that single spawn pick up the synced files.
+  const spawnedRecently = acp.wasSpawnedRecently();
+  const credentialRestartPending =
+    skipReload || acp.wouldRestartForCredentials();
+  const configDirty =
+    expertsHashChanged || skillsResult.configChanged || instructionsChanged;
   const needsReload =
     acp.getConnection()
-    && (expertsHashChanged || skillsResult.configChanged || instructionsChanged);
+    && !credentialRestartPending
+    && !spawnedRecently
+    && configDirty;
 
   if (needsReload) {
     log.info("Project chat prewarm — reloading OpenCode", {
@@ -128,6 +159,17 @@ async function runProjectChatPrewarm(projectRoot: string): Promise<void> {
       instructions: instructionsChanged,
     });
     await acp.reloadAfterSkillsIntegration();
+  } else if (configDirty && (credentialRestartPending || spawnedRecently)) {
+    log.info("Project chat prewarm — skip reload", {
+      projectRoot,
+      reason: spawnedRecently
+        ? "just_spawned"
+        : "deferred_to_credential_connect",
+      experts: expertsHashChanged,
+      skills: skillsResult.configChanged,
+      instructions: instructionsChanged,
+      spawnAgeMs: Date.now() - acp.getLastSpawnAtMs(),
+    });
   }
 
   // Clear never-used empty sessions (no messages) for this project.

@@ -222,7 +222,7 @@ We will redesign the sampling protocol and validate on a pilot cohort.
     const appendix = buildPlanModeTurnAppendix("ses_demo");
     expect(appendix).toContain(sessionDraftPlanRel("ses_demo"));
     expect(appendix).toContain("chat text is not the plan");
-    expect(appendix).toContain("Do not use Task/Expert");
+    expect(appendix).toMatch(/Task\/Expert subagents are allowed/i);
     expect(appendix).not.toContain(PLAN_DOC_STRUCTURE_HINTS);
     expect(appendix).not.toContain("depth ≤ 2");
     expect(appendix).not.toContain("Immediately call todowrite");

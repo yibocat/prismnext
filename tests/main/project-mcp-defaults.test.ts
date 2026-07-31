@@ -68,7 +68,7 @@ describe("ensureDefaultMcpServers", () => {
     ]);
   });
 
-  it("writes paper-search-mcp when mcpServers is empty", () => {
+  it("does not re-add paper-search-mcp when mcp.json exists but entry was removed", () => {
     const agentDir = join(root, ".prismnext", "agent");
     mkdirSync(agentDir, { recursive: true });
     writeFileSync(
@@ -77,14 +77,12 @@ describe("ensureDefaultMcpServers", () => {
       "utf-8",
     );
     const result = ensureDefaultMcpServers(agentDir);
-    expect(result.added).toBe(true);
+    expect(result.added).toBe(false);
     const parsed = JSON.parse(readFileSync(join(agentDir, "mcp.json"), "utf-8"));
-    expect(parsed.mcpServers["paper-search-mcp"].command).toEqual([
-      ...PAPER_SEARCH_MCP_COMMAND,
-    ]);
+    expect(parsed.mcpServers["paper-search-mcp"]).toBeUndefined();
   });
 
-  it("adds paper-search alongside existing unrelated servers", () => {
+  it("does not inject paper-search alongside existing unrelated servers", () => {
     const agentDir = join(root, ".prismnext", "agent");
     mkdirSync(agentDir, { recursive: true });
     writeFileSync(
@@ -101,12 +99,10 @@ describe("ensureDefaultMcpServers", () => {
       "utf-8",
     );
     const result = ensureDefaultMcpServers(agentDir);
-    expect(result.added).toBe(true);
+    expect(result.added).toBe(false);
     const parsed = JSON.parse(readFileSync(join(agentDir, "mcp.json"), "utf-8"));
     expect(parsed.mcpServers.github).toBeDefined();
-    expect(parsed.mcpServers["paper-search-mcp"].command).toEqual([
-      ...PAPER_SEARCH_MCP_COMMAND,
-    ]);
+    expect(parsed.mcpServers["paper-search-mcp"]).toBeUndefined();
   });
 
   it("migrates legacy python venv command to npx", () => {
@@ -211,7 +207,7 @@ describe("ensureDefaultMcpServers", () => {
     ]);
   });
 
-  it("re-enables paper-search-mcp when disabled", () => {
+  it("respects enabled:false (does not force re-enable)", () => {
     const agentDir = join(root, ".prismnext", "agent");
     mkdirSync(agentDir, { recursive: true });
     writeFileSync(
@@ -232,9 +228,9 @@ describe("ensureDefaultMcpServers", () => {
       "utf-8",
     );
     const result = ensureDefaultMcpServers(agentDir);
-    expect(result.reenabled).toBe(true);
+    expect(result.reenabled).toBe(false);
     const parsed = JSON.parse(readFileSync(join(agentDir, "mcp.json"), "utf-8"));
-    expect(parsed.mcpServers["paper-search-mcp"].enabled).toBe(true);
+    expect(parsed.mcpServers["paper-search-mcp"].enabled).toBe(false);
   });
 
   it("is a no-op when paper-search-mcp is already correct and enabled", () => {

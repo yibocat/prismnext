@@ -145,7 +145,7 @@ export const StaticMarkdown = memo(function StaticMarkdown({
   }, [sessionId]);
 
   return (
-    <div className={cn("text-[length:var(--font-chat-message)] text-foreground leading-relaxed min-w-0 max-w-full overflow-hidden", CHAT_MARKDOWN_TYPOGRAPHY)}>
+    <div className={cn("text-[length:var(--font-chat-message)] text-foreground leading-[1.7] min-w-0 max-w-full overflow-hidden", CHAT_MARKDOWN_TYPOGRAPHY)}>
       <ReactMarkdown
         remarkPlugins={remarkPlugins}
         rehypePlugins={rehypePlugins}

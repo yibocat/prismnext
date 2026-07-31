@@ -15,7 +15,11 @@ import {
   patchToolDescription,
 } from "../tools/tool-description";
 import { buildPermissionOutcome, type PermissionResponse } from "./permission";
-import { resolveChatTabId } from "../services/chat-session-registry";
+import {
+  getSessionProjectRoot,
+  getSessionTaskAllowlist,
+  resolveChatTabId,
+} from "../services/chat-session-registry";
 import { mcpJsonToAcpServers, type AcpMcpServer } from "./mcp-transform";
 import { ensureDefaultMcpServers, isEagerMcpServer, mergeMcpAllowlist, mcpAllowlistSetsEqual } from "../services/project-mcp-defaults";
 import {
@@ -30,14 +34,16 @@ import {
 } from "../services/permission-modes";
 import {
   extractTaskSubagentType,
-  formatOrchestratorBuiltinTaskDeniedMessage,
-  formatPlanModeExpertTaskDeniedMessage,
-  shouldDenyOrchestratorBuiltinTask,
+  resolveTaskPermissionDenial,
 } from "../services/task-orchestrator-gate";
 import { emitChatStream } from "../services/chat-stream-notify";
 import { addBashAllowAlwaysFromCommand, addToolAllowAlways, getSettings } from "../services/settings";
 import { sanitizeSkillPermissionMap, skillPermissionNeedsRepair } from "../services/skills-sync";
-import { buildEnabledToolsConfig, ensurePlanAgentPermissionConfig } from "../services/opencode-tools-config";
+import {
+  buildEnabledToolsConfig,
+  ensurePlanAgentPermissionConfig,
+  ensureSubagentModelConfig,
+} from "../services/opencode-tools-config";
 import {
   isOpenCodeCatalogProvider,
   OPENCODE_API_KEY_ENV,
@@ -57,7 +63,9 @@ import {
   mergeOpencodeInstructions,
   PRISM_OPENCODE_INSTRUCTIONS,
 } from "../services/prompt-sync";
+import { diffCredentialEnvKeys } from "./credential-env";
 import { messageIdsAfterTurn } from "../../shared/chat-turns";
+import { buildSubAgentActivityBlocks } from "../../shared/opencode-session-activity";
 import {
   approveCustomToolJob,
   denyBashJob,
@@ -208,6 +216,8 @@ export class AcpService {
   private lastExtraEnv: Record<string, string> = {};
   /** Env actually baked into the running OpenCode child (keys only take effect at spawn). */
   private bakedExtraEnv: Record<string, string> = {};
+  /** When the current OpenCode child was spawned (ms). Fresh processes already see disk agents. */
+  private lastSpawnAt = 0;
   /** ACP lifecycle for status dot / welcome — never “available” from binary alone. */
   private lifecyclePhase: import("../../shared/agent-status").AgentLifecyclePhase = "starting";
   private lastInitError: string | null = null;
@@ -234,6 +244,8 @@ export class AcpService {
   private sessionReplaySuppress = 0;
   /** Sessions already hydrated in this OpenCode process (session/load done once). */
   private opencodeHydratedSessions = new Set<string>();
+  /** Cached OpenCode local HTTP control-plane base (e.g. http://127.0.0.1:4096). */
+  private openCodeHttpBase: string | null = null;
   /** Phase 1B: one-shot redirect note injected into the next chat:send after a
    *  builtin-Task delegation is denied on the orchestrator, so the agent is
    *  nudged toward platform tools (citation-health, literature-*) instead of
@@ -254,6 +266,13 @@ export class AcpService {
       return note;
     }
     return null;
+  }
+
+  /** Stash a one-shot note for the next chat:send (ACP denies can't carry reasons). */
+  setPendingTaskDenial(sessionId: string, note: string): void {
+    const id = sessionId?.trim();
+    if (!id || !note.trim()) return;
+    this.pendingTaskDenialRedirect.set(id, note.trim());
   }
 
   setPendingPlanDraftRedirect(sessionId: string, note: string): void {
@@ -296,6 +315,38 @@ export class AcpService {
 
   getConnection(): ClientSideConnection | null {
     return this.conn;
+  }
+
+  /** Epoch ms of the last successful OpenCode spawn (0 if none). */
+  getLastSpawnAtMs(): number {
+    return this.lastSpawnAt;
+  }
+
+  /**
+   * True when OpenCode was spawned within `withinMs` — fresh children already
+   * read agent/skill/instruction files from disk, so an immediate reload is wasteful.
+   */
+  wasSpawnedRecently(withinMs = 8_000): boolean {
+    return this.lastSpawnAt > 0 && Date.now() - this.lastSpawnAt < withinMs;
+  }
+
+  /**
+   * Preview whether `initialize(extraEnv)` would restart a live child for
+   * credential changes. Merges/hydrates the same way as initialize (side-effect:
+   * fills `lastExtraEnv`) but does not spawn.
+   */
+  wouldRestartForCredentials(extraEnv?: Record<string, string>): boolean {
+    if (!this.conn || !this.proc) return false;
+    if (extraEnv) {
+      for (const [k, v] of Object.entries(extraEnv)) {
+        if (typeof v === "string" && v.trim()) this.lastExtraEnv[k] = v.trim();
+      }
+    }
+    const serverDir = this.getServerDataDir();
+    mkdirSync(serverDir, { recursive: true });
+    this.ensureOpenCodeAuthUnderXdg(serverDir);
+    this.hydrateCredentialEnv(serverDir);
+    return diffCredentialEnvKeys(this.bakedExtraEnv, this.lastExtraEnv).length > 0;
   }
 
   getLifecyclePhase(): import("../../shared/agent-status").AgentLifecyclePhase {
@@ -432,16 +483,16 @@ export class AcpService {
       for (const [provider, apiKey] of Object.entries(aiApiKeys)) {
         if (!apiKey?.trim()) continue;
         const envKey = providerApiKeyEnvVar(provider);
-        if (!this.lastExtraEnv[envKey]) {
+        if (!this.lastExtraEnv[envKey]?.trim()) {
           this.lastExtraEnv[envKey] = apiKey.trim();
         }
+        const baseKey = `${provider.replace(/-/g, "_").toUpperCase()}_BASE_URL`;
         if (
-          aiBaseUrls[provider] &&
+          aiBaseUrls[provider]?.trim() &&
           !isOpenCodeCatalogProvider(provider) &&
-          !this.lastExtraEnv[`${provider.replace(/-/g, "_").toUpperCase()}_BASE_URL`]
+          !this.lastExtraEnv[baseKey]?.trim()
         ) {
-          this.lastExtraEnv[`${provider.replace(/-/g, "_").toUpperCase()}_BASE_URL`] =
-            aiBaseUrls[provider];
+          this.lastExtraEnv[baseKey] = aiBaseUrls[provider].trim();
         }
       }
     } catch (err: any) {
@@ -509,6 +560,224 @@ export class AcpService {
     return parent;
   }
 
+  /**
+   * Parts for a session (assistant activity stream), oldest first.
+   * Used when ACP does not forward subagent session/update notifications.
+   */
+  listSessionActivityParts(
+    sessionId: string,
+  ): Array<{ id: string; role: string; data: Record<string, unknown> }> {
+    const id = sessionId?.trim();
+    if (!id) return [];
+    try {
+      const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
+      const db = new DatabaseSync(this.getDbPath(), { readOnly: true });
+      try {
+        const rows = db
+          .prepare(
+            `SELECT p.id AS part_id, p.data AS part_data, m.data AS message_data
+             FROM part p
+             JOIN message m ON m.id = p.message_id
+             WHERE p.session_id = ?
+             ORDER BY p.time_created ASC`,
+          )
+          .all(id) as Array<{
+            part_id?: string;
+            part_data?: string;
+            message_data?: string;
+          }>;
+        const out: Array<{ id: string; role: string; data: Record<string, unknown> }> = [];
+        for (const row of rows) {
+          const partId = row.part_id?.trim();
+          if (!partId) continue;
+          let partData: Record<string, unknown>;
+          try {
+            partData = JSON.parse(row.part_data || "{}") as Record<string, unknown>;
+          } catch {
+            continue;
+          }
+          let role = "assistant";
+          try {
+            const msg = JSON.parse(row.message_data || "{}") as { role?: string };
+            if (typeof msg.role === "string" && msg.role.trim()) {
+              role = msg.role.trim().toLowerCase();
+            }
+          } catch {
+            /* keep assistant */
+          }
+          out.push({ id: partId, role, data: partData });
+        }
+        return out;
+      } finally {
+        db.close();
+      }
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Child OpenCode sessions for a parent (Task subagents). Used to link when
+   * session/update races ahead of Task enqueue or parent_id commits late.
+   */
+  listChildSessionIds(parentSessionId: string): string[] {
+    const parent = parentSessionId?.trim();
+    if (!parent) return [];
+    try {
+      const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
+      const db = new DatabaseSync(this.getDbPath(), { readOnly: true });
+      try {
+        const rows = db
+          .prepare(
+            `SELECT id FROM session
+             WHERE parent_id = ?
+               AND time_archived IS NULL
+             ORDER BY time_created ASC`,
+          )
+          .all(parent) as Array<{ id?: string }>;
+        const ids: string[] = [];
+        for (const row of rows) {
+          const id = row?.id?.trim();
+          if (!id) continue;
+          ids.push(id);
+          this.sessionParentCache.set(id, parent);
+        }
+        return ids;
+      } finally {
+        db.close();
+      }
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Task tool callIDs on a parent session, oldest first.
+   * Used to map Task tool_use id → child subagent session by index.
+   */
+  listParentTaskToolCallIds(parentSessionId: string): string[] {
+    const parts = this.listSessionActivityParts(parentSessionId);
+    const ids: string[] = [];
+    for (const row of parts) {
+      const d = row.data;
+      const type = String(d.type || "");
+      if (type !== "tool" && type !== "tool_use") continue;
+      const toolName = (
+        (typeof d.tool === "string" ? d.tool : "")
+        || (d.tool as { name?: string } | undefined)?.name
+        || String(d.name || "")
+        || String(d.title || "")
+      ).toLowerCase();
+      if (toolName !== "task") continue;
+      const callId = String(d.callID || d.id || "").trim();
+      if (callId) ids.push(callId);
+    }
+    return ids;
+  }
+
+  /**
+   * Resolve the OpenCode child session for a parent Task tool_use.
+   * Prefer an explicit hint, then single-child, then Task-index ↔ child-index.
+   */
+  resolveChildSessionForTask(
+    parentSessionId: string,
+    taskToolUseId: string,
+    hintSubSessionId?: string,
+  ): string | null {
+    const parent = parentSessionId?.trim();
+    const toolId = taskToolUseId?.trim();
+    if (!parent || !toolId) return null;
+    const children = this.listChildSessionIds(parent);
+    if (children.length === 0) return null;
+    const hint = hintSubSessionId?.trim();
+    if (hint && children.includes(hint)) return hint;
+    if (children.length === 1) return children[0]!;
+    const taskIds = this.listParentTaskToolCallIds(parent);
+    const idx = taskIds.indexOf(toolId);
+    if (idx >= 0 && idx < children.length) return children[idx]!;
+    return null;
+  }
+
+  /**
+   * Hydrate Task run-panel activity from OpenCode SQLite (history / after reload).
+   */
+  getSubAgentActivityForTask(args: {
+    parentSessionId: string;
+    taskToolUseId: string;
+    subSessionId?: string;
+  }): {
+    subSessionId: string | null;
+    blocks: Array<Record<string, unknown>>;
+    status: "done" | "error" | "running";
+    error?: string;
+  } {
+    const parent = args.parentSessionId?.trim();
+    const toolId = args.taskToolUseId?.trim();
+    if (!parent || !toolId) {
+      return { subSessionId: null, blocks: [], status: "done" };
+    }
+
+    let parentToolStatus: "done" | "error" | "running" = "done";
+    let parentToolError: string | undefined;
+    let parentToolOutput = "";
+    for (const row of this.listSessionActivityParts(parent)) {
+      const d = row.data;
+      const type = String(d.type || "");
+      if (type !== "tool" && type !== "tool_use") continue;
+      const callId = String(d.callID || d.id || "").trim();
+      if (callId !== toolId) continue;
+      const state = d.state as {
+        status?: string;
+        output?: unknown;
+      } | undefined;
+      const st = String(state?.status || "").toLowerCase();
+      const output =
+        typeof state?.output === "string"
+          ? state.output
+          : state?.output == null
+            ? ""
+            : JSON.stringify(state.output);
+      parentToolOutput = output;
+      if (st === "pending" || st === "running" || st === "in_progress") {
+        parentToolStatus = "running";
+      } else if (
+        st === "error"
+        || st === "failed"
+        || st === "cancelled"
+        || st === "canceled"
+        || st === "aborted"
+      ) {
+        parentToolStatus = "error";
+        if (output.trim()) parentToolError = output.trim();
+      } else {
+        parentToolStatus = "done";
+      }
+      break;
+    }
+
+    const child = this.resolveChildSessionForTask(parent, toolId, args.subSessionId);
+    if (!child) {
+      // No child session — surface the parent's Task result so the panel is not blank.
+      if (parentToolOutput.trim()) {
+        return {
+          subSessionId: null,
+          blocks: [{ type: "text", text: parentToolOutput }],
+          status: parentToolStatus === "running" ? "done" : parentToolStatus,
+          error: parentToolError,
+        };
+      }
+      return { subSessionId: null, blocks: [], status: parentToolStatus };
+    }
+
+    const blocks = buildSubAgentActivityBlocks(this.listSessionActivityParts(child));
+    return {
+      subSessionId: child,
+      blocks,
+      status: parentToolStatus,
+      error: parentToolError,
+    };
+  }
+
   /** Parent orchestrator session for citation staging when tools run in a Task sub-session. */
   resolveCitationStagingSessionId(sessionId: string): string {
     const parent = this.getSessionParentId(sessionId);
@@ -529,8 +798,13 @@ export class AcpService {
    * projects, with zero cold-start on project switch.
    */
   async initialize(extraEnv?: Record<string, string>): Promise<void> {
-    // Merge into stored env — preserves keys from other providers across reconnects
-    if (extraEnv) Object.assign(this.lastExtraEnv, extraEnv);
+    // Merge into stored env — preserves keys from other providers across reconnects.
+    // Always trim so startup vs first-send whitespace cannot force a false restart.
+    if (extraEnv) {
+      for (const [k, v] of Object.entries(extraEnv)) {
+        if (typeof v === "string" && v.trim()) this.lastExtraEnv[k] = v.trim();
+      }
+    }
 
     for (;;) {
       // Join any in-flight attempt (do not start a parallel spawn/shutdown race).
@@ -553,9 +827,8 @@ export class AcpService {
       // API keys / base URLs only apply at spawn. If credentials arrived after the
       // process was already warm (or changed), restart so OpenCode can use them —
       // otherwise session/set_model to opencode-go/* silently falls back to big-pickle.
-      const credentialDelta = Object.entries(this.lastExtraEnv).some(
-        ([k, v]) => Boolean(v) && /API_KEY|BASE_URL/i.test(k) && this.bakedExtraEnv[k] !== v,
-      );
+      const credentialDiffs = diffCredentialEnvKeys(this.bakedExtraEnv, this.lastExtraEnv);
+      const credentialDelta = credentialDiffs.length > 0;
 
       if (this.conn && this.proc && !credentialDelta) {
         this.setLifecycle("ready");
@@ -563,7 +836,9 @@ export class AcpService {
       }
 
       if (this.conn && this.proc && credentialDelta) {
-        log.info("Restarting OpenCode to apply updated provider credentials");
+        log.info("Restarting OpenCode to apply updated provider credentials", {
+          changedKeys: credentialDiffs,
+        });
       }
 
       // Another caller may have started while we hydrated — join them.
@@ -667,11 +942,17 @@ export class AcpService {
         env,
         stdio: ["pipe", "pipe", "pipe"],
       });
-      this.bakedExtraEnv = { ...this.lastExtraEnv };
+      this.lastSpawnAt = Date.now();
+      this.bakedExtraEnv = Object.fromEntries(
+        Object.entries(this.lastExtraEnv)
+          .filter(([, v]) => typeof v === "string" && v.trim())
+          .map(([k, v]) => [k, v.trim()]),
+      );
     } catch (err: any) {
       log.error(`Failed to spawn opencode: ${err.message}`);
       this.proc = null;
       this.bakedExtraEnv = {};
+      this.lastSpawnAt = 0;
       this.setLifecycle("error", `Failed to start OpenCode: ${err.message}`);
       throw new Error(`Failed to start OpenCode: ${err.message}`);
     }
@@ -725,30 +1006,27 @@ export class AcpService {
             (params as { sessionId?: string }).sessionId
             || (params as { session?: { id?: string } }).session?.id;
 
-          if (
-            toolName === "task"
-            && sessionId
-            && !this.isSubAgentSession(sessionId)
-          ) {
+          if (toolName === "task" && sessionId) {
             const subagent = extractTaskSubagentType(params as Record<string, unknown>);
-            const taskSessionAgent = this.getSessionAgent(sessionId);
-            // Built-in OpenCode subagents (@Explore / @general / …) stay denied on
-            // the orchestrator. Plan mode also clears the expert orchestrator — so
-            // Prism experts (e.g. research-design-coach) must be denied with a
-            // Plan-specific message, not the misleading "builtin disabled" copy.
-            let deniedMsg: string | null = null;
-            if (shouldDenyOrchestratorBuiltinTask(subagent)) {
-              deniedMsg = formatOrchestratorBuiltinTaskDeniedMessage(subagent);
-              log.info(
-                `permission:task-builtin-deny sessionId=${sessionId} subagent=${subagent ?? "(none)"}`,
-              );
-            } else if (taskSessionAgent === "plan") {
-              deniedMsg = formatPlanModeExpertTaskDeniedMessage(subagent);
-              log.info(
-                `permission:task-plan-expert-deny sessionId=${sessionId} subagent=${subagent ?? "(none)"}`,
-              );
+            // Nested deny must not wait on markSubAgentSession — child rows often
+            // have parent_id before Prism links/marks the session.
+            const parentId = this.getSessionParentId(sessionId);
+            const isNested =
+              this.isSubAgentSession(sessionId) || !!parentId;
+            if (isNested && !this.isSubAgentSession(sessionId)) {
+              this.markSubAgentSession(sessionId);
             }
+            const denial = resolveTaskPermissionDenial({
+              isSubAgentSession: isNested,
+              subagentId: subagent,
+              sessionAgent: this.getSessionAgent(sessionId),
+              taskAllowlist: getSessionTaskAllowlist(sessionId),
+            });
+            const deniedMsg = denial?.message ?? null;
             if (deniedMsg) {
+              log.info(
+                `permission:task-deny sessionId=${sessionId} code=${denial!.code} subagent=${subagent ?? "(none)"}`,
+              );
               // Phase 1B: stash a redirect note for the next chat:send — the LLM
               // only gets a generic permission rejection, so we re-surface the
               // guidance on the next turn.
@@ -1509,15 +1787,13 @@ export class AcpService {
   }
 
   /**
-   * Fix corrupted/stale `permission.skill` maps in app-level OpenCode config.
+   * Fix corrupted `permission.skill` maps in app-level OpenCode config.
    * Runs automatically on every OpenCode spawn — users never edit Application Support manually.
    *
-   * Two cases handled:
-   * 1. Legacy numeric-key corruption (string spread bug).
-   * 2. Stale per-skill `deny` entries left by previous profile whitelist runs
-   *    — these would keep skills blocked forever after switching profiles.
-   *    We reset the map to just the wildcard; per-project denies are re-added
-   *    by `applyProjectSkillsIntegration` when a project is loaded.
+   * Handles legacy numeric-key corruption (string spread bug) and string-form
+   * skill permission. Intentional per-skill allow/deny maps from
+   * `applyProjectSkillsIntegration` are left intact (stale denies are cleared
+   * there via sanitize + patch, not by wiping on every spawn).
    */
   /**
    * Inject opencode-go variants into opencode.json on OpenCode ≤1.17.x only.
@@ -1550,11 +1826,12 @@ export class AcpService {
         if (!permission) continue;
 
         const before = permission.skill;
+        // Only fix corruption / string form. Do NOT wipe intentional per-skill
+        // allow/deny maps — those are written by applyProjectSkillsIntegration
+        // and must survive spawn so we can sync-before-start without a reload.
         const needsRepair =
           skillPermissionNeedsRepair(before)
-          || typeof before === "string"
-          || (before && typeof before === "object" && !Array.isArray(before)
-            && Object.keys(before as Record<string, unknown>).some((k) => k !== "*"));
+          || typeof before === "string";
         if (!needsRepair) continue;
 
         permission.skill = sanitizeSkillPermissionMap(before, {});
@@ -1592,7 +1869,11 @@ export class AcpService {
           config.tools as Record<string, unknown> | undefined,
           overrides,
         );
-        const next = ensurePlanAgentPermissionConfig(config);
+        const settings = getSettings() as Record<string, unknown>;
+        const next = ensureSubagentModelConfig(
+          ensurePlanAgentPermissionConfig(config),
+          settings.aiSubagentModel as string | null | undefined,
+        );
         mkdirSync(dirname(p), { recursive: true });
         writeFileSync(p, JSON.stringify(next, null, 2), "utf-8");
         log.info(`Applied built-in tools config to ${p}`);
@@ -1695,28 +1976,32 @@ export class AcpService {
    * (because XDG_CONFIG_HOME = <userData>/opencode-server/config/)
    */
   private writeDefaultConfig(): void {
-    const defaultConfig = ensurePlanAgentPermissionConfig({
-      $schema: "https://opencode.ai/config.json",
-      tools: buildEnabledToolsConfig(),
-      permission: {
-        edit: "ask",
-        bash: "ask",
-        webfetch: "allow",
-        websearch: "allow",
-        question: "allow",
-        task: "allow",
-        skill: "allow",
-      },
-      // Auto-compaction: OpenCode's native compaction agent automatically
-      // summarizes old conversation history when context reaches 70% of the
-      // model's limit. Users can also trigger compaction manually via /compact.
-      compaction: {
-        auto: true,
-        threshold: 0.85,
-        prune: true,
-      },
-      instructions: [...PRISM_OPENCODE_INSTRUCTIONS],
-    });
+    const settings = getSettings() as Record<string, unknown>;
+    const defaultConfig = ensureSubagentModelConfig(
+      ensurePlanAgentPermissionConfig({
+        $schema: "https://opencode.ai/config.json",
+        tools: buildEnabledToolsConfig(),
+        permission: {
+          edit: "ask",
+          bash: "ask",
+          webfetch: "allow",
+          websearch: "allow",
+          question: "allow",
+          task: "allow",
+          skill: "allow",
+        },
+        // Auto-compaction: OpenCode's native compaction agent automatically
+        // summarizes old conversation history when context reaches 70% of the
+        // model's limit. Users can also trigger compaction manually via /compact.
+        compaction: {
+          auto: true,
+          threshold: 0.85,
+          prune: true,
+        },
+        instructions: [...PRISM_OPENCODE_INSTRUCTIONS],
+      }),
+      settings.aiSubagentModel as string | null | undefined,
+    );
 
     const configStr = JSON.stringify(defaultConfig, null, 2);
 
@@ -1767,7 +2052,8 @@ export class AcpService {
       };
     }
 
-    if (options?.mcpServerAllowlist?.length) {
+    // Empty allowlist = load none (not "all"). Undefined = full project set.
+    if (options?.mcpServerAllowlist !== undefined) {
       const allow = new Set(options.mcpServerAllowlist);
       return {
         ...base,
@@ -1794,7 +2080,8 @@ export class AcpService {
 
     this.projectPath = cwd;
     const root = projectRoot || cwd;
-    // session/new: eager MCPs only (paper-search-mcp). Others load on @ / allowlist.
+    // session/new: no MCP (incl. built-in paper-search). Connect on demand via
+    // ensureSessionMcps / session/load when composer or orchestrator allowlists it.
     const { mcpServers, additionalDirectories } = this.loadProjectAgentConfig(root, {
       eagerOnly: true,
     });
@@ -1811,7 +2098,7 @@ export class AcpService {
       cwd,
       mcpCount: mcpServers.length,
       mcpNames: mcpServers.map((s) => s.name),
-      mcpMode: "eager-only",
+      mcpMode: "lazy",
     });
 
     const result = await this.conn.extMethod("session/new", params);
@@ -2473,9 +2760,14 @@ export class AcpService {
     projectRoot: string,
     allowlist?: string[] | null,
   ): Promise<void> {
+    // undefined / empty allowlist → connect nothing this turn (lazy MCP).
     const desired = mergeMcpAllowlist(allowlist);
     const loaded = this.sessionLoadedMcpNames.get(sessionId);
     if (loaded && mcpAllowlistSetsEqual([...loaded], desired)) {
+      return;
+    }
+    if (desired.length === 0 && (!loaded || loaded.size === 0)) {
+      this.sessionLoadedMcpNames.set(sessionId, new Set());
       return;
     }
     await this.reloadSessionMcps(sessionId, cwd, projectRoot, desired);
@@ -2484,7 +2776,9 @@ export class AcpService {
 
   /**
    * Reload MCP tool definitions for an existing session.
-   * Pass a non-empty allowlist to restrict; omit / empty = full project MCP set.
+   * - `undefined` allowlist → full project MCP set
+   * - `[]` → load none
+   * - non-empty → filter to those ids
    */
   async reloadSessionMcps(
     sessionId: string,
@@ -2495,11 +2789,16 @@ export class AcpService {
     if (!this.conn) return;
     const { mcpServers } = this.loadProjectAgentConfig(
       projectRoot,
-      mcpServerAllowlist?.length ? { mcpServerAllowlist } : undefined,
+      mcpServerAllowlist !== undefined ? { mcpServerAllowlist } : undefined,
     );
     log.info("Reloading session MCP servers", {
       sessionId,
-      allowlist: mcpServerAllowlist?.length ? mcpServerAllowlist : "(all)",
+      allowlist:
+        mcpServerAllowlist === undefined
+          ? "(all)"
+          : mcpServerAllowlist.length
+            ? mcpServerAllowlist
+            : "(none)",
       loaded: mcpServers.map((s) => s.name),
     });
     await this.withNotificationCollector(
@@ -2645,6 +2944,30 @@ export class AcpService {
 
   isSubAgentSession(sessionId: string): boolean {
     return this.subAgentSessions.has(sessionId);
+  }
+
+  /**
+   * OpenCode `session.agent` for a child (e.g. `explore`, `literature-synthesizer`).
+   * Used to bind Task tool_use ↔ child without FIFO guesswork.
+   */
+  getSessionAgentName(sessionId: string): string | null {
+    const id = sessionId?.trim();
+    if (!id) return null;
+    try {
+      const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
+      const db = new DatabaseSync(this.getDbPath(), { readOnly: true });
+      try {
+        const row = db
+          .prepare("SELECT agent FROM session WHERE id = ?")
+          .get(id) as { agent?: string | null } | undefined;
+        const agent = row?.agent?.trim();
+        return agent || null;
+      } finally {
+        db.close();
+      }
+    } catch {
+      return null;
+    }
   }
 
   /** Persist sub-agent session IDs to disk for survival across restarts. */
@@ -3011,20 +3334,163 @@ export class AcpService {
     });
   }
 
-  async abort(sessionId: string): Promise<void> {
-    this.releaseSessionPendingWork(sessionId);
-    // Cancel must only stop the in-flight turn — never discard the session.
-    // Drop the hydrate cache so the next prompt re-binds via session/load
-    // (ACP in-memory map can desync after abort even though the session
-    // still exists on disk / in OpenCode's store).
-    this.opencodeHydratedSessions.delete(sessionId);
-    if (!this.conn) return;
-
-    try {
-      this.conn.extNotification("session/cancel", { sessionId });
-    } catch (err: any) {
-      log.error(`Failed to abort session ${sessionId}: ${err.message}`);
+  /**
+   * Discover OpenCode's local HTTP control plane.
+   * Env → probe :4096 /global/health → null (fail closed for subagent abort).
+   */
+  private async ensureOpenCodeHttpBase(): Promise<string | null> {
+    if (this.openCodeHttpBase) return this.openCodeHttpBase;
+    const candidates: string[] = [];
+    const fromEnv = process.env.OPENCODE_SERVER_URL?.trim();
+    if (fromEnv) candidates.push(fromEnv.replace(/\/$/, ""));
+    const port = process.env.OPENCODE_PORT?.trim();
+    if (port) candidates.push(`http://127.0.0.1:${port}`);
+    candidates.push("http://127.0.0.1:4096");
+    const seen = new Set<string>();
+    for (const base of candidates) {
+      if (!base || seen.has(base)) continue;
+      seen.add(base);
+      try {
+        const res = await fetch(`${base}/global/health`, {
+          signal: AbortSignal.timeout(800),
+        });
+        if (res.ok) {
+          this.openCodeHttpBase = base;
+          log.info(`OpenCode HTTP control plane: ${base}`);
+          return base;
+        }
+      } catch {
+        /* try next */
+      }
     }
+    log.warn("OpenCode HTTP control plane not reachable");
+    return null;
+  }
+
+  private resolveAbortDirectory(sessionId: string): string | undefined {
+    const direct = getSessionProjectRoot(sessionId);
+    if (direct) return direct;
+    const parent = this.getSessionParentId(sessionId);
+    if (parent) {
+      const fromParent = getSessionProjectRoot(parent);
+      if (fromParent) return fromParent;
+    }
+    try {
+      const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
+      const db = new DatabaseSync(this.getDbPath(), { readOnly: true });
+      try {
+        const row = db
+          .prepare("SELECT directory FROM session WHERE id = ?")
+          .get(sessionId) as { directory?: string } | undefined;
+        const dir = row?.directory?.trim();
+        return dir || undefined;
+      } finally {
+        db.close();
+      }
+    } catch {
+      return undefined;
+    }
+  }
+
+  private prepareAbort(sessionId: string): string | null {
+    const sid = sessionId?.trim();
+    if (!sid) return null;
+    this.releaseSessionPendingWork(sid);
+    this.opencodeHydratedSessions.delete(sid);
+    return sid;
+  }
+
+  private async acpCancelSession(sid: string): Promise<boolean> {
+    if (!this.conn) {
+      log.warn(`ACP session/cancel skipped — no connection session=${sid}`);
+      return false;
+    }
+    try {
+      await this.conn.cancel({ sessionId: sid });
+      log.info(`session/cancel sent session=${sid}`);
+      return true;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error(`Failed to ACP-cancel session ${sid}: ${msg}`);
+      return false;
+    }
+  }
+
+  /**
+   * POST /session/:id/abort — required for Task children (not in ACPSessionManager).
+   */
+  async abortViaHttp(
+    sessionId: string,
+    directory?: string,
+  ): Promise<{ ok: boolean; error?: "abort_failed" | "unreachable" }> {
+    const sid = sessionId?.trim();
+    if (!sid) return { ok: false, error: "abort_failed" };
+    const base = await this.ensureOpenCodeHttpBase();
+    if (!base) return { ok: false, error: "unreachable" };
+    const dir = directory?.trim() || this.resolveAbortDirectory(sid);
+    const url = new URL(`/session/${encodeURIComponent(sid)}/abort`, `${base}/`);
+    if (dir) url.searchParams.set("directory", dir);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!res.ok) {
+        log.warn(`HTTP session abort failed session=${sid} status=${res.status}`);
+        return { ok: false, error: "abort_failed" };
+      }
+      log.info(`HTTP session/abort ok session=${sid}`);
+      return { ok: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.warn(`HTTP session abort error session=${sid}: ${msg}`);
+      return { ok: false, error: "abort_failed" };
+    }
+  }
+
+  /**
+   * Abort an orchestrator / primary ACP session (session/new|load).
+   * Used by chat:cancel and turn watchdog — cancels the whole turn.
+   */
+  async abortPrimarySession(
+    sessionId: string,
+  ): Promise<{ ok: boolean; error?: string }> {
+    const sid = this.prepareAbort(sessionId);
+    if (!sid) return { ok: false, error: "missing_id" };
+    const acpOk = await this.acpCancelSession(sid);
+    // Belt-and-suspenders: HTTP abort also stops the backing session.
+    await this.abortViaHttp(sid);
+    return acpOk ? { ok: true } : { ok: false, error: "abort_failed" };
+  }
+
+  /**
+   * Abort a Task child / subagent session. HTTP abort is required; ACP cancel
+   * is a no-op for unregistered children and must not be relied on.
+   * Never call this with the parent orchestrator session id from Task Stop.
+   */
+  async abortSubAgentSession(
+    sessionId: string,
+  ): Promise<{ ok: boolean; error?: "abort_failed" | "unreachable" | "missing_id" }> {
+    const sid = this.prepareAbort(sessionId);
+    if (!sid) return { ok: false, error: "missing_id" };
+    const http = await this.abortViaHttp(sid);
+    // Optional ACP cancel — harmless no-op when child is not ACP-registered.
+    void this.acpCancelSession(sid);
+    return http;
+  }
+
+  /**
+   * Compatibility wrapper: route by subagent vs primary.
+   * Prefer abortPrimarySession / abortSubAgentSession at call sites.
+   */
+  async abort(sessionId: string): Promise<void> {
+    const sid = sessionId?.trim();
+    if (!sid) return;
+    if (this.isSubAgentSession(sid) || this.getSessionParentId(sid)) {
+      await this.abortSubAgentSession(sid);
+      return;
+    }
+    await this.abortPrimarySession(sid);
   }
 
   /**

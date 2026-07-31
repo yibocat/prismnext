@@ -20,6 +20,7 @@ import { ComposerToolbar } from "./agent-settings/composer-toolbar";
 import { ModelThoughtSelect } from "./agent-settings/model-thought-select";
 import { InlineComposerEditor } from "./inline-composer";
 import { ComposerChromeStack } from "./composer-chrome-stack";
+import { SubAgentRunPanelHost } from "./subagent-run-panel";
 import { PlanModeChip } from "./plan-mode-chip";
 import { useChatComposer } from "@/hooks/use-chat-composer";
 import { useChatStore } from "@/stores/chat-store";
@@ -321,6 +322,7 @@ export function ChatComposerCore({
       )}
     >
       <div className="flex w-full flex-col">
+        <SubAgentRunPanelHost />
         <ComposerChromeStack />
 
         <div

@@ -37,6 +37,7 @@ import {
   CUSTOM_PRESET,
   getPreset,
   buildCustomModelEntry,
+  buildRemoveCustomProviderPatch,
   modelIdTaken,
   modelSupportsVision,
   prefetchOpenCodeModelsCatalog,
@@ -1000,9 +1001,7 @@ function CustomProviderEditorPanel({
   const removeProvider = () => {
     if (!editProviderId) return;
     setDeleteDialogOpen(false);
-    updateSettings({
-      aiCustomProviders: customProviders.filter((x) => x.id !== editProviderId),
-    });
+    updateSettings(buildRemoveCustomProviderPatch(settings, editProviderId));
     toast.success(t("settings.editor.provider.toast.removed"));
     closePanel();
   };

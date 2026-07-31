@@ -3,40 +3,33 @@
  * Used by main (ACP reject) and renderer (display rewrite).
  */
 
-/** OpenCode built-in Task subagents — keep in sync with task-orchestrator-gate. */
-const OPENCODE_BUILTIN_TASK_SUBAGENTS = new Set([
-  "general",
-  "explore",
-  "command",
-  "plan",
-  "build",
-  "scout",
-]);
+import { formatTaskError } from "./task-error-codes";
 
 function normalizeSubagentId(subagentId: string | null | undefined): string {
   if (!subagentId?.trim()) return "general";
   return subagentId.trim().replace(/^@/, "").toLowerCase();
 }
 
-function isBuiltinTaskSubagent(id: string): boolean {
-  return OPENCODE_BUILTIN_TASK_SUBAGENTS.has(id);
+/** Reserved OpenCode subagents (plan/build) denied on orchestrator sessions. */
+export function formatReservedTaskSubagentDeniedMessage(
+  subagentId: string | null | undefined,
+): string {
+  return formatTaskError("reserved_subagent_denied", { subagentId });
 }
 
-/** User-visible error when ACP rejects a builtin Task — not a manual cancel. */
+/**
+ * @deprecated Use {@link formatReservedTaskSubagentDeniedMessage} for plan/build denies.
+ * Kept for ACP callers that still import this name.
+ */
 export function formatOrchestratorBuiltinTaskDeniedMessage(
   subagentId: string | null | undefined,
 ): string {
-  const id = normalizeSubagentId(subagentId);
-  return (
-    `Built-in Task @${id} is disabled on the orchestrator (this is not a user cancel). ` +
-    "Call platform tools directly in this conversation — e.g. literature-stage after Paper Search MCP, " +
-    "literature-search, or citation-health. Do not use Task/@Explore to read OpenCode tool-output files."
-  );
+  return formatReservedTaskSubagentDeniedMessage(subagentId);
 }
 
 /**
  * Plan mode clears the expert orchestrator — Expert Task cannot run.
- * Prefer this over the builtin-disabled copy (experts are not OpenCode built-ins).
+ * Prefer this over the reserved-subagent copy (experts are not OpenCode built-ins).
  */
 export function formatPlanModeExpertTaskDeniedMessage(
   subagentId: string | null | undefined,
@@ -52,30 +45,27 @@ export function formatPlanModeExpertTaskDeniedMessage(
 
 /**
  * Expert Task failed with opaque OpenCode cancel — do NOT claim "builtin disabled".
+ * @deprecated Prefer {@link formatTaskError} with `opencode_cancelled`.
  */
 export function formatExpertTaskCancelledMessage(
   subagentId: string | null | undefined,
 ): string {
-  const id = normalizeSubagentId(subagentId);
-  return (
-    `Task @${id} was cancelled before the expert finished (this is not a user cancel). ` +
-    "If this tab is in Plan mode, switch to Build and retry — Plan clears the expert orchestrator. " +
-    "Otherwise retry the Task, or continue with platform tools directly in this conversation."
-  );
+  return formatTaskError("opencode_cancelled", { subagentId });
 }
 
 /**
  * Rewrite opaque `{"error":"Task cancelled"}` for the UI.
- * Built-ins → orchestrator disable copy; Prism experts / other ids → expert cancel copy.
+ * Always uses structured opencode_cancelled — no "builtin disabled" for open built-ins.
  */
 export function resolveOpaqueTaskCancelledDisplay(
   subagentId: string | null | undefined,
 ): string {
-  const id = normalizeSubagentId(subagentId);
-  if (!subagentId?.trim() || isBuiltinTaskSubagent(id)) {
-    return formatOrchestratorBuiltinTaskDeniedMessage(id);
-  }
-  return formatExpertTaskCancelledMessage(id);
+  return formatTaskError("opencode_cancelled", { subagentId });
+}
+
+/** Exact opaque OpenCode cancel only — do not swallow richer provider errors. */
+function isExactTaskCancelledPhrase(value: string): boolean {
+  return /^task cancelled\.?$/i.test(value.trim());
 }
 
 /** OpenCode often returns only this JSON after we reject Task permission. */
@@ -87,11 +77,14 @@ export function isOpaqueTaskCancelledResult(content: unknown): boolean {
         ? ""
         : JSON.stringify(content);
   if (!raw) return false;
-  if (/^task cancelled\.?$/i.test(raw)) return true;
+  if (isExactTaskCancelledPhrase(raw)) return true;
   try {
     const parsed = JSON.parse(raw) as { error?: unknown };
-    return typeof parsed?.error === "string" && /task cancelled/i.test(parsed.error);
+    return typeof parsed?.error === "string" && isExactTaskCancelledPhrase(parsed.error);
   } catch {
-    return /["']error["']\s*:\s*["']Task cancelled["']/i.test(raw);
+    // Only the exact opaque JSON shape — not substrings inside longer errors.
+    return /^\s*\{\s*"error"\s*:\s*"Task cancelled"\s*\}\s*$/i.test(raw);
   }
 }
+
+export { formatTaskError, type TaskErrorCode } from "./task-error-codes";

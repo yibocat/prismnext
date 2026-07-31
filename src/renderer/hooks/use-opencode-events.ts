@@ -31,10 +31,8 @@ import { parsePlanSteps } from "@/lib/chat/parse-plan-steps";
 import { isPrismSystemPromptText } from "@/lib/chat/session-message-hydrate";
 import { refreshGitStatusNow } from "@/lib/git/checkout-context";
 import { isChatPreparePhase } from "../../shared/chat-prepare-phases";
-import {
-  isOpaqueTaskCancelledResult,
-  resolveOpaqueTaskCancelledDisplay,
-} from "../../shared/task-deny-message";
+import { formatTaskError } from "../../shared/task-error-codes";
+import { isOpaqueTaskCancelledResult } from "../../shared/task-deny-message";
 
 const log = createLogger("opencode-events", "agent");
 
@@ -173,9 +171,19 @@ export function useOpenCodeEvents() {
       case "text":
         return { type: "text", text: part.text || "" };
       case "reasoning":
-        return { type: "thinking", thinking: part.text || "" };
-      case "thinking":
-        return { type: "thinking", thinking: part.thinking || part.text || "" };
+      case "thinking": {
+        const thinkingText =
+          part.type === "reasoning"
+            ? (part.text || "")
+            : (part.thinking || part.text || "");
+        return {
+          type: "thinking",
+          thinking: thinkingText,
+          ...(typeof part.duration === "number" ? { duration: part.duration } : {}),
+          ...(typeof part.timeStart === "number" ? { timeStart: part.timeStart } : {}),
+          ...(typeof part.timeEnd === "number" ? { timeEnd: part.timeEnd } : {}),
+        };
+      }
       case "tool":
         {
           // Derive the tool name from whatever field OpenCode populated.
@@ -203,6 +211,9 @@ export function useOpenCodeEvents() {
             kind: part.kind || part.tool?.kind || "",
             status: part.status || part.state?.status || "",
             locations: part.locations || part.tool?.locations || [],
+            ...(typeof part.duration === "number" ? { duration: part.duration } : {}),
+            ...(typeof part.timeStart === "number" ? { timeStart: part.timeStart } : {}),
+            ...(typeof part.timeEnd === "number" ? { timeEnd: part.timeEnd } : {}),
           };
         }
       case "tool_use":
@@ -218,6 +229,9 @@ export function useOpenCodeEvents() {
             kind: part.kind || "",
             status: part.status || "",
             locations: part.locations || [],
+            ...(typeof part.duration === "number" ? { duration: part.duration } : {}),
+            ...(typeof part.timeStart === "number" ? { timeStart: part.timeStart } : {}),
+            ...(typeof part.timeEnd === "number" ? { timeEnd: part.timeEnd } : {}),
           };
         }
       case "tool_result":
@@ -230,6 +244,9 @@ export function useOpenCodeEvents() {
           status: part.status || "",
           _backfillInput: (part as any)._backfillInput || undefined,
           _backfillName: (part as any)._backfillName || undefined,
+          ...(typeof part.duration === "number" ? { duration: part.duration } : {}),
+          ...(typeof part.timeStart === "number" ? { timeStart: part.timeStart } : {}),
+          ...(typeof part.timeEnd === "number" ? { timeEnd: part.timeEnd } : {}),
         };
       default:
         return null;
@@ -245,14 +262,12 @@ export function useOpenCodeEvents() {
       if (type === "agent.reconnected" || type === "agent.connectionLost") {
         if (type === "agent.connectionLost") {
           const errText =
-            (typeof data?.error === "string" && data.error)
+            (typeof data?.error === "string" && data.error.trim())
             || i18n.t("chat.errors.connectionLost");
           for (const tab of chatStore.tabs) {
             if (!tab.isStreaming) continue;
-            chatStore._setError(tab.id, errText);
-            chatStore._setStreaming(tab.id, false);
+            chatStore._appendAssistantError(tab.id, errText);
           }
-          toast.error(errText);
         } else {
           const activeTab = chatStore.tabs.find((t) => t.id === chatStore.activeTabId);
           if (activeTab) {
@@ -311,6 +326,13 @@ export function useOpenCodeEvents() {
           break;
         }
 
+        case "subAgent.linkDegraded": {
+          const taskToolUseId = String(data.taskToolUseId || "");
+          if (!taskToolUseId) break;
+          chatStore._markSubAgentLinkDegraded(tabId, taskToolUseId);
+          break;
+        }
+
         case "subAgent.activity": {
           const taskToolUseId = String(data.taskToolUseId || "");
           const block = data.block as ContentBlock | undefined;
@@ -336,14 +358,27 @@ export function useOpenCodeEvents() {
           break;
         }
 
+        case "subAgent.snapshot": {
+          const taskToolUseId = String(data.taskToolUseId || "");
+          const blocks = Array.isArray(data.blocks) ? data.blocks as ContentBlock[] : null;
+          if (!taskToolUseId || !blocks) break;
+          chatStore._setSubAgentSnapshot(tabId, taskToolUseId, blocks);
+          break;
+        }
+
         case "subAgent.completed": {
           const taskToolUseId = String(data.taskToolUseId || "");
           if (!taskToolUseId) break;
-          chatStore._completeSubAgentRun(
-            tabId,
-            taskToolUseId,
-            data.status === "error" ? "error" : "done",
-          );
+          const status = data.status === "error" ? "error" as const : "done" as const;
+          const errorText =
+            typeof data.error === "string" && data.error.trim()
+              ? data.error.trim()
+              : undefined;
+          chatStore._completeSubAgentRun(tabId, taskToolUseId, status, errorText);
+          // Real Task failures (ACP deny / OpenCode) inject a tool_result body.
+          if (status === "error" && errorText) {
+            chatStore._injectToolResult(tabId, taskToolUseId, errorText, true);
+          }
           break;
         }
 
@@ -492,44 +527,45 @@ export function useOpenCodeEvents() {
                 ).toLowerCase();
 
                 // OpenCode returns opaque {"error":"Task cancelled"} after we
-                // reject Task — rewrite by subagent kind (builtin vs expert).
+                // reject Task / abort parent — rewrite by subagent kind.
+                // Prefer an already-recorded watchdog / Plan-deny error over the
+                // generic Plan-mode hint (which misleads when the real cause was
+                // task-link-timeout).
                 if (
                   toolName === "task"
                   && block.is_error
                   && isOpaqueTaskCancelledResult(block.content)
                 ) {
+                  const tabNow = useChatStore.getState().tabs.find((t) => t.id === tabId);
+                  const priorError = tabNow?.subAgentRuns?.[toolUseId]?.error?.trim();
+                  const priorResult = tabNow?.messages
+                    .flatMap((m) => m.message?.content ?? [])
+                    .find(
+                      (b) =>
+                        b.type === "tool_result"
+                        && b.tool_use_id === toolUseId
+                        && typeof b.content === "string"
+                        && b.content.trim()
+                        && !isOpaqueTaskCancelledResult(b.content),
+                    );
+                  if (priorResult || priorError) {
+                    // Keep the specific error already shown; skip opaque rewrite.
+                    continue;
+                  }
                   const input = pendingToolUsesRef.current.get(tabId)?.get(toolUseId)?.input as
                     | Record<string, unknown>
                     | undefined;
+                  const runExpert = tabNow?.subAgentRuns?.[toolUseId]?.expertId;
                   const subagent =
                     (typeof input?.subagent_type === "string" && input.subagent_type)
                     || (typeof input?.subagentType === "string" && input.subagentType)
                     || (typeof input?.agent === "string" && input.agent)
+                    || (runExpert && runExpert !== "expert" ? runExpert : null)
                     || "general";
                   block = {
                     ...block,
-                    content: resolveOpaqueTaskCancelledDisplay(String(subagent)),
+                    content: formatTaskError("opencode_cancelled", { subagentId: String(subagent) }),
                   };
-                }
-
-                const resultMsg: ChatStreamMessage = {
-                  type: "result",
-                  message: { content: [block] },
-                };
-                chatStore._appendMessage(tabId, resultMsg);
-
-                if (toolName === "bash" || toolName === "shell" || toolName === "terminal" || toolName === "execute") {
-                  handleBashToolResult(toolUseId, block.content, block.is_error);
-                }
-
-                // Capture literature-stage results into the citation staging store
-                // so chat [n] references and the Session citations panel stay in sync.
-                if (toolName === "literature-stage" && !block.is_error) {
-                  const sessionId =
-                    useChatStore.getState().tabs.find((t) => t.id === tabId)?.sessionId ?? null;
-                  if (sessionId) {
-                    captureLiteratureStageFromToolResult(sessionId, block.content);
-                  }
                 }
 
                 if (toolName === "task" && !block.is_error) {
@@ -548,6 +584,49 @@ export function useOpenCodeEvents() {
                         ),
                       };
                     }
+                  }
+                  // Clear sticky run.error from any prior false failure.
+                  chatStore._completeSubAgentRun(tabId, toolUseId, "done");
+                }
+
+                const priorToolResult = useChatStore.getState().tabs
+                  .find((t) => t.id === tabId)
+                  ?.messages
+                  .flatMap((m) => m.message?.content ?? [])
+                  .find((b) => b.type === "tool_result" && b.tool_use_id === toolUseId);
+                if (priorToolResult) {
+                  chatStore._injectToolResult(
+                    tabId,
+                    toolUseId,
+                    typeof block.content === "string" ? block.content : String(block.content ?? ""),
+                    !!block.is_error,
+                  );
+                } else {
+                  const resultMsg: ChatStreamMessage = {
+                    type: "result",
+                    message: { content: [block] },
+                  };
+                  chatStore._appendMessage(tabId, resultMsg);
+                }
+
+                if (typeof block.duration === "number" && Number.isFinite(block.duration)) {
+                  chatStore._patchToolDuration(tabId, toolUseId, block.duration, {
+                    start: block.timeStart,
+                    end: block.timeEnd,
+                  });
+                }
+
+                if (toolName === "bash" || toolName === "shell" || toolName === "terminal" || toolName === "execute") {
+                  handleBashToolResult(toolUseId, block.content, block.is_error);
+                }
+
+                // Capture literature-stage results into the citation staging store
+                // so chat [n] references and the Session citations panel stay in sync.
+                if (toolName === "literature-stage" && !block.is_error) {
+                  const sessionId =
+                    useChatStore.getState().tabs.find((t) => t.id === tabId)?.sessionId ?? null;
+                  if (sessionId) {
+                    captureLiteratureStageFromToolResult(sessionId, block.content);
                   }
                 }
 
@@ -575,6 +654,25 @@ export function useOpenCodeEvents() {
 
                 // 1. Patch the tool_use block's input AND name
                 chatStore._patchToolInput(tabId, toolUseId, backfillInput, backfillName || undefined);
+
+                // Task: refresh expert id when subagent_type arrives late (empty rawInput).
+                if ((backfillName || "").toLowerCase() === "task" || toolUseId) {
+                  const sub =
+                    (typeof (backfillInput as any).subagent_type === "string" && (backfillInput as any).subagent_type)
+                    || (typeof (backfillInput as any).subagentType === "string" && (backfillInput as any).subagentType)
+                    || (typeof (backfillInput as any).agent === "string" && (backfillInput as any).agent)
+                    || "";
+                  if (sub.trim()) {
+                    chatStore._linkSubAgentRun(tabId, toolUseId, {
+                      expertId: sub.trim().replace(/^@/, "").toLowerCase(),
+                      prompt: String(
+                        (backfillInput as any).prompt
+                        || (backfillInput as any).description
+                        || "",
+                      ),
+                    });
+                  }
+                }
 
                 // 2. Re-register proposed change with the REAL input.
                 const tabTools = pendingToolUsesRef.current.get(tabId);
@@ -743,15 +841,13 @@ export function useOpenCodeEvents() {
 
         case "session.error": {
           const detail =
-            (typeof data?.message === "string" && data.message)
-            || (typeof data?.error === "string" && data.error)
+            (typeof data?.message === "string" && data.message.trim())
+            || (typeof data?.error === "string" && data.error.trim())
             || "";
-          chatStore._setError(
+          chatStore._appendAssistantError(
             tabId,
             detail || i18n.t("chat.errors.sessionError"),
           );
-          chatStore._setStreaming(tabId, false);
-          toast.error(detail || i18n.t("chat.errors.sessionError"));
           break;
         }
 
@@ -762,17 +858,17 @@ export function useOpenCodeEvents() {
             if (tab?.sessionAgent === "plan") {
               void chatStore.refreshPlanDraftFromDisk(tabId);
             }
-            // Surface upstream session errors — previously this silently
-            // cleared isStreaming with zero user feedback.
+            // Surface upstream session errors as an assistant bubble (not a banner).
             if (status === "error") {
               const detail =
-                (typeof data?.message === "string" && data.message)
-                || (typeof data?.error === "string" && data.error)
+                (typeof data?.message === "string" && data.message.trim())
+                || (typeof data?.error === "string" && data.error.trim())
                 || "";
-              chatStore._setError(
-                tabId,
-                detail || i18n.t("chat.errors.sessionError"),
-              );
+              if (detail) {
+                chatStore._appendAssistantError(tabId, detail);
+              } else {
+                chatStore._appendAssistantError(tabId, i18n.t("chat.errors.sessionError"));
+              }
             }
             // Backup path: if sendPrompt hung (tool blocked), chat:complete never
             // fires and isStreaming stays true — blocking the next user message.
@@ -844,16 +940,20 @@ export function useOpenCodeEvents() {
         if (errorCode === "cancelled") {
           // User-initiated stop — cancelExecution already committed partial reply.
         } else {
-          // Known error codes carry localized copy; raw messages pass through.
-          const display = errorCode ? i18n.t(`chat.errors.${errorCode}`, { defaultValue: error }) : error;
-          chatStore._setError(tabId, display);
-          // Surface attachment / send failures that previously looked like a silent stop.
-          toast.error(display);
+          // Prefer OpenCode/provider raw text; i18n only when raw body is empty.
+          const raw = typeof error === "string" ? error.trim() : "";
+          const display =
+            raw
+            || (errorCode
+              ? i18n.t(`chat.errors.${errorCode}`, { defaultValue: error })
+              : "")
+            || i18n.t("chat.errors.sessionError");
+          chatStore._appendAssistantError(tabId, display);
         }
       } else if (success && emptyTurn) {
         // Provider turn failed upstream but resolved as a bare end_turn with
-        // zero frames (rate limit / quota / 5xx). Never fake-succeed silently.
-        chatStore._setError(tabId, i18n.t("chat.errors.emptyTurn"));
+        // zero frames (rate limit / quota / 5xx). Print into the reply stream.
+        chatStore._appendAssistantError(tabId, i18n.t("chat.errors.emptyTurn"));
       } else {
         notifyDesktopForTab("turn_complete", tabId, "shell.notify.replyFinished");
       }

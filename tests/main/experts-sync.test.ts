@@ -17,7 +17,7 @@ import {
   setBuiltinExpertEnabled,
   resetAllBuiltinExpertsToDefaults,
   saveBuiltinOrchestratorOverride,
-  appendAllowedExpertsSection,
+  appendSubagentRosterSection,
 } from "../../src/main/services/experts-sync";
 import { readBundledOrchestratorInstructions } from "../../src/main/services/bundled-orchestrators";
 
@@ -56,6 +56,51 @@ describe("experts-sync", () => {
     expect(md).not.toMatch(/^tools:/m);
   });
 
+  it("always injects nested Task deny for experts without requiring author config", () => {
+    const md = renderExpertAgentMarkdown(
+      {
+        id: "custom-writer",
+        name: "Custom Writer",
+        description: "Writes drafts",
+      },
+      "Write clearly.",
+    );
+    expect(md).toContain("permission:");
+    expect(md).toContain("task:");
+    expect(md).toContain('"*"');
+    expect(md).toContain("deny");
+  });
+
+  it("injects default subagent model when expert has none", () => {
+    const md = renderExpertAgentMarkdown(
+      {
+        id: "peer-reviewer",
+        name: "Peer Reviewer",
+        description: "Review",
+      },
+      "Review carefully.",
+      {},
+      { defaultModel: "openai/gpt-4o-mini" },
+    );
+    expect(md).toMatch(/^model: openai\/gpt-4o-mini$/m);
+  });
+
+  it("keeps expert-specific model over the global default", () => {
+    const md = renderExpertAgentMarkdown(
+      {
+        id: "peer-reviewer",
+        name: "Peer Reviewer",
+        description: "Review",
+        model: "anthropic/claude-sonnet-4-20250514",
+      },
+      "Review carefully.",
+      {},
+      { defaultModel: "openai/gpt-4o-mini" },
+    );
+    expect(md).toContain("model: anthropic/claude-sonnet-4-20250514");
+    expect(md).not.toContain("openai/gpt-4o-mini");
+  });
+
   it("renders orchestrator task allowlist", () => {
     const md = renderOrchestratorAgentMarkdown(
       {
@@ -83,8 +128,12 @@ describe("experts-sync", () => {
     // Unquoted `*: deny` is invalid YAML (alias) — must be quoted so OpenCode can parse task rules.
     expect(md).toContain('"*": deny');
     expect(md).not.toMatch(/^\s*\*: deny\s*$/m);
-    expect(md).toContain("## Available experts (via Task)");
-    expect(md).toContain("`peer-reviewer` — Peer Reviewer:");
+    expect(md).toContain("## Available subagents (via Task)");
+    expect(md).toContain("### Built-in");
+    expect(md).toContain("`general`");
+    expect(md).toContain("`peer-reviewer` — Peer Reviewer");
+    expect(md).toContain("Choose by fit");
+    expect(md).not.toContain("Only delegate to experts listed above");
   });
 
   it("quotes task wildcard so frontmatter is valid YAML for OpenCode", () => {
@@ -104,14 +153,22 @@ describe("experts-sync", () => {
     // yaml package treats bare `*: deny` as an alias — OpenCode then drops task allows.
     expect(fm).toContain('"*": deny');
     expect(fm).toContain("research-design-coach: allow");
-    expect(fm).toContain("general: deny");
+    expect(fm).toContain("general: allow");
+    expect(fm).toContain("explore: allow");
+    expect(fm).toContain("plan: deny");
+    expect(fm).toContain("build: deny");
     expect(fm).not.toMatch(/^\s*\*: deny\s*$/m);
   });
 
-  it("buildTaskPermissionBlock denies by default", () => {
+  it("buildTaskPermissionBlock allows open builtins and listed experts", () => {
     const rules = buildTaskPermissionBlock(["research-design-coach"]);
     expect(rules["*"]).toBe("deny");
-    expect(rules.general).toBe("deny");
+    expect(rules.general).toBe("allow");
+    expect(rules.explore).toBe("allow");
+    expect(rules.command).toBe("allow");
+    expect(rules.scout).toBe("allow");
+    expect(rules.plan).toBe("deny");
+    expect(rules.build).toBe("deny");
     expect(rules["research-design-coach"]).toBe("allow");
     expect(rules["peer-reviewer"]).toBeUndefined();
   });
@@ -123,11 +180,14 @@ describe("experts-sync", () => {
     });
     const sync = syncProjectExpertsToOpencode(root, { agentsDir, syncStatePath });
     const orchestratorMd = readFileSync(join(agentsDir, "research-prism.md"), "utf-8");
-    expect(orchestratorMd).toContain("No experts are currently allowed");
+    expect(orchestratorMd).toContain("No project experts are currently allowed");
+    expect(orchestratorMd).toContain("### Built-in");
+    expect(orchestratorMd).toContain("`general`");
     expect(orchestratorMd).not.toContain("peer-reviewer: allow");
     expect(sync.agentFiles).toContain("research-prism.md");
-    const section = appendAllowedExpertsSection("body", []);
-    expect(section).toContain("No experts are currently allowed");
+    const section = appendSubagentRosterSection("body", []);
+    expect(section).toContain("No project experts are currently allowed");
+    expect(section).toContain("### Built-in");
   });
 
   it("lists bundled experts and orchestrators", () => {
@@ -179,7 +239,8 @@ describe("experts-sync", () => {
     expect(existsSync(join(agentsDir, "peer-reviewer.md"))).toBe(true);
     const orchestratorMd = readFileSync(join(agentsDir, "research-prism.md"), "utf-8");
     expect(orchestratorMd).toContain("mode: primary");
-    expect(orchestratorMd).toContain("## Available experts (via Task)");
+    expect(orchestratorMd).toContain("## Available subagents (via Task)");
+    expect(orchestratorMd).toContain("### Built-in");
     expect(orchestratorMd).toContain("peer-reviewer");
     expect(orchestratorMd).toContain("## Task delegation (orchestrator)");
     expect(orchestratorMd).toContain("## Chat paper citations");
@@ -188,7 +249,7 @@ describe("experts-sync", () => {
     expect(bundledInstructions).not.toContain("## Chat paper citations");
     const synthesizerMd = readFileSync(join(agentsDir, "literature-synthesizer.md"), "utf-8");
     expect(synthesizerMd).toContain("## Project literature library");
-    expect(synthesizerMd).toContain("Task expert handoff (library papers)");
+    expect(synthesizerMd).toContain("### Task handoff");
     const state = JSON.parse(readFileSync(syncStatePath, "utf-8"));
     expect(state.projectRoot).toBe(root);
     expect(state.agentFiles).toEqual(result.agentFiles);

@@ -6,21 +6,18 @@ describe("buildExpertTeamPreamble", () => {
     expect(buildExpertTeamPreamble([])).toBe("");
   });
 
-  it("lists all experts with task delegation instructions", () => {
+  it("lists @-mentioned experts as must-Task delegated subagents", () => {
     const preamble = buildExpertTeamPreamble([
       {
-        id: "citation-auditor",
-        name: "Citation Auditor",
-        description: "Audit citations",
-      },
-      {
-        id: "literature-scout",
-        name: "Literature Scout",
-        description: "Find papers",
+        id: "methodology-auditor",
+        name: "Methodology Auditor",
+        description: "Audit methods",
       },
     ]);
-    expect(preamble).toContain("@citation-auditor");
-    expect(preamble).toContain("@literature-scout");
-    expect(preamble).toContain("Task tool");
+    expect(preamble).toContain("@methodology-auditor");
+    expect(preamble).toContain("Delegated subagents");
+    expect(preamble).toMatch(/must.*Task/i);
+    expect(preamble).toMatch(/orchestrator/i);
+    expect(preamble).toMatch(/allowlist/i);
   });
 });

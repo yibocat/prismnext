@@ -57,7 +57,7 @@ function buildCategories(breakdown: Record<string, number>, schema: CategorySche
  */
 export function ContextWindowIndicator({
   used = 0,
-  total = 200000,
+  total = 128_000,
   breakdown,
   schema,
   promptStale = false,

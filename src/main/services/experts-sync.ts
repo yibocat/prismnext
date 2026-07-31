@@ -36,6 +36,7 @@ import {
 import { resolveActiveModuleKeys, composeProfileModulePrompts } from "../prompts/resolve-active-modules";
 import { getAgentEditorOptions } from "./agent-editor-options";
 import type { AgentEditorOptions } from "./agent-editor-options";
+import { buildSubagentRosterMarkdown } from "../../shared/subagent-roster";
 import { buildTaskPermissionBlock } from "./task-orchestrator-gate";
 
 export { buildTaskPermissionBlock } from "./task-orchestrator-gate";
@@ -488,36 +489,14 @@ export interface AllowedExpertRef {
   description: string;
 }
 
-/** Appended at sync time from orchestrator allowlist + enabled expert metadata. */
-export function appendAllowedExpertsSection(
+/** Appended at sync time — open built-ins + orchestrator allowlist experts. */
+export function appendSubagentRosterSection(
   body: string,
   allowedExperts: AllowedExpertRef[],
 ): string {
   const trimmed = body.trim();
-  if (!allowedExperts.length) {
-    return [
-      trimmed,
-      "",
-      "---",
-      "## Available experts (via Task)",
-      "",
-      "No experts are currently allowed for this orchestrator. Prefer direct project tools for citation/bib checks; delegate other work via Task only when appropriate.",
-    ].join("\n");
-  }
-
-  const lines = allowedExperts.map(
-    (e) => `- \`${e.id}\` — ${e.name}: ${e.description}`,
-  );
-  return [
-    trimmed,
-    "",
-    "---",
-    "## Available experts (via Task)",
-    "",
-    ...lines,
-    "",
-    "Only delegate to experts listed above.",
-  ].join("\n");
+  const roster = buildSubagentRosterMarkdown(allowedExperts);
+  return [trimmed, "", "---", roster].join("\n");
 }
 
 function resolveAllowedExpertIds(
@@ -584,9 +563,20 @@ function computeSyncContentHash(entries: ProjectExpertsAgentEntry[]): string {
 /** Build agent.md payloads without writing — used to skip redundant sync on chat send. */
 export function buildProjectExpertsAgentPlan(
   projectRoot: string,
-  options?: { promptCtx?: PromptContext },
+  options?: { promptCtx?: PromptContext; defaultSubagentModel?: string | null },
 ): ProjectExpertsAgentPlan {
   const promptCtx: PromptContext = { projectRoot, ...options?.promptCtx };
+  let defaultSubagentModel = options?.defaultSubagentModel ?? null;
+  if (options?.defaultSubagentModel === undefined) {
+    // Lazy require — keep module importable in unit tests without electron-store.
+    try {
+      const { getSettings } = require("./settings") as typeof import("./settings");
+      defaultSubagentModel =
+        (getSettings() as { aiSubagentModel?: string | null }).aiSubagentModel ?? null;
+    } catch {
+      defaultSubagentModel = null;
+    }
+  }
 
   const orchestratorId = resolveOrchestratorId(projectRoot, null);
   const orchestrator = getOrchestrator(projectRoot, orchestratorId);
@@ -608,7 +598,9 @@ export function buildProjectExpertsAgentPlan(
     const instructions = readExpertInstructions(projectRoot, expert);
     agentEntries.push({
       filename: `${expert.id}.md`,
-      content: renderExpertAgentMarkdown(expert, instructions, promptCtx),
+      content: renderExpertAgentMarkdown(expert, instructions, promptCtx, {
+        defaultModel: defaultSubagentModel,
+      }),
     });
   }
 
@@ -652,16 +644,22 @@ export function renderExpertAgentMarkdown(
   def: ExpertDefinition,
   instructionsBody: string,
   promptCtx: PromptContext = {},
+  options?: { defaultModel?: string | null },
 ): string {
   const frontmatter: Record<string, unknown> = {
     description: def.description,
     mode: "subagent",
   };
-  if (def.model) frontmatter.model = def.model;
+  const model =
+    (typeof def.model === "string" && def.model.trim())
+    || (typeof options?.defaultModel === "string" && options.defaultModel.trim())
+    || "";
+  if (model) frontmatter.model = model;
   if (def.temperature !== undefined) frontmatter.temperature = def.temperature;
-  if (def.permission && Object.keys(def.permission).length) {
-    frontmatter.permission = def.permission;
-  }
+  // Platform rule: subagents never nest Task — authors only write domain work.
+  frontmatter.permission = mergePermissions(def.permission, {
+    task: { "*": "deny" },
+  });
   const body = appendCapabilityRefs(def, instructionsBody, promptCtx);
   return `${serializeFrontmatter(frontmatter)}\n\n${body}\n`;
 }
@@ -681,7 +679,7 @@ export function renderOrchestratorAgentMarkdown(
   };
   if (def.model) frontmatter.model = def.model;
   if (def.temperature !== undefined) frontmatter.temperature = def.temperature;
-  const bodyWithExperts = appendAllowedExpertsSection(instructionsBody, allowedExperts);
+  const bodyWithExperts = appendSubagentRosterSection(instructionsBody, allowedExperts);
   const body = appendCapabilityRefs(def, bodyWithExperts, promptCtx);
   return `${serializeFrontmatter(frontmatter)}\n\n${body}\n`;
 }
@@ -727,7 +725,12 @@ export function clearSyncedAgentFiles(agentsDir: string, agentFiles: string[]): 
 
 export function syncProjectExpertsToOpencode(
   projectRoot: string,
-  options?: { agentsDir?: string; syncStatePath?: string; promptCtx?: PromptContext },
+  options?: {
+    agentsDir?: string;
+    syncStatePath?: string;
+    promptCtx?: PromptContext;
+    defaultSubagentModel?: string | null;
+  },
 ): { agentFiles: string[]; orchestratorId: string; orchestratorContentHash: string; syncContentHash: string } {
   const agentsDir = options?.agentsDir ?? getOpencodeAgentsDir();
   mkdirSync(agentsDir, { recursive: true });
