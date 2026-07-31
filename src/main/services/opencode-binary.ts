@@ -4,16 +4,19 @@
  * Dev:      <project>/bin/opencode/<platform>-<arch>/opencode
  */
 
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { app } from "electron";
-import { parseOpencodeVersionOutput } from "../../shared/opencode-version";
+import {
+  parseOpencodeVersionOutput,
+  shouldSkipEffortVariantConfigSync,
+} from "../../shared/opencode-version";
 
 const execFileAsync = promisify(execFile);
 
-export { parseOpencodeVersionOutput };
+export { parseOpencodeVersionOutput, shouldSkipEffortVariantConfigSync };
 
 export interface BundledOpencodeInfo {
   available: boolean;
@@ -48,6 +51,23 @@ export function resolveOpencodeBinaryPath(): string {
   else archDir = arch;
 
   return join(app.getAppPath(), "bin", "opencode", `${platformDir}-${archDir}`, binName);
+}
+
+/** Synchronous version probe (startup config sync — before ACP spawn). */
+export function probeBundledOpencodeVersionSync(): string | null {
+  const path = resolveOpencodeBinaryPath();
+  if (!existsSync(path)) return null;
+  try {
+    const out = execFileSync(path, ["--version"], {
+      encoding: "utf8",
+      timeout: 8_000,
+      windowsHide: true,
+      maxBuffer: 64 * 1024,
+    });
+    return parseOpencodeVersionOutput(out);
+  } catch {
+    return null;
+  }
 }
 
 let cached: BundledOpencodeInfo | null = null;

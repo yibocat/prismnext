@@ -38,6 +38,10 @@ import {
   normalizeOpenCodeModelId,
   providerApiKeyEnvVar,
 } from "../../shared/opencode-provider";
+import {
+  OPENCODE_DEFAULT_VARIANT,
+} from "../../shared/opencode-effort";
+import { effortCatalog } from "../acp/effort-catalog";
 import { buildSessionCitationsTurnAppendix } from "../services/session-citations-context";
 import { buildSessionCiteAuditTurnAppendix } from "../services/session-cite-audit-context";
 import {
@@ -429,7 +433,9 @@ export function registerChatHandlers(): void {
             modelId = orchestrator.model.slice(slash + 1);
           }
         }
-        if (orchestrator?.thoughtLevel) thoughtLevel = orchestrator.thoughtLevel;
+        if (orchestrator?.thoughtLevel && !args.thoughtLevel?.trim()) {
+          thoughtLevel = orchestrator.thoughtLevel;
+        }
 
         const orchestratorRuleAllowlist = getOrchestratorRuntimeFilters(
           args.projectPath,
@@ -562,14 +568,19 @@ export function registerChatHandlers(): void {
         syncIntensiveBibkeysForSession(args.projectPath, sessionId, args.intensivePaperIds);
       }
 
-      // Set thought level if specified via ACP session/set_config_option.
-      if (thoughtLevel) {
-        try {
-          await service.setConfigOption(sessionId, "thought_level", thoughtLevel);
-        } catch (err: any) {
-          log.debug(`setConfigOption thought_level not supported by this OpenCode version: ${err.message}`);
-        }
+      const normalizedModelId = modelId
+        ? normalizeOpenCodeModelId(provider, modelId)
+        : "";
+      const validatedEffort = normalizedModelId
+        ? service.validateModelEffort(provider, normalizedModelId, thoughtLevel)
+        : undefined;
+      if (thoughtLevel && !validatedEffort) {
+        log.warn(
+          `thoughtLevel rejected for ${provider}/${normalizedModelId}: ${thoughtLevel}`,
+        );
       }
+      // OpenCode rejects the sentinel "default" — omit effort to use the model's implicit default.
+      const effortForSend = validatedEffort;
 
       const sessionAgent = resolveSessionAgent(args.sessionAgent);
       // Plan wins over orchestrator for ACP agent key
@@ -655,6 +666,7 @@ export function registerChatHandlers(): void {
         `Sending prompt: sessionId=${sessionId} tabId=${tabId} promptLen=${userPrompt.length} ` +
         `promptSync=${isFirstTurn || promptStale} ` +
         `model=${modelId ? formatOpenCodeModelRef(provider, modelId) : "(default)"} ` +
+        `effort=${effortForSend ?? "(default)"} ` +
         `provider=${provider}`,
       );
       getMapper(win).clearTurnAccumulators();
@@ -723,6 +735,7 @@ export function registerChatHandlers(): void {
         const promptOpts = {
           model: modelId ? formatOpenCodeModelRef(provider, modelId) : undefined,
           provider,
+          effort: effortForSend,
           cwd,
           projectRoot: args.projectPath,
           projectRulesPrompt: projectRulesPrompt || undefined,
@@ -1478,10 +1491,66 @@ export function registerChatHandlers(): void {
     return await getService().getProviders();
   });
 
+  ipcMain.handle("chat:getEffortCatalog", async () => {
+    const service = getService();
+    await effortCatalog.ensureFresh(() => service.refreshEffortCatalog());
+    return service.getEffortCatalogSnapshot();
+  });
+
+  ipcMain.handle("chat:getOpenCodeModelsCatalog", async () => {
+    const service = getService();
+    await effortCatalog.ensureFresh(() => service.refreshEffortCatalog());
+    return service.getOpenCodeModelsCatalogSnapshot();
+  });
+
+  ipcMain.handle(
+    "chat:fetchProviderModels",
+    async (
+      _event,
+      args: { providerId: string; apiKey?: string; baseUrl?: string } | undefined,
+    ) => {
+      const providerId = args?.providerId?.trim() ?? "";
+      return await getService().fetchProviderModels(
+        providerId,
+        args?.apiKey,
+        args?.baseUrl,
+      );
+    },
+  );
+
+  ipcMain.handle(
+    "chat:fetchOpenRouterModels",
+    async (
+      _event,
+      args: { apiKey?: string; baseUrl?: string } | undefined,
+    ) => {
+      return await getService().fetchProviderModels(
+        "openrouter",
+        args?.apiKey,
+        args?.baseUrl,
+      );
+    },
+  );
+
+  ipcMain.handle(
+    "chat:getModelEffort",
+    async (
+      _event,
+      args: { provider: string; modelId: string; fallback?: string[] },
+    ) => {
+      const service = getService();
+      await effortCatalog.ensureFresh(() => service.refreshEffortCatalog());
+      const modelId = normalizeOpenCodeModelId(args.provider, args.modelId);
+      return service.resolveModelEffort(args.provider, modelId, args.fallback);
+    },
+  );
+
   ipcMain.handle(
     "chat:setAuth",
     async (_event, args: { provider: string; credentials: Record<string, string> }) => {
       await getService().setAuth(args.provider, args.credentials);
+      effortCatalog.clear();
+      void getService().refreshEffortCatalog().catch(() => {});
       return { success: true };
     },
   );

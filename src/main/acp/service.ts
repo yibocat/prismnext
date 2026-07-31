@@ -41,8 +41,18 @@ import { buildEnabledToolsConfig, ensurePlanAgentPermissionConfig } from "../ser
 import {
   isOpenCodeCatalogProvider,
   OPENCODE_API_KEY_ENV,
+  OPENCODE_GO_PROVIDER_ID,
   providerApiKeyEnvVar,
+  resolveModelsListUrl,
 } from "../../shared/opencode-provider";
+import {
+  modelsDevCachePath,
+  syncOpenCodeGoEffortVariants,
+} from "./opencode-go-effort-sync";
+import {
+  probeBundledOpencodeVersionSync,
+  shouldSkipEffortVariantConfigSync,
+} from "../services/opencode-binary";
 import {
   mergeOpencodeInstructions,
   PRISM_OPENCODE_INSTRUCTIONS,
@@ -73,6 +83,26 @@ import {
   resolveSessionAgent,
   type SessionAgent,
 } from "../../shared/session-agent";
+import {
+  buildModelsCatalogFromModelsDevCache,
+  PRISM_LAZY_FETCH_CATALOG_PROVIDERS,
+  type OpenCodeModelsCatalogSnapshot,
+  type CatalogModelRow,
+} from "../../shared/opencode-models-catalog";
+import {
+  OPENROUTER_PROVIDER_ID,
+  parseOpenRouterApiModels,
+  type OpenRouterModelRow,
+} from "../../shared/openrouter-models";
+import { isLazyCatalogProvider } from "../../shared/lazy-provider-catalog";
+import { normalizeOpenCodeModelId } from "../../shared/opencode-provider";
+import { effortCatalog } from "./effort-catalog";
+import {
+  OPENCODE_DEFAULT_VARIANT,
+  appendEffortToRuntimeModelRef,
+  prismModelFromRuntimeRef,
+  type OpencodeSessionConfigOption,
+} from "../../shared/opencode-effort";
 import {
   isResearchPlanDraftPath,
   planDraftMissingRedirectNote,
@@ -592,6 +622,7 @@ export class AcpService {
     // enable everything so the AI has the full toolbox available.
     this.writeDefaultConfig();
     this.applyBuiltinToolsConfig();
+    this.applyOpenCodeGoEffortVariantsConfig();
     const settings = getSettings() as Record<string, unknown>;
     const permMode = resolvePermissionMode(settings.permissionMode as string | undefined);
     this.applyPermissionMode(permMode);
@@ -1065,6 +1096,7 @@ export class AcpService {
       });
       log.info(`OpenCode ACP initialized: ${JSON.stringify(result).slice(0, 200)}`);
       this.setLifecycle("ready");
+      void this.refreshEffortCatalog().catch(() => {});
     } catch (err: any) {
       log.error(`ACP initialize failed: ${err.message}`);
       await this.shutdown();
@@ -1110,6 +1142,7 @@ export class AcpService {
     this.conn = null;
     this.proc = null;
     this.bakedExtraEnv = {};
+    effortCatalog.clear();
   }
 
   async healthCheck(): Promise<{ healthy: boolean; version: string }> {
@@ -1448,8 +1481,9 @@ export class AcpService {
     }
 
     const currentNames = new Set(files.map((f) => f.name));
-    // Shared import helper — not in getBuiltinToolFiles() but must not be treated as stale.
+    // Shared import helpers — not in getBuiltinToolFiles() but must not be treated as stale.
     if (bridgeContent) currentNames.add("bridge-paths");
+    if (pollContent) currentNames.add("permission-bridge-poll");
     for (const entry of readdirSync(toolsDir)) {
       if (!entry.endsWith(".ts") || entry === "index.ts") continue;
       const name = entry.replace(/\.ts$/, "");
@@ -1485,6 +1519,28 @@ export class AcpService {
    *    We reset the map to just the wildcard; per-project denies are re-added
    *    by `applyProjectSkillsIntegration` when a project is loaded.
    */
+  /**
+   * Inject opencode-go variants into opencode.json on OpenCode ≤1.17.x only.
+   * ≥1.18 builds variants from models.dev `reasoning_options` at runtime.
+   */
+  applyOpenCodeGoEffortVariantsConfig(): void {
+    const version = probeBundledOpencodeVersionSync();
+    const skipSync = shouldSkipEffortVariantConfigSync(version);
+    if (skipSync) {
+      log.info(
+        `OpenCode ${version ?? "unknown"} — skipping effort variant config sync (catalog-native variants)`,
+      );
+    }
+    const changed = syncOpenCodeGoEffortVariants(
+      this.getOpencodeConfigPaths(),
+      modelsDevCachePath(this.getServerDataDir()),
+      { enabled: !skipSync },
+    );
+    if (changed) {
+      effortCatalog.clear();
+    }
+  }
+
   repairOpencodeServerConfigs(): void {
     for (const p of this.getOpencodeConfigPaths()) {
       if (!existsSync(p)) continue;
@@ -1809,6 +1865,7 @@ export class AcpService {
     try {
       await this.conn.extMethod("session/set_model", { sessionId, modelId });
       log.info(`session/set_model ok: ${modelId}`);
+      await this.syncEffortCatalogForSessionModel(sessionId, modelId);
     } catch (err: any) {
       const detail = err?.message || String(err);
       log.warn(`session/set_model failed for ${modelId}: ${detail}`);
@@ -1830,19 +1887,212 @@ export class AcpService {
 
   /**
    * Set a session configuration option via ACP.
-   * Used for thought_level, model, mode, etc.
+   * Reasoning depth uses configId `"effort"` (category `thought_level`).
    */
   async setConfigOption(
     sessionId: string,
     configId: string,
     value: string,
-  ): Promise<void> {
+  ): Promise<{ configOptions?: OpencodeSessionConfigOption[] }> {
     if (!this.conn) throw new Error("AcpService not initialized");
-    await this.conn.extMethod("session/set_config_option", {
+    const result = await this.conn.extMethod("session/set_config_option", {
       sessionId,
       configId,
       value,
     });
+    const configOptions = (result as { configOptions?: OpencodeSessionConfigOption[] })
+      ?.configOptions;
+    if (configOptions?.length && configId === "effort") {
+      // Effort options are model-scoped; caller may ingest with explicit model ref.
+    }
+    return { configOptions };
+  }
+
+  /** Probe effort variants for the session's current model (catalog ingest only). */
+  async syncEffortCatalogForSessionModel(
+    sessionId: string,
+    modelRef: string,
+  ): Promise<void> {
+    const prism = prismModelFromRuntimeRef(modelRef);
+    if (!prism) return;
+    const cached = effortCatalog.getEfforts(prism.providerId, prism.modelId);
+    if (cached?.length) return;
+    if (!this.conn) return;
+    try {
+      const { configOptions } = await this.setConfigOption(
+        sessionId,
+        "effort",
+        cached?.[0] ?? "high",
+      );
+      effortCatalog.ingestConfigOptions(
+        prism.providerId,
+        prism.modelId,
+        configOptions,
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.debug(
+        `syncEffortCatalogForSessionModel ${modelRef}: ${message}`,
+      );
+    }
+  }
+
+  async refreshEffortCatalog(): Promise<void> {
+    let ingested = 0;
+    if (this.conn) {
+      try {
+        const result = await this.conn.extMethod("providers/list", {});
+        ingested = effortCatalog.ingestProvidersList(result);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.debug(`providers/list unavailable (${message}) — trying models.json cache`);
+      }
+    }
+    if (ingested === 0) {
+      this.applyOpenCodeGoEffortVariantsConfig();
+      ingested = this.refreshEffortCatalogFromModelsCache();
+    }
+    if (ingested === 0) {
+      log.warn("Effort catalog refresh returned 0 models (providers/list + models.json)");
+    }
+  }
+
+  private refreshEffortCatalogFromModelsCache(): number {
+    const raw = this.readModelsDevCacheRaw();
+    if (!raw) return 0;
+    return effortCatalog.ingestModelsDevCache(raw);
+  }
+
+  getEffortCatalogSnapshot() {
+    return effortCatalog.getSnapshot();
+  }
+
+  getOpenCodeModelsCatalogSnapshot(): OpenCodeModelsCatalogSnapshot {
+    const raw = this.readModelsDevCacheRaw();
+    const entries = raw ? buildModelsCatalogFromModelsDevCache(raw) : {};
+    return { entries, fetchedAt: Date.now() };
+  }
+
+  /**
+   * Lazy provider model list for Settings.
+   * OpenRouter: live API when key present, else models.json.
+   * openai / anthropic / google / deepseek: models.json only (richer metadata).
+   */
+  async fetchProviderModels(
+    providerId: string,
+    apiKey?: string,
+    baseUrl?: string,
+  ): Promise<{ models: OpenRouterModelRow[]; source: "api" | "cache" }> {
+    const id = providerId.trim();
+    if (!isLazyCatalogProvider(id)) {
+      return { models: [], source: "cache" };
+    }
+
+    if (id === OPENROUTER_PROVIDER_ID) {
+      return this.fetchOpenRouterModels(apiKey, baseUrl);
+    }
+
+    return this.fetchProviderModelsFromCache(id);
+  }
+
+  /**
+   * Lazy OpenRouter model list for Settings: prefer live API when a key is present,
+   * else fall back to OpenCode `models.json` openrouter section.
+   */
+  async fetchOpenRouterModels(
+    apiKey?: string,
+    baseUrl?: string,
+  ): Promise<{ models: OpenRouterModelRow[]; source: "api" | "cache" }> {
+    const key = apiKey?.trim() ?? "";
+    if (key && !/[^\u0000-\u00ff]/.test(key)) {
+      try {
+        const base = (baseUrl?.trim() || "https://openrouter.ai/api/v1").replace(
+          /\/+$/,
+          "",
+        );
+        const listUrl = /\/v\d+$/i.test(base) ? `${base}/models` : `${base}/v1/models`;
+        const res = await fetch(listUrl, {
+          headers: {
+            Authorization: `Bearer ${key}`,
+            Accept: "application/json",
+          },
+        });
+        if (res.ok) {
+          const body = (await res.json()) as unknown;
+          const models = parseOpenRouterApiModels(body);
+          if (models.length > 0) {
+            return { models, source: "api" };
+          }
+        } else {
+          log.warn(
+            `fetchOpenRouterModels API ${res.status} from ${listUrl}; falling back to cache`,
+          );
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(`fetchOpenRouterModels API failed: ${message}; falling back to cache`);
+      }
+    }
+
+    return this.fetchProviderModelsFromCache(OPENROUTER_PROVIDER_ID);
+  }
+
+  private fetchProviderModelsFromCache(
+    providerId: string,
+  ): { models: OpenRouterModelRow[]; source: "cache" } {
+    const raw = this.readModelsDevCacheRaw();
+    const entries = raw
+      ? buildModelsCatalogFromModelsDevCache(raw, PRISM_LAZY_FETCH_CATALOG_PROVIDERS)
+      : {};
+    const cached: CatalogModelRow[] = entries[providerId] ?? [];
+    return {
+      models: cached.map((row) => ({
+        id: normalizeOpenCodeModelId(providerId, row.id),
+        name: row.name,
+        contextWindow: row.contextWindow,
+        capabilities: row.capabilities,
+        description: row.description,
+      })),
+      source: "cache",
+    };
+  }
+
+  private readModelsDevCacheRaw(): unknown | null {
+    const cachePath = join(
+      this.getServerDataDir(),
+      "cache",
+      "opencode",
+      "models.json",
+    );
+    if (!existsSync(cachePath)) {
+      log.debug(`models.json cache missing: ${cachePath}`);
+      return null;
+    }
+    try {
+      return JSON.parse(readFileSync(cachePath, "utf8")) as unknown;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.warn(`Failed to read models.json cache: ${message}`);
+      return null;
+    }
+  }
+
+  resolveModelEffort(prismProviderId: string, modelId: string, fallback?: string[] | null) {
+    return effortCatalog.resolveModelEffort(prismProviderId, modelId, fallback);
+  }
+
+  validateModelEffort(
+    prismProviderId: string,
+    modelId: string,
+    effort: string | undefined,
+    fallback?: string[] | null,
+  ): string | undefined {
+    return effortCatalog.validateEffort(
+      prismProviderId,
+      modelId,
+      effort,
+      fallback,
+    );
   }
 
   setSessionAgent(sessionId: string, agent: SessionAgent): void {
@@ -1872,6 +2122,20 @@ export class AcpService {
     apiKey: string,
     baseUrl?: string,
   ): Promise<{ success: boolean; models?: string[] }> {
+    const key = apiKey.trim();
+    if (!key) {
+      log.warn(`testConnection: empty apiKey for ${provider}`);
+      return { success: false };
+    }
+    // Fetch headers must be ByteString (Latin-1); Chinese paste into the key field
+    // previously surfaced as an opaque "Cannot convert argument to a ByteString".
+    if (/[^\u0000-\u00ff]/.test(key)) {
+      log.warn(
+        `testConnection failed for ${provider}: API key contains non-ASCII characters (check paste)`,
+      );
+      return { success: false };
+    }
+
     const endpoints: Record<string, { url: string; header: string; prefix: string }> = {
       anthropic: {
         url: baseUrl || "https://api.anthropic.com",
@@ -1908,6 +2172,22 @@ export class AcpService {
         header: "Authorization",
         prefix: "Bearer ",
       },
+      // Bases already include /v1 — do not append another /v1 (see resolveModelsListUrl).
+      "opencode-go": {
+        url: baseUrl || "https://opencode.ai/zen/go/v1",
+        header: "Authorization",
+        prefix: "Bearer ",
+      },
+      "opencode-zen": {
+        url: baseUrl || "https://opencode.ai/zen/v1",
+        header: "Authorization",
+        prefix: "Bearer ",
+      },
+      opencode: {
+        url: baseUrl || "https://opencode.ai/zen/v1",
+        header: "Authorization",
+        prefix: "Bearer ",
+      },
     };
 
     const ep = endpoints[provider];
@@ -1919,24 +2199,39 @@ export class AcpService {
     try {
       // Google uses API key as query parameter
       if (provider === "google") {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`;
         const res = await fetch(url);
         const data = await res.json() as any;
         const models = data?.models?.map((m: any) => m.name?.replace("models/", "")) || undefined;
         return { success: res.ok, models };
       }
 
-      // All other providers use Authorization or custom header
       const base = ep?.url || baseUrl!;
-      const listUrl = base.replace(/\/+$/, "") + "/v1/models";
+      const listUrl = resolveModelsListUrl(base);
       const headers: Record<string, string> = {};
       if (ep?.header && ep?.prefix !== undefined) {
-        headers[ep.header] = ep.prefix + apiKey;
+        headers[ep.header] = ep.prefix + key;
       } else {
-        headers["Authorization"] = `Bearer ${apiKey}`;
+        headers["Authorization"] = `Bearer ${key}`;
+      }
+      // OpenCode Go/Zen also accept x-api-key (same subscription key for both).
+      if (
+        provider === "opencode-go"
+        || provider === "opencode-zen"
+        || provider === "opencode"
+      ) {
+        headers["x-api-key"] = key;
       }
 
       const res = await fetch(listUrl, { headers });
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("json")) {
+        const preview = (await res.text()).slice(0, 80);
+        log.warn(
+          `testConnection failed for ${provider}: non-JSON from ${listUrl} (${res.status}) ${preview}`,
+        );
+        return { success: false };
+      }
       const data = await res.json() as any;
       const models = data?.data?.map((m: any) => m.id) || data?.models?.map((m: any) => m.id || m.name) || undefined;
       return { success: res.ok, models };
@@ -2608,6 +2903,8 @@ export class AcpService {
         | { uri: string; mimeType: string; text: string }
         | { uri: string; mimeType: string; blob: string }
       >;
+      /** Validated OpenCode effort variant id, or `"default"` to clear. Applied after set_model. */
+      effort?: string;
     },
   ): Promise<{ usage?: any }> {
     if (!this.conn) throw new Error("AcpService not initialized");
@@ -2655,14 +2952,22 @@ export class AcpService {
 
     const applyModelIfNeeded = async () => {
       if (!opts?.model) return;
-      const modelId = opts.model.includes("/")
+      let modelId = opts.model.includes("/")
         ? opts.model
         : `${opts.provider || "anthropic"}/${opts.model}`;
+      modelId = appendEffortToRuntimeModelRef(modelId, opts.effort);
       await this.applySessionModel(sessionId, modelId);
+    };
+
+    const applyEffortIfNeeded = async () => {
+      const effort = opts?.effort?.trim();
+      if (!effort || effort === OPENCODE_DEFAULT_VARIANT) return;
+      // Validated effort is applied via `provider/model/<effort>` on set_model (OpenCode 1.18+).
     };
 
     const runPrompt = async () => {
       await applyModelIfNeeded();
+      await applyEffortIfNeeded();
       log.info(
         `session/prompt: sessionId=${sessionId} userLen=${promptText.length} blocks=${content.length} images=${opts?.images?.length ?? 0} resources=${opts?.resources?.length ?? 0}`,
       );

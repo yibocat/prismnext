@@ -24,10 +24,26 @@ describe("provider model capabilities", () => {
     ];
     const enabled = { "opencode-go": ["mimo-v2.5", "glm-5.1"] };
     const apiKeys = { "opencode-go": "sk-test" };
+    const customModels = {
+      "opencode-go": [
+        {
+          id: "mimo-v2.5",
+          name: "MiMo V2.5",
+          contextWindow: "256K",
+          capabilities: { vision: true },
+        },
+        {
+          id: "glm-5.1",
+          name: "GLM-5.1",
+          contextWindow: "200K",
+          capabilities: { vision: false },
+        },
+      ],
+    };
 
     const visionModels = getConfiguredVisionModels(
       enabled,
-      undefined,
+      customModels,
       customProviders,
       apiKeys,
     );
@@ -39,14 +55,41 @@ describe("provider model capabilities", () => {
 
   it("excludes vision models when provider has no API key", () => {
     const enabled = { openai: ["gpt-5.4"] };
-    const visionModels = getConfiguredVisionModels(enabled, undefined, undefined, {});
+    const customProviders = [
+      { id: "openai", name: "OpenAI", baseUrl: "https://api.openai.com" },
+    ];
+    const visionModels = getConfiguredVisionModels(
+      enabled,
+      {
+        openai: [
+          {
+            id: "gpt-5.4",
+            name: "GPT-5.4",
+            contextWindow: "400K",
+            capabilities: { vision: true },
+          },
+        ],
+      },
+      customProviders,
+      {},
+    );
 
     expect(visionModels).toHaveLength(0);
   });
 
-  it("marks OpenCode Go vision conservatively from runtime evidence", () => {
-    const mimo = opencodeGoPreset.models.find((m) => m.id === "mimo-v2.5");
-    const glm = opencodeGoPreset.models.find((m) => m.id === "glm-5.1");
+  it("reads vision from selection snapshots when presets have no models", () => {
+    expect(opencodeGoPreset.models).toEqual([]);
+    const mimo = {
+      id: "mimo-v2.5",
+      name: "MiMo V2.5",
+      contextWindow: "256K",
+      capabilities: { vision: true },
+    };
+    const glm = {
+      id: "glm-5.1",
+      name: "GLM-5.1",
+      contextWindow: "200K",
+    };
     expect(modelSupportsVision(mimo)).toBe(true);
     expect(modelSupportsVision(glm)).toBe(false);
   });

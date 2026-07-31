@@ -1,5 +1,10 @@
 import type { ProviderConfig } from "../types";
 
+/**
+ * 阿里云百炼 — OpenCode often exposes toggle (none/high) for Qwen3.6+/3.7 on some
+ * transports; when unsure keep empty so Edit stays hidden rather than sending
+ * invalid effort values.
+ */
 export const alibabaPreset: ProviderConfig = {
   id: "alibaba",
   name: "阿里云百炼 (Qwen)",

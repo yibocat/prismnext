@@ -12,10 +12,11 @@ export interface ModelConfig {
     /** Accepts image input directly (native vision / multimodal). */
     vision?: boolean;
   };
-  /** Supported reasoning/thinking levels. If absent, provider defaults apply. */
-  reasoning?: string[];
-  /** Default reasoning level when this model is selected. */
-  defaultReasoning?: string;
+  /**
+   * Hover blurb from OpenCode catalog `description` when synced.
+   * Optional override: i18n `chat.model.desc.<providerId>.<modelId>`.
+   */
+  description?: string;
   /** Hide from Chat model dropdown (e.g. deprecated models still configurable in settings). */
   hidden?: boolean;
 }
@@ -31,8 +32,4 @@ export interface ProviderConfig {
   defaultModel?: string;
   /** All models this provider supports */
   models: ModelConfig[];
-  /** Default reasoning levels (used when model doesn't specify its own) */
-  reasoning?: string[];
-  /** Default reasoning level */
-  defaultReasoning?: string;
 }

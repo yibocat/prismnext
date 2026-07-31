@@ -16,7 +16,7 @@ import {
   AppSelectValue,
 } from "@/components/ui/app-select";
 import { useSettingsStore } from "@/stores/settings-store";
-import { getAllEnabledModels, getModel, resolveProviderConfig, type CustomProviderEntry, type ModelConfig } from "@/lib/providers";
+import { getAllEnabledModels, getModelEffortLevelsAsync, resolveProviderConfig, type CustomProviderEntry, type ModelConfig } from "@/lib/providers";
 import { cn } from "@/lib/utils";
 import type { AgentEditorOptions } from "@shared/agent-editor-options";
 import {
@@ -133,22 +133,6 @@ export function formatProfileModel(providerId: string, modelId: string): string 
 function toggleItem(list: string[], item: string, on: boolean): string[] {
   if (on) return list.includes(item) ? list : [...list, item];
   return list.filter((v) => v !== item);
-}
-
-function getThoughtLevelsForModel(
-  providerId: string,
-  modelId: string,
-  customModels?: Record<string, ModelConfig[]>,
-  customProviders?: CustomProviderEntry[],
-) {
-  const model = modelId ? getModel(providerId, modelId, customModels, customProviders) : undefined;
-  const provider = resolveProviderConfig(providerId, customProviders);
-  const levels = model?.reasoning ?? provider?.reasoning;
-  const resolved = levels ?? ["low", "medium", "high"];
-  return resolved.map((value) => ({
-    value,
-    label: value.charAt(0).toUpperCase() + value.slice(1),
-  }));
 }
 
 function SelectableCard({
@@ -383,14 +367,43 @@ export function ProfileEditorForm({
   const modelValue =
     form.modelProvider && form.modelId ? `${form.modelProvider}::${form.modelId}` : "";
 
-  const thoughtLevels = form.modelProvider
-    ? getThoughtLevelsForModel(
-        form.modelProvider,
-        form.modelId,
-        settings.aiCustomModelsData,
-        settings.aiCustomProviders,
-      )
-    : [];
+  const [thoughtLevels, setThoughtLevels] = useState<Array<{ value: string; label: string }>>([]);
+
+  useEffect(() => {
+    if (!form.modelProvider) {
+      setThoughtLevels([]);
+      return;
+    }
+    let cancelled = false;
+    void getModelEffortLevelsAsync(
+      form.modelProvider,
+      form.modelId,
+      settings.aiCustomModelsData,
+      settings.aiCustomProviders,
+    ).then((levels) => {
+      if (!cancelled) setThoughtLevels(levels ?? []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    form.modelProvider,
+    form.modelId,
+    settings.aiCustomModelsData,
+    settings.aiCustomProviders,
+  ]);
+
+  useEffect(() => {
+    if (
+      !form.modelProvider
+      || !form.thoughtLevel
+      || thoughtLevels.length === 0
+      || thoughtLevels.some((l) => l.value === form.thoughtLevel)
+    ) {
+      return;
+    }
+    onFormChange({ ...form, thoughtLevel: "" });
+  }, [thoughtLevels, form, onFormChange]);
 
   const patch = (partial: Partial<ProfileFormState>) => onFormChange({ ...form, ...partial });
   const lockIdentity = builtinCustomize;
@@ -442,18 +455,10 @@ export function ProfileEditorForm({
                 return;
               }
               const [providerId, modelId] = v.split("::");
-              const levels = getThoughtLevelsForModel(
-                providerId,
-                modelId,
-                settings.aiCustomModelsData,
-                settings.aiCustomProviders,
-              );
               patch({
                 modelProvider: providerId,
                 modelId,
-                thoughtLevel: levels.some((l) => l.value === form.thoughtLevel)
-                  ? form.thoughtLevel
-                  : "",
+                thoughtLevel: "",
               });
             }}
           >

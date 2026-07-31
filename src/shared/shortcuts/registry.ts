@@ -407,6 +407,16 @@ export const SHORTCUT_REGISTRY: readonly ShortcutDef[] = [
     implemented: true,
   },
   {
+    id: "product.openModelPicker",
+    category: "product",
+    remappable: true,
+    scope: "app",
+    // ⌥K / Alt+K — ⌘K / Ctrl+K is command palette.
+    defaultChord: { key: "k", alt: true },
+    labelKey: "shortcuts.product.openModelPicker",
+    implemented: true,
+  },
+  {
     id: "product.cycleMessageWidth",
     category: "product",
     remappable: true,

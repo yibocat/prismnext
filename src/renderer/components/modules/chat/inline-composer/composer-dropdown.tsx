@@ -11,6 +11,7 @@ import {
   ListTodoIcon,
   PlugIcon,
   PuzzleIcon,
+  SparklesIcon,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { appPopoverLabelClass, appPopoverListClass } from "@/components/ui/app-popover";
@@ -49,15 +50,21 @@ export type MentionOption =
 
 export type SlashSectionKind = "mode" | "command" | "skill" | "mcp";
 
-/** Composer session modes shown under slash → Modes (not Commands). */
+/** Composer quick actions under slash → Modes (not Commands). */
 export type SlashModeDef = {
-  id: "plan";
+  id: "plan" | "models";
   name: string;
   label: string;
   description: string;
 };
 
 export const COMPOSER_SLASH_MODES: SlashModeDef[] = [
+  {
+    id: "models",
+    name: "models",
+    label: "Models",
+    description: "Choose a model and reasoning depth",
+  },
   {
     id: "plan",
     name: "plan",
@@ -379,9 +386,15 @@ export function SlashCommandDropdown({
               );
             }
             if (option.kind === "mode") {
+              const ModeIcon =
+                option.mode.id === "models" ? SparklesIcon : ListTodoIcon;
+              const iconClass =
+                option.mode.id === "models"
+                  ? "size-3.5 shrink-0 text-primary"
+                  : "size-3.5 shrink-0 text-amber-700 dark:text-amber-400";
               return (
                 <>
-                  <ListTodoIcon className="size-3.5 shrink-0 text-amber-700 dark:text-amber-400" />
+                  <ModeIcon className={iconClass} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{option.mode.label}</span>
                     <span className="mt-0.5 block truncate text-[length:var(--font-path)] text-muted-foreground">

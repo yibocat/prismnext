@@ -1,11 +1,16 @@
 import type { ProviderConfig } from "../types";
 
+/** 智谱 — OpenCode: GLM-5.2 exposes high/max on openai-compatible; older GLM often has no variants. */
 export const zhipuPreset: ProviderConfig = {
   id: "zhipu",
   name: "智谱 GLM",
   defaultBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
   models: [
-    { id: "GLM-5.2", name: "GLM-5.2", contextWindow: "1M" },
+    {
+      id: "GLM-5.2",
+      name: "GLM-5.2",
+      contextWindow: "1M",
+    },
     { id: "GLM-5.1", name: "GLM-5.1", contextWindow: "200K" },
     { id: "GLM-5", name: "GLM-5", contextWindow: "200K" },
     { id: "GLM-4.7", name: "GLM-4.7", contextWindow: "200K" },

@@ -1,5 +1,10 @@
 // Re-export from presets/
 export { type ProviderConfig, type ModelConfig } from "./types";
+export {
+  prefetchOpenCodeModelsCatalog,
+  getCachedOpenCodeCatalogModels,
+  mergeProviderWithOpenCodeCatalog,
+} from "./opencode-catalog-models";
 export { ALL_PROVIDERS, PROVIDER_PRESETS, CUSTOM_PRESET, getPreset } from "./presets";
 export {
   openaiProvider,
@@ -17,6 +22,7 @@ export {
 
 import { ALL_PROVIDERS, getPreset, PROVIDER_PRESETS } from "./presets";
 import type { ProviderConfig, ModelConfig } from "./types";
+import { mergeProviderWithOpenCodeCatalog } from "./opencode-catalog-models";
 
 /** User-added provider entry from settings (`aiCustomProviders`). */
 export interface CustomProviderEntry {
@@ -26,7 +32,7 @@ export interface CustomProviderEntry {
 }
 
 export function getProvider(id: string): ProviderConfig | undefined {
-  return ALL_PROVIDERS.find((p) => p.id === id);
+  return ALL_PROVIDERS.find((p) => p.id === id) ?? getPreset(id);
 }
 
 /**
@@ -37,28 +43,28 @@ export function resolveProviderConfig(
   id: string,
   customProviders?: CustomProviderEntry[],
 ): ProviderConfig | undefined {
-  const builtin = getProvider(id);
-  if (builtin) return builtin;
-
-  const preset = getPreset(id);
+  const preset = getProvider(id) ?? getPreset(id);
   const custom = customProviders?.find((p) => p.id === id);
 
   if (preset) {
-    if (!custom) return preset;
-    return {
-      ...preset,
-      name: custom.name || preset.name,
-      defaultBaseUrl: custom.baseUrl || preset.defaultBaseUrl,
-    };
+    const base = !custom
+      ? preset
+      : {
+          ...preset,
+          name: custom.name || preset.name,
+          defaultBaseUrl: custom.baseUrl || preset.defaultBaseUrl,
+        };
+    return mergeProviderWithOpenCodeCatalog(base);
   }
 
   if (custom) {
-    return {
+    const config: ProviderConfig = {
       id: custom.id,
       name: custom.name,
       defaultBaseUrl: custom.baseUrl,
       models: [],
     };
+    return mergeProviderWithOpenCodeCatalog(config);
   }
 
   return undefined;
@@ -99,16 +105,12 @@ export function isProviderConfigured(
   return Boolean(aiApiKeys?.[providerId]?.trim());
 }
 
-/** Provider ids with a configured API key (built-in + user-added). */
+/** Provider ids with a configured API key among user-added providers. */
 export function getConfiguredProviderIds(
   aiApiKeys?: Record<string, string>,
   customProviders?: CustomProviderEntry[],
 ): string[] {
   const ids = new Set<string>();
-  for (const provider of ALL_PROVIDERS) {
-    if (provider.id === "custom") continue;
-    if (isProviderConfigured(provider.id, aiApiKeys)) ids.add(provider.id);
-  }
   for (const cp of customProviders ?? []) {
     if (isProviderConfigured(cp.id, aiApiKeys)) ids.add(cp.id);
   }
@@ -227,8 +229,7 @@ function collectEnabledModelsForProvider(
 }
 
 /**
- * Returns all enabled models across providers, ready for Chat model dropdown.
- * Includes built-in providers and user-added preset/custom providers.
+ * Returns all enabled models across user-added providers, ready for Chat model dropdown.
  */
 export function getAllEnabledModels(
   enabledIds: Record<string, string[]> | undefined,
@@ -237,12 +238,6 @@ export function getAllEnabledModels(
 ): Array<{ provider: ProviderConfig; model: ModelConfig }> {
   const result: Array<{ provider: ProviderConfig; model: ModelConfig }> = [];
   const seen = new Set<string>();
-
-  for (const provider of ALL_PROVIDERS) {
-    if (provider.id === "custom") continue;
-    seen.add(provider.id);
-    result.push(...collectEnabledModelsForProvider(provider, enabledIds, customModels));
-  }
 
   for (const cp of customProviders ?? []) {
     if (seen.has(cp.id)) continue;
@@ -256,20 +251,107 @@ export function getAllEnabledModels(
 }
 
 /**
- * Returns thought/reasoning level options for a provider.
+ * Display label for an OpenCode effort / variant id.
  */
-const DEFAULT_REASONING = ["low", "medium", "high"] as const;
-
-export function getThoughtLevels(
-  providerId: string,
-): Array<{ value: string; label: string }> {
-  const provider = getProvider(providerId) || getPreset(providerId);
-  const levels = provider?.reasoning || DEFAULT_REASONING;
-  return levels.map((r: string) => ({ value: r, label: capitalize(r) }));
+export function formatEffortLabel(value: string): string {
+  const known: Record<string, string> = {
+    none: "None",
+    minimal: "Minimal",
+    low: "Low",
+    medium: "Medium",
+    high: "High",
+    xhigh: "XHigh",
+    max: "Max",
+    thinking: "Thinking",
+    default: "Default",
+  };
+  if (known[value]) return known[value];
+  return value
+    .split(/[_-]/)
+    .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1) : part))
+    .join(" ");
 }
 
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
+/**
+ * @deprecated Effort lists come from OpenCode catalog IPC only.
+ */
+export function getThoughtLevels(
+  _providerId: string,
+): Array<{ value: string; label: string }> {
+  return [];
+}
+
+/**
+ * @deprecated Use `getModelEffortLevelsAsync` / catalog IPC. Sync preset lists removed.
+ */
+export function getModelEffortLevels(
+  _providerId: string,
+  _modelId: string,
+  _customModels?: Record<string, ModelConfig[]>,
+  _customProviders?: CustomProviderEntry[],
+): Array<{ value: string; label: string }> | null {
+  return null;
+}
+
+function effortLevelsFromIds(ids: string[]): Array<{ value: string; label: string }> {
+  return ids.map((value) => ({ value, label: formatEffortLabel(value) }));
+}
+
+/** @deprecated Preset effort lists removed — returns undefined (catalog-only). */
+export function getModelEffortFallbackIds(
+  _providerId: string,
+  _modelId: string,
+  _customModels?: Record<string, ModelConfig[]>,
+  _customProviders?: CustomProviderEntry[],
+): string[] | undefined {
+  return undefined;
+}
+
+/**
+ * Per-model effort options — OpenCode ACP catalog when available, preset fallback offline.
+ */
+export async function getModelEffortLevelsAsync(
+  providerId: string,
+  modelId: string,
+  customModels?: Record<string, ModelConfig[]>,
+  customProviders?: CustomProviderEntry[],
+): Promise<Array<{ value: string; label: string }> | null> {
+  const fallback = getModelEffortLevels(providerId, modelId, customModels, customProviders);
+  const fallbackIds = fallback?.map((l) => l.value);
+  try {
+    const result = await window.electronAPI.chatGetModelEffort({
+      provider: providerId,
+      modelId,
+      fallback: fallbackIds,
+    });
+    if (!result.efforts?.length) return null;
+    return effortLevelsFromIds(result.efforts);
+  } catch {
+    return fallback;
+  }
+}
+
+/** Batch-load effort catalog for model picker (single IPC). */
+export async function prefetchEffortCatalog(): Promise<
+  Record<string, string[]> | null
+> {
+  try {
+    const snapshot = await window.electronAPI.chatGetEffortCatalog();
+    return snapshot.entries;
+  } catch {
+    return null;
+  }
+}
+
+export function effortLevelsFromCatalogEntry(
+  efforts: string[] | undefined,
+  _providerId: string,
+  _modelId: string,
+  _customModels?: Record<string, ModelConfig[]>,
+  _customProviders?: CustomProviderEntry[],
+): Array<{ value: string; label: string }> | null {
+  if (!efforts?.length) return null;
+  return effortLevelsFromIds(efforts);
 }
 
 /** True if `modelId` already exists in preset or custom model lists. */

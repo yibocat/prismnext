@@ -1774,6 +1774,30 @@ export interface ElectronAPI {
     sessionId: string,
   ) => Promise<{ success: boolean }>;
   chatGetProviders: () => Promise<any[]>;
+  chatGetEffortCatalog: () => Promise<import("../../shared/opencode-effort").EffortCatalogSnapshot>;
+  chatGetOpenCodeModelsCatalog: () => Promise<
+    import("../../shared/opencode-models-catalog").OpenCodeModelsCatalogSnapshot
+  >;
+  chatFetchProviderModels: (args: {
+    providerId: string;
+    apiKey?: string;
+    baseUrl?: string;
+  }) => Promise<{
+    models: import("../../shared/openrouter-models").OpenRouterModelRow[];
+    source: "api" | "cache";
+  }>;
+  chatFetchOpenRouterModels: (args?: {
+    apiKey?: string;
+    baseUrl?: string;
+  }) => Promise<{
+    models: import("../../shared/openrouter-models").OpenRouterModelRow[];
+    source: "api" | "cache";
+  }>;
+  chatGetModelEffort: (args: {
+    provider: string;
+    modelId: string;
+    fallback?: string[];
+  }) => Promise<import("../../shared/opencode-effort").ModelEffortResult>;
   chatSetAuth: (provider: string, credentials: Record<string, string>) => Promise<{ success: boolean }>;
   chatTestConnection(args: { provider: string; apiKey: string; baseUrl?: string }): Promise<{ success: boolean; models?: string[] }>;
 

@@ -17,8 +17,83 @@ import {
   OPENCODE_GO_PROVIDER_ID,
   OPENCODE_ZEN_PROVIDER_ID,
 } from "../../shared/opencode-provider";
+import {
+  migrateOpenRouterEnabledModelIds,
+  migrateOpenRouterPreferenceKey,
+  normalizeOpenRouterModelId,
+  OPENROUTER_PROVIDER_ID,
+} from "../../shared/openrouter-models";
+import {
+  migrateGoogleEnabledModelIds,
+  migrateGooglePreferenceKey,
+  normalizeGoogleModelId,
+  GOOGLE_PROVIDER_ID,
+} from "../../shared/google-models";
+import {
+  migrateAnthropicEnabledModelIds,
+  migrateAnthropicPreferenceKey,
+  normalizeAnthropicModelId,
+  ANTHROPIC_PROVIDER_ID,
+} from "../../shared/anthropic-models";
+import { LEGACY_BUILTIN_PROVIDER_IDS } from "../../shared/lazy-provider-catalog";
+import { getModelEffortFallbackIds, getPreset } from "@/lib/providers";
+import { prefetchOpenCodeModelsCatalog } from "@/lib/providers/opencode-catalog-models";
+import { parseModelPreferenceKey } from "@/components/modules/chat/agent-settings/model-keys";
+import type { ModelConfig } from "@/lib/providers";
 
 const log = createLogger("settings-store");
+
+function migrateModelPreferenceKey(key: string): string {
+  let next = migrateOpenRouterPreferenceKey(key);
+  next = migrateGooglePreferenceKey(next);
+  next = migrateAnthropicPreferenceKey(next);
+  return next;
+}
+
+async function sanitizePersistedModelThoughtLevels(
+  levels: Record<string, string> | undefined,
+  customModels?: AppSettings["aiCustomModelsData"],
+  customProviders?: AppSettings["aiCustomProviders"],
+): Promise<Record<string, string> | undefined> {
+  if (!levels || Object.keys(levels).length === 0) return levels;
+
+  const next: Record<string, string> = { ...levels };
+  let changed = false;
+
+  for (const [key, effort] of Object.entries(levels)) {
+    const parsed = parseModelPreferenceKey(key);
+    if (!parsed) {
+      delete next[key];
+      changed = true;
+      continue;
+    }
+    const fallback = getModelEffortFallbackIds(
+      parsed.providerId,
+      parsed.modelId,
+      customModels,
+      customProviders,
+    );
+    try {
+      const result = await window.electronAPI.chatGetModelEffort({
+        provider: parsed.providerId,
+        modelId: parsed.modelId,
+        fallback,
+      });
+      const allowed = result.efforts ?? [];
+      if (!allowed.length || !allowed.includes(effort)) {
+        delete next[key];
+        changed = true;
+      }
+    } catch {
+      if (!fallback?.includes(effort)) {
+        delete next[key];
+        changed = true;
+      }
+    }
+  }
+
+  return changed ? next : levels;
+}
 
 export interface AppSettings {
   theme: "dark" | "light" | "system";
@@ -94,6 +169,8 @@ export interface AppSettings {
   aiVisionFallbackModel?: string | null;
   /** Per-model reasoning depth: key = `providerId/modelId` */
   aiModelThoughtLevels?: Record<string, string>;
+  /** Pinned model keys (`providerId/modelId`) — shown at top of chat model picker. */
+  aiPinnedModelKeys?: string[];
   /** Providers whose API keys have been verified */
   aiVerifiedProviders?: string[];
   /** Chat tool permission preset: ask | edit_auto | auto | readonly */
@@ -286,6 +363,133 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         }
       }
 
+      // Former built-in providers (openai/google/deepseek): promote into aiCustomProviders
+      {
+        const keys = (r.aiApiKeys || {}) as Record<string, string>;
+        const existing = Array.isArray(r.aiCustomProviders)
+          ? ([...r.aiCustomProviders] as Array<{ id: string; name: string; baseUrl: string }>)
+          : [];
+        const have = new Set(existing.map((p) => p.id));
+        let changed = false;
+        for (const id of LEGACY_BUILTIN_PROVIDER_IDS) {
+          if (have.has(id)) continue;
+          if (!keys[id]?.trim()) continue;
+          const preset = getPreset(id);
+          existing.push({
+            id,
+            name: preset?.name ?? id,
+            baseUrl: (r.aiBaseUrls as Record<string, string> | undefined)?.[id]
+              || preset?.defaultBaseUrl
+              || "",
+          });
+          have.add(id);
+          changed = true;
+        }
+        if (changed) {
+          r.aiCustomProviders = existing;
+          window.electronAPI
+            .settingsSet({ aiCustomProviders: existing })
+            .catch(() => {});
+          log.info("Migrated legacy built-in providers into aiCustomProviders", {
+            ids: existing.map((p) => p.id),
+          });
+        }
+      }
+
+      // OpenRouter / Google / Anthropic: migrate legacy model IDs
+      {
+        let providerPatch: Partial<AppSettings> | null = null;
+
+        const migrateEnabled = (
+          providerId: string,
+          migrateIds: (ids: string[]) => string[],
+        ) => {
+          if (!r.aiEnabledModels?.[providerId]) return;
+          const raw = r.aiEnabledModels[providerId] as string[];
+          const migrated = migrateIds(raw);
+          const changed =
+            migrated.length !== raw.length || migrated.some((id, i) => id !== raw[i]);
+          if (!changed) return;
+          r.aiEnabledModels = { ...r.aiEnabledModels, [providerId]: migrated };
+          providerPatch = {
+            ...(providerPatch ?? {}),
+            aiEnabledModels: r.aiEnabledModels,
+          };
+        };
+
+        const migrateCustoms = (
+          providerId: string,
+          normalizeId: (id: string) => string,
+        ) => {
+          if (!r.aiCustomModelsData?.[providerId]) return;
+          const raw = r.aiCustomModelsData[providerId] as ModelConfig[];
+          const migrated = raw.map((m) => {
+            const id = normalizeId(m.id);
+            return id === m.id ? m : { ...m, id };
+          });
+          const changed = migrated.some((m, i) => m.id !== raw[i]?.id);
+          if (!changed) return;
+          r.aiCustomModelsData = {
+            ...r.aiCustomModelsData,
+            [providerId]: migrated,
+          };
+          providerPatch = {
+            ...(providerPatch ?? {}),
+            aiCustomModelsData: r.aiCustomModelsData,
+          };
+        };
+
+        const migrateActiveModel = (
+          providerId: string,
+          normalizeId: (id: string) => string,
+        ) => {
+          if (r.aiProvider !== providerId || typeof r.aiModel !== "string") return;
+          const normalized = normalizeId(r.aiModel);
+          if (normalized === r.aiModel) return;
+          const previous = r.aiModel;
+          r.aiModel = normalized;
+          providerPatch = { ...(providerPatch ?? {}), aiModel: normalized };
+          log.info(`Migrated aiModel to canonical ${providerId} id`, {
+            from: previous,
+            to: normalized,
+          });
+        };
+
+        migrateEnabled(OPENROUTER_PROVIDER_ID, migrateOpenRouterEnabledModelIds);
+        migrateCustoms(OPENROUTER_PROVIDER_ID, normalizeOpenRouterModelId);
+        migrateActiveModel(OPENROUTER_PROVIDER_ID, normalizeOpenRouterModelId);
+
+        migrateEnabled(GOOGLE_PROVIDER_ID, migrateGoogleEnabledModelIds);
+        migrateCustoms(GOOGLE_PROVIDER_ID, normalizeGoogleModelId);
+        migrateActiveModel(GOOGLE_PROVIDER_ID, normalizeGoogleModelId);
+
+        migrateEnabled(ANTHROPIC_PROVIDER_ID, migrateAnthropicEnabledModelIds);
+        migrateCustoms(ANTHROPIC_PROVIDER_ID, normalizeAnthropicModelId);
+        migrateActiveModel(ANTHROPIC_PROVIDER_ID, normalizeAnthropicModelId);
+
+        if (r.aiModelThoughtLevels) {
+          const nextLevels: Record<string, string> = {};
+          let levelsChanged = false;
+          for (const [key, value] of Object.entries(r.aiModelThoughtLevels)) {
+            const migratedKey = migrateModelPreferenceKey(key);
+            if (migratedKey !== key) levelsChanged = true;
+            nextLevels[migratedKey] = String(value);
+          }
+          if (levelsChanged) {
+            r.aiModelThoughtLevels = nextLevels;
+            providerPatch = {
+              ...(providerPatch ?? {}),
+              aiModelThoughtLevels: nextLevels,
+            };
+          }
+        }
+
+        if (providerPatch) {
+          window.electronAPI.settingsSet(providerPatch).catch(() => {});
+          log.info("Migrated provider model IDs to canonical catalog ids");
+        }
+      }
+
       set({
         settings: {
           ...defaults,
@@ -299,6 +503,26 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       });
       console.log(`[settings] loaded: ${Math.round(performance.now() - t0)}ms`);
       log.info("Settings loaded");
+
+      void sanitizePersistedModelThoughtLevels(
+        r.aiModelThoughtLevels,
+        r.aiCustomModelsData,
+        r.aiCustomProviders,
+      ).then((sanitized) => {
+        if (!sanitized || sanitized === r.aiModelThoughtLevels) return;
+        log.info("Sanitized invalid aiModelThoughtLevels entries");
+        void get().updateSettings({ aiModelThoughtLevels: sanitized });
+      });
+
+      const hasOpenCodeCatalog =
+        Boolean(r.aiApiKeys?.[OPENCODE_GO_PROVIDER_ID]?.trim())
+        || Boolean(r.aiApiKeys?.[OPENCODE_ZEN_PROVIDER_ID]?.trim())
+        || r.aiCustomProviders?.some(
+          (p) => p.id === OPENCODE_GO_PROVIDER_ID || p.id === OPENCODE_ZEN_PROVIDER_ID,
+        );
+      if (hasOpenCodeCatalog) {
+        void prefetchOpenCodeModelsCatalog();
+      }
     } catch (err) {
       console.log(`[settings] load failed: ${Math.round(performance.now() - t0)}ms`);
       log.error("Failed to load settings", err);

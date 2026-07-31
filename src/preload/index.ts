@@ -1090,6 +1090,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	sessionMarkPlanArtifactDiscarded: (projectPath: string, sessionId: string) =>
 		ipcRenderer.invoke("session:markPlanArtifactDiscarded", { projectPath, sessionId }),
 	chatGetProviders: () => ipcRenderer.invoke("chat:getProviders"),
+	chatGetEffortCatalog: () => ipcRenderer.invoke("chat:getEffortCatalog"),
+	chatGetOpenCodeModelsCatalog: () =>
+		ipcRenderer.invoke("chat:getOpenCodeModelsCatalog"),
+	chatFetchProviderModels: (args: {
+		providerId: string;
+		apiKey?: string;
+		baseUrl?: string;
+	}) => ipcRenderer.invoke("chat:fetchProviderModels", args),
+	chatFetchOpenRouterModels: (args?: { apiKey?: string; baseUrl?: string }) =>
+		ipcRenderer.invoke("chat:fetchProviderModels", {
+			providerId: "openrouter",
+			...(args ?? {}),
+		}),
+	chatGetModelEffort: (args: {
+		provider: string;
+		modelId: string;
+		fallback?: string[];
+	}) => ipcRenderer.invoke("chat:getModelEffort", args),
 	chatSetAuth: (provider: string, credentials: Record<string, string>) =>
 		ipcRenderer.invoke("chat:setAuth", { provider, credentials }),
 	chatTestConnection: (args: { provider: string; apiKey: string; baseUrl?: string }) =>

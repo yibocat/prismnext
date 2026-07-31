@@ -8,3 +8,33 @@ export function parseOpencodeVersionOutput(stdout: string): string | null {
   if (/^[\w.+-]+$/.test(line)) return line.replace(/^v/i, "");
   return null;
 }
+
+/** OpenCode ≥1.18 derives model variants from models.dev `reasoning_options`. */
+export const OPENCODE_REASONING_FROM_CATALOG_MIN = "1.18.0";
+
+function parseVersionParts(version: string): [number, number, number] | null {
+  const m = version.trim().match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!m) return null;
+  return [Number(m[1]), Number(m[2]), Number(m[3])];
+}
+
+export function openCodeVersionAtLeast(
+  version: string | null | undefined,
+  minimum: string,
+): boolean {
+  const a = version ? parseVersionParts(version) : null;
+  const b = parseVersionParts(minimum);
+  if (!a || !b) return false;
+  for (let i = 0; i < 3; i++) {
+    if (a[i] > b[i]) return true;
+    if (a[i] < b[i]) return false;
+  }
+  return true;
+}
+
+/** Whether Prism can skip writing variants into opencode.json (runtime builds them). */
+export function shouldSkipEffortVariantConfigSync(
+  version: string | null | undefined,
+): boolean {
+  return openCodeVersionAtLeast(version, OPENCODE_REASONING_FROM_CATALOG_MIN);
+}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/stores/settings-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
@@ -25,19 +25,26 @@ import {
   EyeOffIcon,
   Loader2Icon,
   PlusIcon,
+  RefreshCwIcon,
+  SearchIcon,
   XIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
+  ALL_PROVIDERS,
   PROVIDER_PRESETS,
   CUSTOM_PRESET,
   getPreset,
   buildCustomModelEntry,
   modelIdTaken,
+  modelSupportsVision,
+  prefetchOpenCodeModelsCatalog,
+  getCachedOpenCodeCatalogModels,
 } from "@/lib/providers";
 import type { ModelConfig } from "@/lib/providers";
-import { ModelCapabilityBadges } from "@/components/modules/chat/agent-settings/model-capability-badges";
+import { isOpenCodeCatalogProvider, normalizeOpenCodeModelId } from "../../../../shared/opencode-provider";
+import { isLazyCatalogProvider } from "../../../../shared/lazy-provider-catalog";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import {
   SETTINGS_DETAIL_ACTIONS,
@@ -105,8 +112,133 @@ function ConnectionStatusLine({ status }: { status: ConnectionStatus }) {
   );
 }
 
-const MODEL_ROW =
-  "flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted/50 transition-colors";
+const MODEL_LIST_SHELL = "overflow-hidden rounded-md border border-border";
+const MODEL_LIST_BODY = "max-h-[min(22rem,50vh)] overflow-y-auto px-1 py-0.5 space-y-0.5";
+
+function resolveModelConfig(
+  modelId: string,
+  ...sources: Array<ModelConfig[] | null | undefined>
+): ModelConfig {
+  for (const list of sources) {
+    if (!list) continue;
+    const hit = list.find((m) => m.id === modelId);
+    if (hit) return hit;
+  }
+  return { id: modelId, name: modelId, contextWindow: "—" };
+}
+
+function modelListCheckState(
+  selectedCount: number,
+  totalCount: number,
+): boolean | "indeterminate" {
+  if (totalCount === 0 || selectedCount === 0) return false;
+  if (selectedCount >= totalCount) return true;
+  return "indeterminate";
+}
+
+/** Compact single-line row: name + Vision (inline), context at trailing edge. ID via title. */
+function ModelChecklistRow({
+  model,
+  checked,
+  onToggle,
+  trailing,
+}: {
+  model: ModelConfig;
+  checked: boolean;
+  onToggle: () => void;
+  trailing?: ReactNode;
+}) {
+  const vision = modelSupportsVision(model);
+  return (
+    <div
+      className="flex items-center gap-2 rounded-md px-1.5 py-1 cursor-pointer hover:bg-muted transition-colors"
+      onClick={onToggle}
+      role="button"
+      tabIndex={0}
+      title={model.id}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onToggle();
+        }
+      }}
+    >
+      <Checkbox
+        checked={checked}
+        onCheckedChange={onToggle}
+        onClick={(e) => e.stopPropagation()}
+      />
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+        <span className="truncate text-[length:var(--font-size-12)] text-foreground">
+          {model.name}
+        </span>
+        {vision ? (
+          <span className="shrink-0 text-[length:var(--font-size-10)] text-muted-foreground">
+            Vision
+          </span>
+        ) : null}
+      </div>
+      {model.contextWindow ? (
+        <span className="shrink-0 tabular-nums text-[length:var(--font-size-11)] text-muted-foreground">
+          {model.contextWindow}
+        </span>
+      ) : null}
+      {trailing}
+    </div>
+  );
+}
+
+function ModelListHeader({
+  selectedCount,
+  totalCount,
+  disabled,
+  onToggleAll,
+  showSearch,
+  search,
+  onSearchChange,
+}: {
+  selectedCount: number;
+  totalCount: number;
+  disabled?: boolean;
+  onToggleAll: (selectAll: boolean) => void;
+  showSearch?: boolean;
+  search?: string;
+  onSearchChange?: (value: string) => void;
+}) {
+  const { t } = useTranslation();
+  const state = modelListCheckState(selectedCount, totalCount);
+  return (
+    <div className="border-b border-border">
+      {showSearch ? (
+        <div className="relative flex items-center border-b border-border px-2.5 py-1.5">
+          <SearchIcon className="pointer-events-none absolute left-2.5 size-3 text-muted-foreground" />
+          <input
+            type="search"
+            className="w-full bg-transparent py-0.5 pl-5 pr-1 text-[length:var(--font-size-12)] outline-none placeholder:text-muted-foreground"
+            placeholder={t("settings.editor.provider.searchModels")}
+            value={search ?? ""}
+            onChange={(e) => onSearchChange?.(e.target.value)}
+            aria-label={t("settings.editor.provider.searchModels")}
+          />
+        </div>
+      ) : null}
+      <div className="flex items-center gap-2 px-2.5 py-1.5">
+        <Checkbox
+          checked={state}
+          disabled={disabled || totalCount === 0}
+          onCheckedChange={(value) => onToggleAll(value === true)}
+          aria-label={t("settings.editor.provider.selectAll")}
+        />
+        <span className="text-[length:var(--font-size-11)] text-muted-foreground">
+          {t("settings.editor.provider.selectedCount", {
+            selected: selectedCount,
+            total: totalCount,
+          })}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export function ProviderEditorPanel({ slot }: { slot: ProviderEditorSlot }) {
   const { t } = useTranslation();
@@ -126,18 +258,70 @@ function BuiltinProviderKeyPanel({ providerId }: { providerId: string }) {
   const verifiedProviders = settings.aiVerifiedProviders || [];
   const apiKey = aiApiKeys[providerId] || "";
   const isVerified = verifiedProviders.includes(providerId);
+  const usesCatalog = isOpenCodeCatalogProvider(providerId);
 
   const [showKey, setShowKey] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"idle" | "pass" | "fail">(
     isVerified ? "pass" : "idle",
   );
+  const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
+  const [modelSearch, setModelSearch] = useState("");
+  const [catalogTick, setCatalogTick] = useState(0);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+
+  useEffect(() => {
+    if (!usesCatalog) return;
+    let cancelled = false;
+    setCatalogLoading(true);
+    void prefetchOpenCodeModelsCatalog().then((entries) => {
+      if (cancelled) return;
+      if (entries) setCatalogTick((n) => n + 1);
+      setCatalogLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [usesCatalog, providerId]);
+
+  void catalogTick;
+  const catalogModels = usesCatalog
+    ? getCachedOpenCodeCatalogModels(providerId) ?? []
+    : null;
+  const provider =
+    ALL_PROVIDERS.find((p) => p.id === providerId) || getPreset(providerId);
+  const registryModels =
+    catalogModels && catalogModels.length > 0
+      ? catalogModels
+      : provider?.models || [];
 
   useEffect(() => {
     setShowKey(false);
     setTesting(false);
     setTestResult(isVerified ? "pass" : "idle");
-  }, [providerId, isVerified]);
+    setModelSearch("");
+    const enabled = useSettingsStore.getState().settings.aiEnabledModels?.[providerId];
+    if (enabled !== undefined) {
+      setSelectedModels(new Set(enabled));
+      return;
+    }
+    // Static presets: legacy default = all on. Catalog providers: start empty until user picks.
+    if (!usesCatalog && registryModels.length > 0) {
+      setSelectedModels(new Set(registryModels.map((m) => m.id)));
+    } else {
+      setSelectedModels(new Set());
+    }
+    // registryModels.length: re-seed when catalog first populates for non-catalog? only static
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerId, isVerified, usesCatalog, registryModels.length]);
+
+  const filteredModels = useMemo(() => {
+    const q = modelSearch.trim().toLowerCase();
+    if (!q) return registryModels;
+    return registryModels.filter(
+      (m) => m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q),
+    );
+  }, [registryModels, modelSearch]);
 
   const connectionStatus: ConnectionStatus = !apiKey
     ? "none"
@@ -147,14 +331,23 @@ function BuiltinProviderKeyPanel({ providerId }: { providerId: string }) {
         ? "failed"
         : "untested";
 
+  const toggleModel = (modelId: string) => {
+    const next = new Set(selectedModels);
+    if (next.has(modelId)) next.delete(modelId);
+    else next.add(modelId);
+    setSelectedModels(next);
+  };
+
   const handleTest = useCallback(async () => {
     if (!apiKey) return;
     setTesting(true);
     setTestResult("idle");
     try {
+      const preset = getPreset(providerId) || ALL_PROVIDERS.find((p) => p.id === providerId);
       const result = await window.electronAPI.chatTestConnection({
         provider: providerId,
-        apiKey,
+        apiKey: apiKey.trim(),
+        baseUrl: preset?.defaultBaseUrl,
       });
       setTestResult(result.success ? "pass" : "fail");
       if (result.success) {
@@ -172,6 +365,16 @@ function BuiltinProviderKeyPanel({ providerId }: { providerId: string }) {
       setTesting(false);
     }
   }, [apiKey, providerId, verifiedProviders, updateSettings, t]);
+
+  const handleDone = () => {
+    updateSettings({
+      aiEnabledModels: {
+        ...settings.aiEnabledModels,
+        [providerId]: [...selectedModels],
+      },
+    });
+    closePanel();
+  };
 
   return (
     <div className="flex-1 overflow-auto">
@@ -213,11 +416,54 @@ function BuiltinProviderKeyPanel({ providerId }: { providerId: string }) {
               {t("common.testConnection")}
             </Button>
           </SettingsFormField>
+
+          <SettingsFormField
+            label={t("settings.editor.provider.models")}
+            description={t("settings.editor.provider.modelsDesc")}
+          >
+            <div className={MODEL_LIST_SHELL}>
+                <ModelListHeader
+                  selectedCount={selectedModels.size}
+                  totalCount={registryModels.length}
+                  disabled={catalogLoading && registryModels.length === 0}
+                  showSearch={registryModels.length > 6}
+                  search={modelSearch}
+                  onSearchChange={setModelSearch}
+                  onToggleAll={(selectAll) =>
+                    setSelectedModels(
+                      selectAll
+                        ? new Set(registryModels.map((m) => m.id))
+                        : new Set(),
+                    )
+                  }
+                />
+                <div className={MODEL_LIST_BODY}>
+                  {catalogLoading && registryModels.length === 0 ? (
+                    <p className="px-1.5 py-2 text-[length:var(--font-size-12)] text-muted-foreground">
+                      {t("settings.editor.provider.loadingCatalog")}
+                    </p>
+                  ) : null}
+                  {!catalogLoading && usesCatalog && registryModels.length === 0 ? (
+                    <p className="px-1.5 py-2 text-[length:var(--font-size-12)] text-muted-foreground">
+                      {t("settings.editor.provider.catalogEmpty")}
+                    </p>
+                  ) : null}
+                  {filteredModels.map((m) => (
+                    <ModelChecklistRow
+                      key={m.id}
+                      model={m}
+                      checked={selectedModels.has(m.id)}
+                      onToggle={() => toggleModel(m.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+          </SettingsFormField>
         </div>
 
         <div className={SETTINGS_DETAIL_ACTIONS}>
-          <Button size="xs" onClick={closePanel}>
-            Done
+          <Button size="xs" onClick={handleDone} disabled={selectedModels.size === 0}>
+            {t("common.done")}
           </Button>
           <Button variant="ghost" size="xs" onClick={closePanel}>
             {t("common.cancel")}
@@ -285,11 +531,49 @@ function CustomProviderEditorPanel({
   const [testResult, setTestResult] = useState<"idle" | "pass" | "fail">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [apiKeyError, setApiKeyError] = useState(false);
+  const [catalogTick, setCatalogTick] = useState(0);
+  const [modelSearch, setModelSearch] = useState("");
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  /** Lazy catalog: null until user clicks Fetch — then full remote/cache list. */
+  const [lazyCatalog, setLazyCatalog] = useState<ModelConfig[] | null>(null);
+  const [lazyFetching, setLazyFetching] = useState(false);
+
+  const catalogProviderId = isEditing
+    ? (existing?.id ?? "")
+    : presetId === "__custom__"
+      ? ""
+      : presetId;
+  const usesCatalog = isOpenCodeCatalogProvider(catalogProviderId);
+  const lazyProviderId = isEditing
+    ? (existing?.id ?? "")
+    : presetId === "__custom__"
+      ? ""
+      : presetId;
+  const usesLazyCatalog = isLazyCatalogProvider(lazyProviderId);
+
+  useEffect(() => {
+    if (!usesCatalog) return;
+    let cancelled = false;
+    setCatalogLoading(true);
+    void prefetchOpenCodeModelsCatalog().then((entries) => {
+      if (cancelled) return;
+      if (entries) setCatalogTick((t) => t + 1);
+      setCatalogLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [usesCatalog, catalogProviderId]);
 
   useEffect(() => {
     const initialPresetId = pickInitialPresetId(existing);
     const preset = getPreset(initialPresetId);
-    const presetModels = preset?.models || [];
+    const catalogModels = isOpenCodeCatalogProvider(initialPresetId)
+      ? getCachedOpenCodeCatalogModels(initialPresetId) ?? []
+      : null;
+    const registryModels = catalogModels?.length
+      ? catalogModels
+      : (preset?.models || []);
     const existingCustomModels = (settings.aiCustomModelsData?.[editProviderId || ""] ||
       []) as ModelConfig[];
 
@@ -311,6 +595,7 @@ function CustomProviderEditorPanel({
     setAddingModel(false);
     setSaving(false);
     setTesting(false);
+    setModelSearch("");
     setTestResult(
       existing &&
         editProviderId &&
@@ -320,23 +605,91 @@ function CustomProviderEditorPanel({
     );
     setSaveError(null);
     setApiKeyError(false);
+    setLazyCatalog(null);
+    setLazyFetching(false);
 
     if (existing) {
-      const enabled = settings.aiEnabledModels?.[existing.id];
+      const enabledRaw = settings.aiEnabledModels?.[existing.id];
+      const enabled =
+        isLazyCatalogProvider(existing.id) && enabledRaw
+          ? enabledRaw.map((id) => normalizeOpenCodeModelId(existing.id, id))
+          : enabledRaw;
       setSelectedModels(
-        new Set(enabled ?? presetModels.map((m) => m.id)),
+        new Set(
+          enabled
+            ?? (isLazyCatalogProvider(existing.id)
+              ? []
+              : registryModels.map((m) => m.id)),
+        ),
       );
-      setCustomModels(
-        existingCustomModels.filter((m) => !presetModels.find((p) => p.id === m.id)),
-      );
+      if (isLazyCatalogProvider(existing.id)) {
+        setCustomModels(
+          (existingCustomModels as ModelConfig[]).map((m) => ({
+            ...m,
+            id: normalizeOpenCodeModelId(existing.id, m.id),
+          })),
+        );
+      } else {
+        setCustomModels(
+          existingCustomModels.filter((m) => !registryModels.find((p) => p.id === m.id)),
+        );
+      }
     } else {
-      setSelectedModels(new Set(presetModels.map((m) => m.id)));
+      // New add: start with nothing selected — user picks in this panel.
+      setSelectedModels(new Set());
       setCustomModels([]);
     }
   }, [slot.mode, editProviderId, existing?.name, existing?.id, pickInitialPresetId]);
 
   const currentPreset = getPreset(presetId);
-  const presetModels = currentPreset?.models || [];
+  // catalogTick forces re-read after async models.json prefetch fills the cache
+  void catalogTick;
+  const catalogModels = usesCatalog
+    ? getCachedOpenCodeCatalogModels(catalogProviderId) ?? []
+    : null;
+  const seedPresetModels = catalogModels?.length
+    ? catalogModels
+    : (currentPreset?.models || []);
+
+  /** Lazy catalog without fetch: last-saved snapshots; after fetch: full catalog. */
+  const lazyBrowseList = useMemo(() => {
+    if (!usesLazyCatalog) return [] as ModelConfig[];
+    if (customModels.length > 0) {
+      const byId = new Map(customModels.map((m) => [m.id, m]));
+      for (const id of selectedModels) {
+        if (!byId.has(id)) {
+          byId.set(
+            id,
+            resolveModelConfig(id, lazyCatalog, seedPresetModels),
+          );
+        }
+      }
+      return Array.from(byId.values());
+    }
+    return [...selectedModels].map((id) =>
+      resolveModelConfig(id, lazyCatalog, seedPresetModels),
+    );
+  }, [
+    usesLazyCatalog,
+    customModels,
+    selectedModels,
+    lazyCatalog,
+    seedPresetModels,
+  ]);
+
+  const presetModels = usesLazyCatalog
+    ? lazyCatalog ?? lazyBrowseList
+    : seedPresetModels;
+
+  const filteredPresetModels = useMemo(() => {
+    const q = modelSearch.trim().toLowerCase();
+    if (!q) return presetModels;
+    return presetModels.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q)
+        || m.id.toLowerCase().includes(q),
+    );
+  }, [presetModels, modelSearch]);
 
   const providerId = isEditing
     ? existing!.id
@@ -344,14 +697,67 @@ function CustomProviderEditorPanel({
       ? `custom-${Date.now()}`
       : presetId;
 
+  const handleFetchLazyCatalog = useCallback(async () => {
+    if (!isLazyCatalogProvider(lazyProviderId)) return;
+    setLazyFetching(true);
+    try {
+      const result = await window.electronAPI.chatFetchProviderModels({
+        providerId: lazyProviderId,
+        apiKey: apiKey.trim() || undefined,
+        baseUrl: baseUrl.trim() || currentPreset?.defaultBaseUrl,
+      });
+      const rows: ModelConfig[] = result.models.map((m) => ({
+        id: m.id,
+        name: m.name,
+        contextWindow: m.contextWindow,
+        capabilities: m.capabilities,
+        description: m.description,
+      }));
+      if (rows.length === 0) {
+        toast.error(
+          t("settings.editor.provider.fetchModelsEmpty", {
+            defaultValue:
+              "No models returned. Check your API key, or start chat once so OpenCode can cache the catalog.",
+          }),
+        );
+        return;
+      }
+      setLazyCatalog(rows);
+      toast.success(
+        t("settings.editor.provider.fetchModelsDone", {
+          count: rows.length,
+          defaultValue: "Loaded {{count}} models",
+        }),
+      );
+    } catch {
+      toast.error(
+        t("settings.editor.provider.fetchModelsFailed", {
+          defaultValue: "Failed to fetch models",
+        }),
+      );
+    } finally {
+      setLazyFetching(false);
+    }
+  }, [lazyProviderId, apiKey, baseUrl, currentPreset?.defaultBaseUrl, t]);
+
   const handlePresetChange = (newPresetId: string) => {
     if (isPresetAlreadyAdded(newPresetId)) return;
     setPresetId(newPresetId);
+    setModelSearch("");
+    setLazyCatalog(null);
     const preset = getPreset(newPresetId);
     if (preset && preset.id !== "__custom__") {
       setName(preset.name);
       setBaseUrl(preset.defaultBaseUrl);
-      setSelectedModels(new Set(preset.models.map((m) => m.id)));
+      // Catalog providers load async — selection starts empty until user picks.
+      if (isOpenCodeCatalogProvider(newPresetId)) {
+        setSelectedModels(new Set());
+        void prefetchOpenCodeModelsCatalog().then((entries) => {
+          if (entries) setCatalogTick((t) => t + 1);
+        });
+      } else {
+        setSelectedModels(new Set());
+      }
       setCustomModels([]);
     } else if (newPresetId === "__custom__") {
       setName("");
@@ -371,12 +777,14 @@ function CustomProviderEditorPanel({
   };
 
   const handleAddCustomModel = () => {
-    const mid = newModelId.trim();
+    const mid = usesLazyCatalog && lazyProviderId
+      ? normalizeOpenCodeModelId(lazyProviderId, newModelId.trim())
+      : newModelId.trim();
     if (!mid) {
       setAddModelError(t("settings.editor.provider.modelIdRequired"));
       return;
     }
-    if (modelIdTaken(mid, presetModels, customModels)) {
+    if (modelIdTaken(mid, seedPresetModels, customModels) || (lazyCatalog && modelIdTaken(mid, lazyCatalog, []))) {
       setAddModelError(t("settings.editor.provider.modelIdExists"));
       return;
     }
@@ -409,10 +817,18 @@ function CustomProviderEditorPanel({
     setSelectedModels(next);
   };
 
-  const allSelectedModels = [
-    ...presetModels.filter((m) => selectedModels.has(m.id)),
-    ...customModels.filter((m) => selectedModels.has(m.id)),
-  ];
+  const allSelectedModels = usesLazyCatalog
+    ? [...selectedModels].map((id) =>
+        resolveModelConfig(id, lazyCatalog, customModels, seedPresetModels),
+      )
+    : [
+        ...presetModels.filter((m) => selectedModels.has(m.id)),
+        ...customModels.filter((m) => selectedModels.has(m.id)),
+      ];
+
+  const lazyExtraCustoms = usesLazyCatalog && lazyCatalog
+    ? customModels.filter((m) => !lazyCatalog.some((c) => c.id === m.id))
+    : [];
 
   const isVerifiedInSettings =
     isEditing &&
@@ -510,7 +926,15 @@ function CustomProviderEditorPanel({
       return;
     }
 
-    const enabledModelIds = [...selectedModels];
+    const enabledModelIds = usesLazyCatalog && lazyProviderId
+      ? [...selectedModels].map((id) => normalizeOpenCodeModelId(lazyProviderId, id))
+      : [...selectedModels];
+
+    const lazySnapshots: ModelConfig[] | null = usesLazyCatalog
+      ? enabledModelIds.map((id) =>
+          resolveModelConfig(id, lazyCatalog, customModels, seedPresetModels),
+        )
+      : null;
 
     if (isEditing) {
       updateSettings({
@@ -522,7 +946,7 @@ function CustomProviderEditorPanel({
         aiEnabledModels: { ...settings.aiEnabledModels, [editProviderId!]: enabledModelIds },
         aiCustomModelsData: {
           ...settings.aiCustomModelsData,
-          [editProviderId!]: customModels,
+          [editProviderId!]: lazySnapshots ?? customModels,
         },
         aiVerifiedProviders: [...new Set([...(settings.aiVerifiedProviders || []), editProviderId!])],
       });
@@ -538,7 +962,7 @@ function CustomProviderEditorPanel({
         aiEnabledModels: { ...settings.aiEnabledModels, [providerId]: enabledModelIds },
         aiCustomModelsData: {
           ...settings.aiCustomModelsData,
-          [providerId]: customModels,
+          [providerId]: lazySnapshots ?? customModels,
         },
         aiVerifiedProviders: [...new Set([...(settings.aiVerifiedProviders || []), providerId])],
       });
@@ -567,6 +991,10 @@ function CustomProviderEditorPanel({
     closePanel,
     t,
     isPresetAlreadyAdded,
+    usesLazyCatalog,
+    lazyProviderId,
+    lazyCatalog,
+    seedPresetModels,
   ]);
 
   const removeProvider = () => {
@@ -697,86 +1125,146 @@ function CustomProviderEditorPanel({
 
           <SettingsFormField
             label={t("settings.editor.provider.models")}
-            description={t("settings.editor.provider.modelsDesc")}
+            description={
+              usesLazyCatalog
+                ? t("settings.editor.provider.modelsDescLazy", {
+                    defaultValue:
+                      "Fetch the full model catalog to pick models. After you save, this panel shows only your selection until you fetch again.",
+                  })
+                : t("settings.editor.provider.modelsDesc")
+            }
           >
-            <div className="rounded-md border border-border divide-y divide-border/60">
-              {presetModels.map((m) => (
-                <div
-                  key={m.id}
-                  className={MODEL_ROW}
-                  onClick={() => toggleModel(m.id)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      toggleModel(m.id);
-                    }
-                  }}
-                >
-                  <Checkbox
-                    checked={selectedModels.has(m.id)}
-                    onCheckedChange={() => toggleModel(m.id)}
-                  />
-                  <div className="flex-1 min-w-0 text-[length:var(--font-size-12)]">
-                    <p className="truncate">{m.name}</p>
-                    <ModelCapabilityBadges model={m} />
-                  </div>
-                  {m.contextWindow ? (
-                    <span className="text-[length:var(--font-size-11)] text-muted-foreground shrink-0">
-                      {m.contextWindow}
+            <div className="space-y-2">
+              {usesLazyCatalog ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    onClick={() => void handleFetchLazyCatalog()}
+                    disabled={lazyFetching}
+                  >
+                    {lazyFetching ? (
+                      <Loader2Icon className="size-3 animate-spin mr-1" />
+                    ) : (
+                      <RefreshCwIcon className="size-3 mr-1" />
+                    )}
+                    {lazyCatalog
+                      ? t("settings.editor.provider.refreshModels", {
+                          defaultValue: "Refresh all models",
+                        })
+                      : t("settings.editor.provider.fetchModels", {
+                          defaultValue: "Fetch all models",
+                        })}
+                  </Button>
+                  {lazyCatalog ? (
+                    <span className="text-[length:var(--font-size-11)] text-muted-foreground">
+                      {t("settings.editor.provider.fetchModelsCount", {
+                        count: lazyCatalog.length,
+                        defaultValue: "{{count}} models loaded",
+                      })}
+                    </span>
+                  ) : selectedModels.size > 0 ? (
+                    <span className="text-[length:var(--font-size-11)] text-muted-foreground">
+                      {t("settings.editor.provider.selectedOnlyHint", {
+                        defaultValue: "Showing selected models only",
+                      })}
                     </span>
                   ) : null}
                 </div>
+              ) : null}
+              <div className={MODEL_LIST_SHELL}>
+                <ModelListHeader
+                  selectedCount={selectedModels.size}
+                  totalCount={
+                    usesLazyCatalog
+                      ? presetModels.length + lazyExtraCustoms.length
+                      : presetModels.length + customModels.length
+                  }
+                  disabled={
+                    (catalogLoading && usesCatalog && !usesLazyCatalog && presetModels.length === 0)
+                    || lazyFetching
+                    || (usesLazyCatalog
+                      ? presetModels.length + lazyExtraCustoms.length === 0
+                      : presetModels.length + customModels.length === 0)
+                  }
+                  showSearch={
+                    presetModels.length > 6 || (usesCatalog && !usesLazyCatalog) || Boolean(lazyCatalog)
+                  }
+                  search={modelSearch}
+                  onSearchChange={setModelSearch}
+                  onToggleAll={(selectAll) =>
+                    setSelectedModels(
+                      selectAll
+                        ? new Set([
+                            ...presetModels.map((m) => m.id),
+                            ...(usesLazyCatalog
+                              ? lazyExtraCustoms.map((m) => m.id)
+                              : customModels.map((m) => m.id)),
+                          ])
+                        : new Set(),
+                    )
+                  }
+                />
+                <div className={MODEL_LIST_BODY}>
+              {catalogLoading && usesCatalog && !usesLazyCatalog && presetModels.length === 0 ? (
+                <div className="flex items-center gap-2 px-1.5 py-2 text-[length:var(--font-size-12)] text-muted-foreground">
+                  <Loader2Icon className="size-3.5 animate-spin" />
+                  {t("settings.editor.provider.loadingCatalog", {
+                    defaultValue: "Loading models from OpenCode catalog…",
+                  })}
+                </div>
+              ) : null}
+              {lazyFetching && usesLazyCatalog && !lazyCatalog ? (
+                <div className="flex items-center gap-2 px-1.5 py-2 text-[length:var(--font-size-12)] text-muted-foreground">
+                  <Loader2Icon className="size-3.5 animate-spin" />
+                  {t("settings.editor.provider.loadingCatalog")}
+                </div>
+              ) : null}
+              {usesLazyCatalog
+              && !lazyFetching
+              && !lazyCatalog
+              && presetModels.length === 0 ? (
+                <p className="px-1.5 py-2 text-[length:var(--font-size-12)] text-muted-foreground">
+                  {t("settings.editor.provider.fetchModelsHint", {
+                    defaultValue:
+                      "No models selected yet. Click Fetch all models to load the catalog.",
+                  })}
+                </p>
+              ) : null}
+              {filteredPresetModels.map((m) => (
+                <ModelChecklistRow
+                  key={m.id}
+                  model={m}
+                  checked={selectedModels.has(m.id)}
+                  onToggle={() => toggleModel(m.id)}
+                />
               ))}
 
-              {customModels.map((m) => (
-                <div
+              {(usesLazyCatalog ? lazyExtraCustoms : customModels).map((m) => (
+                <ModelChecklistRow
                   key={m.id}
-                  className={cn(MODEL_ROW, "group")}
-                  onClick={() => toggleModel(m.id)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      toggleModel(m.id);
-                    }
-                  }}
-                >
-                  <Checkbox
-                    checked={selectedModels.has(m.id)}
-                    onCheckedChange={() => toggleModel(m.id)}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[length:var(--font-size-12)] truncate">{m.name}</p>
-                    {m.name !== m.id ? (
-                      <p className="text-[length:var(--font-size-11)] font-mono text-muted-foreground/70 truncate mt-0.5">
-                        {m.id}
-                      </p>
-                    ) : null}
-                    <ModelCapabilityBadges model={m} />
-                  </div>
-                  {m.contextWindow ? (
-                    <span className="text-[length:var(--font-size-11)] text-muted-foreground shrink-0">
-                      {m.contextWindow}
-                    </span>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-0.5 rounded hover:bg-muted"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveCustomModel(m.id);
-                    }}
-                  >
-                    <XIcon className="size-3 text-muted-foreground hover:text-foreground" />
-                  </button>
-                </div>
+                  model={m}
+                  checked={selectedModels.has(m.id)}
+                  onToggle={() => toggleModel(m.id)}
+                  trailing={
+                    <button
+                      type="button"
+                      className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      aria-label={t("common.remove")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveCustomModel(m.id);
+                      }}
+                    >
+                      <XIcon className="size-3" />
+                    </button>
+                  }
+                />
               ))}
 
               {addingModel ? (
-                <div className="space-y-2 border-t border-border/60 px-2 py-2">
+                <div className="space-y-2 border-t border-border px-1.5 py-2">
                   <Input
                     className={cn(SETTINGS_FORM_INPUT_MONO, "w-full")}
                     placeholder={t("settings.editor.provider.modelIdPlaceholder")}
@@ -830,21 +1318,40 @@ function CustomProviderEditorPanel({
                     </Button>
                   </div>
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-1.5 px-3 py-2 text-[length:var(--font-size-12)] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
-                  onClick={openAddModelForm}
-                >
-                  <PlusIcon className="size-3" />
-                  {t("settings.editor.provider.addModelEllipsis")}
-                </button>
-              )}
+              ) : null}
 
-              {allSelectedModels.length === 0 && !addingModel && presetModels.length === 0 && customModels.length === 0 ? (
-                <p className="text-[length:var(--font-size-12)] text-muted-foreground text-center py-4">
-                  {t("settings.editor.provider.noModels")}
+              {!usesLazyCatalog
+              && allSelectedModels.length === 0
+              && !addingModel
+              && presetModels.length === 0
+              && customModels.length === 0
+              && !catalogLoading ? (
+                <p className="px-1.5 py-2 text-[length:var(--font-size-12)] text-muted-foreground">
+                  {usesCatalog
+                    ? t("settings.editor.provider.catalogEmpty", {
+                        defaultValue: "Catalog not loaded yet. Start Prism chat once, then reopen this panel.",
+                      })
+                    : t("settings.editor.provider.noModelsHint", {
+                        defaultValue: "No preset models — add a custom model ID below.",
+                      })}
                 </p>
+              ) : null}
+                </div>
+              </div>
+
+              {!isOpenCodeCatalogProvider(presetId) ? (
+                !addingModel ? (
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1.5 text-left text-[length:var(--font-size-12)] text-muted-foreground hover:bg-muted hover:text-foreground"
+                    onClick={openAddModelForm}
+                  >
+                    <PlusIcon className="size-3" />
+                    {t("settings.editor.provider.addCustomModel", {
+                      defaultValue: "Add custom model…",
+                    })}
+                  </button>
+                ) : null
               ) : null}
             </div>
           </SettingsFormField>

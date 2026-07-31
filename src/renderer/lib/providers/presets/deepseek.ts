@@ -1,28 +1,9 @@
-// src/renderer/lib/providers/deepseek.ts
 import type { ProviderConfig } from "../types";
 
+/** DeepSeek — model list lazy-fetched from OpenCode models.json (Fetch in Configure). */
 export const deepseekProvider: ProviderConfig = {
   id: "deepseek",
   name: "DeepSeek",
   defaultBaseUrl: "https://api.deepseek.com",
-  defaultModel: "deepseek-v4-pro",
-  models: [
-    {
-      id: "deepseek-v4-pro",
-      name: "DeepSeek V4 Pro",
-      contextWindow: "1M",
-      capabilities: { vision: false },
-      reasoning: ["low", "medium", "high", "max"],
-      defaultReasoning: "high",
-    },
-    {
-      id: "deepseek-v4-flash",
-      name: "DeepSeek V4 Flash",
-      contextWindow: "1M",
-      capabilities: { vision: false },
-      reasoning: ["low", "medium", "high", "max"],
-    },
-  ],
-  reasoning: ["low", "medium", "high", "max"],
-  defaultReasoning: undefined,
+  models: [],
 };

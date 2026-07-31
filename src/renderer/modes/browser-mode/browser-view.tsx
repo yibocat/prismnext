@@ -23,11 +23,19 @@ const LINK_MAGIC = "__PRISM_LINK_MENU__";
 type PrismWebview = HTMLWebViewElement & {
   executeJavaScript?: (code: string) => Promise<unknown>;
   reload?: () => void;
+  loadURL?: (url: string) => void;
   getURL?: () => string;
+  stop?: () => void;
 };
 
 function getPrismWebview(ref: RefObject<HTMLWebViewElement | null>): PrismWebview | null {
   return ref.current as PrismWebview | null;
+}
+
+function isAbortedLoad(errorDescription?: string, errorCode?: number): boolean {
+  // Electron: ERR_ABORTED (-3) when a navigation is superseded (redirects, new loadURL).
+  if (errorCode === -3) return true;
+  return Boolean(errorDescription && /ERR_ABORTED/i.test(errorDescription));
 }
 
 export function BrowserView() {
@@ -38,15 +46,27 @@ export function BrowserView() {
 
   const webviewRef = useRef<HTMLWebViewElement>(null);
   const webviewElRef = useRef<HTMLDivElement>(null);
+  /** Initial src for this webview mount — never updated by redirect sync. */
+  const mountSrcRef = useRef(url);
+  /** Last URL we intentionally asked the guest to load (user nav or mount). */
+  const lastLoadedRef = useRef(url);
+  /** True while applying did-navigate* → store so we do not call loadURL again. */
+  const syncingFromWebviewRef = useRef(false);
 
   const [linkMenu, setLinkMenu] = useState<{ x: number; y: number; url: string } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const updateBrowserTabTitle = useRightPanelStore((s) => s.updateBrowserTabTitle);
-  const navigateBrowserTab = useRightPanelStore((s) => s.navigateBrowserTab);
+  const syncBrowserTabUrl = useRightPanelStore((s) => s.syncBrowserTabUrl);
   const setBrowserTabLoading = useRightPanelStore((s) => s.setBrowserTabLoading);
   const setTabHibernated = useRightPanelStore((s) => s.setTabHibernated);
   const recordVisit = useBrowserStore((s) => s.recordVisit);
+
+  // Keep mount src in sync only when this view first gains a URL (Home → webview).
+  if (url && !mountSrcRef.current) {
+    mountSrcRef.current = url;
+    lastLoadedRef.current = url;
+  }
 
   useEffect(() => {
     if (isActive && url) {
@@ -65,7 +85,33 @@ export function BrowserView() {
       registerWebview(tabId, el);
       return () => unregisterWebview(tabId);
     }
-  }, [tabId, url]);
+  }, [tabId, hibernated, loadError, Boolean(url)]);
+
+  // User-intent URL changes (toolbar / home / open link) → loadURL.
+  // Webview-driven redirects only sync the address bar (see navigation handlers).
+  useEffect(() => {
+    if (!url) return;
+    if (syncingFromWebviewRef.current) {
+      syncingFromWebviewRef.current = false;
+      lastLoadedRef.current = url;
+      return;
+    }
+    if (url === lastLoadedRef.current) return;
+    const webview = getPrismWebview(webviewRef);
+    if (!webview?.loadURL) {
+      // Not mounted yet (still on Home / error / hibernated) — next mount uses src.
+      mountSrcRef.current = url;
+      lastLoadedRef.current = url;
+      return;
+    }
+    lastLoadedRef.current = url;
+    setLoadError(null);
+    try {
+      webview.loadURL(url);
+    } catch {
+      /* guest may be disposing */
+    }
+  }, [url]);
 
   useEffect(() => {
     const webview = getPrismWebview(webviewRef);
@@ -82,14 +128,20 @@ export function BrowserView() {
 
     webview.addEventListener("page-title-updated", handlePageTitleUpdated);
     return () => webview.removeEventListener("page-title-updated", handlePageTitleUpdated);
-  }, [tabId, url, updateBrowserTabTitle, recordVisit]);
+  }, [tabId, url, updateBrowserTabTitle, recordVisit, hibernated, loadError]);
 
   useEffect(() => {
     const webview = getPrismWebview(webviewRef);
     if (!webview) return;
 
     const handleNavigation = (e: Event & { url?: string }) => {
-      if (e.url) navigateBrowserTab(tabId, e.url);
+      if (!e.url) return;
+      // Address bar only — never re-assign <webview src> for guest redirects.
+      lastLoadedRef.current = e.url;
+      const current = useRightPanelStore.getState().tabs.find((t) => t.id === tabId)?.url;
+      if (current === e.url) return;
+      syncingFromWebviewRef.current = true;
+      syncBrowserTabUrl(tabId, e.url);
     };
 
     webview.addEventListener("did-navigate-in-page", handleNavigation);
@@ -98,7 +150,7 @@ export function BrowserView() {
       webview.removeEventListener("did-navigate-in-page", handleNavigation);
       webview.removeEventListener("did-navigate", handleNavigation);
     };
-  }, [tabId, navigateBrowserTab]);
+  }, [tabId, syncBrowserTabUrl, hibernated, loadError]);
 
   useEffect(() => {
     const webview = getPrismWebview(webviewRef);
@@ -113,26 +165,30 @@ export function BrowserView() {
       webview.removeEventListener("did-start-loading", handleStartLoading);
       webview.removeEventListener("did-stop-loading", handleStopLoading);
     };
-  }, [tabId, url, setBrowserTabLoading]);
+  }, [tabId, setBrowserTabLoading, hibernated, loadError]);
 
   useEffect(() => {
     const webview = getPrismWebview(webviewRef);
     if (!webview) return;
 
-    const handleFailLoad = (e: Event & { isMainFrame?: boolean; errorDescription?: string }) => {
-      if (e.isMainFrame && e.errorDescription) {
-        setLoadError(e.errorDescription);
-        setBrowserTabLoading(tabId, false);
-      }
+    const handleFailLoad = (
+      e: Event & {
+        isMainFrame?: boolean;
+        errorDescription?: string;
+        errorCode?: number;
+      },
+    ) => {
+      if (!e.isMainFrame || !e.errorDescription) return;
+      // Redirect / superseded navigation — not a real failure; showing an error
+      // page would tear down the guest and restart the loop.
+      if (isAbortedLoad(e.errorDescription, e.errorCode)) return;
+      setLoadError(e.errorDescription);
+      setBrowserTabLoading(tabId, false);
     };
 
     webview.addEventListener("did-fail-load", handleFailLoad);
     return () => webview.removeEventListener("did-fail-load", handleFailLoad);
-  }, [tabId, url, setBrowserTabLoading]);
-
-  useEffect(() => {
-    setLoadError(null);
-  }, [url]);
+  }, [tabId, setBrowserTabLoading, hibernated, loadError]);
 
   useEffect(() => {
     const webview = getPrismWebview(webviewRef);
@@ -220,7 +276,7 @@ export function BrowserView() {
       webview.removeEventListener("dom-ready", injectInterceptor);
       webview.removeEventListener("console-message", handleConsoleMessage);
     };
-  }, [tabId, url]);
+  }, [tabId, hibernated, loadError]);
 
   const isLoading = useRightPanelStore(
     (s) => s.tabs.find((t) => t.id === tabId)?.isLoading ?? false,
@@ -243,7 +299,15 @@ export function BrowserView() {
   if (loadError) {
     const retry = () => {
       setLoadError(null);
-      getPrismWebview(webviewRef)?.reload?.();
+      const target = url || mountSrcRef.current;
+      mountSrcRef.current = target;
+      lastLoadedRef.current = target;
+      // Remount webview with current URL (error view tore it down).
+      requestAnimationFrame(() => {
+        const wv = getPrismWebview(webviewRef);
+        if (wv?.loadURL && target) wv.loadURL(target);
+        else if (wv?.reload) wv.reload();
+      });
     };
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
@@ -263,6 +327,8 @@ export function BrowserView() {
     );
   }
 
+  const guestSrc = mountSrcRef.current || url;
+
   return (
     <div ref={webviewElRef} className="flex h-full flex-col min-h-0">
       {isLoading && (
@@ -272,7 +338,7 @@ export function BrowserView() {
       )}
       <webview
         ref={webviewRef}
-        src={url}
+        src={guestSrc}
         className="flex-1"
         style={{ width: "100%", height: "100%" }}
         {...{

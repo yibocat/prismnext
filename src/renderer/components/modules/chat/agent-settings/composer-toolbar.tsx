@@ -31,7 +31,7 @@ export function ComposerToolbar({
   return (
     <div
       ref={toolbarRef}
-      className="flex items-center justify-between gap-1 px-2 pb-1.5 min-w-0"
+      className="@container flex min-w-0 items-center justify-between gap-1 px-2 pb-1.5"
     >
       <div className={cn("flex min-w-0 flex-1 items-center gap-0.5")}>
         {addMenu}

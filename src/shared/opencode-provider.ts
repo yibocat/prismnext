@@ -4,6 +4,19 @@
  * @see https://opencode.ai/docs/go/
  */
 
+import {
+  OPENROUTER_PROVIDER_ID,
+  normalizeOpenRouterModelId,
+} from "./openrouter-models";
+import {
+  GOOGLE_PROVIDER_ID,
+  normalizeGoogleModelId,
+} from "./google-models";
+import {
+  ANTHROPIC_PROVIDER_ID,
+  normalizeAnthropicModelId,
+} from "./anthropic-models";
+
 export const OPENCODE_GO_PROVIDER_ID = "opencode-go";
 export const OPENCODE_ZEN_PROVIDER_ID = "opencode-zen";
 
@@ -74,6 +87,15 @@ export function normalizeOpenCodeModelId(providerId: string, modelId: string): s
     if (OPENCODE_ZEN_MODEL_ALIASES[trimmed]) return OPENCODE_ZEN_MODEL_ALIASES[trimmed]!;
     return trimmed.replace(OPENCODE_ZEN_VENDOR_PREFIX, "");
   }
+  if (providerId === OPENROUTER_PROVIDER_ID) {
+    return normalizeOpenRouterModelId(trimmed);
+  }
+  if (providerId === GOOGLE_PROVIDER_ID) {
+    return normalizeGoogleModelId(trimmed);
+  }
+  if (providerId === ANTHROPIC_PROVIDER_ID) {
+    return normalizeAnthropicModelId(trimmed);
+  }
   return trimmed;
 }
 
@@ -84,6 +106,17 @@ export function formatOpenCodeModelRef(providerId: string, modelId: string): str
   const runtimeProvider = openCodeRuntimeProviderId(providerId);
   if (normalized.startsWith(`${runtimeProvider}/`)) return normalized;
   return `${runtimeProvider}/${normalized}`;
+}
+
+/**
+ * Build provider `…/models` list URL for connection tests.
+ * OpenCode Go/Zen bases already end with `/v1` — do not append `/v1` again.
+ */
+export function resolveModelsListUrl(baseUrl: string): string {
+  const base = baseUrl.trim().replace(/\/+$/, "");
+  if (!base) return "/v1/models";
+  if (/\/v\d+$/i.test(base)) return `${base}/models`;
+  return `${base}/v1/models`;
 }
 
 /** Migrate enabled-model id lists saved with legacy preset casing. */

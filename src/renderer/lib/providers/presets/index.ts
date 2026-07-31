@@ -1,9 +1,7 @@
-// Built-in providers — always shown in Settings
+// Preset providers — available in Add Provider dialog (no always-on built-ins).
 export { openaiProvider } from "./openai";
 export { googleProvider } from "./google";
 export { deepseekProvider } from "./deepseek";
-
-// Preset providers — available in Add Provider dialog
 export { openrouterPreset } from "./openrouter";
 export { anthropicPreset } from "./anthropic";
 export { zhipuPreset } from "./zhipu";
@@ -26,19 +24,21 @@ import { opencodeZenPreset } from "./opencode-zen";
 import { opencodeGoPreset } from "./opencode-go";
 import type { ProviderConfig } from "../types";
 
-/** Providers that are pre-installed and always shown in Settings. */
-export const ALL_PROVIDERS: ProviderConfig[] = [
-  openaiProvider,
-  googleProvider,
-  deepseekProvider,
-];
+/**
+ * Legacy always-on list — empty. All vendors are added via Settings → Add Provider.
+ * Kept so existing imports of ALL_PROVIDERS do not break.
+ */
+export const ALL_PROVIDERS: ProviderConfig[] = [];
 
 /** Preset providers available in the Add Provider dialog dropdown. */
 export const PROVIDER_PRESETS: ProviderConfig[] = [
   opencodeZenPreset,
   opencodeGoPreset,
   openrouterPreset,
+  openaiProvider,
   anthropicPreset,
+  googleProvider,
+  deepseekProvider,
   zhipuPreset,
   minimaxPreset,
   kimiPreset,

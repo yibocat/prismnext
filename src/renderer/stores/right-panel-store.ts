@@ -90,7 +90,13 @@ interface RightPanelState {
   /** Remove duplicate AI tab without marking session dismissed */
   removeAiTabSilently: (id: string) => void;
   updateTerminalTabTitle: (id: string, title: string) => void;
+  /** User-intent navigation — updates URL (and may reset title to hostname). */
   navigateBrowserTab: (id: string, url: string) => void;
+  /**
+   * Sync address-bar URL from webview events only.
+   * Must NOT drive `<webview src>` reloads (that causes redirect loops).
+   */
+  syncBrowserTabUrl: (id: string, url: string) => void;
   updateBrowserTabTitle: (id: string, title: string) => void;
   setBrowserTabLoading: (id: string, isLoading: boolean) => void;
   setTabHibernated: (id: string, hibernated: boolean) => void;
@@ -490,8 +496,19 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     try { hostname = new URL(url).hostname; } catch { /* ignore */ }
     set((s) => ({
       tabs: s.tabs.map((t) =>
-        t.id === id ? { ...t, url, title: hostname || "New Tab", isInitial: false } : t,
+        t.id === id
+          ? { ...t, url, title: hostname || "New Tab", isInitial: false }
+          : t,
       ),
+    }));
+  },
+
+  syncBrowserTabUrl: (id: string, url: string) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== id || t.url === url) return t;
+        return { ...t, url, isInitial: false };
+      }),
     }));
   },
 

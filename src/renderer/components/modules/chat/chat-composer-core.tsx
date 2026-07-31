@@ -282,7 +282,7 @@ export function ChatComposerCore({
             ref={isCompact ? compactRowRef : undefined}
             className={cn(
               isCompact
-                ? "flex w-full min-w-0 items-center gap-1.5 overflow-hidden"
+                ? "@container flex w-full min-w-0 items-center gap-1.5 overflow-hidden"
                 : "contents",
             )}
           >

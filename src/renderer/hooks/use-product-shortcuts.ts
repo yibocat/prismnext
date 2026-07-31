@@ -12,6 +12,7 @@ import { useChangesStore } from "@/stores/changes-store";
 import { useComposerEditorStore } from "@/stores/composer-editor-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import { requestToggleModelPicker } from "@/lib/chat/open-model-picker";
 
 function matchesShortcut(id: string, e: KeyboardEvent): boolean {
   const overrides = useSettingsStore.getState().settings.shortcutOverrides;
@@ -49,6 +50,7 @@ export function cycleMessageWidth(current: string | undefined): MessageWidth {
  * - product.compile
  * - product.acceptAll / product.rejectAll
  * - product.togglePlanMode — ⌥P / Alt+P
+ * - product.openModelPicker — ⌥K / Alt+K
  * - product.cycleMessageWidth — ⌘L / Ctrl+L (pairs with focus-input)
  * - workspace.insertToChat (hosts) — ⌥L / Alt+L
  *
@@ -57,13 +59,19 @@ export function cycleMessageWidth(current: string | undefined): MessageWidth {
 export function useProductShortcuts() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      // ⌥P must run before the alt-only early-return (macOS Option glyphs / menu mnemonics).
+      // ⌥P / ⌥K must run before the alt-only early-return (macOS Option glyphs).
       if (matchesShortcut("product.togglePlanMode", e)) {
         const { activeTabId, tabs, requestSetSessionAgent } = useChatStore.getState();
         if (!activeTabId || !tabs.some((t) => t.id === activeTabId)) return;
         e.preventDefault();
         const agent = tabs.find((t) => t.id === activeTabId)?.sessionAgent ?? "build";
         requestSetSessionAgent(agent === "plan" ? "build" : "plan");
+        return;
+      }
+
+      if (matchesShortcut("product.openModelPicker", e)) {
+        e.preventDefault();
+        requestToggleModelPicker();
         return;
       }
 

@@ -143,14 +143,19 @@ describe("inline composer query", () => {
     expect(options.map((o) => o.kind)).toEqual(["command", "skill", "mcp"]);
   });
 
-  it("lists Plan under Modes, not Commands", () => {
+  it("lists Models and Plan under Modes, not Commands", () => {
     const options = buildSlashOptions("", [], [], []);
+    expect(options.some((o) => o.kind === "mode" && o.mode.id === "models")).toBe(true);
     expect(options.some((o) => o.kind === "mode" && o.mode.id === "plan")).toBe(true);
     expect(options.some((o) => o.kind === "command")).toBe(false);
 
     const planQuery = buildSlashOptions("plan", [], [], []);
     expect(planQuery.map((o) => o.kind)).toEqual(["mode"]);
     expect(planQuery[0]).toMatchObject({ kind: "mode", mode: { id: "plan", label: "Plan" } });
+
+    const modelsQuery = buildSlashOptions("model", [], [], []);
+    expect(modelsQuery.map((o) => o.kind)).toEqual(["mode"]);
+    expect(modelsQuery[0]).toMatchObject({ kind: "mode", mode: { id: "models", label: "Models" } });
   });
 
   it("appends show-more when a slash section exceeds its limit", () => {

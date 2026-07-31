@@ -55,14 +55,20 @@ import { compactComposerNeedsExpand } from "./compact-overflow";
 import { syncComposerQueryState } from "./composer-query-sync";
 import { loadDraftParts } from "./draft-utils";
 import { useChatStore } from "@/stores/chat-store";
+import { requestOpenModelPicker } from "@/lib/chat/open-model-picker";
 import type { Extension } from "@codemirror/state";
 
-/** Clear the `/…` query and enter Plan mode without inserting a command chip. */
-function applyEnterPlanFromSlash(view: EditorView, q: ComposerQuery): void {
+/** Clear the `/…` query without inserting a command chip. */
+function clearSlashQuery(view: EditorView, q: ComposerQuery): void {
   view.dispatch({
     changes: { from: q.from, to: q.to, insert: "" },
     selection: { anchor: q.from },
   });
+}
+
+/** Clear the `/…` query and enter Plan mode without inserting a command chip. */
+function applyEnterPlanFromSlash(view: EditorView, q: ComposerQuery): void {
+  clearSlashQuery(view, q);
   useChatStore.getState().setSessionAgent("plan");
 }
 
@@ -326,6 +332,9 @@ function insertFromDropdown(
   if (option.kind === "mode") {
     if (option.mode.id === "plan") {
       applyEnterPlanFromSlash(view, q);
+    } else if (option.mode.id === "models") {
+      clearSlashQuery(view, q);
+      requestOpenModelPicker();
     }
     return;
   }
@@ -806,15 +815,22 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
           return;
         }
         if (option.kind === "mode") {
+          const view = viewRef.current;
+          const q = activeQueryRef.current;
           if (option.mode.id === "plan") {
-            const view = viewRef.current;
-            const q = activeQueryRef.current;
             if (view && q) {
               applyEnterPlanFromSlash(view, q);
               emitChange(view);
             }
             closeDropdown();
             viewRef.current?.focus();
+          } else if (option.mode.id === "models") {
+            if (view && q) {
+              clearSlashQuery(view, q);
+              emitChange(view);
+            }
+            closeDropdown();
+            requestOpenModelPicker();
           }
           return;
         }

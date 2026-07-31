@@ -1,4 +1,3 @@
-import { getWebview } from "@/modes/browser-mode/webview-registry";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { isBrowsableUrl, normalizeBrowserUrl } from "./normalize";
@@ -23,9 +22,9 @@ export function navigateBrowserUrl(tabId: string, url: string): void {
   if (!isBrowsableUrl(normalized)) return;
   const rp = useRightPanelStore.getState();
   rp.setActiveTab(tabId);
+  // Store update only — BrowserView loads via a single loadURL path.
+  // A second loadURL here races the src/loadURL effect and aborts redirects.
   rp.navigateBrowserTab(tabId, normalized);
-  const wv = getWebview(tabId) as (HTMLWebViewElement & { loadURL?: (url: string) => void }) | undefined;
-  if (wv?.loadURL) wv.loadURL(normalized);
 }
 
 /**

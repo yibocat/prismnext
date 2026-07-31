@@ -138,6 +138,10 @@ async function runProjectChatPrewarm(projectRoot: string): Promise<void> {
       const message = err instanceof Error ? err.message : String(err);
       log.warn("purgeEmptySessions during prewarm failed", { error: message });
     }
+    void acp.refreshEffortCatalog().catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      log.debug("refreshEffortCatalog during prewarm failed", { error: message });
+    });
   }
 
   log.info("Project chat prewarm complete", {

@@ -230,6 +230,11 @@ describe("resolveChord", () => {
     expect(resolveChord("product.togglePlanMode")?.chord).toEqual({ key: "p", alt: true });
   });
 
+  it("registers product.openModelPicker as ⌥K / Alt+K", () => {
+    expect(listShortcuts().some((d) => d.id === "product.openModelPicker")).toBe(true);
+    expect(resolveChord("product.openModelPicker")?.chord).toEqual({ key: "k", alt: true });
+  });
+
   it("registers product.cycleMessageWidth as ⌘L and workspace.insertToChat as ⌥L", () => {
     expect(resolveChord("product.cycleMessageWidth")?.chord).toEqual({ key: "l", primary: true });
     expect(resolveChord("workspace.insertToChat")?.chord).toEqual({ key: "l", alt: true });
