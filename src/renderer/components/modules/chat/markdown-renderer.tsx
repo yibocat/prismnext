@@ -9,6 +9,8 @@ interface MarkdownRendererProps {
   content: string;
   isAnimating?: boolean;
   sessionId?: string;
+  /** Slightly weaker body color (e.g. interim prose inside Worked for). */
+  muted?: boolean;
 }
 
 /**
@@ -26,11 +28,12 @@ export function MarkdownRenderer({
   content,
   isAnimating = false,
   sessionId,
+  muted = false,
 }: MarkdownRendererProps) {
   if (!content) return null;
 
   if (!isAnimating) {
-    return <StaticMarkdown content={content} sessionId={sessionId} />;
+    return <StaticMarkdown content={content} sessionId={sessionId} muted={muted} />;
   }
 
   const { committed, pending } = useBlockSplitter(content);
@@ -40,7 +43,7 @@ export function MarkdownRenderer({
   if (fence.inFence) {
     return (
       <>
-        <StaticMarkdown content={committed} sessionId={sessionId} />
+        <StaticMarkdown content={committed} sessionId={sessionId} muted={muted} />
         <StreamingCodeFrame lang={fence.lang} code={fence.code} />
       </>
     );
@@ -49,7 +52,7 @@ export function MarkdownRenderer({
   // Normal text streaming
   return (
     <>
-      <StaticMarkdown content={committed} sessionId={sessionId} />
+      <StaticMarkdown content={committed} sessionId={sessionId} muted={muted} />
       <PendingLine content={pending} />
     </>
   );

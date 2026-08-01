@@ -29,9 +29,11 @@ import {
   TURN_WINDOW_LOAD_PULL_PX,
   TURN_WINDOW_SENTINEL_SUPPRESS_MS,
 } from "@/lib/chat/turn-window";
-import { isToolResultUserMessage, extractTurnUserPreview, isHiddenToolResultCarrier } from "./chat-turns";
+import { isToolResultUserMessage, extractTurnUserPreview, isHiddenToolResultCarrier, isHiddenBackgroundTaskInjectMessage } from "./chat-turns";
 import { TurnRail } from "./turn-rail";
 import { buildToolResultMap, contentBlocks } from "./tools/tool-result-map";
+import { MessageTodoDrawer } from "./todo-plan-bar";
+import { selectMessageTodoAnchorUserIndex } from "@/lib/chat/composer-pending-tools";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import {
@@ -117,9 +119,12 @@ TurnErrorRetry.displayName = "TurnErrorRetry";
 const UserHeader = memo(function UserHeader({
   msg,
   isActiveTurn = false,
+  attachedBelow,
 }: {
   msg: ChatStreamMessage;
   isActiveTurn?: boolean;
+  /** Flush under the bubble (e.g. Task plan drawer) — same sticky stack, no gap. */
+  attachedBelow?: ReactNode;
 }) {
   const { t } = useTranslation();
   const allBlocks = contentBlocks(msg.message?.content);
@@ -165,11 +170,13 @@ const UserHeader = memo(function UserHeader({
 
   // Inset with margin (matches composer `px-3`), not padded sticky plate —
   // gutters stay transparent so glass / panel surfaces show through cleanly.
+  // Only the *active* turn sticks — older sticky headers at top-0 stacked on
+  // top of history and made it look like earlier bubbles were overwritten.
   return (
     <div
       className={cn(
-        "sticky top-0 z-20 mx-3 mb-2",
-        isActiveTurn && "z-30",
+        "mx-3 mb-2",
+        isActiveTurn && "sticky top-0 z-30",
       )}
     >
       <div
@@ -284,6 +291,7 @@ const UserHeader = memo(function UserHeader({
           </button>
         ) : null}
       </div>
+      {attachedBelow ? <div className="mt-0">{attachedBelow}</div> : null}
       <ChatImagePreviewDialog
         open={imagePreview != null}
         onOpenChange={(open) => !open && setImagePreview(null)}
@@ -490,6 +498,7 @@ export const ChatMessages = memo(function ChatMessages() {
     return !!tab?.planConfirmSuppressed;
   });
   const turnMeta = useChatStore((s) => s.turnMeta);
+  const todoAnchorUserIndex = useChatStore(selectMessageTodoAnchorUserIndex);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   // Intentional product copy while waiting for first assistant content —
   // not a mistaken stand-in for preparePhase (create session / start model).
@@ -574,6 +583,9 @@ export const ChatMessages = memo(function ChatMessages() {
     const filtered = messages.filter((msg, i) => {
       if (msg.type === "system") return false;
       if (msg.type === "user" && isToolResultUserMessage(msg)) {
+        return false;
+      }
+      if (isHiddenBackgroundTaskInjectMessage(msg)) {
         return false;
       }
       if (msg.type === "result") {
@@ -1242,7 +1254,16 @@ export const ChatMessages = memo(function ChatMessages() {
               }
             >
               {turn.userMessage && (
-                <UserHeader msg={turn.userMessage} isActiveTurn={isLastTurn} />
+                <UserHeader
+                  msg={turn.userMessage}
+                  isActiveTurn={isLastTurn}
+                  attachedBelow={
+                    todoAnchorUserIndex != null
+                    && committed.idxMap.get(turn.userMessage) === todoAnchorUserIndex
+                      ? <MessageTodoDrawer />
+                      : undefined
+                  }
+                />
               )}
               <div className="px-6 min-w-0 max-w-full overflow-hidden">
                 {isLastTurn && showStreamingIndicator && (
@@ -1256,12 +1277,13 @@ export const ChatMessages = memo(function ChatMessages() {
                     if (assistantBatch.length === 0) return;
                     nodes.push(
                       <TurnAssistantContent
-                        key={`turn-asst-${assistantBatch[0]!.displayIdx}`}
+                        key={`turn-asst-${turnIdx}`}
                         responses={assistantBatch}
                         toolResultMap={toolResultMap}
                         sessionId={chatSessionId ?? ""}
                         turnIndex={turnIdx}
                         streamingMessage={streamingMessage}
+                        turnLive={isLastTurn && isStreaming}
                         planReplyFallbackSummary={planReplyFallbackSummary}
                       />,
                     );
@@ -1273,8 +1295,13 @@ export const ChatMessages = memo(function ChatMessages() {
                       assistantBatch.push(item);
                       continue;
                     }
-                    // tool_result carriers are invisible — do not split assistant batch.
+                    // Never split the assistant batch on result carriers — that
+                    // would remount ActivityFold and leave thought/tools unable
+                    // to share one collapsible row.
                     if (isHiddenToolResultCarrier(item.msg)) {
+                      continue;
+                    }
+                    if (item.msg.type === "result" && !item.msg.is_error) {
                       continue;
                     }
                     flushAssistant();

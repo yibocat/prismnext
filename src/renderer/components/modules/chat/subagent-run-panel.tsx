@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { useTranslation } from "react-i18next";
 import { ArrowDownIcon, SquareIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { blurKeyboardFocus, cn } from "@/lib/utils";
 import { useChatStore, type ContentBlock } from "@/stores/chat-store";
 import { AssistantBlockList } from "./assistant-block-list";
 import { buildToolResultMapFromBlocks, contentBlocks } from "./tools/tool-result-map";
@@ -279,7 +279,6 @@ export const SubAgentRunPanel = memo(function SubAgentRunPanel({
                   isStreamingMsg={isRunning && !isStopping}
                   sessionId={parentSessionId}
                   foldActivity
-                  suppressTailUntilTaskSettled={false}
                   turnKey={`${parentSessionId}:sub:${taskToolUseId}`}
                 />
               </div>
@@ -346,6 +345,7 @@ export const SubAgentRunPanelHost = memo(function SubAgentRunPanelHost() {
     // Clear store id immediately so the panel-chat message scrim can fade
     // in sync with this exit; keep `displayedId` until the anim finishes.
     closeSubAgentPanel();
+    blurKeyboardFocus();
     window.setTimeout(() => {
       setDisplayedId(null);
       setClosing(false);
@@ -369,6 +369,26 @@ export const SubAgentRunPanelHost = memo(function SubAgentRunPanelHost() {
     };
     document.addEventListener("mousedown", onDown, true);
     return () => document.removeEventListener("mousedown", onDown, true);
+  }, [displayedId, closing, closeAnimated]);
+
+  // Esc → close (same as AiBar float stack).
+  useEffect(() => {
+    if (!displayedId || closing) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target?.closest("[data-radix-menu-content]")
+        || target?.closest("[data-radix-popper-content-wrapper]")
+      ) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      closeAnimated();
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [displayedId, closing, closeAnimated]);
 
   if (!displayedId) return null;

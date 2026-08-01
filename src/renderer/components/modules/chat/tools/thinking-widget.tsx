@@ -139,16 +139,17 @@ export function ThinkingWidget({
     duration: formatActivityDuration(frozenDuration ?? 0.1),
   });
 
+  // Nested inside ActivityFold — keep thought fold/expand, but no BrainIcon
+  // (outer ActivityFold already owns that chrome).
   if (variant === "nested") {
     if (isProgress) {
       return (
         <div className="py-0.5">
           <button
             type="button"
-            className="flex items-center gap-2 py-0.5 text-[length:var(--font-chat-message)] text-muted-foreground/65"
+            className="flex items-center gap-1.5 py-0.5 text-[length:var(--font-chat-message)] text-muted-foreground/65"
             disabled
           >
-            <BrainIcon className="size-3 shrink-0 opacity-70" />
             <span>Initialization</span>
           </button>
         </div>
@@ -160,11 +161,10 @@ export function ThinkingWidget({
         <button
           ref={toggleRef}
           type="button"
-          className="flex w-full items-center gap-2 py-0 text-left text-[length:var(--font-chat-message)] text-muted-foreground/65 hover:text-muted-foreground/80 transition-colors"
+          className="flex w-full items-center gap-1.5 py-0 text-left text-[length:var(--font-chat-message)] text-muted-foreground/65 hover:text-muted-foreground/80 transition-colors"
           onMouseDown={(e) => e.preventDefault()}
           onClick={toggleExpanded}
         >
-          <BrainIcon className="size-3 shrink-0 opacity-70" />
           <span className="tabular-nums">
             {isStreaming ? thinkingLiveLabel : thinkingDoneLabel}
           </span>

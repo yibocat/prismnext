@@ -85,9 +85,12 @@ function CitationRefLink({ n, sessionId }: { n: number; sessionId: string }) {
 export const StaticMarkdown = memo(function StaticMarkdown({
   content,
   sessionId,
+  muted = false,
 }: {
   content: string;
   sessionId?: string;
+  /** Slightly weaker body color (e.g. interim prose inside Worked for). */
+  muted?: boolean;
 }) {
   if (!content) return null;
 
@@ -145,7 +148,13 @@ export const StaticMarkdown = memo(function StaticMarkdown({
   }, [sessionId]);
 
   return (
-    <div className={cn("text-[length:var(--font-chat-message)] text-foreground leading-[1.7] min-w-0 max-w-full overflow-hidden", CHAT_MARKDOWN_TYPOGRAPHY)}>
+    <div
+      className={cn(
+        "text-[length:var(--font-chat-message)] leading-[1.7] min-w-0 max-w-full overflow-hidden",
+        muted ? "text-muted-foreground" : "text-foreground",
+        CHAT_MARKDOWN_TYPOGRAPHY,
+      )}
+    >
       <ReactMarkdown
         remarkPlugins={remarkPlugins}
         rehypePlugins={rehypePlugins}

@@ -200,9 +200,13 @@ export const MARKDOWN_BODY_RHYTHM = cn(
   "[&_td]:text-[1em]",
 );
 
-/** Typography for file/document markdown preview — follows Appearance → Editor font. */
+/**
+ * Typography for file/document markdown preview.
+ * Body size + family match chat replies (Appearance → UI Font / --font-chat-message),
+ * not Editor — CodeMirror still uses --font-editor-size.
+ */
 export const DOCUMENT_MARKDOWN_TYPOGRAPHY = cn(
-  "font-[family-name:var(--font-editor)] text-[length:var(--font-editor-size)] text-foreground",
+  "font-[family-name:var(--font-sans)] text-[length:var(--font-chat-message)] text-foreground",
   MARKDOWN_BODY_RHYTHM,
   "[&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:bg-muted [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:py-0.5 [&_code:not(pre_code)]:font-mono [&_code:not(pre_code)]:text-[0.95em]",
   MARKDOWN_KATEX_TYPOGRAPHY,

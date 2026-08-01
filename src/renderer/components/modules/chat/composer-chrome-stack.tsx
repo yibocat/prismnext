@@ -4,9 +4,7 @@ import { useChatStore } from "@/stores/chat-store";
 import { useExperimentStore } from "@/stores/experiment-store";
 import {
   resolveComposerPendingQuestion,
-  resolveComposerPendingTodo,
   selectComposerHostedQuestionId,
-  selectComposerHostedTodoId,
 } from "@/lib/chat/composer-pending-tools";
 import {
   resolveComposerPendingExperimentRun,
@@ -19,7 +17,6 @@ import {
 import { PlanSuggestBar } from "./plan-suggest-bar";
 import { PlanChrome } from "./plan-chrome";
 import { QuestionComposerPanel } from "./question-composer-panel";
-import { TodoPlanBar } from "./todo-plan-bar";
 import { ExperimentRunBar } from "./experiment-run-bar";
 import {
   ComposerChromeStackBody,
@@ -38,7 +35,6 @@ function useComposerChromeStackItems(): ComposerChromeStackItem[] {
     return tab?.sessionAgent === "plan" && !!tab.planDraftFileReady && !tab.planConfirmSuppressed;
   });
   const questionId = useChatStore(selectComposerHostedQuestionId);
-  const todoId = useChatStore(selectComposerHostedTodoId);
   const experimentRunId = useChatStore(selectComposerHostedExperimentRunId);
   const runInFlight = useExperimentStore((s) => s.runInFlight);
   const chromeLive = useChatStore((s) => {
@@ -59,17 +55,6 @@ function useComposerChromeStackItems(): ComposerChromeStackItem[] {
     return t("chat.questionPanel.title");
   }, [questionId, streamTick, t]);
 
-  const todoPeek = useMemo(() => {
-    if (!todoId) return null;
-    const pending = resolveComposerPendingTodo(useChatStore.getState());
-    const todos = pending?.toolUse.input?.todos;
-    if (Array.isArray(todos) && todos.length > 0) {
-      const completed = todos.filter((item: { status?: string }) => item.status === "completed").length;
-      return `${t("chat.composer.taskPlanTitle")} · ${completed}/${todos.length}`;
-    }
-    return t("chat.composer.taskPlanTitle");
-  }, [todoId, streamTick, t]);
-
   const experimentPeek = useMemo(() => {
     if (runInFlight?.command?.trim()) {
       return runInFlight.command.trim().slice(0, 72);
@@ -89,7 +74,8 @@ function useComposerChromeStackItems(): ComposerChromeStackItem[] {
         peekLabel: permissionPeek,
         content: <PermissionGatePanel gate={permissionGate} />,
       });
-    }    if (planSuggestVisible) {
+    }
+    if (planSuggestVisible) {
       items.push({
         id: "plan-suggest",
         order: 10,
@@ -113,14 +99,6 @@ function useComposerChromeStackItems(): ComposerChromeStackItem[] {
         content: <QuestionComposerPanel />,
       });
     }
-    if (todoId && todoPeek) {
-      items.push({
-        id: "todo",
-        order: 40,
-        peekLabel: todoPeek,
-        content: <TodoPlanBar />,
-      });
-    }
     const showExperiment =
       chromeLive
       && (runInFlight != null || experimentRunId != null);
@@ -142,8 +120,6 @@ function useComposerChromeStackItems(): ComposerChromeStackItem[] {
     planChromeVisible,
     questionId,
     questionPeek,
-    todoId,
-    todoPeek,
     experimentRunId,
     experimentPeek,
     runInFlight,

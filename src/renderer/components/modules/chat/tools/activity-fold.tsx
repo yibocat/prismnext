@@ -1,6 +1,13 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BrainIcon, ChevronDownIcon } from "lucide-react";
+import {
+  BrainIcon,
+  ChevronDownIcon,
+  FilePenLineIcon,
+  SearchIcon,
+  TerminalIcon,
+  type LucideIcon,
+} from "lucide-react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { cn } from "@/lib/utils";
 import {
@@ -10,16 +17,41 @@ import {
 } from "@/lib/chat/preserve-viewport-anchor";
 import {
   buildActivitySummaryLine,
+  collectActivityBurstInventory,
   countActivityTools,
-  isBridgeTextBlockExported as isBridgeTextBlock,
+  formatActivityInventoryLine,
+  inventoryHasDetail,
   isThinkingBlockStreaming,
+  resolveActivityBurstPhase,
   resolveActivityDurationSec,
   sumThinkingDurations,
+  type ActivityBurstInventory,
+  type ActivityBurstPhase,
+  type WorkedChildSegment,
 } from "@/lib/chat/segment-assistant-blocks";
 import { ToolWidget } from "./tool-widget-dispatcher";
 import { ThinkingWidget } from "./thinking-widget";
+import { DiffStatBadge } from "./shared";
 import { PlanArtifactCard } from "../plan-artifact-card";
+import { MarkdownRenderer } from "../markdown-renderer";
 import { planPathFromToolUse } from "@/lib/chat/plan-artifact-ui";
+
+const BURST_PHASE_ICON: Record<ActivityBurstPhase, LucideIcon> = {
+  planning: BrainIcon,
+  exploring: SearchIcon,
+  editing: FilePenLineIcon,
+  executing: TerminalIcon,
+};
+
+const EMPTY_INVENTORY: ActivityBurstInventory = {
+  editedFiles: 0,
+  exploredFiles: 0,
+  searches: 0,
+  commands: 0,
+  lints: 0,
+  added: 0,
+  removed: 0,
+};
 
 function getActivityFoldState(key: string): boolean {
   return localStorage.getItem(`activity:${key}`) === "open";
@@ -39,6 +71,8 @@ export const ActivityFold = memo(function ActivityFold({
   isStreamingSegment,
   messageThinkingComplete,
   suppressArtifactPaths,
+  turnSettled = false,
+  childrenSegments,
 }: {
   blocks: ContentBlock[];
   blockIndices: number[];
@@ -46,13 +80,25 @@ export const ActivityFold = memo(function ActivityFold({
   persistKey?: string;
   sessionId?: string;
   isStreamingSegment: boolean;
-  /** Turn-level: trailing prose or tools started (unified fold excludes tail text). */
+  /** Turn-level: trailing prose or tools started (thinking-only bursts can freeze). */
   messageThinkingComplete?: boolean;
   suppressArtifactPaths?: readonly string[];
+  /** Whole-turn Worked for (history / turn complete) — not burst Planning/Exploring. */
+  turnSettled?: boolean;
+  /**
+   * Settled Worked-for body: keep live burst folds / Task / interim prose nested
+   * inside instead of flattening tools into one list.
+   */
+  childrenSegments?: WorkedChildSegment[];
 }) {
   const { t } = useTranslation();
+  // Live bursts always start collapsed so thought+tools stay under one row;
+  // only restore expand state after the turn has settled.
   const [expanded, setExpanded] = useState(
-    () => (persistKey ? getActivityFoldState(persistKey) : false),
+    () =>
+      isStreamingSegment
+        ? false
+        : (persistKey ? getActivityFoldState(persistKey) : false),
   );
   const [elapsed, setElapsed] = useState(0);
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -95,24 +141,32 @@ export const ActivityFold = memo(function ActivityFold({
     setExpanded((v) => !v);
   }, []);
 
+  const phaseLine = (key: "plannedFor" | "exploredFor" | "editedFor" | "executedFor") =>
+    (duration: string, toolCount: number) =>
+      toolCount > 0
+        ? t(`chat.activity.${key}WithTools`, { duration, count: toolCount })
+        : t(`chat.activity.${key}`, { duration });
+
   const labels = {
-    working: t("chat.activity.working"),
     thinking: t("chat.activity.thinking"),
     thoughtFor: (duration: string) => t("chat.activity.thoughtFor", { duration }),
-    workedFor: (duration: string, toolCount: number) =>
-      toolCount > 0
-        ? t("chat.activity.workedForWithTools", { duration, count: toolCount })
-        : t("chat.activity.workedFor", { duration }),
+    planning: t("chat.activity.planning"),
+    exploring: t("chat.activity.exploring"),
+    editing: t("chat.activity.editing"),
+    executing: t("chat.activity.executing"),
+    plannedFor: phaseLine("plannedFor"),
+    exploredFor: phaseLine("exploredFor"),
+    editedFor: phaseLine("editedFor"),
+    executedFor: phaseLine("executedFor"),
+    workedFor: (duration: string) => t("chat.activity.workedFor", { duration }),
   };
 
   const toolCount = countActivityTools(blocks);
   const thinkingDone =
     messageThinkingComplete
-    ?? blocks.some(
-      (b) => b.type === "tool_use" || (b.type === "text" && !isBridgeTextBlock(b)),
-    );
+    ?? blocks.some((b) => b.type === "tool_use" || b.type === "text");
   const summaryStreaming =
-    isStreamingSegment && !(thinkingDone && toolCount === 0);
+    !turnSettled && isStreamingSegment && !(thinkingDone && toolCount === 0);
 
   useEffect(() => {
     if (!thinkingDone || toolCount > 0) return;
@@ -121,16 +175,15 @@ export const ActivityFold = memo(function ActivityFold({
     }
   }, [thinkingDone, toolCount, elapsed]);
 
-  const activityBlocks = blocks.filter((b) => !isBridgeTextBlock(b));
-  const persistedDuration = resolveActivityDurationSec(activityBlocks);
-  const thinkingDuration = sumThinkingDurations(activityBlocks);
+  const persistedDuration = resolveActivityDurationSec(blocks);
+  const thinkingDuration = sumThinkingDurations(blocks);
   const authoritative = persistedDuration ?? (thinkingDuration > 0 ? thinkingDuration : undefined);
 
   // Done: always prefer sealed / OpenCode durations so the fold header matches
   // nested ThinkingWidget (live freeze often starts later → shorter).
   // Live: wall clock while the segment is still streaming.
   let displayElapsed = 0;
-  if (!summaryStreaming && authoritative != null) {
+  if ((turnSettled || !summaryStreaming) && authoritative != null) {
     displayElapsed = authoritative;
   } else if (
     (!isStreamingSegment || (thinkingDone && toolCount === 0))
@@ -143,12 +196,42 @@ export const ActivityFold = memo(function ActivityFold({
     displayElapsed = authoritative;
   }
 
-  const summary = buildActivitySummaryLine({
-    blocks: activityBlocks,
+  // Inventory runs diffLines on edits — skip while streaming / on Worked-for chrome.
+  const inventory = useMemo(() => {
+    if (turnSettled || summaryStreaming) return EMPTY_INVENTORY;
+    return collectActivityBurstInventory(blocks);
+  }, [blocks, turnSettled, summaryStreaming]);
+  const inventoryLabels = {
+    editedFiles: (n: number) => t("chat.activity.invEditedFiles", { count: n }),
+    exploredFiles: (n: number) => t("chat.activity.invExploredFiles", { count: n }),
+    searches: (n: number) => t("chat.activity.invSearches", { count: n }),
+    commands: (n: number) => t("chat.activity.invCommands", { count: n }),
+    lints: t("chat.activity.invLints"),
+  };
+  const inventoryLine =
+    !turnSettled
+    && !summaryStreaming
+    && inventoryHasDetail(inventory)
+      ? formatActivityInventoryLine(inventory, inventoryLabels)
+      : "";
+  const summary = inventoryLine || buildActivitySummaryLine({
+    blocks,
     isStreaming: summaryStreaming,
     elapsedSec: displayElapsed,
+    turnSettled,
     labels,
   });
+  // Burst folds may show +/-; whole-turn Worked for is duration-only text.
+  const showDiffStats =
+    !turnSettled
+    && !summaryStreaming
+    && (inventory.added > 0 || inventory.removed > 0);
+  const burstPhase = turnSettled
+    ? null
+    : resolveActivityBurstPhase(blocks);
+  const PhaseIcon = burstPhase ? BURST_PHASE_ICON[burstPhase] : null;
+  // Align nested burst persist keys with live (`:aN`, not `:worked:aN`).
+  const burstPersistBase = persistKey?.replace(/:worked$/, "") ?? persistKey;
 
   return (
     <div className="min-w-0 max-w-full">
@@ -163,12 +246,19 @@ export const ActivityFold = memo(function ActivityFold({
         onMouseDown={(e) => e.preventDefault()}
         onClick={toggleExpanded}
       >
-        <BrainIcon className="size-3.5 shrink-0 opacity-80" />
+        {PhaseIcon ? <PhaseIcon className="size-3.5 shrink-0 opacity-80" /> : null}
         <span
           className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden"
           key={summaryStreaming ? "live" : "done"}
         >
           <span className="min-w-0 truncate tabular-nums">{summary}</span>
+          {showDiffStats ? (
+            <DiffStatBadge
+              added={inventory.added}
+              removed={inventory.removed}
+              className="shrink-0"
+            />
+          ) : null}
           <ChevronDownIcon
             className={cn(
               "size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150",
@@ -179,57 +269,95 @@ export const ActivityFold = memo(function ActivityFold({
       </button>
       {expanded ? (
         <div className="mb-0.5 space-y-0.5">
-          {blocks.map((block, i) => {
-            const blockIndex = blockIndices[i] ?? i;
-            if (isBridgeTextBlock(block) && block.text) {
-              return (
-                <p
-                  key={`bridge-${blockIndex}`}
-                  className="py-0.5 text-[length:var(--font-chat-meta)] text-muted-foreground/75 leading-relaxed"
-                >
-                  {block.text}
-                </p>
-              );
-            }
-            if (block.type === "thinking" && block.thinking) {
-              return (
-                <ThinkingWidget
-                  key={`think-${blockIndex}`}
-                  thinking={block.thinking}
-                  duration={block.duration}
-                  sessionId={sessionId}
-                  variant="nested"
-                  persistKey={
-                    persistKey ? `${persistKey}:t${blockIndex}` : undefined
-                  }
-                  isStreamingMsg={isThinkingBlockStreaming(
-                    blocks,
-                    i,
-                    isStreamingSegment,
-                    isBridgeTextBlock,
-                  )}
-                  isProgress={block._progress === true}
-                />
-              );
-            }
-            if (block.type === "tool_use") {
-              const result = toolResultMap.get(block.id || "");
-              const planPath = planPathFromToolUse(block);
-              const showPlanCard = !!planPath && !!result && !result.is_error;
-              return (
-                <div key={`tool-${block.id ?? blockIndex}`}>
-                  <ToolWidget
-                    toolUse={block}
-                    toolResult={result}
+          {childrenSegments && childrenSegments.length > 0
+            ? childrenSegments.map((child, childIndex) => {
+                if (child.kind === "text") {
+                  return (
+                    <div
+                      key={`worked-text-${child.blockIndex}`}
+                      className="min-w-0 max-w-full overflow-hidden py-0.5 text-[length:var(--font-chat-message)]"
+                    >
+                      <MarkdownRenderer
+                        content={child.block.text!}
+                        isAnimating={false}
+                        sessionId={sessionId}
+                        muted
+                      />
+                    </div>
+                  );
+                }
+                if (child.kind === "tool") {
+                  const result = toolResultMap.get(child.block.id || "");
+                  return (
+                    <div key={`worked-tool-${child.block.id ?? child.blockIndex}`}>
+                      <ToolWidget
+                        toolUse={child.block}
+                        toolResult={result}
+                        suppressArtifactPaths={suppressArtifactPaths}
+                      />
+                    </div>
+                  );
+                }
+                const foldKey = child.blockIndices[0] ?? childIndex;
+                return (
+                  <ActivityFold
+                    key={`activity-${foldKey}`}
+                    blocks={child.blocks}
+                    blockIndices={child.blockIndices}
+                    toolResultMap={toolResultMap}
+                    sessionId={sessionId}
+                    persistKey={
+                      burstPersistBase
+                        ? `${burstPersistBase}:a${foldKey}`
+                        : undefined
+                    }
+                    isStreamingSegment={false}
+                    messageThinkingComplete
                     suppressArtifactPaths={suppressArtifactPaths}
-                    nestedInActivity
+                    turnSettled={false}
                   />
-                  {showPlanCard ? <PlanArtifactCard pathFallback={planPath} /> : null}
-                </div>
-              );
-            }
-            return null;
-          })}
+                );
+              })
+            : blocks.map((block, i) => {
+                const blockIndex = blockIndices[i] ?? i;
+                if (block.type === "thinking" && block.thinking) {
+                  return (
+                    <ThinkingWidget
+                      key={`think-${blockIndex}`}
+                      thinking={block.thinking}
+                      duration={block.duration}
+                      sessionId={sessionId}
+                      variant="nested"
+                      persistKey={
+                        persistKey ? `${persistKey}:t${blockIndex}` : undefined
+                      }
+                      isStreamingMsg={isThinkingBlockStreaming(
+                        blocks,
+                        i,
+                        isStreamingSegment,
+                      )}
+                      isProgress={block._progress === true}
+                    />
+                  );
+                }
+                if (block.type === "tool_use") {
+                  const result = toolResultMap.get(block.id || "");
+                  const planPath = planPathFromToolUse(block);
+                  const showPlanCard = !!planPath && !!result && !result.is_error;
+                  return (
+                    <div key={`tool-${block.id ?? blockIndex}`}>
+                      <ToolWidget
+                        toolUse={block}
+                        toolResult={result}
+                        suppressArtifactPaths={suppressArtifactPaths}
+                        nestedInActivity
+                      />
+                      {showPlanCard ? <PlanArtifactCard pathFallback={planPath} /> : null}
+                    </div>
+                  );
+                }
+                return null;
+              })}
         </div>
       ) : null}
     </div>

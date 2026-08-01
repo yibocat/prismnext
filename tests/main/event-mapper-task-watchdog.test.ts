@@ -803,3 +803,321 @@ describe("EventMapper resolveTabForSession — no sole-pending heuristic (Bug #7
   });
 });
 
+describe("EventMapper background Task", () => {
+  const STARTED = `<task id="ses_bg_child" state="running">
+<summary>Background task started</summary>
+<task_result>The task is working in the background.</task_result>
+</task>`;
+
+  const JOIN = `<task id="ses_bg_child" state="completed">
+<summary>Background task completed: audit</summary>
+<task_result>Done reviewing.</task_result>
+</task>`;
+
+  it("does not complete on background started terminal; emits subAgent.started", () => {
+    const { win, send } = makeMockWin();
+    const mapper = new EventMapper(win);
+    const tabId = "tab-bg";
+    const parentId = "ses-parent-bg";
+    const toolUseId = "tool-bg-1";
+    (mapper as any).tabToSession.set(tabId, parentId);
+    (mapper as any).sessionToTab.set(parentId, tabId);
+    (mapper as any).trackTaskToolUse(tabId, toolUseId, {
+      subagent_type: "citation-auditor",
+      prompt: "audit",
+      background: true,
+    });
+    send.mockClear();
+
+    (mapper as any).handleNotification("session/update", {
+      sessionId: parentId,
+      update: {
+        sessionUpdate: "tool_call_update",
+        toolCallId: toolUseId,
+        title: "task",
+        status: "completed",
+        metadata: { background: true, jobId: "ses_bg_child", sessionId: "ses_bg_child" },
+        rawInput: {
+          subagent_type: "citation-auditor",
+          prompt: "audit",
+          background: true,
+        },
+        content: STARTED,
+      },
+    });
+
+    expect((mapper as any).backgroundOpenTasks.has(toolUseId)).toBe(true);
+    expect((mapper as any).openTaskToolToTab.get(toolUseId)).toBe(tabId);
+    expect((mapper as any).isBackgroundOpenTask(toolUseId)).toBe(true);
+    expect(
+      send.mock.calls.some(
+        (c) =>
+          c[0] === "chat:stream"
+          && c[1]?.type === "subAgent.started"
+          && c[1]?.data?.taskToolUseId === toolUseId
+          && c[1]?.data?.mode === "background",
+      ),
+    ).toBe(true);
+    expect(
+      send.mock.calls.some(
+        (c) => c[0] === "chat:stream" && c[1]?.type === "subAgent.completed",
+      ),
+    ).toBe(false);
+  });
+
+  it("completes background Task on inject with status=completed", () => {
+    const { win, send } = makeMockWin();
+    const mapper = new EventMapper(win);
+    const tabId = "tab-bg-join";
+    const parentId = "ses-parent-bg-join";
+    const toolUseId = "tool-bg-join";
+    (mapper as any).tabToSession.set(tabId, parentId);
+    (mapper as any).sessionToTab.set(parentId, tabId);
+    (mapper as any).openTaskToolToTab.set(toolUseId, tabId);
+    (mapper as any).backgroundOpenTasks.add(toolUseId);
+    (mapper as any).subSessionToTaskTool.set("ses_bg_child", toolUseId);
+    (mapper as any).taskToolExpertById.set(toolUseId, "citation-auditor");
+    send.mockClear();
+
+    const JOIN_STATUS = `<task id="ses_bg_child" status="completed">
+<summary>Background task completed: audit</summary>
+<task_result>Done reviewing.</task_result>
+</task>`;
+
+    (mapper as any).handleNotification("session/update", {
+      sessionId: parentId,
+      update: {
+        sessionUpdate: "user_message_chunk",
+        content: { type: "text", text: JOIN_STATUS },
+      },
+    });
+
+    expect((mapper as any).backgroundOpenTasks.has(toolUseId)).toBe(false);
+    expect((mapper as any).openTaskToolToTab.has(toolUseId)).toBe(false);
+    expect(
+      send.mock.calls.some(
+        (c) =>
+          c[0] === "chat:stream"
+          && c[1]?.type === "subAgent.completed"
+          && c[1]?.data?.taskToolUseId === toolUseId
+          && c[1]?.data?.status === "done",
+      ),
+    ).toBe(true);
+  });
+
+  it("completes background Task when child session.status becomes idle", () => {
+    const { win, send } = makeMockWin();
+    const mapper = new EventMapper(win);
+    const tabId = "tab-bg-idle";
+    const parentId = "ses-parent-bg-idle";
+    const childId = "ses_bg_idle_child";
+    const toolUseId = "tool-bg-idle";
+    (mapper as any).tabToSession.set(tabId, parentId);
+    (mapper as any).sessionToTab.set(parentId, tabId);
+    (mapper as any).sessionToTab.set(childId, tabId);
+    (mapper as any).openTaskToolToTab.set(toolUseId, tabId);
+    (mapper as any).backgroundOpenTasks.add(toolUseId);
+    (mapper as any).subSessionToTaskTool.set(childId, toolUseId);
+    send.mockClear();
+
+    (mapper as any).mapSessionStatus(tabId, childId, { status: "idle" });
+
+    expect((mapper as any).backgroundOpenTasks.has(toolUseId)).toBe(false);
+    expect(
+      send.mock.calls.some(
+        (c) =>
+          c[0] === "chat:stream"
+          && c[1]?.type === "subAgent.completed"
+          && c[1]?.data?.taskToolUseId === toolUseId,
+      ),
+    ).toBe(true);
+  });
+
+  it("does not FIFO-steal another open Task when inject id is unmatched", () => {
+    const { win, send } = makeMockWin();
+    const mapper = new EventMapper(win);
+    const tabId = "tab-bg-multi";
+    const parentId = "ses-parent-bg-multi";
+    const toolA = "tool-bg-a";
+    const toolB = "tool-bg-b";
+    (mapper as any).tabToSession.set(tabId, parentId);
+    (mapper as any).sessionToTab.set(parentId, tabId);
+    (mapper as any).openTaskToolToTab.set(toolA, tabId);
+    (mapper as any).openTaskToolToTab.set(toolB, tabId);
+    (mapper as any).backgroundOpenTasks.add(toolA);
+    (mapper as any).backgroundOpenTasks.add(toolB);
+    // Only A is mapped — inject for unknown id must NOT complete A (old FIFO bug).
+    (mapper as any).subSessionToTaskTool.set("ses_mapped_a", toolA);
+    send.mockClear();
+
+    (mapper as any).handleNotification("session/update", {
+      sessionId: parentId,
+      update: {
+        sessionUpdate: "user_message_chunk",
+        content: {
+          type: "text",
+          text: `<task id="ses_unknown_other" status="completed"><summary>x</summary><task_result>y</task_result></task>`,
+        },
+      },
+    });
+
+    expect((mapper as any).backgroundOpenTasks.has(toolA)).toBe(true);
+    expect((mapper as any).backgroundOpenTasks.has(toolB)).toBe(true);
+    expect(
+      send.mock.calls.some((c) => c[0] === "chat:stream" && c[1]?.type === "subAgent.completed"),
+    ).toBe(false);
+  });
+
+  it("joins each of two background Tasks by matching inject session ids", () => {
+    const { win, send } = makeMockWin();
+    const mapper = new EventMapper(win);
+    const tabId = "tab-bg-two";
+    const parentId = "ses-parent-bg-two";
+    const toolA = "tool-bg-two-a";
+    const toolB = "tool-bg-two-b";
+    (mapper as any).tabToSession.set(tabId, parentId);
+    (mapper as any).sessionToTab.set(parentId, tabId);
+    (mapper as any).openTaskToolToTab.set(toolA, tabId);
+    (mapper as any).openTaskToolToTab.set(toolB, tabId);
+    (mapper as any).backgroundOpenTasks.add(toolA);
+    (mapper as any).backgroundOpenTasks.add(toolB);
+    (mapper as any).subSessionToTaskTool.set("ses_child_a", toolA);
+    (mapper as any).subSessionToTaskTool.set("ses_child_b", toolB);
+    send.mockClear();
+
+    (mapper as any).handleNotification("session/update", {
+      sessionId: parentId,
+      update: {
+        sessionUpdate: "user_message_chunk",
+        content: {
+          type: "text",
+          text: `<task id="ses_child_a" status="completed"><summary>a</summary><task_result>A</task_result></task>`,
+        },
+      },
+    });
+    expect((mapper as any).backgroundOpenTasks.has(toolA)).toBe(false);
+    expect((mapper as any).backgroundOpenTasks.has(toolB)).toBe(true);
+
+    (mapper as any).handleNotification("session/update", {
+      sessionId: parentId,
+      update: {
+        sessionUpdate: "user_message_chunk",
+        content: {
+          type: "text",
+          text: `<task id="ses_child_b" status="completed"><summary>b</summary><task_result>B</task_result></task>`,
+        },
+      },
+    });
+    expect((mapper as any).backgroundOpenTasks.has(toolB)).toBe(false);
+    const completed = send.mock.calls.filter(
+      (c) => c[0] === "chat:stream" && c[1]?.type === "subAgent.completed",
+    );
+    expect(completed.map((c) => c[1]?.data?.taskToolUseId).sort()).toEqual([toolA, toolB].sort());
+  });
+
+  it("joins inject even when Timeline A never marked backgroundOpenTasks", () => {
+    const { win, send } = makeMockWin();
+    const mapper = new EventMapper(win);
+    const tabId = "tab-bg-recover";
+    const parentId = "ses-parent-bg-recover";
+    const toolUseId = "tool-bg-recover";
+    (mapper as any).tabToSession.set(tabId, parentId);
+    (mapper as any).sessionToTab.set(parentId, tabId);
+    // Linked + open, but ACP skipped markBackgroundTaskStarted.
+    (mapper as any).openTaskToolToTab.set(toolUseId, tabId);
+    (mapper as any).subSessionToTaskTool.set("ses_recover_child", toolUseId);
+    expect((mapper as any).backgroundOpenTasks.has(toolUseId)).toBe(false);
+    send.mockClear();
+
+    (mapper as any).joinBackgroundTaskFromInject(tabId, {
+      sessionId: "ses_recover_child",
+      state: "completed",
+      body: "done",
+    });
+
+    expect((mapper as any).openTaskToolToTab.has(toolUseId)).toBe(false);
+    expect(
+      send.mock.calls.some(
+        (c) =>
+          c[0] === "chat:stream"
+          && c[1]?.type === "subAgent.completed"
+          && c[1]?.data?.taskToolUseId === toolUseId,
+      ),
+    ).toBe(true);
+  });
+
+  it("waitForBackgroundTurnSettle resolves after last inject join", async () => {
+    const { win } = makeMockWin();
+    const mapper = new EventMapper(win);
+    const tabId = "tab-bg-settle";
+    const parentId = "ses-parent-bg-settle";
+    const toolA = "tool-settle-a";
+    const toolB = "tool-settle-b";
+    (mapper as any).tabToSession.set(tabId, parentId);
+    (mapper as any).sessionToTab.set(parentId, tabId);
+    (mapper as any).openTaskToolToTab.set(toolA, tabId);
+    (mapper as any).openTaskToolToTab.set(toolB, tabId);
+    (mapper as any).backgroundOpenTasks.add(toolA);
+    (mapper as any).backgroundOpenTasks.add(toolB);
+    (mapper as any).subSessionToTaskTool.set("ses_settle_a", toolA);
+    (mapper as any).subSessionToTaskTool.set("ses_settle_b", toolB);
+    (mapper as any).parentSessionStatus.set(parentId, "idle");
+
+    const settlePromise = mapper.waitForBackgroundTurnSettle(tabId, { timeoutMs: 5_000 });
+
+    // Simulate joins completing while wait is in flight.
+    await new Promise((r) => setTimeout(r, 50));
+    (mapper as any).joinBackgroundTaskFromInject(tabId, {
+      sessionId: "ses_settle_a",
+      state: "completed",
+    });
+    (mapper as any).joinBackgroundTaskFromInject(tabId, {
+      sessionId: "ses_settle_b",
+      state: "completed",
+    });
+    // Parent stays idle and quiet after joins.
+    (mapper as any).parentSessionStatus.set(parentId, "idle");
+    (mapper as any).parentLastContentAt.set(parentId, Date.now() - 2_000);
+
+    await settlePromise;
+    expect((mapper as any).backgroundOpenTasks.size).toBe(0);
+  });
+
+  it("sync Task terminal still completes immediately", () => {
+    const { win, send } = makeMockWin();
+    const mapper = new EventMapper(win);
+    const tabId = "tab-sync";
+    const parentId = "ses-parent-sync";
+    const toolUseId = "tool-sync-1";
+    (mapper as any).tabToSession.set(tabId, parentId);
+    (mapper as any).sessionToTab.set(parentId, tabId);
+    (mapper as any).trackTaskToolUse(tabId, toolUseId, {
+      subagent_type: "citation-auditor",
+      prompt: "audit",
+    });
+    send.mockClear();
+
+    (mapper as any).handleNotification("session/update", {
+      sessionId: parentId,
+      update: {
+        sessionUpdate: "tool_call_update",
+        toolCallId: toolUseId,
+        title: "task",
+        status: "completed",
+        rawInput: { subagent_type: "citation-auditor", prompt: "audit" },
+        content: "Sync result body",
+      },
+    });
+
+    expect((mapper as any).backgroundOpenTasks.has(toolUseId)).toBe(false);
+    expect(
+      send.mock.calls.some(
+        (c) =>
+          c[0] === "chat:stream"
+          && c[1]?.type === "subAgent.completed"
+          && c[1]?.data?.taskToolUseId === toolUseId,
+      ),
+    ).toBe(true);
+  });
+});
+

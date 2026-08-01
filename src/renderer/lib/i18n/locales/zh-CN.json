@@ -1616,12 +1616,34 @@
   },
   "chat": {
     "activity": {
-      "working": "处理中…",
       "thinking": "思考中…",
       "thoughtFor": "思考 {{duration}}",
-      "workedFor": "已处理 {{duration}}",
-      "workedForWithTools": "已处理 {{duration}} · {{count}} 个工具",
-      "workedForWithTools_one": "已处理 {{duration}} · {{count}} 个工具"
+      "planning": "规划中…",
+      "exploring": "探索中…",
+      "editing": "编辑中…",
+      "executing": "执行中…",
+      "invEditedFiles": "已编辑 {{count}} 个文件",
+      "invEditedFiles_one": "已编辑 {{count}} 个文件",
+      "invExploredFiles": "已探索 {{count}} 个文件",
+      "invExploredFiles_one": "已探索 {{count}} 个文件",
+      "invSearches": "{{count}} 次搜索",
+      "invSearches_one": "{{count}} 次搜索",
+      "invCommands": "运行 {{count}} 条命令",
+      "invCommands_one": "运行 {{count}} 条命令",
+      "invLints": "检查",
+      "plannedFor": "已规划 {{duration}}",
+      "plannedForWithTools": "已规划 {{duration}} · {{count}} 个工具",
+      "plannedForWithTools_one": "已规划 {{duration}} · {{count}} 个工具",
+      "exploredFor": "已探索 {{duration}}",
+      "exploredForWithTools": "已探索 {{duration}} · {{count}} 个工具",
+      "exploredForWithTools_one": "已探索 {{duration}} · {{count}} 个工具",
+      "editedFor": "已编辑 {{duration}}",
+      "editedForWithTools": "已编辑 {{duration}} · {{count}} 个工具",
+      "editedForWithTools_one": "已编辑 {{duration}} · {{count}} 个工具",
+      "executedFor": "已执行 {{duration}}",
+      "executedForWithTools": "已执行 {{duration}} · {{count}} 个工具",
+      "executedForWithTools_one": "已执行 {{duration}} · {{count}} 个工具",
+      "workedFor": "已处理 {{duration}}"
     },
     "artifact": {
       "openInFiles": "在文件中打开",
@@ -1664,6 +1686,7 @@
     },
     "subagent": {
       "running": "运行中",
+      "backgroundRunning": "后台运行",
       "stopping": "正在停止…",
       "done": "已完成",
       "stopped": "已停止",
@@ -1694,6 +1717,7 @@
       "stop": "停止",
       "taskPlanTitle": "任务计划",
       "taskPlanInProgress": "进行中",
+      "taskPlanDismiss": "隐藏任务计划",
       "experimentRunTitle": "实验运行",
       "experimentRunLive": "运行中 — 点击打开实时输出",
       "experimentRunOpen": "打开"
@@ -1858,6 +1882,7 @@
       "dismiss": "关闭",
       "sessionError": "模型会话发生错误，请重试。",
       "emptyTurn": "模型未返回任何内容，通常是触发了限流或额度耗尽，请重试。",
+      "provider_error": "模型服务商返回错误（限流、额度不足或 API 失败）。请检查套餐或切换模型。",
       "turn_timeout": "长时间未收到模型响应，已自动终止本轮对话。服务商可能正在限流或暂时不可用。",
       "connectionLost": "Agent 连接已断开，请重试。",
       "cancelled": "已停止。"

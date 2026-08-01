@@ -1616,12 +1616,34 @@
   },
   "chat": {
     "activity": {
-      "working": "Working…",
       "thinking": "Thinking…",
       "thoughtFor": "Thought for {{duration}}",
-      "workedFor": "Worked for {{duration}}",
-      "workedForWithTools": "Worked for {{duration}} · {{count}} tools",
-      "workedForWithTools_one": "Worked for {{duration}} · {{count}} tool"
+      "planning": "Planning…",
+      "exploring": "Exploring…",
+      "editing": "Editing…",
+      "executing": "Executing…",
+      "invEditedFiles": "Edited {{count}} files",
+      "invEditedFiles_one": "Edited {{count}} file",
+      "invExploredFiles": "explored {{count}} files",
+      "invExploredFiles_one": "explored {{count}} file",
+      "invSearches": "{{count}} searches",
+      "invSearches_one": "{{count}} search",
+      "invCommands": "ran {{count}} commands",
+      "invCommands_one": "ran {{count}} command",
+      "invLints": "lints",
+      "plannedFor": "Planned for {{duration}}",
+      "plannedForWithTools": "Planned for {{duration}} · {{count}} tools",
+      "plannedForWithTools_one": "Planned for {{duration}} · {{count}} tool",
+      "exploredFor": "Explored for {{duration}}",
+      "exploredForWithTools": "Explored for {{duration}} · {{count}} tools",
+      "exploredForWithTools_one": "Explored for {{duration}} · {{count}} tool",
+      "editedFor": "Edited for {{duration}}",
+      "editedForWithTools": "Edited for {{duration}} · {{count}} tools",
+      "editedForWithTools_one": "Edited for {{duration}} · {{count}} tool",
+      "executedFor": "Executed for {{duration}}",
+      "executedForWithTools": "Executed for {{duration}} · {{count}} tools",
+      "executedForWithTools_one": "Executed for {{duration}} · {{count}} tool",
+      "workedFor": "Worked for {{duration}}"
     },
     "artifact": {
       "openInFiles": "Open in Files",
@@ -1664,6 +1686,7 @@
     },
     "subagent": {
       "running": "Running",
+      "backgroundRunning": "Background",
       "stopping": "Stopping…",
       "done": "Done",
       "stopped": "Stopped",
@@ -1694,6 +1717,7 @@
       "stop": "Stop",
       "taskPlanTitle": "Task plan",
       "taskPlanInProgress": "In progress",
+      "taskPlanDismiss": "Hide task plan",
       "experimentRunTitle": "Experiment run",
       "experimentRunLive": "Running — open for live output",
       "experimentRunOpen": "Open"
@@ -1832,6 +1856,7 @@
       "dismiss": "Dismiss",
       "sessionError": "The model session reported an error. Please try again.",
       "emptyTurn": "The model returned no content. This is usually caused by rate limits or quota exhaustion — please try again.",
+      "provider_error": "The model provider returned an error (rate limit, quota, or API failure). Check your plan or switch models.",
       "turn_timeout": "No response from the model for a long time — the turn was stopped. The provider may be rate-limited or unavailable.",
       "connectionLost": "Agent connection lost. Please try again.",
       "cancelled": "Stopped."

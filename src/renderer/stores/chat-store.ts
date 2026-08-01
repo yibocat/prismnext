@@ -13,12 +13,13 @@ import { useSettingsStore } from "./settings-store";
 import { truncateChatMessagesToTurn, applyUserDisplaySnapshots, isToolResultUserMessage, countUserTurns } from "@/components/modules/chat/chat-turns";
 import { mapOpenCodePartToBlocks } from "@/lib/chat/message-parts";
 import { hydrateSessionMessages } from "@/lib/chat/session-message-hydrate";
+import { reconcileBackgroundSubAgentRunsFromMessages } from "@/lib/chat/reconcile-background-tasks";
 import {
   countOpenCodeMessages,
   planArtifactCardFromEvents,
 } from "@/lib/chat/plan-ui-events";
 import { clearTurnWindowState } from "@/lib/chat/turn-window";
-import { composerToolsSuppressedOnSessionHydrate } from "@/lib/chat/composer-pending-tools";
+import { composerToolsSuppressedOnSessionHydrate, dismissTodoPlan as persistTodoPlanDismiss } from "@/lib/chat/composer-pending-tools";
 import { contentBlocks } from "@/components/modules/chat/tools/tool-result-map";
 import {
   deriveSessionTitleForSend,
@@ -186,6 +187,11 @@ interface TabState {
    */
   settledStreamMessageIds: string[];
   isStreaming: boolean;
+  /**
+   * Parent end_turn while background Tasks still joining / OpenCode may
+   * auto-resume. Keep the turn alive; ignore session-idle streaming backup.
+   */
+  awaitingBackgroundJoin: boolean;
   error: string | null;
   draft: TabDraft;
   /** Turn index → footer meta (time, model, optional summary). */
@@ -260,8 +266,9 @@ interface TabState {
    */
   planConfirmSuppressed: boolean;
   /**
-   * When true, hide composer Question / TodoWrite chrome — set on session cold-load
+   * When true, hide composer Question chrome — set on session cold-load
    * (tab reopen / history hydrate). Cleared on user send or live agent streaming.
+   * TodoWrite lives under the user message bubble and ignores this flag.
    */
   composerToolsSuppressed: boolean;
   /** Soft-block dialog when leaving Plan with a dirty draft. */
@@ -271,6 +278,8 @@ interface TabState {
 export interface SubAgentRun {
   expertId: string;
   prompt: string;
+  /** Sync (default) blocks parent Task tool; background continues after early start. */
+  mode?: "sync" | "background";
   /** `stopping` = user Stop intent; settle to error/done only when parent Task finishes. */
   status: "running" | "stopping" | "done" | "error";
   subSessionId?: string;
@@ -297,6 +306,7 @@ function makeDefaultTab(id: string): TabState {
     streamingPartMessageId: null,
     settledStreamMessageIds: [],
     isStreaming: false,
+    awaitingBackgroundJoin: false,
     error: null,
     draft: { input: "" },
     turnMeta: {},
@@ -538,6 +548,10 @@ interface ChatState {
   isLoadingSession: boolean;
   /** Debug: incremented on every _upsertLastMessage call to verify re-renders */
   streamTick: number;
+  /** Bumped when the user dismisses a message-anchored TodoWrite drawer (UI only). */
+  todoPlanDismissEpoch: number;
+  /** Persist dismiss + bump epoch so the drawer unmounts without affecting execution. */
+  dismissTodoPlan: (toolUseId: string) => void;
   /** Active tab first-turn prepare phase (projected). */
   preparePhase: ChatPreparePhase | null;
 
@@ -645,6 +659,7 @@ interface ChatState {
   _setSessionId: (tabId: string, id: string) => void;
   _setTitle: (tabId: string, title: string) => void;
   _setStreaming: (tabId: string, streaming: boolean) => void;
+  _setAwaitingBackgroundJoin: (tabId: string, awaiting: boolean) => void;
   _setPreparePhase: (tabId: string, phase: ChatPreparePhase | null) => void;
   _setError: (tabId: string, error: string | null) => void;
   /**
@@ -663,7 +678,17 @@ interface ChatState {
   _linkSubAgentRun: (
     tabId: string,
     taskToolUseId: string,
-    data: { expertId: string; prompt: string; subSessionId?: string },
+    data: { expertId: string; prompt: string; subSessionId?: string; mode?: "sync" | "background" },
+  ) => void;
+  /** Background Task early start — keep status running until join. */
+  _startBackgroundSubAgentRun: (
+    tabId: string,
+    taskToolUseId: string,
+    data: {
+      expertId: string;
+      prompt: string;
+      subSessionId?: string;
+    },
   ) => void;
   _markSubAgentLinkDegraded: (tabId: string, taskToolUseId: string) => void;
   _upsertSubAgentActivity: (tabId: string, taskToolUseId: string, block: ContentBlock) => void;
@@ -1007,6 +1032,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   // Projected
   ...projectActiveTab([initialTab], initialTabId),
   streamTick: 0,
+  todoPlanDismissEpoch: 0,
+
+  dismissTodoPlan: (toolUseId: string) => {
+    persistTodoPlanDismiss(toolUseId);
+    set((s) => ({ todoPlanDismissEpoch: (s.todoPlanDismissEpoch || 0) + 1 }));
+  },
 
   // ─── Tab Management ───
 
@@ -2267,6 +2298,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
               streamingMessage: null,
               isStreaming: false,
               error: null,
+              subAgentRuns: reconcileBackgroundSubAgentRunsFromMessages(
+                filtered,
+                t.subAgentRuns,
+              ),
               composerToolsSuppressed: composerToolsSuppressedOnSessionHydrate(filtered),
             }
           : t,
@@ -2508,6 +2543,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                 contextTokens: ctxData?.tokens ?? null,
                 contextBreakdown: ctxData?.breakdown ?? null,
                 categorySchema: ctxData?.schema ?? null,
+                subAgentRuns: reconcileBackgroundSubAgentRunsFromMessages(
+                  filtered,
+                  t.subAgentRuns,
+                ),
                 composerToolsSuppressed: composerToolsSuppressedOnSessionHydrate(filtered),
               }
             : t,
@@ -2809,6 +2848,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
   },
 
+  _setAwaitingBackgroundJoin: (tabId, awaiting) => {
+    set((s) => {
+      const tabs = s.tabs.map((t) =>
+        t.id === tabId ? { ...t, awaitingBackgroundJoin: awaiting } : t,
+      );
+      return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+    });
+  },
+
   _setStreaming: (tabId: string, isStreaming: boolean) => {
     let stamped: { sessionId: string | null; turnIndex: number; meta: TurnMessageMeta } | null = null;
     set((s) => {
@@ -2851,6 +2899,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           return {
             ...t,
             isStreaming: false,
+            awaitingBackgroundJoin: false,
             preparePhase: null,
             messages,
             streamingMessage,
@@ -3153,11 +3202,42 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             [taskToolUseId]: {
               expertId: nextExpert || data.expertId || "general",
               prompt: data.prompt || prev?.prompt || "",
+              mode: data.mode ?? prev?.mode,
               status: prev?.status === "done" || prev?.status === "error" ? prev.status : "running",
               subSessionId: nextSubSessionId,
               blocks: prev?.blocks ?? [],
               // Late link after UI degrade — clear the muted empty-stream hint.
               linkDegraded: nextSubSessionId ? false : prev?.linkDegraded,
+              error: prev?.error,
+            },
+          },
+        };
+      }),
+    }));
+  },
+
+  _startBackgroundSubAgentRun: (tabId, taskToolUseId, data) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const prev = t.subAgentRuns[taskToolUseId];
+        if (prev?.status === "done" || prev?.status === "error") return t;
+        const nextExpert =
+          data.expertId && data.expertId !== "expert"
+            ? data.expertId
+            : (prev?.expertId && prev.expertId !== "expert" ? prev.expertId : data.expertId);
+        return {
+          ...t,
+          subAgentRuns: {
+            ...t.subAgentRuns,
+            [taskToolUseId]: {
+              expertId: nextExpert || data.expertId || "general",
+              prompt: data.prompt || prev?.prompt || "",
+              mode: "background",
+              status: prev?.status === "stopping" ? "stopping" : "running",
+              subSessionId: data.subSessionId ?? prev?.subSessionId,
+              blocks: prev?.blocks ?? [],
+              linkDegraded: data.subSessionId ? false : prev?.linkDegraded,
               error: prev?.error,
             },
           },

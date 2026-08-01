@@ -1,5 +1,5 @@
 /**
- * Pending interactive tools surfaced above the chat composer (Question, TodoWrite).
+ * Pending interactive tools: Question (composer chrome) + TodoWrite (message drawer).
  */
 import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
 import { contentBlocks } from "@/components/modules/chat/tools/tool-result-map";
@@ -17,6 +17,39 @@ export type ComposerPendingTodo = {
   toolUse: ContentBlock;
 };
 
+/** Todo plan shown under a user message bubble (drawer). */
+export type MessageTodoPlan = {
+  toolUse: ContentBlock;
+  /** Index into committed `messages` (not display) for the anchor user bubble. */
+  anchorUserMessageIndex: number;
+};
+
+const TODO_PLAN_DISMISS_PREFIX = "todo-plan-dismiss:";
+
+export function isTodoPlanDismissed(toolUseId: string | undefined): boolean {
+  const id = toolUseId?.trim();
+  if (!id) return false;
+  try {
+    return localStorage.getItem(`${TODO_PLAN_DISMISS_PREFIX}${id}`) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function dismissTodoPlan(toolUseId: string): void {
+  const id = toolUseId.trim();
+  if (!id) return;
+  try {
+    localStorage.setItem(`${TODO_PLAN_DISMISS_PREFIX}${id}`, "1");
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function isRealUserMessage(msg: ChatStreamMessage): boolean {
+  return msg.type === "user" && !isToolResultUserMessage(msg);
+}
+
 function activeTurnMessages(
   messages: ChatStreamMessage[],
   streamingMessage: ChatStreamMessage | null | undefined,
@@ -24,7 +57,7 @@ function activeTurnMessages(
   let lastUserIdx = -1;
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i]!;
-    if (msg.type === "user" && !isToolResultUserMessage(msg)) {
+    if (isRealUserMessage(msg)) {
       lastUserIdx = i;
       break;
     }
@@ -93,6 +126,124 @@ function findLatestSessionTodoBlock(args: {
   return pickLatestTodoBlock(todoWriteBlocksFromMessages(allMessages));
 }
 
+/**
+ * Open task plan for composer-chrome hydrate rules (Question suppress etc.).
+ * Completed plans are not “pending chrome”.
+ */
+export function findOpenTodoPlan(args: {
+  messages: ChatStreamMessage[];
+  streamingMessage: ChatStreamMessage | null | undefined;
+}): ContentBlock | null {
+  const turnMessages = activeTurnMessages(args.messages, args.streamingMessage);
+  const activeBlock = findTodoInTurnMessages(turnMessages);
+  if (activeBlock) {
+    const todos: Array<{ status?: string }> = activeBlock.input?.todos ?? [];
+    if (todoPlanHasOpenWork(todos)) return activeBlock;
+  }
+
+  const sessionBlock = findLatestSessionTodoBlock(args);
+  if (!sessionBlock) return null;
+  const todos: Array<{ status?: string }> = sessionBlock.input?.todos ?? [];
+  if (!todoPlanHasOpenWork(todos)) return null;
+  return sessionBlock;
+}
+
+/**
+ * Latest TodoWrite plan for the message drawer — open or completed.
+ * Open plans follow the latest user bubble; completed plans pin under the
+ * user bubble that was current when the plan finished.
+ */
+export function findMessageTodoPlan(args: {
+  messages: ChatStreamMessage[];
+  streamingMessage: ChatStreamMessage | null | undefined;
+}): MessageTodoPlan | null {
+  const turnMessages = activeTurnMessages(args.messages, args.streamingMessage);
+  let block = findTodoInTurnMessages(turnMessages);
+  if (!block) {
+    block = findLatestSessionTodoBlock(args);
+  }
+  if (!block?.id || isTodoPlanDismissed(block.id)) return null;
+
+  const todos: Array<{ status?: string }> = block.input?.todos ?? [];
+  if (!Array.isArray(todos) || todos.length === 0) return null;
+
+  const anchorUserMessageIndex = resolveTodoPlanAnchorUserMessageIndex({
+    messages: args.messages,
+    streamingMessage: args.streamingMessage,
+    toolUse: block,
+  });
+  if (anchorUserMessageIndex < 0) return null;
+
+  return { toolUse: block, anchorUserMessageIndex };
+}
+
+/**
+ * Index of the user message that should host the todo drawer.
+ * Open → latest real user; completed → last real user at/before the assistant
+ * message that carries this tool_use (so “continue” keeps the pin after done).
+ */
+export function resolveTodoPlanAnchorUserMessageIndex(args: {
+  messages: ChatStreamMessage[];
+  streamingMessage: ChatStreamMessage | null | undefined;
+  toolUse: ContentBlock;
+}): number {
+  const committed = args.messages;
+  const todos: Array<{ status?: string }> = args.toolUse.input?.todos ?? [];
+  const open = todoPlanHasOpenWork(todos);
+
+  let lastUserIdx = -1;
+  for (let i = committed.length - 1; i >= 0; i--) {
+    if (isRealUserMessage(committed[i]!)) {
+      lastUserIdx = i;
+      break;
+    }
+  }
+
+  if (open) return lastUserIdx;
+
+  const toolId = args.toolUse.id;
+  if (!toolId) return lastUserIdx;
+
+  let toolMsgIdx = -1;
+  for (let i = 0; i < committed.length; i++) {
+    const msg = committed[i]!;
+    if (msg.type !== "assistant") continue;
+    if (isHiddenToolResultCarrier(msg)) continue;
+    const has = contentBlocks(msg.message?.content).some(
+      (b) => b.type === "tool_use" && b.id === toolId,
+    );
+    if (has) toolMsgIdx = i;
+  }
+
+  // Completing only in the live streaming message → still under latest user.
+  if (toolMsgIdx < 0 && args.streamingMessage) {
+    const has = contentBlocks(args.streamingMessage.message?.content).some(
+      (b) => b.type === "tool_use" && b.id === toolId,
+    );
+    if (has) return lastUserIdx;
+  }
+
+  if (toolMsgIdx < 0) return lastUserIdx;
+
+  let pinIdx = -1;
+  for (let i = 0; i <= toolMsgIdx; i++) {
+    if (isRealUserMessage(committed[i]!)) pinIdx = i;
+  }
+  return pinIdx;
+}
+
+/** @deprecated Prefer findOpenTodoPlan / findMessageTodoPlan */
+export function findComposerPendingTodo(args: {
+  messages: ChatStreamMessage[];
+  streamingMessage: ChatStreamMessage | null | undefined;
+  /** When false (cold-loaded tab), open-plan composer chrome stayed hidden. */
+  chromeLive?: boolean;
+}): ComposerPendingTodo | null {
+  if (args.chromeLive === false) return null;
+  const block = findOpenTodoPlan(args);
+  return block ? { toolUse: block } : null;
+}
+
 /** Mirrors AskUserQuestionWidget — question awaiting a user reply. */
 export function questionNeedsUserAnswer(
   toolUse: ContentBlock,
@@ -142,40 +293,17 @@ export function findComposerPendingQuestion(args: {
   return null;
 }
 
-export function findComposerPendingTodo(args: {
-  messages: ChatStreamMessage[];
-  streamingMessage: ChatStreamMessage | null | undefined;
-  /** When false (cold-loaded tab), composer todo chrome stays hidden. */
-  chromeLive?: boolean;
-}): ComposerPendingTodo | null {
-  if (args.chromeLive === false) return null;
-
-  const turnMessages = activeTurnMessages(args.messages, args.streamingMessage);
-  const activeBlock = findTodoInTurnMessages(turnMessages);
-  if (activeBlock) {
-    return { toolUse: activeBlock };
-  }
-
-  // After Stop, tab reopen + user "continue", or a new user turn before the next
-  // todowrite — resume the latest open plan from session history.
-  const sessionBlock = findLatestSessionTodoBlock(args);
-  if (!sessionBlock) return null;
-  const todos: Array<{ status?: string }> = sessionBlock.input?.todos ?? [];
-  if (!todoPlanHasOpenWork(todos)) return null;
-  return { toolUse: sessionBlock };
-}
-
 /**
- * Whether composer Question/Todo chrome stays hidden after loading session history.
- * Stopped mid-turn sessions with an open task plan resume the composer panel.
+ * Whether composer Question chrome stays hidden after loading session history.
+ * Stopped mid-turn sessions with an open task plan resume composer panels that
+ * still live above the input (Question — Todo moved to the message drawer).
  */
 export function composerToolsSuppressedOnSessionHydrate(
   messages: ChatStreamMessage[],
 ): boolean {
-  const todo = findComposerPendingTodo({
+  const todo = findOpenTodoPlan({
     messages,
     streamingMessage: null,
-    chromeLive: true,
   });
   if (!todo) return true;
 
@@ -184,7 +312,7 @@ export function composerToolsSuppressedOnSessionHydrate(
     if (msg.type === "assistant") {
       return !msg.stopped;
     }
-    if (msg.type === "user" && !isToolResultUserMessage(msg)) {
+    if (isRealUserMessage(msg)) {
       return true;
     }
   }
@@ -215,6 +343,8 @@ export type ComposerPendingStoreSlice = {
     isStreaming: boolean;
     composerToolsSuppressed?: boolean;
   }>;
+  /** Bumped when the user dismisses a message todo drawer (re-read localStorage). */
+  todoPlanDismissEpoch?: number;
 };
 
 export function composerChromeLive(tab: ComposerPendingStoreSlice["tabs"][number] | undefined): boolean {
@@ -240,17 +370,34 @@ export function selectComposerHostedQuestionId(
   );
 }
 
-/** Zustand selector — stable string | null (never return fresh objects). */
+/**
+ * Todo plan id hosted in the message drawer (hides full inline widget → stub).
+ * Ignores composerToolsSuppressed — drawer lives in the transcript.
+ */
 export function selectComposerHostedTodoId(state: ComposerPendingStoreSlice): string | null {
   const tab = activeChatTab(state);
   if (!tab) return null;
+  // epoch in deps via store subscription when bumped
+  void state.todoPlanDismissEpoch;
   return (
-    findComposerPendingTodo({
+    findMessageTodoPlan({
       messages: tab.messages,
       streamingMessage: tab.streamingMessage,
-      chromeLive: composerChromeLive(tab),
     })?.toolUse.id ?? null
   );
+}
+
+export function selectMessageTodoAnchorUserIndex(
+  state: ComposerPendingStoreSlice,
+): number | null {
+  const tab = activeChatTab(state);
+  if (!tab) return null;
+  void state.todoPlanDismissEpoch;
+  const plan = findMessageTodoPlan({
+    messages: tab.messages,
+    streamingMessage: tab.streamingMessage,
+  });
+  return plan?.anchorUserMessageIndex ?? null;
 }
 
 export function resolveComposerPendingQuestion(
@@ -270,9 +417,22 @@ export function resolveComposerPendingTodo(
 ): ComposerPendingTodo | null {
   const tab = activeChatTab(state);
   if (!tab) return null;
-  return findComposerPendingTodo({
+  void state.todoPlanDismissEpoch;
+  const plan = findMessageTodoPlan({
     messages: tab.messages,
     streamingMessage: tab.streamingMessage,
-    chromeLive: composerChromeLive(tab),
+  });
+  return plan ? { toolUse: plan.toolUse } : null;
+}
+
+export function resolveMessageTodoPlan(
+  state: ComposerPendingStoreSlice,
+): MessageTodoPlan | null {
+  const tab = activeChatTab(state);
+  if (!tab) return null;
+  void state.todoPlanDismissEpoch;
+  return findMessageTodoPlan({
+    messages: tab.messages,
+    streamingMessage: tab.streamingMessage,
   });
 }

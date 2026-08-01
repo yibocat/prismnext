@@ -28,6 +28,7 @@ import { compileCurrentDocument, pauseAutoCompileForAi, resumeAutoCompileAfterAi
 import { createLogger } from "@/services/logger";
 import { isPlanFileToolUse } from "@/lib/chat/plan-artifact-ui";
 import { parsePlanSteps } from "@/lib/chat/parse-plan-steps";
+import { isBackgroundTaskStartedResult } from "@shared/opencode-background-task";
 import { isPrismSystemPromptText } from "@/lib/chat/session-message-hydrate";
 import { refreshGitStatusNow } from "@/lib/git/checkout-context";
 import { isChatPreparePhase } from "../../shared/chat-prepare-phases";
@@ -322,6 +323,18 @@ export function useOpenCodeEvents() {
             expertId: String(data.expertId || "general"),
             prompt: String(data.prompt || ""),
             subSessionId: data.subSessionId ? String(data.subSessionId) : undefined,
+            mode: data.mode === "background" ? "background" : undefined,
+          });
+          break;
+        }
+
+        case "subAgent.started": {
+          const taskToolUseId = String(data.taskToolUseId || "");
+          if (!taskToolUseId) break;
+          chatStore._startBackgroundSubAgentRun(tabId, taskToolUseId, {
+            expertId: String(data.expertId || "general"),
+            prompt: String(data.prompt || ""),
+            subSessionId: data.subSessionId ? String(data.subSessionId) : undefined,
           });
           break;
         }
@@ -585,8 +598,14 @@ export function useOpenCodeEvents() {
                       };
                     }
                   }
-                  // Clear sticky run.error from any prior false failure.
-                  chatStore._completeSubAgentRun(tabId, toolUseId, "done");
+                  // Background early "started" must not flip the card to done.
+                  const bgStarted = isBackgroundTaskStartedResult({
+                    rawInput: block._backfillInput,
+                    content: block.content,
+                  });
+                  if (!bgStarted) {
+                    chatStore._completeSubAgentRun(tabId, toolUseId, "done");
+                  }
                 }
 
                 const priorToolResult = useChatStore.getState().tabs
@@ -839,6 +858,11 @@ export function useOpenCodeEvents() {
           break;
         }
 
+        case "turn.awaitingBackground": {
+          chatStore._setAwaitingBackgroundJoin(tabId, true);
+          break;
+        }
+
         case "session.error": {
           const detail =
             (typeof data?.message === "string" && data.message.trim())
@@ -872,9 +896,19 @@ export function useOpenCodeEvents() {
             }
             // Backup path: if sendPrompt hung (tool blocked), chat:complete never
             // fires and isStreaming stays true — blocking the next user message.
+            // Do NOT clear while background Tasks are still open: parent end_turn
+            // idles early, then OpenCode inject-resumes — clearing here drops that stream.
             window.setTimeout(() => {
               const current = useChatStore.getState().tabs.find((t) => t.id === tabId);
               if (!current?.isStreaming) return;
+              if (current.awaitingBackgroundJoin) return;
+              const runs = current.subAgentRuns || {};
+              const bgPending = Object.values(runs).some(
+                (r) =>
+                  r?.mode === "background"
+                  && (r.status === "running" || r.status === "stopping"),
+              );
+              if (bgPending) return;
               log.warn("session.status backup — clearing stuck isStreaming", { tabId, status });
               chatStore._setStreaming(tabId, false);
               usePermissionStore.getState().clearTabPermissions(tabId);
@@ -936,7 +970,7 @@ export function useOpenCodeEvents() {
     const unsubComplete = window.electronAPI.onChatComplete(({ tabId, success, error, errorCode, emptyTurn, tokenUsage, contextBreakdown, categorySchema, promptStale, planDraftMissing }) => {
       const chatStore = useChatStore.getState();
 
-      if (!success && error) {
+      if (!success) {
         if (errorCode === "cancelled") {
           // User-initiated stop — cancelExecution already committed partial reply.
         } else {
@@ -945,14 +979,14 @@ export function useOpenCodeEvents() {
           const display =
             raw
             || (errorCode
-              ? i18n.t(`chat.errors.${errorCode}`, { defaultValue: error })
+              ? i18n.t(`chat.errors.${errorCode}`, { defaultValue: error || "" })
               : "")
+            || (emptyTurn ? i18n.t("chat.errors.emptyTurn") : "")
             || i18n.t("chat.errors.sessionError");
           chatStore._appendAssistantError(tabId, display);
         }
-      } else if (success && emptyTurn) {
-        // Provider turn failed upstream but resolved as a bare end_turn with
-        // zero frames (rate limit / quota / 5xx). Print into the reply stream.
+      } else if (emptyTurn) {
+        // Legacy success+emptyTurn path (older main process).
         chatStore._appendAssistantError(tabId, i18n.t("chat.errors.emptyTurn"));
       } else {
         notifyDesktopForTab("turn_complete", tabId, "shell.notify.replyFinished");

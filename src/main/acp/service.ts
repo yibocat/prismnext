@@ -1,6 +1,12 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, accessSync, constants, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, copyFileSync } from "node:fs";
 import { join, dirname } from "node:path";
+import {
+  isPrimaryOpenCodeStreamError,
+  openCodeLogEndOffset,
+  parseOpenCodeStreamErrorLine,
+  readOpenCodeLogDelta,
+} from "./opencode-log-errors";
 import { homedir } from "node:os";
 import { Readable, Writable } from "node:stream";
 import { app } from "electron";
@@ -210,6 +216,13 @@ export class AcpService {
    * distinguish "model still working" from "upstream silently retrying".
    */
   private sessionActivityAt = new Map<string, number>();
+  /**
+   * Provider stream errors scraped from opencode.log (quota / rate limit / 5xx).
+   * OpenCode often never forwards these over ACP.
+   */
+  private sessionProviderErrors = new Map<string, string>();
+  /** Byte offset into opencode.log for the active turn's error watch. */
+  private opencodeLogWatchOffset = 0;
   /** MCP server names already pushed to OpenCode for each session (lazy-load dedupe). */
   private sessionLoadedMcpNames = new Map<string, Set<string>>();
   /** Stored API keys from last chat:send — reused on reconnect. */
@@ -928,6 +941,8 @@ export class AcpService {
       XDG_STATE_HOME: join(this.getServerDataDir(), "state"),
       // Enable OpenCode's built-in websearch (disabled by default)
       OPENCODE_ENABLE_EXA: "1",
+      // Background Task (P1): Task(..., background: true) early-return + inject join
+      OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS: "true",
     };
 
     const serverDir = this.getServerDataDir();
@@ -4052,7 +4067,12 @@ export class AcpService {
     if (method === "session/update") {
       const sid = params?.sessionId;
       if (typeof sid === "string" && sid) {
-        this.sessionActivityAt.set(sid, Date.now());
+        const now = Date.now();
+        this.sessionActivityAt.set(sid, now);
+        // Parent is silent on ACP while waiting on Task — child frames must
+        // keep the turn watchdog from false-stalling / hard-timing-out.
+        const parentId = this.getSessionParentId(sid);
+        if (parentId) this.sessionActivityAt.set(parentId, now);
       }
     }
     for (const handler of this.notificationHandlers) {
@@ -4079,11 +4099,47 @@ export class AcpService {
   /** Auto-abort the turn after this much uninterrupted upstream silence. */
   static readonly TURN_HARD_TIMEOUT_MS = 360_000;
 
+  /** OpenCode's rotating text log (quota / stream errors land here, not on ACP). */
+  getOpenCodeLogPath(): string {
+    return join(this.getServerDataDir(), "opencode", "log", "opencode.log");
+  }
+
+  /** Consume a scraped provider error for this session (if any). */
+  takeSessionProviderError(sessionId: string): string | undefined {
+    const msg = this.sessionProviderErrors.get(sessionId);
+    if (msg) this.sessionProviderErrors.delete(sessionId);
+    return msg;
+  }
+
+  peekSessionProviderError(sessionId: string): string | undefined {
+    return this.sessionProviderErrors.get(sessionId);
+  }
+
+  /** Read new opencode.log bytes; store + return primary stream error for session. */
+  private pollOpenCodeLogForSessionError(sessionId: string): string | null {
+    const path = this.getOpenCodeLogPath();
+    const { offset, lines } = readOpenCodeLogDelta(path, this.opencodeLogWatchOffset);
+    this.opencodeLogWatchOffset = offset;
+    for (const line of lines) {
+      const err = parseOpenCodeStreamErrorLine(line);
+      if (!err || !isPrimaryOpenCodeStreamError(err)) continue;
+      if (err.sessionId !== sessionId) continue;
+      this.sessionProviderErrors.set(sessionId, err.message);
+      log.warn(
+        `opencode log stream error: sessionId=${sessionId} msg=${err.message.slice(0, 200)}`,
+      );
+      return err.message;
+    }
+    return null;
+  }
+
   startTurnWatchdog(
     sessionId: string,
     callbacks: {
       onStall: (silentMs: number) => void;
       onTimeout: (silentMs: number) => void;
+      /** Fired once when opencode.log reports a primary provider stream error. */
+      onProviderError?: (message: string) => void;
     },
     opts?: { stallMs?: number; timeoutMs?: number; pollMs?: number },
   ): () => void {
@@ -4091,10 +4147,23 @@ export class AcpService {
     const timeoutMs = opts?.timeoutMs ?? AcpService.TURN_HARD_TIMEOUT_MS;
     const startedAt = Date.now();
     this.sessionActivityAt.set(sessionId, startedAt);
+    this.sessionProviderErrors.delete(sessionId);
+    // Only watch lines written during this turn (skip historical quota noise).
+    this.opencodeLogWatchOffset = openCodeLogEndOffset(this.getOpenCodeLogPath());
     let stalled = false;
     let fired = false;
+    let providerErrorFired = false;
     const timer = setInterval(() => {
       if (fired) return;
+
+      if (!providerErrorFired && callbacks.onProviderError) {
+        const providerErr = this.pollOpenCodeLogForSessionError(sessionId);
+        if (providerErr) {
+          providerErrorFired = true;
+          callbacks.onProviderError(providerErr);
+        }
+      }
+
       const last = Math.max(startedAt, this.sessionActivityAt.get(sessionId) ?? 0);
       const silentMs = Date.now() - last;
       if (silentMs >= timeoutMs) {
@@ -4112,10 +4181,14 @@ export class AcpService {
         // Stream resumed — allow a future stall to warn again.
         stalled = false;
       }
-    }, opts?.pollMs ?? 2_000);
+    }, opts?.pollMs ?? 1_000);
     return () => {
       fired = true;
       clearInterval(timer);
+      // Final scrape so empty-turn complete can still attach the real message.
+      if (!providerErrorFired) {
+        this.pollOpenCodeLogForSessionError(sessionId);
+      }
     };
   }
 

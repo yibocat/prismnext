@@ -270,6 +270,20 @@
   button:disabled {
     cursor: not-allowed;
   }
+
+  /*
+   * App-wide: no focus rings. Esc/panel close was leaving :focus-visible chrome
+   * on sessions, Task rows, etc. Prefer hover/pointer affordances in this UI.
+   * Tailwind ring utilities use --tw-ring-* + box-shadow — clear those too.
+   */
+  *:focus,
+  *:focus-visible {
+    outline: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+    --tw-ring-width: 0px !important;
+    --tw-ring-offset-width: 0px !important;
+  }
 }
 
 /* macOS window drag region */

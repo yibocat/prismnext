@@ -39,7 +39,7 @@ export type ToolWidgetComponent = ComponentType<{
   /** Inside ActivityFold expanded panel — hide heavy inline peeks. */
   nestedInActivity?: boolean;
   hostedInComposer?: boolean;
-  surface?: "inline" | "composer";
+  surface?: "inline" | "composer" | "drawer";
 }>;
 
 let registeredTaskWidget: ToolWidgetComponent | null = null;

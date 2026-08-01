@@ -12,7 +12,7 @@ import { useComposerInsertStore } from "@/stores/composer-insert-store";
 import { useComposerEditorStore } from "@/stores/composer-editor-store";
 import { WorktreeSelector } from "./worktree-selector";
 import { IntensiveReadingListButton } from "./intensive-reading-list-button";
-import { cn } from "@/lib/utils";
+import { blurKeyboardFocus, cn } from "@/lib/utils";
 import { useChatFileDrop, useOsFileDragging } from "@/lib/chat/use-chat-file-drop";
 import { chatFileDropZoneClass, chatCapsuleFileDropActiveClass } from "@/lib/chat/chat-file-drag-overlay";
 import { displayChatTitle } from "@/lib/i18n/display-chat-title";
@@ -91,6 +91,7 @@ export function AiBar() {
     // Clear store id immediately (panel-chat scrim fades with exit); keep
     // `displayedSubId` mounted until the animation finishes.
     closeSubAgentPanel();
+    blurKeyboardFocus();
     window.setTimeout(() => {
       setDisplayedSubId(null);
       setSubClosing(false);
@@ -291,11 +292,13 @@ export function AiBar() {
 
       if (subPanelFront) {
         e.preventDefault();
+        e.stopPropagation();
         closeSubAnimated();
         return;
       }
       if (subPanelOpen) {
         e.preventDefault();
+        e.stopPropagation();
         return; // already exiting
       }
 

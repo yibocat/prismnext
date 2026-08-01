@@ -41,6 +41,13 @@ import {
 } from "../services/task-orchestrator-gate";
 import { formatTaskError } from "../../shared/task-error-codes";
 import {
+  extractBackgroundTaskSessionId,
+  isBackgroundTaskJoinInject,
+  isBackgroundTaskStartedResult,
+  listBackgroundTaskJoins,
+  type BackgroundTaskInject,
+} from "../../shared/opencode-background-task";
+import {
   durationSecFromOpenCodeTime,
   extractOpenCodeTime,
 } from "../../shared/opencode-part-time";
@@ -70,6 +77,18 @@ export class EventMapper {
   private taskToolExpertById = new Map<string, string>();
   /** Task tool_use id → parent tab while the OpenCode Task is still open. */
   private openTaskToolToTab = new Map<string, string>();
+  /**
+   * Background Task tool_use ids whose Timeline-A early "started" already settled
+   * but Timeline-B (child / inject) has not — keep UI running until join.
+   */
+  /** Background Task tool_use ids awaiting Timeline-B join. */
+  private backgroundOpenTasks = new Set<string>();
+  /** Parent sessionId → last session.status (for post-join resume settle). */
+  private parentSessionStatus = new Map<string, string>();
+  /** Parent sessionId → last noteTurnContent timestamp. */
+  private parentLastContentAt = new Map<string, number>();
+  /** Resolvers woken when a tab's backgroundOpenTasks set becomes empty. */
+  private backgroundSettleWaiters = new Map<string, Set<() => void>>();
   /** Subagent OpenCode session → parent Task tool_use id. */
   private subSessionToTaskTool = new Map<string, string>();
   /** Task tool_use id → UI-degrade timer (soft hint only; does not fail Task). */
@@ -116,6 +135,15 @@ export class EventMapper {
   private subAgentDbSyncFingerprint = new Map<string, string>();
   /** Faster than 400ms so SQLite-only text growth feels closer to streaming. */
   private static readonly SUBAGENT_DB_SYNC_MS = 200;
+  /**
+   * While Task tools are still open on a tab, poll parent SQLite for synthetic
+   * join injects. OpenCode often resumes the parent with inject in context
+   * without forwarding every inject (or even Timeline-A tool_call_update) over
+   * ACP — without this, cards stay on 执行中 after the main agent already
+   * summarized.
+   */
+  private backgroundJoinPollTimers = new Map<string, ReturnType<typeof setInterval>>();
+  private static readonly BACKGROUND_JOIN_POLL_MS = 400;
   /** Task tool_use ids the user stopped from the run panel (Stop). */
   private userStoppedTasks = new Set<string>();
   /**
@@ -217,6 +245,19 @@ export class EventMapper {
     return this.turnEmittedContent;
   }
 
+  /** Visible assistant activity (text / thinking / tools) — not user echo or chrome. */
+  private noteTurnContent(sessionId?: string): void {
+    this.turnEmittedContent = true;
+    const sid = sessionId?.trim();
+    if (!sid) return;
+    for (const primary of this.tabToSession.values()) {
+      if (primary === sid) {
+        this.parentLastContentAt.set(sid, Date.now());
+        return;
+      }
+    }
+  }
+
   /** Clear per-turn text/thinking accumulators before a new user prompt. */
   clearTurnAccumulators(): void {
     this.accumText.clear();
@@ -261,6 +302,7 @@ export class EventMapper {
       this.clearTaskLinkWatchdog(pending.toolUseId);
       this.clearTaskAwaitTimeout(pending.toolUseId);
       this.openTaskToolToTab.delete(pending.toolUseId);
+      this.backgroundOpenTasks.delete(pending.toolUseId);
       this.taskToolExpertById.delete(pending.toolUseId);
       this.win.webContents.send("chat:stream", {
         tabId,
@@ -642,6 +684,9 @@ export class EventMapper {
     // was enqueued — try to bind orphans now that a pending slot exists.
     this.tryLinkChildSessionsForTab(tabId);
     this.startChildSessionPoll(tabId);
+    // Timeline-A tool_call_update is often missing over ACP; start join poll now
+    // so SQLite injects can still settle the Task cards.
+    this.reconcileOpenBackgroundTasks(tabId);
   }
 
   /** Remember an unmapped session and schedule parent_id re-lookups. */
@@ -1037,6 +1082,8 @@ export class EventMapper {
     this.flushOrphanUpdateBuffer(parentTabId, subSessionId);
     // ACP often omits child session/update — keep the panel fed from SQLite.
     this.startSubAgentDbSync(parentTabId, subSessionId);
+    // Recover Timeline A / join if ACP skipped background started tool_result.
+    this.reconcileOpenBackgroundTasks(parentTabId);
   }
 
   /** Link sub-session to pending Task when parent_id is known but link not yet established. */
@@ -1200,6 +1247,7 @@ export class EventMapper {
     }
     this.taskToolExpertById.delete(taskToolUseId);
     this.openTaskToolToTab.delete(taskToolUseId);
+    this.backgroundOpenTasks.delete(taskToolUseId);
     const parentSessionId = this.tabToSession.get(tabId);
     if (!isError && expertId && expertId !== "expert") {
       if (parentSessionId) {
@@ -1220,6 +1268,490 @@ export class EventMapper {
     // Parent may have end_turn'd while this Task was still open — flush @ nudge now.
     if (parentSessionId && !this.hasOpenTaskToolsForTab(tabId)) {
       void flushDeferredTaskAllowlistFollowUp(parentSessionId);
+    }
+    if (!this.hasBackgroundOpenTasksForTab(tabId)) {
+      this.wakeBackgroundSettleWaiters(tabId);
+    }
+  }
+
+  /** True while Timeline-A settled as background start but child/inject not joined. */
+  isBackgroundOpenTask(taskToolUseId: string): boolean {
+    return this.backgroundOpenTasks.has(taskToolUseId?.trim() || "");
+  }
+
+  /** True while this tab has ≥1 background Task awaiting Timeline-B join. */
+  hasBackgroundOpenTasksForTab(tabId: string): boolean {
+    for (const id of this.backgroundOpenTasks) {
+      if (this.openTaskToolToTab.get(id) === tabId) return true;
+    }
+    return false;
+  }
+
+  private wakeBackgroundSettleWaiters(tabId: string): void {
+    const waiters = this.backgroundSettleWaiters.get(tabId);
+    if (!waiters?.size) return;
+    for (const wake of waiters) wake();
+  }
+
+  /**
+   * After parent `session/prompt` returns end_turn while background Tasks are
+   * still open: keep the turn alive until joins finish and OpenCode's inject
+   * auto-resume goes idle. Without this, chat:complete flips isStreaming=false
+   * and the renderer drops the resume stream (only visible after reopen).
+   */
+  async waitForBackgroundTurnSettle(
+    tabId: string,
+    opts?: { timeoutMs?: number; signal?: AbortSignal },
+  ): Promise<void> {
+    const timeoutMs = opts?.timeoutMs ?? 600_000;
+    const signal = opts?.signal;
+    const parentSessionId = this.tabToSession.get(tabId);
+    const deadline = Date.now() + timeoutMs;
+
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => {
+        const t = setTimeout(resolve, ms);
+        t.unref?.();
+      });
+
+    const aborted = () => Boolean(signal?.aborted);
+
+    // Phase 1 — wait until no background Tasks remain open on this tab.
+    this.reconcileOpenBackgroundTasks(tabId);
+    while (this.hasBackgroundOpenTasksForTab(tabId)) {
+      if (aborted() || Date.now() >= deadline) {
+        log.warn(`background turn settle: join phase timed out or aborted`, { tabId });
+        break;
+      }
+      await new Promise<void>((resolve) => {
+        const wake = () => {
+          clearInterval(poll);
+          resolve();
+        };
+        let set = this.backgroundSettleWaiters.get(tabId);
+        if (!set) {
+          set = new Set();
+          this.backgroundSettleWaiters.set(tabId, set);
+        }
+        set.add(wake);
+        const poll = setInterval(() => {
+          this.reconcileOpenBackgroundTasks(tabId);
+          if (!this.hasBackgroundOpenTasksForTab(tabId) || aborted() || Date.now() >= deadline) {
+            set!.delete(wake);
+            if (set!.size === 0) this.backgroundSettleWaiters.delete(tabId);
+            clearInterval(poll);
+            resolve();
+          }
+        }, 250);
+        poll.unref?.();
+      });
+    }
+
+    if (aborted() || !parentSessionId) return;
+
+    // Phase 2 — OpenCode may auto-resume the parent after inject. Hold until
+    // the parent is idle and quiet for a short debounce after the last content.
+    const quietMs = 1_200;
+    const settleEpoch = Date.now();
+    while (Date.now() < deadline) {
+      if (aborted()) return;
+      const status = (this.parentSessionStatus.get(parentSessionId) || "idle").toLowerCase();
+      const lastContent = this.parentLastContentAt.get(parentSessionId) || 0;
+      const anchor = Math.max(lastContent, settleEpoch);
+      const idle = status === "idle" || status === "completed" || status === "done";
+      const quiet = Date.now() - anchor >= quietMs;
+      if (idle && quiet) {
+        log.info(`background turn settle: parent quiet after joins`, {
+          tabId,
+          parentSessionId,
+          status,
+          quietMs: Date.now() - anchor,
+        });
+        return;
+      }
+      await sleep(200);
+    }
+    log.warn(`background turn settle: resume quiet phase timed out`, { tabId });
+  }
+
+  /**
+   * Background Timeline-A "started": keep Task open for UI / Stop; emit started.
+   * @ allowlist is satisfied on dispatch (not only on join).
+   */
+  private markBackgroundTaskStarted(
+    tabId: string,
+    taskToolUseId: string,
+    opts: { metadata?: unknown; content?: unknown; rawInput?: unknown },
+  ): void {
+    this.backgroundOpenTasks.add(taskToolUseId);
+    this.openTaskToolToTab.set(taskToolUseId, tabId);
+    const expertId =
+      this.taskToolExpertById.get(taskToolUseId)
+      || this.pendingTasksByTab.get(tabId)?.find((t) => t.toolUseId === taskToolUseId)?.expertId
+      || "expert";
+    const parentSessionId = this.tabToSession.get(tabId);
+    if (parentSessionId && expertId && expertId !== "expert") {
+      markSessionTaskAllowlistSatisfied(parentSessionId, expertId);
+    }
+    const childSessionId = extractBackgroundTaskSessionId({
+      metadata: opts.metadata,
+      content: opts.content,
+    });
+    if (childSessionId && !this.subSessionToTaskTool.has(childSessionId)) {
+      this.subSessionToTaskTool.set(childSessionId, taskToolUseId);
+      AcpService.getInstance().markSubAgentSession(childSessionId);
+      this.sessionToTab.set(childSessionId, tabId);
+      this.clearTaskLinkWatchdog(taskToolUseId);
+      this.clearTaskAwaitTimeout(taskToolUseId);
+      this.startSubAgentDbSync(tabId, childSessionId);
+    }
+    const prompt =
+      this.pendingTasksByTab.get(tabId)?.find((t) => t.toolUseId === taskToolUseId)?.prompt
+      || "";
+    this.win.webContents.send("chat:stream", {
+      tabId,
+      type: "subAgent.started",
+      data: {
+        taskToolUseId,
+        mode: "background",
+        expertId,
+        prompt,
+        ...(childSessionId ? { subSessionId: childSessionId } : {}),
+        ...(childSessionId ? { jobId: childSessionId } : {}),
+      },
+    });
+    log.info(`background Task started (Timeline A)`, {
+      tabId,
+      taskToolUseId,
+      expertId,
+      childSessionId: childSessionId ?? null,
+    });
+    this.startBackgroundJoinPoll(tabId);
+    // Catch injects that landed in SQLite before we marked Timeline A.
+    this.scanParentBackgroundJoinsFromDb(tabId);
+  }
+
+  /**
+   * Recover background join state from OpenCode SQLite when ACP skipped
+   * Timeline-A tool_call_update and/or inject chunks. Safe to call often.
+   */
+  reconcileOpenBackgroundTasks(tabId: string): void {
+    if (!tabId || !this.tabHasOpenTasksForJoin(tabId)) return;
+    this.ensureBackgroundTasksFromDb(tabId);
+    this.startBackgroundJoinPoll(tabId);
+    this.scanParentBackgroundJoinsFromDb(tabId);
+  }
+
+  /** True when this tab still has a Task tool open (sync or background). */
+  private tabHasOpenTasksForJoin(tabId: string): boolean {
+    for (const t of this.openTaskToolToTab.values()) {
+      if (t === tabId) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Parent DB already has Task tool rows with metadata.background / started stub
+   * even when ACP never delivered the terminal tool_call_update.
+   */
+  private ensureBackgroundTasksFromDb(tabId: string): void {
+    const parentSessionId = this.tabToSession.get(tabId);
+    if (!parentSessionId) return;
+    const parts = AcpService.getInstance().listSessionActivityParts(parentSessionId);
+    for (const part of parts) {
+      const d = part.data;
+      const toolName = String(d.tool || d.name || "").toLowerCase();
+      if (toolName !== "task") continue;
+      const callId = String(d.callID || d.callId || d.id || "").trim();
+      if (!callId || this.openTaskToolToTab.get(callId) !== tabId) continue;
+      if (this.backgroundOpenTasks.has(callId)) continue;
+      const state =
+        d.state && typeof d.state === "object" && !Array.isArray(d.state)
+          ? (d.state as Record<string, unknown>)
+          : null;
+      const meta =
+        state?.metadata && typeof state.metadata === "object" && !Array.isArray(state.metadata)
+          ? (state.metadata as Record<string, unknown>)
+          : null;
+      const input =
+        state?.input && typeof state.input === "object" && !Array.isArray(state.input)
+          ? state.input
+          : null;
+      const output =
+        typeof state?.output === "string"
+          ? state.output
+          : typeof state?.result === "string"
+            ? state.result
+            : "";
+      if (
+        !isBackgroundTaskStartedResult({
+          metadata: meta,
+          rawInput: input,
+          content: output,
+        })
+      ) {
+        continue;
+      }
+      log.info(`background Task recovered from SQLite (ACP Timeline A missed)`, {
+        tabId,
+        taskToolUseId: callId,
+      });
+      this.markBackgroundTaskStarted(tabId, callId, {
+        metadata: meta,
+        content: output,
+        rawInput: input,
+      });
+    }
+  }
+
+  private startBackgroundJoinPoll(tabId: string): void {
+    if (this.backgroundJoinPollTimers.has(tabId)) return;
+    const timer = setInterval(() => {
+      if (!this.tabHasOpenTasksForJoin(tabId)) {
+        this.stopBackgroundJoinPoll(tabId);
+        return;
+      }
+      this.ensureBackgroundTasksFromDb(tabId);
+      this.scanParentBackgroundJoinsFromDb(tabId);
+    }, EventMapper.BACKGROUND_JOIN_POLL_MS);
+    timer.unref?.();
+    this.backgroundJoinPollTimers.set(tabId, timer);
+  }
+
+  private stopBackgroundJoinPoll(tabId: string): void {
+    const timer = this.backgroundJoinPollTimers.get(tabId);
+    if (!timer) return;
+    clearInterval(timer);
+    this.backgroundJoinPollTimers.delete(tabId);
+  }
+
+  /**
+   * Read synthetic `<task … completed>` injects from the parent session DB and
+   * join any still-open Tasks. Mirrors subAgent DB sync: ACP is not the source
+   * of truth for every inject.
+   */
+  private scanParentBackgroundJoinsFromDb(tabId: string): void {
+    if (!this.tabHasOpenTasksForJoin(tabId)) return;
+    const parentSessionId = this.tabToSession.get(tabId);
+    if (!parentSessionId) return;
+    const parts = AcpService.getInstance().listSessionActivityParts(parentSessionId);
+    for (const part of parts) {
+      const text =
+        typeof part.data.text === "string"
+          ? part.data.text
+          : typeof part.data.content === "string"
+            ? part.data.content
+            : "";
+      if (!text || !isBackgroundTaskJoinInject(text)) continue;
+      for (const parsed of listBackgroundTaskJoins(text)) {
+        this.joinBackgroundTaskFromInject(tabId, parsed);
+      }
+    }
+  }
+
+  /** Scan parent-session text for OpenCode injectBackgroundResult markup. */
+  private maybeJoinBackgroundTaskFromText(tabId: string, text: string): void {
+    if (!text?.trim() || !this.tabHasOpenTasksForJoin(tabId)) return;
+    if (!isBackgroundTaskJoinInject(text)) return;
+    for (const parsed of listBackgroundTaskJoins(text)) {
+      this.joinBackgroundTaskFromInject(tabId, parsed);
+    }
+    // ACP may deliver only one inject chunk while siblings already sit in SQLite.
+    this.scanParentBackgroundJoinsFromDb(tabId);
+  }
+
+  /**
+   * Resolve which open Task an inject belongs to, then complete it.
+   * Match by child session / job id only — never FIFO-steal another open Task
+   * when multiple are running (that left the real owner stuck forever).
+   */
+  private joinBackgroundTaskFromInject(
+    tabId: string,
+    parsed: BackgroundTaskInject,
+  ): void {
+    let taskToolUseId =
+      this.subSessionToTaskTool.get(parsed.sessionId)
+      || [...this.openTaskToolToTab.entries()]
+        .filter(([, t]) => t === tabId)
+        .map(([id]) => id)
+        .find((id) => this.findSubSessionForTaskTool(id) === parsed.sessionId);
+
+    if (!taskToolUseId) {
+      taskToolUseId =
+        this.resolveBackgroundTaskToolFromParentDb(tabId, parsed.sessionId)
+        ?? undefined;
+    }
+
+    const openOnTab = [...this.openTaskToolToTab.entries()]
+      .filter(([, t]) => t === tabId)
+      .map(([id]) => id);
+
+    if (!taskToolUseId && openOnTab.length === 1) {
+      // Single open Task: inject must be for it (id aliases happen).
+      taskToolUseId = openOnTab[0];
+    }
+
+    if (!taskToolUseId) {
+      if (openOnTab.length > 1) {
+        log.warn(`background inject id unmatched with multiple open Tasks — waiting`, {
+          injectId: parsed.sessionId,
+          open: openOnTab,
+        });
+      }
+      return;
+    }
+
+    // Inject is Timeline B. Complete even when ACP skipped Timeline A
+    // (tool never entered backgroundOpenTasks).
+    if (
+      !this.openTaskToolToTab.has(taskToolUseId)
+      && !this.backgroundOpenTasks.has(taskToolUseId)
+    ) {
+      return;
+    }
+
+    if (parsed.sessionId && !this.subSessionToTaskTool.has(parsed.sessionId)) {
+      this.subSessionToTaskTool.set(parsed.sessionId, taskToolUseId);
+    }
+    if (!this.backgroundOpenTasks.has(taskToolUseId)) {
+      this.backgroundOpenTasks.add(taskToolUseId);
+    }
+
+    const ownerTab = this.openTaskToolToTab.get(taskToolUseId) ?? tabId;
+    const isError = parsed.state === "error";
+    log.info(`background Task join via inject`, {
+      tabId: ownerTab,
+      taskToolUseId,
+      injectId: parsed.sessionId,
+      state: parsed.state,
+    });
+    this.completeSubAgentTask(
+      ownerTab,
+      taskToolUseId,
+      isError,
+      isError ? (parsed.body || parsed.summary || "Background task failed") : undefined,
+    );
+    if (!this.tabHasOpenTasksForJoin(ownerTab)) {
+      this.stopBackgroundJoinPoll(ownerTab);
+    }
+  }
+
+  /**
+   * Parent SQLite Task tool rows carry metadata.sessionId / jobId — use that when
+   * live maps missed Timeline-A bind but inject id is the real child session.
+   */
+  private resolveBackgroundTaskToolFromParentDb(
+    tabId: string,
+    childSessionId: string,
+  ): string | null {
+    const parentSessionId = this.tabToSession.get(tabId);
+    if (!parentSessionId || !childSessionId) return null;
+    const parts = AcpService.getInstance().listSessionActivityParts(parentSessionId);
+    for (const part of parts) {
+      const d = part.data;
+      const toolName = String(d.tool || d.name || "").toLowerCase();
+      if (toolName !== "task") continue;
+      const callId = String(d.callID || d.callId || d.id || "").trim();
+      if (!callId || this.openTaskToolToTab.get(callId) !== tabId) continue;
+      const state =
+        d.state && typeof d.state === "object" && !Array.isArray(d.state)
+          ? (d.state as Record<string, unknown>)
+          : null;
+      const meta =
+        state?.metadata && typeof state.metadata === "object" && !Array.isArray(state.metadata)
+          ? (state.metadata as Record<string, unknown>)
+          : null;
+      const metaChild =
+        (typeof meta?.sessionId === "string" && meta.sessionId.trim())
+        || (typeof meta?.jobId === "string" && meta.jobId.trim())
+        || "";
+      if (metaChild === childSessionId) return callId;
+      const output =
+        typeof state?.output === "string"
+          ? state.output
+          : typeof state?.result === "string"
+            ? state.result
+            : "";
+      const fromOutput = extractBackgroundTaskSessionId({ content: output });
+      if (fromOutput === childSessionId) return callId;
+    }
+    return null;
+  }
+
+  /** Child session reached terminal status — join background Task if still open. */
+  private maybeCompleteBackgroundTaskFromChildStatus(
+    sessionId: string,
+    status: string,
+  ): boolean {
+    const taskToolUseId = this.subSessionToTaskTool.get(sessionId);
+    if (!taskToolUseId) return false;
+    if (
+      !this.backgroundOpenTasks.has(taskToolUseId)
+      && !this.openTaskToolToTab.has(taskToolUseId)
+    ) {
+      return false;
+    }
+    const tabId = this.openTaskToolToTab.get(taskToolUseId);
+    if (!tabId) return false;
+    const s = status.toLowerCase();
+    if (s === "completed" || s === "idle" || s === "done" || s === "success") {
+      log.info(`background Task join via child session.status=${status}`, {
+        sessionId,
+        taskToolUseId,
+      });
+      if (!this.backgroundOpenTasks.has(taskToolUseId)) {
+        this.backgroundOpenTasks.add(taskToolUseId);
+      }
+      this.completeSubAgentTask(tabId, taskToolUseId, false);
+      if (!this.tabHasOpenTasksForJoin(tabId)) {
+        this.stopBackgroundJoinPoll(tabId);
+      }
+      return true;
+    }
+    if (
+      s === "error"
+      || s === "failed"
+      || s === "aborted"
+      || s === "cancelled"
+      || s === "canceled"
+    ) {
+      if (!this.backgroundOpenTasks.has(taskToolUseId)) {
+        this.backgroundOpenTasks.add(taskToolUseId);
+      }
+      this.completeSubAgentTask(
+        tabId,
+        taskToolUseId,
+        true,
+        `Background task ended (${status})`,
+      );
+      if (!this.tabHasOpenTasksForJoin(tabId)) {
+        this.stopBackgroundJoinPoll(tabId);
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * User Stop on a background Task: parent tool_call already settled — complete
+   * locally after child abort (do not hang waiting for a second tool_result).
+   */
+  completeBackgroundTaskUserCancel(taskToolUseId: string, message: string): void {
+    const id = taskToolUseId?.trim();
+    if (!id) return;
+    const tabId = this.openTaskToolToTab.get(id);
+    if (!tabId) {
+      this.backgroundOpenTasks.delete(id);
+      return;
+    }
+    if (!this.backgroundOpenTasks.has(id) && !this.openTaskToolToTab.has(id)) return;
+    this.backgroundOpenTasks.add(id);
+    this.markUserStoppedTask(id);
+    this.completeSubAgentTask(tabId, id, true, message);
+    this.settleUserStoppedTask(id);
+    this.clearUserStoppedTask(id);
+    if (!this.tabHasOpenTasksForJoin(tabId)) {
+      this.stopBackgroundJoinPoll(tabId);
     }
   }
 
@@ -1346,7 +1878,8 @@ export class EventMapper {
       return;
     }
 
-    this.turnEmittedContent = true;
+    // Do NOT mark turn content here — user_message_chunk / mode chrome / plan
+    // updates must not suppress the empty-turn provider-error path.
     // The ACP SDK's sessionUpdate callback delivers a JSON-RPC notification's
     // `params` field.  The exact shape depends on the SDK version:
     //
@@ -1609,6 +2142,7 @@ export class EventMapper {
         this.trackTaskToolUse(tabId, toolId, toolInput);
       }
 
+      this.noteTurnContent(sessionId);
       this.win.webContents.send("chat:stream", {
         tabId,
         type: "message.part.updated",
@@ -1863,10 +2397,30 @@ export class EventMapper {
         && updateId
         && isTerminal
       ) {
-        this.completeSubAgentTask(tabId, updateId, isError, userStoppedError);
-        if (userStoppedTask || this.isUserStoppedTask(updateId)) {
-          this.settleUserStoppedTask(updateId);
-          this.clearUserStoppedTask(updateId);
+        const taskMeta =
+          tu.metadata
+          ?? tu.state?.metadata
+          ?? tu._meta
+          ?? null;
+        const backgroundStarted =
+          !isError
+          && isBackgroundTaskStartedResult({
+            metadata: taskMeta,
+            rawInput: backfillInput,
+            content: resultContent,
+          });
+        if (backgroundStarted) {
+          this.markBackgroundTaskStarted(tabId, updateId, {
+            metadata: taskMeta,
+            content: resultContent,
+            rawInput: backfillInput,
+          });
+        } else {
+          this.completeSubAgentTask(tabId, updateId, isError, userStoppedError);
+          if (userStoppedTask || this.isUserStoppedTask(updateId)) {
+            this.settleUserStoppedTask(updateId);
+            this.clearUserStoppedTask(updateId);
+          }
         }
       }
 
@@ -1916,6 +2470,7 @@ export class EventMapper {
         ocTime && typeof ocTime === "object" && typeof (ocTime as { end?: unknown }).end === "number"
           ? (ocTime as { end: number }).end
           : undefined;
+      this.noteTurnContent(sessionId);
       this.win.webContents.send("chat:stream", {
         tabId,
         type: "message.updated",
@@ -1997,6 +2552,7 @@ export class EventMapper {
         const full = (this.accumThinking.get(key) || "") + delta;
         this.accumThinking.set(key, full);
         this.pruneAccum(this.accumThinking);
+        this.noteTurnContent(sessionId);
         this.win.webContents.send("chat:stream", {
           tabId,
           type: "message.part.updated",
@@ -2007,6 +2563,15 @@ export class EventMapper {
           },
         });
       } else if (chunkType === "user_message_chunk") {
+        // Background join inject arrives as a synthetic parent prompt (user role).
+        // Scan for completion markup without rendering as a chat user bubble.
+        if (typeof content.text === "string" && content.text) {
+          const key = `${sessionId}-bg-inject`;
+          const full = (this.accumText.get(key) || "") + content.text;
+          this.accumText.set(key, full);
+          this.pruneAccum(this.accumText);
+          this.maybeJoinBackgroundTaskFromText(tabId, full);
+        }
         // User turns are rendered from composer/display snapshots — never replay
         // stored user chunks (includes injected system prompt on session/load).
         return;
@@ -2019,6 +2584,8 @@ export class EventMapper {
         const full = (this.accumText.get(key) || "") + delta;
         this.accumText.set(key, full);
         this.pruneAccum(this.accumText);
+        this.maybeJoinBackgroundTaskFromText(tabId, full);
+        this.noteTurnContent(sessionId);
         this.win.webContents.send("chat:stream", {
           tabId,
           type: "message.part.updated",
@@ -2030,6 +2597,7 @@ export class EventMapper {
         });
       } else {
         // Generic text update (no recognised chunk type)
+        this.noteTurnContent(sessionId);
         this.win.webContents.send("chat:stream", {
           tabId,
           type: "message.part.updated",
@@ -2044,6 +2612,7 @@ export class EventMapper {
       // ── Legacy tool call (content.type style) ──
       const legacyName = update.name || update.tool?.name || "";
       log.debug(`legacy tool_call: name="${legacyName}"`);
+      this.noteTurnContent(sessionId);
       this.win.webContents.send("chat:stream", {
         tabId,
         type: "message.part.updated",
@@ -2227,6 +2796,19 @@ export class EventMapper {
 
     log.info(`session.status: ${status} (sessionId=${sessionId})`);
 
+    // Track primary-session status for background turn settle (post-inject resume).
+    for (const primary of this.tabToSession.values()) {
+      if (primary === sessionId) {
+        this.parentSessionStatus.set(sessionId, String(status || ""));
+        break;
+      }
+    }
+
+    // Background child finished — complete parent Task card even if inject was missed.
+    if (this.maybeCompleteBackgroundTaskFromChildStatus(sessionId, String(status || ""))) {
+      return;
+    }
+
     switch (status) {
       case "completed":
       case "idle":
@@ -2257,7 +2839,7 @@ export class EventMapper {
         this.win.webContents.send("chat:stream", {
           tabId,
           type: "session.status",
-          data: { status, ...params },
+          data: { status, sessionId, ...params },
         });
         break;
     }

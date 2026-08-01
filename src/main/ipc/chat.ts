@@ -738,6 +738,7 @@ export function registerChatHandlers(): void {
       // Set by the turn watchdog's hard-timeout path (declared inside the try
       // below via closure) — hoisted so the catch can skip double-reporting.
       let turnSettledByWatchdog = false;
+      let turnSettledByProviderError = false;
       try {
         let resources:
           | Array<
@@ -811,6 +812,18 @@ export function registerChatHandlers(): void {
           onStall: () => {
             emitChatPrepare(tabId, "stalled");
           },
+          onProviderError: (message) => {
+            // OpenCode keeps quota/rate-limit failures off the ACP wire — surface
+            // the log line immediately and abort useless retries.
+            turnSettledByProviderError = true;
+            clearPrepare();
+            win.webContents.send("chat:stream", {
+              tabId,
+              type: "session.error",
+              data: { message },
+            });
+            void service.abortPrimarySession(sessionId!).catch(() => {});
+          },
           onTimeout: (silentMs) => {
             turnSettledByWatchdog = true;
             void service.abortPrimarySession(sessionId!).catch(() => {});
@@ -831,9 +844,22 @@ export function registerChatHandlers(): void {
         } finally {
           stopWatchdog();
         }
-        if (turnSettledByWatchdog) {
-          // The watchdog already reported failure; skip the success path that
-          // would overwrite it when the aborted prompt finally resolves.
+        if (turnSettledByWatchdog || turnSettledByProviderError) {
+          // Watchdog / provider-error path already reported failure; skip the
+          // success path that would overwrite it when the aborted prompt resolves.
+          // Still attach provider error via complete if the stream event raced.
+          if (turnSettledByProviderError && sessionId) {
+            const providerError = service.takeSessionProviderError(sessionId);
+            if (providerError) {
+              win.webContents.send("chat:complete", {
+                tabId,
+                sessionId,
+                success: false,
+                error: providerError,
+                errorCode: "provider_error",
+              });
+            }
+          }
           return;
         }
         if (isSendCancelled()) return;
@@ -887,10 +913,18 @@ export function registerChatHandlers(): void {
         }
       } catch (err: any) {
         if (turnSettledByWatchdog || isSendCancelled()) return;
+        const providerError = sessionId
+          ? service.takeSessionProviderError(sessionId)
+          : undefined;
+        if (turnSettledByProviderError && !providerError) return;
         log.error(`sendPrompt failed: ${err.message}`);
         clearPrepare();
         win.webContents.send("chat:complete", {
-          tabId, sessionId, success: false, error: err.message,
+          tabId,
+          sessionId,
+          success: false,
+          error: providerError || err.message,
+          errorCode: providerError ? "provider_error" : undefined,
         });
         return;
       }
@@ -1020,6 +1054,8 @@ export function registerChatHandlers(): void {
           effort: effortForSend,
         };
         if (getMapper(win).hasOpenTaskToolsForTab(tabId)) {
+          // ACP often skips Timeline-A / inject chunks — settle cards from SQLite now.
+          getMapper(win).reconcileOpenBackgroundTasks(tabId);
           deferTaskAllowlistFollowUp(sessionId, followUpOpts);
           log.info(
             `task-allowlist-follow-up: deferred until Tasks settle sessionId=${sessionId}`,
@@ -1057,18 +1093,76 @@ export function registerChatHandlers(): void {
       // turn that finishes without visible parts does not leave a stuck label.
       clearPrepare();
       if (isSendCancelled()) return;
+
+      // Background Tasks: parent may end_turn while children still run. OpenCode
+      // then injects results and auto-resumes the parent. If we chat:complete now,
+      // the renderer sets isStreaming=false and DROPS the resume stream — UI looks
+      // finished until the tab is reopened. Hold the turn until joins + resume quiet.
+      if (
+        !isSendCancelled()
+        && getMapper(win).hasBackgroundOpenTasksForTab(tabId)
+      ) {
+        log.info(
+          `deferring chat:complete until background Tasks settle sessionId=${sessionId}`,
+        );
+        win.webContents.send("chat:stream", {
+          tabId,
+          type: "turn.awaitingBackground",
+          data: { sessionId },
+        });
+        try {
+          await getMapper(win).waitForBackgroundTurnSettle(tabId);
+        } catch (err: unknown) {
+          log.warn(
+            `background turn settle failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+        if (isSendCancelled()) return;
+      }
+
       // OpenCode can resolve a failed provider turn with a bare end_turn and
-      // ZERO stream frames — flag it so the renderer shows a real error
-      // instead of a fake-successful, silently empty turn.
+      // ZERO stream frames — or keep the real error only in opencode.log.
       const emptyTurn = !bridge.hadTurnContent();
-      win.webContents.send("chat:complete", {
-        tabId, sessionId, success: true, tokenUsage: effectiveUsage,
-        contextBreakdown: fullBreakdown,
-        categorySchema: CONTEXT_CATEGORY_SCHEMA,
-        promptStale,
-        planDraftMissing: planDraftMissingThisTurn,
-        emptyTurn,
-      });
+      const providerError = sessionId
+        ? service.takeSessionProviderError(sessionId)
+        : undefined;
+      if (providerError) {
+        win.webContents.send("chat:complete", {
+          tabId,
+          sessionId,
+          success: false,
+          error: providerError,
+          errorCode: "provider_error",
+          tokenUsage: effectiveUsage,
+          contextBreakdown: fullBreakdown,
+          categorySchema: CONTEXT_CATEGORY_SCHEMA,
+          promptStale,
+          planDraftMissing: planDraftMissingThisTurn,
+        });
+      } else if (emptyTurn) {
+        win.webContents.send("chat:complete", {
+          tabId,
+          sessionId,
+          success: false,
+          errorCode: "emptyTurn",
+          tokenUsage: effectiveUsage,
+          contextBreakdown: fullBreakdown,
+          categorySchema: CONTEXT_CATEGORY_SCHEMA,
+          promptStale,
+          planDraftMissing: planDraftMissingThisTurn,
+          emptyTurn: true,
+        });
+      } else {
+        win.webContents.send("chat:complete", {
+          tabId, sessionId, success: true, tokenUsage: effectiveUsage,
+          contextBreakdown: fullBreakdown,
+          categorySchema: CONTEXT_CATEGORY_SCHEMA,
+          promptStale,
+          planDraftMissing: planDraftMissingThisTurn,
+        });
+      }
       } finally {
         finishInflightSend();
       }
@@ -1220,7 +1314,84 @@ export function registerChatHandlers(): void {
       }
       // Freeze panel stream + keep userStopped until Task tool_result rewrite.
       const linkedChild = mapper.freezeUserStoppedSubAgent(taskToolUseId);
-      // Register settlement waiter BEFORE abort — OpenCode may finish the
+      const isBackground = mapper.isBackgroundOpenTask(taskToolUseId);
+
+      // Background: parent Task tool already settled on "started" — do not wait
+      // for a second tool_result. Abort child, then complete locally.
+      if (isBackground) {
+        const exclude = new Set(
+          (args.excludeSessionIds ?? []).map((id) => id.trim()).filter(Boolean),
+        );
+        const collectCandidates = (): Set<string> => {
+          const next = new Set<string>();
+          const hint = args.subSessionId?.trim();
+          if (hint) next.add(hint);
+          if (linkedChild) next.add(linkedChild);
+          const resolved = service.resolveChildSessionForTask(
+            parentSessionId,
+            taskToolUseId,
+            hint,
+          );
+          if (resolved) next.add(resolved);
+          if (next.size === 0) {
+            for (const id of service.listChildSessionIds(parentSessionId)) {
+              if (!exclude.has(id)) next.add(id);
+            }
+          }
+          next.delete(parentSessionId);
+          for (const id of exclude) next.delete(id);
+          return next;
+        };
+
+        let candidates = collectCandidates();
+        for (let attempt = 0; attempt < 5 && candidates.size === 0; attempt++) {
+          await new Promise((r) => setTimeout(r, 200));
+          candidates = collectCandidates();
+        }
+
+        const aborted: string[] = [];
+        let anyAbortOk = false;
+        for (const childId of candidates) {
+          cancelAiCommandForSession(childId);
+          service.releaseSessionPendingWork(childId);
+          const result = await service.abortSubAgentSession(childId);
+          if (result.ok) {
+            anyAbortOk = true;
+            aborted.push(childId);
+          } else {
+            log.warn("chat:stopSubAgent child abort failed", {
+              childId,
+              error: result.error ?? "abort_failed",
+            });
+          }
+        }
+
+        if (candidates.size === 0 || !anyAbortOk) {
+          log.warn("chat:stopSubAgent background abort_failed", {
+            parent: parentSessionId,
+            taskToolUseId,
+            candidates: [...candidates],
+          });
+          return {
+            ok: false as const,
+            settled: false,
+            aborted,
+            error: "abort_failed" as const,
+          };
+        }
+
+        mapper.completeBackgroundTaskUserCancel(taskToolUseId, message);
+        log.info("chat:stopSubAgent background", {
+          parent: parentSessionId,
+          taskToolUseId,
+          linkedChild: linkedChild ?? null,
+          aborted,
+          settled: true,
+        });
+        return { ok: true as const, settled: true, aborted };
+      }
+
+      // Sync: Register settlement waiter BEFORE abort — OpenCode may finish the
       // parent Task immediately after HTTP abort (race if we wait afterward).
       const settlement = mapper.waitForUserStoppedTaskSettlement(taskToolUseId);
 

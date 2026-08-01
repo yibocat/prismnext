@@ -8,6 +8,7 @@ import {
   CircleIcon,
   Loader2Icon,
   ChevronDownIcon,
+  XIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -15,7 +16,6 @@ import {
   TOOL_EXPANDED_CONTENT_CLASS,
   StatusIcon,
 } from "./shared";
-import { ComposerChromeCard } from "../composer-chrome-card";
 
 function getTodoExpandedState(key: string): boolean {
   return localStorage.getItem(`todo:${key}`) === "open";
@@ -85,31 +85,34 @@ export const TodoWriteWidget = memo(function TodoWriteWidget({
   toolName,
   hostedInComposer = false,
   surface = "inline",
+  onDismiss,
 }: {
   toolUse: ContentBlock;
   toolName: string;
   hostedInComposer?: boolean;
-  surface?: "inline" | "composer";
+  /** `drawer` = under user bubble; `composer` kept for compat (same chrome as drawer). */
+  surface?: "inline" | "composer" | "drawer";
+  onDismiss?: () => void;
 }) {
   const { t } = useTranslation();
   const todos: Array<{ content: string; status: string }> = toolUse.input?.todos || [];
   const isStreaming = useChatStore((s) => s.isStreaming);
   const persistKey = toolUse.id || undefined;
-  const isComposer = surface === "composer";
+  const isDrawer = surface === "drawer" || surface === "composer";
 
   const [expanded, setExpanded] = useState(() => {
-    if (isComposer) return true;
+    if (isDrawer) return true;
     return persistKey ? getTodoExpandedState(persistKey) : false;
   });
 
   useEffect(() => {
-    if (isComposer || !persistKey) return;
+    if (isDrawer || !persistKey) return;
     saveTodoExpandedState(persistKey, expanded);
-  }, [persistKey, expanded, isComposer]);
+  }, [persistKey, expanded, isDrawer]);
 
   useEffect(() => {
-    if (isComposer) setExpanded(true);
-  }, [toolUse.id, isComposer]);
+    if (isDrawer) setExpanded(true);
+  }, [toolUse.id, isDrawer]);
 
   if (todos.length === 0) return null;
 
@@ -117,7 +120,7 @@ export const TodoWriteWidget = memo(function TodoWriteWidget({
   const hasInProgress = todos.some((item) => item.status === "in_progress");
   const allDone = completed === todos.length;
   const isLoading = isStreaming && hasInProgress && !allDone;
-  const title = isComposer ? t("chat.composer.taskPlanTitle") : toolName;
+  const title = isDrawer ? t("chat.composer.taskPlanTitle") : toolName;
 
   if (hostedInComposer) {
     return (
@@ -133,38 +136,61 @@ export const TodoWriteWidget = memo(function TodoWriteWidget({
     );
   }
 
-  if (isComposer) {
+  if (isDrawer) {
     return (
-      <ComposerChromeCard className="px-3 py-2.5">
-        <button
-          type="button"
-          className="flex w-full items-start gap-2 text-left"
-          onClick={() => setExpanded((prev) => !prev)}
-        >
-          <ListTodoIcon className="mt-0.5 size-3.5 shrink-0 text-plan" />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-              <span className="text-[length:var(--font-chat-meta)] font-medium text-foreground">
-                {title}
-              </span>
-              <span className="text-[length:var(--font-chat-meta)] tabular-nums text-muted-foreground">
-                ({completed}/{todos.length})
-              </span>
-              {isLoading ? (
-                <span className="inline-flex items-center gap-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
-                  <Loader2Icon className="size-3 shrink-0 animate-spin" />
-                  {t("chat.composer.taskPlanInProgress")}
+      // Flush under bubble; fill/border match AI-reply tool expand (TOOL_EXPANDED_CONTENT_CLASS).
+      <div
+        className={cn(
+          TOOL_EXPANDED_CONTENT_CLASS,
+          "mx-3 my-0 rounded-b-md rounded-t-none border-t-0 animate-none",
+        )}
+      >
+        <div className="flex items-start gap-1.5">
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-start gap-2 text-left"
+            onClick={() => setExpanded((prev) => !prev)}
+          >
+            <ListTodoIcon className="mt-0.5 size-3.5 shrink-0 text-plan" />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="text-[length:var(--font-chat-meta)] font-medium text-foreground">
+                  {title}
                 </span>
-              ) : null}
+                <span className="text-[length:var(--font-chat-meta)] tabular-nums text-muted-foreground">
+                  ({completed}/{todos.length})
+                </span>
+                {isLoading ? (
+                  <span className="inline-flex items-center gap-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
+                    <Loader2Icon className="size-3 shrink-0 animate-spin" />
+                    {t("chat.composer.taskPlanInProgress")}
+                  </span>
+                ) : null}
+              </div>
             </div>
-          </div>
-          <ChevronDownIcon
-            className={cn(
-              "mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
-              expanded ? "rotate-0" : "-rotate-90",
-            )}
-          />
-        </button>
+            <ChevronDownIcon
+              className={cn(
+                "mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
+                expanded ? "rotate-0" : "-rotate-90",
+              )}
+            />
+          </button>
+          {onDismiss ? (
+            <button
+              type="button"
+              // No mt-0.5: p-0.5 already matches the ListTodo/Chevron optical offset.
+              className="rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label={t("chat.composer.taskPlanDismiss")}
+              title={t("chat.composer.taskPlanDismiss")}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDismiss();
+              }}
+            >
+              <XIcon className="size-3.5" />
+            </button>
+          ) : null}
+        </div>
         {expanded ? (
           <div className="mt-2 border-t border-border pt-2">
             <TodoListItems
@@ -174,7 +200,7 @@ export const TodoWriteWidget = memo(function TodoWriteWidget({
             />
           </div>
         ) : null}
-      </ComposerChromeCard>
+      </div>
     );
   }
 

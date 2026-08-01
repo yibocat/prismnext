@@ -26,4 +26,14 @@ describe("taskActivityEmptyHint", () => {
       taskActivityEmptyHint({ status: "running", blocks: [], linkDegraded: true }),
     ).toBe("activityLinking");
   });
+
+  it("does not show activityMissing when done with blocks even if linkDegraded", () => {
+    expect(
+      taskActivityEmptyHint({
+        status: "done",
+        blocks: [{ type: "text", text: "hi" }],
+        linkDegraded: true,
+      }),
+    ).toBeNull();
+  });
 });

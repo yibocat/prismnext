@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CHAT_CHROME_BUTTON_TEXT } from "../worktree-selector";
 import { StatusIcon, param } from "./shared";
+import { isBackgroundTaskStartedResult } from "@shared/opencode-background-task";
 
 /** OpenCode built-in subagent types */
 const OPENCODE_AGENT_META: Record<string, { label: string; desc: string }> = {
@@ -78,7 +79,7 @@ export function taskActivityEmptyHint(run: {
   if (run.status === "running" && run.linkDegraded && run.blocks.length === 0) {
     return "activityLinking";
   }
-  if (run.status === "done" && (run.blocks.length === 0 || run.linkDegraded)) {
+  if (run.status === "done" && run.blocks.length === 0) {
     return "activityMissing";
   }
   return null;
@@ -106,11 +107,22 @@ export const TaskWidget = memo(function TaskWidget({
   const cancelSubAgentRun = useChatStore((s) => s.cancelSubAgentRun);
 
   const isStopping = subAgentRun?.status === "stopping";
+  const bgStartedStub =
+    !!toolResult
+    && isBackgroundTaskStartedResult({
+      rawInput: toolUse.input ?? toolUse._backfillInput,
+      content: toolResult.content,
+    });
+  // Background Tasks get an early tool_result ("started") while the child still runs —
+  // drive loading from SubAgentRun status, not merely presence of tool_result.
   const isLoading =
     isStopping
+    || subAgentRun?.status === "running"
+    || (bgStartedStub && subAgentRun?.status !== "done" && subAgentRun?.status !== "error")
     || (!toolResult && subAgentRun?.status !== "done" && subAgentRun?.status !== "error");
   const isError =
     !!(toolResult?.is_error || (subAgentRun?.status === "error" && subAgentRun?.error));
+  const isBackground = subAgentRun?.mode === "background" || bgStartedStub;
 
   const prompt =
     param(toolUse.input, "prompt")
@@ -132,9 +144,11 @@ export const TaskWidget = memo(function TaskWidget({
   const statusLine = isStopping
     ? t("chat.subagent.stopping")
     : isLoading
-      ? (activityHintKey === "activityLinking"
-        ? t("chat.subagent.activityLinkingShort")
-        : t("chat.subagent.running"))
+      ? (isBackground
+        ? t("chat.subagent.backgroundRunning")
+        : activityHintKey === "activityLinking"
+          ? t("chat.subagent.activityLinkingShort")
+          : t("chat.subagent.running"))
       : isError
         ? t("chat.subagent.stopped")
         : t("chat.subagent.done");
@@ -150,28 +164,31 @@ export const TaskWidget = memo(function TaskWidget({
       : (promptPreview || t("chat.subagent.openHint"));
 
   return (
-    <div className="group flex w-full min-w-0 max-w-full items-center gap-0.5 rounded-md hover:bg-muted">
+    <div className="group flex w-full min-w-0 max-w-full items-center gap-0.5">
       <button
         type="button"
         className={cn(
-          "flex min-w-0 flex-1 flex-col gap-0.5 py-1.5 pl-1.5 pr-1 text-left",
-          "text-[length:var(--font-chat-message)]",
+          "flex min-w-0 flex-1 cursor-pointer flex-col gap-0.5 py-1.5 pl-1.5 pr-1 text-left",
+          "text-[length:var(--font-chat-message)] text-muted-foreground/65",
+          "transition-colors hover:text-muted-foreground/80",
+          "outline-none focus:outline-none focus-visible:outline-none",
         )}
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => {
           if (toolUseId) openSubAgentPanel(toolUseId);
         }}
       >
         <div className="flex min-w-0 items-center gap-2">
           <StatusIcon isLoading={!!isLoading} isError={!!isError} />
-          <BotIcon className="size-3.5 shrink-0 text-primary" />
-          <span className="min-w-0 truncate font-medium text-foreground/90">
+          <BotIcon className="size-3.5 shrink-0 opacity-80" />
+          <span className="min-w-0 truncate font-medium">
             Task @{meta.label}
           </span>
-          <span className="shrink-0 text-[length:var(--font-chat-meta)] text-muted-foreground">
+          <span className="shrink-0 text-[length:var(--font-chat-meta)]">
             {statusLine}
           </span>
         </div>
-        <div className="min-w-0 truncate pl-[1.625rem] text-[length:var(--font-chat-meta)] text-muted-foreground">
+        <div className="min-w-0 truncate pl-[1.625rem] text-[length:var(--font-chat-meta)]">
           {secondLine}
         </div>
       </button>

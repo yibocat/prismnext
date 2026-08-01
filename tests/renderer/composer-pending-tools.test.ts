@@ -1,12 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import type { ChatStreamMessage, ContentBlock } from "../../src/renderer/stores/chat-store";
 import {
   findComposerPendingQuestion,
   findComposerPendingTodo,
+  findMessageTodoPlan,
+  findOpenTodoPlan,
   composerToolsSuppressedOnSessionHydrate,
   questionNeedsUserAnswer,
+  resolveTodoPlanAnchorUserMessageIndex,
   selectComposerHostedQuestionId,
   selectComposerHostedTodoId,
+  dismissTodoPlan,
+  isTodoPlanDismissed,
 } from "../../src/renderer/lib/chat/composer-pending-tools";
 
 function assistantMsg(blocks: ContentBlock[]): ChatStreamMessage {
@@ -27,6 +32,22 @@ function resultMsg(toolUseId: string, content: string): ChatStreamMessage {
 }
 
 describe("composer-pending-tools", () => {
+  beforeEach(() => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { store.set(k, v); },
+      removeItem: (k: string) => { store.delete(k); },
+      clear: () => { store.clear(); },
+      key: () => null,
+      length: 0,
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("finds pending question in active turn", () => {
     const messages = [
       userMsg("hi"),
@@ -105,11 +126,26 @@ describe("composer-pending-tools", () => {
     ];
     const pending = findComposerPendingTodo({ messages, streamingMessage: null, chromeLive: true });
     expect(pending?.toolUse.id).toBe("t-old");
+    const plan = findMessageTodoPlan({ messages, streamingMessage: null });
+    expect(plan?.toolUse.id).toBe("t-old");
+    // Open plan follows the latest user ("continue")
+    expect(plan?.anchorUserMessageIndex).toBe(2);
   });
 
-  it("does not resume a fully completed session todo in a new turn", () => {
+  it("pins completed plan under the user bubble current when it finished", () => {
     const messages = [
-      userMsg("go"),
+      userMsg("debug"),
+      assistantMsg([
+        {
+          type: "tool_use",
+          id: "t-done",
+          name: "todowrite",
+          input: {
+            todos: [{ content: "Step 1", status: "in_progress" }],
+          },
+        },
+      ]),
+      userMsg("continue"),
       assistantMsg([
         {
           type: "tool_use",
@@ -122,10 +158,62 @@ describe("composer-pending-tools", () => {
       ]),
       userMsg("thanks"),
     ];
+    // Open-plan helpers must not resume completed plans into a new turn
+    expect(findOpenTodoPlan({ messages, streamingMessage: null })).toBeNull();
     expect(findComposerPendingTodo({ messages, streamingMessage: null, chromeLive: true })).toBeNull();
+
+    const plan = findMessageTodoPlan({ messages, streamingMessage: null });
+    expect(plan?.toolUse.id).toBe("t-done");
+    // Completed while "continue" was the latest user → pin at index 2, not "thanks"
+    expect(plan?.anchorUserMessageIndex).toBe(2);
   });
 
-  it("hides composer todo when session chrome is suppressed after cold load", () => {
+  it("open plan anchors to the latest user message", () => {
+    const messages = [
+      userMsg("go"),
+      assistantMsg([
+        {
+          type: "tool_use",
+          id: "t1",
+          name: "todowrite",
+          input: { todos: [{ content: "Step 1", status: "pending" }] },
+        },
+      ]),
+      userMsg("keep going"),
+    ];
+    expect(
+      resolveTodoPlanAnchorUserMessageIndex({
+        messages,
+        streamingMessage: null,
+        toolUse: {
+          type: "tool_use",
+          id: "t1",
+          name: "todowrite",
+          input: { todos: [{ content: "Step 1", status: "pending" }] },
+        },
+      }),
+    ).toBe(2);
+  });
+
+  it("hides message todo after dismiss (UI only)", () => {
+    const messages = [
+      userMsg("go"),
+      assistantMsg([
+        {
+          type: "tool_use",
+          id: "t1",
+          name: "todowrite",
+          input: { todos: [{ content: "Step 1", status: "pending" }] },
+        },
+      ]),
+    ];
+    expect(findMessageTodoPlan({ messages, streamingMessage: null })?.toolUse.id).toBe("t1");
+    dismissTodoPlan("t1");
+    expect(isTodoPlanDismissed("t1")).toBe(true);
+    expect(findMessageTodoPlan({ messages, streamingMessage: null })).toBeNull();
+  });
+
+  it("hides composer question when session chrome is suppressed after cold load", () => {
     const messages = [
       userMsg("go"),
       assistantMsg([
@@ -152,6 +240,8 @@ describe("composer-pending-tools", () => {
       streamingMessage: null,
       chromeLive: false,
     })).toBeNull();
+    // Message drawer still shows open todos (ignores composerToolsSuppressed)
+    expect(selectComposerHostedTodoId(state)).toBe("t1");
     expect(selectComposerHostedQuestionId({
       ...state,
       tabs: [{
@@ -166,7 +256,7 @@ describe("composer-pending-tools", () => {
     })).toBeNull();
   });
 
-  it("shows composer todo again when chrome is live", () => {
+  it("shows message todo when chrome is live", () => {
     const messages = [
       userMsg("go"),
       assistantMsg([

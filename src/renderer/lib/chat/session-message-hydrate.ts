@@ -133,15 +133,16 @@ export async function hydrateSessionMessages(
 
   stripSystemPromptFromDisplay(filtered, hasSystemPromptBlock);
 
+  // Drop silent Approve/Deny user kicks *before* display snapshots so they do
+  // not consume a snapshot slot and shift 「继续」onto an earlier bubble.
+  filtered = stripPlanControlTurns(filtered);
+
   try {
     const displays = await window.electronAPI.sessionGetUserDisplays(projectPath, sessionId);
     if (displays?.length) {
       filtered = applyUserDisplaySnapshots(filtered, displays);
     }
   } catch { /* best-effort */ }
-
-  // Remove silent Approve/Deny user kicks only (keep Build execution assistants).
-  filtered = stripPlanControlTurns(filtered);
 
   try {
     const planEvents = await window.electronAPI.sessionGetPlanEvents(projectPath, sessionId);

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /** Shared height for AiBar + Task run float panels (CSS length). */
-export const CHAT_FLOAT_PANEL_HEIGHT = "min(72vh, 720px)";
+export const CHAT_FLOAT_PANEL_HEIGHT = "min(78vh, 780px)";
 
 /**
  * Shared float shell for AiBar run panel and Task/subagent run panel —
@@ -53,7 +53,7 @@ export const ChatFloatPanel = forwardRef<
       {...attrProps}
       className={cn(
         "relative flex w-full min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card",
-        fillHeight ? "h-full" : "max-h-[min(72vh,720px)]",
+        fillHeight ? "h-full" : "max-h-[min(78vh,780px)]",
         className,
       )}
       {...rest}

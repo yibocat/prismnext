@@ -24,6 +24,8 @@ export const TurnAssistantContent = memo(function TurnAssistantContent({
   sessionId,
   turnIndex,
   streamingMessage,
+  /** True for the whole user turn while the tab is still streaming (incl. gaps between assistant rounds). */
+  turnLive = false,
   planReplyFallbackSummary,
 }: {
   responses: Array<{ msg: ChatStreamMessage; displayIdx: number }>;
@@ -31,6 +33,7 @@ export const TurnAssistantContent = memo(function TurnAssistantContent({
   sessionId: string;
   turnIndex: number;
   streamingMessage: ChatStreamMessage | null;
+  turnLive?: boolean;
   planReplyFallbackSummary?: string | null;
 }) {
   const { blocks, hasStopped } = useMemo(
@@ -38,11 +41,17 @@ export const TurnAssistantContent = memo(function TurnAssistantContent({
     [responses],
   );
 
+  // Prefer turnLive: OpenCode often commits assistant message N and briefly
+  // clears streamingMessage before N+1 — treating that as "settled" mounted
+  // Worked-for mid-turn, remounted burst folds, and scroll jumps.
   const isStreamingMsg = useMemo(
     () =>
-      !!streamingMessage
-      && responses.some(({ msg }) => msg === streamingMessage),
-    [responses, streamingMessage],
+      turnLive
+      || (
+        !!streamingMessage
+        && responses.some(({ msg }) => msg === streamingMessage)
+      ),
+    [turnLive, responses, streamingMessage],
   );
 
   const msgIndex = responses[0]?.displayIdx ?? turnIndex;

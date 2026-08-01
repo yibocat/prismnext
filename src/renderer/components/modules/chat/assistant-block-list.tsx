@@ -18,9 +18,11 @@ import {
   isThinkingBlockStreaming,
   segmentAssistantBlocks,
 } from "@/lib/chat/segment-assistant-blocks";
-import { hasUnsettledTaskTool } from "./tools/tool-result-map";
 
-/** Shared assistant block renderer for main chat and Task expert activity. */
+/**
+ * Live: contiguous thought+tools → burst folds; Task standalone; prose outside.
+ * Settled / history: one Worked-for fold through the last process block; final reply out.
+ */
 export const AssistantBlockList = memo(function AssistantBlockList({
   blocks,
   toolResultMap,
@@ -28,7 +30,6 @@ export const AssistantBlockList = memo(function AssistantBlockList({
   isStreamingMsg,
   sessionId,
   foldActivity = true,
-  suppressTailUntilTaskSettled: suppressTailOverride,
   turnKey,
   planReplyFallbackSummary,
 }: {
@@ -38,11 +39,6 @@ export const AssistantBlockList = memo(function AssistantBlockList({
   isStreamingMsg?: boolean;
   sessionId: string;
   foldActivity?: boolean;
-  /**
-   * When set, overrides Task-tail suppress. Subagent run panel passes false so
-   * trailing reply text streams outside the activity fold while live.
-   */
-  suppressTailUntilTaskSettled?: boolean;
   /** Stable key for activity-fold persistence (turn-level). */
   turnKey?: string;
   /** Frontmatter description when Plan draft awaits Approve & Build but model omitted chat prose. */
@@ -51,6 +47,8 @@ export const AssistantBlockList = memo(function AssistantBlockList({
   const thinkingComplete = blocks.some(
     (b) => b.type === "text" || b.type === "tool_use",
   );
+  const settled = !isStreamingMsg;
+  const phase = settled ? "settled" : "live";
 
   const missingArtifacts = isStreamingMsg
     ? []
@@ -72,31 +70,33 @@ export const AssistantBlockList = memo(function AssistantBlockList({
       );
 
   const segments = useMemo(
-    () => {
-      if (!foldActivity) return null;
-      const suppressTailUntilTaskSettled =
-        suppressTailOverride ?? hasUnsettledTaskTool(blocks, toolResultMap);
-      return segmentAssistantBlocks(blocks, {
-        unifiedActivity: true,
-        suppressTailUntilTaskSettled,
-      });
-    },
-    [blocks, foldActivity, toolResultMap, suppressTailOverride],
+    () => (foldActivity ? segmentAssistantBlocks(blocks, { phase }) : null),
+    [blocks, foldActivity, phase],
   );
 
   const lastActivitySegmentIndex = useMemo(() => {
     if (!segments) return -1;
     for (let i = segments.length - 1; i >= 0; i--) {
-      if (segments[i]?.kind === "activity") return i;
+      const kind = segments[i]?.kind;
+      if (kind === "activity" || kind === "worked") return i;
     }
     return -1;
   }, [segments]);
+
+  // Streaming caret only on the tip of the turn — not every interim prose block.
+  const lastFlatTextIndex = useMemo(() => {
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      const b = blocks[i]!;
+      if (b.type === "text" && b.text?.trim()) return i;
+    }
+    return -1;
+  }, [blocks]);
 
   const renderFlatBlock = (block: ContentBlock, i: number) => {
     if (block.type === "thinking" && block.thinking) {
       return (
         <ThinkingWidget
-          key={i}
+          key={`think-${i}`}
           thinking={block.thinking}
           duration={block.duration}
           sessionId={sessionId}
@@ -111,11 +111,18 @@ export const AssistantBlockList = memo(function AssistantBlockList({
       );
     }
     if (block.type === "text" && block.text) {
+      const animateTip =
+        !!isStreamingMsg
+        && i === lastFlatTextIndex
+        && i === blocks.length - 1;
       return (
-        <div key={i} className="min-w-0 max-w-full overflow-hidden text-[length:var(--font-chat-message)]">
+        <div
+          key={`text-${i}`}
+          className="min-w-0 max-w-full overflow-hidden text-[length:var(--font-chat-message)]"
+        >
           <MarkdownRenderer
             content={block.text}
-            isAnimating={isStreamingMsg}
+            isAnimating={animateTip}
             sessionId={sessionId}
           />
         </div>
@@ -126,7 +133,7 @@ export const AssistantBlockList = memo(function AssistantBlockList({
       const planPath = planPathFromToolUse(block);
       const showPlanCard = !!planPath && !!result && !result.is_error;
       return (
-        <div key={i}>
+        <div key={`tool-${block.id ?? i}`}>
           <ToolWidget
             toolUse={block}
             toolResult={result}
@@ -146,6 +153,8 @@ export const AssistantBlockList = memo(function AssistantBlockList({
       {foldActivity && segments
         ? segments.map((segment, segIndex) => {
             if (segment.kind === "text") {
+              const animateTip =
+                !!isStreamingMsg && segIndex === segments.length - 1;
               return (
                 <div
                   key={`text-${segment.blockIndex}`}
@@ -153,29 +162,59 @@ export const AssistantBlockList = memo(function AssistantBlockList({
                 >
                   <MarkdownRenderer
                     content={segment.block.text!}
-                    isAnimating={isStreamingMsg}
+                    isAnimating={animateTip}
                     sessionId={sessionId}
                   />
                 </div>
               );
             }
-            // Freeze activity timer once trailing prose exists — do not count
-            // final answer streaming toward Worked for.
+            // Task / subagent — own card while live (settled: nested under Worked for).
+            if (segment.kind === "tool") {
+              const result = toolResultMap.get(segment.block.id || "");
+              return (
+                <div key={`tool-${segment.block.id ?? segment.blockIndex}`}>
+                  <ToolWidget
+                    toolUse={segment.block}
+                    toolResult={result}
+                    suppressArtifactPaths={suppressArtifactPaths}
+                  />
+                </div>
+              );
+            }
+            if (segment.kind === "worked") {
+              return (
+                <ActivityFold
+                  key={`worked-${foldPersistBase}`}
+                  blocks={segment.blocks}
+                  blockIndices={segment.blockIndices}
+                  toolResultMap={toolResultMap}
+                  sessionId={sessionId}
+                  persistKey={`${foldPersistBase}:worked`}
+                  isStreamingSegment={false}
+                  messageThinkingComplete={thinkingComplete}
+                  suppressArtifactPaths={suppressArtifactPaths}
+                  turnSettled
+                  childrenSegments={segment.children}
+                />
+              );
+            }
+            const foldKey = segment.blockIndices[0] ?? segIndex;
             const isStreamingSegment =
               !!isStreamingMsg
               && segIndex === lastActivitySegmentIndex
               && segments[segments.length - 1]?.kind === "activity";
             return (
               <ActivityFold
-                key={`activity-${segment.blockIndices[0] ?? segIndex}`}
+                key={`activity-${foldKey}`}
                 blocks={segment.blocks}
                 blockIndices={segment.blockIndices}
                 toolResultMap={toolResultMap}
                 sessionId={sessionId}
-                persistKey={`${foldPersistBase}:a${segIndex}`}
+                persistKey={`${foldPersistBase}:a${foldKey}`}
                 isStreamingSegment={isStreamingSegment}
                 messageThinkingComplete={thinkingComplete}
                 suppressArtifactPaths={suppressArtifactPaths}
+                turnSettled={false}
               />
             );
           })

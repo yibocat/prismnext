@@ -156,22 +156,6 @@ export function buildToolResultMap(
   return map;
 }
 
-/** True when a Task tool_use in `blocks` has no terminal tool_result yet. */
-export function hasUnsettledTaskTool(
-  blocks: ContentBlock[],
-  toolResultMap: Map<string, ContentBlock>,
-): boolean {
-  for (const block of blocks) {
-    if (block.type !== "tool_use") continue;
-    if ((block.name || "").toLowerCase() !== "task" || !block.id) continue;
-    const result = toolResultMap.get(block.id);
-    if (!result) return true;
-    const status = (result as ContentBlock & { status?: string }).status;
-    if (status && isActiveToolStatus(status)) return true;
-  }
-  return false;
-}
-
 /** Same as buildToolResultMap but for a flat activity block list (e.g. subAgent runs). */
 export function buildToolResultMapFromBlocks(
   blocks: ContentBlock[],

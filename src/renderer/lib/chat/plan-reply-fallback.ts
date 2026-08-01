@@ -9,7 +9,7 @@ import type { ContentBlock } from "@/stores/chat-store";
 import { segmentAssistantBlocks } from "@/lib/chat/segment-assistant-blocks";
 
 export function hasTrailingProseInBlocks(blocks: ContentBlock[]): boolean {
-  const segments = segmentAssistantBlocks(blocks, { unifiedActivity: true });
+  const segments = segmentAssistantBlocks(blocks, { phase: "settled" });
   return segments.some(
     (seg) => seg.kind === "text" && !!seg.block.text?.trim(),
   );

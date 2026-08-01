@@ -22,7 +22,7 @@ export function buildExpertTeamPreamble(experts: ExpertTeamPreambleEntry[]): str
     "You are the **orchestrator** in this conversation — you are NOT any of the subagents below.",
     "Do **not** assume their identity, speak as them, or do their specialty work with platform tools in this turn.",
     "You **must** call the Task tool once per listed id (`subagent_type` = that id) with a focused sub-prompt for the user's request.",
-    "This turn's Task allowlist is only these ids (other Task targets are denied). After Task results return, synthesize for the user.",
+    "This turn's Task allowlist is only these ids (other Task targets are denied). You may set Task `background: true` when you can continue other work before joining results; omit `background` to wait synchronously. After Task results return (or background completion arrives), synthesize for the user.",
     ...lines,
     "---",
   ].join("\n");

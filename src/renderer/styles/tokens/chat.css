@@ -12,7 +12,7 @@
 :root {
   /*
    * Chat typography — two rem steps only (both scale with Appearance → UI Font):
-   *   body   (14) — message text, tool titles, thinking
+   *   body   (14) — message text, tool titles, thinking; also Files .md preview body
    *   chrome (13) — composer, toolbar, meta labels, inline/code, session list
    * Hierarchy inside chrome uses color / weight, not a third size.
    * Micro badges (10) stay on shared layout tokens outside this ladder.
