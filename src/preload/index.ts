@@ -501,7 +501,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			doi?: string;
 			arxivId?: string;
 			sourceUrl?: string;
-			discoveredFrom?: "paper-search-mcp" | "websearch" | "webfetch" | "user" | "agent";
+			discoveredFrom?: "literature-discover" | "paper-search-mcp" | "websearch" | "webfetch" | "user" | "agent";
 		},
 	) => ipcRenderer.invoke("literature:stage", { projectRoot, ...args }),
 	literatureApplyMetadata: (projectRoot: string, paperId: string, metadata: Record<string, unknown>) =>
@@ -808,28 +808,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	mcpEnsure: (projectPath: string) =>
 		ipcRenderer.invoke("mcp:ensure", { projectPath }) as Promise<{
 			ok: boolean;
-			health: {
-				status: "ready" | "degraded";
-				mode: "npx";
-				detail: string;
+			ensure?: {
+				added?: boolean;
+				migrated?: boolean;
+				reenabled?: boolean;
+				removed?: boolean;
 			};
+			reloadedSessions?: number;
 		}>,
 	mcpApply: (projectPath: string) =>
 		ipcRenderer.invoke("mcp:apply", { projectPath }) as Promise<{
 			ok: boolean;
 			reloadedSessions: number;
 			error?: string;
-			health?: {
-				status: "ready" | "degraded";
-				mode: "npx";
-				detail: string;
-			};
-		}>,
-	mcpPaperSearchHealth: () =>
-		ipcRenderer.invoke("mcp:paperSearchHealth") as Promise<{
-			status: "ready" | "degraded";
-			mode: "npx";
-			detail: string;
 		}>,
 	agentListSkills: (projectPath: string) => ipcRenderer.invoke("agent:listSkills", { projectPath }),
 	agentListRules: (projectPath: string) => ipcRenderer.invoke("agent:listRules", { projectPath }),

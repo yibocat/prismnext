@@ -8,7 +8,16 @@ import {
 } from "../../src/main/acp/tool-name-infer";
 
 describe("inferToolNameFromInput", () => {
-  it("maps literature-search when query and limit are present", () => {
+  it("maps literature-discover when discover-only fields are present", () => {
+    expect(inferToolNameFromInput({ query: "fuzzy neural network", limit: 10, year: "2024-2026" })).toBe(
+      "literature-discover",
+    );
+    expect(inferToolNameFromInput({ query: "topic", sources: ["arxiv"], limit: 8 })).toBe(
+      "literature-discover",
+    );
+  });
+
+  it("maps literature-search when query and limit are present without discover fields", () => {
     expect(inferToolNameFromInput({ query: "Choquet", limit: 20 })).toBe("literature-search");
   });
 
@@ -46,6 +55,18 @@ describe("inferToolNameFromInput", () => {
 });
 
 describe("inferToolNameFromOutput", () => {
+  it("detects literature-discover results by hits + source", () => {
+    const raw = {
+      output: JSON.stringify({
+        query: "fuzzy neural network",
+        sourcesQueried: ["arxiv", "crossref"],
+        sourcesFailed: [],
+        hits: [{ id: "x", title: "Test", authors: [], source: "arxiv", doi: "10.1/example" }],
+      }),
+    };
+    expect(inferToolNameFromOutput(raw)).toBe("literature-discover");
+  });
+
   it("detects literature-search results by bibkey", () => {
     const raw = {
       output: JSON.stringify({
@@ -66,6 +87,7 @@ describe("inferToolNameFromOutput", () => {
 describe("resolveLiteratureToolTitle", () => {
   it("accepts literature tool titles", () => {
     expect(resolveLiteratureToolTitle("literature-search")).toBe("literature-search");
+    expect(resolveLiteratureToolTitle("literature-discover")).toBe("literature-discover");
     expect(resolveLiteratureToolTitle("literature-add")).toBe("literature-add");
     expect(resolveLiteratureToolTitle("literature-stage")).toBe("literature-stage");
   });
@@ -128,6 +150,7 @@ describe("resolvePrismToolTitle", () => {
     expect(resolvePrismToolTitle("latex-compile")).toBe("latex-compile");
     expect(resolvePrismToolTitle("latex-root")).toBe("latex-root");
     expect(resolvePrismToolTitle("literature-export-bib")).toBe("literature-export-bib");
+    expect(resolvePrismToolTitle("literature-discover")).toBe("literature-discover");
     expect(resolvePrismToolTitle("literature-delete")).toBe("literature-delete");
     expect(resolvePrismToolTitle("  LITERATURE-READ  ")).toBe("literature-read");
   });

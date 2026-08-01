@@ -12,9 +12,11 @@ import { InteractionChatThumbnail } from "@/lib/interaction/interaction-chat-thu
 import { openInteractionPanel } from "@/lib/interaction/open-interaction-panel";
 import { parseInteractionFenceContent } from "./chat-interaction";
 import { claimInteractionFenceSlot } from "@/lib/interaction/interaction-fence-dedupe";
+import {
+  CHAT_ARTIFACT_THUMB_SHELL_CLASS,
+} from "@/lib/markdown/chat-artifact";
 
-const PEEK_CARD_SHELL =
-  "my-2 w-full max-w-full overflow-hidden rounded-lg border border-border/50 bg-muted/20 text-left";
+const PEEK_CARD_SHELL = cn(CHAT_ARTIFACT_THUMB_SHELL_CLASS, "text-left");
 
 export function ChatInteractionBlock({
   id,

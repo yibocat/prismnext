@@ -12,6 +12,8 @@ export interface PromptContext {
   customRules?: Array<{ name: string; content: string }>;
   /** Module keys enabled for the current agent profile (e.g. ["citations"]). */
   profileModules?: string[];
+  /** Profile module labels/descriptions for sibling modules (excludes proactive-scheduling). */
+  profileModuleSummaries?: Array<{ key: string; label: string; description: string }>;
 }
 
 /** A single layer in the prompt stack. */

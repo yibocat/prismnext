@@ -14,7 +14,7 @@ export const StreamingCodeFrame = memo(function StreamingCodeFrame({
   return (
     <div className="my-4 max-w-full overflow-hidden rounded-lg border border-border">
       {/* Header bar */}
-      <div className="flex items-center justify-between px-4 py-1.5 bg-muted/50 border-b border-border">
+      <div className="flex items-center justify-between border-b border-border-subtle bg-muted/50 px-4 py-1.5">
         <span className="text-xs text-muted-foreground font-mono">
           {lang || "text"}
         </span>

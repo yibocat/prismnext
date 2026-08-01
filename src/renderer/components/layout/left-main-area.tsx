@@ -247,7 +247,7 @@ export function LeftMainArea() {
           <div
             ref={chatFileDropZoneRef}
             className={cn(
-              "relative z-10 flex min-w-0 flex-1 flex-col items-center justify-center overflow-x-hidden @xl:pb-[var(--height-titlebar)]",
+              "relative z-10 flex min-w-0 flex-1 flex-col items-center justify-end overflow-x-hidden @xl:justify-center @xl:pb-[var(--height-titlebar)]",
               chatFileDragActive && chatFileDropZoneClass,
             )}
             {...chatFileDropHandlers}

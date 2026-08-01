@@ -568,7 +568,7 @@ export function PdfViewerInner({
       <PdfLinkCapture />
       {/* Toolbar — omitted for chat lightbox / compact peeks */}
       {!hideToolbar ? (
-        <div data-surface="content" className="flex h-[var(--height-right-area-subtoolbar)] shrink-0 items-center gap-0.5 border-b border-border bg-background px-2 text-[length:var(--font-toolbar-label)]">
+        <div data-surface="content" className="flex h-[var(--height-right-area-subtoolbar)] shrink-0 items-center gap-0.5 border-b border-[var(--toolbar-edge-line)] bg-background px-2 text-[length:var(--font-toolbar-label)]">
           {/* Left: side panel toggles */}
           <div className="flex items-center gap-0.5">
             {PANEL_TOGGLES.map((t) => (
@@ -711,7 +711,7 @@ export function PdfViewerInner({
       {/* Body: Side Panel + Pages */}
       <div className="relative flex flex-1 min-h-0">
         {!hideToolbar && panelOpen && (
-          <div data-surface="sidebar" className="shrink-0 border-r border-border bg-sidebar overflow-hidden" style={{ width: PANEL_WIDTH }}>
+          <div data-surface="sidebar" className="shrink-0 border-r border-[var(--sidebar-edge-line)] bg-sidebar overflow-hidden" style={{ width: PANEL_WIDTH }}>
             {sidePanel === "outline" && <OutlinePanel onJump={() => setSidePanel(null)} />}
             {sidePanel === "search" && <SearchPanel />}
             {sidePanel === "thumbnails" && <ThumbnailsPanel />}

@@ -7,7 +7,7 @@ import { LITERATURE_LIBRARY_PROMPT } from "./literature-library";
 import { TASK_DELEGATION_PROMPT } from "./task-delegation";
 import { RESEARCH_REASONING_PROMPT } from "./research-reasoning";
 import { REPLY_DEPTH_PROMPT } from "./reply-depth";
-import { PROACTIVE_SCHEDULING_PROMPT } from "./proactive-scheduling";
+import { buildProactiveSchedulingPrompt } from "./proactive-scheduling";
 import { RESEARCH_DESIGN_PROMPT } from "./research-design";
 import { EXPERIMENTS_PROMPT } from "./experiments";
 import { INTERACTION_PROMPT } from "./interaction";
@@ -110,11 +110,11 @@ export const ALL_MODULES: PromptModule[] = [
     key: "proactive-scheduling",
     label: "Proactive Scheduling (orchestrator)",
     description:
-      "Orchestrator decides which capabilities a task needs and acts — tool & delegation judgment, not scripted sequences.",
+      "Orchestrator judgment: read the request, pick capability lines, schedule order/parallelism, respect gates — not tool how-to.",
     enabled: true,
     profileOnly: true,
     source: "app",
-    prompt: PROACTIVE_SCHEDULING_PROMPT,
+    build: buildProactiveSchedulingPrompt,
   },
   {
     key: "research-design",

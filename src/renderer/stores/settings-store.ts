@@ -208,6 +208,10 @@ export interface AppSettings {
   legacyBuiltinProvidersMigrated?: boolean;
   /** MinerU cloud API token for precision PDF extraction */
   mineruApiToken?: string;
+  /** Optional Semantic Scholar API key for literature-discover rate limits */
+  semanticScholarApiKey?: string;
+  /** Optional NCBI API key for PubMed literature-discover rate limits */
+  pubmedApiKey?: string;
   /** Default extract engine: pdfjs (local) | mineru (cloud) */
   literatureExtractEngineDefault?: "pdfjs" | "mineru";
   /** Auto-extract PDF on library import (default off) */

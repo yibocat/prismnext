@@ -23,11 +23,9 @@ describe("buildOpencodeToolDescription", () => {
     const meta = BUILTIN_TOOLS.find((t) => t.name === TOOL_NAMES.literatureStage)!;
     const text = buildOpencodeToolDescription(meta);
     expect(text).toContain("BINDING:");
-    expect(text).toContain("Paper Search MCP");
-    expect(text).toContain("does NOT create session citations");
-    expect(text).toContain("search_arxiv");
-    expect(text).toContain("paper-search-mcp_*");
-    expect(text).toContain("Do NOT use the Task tool");
+    expect(text).toContain("literature-discover");
+    expect(text).toContain("No library write");
+    expect(text).toContain("Task-out discovery");
   });
 
   it("reflects registry workflow rule changes without a prompt module", () => {

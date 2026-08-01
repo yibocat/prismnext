@@ -8,53 +8,28 @@ import {
   presetToEntry,
 } from "../../src/renderer/lib/agent/mcp-presets";
 
-describe("paper-search-mcp preset", () => {
-  it("exists as first built-in search preset", () => {
-    const preset = getMcpPreset("paper-search-mcp");
-    expect(preset).toBeDefined();
-    expect(preset!.builtin).toBe(true);
-    expect(preset!.recommended).toBe(true);
-    expect(preset!.category).toBe("search");
-    expect(MCP_PRESETS[0].id).toBe("paper-search-mcp");
-    expect(isBuiltinMcpServer("paper-search-mcp")).toBe(true);
+describe("MCP presets catalog", () => {
+  it("does not ship paper-search-mcp", () => {
+    expect(getMcpPreset("paper-search-mcp")).toBeUndefined();
+    expect(MCP_PRESETS.some((p) => p.id === "paper-search-mcp")).toBe(false);
+    expect(MCP_PRESETS[0].id).toBe("fetch");
     expect(isBuiltinMcpServer("fetch")).toBe(false);
   });
 
-  it("builds npx launcher for paper-search-mcp-nodejs", () => {
-    const preset = getMcpPreset("paper-search-mcp")!;
-    const entry = presetToEntry(preset, {
-      SEMANTIC_SCHOLAR_API_KEY: "test-key",
-    });
+  it("builds fetch preset via npx", () => {
+    const preset = getMcpPreset("fetch")!;
+    const entry = presetToEntry(preset);
     expect(entry).not.toBeNull();
-    expect(entry!.name).toBe("paper-search-mcp");
-    expect(entry!.command).toEqual(["npx", "-y", "paper-search-mcp-nodejs"]);
-    expect(entry!.environment.SEMANTIC_SCHOLAR_API_KEY).toBe("test-key");
+    expect(entry!.name).toBe("fetch");
+    expect(entry!.command).toEqual(["npx", "-y", "@modelcontextprotocol/server-fetch"]);
     expect(findPresetForEntry(entry!)).toBe(preset);
   });
 
-  it("allows install without optional env keys", () => {
-    const preset = getMcpPreset("paper-search-mcp")!;
-    expect(presetFieldsValid(preset, {})).toBe(true);
-    const entry = presetToEntry(preset, {});
-    expect(entry?.command).toEqual(["npx", "-y", "paper-search-mcp-nodejs"]);
-  });
-
-  it("exposes full upstream env keys for Configure", () => {
-    const keys = (getMcpPreset("paper-search-mcp")!.fields ?? []).map((f) => f.key);
-    expect(keys).toEqual([
-      "SEMANTIC_SCHOLAR_API_KEY",
-      "PUBMED_API_KEY",
-      "WOS_API_KEY",
-      "WOS_API_VERSION",
-      "ELSEVIER_API_KEY",
-      "SPRINGER_API_KEY",
-      "SPRINGER_OPENACCESS_API_KEY",
-      "WILEY_TDM_TOKEN",
-      "SCHOLAR_PROXY",
-    ]);
-    // None are required — search works via free platforms without keys.
-    expect(
-      (getMcpPreset("paper-search-mcp")!.fields ?? []).every((f) => !f.required),
-    ).toBe(true);
+  it("validates brave-search required API key", () => {
+    const preset = getMcpPreset("brave-search")!;
+    expect(presetFieldsValid(preset, {})).toBe(false);
+    expect(presetFieldsValid(preset, { BRAVE_API_KEY: "key" })).toBe(true);
+    const entry = presetToEntry(preset, { BRAVE_API_KEY: "key" });
+    expect(entry?.environment.BRAVE_API_KEY).toBe("key");
   });
 });

@@ -11,8 +11,10 @@ describe("CHAT_CITATION_STAGING_PROMPT", () => {
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("[n]");
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("Task handoff");
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("see that tool");
-    expect(CHAT_CITATION_STAGING_PROMPT).toContain("Paper Search MCP");
+    expect(CHAT_CITATION_STAGING_PROMPT).toContain(TOOL_NAMES.literatureDiscover);
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("websearch");
+
+    expect(CHAT_CITATION_STAGING_PROMPT).not.toContain("Paper Search MCP");
 
     expect(CHAT_CITATION_STAGING_PROMPT).not.toContain("BINDING");
     expect(CHAT_CITATION_STAGING_PROMPT).not.toContain("search_arxiv");

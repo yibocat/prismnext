@@ -194,8 +194,8 @@ export const MARKDOWN_BODY_RHYTHM = cn(
   "[&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-6",
   "[&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-6",
   "[&_li]:my-1 [&_li]:leading-[1.7]",
-  "[&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-4 [&_blockquote]:my-2.5 [&_blockquote]:text-muted-foreground",
-  "[&_hr]:my-4 [&_hr]:border-border",
+  "[&_blockquote]:border-l [&_blockquote]:border-border-subtle [&_blockquote]:pl-4 [&_blockquote]:my-2.5 [&_blockquote]:text-muted-foreground",
+  "[&_hr]:my-4 [&_hr]:border-border-subtle",
   "[&_th]:text-[0.92em] [&_th]:font-medium [&_th]:text-muted-foreground",
   "[&_td]:text-[1em]",
 );
@@ -210,7 +210,7 @@ export const DOCUMENT_MARKDOWN_TYPOGRAPHY = cn(
   MARKDOWN_BODY_RHYTHM,
   "[&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:bg-muted [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:py-0.5 [&_code:not(pre_code)]:font-mono [&_code:not(pre_code)]:text-[0.95em]",
   MARKDOWN_KATEX_TYPOGRAPHY,
-  "[&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border [&_pre]:p-4 [&_pre]:overflow-x-auto [&_pre]:text-[0.95em] [&_pre]:font-mono",
+  "[&_pre]:rounded-lg [&_pre]:border [&_pre]:border-border-subtle [&_pre]:p-4 [&_pre]:overflow-x-auto [&_pre]:text-[0.95em] [&_pre]:font-mono",
 );
 
 /**
@@ -337,7 +337,7 @@ export const MARKDOWN_COMPONENTS: Components = {
     </div>
   ),
   thead: ({ children }) => (
-    <thead className="border-b border-border">{children}</thead>
+    <thead className="border-b border-border-subtle">{children}</thead>
   ),
   th: ({ children }) => (
     <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">
@@ -348,7 +348,7 @@ export const MARKDOWN_COMPONENTS: Components = {
     <td className="px-4 py-2.5">{children}</td>
   ),
   tr: ({ children }) => (
-    <tr className="border-b border-border last:border-0">{children}</tr>
+    <tr className="border-b border-border-subtle last:border-0">{children}</tr>
   ),
   a: ({ href, children, ...props }: any) => {
     if (href?.startsWith("wikilink:")) {

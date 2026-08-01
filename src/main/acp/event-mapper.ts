@@ -1,14 +1,6 @@
 import type { BrowserWindow } from "electron";
-import { app } from "electron";
 import { AcpService } from "./service";
 import { createLogger } from "../services/logger";
-
-/** Dev-terminal one-liner — always includes tool name. Silent in packaged builds. */
-function logToolDev(message: string) {
-  if (!app.isPackaged) {
-    console.log(`[tool] ${message}`);
-  }
-}
 import {
   registerChatSession,
   unregisterChatSession,
@@ -2065,10 +2057,7 @@ export class EventMapper {
       }
 
       const toolLabel = toolName || String(tc.title || tc.kind || "?").trim() || "?";
-      const toolCallMsg =
-        `${toolLabel} id=${toolId || "(none)"} kind=${tc.kind || "?"} status=${tc.status || tc.state?.status || "?"} inputKeys=${JSON.stringify(Object.keys(toolInput || {}))}`;
-      log.debug(`tool_call ${toolCallMsg}`);
-      logToolDev(`call ${toolCallMsg}`);
+      log.info(`tool call: ${toolLabel}`);
 
       const isBash =
         toolName === "bash"
@@ -2269,6 +2258,10 @@ export class EventMapper {
       if (backfillInput && !backfillName && resolveLiteratureToolTitle(tuTitleLower)) {
         backfillName = tuTitleLower;
       }
+      if (backfillInput && !backfillName) {
+        const prismTitle = resolvePrismToolTitle(tuTitleLower);
+        if (prismTitle) backfillName = prismTitle;
+      }
 
       // Prefer MCP `server_tool` title before query→websearch inference.
       if (backfillInput && !backfillName) {
@@ -2286,9 +2279,22 @@ export class EventMapper {
         const mcpTitle = resolveMcpToolTitle(tuTitleLower);
         if (mcpTitle) backfillName = mcpTitle;
       }
+      // query+limit input inference mislabels literature-discover as literature-search
+      // during live streaming; title + discover-shaped output are authoritative.
+      if (backfillName === "literature-search") {
+        const prismTitle = resolvePrismToolTitle(tuTitleLower) || resolveLiteratureToolTitle(tuTitleLower);
+        if (prismTitle === "literature-discover") backfillName = prismTitle;
+      }
 
       const outputInferred = inferToolNameFromOutput(rawResult);
-      if (outputInferred && (!backfillName || backfillName === "websearch")) {
+      if (
+        outputInferred
+        && (
+          !backfillName
+          || backfillName === "websearch"
+          || (outputInferred === "literature-discover" && backfillName === "literature-search")
+        )
+      ) {
         backfillName = outputInferred;
       }
 
@@ -2511,10 +2517,7 @@ export class EventMapper {
         : /success|finished|done/i.test(_rawSentStatus)
           ? "completed"
           : (_rawSentStatus || "completed");
-      const toolResultMsg =
-        `${toolLabel} id=${updateId || "(none)"} status=${_sentStatus}${isError ? " error" : ""} contentLen=${typeof resultContent === "string" ? resultContent.length : -1}`;
-      log.debug(`tool_result ${toolResultMsg}`);
-      logToolDev(`result ${toolResultMsg}`);
+      log.info(`tool result: ${toolLabel}`);
       const ocTime = extractOpenCodeTime(tu) ?? extractOpenCodeTime({ state: tu.state });
       const ocDuration = durationSecFromOpenCodeTime(ocTime);
       const timeStart =
@@ -2666,7 +2669,7 @@ export class EventMapper {
     } else if (content && (content.type === "tool" || content.type === "tool_use")) {
       // ── Legacy tool call (content.type style) ──
       const legacyName = update.name || update.tool?.name || "";
-      log.debug(`legacy tool_call: name="${legacyName}"`);
+      log.info(`tool call: ${legacyName || "?"}`);
       this.noteTurnContent(sessionId);
       this.win.webContents.send("chat:stream", {
         tabId,

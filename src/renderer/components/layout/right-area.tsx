@@ -41,7 +41,7 @@ import {
   RIGHT_AREA_SPLIT_THRESHOLD,
 } from "@/lib/workspace/right-area-sidebar-layout";
 import { SIDEBAR_RIGHT_MIN } from "@/styles/constants";
-import { PANEL_COLLAPSE_THRESHOLD_PX, MODE_SIDEBAR_SASH_CLASS } from "@/lib/workspace/layout-constants";
+import { PANEL_COLLAPSE_THRESHOLD_PX, MODE_SIDEBAR_SASH_CLASS, SHELL_SASH_SHADOW_LEFT_CLASS } from "@/lib/workspace/layout-constants";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   closeRightArea,
@@ -84,12 +84,14 @@ function SidebarDragHandle({
   getStartWidth,
   isDraggingRef,
   onDragChange,
+  className,
 }: {
   onResize: (width: number) => void;
   /** Visible sidebar width when drag begins (may be squeezed below stored preference). */
   getStartWidth: () => number;
   isDraggingRef?: React.MutableRefObject<boolean>;
   onDragChange?: (dragging: boolean) => void;
+  className?: string;
 }) {
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -131,7 +133,7 @@ function SidebarDragHandle({
 
   return (
     <div
-      className={MODE_SIDEBAR_SASH_CLASS}
+      className={cn(MODE_SIDEBAR_SASH_CLASS, className)}
       onMouseDown={handleMouseDown}
     />
   );
@@ -921,7 +923,7 @@ function RightAreaWorkspace({
       )}
 
       {/* Main content: flex layout — main expands, sidebar stays fixed width */}
-      <div ref={containerElRef} className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden border-t border-border">
+      <div ref={containerElRef} className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden border-t border-[var(--toolbar-edge-line)]">
         {/* Keep mounted when sidebar is full-width — unmounting wiped PDF/editor scroll. */}
         <div
           className={
@@ -943,6 +945,7 @@ function RightAreaWorkspace({
                 getStartWidth={getSidebarDragStartWidth}
                 isDraggingRef={isDraggingSidebar}
                 onDragChange={handleSidebarDragChange}
+                className={SHELL_SASH_SHADOW_LEFT_CLASS}
               />
             )}
             {sidebarPanelVisible && (

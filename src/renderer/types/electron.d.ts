@@ -1040,7 +1040,7 @@ export interface ElectronAPI {
       doi?: string;
       arxivId?: string;
       sourceUrl?: string;
-      discoveredFrom?: "paper-search-mcp" | "websearch" | "webfetch" | "user" | "agent";
+      discoveredFrom?: "literature-discover" | "paper-search-mcp" | "websearch" | "webfetch" | "user" | "agent";
     },
   ) => Promise<{
     staged: boolean;
@@ -1060,7 +1060,7 @@ export interface ElectronAPI {
       catalogSource: string | null;
       catalogVerified: boolean;
       verifyError: string | null;
-      discoveredFrom: "paper-search-mcp" | "websearch" | "webfetch" | "user" | "agent";
+      discoveredFrom: "literature-discover" | "paper-search-mcp" | "websearch" | "webfetch" | "user" | "agent";
       libraryPaperId: string | null;
       libraryBibkey: string | null;
     };
@@ -1314,26 +1314,18 @@ export interface ElectronAPI {
   ) => () => void;
   mcpEnsure: (projectPath: string) => Promise<{
     ok: boolean;
-    health: {
-      status: "ready" | "degraded";
-      mode: "npx";
-      detail: string;
+    ensure?: {
+      added?: boolean;
+      migrated?: boolean;
+      reenabled?: boolean;
+      removed?: boolean;
     };
+    reloadedSessions?: number;
   }>;
   mcpApply: (projectPath: string) => Promise<{
     ok: boolean;
     reloadedSessions: number;
     error?: string;
-    health?: {
-      status: "ready" | "degraded";
-      mode: "npx";
-      detail: string;
-    };
-  }>;
-  mcpPaperSearchHealth: () => Promise<{
-    status: "ready" | "degraded";
-    mode: "npx";
-    detail: string;
   }>;
   agentListSkills: (projectPath: string) => Promise<Array<{
     id: string;

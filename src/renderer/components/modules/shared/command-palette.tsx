@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/command";
 import { BookIcon, BookOpenIcon, Loader2Icon, FilePlusIcon, MessageSquarePlusIcon, FlaskConicalIcon, GlobeIcon, HistoryIcon, XIcon, CheckIcon, MoreHorizontalIcon } from "lucide-react";
 import { getFileIcon } from "@/lib/files/file-tree";
-import { getRecentOpenedFilesForProject } from "@/lib/files/recent-files";
+import { getRecentOpenedFilesForProject, trackRecentOpenedFile } from "@/lib/files/recent-files";
+import { openProjectFileFromChat } from "@/lib/files/open-project-file";
 import { useLayoutStore, type RightToolbarTab } from "@/stores/layout-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore, type ProjectFile } from "@/stores/document-store";
@@ -156,6 +157,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<Category>("all");
   const [ignoredPaths, setIgnoredPaths] = useState<Set<string>>(() => new Set());
+  const paletteInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open || !projectRoot || files.length === 0) {
@@ -199,6 +201,12 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
 
   const close = () => onOpenChange(false);
   const goToCategory = (next: Category) => setCategory(next);
+  /** Category chips sit inside cmdk — pointerdown avoids first-click being eaten by focus trap. */
+  const onCategoryPointerDown = (next: Category) => (e: PointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    goToCategory(next);
+  };
   const run = (fn: () => void) => {
     // Record the query as a successful search (per-project history).
     if (query.trim()) {
@@ -617,9 +625,14 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
       isMobile,
     });
   };
-  const openFile = (f: ProjectFile, maximize = false) => {
+  const openFile = async (f: ProjectFile, maximize = false) => {
     ensureRightAreaOpen();
-    useRightPanelStore.getState().openFile(f.id, f.absolutePath, f.name);
+    void trackRecentOpenedFile(f.relativePath, f.name);
+    const ok = await openProjectFileFromChat(f.relativePath, { pin: false });
+    if (!ok) {
+      toast.error(t("shell.command.fileOpenFailed", { path: f.relativePath }));
+      return;
+    }
     if (maximize) maximizeRightArea();
   };
   const openSession = (s: SessionListItem, _maximize = false) =>
@@ -732,25 +745,27 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
     Boolean(urlToOpen) ||
     historyItems.length > 0;
 
-  // Remount cmdk only when the session list finishes its first load — never on
-  // category Tab (that used to reset cmdk and break ↑↓ / Tab navigation).
-  const commandMountKey = sessionsReady ? "sessions-ready" : "sessions-loading";
-
+  // Do not remount cmdk when sessions finish loading — that reset selection/focus and
+  // broke category clicks, Tab, and ↑↓ until the user interacted again.
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
         overlayClassName="bg-black/30"
-        className="top-[15vh] left-1/2 -translate-x-1/2 translate-y-0 overflow-hidden border-border/80 bg-background/88 p-0 shadow-lg backdrop-blur-md sm:max-w-xl"
+        className="top-[15vh] left-1/2 -translate-x-1/2 translate-y-0 overflow-hidden border-border-subtle bg-background/88 p-0 shadow-lg backdrop-blur-md sm:max-w-xl"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          requestAnimationFrame(() => paletteInputRef.current?.focus());
+        }}
       >
         <Command
-          key={commandMountKey}
           loop
           filter={passAllFilter}
           className="bg-transparent text-[length:var(--font-size-13)] [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:text-[length:var(--font-size-12)] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-1 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-4 [&_[cmdk-input-wrapper]_svg]:w-4 [&_[cmdk-input]]:h-11 [&_[cmdk-input]]:text-[length:var(--font-size-13)] [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-1.5 [&_[cmdk-item]]:text-[length:var(--font-size-13)] [&_[cmdk-item]_svg]:h-4 [&_[cmdk-item]_svg]:w-4"
         >
           <DialogTitle className="sr-only">{t("shell.commandPalette")}</DialogTitle>
           <CommandInput
+            ref={paletteInputRef}
             placeholder={t("shell.commandPalettePlaceholder")}
             value={query}
             onValueChange={setQuery}
@@ -762,7 +777,8 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
               <button
                 key={c.id}
                 type="button"
-                onClick={() => setCategory(c.id)}
+                tabIndex={-1}
+                onPointerDown={onCategoryPointerDown(c.id)}
                 className={cn(
                   "rounded-md px-2 py-1 text-[length:var(--font-size-12)] transition-colors",
                   category === c.id
@@ -828,8 +844,10 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
                     {t("shell.command.history")}
                     <button
                       type="button"
+                      tabIndex={-1}
                       className="text-[length:var(--font-size-12)] text-muted-foreground hover:text-destructive"
-                      onClick={(e) => {
+                      onPointerDown={(e) => {
+                        e.preventDefault();
                         e.stopPropagation();
                         clearSearchHistory(projectRoot);
                         setHistoryVersion((v) => v + 1);
@@ -855,8 +873,10 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
                     </CommandShortcut>
                     <button
                       type="button"
+                      tabIndex={-1}
                       className="ml-1 shrink-0 text-muted-foreground/50 opacity-0 hover:text-destructive group-data-[selected=true]:opacity-100"
-                      onClick={(e) => {
+                      onPointerDown={(e) => {
+                        e.preventDefault();
                         e.stopPropagation();
                         removeSearchHistory(projectRoot, h.query);
                         setHistoryVersion((v) => v + 1);

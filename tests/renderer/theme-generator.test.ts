@@ -21,6 +21,13 @@ describe("generateThemeCSS", () => {
     expect(d.themePack).toBe("academic");
   });
 
+  it("softens UI and shell edge borders via color-mix", () => {
+    const css = generateThemeCSS(getDefaultThemeConfig());
+    expect(css).toContain("--border-subtle:");
+    expect(css).toContain("--shell-edge-line:");
+    expect(css).toContain("color-mix(in oklch");
+  });
+
   it("binds editor to card and pdf well to muted", () => {
     const css = generateThemeCSS(getDefaultThemeConfig());
     const root = css.split(".dark")[0];

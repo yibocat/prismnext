@@ -1,16 +1,13 @@
 import { join } from "node:path";
 import { ipcMain } from "electron";
 import { AcpService } from "../acp/service";
-import {
-  ensureDefaultMcpServers,
-  getPaperSearchMcpHealth,
-} from "../services/project-mcp-defaults";
+import { ensureDefaultMcpServers } from "../services/project-mcp-defaults";
 
 export function registerMcpHandlers(): void {
   /**
-   * Seed/repair mcp.json + refresh ACP cache. When seed/migrate/reenable
-   * actually changed the file, also push into open sessions (Bug #25) —
-   * otherwise Settings→load would leave running chats on the old MCP set.
+   * Seed/repair mcp.json + refresh ACP cache. When ensure actually changed the file,
+   * also push into open sessions (Bug #25) — otherwise Settings→load would leave
+   * running chats on the old MCP set.
    *
    * MCP changes use session/load — do not invalidate project chat prewarm
    * (that forced a full OpenCode reload on the next send).
@@ -20,19 +17,18 @@ export function registerMcpHandlers(): void {
     async (_e, args: { projectPath: string }) => {
       const projectPath = args.projectPath?.trim();
       if (!projectPath) {
-        return { ok: false as const, health: getPaperSearchMcpHealth() };
+        return { ok: false as const };
       }
       const ensure = ensureDefaultMcpServers(join(projectPath, ".prismnext", "agent"));
       const acp = AcpService.getInstance();
       acp.prewarmProject(projectPath);
       let reloadedSessions = 0;
-      if (ensure.added || ensure.migrated || ensure.reenabled) {
+      if (ensure.added || ensure.migrated || ensure.reenabled || ensure.removed) {
         const applied = await acp.applyProjectMcpConfig(projectPath);
         reloadedSessions = applied.reloadedSessions;
       }
       return {
         ok: true as const,
-        health: getPaperSearchMcpHealth(),
         ensure,
         reloadedSessions,
       };
@@ -48,11 +44,7 @@ export function registerMcpHandlers(): void {
         return { ok: false as const, reloadedSessions: 0, error: "missing projectPath" };
       }
       const result = await AcpService.getInstance().applyProjectMcpConfig(projectPath);
-      return { ok: true as const, ...result, health: getPaperSearchMcpHealth() };
+      return { ok: true as const, ...result };
     },
   );
-
-  ipcMain.handle("mcp:paperSearchHealth", async () => {
-    return getPaperSearchMcpHealth();
-  });
 }

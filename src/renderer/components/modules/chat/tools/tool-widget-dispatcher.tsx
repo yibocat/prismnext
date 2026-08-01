@@ -73,6 +73,7 @@ const CUSTOM_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
   delete: DeleteWidget,
   move: MoveWidget,
   "literature-search": LiteratureToolWidget,
+  "literature-discover": LiteratureToolWidget,
   "literature-stage": LiteratureToolWidget,
   "literature-add": LiteratureToolWidget,
   "literature-read": LiteratureToolWidget,
@@ -130,12 +131,32 @@ function isLiteratureSearchResult(content: unknown): boolean {
   );
 }
 
+function isLiteratureDiscoverResult(content: unknown): boolean {
+  const payload = parseToolResultContent(content);
+  if (!payload) return false;
+  const data =
+    typeof payload.output === "string"
+      ? parseToolResultContent(payload.output) ?? payload
+      : payload;
+  if (Array.isArray(data.sourcesQueried) && Array.isArray(data.hits)) return true;
+  const hits = data.hits;
+  if (!Array.isArray(hits) || hits.length === 0) return false;
+  const first = hits[0];
+  return !!(
+    first
+    && typeof first === "object"
+    && !Array.isArray(first)
+    && typeof (first as Record<string, unknown>).source === "string"
+  );
+}
+
 function resolveToolWidgetName(
   toolUse: ContentBlock,
   toolResult?: ContentBlock,
 ): string {
   const name = (toolUse.name || "").toLowerCase();
   if (CUSTOM_TOOL_WIDGETS[name]) return name;
+  if (isLiteratureDiscoverResult(toolResult?.content)) return "literature-discover";
   if (isLiteratureSearchResult(toolResult?.content)) return "literature-search";
   return name;
 }

@@ -144,8 +144,27 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     category: "reference",
     usageHint:
       "Full-text search only within the local library (`.prismnext/library/library.db`). " +
-      "Use to find papers already added to the project. Does NOT search the web. " +
+      "Use to find papers already added to the project. Does NOT search the web or external catalogs. " +
       "Optional collection= filters by collection name; the response always includes a `collections` roster (id, name, paperCount).",
+    workflowRules: [
+      "BINDING: External topic / literature recommendations / papers not yet in the library → use literature-discover, NOT this tool.",
+      "Use this tool only when the user asks about papers already in the project library, tags, or collections.",
+    ],
+  },
+  {
+    name: TOOL_NAMES.literatureDiscover,
+    label: "Discover Literature",
+    description: "Search external academic catalogs by topic (not the project library)",
+    category: "reference",
+    usageHint:
+      "Keyword search across arXiv, Crossref, OpenAlex, Semantic Scholar, PubMed. " +
+      "Returns candidate DOI/arXiv IDs. Does NOT search the local library and does NOT cite. " +
+      "After choosing papers, call literature-stage for each DOI/arXiv before writing [n].",
+    workflowRules: [
+      "BINDING: Topic / external discovery uses literature-discover — not literature-search.",
+      "BINDING: Never write [n] from discover hits alone — literature-stage each paper first (discoveredFrom: \"literature-discover\").",
+      "Prefer focused queries; default sources are enough unless the user names a venue/server.",
+    ],
   },
   {
     name: TOOL_NAMES.literatureStage,
@@ -158,10 +177,10 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "This is the DEFAULT for any paper you cite.",
     workflowRules: [
       "BINDING: No `[n]` / paper list in reply until every stage call this turn returned a verified refId.",
-      "BINDING: Paper Search MCP (`paper-search-mcp_*`) only discovers IDs — after results, stage each paper you will mention, then reply. Do not bash/rg tool-output spills.",
+      "BINDING: literature-discover only discovers IDs — after results, stage each paper you will mention, then reply. Do not bash/rg tool-output spills.",
       "Discover → stage → one reply with `[n]`. Do not Task-out discovery/staging. Exact DOI/arXiv only — never invent.",
       "Layout: `**Title** [n]` + short summary per line; reuse `[n]` for the same paper; no markdown ordered-list citations.",
-      "If `verified: false`, do not write `[n]`. Topic search: focused MCP query then stage (`discoveredFrom: \"paper-search-mcp\"`); websearch only if MCP unavailable.",
+      "If `verified: false`, do not write `[n]`. Topic search: literature-discover then stage (`discoveredFrom: \"literature-discover\"`); websearch only as fallback.",
       `Do not call ${TOOL_NAMES.literatureAdd} unless the user explicitly asks to add to the library.`,
     ],
   },

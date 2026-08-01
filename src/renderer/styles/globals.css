@@ -45,6 +45,7 @@
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
   --color-destructive: var(--destructive);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
@@ -107,8 +108,9 @@
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --border: oklch(0.88 0 0);
-  --input: oklch(0.88 0 0);
+  --border: color-mix(in oklch, oklch(0.86 0 0) 58%, var(--card));
+  --border-subtle: color-mix(in oklch, oklch(0.86 0 0) 42%, var(--card));
+  --input: color-mix(in oklch, oklch(0.86 0 0) 65%, var(--background));
   --ring: oklch(0.708 0 0);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
@@ -121,8 +123,15 @@
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.145 0 0);
-  --sidebar-border: oklch(0.88 0 0);
+  --sidebar-border: color-mix(in oklch, oklch(0.86 0 0) 55%, var(--sidebar));
   --sidebar-ring: oklch(0.708 0 0);
+  /* Shell chrome — fallbacks until theme pack injects (light: slightly stronger than before) */
+  --shell-edge-line: color-mix(in oklch, oklch(0.86 0 0) 54%, var(--background));
+  --shell-edge-shadow-right: 8px 0 20px -10px oklch(0 0 0 / 0.07);
+  --shell-edge-shadow-left: -8px 0 20px -10px oklch(0 0 0 / 0.07);
+  --toolbar-edge-line: color-mix(in oklch, oklch(0.86 0 0) 50%, var(--background));
+  --sidebar-edge-line: color-mix(in oklch, oklch(0.86 0 0) 52%, var(--sidebar));
+  --sidebar-edge-shadow: var(--shell-edge-shadow-right);
 
   /* ── Glass effect tokens ── */
   --glass-blur-sm: 8px;
@@ -159,8 +168,9 @@
   --muted-foreground: oklch(0.65 0 0);
   --accent: oklch(0.30 0 0);
   --accent-foreground: oklch(0.86 0 0);
-  --border: oklch(1 0 0 / 18%);
-  --input: oklch(1 0 0 / 20%);
+  --border: color-mix(in oklch, oklch(1 0 0 / 18%) 62%, var(--card));
+  --border-subtle: color-mix(in oklch, oklch(1 0 0 / 18%) 48%, var(--card));
+  --input: color-mix(in oklch, oklch(1 0 0 / 20%) 68%, var(--background));
   --ring: oklch(0.556 0 0);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
@@ -173,8 +183,14 @@
   --sidebar-primary-foreground: oklch(0.22 0 0);
   --sidebar-accent: oklch(0.30 0 0);
   --sidebar-accent-foreground: oklch(0.86 0 0);
-  --sidebar-border: oklch(1 0 0 / 18%);
+  --sidebar-border: color-mix(in oklch, oklch(1 0 0 / 18%) 55%, var(--sidebar));
   --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-edge-line: color-mix(in oklch, oklch(1 0 0 / 18%) 40%, var(--sidebar));
+  --sidebar-edge-shadow: var(--shell-edge-shadow-right);
+  --shell-edge-line: color-mix(in oklch, oklch(1 0 0 / 18%) 38%, var(--background));
+  --shell-edge-shadow-right: 10px 0 28px -14px oklch(0 0 0 / 0.38);
+  --shell-edge-shadow-left: -10px 0 28px -14px oklch(0 0 0 / 0.38);
+  --toolbar-edge-line: color-mix(in oklch, oklch(1 0 0 / 18%) 35%, var(--background));
 
   /* ── Semantic (theme-independent) ── */
   --destructive: oklch(0.62 0.20 22);
@@ -292,7 +308,20 @@
   [data-surface="sidebar"] {
     background-color: var(--glass-sidebar-bg, var(--sidebar));
     border-color: var(--glass-border, var(--border));
-    box-shadow: var(--glass-edge-glow, none);
+  }
+
+  /* Shell sash depth — applied on the 1px separator, not clipped panel children */
+  .shell-sash-shadow-right {
+    box-shadow: var(--shell-edge-shadow-right);
+  }
+
+  .shell-sash-shadow-left {
+    box-shadow: var(--shell-edge-shadow-left);
+  }
+
+  /* Alias kept for left sidebar */
+  .sidebar-sash-shadow {
+    box-shadow: var(--shell-edge-shadow-right);
   }
 
   /* Toolbar surfaces */

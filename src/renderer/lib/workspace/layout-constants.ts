@@ -8,17 +8,30 @@ export const PANEL_COLLAPSE_THRESHOLD_PX = 30;
  */
 export const PANEL_RESIZE_HIT = { fine: 24, coarse: 28 } as const;
 
-/** Mode sidebar (RightArea L2) sash — 1px line + extended hit area (custom drag, not RRP). */
-export const MODE_SIDEBAR_SASH_CLASS =
-  "w-px bg-border hover:bg-foreground/30 active:bg-foreground/40 transition-colors outline-none cursor-col-resize shrink-0 relative z-10 after:absolute after:inset-y-0 after:-left-3 after:-right-3";
+const PANEL_SASH_HIT_FRINGE =
+  "after:absolute after:inset-y-0 after:-left-3 after:-right-3";
+
+/** Shared resize sash chrome — line color supplied per surface via CSS vars. */
+const PANEL_SASH_BASE = `w-px transition-colors outline-none cursor-col-resize shrink-0 relative z-10 ${PANEL_SASH_HIT_FRINGE}`;
 
 /**
  * App shell + WorkspaceSplit panel sash (react-resizable-panels Separator).
  * Groups should set `disableCursor` so the library does not inject `ew-resize !important`
  * (that fought CSS `col-resize` and made the cursor flicker / feel like a second handle).
  */
-export const PANEL_SASH_SEPARATOR_CLASS =
-  "w-px bg-border hover:bg-foreground/30 active:bg-foreground/40 transition-colors outline-none cursor-col-resize shrink-0 relative z-10 after:absolute after:inset-y-0 after:-left-3 after:-right-3";
+export const PANEL_SASH_SEPARATOR_CLASS = `${PANEL_SASH_BASE} bg-[var(--shell-edge-line)] hover:bg-border active:bg-foreground/25`;
+
+/** Left nav shell sash — mixes with sidebar surface; pair with `SHELL_SASH_SHADOW_RIGHT_CLASS` when open. */
+export const LEFT_SIDEBAR_SASH_SEPARATOR_CLASS = `${PANEL_SASH_BASE} bg-[var(--sidebar-edge-line)] hover:bg-sidebar-border active:bg-sidebar-border`;
+
+/** RightArea mode sidebar drag sash — same line tokens as left nav; shadow casts left. */
+export const MODE_SIDEBAR_SASH_CLASS = LEFT_SIDEBAR_SASH_SEPARATOR_CLASS;
+
+/** Drop shadow on a sash toward the main canvas (left sidebar open). */
+export const SHELL_SASH_SHADOW_RIGHT_CLASS = "shell-sash-shadow-right";
+
+/** Drop shadow on a sash toward the center pane (RightArea open). */
+export const SHELL_SASH_SHADOW_LEFT_CLASS = "shell-sash-shadow-left";
 
 /**
  * Fully non-interactive sash (no hit fringe).

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -43,7 +43,7 @@ describe("mcp:ensure apply-on-change (Bug #25)", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("calls applyProjectMcpConfig when ensure adds Paper Search", async () => {
+  it("creates empty mcp.json when missing (no Paper Search seed)", async () => {
     const ensure = handlers.get("mcp:ensure");
     expect(ensure).toBeTruthy();
     const result = (await ensure!({}, { projectPath: root })) as {
@@ -52,30 +52,40 @@ describe("mcp:ensure apply-on-change (Bug #25)", () => {
       ensure?: { added?: boolean };
     };
     expect(result.ok).toBe(true);
-    expect(result.ensure?.added).toBe(true);
-    expect(prewarmProject).toHaveBeenCalledWith(root);
-    expect(applyProjectMcpConfig).toHaveBeenCalledWith(root);
-    expect(result.reloadedSessions).toBe(2);
-  });
-
-  it("skips apply when mcp.json already has the built-in server", async () => {
-    const ensure = handlers.get("mcp:ensure");
-    // First call seeds the file.
-    await ensure!({}, { projectPath: root });
-    applyProjectMcpConfig.mockClear();
-    prewarmProject.mockClear();
-
-    const result = (await ensure!({}, { projectPath: root })) as {
-      ok: boolean;
-      reloadedSessions?: number;
-      ensure?: { added?: boolean; migrated?: boolean; reenabled?: boolean };
-    };
-    expect(result.ok).toBe(true);
     expect(result.ensure?.added).toBe(false);
-    expect(result.ensure?.migrated).toBe(false);
-    expect(result.ensure?.reenabled).toBe(false);
     expect(prewarmProject).toHaveBeenCalledWith(root);
     expect(applyProjectMcpConfig).not.toHaveBeenCalled();
     expect(result.reloadedSessions).toBe(0);
+  });
+
+  it("reloads open sessions when legacy paper-search is stripped", async () => {
+    const agentDir = join(root, ".prismnext", "agent");
+    writeFileSync(
+      join(agentDir, "mcp.json"),
+      JSON.stringify(
+        {
+          mcpServers: {
+            "paper-search-mcp": {
+              type: "local",
+              enabled: true,
+              command: ["npx", "-y", "paper-search-mcp-nodejs"],
+            },
+          },
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+    const ensure = handlers.get("mcp:ensure");
+    const result = (await ensure!({}, { projectPath: root })) as {
+      ok: boolean;
+      reloadedSessions?: number;
+      ensure?: { removed?: boolean };
+    };
+    expect(result.ok).toBe(true);
+    expect(result.ensure?.removed).toBe(true);
+    expect(applyProjectMcpConfig).toHaveBeenCalledWith(root);
+    expect(result.reloadedSessions).toBe(2);
   });
 });

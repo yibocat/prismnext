@@ -76,7 +76,7 @@ export const MarkdownPreview = memo(function MarkdownPreview() {
             <img
               src={src}
               alt={alt ?? ""}
-              className="my-2 max-w-full h-auto rounded border border-border/40"
+              className="my-2 max-w-full h-auto rounded border border-border-subtle"
               loading="lazy"
             />
           );

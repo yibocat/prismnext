@@ -1473,7 +1473,7 @@ export class AcpService {
   } {
     const agentDir = join(projectRoot, ".prismnext", "agent");
 
-    // Built-in Paper Search MCP: always present + enabled before ACP reads config.
+    // Ensure mcp.json exists; strip legacy Paper Search MCP if present.
     try {
       ensureDefaultMcpServers(agentDir);
     } catch (err: unknown) {
@@ -2738,7 +2738,7 @@ export class AcpService {
   async initSession(sessionId: string, cwd: string, projectRoot?: string): Promise<void> {
     if (!this.conn) return;
     const root = projectRoot || cwd;
-    const { mcpServers } = this.loadProjectAgentConfig(root);
+    const { mcpServers } = this.loadProjectAgentConfig(root, { eagerOnly: true });
     this.sessionReplaySuppress++;
     try {
       await this.withNotificationCollector(
@@ -2746,6 +2746,7 @@ export class AcpService {
         () => this.conn!.extMethod("session/load", { sessionId, cwd, mcpServers }),
       );
       this.opencodeHydratedSessions.add(sessionId);
+      this.sessionLoadedMcpNames.set(sessionId, new Set(mcpServers.map((s) => s.name)));
     } catch (err: any) {
       // Visible: failed re-bind after cancel is the main "session not found" cause.
       log.warn(`session/load failed for ${sessionId}: ${err.message}`);
@@ -2883,7 +2884,7 @@ export class AcpService {
     // Fallback: ACP session/load
     if (!this.conn) throw new Error("AcpService not initialized");
     const root = projectRoot || cwd;
-    const { mcpServers } = this.loadProjectAgentConfig(root);
+    const { mcpServers } = this.loadProjectAgentConfig(root, { eagerOnly: true });
     const messages: any[] = [];
     await this.withNotificationCollector(
       (method, params) => {

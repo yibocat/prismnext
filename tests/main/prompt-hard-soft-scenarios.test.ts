@@ -7,8 +7,8 @@ import { ALL_MODULES } from "../../src/main/prompts/modules";
 import { CHAT_CITATION_STAGING_PROMPT } from "../../src/main/prompts/modules/chat-citation-staging";
 import { EXPERIMENTS_PROMPT } from "../../src/main/prompts/modules/experiments";
 import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/literature-library";
-import { PROACTIVE_SCHEDULING_PROMPT } from "../../src/main/prompts/modules/proactive-scheduling";
-import { resolveStableSystemModules } from "../../src/main/prompts/resolve-active-modules";
+import { PROACTIVE_SCHEDULING_PROMPT, buildProactiveSchedulingPrompt } from "../../src/main/prompts/modules/proactive-scheduling";
+import { composeProfileModulePrompts, resolveStableSystemModules } from "../../src/main/prompts/resolve-active-modules";
 import { buildPlanModeTurnAppendix } from "../../src/main/prompts/per-turn/plan-mode";
 import { BUILTIN_TOOLS } from "../../src/main/tools";
 import { buildOpencodeToolDescription } from "../../src/main/tools/tool-description";
@@ -44,10 +44,36 @@ describe("S1 — experiment design Plan suggest is AI-soft (tool), not keyword H
     expect(desc).toContain("draftPath");
   });
 
-  it("proactive map points at suggest-plan without reprinting consent essay", () => {
-    expect(PROACTIVE_SCHEDULING_PROMPT).toContain("suggest-plan");
+  it("proactive map is orchestration-only — no tool names; domains from profile at compose time", () => {
+    expect(PROACTIVE_SCHEDULING_PROMPT).not.toMatch(/literature-search|literature-discover|latex-compile/);
+    expect(PROACTIVE_SCHEDULING_PROMPT).not.toMatch(/\[@bibkey\]|\[n\]/);
+    expect(PROACTIVE_SCHEDULING_PROMPT).not.toContain("Literature Library");
     expect(PROACTIVE_SCHEDULING_PROMPT).not.toContain("15s consent strip");
     expect(PROACTIVE_SCHEDULING_PROMPT).not.toContain("Entering Plan mode (consent");
+
+    const researchPrismModules = [
+      "chat-citation-staging",
+      "citation-audit",
+      "literature-library",
+      "task-delegation",
+      "latex-workspace",
+      "proactive-scheduling",
+      "research-design",
+      "experiments",
+      "interaction",
+    ];
+    const composed = composeProfileModulePrompts(researchPrismModules);
+    const proactiveOnly = buildProactiveSchedulingPrompt({
+      profileModules: researchPrismModules,
+      profileModuleSummaries: ALL_MODULES.filter(
+        (m) => m.profileOnly && researchPrismModules.includes(m.key) && m.key !== "proactive-scheduling",
+      ).map((m) => ({ key: m.key, label: m.label, description: m.description })),
+    });
+    expect(proactiveOnly).toContain("Chat Paper Citations");
+    expect(proactiveOnly).toContain("Task Delegation");
+    expect(proactiveOnly).toMatch(/Delegation.*profile's delegation guidance/);
+    expect(proactiveOnly).not.toMatch(/literature-search|literature-discover|latex-compile/);
+    expect(composed).toContain("Chat Paper Citations");
   });
 });
 
@@ -113,7 +139,7 @@ describe("S4 — external literature recommendations", () => {
 
     const desc = toolDesc(TOOL_NAMES.literatureStage);
     expect(desc).toContain("BINDING");
-    expect(desc).toMatch(/paper-search-mcp/i);
+    expect(desc).toMatch(/literature-discover/i);
     expect(desc).toContain("[n]");
   });
 });

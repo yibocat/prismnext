@@ -28,10 +28,20 @@ export function composeProfileModulePrompts(
   if (!profileModules?.length) return "";
 
   const allowed = new Set(profileModules);
+  const profileModuleSummaries = ALL_MODULES.filter(
+    (m) => m.profileOnly && allowed.has(m.key) && m.key !== "proactive-scheduling",
+  ).map((m) => ({ key: m.key, label: m.label, description: m.description }));
+
+  const enrichedCtx: PromptContext = {
+    ...ctx,
+    profileModules,
+    profileModuleSummaries,
+  };
+
   const parts: string[] = [];
   for (const mod of ALL_MODULES) {
     if (!mod.profileOnly || !allowed.has(mod.key)) continue;
-    const text = buildModulePromptText(mod, ctx).trim();
+    const text = buildModulePromptText(mod, enrichedCtx).trim();
     if (text) parts.push(text);
   }
   return parts.join("\n\n");

@@ -165,7 +165,7 @@ const ShikiHighlightedCode = memo(function ShikiHighlightedCode({
   return (
     <div className="my-4 max-w-full overflow-hidden rounded-lg border border-border">
       {/* Header bar: language label + copy button */}
-      <div className="flex items-center justify-between px-4 py-1.5 bg-muted/50 border-b border-border">
+      <div className="flex items-center justify-between border-b border-border-subtle bg-muted/50 px-4 py-1.5">
         <span className="text-xs text-muted-foreground font-mono">{resolvedLang}</span>
         <CopyButton text={code} />
       </div>
@@ -194,7 +194,7 @@ const ShikiHighlightedCode = memo(function ShikiHighlightedCode({
             <button
               type="button"
               onClick={() => setFolded(false)}
-              className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 px-3 py-1 rounded-md border border-border/50 bg-background/80 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-md border border-border-subtle bg-background/80 px-3 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
               <ChevronDownIcon className="size-3" />
               Show all {lines} lines
@@ -207,7 +207,7 @@ const ShikiHighlightedCode = memo(function ShikiHighlightedCode({
           <button
             type="button"
             onClick={() => setFolded(true)}
-            className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 px-3 py-1 rounded-md border border-border/50 bg-background/80 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-md border border-border-subtle bg-background/80 px-3 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             <ChevronUpIcon className="size-3" />
             Collapse

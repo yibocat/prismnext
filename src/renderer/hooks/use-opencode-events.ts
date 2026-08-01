@@ -196,13 +196,6 @@ export function useOpenCodeEvents() {
             "";
           const extractedInput = part.tool?.input || part.input || part.state?.input || {};
 
-          // Debug: log what the renderer received vs what EventMapper sent.
-          // The _debug field is attached by EventMapper for diagnostics.
-          const debugInfo = (part as any)._debug;
-          if (debugInfo) {
-            console.log(`[opencode-events] tool_use received: name="${derivedName}" id=${part.id} inputKeys=${JSON.stringify(Object.keys(extractedInput))} _debug=${JSON.stringify(debugInfo)}`);
-          }
-
           return {
             type: "tool_use",
             id: part.id || part.toolId || "",
@@ -545,7 +538,6 @@ export function useOpenCodeEvents() {
               if (isFinalToolResult && block.status) {
                 block.status = normalizeToolStatus(block.status);
               }
-              console.log(`[opencode-events] tool_result RX: toolUseId=${toolUseId} status=${(block.status || "").toLowerCase() || "(none)"} isFinal=${isFinalToolResult} isError=${block.is_error} contentLen=${typeof block.content === "string" ? block.content.length : -1} ${isFinalToolResult ? "" : "→ DROPPED (not final)"}`);
               if (isFinalToolResult) {
                 const toolName = (
                   pendingToolUsesRef.current.get(tabId)?.get(toolUseId)?.name
@@ -675,7 +667,7 @@ export function useOpenCodeEvents() {
                   }
                 }
               } else {
-                console.log(`[opencode-events] tool_result update not final: tool_use_id=${toolUseId} status=${status}`);
+                // non-final tool_result — wait for terminal status
               }
 
               // Apply backfill input if present — patches the empty rawInput
@@ -683,8 +675,6 @@ export function useOpenCodeEvents() {
               const backfillInput = (block as any)._backfillInput;
               const backfillName = (block as any)._backfillName as string | null;
               if (backfillInput && typeof backfillInput === "object" && Object.keys(backfillInput).length > 0) {
-                console.log(`[opencode-events] backfilling tool input: tool_use_id=${toolUseId} keys=${Object.keys(backfillInput).join(",")} name=${backfillName || "(unchanged)"}`);
-
                 // 1. Patch the tool_use block's input AND name
                 chatStore._patchToolInput(tabId, toolUseId, backfillInput, backfillName || undefined);
 
@@ -765,8 +755,6 @@ export function useOpenCodeEvents() {
                       }
                     });
                   }
-                } else {
-                  console.log(`[opencode-events] backfill FAILED: no pendingTool found for toolUseId=${toolUseId}`);
                 }
               }
             }

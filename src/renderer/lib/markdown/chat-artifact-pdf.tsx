@@ -19,8 +19,13 @@ import {
   artifactBasename,
   chatImagePathCandidates,
 } from "../../../shared/artifact-path";
-import { normalizeArtifactDisplayPath } from "./chat-artifact";
 import { cn } from "@/lib/utils";
+import {
+  CHAT_ARTIFACT_THUMB_PDF_IMAGE_CLASS,
+  CHAT_ARTIFACT_THUMB_PREVIEW_CLASS,
+  CHAT_ARTIFACT_THUMB_SHELL_CLASS,
+  normalizeArtifactDisplayPath,
+} from "./chat-artifact";
 
 /** Wider raster so full-width chat peeks stay sharp. */
 const PEEK_MAX_WIDTH = 960;
@@ -198,7 +203,7 @@ export function ChatArtifactPdf({
 
   if (failed && !peekUrl) {
     return (
-      <div className="my-2 flex w-full max-w-full items-stretch gap-2 rounded-lg border border-border/50 bg-muted/20 p-1.5">
+      <div className="my-2 flex w-full max-w-full items-stretch gap-2 rounded-lg border border-border-subtle bg-muted/20 p-1.5">
         <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-background/80 text-muted-foreground">
           <FileTextIcon className="size-4" aria-hidden />
         </div>
@@ -223,7 +228,7 @@ export function ChatArtifactPdf({
 
   return (
     <>
-      <div className="my-2 w-full max-w-full overflow-hidden rounded-lg border border-border/50 bg-muted/20">
+      <div className={CHAT_ARTIFACT_THUMB_SHELL_CLASS}>
         <div className="flex items-center gap-2 px-2 py-1.5">
           <span className="shrink-0 text-[length:var(--font-size-11)] font-medium text-muted-foreground">
             PDF
@@ -254,17 +259,24 @@ export function ChatArtifactPdf({
               name: label,
               defaultValue: "Preview {{name}}",
             })}
-            className="block w-full cursor-zoom-in border-t border-border/40 p-1.5 text-left transition-opacity hover:opacity-90"
+            className="block w-full cursor-zoom-in border-t border-border-subtle p-1.5 text-left transition-opacity hover:opacity-90"
           >
-            <img
-              src={peekUrl}
-              alt={label}
-              className="h-auto w-full rounded-md bg-white"
-              loading="lazy"
-            />
+            <div className={CHAT_ARTIFACT_THUMB_PREVIEW_CLASS}>
+              <img
+                src={peekUrl}
+                alt={label}
+                className={CHAT_ARTIFACT_THUMB_PDF_IMAGE_CLASS}
+                loading="lazy"
+              />
+            </div>
           </button>
         ) : (
-          <div className="flex h-24 items-center justify-center border-t border-border/40 text-[length:var(--font-size-11)] text-muted-foreground">
+          <div
+            className={cn(
+              CHAT_ARTIFACT_THUMB_PREVIEW_CLASS,
+              "border-t border-border-subtle text-[length:var(--font-size-11)] text-muted-foreground",
+            )}
+          >
             {t("chat.artifact.pdfLoading", { defaultValue: "Loading PDF…" })}
           </div>
         )}
@@ -274,7 +286,7 @@ export function ChatArtifactPdf({
         <DialogContent
           showCloseButton={false}
           className={cn(
-            "flex h-[min(94vh,56rem)] w-[min(96vw,90rem)] max-w-[min(96vw,90rem)] flex-col gap-0 overflow-hidden border-border/80 bg-background p-0 shadow-2xl",
+            "flex h-[min(94vh,56rem)] w-[min(96vw,90rem)] max-w-[min(96vw,90rem)] flex-col gap-0 overflow-hidden border-border-subtle bg-background p-0 shadow-2xl",
             "sm:max-w-[min(96vw,90rem)]",
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}

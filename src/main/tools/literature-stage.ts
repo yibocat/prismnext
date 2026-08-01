@@ -5,7 +5,7 @@
  * The result is staged as a session citation: the agent references it as [n]
  * in its reply; the user confirms before the paper is added to the library.
  *
- * NEVER invent identifiers — copy exact DOI/arXiv from Paper Search MCP, websearch, or the user.
+ * NEVER invent identifiers — copy exact DOI/arXiv from literature-discover, websearch, or the user.
  */
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
@@ -79,8 +79,8 @@ export default tool({
     "and return its bibliographic metadata. The paper is NOT added to the library — it is staged " +
     "as a session citation the user can review and confirm. " +
     "Use this BEFORE citing a paper in your reply; reference the returned refId as [n]. " +
-    "ONLY use DOI/arXiv copied from Paper Search MCP, websearch, or the user — NEVER invent identifiers. " +
-    "Any paper-search-mcp_* result (search_papers / search_arxiv / search_crossref / …) alone is NOT enough — " +
+    "ONLY use DOI/arXiv copied from literature-discover, websearch, or the user — NEVER invent identifiers. " +
+    "literature-discover hits alone are NOT enough — " +
     "stage each paper you will mention before writing reply text. " +
     "For topic discovery: search once, then immediately stage each hit (do not re-parse tool-output with bash).",
   args: {
@@ -94,12 +94,12 @@ export default tool({
       .optional(),
     sourceUrl: tool.schema
       .string()
-      .describe("Optional origin URL (Paper Search result, arXiv abs page, websearch) for provenance.")
+      .describe("Optional origin URL (literature-discover hit, arXiv abs page, websearch) for provenance.")
       .optional(),
     discoveredFrom: tool.schema
-      .enum(["paper-search-mcp", "websearch", "webfetch", "user", "agent"])
+      .enum(["literature-discover", "paper-search-mcp", "websearch", "webfetch", "user", "agent"])
       .describe(
-        "How the identifier was discovered. Use paper-search-mcp after any Paper Search MCP tool; websearch only as fallback.",
+        "How the identifier was discovered. Use literature-discover after literature-discover tool; websearch only as fallback.",
       )
       .optional(),
   },
@@ -111,7 +111,7 @@ export default tool({
         staged: false,
         verified: false,
         error: "Provide exactly one of doi or arxivId.",
-        hint: "Get the identifier from Paper Search MCP, websearch, or the user first. Do not invent DOIs.",
+        hint: "Get the identifier from literature-discover, websearch, or the user first. Do not invent DOIs.",
       });
     }
     if (doi && arxivId) {
@@ -121,7 +121,7 @@ export default tool({
         error: "Provide only one of doi or arxivId, not both.",
       });
     }
-    const allowed = ["paper-search-mcp", "websearch", "webfetch", "user", "agent"] as const;
+    const allowed = ["literature-discover", "paper-search-mcp", "websearch", "webfetch", "user", "agent"] as const;
     const raw = typeof args.discoveredFrom === "string" ? args.discoveredFrom : "agent";
     const discoveredFrom = (allowed as readonly string[]).includes(raw)
       ? raw

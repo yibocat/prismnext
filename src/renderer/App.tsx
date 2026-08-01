@@ -45,6 +45,9 @@ import {
   RESIZE_FILL_PX,
   SIDEBAR_FULLY_COLLAPSED_PX,
   PANEL_SASH_SEPARATOR_CLASS,
+  LEFT_SIDEBAR_SASH_SEPARATOR_CLASS,
+  SHELL_SASH_SHADOW_RIGHT_CLASS,
+  SHELL_SASH_SHADOW_LEFT_CLASS,
 } from "@/lib/workspace/layout-constants";
 import { isProgrammaticCenterResize, isWindowLayoutResizing, runDuringWindowLayoutResize } from "@/lib/workspace/layout-resize-guard";
 import {
@@ -89,6 +92,7 @@ export function App() {
   const inSettings = leftSidebarView === "settings";
   const settingsDetailStacked = useLayoutStore((s) => s.settingsDetailStacked);
   const settingsDetailOpen = inSettings && hasOpenSettingsEditor();
+  const sidebarExpanded = useLayoutStore((s) => s.sidebarExpanded);
 
   const leftSidebarRef = usePanelRef();
   const centerRef = usePanelRef();
@@ -545,7 +549,13 @@ export function App() {
                 <LeftSidebar leftSidebarRef={leftSidebarRef} centerRef={centerRef} rightAreaRef={rightAreaRef} />
               </Panel>
 
-              <Separator id="sep-sidebar" className={PANEL_SASH_SEPARATOR_CLASS} />
+              <Separator
+                id="sep-sidebar"
+                className={cn(
+                  LEFT_SIDEBAR_SASH_SEPARATOR_CLASS,
+                  sidebarExpanded && SHELL_SASH_SHADOW_RIGHT_CLASS,
+                )}
+              />
 
               <Panel id="main-area" minSize={MAIN_AREA_MIN}>
                 <Group
@@ -610,6 +620,9 @@ export function App() {
                     id="sep-center-right"
                     className={cn(
                       PANEL_SASH_SEPARATOR_CLASS,
+                      rightAreaExpanded &&
+                        !(editorMaximized && !inSettings) &&
+                        SHELL_SASH_SHADOW_LEFT_CLASS,
                       ((editorMaximized && !inSettings) || !rightAreaExpanded) && "w-0",
                     )}
                     disabled={
@@ -711,7 +724,13 @@ export function App() {
                 <LeftSidebar leftSidebarRef={leftSidebarRef} centerRef={centerRef} rightAreaRef={rightAreaRef} />
               </Panel>
 
-              <Separator id="sep-sidebar" className={PANEL_SASH_SEPARATOR_CLASS} />
+              <Separator
+                id="sep-sidebar"
+                className={cn(
+                  LEFT_SIDEBAR_SASH_SEPARATOR_CLASS,
+                  sidebarExpanded && SHELL_SASH_SHADOW_RIGHT_CLASS,
+                )}
+              />
 
               <Panel id="main-area" minSize={MAIN_AREA_MIN}>
                 <div className="flex h-full min-w-0 flex-col">

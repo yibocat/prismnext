@@ -56,7 +56,7 @@ export function ChatArtifactBlock({
   }
 
   return (
-    <div className="my-2 flex w-full max-w-full items-stretch gap-2 rounded-lg border border-border/50 bg-muted/20 p-1.5">
+    <div className="my-2 flex w-full max-w-full items-stretch gap-2 rounded-lg border border-border-subtle bg-muted/20 p-1.5">
       <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-background/80 text-muted-foreground">
         <FileIcon className="size-4" aria-hidden />
       </div>

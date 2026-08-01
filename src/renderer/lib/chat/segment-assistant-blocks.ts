@@ -341,6 +341,7 @@ const EXPLORE_TOOL_NAMES = new Set([
   "websearch",
   "web_search",
   "literature-search",
+  "literature-discover",
   "literature-read",
   "literature-cite",
   "literature-stage",

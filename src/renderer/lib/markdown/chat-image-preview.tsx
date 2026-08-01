@@ -61,7 +61,7 @@ export function ChatImagePreviewDialog({
       <DialogContent
         showCloseButton={false}
         className={cn(
-          "flex h-[min(94vh,56rem)] w-[min(96vw,90rem)] max-w-[min(96vw,90rem)] flex-col gap-0 overflow-hidden border-border/80 bg-background p-0 shadow-2xl",
+          "flex h-[min(94vh,56rem)] w-[min(96vw,90rem)] max-w-[min(96vw,90rem)] flex-col gap-0 overflow-hidden border-border-subtle bg-background p-0 shadow-2xl",
           "sm:max-w-[min(96vw,90rem)]",
         )}
         onOpenAutoFocus={(e) => e.preventDefault()}

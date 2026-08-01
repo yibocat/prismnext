@@ -519,6 +519,7 @@
       "subtitle": "文献库存储、PDF 提取与 Zotero。",
       "libraryStorage": "文献库存储",
       "pdfExtraction": "PDF 提取",
+      "discoveryTitle": "文献发现",
       "zotero": "Zotero",
       "pageDesc": "项目文献库存储与可选的 Zotero 同步。",
       "toast": {
@@ -528,6 +529,7 @@
       },
       "storageDesc": "缓存的 PDF 会保留，直到你删除对应条目或清理下方未引用文件。",
       "extractDesc": "Agent 与文献面板会读取 .prismnext/library/extract/ 下的缓存 Markdown。设置 Token 后，MinerU（云端）可上传 PDF 做高精度解析。",
+      "discoveryDesc": "内置 literature-discover（arXiv、Crossref、OpenAlex、Semantic Scholar、PubMed）的可选 API 密钥。无密钥也可搜索；密钥可提高速率限制。",
       "zoteroDesc": "可选 — 在 Zotero 桌面端运行时流式读取 PDF。Better BibTeX 提供 citekey；编辑集合需要 Web API 凭证或 debug-bridge 插件。",
       "rows": {
         "project": "项目",
@@ -535,6 +537,8 @@
         "unusedFiles": "未使用文件",
         "defaultEngine": "默认引擎",
         "mineruToken": "MinerU API Token",
+        "semanticScholarKey": "Semantic Scholar API 密钥",
+        "pubmedKey": "PubMed / NCBI API 密钥",
         "mineruConnection": "MinerU 连接",
         "autoExtract": "导入时自动提取",
         "autoAiMetadata": "自动生成摘要与关键词",
@@ -552,6 +556,8 @@
         "noUnused": "没有未引用的 PDF",
         "defaultEngine": "用于重新提取与 Agent 自动提取偏好。",
         "mineruToken": "可选 — 留空使用免费 flash 模式（10MB / 20 页）。Token 可启用高精度提取（最高 200MB / 200 页）。PDF 会发送到 MinerU 服务器。",
+        "semanticScholarKey": "可选 — 提高 literature-discover 对 Semantic Scholar 的速率限制。",
+        "pubmedKey": "可选 — 提高 literature-discover 对 PubMed / NCBI E-utilities 的速率限制。",
         "mineruTestHint": "测试 Token 或 flash 可用性。",
         "autoExtract": "将 PDF 加入文献库时排队提取。",
         "autoAiMetadata": "PDF 文本提取后，生成一句话摘要并写入标签（每篇少量 token）。",
@@ -568,6 +574,8 @@
       },
       "placeholders": {
         "mineruToken": "Bearer token…",
+        "semanticScholarKey": "x-api-key…",
+        "pubmedKey": "NCBI api_key…",
         "apiKey": "输入密钥…"
       },
       "actions": {
@@ -1099,7 +1107,7 @@
           "added": "已添加 {{name}} — 请开新对话以使用。"
         },
         "openProject": "请先打开项目以浏览 MCP 目录。",
-        "intro": "面向研究工作流的精选 MCP 服务器，需要 npx。「论文搜索」为内置（始终开启）。暂存与文献库引用仍使用 prismnext 的 literature-* 工具。",
+        "intro": "面向研究工作流的精选 MCP 服务器，需要 npx。外部文献发现使用内置 literature-discover；暂存与文献库引用仍使用 prismnext 的 literature-* 工具。",
         "searchPlaceholder": "搜索 MCP 服务器…",
         "badgeBuiltin": "内置",
         "badgeRecommended": "推荐",
@@ -1116,9 +1124,6 @@
           "productivity": "效率"
         },
         "presets": {
-          "paper-search-mcp": {
-            "description": "内置学术论文搜索（arXiv、PubMed、Semantic Scholar、Crossref 等）。通过 npx 运行，无需 Python。"
-          },
           "fetch": {
             "description": "抓取网页并转换为 Markdown"
           },
@@ -1552,6 +1557,7 @@
       "createSession": "创建新会话",
       "createIsland": "新建实验",
       "openInBrowser": "在浏览器打开",
+      "fileOpenFailed": "无法打开「{{path}}」",
       "more": "更多",
       "language": "语言",
       "settingsMore": "更多设置…",

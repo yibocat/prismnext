@@ -9,6 +9,7 @@ const LABELS: Record<string, string> = {
   "literature-read-pdf": "Read paper PDF text",
   "literature-intensive-reading": "Intensive reading",
   "literature-search": "Search literature library",
+  "literature-discover": "Discover external papers",
   "literature-stage": "Stage citation",
   "literature-add": "Add paper to library",
   "literature-export-bib": "Export library to .bib",
@@ -182,6 +183,16 @@ function LiteratureResultSummary({
     return (
       <p className="text-[length:var(--font-chat-meta)] text-muted-foreground">
         {data.results.length} result{data.results.length === 1 ? "" : "s"}
+      </p>
+    );
+  }
+
+  if (toolName === "literature-discover" && Array.isArray(data.hits)) {
+    const failed = Array.isArray(data.sourcesFailed) ? data.sourcesFailed.length : 0;
+    return (
+      <p className="text-[length:var(--font-chat-meta)] text-muted-foreground">
+        {data.hits.length} hit{data.hits.length === 1 ? "" : "s"}
+        {failed > 0 ? ` · ${failed} source${failed === 1 ? "" : "s"} failed` : ""}
       </p>
     );
   }

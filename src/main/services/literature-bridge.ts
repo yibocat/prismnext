@@ -40,6 +40,7 @@ import { resolveBibliographicMetadata } from "../../shared/bibliographic-metadat
 import { readPaperPdfContent } from "./paper-extract-read";
 import { getSettings } from "./settings";
 import { PAPER_EXTRACT_AGENT_UI_HINT } from "../../shared/paper-extract";
+import { discoverLiterature } from "./literature-discovery";
 import type { StagedCitationPayload, StageResult } from "../../shared/citation-staging";
 import {
   hitsFromLiteratureReadResult,
@@ -63,6 +64,7 @@ interface LiteratureBridgeRequest {
     | "read"
     | "read-pdf"
     | "search"
+    | "discover"
     | "add"
     | "stage"
     | "delete"
@@ -78,6 +80,9 @@ interface LiteratureBridgeRequest {
   all?: boolean;
   onlyCitedInTex?: boolean;
   query?: string;
+  sources?: string[];
+  year?: string;
+  author?: string;
   limit?: number;
   tag?: string;
   collection?: string;
@@ -599,6 +604,32 @@ function handleIntensiveReading(req: LiteratureBridgeRequest): Record<string, un
   };
 }
 
+async function handleDiscover(req: LiteratureBridgeRequest): Promise<Record<string, unknown>> {
+  const query = req.query?.trim() ?? "";
+  if (!query) {
+    return {
+      error: "Missing query parameter.",
+      hint: "Provide a focused topic or keyword query for external literature discovery.",
+    };
+  }
+  const settings = getSettings();
+  const result = await discoverLiterature({
+    query,
+    sources: req.sources,
+    limit: req.limit,
+    year: req.year,
+    author: req.author,
+    semanticScholarApiKey: settings.semanticScholarApiKey,
+    pubmedApiKey: settings.pubmedApiKey,
+  });
+  return {
+    ...result,
+    hint:
+      "External discovery hits only — call literature-stage with each DOI/arXiv before citing as [n]. " +
+      "Does not search or modify the project library.",
+  };
+}
+
 function dispatch(req: LiteratureBridgeRequest): unknown | Promise<unknown> {
   const projectRoot = resolveProjectRoot(req);
   if (!projectRoot) {
@@ -642,6 +673,8 @@ function dispatch(req: LiteratureBridgeRequest): unknown | Promise<unknown> {
       const collection = req.collection?.trim() ?? "";
       return handleSearch(projectRoot, query, req.limit, tag, collection);
     }
+    case "discover":
+      return handleDiscover(req);
     case "citation-health":
       return handleCitationHealth(projectRoot, req.verify !== false);
     case "delete": {

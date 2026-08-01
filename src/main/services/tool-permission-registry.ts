@@ -77,6 +77,7 @@ export const TOOL_PERMISSION_REGISTRY: Record<string, ToolPermissionEntry> = {
   skill: { confirmUx: "none", rules: READ_ONLY },
   todowrite: { confirmUx: "none", rules: READ_ONLY },
   "literature-search": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
+  "literature-discover": { permissionGroup: "network", confirmUx: "none", rules: READ_ONLY },
   "literature-read": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "literature-read-pdf": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "literature-intensive-reading": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },

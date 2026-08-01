@@ -8,6 +8,7 @@ export const TOOL_NAMES = {
   delete: "delete",
   move: "move",
   literatureSearch: "literature-search",
+  literatureDiscover: "literature-discover",
   literatureStage: "literature-stage",
   literatureAdd: "literature-add",
   literatureRead: "literature-read",

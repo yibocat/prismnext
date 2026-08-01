@@ -41,66 +41,6 @@ export const MCP_CATEGORY_LABELS: Record<McpPresetCategory, string> = {
 /** Curated catalog — prefer official @modelcontextprotocol servers with clear research value. */
 export const MCP_PRESETS: McpPreset[] = [
   {
-    id: "paper-search-mcp",
-    name: "Paper Search",
-    description:
-      "Built-in academic paper search (arXiv, PubMed, Semantic Scholar, Crossref, …). Runs via npx — no Python.",
-    category: "search",
-    type: "local",
-    builtin: true,
-    recommended: true,
-    command: ["npx", "-y", "paper-search-mcp-nodejs"],
-    docsUrl: "https://github.com/Dianel555/paper-search-mcp-nodejs",
-    fields: [
-      {
-        key: "SEMANTIC_SCHOLAR_API_KEY",
-        label: "Semantic Scholar (optional — higher rate limits)",
-        secret: true,
-      },
-      {
-        key: "PUBMED_API_KEY",
-        label: "PubMed / NCBI (optional — higher rate limits)",
-        secret: true,
-      },
-      {
-        key: "WOS_API_KEY",
-        label: "Web of Science (required for WoS search)",
-        secret: true,
-      },
-      {
-        key: "WOS_API_VERSION",
-        label: "Web of Science API version (optional, default v1)",
-        placeholder: "v1",
-      },
-      {
-        key: "ELSEVIER_API_KEY",
-        label: "Elsevier (required for ScienceDirect & Scopus)",
-        secret: true,
-      },
-      {
-        key: "SPRINGER_API_KEY",
-        label: "Springer Nature (required for Springer search)",
-        secret: true,
-      },
-      {
-        key: "SPRINGER_OPENACCESS_API_KEY",
-        label: "Springer OpenAccess (optional, if separate from main key)",
-        secret: true,
-      },
-      {
-        key: "WILEY_TDM_TOKEN",
-        label: "Wiley TDM token (required for Wiley PDF download)",
-        secret: true,
-      },
-      {
-        key: "SCHOLAR_PROXY",
-        label: "Google Scholar proxy (optional, if blocked)",
-        placeholder: "http://user:pass@host:port",
-        secret: true,
-      },
-    ],
-  },
-  {
     id: "fetch",
     name: "Fetch",
     description: "Fetch web pages and convert to markdown",

@@ -369,7 +369,7 @@ export function registerFsHandlers(): void {
       mkdirSync(skillsDir, { recursive: true });
     }
 
-    // Seed curated Paper Search MCP (npx) when mcp.json is missing/empty.
+    // Ensure mcp.json exists; strip legacy Paper Search MCP if present.
     const { ensureDefaultMcpServers } = await import("../services/project-mcp-defaults");
     ensureDefaultMcpServers(newAgentDir);
 

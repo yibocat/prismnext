@@ -8,6 +8,7 @@
  * `docs-private/superpowers/specs/2026-07-01-chat-citation-staging-design.md`.
  */
 export type StagedCitationDiscovery =
+  | "literature-discover"
   | "paper-search-mcp"
   | "websearch"
   | "webfetch"

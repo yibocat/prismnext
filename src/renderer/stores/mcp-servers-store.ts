@@ -34,7 +34,7 @@ export const useMcpServersStore = create<McpServersState>()((set, get) => ({
     }
     const mcpPath = mcpPathFor(projectRoot);
     try {
-      // Seed Paper Search only when mcp.json is missing; never force-enable.
+      // Ensure mcp.json exists; strip legacy Paper Search MCP if present.
       await window.electronAPI.mcpEnsure(projectRoot);
       const exists = await window.electronAPI.fsExists(mcpPath);
       if (!exists) {

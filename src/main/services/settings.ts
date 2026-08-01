@@ -67,6 +67,10 @@ export interface AppSettings {
   literatureAutoAiMetadata?: boolean;
   /** Optional override model for literature AI metadata (`provider/model`). */
   literatureAiMetadataModel?: string;
+  /** Optional Semantic Scholar API key for literature-discover rate limits */
+  semanticScholarApiKey?: string;
+  /** Optional NCBI API key for PubMed literature-discover rate limits */
+  pubmedApiKey?: string;
 
   /** Optional update feed override (generic provider root, or unpackaged
    *  version.json URL/path). Empty → use PRISM_UPDATER_BASE_URL / baked default. */
@@ -196,7 +200,14 @@ function decryptIfAvailable(value: string): string {
   return value;
 }
 
-const SENSITIVE_KEYS = ["zoteroApiKey", "zoteroUserId", "aiApiKeys", "mineruApiToken"] as const;
+const SENSITIVE_KEYS = [
+  "zoteroApiKey",
+  "zoteroUserId",
+  "aiApiKeys",
+  "mineruApiToken",
+  "semanticScholarApiKey",
+  "pubmedApiKey",
+] as const;
 
 function isSensitiveKey(key: string): boolean {
   return (SENSITIVE_KEYS as readonly string[]).includes(key);
@@ -233,6 +244,16 @@ export function getSettings(): AppSettings {
   const encryptedMineru = store.get("mineruApiToken") as string | undefined;
   if (encryptedMineru) {
     settings.mineruApiToken = decryptIfAvailable(encryptedMineru);
+  }
+
+  const encryptedS2 = store.get("semanticScholarApiKey") as string | undefined;
+  if (encryptedS2) {
+    settings.semanticScholarApiKey = decryptIfAvailable(encryptedS2);
+  }
+
+  const encryptedPubmed = store.get("pubmedApiKey") as string | undefined;
+  if (encryptedPubmed) {
+    settings.pubmedApiKey = decryptIfAvailable(encryptedPubmed);
   }
 
   const encryptedAiKeys = store.get("aiApiKeys") as string | undefined;
@@ -276,6 +297,10 @@ export function getSettings(): AppSettings {
     result.zoteroUserId = settings.zoteroUserId;
   if (settings.mineruApiToken !== undefined)
     result.mineruApiToken = settings.mineruApiToken;
+  if (settings.semanticScholarApiKey !== undefined)
+    result.semanticScholarApiKey = settings.semanticScholarApiKey;
+  if (settings.pubmedApiKey !== undefined)
+    result.pubmedApiKey = settings.pubmedApiKey;
   if (settings.aiApiKeys !== undefined)
     result.aiApiKeys = settings.aiApiKeys;
 

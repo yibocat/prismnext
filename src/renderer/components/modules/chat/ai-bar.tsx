@@ -30,7 +30,7 @@ const CAPSULE_TOOLBAR_PILL =
 
 /** Capsule outer shell — neutral gray border (not theme accent). */
 const CAPSULE_SHELL_BORDER = "border-border";
-const CAPSULE_SHELL_BORDER_IDLE = "border-border/70";
+const CAPSULE_SHELL_BORDER_IDLE = "border-border-subtle";
 
 /** idle: hover pill · input: compact capsule · expanded: full composer */
 type Phase = "idle" | "input" | "expanded";

@@ -31,24 +31,57 @@ export function getDefaultThemeConfig(): ThemeConfig {
   };
 }
 
-export function mapAnchorsToCssVars(anchors: ThemeAnchors): Record<string, string> {
+/** Opaque edge mixes — anchor % toward pack border/input, remainder toward surface. */
+const EDGE_MIX = {
+  light: {
+    border: 58,
+    borderSubtle: 42,
+    input: 65,
+    sidebarBorder: 55,
+    shellEdge: 54,
+    sidebarEdge: 52,
+    toolbarEdge: 50,
+  },
+  dark: {
+    border: 62,
+    borderSubtle: 48,
+    input: 68,
+    sidebarBorder: 55,
+    shellEdge: 38,
+    sidebarEdge: 40,
+    toolbarEdge: 35,
+  },
+} as const;
+
+function edgeMix(anchor: string, surface: string, anchorPercent: number): string {
+  return `color-mix(in oklch, ${anchor} ${anchorPercent}%, ${surface})`;
+}
+
+export function mapAnchorsToCssVars(
+  anchors: ThemeAnchors,
+  mode: "light" | "dark",
+): Record<string, string> {
+  const n = anchors.neutral;
+  const m = EDGE_MIX[mode];
+
   return {
-    "--background": anchors.neutral.background,
-    "--foreground": anchors.neutral.foreground,
-    "--card": anchors.neutral.card,
-    "--card-foreground": anchors.neutral.cardForeground,
-    "--popover": anchors.neutral.popover,
-    "--popover-foreground": anchors.neutral.popoverForeground,
+    "--background": n.background,
+    "--foreground": n.foreground,
+    "--card": n.card,
+    "--card-foreground": n.cardForeground,
+    "--popover": n.popover,
+    "--popover-foreground": n.popoverForeground,
     "--primary": anchors.brand.base,
     "--primary-foreground": anchors.brand.foreground,
     "--secondary": anchors.secondary.base,
     "--secondary-foreground": anchors.secondary.foreground,
-    "--muted": anchors.neutral.muted,
-    "--muted-foreground": anchors.neutral.mutedForeground,
+    "--muted": n.muted,
+    "--muted-foreground": n.mutedForeground,
     "--accent": anchors.accent.base,
     "--accent-foreground": anchors.accent.foreground,
-    "--border": anchors.neutral.border,
-    "--input": anchors.neutral.input,
+    "--border": edgeMix(n.border, n.card, m.border),
+    "--border-subtle": edgeMix(n.border, n.card, m.borderSubtle),
+    "--input": edgeMix(n.input, n.background, m.input),
     "--ring": anchors.brand.ring,
     "--destructive": anchors.semantic.destructive,
     "--destructive-foreground": anchors.semantic.destructiveForeground,
@@ -56,14 +89,17 @@ export function mapAnchorsToCssVars(anchors: ThemeAnchors): Record<string, strin
     "--success-foreground": anchors.semantic.successForeground,
     "--warning": anchors.semantic.warning,
     "--warning-foreground": anchors.semantic.warningForeground,
-    "--sidebar": anchors.neutral.sidebar,
-    "--sidebar-foreground": anchors.neutral.sidebarForeground,
+    "--sidebar": n.sidebar,
+    "--sidebar-foreground": n.sidebarForeground,
     "--sidebar-primary": anchors.brand.base,
     "--sidebar-primary-foreground": anchors.brand.foreground,
-    "--sidebar-accent": anchors.neutral.sidebarAccent,
-    "--sidebar-accent-foreground": anchors.neutral.sidebarAccentForeground,
-    "--sidebar-border": anchors.neutral.sidebarBorder,
-    "--sidebar-ring": anchors.neutral.sidebarRing,
+    "--sidebar-accent": n.sidebarAccent,
+    "--sidebar-accent-foreground": n.sidebarAccentForeground,
+    "--sidebar-border": edgeMix(n.sidebarBorder, n.sidebar, m.sidebarBorder),
+    "--sidebar-ring": n.sidebarRing,
+    "--shell-edge-line": edgeMix(n.border, n.background, m.shellEdge),
+    "--sidebar-edge-line": edgeMix(n.sidebarBorder, n.sidebar, m.sidebarEdge),
+    "--toolbar-edge-line": edgeMix(n.border, n.background, m.toolbarEdge),
   };
 }
 
@@ -151,6 +187,7 @@ function emitModeBlock(vars: Record<string, string>, indent = "  "): string {
     "--accent",
     "--accent-foreground",
     "--border",
+    "--border-subtle",
     "--input",
     "--ring",
     "--destructive",
@@ -167,6 +204,9 @@ function emitModeBlock(vars: Record<string, string>, indent = "  "): string {
     "--sidebar-accent-foreground",
     "--sidebar-border",
     "--sidebar-ring",
+    "--shell-edge-line",
+    "--sidebar-edge-line",
+    "--toolbar-edge-line",
   ] as const;
 
   return keys.map((k) => `${indent}${k}: ${vars[k]};`).join("\n");
@@ -177,8 +217,8 @@ export function generateThemeCSS(config: ThemeConfig): string {
   const lightAnchors = pack.balanced.light;
   const darkAnchors = pack.balanced.dark;
 
-  const lightVars = mapAnchorsToCssVars(lightAnchors);
-  const darkVars = mapAnchorsToCssVars(darkAnchors);
+  const lightVars = mapAnchorsToCssVars(lightAnchors, "light");
+  const darkVars = mapAnchorsToCssVars(darkAnchors, "dark");
 
   const chart = pack.chart;
   const sansFamily = resolveFontCssFamily(config.fontSans, "sans");

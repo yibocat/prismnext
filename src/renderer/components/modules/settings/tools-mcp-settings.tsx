@@ -22,10 +22,6 @@ import { InlineDeleteButton } from "./inline-delete-button";
 import { isBuiltinMcpServer, serverIsConfigurable } from "@/lib/agent/mcp-presets";
 import type { McpServerEntry } from "@/lib/agent/mcp-config";
 
-type PaperSearchHealth = Awaited<
-  ReturnType<typeof window.electronAPI.mcpPaperSearchHealth>
->;
-
 const CATEGORY_HEADER =
   "text-[length:var(--font-size-12)] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2";
 const CARD = "rounded-lg border border-border px-4 divide-y divide-border";
@@ -54,28 +50,16 @@ export function ToolsMcpSettings() {
   const openMcpServerSlot = useSettingsEditorSlotOfKind("mcp-server");
   const deleteConfirm = useInlineDeleteConfirm();
   const [applying, setApplying] = useState(false);
-  const [paperHealth, setPaperHealth] = useState<PaperSearchHealth | null>(null);
 
   useEffect(() => {
     void load(projectRoot);
   }, [projectRoot, load]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void window.electronAPI.mcpPaperSearchHealth().then((h) => {
-      if (!cancelled) setPaperHealth(h);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectRoot, loaded, servers]);
 
   const handleApplyMcp = async () => {
     if (!projectRoot) return;
     setApplying(true);
     try {
       const result = await window.electronAPI.mcpApply(projectRoot);
-      if (result.health) setPaperHealth(result.health);
       await load(projectRoot);
       if (!result.ok) {
         toast.error(result.error || t("settings.mcp.toast.applyFailed"));
@@ -190,9 +174,11 @@ export function ToolsMcpSettings() {
               (not a project-root <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">.mcp.json</code>
               ). Use{" "}
               <span className="font-medium text-foreground">{t("settings.mcp.applyToChats")}</span>{" "}
-              after Configure changes so open sessions reload MCP tools. Paper
-              Search may run via <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">npx -y</code>
-              {" "}on first use (network).
+              after Configure changes so open sessions reload MCP tools. MCP servers
+              may run via{" "}
+              <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">npx -y</code>
+              {" "}on first use (network). External literature discovery uses built-in{" "}
+              <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">literature-discover</code>.
             </p>
 
             <div>
@@ -269,12 +255,7 @@ export function ToolsMcpSettings() {
                                 </span>
                               )}
                             </div>
-                            <p className={ROW_DESC}>
-                              {builtin
-                                ? paperHealth?.detail
-                                  ?? "Default academic discovery — optional; disable or remove anytime."
-                                : serverSummary(entry)}
-                            </p>
+                            <p className={ROW_DESC}>{serverSummary(entry)}</p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             {configurable ? (

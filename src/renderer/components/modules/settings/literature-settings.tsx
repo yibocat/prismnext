@@ -66,6 +66,8 @@ export function LiteratureSettings() {
 
   const [showKey, setShowKey] = useState(false);
   const [showMineruKey, setShowMineruKey] = useState(false);
+  const [showS2Key, setShowS2Key] = useState(false);
+  const [showPubmedKey, setShowPubmedKey] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testingMineru, setTestingMineru] = useState(false);
   const [mineruStatus, setMineruStatus] = useState<string | null>(null);
@@ -367,6 +369,51 @@ export function LiteratureSettings() {
                   updateSettings({ literatureStrictIntensivePdf: checked })
                 }
               />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <h3 className={SECTION_TITLE}>{t("settings.literaturePage.discoveryTitle")}</h3>
+            <p className={SECTION_DESC}>{t("settings.literaturePage.discoveryDesc")}</p>
+          </div>
+          <div className={CARD}>
+            <div className={ROW}>
+              <div>
+                <p className={ROW_LABEL}>{t("settings.literaturePage.rows.semanticScholarKey")}</p>
+                <p className={ROW_DESC}>{t("settings.literaturePage.rowDesc.semanticScholarKey")}</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Input
+                  type={showS2Key ? "text" : "password"}
+                  className="!h-7 !text-[length:var(--font-size-12)] w-48"
+                  placeholder={t("settings.literaturePage.placeholders.semanticScholarKey")}
+                  value={(settings.semanticScholarApiKey as string) || ""}
+                  onChange={(e) => updateSettings({ semanticScholarApiKey: e.target.value })}
+                />
+                <Button variant="ghost" size="icon-xs" onClick={() => setShowS2Key(!showS2Key)}>
+                  {showS2Key ? <EyeOffIcon className="size-3" /> : <EyeIcon className="size-3" />}
+                </Button>
+              </div>
+            </div>
+            <div className={ROW}>
+              <div>
+                <p className={ROW_LABEL}>{t("settings.literaturePage.rows.pubmedKey")}</p>
+                <p className={ROW_DESC}>{t("settings.literaturePage.rowDesc.pubmedKey")}</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Input
+                  type={showPubmedKey ? "text" : "password"}
+                  className="!h-7 !text-[length:var(--font-size-12)] w-48"
+                  placeholder={t("settings.literaturePage.placeholders.pubmedKey")}
+                  value={(settings.pubmedApiKey as string) || ""}
+                  onChange={(e) => updateSettings({ pubmedApiKey: e.target.value })}
+                />
+                <Button variant="ghost" size="icon-xs" onClick={() => setShowPubmedKey(!showPubmedKey)}>
+                  {showPubmedKey ? <EyeOffIcon className="size-3" /> : <EyeIcon className="size-3" />}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

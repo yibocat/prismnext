@@ -3,8 +3,14 @@ import { useTranslation } from "react-i18next";
 import { useDocumentStore } from "@/stores/document-store";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { resolveProjectRelativePath } from "@/lib/files/project-path";
+import { cn } from "@/lib/utils";
 import { ChatImagePreviewDialog } from "@/lib/markdown/chat-image-preview";
 import { chatImagePathCandidates, artifactBasename } from "../../../shared/artifact-path";
+import {
+  CHAT_ARTIFACT_THUMB_IMAGE_CLASS,
+  CHAT_ARTIFACT_THUMB_PREVIEW_CLASS,
+  CHAT_ARTIFACT_THUMB_SHELL_CLASS,
+} from "./chat-artifact";
 
 /** Resolve `images/foo.png` relative to an extract markdown file path. */
 export function resolveExtractRelativeAssetPath(
@@ -94,7 +100,7 @@ export function ExtractMarkdownImage({
     <img
       src={dataUrl}
       alt={alt ?? ""}
-      className="my-2 max-w-full h-auto rounded border border-border/40"
+      className="my-2 max-w-full h-auto rounded border border-border-subtle"
       loading="lazy"
     />
   );
@@ -267,14 +273,19 @@ export function ChatProjectImage({
         type="button"
         aria-label={t("chat.composer.previewAttachment", { name: previewName })}
         onClick={() => setPreviewOpen(true)}
-        className="my-2 block max-w-full cursor-zoom-in rounded-lg border border-border/50 bg-muted/20 p-1.5 text-left transition-opacity hover:opacity-90"
+        className={cn(
+          CHAT_ARTIFACT_THUMB_SHELL_CLASS,
+          "cursor-zoom-in p-1.5 text-left transition-opacity hover:opacity-90",
+        )}
       >
-        <img
-          src={dataUrl}
-          alt={alt ?? ""}
-          className="max-w-full h-auto rounded-md"
-          loading="lazy"
-        />
+        <div className={CHAT_ARTIFACT_THUMB_PREVIEW_CLASS}>
+          <img
+            src={dataUrl}
+            alt={alt ?? ""}
+            className={CHAT_ARTIFACT_THUMB_IMAGE_CLASS}
+            loading="lazy"
+          />
+        </div>
       </button>
       <ChatImagePreviewDialog
         open={previewOpen}

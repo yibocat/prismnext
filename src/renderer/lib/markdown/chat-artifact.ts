@@ -23,6 +23,18 @@ export type ParsedArtifactFence = {
 /** Max auto-injected artifact blocks per assistant message. */
 export const CHAT_ARTIFACT_AUTO_CAP = 5;
 
+/** Fixed preview viewport for inline chat image/PDF thumbnails (`object-contain` inside). */
+export const CHAT_ARTIFACT_THUMB_SHELL_CLASS =
+  "my-2 w-full max-w-full overflow-hidden rounded-lg border border-border-subtle bg-muted/20";
+
+export const CHAT_ARTIFACT_THUMB_PREVIEW_CLASS =
+  "flex h-52 w-full items-center justify-center overflow-hidden rounded-md bg-background/80";
+
+export const CHAT_ARTIFACT_THUMB_IMAGE_CLASS = "max-h-full max-w-full object-contain";
+
+export const CHAT_ARTIFACT_THUMB_PDF_IMAGE_CLASS =
+  "max-h-full max-w-full rounded-md bg-white object-contain";
+
 export function classifyArtifactKind(path: string): ChatArtifactKind {
   if (isImageArtifactPath(path)) return "image";
   if (isPdfArtifactPath(path)) return "pdf";

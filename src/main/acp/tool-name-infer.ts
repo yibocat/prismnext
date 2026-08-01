@@ -26,12 +26,17 @@ export function inferToolNameFromInput(input: unknown): string | null {
   }
 
   if (has("query") && !has("pattern")) {
-  if (has("max_results") || has("maxResults")) return "websearch";
-  if (has("limit")) return "literature-search";
-  // websearch is the most common tool with a bare `query` parameter.
-  // literature-search typically also sends `limit`; without it, default to
-  // websearch to avoid mislabeling as "task" via KIND_TO_TOOL["other"].
-  return "websearch";
+    if (has("max_results") || has("maxResults")) return "websearch";
+    // literature-discover: external catalogs (sources/year/author). Must run before
+    // query+limit→literature-search — discover shares those keys and was mislabeled
+    // live (persisted JSONL kept literature-discover → "reload fixes it" bug).
+    if (has("sources") || has("year") || has("author")) return "literature-discover";
+    if (has("tag") || has("collection")) return "literature-search";
+    if (has("limit")) return "literature-search";
+    // websearch is the most common tool with a bare `query` parameter.
+    // literature-search typically also sends `limit`; without it, default to
+    // websearch to avoid mislabeling as "task" via KIND_TO_TOOL["other"].
+    return "websearch";
   }
 
   if (has("todos")) return "todowrite";
@@ -95,12 +100,27 @@ function unwrapToolOutput(payload: Record<string, unknown>): Record<string, unkn
   return payload;
 }
 
-/** Correct mis-labeled websearch when output is clearly from literature-search. */
+/** Correct mis-labeled tools when output shape is unambiguous. */
 export function inferToolNameFromOutput(raw: unknown): string | null {
   const payload = parseToolPayload(raw);
   if (!payload) return null;
 
   const data = unwrapToolOutput(payload);
+
+  const hits = data.hits;
+  if (Array.isArray(hits) && hits.length > 0) {
+    const first = hits[0];
+    if (first && typeof first === "object" && !Array.isArray(first)) {
+      const row = first as Record<string, unknown>;
+      if (typeof row.source === "string" && (row.doi || row.arxivId || row.pmid)) {
+        return "literature-discover";
+      }
+    }
+  }
+  if (Array.isArray(data.sourcesQueried) && data.sourcesQueried.length > 0 && Array.isArray(hits)) {
+    return "literature-discover";
+  }
+
   const results = data.results;
   if (!Array.isArray(results) || results.length === 0) return null;
 
@@ -116,7 +136,7 @@ export function inferToolNameFromOutput(raw: unknown): string | null {
 
 export function resolveLiteratureToolTitle(title: string): string | null {
   const lower = title.toLowerCase();
-  const match = lower.match(/^literature-(read-pdf|read|search|cite|add|stage)$/);
+  const match = lower.match(/^literature-(read-pdf|read|search|discover|cite|add|stage)$/);
   return match ? lower : null;
 }
 
@@ -130,7 +150,7 @@ export function resolveLiteratureToolTitle(title: string): string | null {
  */
 const PRISM_TOOL_NAMES = new Set([
   "question", "bash", "delete", "move",
-  "literature-search", "literature-stage", "literature-add",
+  "literature-search", "literature-discover", "literature-stage", "literature-add",
   "literature-read", "literature-read-pdf", "literature-intensive-reading", "literature-export-bib",
   "literature-delete", "citation-health", "latex-root", "latex-compile",
   "experiment-log", "experiment-run", "results-snapshot", "provenance-query",

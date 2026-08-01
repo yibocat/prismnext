@@ -71,6 +71,7 @@ async function bridgeCall(
 export default tool({
   description:
     "Search papers in the current project's literature library by title, authors, abstract, bibkey, user tags, or AI summary. " +
+    "LOCAL LIBRARY ONLY — does NOT search arXiv, Crossref, or the web. For topic / external discovery use literature-discover instead. " +
     "Omit query (and tag) to list all library papers. Optional tag= filters to papers with that exact project tag (case-insensitive); " +
     "collection= filters to papers in a named collection. The response always includes a `collections` roster (id, name, paperCount).",
   args: {

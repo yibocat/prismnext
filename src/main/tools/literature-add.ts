@@ -73,8 +73,8 @@ export default tool({
   description:
     "Add a real paper to the project literature library by DOI or arXiv ID. " +
     "The identifier is verified against external catalogs (Crossref, arXiv, OpenAlex, …) before insert. " +
-    "ONLY use DOI/arXiv copied from Paper Search MCP, websearch, or the user — NEVER invent identifiers. " +
-    "If unsure, run Paper Search MCP `search_papers` first, then call this tool with the exact DOI or arXiv ID.",
+    "ONLY use DOI/arXiv copied from literature-discover, websearch, or the user — NEVER invent identifiers. " +
+    "If unsure, run literature-discover first, then call this tool with the exact DOI or arXiv ID.",
   args: {
     doi: tool.schema
       .string()
@@ -96,7 +96,7 @@ export default tool({
     if (!doi && !arxivId) {
       return toolOutput({
         error: "Provide exactly one of doi or arxivId.",
-        hint: "Get the identifier from Paper Search MCP, websearch, or the user first. Do not invent DOIs.",
+        hint: "Get the identifier from literature-discover, websearch, or the user first. Do not invent DOIs.",
       });
     }
     if (doi && arxivId) {

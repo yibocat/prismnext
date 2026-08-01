@@ -13,10 +13,11 @@ import {
   artifactBasename,
   chatImagePathCandidates,
 } from "../../../shared/artifact-path";
+import {
+  CHAT_ARTIFACT_THUMB_PREVIEW_CLASS,
+} from "@/lib/markdown/chat-artifact";
 import { loadInteractionPlotData } from "./plot/load-interaction-plot-data";
 import { cn } from "@/lib/utils";
-
-const PEEK_HEIGHT_PX = 128;
 
 function useElementSize(ref: RefObject<HTMLElement | null>, active: boolean) {
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
@@ -55,10 +56,10 @@ function PeekFrame({
   return (
     <div
       className={cn(
-        "relative overflow-hidden border-t border-border/40 bg-background",
+        "relative overflow-hidden border-t border-border-subtle bg-background",
+        CHAT_ARTIFACT_THUMB_PREVIEW_CLASS,
         className,
       )}
-      style={{ height: PEEK_HEIGHT_PX }}
     >
       {children}
     </div>
