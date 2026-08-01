@@ -246,6 +246,13 @@ describe("resolveChord", () => {
     expect(formatChord({ key: "l", alt: true }, "linux")).toBe("Alt+L");
   });
 
+  it("registers appearance cycle shortcuts as Alt+T and Alt+B", () => {
+    expect(resolveChord("product.cycleThemePack")?.chord).toEqual({ key: "t", alt: true });
+    expect(resolveChord("product.cycleChatBackdrop")?.chord).toEqual({ key: "b", alt: true });
+    expect(formatChord({ key: "t", alt: true }, "darwin")).toBe("⌥T");
+    expect(formatChord({ key: "b", alt: true }, "darwin")).toBe("⌥B");
+  });
+
   it("matches alt+l on darwin when Option remaps key", () => {
     expect(
       chordMatchesEvent(

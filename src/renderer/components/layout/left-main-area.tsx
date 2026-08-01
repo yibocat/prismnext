@@ -43,6 +43,7 @@ import {
 } from "@/components/modules/settings";
 import { TemplateCenter } from "@/components/modules/templates/template-center";
 import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator, RestoreUndoBar } from "@/components/modules/chat";
+import { ChatHomeBackdrop } from "@/components/modules/chat/chat-home-backdrop";
 import { WorktreeSelector, CHAT_PANEL_TOOLBAR_BUTTON } from "@/components/modules/chat/worktree-selector";
 import { BranchSelector } from "@/components/modules/chat/branch-selector";
 import { WorktreeActions } from "@/components/modules/chat/worktree-actions";
@@ -99,6 +100,8 @@ export function LeftMainArea() {
     return () => window.clearTimeout(t);
   }, [openSubAgentPanelToolUseId]);
   const contextTokens = useChatStore((s) => s.contextTokens);
+  const contextWindowSize = useChatStore((s) => s.contextWindowSize);
+  const contextUsageSource = useChatStore((s) => s.contextUsageSource);
   const contextBreakdown = useChatStore((s) => s.contextBreakdown);
   const categorySchema = useChatStore((s) => s.categorySchema);
   const promptStale = useChatStore((s) => s.promptStale);
@@ -143,6 +146,9 @@ export function LeftMainArea() {
   }, []);
   const contextTotal = useMemo(() => {
     void catalogTick;
+    if (typeof contextWindowSize === "number" && contextWindowSize > 0) {
+      return contextWindowSize;
+    }
     const custom = aiCustomModelsData
       ? Object.fromEntries(
           Object.entries(aiCustomModelsData).map(([k, v]) => [k, v as any]),
@@ -150,12 +156,13 @@ export function LeftMainArea() {
       : undefined;
     return resolveSelectedModelContextTokens(
       aiProvider,
-      aiModel,
+      aiModel ?? undefined,
       aiEnabledModels,
       custom,
       aiCustomProviders,
     );
   }, [
+    contextWindowSize,
     aiProvider,
     aiModel,
     aiEnabledModels,
@@ -233,12 +240,14 @@ export function LeftMainArea() {
   return (
     <div className="flex h-full flex-col min-w-0 @container" data-surface="content">
       <ChatErrorBoundary>
-        {showHomepage ? (
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-sm bg-background">
+          <ChatHomeBackdrop />
+          {showHomepage ? (
           /* ── Homepage ── */
           <div
             ref={chatFileDropZoneRef}
             className={cn(
-              "relative flex min-w-0 flex-1 flex-col items-center justify-end overflow-x-hidden rounded-sm @xl:justify-center @xl:pb-[var(--height-titlebar)]",
+              "relative z-10 flex min-w-0 flex-1 flex-col items-center justify-center overflow-x-hidden @xl:pb-[var(--height-titlebar)]",
               chatFileDragActive && chatFileDropZoneClass,
             )}
             {...chatFileDropHandlers}
@@ -248,21 +257,25 @@ export function LeftMainArea() {
                 {t("chat.aibar.dropFiles")}
               </span>
             ) : null}
-            {/* Top toolbar — branch & worktree (gap to composer = composer py) */}
-            <div data-chat-width className="flex h-6 w-full items-center gap-1.5 px-3">
-              <BranchSelector />
+            <div className="relative z-10 flex w-full flex-col items-center">
+              {/* Branch / worktree — sits directly above the centered composer */}
+              <div data-chat-width className="flex h-6 w-full items-center gap-1.5 px-3">
+                <BranchSelector />
 
-              <WorktreeSelector />
-            </div>
-
-            {/* Composer */}
-            {!editorMaximized && (
-              <div data-chat-width className="w-full">
-                <ChatComposer />
+                <WorktreeSelector />
               </div>
-            )}
-            {/* Suggestion chips under homepage composer (gap from composer = composer py) */}
-            <div data-chat-width className="mb-2 flex h-6 w-full items-center gap-1.5 px-3 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
+
+              {/* Composer */}
+              {!editorMaximized && (
+                <div data-chat-width className="w-full">
+                  <ChatComposer />
+                </div>
+              )}
+              {/* Suggestion chips under homepage composer (gap from composer = composer py) */}
+              <div
+                data-chat-width
+                className="mb-2 flex h-6 w-full items-center gap-1.5 px-3 text-[length:var(--font-chat-meta)] text-muted-foreground/70"
+              >
               {showPlanNewIdea ? (
                 <button
                   type="button"
@@ -277,6 +290,7 @@ export function LeftMainArea() {
                 </button>
               ) : null}
               <span className="flex-1" />
+              </div>
             </div>
           </div>
         ) : (
@@ -284,7 +298,7 @@ export function LeftMainArea() {
           <div
             ref={chatFileDropZoneRef}
             className={cn(
-              "relative flex flex-1 flex-col min-w-0 overflow-x-hidden rounded-sm",
+              "relative z-10 flex min-w-0 flex-1 flex-col overflow-x-hidden",
               chatFileDragActive && chatFileDropZoneClass,
             )}
             {...chatFileDropHandlers}
@@ -351,12 +365,13 @@ export function LeftMainArea() {
                   </>
                 )}
                 <span className="flex-1" />
-                {contextTokens != null && (
+                {(contextTokens != null || contextWindowSize != null || sessionId) && (
                   <ContextWindowIndicator
                     used={contextTokens}
                     total={contextTotal}
                     breakdown={contextBreakdown}
                     schema={categorySchema}
+                    source={contextUsageSource}
                     promptStale={promptStale}
                     isStreaming={isStreaming}
                   />
@@ -365,6 +380,7 @@ export function LeftMainArea() {
             </div>
           </div>
         )}
+        </div>
       </ChatErrorBoundary>
     </div>
   );

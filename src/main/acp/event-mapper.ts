@@ -52,6 +52,15 @@ import {
   extractOpenCodeTime,
 } from "../../shared/opencode-part-time";
 import { buildSubAgentActivityBlocks } from "../../shared/opencode-session-activity";
+import {
+  parseAcpUsageUpdate,
+  type AcpUsageUpdate,
+} from "../../shared/session-context-usage";
+import {
+  loadSessionContext,
+  persistSessionContext,
+} from "../services/session-context-store";
+import { CONTEXT_CATEGORY_SCHEMA } from "../services/context-constants";
 
 const log = createLogger("event-mapper", "agent");
 
@@ -77,6 +86,11 @@ export class EventMapper {
   private taskToolExpertById = new Map<string, string>();
   /** Task tool_use id → parent tab while the OpenCode Task is still open. */
   private openTaskToolToTab = new Map<string, string>();
+  /** Latest ACP usage_update per session (authoritative context ring fill). */
+  private lastUsageBySession = new Map<
+    string,
+    AcpUsageUpdate & { at: number }
+  >();
   /**
    * Background Task tool_use ids whose Timeline-A early "started" already settled
    * but Timeline-B (child / inject) has not — keep UI running until join.
@@ -1860,6 +1874,11 @@ export class EventMapper {
     });
   }
 
+  /** Latest OpenCode usage_update for a session (used by chat:complete). */
+  getLastUsageUpdate(sessionId: string): (AcpUsageUpdate & { at: number }) | null {
+    return this.lastUsageBySession.get(sessionId) ?? null;
+  }
+
   private mapSessionUpdate(tabId: string, sessionId: string, params: any): void {
     const update: any = params.update || params;
     const chunkType = update.sessionUpdate;
@@ -1874,6 +1893,42 @@ export class EventMapper {
         tabId,
         type: "session.error",
         data: { message: detail, raw: update },
+      });
+      return;
+    }
+
+    // ACP session-usage RFD: { sessionUpdate: "usage_update", used, size }
+    const usageUpdate = parseAcpUsageUpdate(update);
+    if (usageUpdate) {
+      this.lastUsageBySession.set(sessionId, { ...usageUpdate, at: Date.now() });
+      this.win.webContents.send("chat:stream", {
+        tabId,
+        type: "session.usage",
+        data: {
+          used: usageUpdate.used,
+          size: usageUpdate.size,
+          cost: usageUpdate.cost ?? null,
+          source: "usage_update" as const,
+        },
+      });
+      const projectRoot = getSessionProjectRoot(sessionId);
+      if (projectRoot) {
+        const prev = loadSessionContext(projectRoot, sessionId);
+        persistSessionContext(projectRoot, sessionId, {
+          tokens: usageUpdate.used,
+          windowSize: usageUpdate.size,
+          source: "usage_update",
+          breakdown: prev?.breakdown ?? {},
+          schema: prev?.schema?.length ? prev.schema : CONTEXT_CATEGORY_SCHEMA,
+          updatedAt: Date.now(),
+          promptFingerprint: prev?.promptFingerprint,
+          hasSystemPromptBlock: prev?.hasSystemPromptBlock,
+        });
+      }
+      log.debug("usage_update", {
+        sessionId,
+        used: usageUpdate.used,
+        size: usageUpdate.size,
       });
       return;
     }

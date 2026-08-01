@@ -200,8 +200,12 @@ interface TabState {
   pendingTurnMeta: { modelLabel: string } | null;
   /** Per-tab context token total — persisted alongside breakdown. Source of
    *  truth for the context ring. Set by _setContextTokens (live) or restored
-   *  from sessions-context.json (loaded). */
+   *  from sessions-context.json (loaded). Prefer OpenCode usage_update.used. */
   contextTokens: number | null;
+  /** OpenCode usage_update.size when known; else null (UI falls back to model metadata). */
+  contextWindowSize: number | null;
+  /** How contextTokens was derived. */
+  contextUsageSource: "usage_update" | "prompt_usage" | "estimate" | null;
   /** Per-tab context token breakdown (set by _setContextTokens or sessionGetContext) */
   contextBreakdown: Record<string, number> | null;
   /** Per-tab category schema (set by _setContextTokens or sessionGetContext) */
@@ -312,6 +316,8 @@ function makeDefaultTab(id: string): TabState {
     turnMeta: {},
     pendingTurnMeta: null,
     contextTokens: null,
+    contextWindowSize: null,
+    contextUsageSource: null,
     contextBreakdown: null,
     categorySchema: null,
     promptStale: false,
@@ -536,8 +542,11 @@ interface ChatState {
   sessionId: string | null;
   isStreaming: boolean;
   error: string | null;
-  /** Current context window tokens used (from latest message with usage) — null = no conversation yet */
+  /** Current context window tokens used (OpenCode usage_update / prompt usage) — null = unknown */
   contextTokens: number | null;
+  /** OpenCode-reported context window size; null → fall back to model metadata */
+  contextWindowSize: number | null;
+  contextUsageSource: "usage_update" | "prompt_usage" | "estimate" | null;
   /** Categorized token breakdown (Record<categoryKey, tokenCount>). null = no data. */
   contextBreakdown: Record<string, number> | null;
   /** Category definitions for the context ring (drives UI rendering). null = no schema. */
@@ -667,7 +676,18 @@ interface ChatState {
    * agent UIs). Commits any in-flight stream first; clears tab.error.
    */
   _appendAssistantError: (tabId: string, text: string) => void;
-  _setContextTokens: (tabId: string, tokens: number, breakdown?: Record<string, number> | null, schema?: { key: string; label: string; color: string; description?: string; order?: number }[] | null) => void;
+  _setContextTokens: (
+    tabId: string,
+    tokens: number | null,
+    breakdown?: Record<string, number> | null,
+    schema?: { key: string; label: string; color: string; description?: string; order?: number }[] | null,
+    opts?: {
+      windowSize?: number | null;
+      source?: "usage_update" | "prompt_usage" | "estimate" | null;
+      /** When true, clear used/size (e.g. after compact). */
+      clear?: boolean;
+    },
+  ) => void;
   _setPromptStale: (tabId: string, stale: boolean) => void;
   /** Patch tool_use duration / OpenCode time range. */
   _patchToolDuration: (tabId: string, toolUseId: string, duration: number, time?: { start?: number; end?: number }) => void;
@@ -734,17 +754,23 @@ interface ChatState {
 function computeContextTokens(msg: ChatStreamMessage): number | null {
   // Check result type (backward compatibility with JSONL replay)
   if (msg.type === "result" && !msg.is_error) {
-    const usage = msg.usage || msg.message?.usage;
+    const usage = (msg.usage || msg.message?.usage) as Record<string, number> | undefined;
     if (usage) {
-      return (usage.input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0);
+      const total = usage.total_tokens ?? usage.totalTokens;
+      if (typeof total === "number" && total > 0) return total;
+      const sum = (usage.input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0);
+      return sum > 0 ? sum : null;
     }
   }
   // Check assistant messages (OpenCode emits final assistant messages with
   // message.usage containing the complete token breakdown.
   // Other agents should follow the same convention.)
   if (msg.type === "assistant" && msg.message?.usage) {
-    const usage = msg.message.usage;
-    return (usage.input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0);
+    const usage = msg.message.usage as Record<string, number>;
+    const total = usage.total_tokens ?? usage.totalTokens;
+    if (typeof total === "number" && total > 0) return total;
+    const sum = (usage.input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0);
+    return sum > 0 ? sum : null;
   }
   return null;
 }
@@ -833,6 +859,8 @@ function projectActiveTab(tabs: TabState[], activeTabId: string) {
       isStreaming: false,
       error: null as string | null,
       contextTokens: null as number | null,
+      contextWindowSize: null as number | null,
+      contextUsageSource: null as "usage_update" | "prompt_usage" | "estimate" | null,
       contextBreakdown: null as Record<string, number> | null,
       categorySchema: null as { key: string; label: string; color: string; description?: string; order?: number }[] | null,
       promptStale: false,
@@ -864,6 +892,8 @@ function projectActiveTab(tabs: TabState[], activeTabId: string) {
     isStreaming: tab.isStreaming,
     error: tab.error,
     contextTokens,
+    contextWindowSize: tab.contextWindowSize,
+    contextUsageSource: tab.contextUsageSource,
     contextBreakdown: tab.contextBreakdown,
     categorySchema: tab.categorySchema,
     promptStale: tab.promptStale,
@@ -1186,13 +1216,22 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           useChatStore.setState((s) => {
             const tabs = s.tabs.map((t) =>
               t.id === id
-                ? { ...t, contextTokens: ctxData.tokens, contextBreakdown: ctxData.breakdown, categorySchema: ctxData.schema }
+                ? {
+                    ...t,
+                    contextTokens: ctxData.tokens,
+                    contextWindowSize: ctxData.windowSize ?? null,
+                    contextUsageSource: ctxData.source ?? null,
+                    contextBreakdown: ctxData.breakdown,
+                    categorySchema: ctxData.schema,
+                  }
                 : t,
             );
             if (s.activeTabId === id) {
               return {
                 tabs,
                 contextTokens: ctxData.tokens,
+                contextWindowSize: ctxData.windowSize ?? null,
+                contextUsageSource: ctxData.source ?? null,
                 contextBreakdown: ctxData.breakdown,
                 categorySchema: ctxData.schema,
               };
@@ -2396,13 +2435,22 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         useChatStore.setState((s) => {
           const tabs = s.tabs.map((t) =>
             t.id === tabId
-              ? { ...t, contextTokens: d.tokens, contextBreakdown: d.breakdown, categorySchema: d.schema }
+              ? {
+                  ...t,
+                  contextTokens: d.tokens,
+                  contextWindowSize: d.windowSize ?? null,
+                  contextUsageSource: d.source ?? null,
+                  contextBreakdown: d.breakdown,
+                  categorySchema: d.schema,
+                }
               : t,
           );
           if (s.activeTabId === tabId) {
             return {
               tabs,
               contextTokens: d.tokens,
+              contextWindowSize: d.windowSize ?? null,
+              contextUsageSource: d.source ?? null,
               contextBreakdown: d.breakdown,
               categorySchema: d.schema,
             };
@@ -2521,7 +2569,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       // fetchSessions writes from OpenCode don't clobber it.
       const userTitleSet = !!(dbTitle && !isGenericSessionTitle(dbTitle));
 
-      let ctxData: { tokens: number; breakdown: Record<string, number>; schema: any[] } | null = null;
+      let ctxData: {
+        tokens: number;
+        breakdown: Record<string, number>;
+        schema: any[];
+        windowSize?: number | null;
+        source?: "usage_update" | "prompt_usage" | "estimate";
+      } | null = null;
       try {
         ctxData = await window.electronAPI.sessionGetContext(projectPath, sessionId);
       } catch { /* best-effort */ }
@@ -2541,6 +2595,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                 isStreaming: false,
                 isLoadingSession: false,
                 contextTokens: ctxData?.tokens ?? null,
+                contextWindowSize: ctxData?.windowSize ?? null,
+                contextUsageSource: ctxData?.source ?? null,
                 contextBreakdown: ctxData?.breakdown ?? null,
                 categorySchema: ctxData?.schema ?? null,
                 subAgentRuns: reconcileBackgroundSubAgentRunsFromMessages(
@@ -3004,16 +3060,37 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     cacheTabMessages(tab?.sessionId, tab?.messages ?? []);
   },
 
-  _setContextTokens: (tabId: string, tokens: number, breakdown?: Record<string, number> | null, schema?: { key: string; label: string; color: string; description?: string; order?: number }[] | null) => {
+  _setContextTokens: (tabId, tokens, breakdown, schema, opts) => {
     set((s) => {
-      // Store tokens, breakdown, and schema on the TAB — survives tab switches.
-      const tabs = s.tabs.map((t) =>
-        t.id === tabId ? { ...t, contextTokens: tokens, contextBreakdown: breakdown ?? null, categorySchema: schema ?? null } : t,
-      );
-      // Also project to store-level for the active tab
+      const clear = opts?.clear === true;
+      const nextTokens = clear ? null : tokens;
+      const nextSize =
+        clear ? null : (opts && "windowSize" in opts ? opts.windowSize ?? null : undefined);
+      const nextSource =
+        clear ? null : (opts && "source" in opts ? opts.source ?? null : undefined);
+
+      const tabs = s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        return {
+          ...t,
+          contextTokens: nextTokens,
+          ...(nextSize !== undefined ? { contextWindowSize: nextSize } : {}),
+          ...(nextSource !== undefined ? { contextUsageSource: nextSource } : {}),
+          ...(breakdown !== undefined ? { contextBreakdown: breakdown ?? null } : {}),
+          ...(schema !== undefined ? { categorySchema: schema ?? null } : {}),
+        };
+      });
       const isActive = s.activeTabId === tabId;
       if (isActive) {
-        return { tabs, contextTokens: tokens, contextBreakdown: breakdown ?? null, categorySchema: schema ?? null };
+        const active = tabs.find((t) => t.id === tabId);
+        return {
+          tabs,
+          contextTokens: active?.contextTokens ?? null,
+          contextWindowSize: active?.contextWindowSize ?? null,
+          contextUsageSource: active?.contextUsageSource ?? null,
+          contextBreakdown: active?.contextBreakdown ?? null,
+          categorySchema: active?.categorySchema ?? null,
+        };
       }
       return { tabs };
     });

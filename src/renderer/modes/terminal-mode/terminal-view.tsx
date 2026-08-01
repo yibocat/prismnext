@@ -81,7 +81,7 @@ export function TerminalView({ tabId }: TerminalViewProps) {
     }
 
     const computedStyle = getComputedStyle(document.documentElement);
-    const editorFont = computedStyle.getPropertyValue("--font-editor").trim() || "'Geist Mono', 'Menlo', 'Monaco', 'Courier New', monospace";
+    const editorFont = computedStyle.getPropertyValue("--font-editor").trim() || "ui-monospace, Menlo, Monaco, Consolas, monospace";
     const editorFontSize = parseFloat(computedStyle.getPropertyValue("--font-editor-size")) || 13;
 
     const term = new Terminal({

@@ -48,7 +48,7 @@ const DelegationUserBubble = memo(function DelegationUserBubble({
     <div className="sticky top-0 z-20 mx-3 mb-2">
       <div
         className={cn(
-          "rounded-lg border border-input bg-muted px-4 py-2 shadow-[0_0_6px_rgba(0,0,0,0.06)]",
+          "rounded-lg border border-border bg-card px-4 py-2 shadow-[0_0_6px_rgba(0,0,0,0.06)]",
           long && !expanded && "cursor-pointer transition-colors hover:bg-accent",
         )}
         onClick={long && !expanded ? () => setExpanded(true) : undefined}

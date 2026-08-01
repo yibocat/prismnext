@@ -10,7 +10,7 @@ import {
   CommandItem,
   CommandShortcut,
 } from "@/components/ui/command";
-import { MessageSquareIcon, BookIcon, BookOpenIcon, Loader2Icon, SparklesIcon, FilePlusIcon, MessageSquarePlusIcon, FlaskConicalIcon, GlobeIcon, HistoryIcon, XIcon } from "lucide-react";
+import { BookIcon, BookOpenIcon, Loader2Icon, FilePlusIcon, MessageSquarePlusIcon, FlaskConicalIcon, GlobeIcon, HistoryIcon, XIcon, CheckIcon, MoreHorizontalIcon } from "lucide-react";
 import { getFileIcon } from "@/lib/files/file-tree";
 import { getRecentOpenedFilesForProject } from "@/lib/files/recent-files";
 import { useLayoutStore, type RightToolbarTab } from "@/stores/layout-store";
@@ -18,6 +18,8 @@ import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore, type ProjectFile } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useExperimentStore } from "@/stores/experiment-store";
+import { useThemeStore } from "@/stores/theme-store";
+import { useSettingsStore } from "@/stores/settings-store";
 import { openUrlInBrowser } from "@/lib/browser-link";
 import { toast } from "sonner";
 import { useLiteratureStore } from "@/stores/literature-store";
@@ -28,6 +30,13 @@ import { pressLeftNav } from "@/lib/workspace/left-nav";
 import { openRightArea, toggleRightAreaMaximize } from "@/lib/workspace/right-area-layout";
 import { openPaperPdfReader, openPaperInMainLibrary } from "@/lib/literature/open-paper-in-library";
 import { paperHasReadablePdf } from "@/modes/literature-mode/literature-format";
+import { LiteratureExtractBadge } from "@/modes/literature-mode/literature-extract-badge";
+import { useLiteratureExtractStore, useLiteratureExtractSession } from "@/stores/literature-extract-store";
+import {
+  APP_LOCALE_PREFERENCES,
+  normalizeAppLocalePreference,
+  type AppLocalePreference,
+} from "../../../../shared/app-locale";
 import { fuzzyMatch } from "@/lib/search/fuzzy";
 import {
   getSearchHistory,
@@ -36,9 +45,20 @@ import {
   clearSearchHistory,
 } from "@/lib/search/history";
 import { formatRelativeTimeMs } from "@/lib/chat/relative-time";
+import { displayChatTitle } from "@/lib/i18n/display-chat-title";
 import { cn } from "@/lib/utils";
 import { ShortcutKbdChips } from "@/lib/shortcuts";
 import { Kbd } from "@/components/ui/kbd";
+import {
+  THEME_PACK_IDS,
+  getThemePack,
+  type ThemePackId,
+} from "@/lib/theme/theme-packs";
+import {
+  CHAT_HOME_BACKDROP_LABEL_KEYS,
+  CHAT_HOME_BACKDROP_STYLE_OPTIONS,
+} from "@/lib/chat/home-backdrops/registry";
+import type { ChatHomeBackdropSetting } from "@/lib/chat/home-backdrops/types";
 
 export interface CommandPanelRefs {
   leftSidebarRef: RefObject<PanelImperativeHandle | null>;
@@ -89,17 +109,86 @@ const MODE_SHORTCUT: Partial<Record<string, string>> = {
 
 const FILE_LIMIT_ALL = 8;
 const FILE_LIMIT_SINGLE = 30;
+const RECENT_FILE_PREVIEW = 5;
 const SESSION_LIMIT_ALL = 6;
-const SESSION_LIMIT_SINGLE = 20;
+const SETTINGS_PREVIEW_COUNT = 5;
+
+function localeOptionLabel(value: AppLocalePreference, t: (key: string) => string): string {
+  switch (value) {
+    case "en":
+      return t("localeName.en");
+    case "zh-CN":
+      return t("localeName.zhCN");
+    case "zh-HK":
+      return t("localeName.zhHK");
+  }
+}
+
+function PaletteMoreItem({
+  id,
+  label,
+  onGo,
+}: {
+  id: string;
+  label: string;
+  onGo: () => void;
+}) {
+  return (
+    <CommandItem
+      value={id}
+      keywords={[label, "more"]}
+      onSelect={onGo}
+      className="text-muted-foreground"
+    >
+      <MoreHorizontalIcon className="size-4" />
+      <span className="flex-1 truncate">{label}</span>
+    </CommandItem>
+  );
+}
 
 export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: CommandPaletteProps) {
   const { t } = useTranslation();
   const { centerRef, rightAreaRef } = panelRefs;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const files = useDocumentStore((s) => s.files);
+  const chatTabs = useChatStore((s) => s.tabs);
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<Category>("all");
+  const [ignoredPaths, setIgnoredPaths] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    if (!open || !projectRoot || files.length === 0) {
+      setIgnoredPaths(new Set());
+      return;
+    }
+    let cancelled = false;
+    const paths = files.map((f) => f.relativePath);
+    window.electronAPI
+      .gitCheckIgnore(projectRoot, paths)
+      .then((ignored) => {
+        if (!cancelled) setIgnoredPaths(new Set(ignored));
+      })
+      .catch(() => {
+        if (!cancelled) setIgnoredPaths(new Set());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, projectRoot, files]);
+
+  const visibleFiles = useMemo(
+    () => files.filter((f) => !ignoredPaths.has(f.relativePath)),
+    [files, ignoredPaths],
+  );
+
+  const openSessionIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const tab of chatTabs) {
+      if (tab.sessionId) ids.add(tab.sessionId);
+    }
+    return ids;
+  }, [chatTabs]);
 
   useEffect(() => {
     if (open) {
@@ -109,6 +198,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
   }, [open]);
 
   const close = () => onOpenChange(false);
+  const goToCategory = (next: Category) => setCategory(next);
   const run = (fn: () => void) => {
     // Record the query as a successful search (per-project history).
     if (query.trim()) {
@@ -122,6 +212,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Tab") {
       e.preventDefault();
+      e.stopPropagation();
       const idx = CATEGORIES.findIndex((c) => c.id === category);
       const next = e.shiftKey
         ? (idx - 1 + CATEGORIES.length) % CATEGORIES.length
@@ -153,11 +244,19 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
 
   // ── Sessions (sorted by lastModified desc) ──
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
+  const [sessionsReady, setSessionsReady] = useState(false);
   useEffect(() => {
-    if (!open || !projectRoot) {
+    if (!open) {
       setSessions([]);
+      setSessionsReady(false);
       return;
     }
+    if (!projectRoot) {
+      setSessions([]);
+      setSessionsReady(true);
+      return;
+    }
+    setSessionsReady(false);
     let cancelled = false;
     window.electronAPI
       .sessionList(projectRoot)
@@ -166,59 +265,74 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
       })
       .catch(() => {
         if (!cancelled) setSessions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSessionsReady(true);
       });
     return () => {
       cancelled = true;
     };
   }, [open, projectRoot]);
 
-  const sessionsSorted = useMemo(
-    () => [...sessions].sort((a, b) => b.lastModified - a.lastModified),
-    [sessions],
-  );
+  const sessionsSorted = useMemo(() => {
+    const enriched = sessions.map((s) => {
+      const tab = chatTabs.find((t) => t.sessionId === s.id);
+      if (tab?.userTitleSet && tab.title) {
+        return { ...s, title: tab.title };
+      }
+      if (s.title.startsWith("New Chat") || s.title.startsWith("New session")) {
+        if (tab?.title && tab.title !== "New Chat") {
+          return { ...s, title: tab.title };
+        }
+      }
+      return s;
+    });
+    return [...enriched].sort((a, b) => b.lastModified - a.lastModified);
+  }, [sessions, chatTabs]);
 
   // ── Recent files (per-project recent-opened list, still present in the tree) ──
   const recentFileItems = useMemo(() => {
     if (!projectRoot) return [] as ProjectFile[];
     const recent = getRecentOpenedFilesForProject(projectRoot);
-    const fileById = new Map(files.map((f) => [f.id, f]));
-    return recent.filter((r) => fileById.has(r.id)).slice(0, 5).map((r) => fileById.get(r.id)!);
-  }, [projectRoot, files]);
+    const fileById = new Map(visibleFiles.map((f) => [f.id, f]));
+    return recent.filter((r) => fileById.has(r.id)).slice(0, RECENT_FILE_PREVIEW).map((r) => fileById.get(r.id)!);
+  }, [projectRoot, visibleFiles]);
 
   // ── File items to render ──
   const showFiles = category === "files" || (isAll && hasQuery);
   const fileLimit = isAll ? FILE_LIMIT_ALL : FILE_LIMIT_SINGLE;
   const fileItems = useMemo(() => {
-    if (showRecentLayout) return recentFileItems;
+    if (showRecentLayout) {
+      if (!sessionsReady) return [];
+      return recentFileItems;
+    }
     if (!showFiles) return [];
     const out: ProjectFile[] = [];
-    for (const f of files) {
+    for (const f of visibleFiles) {
       if (!hasQuery || fuzzyMatch(query, f.name) || fuzzyMatch(query, f.relativePath)) {
         out.push(f);
         if (out.length >= fileLimit) break;
       }
     }
     return out;
-  }, [showRecentLayout, recentFileItems, showFiles, files, hasQuery, query, fileLimit]);
+  }, [showRecentLayout, recentFileItems, showFiles, visibleFiles, hasQuery, query, fileLimit, sessionsReady]);
 
   // ── Session items to render ──
   const showSessions = category === "sessions" || (isAll && hasQuery);
-  const sessionLimit = isAll ? SESSION_LIMIT_ALL : SESSION_LIMIT_SINGLE;
   const sessionItems = useMemo(() => {
-    if (showRecentLayout) return sessionsSorted.slice(0, 8);
+    if (showRecentLayout) return sessionsSorted.slice(0, SESSION_LIMIT_ALL);
     if (!showSessions) return [];
-    const out: SessionListItem[] = [];
-    for (const s of sessionsSorted) {
-      if (!hasQuery || fuzzyMatch(query, s.title)) {
-        out.push(s);
-        if (out.length >= sessionLimit) break;
-      }
-    }
-    return out;
-  }, [showRecentLayout, sessionsSorted, showSessions, hasQuery, query, sessionLimit]);
+    if (!hasQuery) return sessionsSorted;
+    return sessionsSorted.filter((s) => fuzzyMatch(query, s.title));
+  }, [showRecentLayout, sessionsSorted, showSessions, hasQuery, query]);
+
+  const showSessionsMore = showRecentLayout && sessionsSorted.length > SESSION_LIMIT_ALL;
+  const showFilesMore =
+    showRecentLayout &&
+    (visibleFiles.length > RECENT_FILE_PREVIEW || recentFileItems.length > 0);
 
   // ── Modes (RightArea modules) ──
-  const showModes = category === "modes" || category === "all";
+  const showModes = (category === "modes" || (isAll && showRecentLayout)) && sessionsReady;
   const modeItems = useMemo(() => {
     if (!showModes) return [] as { id: string; label: string; icon: ReactNode; shortcutId?: string }[];
     return modeRegistry
@@ -232,9 +346,133 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
       .filter((m) => !query || fuzzyMatch(query, m.label) || fuzzyMatch(query, m.id));
   }, [showModes, query, t]);
 
+  // ── Appearance (theme / backdrop / language) — All tab only ──
+  const currentThemePack = useThemeStore((s) => s.config.themePack);
+  const currentBackdrop = useSettingsStore((s) => s.settings.chatHomeBackdrop ?? "auto");
+  const appLocale = useSettingsStore((s) =>
+    normalizeAppLocalePreference(s.settings.appLocale),
+  );
+  const appearanceLabel = t("settings.nav.appearance");
+  const themePackPrefix = t("shell.command.themePackPrefix");
+  const backdropPrefix = t("shell.command.backdropPrefix");
+  const languageLabel = t("shell.command.language");
+
+  type AppearanceQuickItem = {
+    kind: "themePack" | "backdrop";
+    id: string;
+    label: string;
+    searchText: string;
+    selected: boolean;
+  };
+
+  const showAppearanceSection = isAll && sessionsReady;
+
+  const themePackItems = useMemo(() => {
+    if (!showAppearanceSection) return [] as AppearanceQuickItem[];
+
+    const packs: AppearanceQuickItem[] = THEME_PACK_IDS.map((id) => {
+      const pack = getThemePack(id);
+      const name = t(pack.labelKey);
+      return {
+        kind: "themePack" as const,
+        id,
+        label: name,
+        searchText: [themePackPrefix, name, id, appearanceLabel, "theme", "pack", "主题", "主題"].join(
+          " ",
+        ),
+        selected: currentThemePack === id,
+      };
+    });
+
+    if (!hasQuery) return packs;
+    return packs.filter(
+      (item) =>
+        fuzzyMatch(query, item.label) ||
+        fuzzyMatch(query, item.searchText) ||
+        fuzzyMatch(query, item.id),
+    );
+  }, [showAppearanceSection, hasQuery, query, t, themePackPrefix, appearanceLabel, currentThemePack]);
+
+  const backdropItems = useMemo(() => {
+    if (!showAppearanceSection) return [] as AppearanceQuickItem[];
+
+    const backdrops: AppearanceQuickItem[] = [
+      {
+        kind: "backdrop" as const,
+        id: "auto",
+        label: t("settings.appearance.chatHomeBackdropDefault"),
+        searchText: [
+          backdropPrefix,
+          t("settings.appearance.chatHomeBackdropDefault"),
+          "auto",
+          "default",
+          appearanceLabel,
+          "backdrop",
+          "background",
+          "背景",
+        ].join(" "),
+        selected: currentBackdrop === "auto" || currentBackdrop === "none",
+      },
+      ...CHAT_HOME_BACKDROP_STYLE_OPTIONS.map((id) => {
+        const name = t(CHAT_HOME_BACKDROP_LABEL_KEYS[id]);
+        return {
+          kind: "backdrop" as const,
+          id,
+          label: name,
+          searchText: [backdropPrefix, name, id, appearanceLabel, "backdrop", "background", "背景"].join(
+            " ",
+          ),
+          selected: currentBackdrop === id,
+        };
+      }),
+    ];
+
+    if (!hasQuery) return backdrops;
+    return backdrops.filter(
+      (item) =>
+        fuzzyMatch(query, item.label) ||
+        fuzzyMatch(query, item.searchText) ||
+        fuzzyMatch(query, item.id),
+    );
+  }, [
+    showAppearanceSection,
+    hasQuery,
+    query,
+    t,
+    backdropPrefix,
+    appearanceLabel,
+    currentBackdrop,
+  ]);
+
+  const languageItems = useMemo(() => {
+    if (!showAppearanceSection) return [] as { id: AppLocalePreference; label: string; selected: boolean }[];
+
+    const all = APP_LOCALE_PREFERENCES.map((id) => ({
+      id,
+      label: localeOptionLabel(id, t),
+      selected: appLocale === id,
+      searchText: [languageLabel, localeOptionLabel(id, t), id, "language", "locale", "语言", "語言"].join(
+        " ",
+      ),
+    }));
+
+    if (!hasQuery) return all;
+    return all.filter(
+      (item) =>
+        fuzzyMatch(query, item.label) ||
+        fuzzyMatch(query, item.searchText) ||
+        fuzzyMatch(query, item.id),
+    );
+  }, [showAppearanceSection, hasQuery, query, t, languageLabel, appLocale]);
+
+  const showAppearanceGroups =
+    themePackItems.length > 0 || backdropItems.length > 0 || languageItems.length > 0;
+
   // ── Settings ──
-  const showSettings = category === "settings" || category === "all";
-  const settingItems = useMemo(() => {
+  const showSettings =
+    category === "settings" || (isAll && (showRecentLayout || hasQuery) && sessionsReady);
+
+  const allSettingItems = useMemo(() => {
     if (!showSettings)
       return [] as { id: string; label: string; icon: ComponentType<{ className?: string }> }[];
     const all: { id: string; label: string; icon: ComponentType<{ className?: string }> }[] = [];
@@ -244,8 +482,38 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
         all.push({ id: it.id, label, icon: it.icon });
       }
     }
-    return query ? all.filter((s) => fuzzyMatch(query, s.label) || fuzzyMatch(query, s.id)) : all;
+    return query
+      ? all.filter((s) => fuzzyMatch(query, s.label) || fuzzyMatch(query, s.id))
+      : all;
   }, [showSettings, query, t]);
+
+  const visibleSettingItems = useMemo(() => {
+    if (hasQuery || category === "settings") return allSettingItems;
+    if (showRecentLayout) return allSettingItems.slice(0, SETTINGS_PREVIEW_COUNT);
+    return [];
+  }, [allSettingItems, hasQuery, category, showRecentLayout]);
+
+  const showSettingsMore =
+    showRecentLayout && allSettingItems.length > SETTINGS_PREVIEW_COUNT;
+
+  const applyAppearanceQuick = (item: AppearanceQuickItem) => {
+    if (item.kind === "themePack") {
+      void useThemeStore.getState().updateConfig({ themePack: item.id as ThemePackId });
+      return;
+    }
+    if (item.id === "auto") {
+      void useSettingsStore.getState().updateSettings({ chatHomeBackdrop: "auto" });
+      return;
+    }
+    void useSettingsStore.getState().updateSettings({
+      chatHomeBackdropEnabled: true,
+      chatHomeBackdrop: item.id as ChatHomeBackdropSetting,
+    });
+  };
+
+  const applyLanguage = (locale: AppLocalePreference) => {
+    void useSettingsStore.getState().updateSettings({ appLocale: locale });
+  };
 
   // ── Literature (FTS over title/abstract/authors/tags/ai_summary via IPC) ──
   const showPapers = category === "literature" || (isAll && hasQuery);
@@ -307,6 +575,10 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
       clearTimeout(timer);
     };
   }, [open, projectRoot, showPapers, hasQuery, query]);
+
+  const extractStates = useLiteratureExtractStore((s) => s.statesByPaper);
+  const paperIdsForExtract = useMemo(() => papers.map((p) => p.id), [papers]);
+  useLiteratureExtractSession(open && showPapers ? projectRoot : null, paperIdsForExtract);
 
   // ── History (recent queries, per-project localStorage) ──
   const showHistory = category === "history";
@@ -444,26 +716,38 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
   }, [hasQuery, query, category, t]);
 
   const now = Date.now();
+  const moreLabel = t("shell.command.more");
   const hasResults =
     fileItems.length > 0 ||
+    showFilesMore ||
     sessionItems.length > 0 ||
+    showSessionsMore ||
+    (!sessionsReady && showRecentLayout) ||
     papers.length > 0 ||
     modeItems.length > 0 ||
-    settingItems.length > 0 ||
+    visibleSettingItems.length > 0 ||
+    showSettingsMore ||
+    showAppearanceGroups ||
     createOptions.length > 0 ||
     Boolean(urlToOpen) ||
     historyItems.length > 0;
+
+  // Remount cmdk only when the session list finishes its first load — never on
+  // category Tab (that used to reset cmdk and break ↑↓ / Tab navigation).
+  const commandMountKey = sessionsReady ? "sessions-ready" : "sessions-loading";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="top-[15vh] left-1/2 -translate-x-1/2 translate-y-0 overflow-hidden p-0 shadow-lg sm:max-w-xl"
+        overlayClassName="bg-black/30"
+        className="top-[15vh] left-1/2 -translate-x-1/2 translate-y-0 overflow-hidden border-border/80 bg-background/88 p-0 shadow-lg backdrop-blur-md sm:max-w-xl"
       >
         <Command
+          key={commandMountKey}
           loop
           filter={passAllFilter}
-          className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-4 [&_[cmdk-input-wrapper]_svg]:w-4 [&_[cmdk-input]]:h-11 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-1.5 [&_[cmdk-item]_svg]:h-4 [&_[cmdk-item]_svg]:w-4"
+          className="bg-transparent text-[length:var(--font-size-13)] [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:text-[length:var(--font-size-12)] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-1 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-4 [&_[cmdk-input-wrapper]_svg]:w-4 [&_[cmdk-input]]:h-11 [&_[cmdk-input]]:text-[length:var(--font-size-13)] [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-1.5 [&_[cmdk-item]]:text-[length:var(--font-size-13)] [&_[cmdk-item]_svg]:h-4 [&_[cmdk-item]_svg]:w-4"
         >
           <DialogTitle className="sr-only">{t("shell.commandPalette")}</DialogTitle>
           <CommandInput
@@ -480,7 +764,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
                 type="button"
                 onClick={() => setCategory(c.id)}
                 className={cn(
-                  "rounded-md px-2 py-1 text-[length:var(--font-size-11)] transition-colors",
+                  "rounded-md px-2 py-1 text-[length:var(--font-size-12)] transition-colors",
                   category === c.id
                     ? "bg-accent text-accent-foreground"
                     : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
@@ -494,9 +778,15 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
               {t("shell.command.tabHint")}
             </span>
           </div>
+          {showRecentLayout && !sessionsReady ? (
+            <div className="flex items-center gap-2 border-b px-3 py-3 text-[length:var(--font-size-13)] text-muted-foreground">
+              <Loader2Icon className="size-4 animate-spin" />
+              <span>{t("shell.command.searching")}</span>
+            </div>
+          ) : null}
           <CommandList className="max-h-[50vh]">
             {query && !hasResults ? (
-              <div className="py-6 text-center text-[length:var(--font-menu-item)] text-muted-foreground">
+              <div className="py-6 text-center text-[length:var(--font-size-13)] text-muted-foreground">
                 {t("shell.commandPaletteEmpty")}
               </div>
             ) : null}
@@ -507,15 +797,27 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
                   <CommandItem
                     key={`session-${s.id}`}
                     value={`session ${s.id} ${s.title}`}
+                    className="pl-3"
                     onSelect={() => run(() => openSession(s, consumeMaximize()))}
                   >
-                    <MessageSquareIcon className="size-4" />
-                    <span className="flex-1 truncate">{s.title}</span>
+                    <span className="flex w-3 shrink-0 items-center justify-center">
+                      {openSessionIds.has(s.id) ? (
+                        <span className="size-1.5 rounded-full bg-primary" aria-hidden />
+                      ) : null}
+                    </span>
+                    <span className="flex-1 truncate pl-1">{displayChatTitle(s.title, t)}</span>
                     <CommandShortcut className="tabular-nums">
                       {formatRelativeTimeMs(s.lastModified, now)}
                     </CommandShortcut>
                   </CommandItem>
                 ))}
+                {showSessionsMore ? (
+                  <PaletteMoreItem
+                    id="palette-more-sessions"
+                    label={moreLabel}
+                    onGo={() => goToCategory("sessions")}
+                  />
+                ) : null}
               </CommandGroup>
             )}
 
@@ -526,7 +828,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
                     {t("shell.command.history")}
                     <button
                       type="button"
-                      className="text-[length:var(--font-size-11)] text-muted-foreground hover:text-destructive"
+                      className="text-[length:var(--font-size-12)] text-muted-foreground hover:text-destructive"
                       onClick={(e) => {
                         e.stopPropagation();
                         clearSearchHistory(projectRoot);
@@ -577,40 +879,117 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
                     onSelect={() => run(() => openFile(file, consumeMaximize()))}
                   >
                     {getFileIcon(file)}
-                    <span className="flex-1 truncate font-mono text-[length:var(--font-size-11)]">
+                    <span className="flex-1 truncate font-mono text-[length:var(--font-size-12)]">
                       {file.relativePath}
                     </span>
                   </CommandItem>
                 ))}
+                {showFilesMore ? (
+                  <PaletteMoreItem
+                    id="palette-more-files"
+                    label={moreLabel}
+                    onGo={() => goToCategory("files")}
+                  />
+                ) : null}
               </CommandGroup>
             )}
+
+            {showAppearanceGroups ? (
+              <>
+                {themePackItems.length > 0 ? (
+                  <CommandGroup
+                    heading={
+                      <span className="flex w-full items-center justify-between gap-2 pr-1">
+                        <span>{themePackPrefix}</span>
+                        <ShortcutKbdChips id="product.cycleThemePack" />
+                      </span>
+                    }
+                  >
+                    {themePackItems.map((item) => (
+                      <CommandItem
+                        key={`theme-pack-${item.id}`}
+                        value={`appearance theme ${item.searchText}`}
+                        onSelect={() => run(() => applyAppearanceQuick(item))}
+                      >
+                        <span className="flex size-4 shrink-0 items-center justify-center">
+                          {item.selected ? <CheckIcon className="size-3.5 text-primary" /> : null}
+                        </span>
+                        <span className="flex-1 truncate">{item.label}</span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                ) : null}
+                {backdropItems.length > 0 ? (
+                  <CommandGroup
+                    heading={
+                      <span className="flex w-full items-center justify-between gap-2 pr-1">
+                        <span>{backdropPrefix}</span>
+                        <ShortcutKbdChips id="product.cycleChatBackdrop" />
+                      </span>
+                    }
+                  >
+                    {backdropItems.map((item) => (
+                      <CommandItem
+                        key={`backdrop-${item.id}`}
+                        value={`appearance backdrop ${item.searchText}`}
+                        onSelect={() => run(() => applyAppearanceQuick(item))}
+                      >
+                        <span className="flex size-4 shrink-0 items-center justify-center">
+                          {item.selected ? <CheckIcon className="size-3.5 text-primary" /> : null}
+                        </span>
+                        <span className="flex-1 truncate">{item.label}</span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                ) : null}
+                {languageItems.length > 0 ? (
+                  <CommandGroup heading={languageLabel}>
+                    {languageItems.map((item) => (
+                      <CommandItem
+                        key={`language-${item.id}`}
+                        value={`appearance language ${item.label} ${item.id}`}
+                        onSelect={() => run(() => applyLanguage(item.id))}
+                      >
+                        <span className="flex size-4 shrink-0 items-center justify-center">
+                          {item.selected ? <CheckIcon className="size-3.5 text-primary" /> : null}
+                        </span>
+                        <span className="flex-1 truncate">{item.label}</span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                ) : null}
+              </>
+            ) : null}
 
             {showPapers && (papers.length > 0 || papersLoading) && (
               <CommandGroup heading={t("shell.command.literature")}>
                 {papersLoading ? (
-                  <div className="flex items-center gap-2 px-2 py-2 text-[length:var(--font-menu-item)] text-muted-foreground">
+                  <div className="flex items-center gap-2 px-2 py-2 text-[length:var(--font-size-13)] text-muted-foreground">
                     <Loader2Icon className="size-4 animate-spin" />
                     <span>{t("shell.command.searching")}</span>
                   </div>
                 ) : (
                   papers.map((p) => {
                     const hasPdf = paperHasReadablePdf(p);
-                    const extracted = p.ai_metadata_status === "ready";
                     return (
                       <CommandItem
                         key={`paper-${p.id}`}
                         value={`paper ${p.id} ${p.title}`}
                         onSelect={() => run(() => openPaper(p, consumeMaximize()))}
                       >
+                        <span className="flex w-7 shrink-0 items-center justify-center">
+                          <LiteratureExtractBadge
+                            paperId={p.id}
+                            statesByPaper={extractStates}
+                            visible
+                          />
+                        </span>
                         {hasPdf ? (
                           <BookOpenIcon className="size-4" />
                         ) : (
                           <BookIcon className="size-4 text-muted-foreground/50" />
                         )}
                         <span className="flex-1 truncate">{p.title}</span>
-                        {extracted ? (
-                          <SparklesIcon className="ml-auto size-3.5 shrink-0 text-primary/70" />
-                        ) : null}
                       </CommandItem>
                     );
                   })
@@ -634,9 +1013,9 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
               </CommandGroup>
             )}
 
-            {settingItems.length > 0 && (
+            {(visibleSettingItems.length > 0 || showSettingsMore) && (
               <CommandGroup heading={t("shell.command.settings")}>
-                {settingItems.map((s) => {
+                {visibleSettingItems.map((s) => {
                   const Icon = s.icon;
                   return (
                     <CommandItem
@@ -649,6 +1028,13 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
                     </CommandItem>
                   );
                 })}
+                {showSettingsMore ? (
+                  <PaletteMoreItem
+                    id="palette-more-settings"
+                    label={t("shell.command.settingsMore")}
+                    onGo={() => goToCategory("settings")}
+                  />
+                ) : null}
               </CommandGroup>
             )}
             {(createOptions.length > 0 || urlToOpen) && (
@@ -683,7 +1069,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
               </CommandGroup>
             )}
           </CommandList>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-3 py-1.5 text-[length:var(--font-size-11)] text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-3 py-1.5 text-[length:var(--font-size-12)] text-muted-foreground">
             <span className="flex items-center gap-1">
               <Kbd>↑</Kbd>
               <Kbd>↓</Kbd>

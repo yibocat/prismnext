@@ -49,15 +49,17 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  overlayClassName,
   // Desktop UI: don't restore focus to the opener after Esc/close (avoids sticky focus rings).
   onCloseAutoFocus = (event) => event.preventDefault(),
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
+  overlayClassName?: string;
 }) {
   return (
     <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(

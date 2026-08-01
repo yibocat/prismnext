@@ -1,7 +1,7 @@
 // lib/theme/theme-generator.ts
 // Core engine: ThemeConfig -> CSS text string for <style> injection.
 
-import { getFontById, getDefaultSansFont, getDefaultMonoFont } from "./font-options";
+import { resolveFontCssFamily } from "./font-options";
 import { generateGlassCSS, type GlassTier } from "./glass-system";
 import { getThemePack, type ThemeAnchors, type ThemePackId } from "./theme-packs";
 
@@ -181,9 +181,9 @@ export function generateThemeCSS(config: ThemeConfig): string {
   const darkVars = mapAnchorsToCssVars(darkAnchors);
 
   const chart = pack.chart;
-  const sansFont = getFontById(config.fontSans) ?? getDefaultSansFont();
-  const monoFont = getFontById(config.fontMono) ?? getDefaultMonoFont();
-  const editorFont = getFontById(config.editorFontFamily) ?? getDefaultMonoFont();
+  const sansFamily = resolveFontCssFamily(config.fontSans, "sans");
+  const monoFamily = resolveFontCssFamily(config.fontMono, "mono");
+  const editorFamily = resolveFontCssFamily(config.editorFontFamily, "mono");
 
   const glassCSS = config.glassEffect
     ? generateGlassCSS({ tier: config.glassIntensity })
@@ -198,10 +198,10 @@ ${emitModeBlock(lightVars)}
   --chart-3: ${chart.light[2]};
   --chart-4: ${chart.light[3]};
   --chart-5: ${chart.light[4]};
-  --font-sans: ${sansFont.family};
-  --font-mono: ${monoFont.family};
+  --font-sans: ${sansFamily};
+  --font-mono: ${monoFamily};
   --font-ui-size: ${resolveFontSize(config.uiFontSize)};
-  --font-editor: ${editorFont.family};
+  --font-editor: ${editorFamily};
   --font-editor-size: ${resolveFontSize(config.editorFontSize)};
   ${generateEditorSyntaxVars(lightAnchors.brand.base, lightVars, "light")}${glassCSS.root}
 }

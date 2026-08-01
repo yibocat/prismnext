@@ -291,6 +291,20 @@ export function useOpenCodeEvents() {
       if (!tab) return;
 
       switch (type) {
+        case "session.usage": {
+          if (data?.cleared) {
+            chatStore._setContextTokens(tabId, null, undefined, undefined, { clear: true });
+            break;
+          }
+          const used = typeof data?.used === "number" ? data.used : null;
+          const size = typeof data?.size === "number" ? data.size : null;
+          if (used == null) break;
+          chatStore._setContextTokens(tabId, used, undefined, undefined, {
+            windowSize: size,
+            source: data?.source === "usage_update" ? "usage_update" : "prompt_usage",
+          });
+          break;
+        }
         case "system.prepare": {
           const phase = data?.phase;
           if (phase == null || phase === "") {
@@ -967,7 +981,7 @@ export function useOpenCodeEvents() {
     });
 
     // ─── Chat Complete Handler ───
-    const unsubComplete = window.electronAPI.onChatComplete(({ tabId, success, error, errorCode, emptyTurn, tokenUsage, contextBreakdown, categorySchema, promptStale, planDraftMissing }) => {
+    const unsubComplete = window.electronAPI.onChatComplete(({ tabId, success, error, errorCode, emptyTurn, tokenUsage, contextUsed, contextWindowSize, contextSource, contextBreakdown, categorySchema, promptStale, planDraftMissing }) => {
       const chatStore = useChatStore.getState();
 
       if (!success) {
@@ -996,11 +1010,38 @@ export function useOpenCodeEvents() {
         toast.message(i18n.t("chat.planWorkflow.draftMissingRedirect"));
       }
 
-      if (tokenUsage) {
-        const totalTokens = (tokenUsage.input_tokens || 0) +
-          (tokenUsage.cache_creation_input_tokens || 0) +
-          (tokenUsage.cache_read_input_tokens || 0);
-        chatStore._setContextTokens(tabId, totalTokens, contextBreakdown ?? null, categorySchema ?? null);
+      // Prefer explicit OpenCode ring fields; do not overwrite a fresher usage_update
+      // with a weaker prompt-only sum when used is missing.
+      const ctxTab = chatStore.tabs.find((t) => t.id === tabId);
+      const alreadyOpenCode = ctxTab?.contextUsageSource === "usage_update";
+      const used =
+        typeof contextUsed === "number"
+          ? contextUsed
+          : tokenUsage
+            ? (tokenUsage.total_tokens
+              || ((tokenUsage.input_tokens || 0)
+                + (tokenUsage.cache_creation_input_tokens || 0)
+                + (tokenUsage.cache_read_input_tokens || 0))
+              || null)
+            : null;
+      if (used != null && !(alreadyOpenCode && contextSource !== "usage_update")) {
+        chatStore._setContextTokens(
+          tabId,
+          used,
+          contextBreakdown ?? undefined,
+          categorySchema ?? undefined,
+          {
+            windowSize: typeof contextWindowSize === "number" ? contextWindowSize : undefined,
+            source: contextSource ?? (tokenUsage ? "prompt_usage" : null),
+          },
+        );
+      } else if (contextBreakdown || categorySchema) {
+        chatStore._setContextTokens(
+          tabId,
+          ctxTab?.contextTokens ?? null,
+          contextBreakdown ?? undefined,
+          categorySchema ?? undefined,
+        );
       }
 
       if (promptStale !== undefined) {

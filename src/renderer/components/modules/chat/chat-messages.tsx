@@ -118,11 +118,9 @@ TurnErrorRetry.displayName = "TurnErrorRetry";
 
 const UserHeader = memo(function UserHeader({
   msg,
-  isActiveTurn = false,
   attachedBelow,
 }: {
   msg: ChatStreamMessage;
-  isActiveTurn?: boolean;
   /** Flush under the bubble (e.g. Task plan drawer) — same sticky stack, no gap. */
   attachedBelow?: ReactNode;
 }) {
@@ -168,21 +166,14 @@ const UserHeader = memo(function UserHeader({
   const long = text.length > 140;
   const hasBody = Boolean(text) || hasInline || attachments.length > 0;
 
-  // Inset with margin (matches composer `px-3`), not padded sticky plate —
-  // gutters stay transparent so glass / panel surfaces show through cleanly.
-  // Only the *active* turn sticks — older sticky headers at top-0 stacked on
-  // top of history and made it look like earlier bubbles were overwritten.
+  // Same inset as main AI Chat (`mx-3`). Sticky on every turn section so the
+  // user bubble pins while that turn is in view. Do not use -mx full-bleed —
+  // that made AiBar / Task float bubbles flush to the panel sides.
   return (
-    <div
-      className={cn(
-        "mx-3 mb-2",
-        isActiveTurn && "sticky top-0 z-30",
-      )}
-    >
+    <div className="sticky top-0 z-30 mx-3 mb-2">
       <div
         className={cn(
-          // Opaque bg — /50 hover looked “transparent” over glass chat surfaces.
-          "rounded-lg border border-input bg-muted px-4 py-2 shadow-[0_0_6px_rgba(0,0,0,0.06)]",
+          "rounded-lg border border-border bg-card px-4 py-2 shadow-[0_0_6px_rgba(0,0,0,0.06)]",
           long && !expanded && "cursor-pointer transition-colors hover:bg-accent",
         )}
         onClick={long && !expanded ? () => setExpanded(true) : undefined}
@@ -1256,7 +1247,6 @@ export const ChatMessages = memo(function ChatMessages() {
               {turn.userMessage && (
                 <UserHeader
                   msg={turn.userMessage}
-                  isActiveTurn={isLastTurn}
                   attachedBelow={
                     todoAnchorUserIndex != null
                     && committed.idxMap.get(turn.userMessage) === todoAnchorUserIndex

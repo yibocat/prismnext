@@ -6,6 +6,7 @@ import {
   getDefaultThemeConfig,
   type ThemeConfig,
 } from "./theme-generator";
+import { migrateFontValue } from "./font-options";
 import { THEME_PACK_IDS, type ThemePackId } from "./theme-packs";
 import type { GlassTier } from "./glass-system";
 
@@ -47,13 +48,19 @@ export function migrateToThemePackConfig(
   return {
     themePack: resolvePack(raw),
     radius: typeof raw.radius === "number" ? raw.radius : defaults.radius,
-    fontSans: typeof raw.fontSans === "string" ? raw.fontSans : defaults.fontSans,
-    fontMono: typeof raw.fontMono === "string" ? raw.fontMono : defaults.fontMono,
+    fontSans:
+      typeof raw.fontSans === "string"
+        ? migrateFontValue(raw.fontSans, "sans")
+        : defaults.fontSans,
+    fontMono:
+      typeof raw.fontMono === "string"
+        ? migrateFontValue(raw.fontMono, "mono")
+        : defaults.fontMono,
     uiFontSize:
       typeof raw.uiFontSize === "string" ? raw.uiFontSize : defaults.uiFontSize,
     editorFontFamily:
       typeof raw.editorFontFamily === "string"
-        ? raw.editorFontFamily
+        ? migrateFontValue(raw.editorFontFamily, "mono")
         : defaults.editorFontFamily,
     editorFontSize:
       typeof raw.editorFontSize === "string"

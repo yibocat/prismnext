@@ -1066,3 +1066,54 @@ export async function deleteBranch(
     return { success: false, error: (err as Error).message };
   }
 }
+
+/** Paths ignored by .gitignore (via `git check-ignore`). Fails open on error. */
+export async function checkIgnoredPaths(
+  projectRoot: string,
+  relativePaths: string[],
+): Promise<string[]> {
+  if (!relativePaths.length) return [];
+  if (!existsSync(join(projectRoot, ".git"))) return [];
+
+  const CHUNK = 400;
+  const ignored: string[] = [];
+
+  const runChunk = (chunk: string[]) =>
+    new Promise<string[]>((resolve) => {
+      const child = spawn(
+        "git",
+        ["-c", "core.quotepath=false", "check-ignore", "-z", "--stdin"],
+        {
+          cwd: projectRoot,
+          timeout: GIT_TIMEOUT_MS,
+          windowsHide: true,
+          stdio: ["pipe", "pipe", "pipe"],
+        },
+      );
+      let stdout = "";
+      child.stdout.on("data", (data: Buffer) => {
+        stdout += data.toString();
+      });
+      child.stdin.write(chunk.join("\0") + "\0");
+      child.stdin.end();
+      child.on("close", (code) => {
+        // Exit 1 means none of the paths are ignored.
+        if (code === 0 || code === 1) {
+          resolve(stdout.split("\0").filter(Boolean));
+        } else {
+          resolve([]);
+        }
+      });
+      child.on("error", () => resolve([]));
+    });
+
+  for (let i = 0; i < relativePaths.length; i += CHUNK) {
+    const chunk = relativePaths.slice(i, i + CHUNK);
+    const task = _pending.then(() => runChunk(chunk), () => runChunk(chunk));
+    _pending = task.catch(() => {}).then(() => {});
+    const part = await task;
+    ignored.push(...part);
+  }
+
+  return ignored;
+}

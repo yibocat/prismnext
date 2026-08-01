@@ -26,12 +26,17 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { EditorThemePicker } from "./editor-theme-picker";
+import { SystemFontPicker } from "./system-font-picker";
 import {
   THEME_PACK_IDS,
   getThemePack,
   type ThemePackId,
 } from "@/lib/theme/theme-packs";
-import { SANS_FONTS, MONO_FONTS } from "@/lib/theme/font-options";
+import {
+  CHAT_HOME_BACKDROP_LABEL_KEYS,
+  CHAT_HOME_BACKDROP_STYLE_OPTIONS,
+} from "@/lib/chat/home-backdrops/registry";
+import type { ChatHomeBackdropSetting, ChatHomeBackdropStyle } from "@/lib/chat/home-backdrops/types";
 import {
   SETTINGS_CARD,
   SETTINGS_CATEGORY_HEADER,
@@ -85,6 +90,12 @@ export function AppearanceSettings() {
   const glassEffect = config.glassEffect;
   const defaults = getDefaultThemeConfig();
   const messageWidth = useSettingsStore((s) => s.settings.messageWidth ?? "balanced");
+  const chatHomeBackdropEnabled =
+    useSettingsStore((s) => s.settings.chatHomeBackdropEnabled ?? true);
+  const chatHomeBackdrop =
+    useSettingsStore((s) => s.settings.chatHomeBackdrop ?? "auto");
+  const chatHomeBackdropStyleValue: ChatHomeBackdropSetting | ChatHomeBackdropStyle =
+    chatHomeBackdrop === "none" ? "auto" : chatHomeBackdrop;
   const updateSettings = useSettingsStore((s) => s.updateSettings);
 
   // ── CodeMirror preview (read-only Python sample) ──
@@ -284,6 +295,76 @@ export function AppearanceSettings() {
                 </AppSelect>
               </div>
             </div>
+
+            {/* Chat homepage backdrop */}
+            <div className="flex items-center justify-between py-2.5 group">
+              <div>
+                <p className={ROW_LABEL}>{t("settings.appearance.chatHomeBackdrop")}</p>
+                <p className={ROW_DESC}>{t("settings.appearance.chatHomeBackdropDesc")}</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Hint label={t("settings.appearance.resetDefault")}>
+                  <button
+                    className={RESET_ICON}
+                    onClick={() =>
+                      void updateSettings({ chatHomeBackdropEnabled: true })
+                    }
+                  >
+                    <RotateCcwIcon className="size-3" />
+                  </button>
+                </Hint>
+                <Switch
+                  checked={chatHomeBackdropEnabled}
+                  onCheckedChange={(v) =>
+                    void updateSettings({ chatHomeBackdropEnabled: v })
+                  }
+                />
+              </div>
+            </div>
+
+            <div
+              className={cn(
+                "flex items-center justify-between py-2.5 group transition-opacity duration-200",
+                !chatHomeBackdropEnabled && "opacity-40 pointer-events-none",
+              )}
+            >
+              <div>
+                <p className={ROW_LABEL}>{t("settings.appearance.chatHomeBackdropStyle")}</p>
+                <p className={ROW_DESC}>{t("settings.appearance.chatHomeBackdropStyleDesc")}</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Hint label={t("settings.appearance.resetDefault")}>
+                  <button
+                    className={RESET_ICON}
+                    onClick={() => void updateSettings({ chatHomeBackdrop: "auto" })}
+                  >
+                    <RotateCcwIcon className="size-3" />
+                  </button>
+                </Hint>
+                <AppSelect
+                  value={chatHomeBackdropStyleValue}
+                  onValueChange={(v) =>
+                    void updateSettings({
+                      chatHomeBackdrop: v as ChatHomeBackdropSetting,
+                    })
+                  }
+                >
+                  <AppSelectTrigger className="w-40">
+                    <AppSelectValue />
+                  </AppSelectTrigger>
+                  <AppSelectContent>
+                    <AppSelectItem value="auto">
+                      {t("settings.appearance.chatHomeBackdropDefault")}
+                    </AppSelectItem>
+                    {CHAT_HOME_BACKDROP_STYLE_OPTIONS.map((id) => (
+                      <AppSelectItem key={id} value={id}>
+                        {t(CHAT_HOME_BACKDROP_LABEL_KEYS[id])}
+                      </AppSelectItem>
+                    ))}
+                  </AppSelectContent>
+                </AppSelect>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -309,18 +390,11 @@ export function AppearanceSettings() {
                   </button>
                 </Hint>
                 <div className="flex gap-2">
-                  <AppSelect value={config.fontSans} onValueChange={(v) => updateConfig({ fontSans: v })}>
-                    <AppSelectTrigger className="w-28">
-                      <AppSelectValue />
-                    </AppSelectTrigger>
-                    <AppSelectContent>
-                      {SANS_FONTS.map((f) => (
-                        <AppSelectItem key={f.id} value={f.id}>
-                          {f.label}
-                        </AppSelectItem>
-                      ))}
-                    </AppSelectContent>
-                  </AppSelect>
+                  <SystemFontPicker
+                    value={config.fontSans}
+                    onChange={(v) => updateConfig({ fontSans: v })}
+                    triggerClassName="w-44"
+                  />
                   <div className={STEPPER}>
                     <Button
                       variant="ghost"
@@ -372,21 +446,12 @@ export function AppearanceSettings() {
                   </button>
                 </Hint>
                 <div className="flex gap-2">
-                  <AppSelect
+                  <SystemFontPicker
                     value={config.editorFontFamily}
-                    onValueChange={(v) => updateConfig({ editorFontFamily: v, fontMono: v })}
-                  >
-                    <AppSelectTrigger className="w-36">
-                      <AppSelectValue />
-                    </AppSelectTrigger>
-                    <AppSelectContent>
-                      {MONO_FONTS.map((f) => (
-                        <AppSelectItem key={f.id} value={f.id}>
-                          {f.label}
-                        </AppSelectItem>
-                      ))}
-                    </AppSelectContent>
-                  </AppSelect>
+                    onChange={(v) => updateConfig({ editorFontFamily: v, fontMono: v })}
+                    preferMono
+                    triggerClassName="w-44"
+                  />
                   <div className={STEPPER}>
                     <Button
                       variant="ghost"

@@ -58,6 +58,6 @@ export const PDF_PAGE_CLASS = "prism-pdf-page bg-white";
 
 export const PDF_PAGE_INVERTED_CLASS = "prism-pdf-page--inverted";
 
-/** Invert stack — tuned with user (brightness 91%). */
+/** Invert stack — soft night page (between harsh crush and washed-out). */
 export const PDF_PAGE_DARK_FILTER =
-  " invert-[92%] hue-rotate-180 brightness-[91%] contrast-[165%] saturate-[92%]";
+  " invert-[86%] hue-rotate-180 brightness-[110%] contrast-[105%] saturate-[86%]";

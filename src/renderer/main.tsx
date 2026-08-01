@@ -18,6 +18,10 @@ import "./styles/tokens/shared.css";
 
 const i18n = initI18n();
 
+if (window.electronAPI?.platform) {
+  document.documentElement.dataset.platform = window.electronAPI.platform;
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <I18nextProvider i18n={i18n}>

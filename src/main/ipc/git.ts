@@ -263,4 +263,12 @@ export function registerGitHandlers(): void {
   ipcMain.handle("git:push", async (_e, args: { projectRoot: string }) =>
     gitService.pushBranch(args.projectRoot),
   );
+
+  // ── git:checkIgnore ──
+  ipcMain.handle(
+    "git:checkIgnore",
+    async (_event, args: { projectRoot: string; relativePaths: string[] }) => {
+      return gitService.checkIgnoredPaths(args.projectRoot, args.relativePaths);
+    },
+  );
 }

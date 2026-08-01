@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from "react";
+import { useState, memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "@/stores/chat-store";
 import { useChatStore } from "@/stores/chat-store";
@@ -16,18 +16,6 @@ import {
   TOOL_EXPANDED_CONTENT_CLASS,
   StatusIcon,
 } from "./shared";
-
-function getTodoExpandedState(key: string): boolean {
-  return localStorage.getItem(`todo:${key}`) === "open";
-}
-
-function saveTodoExpandedState(key: string, open: boolean): void {
-  if (open) {
-    localStorage.setItem(`todo:${key}`, "open");
-  } else {
-    localStorage.removeItem(`todo:${key}`);
-  }
-}
 
 function TodoStatusIcon({
   status,
@@ -97,22 +85,10 @@ export const TodoWriteWidget = memo(function TodoWriteWidget({
   const { t } = useTranslation();
   const todos: Array<{ content: string; status: string }> = toolUse.input?.todos || [];
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const persistKey = toolUse.id || undefined;
   const isDrawer = surface === "drawer" || surface === "composer";
 
-  const [expanded, setExpanded] = useState(() => {
-    if (isDrawer) return true;
-    return persistKey ? getTodoExpandedState(persistKey) : false;
-  });
-
-  useEffect(() => {
-    if (isDrawer || !persistKey) return;
-    saveTodoExpandedState(persistKey, expanded);
-  }, [persistKey, expanded, isDrawer]);
-
-  useEffect(() => {
-    if (isDrawer) setExpanded(true);
-  }, [toolUse.id, isDrawer]);
+  // Always start collapsed (drawer, inline, session reopen). User toggles only.
+  const [expanded, setExpanded] = useState(false);
 
   if (todos.length === 0) return null;
 

@@ -40,8 +40,25 @@ describe("migrateToThemePackConfig", () => {
     expect(out.radius).toBe(0.775);
   });
 
-  it("maps legacy themeColor academic-blue", () => {
-    const out = migrateToThemePackConfig({ themeColor: "academic-blue" });
-    expect(out.themePack).toBe("academic");
+  it("maps legacy bundled font ids to system presets", () => {
+    const out = migrateToThemePackConfig({
+      themePack: "academic",
+      fontSans: "geist-sans",
+      fontMono: "jetbrains-mono",
+      editorFontFamily: "fira-code",
+    });
+    expect(out.fontSans).toBe("system-ui");
+    expect(out.fontMono).toBe("system-mono");
+    expect(out.editorFontFamily).toBe("system-mono");
+  });
+
+  it("keeps raw system family names", () => {
+    const out = migrateToThemePackConfig({
+      themePack: "academic",
+      fontSans: "Helvetica Neue",
+      editorFontFamily: "Menlo",
+    });
+    expect(out.fontSans).toBe("Helvetica Neue");
+    expect(out.editorFontFamily).toBe("Menlo");
   });
 });

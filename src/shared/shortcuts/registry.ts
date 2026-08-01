@@ -436,6 +436,26 @@ export const SHORTCUT_REGISTRY: readonly ShortcutDef[] = [
     labelKey: "shortcuts.product.undoRename",
     implemented: true,
   },
+  {
+    id: "product.cycleThemePack",
+    category: "product",
+    remappable: true,
+    scope: "app",
+    // ⌥T / Alt+T — appearance theme pack cycle (pairs with cycleChatBackdrop).
+    defaultChord: { key: "t", alt: true },
+    labelKey: "shortcuts.product.cycleThemePack",
+    implemented: true,
+  },
+  {
+    id: "product.cycleChatBackdrop",
+    category: "product",
+    remappable: true,
+    scope: "app",
+    // ⌥B / Alt+B — chat backdrop style cycle.
+    defaultChord: { key: "b", alt: true },
+    labelKey: "shortcuts.product.cycleChatBackdrop",
+    implemented: true,
+  },
 ] as const;
 
 const BY_ID = new Map(SHORTCUT_REGISTRY.map((d) => [d.id, d]));

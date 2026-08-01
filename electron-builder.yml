@@ -5,6 +5,8 @@ directories:
 
 asarUnpack:
   - "**/node_modules/node-pty/**"
+  # font-list: macOS helper binary + Windows VBS must run outside asar
+  - "**/node_modules/font-list/**"
 
 # Shared app assets (all platforms).
 extraResources:

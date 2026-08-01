@@ -4,6 +4,8 @@ import {
   detectShortcutPlatform,
   resolveChord,
 } from "../../shared/shortcuts";
+import { cycleChatBackdrop } from "@/lib/chat/home-backdrops/resolve";
+import { cycleThemePack } from "@/lib/theme/theme-packs";
 import { pressLeftNav } from "@/lib/workspace/left-nav";
 import { getLeftNavPanelRefs } from "@/lib/workspace/left-nav/panel-refs";
 import { compileCurrentDocument } from "@/stores/compile-store";
@@ -12,6 +14,7 @@ import { useChangesStore } from "@/stores/changes-store";
 import { useComposerEditorStore } from "@/stores/composer-editor-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useThemeStore } from "@/stores/theme-store";
 import { requestToggleModelPicker } from "@/lib/chat/open-model-picker";
 
 function matchesShortcut(id: string, e: KeyboardEvent): boolean {
@@ -52,6 +55,8 @@ export function cycleMessageWidth(current: string | undefined): MessageWidth {
  * - product.togglePlanMode — ⌥P / Alt+P
  * - product.openModelPicker — ⌥K / Alt+K
  * - product.cycleMessageWidth — ⌘L / Ctrl+L (pairs with focus-input)
+ * - product.cycleThemePack — ⌥T / Alt+T
+ * - product.cycleChatBackdrop — ⌥B / Alt+B
  * - workspace.insertToChat (hosts) — ⌥L / Alt+L
  *
  * Single accept/reject (product.acceptChange / rejectChange) stay in the editor host.
@@ -72,6 +77,29 @@ export function useProductShortcuts() {
       if (matchesShortcut("product.openModelPicker", e)) {
         e.preventDefault();
         requestToggleModelPicker();
+        return;
+      }
+
+      if (matchesShortcut("product.cycleThemePack", e)) {
+        e.preventDefault();
+        const { themePack } = useThemeStore.getState().config;
+        void useThemeStore.getState().updateConfig({ themePack: cycleThemePack(themePack) });
+        return;
+      }
+
+      if (matchesShortcut("product.cycleChatBackdrop", e)) {
+        e.preventDefault();
+        const { settings, updateSettings } = useSettingsStore.getState();
+        const themePack = useThemeStore.getState().config.themePack;
+        const next = cycleChatBackdrop(
+          settings.chatHomeBackdrop,
+          settings.chatHomeBackdropEnabled,
+          themePack,
+        );
+        void updateSettings({
+          chatHomeBackdropEnabled: true,
+          chatHomeBackdrop: next,
+        });
         return;
       }
 

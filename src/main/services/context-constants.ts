@@ -26,9 +26,7 @@ export function parseContextWindow(label?: string | null): number {
   return DEFAULT_CONTEXT_WINDOW;
 }
 
-/** Category schema for the context-window breakdown panel.
- *  Each entry maps to a component of the assembled system prompt
- *  plus the conversation itself. */
+/** Two-bucket estimate schema — only what Prism can roughly measure vs remainder. */
 export interface ContextCategoryDef {
   key: string;
   label: string;
@@ -38,13 +36,34 @@ export interface ContextCategoryDef {
 }
 
 export const CONTEXT_CATEGORY_SCHEMA: ContextCategoryDef[] = [
-  { key: "messages",             label: "Messages",             color: "bg-rose-400",   description: "Chat messages and tool call results",              order: 0 },
-  { key: "user-instructions",    label: "User Instructions",    color: "bg-purple-500", description: "Custom system prompt from app settings",         order: 1 },
-  { key: "project-instructions", label: "Project Instructions", color: "bg-amber-500", description: "AGENTS.md — per-project agent instructions",     order: 2 },
-  { key: "project-rules",        label: "Project Rules",        color: "bg-yellow-500", description: "Custom rules from RULE.md files",                order: 3 },
-  { key: "skills",               label: "Skills",               color: "bg-cyan-500",   description: "Agent skills (.prismnext/agent/skills/)",        order: 4 },
-  { key: "modules",              label: "Prompt Modules",       color: "bg-emerald-500", description: "Domain-specific knowledge modules",             order: 5 },
-  { key: "mcp-tools",            label: "MCP Tools",            color: "bg-orange-500", description: "MCP server tool definitions",                    order: 6 },
-  { key: "core-persona",         label: "Core Persona",         color: "bg-blue-500",   description: "prismnext built-in agent role and behavior rules",   order: 7 },
-  { key: "agent-base",           label: "Agent Base",           color: "bg-slate-400",  description: "OpenCode built-in system prompt & tool defs",    order: 8 },
+  {
+    key: "prism-side",
+    label: "Prism-injected",
+    color: "bg-primary",
+    description: "Rough chars/4 estimate of Prism prompts, skills, and MCP config",
+    order: 0,
+  },
+  {
+    key: "session-rest",
+    label: "Session / agent",
+    color: "bg-muted-foreground",
+    description: "Remainder of OpenCode used − Prism-side estimate (conversation, tools, agent base, cache)",
+    order: 1,
+  },
 ];
+
+/**
+ * Build the honest two-bucket breakdown.
+ * `prismSide` = sum of Prism-known estimates; remainder fills to `used`.
+ */
+export function buildTwoBucketBreakdown(
+  used: number,
+  prismSideEstimate: number,
+): Record<string, number> {
+  const prism = Math.max(0, Math.round(prismSideEstimate));
+  const rest = Math.max(0, Math.round(used) - prism);
+  return {
+    "prism-side": prism,
+    "session-rest": rest,
+  };
+}

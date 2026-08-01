@@ -17,7 +17,7 @@ export default defineConfig({
     plugins: [sharedAliasPlugin(__dirname)],
     build: {
       rollupOptions: {
-        external: ["electron", "node-pty", "@napi-rs/canvas"],
+        external: ["electron", "node-pty", "@napi-rs/canvas", "font-list"],
       },
     },
   },

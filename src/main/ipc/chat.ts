@@ -7,7 +7,16 @@ import { EventMapper } from "../acp/event-mapper";
 import { createLogger } from "../services/logger";
 import { promptManager } from "../prompts";
 import { buildPromptContext } from "../prompts/context";
-import { CONTEXT_CATEGORY_SCHEMA } from "../services/context-constants";
+import { CONTEXT_CATEGORY_SCHEMA, buildTwoBucketBreakdown } from "../services/context-constants";
+import {
+  clearSessionContextUsage,
+  loadSessionContext,
+  persistSessionContext,
+} from "../services/session-context-store";
+import {
+  mapAcpUsageToSnake,
+  resolveContextUsedFromPromptUsage,
+} from "../../shared/session-context-usage";
 import {
   appendPlanDecisionEvent,
   appendUserDisplay,
@@ -115,64 +124,7 @@ const sessionDisplayBackups = new Map<
   NonNullable<ReturnType<typeof getSessionDisplayBackup>>
 >();
 
-// ── Session context persistence ──────────────────────────────────
-
-interface SessionContextData {
-  tokens: number;
-  breakdown: Record<string, number>;
-  schema: { key: string; label: string; color: string; description?: string; order?: number }[];
-  updatedAt: number;
-  /** Fingerprint of stable system file content (OpenCode instructions). */
-  promptFingerprint?: string;
-  /** @deprecated Legacy flag — stable system no longer uses user content blocks. */
-  hasSystemPromptBlock?: boolean;
-}
-
-function contextStorePath(projectRoot: string): string {
-  return path.join(projectRoot, ".prismnext", "agent", "sessions-context.json");
-}
-
-function persistSessionContext(
-  projectRoot: string,
-  sessionId: string,
-  data: SessionContextData,
-): void {
-  if (!projectRoot) return;
-  try {
-    const storePath = contextStorePath(projectRoot);
-    let store: Record<string, SessionContextData> = {};
-    if (fs.existsSync(storePath)) {
-      store = JSON.parse(fs.readFileSync(storePath, "utf-8"));
-    }
-    store[sessionId] = data;
-    // Prune entries older than 30 days
-    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    for (const [id, entry] of Object.entries(store)) {
-      if (entry.updatedAt < cutoff) delete store[id];
-    }
-    const dir = path.dirname(storePath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(storePath, JSON.stringify(store, null, 2), "utf-8");
-    log.debug(`Context persisted for session ${sessionId}`);
-  } catch (err) {
-    log.warn(`Failed to persist session context: ${(err as Error).message}`);
-  }
-}
-
-function loadSessionContext(
-  projectRoot: string,
-  sessionId: string,
-): SessionContextData | null {
-  if (!projectRoot) return null;
-  try {
-    const storePath = contextStorePath(projectRoot);
-    if (!fs.existsSync(storePath)) return null;
-    const store = JSON.parse(fs.readFileSync(storePath, "utf-8"));
-    return store[sessionId] ?? null;
-  } catch {
-    return null;
-  }
-}
+// ── Session context (persist helpers live in session-context-store) ──
 
 const mappers = new Map<number, EventMapper>();
 
@@ -897,17 +849,21 @@ export function registerChatHandlers(): void {
         if (args.userDisplayContent?.length && args.projectPath && sessionId) {
           appendUserDisplay(args.projectPath, sessionId, args.userDisplayContent);
         }
-        // ACP PromptResponse.usage uses camelCase: { inputTokens, outputTokens, ... }
-        // Map to snake_case for backward compat with renderer token formatting
+        // ACP PromptResponse.usage (camelCase). Prefer usage_update for the
+        // ring; map snake_case for footnotes + breakdown math.
         const acpUsage = (result as any)?.usage;
         if (acpUsage) {
-          usage = {
-            input_tokens: acpUsage.inputTokens ?? 0,
-            output_tokens: acpUsage.outputTokens ?? 0,
-            cache_creation_input_tokens: acpUsage.cachedWriteTokens ?? 0,
-            cache_read_input_tokens: acpUsage.cachedReadTokens ?? 0,
-          };
-          log.debug("ACP usage mapped", { acpUsage: { inputTokens: acpUsage.inputTokens, outputTokens: acpUsage.outputTokens, cachedReadTokens: acpUsage.cachedReadTokens, cachedWriteTokens: acpUsage.cachedWriteTokens }, mapped: usage });
+          usage = mapAcpUsageToSnake(acpUsage);
+          log.debug("ACP usage mapped", {
+            acpUsage: {
+              inputTokens: acpUsage.inputTokens,
+              outputTokens: acpUsage.outputTokens,
+              cachedReadTokens: acpUsage.cachedReadTokens,
+              cachedWriteTokens: acpUsage.cachedWriteTokens,
+              totalTokens: acpUsage.totalTokens,
+            },
+            mapped: usage,
+          });
         } else {
           log.debug("No usage in PromptResponse — OpenCode/ACP may not support it yet");
         }
@@ -929,29 +885,32 @@ export function registerChatHandlers(): void {
         return;
       }
 
-      // ── Build categorized breakdown ──
-      // Categories (sum MUST equal totalUsed):
-      //   1-4: prismnext system prompt layers (chars/4 estimate)
-      //   5:   Skills — .prismnext/agent/skills/ (file sizes / 4)
-      //   6:   MCP Tools — .prismnext/agent/mcp.json config
-      //   7:   Agent Base — OpenCode's own built-in prompt + tool defs +
-      //        any conversation content cached beyond what prismnext tracks
-      //   8:   Messages — actual conversation tokens (remainder)
-      //
-      //   Formula: totalUsed = sum(sysBreakdown) + skills + mcpTools + agentBase + messages
-      //
-      //   On turn 1: cacheRead=0 so agentBase=0; messages = totalUsed - knownStatic.
-      //     This avoids double-counting: system prompt is counted in sysBreakdown,
-      //     not duplicated in messages (which would happen with inputTokens+cacheCreation).
-      //   On later turns: cacheRead grows as OpenCode caches more conversation;
-      //     agentBase = cacheRead - knownStatic captures the cached portion beyond
-      //     what prismnext explicitly tracks.
+      // ── OpenCode ring numbers + optional two-bucket Prism estimate ──
       const inputTokens = (usage as any)?.input_tokens ?? 0;
       const cacheCreation = (usage as any)?.cache_creation_input_tokens ?? 0;
       const cacheRead = (usage as any)?.cache_read_input_tokens ?? 0;
       const reportedTotal = inputTokens + cacheCreation + cacheRead;
+      const lastUsageUpdate = getMapper(win).getLastUsageUpdate(sessionId);
+      const promptUsed = resolveContextUsedFromPromptUsage(usage);
+      const ringUsed =
+        lastUsageUpdate && Date.now() - lastUsageUpdate.at < 60_000
+          ? lastUsageUpdate.used
+          : promptUsed;
+      const ringSize =
+        lastUsageUpdate && Date.now() - lastUsageUpdate.at < 60_000
+          ? lastUsageUpdate.size
+          : null;
+      const ringSource =
+        lastUsageUpdate && Date.now() - lastUsageUpdate.at < 60_000
+          ? ("usage_update" as const)
+          : promptUsed != null
+            ? ("prompt_usage" as const)
+            : null;
 
-      // ── Estimate Skills tokens ──
+      // ── Two-bucket estimate (optional UI) ──
+      // prism-side: chars/4 of Prism prompts + on-disk skills + mcp.json
+      // session-rest: OpenCode used − prism-side (conversation, OC system/tools, cache…)
+      // Do NOT invent Agent Base / Messages theater from cacheRead.
       let skillsTokens = 0;
       if (args.projectPath) {
         try {
@@ -968,60 +927,38 @@ export function registerChatHandlers(): void {
         } catch { /* best-effort */ }
       }
 
-      // ── Estimate MCP Tools tokens ──
       let mcpTokens = 0;
       if (args.projectPath) {
         try {
           const mcpPath = path.join(args.projectPath, ".prismnext", "agent", "mcp.json");
           if (fs.existsSync(mcpPath)) {
             const raw = fs.readFileSync(mcpPath, "utf-8");
-            // MCP tool definitions are roughly the JSON config × 2
-            // (OpenCode expands each server entry into tool schemas)
             mcpTokens = Math.max(1, Math.round(raw.length / 3));
           }
         } catch { /* best-effort */ }
       }
 
-      // Static known portions (prismnext prompts + skills + MCP).
-      // These are chars/4 estimates — not exact, but proportions are what matter.
-      const knownStatic = sysTokensEstimate + skillsTokens + mcpTokens;
+      const prismSideEstimate = sysTokensEstimate + skillsTokens + mcpTokens;
+      const breakdownUsed = ringUsed ?? (reportedTotal > 0 ? reportedTotal : 0);
+      const fullBreakdown = buildTwoBucketBreakdown(breakdownUsed, prismSideEstimate);
 
-      // Agent Base: cached tokens NOT explained by prismnext's static estimates.
-      // On turn 1 (cacheRead=0) this is 0. On later turns, it captures:
-      //   - OpenCode's own built-in system prompt & tool definitions
-      //   - Any conversation content OpenCode chooses to cache
-      //
-      // When cacheRead < knownStatic (turn 1), agentBase = 0 (no mystery cache yet).
-      // When cacheRead > knownStatic (later turns), agentBase captures the gap.
-      const agentBase = Math.max(0, cacheRead - knownStatic);
+      // Ring numbers: OpenCode only — never invent used from chars/4 estimates.
+      const effectiveUsage =
+        usage && reportedTotal > 0
+          ? usage
+          : ringUsed != null
+            ? {
+                input_tokens: ringUsed,
+                output_tokens: (usage as any)?.output_tokens ?? 0,
+                cache_creation_input_tokens: 0,
+                cache_read_input_tokens: 0,
+                total_tokens: ringUsed,
+              }
+            : null;
 
-      // Messages: the remainder after accounting for static + agent base.
-      // This is the actual conversation — user messages, assistant responses,
-      // tool calls, etc. — whether cached or uncached.
-      //
-      // Guarantee: knownStatic + agentBase + messages = reportedTotal
-      const messagesTokens = Math.max(0, reportedTotal - knownStatic - agentBase);
-
-      const fullBreakdown: Record<string, number> = {
-        ...sysBreakdown,
-        skills: skillsTokens,
-        "mcp-tools": mcpTokens,
-        "agent-base": agentBase,
-        messages: messagesTokens,
-      };
-
-      // Total used tokens: prefer OpenCode's report, fall back to our estimate
-      const totalUsed = reportedTotal > 0
-        ? reportedTotal
-        : Object.values(fullBreakdown).reduce((a, b) => a + b, 0);
-
-      // Synthesize a tokenUsage object for the renderer when OpenCode doesn't
-      // provide one, so the context ring always has data to display.
-      const effectiveUsage = (usage && reportedTotal > 0)
-        ? usage
-        : { input_tokens: totalUsed, output_tokens: 0 };
-
-      log.info(`Prompt complete: sessionId=${sessionId} totalUsed=${totalUsed}`, {
+      log.info(`Prompt complete: sessionId=${sessionId} ringUsed=${ringUsed} reportedTotal=${reportedTotal}`, {
+        ringSource,
+        ringSize,
         categories: Object.keys(fullBreakdown).length,
         samples: Object.fromEntries(
           Object.entries(fullBreakdown).filter(([, v]) => v > 0),
@@ -1032,9 +969,12 @@ export function registerChatHandlers(): void {
       // Drop that leftover 90s watchdog so it cannot abort the next message.
       getMapper(win).releasePendingTaskWatchdogsForTab(tabId);
 
-      // Persist context breakdown per session so it survives app restarts
+      // Persist context — prefer OpenCode ring numbers when available.
+      const prevCtx = loadSessionContext(args.projectPath, sessionId);
       persistSessionContext(args.projectPath, sessionId, {
-        tokens: totalUsed,
+        tokens: ringUsed ?? (reportedTotal > 0 ? reportedTotal : (prevCtx?.tokens ?? 0)),
+        windowSize: ringSize ?? prevCtx?.windowSize ?? null,
+        source: ringSource ?? prevCtx?.source,
         breakdown: fullBreakdown,
         schema: CONTEXT_CATEGORY_SCHEMA,
         updatedAt: Date.now(),
@@ -1136,6 +1076,9 @@ export function registerChatHandlers(): void {
           error: providerError,
           errorCode: "provider_error",
           tokenUsage: effectiveUsage,
+          contextUsed: ringUsed,
+          contextWindowSize: ringSize,
+          contextSource: ringSource,
           contextBreakdown: fullBreakdown,
           categorySchema: CONTEXT_CATEGORY_SCHEMA,
           promptStale,
@@ -1148,6 +1091,9 @@ export function registerChatHandlers(): void {
           success: false,
           errorCode: "emptyTurn",
           tokenUsage: effectiveUsage,
+          contextUsed: ringUsed,
+          contextWindowSize: ringSize,
+          contextSource: ringSource,
           contextBreakdown: fullBreakdown,
           categorySchema: CONTEXT_CATEGORY_SCHEMA,
           promptStale,
@@ -1156,7 +1102,13 @@ export function registerChatHandlers(): void {
         });
       } else {
         win.webContents.send("chat:complete", {
-          tabId, sessionId, success: true, tokenUsage: effectiveUsage,
+          tabId,
+          sessionId,
+          success: true,
+          tokenUsage: effectiveUsage,
+          contextUsed: ringUsed,
+          contextWindowSize: ringSize,
+          contextSource: ringSource,
           contextBreakdown: fullBreakdown,
           categorySchema: CONTEXT_CATEGORY_SCHEMA,
           promptStale,
@@ -1521,6 +1473,23 @@ export function registerChatHandlers(): void {
     "chat:compact",
     async (_event, args: { sessionId: string; projectPath: string }) => {
       await getService().sendCompact(args.sessionId, args.projectPath);
+      clearSessionContextUsage(args.projectPath, args.sessionId);
+      const tabId = resolveChatTabId(args.sessionId);
+      if (tabId) {
+        for (const win of BrowserWindow.getAllWindows()) {
+          win.webContents.send("chat:stream", {
+            tabId,
+            type: "session.usage",
+            data: {
+              used: null,
+              size: null,
+              source: null,
+              cleared: true,
+            },
+          });
+        }
+      }
+      return { ok: true as const };
     },
   );
 

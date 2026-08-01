@@ -1,4 +1,4 @@
-import { useState, useEffect, memo } from "react";
+import { useState, memo } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { useChatStore } from "@/stores/chat-store";
 import { parsePlanSteps } from "@/lib/chat/parse-plan-steps";
@@ -16,18 +16,6 @@ import {
   StatusIcon,
 } from "./shared";
 
-function getPlanExpandedState(key: string): boolean {
-  return localStorage.getItem(`plan:${key}`) === "open";
-}
-
-function savePlanExpandedState(key: string, open: boolean): void {
-  if (open) {
-    localStorage.setItem(`plan:${key}`, "open");
-  } else {
-    localStorage.removeItem(`plan:${key}`);
-  }
-}
-
 export const PlanWidget = memo(function PlanWidget({
   toolUse,
   toolName,
@@ -37,15 +25,8 @@ export const PlanWidget = memo(function PlanWidget({
 }) {
   const steps = parsePlanSteps(toolUse.input);
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const persistKey = toolUse.id || undefined;
-
-  const [expanded, setExpanded] = useState(
-    () => (persistKey ? getPlanExpandedState(persistKey) : false),
-  );
-
-  useEffect(() => {
-    if (persistKey) savePlanExpandedState(persistKey, expanded);
-  }, [persistKey, expanded]);
+  // Always start collapsed — same as TodoWrite / Worked for / Thought.
+  const [expanded, setExpanded] = useState(false);
 
   if (steps.length === 0) return null;
 

@@ -4,13 +4,13 @@
 :root {
   --height-preview-toolbar:      var(--height-base-32);
   --height-preview-thin-toolbar: var(--height-base-32);
-  /* PDF canvas always follows the app theme. The PDF light/dark toggle only
-     inverts the page content (filter), never the canvas behind it. */
-  --pdf-canvas: var(--muted);
+  /* PDF chrome follows the app theme. Page invert (Moon / Follow+dark) only
+     filters the sheet — canvas stays a soft shell token, not pure black. */
+  --pdf-canvas: var(--background);
 }
 
 .dark {
-  --pdf-canvas: var(--muted);
+  --pdf-canvas: var(--background);
 }
 
 .textLayer span::selection {

@@ -1,58 +1,23 @@
 // lib/theme/font-options.ts
-// Built-in font options for Appearance settings.
-// All families include Chinese fallback chain.
+// System font stacks for Appearance → Typography.
+// Bundled @fontsource faces were removed — pick any installed family via the system picker.
 
 export interface FontOption {
   id: string;
   label: string;
-  family: string;       // CSS font-family value
+  family: string; // CSS font-family value
   category: "sans" | "mono";
 }
 
 const CN = '"PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif';
 const CN_MONO = '"PingFang SC", "Microsoft YaHei", "Noto Sans SC", ui-monospace, monospace';
 
+/** Presets only — system stacks with cross-platform + CJK fallbacks. */
 export const SANS_FONTS: FontOption[] = [
   {
     id: "system-ui",
     label: "System",
     family: `system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, ${CN}`,
-    category: "sans",
-  },
-  {
-    id: "geist-sans",
-    label: "Geist Sans",
-    family: `"Geist Sans", ${CN}`,
-    category: "sans",
-  },
-  {
-    id: "inter",
-    label: "Inter",
-    family: `"Inter", ${CN}`,
-    category: "sans",
-  },
-  {
-    id: "ibm-plex-sans",
-    label: "IBM Plex Sans",
-    family: `"IBM Plex Sans", ${CN}`,
-    category: "sans",
-  },
-  {
-    id: "source-sans-3",
-    label: "Source Sans 3",
-    family: `"Source Sans 3", ${CN}`,
-    category: "sans",
-  },
-  {
-    id: "dm-sans",
-    label: "DM Sans",
-    family: `"DM Sans", ${CN}`,
-    category: "sans",
-  },
-  {
-    id: "plus-jakarta-sans",
-    label: "Plus Jakarta Sans",
-    family: `"Plus Jakarta Sans", ${CN}`,
     category: "sans",
   },
 ];
@@ -61,67 +26,83 @@ export const MONO_FONTS: FontOption[] = [
   {
     id: "system-mono",
     label: "System",
-    family: `ui-monospace, "SF Mono", "Cascadia Code", "Consolas", "Liberation Mono", Menlo, monospace, ${CN_MONO}`,
-    category: "mono",
-  },
-  {
-    id: "geist-mono",
-    label: "Geist Mono",
-    family: `"Geist Mono", ${CN_MONO}`,
-    category: "mono",
-  },
-  {
-    id: "cascadia-code",
-    label: "Cascadia Code",
-    family: `"Cascadia Code", ${CN_MONO}`,
-    category: "mono",
-  },
-  {
-    id: "jetbrains-mono",
-    label: "JetBrains Mono",
-    family: `"JetBrains Mono", ${CN_MONO}`,
-    category: "mono",
-  },
-  {
-    id: "fira-code",
-    label: "Fira Code",
-    family: `"Fira Code", ${CN_MONO}`,
-    category: "mono",
-  },
-  {
-    id: "sf-mono",
-    label: "SF Mono",
-    family: `"SF Mono", "SF Mono SC", ${CN_MONO}`,
-    category: "mono",
-  },
-  {
-    id: "consolas",
-    label: "Consolas",
-    family: `"Consolas", "Courier New", ${CN_MONO}`,
-    category: "mono",
-  },
-  {
-    id: "ibm-plex-mono",
-    label: "IBM Plex Mono",
-    family: `"IBM Plex Mono", ${CN_MONO}`,
-    category: "mono",
-  },
-  {
-    id: "source-code-pro",
-    label: "Source Code Pro",
-    family: `"Source Code Pro", ${CN_MONO}`,
+    family: `ui-monospace, "SF Mono", "Cascadia Code", "Cascadia Mono", Consolas, "Liberation Mono", Menlo, Monaco, monospace, ${CN_MONO}`,
     category: "mono",
   },
 ];
+
+/** Former curated ids (bundled woff2 / @fontsource). Migrated to system presets. */
+const LEGACY_BUNDLED_SANS = new Set([
+  "geist-sans",
+  "inter",
+  "ibm-plex-sans",
+  "source-sans-3",
+  "dm-sans",
+  "plus-jakarta-sans",
+]);
+
+const LEGACY_BUNDLED_MONO = new Set([
+  "geist-mono",
+  "cascadia-code",
+  "jetbrains-mono",
+  "fira-code",
+  "sf-mono",
+  "consolas",
+  "ibm-plex-mono",
+  "source-code-pro",
+]);
+
+export function isLegacyBundledFontId(id: string): boolean {
+  return LEGACY_BUNDLED_SANS.has(id) || LEGACY_BUNDLED_MONO.has(id);
+}
+
+/** Map removed curated ids → system presets. Pass-through for system-* and real family names. */
+export function migrateFontValue(
+  idOrFamily: string,
+  category: "sans" | "mono",
+): string {
+  if (LEGACY_BUNDLED_SANS.has(idOrFamily)) return "system-ui";
+  if (LEGACY_BUNDLED_MONO.has(idOrFamily)) return "system-mono";
+  if (!idOrFamily.trim()) {
+    return category === "mono" ? "system-mono" : "system-ui";
+  }
+  return idOrFamily;
+}
 
 export function getFontById(id: string): FontOption | undefined {
   return [...SANS_FONTS, ...MONO_FONTS].find((f) => f.id === id);
 }
 
 export function getDefaultSansFont(): FontOption {
-  return SANS_FONTS[0]; // System
+  return SANS_FONTS[0];
 }
 
 export function getDefaultMonoFont(): FontOption {
-  return MONO_FONTS[0]; // System
+  return MONO_FONTS[0];
+}
+
+/**
+ * Resolve a stored Appearance font value to a CSS `font-family` stack.
+ * Supports system presets, legacy curated ids (→ system), and raw OS family names.
+ */
+export function resolveFontCssFamily(
+  idOrFamily: string,
+  category: "sans" | "mono",
+): string {
+  const migrated = migrateFontValue(idOrFamily, category);
+  const known = getFontById(migrated);
+  if (known) return known.family;
+
+  const family = migrated.trim();
+  if (!family) {
+    return category === "mono"
+      ? getDefaultMonoFont().family
+      : getDefaultSansFont().family;
+  }
+
+  // Quote multi-word / non-ident family names for CSS.
+  const quoted = /^[a-zA-Z_][\w-]*$/.test(family)
+    ? family
+    : `"${family.replace(/"/g, '\\"')}"`;
+  return category === "mono" ? `${quoted}, ${CN_MONO}` : `${quoted}, ${CN}`;
 }

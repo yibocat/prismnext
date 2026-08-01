@@ -8,8 +8,9 @@ import { cn } from "@/lib/utils";
 export const CHAT_FLOAT_PANEL_HEIGHT = "min(78vh, 780px)";
 
 /**
- * Shared float shell for AiBar run panel and Task/subagent run panel —
- * same chrome: card, header title + close, scrollable body.
+ * Shared float shell for AiBar run panel and Task/subagent run panel.
+ * Fill is `bg-background` in both light and dark (page canvas role).
+ * Bubbles stay `bg-card` (lifted). Soft fills use `bg-muted`.
  */
 export const ChatFloatPanel = forwardRef<
   HTMLDivElement,
@@ -52,11 +53,13 @@ export const ChatFloatPanel = forwardRef<
       ref={ref}
       {...attrProps}
       className={cn(
-        "relative flex w-full min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card",
+        // Shell = page canvas (`bg-background`) in light and dark — same role both modes.
+        "relative flex w-full min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-background shadow-lg",
         fillHeight ? "h-full" : "max-h-[min(78vh,780px)]",
         className,
       )}
       {...rest}
+      data-chat-float=""
     >
       <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-1.5">
         <div className="min-w-0 flex-1 truncate text-[length:var(--font-chat-meta)] text-muted-foreground">
@@ -82,7 +85,7 @@ export const ChatFloatPanel = forwardRef<
           ) : null}
         </div>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col bg-background">{children}</div>
       {footer}
     </div>
   );

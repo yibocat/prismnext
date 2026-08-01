@@ -26,6 +26,13 @@
   /* Permission ask — uses theme primary + accent (updated by Appearance settings) */
   --permission-ask-border: color-mix(in oklch, var(--primary) 28%, var(--border));
   --permission-ask-bg: color-mix(in oklch, var(--primary) 8%, var(--accent));
+
+  /*
+   * AiBar / Task float shell — same role in light and dark: page canvas.
+   * Bubbles stay --card (lifted). Do not map light→muted / dark→background;
+   * muted is soft-fill chrome and is brighter than card in dark mode.
+   */
+  --chat-float: var(--background);
 }
 
 /* ============================================================

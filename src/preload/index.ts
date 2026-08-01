@@ -1371,6 +1371,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("git:commitFiles", { projectRoot, hash }),
 	gitCommitFileDiff: (projectRoot: string, hash: string, filePath: string) =>
 		ipcRenderer.invoke("git:commitFileDiff", { projectRoot, hash, filePath }),
+	gitCheckIgnore: (projectRoot: string, relativePaths: string[]) =>
+		ipcRenderer.invoke("git:checkIgnore", { projectRoot, relativePaths }),
 
 	// Worktree operations
 	worktreeList: (projectRoot: string) =>
@@ -1392,7 +1394,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("chat:stream", handler);
 		return () => ipcRenderer.removeListener("chat:stream", handler);
 	},
-	onChatComplete: (callback: (data: { tabId: string; sessionId: string; success: boolean; error?: string; errorCode?: string; emptyTurn?: boolean; tokenUsage?: any; planDraftMissing?: boolean }) => void) => {
+	onChatComplete: (callback: (data: {
+		tabId: string;
+		sessionId: string;
+		success: boolean;
+		error?: string;
+		errorCode?: string;
+		emptyTurn?: boolean;
+		tokenUsage?: any;
+		contextUsed?: number | null;
+		contextWindowSize?: number | null;
+		contextSource?: "usage_update" | "prompt_usage" | "estimate" | null;
+		contextBreakdown?: Record<string, number> | null;
+		categorySchema?: any;
+		promptStale?: boolean;
+		planDraftMissing?: boolean;
+	}) => void) => {
 		const handler = (_event: Electron.IpcRendererEvent, data: any) => callback(data);
 		ipcRenderer.on("chat:complete", handler);
 		return () => ipcRenderer.removeListener("chat:complete", handler);
@@ -1432,4 +1449,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	// Theme — glass vibrancy synchronization
 	themeSetGlassMode: (mode: "light" | "dark" | "system") =>
 		ipcRenderer.invoke("theme:setGlassMode", mode),
+	themeListSystemFonts: () =>
+		ipcRenderer.invoke("theme:listSystemFonts") as Promise<
+			{ family: string; monospace: boolean }[]
+		>,
 });

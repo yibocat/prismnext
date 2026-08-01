@@ -53,15 +53,6 @@ const EMPTY_INVENTORY: ActivityBurstInventory = {
   removed: 0,
 };
 
-function getActivityFoldState(key: string): boolean {
-  return localStorage.getItem(`activity:${key}`) === "open";
-}
-
-function saveActivityFoldState(key: string, open: boolean): void {
-  if (open) localStorage.setItem(`activity:${key}`, "open");
-  else localStorage.removeItem(`activity:${key}`);
-}
-
 export const ActivityFold = memo(function ActivityFold({
   blocks,
   blockIndices,
@@ -77,6 +68,7 @@ export const ActivityFold = memo(function ActivityFold({
   blocks: ContentBlock[];
   blockIndices: number[];
   toolResultMap: Map<string, ContentBlock>;
+  /** Stable id for nested thought/burst keys (expand state is not persisted). */
   persistKey?: string;
   sessionId?: string;
   isStreamingSegment: boolean;
@@ -92,14 +84,8 @@ export const ActivityFold = memo(function ActivityFold({
   childrenSegments?: WorkedChildSegment[];
 }) {
   const { t } = useTranslation();
-  // Live bursts always start collapsed so thought+tools stay under one row;
-  // only restore expand state after the turn has settled.
-  const [expanded, setExpanded] = useState(
-    () =>
-      isStreamingSegment
-        ? false
-        : (persistKey ? getActivityFoldState(persistKey) : false),
-  );
+  // Always start collapsed (live, settled, and session reopen). User toggles only.
+  const [expanded, setExpanded] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const toggleRef = useRef<HTMLButtonElement>(null);
   const pendingAnchorRef = useRef<ViewportAnchorCapture | null>(null);
@@ -112,10 +98,6 @@ export const ActivityFold = memo(function ActivityFold({
     restoreViewportAnchor(captured, anchor);
     pendingAnchorRef.current = null;
   }, [expanded]);
-
-  useEffect(() => {
-    if (persistKey) saveActivityFoldState(persistKey, expanded);
-  }, [persistKey, expanded]);
 
   useEffect(() => {
     if (!isStreamingSegment) return;

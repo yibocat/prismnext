@@ -19,9 +19,9 @@ export function StatusIcon({ isLoading, isError }: { isLoading: boolean; isError
 // ─── Shared panel tokens (ToolCard expanded, Todo, Question) ───
 
 export const TOOL_PANEL_CLASS =
-  "rounded-lg border border-border/80 bg-muted/10 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden";
+  "rounded-lg border border-border bg-muted shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden";
 export const TOOL_PANEL_HEADER_CLASS =
-  "border-b border-border/40 bg-muted/30";
+  "border-b border-border bg-muted";
 /** Collapsed tool row — UI Font + muted vs assistant prose (Cursor-like hierarchy). */
 export const TOOL_INLINE_ROW_CLASS =
   "flex items-center gap-2 font-sans text-muted-foreground/65 hover:text-muted-foreground/80 transition-colors min-w-0";
@@ -33,9 +33,9 @@ export const TOOL_INLINE_ROW_CLASS =
  */
 export const TOOL_INLINE_LABEL_CLASS =
   "min-w-0 truncate font-sans font-normal text-muted-foreground/70 [&_*]:font-sans [&_[role=link]]:font-normal [&_[role=link]]:text-muted-foreground/70 [&_[role=link]]:hover:text-muted-foreground/85";
-/** Expanded tool body — content-only panel below the inline row (matches ThinkingWidget). */
+/** Expanded tool body — opaque muted fill (never bg-muted/N — reads as transparent on dark chat). */
 export const TOOL_EXPANDED_CONTENT_CLASS =
-  "my-1.5 min-w-0 max-w-full rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-[length:var(--font-code)] overflow-x-auto overflow-y-hidden animate-in fade-in slide-in-from-top-1 duration-150";
+  "my-1.5 min-w-0 max-w-full rounded-lg border border-border bg-muted px-3 py-2 text-[length:var(--font-code)] overflow-x-auto overflow-y-hidden animate-in fade-in slide-in-from-top-1 duration-150";
 
 // ─── ToolCard — shared shell for all tool widgets ───
 

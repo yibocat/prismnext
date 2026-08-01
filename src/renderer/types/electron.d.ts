@@ -1729,7 +1729,7 @@ export interface ElectronAPI {
     sessionId: string;
     decision: "accepted" | "dismissed" | "timed_out";
   }) => Promise<{ success: boolean; error?: string }>;
-  chatCompact: (sessionId: string, projectPath: string) => Promise<void>;
+  chatCompact: (sessionId: string, projectPath: string) => Promise<{ ok: boolean } | void>;
   chatAnswer: (sessionId: string, answer: string) => Promise<void>;
   chatAnswerQuestion: (questionId: string, answer: string) => Promise<{ success: boolean; error?: string }>;
   chatReadPendingQuestion: (sessionId: string) => Promise<{
@@ -1763,7 +1763,16 @@ export interface ElectronAPI {
     projectPath: string;
     worktreePath?: string;
   }) => Promise<{ success: boolean }>;
-  sessionGetContext: (projectPath: string, sessionId: string) => Promise<{ tokens: number; breakdown: Record<string, number>; schema: { key: string; label: string; color: string; description?: string; order?: number }[]; updatedAt: number; hasSystemPromptBlock?: boolean; promptFingerprint?: string } | null>;
+  sessionGetContext: (projectPath: string, sessionId: string) => Promise<{
+    tokens: number;
+    breakdown: Record<string, number>;
+    schema: { key: string; label: string; color: string; description?: string; order?: number }[];
+    updatedAt: number;
+    windowSize?: number | null;
+    source?: "usage_update" | "prompt_usage" | "estimate";
+    hasSystemPromptBlock?: boolean;
+    promptFingerprint?: string;
+  } | null>;
   sessionGetUserDisplays: (projectPath: string, sessionId: string) => Promise<import("@/stores/chat-store").ContentBlock[][]>;
   sessionAppendUserDisplay: (
     projectPath: string,
@@ -1828,7 +1837,22 @@ export interface ElectronAPI {
 
   // Chat events (Main → Renderer)
   onChatStream: (callback: (data: { tabId: string; type: string; data: any }) => void) => () => void;
-  onChatComplete: (callback: (data: { tabId: string; sessionId: string; success: boolean; error?: string; errorCode?: string; emptyTurn?: boolean; tokenUsage?: any; contextBreakdown?: Record<string, number> | null; categorySchema?: import("../../shared/constants").ContextCategoryDef[] | null; promptStale?: boolean; planDraftMissing?: boolean }) => void) => () => void;
+  onChatComplete: (callback: (data: {
+    tabId: string;
+    sessionId: string;
+    success: boolean;
+    error?: string;
+    errorCode?: string;
+    emptyTurn?: boolean;
+    tokenUsage?: any;
+    contextUsed?: number | null;
+    contextWindowSize?: number | null;
+    contextSource?: "usage_update" | "prompt_usage" | "estimate" | null;
+    contextBreakdown?: Record<string, number> | null;
+    categorySchema?: { key: string; label: string; color: string; description?: string; order?: number }[] | null;
+    promptStale?: boolean;
+    planDraftMissing?: boolean;
+  }) => void) => () => void;
   onChatPermission: (callback: (data: { tabId: string; permissionId: string; message: string; options: any; toolCallId?: string; toolName?: string; raw?: any }) => void) => () => void;
   onChatSessionCreated: (callback: (data: { tabId: string; sessionId: string }) => void) => () => void;
   removeChatListeners: () => void;
@@ -2023,9 +2047,11 @@ export interface ElectronAPI {
   gitCommitDiff: (projectRoot: string, hash: string) => Promise<string>;
   gitCommitFiles: (projectRoot: string, hash: string) => Promise<Array<{ path: string; added: number; deleted: number }>>;
   gitCommitFileDiff: (projectRoot: string, hash: string, filePath: string) => Promise<{ path: string; oldContent: string; newContent: string }>;
+  gitCheckIgnore: (projectRoot: string, relativePaths: string[]) => Promise<string[]>;
 
   // Theme — glass vibrancy synchronization
   themeSetGlassMode: (mode: "light" | "dark" | "system") => Promise<void>;
+  themeListSystemFonts: () => Promise<{ family: string; monospace: boolean }[]>;
 
   // Worktree operations
   worktreeList: (projectRoot: string) => Promise<WorktreeInfo[]>;

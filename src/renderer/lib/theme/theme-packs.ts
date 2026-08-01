@@ -30,6 +30,13 @@ export const THEME_PACK_IDS: ThemePackId[] = [
   "graphite",
 ];
 
+/** Next theme pack in display order (wraps). Unknown ids start from the first pack. */
+export function cycleThemePack(current: ThemePackId | string | undefined): ThemePackId {
+  const idx = current ? THEME_PACK_IDS.indexOf(current as ThemePackId) : -1;
+  const safe = idx < 0 ? 0 : idx;
+  return THEME_PACK_IDS[(safe + 1) % THEME_PACK_IDS.length];
+}
+
 export interface ThemeAnchors {
   brand: { base: string; foreground: string; ring: string };
   secondary: { base: string; foreground: string };
@@ -77,24 +84,24 @@ function anchors(light: ThemeAnchors, dark: ThemeAnchors): { light: ThemeAnchors
   return { light, dark };
 }
 
-/** Canvas slightly below pure white; card/popover white - shadcn gallery lift.
+/** Light shell: card slightly below pure white on a 0.96 canvas; muted/sidebar step down.
  *  Sidebar is a step DARKER than the canvas (not lighter) so the rail reads as
  *  a recessed panel; it also carries a touch more brand-hue chroma so each
  *  theme's temperature is perceptible at a glance. Borders are darkened so
  *  dividers stay visible on the airy light shell. */
 function lightShell(h: number) {
   return {
-    background: `oklch(0.97 0.005 ${h})`,
+    background: `oklch(0.96 0.005 ${h})`,
     foreground: `oklch(0.205 0.01 ${h})`,
-    card: `oklch(1 0 0)`,
+    card: `oklch(0.97 0.003 ${h})`,
     cardForeground: `oklch(0.205 0.01 ${h})`,
-    popover: `oklch(1 0 0)`,
+    popover: `oklch(0.97 0.003 ${h})`,
     popoverForeground: `oklch(0.205 0.01 ${h})`,
-    muted: `oklch(0.96 0.008 ${h})`,
+    muted: `oklch(0.94 0.008 ${h})`,
     mutedForeground: `oklch(0.50 0.015 ${h})`,
     border: `oklch(0.86 0.01 ${h})`,
     input: `oklch(0.86 0.01 ${h})`,
-    sidebar: `oklch(0.95 0.014 ${h})`,
+    sidebar: `oklch(0.93 0.014 ${h})`,
     sidebarForeground: `oklch(0.205 0.01 ${h})`,
     sidebarBorder: `oklch(0.86 0.01 ${h})`,
   };
@@ -102,19 +109,19 @@ function lightShell(h: number) {
 
 function darkShell(h: number) {
   return {
-    background: `oklch(0.16 0.01 ${h})`,
-    foreground: `oklch(0.96 0.006 ${h})`,
-    card: `oklch(0.20 0.012 ${h})`,
-    cardForeground: `oklch(0.96 0.006 ${h})`,
-    popover: `oklch(0.20 0.012 ${h})`,
-    popoverForeground: `oklch(0.96 0.006 ${h})`,
-    muted: `oklch(0.25 0.014 ${h})`,
-    mutedForeground: `oklch(0.70 0.015 ${h})`,
-    border: `oklch(0.32 0.014 ${h})`,
-    input: `oklch(0.32 0.014 ${h})`,
-    sidebar: `oklch(0.20 0.012 ${h})`,
-    sidebarForeground: `oklch(0.96 0.006 ${h})`,
-    sidebarBorder: `oklch(0.32 0.014 ${h})`,
+    background: `oklch(0.22 0.01 ${h})`,
+    foreground: `oklch(0.86 0.006 ${h})`,
+    card: `oklch(0.26 0.012 ${h})`,
+    cardForeground: `oklch(0.86 0.006 ${h})`,
+    popover: `oklch(0.26 0.012 ${h})`,
+    popoverForeground: `oklch(0.86 0.006 ${h})`,
+    muted: `oklch(0.30 0.014 ${h})`,
+    mutedForeground: `oklch(0.65 0.015 ${h})`,
+    border: `oklch(0.38 0.014 ${h})`,
+    input: `oklch(0.38 0.014 ${h})`,
+    sidebar: `oklch(0.26 0.012 ${h})`,
+    sidebarForeground: `oklch(0.86 0.006 ${h})`,
+    sidebarBorder: `oklch(0.38 0.014 ${h})`,
   };
 }
 
@@ -508,17 +515,17 @@ export const GRAPHITE_PACK: ThemePack = {
       secondary: { base: "oklch(0.96 0 0)", foreground: "oklch(0.30 0 0)" },
       accent: { base: "oklch(0.91 0 0)", foreground: "oklch(0.22 0 0)" },
       neutral: {
-        background: "oklch(0.97 0 0)",
+        background: "oklch(0.96 0 0)",
         foreground: "oklch(0.20 0 0)",
-        card: "oklch(1 0 0)",
+        card: "oklch(0.97 0 0)",
         cardForeground: "oklch(0.20 0 0)",
-        popover: "oklch(1 0 0)",
+        popover: "oklch(0.97 0 0)",
         popoverForeground: "oklch(0.20 0 0)",
-        muted: "oklch(0.96 0 0)",
+        muted: "oklch(0.94 0 0)",
         mutedForeground: "oklch(0.50 0 0)",
         border: "oklch(0.86 0 0)",
         input: "oklch(0.86 0 0)",
-        sidebar: "oklch(0.95 0 0)",
+        sidebar: "oklch(0.93 0 0)",
         sidebarForeground: "oklch(0.20 0 0)",
         sidebarAccent: "oklch(0.91 0 0)",
         sidebarAccentForeground: "oklch(0.22 0 0)",
@@ -543,21 +550,21 @@ export const GRAPHITE_PACK: ThemePack = {
       secondary: { base: "oklch(0.28 0 0)", foreground: "oklch(0.95 0 0)" },
       accent: { base: "oklch(0.30 0 0)", foreground: "oklch(0.82 0 0)" },
       neutral: {
-        background: "oklch(0.16 0 0)",
-        foreground: "oklch(0.96 0 0)",
-        card: "oklch(0.20 0 0)",
-        cardForeground: "oklch(0.96 0 0)",
-        popover: "oklch(0.20 0 0)",
-        popoverForeground: "oklch(0.96 0 0)",
-        muted: "oklch(0.25 0 0)",
-        mutedForeground: "oklch(0.68 0 0)",
-        border: "oklch(0.32 0 0)",
-        input: "oklch(0.32 0 0)",
-        sidebar: "oklch(0.20 0 0)",
-        sidebarForeground: "oklch(0.96 0 0)",
+        background: "oklch(0.22 0 0)",
+        foreground: "oklch(0.86 0 0)",
+        card: "oklch(0.26 0 0)",
+        cardForeground: "oklch(0.86 0 0)",
+        popover: "oklch(0.26 0 0)",
+        popoverForeground: "oklch(0.86 0 0)",
+        muted: "oklch(0.30 0 0)",
+        mutedForeground: "oklch(0.65 0 0)",
+        border: "oklch(0.38 0 0)",
+        input: "oklch(0.38 0 0)",
+        sidebar: "oklch(0.26 0 0)",
+        sidebarForeground: "oklch(0.86 0 0)",
         sidebarAccent: "oklch(0.30 0 0)",
         sidebarAccentForeground: "oklch(0.82 0 0)",
-        sidebarBorder: "oklch(0.32 0 0)",
+        sidebarBorder: "oklch(0.38 0 0)",
         sidebarRing: "oklch(0.70 0 0)",
       },
       semantic: {

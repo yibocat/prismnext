@@ -12,20 +12,6 @@ import { TOOL_EXPANDED_CONTENT_CLASS } from "./shared";
 import { MarkdownRenderer } from "../markdown-renderer";
 import { formatActivityDuration } from "@/lib/chat/segment-assistant-blocks";
 
-// ─── LocalStorage persistence ───
-
-function getThinkingState(key: string): boolean {
-  return localStorage.getItem(`thinking:${key}`) === "open";
-}
-
-function saveThinkingState(key: string, open: boolean): void {
-  if (open) {
-    localStorage.setItem(`thinking:${key}`, "open");
-  } else {
-    localStorage.removeItem(`thinking:${key}`);
-  }
-}
-
 // ─── Thinking Widget ───
 
 /** Tighter than assistant prose — thought is secondary chrome. */
@@ -67,7 +53,7 @@ function ThinkingMarkdownBody({
 export function ThinkingWidget({
   thinking,
   duration,
-  persistKey,
+  persistKey: _persistKey,
   sessionId,
   isStreamingMsg,
   isProgress,
@@ -75,6 +61,7 @@ export function ThinkingWidget({
 }: {
   thinking: string;
   duration?: number;
+  /** Unused — kept for call-site stability; thought folds are not persisted. */
   persistKey?: string;
   sessionId?: string;
   isStreamingMsg?: boolean;
@@ -83,9 +70,8 @@ export function ThinkingWidget({
   variant?: "standalone" | "nested";
 }) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(
-    () => isProgress ? false : (persistKey ? getThinkingState(persistKey) : false),
-  );
+  // Always start collapsed (session open / history / live). User toggles only.
+  const [expanded, setExpanded] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const globalStreaming = useChatStore((s) => s.isStreaming);
   const isStreaming = isStreamingMsg ?? globalStreaming;
@@ -107,10 +93,6 @@ export function ThinkingWidget({
     }
     setExpanded((prev) => !prev);
   };
-
-  useEffect(() => {
-    if (persistKey) saveThinkingState(persistKey, expanded);
-  }, [persistKey, expanded]);
 
   useEffect(() => {
     if (!isStreaming || isProgress) return;
