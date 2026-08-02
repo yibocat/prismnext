@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname } from "node:path";
+import { resolveTectonicBinary } from "./tectonic-binary";
 
 export interface TexliveStatus {
   available: boolean;
@@ -132,12 +133,12 @@ export async function detectTexlive(): Promise<TexliveStatus> {
 }
 
 /**
- * Check if tectonic is available.
+ * Check if tectonic is available (bundled binary first, then system PATH).
  */
 export async function detectTectonic(): Promise<boolean> {
   try {
-    const path = await findBinary("tectonic");
-    return path !== null;
+    const info = await resolveTectonicBinary();
+    return info.available;
   } catch {
     return false;
   }

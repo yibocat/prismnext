@@ -22,7 +22,7 @@ export const KATEX_RENDER_OPTIONS = {
 /** @deprecated alias */
 export const KATEX_DOCUMENT_OPTIONS = KATEX_RENDER_OPTIONS;
 
-const CUSTOM_MARKDOWN_LINK_PROTOCOLS = ["citation", "wikilink", "library-cite"] as const;
+const CUSTOM_MARKDOWN_LINK_PROTOCOLS = ["citation", "wikilink", "library-cite", "library-figure", "project-file", "experiment-ref"] as const;
 
 const SCIENTIFIC_HTML_SCHEMA = {
   ...defaultSchema,

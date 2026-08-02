@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useFocusedModeId } from "@/lib/workspace/modes-from-tabs";
 import { displayChatTitle } from "@/lib/i18n/display-chat-title";
 import { useChatStore, type ChatStreamMessage } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -174,7 +175,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const setLeftSidebarOverlay = useLayoutStore((s) => s.setLeftSidebarOverlay);
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
-  const focusedMode = useLayoutStore((s) => s.focusedMode);
+  const focusedMode = useFocusedModeId();
   const hasTexWorkspaceTab = useRightPanelStore((s) =>
     s.tabs.some((t) => t.kind === "texworkspace"),
   );

@@ -27,7 +27,6 @@ import type {
 } from "../../shared/experiment-log";
 import { RUN_OUTPUT_TAIL_BYTES, stripAnsi, tailBytes } from "../../shared/experiment-log";
 import type { ExperimentResultsSnapshot } from "../../main/services/experiment-results-snapshot";
-import { useLayoutStore } from "@/stores/layout-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { navigateFileTreeToPath } from "@/lib/files/navigate-file-tree";
@@ -706,7 +705,6 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
     const paths = await get().getPaths(projectRoot, id);
     if (!paths) return null;
     // Switch to Files mode + reveal the lab subfolder in the file tree.
-    useLayoutStore.getState().activateMode("files");
     navigateFileTreeToPath(paths.workspaceRel);
     return paths;
   },

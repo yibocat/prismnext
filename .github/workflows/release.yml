@@ -70,6 +70,10 @@ jobs:
         shell: bash
         run: ./scripts/download-opencode.sh
 
+      - name: Download Tectonic binary
+        shell: bash
+        run: ./scripts/download-tectonic.sh
+
       - name: Build app
         run: pnpm build
 
@@ -154,6 +158,10 @@ jobs:
       - name: Download OpenCode binary
         shell: bash
         run: ./scripts/download-opencode.sh
+
+      - name: Download Tectonic binary
+        shell: bash
+        run: ./scripts/download-tectonic.sh
 
       - name: Build app
         run: pnpm build
@@ -243,6 +251,10 @@ jobs:
       - name: Download OpenCode binary
         shell: bash
         run: ./scripts/download-opencode.sh
+
+      - name: Download Tectonic binary
+        shell: bash
+        run: ./scripts/download-tectonic.sh
 
       - name: Build app
         run: pnpm build

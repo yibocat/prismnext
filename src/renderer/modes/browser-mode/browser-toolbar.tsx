@@ -21,6 +21,7 @@ import {
   GlobeIcon,
   StarIcon,
   EllipsisIcon,
+  PlusIcon,
 } from "lucide-react";
 
 /** Normalize URL for comparison: strip trailing slash, fragment, and www prefix */
@@ -45,6 +46,7 @@ interface BrowserToolbarProps {
 export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps) {
   const { t } = useTranslation();
   const navigateBrowserTab = useRightPanelStore((s) => s.navigateBrowserTab);
+  const newBrowserTab = useRightPanelStore((s) => s.newBrowserTab);
   const addBookmark = useBrowserStore((s) => s.addBookmark);
   const bookmarks = useBrowserStore((s) => s.bookmarks);
   const clearRecentVisits = useBrowserStore((s) => s.clearRecentVisits);
@@ -180,6 +182,16 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
       </div>
 
       <div className="mx-1 h-4 w-px bg-border shrink-0" />
+
+      <Hint label={t("modes.browser.newTab", { defaultValue: "New Tab" })}>
+        <button
+          type="button"
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+          onClick={() => newBrowserTab()}
+        >
+          <PlusIcon className="size-3.5" />
+        </button>
+      </Hint>
 
       {/* Three-dot menu */}
       <AppMenu open={menuOpen} onOpenChange={setMenuOpen}>

@@ -11,6 +11,7 @@ import {
   buildBibInputSearchPaths,
   stageBibliographyForBuild,
   syncTexSourceToBuildDir,
+  syncTexSourceIncremental,
   withBibInputsEnv,
 } from "../../src/main/lib/bib-path-resolve";
 import { detectBibTool } from "../../src/main/services/compiler";
@@ -103,6 +104,24 @@ Hello \cite{smith2024}.
     expect(sourceDirRel).toBe("manuscript");
     expect(existsSync(join(outDir, "main.tex"))).toBe(true);
     expect(existsSync(join(outDir, "references.bib"))).toBe(true);
+  });
+
+  it("incremental sync copies only dirty files when build tree exists", async () => {
+    const outDir = join(root, ".prismnext", "compile");
+    await syncTexSourceToBuildDir(root, "manuscript/main.tex", outDir);
+
+    writeFileSync(
+      join(root, "manuscript", "chapter.tex"),
+      "\\section{Ch}\n",
+      "utf-8",
+    );
+
+    await syncTexSourceIncremental(root, "manuscript/main.tex", outDir, [
+      "manuscript/chapter.tex",
+    ]);
+
+    expect(existsSync(join(outDir, "chapter.tex"))).toBe(true);
+    expect(readFileSync(join(outDir, "chapter.tex"), "utf-8")).toContain("Ch");
   });
 
   it("BIBINPUTS keeps current directory first for bibtex in output dir", () => {

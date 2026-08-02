@@ -66,6 +66,34 @@ export interface StagedCitationPayload {
   libraryBibkey: string | null;
 }
 
+/** IPC / store error code when user cancels an in-flight staged add. */
+export const STAGED_CITATION_ADD_CANCELLED = "STAGED_CITATION_ADD_CANCELLED";
+
+/** Successful IPC response shape is the mapped paper payload; cancel is not an error throw. */
+export const STAGED_CITATION_CREATE_CANCELLED = { cancelled: true as const };
+export type StagedCitationCreateCancelledResult = typeof STAGED_CITATION_CREATE_CANCELLED;
+
+export function isStagedCitationCreateCancelledResult(
+  result: unknown,
+): result is StagedCitationCreateCancelledResult {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    "cancelled" in result &&
+    (result as { cancelled?: boolean }).cancelled === true
+  );
+}
+
+export function isStagedCitationAddCancelledError(err: unknown): boolean {
+  if (err instanceof Error) {
+    return (
+      err.message === STAGED_CITATION_ADD_CANCELLED ||
+      err.name === "StagedCitationAddCancelledError"
+    );
+  }
+  return err === STAGED_CITATION_ADD_CANCELLED;
+}
+
 /** Progress phases while adding a staged citation to `library.db`. */
 export type StagedAddProgressPhase = "writing" | "downloading-pdf" | "done";
 

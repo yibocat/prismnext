@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { AUTO_COMPILE_DEBOUNCE } from "@/styles/constants";
+import { AUTO_COMPILE_DEBOUNCE, AUTO_COMPILE_SPINNER_MIN_MS, COMPILE_SPINNER_MIN_MS, COMPILE_UI_SPINNER_DELAY_MS } from "@/styles/constants";
 import { useDocumentStore } from "./document-store";
 import { useWorkspaceConfigStore } from "./workspace-config-store";
 import { resolveCompileTarget } from "@/lib/tex/resolve-tex-root";
@@ -126,6 +126,7 @@ export function clearPdfCache() {
 // ─── Auto-compile debounce timer ───
 
 let _autoCompileTimer: ReturnType<typeof setTimeout> | null = null;
+let _compileInFlight = false;
 
 function clearAutoCompileTimer() {
   if (_autoCompileTimer !== null) {
@@ -142,7 +143,7 @@ interface TexliveStatus {
   version: string | null;
 }
 
-interface CompilerStatus {
+export interface CompilerStatus {
   texlive: TexliveStatus;
   tectonic: boolean;
 }
@@ -163,15 +164,13 @@ interface CompileState {
   compileError: string | null;
   compileLog: string | null;
   pdfRevision: number;
-  compilerBackend: "tectonic" | "texlive";
   compilerStatus: CompilerStatus | null;
   pendingRecompile: boolean;
   lastCompiledRootId: string | null;
   autoCompile: boolean;
   synctexForwardTarget: SynctexForwardTarget | null;
 
-  compile: (projectDir: string, mainFile: string) => Promise<void>;
-  setCompilerBackend: (backend: "tectonic" | "texlive") => void;
+  compile: (projectDir: string, mainFile: string, opts?: { fromAutoCompile?: boolean }) => Promise<void>;
   setPdfData: (data: Uint8Array | null, rootFileId?: string) => void;
   setCompileError: (error: string | null) => void;
   detectCompilers: () => Promise<void>;
@@ -190,7 +189,6 @@ export const useCompileStore = create<CompileState>()(
       compileError: null,
       compileLog: null,
       pdfRevision: 0,
-      compilerBackend: "tectonic",
       compilerStatus: null,
       pendingRecompile: false,
       lastCompiledRootId: null,
@@ -201,97 +199,146 @@ export const useCompileStore = create<CompileState>()(
       autoCompile: true,
       synctexForwardTarget: null,
 
-      compile: async (projectDir: string, mainFile: string) => {
-        const state = get();
+      compile: async (projectDir: string, mainFile: string, opts?: { fromAutoCompile?: boolean }) => {
+        const fromAuto = opts?.fromAutoCompile ?? false;
 
-        // If already compiling, mark pending recompile
-        if (state.isCompiling) {
+        // One engine run at a time; coalesce to "need another pass with latest buffers".
+        if (_compileInFlight) {
           set({ pendingRecompile: true });
           return;
         }
 
-        // Save all dirty files first
-        await useDocumentStore.getState().saveAllFiles();
+        const MAX_LIVE_PASSES = 6;
+        let pass = 0;
 
-        set({ isCompiling: true, compileError: null });
+        while (pass < MAX_LIVE_PASSES) {
+          pass++;
+          const docState = useDocumentStore.getState();
+          const generation = docState.contentVersion;
+          const snapshot = fromAuto || pass > 1
+            ? docState.getLiveCompilePayload()
+            : {
+                dirtyRelPaths: docState.getDirtyRelativePaths(),
+                dirtyFiles: [] as Array<{ relPath: string; content: string }>,
+              };
+          const { dirtyRelPaths, dirtyFiles } = snapshot;
 
-        const startTime = Date.now();
-        const useTexlive = state.compilerBackend === "texlive";
-
-        try {
-          console.log(`[compile-store] compile: projectDir=${projectDir} mainFile=${mainFile} useTexlive=${useTexlive}`);
-          const result = await window.electronAPI.compileExecute(
-            projectDir,
-            mainFile,
-            useTexlive,
-          );
-
-          // Ensure spinner visible for at least 500ms
-          const elapsed = Date.now() - startTime;
-          if (elapsed < 500) {
-            await new Promise((r) => setTimeout(r, 500 - elapsed));
+          // Live pass with nothing dirty: buffers already match disk/build — skip engine.
+          if ((fromAuto || pass > 1) && dirtyRelPaths.length === 0 && dirtyFiles.length === 0) {
+            break;
           }
 
-          if ("pdfBytes" in result) {
-            // Defensive copy: the Blob constructor used for PDF preview
-            // can transfer/detach the original ArrayBuffer.  Store an
-            // independent copy so the cache survives repeated use.
-            const buf = result.pdfBytes.slice(0) as ArrayBuffer;
-            const pdfData = new Uint8Array(buf);
-            _pdfBytesCache.set(projectDir, pdfData);
-
-            _currentPdfRootId = projectDir;
-            set({
-              isCompiling: false,
-              compileError: null,
-              compileLog: result.stdout ?? null,
-              pdfRevision: get().pdfRevision + 1,
-              lastCompiledRootId: projectDir,
-              pendingRecompile: false,
-            });
-          } else {
-            set({
-              isCompiling: false,
-              compileError: result.error,
-              compileLog: result.stdout ?? null,
-              pendingRecompile: false,
-            });
-          }
-        } catch (error) {
-          // Ensure spinner visible for at least 500ms
-          const elapsed = Date.now() - startTime;
-          if (elapsed < 500) {
-            await new Promise((r) => setTimeout(r, 500 - elapsed));
+          if (!fromAuto && pass === 1) {
+            await docState.saveAllFiles();
           }
 
-          set({
-            isCompiling: false,
-            compileError: error instanceof Error ? error.message : String(error),
-            pendingRecompile: false,
-          });
-        }
+          _compileInFlight = true;
+          set({ compileError: null, pendingRecompile: false });
+          const spinnerTimer = setTimeout(() => {
+            set({ isCompiling: true });
+          }, COMPILE_UI_SPINNER_DELAY_MS);
 
-        // Handle pending recompile
-        if (get().pendingRecompile) {
-          set({ pendingRecompile: false });
-          // Recompile after a short delay
-          setTimeout(() => {
-            const currentState = get();
-            const docState = useDocumentStore.getState();
-            const resolved = resolveCompileTarget(
-              docState.activeFileId || "",
-              docState.files,
-              docState.getContent,
+          const startTime = Date.now();
+          const spinnerMin = fromAuto || pass > 1
+            ? AUTO_COMPILE_SPINNER_MIN_MS
+            : COMPILE_SPINNER_MIN_MS;
+          const liveFast = fromAuto || pass > 1;
+
+          let published = false;
+          let failed = false;
+
+          try {
+            const result = await window.electronAPI.compileExecute(
+              projectDir,
+              mainFile,
+              false,
+              {
+                dirtyRelPaths,
+                ...(dirtyFiles.length > 0 ? { dirtyFiles } : {}),
+                skipSynctex: true,
+                fast: liveFast,
+                pdfOnDisk: liveFast,
+              },
             );
-            if (resolved && docState.projectRoot) {
-              currentState.compile(docState.projectRoot, resolved.targetPath);
-            }
-          }, 100);
-        }
-      },
 
-      setCompilerBackend: (backend) => {
-        set({ compilerBackend: backend });
+            const elapsed = Date.now() - startTime;
+            if (elapsed < spinnerMin) {
+              await new Promise((r) => setTimeout(r, spinnerMin - elapsed));
+            }
+
+            if ("pdfBytes" in result && result.pdfBytes) {
+              // Always publish — discarding on "stale" made continuous typing never update the PDF.
+              const buf = result.pdfBytes.slice(0) as ArrayBuffer;
+              _pdfBytesCache.set(projectDir, new Uint8Array(buf));
+              _currentPdfRootId = projectDir;
+              if (dirtyFiles.length > 0) {
+                useDocumentStore.getState().markCompiledClean(dirtyFiles);
+              }
+              set({
+                isCompiling: false,
+                compileError: null,
+                compileLog: result.stdout ?? null,
+                pdfRevision: get().pdfRevision + 1,
+                lastCompiledRootId: projectDir,
+              });
+              published = true;
+            } else if ("pdfPath" in result && result.pdfPath) {
+              const { bytes } = await window.electronAPI.fsReadBytes(result.pdfPath);
+              _pdfBytesCache.set(projectDir, new Uint8Array(bytes));
+              _currentPdfRootId = projectDir;
+              if (dirtyFiles.length > 0) {
+                useDocumentStore.getState().markCompiledClean(dirtyFiles);
+              }
+              set({
+                isCompiling: false,
+                compileError: null,
+                compileLog: result.stdout ?? null,
+                pdfRevision: get().pdfRevision + 1,
+                lastCompiledRootId: projectDir,
+              });
+              published = true;
+            } else if ("error" in result) {
+              failed = true;
+              set({
+                isCompiling: false,
+                compileError: result.error,
+                compileLog: result.stdout ?? null,
+              });
+            } else {
+              failed = true;
+              set({
+                isCompiling: false,
+                compileError: "Compilation failed",
+                compileLog: null,
+              });
+            }
+
+            if (!published && !failed) {
+              set({ isCompiling: false });
+            }
+          } catch (error) {
+            failed = true;
+            const elapsed = Date.now() - startTime;
+            if (elapsed < spinnerMin) {
+              await new Promise((r) => setTimeout(r, spinnerMin - elapsed));
+            }
+            set({
+              isCompiling: false,
+              compileError: error instanceof Error ? error.message : String(error),
+            });
+          } finally {
+            clearTimeout(spinnerTimer);
+            _compileInFlight = false;
+          }
+
+          const latest = useDocumentStore.getState().contentVersion;
+          const needAnother =
+            get().pendingRecompile || latest !== generation;
+          set({ pendingRecompile: false });
+
+          if (!needAnother) break;
+          // Follow-up always uses live memory flush.
+        }
       },
 
       setPdfData: (data, rootFileId) => {
@@ -322,15 +369,6 @@ export const useCompileStore = create<CompileState>()(
         try {
           const status = await window.electronAPI.compileDetectTexlive();
           set({ compilerStatus: status });
-
-          // Auto-select backend based on availability
-          if (!status.tectonic && status.texlive.available) {
-            set({ compilerBackend: "texlive" });
-          } else if (status.tectonic) {
-            set({ compilerBackend: "tectonic" });
-          } else if (status.texlive.available) {
-            set({ compilerBackend: "texlive" });
-          }
         } catch (error) {
           console.error("Failed to detect compilers:", error);
         }
@@ -386,8 +424,7 @@ export const useCompileStore = create<CompileState>()(
           }
 
           if (targetPath) {
-            // compile() already calls saveAllFiles() internally
-            get().compile(projectRoot, targetPath);
+            get().compile(projectRoot, targetPath, { fromAutoCompile: true });
           }
         }, AUTO_COMPILE_DEBOUNCE);
       },
@@ -418,7 +455,6 @@ export const useCompileStore = create<CompileState>()(
     {
       name: "prism-next-compile",
       partialize: (state) => ({
-        compilerBackend: state.compilerBackend,
         autoCompile: state.autoCompile,
       }),
     },

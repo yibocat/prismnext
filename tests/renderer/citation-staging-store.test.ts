@@ -1,8 +1,19 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+vi.mock("../../src/renderer/stores/literature-store", () => ({
+  useLiteratureStore: {
+    getState: () => ({
+      papers: [],
+      bootstrapLiterature: vi.fn().mockResolvedValue(undefined),
+    }),
+  },
+}));
+
 import {
   isCitationInLibrary,
   useCitationStagingStore,
 } from "../../src/renderer/stores/citation-staging-store";
+import { useDocumentStore } from "../../src/renderer/stores/document-store";
 import type { StageResult } from "../../src/shared/citation-staging";
 
 const SESSION = "chat-tab-1";
@@ -243,5 +254,83 @@ describe("citationStagingStore", () => {
     const c = useCitationStagingStore.getState().getCitationsForSession(SESSION)[0];
     expect(isCitationInLibrary(c, new Set(["p-live"]))).toBe(true);
     expect(isCitationInLibrary(c, new Set())).toBe(false);
+  });
+
+  it("tracks checked staged ids per session", () => {
+    const id = useCitationStagingStore.getState().upsertFromStageResult(SESSION, verifiedResult());
+    useCitationStagingStore.getState().toggleStagedChecked(SESSION, id!);
+    expect(useCitationStagingStore.getState().checkedStagedIdsBySession[SESSION]).toEqual([id]);
+    useCitationStagingStore.getState().toggleStagedChecked(SESSION, id!);
+    expect(useCitationStagingStore.getState().checkedStagedIdsBySession[SESSION]).toEqual([]);
+  });
+
+  it("cancelAddToLibrary removes a queued staged citation without IPC", () => {
+    const id = useCitationStagingStore.getState().upsertFromStageResult(SESSION, verifiedResult())!;
+    useCitationStagingStore.setState({
+      batchQueuedIds: { [id]: true },
+    });
+    useCitationStagingStore.getState().cancelAddToLibrary(id);
+    const s = useCitationStagingStore.getState();
+    expect(s.batchQueuedIds[id]).toBeUndefined();
+    expect(s.cancelledAddIds[id]).toBe(true);
+    expect(s.inFlightAddIds[id]).toBeUndefined();
+  });
+
+  it("cancelBatchAdd clears queued ids and marks them cancelled", () => {
+    const id1 = useCitationStagingStore.getState().upsertFromStageResult(SESSION, verifiedResult())!;
+    const id2 = useCitationStagingStore
+      .getState()
+      .upsertFromStageResult(
+        SESSION,
+        verifiedResult({
+          citation: {
+            ...verifiedResult().citation!,
+            title: "Second",
+            doi: "10.1038/test.2024.002",
+          },
+        }),
+      )!;
+    useCitationStagingStore.setState({
+      batchAdd: { sessionId: SESSION, total: 2, completed: 0, failed: 0 },
+      batchQueuedIds: { [id1]: true, [id2]: true },
+    });
+    useCitationStagingStore.getState().cancelBatchAdd(SESSION);
+    const s = useCitationStagingStore.getState();
+    expect(s.batchQueuedIds).toEqual({});
+    expect(s.cancelledAddIds[id1]).toBe(true);
+    expect(s.cancelledAddIds[id2]).toBe(true);
+  });
+
+  it("addToLibrary clears a stale cancelled mark before starting", async () => {
+    const id = useCitationStagingStore.getState().upsertFromStageResult(SESSION, verifiedResult())!;
+    useCitationStagingStore.setState({ cancelledAddIds: { [id]: true } });
+
+    const create = vi.fn().mockResolvedValue({
+      created: true,
+      paper: { id: "p1", bibkey: "smith2024" },
+      pdfAttached: false,
+    });
+    vi.stubGlobal("electronAPI", {
+      literatureCreateFromStagedCitation: create,
+      literatureDeletePaper: vi.fn(),
+    });
+    useDocumentStore.setState({ projectRoot: "/tmp/project" });
+
+    const result = await useCitationStagingStore.getState().addToLibrary(id);
+    expect(result.ok).toBe(true);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(useCitationStagingStore.getState().cancelledAddIds[id]).toBeUndefined();
+  });
+
+  it("addToLibrary treats cancelled IPC result as a soft cancel", async () => {
+    const id = useCitationStagingStore.getState().upsertFromStageResult(SESSION, verifiedResult())!;
+    vi.stubGlobal("electronAPI", {
+      literatureCreateFromStagedCitation: vi.fn().mockResolvedValue({ cancelled: true }),
+      literatureDeletePaper: vi.fn(),
+    });
+    useDocumentStore.setState({ projectRoot: "/tmp/project" });
+
+    const result = await useCitationStagingStore.getState().addToLibrary(id);
+    expect(result).toEqual({ ok: false, error: "cancelled" });
   });
 });

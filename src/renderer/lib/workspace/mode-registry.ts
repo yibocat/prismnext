@@ -71,7 +71,7 @@ export interface RightTab {
 // ── Mode Definition ──
 
 export interface ModeDefinition {
-  /** 唯一标识，用作工具栏按钮 key 和 layout-store activeModes 的元素 */
+  /** 唯一标识，用作工具栏按钮 key 和 RightArea tab 派生的 mode id */
   id: string;
   /** 工具栏显示标签（英文回退；UI 优先用 labelKey） */
   label: string;
@@ -83,10 +83,11 @@ export interface ModeDefinition {
   tabKinds: RightTabKind[];
   /** 在 workspace / settings 哪些上下文中可用 */
   surface?: ModeSurface;
-  /** 是否出现在 RightArea 模式工具栏（Files / Browser / …） */
-  showInModeToolbar?: boolean;
-  /** persistent: 最后 tab 关闭时重生 home tab；transient: 去激活模式 */
-  persistence: "persistent" | "transient";
+  /**
+   * Whether the mode appears in the RightArea「+」add menu.
+   * Default true. Set false for settings-editor / interaction / research-plan.
+   */
+  showInAddMenu?: boolean;
   /** home / initial tab 默认标题（英文回退；UI 优先用 initialTitleKey） */
   initialTitle: string;
   /** i18n key for initial / home tab title */
@@ -99,10 +100,21 @@ export interface ModeDefinition {
   Toolbar?: ComponentType<{ tab: RightTab }>;
   /** 内容区组件。接收 tab + isActive */
   Content: ComponentType<{ tab: RightTab; isActive: boolean }>;
-  /** 模式激活时调用（初始化 store / IPC 等） */
+  /** 模式激活时调用（初始化 store / IPC 等）— 仅 0→1 tabs */
   onActivate?: () => void;
-  /** 模式去激活时调用 */
+  /** 模式去激活时调用 — 仅 1→0 tabs */
   onDeactivate?: () => void;
+  /**
+   * 「+」菜单策略：
+   * - singleton（默认）：该模式已有任意 tab 时从菜单隐藏
+   * - multi：始终列出；点选新建一个 tab（Terminal / Browser / Literature）
+   */
+  addMenuPolicy?: "singleton" | "multi";
+  /**
+   * Optional override for「+」/ shortcut open.
+   * Default: openMode — focus existing tab or ensure home / spawn multi.
+   */
+  openFromAddMenu?: () => void;
 }
 
 // ── Registry ──
@@ -140,13 +152,28 @@ export const modeRegistry = {
     return registry.get(modeId)?.tabKinds[0];
   },
 
-  /** Modes shown in the RightArea toolbar for a given surface context. */
-  getToolbarModes(surface: "workspace" | "settings"): ModeDefinition[] {
+  /** Modes shown in the RightArea「+」add menu for a given surface context. */
+  getAddMenuModes(surface: "workspace" | "settings"): ModeDefinition[] {
     return Array.from(registry.values()).filter((def) => {
-      if (def.showInModeToolbar === false) return false;
+      if (def.showInAddMenu === false) return false;
       const modeSurface = def.surface ?? "workspace";
       if (modeSurface === "any") return true;
       return modeSurface === surface;
+    });
+  },
+
+  /** Add-menu entries after applying singleton hide-when-open rules. */
+  getVisibleAddMenuModes(
+    surface: "workspace" | "settings",
+    openTabKinds: ReadonlySet<string> | readonly string[],
+  ): ModeDefinition[] {
+    const open = openTabKinds instanceof Set
+      ? openTabKinds
+      : new Set(openTabKinds);
+    return modeRegistry.getAddMenuModes(surface).filter((def) => {
+      const policy = def.addMenuPolicy ?? "singleton";
+      if (policy === "multi") return true;
+      return !def.tabKinds.some((k) => open.has(k));
     });
   },
 };

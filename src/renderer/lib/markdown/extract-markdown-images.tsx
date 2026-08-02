@@ -7,9 +7,8 @@ import { cn } from "@/lib/utils";
 import { ChatImagePreviewDialog } from "@/lib/markdown/chat-image-preview";
 import { chatImagePathCandidates, artifactBasename } from "../../../shared/artifact-path";
 import {
-  CHAT_ARTIFACT_THUMB_IMAGE_CLASS,
-  CHAT_ARTIFACT_THUMB_PREVIEW_CLASS,
-  CHAT_ARTIFACT_THUMB_SHELL_CLASS,
+  CHAT_ARTIFACT_INLINE_IMAGE_CLASS,
+  CHAT_ARTIFACT_INLINE_IMAGE_FRAME_CLASS,
 } from "./chat-artifact";
 
 /** Resolve `images/foo.png` relative to an extract markdown file path. */
@@ -273,19 +272,14 @@ export function ChatProjectImage({
         type="button"
         aria-label={t("chat.composer.previewAttachment", { name: previewName })}
         onClick={() => setPreviewOpen(true)}
-        className={cn(
-          CHAT_ARTIFACT_THUMB_SHELL_CLASS,
-          "cursor-zoom-in p-1.5 text-left transition-opacity hover:opacity-90",
-        )}
+        className={cn(CHAT_ARTIFACT_INLINE_IMAGE_FRAME_CLASS, "cursor-zoom-in")}
       >
-        <div className={CHAT_ARTIFACT_THUMB_PREVIEW_CLASS}>
-          <img
-            src={dataUrl}
-            alt={alt ?? ""}
-            className={CHAT_ARTIFACT_THUMB_IMAGE_CLASS}
-            loading="lazy"
-          />
-        </div>
+        <img
+          src={dataUrl}
+          alt={alt ?? ""}
+          className={CHAT_ARTIFACT_INLINE_IMAGE_CLASS}
+          loading="lazy"
+        />
       </button>
       <ChatImagePreviewDialog
         open={previewOpen}

@@ -22,6 +22,10 @@ import {
   PDF_ATTACH_PAYWALL_FALLBACK,
 } from "../../shared/pdf-download-messages";
 import type { StagedCitationImportInput, StagedAddProgressPhase } from "../../shared/citation-staging";
+import {
+  StagedCitationAddCancelledError,
+  throwIfStagedCitationAddAborted,
+} from "../lib/staged-citation-add-cancelled";
 import { extractIdsFromPdfFile } from "../lib/extract-pdf-identifiers";
 import type { PaperRow } from "./literature-service";
 import {
@@ -137,6 +141,7 @@ export async function tryAttachPdfFromUrl(
   paperId: string,
   pdfUrl: string | null | undefined,
   onDownloadProgress?: (info: PdfDownloadProgress) => void,
+  signal?: AbortSignal,
 ): Promise<PdfAttachResult> {
   const paper = getPaper(projectRoot, paperId);
   if (!paper) throw new Error("Paper not found");
@@ -144,7 +149,9 @@ export async function tryAttachPdfFromUrl(
   if (!pdfUrl?.trim()) return { paper, attached: false };
 
   try {
-    const buf = await downloadPdfBytes(pdfUrl, onDownloadProgress);
+    throwIfStagedCitationAddAborted(signal);
+    const buf = await downloadPdfBytes(pdfUrl, onDownloadProgress, signal);
+    throwIfStagedCitationAddAborted(signal);
     const updated = attachPdfBufferToPaper(projectRoot, paperId, buf);
     if (updated.pdf_path && !paper.pdf_path) {
       onPaperPdfAttached(projectRoot, paperId, "download");
@@ -152,6 +159,9 @@ export async function tryAttachPdfFromUrl(
     }
     return { paper: updated, attached: true };
   } catch (err) {
+    if (err instanceof StagedCitationAddCancelledError || signal?.aborted) {
+      throw new StagedCitationAddCancelledError();
+    }
     return {
       paper,
       attached: false,
@@ -214,7 +224,9 @@ export async function createPaperFromStagedCitation(
   projectRoot: string,
   input: StagedCitationImportInput,
   onProgress?: StagedAddProgressCallback,
+  opts?: { signal?: AbortSignal },
 ): Promise<CreatePaperFromCatalogResult> {
+  const signal = opts?.signal;
   const doi = input.doi ? normalizeDoi(input.doi) : undefined;
   const arxivId = input.arxivId ? normalizeArxivId(input.arxivId) : undefined;
   if (!doi && !arxivId) throw new Error("Provide a DOI or arXiv ID");
@@ -222,55 +234,94 @@ export async function createPaperFromStagedCitation(
     throw new Error("Citation is not verified — cannot add to library");
   }
 
-  onProgress?.({ phase: "writing" });
+  let paperId: string | null = null;
+  let createdNewPaper = false;
+  try {
+    throwIfStagedCitationAddAborted(signal);
 
-  const createResult = createPaper(projectRoot, {
-    title: input.title.trim() || "Untitled",
-    authors: input.authors,
-    year: input.year,
-    abstract: input.abstract,
-    doi: doi ?? null,
-    arxiv_id: arxivId ?? null,
-    venue: input.venue,
-    type: input.type,
-    origin: "catalog",
-    metadata_source: input.catalogSource,
-    csl_json: serializeCslJson(input.cslJson),
-  });
+    const pdfUrl = await resolvePdfUrlForStaged({ doi: doi ?? undefined, arxivId: arxivId ?? undefined });
+    throwIfStagedCitationAddAborted(signal);
 
-  const pdfUrl = await resolvePdfUrlForStaged({ doi: doi ?? undefined, arxivId: arxivId ?? undefined });
-  let attach: PdfAttachResult;
+    let pdfBuffer: Buffer | null = null;
+    let pdfAttachError: string | undefined;
+    if (pdfUrl) {
+      onProgress?.({ phase: "downloading-pdf" });
+      try {
+        pdfBuffer = await downloadPdfBytes(
+          pdfUrl,
+          (info) => onProgress?.({ phase: "downloading-pdf", ...info }),
+          signal,
+        );
+      } catch (err) {
+        if (err instanceof StagedCitationAddCancelledError || signal?.aborted) {
+          throw new StagedCitationAddCancelledError();
+        }
+        pdfAttachError = err instanceof Error ? err.message : String(err);
+      }
+      throwIfStagedCitationAddAborted(signal);
+    }
 
-  if (pdfUrl && !createResult.paper.pdf_path) {
-    onProgress?.({ phase: "downloading-pdf" });
-    attach = await tryAttachPdfFromUrl(
-      projectRoot,
-      createResult.paper.id,
-      pdfUrl,
-      (info) => onProgress?.({ phase: "downloading-pdf", ...info }),
-    );
-  } else {
-    attach = { paper: createResult.paper, attached: false };
+    onProgress?.({ phase: "writing" });
+    const createResult = createPaper(projectRoot, {
+      title: input.title.trim() || "Untitled",
+      authors: input.authors,
+      year: input.year,
+      abstract: input.abstract,
+      doi: doi ?? null,
+      arxiv_id: arxivId ?? null,
+      venue: input.venue,
+      type: input.type,
+      origin: "catalog",
+      metadata_source: input.catalogSource,
+      csl_json: serializeCslJson(input.cslJson),
+    });
+    paperId = createResult.paper.id;
+    createdNewPaper = createResult.created;
+
+    throwIfStagedCitationAddAborted(signal);
+
+    let paper = createResult.paper;
+    let pdfAttached = false;
+    if (pdfBuffer && !paper.pdf_path) {
+      paper = attachPdfBufferToPaper(projectRoot, paper.id, pdfBuffer);
+      pdfAttached = Boolean(paper.pdf_path);
+      if (pdfAttached) {
+        onPaperPdfAttached(projectRoot, paper.id, "import");
+        recordPdfDownload(projectRoot, paper, "literature-ingest", pdfUrl!, pdfBuffer.length);
+      }
+    }
+
+    throwIfStagedCitationAddAborted(signal);
+
+    onProgress?.({
+      phase: "done",
+      pdfAttached,
+      pdfSkipped: !pdfUrl,
+    });
+
+    maybeEnqueueAiMetadataAfterMetadata(projectRoot, paper.id);
+
+    return {
+      ...createResult,
+      paper,
+      pdfAttached,
+      pdfAttachError: pdfUrl && !pdfAttached ? pdfAttachError ?? PDF_ATTACH_NO_OA_URL : undefined,
+    };
+  } catch (err) {
+    if (
+      paperId &&
+      createdNewPaper &&
+      (err instanceof StagedCitationAddCancelledError || signal?.aborted)
+    ) {
+      try {
+        deletePaper(projectRoot, paperId);
+      } catch {
+        // Best-effort cleanup after cancel.
+      }
+      throw new StagedCitationAddCancelledError();
+    }
+    throw err;
   }
-
-  if (attach.attached) {
-    onPaperPdfAttached(projectRoot, attach.paper.id, "import");
-  }
-
-  onProgress?.({
-    phase: "done",
-    pdfAttached: attach.attached,
-    pdfSkipped: !pdfUrl,
-  });
-
-  maybeEnqueueAiMetadataAfterMetadata(projectRoot, attach.paper.id);
-
-  return {
-    ...createResult,
-    paper: attach.paper,
-    pdfAttached: attach.attached,
-    pdfAttachError: resolvePdfAttachError(attach, pdfUrl),
-  };
 }
 
 /** Catalog lookup → create or merge by identifier. Sources only — no Zotero shortcut. */

@@ -125,10 +125,16 @@ export function AiBar() {
   const attachmentCountRef = useRef(attachmentCount);
   attachmentCountRef.current = attachmentCount;
 
+  const queueLength = useChatStore(
+    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.composerSendQueue.length ?? 0,
+  );
+  const queueLengthRef = useRef(queueLength);
+  queueLengthRef.current = queueLength;
+
   const hasConversation = messages.length > 0 || isStreaming;
   const isInputting = phase === "input";
   const isComposerVisible = phase !== "idle";
-  const composerHasContent = !draftEmpty || attachmentCount > 0;
+  const composerHasContent = !draftEmpty || attachmentCount > 0 || queueLength > 0;
 
   const focusComposer = useCallback(() => {
     requestAnimationFrame(() => {
@@ -223,7 +229,7 @@ export function AiBar() {
       const target = e.target as HTMLElement;
       if (composerShellRef.current?.contains(target)) return;
       if (target.closest("[data-radix-menu-content]") || target.closest("[data-radix-popper-content-wrapper]")) return;
-      if (draftEmptyRef.current && attachmentCountRef.current === 0) collapseToIdle();
+      if (draftEmptyRef.current && attachmentCountRef.current === 0 && queueLengthRef.current === 0) collapseToIdle();
     };
 
     document.addEventListener("mousedown", handleMouseDown, true);
@@ -310,14 +316,14 @@ export function AiBar() {
 
       if (phase === "expanded") {
         e.preventDefault();
-        if (draftEmptyRef.current && attachmentCountRef.current === 0) collapseToIdle();
+        if (draftEmptyRef.current && attachmentCountRef.current === 0 && queueLengthRef.current === 0) collapseToIdle();
         else collapseToInput();
         return;
       }
 
       if (phase === "input") {
         e.preventDefault();
-        if (draftEmptyRef.current && attachmentCountRef.current === 0) {
+        if (draftEmptyRef.current && attachmentCountRef.current === 0 && queueLengthRef.current === 0) {
           collapseToIdle();
         } else {
           (document.activeElement as HTMLElement | null)?.blur?.();
@@ -481,6 +487,12 @@ export function AiBar() {
           <div data-chat-width className="pointer-events-auto w-full">
             <ComposerChromeStack />
           </div>
+          {/* Queue sits above the capsule shell (not inside the pill), like Cursor. */}
+          <div
+            id="ai-bar-composer-queue-slot"
+            data-chat-width
+            className="pointer-events-auto w-full max-w-[var(--chat-max-w)] mx-auto"
+          />
           <div
             ref={(node) => {
               morphRef.current = node;

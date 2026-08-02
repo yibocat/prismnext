@@ -105,34 +105,38 @@ actionRegistry.register("compact-context", async () => {
   return "Context compacted. Old messages have been summarized to free token space.";
 });
 
-// ── restore-previous-turn ──
+// ── restore-previous-turn (/undo) — world rollback to previous turn ──
 actionRegistry.register("restore-previous-turn", async () => {
   const { useChatStore } = await import("@/stores/chat-store");
   const { useCheckpointStore } = await import("@/stores/checkpoint-store");
 
   const tabId = useChatStore.getState().activeTabId;
-  const restored = await useCheckpointStore.getState().restorePreviousTurn(tabId);
+  const restored = await useCheckpointStore.getState().rollbackPreviousTurn(tabId);
 
   if (restored == null) {
-    throw new Error("No checkpoint to restore — complete a turn that modified files first.");
+    throw new Error("Nothing to roll back — complete at least one turn first.");
   }
 
-  return `Restored ${restored} file(s) to the previous turn. Files and chat history were rolled back.`;
+  return `Rolled back ${restored} file(s). Chat, workspace files, and proposed changes were rolled back.`;
 });
 
-// ── undo-last-restore ──
+// ── undo-last-restore (/redo) — regret / undo last rollback ──
 actionRegistry.register("undo-last-restore", async () => {
   const { useChatStore } = await import("@/stores/chat-store");
   const { useCheckpointStore } = await import("@/stores/checkpoint-store");
 
   const tabId = useChatStore.getState().activeTabId;
-  const ok = await useCheckpointStore.getState().undoLastRestore(tabId);
+  const result = await useCheckpointStore.getState().undoLastRollback(tabId);
 
-  if (!ok) {
-    throw new Error("Nothing to undo — restore workspace files to an earlier turn first.");
+  if (!result.ok) {
+    throw new Error("Nothing to undo — roll back to an earlier turn first.");
   }
 
-  return "Restore undone. Workspace files and chat history are back to their pre-restore state.";
+  if (!result.sessionRestored) {
+    return "Rollback undone in the UI. Session history may be incomplete (truncation backup was missing).";
+  }
+
+  return "Rollback undone. Chat and workspace files are back to their pre-rollback state.";
 });
 
 // ── enter-plan-mode ──

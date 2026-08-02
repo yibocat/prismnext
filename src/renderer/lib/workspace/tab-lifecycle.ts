@@ -55,50 +55,6 @@ export function isExperimentsDetailTab(tab: RightTab): boolean {
   return tab.kind === "experiments" && Boolean(tab.experimentId);
 }
 
-/** Literature tab close overrides the generic persistent-mode reset behavior. */
-export type LiteratureTabCloseAction = "deactivate-mode" | "remove-and-ensure-home";
-
-export function getLiteratureTabCloseAction(
-  closingTab: RightTab,
-  allTabs: RightTab[],
-): LiteratureTabCloseAction | null {
-  if (closingTab.kind !== "literature") return null;
-
-  const literatureTabs = allTabs.filter((t) => t.kind === "literature");
-
-  if (isLiteratureHomeTab(closingTab)) {
-    return "deactivate-mode";
-  }
-
-  if (isLiteraturePaperTab(closingTab) && literatureTabs.length === 1) {
-    return "remove-and-ensure-home";
-  }
-
-  return null;
-}
-
-/** Same pattern as literature: home closes mode; sole detail tab rebuilds home. */
-export type ExperimentsTabCloseAction = "deactivate-mode" | "remove-and-ensure-home";
-
-export function getExperimentsTabCloseAction(
-  closingTab: RightTab,
-  allTabs: RightTab[],
-): ExperimentsTabCloseAction | null {
-  if (closingTab.kind !== "experiments") return null;
-
-  const experimentTabs = allTabs.filter((t) => t.kind === "experiments");
-
-  if (isExperimentsHomeTab(closingTab)) {
-    return "deactivate-mode";
-  }
-
-  if (isExperimentsDetailTab(closingTab) && experimentTabs.length === 1) {
-    return "remove-and-ensure-home";
-  }
-
-  return null;
-}
-
 /** Strip mode-specific payload when resetting a persistent home tab. */
 export function buildInitialTabShell(tab: RightTab, initialTitle: string): RightTab {
   return {

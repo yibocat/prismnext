@@ -1,14 +1,9 @@
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
+import { focusedModeId } from "@/lib/workspace/modes-from-tabs";
 import { isBrowsableUrl, normalizeBrowserUrl } from "./normalize";
 
 export function activateBrowserMode(): void {
-  const layout = useLayoutStore.getState();
-  if (!layout.activeModes.includes("browser")) {
-    layout.activateMode("browser");
-  } else {
-    layout.setFocusedMode("browser");
-  }
   useRightPanelStore.getState().ensureTab("browser");
 }
 
@@ -28,8 +23,32 @@ export function navigateBrowserUrl(tabId: string, url: string): void {
 }
 
 /**
+ * Pick a Browser tab for opportunistic URL open (not an explicit「new tab」).
+ * Prefer the focused Browser tab, else an unused home (isInitial), else create.
+ */
+function resolveTabForUrlOpen(): string {
+  const rp = useRightPanelStore.getState();
+  const active = rp.tabs.find((t) => t.id === rp.activeTabId);
+
+  if (focusedModeId(rp.tabs, rp.activeTabId) === "browser" && active?.kind === "browser") {
+    return active.id;
+  }
+
+  const idleHome = rp.tabs.find((t) => t.kind === "browser" && t.isInitial);
+  if (idleHome) {
+    rp.setActiveTab(idleHome.id);
+    return idleHome.id;
+  }
+
+  return rp.newBrowserTab();
+}
+
+/**
  * Open URL in in-app Browser: expand RightArea, activate mode, navigate.
  * Never opens the OS browser.
+ *
+ * `newTab: true` always spawns a blank tab first (same as「+」→ Browser).
+ * Default reuses the focused Browser tab or an idle home when available.
  */
 export function openUrlInBrowser(url: string, options?: { newTab?: boolean }): string | null {
   const normalized = normalizeBrowserUrl(url);
@@ -39,19 +58,7 @@ export function openUrlInBrowser(url: string, options?: { newTab?: boolean }): s
   activateBrowserMode();
 
   const rp = useRightPanelStore.getState();
-  let tabId: string;
-
-  if (options?.newTab) {
-    tabId = rp.newBrowserTab();
-  } else {
-    const layout = useLayoutStore.getState();
-    const active = rp.tabs.find((t) => t.id === rp.activeTabId);
-    if (layout.focusedMode === "browser" && active?.kind === "browser") {
-      tabId = active.id;
-    } else {
-      tabId = rp.newBrowserTab();
-    }
-  }
+  const tabId = options?.newTab ? rp.newBrowserTab() : resolveTabForUrlOpen();
 
   navigateBrowserUrl(tabId, normalized);
   return tabId;

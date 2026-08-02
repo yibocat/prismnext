@@ -96,7 +96,6 @@ vi.mock("../../src/renderer/stores/document-store", () => ({
 vi.mock("../../src/renderer/stores/layout-store", () => ({
   useLayoutStore: {
     getState: () => ({
-      activateMode: vi.fn(),
     }),
   },
 }));

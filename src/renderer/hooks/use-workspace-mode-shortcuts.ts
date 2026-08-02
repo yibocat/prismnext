@@ -14,8 +14,8 @@ import {
   toggleTexWorkspaceSplit,
 } from "@/lib/workspace/left-nav/panel-utils";
 import {
-  toggleToolbarModeMaximize,
-  toggleToolbarModeSplit,
+  openModeMaximized,
+  openModeInSplit,
 } from "@/lib/workspace/toolbar-mode-open";
 import { useSettingsStore } from "@/stores/settings-store";
 
@@ -99,42 +99,42 @@ export function useWorkspaceModeShortcuts(
       // Toolbar modes.
       if (matchesShortcut("workspace.openFilesMaximize", e)) {
         e.preventDefault();
-        toggleToolbarModeMaximize("files", layoutCtx());
+        openModeMaximized("files", layoutCtx());
         return;
       }
       if (matchesShortcut("workspace.openFiles", e)) {
         e.preventDefault();
-        toggleToolbarModeSplit("files", layoutCtx());
+        openModeInSplit("files", layoutCtx());
         return;
       }
       if (matchesShortcut("workspace.openGitMaximize", e)) {
         e.preventDefault();
-        toggleToolbarModeMaximize("git", layoutCtx());
+        openModeMaximized("git", layoutCtx());
         return;
       }
       if (matchesShortcut("workspace.openGit", e)) {
         e.preventDefault();
-        toggleToolbarModeSplit("git", layoutCtx());
+        openModeInSplit("git", layoutCtx());
         return;
       }
       if (matchesShortcut("workspace.openBrowserMaximize", e)) {
         e.preventDefault();
-        toggleToolbarModeMaximize("browser", layoutCtx());
+        openModeMaximized("browser", layoutCtx());
         return;
       }
       if (matchesShortcut("workspace.openBrowser", e)) {
         e.preventDefault();
-        toggleToolbarModeSplit("browser", layoutCtx());
+        openModeInSplit("browser", layoutCtx());
         return;
       }
       if (matchesShortcut("workspace.openTerminalMaximize", e)) {
         e.preventDefault();
-        toggleToolbarModeMaximize("terminal", layoutCtx());
+        openModeMaximized("terminal", layoutCtx());
         return;
       }
       if (matchesShortcut("workspace.openTerminal", e)) {
         e.preventDefault();
-        toggleToolbarModeSplit("terminal", layoutCtx());
+        openModeInSplit("terminal", layoutCtx());
       }
     };
 

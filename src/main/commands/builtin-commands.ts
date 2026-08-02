@@ -95,7 +95,7 @@ export const BUILTIN_COMMANDS: CommandDef[] = [
   {
     id: "builtin:undo",
     name: "undo",
-    description: "Restore workspace files to the previous turn",
+    description: "Roll back chat and workspace files to the previous turn",
     source: "builtin",
     template: "",
     action: "restore-previous-turn",
@@ -105,7 +105,7 @@ export const BUILTIN_COMMANDS: CommandDef[] = [
   {
     id: "builtin:redo",
     name: "redo",
-    description: "Undo the last file restore",
+    description: "Undo the last rollback (restore the previous tip)",
     source: "builtin",
     template: "",
     action: "undo-last-restore",

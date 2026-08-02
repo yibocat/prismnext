@@ -72,14 +72,18 @@ export function StagedCitationEntryPanel({
   const { t } = useTranslation();
   const addToLibrary = useCitationStagingStore((s) => s.addToLibrary);
   const addProgress = useCitationStagingStore((s) => s.addProgressById[citation.id]);
+  const inFlight = useCitationStagingStore((s) => Boolean(s.inFlightAddIds[citation.id]));
   const libraryPaper = useLiteratureStore((s) =>
     citation.libraryPaperId
       ? s.papers.find((p) => p.id === citation.libraryPaperId) ?? null
       : null,
   );
   const [adding, setAdding] = useState(false);
-  const isAdding = adding || (addProgress != null && addProgress.phase !== "done");
-  const progressLabel = addProgress ? stagedAddProgressLabel(addProgress) : null;
+  const isAdding =
+    adding ||
+    (inFlight && addProgress != null && addProgress.phase !== "done");
+  const progressLabel =
+    inFlight && addProgress ? stagedAddProgressLabel(addProgress) : null;
   const hasPdf = inLibrary && libraryPaper != null && paperHasReadablePdf(libraryPaper);
   const openTitle = libraryPaper?.title ?? citation.title;
 
@@ -99,7 +103,7 @@ export function StagedCitationEntryPanel({
         toast.success(
           r.bibkey ? `Added to library: ${r.bibkey}` : "Added to library",
         );
-      } else {
+      } else if (r.error !== "cancelled") {
         toast.error(r.error ?? "Failed to add to library");
       }
     } finally {

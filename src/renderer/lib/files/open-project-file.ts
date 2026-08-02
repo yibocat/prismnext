@@ -10,6 +10,7 @@ import {
 } from "./project-path";
 import { navigateFileTreeToPath } from "./navigate-file-tree";
 import { openHiddenProjectFile } from "./open-project-path";
+import { revealProjectRelativePath } from "./reveal-project-path";
 
 /** Join a directory path with a child name (project-relative). */
 export function joinProjectPaths(base: string, name: string): string {
@@ -49,9 +50,8 @@ export function resolveChatFilePath(rawPath: string, projectRoot: string): strin
 }
 
 /** Expand RightArea so chat file / plan links are immediately visible. */
-export function ensureRightAreaVisible(mode: "files" | "research-plan" = "files"): void {
+export function ensureRightAreaVisible(_mode: "files" | "research-plan" = "files"): void {
   const layout = useLayoutStore.getState();
-  layout.activateMode(mode);
   // Maximize mode already gives RightArea full width with center collapsed — keep it.
   if (!layout.editorMaximized) {
     layout.requestRightAreaExpand();
@@ -103,7 +103,6 @@ export async function openProjectFileFromChat(
     return true;
   }
 
-  const name = relativePath.split("/").pop() || relativePath;
   const hasMeta =
     docStore.fileMetadata.has(relativePath)
     || docStore.files.some((f) => f.relativePath === relativePath || f.id === relativePath);
@@ -115,13 +114,18 @@ export async function openProjectFileFromChat(
       const exists = await window.electronAPI.fsExists(abs);
       if (!exists) return false;
       const isFile = await window.electronAPI.fsIsFile(abs);
-      if (!isFile) return false;
+      if (!isFile) {
+        navigateFileTreeToPath(relativePath);
+        revealProjectRelativePath(relativePath);
+        return true;
+      }
       await docStore.refreshFiles();
     } catch {
       return false;
     }
   }
 
+  const name = relativePath.split("/").pop() || relativePath;
   if (isPlan) {
     useRightPanelStore.getState().openResearchPlan(relativePath, relativePath, name, {
       pin: opts?.pin ?? true,

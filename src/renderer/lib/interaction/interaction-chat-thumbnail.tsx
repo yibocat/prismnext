@@ -14,6 +14,8 @@ import {
   chatImagePathCandidates,
 } from "../../../shared/artifact-path";
 import {
+  CHAT_ARTIFACT_INLINE_IMAGE_CLASS,
+  CHAT_ARTIFACT_PEEK_BODY_CLASS,
   CHAT_ARTIFACT_THUMB_PREVIEW_CLASS,
 } from "@/lib/markdown/chat-artifact";
 import { loadInteractionPlotData } from "./plot/load-interaction-plot-data";
@@ -46,7 +48,8 @@ function useElementSize(ref: RefObject<HTMLElement | null>, active: boolean) {
   return size;
 }
 
-function PeekFrame({
+/** Fixed-height host for Observable Plot peeks inside interaction cards. */
+function PlotPeekFrame({
   children,
   className,
 }: {
@@ -62,6 +65,33 @@ function PeekFrame({
       )}
     >
       {children}
+    </div>
+  );
+}
+
+function FigurePeekPlaceholder({
+  loading,
+  failed,
+}: {
+  loading: boolean;
+  failed: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div
+      className={cn(
+        "flex w-full items-center justify-center py-6 text-[length:var(--font-size-11)] text-muted-foreground",
+        loading ? "animate-pulse" : "",
+      )}
+    >
+      {loading ? (
+        t("interaction.card.previewLoading")
+      ) : failed ? (
+        <span className="flex items-center gap-1.5">
+          <ImageIcon className="size-3.5" aria-hidden />
+          {t("interaction.card.previewUnavailable")}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -103,7 +133,6 @@ function PeekPlaceholder({
 
 function FigurePeek({ spec, projectRoot }: { spec: InteractionSpec; projectRoot: string }) {
   const rel = pickFigureResourcePath(spec);
-  const frameRef = useRef<HTMLDivElement>(null);
   const workspaceHintsKey = useExperimentStore((s) => {
     const hints = new Set<string>();
     const detailWs = s.detail?.meta.workspacePath;
@@ -183,20 +212,18 @@ function FigurePeek({ spec, projectRoot }: { spec: InteractionSpec; projectRoot:
   }, [rel, projectRoot, workspaceHintsKey]);
 
   return (
-    <PeekFrame>
-      <div ref={frameRef} className="box-border h-full w-full p-2">
-        {loading || failed || !dataUrl ? (
-          <PeekPlaceholder loading={loading} failed={failed} kind={spec.kind} />
-        ) : (
-          <img
-            src={dataUrl}
-            alt={spec.title}
-            className="block h-full w-full object-contain object-center"
-            loading="lazy"
-          />
-        )}
-      </div>
-    </PeekFrame>
+    <div className={CHAT_ARTIFACT_PEEK_BODY_CLASS}>
+      {loading || failed || !dataUrl ? (
+        <FigurePeekPlaceholder loading={loading} failed={failed} />
+      ) : (
+        <img
+          src={dataUrl}
+          alt={spec.title}
+          className={CHAT_ARTIFACT_INLINE_IMAGE_CLASS}
+          loading="lazy"
+        />
+      )}
+    </div>
   );
 }
 
@@ -287,7 +314,7 @@ function PlotPeek({ spec, projectRoot }: { spec: InteractionSpec; projectRoot: s
   const showPlaceholder = loadingData || failed || !data?.ok;
 
   return (
-    <PeekFrame>
+    <PlotPeekFrame>
       <div ref={frameRef} className="box-border h-full w-full p-1.5">
         <div ref={plotHostRef} className="h-full w-full" />
       </div>
@@ -299,7 +326,7 @@ function PlotPeek({ spec, projectRoot }: { spec: InteractionSpec; projectRoot: s
           overlay
         />
       ) : null}
-    </PeekFrame>
+    </PlotPeekFrame>
   );
 }
 
@@ -317,8 +344,8 @@ export function InteractionChatThumbnail({
     return <PlotPeek spec={spec} projectRoot={projectRoot} />;
   }
   return (
-    <PeekFrame>
+    <PlotPeekFrame>
       <PeekPlaceholder loading={false} failed kind={spec.kind} />
-    </PeekFrame>
+    </PlotPeekFrame>
   );
 }

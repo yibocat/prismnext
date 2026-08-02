@@ -9,7 +9,6 @@ export const texworkspaceMode: ModeDefinition = {
   labelKey: "modes.texworkspace.label",
   icon: <FileType className="size-3.5" />,
   tabKinds: ["texworkspace"],
-  persistence: "transient",
   initialTitle: "TeX Workspace",
   initialTitleKey: "modes.texworkspace.initialTitle",
   Sidebar: TexworkspaceSidebar,

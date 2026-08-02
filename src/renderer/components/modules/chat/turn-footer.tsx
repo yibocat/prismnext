@@ -1,11 +1,13 @@
 import { memo, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CopyIcon, CheckIcon, HistoryIcon, Loader2Icon } from "lucide-react";
+import { CopyIcon, CheckIcon, Undo2Icon, Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
+import { countUserTurns } from "@/components/modules/chat/chat-turns";
 import { useCheckpointStore } from "@/stores/checkpoint-store";
 import { useChatStore } from "@/stores/chat-store";
+import { useChangesStore } from "@/stores/changes-store";
 import { formatRelativeTimeMs } from "@/lib/chat/relative-time";
 
 interface TurnFooterProps {
@@ -32,13 +34,10 @@ export const TurnFooter = memo(function TurnFooter({
   const { t } = useTranslation();
   const activeTabId = useChatStore((s) => s.activeTabId);
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const checkpoint = useCheckpointStore((s) =>
-    s.byTab[activeTabId]?.checkpoints.find((c) => c.turnIndex === turnIndex),
-  );
-  const canRestore = useCheckpointStore((s) => s.canRestoreToTurn(activeTabId, turnIndex));
+  const canRollback = useCheckpointStore((s) => s.canRollbackToTurn(activeTabId, turnIndex));
 
   const [copied, setCopied] = useState(false);
-  const [restoring, setRestoring] = useState(false);
+  const [rollingBack, setRollingBack] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -54,44 +53,68 @@ export const TurnFooter = memo(function TurnFooter({
     setTimeout(() => setCopied(false), 2000);
   }, [copyText]);
 
-  const handleRestore = useCallback(async () => {
-    if (!canRestore || restoring || isStreaming) return;
-    setRestoring(true);
+  const handleRollback = useCallback(async () => {
+    if (!canRollback || rollingBack || isStreaming) return;
+
+    const chatTab = useChatStore.getState().tabs.find((t) => t.id === activeTabId);
+    const turnCount = countUserTurns(chatTab?.messages ?? []);
+    const hasLaterTurns = turnIndex < turnCount - 1;
+    const tabCp = useCheckpointStore.getState().byTab[activeTabId];
+    const fileTarget =
+      tabCp?.checkpoints.find((c) => c.turnIndex === turnIndex)
+      ?? [...(tabCp?.checkpoints ?? [])].reverse().find((c) => c.turnIndex <= turnIndex)
+      ?? null;
+    const hasFiles = Boolean(fileTarget?.files.length);
+    const hasProposed = useChangesStore.getState().changes.length > 0;
+
+    // Tip with nothing to rewind — keep the icon, explain instead of a fake regret.
+    if (!hasLaterTurns && !hasFiles && !hasProposed) {
+      toast.message(
+        t("chat.turnFooter.alreadyAtTurn", {
+          defaultValue: "Already at the end of this turn — nothing later to roll back",
+        }),
+      );
+      return;
+    }
+
+    setRollingBack(true);
     try {
-      const count = await useCheckpointStore.getState().restoreToTurn(activeTabId, turnIndex);
+      const count = await useCheckpointStore.getState().rollbackToTurn(activeTabId, turnIndex);
       toast.success(
-        t("chat.turnFooter.restored", {
+        t("chat.turnFooter.rolledBack", {
           count,
-          defaultValue: `Restored ${count} file${count === 1 ? "" : "s"} to the end of this turn`,
+          defaultValue: count > 0
+            ? `Rolled back ${count} file${count === 1 ? "" : "s"} to the end of this turn`
+            : "Rolled back chat to the end of this turn",
         }),
         {
-          description: t("chat.turnFooter.restoredDesc", {
-            defaultValue: "Workspace files and chat history were rolled back to this turn.",
+          description: t("chat.turnFooter.rolledBackDesc", {
+            defaultValue: "Chat, workspace files, and proposed changes were rolled back to this turn.",
           }),
         },
       );
     } catch (err) {
       toast.error(
-        t("chat.turnFooter.restoreFailed", {
+        t("chat.turnFooter.rollbackFailed", {
           message: (err as Error).message,
-          defaultValue: `Restore failed: ${(err as Error).message}`,
+          defaultValue: `Rollback failed: ${(err as Error).message}`,
         }),
       );
     } finally {
-      setRestoring(false);
+      setRollingBack(false);
     }
-  }, [activeTabId, canRestore, isStreaming, restoring, t, turnIndex]);
+  }, [activeTabId, canRollback, isStreaming, rollingBack, t, turnIndex]);
 
   if (!isComplete) return null;
 
   const showCopy = copyText.trim().length > 0;
-  const showRestore = canRestore && !isStreaming;
+  const showRollback = canRollback && !isStreaming;
   const relative =
     completedAt != null && completedAt > 0
       ? formatRelativeTimeMs(completedAt, now)
       : null;
 
-  if (!showCopy && !showRestore && !relative && !modelLabel) return null;
+  if (!showCopy && !showRollback && !relative && !modelLabel) return null;
 
   return (
     <div className="flex items-center justify-end gap-1.5 pt-1 pb-1 mb-3">
@@ -110,18 +133,18 @@ export const TurnFooter = memo(function TurnFooter({
           {modelLabel}
         </span>
       ) : null}
-      {showRestore ? (
-        <Hint label={t("chat.turnFooter.restore", { defaultValue: "Restore workspace files to the end of this turn" })}>
+      {showRollback ? (
+        <Hint label={t("chat.turnFooter.rollback", { defaultValue: "Roll back chat and files to the end of this turn" })}>
           <button
             type="button"
-            onClick={handleRestore}
-            disabled={restoring}
+            onClick={handleRollback}
+            disabled={rollingBack}
             className={cn(ICON_BTN, "disabled:opacity-50")}
           >
-            {restoring ? (
+            {rollingBack ? (
               <Loader2Icon className="size-3 animate-spin" />
             ) : (
-              <HistoryIcon className="size-3" />
+              <Undo2Icon className="size-3" />
             )}
           </button>
         </Hint>

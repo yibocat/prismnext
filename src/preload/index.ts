@@ -397,8 +397,28 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	},
 
 	// Compile operations
-	compileExecute: (projectDir: string, mainFile: string, useTexlive?: boolean) =>
-		ipcRenderer.invoke("compile:execute", { projectDir, mainFile, useTexlive }),
+	compileExecute: (
+		projectDir: string,
+		mainFile: string,
+		useTexlive?: boolean,
+		opts?: {
+			dirtyRelPaths?: string[];
+			dirtyFiles?: Array<{ relPath: string; content: string }>;
+			pdfOnDisk?: boolean;
+			skipSynctex?: boolean;
+			fast?: boolean;
+		},
+	) =>
+		ipcRenderer.invoke("compile:execute", {
+			projectDir,
+			mainFile,
+			useTexlive,
+			dirtyRelPaths: opts?.dirtyRelPaths,
+			dirtyFiles: opts?.dirtyFiles,
+			pdfOnDisk: opts?.pdfOnDisk,
+			skipSynctex: opts?.skipSynctex,
+			fast: opts?.fast,
+		}),
 	compileSynctex: (projectDir: string, page: number, x: number, y: number) =>
 		ipcRenderer.invoke("compile:synctex", { projectDir, page, x, y }),
 	compileSynctexForward: (projectDir: string, file: string, line: number) =>
@@ -475,6 +495,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		projectRoot: string,
 		citation: import("../shared/citation-staging").StagedCitationImportInput,
 	) => ipcRenderer.invoke("literature:createFromStagedCitation", { projectRoot, citation }),
+	literatureCancelStagedCitationAdd: (stagedId: string) =>
+		ipcRenderer.invoke("literature:cancelStagedCitationAdd", { stagedId }),
 	onLiteratureStagedAddProgress: (
 		callback: (data: import("../shared/citation-staging").StagedAddProgressEvent) => void,
 	) => {

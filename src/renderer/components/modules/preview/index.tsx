@@ -89,47 +89,6 @@ function PdfLinkNavigationBridge() {
   return null;
 }
 
-/** Consume forward SyncTeX requests from the TeX editor (⌘⇧F). */
-function SynctexForwardBridge() {
-  const target = useCompileStore((s) => s.synctexForwardTarget);
-  const { jumpToHighlightRects } = usePdfJump();
-  const getPdfPageProxy = usePdf((s) => s.getPdfPageProxy);
-
-  useEffect(() => {
-    if (!target) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const pageProxy = getPdfPageProxy(target.page);
-        const viewport = pageProxy.getViewport({ scale: 1 });
-        // SyncTeX y is from page bottom; Lector/PDF.js highlights use top-left.
-        const top = viewport.height - target.y - target.height;
-        if (cancelled) return;
-        jumpToHighlightRects(
-          [
-            {
-              pageNumber: target.page,
-              left: target.x,
-              top: Math.max(0, top),
-              width: target.width,
-              height: target.height,
-              type: "pixels",
-            },
-          ],
-          "pixels",
-        );
-      } catch {
-        /* page not ready yet */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [target, getPdfPageProxy, jumpToHighlightRects]);
-
-  return null;
-}
-
 /** Route PDF links: external → in-app browser; internal → in-document jump. */
 function PdfLinkCapture() {
   const viewportRef = usePdf((s) => s.viewportRef);
@@ -367,6 +326,11 @@ export interface PdfViewerInnerProps {
   documentLayers?: ReactNode;
   /** Chat / lightbox: pages only, no outline/zoom/page chrome. */
   hideToolbar?: boolean;
+  /**
+   * TanStack virtual overscan for `<Pages>`.
+   * Live A/B preview uses a higher value so neighbors are painted before promote.
+   */
+  pageOverscan?: number;
 }
 
 export function PdfViewerInner({
@@ -378,6 +342,7 @@ export function PdfViewerInner({
   pageLayers,
   documentLayers,
   hideToolbar = false,
+  pageOverscan = 1,
 }: PdfViewerInnerProps) {
   const { t } = useTranslation();
   const [sidePanel, setSidePanel] = useState<SidePanel>(null);
@@ -421,49 +386,78 @@ export function PdfViewerInner({
   // - View/swap: TexWorkspaceMain keeps this tree mounted (do not unmount).
   // - Collapse to 0px still wipes Lector scroll → re-apply when size returns.
   // - Recompile creates a new pdfDocumentProxy → re-apply once per document.
+  // Session refs survive recompile; never let Lector's transient page=1 overwrite them.
   const currentPageRef = useRef(currentPage);
   currentPageRef.current = currentPage;
   const restoredDocRef = useRef<unknown>(null);
+  const trackingPageRef = useRef(false);
+  const sessionPageRef = useRef<number>(
+    (persistKey ? loadViewerPosition(persistKey)?.pdfPage : undefined) ?? 1,
+  );
+  const sessionScrollRef = useRef<number>(
+    (persistKey ? loadViewerPosition(persistKey)?.pdfScrollOffset : undefined) ?? 0,
+  );
 
   const applySavedPdfPosition = useCallback(() => {
     if (!persistKey || !pdfDocumentProxy) return;
     const el = viewportRef.current;
     if (!el || el.clientWidth < 8 || el.clientHeight < 8) return;
-    const saved = loadViewerPosition(persistKey);
-    const page = saved?.pdfPage;
-    if (
-      page == null ||
-      page < 1 ||
-      page > (pdfDocumentProxy.numPages ?? Infinity)
-    ) {
+    const page = sessionPageRef.current;
+    if (page < 1 || page > (pdfDocumentProxy.numPages ?? Infinity)) {
       return;
     }
     jumpToPage(page, { align: "start", behavior: "auto" });
-    if (saved.pdfScrollOffset != null && saved.pdfScrollOffset > 0) {
+    const scroll = sessionScrollRef.current;
+    if (scroll > 0) {
       requestAnimationFrame(() => {
         const vp = viewportRef.current;
-        if (vp) vp.scrollTop = saved.pdfScrollOffset!;
+        if (vp) vp.scrollTop = scroll;
       });
     }
   }, [persistKey, pdfDocumentProxy, jumpToPage, viewportRef]);
 
   useEffect(() => {
     restoredDocRef.current = null;
+    trackingPageRef.current = false;
   }, [persistKey]);
 
   useEffect(() => {
     if (!persistKey || !pdfDocumentProxy) return;
     if (restoredDocRef.current === pdfDocumentProxy) return;
     restoredDocRef.current = pdfDocumentProxy;
+    trackingPageRef.current = false;
     applySavedPdfPosition();
+    // Resume tracking after restore settles (ignore Lector's initial page=1).
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        trackingPageRef.current = true;
+      });
+    });
   }, [persistKey, pdfDocumentProxy, applySavedPdfPosition]);
+
+  useEffect(() => {
+    if (!trackingPageRef.current) return;
+    if (currentPage <= 0) return;
+    sessionPageRef.current = currentPage;
+    const el = viewportRef.current;
+    if (el) sessionScrollRef.current = el.scrollTop;
+    if (persistKey) {
+      saveViewerPosition(persistKey, {
+        pdfPage: currentPage,
+        pdfScrollOffset: el?.scrollTop ?? 0,
+      });
+    }
+  }, [currentPage, persistKey, viewportRef]);
 
   useEffect(() => {
     if (!persistKey) return;
     const saveNow = () => {
+      if (!trackingPageRef.current) return;
       if (currentPageRef.current <= 0) return;
       const el = viewportRef.current;
       if (!el || el.clientWidth < 8 || el.clientHeight < 8) return;
+      sessionPageRef.current = currentPageRef.current;
+      sessionScrollRef.current = el.scrollTop;
       saveViewerPosition(persistKey, {
         pdfPage: currentPageRef.current,
         pdfScrollOffset: el.scrollTop,
@@ -487,7 +481,6 @@ export function PdfViewerInner({
         if (!node) return;
         const tiny = node.clientWidth < 8 || node.clientHeight < 8;
         if (wasTiny && !tiny) {
-          // Panel expanded after tex/pdf-only — put the page back.
           applySavedPdfPosition();
         }
         wasTiny = tiny;
@@ -720,11 +713,13 @@ export function PdfViewerInner({
 
         {/* PDF Pages — Pages component provides its own virtualized scroll container.
             We pass scroll + click props directly to Pages rather than wrapping in
-            an extra div, which would interfere with the virtualizer's height calc. */}
+            an extra div, which would interfere with the virtualizer's height calc.
+            overscan>1 paints neighbors before A/B promote (Lector default is 1). */}
         <Pages
           className={PDF_PAGES_CLASS}
           style={PDF_PAGES_STYLE}
           gap={16}
+          virtualizerOptions={{ overscan: pageOverscan }}
         >
           <Page
             className={`${PDF_PAGE_CLASS}${pdfDarkActive ? ` ${PDF_PAGE_INVERTED_CLASS}${PDF_PAGE_DARK_FILTER}` : ""}`}
@@ -757,6 +752,37 @@ export interface PdfDocumentViewProps {
   className?: string;
   /** Hide outline/zoom/page toolbar (chat PDF lightbox). */
   hideToolbar?: boolean;
+  /**
+   * Use a blank loader instead of “Loading…” text.
+   * TeX live-compile path: brief blank is less jarring than a text flash.
+   */
+  silentLoader?: boolean;
+  /** Fires when document + viewports are ready (safe to drop freeze overlay). */
+  onViewerReady?: () => void;
+  /** Forwarded to Lector `<Pages virtualizerOptions.overscan>`. */
+  pageOverscan?: number;
+}
+
+/** Fires once when Lector has a document proxy and viewports. */
+function PdfViewerReadySignal({ onReady }: { onReady?: () => void }) {
+  const pdfDocumentProxy = usePdf((s) => s.pdfDocumentProxy);
+  const viewports = usePdf((s) => s.viewports);
+  const firedRef = useRef(false);
+
+  useEffect(() => {
+    firedRef.current = false;
+  }, [onReady, pdfDocumentProxy]);
+
+  useEffect(() => {
+    if (!onReady || firedRef.current) return;
+    if (!pdfDocumentProxy || !viewports || viewports.length === 0) return;
+    firedRef.current = true;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => onReady());
+    });
+  }, [onReady, pdfDocumentProxy, viewports]);
+
+  return null;
 }
 
 export function PdfDocumentView({
@@ -770,6 +796,9 @@ export function PdfDocumentView({
   documentLayers,
   className,
   hideToolbar = false,
+  silentLoader = false,
+  onViewerReady,
+  pageOverscan,
 }: PdfDocumentViewProps) {
   // Fresh TypedArray per mount/source identity — pdf.js detaches buffers it loads.
   const pdfSource = useMemo(() => copyPdfSourceForViewer(source), [source]);
@@ -783,11 +812,16 @@ export function PdfDocumentView({
           isZoomFitWidth
           className="h-full flex flex-col"
           loader={
-            <span className="flex justify-center pt-20 text-muted-foreground text-[length:var(--font-placeholder)]">
-              Loading…
-            </span>
+            silentLoader ? (
+              <span className="block h-full w-full bg-background" aria-hidden />
+            ) : (
+              <span className="flex justify-center pt-20 text-muted-foreground text-[length:var(--font-placeholder)]">
+                Loading…
+              </span>
+            )
           }
         >
+          <PdfViewerReadySignal onReady={onViewerReady} />
           <PdfViewerInner
             isPdfFile={isPdfFile}
             isCompiling={isCompiling}
@@ -797,9 +831,227 @@ export function PdfDocumentView({
             pageLayers={pageLayers}
             documentLayers={documentLayers}
             hideToolbar={hideToolbar}
+            pageOverscan={pageOverscan}
           />
         </Root>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Lector A/B page restore.
+ *
+ * Critical: `@anaralabs/lector` `jumpToPage` is a no-op while `virtualizer` is
+ * still null (Pages sets it in an effect). Marking "restored" on viewports-only
+ * and promoting after 2 rAF leaves scroll at 0 → page 1, then `onPage(1)`
+ * poisons session memory.
+ */
+function PageSessionBridge({
+  restorePage,
+  onPage,
+  onReady,
+}: {
+  restorePage?: number | null;
+  onPage?: (page: number) => void;
+  onReady?: () => void;
+}) {
+  const pdfDocumentProxy = usePdf((s) => s.pdfDocumentProxy);
+  const viewports = usePdf((s) => s.viewports);
+  const virtualizer = usePdf((s) => s.virtualizer);
+  const currentPage = usePdf((s) => s.currentPage);
+  const { jumpToPage } = usePdfJump();
+  const targetRef = useRef<number | null>(null);
+  const jumpedRef = useRef(false);
+  const readyFiredRef = useRef(false);
+  const trackingRef = useRef(false);
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+
+  const finishReady = useCallback(() => {
+    if (readyFiredRef.current) return;
+    readyFiredRef.current = true;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        trackingRef.current = true;
+        onReadyRef.current?.();
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    targetRef.current = null;
+    jumpedRef.current = false;
+    readyFiredRef.current = false;
+    trackingRef.current = false;
+  }, [pdfDocumentProxy]);
+
+  // Resolve target + jump only after virtualizer exists (otherwise scrollToIndex is dropped).
+  useEffect(() => {
+    if (!pdfDocumentProxy || !viewports?.length || !virtualizer) return;
+    if (readyFiredRef.current) return;
+
+    const numPages = pdfDocumentProxy.numPages ?? 1;
+    const raw = restorePage && restorePage > 0 ? restorePage : 1;
+    const target = Math.min(raw, numPages);
+    targetRef.current = target;
+
+    if (target > 1 && !jumpedRef.current) {
+      jumpedRef.current = true;
+      jumpToPage(target, { align: "start", behavior: "auto" });
+    }
+  }, [pdfDocumentProxy, viewports, virtualizer, restorePage, jumpToPage]);
+
+  // Promote only once the visible page matches the session target (or target is 1).
+  useEffect(() => {
+    if (readyFiredRef.current) return;
+    if (!virtualizer || targetRef.current == null) return;
+
+    const target = targetRef.current;
+    if (target === 1 || currentPage === target) {
+      finishReady();
+    }
+  }, [currentPage, virtualizer, finishReady]);
+
+  // Safety: if useVisiblePage never reports the target (scroll quirk), re-jump then promote.
+  useEffect(() => {
+    if (!virtualizer || targetRef.current == null) return;
+    if (readyFiredRef.current) return;
+
+    const target = targetRef.current;
+    const timer = window.setTimeout(() => {
+      if (readyFiredRef.current) return;
+      if (target > 1) {
+        jumpToPage(target, { align: "start", behavior: "auto" });
+      }
+      finishReady();
+    }, 800);
+
+    return () => window.clearTimeout(timer);
+  }, [virtualizer, jumpToPage, finishReady, pdfDocumentProxy]);
+
+  useEffect(() => {
+    if (!trackingRef.current || !onPage) return;
+    if (currentPage <= 0) return;
+    onPage(currentPage);
+  }, [currentPage, onPage]);
+
+  return null;
+}
+
+/** Extra pages painted around the viewport before A/B promote. */
+const LIVE_PREVIEW_OVERSCAN = 4;
+
+function PdfAbPreview({
+  source,
+  sourceRevision,
+  persistKey,
+  isCompiling,
+  compileError,
+}: {
+  source: Uint8Array;
+  sourceRevision: number;
+  persistKey?: string;
+  isCompiling: boolean;
+  compileError: string | null;
+}) {
+  const nextId = useRef(1);
+  const lastRev = useRef(sourceRevision);
+  // Own page memory — never hand persistKey to PdfDocumentView here.
+  // Passing persistKey only after promote used to reset Lector to localStorage page 1.
+  const sessionPageRef = useRef(
+    (persistKey ? loadViewerPosition(persistKey)?.pdfPage : undefined) ?? 1,
+  );
+
+  const [frontId, setFrontId] = useState(0);
+  const [loadingId, setLoadingId] = useState<number | null>(null);
+  /** Previous front kept above the new one for 2 frames so promote never flashes blank. */
+  const [coverId, setCoverId] = useState<number | null>(null);
+  const [slots, setSlots] = useState<Record<number, Uint8Array>>(() => ({
+    0: source,
+  }));
+
+  useEffect(() => {
+    if (sourceRevision === lastRev.current) return;
+    lastRev.current = sourceRevision;
+    const id = nextId.current++;
+    setSlots((prev) => ({ ...prev, [id]: source }));
+    setLoadingId(id);
+  }, [source, sourceRevision]);
+
+  const onSessionPage = useCallback(
+    (page: number) => {
+      if (page <= 0) return;
+      sessionPageRef.current = page;
+      if (persistKey) {
+        saveViewerPosition(persistKey, {
+          pdfPage: page,
+          pdfScrollOffset: 0,
+        });
+      }
+    },
+    [persistKey],
+  );
+
+  const promote = useCallback((slotId: number) => {
+    setLoadingId((cur) => {
+      if (cur !== slotId) return cur;
+      setFrontId((prev) => {
+        if (prev !== slotId) setCoverId(prev);
+        return slotId;
+      });
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setCoverId(null);
+          setSlots((prev) => {
+            if (!(slotId in prev)) return prev;
+            return { [slotId]: prev[slotId] };
+          });
+        });
+      });
+      return null;
+    });
+  }, []);
+
+  return (
+    <div className="relative h-full min-h-0 w-full bg-background">
+      {Object.entries(slots).map(([idStr, bytes]) => {
+        const id = Number(idStr);
+        const isFront = id === frontId;
+        const isLoading = id === loadingId;
+        const isCover = id === coverId;
+        if (!isFront && !isLoading && !isCover) return null;
+
+        return (
+          <div
+            key={id}
+            className={cn(
+              "absolute inset-0",
+              isCover
+                ? "z-30 pointer-events-none"
+                : isFront
+                  ? "z-20"
+                  : "z-10 pointer-events-none opacity-0",
+            )}
+            aria-hidden={!isFront || undefined}
+          >
+            <PdfDocumentView
+              source={bytes}
+              isCompiling={isFront && !isCover ? isCompiling : false}
+              compileError={isFront && !isCover ? compileError : null}
+              silentLoader
+              pageOverscan={LIVE_PREVIEW_OVERSCAN}
+              documentLayers={
+                <PageSessionBridge
+                  restorePage={sessionPageRef.current}
+                  onPage={isFront && !isCover ? onSessionPage : undefined}
+                  onReady={isLoading ? () => promote(id) : undefined}
+                />
+              }
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -940,7 +1192,7 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
     const loadingLabel = isPdfFile
       ? "Loading PDF…"
       : t("modes.texworkspace.loadingPdfPreview");
-    if (isPdfFile || diskHydrating || isCompiling) {
+    if (isPdfFile || diskHydrating) {
       return (
         <div className="flex h-full min-h-0 w-full flex-col items-center justify-center gap-2 bg-background text-[length:var(--font-size-12)] text-muted-foreground">
           <LoaderIcon className="size-5 animate-spin" />
@@ -956,6 +1208,18 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
     );
   }
 
+  if (!isPdfFile && source instanceof Uint8Array) {
+    return (
+      <PdfAbPreview
+        source={source}
+        sourceRevision={pdfRevision}
+        persistKey={persistKey}
+        isCompiling={isCompiling}
+        compileError={compileError}
+      />
+    );
+  }
+
   return (
     <PdfDocumentView
       source={source}
@@ -963,7 +1227,6 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
       isPdfFile={isPdfFile}
       isCompiling={isCompiling}
       compileError={compileError}
-      documentLayers={isPdfFile ? undefined : <SynctexForwardBridge />}
     />
   );
 }

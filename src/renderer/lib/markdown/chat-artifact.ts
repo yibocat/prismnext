@@ -23,17 +23,29 @@ export type ParsedArtifactFence = {
 /** Max auto-injected artifact blocks per assistant message. */
 export const CHAT_ARTIFACT_AUTO_CAP = 5;
 
-/** Fixed preview viewport for inline chat image/PDF thumbnails (`object-contain` inside). */
+/** Outer shell for PDF / interaction file cards (header + peek). */
 export const CHAT_ARTIFACT_THUMB_SHELL_CLASS =
   "my-2 w-full max-w-full overflow-hidden rounded-lg border border-border-subtle bg-muted/20";
 
+/**
+ * Inline chat image — single thin border, light padding, content-driven height.
+ * Used by markdown `![](path)`, literature figures, and experiment image artifacts.
+ */
+export const CHAT_ARTIFACT_INLINE_IMAGE_FRAME_CLASS =
+  "my-2 block w-full max-w-full overflow-hidden rounded-lg border border-border-subtle bg-background p-1.5 text-left transition-opacity hover:opacity-95";
+
+export const CHAT_ARTIFACT_INLINE_IMAGE_CLASS =
+  "block w-full h-auto max-h-[min(28rem,70vh)] object-contain";
+
+/** Padding wrapper for image peek areas inside PDF / interaction file cards. */
+export const CHAT_ARTIFACT_PEEK_BODY_CLASS =
+  "border-t border-border-subtle p-1.5";
+
+/** Fixed viewport for interaction plot hosts (needs measurable height). */
 export const CHAT_ARTIFACT_THUMB_PREVIEW_CLASS =
   "flex h-52 w-full items-center justify-center overflow-hidden rounded-md bg-background/80";
 
-export const CHAT_ARTIFACT_THUMB_IMAGE_CLASS = "max-h-full max-w-full object-contain";
-
-export const CHAT_ARTIFACT_THUMB_PDF_IMAGE_CLASS =
-  "max-h-full max-w-full rounded-md bg-white object-contain";
+export const CHAT_ARTIFACT_THUMB_IMAGE_CLASS = CHAT_ARTIFACT_INLINE_IMAGE_CLASS;
 
 export function classifyArtifactKind(path: string): ChatArtifactKind {
   if (isImageArtifactPath(path)) return "image";

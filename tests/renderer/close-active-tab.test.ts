@@ -44,7 +44,6 @@ describe("closeActiveTabFromShortcut", () => {
     const requestCloseTab = vi.fn();
     layoutGet.mockReturnValue({
       rightAreaExpanded: true,
-      focusedMode: "files",
       editorMaximized: false,
       setEditorMaximized: vi.fn(),
       setRightAreaExpanded: vi.fn(),
@@ -66,7 +65,6 @@ describe("closeActiveTabFromShortcut", () => {
     const setEditorMaximized = vi.fn();
     layoutGet.mockReturnValue({
       rightAreaExpanded: true,
-      focusedMode: "dashboard",
       editorMaximized: true,
       setEditorMaximized,
       setRightAreaExpanded,

@@ -1,12 +1,10 @@
 /**
- * Activate / deactivate RightArea toolbar modes (Files, Git, Browser, Terminal)
- * for keyboard shortcuts — mirrors right-area handleModeClick lifecycle.
+ * Keyboard helpers for opening RightArea modes (open/focus — does not close tabs).
  */
-import type { RightToolbarTab } from "@/stores/layout-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
-import { modeRegistry } from "@/lib/workspace/mode-registry";
-import { deactivateModeFromToolbar } from "@/lib/workspace/deactivate-mode";
+import { openMode } from "@/lib/workspace/open-right-area-mode";
+import { focusedModeId } from "@/lib/workspace/modes-from-tabs";
 import {
   closeRightArea,
   openRightArea,
@@ -15,66 +13,41 @@ import {
 } from "@/lib/workspace/right-area-layout";
 
 function isModeFocused(modeId: string): boolean {
-  const st = useLayoutStore.getState();
-  return (
-    st.activeModes.includes(modeId as RightToolbarTab) && st.focusedMode === modeId
-  );
+  const rp = useRightPanelStore.getState();
+  return focusedModeId(rp.tabs, rp.activeTabId) === modeId;
 }
 
-/** Ensure mode is active with a home tab (same rules as toolbar first click). */
-export function activateToolbarMode(modeId: string): void {
-  const store = useRightPanelStore.getState();
-  const def = modeRegistry.get(modeId);
-  const st = useLayoutStore.getState();
-
-  st.activateMode(modeId as RightToolbarTab);
-  if (!def) return;
-
-  if (modeId === "terminal" && store.hasTabsOfKind("terminal")) {
-    const tab = store.tabs.find((t) => t.kind === "terminal");
-    if (tab) store.setActiveTab(tab.id);
-  } else {
-    const kind = def.tabKinds[0];
-    if (kind) {
-      if (modeId === "terminal") {
-        store.newTerminalTab();
-      } else {
-        store.ensureTab(kind);
-      }
-    }
-  }
-  def.onActivate?.();
-  const hasSidebar = Boolean(def.Sidebar && !def.hideRightSidebar);
-  if (hasSidebar) {
-    useLayoutStore.getState().revealRightSidebar();
-  }
+/** Shortcuts: reuse existing session if any, else create home / first tab. */
+export function focusWorkspaceMode(modeId: string): void {
+  openMode(modeId, { intent: "focus" });
 }
 
-/** Split open (toggle off when already split + focused). */
-export function toggleToolbarModeSplit(
+/** Split open; if already split + focused, ensure focus only. */
+export function openModeInSplit(
   modeId: string,
   ctx: RightAreaLayoutCtx,
 ): void {
   const st = useLayoutStore.getState();
   if (st.rightAreaExpanded && !st.editorMaximized && isModeFocused(modeId)) {
-    deactivateModeFromToolbar(modeId);
+    openMode(modeId, { intent: "focus" });
     return;
   }
   openRightArea(ctx);
-  activateToolbarMode(modeId);
+  openMode(modeId, { intent: "add" });
 }
 
-/** Maximize open (toggle off when already maximized + focused). */
-export function toggleToolbarModeMaximize(
+/**
+ * Maximize open. If already maximized + focused, collapse L1 only (tabs stay).
+ */
+export function openModeMaximized(
   modeId: string,
   ctx: RightAreaLayoutCtx,
 ): void {
   const st = useLayoutStore.getState();
   if (st.rightAreaExpanded && st.editorMaximized && isModeFocused(modeId)) {
-    deactivateModeFromToolbar(modeId);
     closeRightArea(ctx);
     return;
   }
   openRightAreaMaximized(ctx);
-  activateToolbarMode(modeId);
+  openMode(modeId, { intent: "add" });
 }

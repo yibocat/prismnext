@@ -1,13 +1,13 @@
-import { useLayoutStore } from "@/stores/layout-store";
 import { SidebarProvider, Sidebar } from "@/components/ui/sidebar";
 import { modeRegistry } from "@/lib/workspace/mode-registry";
+import { useFocusedModeId } from "@/lib/workspace/modes-from-tabs";
 
 export { FilesSidebar } from "@/modes/files-mode/files-sidebar";
 export { GitSidebar } from "@/modes/git-mode/git-sidebar";
 export { BrowserSidebar } from "@/modes/browser-mode/browser-sidebar";
 
 export function RightSidebar(_props: { fullMode?: boolean }) {
-  const focusedMode = useLayoutStore((s) => s.focusedMode);
+  const focusedMode = useFocusedModeId();
 
   const def = focusedMode !== "dashboard" ? modeRegistry.get(focusedMode) : undefined;
   if (!def?.Sidebar) return null;

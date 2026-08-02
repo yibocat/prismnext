@@ -14,8 +14,6 @@ describe("open-project-file", () => {
     useLayoutStore.setState({
       editorMaximized: false,
       rightAreaExpandNonce: 0,
-      focusedMode: "dashboard",
-      activeModes: [],
     });
   });
 
@@ -28,7 +26,6 @@ describe("open-project-file", () => {
     const st = useLayoutStore.getState();
     expect(st.editorMaximized).toBe(true);
     expect(st.rightAreaExpandNonce).toBe(nonceBefore);
-    expect(st.focusedMode).toBe("files");
   });
 
   it("requests right area expand when not maximized", () => {
@@ -37,7 +34,6 @@ describe("open-project-file", () => {
     const st = useLayoutStore.getState();
     expect(st.editorMaximized).toBe(false);
     expect(st.rightAreaExpandNonce).toBe(1);
-    expect(st.focusedMode).toBe("files");
   });
 
   it("resolves absolute project paths to relative", () => {

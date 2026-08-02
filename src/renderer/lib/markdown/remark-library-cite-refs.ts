@@ -10,6 +10,7 @@
  * Skips text inside link/code/math nodes (except vetted inlineCode bibkeys).
  */
 import { normalizeLibraryCiteMarkers } from "../../../shared/normalize-library-cite-markers";
+import { encodeLibraryFigureHref } from "@shared/paper-extract-images";
 export interface RemarkLibraryCiteRefsOptions {
   /** When set, bare `@bibkey` and `` `bibkey` `` only link for keys in the library. */
   knownBibkeys?: ReadonlySet<string>;
@@ -17,7 +18,7 @@ export interface RemarkLibraryCiteRefsOptions {
 
 /** BibTeX-style cite keys — alphanumeric first, then letters/digits/colon/underscore/hyphen. */
 const BIBKEY_BODY = "[A-Za-z0-9][A-Za-z0-9:_-]*";
-const BRACKETED_CITE_RE = new RegExp(`\\[@(${BIBKEY_BODY})\\]`, "g");
+const BRACKETED_LIBRARY_RE = new RegExp(`\\[@(${BIBKEY_BODY})(?:\\|([^\\]]+))?\\]`, "g");
 const BARE_AT_CITE_RE = new RegExp(`(?<!\\[)@(${BIBKEY_BODY})`, "g");
 
 /** Task / expert @mentions — never treat as library bibkeys. */
@@ -76,16 +77,32 @@ function libraryLinkNode(bibkey: string, label: string): LinkNode {
   };
 }
 
+function libraryFigureLinkNode(bibkey: string, imageRel: string, label: string): LinkNode {
+  return {
+    type: "link",
+    url: encodeLibraryFigureHref(bibkey, imageRel),
+    title: null,
+    children: [{ type: "text", value: label }],
+  };
+}
+
 function parseBracketedLibraryCites(value: string): (TextNode | LinkNode)[] {
   const out: (TextNode | LinkNode)[] = [];
   let lastEnd = 0;
-  for (const m of value.matchAll(BRACKETED_CITE_RE)) {
+  for (const m of value.matchAll(BRACKETED_LIBRARY_RE)) {
     const start = m.index!;
     if (start > lastEnd) {
       out.push({ type: "text", value: value.slice(lastEnd, start) });
     }
-    const bibkey = m[1];
-    out.push(libraryLinkNode(bibkey, `[@${bibkey}]`));
+    const bibkey = m[1]!;
+    const imageRel = m[2]?.trim();
+    if (imageRel) {
+      out.push(
+        libraryFigureLinkNode(bibkey, imageRel, `[@${bibkey}|${imageRel}]`),
+      );
+    } else {
+      out.push(libraryLinkNode(bibkey, `[@${bibkey}]`));
+    }
     lastEnd = start + m[0].length;
   }
   if (lastEnd < value.length) {

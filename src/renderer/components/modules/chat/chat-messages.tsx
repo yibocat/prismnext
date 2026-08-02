@@ -8,8 +8,6 @@ export { AssistantBlockList } from "./assistant-block-list";
 import { TurnAssistantContent } from "./turn-assistant-content";
 import "./tools/task-widget-register";
 import { TurnFooter, extractTurnCopyText } from "./turn-footer";
-import { InlineRichText, InlineTokenChip } from "./inline-tokens";
-import { partsToPlainText, type ComposerPart } from "@/lib/chat/composer-parts";
 import {
   captureSentinelScrollAnchor,
   followActiveTurnTail,
@@ -33,13 +31,12 @@ import { isToolResultUserMessage, extractTurnUserPreview, isHiddenToolResultCarr
 import { TurnRail } from "./turn-rail";
 import { buildToolResultMap, contentBlocks } from "./tools/tool-result-map";
 import { MessageTodoDrawer } from "./todo-plan-bar";
+import { UserMessageHeader } from "./user-message-header";
 import { selectMessageTodoAnchorUserIndex } from "@/lib/chat/composer-pending-tools";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import {
   AlertCircleIcon,
-  CopyIcon,
-  CheckIcon,
   ArrowDownIcon,
   RotateCcwIcon,
   ZapIcon,
@@ -48,32 +45,7 @@ import {
   ChevronRightIcon,
   SquareIcon,
 } from "lucide-react";
-import { ChatImagePreviewDialog } from "@/lib/markdown/chat-image-preview";
 import { Hint } from "@/components/ui/hint";
-
-// ─── Copy Button ───
-
-const CopyButton = memo(({ text }: { text: string }) => {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = useCallback(async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [text]);
-
-  return (
-    <Hint label="Copy">
-      <button
-        type="button"
-        onClick={handleCopy}
-        className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 opacity-0 transition-all hover:bg-accent hover:text-accent-foreground group-hover:opacity-100"
-      >
-        {copied ? <CheckIcon className="size-3 text-success" /> : <CopyIcon className="size-3" />}
-      </button>
-    </Hint>
-  );
-});
-CopyButton.displayName = "CopyButton";
 
 // ─── Streaming Indicator ───
 
@@ -113,185 +85,6 @@ const TurnErrorRetry = memo(({ onRetry }: { onRetry: () => void }) => {
   );
 });
 TurnErrorRetry.displayName = "TurnErrorRetry";
-
-// ─── User Header ───
-
-const UserHeader = memo(function UserHeader({
-  msg,
-  attachedBelow,
-}: {
-  msg: ChatStreamMessage;
-  /** Flush under the bubble (e.g. Task plan drawer) — same sticky stack, no gap. */
-  attachedBelow?: ReactNode;
-}) {
-  const { t } = useTranslation();
-  const allBlocks = contentBlocks(msg.message?.content);
-  const commandBlocks = allBlocks.filter((b) => b.type === "command");
-  const profileBlocks = allBlocks.filter((b) => b.type === "profile");
-
-  const inlineParts: ComposerPart[] = [];
-  const attachments: NonNullable<ContentBlock["attachments"]> = [];
-  for (const b of allBlocks) {
-    if (b.type === "text" && b.inlineParts?.length) {
-      inlineParts.push(...b.inlineParts);
-    }
-    if (b.type === "text" && b.attachments?.length) {
-      attachments.push(...b.attachments);
-    }
-  }
-  const hasInline = inlineParts.length > 0;
-
-  const text = hasInline
-    ? partsToPlainText(inlineParts)
-    : allBlocks
-        .filter((b) => {
-          if (b.type !== "text" || !b.text) return false;
-          const t = b.text;
-          if (
-            t.startsWith("## Role") &&
-            (t.includes("integrated into prismnext") ||
-              t.includes("integrated into Prism") ||
-              t.includes("LaTeX academic paper writing workspace") ||
-              t.includes("## Core Rules"))
-          ) {
-            return false;
-          }
-          return true;
-        })
-        .map((b) => b.text)
-        .join("\n");
-  const [expanded, setExpanded] = useState(false);
-  const [imagePreview, setImagePreview] = useState<{ url: string; name: string } | null>(null);
-
-  const long = text.length > 140;
-  const hasBody = Boolean(text) || hasInline || attachments.length > 0;
-
-  // Same inset as main AI Chat (`mx-3`). Sticky on every turn section so the
-  // user bubble pins while that turn is in view. Do not use -mx full-bleed —
-  // that made AiBar / Task float bubbles flush to the panel sides.
-  return (
-    <div className="sticky top-0 z-30 mx-3 mb-2">
-      <div
-        className={cn(
-          "rounded-lg border border-border bg-card px-4 py-2 shadow-[0_0_6px_rgba(0,0,0,0.06)]",
-          long && !expanded && "cursor-pointer transition-colors hover:bg-accent",
-        )}
-        onClick={long && !expanded ? () => setExpanded(true) : undefined}
-      >
-        <div className="flex items-start gap-2">
-          <div className="flex-1 min-w-0">
-            {/* Legacy profile + command chips (pre-inline messages) */}
-            {!hasInline && (profileBlocks.length > 0 || commandBlocks.length > 0) && (
-              <div className="flex flex-wrap items-center gap-1 mb-1.5">
-                {profileBlocks.map((block, i) => (
-                  <InlineTokenChip
-                    key={`profile-${i}`}
-                    variant="profile"
-                    prefix="@"
-                    label={block.name ?? "profile"}
-                  />
-                ))}
-                {commandBlocks.map((block, i) => (
-                  <InlineTokenChip
-                    key={i}
-                    variant={(block as ContentBlock & { action?: string }).action ? "command-action" : "command"}
-                    prefix="/"
-                    label={block.name ?? "command"}
-                  />
-                ))}
-              </div>
-            )}
-            {attachments.length > 0 && (
-              <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                {attachments.map((att, i) => (
-                  <span
-                    key={`${att.path}-${i}`}
-                    className="inline-flex max-w-[9rem] items-center gap-1.5 rounded-md border border-border/80 bg-background/50 px-1.5 py-0.5"
-                  >
-                    {att.kind === "image" && att.previewUrl ? (
-                      <button
-                        type="button"
-                        aria-label={`Preview ${att.name}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setImagePreview({ url: att.previewUrl!, name: att.name });
-                        }}
-                        className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <img
-                          src={att.previewUrl}
-                          alt={att.name}
-                          className="size-7 rounded object-cover transition-opacity hover:opacity-90"
-                        />
-                      </button>
-                    ) : null}
-                    <span className="truncate font-mono text-[length:var(--font-chat-meta)] text-muted-foreground">
-                      {att.name}
-                    </span>
-                    {att.note ? (
-                      <span className="truncate text-[length:var(--font-size-10)] text-primary/80">
-                        {att.note}
-                      </span>
-                    ) : null}
-                  </span>
-                ))}
-              </div>
-            )}
-            {(hasInline || text) && (
-              <span
-                className={cn(
-                  "text-[length:var(--font-chat-message)] text-foreground",
-                  long && !expanded ? "line-clamp-2" : "whitespace-pre-wrap break-words",
-                )}
-              >
-                {hasInline ? (
-                  <InlineRichText parts={inlineParts} />
-                ) : text ? (
-                  <InlineRichText text={text} />
-                ) : null}
-              </span>
-            )}
-            {!hasBody && (
-              <span className="text-[length:var(--font-chat-meta)] text-muted-foreground">
-                (attachment)
-              </span>
-            )}
-          </div>
-          <CopyButton text={text} />
-        </div>
-        {long && !expanded ? (
-          <div className="mt-0.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
-            {t("chat.messages.expand")}
-          </div>
-        ) : null}
-        {/* Collapse at the bubble foot — full-width hit target, no divider. */}
-        {long && expanded ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setExpanded(false);
-            }}
-            className={cn(
-              "mt-1 -mx-4 -mb-2 w-[calc(100%+2rem)] rounded-b-lg px-4 pb-2 pt-1",
-              "text-left text-[length:var(--font-chat-meta)] text-muted-foreground",
-              "cursor-pointer transition-colors hover:bg-accent hover:text-foreground",
-            )}
-          >
-            {t("chat.messages.collapse")}
-          </button>
-        ) : null}
-      </div>
-      {attachedBelow ? <div className="mt-0">{attachedBelow}</div> : null}
-      <ChatImagePreviewDialog
-        open={imagePreview != null}
-        onOpenChange={(open) => !open && setImagePreview(null)}
-        url={imagePreview?.url ?? null}
-        name={imagePreview?.name ?? "Image preview"}
-      />
-    </div>
-  );
-});
 
 // ─── Assistant Message ───
 
@@ -1245,8 +1038,9 @@ export const ChatMessages = memo(function ChatMessages() {
               }
             >
               {turn.userMessage && (
-                <UserHeader
+                <UserMessageHeader
                   msg={turn.userMessage}
+                  turnIndex={turnIdx}
                   attachedBelow={
                     todoAnchorUserIndex != null
                     && committed.idxMap.get(turn.userMessage) === todoAnchorUserIndex

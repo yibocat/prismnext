@@ -131,12 +131,22 @@ export function openRightAreaMaximized(ctx: RightAreaLayoutCtx): void {
   applyMaximizePanels(ctx);
 }
 
-/** Open RightArea — split when wide enough, else chat-first maximize. */
+/** Open RightArea — split when wide enough, else chat-first maximize.
+ *  When already visually open, leave panel sizes alone (preserve user drag width / maximize).
+ *  Store `rightAreaExpanded` alone is not enough: chat deep links call
+ *  `requestRightAreaExpand()` (sets the flag) before App runs `openRightArea` on a
+ *  still-collapsed panel — those must still apply split/maximize.
+ */
 export function openRightArea({ centerRef, rightAreaRef, leftSidebarRef, isMobile }: RightAreaLayoutCtx): void {
   const r = rightAreaRef;
   if (!r) return;
 
   const st = useLayoutStore.getState();
+  if (st.rightAreaExpanded && !r.isCollapsed()) {
+    // Truly open — do not re-apply split/maximize (would jump width back to store default).
+    return;
+  }
+
   const canSplit = !isMobile && computeCanSplitRightArea(leftSidebarRef);
 
   st.setRightAreaExpanded(true);
@@ -149,6 +159,24 @@ export function openRightArea({ centerRef, rightAreaRef, leftSidebarRef, isMobil
 
   st.setEditorMaximized(true);
   applyMaximizePanels({ centerRef, rightAreaRef, leftSidebarRef });
+}
+
+/**
+ * Deep links (chat inline tokens, tool widgets) — open RightArea when closed,
+ * but preserve maximize vs split when already expanded.
+ */
+export function openRightAreaForDeepLink(ctx: RightAreaLayoutCtx): void {
+  const st = useLayoutStore.getState();
+  const collapsed = ctx.rightAreaRef?.isCollapsed() ?? true;
+  if (!st.rightAreaExpanded || collapsed) {
+    openRightArea(ctx);
+    return;
+  }
+  if (st.editorMaximized) {
+    applyMaximizePanels(ctx);
+    return;
+  }
+  // Split — mode/tab focus only; do not re-run openRightArea (would reset drag width).
 }
 
 /** Close RightArea — center fills main-area; preserve last split width when not maximized. */

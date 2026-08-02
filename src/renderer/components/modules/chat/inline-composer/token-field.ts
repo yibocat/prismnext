@@ -1,5 +1,6 @@
 import { StateField, StateEffect, RangeSetBuilder, EditorState, EditorSelection } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType } from "@codemirror/view";
+import { invertedEffects } from "@codemirror/commands";
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ComposerPart } from "@/lib/chat/composer-parts";
@@ -23,6 +24,35 @@ export type TokenMap = PositionTokenMap;
 
 export const setTokenMapEffect = StateEffect.define<TokenMap>();
 
+function cloneTokenMap(map: TokenMap): TokenMap {
+  return new Map(map);
+}
+
+/** Every doc edit gets an explicit token-map effect so undo/redo can restore full sentences. */
+export const syncTokenMapOnDocChange = EditorState.transactionExtender.of((tr) => {
+  if (!tr.docChanged) return null;
+  if (tr.effects.some((e) => e.is(setTokenMapEffect))) return null;
+  const ordered = orderedPartsFromMap(tr.startState.field(tokenMapStateField));
+  const nextDoc = tr.changes.apply(tr.startState.doc).toString();
+  const nextMap = rebuildTokenMapFromDoc(nextDoc, ordered);
+  return { effects: setTokenMapEffect.of(nextMap) };
+});
+
+/** Wire token-map effects into CodeMirror undo/redo (see inverted-effect example). */
+export const composerTokenHistory = invertedEffects.of((tr) => {
+  const inverted: StateEffect<TokenMap>[] = [];
+  const startMap = cloneTokenMap(tr.startState.field(tokenMapStateField));
+  for (const effect of tr.effects) {
+    if (effect.is(setTokenMapEffect)) {
+      inverted.push(setTokenMapEffect.of(startMap));
+    }
+  }
+  if (inverted.length === 0 && tr.docChanged) {
+    inverted.push(setTokenMapEffect.of(startMap));
+  }
+  return inverted;
+});
+
 export const tokenMapStateField = StateField.define<TokenMap>({
   create() {
     return new Map();
@@ -30,10 +60,6 @@ export const tokenMapStateField = StateField.define<TokenMap>({
   update(value, tr) {
     for (const effect of tr.effects) {
       if (effect.is(setTokenMapEffect)) return effect.value;
-    }
-    if (tr.docChanged) {
-      const ordered = orderedPartsFromMap(value);
-      return rebuildTokenMapFromDoc(tr.state.doc.toString(), ordered);
     }
     return value;
   },

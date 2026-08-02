@@ -26,6 +26,7 @@ import {
   PAPER_AGENT_CONTEXT_FOOTER,
   type PaperNoteAgentContext,
 } from "@/lib/literature/paper-agent-context";
+import { rewritePaperExtractImageSrcs } from "@shared/paper-extract-images";
 
 /** Max chars inlined per @-mentioned text file (rest truncated with a note). */
 const MAX_INLINE_ATTACHMENT_CHARS = 200_000;
@@ -354,8 +355,12 @@ export async function compileComposerPrompt(
 
     for (const pp of paperParts) {
       const blockHint = pp.blockType ? `, block: ${pp.blockType}` : "";
+      const paper =
+        useLiteratureStore.getState().papers.find((p) => p.bibkey === pp.bibkey) ?? null;
+      const excerptRaw = pp.quotedText.trim() || "(empty excerpt)";
+      const excerpt = paper ? rewritePaperExtractImageSrcs(excerptRaw, paper.id) : excerptRaw;
       blocks.push(
-        `\`\`\`paper ${pp.bibkey}\n# ${pp.title} (p.${pp.page}${blockHint})\n${pp.quotedText.trim() || "(empty excerpt)"}\n\`\`\``,
+        `\`\`\`paper ${pp.bibkey}\n# ${pp.title} (p.${pp.page}${blockHint})\n${excerpt}\n\`\`\``,
       );
     }
 

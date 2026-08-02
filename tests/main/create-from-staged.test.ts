@@ -111,8 +111,8 @@ describe("createPaperFromStagedCitation", () => {
       onProgress,
     );
 
-    expect(phases[0]).toBe("writing");
-    expect(phases).toContain("downloading-pdf");
+    expect(phases[0]).toBe("downloading-pdf");
+    expect(phases).toContain("writing");
     expect(phases[phases.length - 1]).toBe("done");
 
     globalThis.fetch = originalFetch;
@@ -159,6 +159,59 @@ describe("createPaperFromStagedCitation", () => {
     expect(result.pdfAttached).toBe(true);
     expect(getPaper(root, result.paper.id)?.pdf_path).toBeTruthy();
 
+    globalThis.fetch = originalFetch;
+  });
+
+  it("deletes the library row when cancelled during PDF download", async () => {
+    const controller = new AbortController();
+    const encoder = new TextEncoder();
+    let reads = 0;
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (_url, init) => {
+      const stream = new ReadableStream<Uint8Array>({
+        pull(streamController) {
+          reads++;
+          if (reads > 1) {
+            controller.abort();
+            streamController.error(new DOMException("Aborted", "AbortError"));
+            return;
+          }
+          streamController.enqueue(encoder.encode("%PDF-1.4\n"));
+          if (init?.signal?.aborted) {
+            streamController.error(new DOMException("Aborted", "AbortError"));
+          }
+        },
+      });
+      return new Response(stream, {
+        status: 200,
+        headers: { "Content-Type": "application/pdf" },
+      });
+    }) as typeof fetch;
+
+    await expect(
+      createPaperFromStagedCitation(
+        root,
+        {
+          stagedId: "staged-cancel",
+          title: "Cancel Me",
+          authors: null,
+          year: 2024,
+          venue: null,
+          type: "article",
+          doi: null,
+          arxivId: "2405.00133",
+          abstract: null,
+          cslJson: null,
+          catalogSource: "arxiv",
+          catalogVerified: true,
+        },
+        undefined,
+        { signal: controller.signal },
+      ),
+    ).rejects.toThrow("STAGED_CITATION_ADD_CANCELLED");
+
+    expect(listPapers(root)).toHaveLength(0);
     globalThis.fetch = originalFetch;
   });
 });

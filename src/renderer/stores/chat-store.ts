@@ -2,6 +2,10 @@ import { create } from "zustand";
 import { toast } from "sonner";
 import { i18n } from "@/lib/i18n";
 import type { ComposerPart } from "@/lib/chat/composer-parts";
+import {
+  combineComposerQueueItems,
+  type ComposerQueueItem,
+} from "@/lib/chat/composer-send-queue";
 import { useDocumentStore } from "./document-store";
 import { useWorktreeStore } from "./worktree-store";
 import { applyCheckoutTransition, attachWorktreeForSessionDirectory, captureSessionCwd, resolveWorktreeAtCheckout, resolveWorktreePathForSend, isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
@@ -188,6 +192,11 @@ interface TabState {
   settledStreamMessageIds: string[];
   isStreaming: boolean;
   /**
+   * Monotonic per tab. Bumped when a turn starts streaming or is cancelled.
+   * Stale `chat:complete` / idle backups must not clear a newer generation.
+   */
+  streamGeneration: number;
+  /**
    * Parent end_turn while background Tasks still joining / OpenCode may
    * auto-resume. Keep the turn alive; ignore session-idle streaming backup.
    */
@@ -275,6 +284,16 @@ interface TabState {
    * TodoWrite lives under the user message bubble and ignores this flag.
    */
   composerToolsSuppressed: boolean;
+  /**
+   * Messages queued while a turn is in flight. Ephemeral (not session-persisted).
+   * After idle (natural end or Stop): send pendingFlush first (if any), then sequential dequeue.
+   */
+  composerSendQueue: import("@/lib/chat/composer-send-queue").ComposerQueueItem[];
+  /**
+   * Next payload to send once idle. Set by empty-Enter flush (combine all) or row send-one.
+   * Empty Enter / send-one while streaming also cancel the current turn first.
+   */
+  composerQueuePendingFlush: import("@/lib/chat/composer-send-queue").ComposerQueueItem | null;
   /** Soft-block dialog when leaving Plan with a dirty draft. */
   planExitDialogOpen: boolean;
 }
@@ -310,6 +329,7 @@ function makeDefaultTab(id: string): TabState {
     streamingPartMessageId: null,
     settledStreamMessageIds: [],
     isStreaming: false,
+    streamGeneration: 0,
     awaitingBackgroundJoin: false,
     error: null,
     draft: { input: "" },
@@ -342,6 +362,8 @@ function makeDefaultTab(id: string): TabState {
     planDraftFileReady: false,
     planConfirmSuppressed: false,
     composerToolsSuppressed: false,
+    composerSendQueue: [],
+    composerQueuePendingFlush: null,
     planExitDialogOpen: false,
   };
 }
@@ -644,6 +666,24 @@ interface ChatState {
     },
   ) => Promise<void>;
   cancelExecution: () => Promise<void>;
+  enqueueComposerSend: (
+    tabId: string,
+    item: ComposerQueueItem,
+  ) => void;
+  removeComposerSend: (tabId: string, itemId: string) => void;
+  /** Move an item to the front of the queue. */
+  prioritizeComposerSend: (tabId: string, itemId: string) => void;
+  /** Empty Enter: combine entire queue into pendingFlush and clear the list. */
+  commitComposerQueueFlush: (tabId: string) => void;
+  /**
+   * Row send-one: pull one item into pendingFlush (remaining stay queued).
+   * Caller cancels the in-flight turn when streaming.
+   */
+  promoteComposerSendToPendingFlush: (tabId: string, itemId: string) => void;
+  clearComposerSendQueue: (tabId: string) => void;
+  takeComposerSendQueueHead: (tabId: string) => ComposerQueueItem | null;
+  takeComposerSendQueueCombined: (tabId: string) => ComposerQueueItem | null;
+  takeComposerQueuePendingFlush: (tabId: string) => ComposerQueueItem | null;
   /** Open the composer-above subagent run panel for a Task tool_use. */
   openSubAgentPanel: (taskToolUseId: string) => void;
   closeSubAgentPanel: () => void;
@@ -1865,6 +1905,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           title: deriveSessionTitleForSend(snapshot, userPrompt, userContent, userMessage),
           messages: userMessage ? [...finalized.messages, userMessage] : finalized.messages,
           isStreaming: true,
+          streamGeneration: t.streamGeneration + 1,
           error: null,
           composerToolsSuppressed: userMessage ? false : t.composerToolsSuppressed,
         };
@@ -2213,16 +2254,152 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           return {
             ...t,
             isStreaming: false,
+            // Invalidate delayed chat:complete from this cancel (queue drain / re-send).
+            streamGeneration: t.streamGeneration + 1,
             messages: [...t.messages, committed],
             streamingMessage: null,
             streamingPartMessageId: null,
             settledStreamMessageIds: withSettledStreamMessageId(t, t.streamingPartMessageId),
           };
         }
-        return { ...t, isStreaming: false };
+        return {
+          ...t,
+          isStreaming: false,
+          streamGeneration: t.streamGeneration + 1,
+        };
       });
       return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
     });
+  },
+
+  enqueueComposerSend: (tabId, item) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId
+          ? { ...t, composerSendQueue: [...t.composerSendQueue, item] }
+          : t,
+      ),
+    }));
+  },
+
+  removeComposerSend: (tabId, itemId) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId
+          ? {
+              ...t,
+              composerSendQueue: t.composerSendQueue.filter((q) => q.id !== itemId),
+            }
+          : t,
+      ),
+    }));
+  },
+
+  prioritizeComposerSend: (tabId, itemId) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const idx = t.composerSendQueue.findIndex((q) => q.id === itemId);
+        if (idx <= 0) return t;
+        const item = t.composerSendQueue[idx];
+        const rest = t.composerSendQueue.filter((q) => q.id !== itemId);
+        return {
+          ...t,
+          composerSendQueue: [item, ...rest],
+        };
+      }),
+    }));
+  },
+
+  commitComposerQueueFlush: (tabId) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId || t.composerSendQueue.length === 0) return t;
+        const combined = combineComposerQueueItems(t.composerSendQueue);
+        // If a previous flush is still waiting, fold it in front of the new combine.
+        const pending = t.composerQueuePendingFlush
+          ? combineComposerQueueItems([t.composerQueuePendingFlush, combined])
+          : combined;
+        return {
+          ...t,
+          composerSendQueue: [],
+          composerQueuePendingFlush: pending,
+        };
+      }),
+    }));
+  },
+
+  promoteComposerSendToPendingFlush: (tabId, itemId) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const idx = t.composerSendQueue.findIndex((q) => q.id === itemId);
+        if (idx < 0) return t;
+        const item = t.composerSendQueue[idx]!;
+        const rest = t.composerSendQueue.filter((q) => q.id !== itemId);
+        const pending = t.composerQueuePendingFlush
+          ? combineComposerQueueItems([item, t.composerQueuePendingFlush])
+          : item;
+        return {
+          ...t,
+          composerSendQueue: rest,
+          composerQueuePendingFlush: pending,
+        };
+      }),
+    }));
+  },
+
+  clearComposerSendQueue: (tabId) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId
+          ? { ...t, composerSendQueue: [], composerQueuePendingFlush: null }
+          : t,
+      ),
+    }));
+  },
+
+  takeComposerSendQueueHead: (tabId) => {
+    let taken: ComposerQueueItem | null = null;
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId || t.composerSendQueue.length === 0) return t;
+        const [head, ...rest] = t.composerSendQueue;
+        taken = head;
+        return {
+          ...t,
+          composerSendQueue: rest,
+        };
+      }),
+    }));
+    return taken;
+  },
+
+  takeComposerSendQueueCombined: (tabId) => {
+    let taken: ComposerQueueItem | null = null;
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId || t.composerSendQueue.length === 0) return t;
+        taken = combineComposerQueueItems(t.composerSendQueue);
+        return {
+          ...t,
+          composerSendQueue: [],
+        };
+      }),
+    }));
+    return taken;
+  },
+
+  takeComposerQueuePendingFlush: (tabId) => {
+    let taken: ComposerQueueItem | null = null;
+    set((s) => ({
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId || !t.composerQueuePendingFlush) return t;
+        taken = t.composerQueuePendingFlush;
+        return { ...t, composerQueuePendingFlush: null };
+      }),
+    }));
+    return taken;
   },
 
   newSession: () => {
@@ -2965,7 +3142,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             pendingTurnMeta,
           };
         }
-        return { ...t, isStreaming: true };
+        return {
+          ...t,
+          isStreaming: true,
+          streamGeneration: t.streamGeneration + 1,
+        };
       });
       // Recalculate ALL projected fields via projectActiveTab so that
       // contextTokens picks up usage from the newly committed assistant message.

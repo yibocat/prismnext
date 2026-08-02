@@ -1,8 +1,10 @@
 import { spawn, execSync, spawnSync } from "node:child_process";
-import { readFile, mkdir, rm } from "node:fs/promises";
+import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { join, dirname, basename, extname } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
-import { syncTexSourceToBuildDir } from "../lib/bib-path-resolve";
+import { syncTexSourceToBuildDir, syncTexSourceIncremental } from "../lib/bib-path-resolve";
+import { resolveTectonicBinary } from "./tectonic-binary";
+import { getTectonicDaemonSession } from "./tectonic-daemon";
 
 import { createLogger } from "./logger";
 
@@ -22,9 +24,27 @@ interface BuildInfo {
 interface CompileResult {
   success: boolean;
   pdfBytes?: Buffer;
+  pdfPath?: string;
   error?: string;
   logContent?: string;
   buildDir: string;
+}
+
+export interface CompileLatexOptions {
+  /** Project-relative paths changed since the last compile (incremental sync). */
+  dirtyRelPaths?: string[];
+  /** In-memory dirty sources — flushed to project tree before sync (skips renderer save). */
+  dirtyFiles?: Array<{ relPath: string; content: string }>;
+  /** When true, omit pdfBytes — renderer reads from pdfPath on disk. */
+  pdfOnDisk?: boolean;
+  /** Skip SyncTeX (always on for now — SyncTeX UI is disabled). */
+  skipSynctex?: boolean;
+  /**
+   * Live typing preview: prefer latency over full aux/bib convergence.
+   * Tectonic: one TeX pass (`-r 0`); TeX Live: single latex, no bib.
+   * Skips the strict “citations unresolved” failure gate (PDF still returned).
+   */
+  fast?: boolean;
 }
 
 interface SynctexResult {
@@ -330,12 +350,37 @@ async function compileWithTectonic(
   mainFile: string,
   outDir: string,
   tectonicPath: string,
+  opts?: { synctex?: boolean; fast?: boolean },
 ): Promise<{ success: boolean; logContent: string }> {
-  const args = ["--keep-logs", "--synctex", "--outdir", outDir, mainFile];
-  const { exitCode } = await runWithTimeout(tectonicPath, args, cwd, process.env, COMPILE_TIMEOUT_MS);
-
   const mainStem = basename(mainFile, extname(mainFile));
   const logPath = join(outDir, `${mainStem}.log`);
+  const pdfPath = join(outDir, `${mainStem}.pdf`);
+
+  let exitCode: number;
+
+  // Live fast path: reuse a warm daemon session (Node worker + hot build dir).
+  if (opts?.fast) {
+    try {
+      const session = getTectonicDaemonSession(tectonicPath, cwd, mainFile);
+      ({ exitCode } = await session.compile(true));
+    } catch (err) {
+      const code = (err as Error & { code?: string }).code;
+      if (code === "SUPERSEDED") {
+        // Renderer generation loop will issue another compile — treat as no-op.
+        return {
+          success: existsSync(pdfPath),
+          logContent: "",
+        };
+      }
+      log.warn("daemon compile failed, falling back to one-shot", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      exitCode = await runTectonicOnce(tectonicPath, cwd, outDir, mainFile, opts);
+    }
+  } else {
+    exitCode = await runTectonicOnce(tectonicPath, cwd, outDir, mainFile, opts);
+  }
+
   let logContent = "";
   try {
     logContent = await readFile(logPath, "utf-8");
@@ -343,16 +388,29 @@ async function compileWithTectonic(
     logContent = "";
   }
 
-  // If Tectonic crashed / timed out / was killed, surface it in the log
   if (exitCode !== 0 && !logContent) {
     logContent = `Tectonic exited with code ${exitCode}. See stderr output above (if any).`;
   }
 
-  const pdfPath = join(outDir, `${mainStem}.pdf`);
   return {
     success: existsSync(pdfPath),
     logContent,
   };
+}
+
+async function runTectonicOnce(
+  tectonicPath: string,
+  cwd: string,
+  outDir: string,
+  mainFile: string,
+  opts?: { synctex?: boolean; fast?: boolean },
+): Promise<number> {
+  const args = ["--keep-logs", "--keep-intermediates", "--outdir", outDir];
+  if (opts?.synctex !== false) args.push("--synctex");
+  if (opts?.fast) args.push("-r", "0");
+  args.push(mainFile);
+  const { exitCode } = await runWithTimeout(tectonicPath, args, cwd, process.env, COMPILE_TIMEOUT_MS);
+  return exitCode;
 }
 
 /**
@@ -365,6 +423,7 @@ async function compileWithTexlive(
   engine: TexEngine,
   texContent: string,
   outDir: string,
+  opts?: { synctex?: boolean; fast?: boolean },
 ): Promise<{ success: boolean; logContent: string }> {
   const enginePath = await findTexliveBinary(engine);
   if (!enginePath) {
@@ -375,10 +434,11 @@ async function compileWithTexlive(
   const env = { ...process.env, PATH: envPath };
   const bibTool = detectBibTool(texContent);
   const mainStem = basename(mainFile, extname(mainFile));
+  const synctexArg = opts?.synctex === false ? "-synctex=0" : "-synctex=1";
 
-  console.log(`[texlive] backend: ${engine} (${enginePath}) bibTool=${bibTool ?? "none"}`);
+  console.log(`[texlive] backend: ${engine} (${enginePath}) bibTool=${bibTool ?? "none"} fast=${opts?.fast ?? false}`);
 
-  const commonArgs = ["-synctex=1", "-interaction=nonstopmode"];
+  const commonArgs = [synctexArg, "-interaction=nonstopmode"];
   const logPath = join(outDir, `${mainStem}.log`);
 
   let logContent = "";
@@ -396,6 +456,16 @@ async function compileWithTexlive(
 
   // Pass 1
   await runLatex();
+
+  // Live preview: one latex pass is enough to refresh body text.
+  if (opts?.fast) {
+    logContent = await readCompileLog();
+    const pdfPath = join(outDir, `${mainStem}.pdf`);
+    return {
+      success: existsSync(pdfPath),
+      logContent,
+    };
+  }
 
   if (bibTool) {
     const runBibtex = async (): Promise<void> => {
@@ -514,9 +584,11 @@ async function compileWithTexlive(
 export async function compileLatex(
   projectDir: string,
   mainFile: string,
-  useTexlive: boolean = false
+  _legacyUseTexlive: boolean = false,
+  options: CompileLatexOptions = {},
 ): Promise<CompileResult> {
   const buildDir = persistentBuildDir(projectDir);
+  const dirtyRelPaths = options.dirtyRelPaths ?? [];
 
   // Check concurrency limit
   if (activeCount >= MAX_CONCURRENT) {
@@ -543,15 +615,15 @@ export async function compileLatex(
     // Ensure output directory exists
     await mkdir(buildDir, { recursive: true });
 
+    for (const { relPath, content: fileContent } of options.dirtyFiles ?? []) {
+      const normalized = relPath.replace(/\\/g, "/").replace(/^\.\//, "");
+      const abs = join(projectDir, normalized);
+      await mkdir(dirname(abs), { recursive: true });
+      await writeFile(abs, fileContent, "utf-8");
+    }
+
     const mainStem = basename(mainFile, extname(mainFile));
     const pdfPath = join(buildDir, `${mainStem}.pdf`);
-
-    // Remove stale PDF so a broken compile doesn't show old output
-    try {
-      await rm(pdfPath);
-    } catch {
-      // ignore
-    }
 
     // Verify main file exists in the project (not the build dir)
     const mainFilePath = join(projectDir, mainFile);
@@ -563,31 +635,62 @@ export async function compileLatex(
       };
     }
 
-    // Read content for engine / bib detection
-    const content = await readFile(mainFilePath, "utf-8");
+    // Read content for engine / bib detection (prefer just-flushed memory)
+    const normalizedMainPath = mainFile.replace(/\\/g, "/").replace(/^\.\//, "");
+    const flushedMain = options.dirtyFiles?.find(
+      (f) => f.relPath.replace(/\\/g, "/").replace(/^\.\//, "") === normalizedMainPath,
+    );
+    const content = flushedMain?.content ?? await readFile(mainFilePath, "utf-8");
     const engine = detectTexEngine(content) || "xelatex";
 
-    const { buildMain, sourceDirRel } = await syncTexSourceToBuildDir(projectDir, mainFile, buildDir);
+    const normalizedMain = mainFile.replace(/\\/g, "/").replace(/^\.\//, "");
+    const expectedBuildMain = basename(normalizedMain);
+
+    let buildMain: string;
+    let sourceDirRel: string;
+    if (dirtyRelPaths.length > 0) {
+      ({ buildMain, sourceDirRel } = await syncTexSourceIncremental(
+        projectDir,
+        mainFile,
+        buildDir,
+        dirtyRelPaths,
+      ));
+    } else if (existsSync(join(buildDir, expectedBuildMain))) {
+      buildMain = expectedBuildMain;
+      const mainDirRel = dirname(normalizedMain);
+      sourceDirRel = mainDirRel === "." ? "" : mainDirRel.replace(/\\/g, "/");
+    } else {
+      ({ buildMain, sourceDirRel } = await syncTexSourceToBuildDir(projectDir, mainFile, buildDir));
+    }
     console.log(`[compiler] synced ${sourceDirRel || "."} → ${buildDir}, compiling ${buildMain}`);
 
-    // Compile inside buildDir — sources, aux, and PDF share one directory.
+    // Tectonic (bundled) first; TeX Live only when Tectonic is unavailable.
+    const wantSynctex = false;
+    const fast = options.fast === true;
     let result: { success: boolean; logContent: string };
-    if (useTexlive) {
-      result = await compileWithTexlive(buildDir, buildMain, engine, content, buildDir);
+    const tectonic = await resolveTectonicBinary();
+    if (tectonic.available) {
+      console.log("[compiler] Using Tectonic:", tectonic.path, tectonic.bundled ? "(bundled)" : "(system)", fast ? "(fast)" : "");
+      result = await compileWithTectonic(buildDir, buildMain, buildDir, tectonic.path, {
+        synctex: wantSynctex,
+        fast,
+      });
     } else {
-      const tectonicPath = await findTexliveBinary("tectonic");
-      if (tectonicPath) {
-        console.log("[compiler] Using Tectonic:", tectonicPath);
-        result = await compileWithTectonic(buildDir, buildMain, buildDir, tectonicPath);
-      } else {
-        console.log("[compiler] Tectonic not found, falling back to TeXLive");
-        result = await compileWithTexlive(buildDir, buildMain, engine, content, buildDir);
-      }
+      console.log("[compiler] Tectonic not found, falling back to TeX Live");
+      result = await compileWithTexlive(buildDir, buildMain, engine, content, buildDir, {
+        synctex: wantSynctex,
+        fast,
+      });
     }
 
     if (result.success) {
+      // Formal compiles still fail closed on unresolved cites; live/fast keeps the PDF.
       const bibTool = detectBibTool(content);
-      if (bibTool && !bibliographyLooksResolved(buildDir, mainStem, result.logContent ?? "")) {
+      if (
+        !fast
+        && bibTool
+        && !bibliographyLooksResolved(buildDir, mainStem, result.logContent ?? "")
+      ) {
         return {
           success: false,
           error:
@@ -597,11 +700,13 @@ export async function compileLatex(
           buildDir,
         };
       }
-      const pdfBytes = await readFile(pdfPath);
+      const pdfOnDisk = options.pdfOnDisk ?? options.fast === true;
+      const pdfBytes = pdfOnDisk ? undefined : await readFile(pdfPath);
       lastBuilds.set(projectDir, { workDir: buildDir, mainFileName: mainFile, sourceDirRel });
       return {
         success: true,
         pdfBytes,
+        pdfPath,
         logContent: result.logContent,
         buildDir,
       };

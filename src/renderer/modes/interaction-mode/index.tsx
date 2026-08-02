@@ -13,11 +13,10 @@ export const interactionMode: ModeDefinition = {
   labelKey: "modes.interaction.label",
   icon: <SparklesIcon className="size-3.5" />,
   tabKinds: ["interaction"],
-  surface: "any",
-  /** Opened from Chat cards — not listed in the RightArea mode toolbar (P0). */
-  showInModeToolbar: false,
+  surface: "workspace",
+  /** Opened from Chat cards — not listed in the「+」add menu. */
+  showInAddMenu: false,
   hideRightSidebar: true,
-  persistence: "transient",
   initialTitle: "Interaction",
   initialTitleKey: "modes.interaction.initialTitle",
   Toolbar: InteractionToolbarWrapper,

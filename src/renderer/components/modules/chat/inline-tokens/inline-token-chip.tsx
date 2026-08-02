@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import {
   BotIcon,
   Code2Icon,
@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { InlineTokenVariant } from "./variants";
-import { inlineTokenClassName } from "./styles";
+import { INLINE_TOKEN_CLICKABLE, inlineTokenClassName } from "./styles";
 
 export interface InlineTokenChipProps {
   variant: InlineTokenVariant;
@@ -31,16 +31,16 @@ export interface InlineTokenChipProps {
 }
 
 const DEFAULT_ICONS: Partial<Record<InlineTokenVariant, ReactNode>> = {
-  file: <FileTextIcon className="size-3 shrink-0" />,
-  profile: <BotIcon className="size-3 shrink-0" />,
-  command: <SlashIcon className="size-3 shrink-0" />,
-  "command-action": <ZapIcon className="size-3 shrink-0" />,
-  skill: <PuzzleIcon className="size-3 shrink-0" />,
-  mcp: <PlugIcon className="size-3 shrink-0" />,
-  link: <GlobeIcon className="size-3 shrink-0" />,
-  terminal: <TerminalIcon className="size-3 shrink-0" />,
-  code: <Code2Icon className="size-3 shrink-0" />,
-  "code-git": <FileDiffIcon className="size-3 shrink-0" />,
+  profile: <BotIcon className="size-[0.85em] shrink-0" />,
+  command: <SlashIcon className="size-[0.85em] shrink-0" />,
+  "command-action": <ZapIcon className="size-[0.85em] shrink-0" />,
+  skill: <PuzzleIcon className="size-[0.85em] shrink-0" />,
+  mcp: <PlugIcon className="size-[0.85em] shrink-0" />,
+  link: <GlobeIcon className="size-[0.85em] shrink-0" />,
+  terminal: <TerminalIcon className="size-[0.85em] shrink-0" />,
+  code: <Code2Icon className="size-[0.85em] shrink-0" />,
+  "code-git": <FileDiffIcon className="size-[0.85em] shrink-0" />,
+  literature: <FileTextIcon className="size-[0.85em] shrink-0" />,
 };
 
 /**
@@ -61,17 +61,34 @@ export function InlineTokenChip({
   const Tag = onClick ? "button" : "span";
   const resolvedIcon = icon ?? DEFAULT_ICONS[variant];
 
+  const handleClick = onClick
+    ? (e: MouseEvent) => {
+        e.stopPropagation();
+        onClick();
+      }
+    : undefined;
+
   return (
     <Tag
       type={onClick ? "button" : undefined}
       title={title ?? label}
       contentEditable={asToken ? false : undefined}
       data-inline-token={variant}
-      className={cn(inlineTokenClassName(variant, className))}
-      onClick={onClick}
+      className={cn(
+        inlineTokenClassName(variant, className),
+        onClick && INLINE_TOKEN_CLICKABLE,
+      )}
+      onClick={handleClick}
+      onMouseDown={
+        onClick
+          ? (e) => {
+              e.preventDefault();
+            }
+          : undefined
+      }
     >
       {resolvedIcon}
-      <span className="min-w-0 truncate">
+      <span className="inline min-w-0 truncate leading-[inherit]">
         {prefix}
         {label}
       </span>

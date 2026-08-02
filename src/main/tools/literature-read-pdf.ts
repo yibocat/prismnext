@@ -70,8 +70,8 @@ async function bridgeCall(
 
 export default tool({
   description:
-    "Read extracted body text of a library paper PDF by bibkey. Uses cached MinerU/pdfjs/HTML extracts under .prismnext/library/extract/. Set force=true to start extraction if missing (may upload PDF to MinerU cloud). " +
-    "Intensive reading list only. When citing content from this tool in your chat reply, use [@bibkey] with the exact bibkey and page numbers as p.X.",
+    "Read extracted body text of a library paper PDF by bibkey. Uses cached extracts under .prismnext/library/extract/. Set force=true to start extraction if missing. " +
+    "Intensive reading list only. Cite with [@bibkey] and p.X. When figure paths are returned, you may embed them with `![caption](path)` or `[@bibkey|images/fig-0.png]` if helpful — optional.",
   args: {
     bibkey: tool.schema.string().describe("Exact cite key / bibkey from the Literature library"),
     pages: tool.schema

@@ -5,8 +5,17 @@
 /** Auto-save delay after last edit (ms) */
 export const AUTO_SAVE_DELAY = 2000;
 
-/** Auto-compile debounce after last save (ms) */
-export const AUTO_COMPILE_DEBOUNCE = 2000;
+/** Auto-compile debounce after last edit (ms) */
+export const AUTO_COMPILE_DEBOUNCE = 150;
+
+/** Minimum compile spinner for manual ⌘S compile (ms) */
+export const COMPILE_SPINNER_MIN_MS = 300;
+
+/** Minimum compile spinner for auto-compile (ms) */
+export const AUTO_COMPILE_SPINNER_MIN_MS = 0;
+
+/** Delay before showing compile spinner in the PDF toolbar (ms) */
+export const COMPILE_UI_SPINNER_DELAY_MS = 300;
 
 /** Table-of-contents parse debounce (ms) */
 export const TOC_PARSE_DEBOUNCE = 300;

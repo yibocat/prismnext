@@ -22,21 +22,48 @@ export function registerCompileHandlers(): void {
     "compile:execute",
     async (
       _event,
-      args: { projectDir: string; mainFile: string; useTexlive?: boolean },
+      args: {
+        projectDir: string;
+        mainFile: string;
+        useTexlive?: boolean;
+        dirtyRelPaths?: string[];
+        dirtyFiles?: Array<{ relPath: string; content: string }>;
+        pdfOnDisk?: boolean;
+        skipSynctex?: boolean;
+        fast?: boolean;
+      },
     ) => {
       log.info("compile:execute", {
         projectDir: args.projectDir,
         mainFile: args.mainFile,
         useTexlive: args.useTexlive ?? false,
+        dirty: args.dirtyRelPaths?.length ?? 0,
+        skipSynctex: args.skipSynctex ?? false,
+        fast: args.fast ?? false,
       });
       const result = await compileLatex(
         args.projectDir,
         args.mainFile,
         args.useTexlive,
+        {
+          dirtyRelPaths: args.dirtyRelPaths,
+          dirtyFiles: args.dirtyFiles,
+          pdfOnDisk: args.pdfOnDisk,
+          skipSynctex: args.skipSynctex,
+          fast: args.fast,
+        },
       );
-      if (result.success && result.pdfBytes) {
-        log.info("compile:execute success", { bytes: result.pdfBytes.length });
-        return { pdfBytes: result.pdfBytes, buildDir: result.buildDir, stdout: result.logContent };
+      if (result.success && (result.pdfBytes || result.pdfPath)) {
+        log.info("compile:execute success", {
+          bytes: result.pdfBytes?.length,
+          pdfPath: result.pdfPath,
+        });
+        return {
+          pdfBytes: result.pdfBytes,
+          pdfPath: result.pdfPath,
+          buildDir: result.buildDir,
+          stdout: result.logContent,
+        };
       } else {
         log.warn("compile:execute failed", { error: result.error || "unknown" });
         return { error: result.error || "Compilation failed", stdout: result.logContent };

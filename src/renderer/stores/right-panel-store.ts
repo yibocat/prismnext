@@ -10,17 +10,13 @@ import {
   type RightTabKind,
   type RightTab,
 } from "@/lib/workspace/mode-registry";
+import { notifyModeLifecycleTransitions } from "@/lib/workspace/modes-from-tabs";
 import { isResearchPlanFilePath } from "@/lib/chat/plan-artifact-ui";
 import { getTabCloseConfirmation, getBatchTabCloseConfirmation } from "@/lib/workspace/tab-close-confirmation";
-import {
-  buildInitialTabShell,
-  getExperimentsTabCloseAction,
-  getLiteratureTabCloseAction,
-} from "@/lib/workspace/tab-lifecycle";
+import { buildInitialTabShell } from "@/lib/workspace/tab-lifecycle";
 import { useTabCloseConfirmStore } from "@/stores/tab-close-confirm-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useChatStore } from "@/stores/chat-store";
-import { deactivateModeByTabKind } from "@/lib/workspace/deactivate-mode";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import { settingsPanelSlotKey } from "@/lib/settings/settings-panel-slot-key";
 import { settingsPanelSlotTitle } from "@/lib/settings/settings-panel-slots";
@@ -45,7 +41,9 @@ interface RightPanelState {
 
   ensureTab: (kind: RightTabKind) => string;
   openLiteraturePaper: (paperId: string, title: string, view?: "grid" | "reader" | "notes") => string;
-  /** Open / focus a detail tab for one experiment (browse home tab stays). */
+  /** Always spawn a Library home tab (「+」→ Literature). */
+  newLiteratureHomeTab: () => string;
+  /** Open / focus a detail tab for one experiment (Files-like home replace). */
   openExperimentTab: (experimentId: string, title: string) => string;
   /** Open/focus an Interaction panel tab for a persisted object id. */
   openInteractionTab: (interactionId: string, title: string) => string;
@@ -147,34 +145,54 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   },
 
   openLiteraturePaper: (paperId, title, view = "reader") => {
-    useLayoutStore.getState().activateMode("literature");
-    const { tabs } = get();
+    const { tabs, activeTabId } = get();
     const existing = tabs.find((t) => t.kind === "literature" && t.literaturePaperId === paperId);
     if (existing) {
       set({ activeTabId: existing.id });
       return existing.id;
     }
-    const id = nextTabId();
-    const tab: RightTab = {
+
+    const makePaperTab = (id: string): RightTab => ({
       id,
       kind: "literature",
       title: title.slice(0, 48),
       isInitial: false,
       literaturePaperId: paperId,
       literatureView: view,
+    });
+
+    const active = tabs.find((t) => t.id === activeTabId);
+    // Files / Experiments-like: replace Library home in place.
+    if (active?.kind === "literature" && !active.literaturePaperId) {
+      set((s) => ({
+        tabs: s.tabs.map((t) => (t.id === active.id ? makePaperTab(active.id) : t)),
+        activeTabId: active.id,
+      }));
+      return active.id;
+    }
+
+    const id = nextTabId();
+    set((s) => ({ tabs: [makePaperTab(id), ...s.tabs], activeTabId: id }));
+    return id;
+  },
+
+  newLiteratureHomeTab: () => {
+    const id = nextTabId();
+    const tab: RightTab = {
+      id,
+      kind: "literature",
+      title: modeRegistry.findByTabKind("literature")?.initialTitle ?? "Library",
+      isInitial: true,
     };
     set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
     return id;
   },
 
   openExperimentTab: (experimentId, title) => {
-    const layout = useLayoutStore.getState();
-    layout.activateMode("experiments");
     // Files-like: show experiment list beside detail (deferred until RightArea has width).
-    layout.revealRightSidebar();
-    // Keep a browse home tab around so closing detail doesn't lose the grid.
-    get().ensureTab("experiments");
-    const { tabs } = get();
+    useLayoutStore.getState().revealRightSidebar();
+
+    const { tabs, activeTabId } = get();
     const existing = tabs.find(
       (t) => t.kind === "experiments" && t.experimentId === experimentId,
     );
@@ -183,23 +201,34 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       void trackRecentOpenedExperiment(experimentId, title);
       return existing.id;
     }
-    const id = nextTabId();
-    const tab: RightTab = {
+
+    const makeDetailTab = (id: string): RightTab => ({
       id,
       kind: "experiments",
       title: title.slice(0, 48),
       isInitial: false,
       experimentId,
       experimentsView: "detail",
-    };
-    set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
+    });
+
+    const active = tabs.find((t) => t.id === activeTabId);
+    // Files-like: replace empty Experiments home in place (no parallel home+detail).
+    if (active?.kind === "experiments" && !active.experimentId) {
+      set((s) => ({
+        tabs: s.tabs.map((t) => (t.id === active.id ? makeDetailTab(active.id) : t)),
+        activeTabId: active.id,
+      }));
+      void trackRecentOpenedExperiment(experimentId, title);
+      return active.id;
+    }
+
+    const id = nextTabId();
+    set((s) => ({ tabs: [makeDetailTab(id), ...s.tabs], activeTabId: id }));
     void trackRecentOpenedExperiment(experimentId, title);
     return id;
   },
 
   openInteractionTab: (interactionId, title) => {
-    const layout = useLayoutStore.getState();
-    layout.activateMode("interaction");
     const { tabs } = get();
     const existing = tabs.find(
       (t) => t.kind === "interaction" && t.interactionId === interactionId,
@@ -241,19 +270,13 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       const next = s.tabs.filter((t) => !removeIds.has(t.id));
       const nextActive =
         s.activeTabId && removeIds.has(s.activeTabId)
-          ? (next.find((t) => t.kind === "experiments" && !t.experimentId)?.id ??
-            next[0]?.id ??
-            null)
+          ? (next.find((t) => t.kind === "experiments")?.id ?? next[0]?.id ?? null)
           : s.activeTabId;
       return { tabs: next, activeTabId: nextActive };
     });
-    if (!get().hasTabsOfKind("experiments")) {
-      get().ensureTab("experiments");
-    }
   },
 
   activateExperimentsHomeTab: () => {
-    useLayoutStore.getState().activateMode("experiments");
     const homeId = get().ensureTab("experiments");
     set((s) => ({
       tabs: s.tabs.map((t) =>
@@ -271,7 +294,6 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   },
 
   openTerminalAtCwd: (cwd, title) => {
-    useLayoutStore.getState().activateMode("terminal");
     const { tabs } = get();
     // Reuse an existing terminal tab spawned at the same cwd.
     const existing = tabs.find((t) => t.kind === "terminal" && t.terminalCwd === cwd);
@@ -322,7 +344,6 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   },
 
   switchToTexworkspace: (fileId: string, filePath: string, name: string) => {
-    useLayoutStore.getState().activateMode("texworkspace");
     const { tabs } = get();
     const existing = tabs.find((t) => t.kind === "texworkspace");
     if (existing) {
@@ -348,8 +369,6 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
 
     const pin = opts?.pin ?? false;
     const isExternal = opts?.isExternal ?? false;
-
-    useLayoutStore.getState().activateMode("files");
 
     const ext = name.slice(name.lastIndexOf(".")).toLowerCase();
     const defaultViewMode = ext === ".md" || ext === ".mdx" ? "preview" : "source";
@@ -418,7 +437,6 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
 
   openResearchPlan: (fileId, filePath, name, opts) => {
     const pin = opts?.pin ?? true;
-    useLayoutStore.getState().activateMode("research-plan");
 
     const { tabs } = get();
 
@@ -483,8 +501,6 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   },
 
   openGitDiff: (filePath: string) => {
-    // Ensure Git mode is active and focused
-    useLayoutStore.getState().activateMode("git");
     const name = filePath.split("/").pop() || filePath;
     const id = nextTabId();
     const tab: RightTab = { id, kind: "git-diff", title: name, filePath, isInitial: false };
@@ -537,13 +553,15 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   },
 
   newBrowserTab: () => {
-    const { tabs, activeTabId } = get();
-    const active = tabs.find((t) => t.id === activeTabId);
-    if (active?.kind === "browser" && active.isInitial) return active.id;
-    const existing = tabs.find((t) => t.kind === "browser" && t.isInitial);
-    if (existing) { set({ activeTabId: existing.id }); return existing.id; }
+    // Always spawn a blank Browser tab (Chrome-style +). Do not reuse an
+    // existing isInitial home — that blocked multi-open while sitting on home.
     const id = nextTabId();
-    const tab: RightTab = { id, kind: "browser", title: modeRegistry.findByTabKind("browser")?.initialTitle ?? "Browser", isInitial: true };
+    const tab: RightTab = {
+      id,
+      kind: "browser",
+      title: modeRegistry.findByTabKind("browser")?.initialTitle ?? "Browser",
+      isInitial: true,
+    };
     set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
     return id;
   },
@@ -703,7 +721,6 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       useTerminalStore.getState().resetProjectState();
       useRightPanelStore.setState({ tabs: [], activeTabId: null });
       useDocumentStore.getState().setActiveFile("");
-      useLayoutStore.setState({ activeModes: [], focusedMode: "dashboard" });
     };
 
     if (confirmation) {
@@ -792,62 +809,6 @@ function performCloseTab(
   const closingTab = state.tabs.find((t) => t.id === id);
   if (!closingTab) return;
 
-  const literatureCloseAction = getLiteratureTabCloseAction(closingTab, state.tabs);
-  if (literatureCloseAction === "deactivate-mode") {
-    deactivateModeByTabKind(closingTab.kind);
-    return;
-  }
-  if (literatureCloseAction === "remove-and-ensure-home") {
-    useRightPanelStore.setState((s) => ({
-      tabs: s.tabs.filter((t) => t.id !== id),
-      activeTabId: null,
-    }));
-    const homeId = useRightPanelStore.getState().ensureTab("literature");
-    useRightPanelStore.setState({ activeTabId: homeId });
-    return;
-  }
-
-  const experimentsCloseAction = getExperimentsTabCloseAction(closingTab, state.tabs);
-  if (experimentsCloseAction === "deactivate-mode") {
-    deactivateModeByTabKind(closingTab.kind);
-    return;
-  }
-  if (experimentsCloseAction === "remove-and-ensure-home") {
-    useRightPanelStore.setState((s) => ({
-      tabs: s.tabs.filter((t) => t.id !== id),
-      activeTabId: null,
-    }));
-    const homeId = useRightPanelStore.getState().ensureTab("experiments");
-    useRightPanelStore.setState({ activeTabId: homeId });
-    return;
-  }
-
-  const sameKind = state.tabs.filter((t) => t.kind === closingTab.kind);
-  const isLastOfKind = sameKind.length === 1;
-  const def = modeRegistry.findByTabKind(closingTab.kind);
-  const isPersistent = def?.persistence === "persistent";
-
-  if (isLastOfKind && isPersistent) {
-    if (closingTab.isInitial) {
-      deactivateModeByTabKind(closingTab.kind);
-      return;
-    }
-    useRightPanelStore.setState((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === id
-          ? buildInitialTabShell(
-              t,
-              modeRegistry.findByTabKind(t.kind)?.initialTitle ?? t.kind,
-            )
-          : t,
-      ),
-    }));
-    if (closingTab.kind === "file") {
-      useDocumentStore.getState().setActiveFile("");
-    }
-    return;
-  }
-
   let closedAiTabId: string | undefined;
 
   useRightPanelStore.setState((s) => {
@@ -880,29 +841,6 @@ function performCloseTab(
       closedAiTabId = closing.id;
     }
 
-    const hasRemainingOfMode = next.some((t) => {
-      const modeDef = modeRegistry.findByTabKind(t.kind);
-      return modeDef?.id === closingMode;
-    });
-    if (!hasRemainingOfMode && closing) {
-      useLayoutStore.setState((st) => {
-        const remainingModes = st.activeModes.filter((m) => m !== closingMode);
-        const newFocused = remainingModes.length > 0
-          ? remainingModes[remainingModes.length - 1]
-          : "dashboard";
-        return { activeModes: remainingModes, focusedMode: newFocused };
-      });
-      if (useLayoutStore.getState().focusedMode === "dashboard") {
-        nextActive = null;
-      } else {
-        const newModeTab = next.find((t) => {
-          const modeDef = modeRegistry.findByTabKind(t.kind);
-          return modeDef?.id === useLayoutStore.getState().focusedMode;
-        });
-        nextActive = newModeTab?.id ?? null;
-      }
-    }
-
     return { tabs: next, activeTabId: nextActive };
   });
 
@@ -910,3 +848,9 @@ function performCloseTab(
     useTerminalAiStore.getState().onAiTabClosedByUser(closedAiTabId);
   }
 }
+
+/** Fire mode onActivate / onDeactivate when tab counts cross 0↔1. */
+useRightPanelStore.subscribe((state, prev) => {
+  if (state.tabs === prev.tabs) return;
+  notifyModeLifecycleTransitions(prev.tabs, state.tabs);
+});

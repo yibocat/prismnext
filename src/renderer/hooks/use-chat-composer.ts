@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
-import { getMentionableFiles } from "@/lib/files/mentionable-files";
+import { useMentionableFiles } from "@/lib/files/mentionable-files";
 import { pickComposerAttachments, projectFileToAttachment, attachmentsFromAbsolutePaths, type ComposerAttachment } from "@/lib/chat/composer-attach-file";
 import { isComposerEmpty, type ComposerPart, COMPOSER_PLACEHOLDER, composerNeedsExpandedLayout } from "@/lib/chat/composer-parts";
 import { loadSlashCatalog } from "@/lib/chat/slash-catalog";
@@ -17,6 +17,13 @@ import "@/actions/builtin-actions";
 import type { ExpertInfo } from "@shared/agent-experts";
 import { getModel, modelSupportsVision, resolveProviderConfig } from "@/lib/providers";
 import type { ContentBlock } from "@/stores/chat-store";
+import {
+  appendComposerParts,
+  combineComposerQueueItems,
+  createComposerQueueItemId,
+  isComposerQueuePayloadEmpty,
+  type ComposerQueueItem,
+} from "@/lib/chat/composer-send-queue";
 import {
   compileComposerPrompt,
   shouldSendPromptToAgent,
@@ -78,6 +85,9 @@ export interface PinnedContext {
   selectedText: string;
 }
 
+/** Prevent duplicate auto-drain when Panel + AiBar both mount useChatComposer. */
+let _queueDrainInFlight = false;
+
 /** @deprecated import from `@/lib/chat/composer-parts` */
 export { composerNeedsExpandedLayout } from "@/lib/chat/composer-parts";
 
@@ -105,10 +115,7 @@ export function useChatComposer() {
 
   const files = useDocumentStore((s) => s.files);
   const fileMetadata = useDocumentStore((s) => s.fileMetadata);
-  const mentionableFiles = useMemo(
-    () => getMentionableFiles(files, fileMetadata),
-    [files, fileMetadata],
-  );
+  const mentionableFiles = useMentionableFiles(files, fileMetadata);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const activeFileId = useDocumentStore((s) => s.activeFileId);
   const selectionRange = useDocumentStore((s) => s.selectionRange);
@@ -251,10 +258,19 @@ export function useChatComposer() {
     if (root) loadCommands();
   }, [loadCommands]);
 
+  const queueLength = useChatStore(
+    (s) => {
+      const tab = s.tabs.find((t) => t.id === s.activeTabId);
+      if (!tab) return 0;
+      return tab.composerSendQueue.length + (tab.composerQueuePendingFlush ? 1 : 0);
+    },
+  );
+
   const canSend =
     !draftEmpty ||
     pinnedContexts.length > 0 ||
-    pendingAttachments.length > 0;
+    pendingAttachments.length > 0 ||
+    queueLength > 0;
 
   const appendAttachments = useCallback(async (files: Awaited<ReturnType<typeof pickComposerAttachments>>) => {
     if (files.length === 0) return;
@@ -279,25 +295,31 @@ export function useChatComposer() {
     setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
-  const handleSend = useCallback(async () => {
-    useComposerEditorStore.getState().flushDraftPersist();
-    const parts = editorRef.current?.getParts() ?? draftParts;
-    const attachments = pendingAttachmentsRef.current;
-    if (isComposerEmpty(parts) && pinnedContextsRef.current.length === 0 && attachments.length === 0) {
-      return;
-    }
-    if (isStreaming) return;
+  const clearComposerUi = useCallback(() => {
+    setDraftParts([{ type: "text", text: "" }], true);
+    setPinnedContexts([]);
+    setPendingAttachments([]);
+    editorRef.current?.focus();
+  }, [setDraftParts]);
+
+  const executeSendPayload = useCallback(async (payload: {
+    parts: ComposerPart[];
+    pinnedContexts: Array<{ label: string; filePath: string; selectedText: string }>;
+    attachments: ComposerAttachment[];
+  }) => {
+    if (isComposerQueuePayloadEmpty(payload)) return;
 
     const store = useChatStore.getState();
     const tabId = store.activeTabId;
-    const pinnedAtSend = pinnedContextsRef.current.map((c) => ({
+    const pinnedAtSend = payload.pinnedContexts.map((c) => ({
       filePath: c.filePath,
       selectedText: c.selectedText,
     }));
     const pinnedCountAtSend = pinnedAtSend.length;
-    const attachmentCountAtSend = attachments.length;
+    const attachmentCountAtSend = payload.attachments.length;
+    const parts = payload.parts;
+    const attachments = payload.attachments;
 
-    // Fast path: show the user bubble + clear composer before any disk/network work.
     const quickDisplay = buildComposerDisplayBlocks(parts, attachments);
     let skipUserAppend = false;
     if (quickDisplay.length > 0) {
@@ -307,12 +329,9 @@ export function useChatComposer() {
           message: { content: quickDisplay },
         });
         store._setStreaming(tabId, true);
-        setDraftParts([{ type: "text", text: "" }], true);
-        setPinnedContexts([]);
-        setPendingAttachments([]);
+        clearComposerUi();
       });
       skipUserAppend = true;
-      editorRef.current?.focus();
     }
 
     let compiled;
@@ -326,7 +345,6 @@ export function useChatComposer() {
       return;
     }
 
-    // Stopped while compiling attachments.
     if (!useChatStore.getState().tabs.find((t) => t.id === tabId)?.isStreaming && skipUserAppend) {
       return;
     }
@@ -533,12 +551,159 @@ export function useChatComposer() {
     }
 
     if (!skipUserAppend) {
-      setDraftParts([{ type: "text", text: "" }], true);
-      setPinnedContexts([]);
-      setPendingAttachments([]);
-      editorRef.current?.focus();
+      clearComposerUi();
     }
-  }, [draftParts, isStreaming, sendPrompt, commands, expandCommand, setDraftParts]);
+  }, [clearComposerUi, commands, expandCommand, sendPrompt]);
+
+  const executeSendPayloadRef = useRef(executeSendPayload);
+  executeSendPayloadRef.current = executeSendPayload;
+
+  const drainComposerQueue = useCallback(async () => {
+    if (_queueDrainInFlight) return;
+    const store = useChatStore.getState();
+    const tabId = store.activeTabId;
+    const tab = store.tabs.find((t) => t.id === tabId);
+    if (!tab || tab.isStreaming) return;
+    if (!tab.composerQueuePendingFlush && tab.composerSendQueue.length === 0) return;
+
+    _queueDrainInFlight = true;
+    try {
+      // One-click / auto-drain = merge everything into a single turn (never N turns).
+      const pending = store.takeComposerQueuePendingFlush(tabId);
+      const rest = store.takeComposerSendQueueCombined(tabId);
+      const payload = pending && rest
+        ? combineComposerQueueItems([pending, rest])
+        : (pending ?? rest);
+      if (!payload) return;
+      await executeSendPayloadRef.current(payload);
+    } finally {
+      _queueDrainInFlight = false;
+    }
+  }, []);
+
+  const wasStreamingRef = useRef(isStreaming);
+  useEffect(() => {
+    const was = wasStreamingRef.current;
+    wasStreamingRef.current = isStreaming;
+    if (was && !isStreaming) {
+      void drainComposerQueue();
+    }
+  }, [isStreaming, drainComposerQueue]);
+
+  const handleSend = useCallback(async () => {
+    useComposerEditorStore.getState().flushDraftPersist();
+    const parts = editorRef.current?.getParts() ?? draftParts;
+    const attachments = pendingAttachmentsRef.current;
+    const pinned = pinnedContextsRef.current;
+    const empty =
+      isComposerEmpty(parts) && pinned.length === 0 && attachments.length === 0;
+
+    const store = useChatStore.getState();
+    const tabId = store.activeTabId;
+    const tab = store.tabs.find((t) => t.id === tabId);
+    const queue = tab?.composerSendQueue ?? [];
+
+    // Empty Enter: flush queue. While streaming → stop turn, then send as next.
+    if (empty) {
+      if (queue.length === 0 && !tab?.composerQueuePendingFlush) return;
+      if (isStreaming) {
+        if (queue.length > 0) store.commitComposerQueueFlush(tabId);
+        await cancelExecution();
+        // cancel clears isStreaming → drainComposerQueue effect sends pendingFlush
+        return;
+      }
+      // Idle: send pending flush and/or combine remaining queue immediately.
+      const pending = store.takeComposerQueuePendingFlush(tabId);
+      if (pending && queue.length === 0) {
+        await executeSendPayload(pending);
+        return;
+      }
+      if (pending && queue.length > 0) {
+        const rest = store.takeComposerSendQueueCombined(tabId);
+        const merged = rest
+          ? combineComposerQueueItems([pending, rest])
+          : pending;
+        await executeSendPayload(merged);
+        return;
+      }
+      const combined = store.takeComposerSendQueueCombined(tabId);
+      if (combined) await executeSendPayload(combined);
+      return;
+    }
+
+    // Streaming + content: enqueue and clear composer.
+    if (isStreaming) {
+      const item: ComposerQueueItem = {
+        id: createComposerQueueItemId(),
+        parts: structuredClone(parts),
+        pinnedContexts: pinned.map((c) => ({ ...c })),
+        attachments: attachments.map((a) => ({ ...a })),
+        createdAt: Date.now(),
+      };
+      store.enqueueComposerSend(tabId, item);
+      clearComposerUi();
+      return;
+    }
+
+    await executeSendPayload({
+      parts,
+      pinnedContexts: pinned,
+      attachments,
+    });
+  }, [cancelExecution, clearComposerUi, draftParts, executeSendPayload, isStreaming]);
+
+  const handleQueueEdit = useCallback((itemId: string) => {
+    const store = useChatStore.getState();
+    const tabId = store.activeTabId;
+    const tab = store.tabs.find((t) => t.id === tabId);
+    const item = tab?.composerSendQueue.find((q) => q.id === itemId);
+    if (!item) return;
+    store.removeComposerSend(tabId, itemId);
+
+    const currentParts = editorRef.current?.getParts() ?? draftParts;
+    setDraftParts(appendComposerParts(currentParts, item.parts), true);
+    setPinnedContexts((prev) => {
+      const seen = new Set(prev.map((c) => `${c.filePath}\0${c.selectedText}`));
+      const next = [...prev];
+      for (const ctx of item.pinnedContexts) {
+        const key = `${ctx.filePath}\0${ctx.selectedText}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        next.push(ctx);
+      }
+      return next;
+    });
+    setPendingAttachments((prev) => {
+      const seen = new Set(prev.map((a) => a.absolutePath));
+      return [
+        ...prev,
+        ...item.attachments.filter((a) => !seen.has(a.absolutePath)),
+      ];
+    });
+    editorRef.current?.focus();
+  }, [draftParts, setDraftParts]);
+
+  const handleQueueSendOne = useCallback(async (itemId: string) => {
+    const store = useChatStore.getState();
+    const tabId = store.activeTabId;
+    const tab = store.tabs.find((t) => t.id === tabId);
+    const item = tab?.composerSendQueue.find((q) => q.id === itemId);
+    if (!item) return;
+
+    if (isStreaming) {
+      store.promoteComposerSendToPendingFlush(tabId, itemId);
+      await cancelExecution();
+      return;
+    }
+
+    store.removeComposerSend(tabId, itemId);
+    await executeSendPayload(item);
+  }, [cancelExecution, executeSendPayload, isStreaming]);
+
+  const handleQueueDelete = useCallback((itemId: string) => {
+    const store = useChatStore.getState();
+    store.removeComposerSend(store.activeTabId, itemId);
+  }, []);
 
   /** Fallback; UI should prefer `t("chat.composer.placeholder")`. */
   const placeholder = COMPOSER_PLACEHOLDER;
@@ -560,10 +725,14 @@ export function useChatComposer() {
     isArchived,
     isStreaming,
     canSend,
+    queueLength,
     placeholder,
     handleSend,
     handleAddFile,
     handleAddImage,
     cancelExecution,
+    handleQueueEdit,
+    handleQueueSendOne,
+    handleQueueDelete,
   };
 }

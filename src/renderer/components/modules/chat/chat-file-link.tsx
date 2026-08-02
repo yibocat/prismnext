@@ -1,6 +1,5 @@
-import type { MouseEvent, ReactNode } from "react";
-import { cn } from "@/lib/utils";
-import { openProjectFileFromChat } from "@/lib/files/open-project-file";
+import type { ReactNode } from "react";
+import { ChatFileInline } from "./chat-file-inline";
 
 interface ChatFileLinkProps {
   path: string;
@@ -10,35 +9,22 @@ interface ChatFileLinkProps {
   title?: string;
 }
 
+/** Tool widgets + markdown — opens RightArea and focuses the project file. */
 export function ChatFileLink({
   path,
   children,
   className,
   title,
 }: ChatFileLinkProps) {
-  const display = children ?? (path.split("/").pop() || path);
+  const label =
+    typeof children === "string" && children.trim() ? children : undefined;
 
   return (
-    <span
-      role="link"
-      tabIndex={0}
-      className={cn(
-        "truncate font-medium text-primary/90 hover:text-primary hover:underline underline-offset-2 cursor-pointer",
-        className,
-      )}
-      title={title ?? path}
-      onClick={(e: MouseEvent) => {
-        e.stopPropagation();
-        void openProjectFileFromChat(path);
-      }}
-      onKeyDown={(e) => {
-        if (e.key !== "Enter" && e.key !== " ") return;
-        e.preventDefault();
-        e.stopPropagation();
-        void openProjectFileFromChat(path);
-      }}
-    >
-      {display}
-    </span>
+    <ChatFileInline
+      path={path}
+      label={label}
+      title={title}
+      className={className}
+    />
   );
 }

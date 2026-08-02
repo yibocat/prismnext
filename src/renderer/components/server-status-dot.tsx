@@ -7,6 +7,10 @@ import {
 } from "@/components/ui/hover-card";
 import { CircleIcon, FileTypeIcon, SparklesIcon, TerminalIcon } from "lucide-react";
 import { useCompileStore } from "@/stores/compile-store";
+import {
+  isCompileEngineAvailable,
+  resolveActiveCompileEngineLabel,
+} from "@/lib/tex/compile-engine-label";
 import { useDocumentStore } from "@/stores/document-store";
 import { countActiveTerminalActivity } from "@/lib/terminal/terminal-sidebar-items";
 import { useTerminalAiStore } from "@/stores/terminal-ai-store";
@@ -95,7 +99,6 @@ export function ServerStatusDot() {
   });
   const [retrying, setRetrying] = useState(false);
   const compilerStatus = useCompileStore((s) => s.compilerStatus);
-  const compilerBackend = useCompileStore((s) => s.compilerBackend);
   const autoCompile = useCompileStore((s) => s.autoCompile);
   const detectCompilers = useCompileStore((s) => s.detectCompilers);
 
@@ -165,13 +168,8 @@ export function ServerStatusDot() {
     }
   };
 
-  const latexReady = Boolean(
-    compilerStatus?.tectonic || compilerStatus?.texlive?.available,
-  );
-  const latexBackendLabel =
-    compilerBackend === "tectonic"
-      ? "Tectonic"
-      : compilerStatus?.texlive?.engines?.[0] || "TeXLive";
+  const latexReady = isCompileEngineAvailable(compilerStatus);
+  const latexBackendLabel = resolveActiveCompileEngineLabel(compilerStatus);
   const latexDetail = !compilerStatus
     ? t("shell.status.checking")
     : latexReady

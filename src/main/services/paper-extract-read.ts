@@ -12,6 +12,12 @@ import {
   sliceMarkdownByPages,
   truncateMarkdown,
 } from "../../shared/paper-extract-slice";
+import {
+  listExtractFigurePaths,
+  markdownHasExtractFigures,
+  resolveLibraryFigurePath,
+  rewritePaperExtractImageSrcs,
+} from "../../shared/paper-extract-images";
 import { getPaperByBibkey } from "./literature-service";
 import {
   enqueuePaperExtract,
@@ -43,6 +49,10 @@ export interface ReadPdfContentResult {
   pages?: string;
   markdown?: string;
   truncated?: boolean;
+  /** Extract includes embeddable figure image paths. */
+  hasFigures?: boolean;
+  /** Project-relative figure paths present in markdown (when hasFigures). */
+  figures?: string[];
   not_extracted?: boolean;
   extracting?: boolean;
   hint?: string;
@@ -165,6 +175,20 @@ export async function readPaperPdfContent(
     markdown = filterMarkdownByQuery(markdown, args.query);
   }
   const { text, truncated } = truncateMarkdown(markdown);
+  const rewritten = rewritePaperExtractImageSrcs(text, paper.id);
+  const hasFigures = markdownHasExtractFigures(rewritten);
+  const figures = hasFigures
+    ? listExtractFigurePaths(rewritten).map((p) =>
+        p.startsWith("images/") ? resolveLibraryFigurePath(paper.id, p) : p,
+      )
+    : undefined;
+
+  let hint =
+    "When citing in chat, use [@bibkey] with this exact bibkey; add p.X when quoting specific pages. Use pages= for narrower ranges.";
+  if (hasFigures) {
+    hint +=
+      " Figures may be embedded in your reply with `![caption](path)` (paths from this output) or compact `[@bibkey|images/fig-0.png]` — optional; use when a chart or diagram helps.";
+  }
 
   return {
     bibkey,
@@ -172,8 +196,10 @@ export async function readPaperPdfContent(
     source: readySource,
     cached: true,
     pages: args.pages,
-    markdown: text,
+    markdown: rewritten,
     truncated,
-    hint: "When citing in chat, use [@bibkey] with this exact bibkey; add p.X when quoting specific pages. Use pages= for narrower ranges.",
+    hasFigures,
+    figures,
+    hint,
   };
 }

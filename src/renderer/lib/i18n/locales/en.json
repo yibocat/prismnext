@@ -786,7 +786,7 @@
         "defaultEngine": "Default engine",
         "defaultEngineDesc": "LaTeX compiler for this project. Build output goes to .prismnext/compile/.",
         "autoCompile": "Auto compile",
-        "autoCompileDesc": "Automatically compile after saving a .tex file."
+        "autoCompileDesc": "Pause typing ~0.5s to recompile the PDF (Tectonic when available)."
       },
       "backups": "Backups",
       "references": "References",
@@ -1603,9 +1603,10 @@
       "running": "Running",
       "stopped": "Stopped"
     },
-    "rightArea": {
+      "rightArea": {
       "backToSettings": "Back to settings",
       "modes": "Modes",
+      "addMode": "Add panel",
       "openTabs": "Open tabs",
       "closePanel": "Close Panel",
       "maximizePanel": "Maximize panel",
@@ -1753,8 +1754,14 @@
       "zoomIn": "Zoom in",
       "zoomOut": "Zoom out",
       "placeholder": "@ expert, file, paper, or experiment · / commands, skills, MCP",
+      "placeholderFollowUp": "Send follow-up",
       "archivedReadonly": "This conversation is archived. Restore it to continue chatting.",
       "stop": "Stop",
+      "queueCount": "{{count}} Queued",
+      "queueEnterToSend": "to Stop & Send",
+      "queueEdit": "Edit",
+      "queueSendOne": "Stop and send this message",
+      "queueDelete": "Remove from queue",
       "taskPlanTitle": "Task plan",
       "taskPlanInProgress": "In progress",
       "taskPlanDismiss": "Hide task plan",
@@ -1879,6 +1886,10 @@
       "remove": "Remove from intensive list",
       "removeTitle": "Remove from intensive list (keeps @ chip)"
     },
+    "libraryCite": {
+      "notInLibrary": "Not in library",
+      "notFoundBody": "No paper with cite key {{bibkey}} was found."
+    },
     "messages": {
       "loading": "Loading conversation…",
       "loadMore": "Load earlier messages",
@@ -1886,7 +1897,10 @@
       "loadMorePulling": "Keep scrolling up…",
       "loadingOlder": "Loading…",
       "expand": "Click to expand",
-      "collapse": "Collapse"
+      "collapse": "Collapse",
+      "editHint": "Click outside to cancel · Enter to resend",
+      "resend": "Resend",
+      "resendFailed": "Failed to resend message"
     },
     "prepare": {
       "planningNext": "Planning next step…",
@@ -1914,11 +1928,25 @@
       "hoursAgo": "{{count}}h ago",
       "daysAgo": "{{count}}d ago",
       "copy": "Copy this turn",
-      "restore": "Restore workspace files to the end of this turn",
-      "restored": "Restored {{count}} file to the end of this turn",
-      "restored_plural": "Restored {{count}} files to the end of this turn",
-      "restoredDesc": "Workspace files and chat history were rolled back to this turn.",
-      "restoreFailed": "Restore failed: {{message}}"
+      "rollback": "Roll back chat and files to the end of this turn",
+      "rolledBack": "Rolled back {{count}} file to the end of this turn",
+      "rolledBack_plural": "Rolled back {{count}} files to the end of this turn",
+      "rolledBackDesc": "Chat, workspace files, and proposed changes were rolled back to this turn.",
+      "rollbackFailed": "Rollback failed: {{message}}",
+      "alreadyAtTurn": "Already at the end of this turn — nothing later to roll back",
+      "restore": "Roll back chat and files to the end of this turn",
+      "restored": "Rolled back {{count}} file to the end of this turn",
+      "restored_plural": "Rolled back {{count}} files to the end of this turn",
+      "restoredDesc": "Chat, workspace files, and proposed changes were rolled back to this turn.",
+      "restoreFailed": "Rollback failed: {{message}}"
+    },
+    "regretBar": {
+      "message": "Rolled back to an earlier turn.",
+      "undo": "Undo rollback",
+      "undone": "Rollback undone — chat and files are back",
+      "undonePartial": "Rollback undone in the UI — session history may be incomplete (restart cleared the backup)",
+      "undoFailed": "Undo failed: {{message}}",
+      "dismiss": "Dismiss"
     }
   },
   "modes": {
@@ -1940,7 +1968,10 @@
       "noOpenFiles": "No open files",
       "recent": "Recent",
       "noFilesYet": "No files yet",
-      "openProjectToStart": "Open a project to get started"
+      "openProjectToStart": "Open a project to get started",
+      "binaryCannotOpenTitle": "This file can't be opened in the editor",
+      "binaryCannotOpenBody": "{{name}} is a binary or database file. Open it in your system file manager instead.",
+      "revealInSystem": "Show in Finder"
     },
     "researchPlan": {
       "label": "Plan",
@@ -1968,6 +1999,7 @@
       "stop": "Stop loading",
       "urlPlaceholder": "Search or enter URL",
       "bookmark": "Bookmark",
+      "newTab": "New Tab",
       "clearHistory": "Clear History",
       "clearCookies": "Clear Cookies",
       "clearCache": "Clear Cache",
@@ -2044,6 +2076,7 @@
       "viewPdf": "PDF only",
       "swapPanes": "Swap editor and PDF",
       "compile": "Compile ({{engine}})",
+      "compileDocument": "Compile document",
       "autoCompileOn": "Auto-compile: ON",
       "autoCompileOff": "Auto-compile: OFF",
       "showProblems": "Show compile problems",
@@ -2111,6 +2144,7 @@
       "emptyTitle": "Start your library",
       "emptyHint": "Import a PDF or connect Zotero to add papers.",
       "addAll": "Add all",
+      "addSelected": "Add ({{count}})",
       "clearCitations": "Clear",
       "addToLibrary": "Add to library",
       "newEntry": "New entry…",
@@ -2121,6 +2155,16 @@
       "openNotes": "Open reading notes",
       "closeNotes": "Close reading notes",
       "addAllPendingHint": "Add all pending citations to the library",
+      "addSelectedPendingHint": "Add {{count}} selected citation(s) to the library",
+      "addSelectedPendingEmptyHint": "Select citations in the list, then add them to the library",
+      "selectAllAddableCitations": "Select all citations that can be added",
+      "cancelAddCitation": "Stop adding this citation",
+      "cancellingAddCitation": "Stopping…",
+      "queuedAddCitation": "Waiting in the add queue",
+      "cancelQueuedAddCitation": "Remove from add queue",
+      "statusQueued": "Queued",
+      "cancelAllAdds": "Stop all adds",
+      "citationNotAddable": "Already in library or not verified",
       "clearCitationsHint": "Clear all citations in this session",
       "citationHealthHint": "Manuscript citation health (.tex ↔ .bib ↔ library)",
       "importBibTeX": "Import BibTeX (+ optional .json)…",

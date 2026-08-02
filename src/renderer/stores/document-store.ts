@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { toast } from "sonner";
 import { AUTO_SAVE_DELAY } from "@/styles/constants";
 import { createLogger } from "@/services/logger";
+import { isBinaryProjectFile } from "../../shared/project-file-openability";
 
 const log = createLogger("document-store", "startup");
 
@@ -38,6 +39,8 @@ interface FileContent {
   content?: string; // for text files
   dataUrl?: string; // for images
   isDirty: boolean;
+  /** Binary / DB — viewer shows shell-reveal placeholder instead of editor. */
+  nonOpenable?: boolean;
 }
 
 interface FileMeta {
@@ -121,6 +124,18 @@ interface DocumentState {
   // Sync actions
   setActiveFile: (id: string) => void;
   getContent: (id: string) => string;
+  /** Project-relative paths of files with unsaved edits. */
+  getDirtyRelativePaths: () => string[];
+  /** Dirty + open tex-related files with in-memory content (for live compile flush). */
+  getLiveCompilePayload: () => {
+    dirtyRelPaths: string[];
+    dirtyFiles: Array<{ relPath: string; content: string }>;
+  };
+  /**
+   * Mark files clean only when in-memory content still matches what was compiled.
+   * Edits that arrived during compile stay dirty so a follow-up compile can pick them up.
+   */
+  markCompiledClean: (compiled: Array<{ relPath: string; content: string }>) => void;
   setContent: (id: string, content: string) => void;
   isFileDirty: (id: string) => boolean;
   requestJumpToPosition: (position: number) => void;
@@ -413,6 +428,20 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const openSeq = ++fileOpenGeneration;
     // Switch active immediately so tabs/UI match the click while content loads.
     if (get().activeFileId !== id) set({ activeFileId: id });
+
+    const relPath = meta.relativePath || id;
+    if (isBinaryProjectFile(relPath)) {
+      const newMap = new Map(get().openedContents);
+      newMap.set(id, { nonOpenable: true, isDirty: false });
+      if (openSeq === fileOpenGeneration) {
+        set({
+          openedContents: newMap,
+          activeFileId: id,
+          contentVersion: get().contentVersion + 1,
+        });
+      }
+      return;
+    }
 
     try {
       // Images: data URL for ImageViewer. PDFs: preview loads Uint8Array via
@@ -1399,6 +1428,58 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
   getContent: (id: string) => get().openedContents.get(id)?.content ?? "",
 
+  getDirtyRelativePaths: () => {
+    const state = get();
+    const paths: string[] = [];
+    state.openedContents.forEach((val, id) => {
+      if (!val.isDirty) return;
+      const file = state.files.find((f) => f.id === id);
+      if (file?.relativePath) paths.push(file.relativePath);
+    });
+    return paths;
+  },
+
+  getLiveCompilePayload: () => {
+    const state = get();
+    const dirtyRelPaths: string[] = [];
+    const dirtyFiles: Array<{ relPath: string; content: string }> = [];
+    const seen = new Set<string>();
+    state.openedContents.forEach((val, id) => {
+      // Only flush buffers that actually changed — avoids rewriting every open
+      // .tex/.bib on each live pass (IPC + disk + incremental sync).
+      if (!val.isDirty || val.content == null) return;
+      const file = state.files.find((f) => f.id === id);
+      if (!file?.relativePath) return;
+      if (!/\.(tex|bib|sty|cls|bst)$/i.test(file.relativePath)) return;
+      if (seen.has(file.relativePath)) return;
+      seen.add(file.relativePath);
+      dirtyRelPaths.push(file.relativePath);
+      dirtyFiles.push({ relPath: file.relativePath, content: val.content });
+    });
+    return { dirtyRelPaths, dirtyFiles };
+  },
+
+  markCompiledClean: (compiled) => {
+    if (compiled.length === 0) return;
+    const state = get();
+    const byRel = new Map(compiled.map((f) => [f.relPath, f.content]));
+    const newMap = new Map(state.openedContents);
+    let changed = false;
+    for (const file of state.files) {
+      const compiledContent = byRel.get(file.relativePath);
+      if (compiledContent === undefined) continue;
+      const existing = newMap.get(file.id);
+      if (!existing?.isDirty) continue;
+      // Still editing — leave dirty for the next compile pass.
+      if (existing.content !== compiledContent) continue;
+      newMap.set(file.id, { ...existing, isDirty: false });
+      changed = true;
+    }
+    if (changed) {
+      set({ openedContents: newMap, dirtyVersion: state.dirtyVersion + 1 });
+    }
+  },
+
   setContent: (id: string, content: string) => {
     const state = get();
     const existing = state.openedContents.get(id);
@@ -1417,6 +1498,13 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     if (previewTab) rp.pinTab(previewTab.id);
 
     scheduleAutoSave();
+
+    const file = state.files.find((f) => f.id === id);
+    if (file && /\.(tex|bib|sty|cls|bst)$/i.test(file.relativePath)) {
+      void import("./compile-store").then(({ useCompileStore }) => {
+        useCompileStore.getState().scheduleAutoCompile();
+      });
+    }
   },
 
   isFileDirty: (id: string) => get().openedContents.get(id)?.isDirty ?? false,

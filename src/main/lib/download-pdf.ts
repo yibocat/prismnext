@@ -1,3 +1,9 @@
+import {
+  StagedCitationAddCancelledError,
+  rethrowIfStagedCitationAddAborted,
+  throwIfStagedCitationAddAborted,
+} from "./staged-citation-add-cancelled";
+
 const CATALOG_USER_AGENT = "PrismNext/1.0 (mailto:support@researchprism.app)";
 const MAX_PDF_BYTES = 80 * 1024 * 1024;
 
@@ -25,14 +31,22 @@ function assertValidPdf(buf: Buffer): void {
 export async function downloadPdfBytes(
   url: string,
   onProgress?: (info: PdfDownloadProgress) => void,
+  signal?: AbortSignal,
 ): Promise<Buffer> {
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": CATALOG_USER_AGENT,
-      Accept: "application/pdf,*/*",
-    },
-    redirect: "follow",
-  });
+  throwIfStagedCitationAddAborted(signal);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: {
+        "User-Agent": CATALOG_USER_AGENT,
+        Accept: "application/pdf,*/*",
+      },
+      redirect: "follow",
+      signal,
+    });
+  } catch (err) {
+    rethrowIfStagedCitationAddAborted(err, signal);
+  }
   if (!res.ok) {
     throw new Error(`PDF download failed: HTTP ${res.status}`);
   }
@@ -40,17 +54,34 @@ export async function downloadPdfBytes(
   const totalBytes = parseContentLength(res.headers.get("content-length"));
 
   if (!onProgress || !res.body) {
-    const buf = Buffer.from(await res.arrayBuffer());
-    assertValidPdf(buf);
-    onProgress?.({ receivedBytes: buf.length, totalBytes: totalBytes ?? buf.length });
-    return buf;
+    try {
+      const buf = Buffer.from(await res.arrayBuffer());
+      throwIfStagedCitationAddAborted(signal);
+      assertValidPdf(buf);
+      onProgress?.({ receivedBytes: buf.length, totalBytes: totalBytes ?? buf.length });
+      return buf;
+    } catch (err) {
+      rethrowIfStagedCitationAddAborted(err, signal);
+    }
   }
 
   const reader = res.body.getReader();
   const chunks: Buffer[] = [];
   let receivedBytes = 0;
   while (true) {
-    const { done, value } = await reader.read();
+    throwIfStagedCitationAddAborted(signal);
+    let chunkResult: ReadableStreamReadResult<Uint8Array>;
+    try {
+      chunkResult = await reader.read();
+    } catch (err) {
+      try {
+        await reader.cancel();
+      } catch {
+        // ignore
+      }
+      rethrowIfStagedCitationAddAborted(err, signal);
+    }
+    const { done, value } = chunkResult;
     if (done) break;
     const chunk = Buffer.from(value);
     chunks.push(chunk);
@@ -58,6 +89,7 @@ export async function downloadPdfBytes(
     onProgress({ receivedBytes, totalBytes });
   }
   const buf = Buffer.concat(chunks);
+  throwIfStagedCitationAddAborted(signal);
   assertValidPdf(buf);
   return buf;
 }

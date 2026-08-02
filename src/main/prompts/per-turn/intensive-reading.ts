@@ -35,6 +35,7 @@ export function buildIntensiveReadingInstruction(
   const rules: string[] = [
     `- Extracts live under \`.prismnext/library/extract/\`; use \`${readPdfTool}\` (optional \`pages=\` / \`query=\`). Gate is enforced by the tool.`,
     "- Cite library papers as **`[@bibkey]`**; add `p.X` when quoting PDF / excerpt text.",
+    "- When extracted text includes figures and a chart or diagram clarifies your answer, embed it with `![caption](path)` or `[@bibkey|images/fig-0.png]` — optional; use your judgment.",
   ];
 
   if (options?.hasPaperSnippets) {

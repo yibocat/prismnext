@@ -7,6 +7,7 @@ import {
   fitSplitRightWidthPx,
   measureMainAreaWidthPx,
   openRightArea,
+  openRightAreaForDeepLink,
   closeRightArea,
   toggleRightAreaMaximize,
   reconcileRightAreaOnMainAreaResize,
@@ -107,6 +108,64 @@ describe("right-area-layout", () => {
     expect(st.editorMaximized).toBe(true);
     expect(center.collapse).toHaveBeenCalled();
     expect(right.resize).toHaveBeenCalledWith(RESIZE_FILL_PX);
+  });
+
+  it("openRightArea is a no-op when already expanded (preserves drag width)", () => {
+    vi.stubGlobal("innerWidth", 1400);
+    useLayoutStore.setState({
+      rightAreaExpanded: true,
+      editorMaximized: false,
+      rightAreaWidth: 700,
+    });
+    const center = mockPanel({ px: 700, collapsed: false });
+    const right = mockPanel({ px: 700, collapsed: false });
+    openRightArea({ centerRef: center, rightAreaRef: right });
+    expect(right.resize).not.toHaveBeenCalled();
+    expect(center.expand).not.toHaveBeenCalled();
+    expect(useLayoutStore.getState().rightAreaWidth).toBe(700);
+  });
+
+  it("openRightArea still expands when store says expanded but panel is collapsed (chat deep-link)", () => {
+    // requestRightAreaExpand() sets rightAreaExpanded before App's effect calls openRightArea.
+    vi.stubGlobal("innerWidth", 1400);
+    useLayoutStore.setState({
+      rightAreaExpanded: true,
+      editorMaximized: false,
+      rightAreaWidth: 500,
+    });
+    const center = mockPanel({ px: 900, collapsed: false });
+    const right = mockPanel({ px: 0, collapsed: true });
+    openRightArea({ centerRef: center, rightAreaRef: right });
+    expect(right.expand).toHaveBeenCalled();
+    expect(right.resize).toHaveBeenCalledWith(500);
+    expect(center.expand).toHaveBeenCalled();
+  });
+
+  it("openRightAreaForDeepLink preserves maximize when already expanded", () => {
+    vi.stubGlobal("innerWidth", 1400);
+    useLayoutStore.setState({ rightAreaExpanded: true, editorMaximized: true });
+    const center = mockPanel({ px: 0, collapsed: true });
+    const right = mockPanel({ px: 1100, collapsed: false });
+    openRightAreaForDeepLink({ centerRef: center, rightAreaRef: right });
+    const st = useLayoutStore.getState();
+    expect(st.rightAreaExpanded).toBe(true);
+    expect(st.editorMaximized).toBe(true);
+    expect(center.collapse).toHaveBeenCalled();
+    expect(center.expand).not.toHaveBeenCalled();
+    expect(right.resize).toHaveBeenCalledWith(RESIZE_FILL_PX);
+  });
+
+  it("openRightAreaForDeepLink does not unmaximize split workspace", () => {
+    vi.stubGlobal("innerWidth", 1400);
+    useLayoutStore.setState({ rightAreaExpanded: true, editorMaximized: false, rightAreaWidth: 500 });
+    const center = mockPanel({ px: 900, collapsed: false });
+    const right = mockPanel({ px: 500, collapsed: false });
+    openRightAreaForDeepLink({ centerRef: center, rightAreaRef: right });
+    const st = useLayoutStore.getState();
+    expect(st.editorMaximized).toBe(false);
+    expect(center.expand).not.toHaveBeenCalled();
+    expect(center.collapse).not.toHaveBeenCalled();
+    expect(right.resize).not.toHaveBeenCalled();
   });
 
   it("closeRightArea syncs store and panels", () => {

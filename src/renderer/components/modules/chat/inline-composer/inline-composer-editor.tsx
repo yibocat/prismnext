@@ -15,7 +15,7 @@ import type { ExpertInfo } from "@shared/agent-experts";
 import { formatPaperMentionLabel } from "../../../../../shared/bibkey-utils";
 import type { ProjectFile } from "@/stores/document-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { mentionFileLabel } from "@/lib/files/mentionable-files";
+import { mentionFileDisplayLabel, mentionFileLabel } from "@/lib/files/mentionable-files";
 import type { LiteraturePaper } from "@/types/electron.d";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useLiteratureExtractStore } from "@/stores/literature-extract-store";
@@ -30,10 +30,16 @@ import {
   isComposerEmpty,
   parseTextToComposerParts,
 } from "@/lib/chat/composer-parts";
-import { partsToDoc, stripTokenSeparators } from "./serialize";
+import { partsToDoc, stripTokenSeparators, partsInDocSelection, partsAfterRemovingDocSelection } from "./serialize";
+import {
+  readComposerPartsFromClipboard,
+  writeComposerPartsToClipboard,
+} from "@/lib/chat/composer-clipboard";
 import {
   atomicTokenBackspace,
   atomicTokenDeleteForward,
+  composerTokenHistory,
+  syncTokenMapOnDocChange,
   insertComposerToken,
   insertComposerParts,
   linkifyViewIfNeeded,
@@ -97,6 +103,9 @@ const composerTheme = EditorView.theme({
     padding: "0",
     lineHeight: "20px",
     minHeight: "20px",
+    paddingTop: "2px",
+    paddingBottom: "2px",
+    boxSizing: "border-box",
   },
   ".cm-scroller": {
     overflow: "auto",
@@ -121,25 +130,59 @@ const composerTheme = EditorView.theme({
 });
 
 const composerInlineTokenTheme = EditorView.theme({
+  ".cm-content .cm-widgetBuffer": {
+    verticalAlign: "baseline",
+    lineHeight: "inherit",
+  },
   ".inline-composer-token": {
-    display: "inline-flex",
-    verticalAlign: "middle",
-    alignItems: "center",
-    height: "20px",
-    lineHeight: "20px",
-    marginInline: "1px",
+    display: "inline",
+    verticalAlign: "baseline",
+    lineHeight: "inherit",
   },
   ".inline-composer-token [data-inline-token]": {
-    fontSize: "12px",
-    padding: "0 5px",
-    height: "18px",
-    lineHeight: "18px",
-    gap: "2px",
-    borderRadius: "3px",
+    fontFamily: "inherit",
+    fontSize: "inherit",
+    padding: "0",
+    height: "auto",
+    lineHeight: "inherit",
+    borderRadius: "0",
+    maxWidth: "none",
+    verticalAlign: "baseline",
+    cursor: "pointer",
   },
   ".inline-composer-token [data-inline-token] svg": {
-    width: "10px",
-    height: "10px",
+    width: "0.85em",
+    height: "0.85em",
+  },
+});
+
+const composerSelectionTheme = EditorView.theme({
+  ".cm-line": {
+    "& ::selection, &::selection": {
+      backgroundColor: "transparent !important",
+      color: "inherit !important",
+      WebkitTextFillColor: "inherit !important",
+    },
+  },
+  ".cm-content": {
+    "& ::selection, &::selection": {
+      backgroundColor: "transparent !important",
+      color: "inherit !important",
+      WebkitTextFillColor: "inherit !important",
+    },
+  },
+  "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, &.cm-focused .cm-selectionBackground":
+    {
+      backgroundColor: "var(--composer-selection-focused) !important",
+      borderRadius: "3px",
+    },
+  "& .cm-selectionBackground": {
+    backgroundColor: "var(--composer-selection) !important",
+    borderRadius: "3px",
+  },
+  ".inline-composer-token::selection, .inline-composer-token *::selection": {
+    backgroundColor: "transparent !important",
+    color: "inherit !important",
   },
 });
 
@@ -156,12 +199,15 @@ const composerCompactTheme = EditorView.theme({
     minHeight: COMPACT_LINE_HEIGHT,
     maxHeight: COMPACT_LINE_HEIGHT,
     lineHeight: COMPACT_LINE_HEIGHT,
-    caretColor: "var(--foreground)",
+    caretColor: "transparent",
     fontFamily: "inherit",
   },
   ".cm-line": {
     padding: "0",
-    lineHeight: COMPACT_LINE_HEIGHT,
+    lineHeight: "20px",
+    paddingTop: "2px",
+    paddingBottom: "2px",
+    boxSizing: "border-box",
   },
   ".cm-scroller": {
     overflow: "hidden",
@@ -169,16 +215,19 @@ const composerCompactTheme = EditorView.theme({
     lineHeight: COMPACT_LINE_HEIGHT,
     fontFamily: "inherit",
   },
-  ".cm-cursor, .cm-dropCursor, .cm-cursorLayer, .cm-cursor-secondary": {
+  ".cm-dropCursor, .cm-cursor-secondary": {
+    display: "none !important",
+  },
+  ".cm-cursorLayer > .cm-cursor ~ .cm-cursor": {
+    display: "none !important",
+  },
+  "&:not(.cm-focused) .cm-cursor, &:not(.cm-focused) .cm-cursorLayer": {
     display: "none !important",
   },
   "&.cm-focused .cm-cursor": {
     display: "block !important",
     borderLeftWidth: "1.5px",
     borderLeftColor: "var(--foreground)",
-  },
-  "&.cm-focused .cm-selectionBackground, & .cm-selectionBackground": {
-    backgroundColor: "transparent !important",
   },
 });
 
@@ -190,12 +239,16 @@ function densityExtensions(density: "default" | "compact", placeholderText: stri
   return [composerTheme, EditorView.lineWrapping, cmPlaceholder(placeholderText)];
 }
 
-function selectionExtensions(density: "default" | "compact"): Extension[] {
-  if (density === "compact") {
-    // Native caret only — avoids duplicate / dashed drawSelection cursors in single-line capsule.
-    return [];
-  }
+function selectionExtensions(_density: "default" | "compact"): Extension[] {
   return [drawSelection({ drawRangeCursor: false })];
+}
+
+function selectionPartsFromView(view: EditorView): ComposerPart[] {
+  const sel = view.state.selection.main;
+  if (sel.empty) return [];
+  const doc = view.state.doc.toString();
+  const tokenMap = view.state.field(tokenMapStateField);
+  return partsInDocSelection(doc, tokenMap, sel.from, sel.to);
 }
 
 function applyPartsToEditorView(view: EditorView, parts: ComposerPart[]): void {
@@ -255,6 +308,11 @@ export interface InlineComposerEditorProps {
    * Leave false for AiBar (capsule owns Esc → idle / blur).
    */
   escapeBlurs?: boolean;
+  /**
+   * When false, do not take over the global composer-editor handle
+   * (bubble in-place edit must not steal AiBar / panel inserts).
+   */
+  registerGlobal?: boolean;
 }
 
 function insertFromDropdown(
@@ -309,14 +367,15 @@ function insertFromDropdown(
         q.to,
       );
     } else if (opt.kind === "file") {
+      const filePath = mentionFileLabel(opt.file);
       insertComposerToken(
         view,
         {
           type: "mention",
           mentionType: "file",
           id: createTokenId(),
-          label: opt.file.relativePath,
-          filePath: opt.file.relativePath,
+          label: mentionFileDisplayLabel(opt.file),
+          filePath,
           fileId: opt.file.id,
         },
         q.from,
@@ -492,6 +551,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       onLayoutExpand,
       onExternalFiles,
       escapeBlurs = false,
+      registerGlobal = true,
     },
     ref,
   ) {
@@ -740,13 +800,13 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
 
     const insertFile = useCallback(
       (file: ProjectFile) => {
-        const label = mentionFileLabel(file);
+        const filePath = mentionFileLabel(file);
         insertAtQuery({
           type: "mention",
           mentionType: "file",
           id: createTokenId(),
-          label,
-          filePath: label,
+          label: mentionFileDisplayLabel(file),
+          filePath,
           fileId: file.id,
         });
       },
@@ -1094,8 +1154,11 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             tokenMapStateField,
             tokenDecorationsField,
             composerInlineTokenTheme,
+            Prec.highest(composerSelectionTheme),
             composerTokenTransactionFilter,
             composerTokenAtomicRanges,
+            composerTokenHistory,
+            syncTokenMapOnDocChange,
             history(),
             selectionCompartmentRef.current.of(selectionExtensions(density)),
             densityCompartmentRef.current.of(densityExtensions(density, placeholder)),
@@ -1142,6 +1205,26 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
                 if (linkifyViewIfNeeded(view)) emitChange(view);
                 return false;
               },
+              copy(event, view) {
+                const parts = selectionPartsFromView(view);
+                if (parts.length === 0 || !event.clipboardData) return false;
+                event.preventDefault();
+                writeComposerPartsToClipboard(event.clipboardData, parts);
+                return true;
+              },
+              cut(event, view) {
+                const parts = selectionPartsFromView(view);
+                if (parts.length === 0 || !event.clipboardData) return false;
+                event.preventDefault();
+                writeComposerPartsToClipboard(event.clipboardData, parts);
+                const sel = view.state.selection.main;
+                const doc = view.state.doc.toString();
+                const tokenMap = view.state.field(tokenMapStateField);
+                const remaining = partsAfterRemovingDocSelection(doc, tokenMap, sel.from, sel.to);
+                applyPartsToEditorView(view, remaining);
+                emitChange(view);
+                return true;
+              },
               paste(event, view) {
                 const paths = absolutePathsFromDataTransfer(event.clipboardData);
                 if (paths.length > 0 && onExternalFilesRef.current) {
@@ -1152,12 +1235,23 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
                   }
                   return true;
                 }
+                const structured = event.clipboardData
+                  ? readComposerPartsFromClipboard(event.clipboardData)
+                  : null;
+                if (structured) {
+                  event.preventDefault();
+                  const sel = view.state.selection.main;
+                  insertComposerParts(view, structured, sel.from, sel.to);
+                  emitChange(view);
+                  return true;
+                }
                 const text = event.clipboardData?.getData("text/plain");
                 if (text == null) return false;
                 event.preventDefault();
                 const parts = parseTextToComposerParts(text);
                 const sel = view.state.selection.main;
                 insertComposerParts(view, parts, sel.from, sel.to);
+                emitChange(view);
                 if (densityRef.current === "compact" && text.includes("\n")) {
                   onLayoutExpandRef.current?.();
                 }
@@ -1171,56 +1265,60 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
 
       view.dispatch({ effects: setTokenMapEffect.of(tokenMap) });
       viewRef.current = view;
-      useComposerEditorStore.getState().register({
-        focus: () => view.focus(),
-        getParts: () => readPartsFromView(view),
-        replaceParts: (next) => applyPartsToEditorView(view, next),
-        insertFileMention: (file: ProjectFile) => {
-          const label = mentionFileLabel(file);
-          const pos = view.state.selection.main.head;
-          insertComposerToken(
-            view,
-            {
-              type: "mention",
-              mentionType: "file",
-              id: createTokenId(),
-              label,
-              filePath: label,
-              fileId: file.id,
-            },
-            pos,
-            pos,
-          );
-          emitChange(view);
-          view.focus();
-        },
-        insertContextPart: (part) => {
-          if (
-            part.type !== "terminal-snippet" &&
-            part.type !== "code-snippet" &&
-            part.type !== "git-diff-snippet" &&
-            part.type !== "paper-snippet" &&
-            part.type !== "experiment-run"
-          ) {
-            return false;
-          }
-          const pos = view.state.selection.main.head;
-          insertComposerToken(view, part, pos, pos);
-          emitChange(view);
-          view.focus();
-          return true;
-        },
-        insertTerminalSnippet: (part) => {
-          if (part.type !== "terminal-snippet") return;
-          const pos = view.state.selection.main.head;
-          insertComposerToken(view, part, pos, pos);
-          emitChange(view);
-          view.focus();
-        },
-      });
-      useComposerEditorStore.getState().flushPendingInsert();
+      if (registerGlobal) {
+        useComposerEditorStore.getState().register({
+          focus: () => view.focus(),
+          getParts: () => readPartsFromView(view),
+          replaceParts: (next) => applyPartsToEditorView(view, next),
+          insertFileMention: (file: ProjectFile) => {
+            const filePath = mentionFileLabel(file);
+            const pos = view.state.selection.main.head;
+            insertComposerToken(
+              view,
+              {
+                type: "mention",
+                mentionType: "file",
+                id: createTokenId(),
+                label: mentionFileDisplayLabel(file),
+                filePath,
+                fileId: file.id,
+              },
+              pos,
+              pos,
+            );
+            emitChange(view);
+            view.focus();
+          },
+          insertContextPart: (part) => {
+            if (
+              part.type !== "terminal-snippet" &&
+              part.type !== "code-snippet" &&
+              part.type !== "git-diff-snippet" &&
+              part.type !== "paper-snippet" &&
+              part.type !== "experiment-run"
+            ) {
+              return false;
+            }
+            const pos = view.state.selection.main.head;
+            insertComposerToken(view, part, pos, pos);
+            emitChange(view);
+            view.focus();
+            return true;
+          },
+          insertTerminalSnippet: (part) => {
+            if (part.type !== "terminal-snippet") return;
+            const pos = view.state.selection.main.head;
+            insertComposerToken(view, part, pos, pos);
+            emitChange(view);
+            view.focus();
+          },
+        });
+        useComposerEditorStore.getState().flushPendingInsert();
+      }
       return () => {
-        useComposerEditorStore.getState().register(null);
+        if (registerGlobal) {
+          useComposerEditorStore.getState().register(null);
+        }
         view.destroy();
         viewRef.current = null;
       };
@@ -1300,7 +1398,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       insertFileMention: (file: ProjectFile) => {
         const view = viewRef.current;
         if (!view) return;
-        const label = mentionFileLabel(file);
+        const filePath = mentionFileLabel(file);
         const pos = view.state.selection.main.head;
         insertComposerToken(
           view,
@@ -1308,8 +1406,8 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             type: "mention",
             mentionType: "file",
             id: createTokenId(),
-            label,
-            filePath: label,
+            label: mentionFileDisplayLabel(file),
+            filePath,
             fileId: file.id,
           },
           pos,

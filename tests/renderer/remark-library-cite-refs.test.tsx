@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import ReactMarkdown from "react-markdown";
 import { remarkLibraryCiteRefs } from "../../src/renderer/lib/markdown/remark-library-cite-refs";
 import { StaticMarkdown } from "../../src/renderer/components/modules/chat/static-markdown";
@@ -133,18 +133,25 @@ describe("remarkLibraryCiteRefs", () => {
     expect(links[1].getAttribute("href")).toBe("library-cite:2605_26379v1");
   });
 
-  it("StaticMarkdown renders clickable library cite chip with popover", () => {
-    render(<StaticMarkdown content="Prior work [@smith2024] shows this." />);
-    const chip = screen.getByRole("button", { name: "@smith2024" });
-    expect(chip).toBeTruthy();
-    fireEvent.click(chip);
-    expect(screen.getByText("World Models for RL")).toBeTruthy();
-    expect(screen.getByText("Open in library")).toBeTruthy();
+  it("turns [@bibkey|images/fig.png] into library-figure link", () => {
+    const { container } = render(
+      <RenderMarkdown content="See [@smith2024|images/fig-0.png] for the plot." />,
+    );
+    const link = container.querySelector('a[href^="library-figure:"]');
+    expect(link).toBeTruthy();
+    expect(link?.textContent).toBe("[@smith2024|images/fig-0.png]");
   });
 
-  it("StaticMarkdown shows not-found state for unknown bibkey", () => {
+  it("StaticMarkdown renders literature cite chip (hover opens preview, no click-to-open)", () => {
+    render(<StaticMarkdown content="Prior work [@smith2024] shows this." />);
+    const chip = screen.getByText("smith2024").closest("[data-inline-token='literature']");
+    expect(chip).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "smith2024" })).toBeNull();
+    expect(screen.queryByText("Open in library")).toBeNull();
+  });
+
+  it("StaticMarkdown renders unknown bibkey chip", () => {
     render(<StaticMarkdown content="Maybe [@missing-key] exists." />);
-    fireEvent.click(screen.getByRole("button", { name: "@missing-key" }));
-    expect(screen.getByText("Not in library")).toBeTruthy();
+    expect(screen.getByText("missing-key").closest("[data-inline-token='literature']")).toBeTruthy();
   });
 });

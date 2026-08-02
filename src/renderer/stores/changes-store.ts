@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { useDocumentStore } from "./document-store";
+import { useChatStore } from "./chat-store";
 
 export interface ProposedChange {
   id: string; // tool_use_id
@@ -22,6 +23,22 @@ interface ChangesState {
   rejectAll: () => Promise<void>;
   clearAll: () => void;
   getChangeForFile: (relativePath: string) => ProposedChange | undefined;
+}
+
+async function sealAcceptedIntoCheckpoint(change: ProposedChange): Promise<void> {
+  const { useCheckpointStore } = await import("./checkpoint-store");
+  const tabId = useChatStore.getState().activeTabId;
+  if (!tabId) return;
+  const created = change.oldContent === "" && change.toolName.toLowerCase().includes("write");
+  await useCheckpointStore.getState().sealFileIntoLatestCheckpoint(
+    tabId,
+    {
+      relativePath: change.filePath,
+      absolutePath: change.absolutePath,
+      content: change.newContent,
+    },
+    { created },
+  );
 }
 
 export const useChangesStore = create<ChangesState>()((set, get) => ({
@@ -47,6 +64,20 @@ export const useChangesStore = create<ChangesState>()((set, get) => ({
         changes: [...state.changes, { ...change, timestamp: Date.now() }],
       };
     });
+
+    // Mark during the active turn so finalizeTurn includes this path.
+    void import("./checkpoint-store").then(({ useCheckpointStore }) => {
+      const tabId = useChatStore.getState().activeTabId;
+      if (!tabId) return;
+      const created = change.oldContent === "";
+      useCheckpointStore.getState().noteFileMutation(
+        tabId,
+        change.filePath,
+        change.absolutePath,
+        change.oldContent,
+        { created },
+      );
+    });
   },
 
   removeChange: (id) => {
@@ -68,6 +99,7 @@ export const useChangesStore = create<ChangesState>()((set, get) => ({
       } else {
         await docState.refreshFiles();
       }
+      await sealAcceptedIntoCheckpoint(change);
     } catch (err) {
       console.error("[changes] acceptChange write failed:", err);
       return;
@@ -114,6 +146,7 @@ export const useChangesStore = create<ChangesState>()((set, get) => ({
         if (file) {
           await docState.refreshFileContent(file.id);
         }
+        await sealAcceptedIntoCheckpoint(change);
         succeeded.push(change.id);
       } catch (err) {
         console.error("[changes] acceptAll failed for", change.filePath, err);

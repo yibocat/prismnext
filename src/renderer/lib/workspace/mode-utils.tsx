@@ -1,4 +1,5 @@
 import { lazy, type ReactNode } from "react";
+import { isBinaryProjectFile } from "../../../shared/project-file-openability";
 import { TabContext, type TabContextValue } from "./tab-context";
 
 // ── Lazy-loaded viewers (single canonical source) ──
@@ -7,11 +8,19 @@ export const LatexEditor = lazy(() => import("@/components/modules/editor").then
 export const MarkdownPreview = lazy(() => import("@/components/modules/editor/markdown-preview").then((m) => ({ default: m.MarkdownPreview })));
 export const ImageViewer = lazy(() => import("@/components/modules/editor/image-viewer").then((m) => ({ default: m.ImageViewer })));
 export const PdfPreview = lazy(() => import("@/components/modules/preview").then((m) => ({ default: m.PdfPreview })));
+export const BinaryFilePlaceholder = lazy(() =>
+  import("@/components/modules/editor/binary-file-placeholder").then((m) => ({
+    default: m.BinaryFilePlaceholder,
+  })),
+);
 
 export const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".svg"]);
 
 /** Resolve the appropriate viewer component for a given file path based on extension. */
 export function resolveViewer(filePath: string): ReactNode {
+  if (isBinaryProjectFile(filePath)) {
+    return <BinaryFilePlaceholder />;
+  }
   const dot = filePath.lastIndexOf(".");
   const ext = dot === -1 ? "" : filePath.slice(dot).toLowerCase();
   if (IMAGE_EXTS.has(ext)) return <ImageViewer />;

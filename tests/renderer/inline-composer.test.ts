@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import React from "react";
-import { EditorSelection, EditorState } from "@codemirror/state";
+import { EditorSelection, EditorState, Transaction } from "@codemirror/state";
+import { history, redo, undo } from "@codemirror/commands";
 import { detectQueryAtCursor } from "../../src/renderer/components/modules/chat/inline-composer/query";
 import { buildSlashOptions } from "../../src/renderer/components/modules/chat/inline-composer/composer-dropdown";
 import { buildMentionOptions } from "../../src/renderer/components/modules/chat/inline-composer/inline-composer-editor";
@@ -15,9 +16,18 @@ import {
   TOKEN_OBJECT,
   collapseRedundantTokenSeparators,
   docPosToPlainTextOffset,
+  partsInDocSelection,
+  partsAfterRemovingDocSelection,
 } from "../../src/renderer/components/modules/chat/inline-composer/serialize";
 import {
+  COMPOSER_CLIPBOARD_MIME,
+  readComposerPartsFromClipboard,
+  writeComposerPartsToClipboard,
+} from "../../src/renderer/lib/chat/composer-clipboard";
+import {
   atomicTokenBackspace,
+  composerTokenHistory,
+  syncTokenMapOnDocChange,
   composerTokenTransactionFilter,
   insertComposerParts,
   insertComposerToken,
@@ -38,14 +48,29 @@ function createTokenTestView(doc: string, tokenMap = new Map<number, ComposerPar
   const view = {
     state: EditorState.create({
       doc,
-      extensions: [tokenMapStateField, composerTokenTransactionFilter],
+      extensions: [
+        tokenMapStateField,
+        composerTokenTransactionFilter,
+        composerTokenHistory,
+        syncTokenMapOnDocChange,
+        history(),
+      ],
     }),
     dispatch(spec: Parameters<import("@codemirror/view").EditorView["dispatch"]>[0]) {
-      this.state = this.state.update(spec).state;
+      const tr = spec instanceof Transaction ? spec : view.state.update(spec);
+      view.state = tr.state;
     },
   };
   view.state = view.state.update({ effects: setTokenMapEffect.of(tokenMap) }).state;
   return view as unknown as import("@codemirror/view").EditorView;
+}
+
+function runUndo(view: import("@codemirror/view").EditorView): boolean {
+  return undo({ state: view.state, dispatch: (tr) => view.dispatch(tr) });
+}
+
+function runRedo(view: import("@codemirror/view").EditorView): boolean {
+  return redo({ state: view.state, dispatch: (tr) => view.dispatch(tr) });
 }
 
 describe("compact overflow", () => {
@@ -606,5 +631,157 @@ describe("ComposerTokenChip for experiment mention", () => {
     expect(chip?.getAttribute("title")).toContain("exp-lr");
     // The label appears as text content (possibly truncated by max-w, hence a substring match).
     expect(chip?.textContent).toContain("LR Ablation");
+  });
+});
+
+describe("composer clipboard selection", () => {
+  const filePart: ComposerPart = {
+    type: "mention",
+    mentionType: "file",
+    id: "f1",
+    label: "main.tex",
+    filePath: "src/main.tex",
+    fileId: "src/main.tex",
+  };
+  const paperPart: ComposerPart = {
+    type: "mention",
+    mentionType: "paper",
+    id: "p1",
+    label: "wang2024",
+    bibkey: "wang2024",
+    paperId: "paper-1",
+  };
+
+  it("includes atomic tokens when selection touches them", () => {
+    const { doc, tokenMap } = partsToDoc([
+      filePart,
+      { type: "text", text: " hello" },
+      paperPart,
+    ]);
+    const selected = partsInDocSelection(doc, tokenMap, 0, doc.length);
+    expect(selected).toHaveLength(3);
+    expect(selected[0]).toMatchObject({ type: "mention", mentionType: "file" });
+    expect(selected[2]).toMatchObject({ type: "mention", mentionType: "paper" });
+  });
+
+  it("round-trips structured parts through clipboard mime", () => {
+    const parts: ComposerPart[] = [
+      filePart,
+      { type: "text", text: " " },
+      paperPart,
+    ];
+    const json = JSON.stringify({ parts });
+    const restored = readComposerPartsFromClipboard({
+      getData(type: string) {
+        if (type === COMPOSER_CLIPBOARD_MIME) return json;
+        if (type === "text/plain") return partsToPlainText(parts);
+        return "";
+      },
+    } as DataTransfer);
+    expect(restored).toHaveLength(3);
+    expect(partsToPlainText(restored!)).toContain("main.tex");
+  });
+
+  it("removes selected tokens on cut-style delete", () => {
+    const { doc, tokenMap } = partsToDoc([
+      { type: "text", text: "a " },
+      filePart,
+      { type: "text", text: " b" },
+    ]);
+    const tokenPos = doc.indexOf(TOKEN_OBJECT);
+    const remaining = partsAfterRemovingDocSelection(
+      doc,
+      tokenMap,
+      tokenPos,
+      tokenPos + 2,
+    );
+    expect(partsToPlainText(remaining)).toBe("a b");
+  });
+});
+
+describe("composer token undo/redo", () => {
+  const filePart: Extract<ComposerPart, { type: "mention"; mentionType: "file" }> = {
+    type: "mention",
+    mentionType: "file",
+    id: "f-undo",
+    label: "main.tex",
+    filePath: "src/main.tex",
+    fileId: "src/main.tex",
+  };
+
+  it("undoes and redoes inline token insert", () => {
+    const view = createTokenTestView("");
+    insertComposerToken(view, filePart, 0, 0);
+    expect(readPartsFromView(view).some((p) => p.type === "mention")).toBe(true);
+
+    expect(runUndo(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe("");
+    expect(readPartsFromView(view).some((p) => p.type === "mention")).toBe(false);
+
+    expect(runRedo(view)).toBe(true);
+    expect(readPartsFromView(view).some((p) => p.type === "mention" && p.label === "main.tex")).toBe(
+      true,
+    );
+  });
+
+  it("undoes atomic token delete", () => {
+    const { doc, tokenMap } = partsToDoc([filePart, { type: "text", text: "hi" }]);
+    const view = createTokenTestView(doc, tokenMap);
+    view.dispatch({
+      selection: EditorSelection.cursor(1),
+    });
+    expect(atomicTokenBackspace(view)).toBe(true);
+    expect(readPartsFromView(view).some((p) => p.type === "mention")).toBe(false);
+
+    expect(runUndo(view)).toBe(true);
+    expect(readPartsFromView(view).some((p) => p.type === "mention" && p.label === "main.tex")).toBe(
+      true,
+    );
+  });
+
+  it("undoes a full multi-token sentence in one step", () => {
+    const paperPart: Extract<ComposerPart, { type: "mention"; mentionType: "paper" }> = {
+      type: "mention",
+      mentionType: "paper",
+      id: "p-undo",
+      label: "wang2024",
+      bibkey: "wang2024",
+      paperId: "paper-1",
+    };
+    const { doc, tokenMap } = partsToDoc([
+      filePart,
+      { type: "text", text: " hello " },
+      paperPart,
+      { type: "text", text: "world" },
+    ]);
+    const view = createTokenTestView(doc, tokenMap);
+
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length },
+      selection: EditorSelection.cursor(0),
+    });
+    expect(view.state.doc.toString()).toBe("");
+    expect(readPartsFromView(view).some((p) => p.type === "mention")).toBe(false);
+
+    expect(runUndo(view)).toBe(true);
+    const restored = readPartsFromView(view);
+    expect(restored.some((p) => p.type === "mention" && p.mentionType === "file")).toBe(true);
+    expect(restored.some((p) => p.type === "mention" && p.mentionType === "paper")).toBe(true);
+    expect(partsToPlainText(restored)).toContain("wang2024");
+    expect(partsToPlainText(restored)).toContain("world");
+  });
+
+  it("undoes typing after an inline token", () => {
+    const { doc, tokenMap } = partsToDoc([filePart, { type: "text", text: "" }]);
+    const view = createTokenTestView(doc, tokenMap);
+    const tail = doc.length;
+    view.dispatch({
+      changes: { from: tail, to: tail, insert: " hello" },
+      selection: EditorSelection.cursor(tail + " hello".length),
+    });
+    expect(partsToPlainText(readPartsFromView(view))).toContain("hello");
+
+    expect(runUndo(view)).toBe(true);
+    expect(partsToPlainText(readPartsFromView(view))).toBe("@src/main.tex");
   });
 });

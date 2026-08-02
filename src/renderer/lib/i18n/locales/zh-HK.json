@@ -793,7 +793,7 @@
         "defaultEngine": "預設引擎",
         "defaultEngineDesc": "本專案的 LaTeX 編譯器。構建輸出位於 .prismnext/compile/。",
         "autoCompile": "自動編譯",
-        "autoCompileDesc": "儲存 .tex 檔案後自動編譯。"
+        "autoCompileDesc": "停止輸入約 0.5 秒後自動重新編譯 PDF（優先使用 Tectonic）。"
       },
       "backups": "備份",
       "references": "參考文獻",
@@ -1613,6 +1613,7 @@
     "rightArea": {
       "backToSettings": "返回設定",
       "modes": "模式",
+      "addMode": "新增面板",
       "openTabs": "開啟的標籤",
       "closePanel": "關閉面板",
       "maximizePanel": "最大化面板",
@@ -1760,8 +1761,14 @@
       "zoomIn": "放大",
       "zoomOut": "縮小",
       "placeholder": "@ 專家、檔案、文獻或實驗 · / 命令、技能、MCP",
+      "placeholderFollowUp": "傳送後續訊息",
       "archivedReadonly": "此對話已歸檔。恢復後可繼續聊天。",
       "stop": "停止",
+      "queueCount": "{{count}} 條排隊",
+      "queueEnterToSend": "停止並傳送",
+      "queueEdit": "重新編輯",
+      "queueSendOne": "停止並傳送這條",
+      "queueDelete": "從佇列刪除",
       "taskPlanTitle": "任務計劃",
       "taskPlanInProgress": "進行中",
       "taskPlanDismiss": "隱藏任務計劃",
@@ -1912,6 +1919,10 @@
       "remove": "從精讀列表移除",
       "removeTitle": "從精讀列表移除（保留 @ 標籤）"
     },
+    "libraryCite": {
+      "notInLibrary": "不在文獻庫中",
+      "notFoundBody": "未找到引用鍵為 {{bibkey}} 的文獻。"
+    },
     "messages": {
       "loading": "正在載入對話…",
       "loadMore": "載入更多歷史",
@@ -1919,7 +1930,10 @@
       "loadMorePulling": "繼續向上滑…",
       "loadingOlder": "載入中…",
       "expand": "點擊展開",
-      "collapse": "收起"
+      "collapse": "收起",
+      "editHint": "點擊氣泡外取消 · Enter 重新傳送",
+      "resend": "重新傳送",
+      "resendFailed": "重新傳送失敗"
     },
     "prepare": {
       "planningNext": "正在規劃下一步…",
@@ -1947,11 +1961,25 @@
       "hoursAgo": "{{count}} 小時前",
       "daysAgo": "{{count}} 天前",
       "copy": "複製本輪回覆",
-      "restore": "將工作區檔案還原到本輪結束時",
-      "restored": "已還原 {{count}} 個檔案到本輪結束時",
-      "restored_plural": "已還原 {{count}} 個檔案到本輪結束時",
-      "restoredDesc": "工作區檔案與聊天歷史已回退到本輪。",
-      "restoreFailed": "還原失敗：{{message}}"
+      "rollback": "將對話與檔案回退到本輪結束時",
+      "rolledBack": "已回退 {{count}} 個檔案到本輪結束時",
+      "rolledBack_plural": "已回退 {{count}} 個檔案到本輪結束時",
+      "rolledBackDesc": "對話、工作區檔案與待確認改動已回退到本輪。",
+      "rollbackFailed": "回退失敗：{{message}}",
+      "alreadyAtTurn": "已在本輪結束態 — 沒有更晚的內容可回退",
+      "restore": "將對話與檔案回退到本輪結束時",
+      "restored": "已回退 {{count}} 個檔案到本輪結束時",
+      "restored_plural": "已回退 {{count}} 個檔案到本輪結束時",
+      "restoredDesc": "對話、工作區檔案與待確認改動已回退到本輪。",
+      "restoreFailed": "回退失敗：{{message}}"
+    },
+    "regretBar": {
+      "message": "已回退到更早一輪。",
+      "undo": "撤銷回退",
+      "undone": "已撤銷回退 — 對話與檔案已恢復",
+      "undonePartial": "介面已撤銷回退 — 會話歷史可能不完整（重啟後備份已遺失）",
+      "undoFailed": "撤銷失敗：{{message}}",
+      "dismiss": "關閉"
     }
   },
   "modes": {
@@ -1973,7 +2001,10 @@
       "noOpenFiles": "沒有開啟的檔案",
       "recent": "最近",
       "noFilesYet": "尚無檔案",
-      "openProjectToStart": "開啟專案以開始"
+      "openProjectToStart": "開啟專案以開始",
+      "binaryCannotOpenTitle": "無法在編輯器中開啟此檔案",
+      "binaryCannotOpenBody": "{{name}} 是二進位或資料庫檔案，請在系統檔案管理器中檢視。",
+      "revealInSystem": "在系統中顯示"
     },
     "researchPlan": {
       "label": "Plan",
@@ -2001,6 +2032,7 @@
       "stop": "停止載入",
       "urlPlaceholder": "搜尋或輸入網址",
       "bookmark": "書籤",
+      "newTab": "新增分頁",
       "clearHistory": "清除歷史",
       "clearCookies": "清除 Cookie",
       "clearCache": "清除快取",
@@ -2077,6 +2109,7 @@
       "viewPdf": "僅 PDF",
       "swapPanes": "交換編輯器與 PDF",
       "compile": "編譯（{{engine}}）",
+      "compileDocument": "編譯文件",
       "autoCompileOn": "自動編譯：開",
       "autoCompileOff": "自動編譯：關",
       "showProblems": "顯示編譯問題",
@@ -2144,6 +2177,7 @@
       "emptyTitle": "開始建立文獻庫",
       "emptyHint": "匯入 PDF 或連線 Zotero 以新增論文。",
       "addAll": "全部新增",
+      "addSelected": "新增 ({{count}})",
       "clearCitations": "清除",
       "addToLibrary": "新增到文獻庫",
       "newEntry": "新建條目…",
@@ -2154,6 +2188,16 @@
       "openNotes": "開啟閱讀筆記",
       "closeNotes": "關閉閱讀筆記",
       "addAllPendingHint": "將所有待處理引用新增至文獻庫",
+      "addSelectedPendingHint": "將選中的 {{count}} 條引用新增至文獻庫",
+      "addSelectedPendingEmptyHint": "在列表中勾選要新增的引用，再點擊新增",
+      "selectAllAddableCitations": "全選可新增的引用",
+      "cancelAddCitation": "停止新增此條引用",
+      "cancellingAddCitation": "正在停止…",
+      "queuedAddCitation": "在新增佇列中等待",
+      "cancelQueuedAddCitation": "從新增佇列中移除",
+      "statusQueued": "排隊中",
+      "cancelAllAdds": "停止全部新增",
+      "citationNotAddable": "已在文獻庫中或未通過校驗",
       "clearCitationsHint": "清除本工作階段中的全部引用",
       "citationHealthHint": "文稿引用健康檢查（.tex ↔ .bib ↔ 文獻庫）",
       "importBibTeX": "匯入 BibTeX（可選 .json）…",

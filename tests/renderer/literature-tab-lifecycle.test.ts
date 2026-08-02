@@ -1,7 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   buildInitialTabShell,
-  getLiteratureTabCloseAction,
   isTabDirty,
   tabDisplayTitle,
 } from "@/lib/workspace/tab-lifecycle";
@@ -10,13 +9,6 @@ import { useLiteratureReaderStore } from "@/stores/literature-reader-store";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 
 describe("literature tab lifecycle", () => {
-  const homeTab: RightTab = {
-    id: "lit-home",
-    kind: "literature",
-    title: "Library",
-    isInitial: true,
-  };
-
   const litTab: RightTab = {
     id: "lit-1",
     kind: "literature",
@@ -31,19 +23,6 @@ describe("literature tab lifecycle", () => {
       openedContents: new Map(),
       dirtyVersion: 0,
     });
-  });
-
-  it("closing library home tab deactivates literature mode", () => {
-    expect(getLiteratureTabCloseAction(homeTab, [homeTab, litTab])).toBe("deactivate-mode");
-    expect(getLiteratureTabCloseAction(homeTab, [homeTab])).toBe("deactivate-mode");
-  });
-
-  it("closing sole paper tab recreates library home instead of morphing in place", () => {
-    expect(getLiteratureTabCloseAction(litTab, [litTab])).toBe("remove-and-ensure-home");
-  });
-
-  it("closing paper tab with library home open uses normal tab removal", () => {
-    expect(getLiteratureTabCloseAction(litTab, [homeTab, litTab])).toBeNull();
   });
 
   it("buildInitialTabShell drops literaturePaperId", () => {

@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { focusedModeId } from "../../src/renderer/lib/workspace/modes-from-tabs";
+import type { RightTab } from "../../src/renderer/lib/workspace/mode-registry";
 
 const expand = vi.fn();
 const collapse = vi.fn();
@@ -13,17 +15,14 @@ const panelRefs = {
 let layoutState: {
   rightAreaExpanded: boolean;
   editorMaximized: boolean;
-  focusedMode: string;
-  activeModes: string[];
   setLeftSidebarView: ReturnType<typeof vi.fn>;
-  activateMode: ReturnType<typeof vi.fn>;
-  deactivateMode: ReturnType<typeof vi.fn>;
+  revealRightSidebar: ReturnType<typeof vi.fn>;
   setRightAreaExpanded: ReturnType<typeof vi.fn>;
   setEditorMaximized: ReturnType<typeof vi.fn>;
 };
 
 let panelState: {
-  tabs: { id: string; kind: string; isInitial?: boolean }[];
+  tabs: RightTab[];
   activeTabId: string | null;
   ensureTab: ReturnType<typeof vi.fn>;
   closeTabsOfKind: ReturnType<typeof vi.fn>;
@@ -58,6 +57,14 @@ vi.mock("../../src/renderer/lib/workspace/right-area-layout", () => ({
     layoutState.rightAreaExpanded = true;
     layoutState.editorMaximized = true;
   }),
+  openRightAreaForDeepLink: vi.fn(() => {
+    if (!layoutState.rightAreaExpanded) {
+      layoutState.rightAreaExpanded = true;
+      layoutState.editorMaximized = false;
+      return;
+    }
+    if (layoutState.editorMaximized) return;
+  }),
 }));
 
 vi.mock("../../src/renderer/lib/workspace/mode-registry", () => ({
@@ -66,6 +73,12 @@ vi.mock("../../src/renderer/lib/workspace/mode-registry", () => ({
       if (id === "texworkspace") return { id, tabKinds: ["texworkspace"], onDeactivate: undefined };
       if (id === "literature") return { id, tabKinds: ["literature"], onDeactivate: undefined };
       if (id === "experiments") return { id, tabKinds: ["experiments"], onDeactivate: undefined };
+      return undefined;
+    },
+    findByTabKind: (kind: string) => {
+      if (kind === "texworkspace") return { id: "texworkspace" };
+      if (kind === "literature") return { id: "literature" };
+      if (kind === "experiments") return { id: "experiments" };
       return undefined;
     },
   },
@@ -77,7 +90,7 @@ import {
   openLiteratureSplit,
   openTexWorkspaceSplit,
 } from "../../src/renderer/lib/workspace/left-nav/panel-utils";
-import { openRightArea } from "../../src/renderer/lib/workspace/right-area-layout";
+import { openRightAreaForDeepLink } from "../../src/renderer/lib/workspace/right-area-layout";
 
 describe("parallel RightArea modes", () => {
   beforeEach(() => {
@@ -85,22 +98,8 @@ describe("parallel RightArea modes", () => {
     layoutState = {
       rightAreaExpanded: false,
       editorMaximized: false,
-      focusedMode: "dashboard",
-      activeModes: [],
       setLeftSidebarView: vi.fn(),
-      activateMode: vi.fn((mode: string) => {
-        if (!layoutState.activeModes.includes(mode)) {
-          layoutState.activeModes = [...layoutState.activeModes, mode];
-        }
-        layoutState.focusedMode = mode;
-      }),
-      deactivateMode: vi.fn((mode: string) => {
-        layoutState.activeModes = layoutState.activeModes.filter((m) => m !== mode);
-        if (layoutState.focusedMode === mode) {
-          layoutState.focusedMode =
-            layoutState.activeModes[layoutState.activeModes.length - 1] ?? "dashboard";
-        }
-      }),
+      revealRightSidebar: vi.fn(),
       setRightAreaExpanded: vi.fn((v: boolean) => {
         layoutState.rightAreaExpanded = v;
       }),
@@ -119,7 +118,10 @@ describe("parallel RightArea modes", () => {
           return existing.id;
         }
         const id = `${kind}-1`;
-        panelState.tabs = [...panelState.tabs, { id, kind, isInitial: true }];
+        panelState.tabs = [
+          ...panelState.tabs,
+          { id, kind, title: kind, isInitial: true } as RightTab,
+        ];
         panelState.activeTabId = id;
         return id;
       }),
@@ -142,9 +144,9 @@ describe("parallel RightArea modes", () => {
       "texworkspace",
       "literature",
     ]);
-    expect(layoutState.focusedMode).toBe("literature");
+    expect(focusedModeId(panelState.tabs, panelState.activeTabId)).toBe("literature");
     expect(layoutState.rightAreaExpanded).toBe(true);
-    expect(openRightArea).toHaveBeenCalled();
+    expect(openRightAreaForDeepLink).toHaveBeenCalled();
     expect(panelState.closeTabsOfKind).not.toHaveBeenCalled();
   });
 

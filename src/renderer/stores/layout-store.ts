@@ -11,9 +11,9 @@ import {
 /** App mode — "all", "manuscript", "chat", or any project subdirectory name. */
 export type AppMode = string;
 /**
- * Toolbar mode identifiers. These MUST match the `id` fields of registered
- * ModeDefinition entries in modeRegistry. The dashboard sentinel is the only
- * value not backed by a ModeDefinition — it represents "no mode active."
+ * Toolbar mode identifiers (RightArea mode ids). Match ModeDefinition.id.
+ * Named historically; not a writable “toolbar toggle” store.
+ * Sentinel `"dashboard"` means no focused mode (no active tab).
  */
 export type RightToolbarTab =
   | "dashboard"
@@ -40,18 +40,11 @@ interface LayoutState {
   activeMode: AppMode;
   setActiveMode: (mode: AppMode) => void;
 
-  /** Modes that are currently toggled on (can be multiple simultaneously) */
-  activeModes: RightToolbarTab[];
-  /** Which mode's content + sidebar is currently visible */
-  focusedMode: RightToolbarTab | "dashboard";
-  /** Activate a mode (add to activeModes) and focus it */
-  activateMode: (mode: RightToolbarTab) => void;
-  /** Deactivate a mode (remove from activeModes), auto-focus next or dashboard */
-  deactivateMode: (mode: RightToolbarTab) => void;
-  /** Toggle: activate+focus if off; deactivate if on-and-focused; focus if on-but-not-focused */
-  toggleMode: (mode: RightToolbarTab) => void;
-  /** Switch focus to a different active mode */
-  setFocusedMode: (mode: RightToolbarTab | "dashboard") => void;
+  /**
+   * RightArea “which modes are open / focused” is **not** stored here.
+   * Derive from `right-panel-store.tabs` + `activeTabId` via
+   * `modes-from-tabs.ts` (`activeModeIds` / `focusedModeId` / `hasMode`).
+   */
 
   texworkspaceViewMode: TexworkspaceViewMode;
   setTexworkspaceViewMode: (mode: TexworkspaceViewMode) => void;
@@ -192,52 +185,6 @@ export const useLayoutStore = create<LayoutState>()(
     (set) => ({
       activeMode: "chat",
       setActiveMode: (mode) => set({ activeMode: mode }),
-
-      activeModes: [],
-      focusedMode: "dashboard",
-
-      activateMode: (mode) =>
-        set((s) => ({
-          activeModes: s.activeModes.includes(mode) ? s.activeModes : [...s.activeModes, mode],
-          focusedMode: mode,
-        })),
-
-      deactivateMode: (mode) =>
-        set((s) => {
-          const next = s.activeModes.filter((m) => m !== mode);
-          return {
-            activeModes: next,
-            focusedMode:
-              s.focusedMode === mode
-                ? next.length > 0
-                  ? next[next.length - 1]
-                  : "dashboard"
-                : s.focusedMode,
-          };
-        }),
-
-      toggleMode: (mode) =>
-        set((s) => {
-          if (!s.activeModes.includes(mode)) {
-            // Not active → activate + focus
-            return {
-              activeModes: [...s.activeModes, mode],
-              focusedMode: mode,
-            };
-          } else if (s.focusedMode === mode) {
-            // Active and focused → deactivate
-            const next = s.activeModes.filter((m) => m !== mode);
-            return {
-              activeModes: next,
-              focusedMode: next.length > 0 ? next[next.length - 1] : "dashboard",
-            };
-          } else {
-            // Active but not focused → just focus
-            return { focusedMode: mode };
-          }
-        }),
-
-      setFocusedMode: (mode) => set({ focusedMode: mode }),
 
       texworkspaceViewMode: "split",
       texworkspaceDefaultViewMode: "split",

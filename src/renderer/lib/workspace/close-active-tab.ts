@@ -1,4 +1,3 @@
-import { modeRegistry } from "./mode-registry";
 import { isDisposableEmptyChatTab } from "@/lib/chat/session-title";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -18,16 +17,8 @@ function collapseRightShell(): void {
 }
 
 function resolveRightAreaTabToClose() {
-  const layout = useLayoutStore.getState();
   const rp = useRightPanelStore.getState();
-  let activeTab = rp.tabs.find((t) => t.id === rp.activeTabId);
-
-  const focusedDef = modeRegistry.get(layout.focusedMode);
-  if (activeTab && focusedDef && !focusedDef.tabKinds.includes(activeTab.kind)) {
-    activeTab = rp.tabs.find((t) => focusedDef.tabKinds.includes(t.kind));
-  }
-
-  return activeTab ?? rp.tabs[0] ?? null;
+  return rp.tabs.find((t) => t.id === rp.activeTabId) ?? rp.tabs[0] ?? null;
 }
 
 /**

@@ -270,7 +270,6 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
       return existing;
     }
 
-    useLayoutStore.getState().activateMode("terminal");
     const aiTabId = useRightPanelStore.getState().newAiTerminalTab({
       chatTabId,
       toolCallId,
@@ -535,7 +534,6 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
       return openId;
     }
 
-    useLayoutStore.getState().activateMode("terminal");
     const aiTabId = useRightPanelStore.getState().newAiTerminalTab({
       chatTabId,
       toolCallId,
@@ -618,7 +616,6 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
       get().touchSessionViewed(tab.linkedChatTabId);
     }
     useLayoutStore.getState().requestRightAreaExpand();
-    useLayoutStore.getState().activateMode("terminal");
     useRightPanelStore.getState().setActiveTab(aiTabId);
   },
 
@@ -729,7 +726,6 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
     const mirror = get().sessionMirrorLog[key];
     if (!mirror) return;
 
-    useLayoutStore.getState().activateMode("terminal");
     const aiTabId = useRightPanelStore.getState().newAiTerminalTab({
       chatTabId,
       title: aiSessionTabTitle(),

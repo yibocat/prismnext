@@ -1,18 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const deactivateMode = vi.fn();
 const closeTabsOfKind = vi.fn();
 const setActiveTab = vi.fn();
 const setState = vi.fn();
-
-vi.mock("../../src/renderer/stores/layout-store", () => ({
-  useLayoutStore: {
-    getState: () => ({
-      deactivateMode,
-      focusedMode: "files",
-    }),
-  },
-}));
 
 vi.mock("../../src/renderer/stores/right-panel-store", () => ({
   useRightPanelStore: {
@@ -40,7 +30,7 @@ vi.mock("../../src/renderer/lib/workspace/mode-registry", () => ({
   },
 }));
 
-describe("deactivateModeFromToolbar", () => {
+describe("closeModeTabs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     closeTabsOfKind.mockImplementation((_kind, opts?: { onClosed?: () => void }) => {
@@ -48,12 +38,11 @@ describe("deactivateModeFromToolbar", () => {
     });
   });
 
-  it("closes terminal tabs when deactivating via shortcut / mode toggle", async () => {
-    const { deactivateModeFromToolbar } = await import(
-      "../../src/renderer/lib/workspace/deactivate-mode"
+  it("closes terminal tabs when retiring a mode", async () => {
+    const { closeModeTabs } = await import(
+      "../../src/renderer/lib/workspace/close-mode-tabs"
     );
-    deactivateModeFromToolbar("terminal");
+    closeModeTabs("terminal");
     expect(closeTabsOfKind).toHaveBeenCalledWith("terminal", expect.any(Object));
-    expect(deactivateMode).toHaveBeenCalledWith("terminal");
   });
 });

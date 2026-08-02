@@ -15,9 +15,14 @@ import { useLiteratureStore } from "./literature-store";
 import { useDocumentStore } from "./document-store";
 import { toast } from "sonner";
 import { formatPdfDownloadFailure } from "../../shared/pdf-download-messages";
+import {
+  isStagedCitationAddCancelledError,
+  isStagedCitationCreateCancelledResult,
+} from "../../shared/citation-staging";
 
 /** Stable empty list for zustand selectors (avoid `?? []` creating new refs). */
 export const EMPTY_STAGED_CITATIONS: StagedCitation[] = [];
+export const EMPTY_CHECKED_STAGED_IDS: string[] = [];
 
 /** True when the staged citation still points at a paper in the current library list. */
 export function isCitationInLibrary(
@@ -28,6 +33,18 @@ export function isCitationInLibrary(
     citation.addedToLibrary &&
       citation.libraryPaperId &&
       libraryPaperIds.has(citation.libraryPaperId),
+  );
+}
+
+/** User can add this staged citation to the project library. */
+export function isStagedCitationAddable(
+  citation: StagedCitation,
+  inLibrary: boolean,
+): boolean {
+  return (
+    !inLibrary &&
+    citation.catalogVerified &&
+    Boolean(citation.doi || citation.arxivId)
   );
 }
 
@@ -52,6 +69,14 @@ interface CitationStagingState {
   addProgressById: Record<string, StagedAddProgressEvent>;
   /** Batch add summary for toolbar / list chrome. */
   batchAdd: { sessionId: string; total: number; completed: number; failed: number } | null;
+  /** Checked staged citation ids per session (batch add selection; not persisted). */
+  checkedStagedIdsBySession: Record<string, string[]>;
+  /** Staged ids the user cancelled during add — skip / roll back when possible. */
+  cancelledAddIds: Record<string, true>;
+  /** Staged ids with an active add-to-library IPC call. */
+  inFlightAddIds: Record<string, true>;
+  /** Staged ids waiting in the current batch-add queue (not started yet). */
+  batchQueuedIds: Record<string, true>;
 
   setAddProgress: (event: StagedAddProgressEvent) => void;
   clearAddProgress: (stagedId: string) => void;
@@ -96,6 +121,21 @@ interface CitationStagingState {
 
   /** Add all pending citations in a session. Returns summary counts. */
   addAllToLibrary: (sessionId: string) => Promise<{ added: number; failed: number }>;
+
+  /** Add selected staged citations in a session. Returns summary counts. */
+  addStagedToLibrary: (
+    sessionId: string,
+    stagedIds: string[],
+  ) => Promise<{ added: number; failed: number; skipped: number }>;
+
+  toggleStagedChecked: (sessionId: string, stagedId: string) => void;
+  setStagedCheckedIds: (sessionId: string, stagedIds: string[]) => void;
+
+  /** Cancel an in-flight or queued staged add for one citation. */
+  cancelAddToLibrary: (stagedId: string) => void;
+
+  /** Cancel all queued and in-flight staged adds for a session batch. */
+  cancelBatchAdd: (sessionId: string) => void;
 
   /** Remove a single staged citation by id (user dismissed). */
   removeById: (id: string) => void;
@@ -293,14 +333,21 @@ export const useCitationStagingStore = create<CitationStagingState>()(
       panelHiddenSessions: {},
       addProgressById: {},
       batchAdd: null,
+      checkedStagedIdsBySession: {},
+      cancelledAddIds: {},
+      inFlightAddIds: {},
+      batchQueuedIds: {},
 
       setAddProgress: (event) => {
-        set((s) => ({
-          addProgressById: {
-            ...s.addProgressById,
-            [event.stagedId]: event,
-          },
-        }));
+        set((s) => {
+          if (!s.inFlightAddIds[event.stagedId]) return s;
+          return {
+            addProgressById: {
+              ...s.addProgressById,
+              [event.stagedId]: event,
+            },
+          };
+        });
       },
 
       clearAddProgress: (stagedId) => {
@@ -424,7 +471,75 @@ export const useCitationStagingStore = create<CitationStagingState>()(
           panelHiddenSessions: {},
           addProgressById: {},
           batchAdd: null,
+          checkedStagedIdsBySession: {},
+          cancelledAddIds: {},
+          inFlightAddIds: {},
+          batchQueuedIds: {},
         }),
+
+      toggleStagedChecked: (sessionId, stagedId) => {
+        set((s) => {
+          const prev = s.checkedStagedIdsBySession[sessionId] ?? [];
+          const next = prev.includes(stagedId)
+            ? prev.filter((id) => id !== stagedId)
+            : [...prev, stagedId];
+          return {
+            checkedStagedIdsBySession: {
+              ...s.checkedStagedIdsBySession,
+              [sessionId]: next,
+            },
+          };
+        });
+      },
+
+      setStagedCheckedIds: (sessionId, stagedIds) => {
+        set((s) => ({
+          checkedStagedIdsBySession: {
+            ...s.checkedStagedIdsBySession,
+            [sessionId]: stagedIds,
+          },
+        }));
+      },
+
+      cancelAddToLibrary: (stagedId) => {
+        if (get().batchQueuedIds[stagedId]) {
+          set((s) => {
+            const batchQueuedIds = { ...s.batchQueuedIds };
+            delete batchQueuedIds[stagedId];
+            return {
+              cancelledAddIds: { ...s.cancelledAddIds, [stagedId]: true },
+              batchQueuedIds,
+            };
+          });
+          return;
+        }
+        if (!get().inFlightAddIds[stagedId]) return;
+        set((s) => ({
+          cancelledAddIds: { ...s.cancelledAddIds, [stagedId]: true },
+        }));
+        get().clearAddProgress(stagedId);
+        void window.electronAPI.literatureCancelStagedCitationAdd(stagedId);
+      },
+
+      cancelBatchAdd: (sessionId) => {
+        const s = get();
+        if (s.batchAdd?.sessionId !== sessionId) return;
+        const cancelledAddIds = { ...s.cancelledAddIds };
+        for (const id of Object.keys(s.batchQueuedIds)) {
+          cancelledAddIds[id] = true;
+        }
+        for (const id of Object.keys(s.inFlightAddIds)) {
+          const list = s.bySession[sessionId] ?? [];
+          if (!list.some((c) => c.id === id)) continue;
+          cancelledAddIds[id] = true;
+          get().clearAddProgress(id);
+          void window.electronAPI.literatureCancelStagedCitationAdd(id);
+        }
+        set({
+          cancelledAddIds,
+          batchQueuedIds: {},
+        });
+      },
 
       getCitationsForSession: (sessionId) => get().bySession[sessionId] ?? EMPTY_STAGED_CITATIONS,
 
@@ -480,6 +595,13 @@ export const useCitationStagingStore = create<CitationStagingState>()(
       },
 
       addToLibrary: async (id, batch) => {
+        // Explicit add — drop stale cancel marks from a prior batch.
+        set((s) => {
+          if (!s.cancelledAddIds[id]) return s;
+          const cancelledAddIds = { ...s.cancelledAddIds };
+          delete cancelledAddIds[id];
+          return { cancelledAddIds };
+        });
         const projectRoot = useDocumentStore.getState().projectRoot;
         if (!projectRoot) {
           return { ok: false, error: "No project open" };
@@ -515,12 +637,35 @@ export const useCitationStagingStore = create<CitationStagingState>()(
           batchIndex: batch?.index,
           batchTotal: batch?.total,
         });
+        set((s) => {
+          const cancelledAddIds = { ...s.cancelledAddIds };
+          delete cancelledAddIds[id];
+          return {
+            inFlightAddIds: { ...s.inFlightAddIds, [id]: true },
+            cancelledAddIds,
+          };
+        });
 
         try {
           const result = await window.electronAPI.literatureCreateFromStagedCitation(
             projectRoot,
             stagedToImportInput(target, batch),
           );
+          if (isStagedCitationCreateCancelledResult(result)) {
+            void useLiteratureStore.getState().bootstrapLiterature(projectRoot);
+            return { ok: false, error: "cancelled" };
+          }
+          if (get().cancelledAddIds[id]) {
+            if (result.created) {
+              try {
+                await window.electronAPI.literatureDeletePaper(projectRoot, result.paper.id);
+              } catch {
+                // Best-effort rollback when cancel raced IPC success.
+              }
+              void useLiteratureStore.getState().bootstrapLiterature(projectRoot);
+            }
+            return { ok: false, error: "cancelled" };
+          }
           get().markAddedToLibrary(id, result.paper.id, result.paper.bibkey);
           void useLiteratureStore.getState().bootstrapLiterature(projectRoot);
           if (result.pdfAttachError && result.pdfAttached !== true) {
@@ -529,28 +674,78 @@ export const useCitationStagingStore = create<CitationStagingState>()(
           }
           return { ok: true, bibkey: result.paper.bibkey };
         } catch (err) {
+          if (isStagedCitationAddCancelledError(err) || get().cancelledAddIds[id]) {
+            void useLiteratureStore.getState().bootstrapLiterature(projectRoot);
+            return { ok: false, error: "cancelled" };
+          }
           const message = err instanceof Error ? err.message : String(err);
           return { ok: false, error: message };
         } finally {
           get().clearAddProgress(id);
+          set((s) => {
+            const inFlightAddIds = { ...s.inFlightAddIds };
+            delete inFlightAddIds[id];
+            const cancelledAddIds = { ...s.cancelledAddIds };
+            delete cancelledAddIds[id];
+            return { inFlightAddIds, cancelledAddIds };
+          });
         }
       },
 
-      addAllToLibrary: async (sessionId) => {
+      addStagedToLibrary: async (sessionId, stagedIds) => {
         const list = get().bySession[sessionId] ?? [];
-        const pending = list.filter((c) => !c.addedToLibrary);
+        const idSet = new Set(stagedIds);
+        const pending = list.filter((c) => idSet.has(c.id) && !c.addedToLibrary);
         const total = pending.length;
-        if (total === 0) return { added: 0, failed: 0 };
+        if (total === 0) return { added: 0, failed: 0, skipped: 0 };
 
+        const batchQueuedIds = Object.fromEntries(pending.map((c) => [c.id, true] as const));
         get().setBatchAdd({ sessionId, total, completed: 0, failed: 0 });
+        set((s) => {
+          const cancelledAddIds = { ...s.cancelledAddIds };
+          let changed = false;
+          for (const c of pending) {
+            if (cancelledAddIds[c.id]) {
+              delete cancelledAddIds[c.id];
+              changed = true;
+            }
+          }
+          return {
+            batchQueuedIds,
+            ...(changed ? { cancelledAddIds } : {}),
+          };
+        });
         let added = 0;
         let failed = 0;
+        let skipped = 0;
         try {
           for (let i = 0; i < pending.length; i++) {
             const c = pending[i]!;
+            if (get().cancelledAddIds[c.id]) {
+              skipped++;
+              set((s) => {
+                const nextQueued = { ...s.batchQueuedIds };
+                delete nextQueued[c.id];
+                return { batchQueuedIds: nextQueued };
+              });
+              get().setBatchAdd({
+                sessionId,
+                total,
+                completed: added + failed + skipped,
+                failed,
+              });
+              continue;
+            }
+            set((s) => {
+              const nextQueued = { ...s.batchQueuedIds };
+              delete nextQueued[c.id];
+              return { batchQueuedIds: nextQueued };
+            });
             const r = await get().addToLibrary(c.id, { index: i + 1, total });
             if (r.ok) {
               added++;
+            } else if (r.error === "cancelled") {
+              skipped++;
             } else {
               failed++;
               toast.error(`Failed to add "${c.title}": ${r.error ?? "unknown error"}`);
@@ -558,17 +753,37 @@ export const useCitationStagingStore = create<CitationStagingState>()(
             get().setBatchAdd({
               sessionId,
               total,
-              completed: added + failed,
+              completed: added + failed + skipped,
               failed,
             });
           }
           if (added > 0) {
             toast.success(`Added ${added} paper${added > 1 ? "s" : ""} to library`);
           }
-          return { added, failed };
+          return { added, failed, skipped };
         } finally {
           get().setBatchAdd(null);
+          set((s) => {
+            const processed = new Set(pending.map((c) => c.id));
+            const checked = (s.checkedStagedIdsBySession[sessionId] ?? []).filter(
+              (id) => !processed.has(id),
+            );
+            return {
+              batchQueuedIds: {},
+              checkedStagedIdsBySession: {
+                ...s.checkedStagedIdsBySession,
+                [sessionId]: checked,
+              },
+            };
+          });
         }
+      },
+
+      addAllToLibrary: async (sessionId) => {
+        const list = get().bySession[sessionId] ?? [];
+        const pendingIds = list.filter((c) => !c.addedToLibrary).map((c) => c.id);
+        const { added, failed } = await get().addStagedToLibrary(sessionId, pendingIds);
+        return { added, failed };
       },
     }),
     {

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, memo } from "react";
+import { memo } from "react";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { XIcon, DotIcon, FoldersIcon, Terminal as TerminalIcon, SparklesIcon } from "lucide-react";
 import { Icon } from "@iconify/react/offline";
@@ -23,8 +23,6 @@ interface TabBarProps {
   onReorder?: (fromIndex: number, toIndex: number) => void;
   onPinTab?: (id: string) => void;
   dirtyFileIds?: Set<string>;
-  /** When true, hide tabs regardless of internal scroll detection */
-  forceOverflow?: boolean;
 }
 
 function tabIcon(
@@ -74,39 +72,19 @@ export const TabBar = memo(function TabBar({
   onReorder,
   onPinTab,
   dirtyFileIds,
-  forceOverflow,
 }: TabBarProps) {
   const terminalSessions = useTerminalStore((s) => s.sessions);
 
-  const scrollerRef = useRef<HTMLDivElement>(null);
-  const [overflow, setOverflow] = useState(false);
-
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const check = () => setOverflow(el.scrollWidth > el.clientWidth + 1);
-    check();
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [tabs]);
-
   if (tabs.length === 0) return null;
-
-  // Overflow: hide tabs — dropdown is rendered by parent (right-area)
-  if (overflow || forceOverflow) {
-    return null;
-  }
 
   return (
     <SortableTabStrip
-      ref={scrollerRef}
       items={tabs}
       getKey={(tab) => tab.id}
       onReorder={onReorder}
       onDragItem={(tab) => onSelect(tab.id)}
       className="min-w-0"
-      rowClassName="scrollbar-none min-w-0 gap-0.5 overflow-x-auto justify-end"
+      rowClassName="scrollbar-none min-w-0 gap-0.5 overflow-x-auto"
       renderItem={({ item: tab, dragging, dragHandleProps }) => (
         <AppContextMenu>
           <AppContextMenuTrigger asChild>

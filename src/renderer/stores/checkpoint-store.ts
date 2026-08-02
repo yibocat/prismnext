@@ -3,6 +3,7 @@ import { useDocumentStore } from "./document-store";
 import { resolveWorktreePathForSend, resolveWorktreeAtCheckout } from "@/lib/git/checkout-context";
 import { useChatStore, type ChatStreamMessage } from "./chat-store";
 import { useChangesStore } from "./changes-store";
+import { countUserTurns } from "@/components/modules/chat/chat-turns";
 import { createLogger } from "@/services/logger";
 
 const log = createLogger("checkpoint-store", "agent");
@@ -21,6 +22,8 @@ export interface TurnCheckpoint {
   files: CheckpointFile[];
   /** Relative paths modified during this turn only */
   touchedThisTurn: string[];
+  /** Paths created this turn (did not exist before first mutation) — deleted on rollback to earlier turns */
+  createdThisTurn?: string[];
 }
 
 interface PendingTurn {
@@ -28,20 +31,32 @@ interface PendingTurn {
   /** Content before the first mutation in this turn */
   beforeByPath: Map<string, string>;
   touchedPaths: Set<string>;
+  createdPaths: Set<string>;
 }
 
-interface RestoreUndoState {
+/** Snapshot taken before a rollback — used by 「后悔」/ undo-last-rollback. */
+export interface RegretState {
   files: CheckpointFile[];
   checkpoints: TurnCheckpoint[];
   messages: ChatStreamMessage[];
+  /**
+   * Edit-resend: keep regret across the immediate rebound turn's finalize.
+   * Cleared after that finalize (or on dismiss / another rollback).
+   */
+  surviveNextFinalize?: boolean;
+}
+
+export interface RollbackOptions {
+  /** Edit-resend path: regret remains after the next successful finalizeTurn. */
+  preserveRegretAcrossNextFinalize?: boolean;
 }
 
 interface TabCheckpointState {
   sessionId: string | null;
   checkpoints: TurnCheckpoint[];
   pendingTurn: PendingTurn | null;
-  /** Single-step undo: workspace + checkpoints before the last restore */
-  restoreUndo: RestoreUndoState | null;
+  /** Single-step regret: tip before the last rollback */
+  regret: RegretState | null;
   /** Checkout root when checkpoints were captured (worktree path or project root). */
   boundCheckoutPath: string | null;
 }
@@ -63,14 +78,50 @@ interface CheckpointStoreState {
     relativePath: string,
     absolutePath: string,
     beforeContent: string,
+    opts?: { created?: boolean },
   ) => void;
+  /**
+   * After Accept (or late disk write) when the turn already finalized:
+   * upsert file into the latest checkpoint so rollback still covers it.
+   */
+  sealFileIntoLatestCheckpoint: (
+    tabId: string,
+    file: CheckpointFile,
+    opts?: { created?: boolean },
+  ) => Promise<void>;
   finalizeTurn: (tabId: string, success: boolean) => Promise<void>;
   getCheckpoint: (tabId: string, turnIndex: number) => TurnCheckpoint | null;
   getLatestCheckpoint: (tabId: string) => TurnCheckpoint | null;
-  restoreToTurn: (tabId: string, turnIndex: number) => Promise<number>;
+  /** Roll world (chat + files + Proposed Changes) back to end of turnIndex (-1 = empty). */
+  rollbackToTurn: (
+    tabId: string,
+    turnIndex: number,
+    opts?: RollbackOptions,
+  ) => Promise<number>;
+  rollbackPreviousTurn: (tabId: string) => Promise<number | null>;
+  /**
+   * Undo last rollback. Restores in-memory tip even if OpenCode session
+   * undo fails (e.g. app restarted and truncation backup is gone).
+   */
+  undoLastRollback: (tabId: string) => Promise<{
+    ok: boolean;
+    sessionRestored: boolean;
+  }>;
+  canRollbackToTurn: (tabId: string, turnIndex: number) => boolean;
+  canUndoRollback: (tabId: string) => boolean;
+  /** @deprecated Use rollbackToTurn */
+  restoreToTurn: (
+    tabId: string,
+    turnIndex: number,
+    opts?: RollbackOptions,
+  ) => Promise<number>;
+  /** @deprecated Use rollbackPreviousTurn */
   restorePreviousTurn: (tabId: string) => Promise<number | null>;
+  /** @deprecated Use undoLastRollback */
   undoLastRestore: (tabId: string) => Promise<boolean>;
+  /** @deprecated Use canRollbackToTurn */
   canRestoreToTurn: (tabId: string, turnIndex: number) => boolean;
+  /** @deprecated Use canUndoRollback */
   canUndoRestore: (tabId: string) => boolean;
 }
 
@@ -79,7 +130,7 @@ function emptyTabState(): TabCheckpointState {
     sessionId: null,
     checkpoints: [],
     pendingTurn: null,
-    restoreUndo: null,
+    regret: null,
     boundCheckoutPath: null,
   };
 }
@@ -200,6 +251,52 @@ async function applyCheckpointFiles(files: CheckpointFile[]): Promise<void> {
   }
 }
 
+/** Delete workspace files that were created after the rollback target. */
+async function deleteCheckpointOrphans(
+  projectRoot: string,
+  absoluteByRel: Map<string, string>,
+  relativePaths: Iterable<string>,
+): Promise<void> {
+  const docState = useDocumentStore.getState();
+  for (const rel of relativePaths) {
+    const absolutePath =
+      absoluteByRel.get(rel)
+      ?? docState.files.find((f) => f.relativePath === rel)?.absolutePath
+      ?? `${projectRoot}/${rel}`;
+    try {
+      const exists = await window.electronAPI.fsExists(absolutePath);
+      if (!exists) continue;
+      await window.electronAPI.fsDelete(absolutePath);
+      log.info(`Rollback deleted created file: ${rel}`);
+    } catch (err) {
+      log.warn(`Failed to delete orphan ${rel}`, { error: (err as Error).message });
+    }
+  }
+  await docState.refreshFiles();
+}
+
+function collectCreatedAfterTurn(
+  checkpoints: TurnCheckpoint[],
+  turnIndex: number,
+): { paths: string[]; absoluteByRel: Map<string, string> } {
+  const targetPaths = new Set<string>();
+  const absoluteByRel = new Map<string, string>();
+  for (const cp of checkpoints) {
+    for (const f of cp.files) {
+      absoluteByRel.set(f.relativePath, f.absolutePath);
+      if (cp.turnIndex <= turnIndex) targetPaths.add(f.relativePath);
+    }
+  }
+  const paths = new Set<string>();
+  for (const cp of checkpoints) {
+    if (cp.turnIndex <= turnIndex) continue;
+    for (const rel of cp.createdThisTurn ?? []) {
+      if (!targetPaths.has(rel)) paths.add(rel);
+    }
+  }
+  return { paths: [...paths], absoluteByRel };
+}
+
 function snapshotFromCheckpoints(checkpoints: TurnCheckpoint[]): CheckpointFile[] {
   const map = new Map<string, CheckpointFile>();
   for (const cp of checkpoints) {
@@ -274,7 +371,7 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
           sessionId,
           checkpoints,
           pendingTurn: existing?.pendingTurn ?? null,
-          restoreUndo: existing?.restoreUndo ?? null,
+          regret: existing?.regret ?? null,
           boundCheckoutPath:
             existing?.boundCheckoutPath
             ?? currentBoundCheckoutPath(tabId),
@@ -322,7 +419,7 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
             sessionId: sessionId ?? existing.sessionId,
             checkpoints: [],
             pendingTurn: null,
-            restoreUndo: null,
+            regret: null,
             boundCheckoutPath: currentBoundCheckoutPath(tabId),
           },
         },
@@ -355,6 +452,7 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
               turnIndex,
               beforeByPath: new Map(),
               touchedPaths: new Set(),
+              createdPaths: new Set(),
             },
           },
         },
@@ -362,7 +460,7 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
     });
   },
 
-  noteFileMutation: (tabId, relativePath, absolutePath, beforeContent) => {
+  noteFileMutation: (tabId, relativePath, absolutePath, beforeContent, opts) => {
     if (!relativePath) return;
     set((s) => {
       const tab = s.byTab[tabId];
@@ -372,6 +470,12 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
       if (!pending.beforeByPath.has(relativePath)) {
         pending.beforeByPath.set(relativePath, beforeContent);
       }
+      const created =
+        opts?.created === true
+        || (opts?.created !== false
+          && beforeContent === ""
+          && !useDocumentStore.getState().files.some((f) => f.relativePath === relativePath));
+      if (created) pending.createdPaths.add(relativePath);
       return {
         byTab: {
           ...s.byTab,
@@ -380,6 +484,74 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
       };
     });
     void absolutePath; // used at finalize via path resolution
+  },
+
+  sealFileIntoLatestCheckpoint: async (tabId, file, opts) => {
+    const tab = get().byTab[tabId];
+    if (!tab) return;
+
+    if (tab.pendingTurn) {
+      get().noteFileMutation(
+        tabId,
+        file.relativePath,
+        file.absolutePath,
+        // Prefer empty before only when marked created; otherwise keep prior.
+        opts?.created ? "" : (tab.pendingTurn.beforeByPath.get(file.relativePath) ?? ""),
+        opts,
+      );
+      return;
+    }
+
+    const projectRoot = useDocumentStore.getState().projectRoot;
+    if (!projectRoot || !tab.sessionId) return;
+
+    const chatTab = useChatStore.getState().tabs.find((t) => t.id === tabId);
+    const turnCount = countUserTurns(chatTab?.messages ?? []);
+    const turnIndex = Math.max(0, turnCount - 1);
+
+    let checkpoints = [...tab.checkpoints];
+    let latest = checkpoints.find((c) => c.turnIndex === turnIndex)
+      ?? checkpoints[checkpoints.length - 1]
+      ?? null;
+
+    if (!latest) {
+      latest = {
+        turnIndex,
+        createdAt: Date.now(),
+        files: [file],
+        touchedThisTurn: [file.relativePath],
+        createdThisTurn: opts?.created ? [file.relativePath] : [],
+      };
+      checkpoints = [latest];
+    } else {
+      const files = [
+        ...latest.files.filter((f) => f.relativePath !== file.relativePath),
+        file,
+      ];
+      const touched = latest.touchedThisTurn.includes(file.relativePath)
+        ? latest.touchedThisTurn
+        : [...latest.touchedThisTurn, file.relativePath];
+      const created = new Set(latest.createdThisTurn ?? []);
+      if (opts?.created) created.add(file.relativePath);
+      latest = {
+        ...latest,
+        files,
+        touchedThisTurn: touched,
+        createdThisTurn: [...created],
+      };
+      checkpoints = [
+        ...checkpoints.filter((c) => c.turnIndex !== latest!.turnIndex),
+        latest,
+      ].sort((a, b) => a.turnIndex - b.turnIndex);
+    }
+
+    set((s) => ({
+      byTab: {
+        ...s.byTab,
+        [tabId]: { ...tab, checkpoints },
+      },
+    }));
+    await persistCheckpoints(projectRoot, tab.sessionId, checkpoints);
   },
 
   finalizeTurn: async (tabId, success) => {
@@ -398,15 +570,29 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
       return;
     }
 
-    const { turnIndex, touchedPaths } = tab.pendingTurn;
+    const { turnIndex, touchedPaths, createdPaths } = tab.pendingTurn;
+    const createdList = [...(createdPaths ?? new Set<string>())];
     const projectRoot = useDocumentStore.getState().projectRoot;
+
+    const advanceRegret = (current: typeof tab) => {
+      const prevRegret = current.regret;
+      if (prevRegret?.surviveNextFinalize) {
+        return { ...prevRegret, surviveNextFinalize: false };
+      }
+      return null;
+    };
+
     if (!projectRoot || !tab.sessionId) {
-      set((s) => ({
-        byTab: {
-          ...s.byTab,
-          [tabId]: { ...tab, pendingTurn: null },
-        },
-      }));
+      set((s) => {
+        const t = s.byTab[tabId];
+        if (!t) return s;
+        return {
+          byTab: {
+            ...s.byTab,
+            [tabId]: { ...t, pendingTurn: null, regret: advanceRegret(t) },
+          },
+        };
+      });
       return;
     }
 
@@ -428,10 +614,13 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
       createdAt: Date.now(),
       files: [...fileMap.values()],
       touchedThisTurn: [...touchedPaths],
+      createdThisTurn: createdList,
     };
 
     const checkpoints = [...tab.checkpoints.filter((c) => c.turnIndex !== turnIndex), checkpoint]
       .sort((a, b) => a.turnIndex - b.turnIndex);
+
+    const nextRegret = advanceRegret(tab);
 
     set((s) => ({
       byTab: {
@@ -440,7 +629,7 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
           ...tab,
           checkpoints,
           pendingTurn: null,
-          restoreUndo: null,
+          regret: nextRegret,
           boundCheckoutPath: tab.boundCheckoutPath ?? currentBoundCheckoutPath(tabId),
         },
       },
@@ -460,30 +649,42 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
     return cps[cps.length - 1];
   },
 
-  canRestoreToTurn: (tabId, turnIndex) => {
+  canRollbackToTurn: (tabId, turnIndex) => {
     const tab = get().byTab[tabId];
-    const cp = tab?.checkpoints.find((c) => c.turnIndex === turnIndex);
-    if (!cp || cp.touchedThisTurn.length === 0) return false;
-    const bound = tab.boundCheckoutPath ?? currentBoundCheckoutPath(tabId);
+    const chatTab = useChatStore.getState().tabs.find((t) => t.id === tabId);
+    const turnCount = countUserTurns(chatTab?.messages ?? []);
+    if (turnIndex < 0 || turnCount === 0) return false;
+    if (turnIndex >= turnCount) return false;
+
+    const bound = tab?.boundCheckoutPath ?? currentBoundCheckoutPath(tabId);
     const cwd = currentBoundCheckoutPath(tabId);
     if (bound && cwd && bound !== cwd) return false;
-    return checkpointsMatchCheckout(tab.checkpoints, bound);
+    if (tab?.checkpoints.length && !checkpointsMatchCheckout(tab.checkpoints, bound)) {
+      return false;
+    }
+
+    // Every completed turn is a rollback endpoint (files optional).
+    return true;
   },
 
-  canUndoRestore: (tabId) => Boolean(get().byTab[tabId]?.restoreUndo),
+  canUndoRollback: (tabId) => Boolean(get().byTab[tabId]?.regret),
 
-  restoreToTurn: async (tabId, turnIndex) => {
-    const tab = get().byTab[tabId];
-    const target = tab?.checkpoints.find((c) => c.turnIndex === turnIndex);
-    if (!tab || !target) return 0;
-
+  rollbackToTurn: async (tabId, turnIndex, opts) => {
+    const tab = get().byTab[tabId] ?? emptyTabState();
     const chatTab = useChatStore.getState().tabs.find((t) => t.id === tabId);
     const messagesBefore = chatTab ? [...chatTab.messages] : [];
 
     const { projectRoot, worktreePath } = sessionPaths(tabId);
     if (!projectRoot) return 0;
 
-    const currentSnapshot: RestoreUndoState = {
+    const fileTarget =
+      turnIndex < 0
+        ? null
+        : tab.checkpoints.find((c) => c.turnIndex === turnIndex)
+          ?? [...tab.checkpoints].reverse().find((c) => c.turnIndex <= turnIndex)
+          ?? null;
+
+    const regretSnapshot: RegretState = {
       files: await Promise.all(
         snapshotFromCheckpoints(tab.checkpoints).map(async (f) => ({
           ...f,
@@ -492,9 +693,10 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
       ),
       checkpoints: [...tab.checkpoints],
       messages: messagesBefore,
+      surviveNextFinalize: opts?.preserveRegretAcrossNextFinalize === true,
     };
 
-    const sessionId = tab?.sessionId ?? chatTab?.sessionId ?? null;
+    const sessionId = tab.sessionId ?? chatTab?.sessionId ?? null;
     if (sessionId) {
       await window.electronAPI.sessionTruncateToTurn({
         sessionId,
@@ -507,17 +709,42 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
       useChatStore.getState().truncateToTurn(tabId, turnIndex);
     }
 
-    await applyCheckpointFiles(target.files);
+    const { paths: orphanPaths, absoluteByRel } = turnIndex < 0
+      ? (() => {
+          const absoluteByRel = new Map<string, string>();
+          const paths = new Set<string>();
+          for (const cp of tab.checkpoints) {
+            for (const f of cp.files) {
+              absoluteByRel.set(f.relativePath, f.absolutePath);
+              paths.add(f.relativePath);
+            }
+            for (const rel of cp.touchedThisTurn) paths.add(rel);
+            for (const rel of cp.createdThisTurn ?? []) paths.add(rel);
+          }
+          return { paths: [...paths], absoluteByRel };
+        })()
+      : collectCreatedAfterTurn(tab.checkpoints, turnIndex);
+    if (orphanPaths.length > 0) {
+      await deleteCheckpointOrphans(projectRoot, absoluteByRel, orphanPaths);
+    }
+
+    if (fileTarget?.files.length) {
+      await applyCheckpointFiles(fileTarget.files);
+    }
     useChangesStore.getState().clearAll();
 
-    const kept = tab.checkpoints.filter((c) => c.turnIndex <= turnIndex);
+    const kept = turnIndex < 0
+      ? []
+      : tab.checkpoints.filter((c) => c.turnIndex <= turnIndex);
     set((s) => ({
       byTab: {
         ...s.byTab,
         [tabId]: {
           ...tab,
+          sessionId: sessionId ?? tab.sessionId,
           checkpoints: kept,
-          restoreUndo: currentSnapshot,
+          pendingTurn: null,
+          regret: regretSnapshot,
         },
       },
     }));
@@ -526,40 +753,52 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
       await persistCheckpoints(projectRoot, sessionId, kept);
     }
 
-    return target.files.length;
+    return fileTarget?.files.length ?? 0;
   },
 
-  restorePreviousTurn: async (tabId) => {
+  rollbackPreviousTurn: async (tabId) => {
+    const chatTab = useChatStore.getState().tabs.find((t) => t.id === tabId);
+    const turnCount = countUserTurns(chatTab?.messages ?? []);
+    if (turnCount <= 0) return null;
+
     const latest = get().getLatestCheckpoint(tabId);
     if (!latest || latest.turnIndex <= 0) {
-      const tab = get().byTab[tabId];
-      if (!tab || tab.checkpoints.length === 0) return null;
-      return get().restoreToTurn(tabId, 0);
+      if (turnCount <= 1) {
+        // Only one turn — roll back to empty world.
+        return get().rollbackToTurn(tabId, -1);
+      }
+      return get().rollbackToTurn(tabId, 0);
     }
-    return get().restoreToTurn(tabId, latest.turnIndex - 1);
+    return get().rollbackToTurn(tabId, latest.turnIndex - 1);
   },
 
-  undoLastRestore: async (tabId) => {
+  undoLastRollback: async (tabId) => {
     const tab = get().byTab[tabId];
-    const undo = tab?.restoreUndo;
-    if (!tab || !undo) return false;
+    const undo = tab?.regret;
+    if (!tab || !undo) return { ok: false, sessionRestored: false };
 
     const { projectRoot, worktreePath } = sessionPaths(tabId);
     const sessionId = tab.sessionId
       ?? useChatStore.getState().tabs.find((t) => t.id === tabId)?.sessionId
       ?? null;
 
+    let sessionRestored = false;
     if (sessionId && projectRoot) {
-      await window.electronAPI.sessionUndoTruncate({
-        sessionId,
-        projectPath: projectRoot,
-        worktreePath,
-      });
+      try {
+        await window.electronAPI.sessionUndoTruncate({
+          sessionId,
+          projectPath: projectRoot,
+          worktreePath,
+        });
+        sessionRestored = true;
+      } catch (err) {
+        log.warn("sessionUndoTruncate failed — restoring UI/files from in-memory regret", {
+          error: (err as Error).message,
+        });
+      }
     }
 
-    if (undo.messages.length > 0) {
-      useChatStore.getState().restoreMessages(tabId, undo.messages);
-    }
+    useChatStore.getState().restoreMessages(tabId, undo.messages);
 
     await applyCheckpointFiles(undo.files);
     useChangesStore.getState().clearAll();
@@ -570,7 +809,7 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
         [tabId]: {
           ...tab,
           checkpoints: undo.checkpoints,
-          restoreUndo: null,
+          regret: null,
         },
       },
     }));
@@ -579,8 +818,18 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
       await persistCheckpoints(projectRoot, sessionId, undo.checkpoints);
     }
 
-    return true;
+    return { ok: true, sessionRestored };
   },
+
+  // Deprecated aliases — keep call sites working during migration.
+  restoreToTurn: (tabId, turnIndex, opts) => get().rollbackToTurn(tabId, turnIndex, opts),
+  restorePreviousTurn: (tabId) => get().rollbackPreviousTurn(tabId),
+  undoLastRestore: async (tabId) => {
+    const result = await get().undoLastRollback(tabId);
+    return result.ok;
+  },
+  canRestoreToTurn: (tabId, turnIndex) => get().canRollbackToTurn(tabId, turnIndex),
+  canUndoRestore: (tabId) => get().canUndoRollback(tabId),
 }));
 
 /** Resolve project-relative path from an absolute or relative tool path. */

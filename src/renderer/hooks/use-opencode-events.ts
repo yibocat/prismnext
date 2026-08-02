@@ -30,6 +30,7 @@ import { isPlanFileToolUse } from "@/lib/chat/plan-artifact-ui";
 import { parsePlanSteps } from "@/lib/chat/parse-plan-steps";
 import { isBackgroundTaskStartedResult } from "@shared/opencode-background-task";
 import { isPrismSystemPromptText } from "@/lib/chat/session-message-hydrate";
+import { canClearStreamingForGeneration } from "@/lib/chat/stream-generation";
 import { refreshGitStatusNow } from "@/lib/git/checkout-context";
 import { isChatPreparePhase } from "../../shared/chat-prepare-phases";
 import { formatTaskError } from "../../shared/task-error-codes";
@@ -84,6 +85,7 @@ export function useOpenCodeEvents() {
     tracker: Map<string, string>,
   ) {
     if (!isDiskMutationTool(toolName)) return;
+    const normalized = toolName.toLowerCase();
     const paths = isPatchTool(toolName)
       ? extractPatchTargetPaths(toolInput as Record<string, unknown>)
       : [
@@ -96,11 +98,20 @@ export function useOpenCodeEvents() {
       const resolved = resolveRelativeToolPath(fp);
       if (!resolved) continue;
       const before = tracker.get(resolved.relativePath) ?? "";
+      const docHas = useDocumentStore.getState().files.some(
+        (f) => f.relativePath === resolved.relativePath,
+      );
+      const created =
+        normalized !== "delete"
+        && normalized !== "move"
+        && before === ""
+        && !docHas;
       useCheckpointStore.getState().noteFileMutation(
         tabId,
         resolved.relativePath,
         resolved.absolutePath,
         before,
+        { created },
       );
     }
   }
@@ -144,12 +155,14 @@ export function useOpenCodeEvents() {
       return;
     }
 
+    if (!isDiskMutationTool(toolName)) return;
+
+    // Always record for world-rollback checkpoints (not only Auto-apply).
+    noteCheckpointForDiskTool(tabId, toolName, toolInput, fileContentTrackerRef.current);
+
     if (!isEditAutoApplyMode(useSettingsStore.getState().settings.permissionMode)) {
       return;
     }
-    if (!isDiskMutationTool(toolName)) return;
-
-    noteCheckpointForDiskTool(tabId, toolName, toolInput, fileContentTrackerRef.current);
 
     if (isPatchTool(toolName)) {
       for (const filePath of extractPatchTargetPaths(toolInput)) {
@@ -900,9 +913,14 @@ export function useOpenCodeEvents() {
             // fires and isStreaming stays true — blocking the next user message.
             // Do NOT clear while background Tasks are still open: parent end_turn
             // idles early, then OpenCode inject-resumes — clearing here drops that stream.
+            // Also ignore if a newer turn started (Stop → queue drain / re-send).
+            const generationAtIdle = tab?.streamGeneration ?? 0;
             window.setTimeout(() => {
               const current = useChatStore.getState().tabs.find((t) => t.id === tabId);
               if (!current?.isStreaming) return;
+              if (!canClearStreamingForGeneration(generationAtIdle, current.streamGeneration)) {
+                return;
+              }
               if (current.awaitingBackgroundJoin) return;
               const runs = current.subAgentRuns || {};
               const bgPending = Object.values(runs).some(
@@ -971,6 +989,8 @@ export function useOpenCodeEvents() {
     // ─── Chat Complete Handler ───
     const unsubComplete = window.electronAPI.onChatComplete(({ tabId, success, error, errorCode, emptyTurn, tokenUsage, contextUsed, contextWindowSize, contextSource, contextBreakdown, categorySchema, promptStale, planDraftMissing }) => {
       const chatStore = useChatStore.getState();
+      const generationAtComplete =
+        chatStore.tabs.find((t) => t.id === tabId)?.streamGeneration ?? 0;
 
       if (!success) {
         if (errorCode === "cancelled") {
@@ -1038,9 +1058,18 @@ export function useOpenCodeEvents() {
         void chatStore.checkPromptStale(tabId);
       }
 
-      setTimeout(() => {
-        chatStore._setStreaming(tabId, false);
-      }, 50);
+      // cancelExecution already cleared isStreaming; a delayed clear races Stop→queue drain.
+      // Any complete must also ignore a newer streamGeneration (re-send after cancel).
+      if (errorCode !== "cancelled") {
+        setTimeout(() => {
+          const current = useChatStore.getState().tabs.find((t) => t.id === tabId);
+          if (!current) return;
+          if (!canClearStreamingForGeneration(generationAtComplete, current.streamGeneration)) {
+            return;
+          }
+          useChatStore.getState()._setStreaming(tabId, false);
+        }, 50);
+      }
 
       const tab = chatStore.tabs.find((t) => t.id === tabId);
       if (tab?.sessionAgent === "plan") {

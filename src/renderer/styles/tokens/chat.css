@@ -23,6 +23,10 @@
   --font-code:         var(--font-chat-meta);
   --font-session-item: var(--font-chat-meta);
 
+  /* Composer CodeMirror selection — tuned for dark mode (keeps token colors readable). */
+  --composer-selection: color-mix(in oklch, var(--primary) 22%, transparent);
+  --composer-selection-focused: color-mix(in oklch, var(--primary) 32%, transparent);
+
   /* Permission ask — uses theme primary + accent (updated by Appearance settings) */
   --permission-ask-border: color-mix(in oklch, var(--primary) 28%, var(--border));
   --permission-ask-bg: color-mix(in oklch, var(--primary) 8%, var(--accent));
@@ -73,3 +77,8 @@ html[data-message-width="wide"]     { --chat-max-w: 64rem; }
  *   uiFontSize 20px  -> composer 16.25px  -> 58.75px height
  * Read with `h-[var(--chat-input-h)]` in Tailwind. */
 :root { --chat-input-h: calc(var(--font-composer) * 3 + 0.5rem); }
+
+.dark {
+  --composer-selection: color-mix(in oklch, var(--primary) 16%, var(--background));
+  --composer-selection-focused: color-mix(in oklch, var(--primary) 24%, var(--background));
+}

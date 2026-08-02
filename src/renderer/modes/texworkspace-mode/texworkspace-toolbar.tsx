@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import {
   AppMenu,
-  AppMenuCheckItem,
   AppMenuContent,
   AppMenuItem,
   AppMenuLabel,
@@ -44,12 +43,6 @@ interface TexworkspaceToolbarProps {
   compileFile: string | null | undefined;
 }
 
-const ENGINE_LABELS: Record<string, string> = {
-  tectonic: "Tectonic",
-  texlive: "TeXLive",
-};
-
-/** Segmented view-mode chip (selected = raised background). */
 const VIEW_SEG_BTN =
   "flex size-6 shrink-0 items-center justify-center rounded-md transition-colors";
 
@@ -82,8 +75,6 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
   const compileLog = useCompileStore((s) => s.compileLog);
   const autoCompile = useCompileStore((s) => s.autoCompile);
   const toggleAutoCompile = useCompileStore((s) => s.toggleAutoCompile);
-  const compilerBackend = useCompileStore((s) => s.compilerBackend);
-  const setCompilerBackend = useCompileStore((s) => s.setCompilerBackend);
   const texworkspaceViewMode = useLayoutStore((s) => s.texworkspaceViewMode);
   const setTexworkspaceViewMode = useLayoutStore((s) => s.setTexworkspaceViewMode);
   const panesSwapped = useLayoutStore((s) => s.texworkspacePanesSwapped);
@@ -252,7 +243,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
       {/* Compile cluster */}
       <div className="ml-1.5 flex shrink-0 items-center gap-0.5 border-l border-border/50 pl-1.5">
         <Hint
-          label={t("modes.texworkspace.compile", { engine: ENGINE_LABELS[compilerBackend] })}
+          label={t("modes.texworkspace.compileDocument")}
           shortcutId="product.compile"
         >
           <button
@@ -271,34 +262,6 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
             )}
           </button>
         </Hint>
-
-        <AppMenu>
-          <Hint label={t("modes.texworkspace.selectCompiler")}>
-            <AppMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[length:var(--font-menu-item)] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <span>{ENGINE_LABELS[compilerBackend]}</span>
-                <ChevronDownIcon className="size-3" />
-              </button>
-            </AppMenuTrigger>
-          </Hint>
-          <AppMenuContent align="start" className="min-w-[6.5rem]">
-            <AppMenuCheckItem
-              selected={compilerBackend === "tectonic"}
-              onClick={() => setCompilerBackend("tectonic")}
-            >
-              Tectonic
-            </AppMenuCheckItem>
-            <AppMenuCheckItem
-              selected={compilerBackend === "texlive"}
-              onClick={() => setCompilerBackend("texlive")}
-            >
-              TeXLive
-            </AppMenuCheckItem>
-          </AppMenuContent>
-        </AppMenu>
 
         <Hint label={autoCompile ? t("modes.texworkspace.autoCompileOn") : t("modes.texworkspace.autoCompileOff")}>
           <button

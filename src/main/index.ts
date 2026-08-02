@@ -18,6 +18,7 @@ import { installApplicationMenu } from "./menu";
 import { disposeChat } from "./ipc/chat";
 import { destroyAllTerminalSessions } from "./ipc/terminal";
 import { destroyAllAiPty } from "./services/ai-pty";
+import { disposeAllTectonicDaemonSessions } from "./services/tectonic-daemon";
 import { startTerminalBridge, stopTerminalBridge, setTerminalBridgeWindow } from "./services/terminal-bridge";
 import { startLiteratureBridge, stopLiteratureBridge } from "./services/literature-bridge";
 import { startLatexBridge, stopLatexBridge } from "./services/latex-bridge";
@@ -460,6 +461,7 @@ app.whenReady().then(async () => {
 // (macOS menu Quit paths). Safe to call twice alongside the closed handler.
 app.on("before-quit", () => {
   setIsQuitting(true);
+  disposeAllTectonicDaemonSessions();
   destroyAllAiPty();
   destroyAllTerminalSessions();
 });

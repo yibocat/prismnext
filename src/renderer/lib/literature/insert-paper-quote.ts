@@ -10,27 +10,9 @@ import {
   createNewPaperNote,
 } from "@/lib/literature/create-paper-note";
 import type { LiteraturePaper } from "@/types/electron.d";
+import { rewritePaperExtractImageSrcs } from "@shared/paper-extract-images";
 
-/**
- * MinerU image blocks use extract-local paths (`images/fig.png`). Notes live under
- * `notes/…`, so rewrite to project-relative extract paths before insert.
- */
-export function rewritePaperExtractImageSrcs(markdown: string, paperId: string): string {
-  const id = paperId.trim();
-  if (!id || !markdown) return markdown;
-  const base = `.prismnext/library/extract/${id}/`;
-  return markdown.replace(
-    /!\[([^\]]*)\]\(\s*([^)\s]+)\s*\)/g,
-    (full, alt: string, src: string) => {
-      const raw = src.trim().replace(/\\/g, "/");
-      if (/^(https?:|data:|blob:|file:)/i.test(raw)) return full;
-      if (raw.includes(".prismnext/library/extract/")) return full;
-      const norm = raw.replace(/^\.\//, "");
-      if (!norm.startsWith("images/")) return full;
-      return `![${alt}](${base}${norm})`;
-    },
-  );
-}
+export { rewritePaperExtractImageSrcs } from "@shared/paper-extract-images";
 
 /** Markdown blockquote + page citation for a PDF excerpt. */
 export function formatPaperQuoteMarkdown(

@@ -1,13 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { PlusIcon, Loader2Icon, NotebookPenIcon, PlusCircleIcon, Trash2Icon, LoaderCircleIcon, XIcon, BookMarkedIcon } from "lucide-react";
+import { PlusIcon, Loader2Icon, NotebookPenIcon, PlusCircleIcon, Trash2Icon, LoaderCircleIcon, XIcon, BookMarkedIcon, SquareIcon } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useLiteratureReaderStore } from "@/stores/literature-reader-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useChatStore } from "@/stores/chat-store";
-import { useCitationStagingStore, EMPTY_STAGED_CITATIONS, isCitationInLibrary } from "@/stores/citation-staging-store";
+import {
+  useCitationStagingStore,
+  EMPTY_STAGED_CITATIONS,
+  EMPTY_CHECKED_STAGED_IDS,
+  isCitationInLibrary,
+  isStagedCitationAddable,
+} from "@/stores/citation-staging-store";
 import { useLiteratureExtractStore, useLiteratureExtractSession } from "@/stores/literature-extract-store";
 import { Button } from "@/components/ui/button";
 import type { RightTab } from "@/lib/workspace/mode-registry";
@@ -160,10 +166,17 @@ function LiteratureLibraryToolbar() {
   const pdfImportTotalCount = pdfImportBusyCount + pdfImportQueuedCount;
   const enqueuePdfImports = useLiteratureStore((s) => s.enqueuePdfImports);
   const chatSessionId = useChatStore((s) => s.sessionId);
-  const addAllToLibrary = useCitationStagingStore((s) => s.addAllToLibrary);
+  const addStagedToLibrary = useCitationStagingStore((s) => s.addStagedToLibrary);
+  const cancelBatchAdd = useCitationStagingStore((s) => s.cancelBatchAdd);
   const batchAdd = useCitationStagingStore((s) => s.batchAdd);
   const addProgressById = useCitationStagingStore((s) => s.addProgressById);
+  const inFlightAddIds = useCitationStagingStore((s) => s.inFlightAddIds);
   const clearPanelForSession = useCitationStagingStore((s) => s.clearPanelForSession);
+  const checkedStagedIds = useCitationStagingStore((s) =>
+    chatSessionId
+      ? s.checkedStagedIdsBySession[chatSessionId] ?? EMPTY_CHECKED_STAGED_IDS
+      : EMPTY_CHECKED_STAGED_IDS,
+  );
   const citations = useCitationStagingStore((s) => {
     if (!chatSessionId) return EMPTY_STAGED_CITATIONS;
     if (s.panelHiddenSessions[chatSessionId]) return EMPTY_STAGED_CITATIONS;
@@ -173,14 +186,25 @@ function LiteratureLibraryToolbar() {
     () => new Set(papers.map((p) => p.id)),
     [papers],
   );
-  const pendingCount = citations.filter(
-    (c) => !isCitationInLibrary(c, libraryPaperIdSet),
-  ).length;
+  const selectedAddableIds = useMemo(() => {
+    const checked = new Set(checkedStagedIds);
+    return citations
+      .filter(
+        (c) =>
+          checked.has(c.id) &&
+          isStagedCitationAddable(c, isCitationInLibrary(c, libraryPaperIdSet)),
+      )
+      .map((c) => c.id);
+  }, [citations, checkedStagedIds, libraryPaperIdSet]);
+  const selectedAddableCount = selectedAddableIds.length;
   const addingAll = batchAdd != null && batchAdd.sessionId === chatSessionId;
   const activeBatchProgress = addingAll
-    ? Object.values(addProgressById).find(
-        (p) => p.sessionId === chatSessionId && p.phase !== "done",
-      )
+    ? Object.entries(addProgressById).find(
+        ([stagedId, p]) =>
+          Boolean(inFlightAddIds[stagedId]) &&
+          p.sessionId === chatSessionId &&
+          p.phase !== "done",
+      )?.[1]
     : undefined;
 
   // Global extraction progress — count papers with any queued/extracting source.
@@ -283,9 +307,9 @@ function LiteratureLibraryToolbar() {
     }
   };
 
-  const handleAddAllCitations = async () => {
-    if (!chatSessionId || pendingCount === 0 || addingAll) return;
-    await addAllToLibrary(chatSessionId);
+  const handleAddSelectedCitations = async () => {
+    if (!chatSessionId || selectedAddableCount === 0 || addingAll) return;
+    await addStagedToLibrary(chatSessionId, selectedAddableIds);
   };
 
   const handleClearCitations = () => {
@@ -324,36 +348,56 @@ function LiteratureLibraryToolbar() {
         {subview === "session-citations" ? (
           <>
             {addingAll && batchAdd ? (
-              <span
-                className="inline-flex max-w-[min(16rem,45vw)] items-center gap-1 rounded-full bg-amber-500/10 px-2 h-6 text-[length:var(--font-menu-item)] text-amber-800 dark:text-amber-300 shrink-0"
-                title={
-                  activeBatchProgress
-                    ? stagedAddProgressLabel(activeBatchProgress)
-                    : `Adding ${batchAdd.completed}/${batchAdd.total} to library`
-                }
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex max-w-[min(18rem,50vw)] items-center gap-1 rounded-full border px-2 h-6 shrink-0",
+                  "border-amber-500/35 bg-amber-500/10 text-[length:var(--font-menu-item)] text-amber-800 dark:text-amber-300",
+                  "hover:bg-amber-500/15",
+                )}
+                title={t("modes.literature.cancelAllAdds")}
+                aria-label={t("modes.literature.cancelAllAdds")}
+                onClick={() => {
+                  if (chatSessionId) cancelBatchAdd(chatSessionId);
+                }}
               >
                 <Loader2Icon className="size-3 shrink-0 animate-spin" />
                 <span className="truncate tabular-nums">
                   {activeBatchProgress
                     ? stagedAddProgressLabel(activeBatchProgress)
-                    : `${batchAdd.completed}/${batchAdd.total} adding`}
+                    : `${batchAdd.completed}/${batchAdd.total}`}
                 </span>
-              </span>
+                <SquareIcon className="size-3 shrink-0 fill-current" />
+              </button>
             ) : null}
-            <Hint label={t("modes.literature.addAllPendingHint")}>
+            <Hint
+              label={
+                selectedAddableCount > 0
+                  ? t("modes.literature.addSelectedPendingHint", {
+                      count: selectedAddableCount,
+                    })
+                  : t("modes.literature.addSelectedPendingEmptyHint")
+              }
+            >
               <Button
                 size="xs"
                 variant="ghost"
                 className={cn("h-6 shrink-0", compact ? "size-6 px-0" : "px-1.5")}
-                onClick={() => void handleAddAllCitations()}
-                disabled={pendingCount === 0 || addingAll}
+                onClick={() => void handleAddSelectedCitations()}
+                disabled={selectedAddableCount === 0 || addingAll}
               >
                 {addingAll ? (
                   <Loader2Icon className="size-3.5 animate-spin" />
                 ) : (
                   <PlusCircleIcon className="size-3.5" />
                 )}
-                {!compact ? <span className="ml-1">{t("modes.literature.addAll")}</span> : null}
+                {!compact ? (
+                  <span className="ml-1">
+                    {selectedAddableCount > 0
+                      ? t("modes.literature.addSelected", { count: selectedAddableCount })
+                      : t("modes.literature.addToLibrary")}
+                  </span>
+                ) : null}
               </Button>
             </Hint>
             <Hint label={t("modes.literature.clearCitationsHint")}>

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { useLayoutStore } from "@/stores/layout-store";
+import { focusedModeId } from "@/lib/workspace/modes-from-tabs";
 import { useGitStore } from "@/stores/git-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { modeRegistry } from "@/lib/workspace/mode-registry";
@@ -31,7 +31,7 @@ export function useRightAreaShortcuts(enabled: boolean) {
 
       const rp = useRightPanelStore.getState();
       const activeTab = rp.tabs.find((t) => t.id === rp.activeTabId);
-      const focusedMode = useLayoutStore.getState().focusedMode;
+      const focusedMode = focusedModeId(rp.tabs, rp.activeTabId);
 
       if (!activeTab) return;
 

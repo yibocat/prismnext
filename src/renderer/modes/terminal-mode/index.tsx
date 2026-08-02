@@ -21,7 +21,7 @@ export const terminalMode: ModeDefinition = {
   labelKey: "modes.terminal.label",
   icon: <TerminalIcon className="size-3.5" />,
   tabKinds: ["terminal"],
-  persistence: "transient",
+  addMenuPolicy: "multi",
   initialTitle: "Shell",
   initialTitleKey: "modes.terminal.initialTitle",
   Sidebar: TerminalSidebar,

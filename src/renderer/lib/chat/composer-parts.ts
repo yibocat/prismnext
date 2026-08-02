@@ -171,7 +171,10 @@ export function createTokenId(): string {
 
 export function plainLabelForPart(part: ComposerPart): string {
   if (part.type === "text") return part.text;
-  if (part.type === "mention") return `@${part.label}`;
+  if (part.type === "mention") {
+    if (part.mentionType === "file") return `@${part.filePath}`;
+    return `@${part.label}`;
+  }
   if (part.type === "link") return part.label;
   if (part.type === "terminal-snippet") return `[${part.label}]`;
   if (part.type === "code-snippet") return `[${part.label}]`;

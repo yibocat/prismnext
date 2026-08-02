@@ -92,7 +92,7 @@ export function IntensiveReadingListButton({
           >
             <BookOpenIcon className="size-3 shrink-0 text-amber-600 dark:text-amber-400" />
             <div className="min-w-0 flex-1">
-              <div className="truncate font-mono text-[length:var(--font-chat-meta)] font-medium">
+              <div className="truncate text-[length:var(--font-chat-meta)] font-medium">
                 {formatPaperMentionLabel(paper.bibkey)}
               </div>
               <div className="truncate text-[length:var(--font-chat-meta)] text-muted-foreground">

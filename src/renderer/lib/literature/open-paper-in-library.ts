@@ -8,7 +8,6 @@ import { paperHasReadablePdf } from "@/modes/literature-mode/literature-format";
 
 function activateLiteratureListTab(): void {
   const layout = useLayoutStore.getState();
-  layout.activateMode("literature");
   if (!layout.editorMaximized && !layout.rightAreaExpanded) {
     layout.requestRightAreaExpand();
   }
@@ -39,7 +38,6 @@ export function openPaperPdfReader(paperId: string, title: string): void {
   const paper = useLiteratureStore.getState().papers.find((p) => p.id === paperId);
   if (!paper || !paperHasReadablePdf(paper)) return;
   const layout = useLayoutStore.getState();
-  layout.activateMode("literature");
   if (!layout.editorMaximized && !layout.rightAreaExpanded) {
     layout.requestRightAreaExpand();
   }

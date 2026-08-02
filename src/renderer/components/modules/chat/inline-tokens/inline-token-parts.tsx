@@ -1,8 +1,26 @@
 import type { ComposerPart } from "@/lib/chat/composer-parts";
-import { FlaskConicalIcon, GitCompareArrowsIcon } from "lucide-react";
+import { BookOpenIcon, FlaskConicalIcon, GitCompareArrowsIcon } from "lucide-react";
+import { Icon } from "@iconify/react/offline";
+import { getFileIconName } from "@/lib/files/file-icon-class";
+import { projectPathBasename } from "@/lib/files/mentionable-files";
+import {
+  openComposerExperimentToken,
+  openComposerFileToken,
+  openComposerPaperToken,
+} from "@/lib/chat/inline-token-open";
 import { InlineTokenChip } from "./inline-token-chip";
 import { openUrlInBrowser } from "@/lib/browser-link";
 import { useChatStore } from "@/stores/chat-store";
+
+function inlineFileIcon(path: string) {
+  const name = path.split(/[/\\]/).pop() || path;
+  return (
+    <Icon
+      icon={getFileIconName(name)}
+      className="size-[0.85em] shrink-0"
+    />
+  );
+}
 
 function GitDiffStatsSuffix({
   added,
@@ -30,11 +48,16 @@ export function ComposerTokenChip({
   openLinks?: boolean;
 }) {
   if (part.type === "mention" && part.mentionType === "file") {
+    const filePath = part.filePath || part.label;
+    const displayName = projectPathBasename(filePath);
     return (
       <InlineTokenChip
         variant="file"
-        prefix="@"
-        label={part.label}
+        prefix=""
+        label={displayName}
+        title={filePath}
+        icon={inlineFileIcon(filePath)}
+        onClick={() => openComposerFileToken(filePath)}
         asToken
       />
     );
@@ -56,9 +79,10 @@ export function ComposerTokenChip({
       <InlineTokenChip
         variant="code"
         prefix="@"
-        icon={<FlaskConicalIcon className="size-3 shrink-0" />}
+        icon={<FlaskConicalIcon className="size-[0.85em] shrink-0" />}
         label={part.label}
         title={`Experiment: ${part.experimentId}`}
+        onClick={() => openComposerExperimentToken(part.experimentId)}
         asToken
       />
     );
@@ -212,15 +236,18 @@ function PaperMentionChip({
   });
   return (
     <InlineTokenChip
-      variant="file"
-      prefix="@"
+      variant="literature"
+      prefix=""
+      icon={<BookOpenIcon className="size-[0.85em] shrink-0" />}
       label={part.label}
+      title={part.bibkey}
+      onClick={() => void openComposerPaperToken(part.paperId)}
       asToken
       suffix={
         intensive ? (
           <span
             title="Intensive reading"
-            className="ml-0.5 inline-flex shrink-0 items-center rounded-sm bg-emerald-500/15 px-1 text-[9px] font-semibold uppercase leading-none tracking-wide text-emerald-700 dark:text-emerald-400"
+            className="ml-0.5 shrink-0 text-[9px] font-semibold uppercase leading-none tracking-wide text-indigo-700 dark:text-indigo-300"
           >
             Intensive
           </span>

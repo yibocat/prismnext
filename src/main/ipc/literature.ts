@@ -58,6 +58,13 @@ import {
   downloadPdfForPaper,
   ingestPdfWithEnrich,
 } from "../services/literature-enrich";
+import {
+  beginStagedCitationAdd,
+  cancelStagedCitationAdd,
+  endStagedCitationAdd,
+} from "../services/staged-citation-add-abort";
+import { StagedCitationAddCancelledError } from "../lib/staged-citation-add-cancelled";
+import { STAGED_CITATION_CREATE_CANCELLED } from "../../shared/citation-staging";
 import { exportZoteroBibliography } from "../services/zotero-sync";
 import type { StagedCitationImportInput, StagedCitationPayload, StageResult } from "../../shared/citation-staging";
 import { stageLiteratureCitation } from "../services/literature-bridge";
@@ -244,6 +251,8 @@ export function registerLiteratureHandlers(): void {
       event,
       args: { projectRoot: string; citation: StagedCitationImportInput },
     ) => {
+      const stagedId = args.citation.stagedId;
+      const signal = beginStagedCitationAdd(stagedId);
       const send = (payload: {
         phase: "writing" | "downloading-pdf" | "done";
         receivedBytes?: number;
@@ -251,15 +260,36 @@ export function registerLiteratureHandlers(): void {
         pdfAttached?: boolean;
         pdfSkipped?: boolean;
       }) => {
+        if (signal.aborted) return;
         event.sender.send("literature:stagedAddProgress", {
-          stagedId: args.citation.stagedId,
+          stagedId,
           sessionId: args.citation.sessionId,
           batchIndex: args.citation.batchIndex,
           batchTotal: args.citation.batchTotal,
           ...payload,
         });
       };
-      return mapPaperPayload(await createPaperFromStagedCitation(args.projectRoot, args.citation, send));
+      try {
+        return mapPaperPayload(
+          await createPaperFromStagedCitation(args.projectRoot, args.citation, send, {
+            signal,
+          }),
+        );
+      } catch (err) {
+        if (err instanceof StagedCitationAddCancelledError) {
+          return STAGED_CITATION_CREATE_CANCELLED;
+        }
+        throw err;
+      } finally {
+        endStagedCitationAdd(stagedId);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "literature:cancelStagedCitationAdd",
+    (_event, args: { stagedId: string }) => {
+      cancelStagedCitationAdd(args.stagedId);
     },
   );
 

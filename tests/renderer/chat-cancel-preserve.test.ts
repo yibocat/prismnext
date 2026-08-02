@@ -102,9 +102,49 @@ describe("cancelExecution preserves partial reply", () => {
     await useChatStore.getState().cancelExecution();
 
     const tab = useChatStore.getState().tabs.find((t) => t.id === tabId)!;
-    expect(tab.loadedMessageCount).toBe(1);
-    expect(tab.totalMessageCount).toBeGreaterThanOrEqual(1);
-    expect(tab.loadedSqlRowCount).toBeGreaterThanOrEqual(1);
+    // Committed interrupted reply must stay in the in-memory transcript.
+    expect(tab.messages).toHaveLength(1);
+    expect(tab.messages[0]).toMatchObject({ type: "assistant", stopped: true });
+    expect(tab.streamingMessage).toBeNull();
+  });
+
+  it("bumps streamGeneration on cancel so stale chat:complete cannot clear the next turn", async () => {
+    const tabId = useChatStore.getState().createTab();
+    useChatStore.setState((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId
+          ? {
+              ...t,
+              sessionId: "sess-gen",
+              isStreaming: true,
+              streamGeneration: 2,
+              streamingMessage: {
+                type: "assistant" as const,
+                message: { content: [{ type: "text" as const, text: "partial" }] },
+              },
+            }
+          : t,
+      ),
+    }));
+
+    await useChatStore.getState().cancelExecution();
+    const afterCancel = useChatStore.getState().tabs.find((t) => t.id === tabId)!;
+    expect(afterCancel.isStreaming).toBe(false);
+    expect(afterCancel.streamGeneration).toBe(3);
+
+    // Queue drain / re-send starts a new turn
+    useChatStore.getState()._setStreaming(tabId, true);
+    const afterResend = useChatStore.getState().tabs.find((t) => t.id === tabId)!;
+    expect(afterResend.isStreaming).toBe(true);
+    expect(afterResend.streamGeneration).toBe(4);
+
+    // Stale complete captured generation 2 or 3 must not clear generation 4
+    const { canClearStreamingForGeneration } = await import(
+      "../../src/renderer/lib/chat/stream-generation"
+    );
+    expect(canClearStreamingForGeneration(2, afterResend.streamGeneration)).toBe(false);
+    expect(canClearStreamingForGeneration(3, afterResend.streamGeneration)).toBe(false);
+    expect(canClearStreamingForGeneration(4, afterResend.streamGeneration)).toBe(true);
   });
 
   it("does not throw when there is no streaming message to commit", async () => {

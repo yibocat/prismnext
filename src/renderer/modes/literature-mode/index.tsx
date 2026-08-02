@@ -16,8 +16,9 @@ export const literatureMode: ModeDefinition = {
   labelKey: "modes.literature.label",
   icon: <BookOpenIcon className="size-3.5" />,
   tabKinds: ["literature"],
-  surface: "any",
-  persistence: "persistent",
+  surface: "workspace",
+  /** 「+」始终可再开一个 Library 首页；开论文时由 openLiteraturePaper 替换当前首页。 */
+  addMenuPolicy: "multi",
   initialTitle: "Library",
   initialTitleKey: "modes.literature.initialTitle",
   Sidebar: LiteratureSidebar,

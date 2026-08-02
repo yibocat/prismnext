@@ -36,7 +36,6 @@ vi.mock("../../src/renderer/stores/layout-store", () => ({
       rightAreaExpanded: true,
       unmaximizeRightArea: vi.fn(),
       setLeftSidebarView: vi.fn(),
-      activateMode: vi.fn(),
       requestRightAreaExpand: vi.fn(),
     }),
   },

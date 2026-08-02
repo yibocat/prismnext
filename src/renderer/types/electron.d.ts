@@ -924,7 +924,17 @@ export interface ElectronAPI {
     projectDir: string,
     mainFile: string,
     useTexlive?: boolean,
-  ) => Promise<{ pdfBytes: ArrayBuffer; buildDir?: string; stdout?: string } | { error: string; stdout?: string }>;
+    opts?: {
+      dirtyRelPaths?: string[];
+      dirtyFiles?: Array<{ relPath: string; content: string }>;
+      pdfOnDisk?: boolean;
+      skipSynctex?: boolean;
+      fast?: boolean;
+    },
+  ) => Promise<
+    | { pdfBytes?: ArrayBuffer; pdfPath?: string; buildDir?: string; stdout?: string }
+    | { error: string; stdout?: string }
+  >;
   compileSynctex: (
     projectDir: string,
     page: number,
@@ -1019,13 +1029,17 @@ export interface ElectronAPI {
   literatureCreateFromStagedCitation: (
     projectRoot: string,
     citation: import("../../shared/citation-staging").StagedCitationImportInput,
-  ) => Promise<{
-    paper: LiteraturePaper;
-    created: boolean;
-    duplicateReason?: "doi" | "arxiv";
-    pdfAttached?: boolean;
-    pdfAttachError?: string;
-  }>;
+  ) => Promise<
+    | import("../../shared/citation-staging").StagedCitationCreateCancelledResult
+    | {
+        paper: LiteraturePaper;
+        created: boolean;
+        duplicateReason?: "doi" | "arxiv";
+        pdfAttached?: boolean;
+        pdfAttachError?: string;
+      }
+  >;
+  literatureCancelStagedCitationAdd: (stagedId: string) => Promise<void>;
   onLiteratureStagedAddProgress: (
     callback: (data: import("../../shared/citation-staging").StagedAddProgressEvent) => void,
   ) => () => void;

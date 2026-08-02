@@ -17,6 +17,7 @@ extraResources:
 # Layout matches resolveOpencodeBinaryPath():
 #   Packaged → <resources>/opencode/opencode[.exe]
 #   Dev      → bin/opencode/<platform>-<arch>/opencode[.exe]
+# Tectonic LaTeX engine — same layout under tectonic/ (see resolveBundledTectonicBinaryPath).
 # Folder names: darwin | linux | windows  (not electron-builder's mac/win macros).
 mac:
   icon: resources/brand/icon.icns
@@ -30,6 +31,10 @@ mac:
       to: "opencode"
       filter:
         - "opencode*"
+    - from: "bin/tectonic/darwin-${arch}/"
+      to: "tectonic"
+      filter:
+        - "tectonic*"
 
 win:
   # Generated from app-icon-dark.png (Pillow). Falls back to PNG if missing.
@@ -42,6 +47,10 @@ win:
       to: "opencode"
       filter:
         - "opencode*"
+    - from: "bin/tectonic/windows-${arch}/"
+      to: "tectonic"
+      filter:
+        - "tectonic*"
 
 linux:
   icon: resources/brand/app-icon-dark.png
@@ -53,6 +62,10 @@ linux:
       to: "opencode"
       filter:
         - "opencode*"
+    - from: "bin/tectonic/linux-${arch}/"
+      to: "tectonic"
+      filter:
+        - "tectonic*"
 
 # CI may override with --config.publish.url="$R2_PUBLIC_BASE_URL".
 # Local dist:* uses --publish never — no upload.

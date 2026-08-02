@@ -261,3 +261,96 @@ export function parseDraftJson(raw: string | undefined): ComposerPart[] {
 export function draftToJson(parts: ComposerPart[]): string {
   return JSON.stringify({ parts: mergeAdjacentText(parts) });
 }
+
+function tokenDocSpan(doc: string, pos: number): number {
+  return 1 + (isAutoTokenSeparator(doc[pos + 1]) ? 1 : 0);
+}
+
+/** Parts intersecting a CodeMirror doc selection (tokens are atomic when touched). */
+export function partsInDocSelection(
+  doc: string,
+  tokenMap: PositionTokenMap,
+  selFrom: number,
+  selTo: number,
+): ComposerPart[] {
+  if (selFrom === selTo) return [];
+
+  const from = Math.max(0, Math.min(selFrom, selTo));
+  const to = Math.max(from, Math.max(selFrom, selTo));
+  const ordered = docToParts(doc, tokenMap);
+  const result: ComposerPart[] = [];
+  let docPos = 0;
+
+  for (const part of ordered) {
+    if (part.type === "text") {
+      const partFrom = docPos;
+      const partTo = docPos + part.text.length;
+      if (partTo <= from || partFrom >= to) {
+        docPos = partTo;
+        continue;
+      }
+      const sliceFrom = Math.max(0, from - partFrom);
+      const sliceTo = Math.min(part.text.length, to - partFrom);
+      const slice = part.text.slice(sliceFrom, sliceTo);
+      if (slice) result.push({ type: "text", text: slice });
+      docPos = partTo;
+      continue;
+    }
+
+    const tokenFrom = docPos;
+    const tokenTo = docPos + tokenDocSpan(doc, docPos);
+    if (tokenFrom < to && tokenTo > from) {
+      result.push(part);
+    }
+    docPos = tokenTo;
+  }
+
+  return mergeAdjacentText(result);
+}
+
+/** Remove the doc selection and return remaining parts. */
+export function partsAfterRemovingDocSelection(
+  doc: string,
+  tokenMap: PositionTokenMap,
+  selFrom: number,
+  selTo: number,
+): ComposerPart[] {
+  if (selFrom === selTo) return docToParts(doc, tokenMap);
+
+  const from = Math.max(0, Math.min(selFrom, selTo));
+  const to = Math.max(from, Math.max(selFrom, selTo));
+  const ordered = docToParts(doc, tokenMap);
+  const result: ComposerPart[] = [];
+  let docPos = 0;
+
+  for (const part of ordered) {
+    if (part.type === "text") {
+      const partFrom = docPos;
+      const partTo = docPos + part.text.length;
+      if (partTo <= from || partFrom >= to) {
+        result.push(part);
+      } else {
+        if (from > partFrom) {
+          const head = part.text.slice(0, from - partFrom);
+          if (head) result.push({ type: "text", text: head });
+        }
+        if (to < partTo) {
+          const tail = part.text.slice(to - partFrom);
+          if (tail) result.push({ type: "text", text: tail });
+        }
+      }
+      docPos = partTo;
+      continue;
+    }
+
+    const tokenFrom = docPos;
+    const tokenTo = docPos + tokenDocSpan(doc, docPos);
+    if (tokenFrom >= to || tokenTo <= from) {
+      result.push(part);
+    }
+    docPos = tokenTo;
+  }
+
+  const merged = mergeAdjacentText(result);
+  return merged.length > 0 ? merged : [{ type: "text", text: "" }];
+}

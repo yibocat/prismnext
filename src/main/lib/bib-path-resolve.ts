@@ -217,6 +217,72 @@ export async function syncTexSourceToBuildDir(
   return { buildMain, sourceDirRel };
 }
 
+function mapProjectRelToBuildRel(
+  relPath: string,
+  sourceDirRel: string,
+): string | null {
+  const n = normalizeRel(relPath);
+  if (sourceDirRel) {
+    const prefix = `${sourceDirRel}/`;
+    if (n.startsWith(prefix)) return n.slice(prefix.length);
+    if (!n.includes("/") && /\.(bib|sty|cls|bst|def|tex)$/i.test(n)) return n;
+    return null;
+  }
+  return n;
+}
+
+/**
+ * Incrementally copy only dirty project files into the build dir.
+ * Falls back to a full sync when the build tree is missing.
+ */
+export async function syncTexSourceIncremental(
+  projectRoot: string,
+  mainFile: string,
+  buildDir: string,
+  dirtyRelPaths: string[],
+): Promise<{ buildMain: string; sourceDirRel: string; fullSync: boolean }> {
+  const normalizedMain = normalizeRel(mainFile);
+  const buildMain = path.basename(normalizedMain);
+  const mainDirRel = path.dirname(normalizedMain);
+  const sourceDirRel = mainDirRel === "." ? "" : normalizeRel(mainDirRel);
+
+  await fs.promises.mkdir(buildDir, { recursive: true });
+
+  const buildMainPath = path.join(buildDir, buildMain);
+  if (!fs.existsSync(buildMainPath)) {
+    await syncTexSourceToBuildDir(projectRoot, mainFile, buildDir);
+    return { buildMain, sourceDirRel, fullSync: true };
+  }
+
+  if (dirtyRelPaths.length === 0) {
+    return { buildMain, sourceDirRel, fullSync: false };
+  }
+
+  const copied = new Set<string>();
+  for (const rel of dirtyRelPaths) {
+    const destRel = mapProjectRelToBuildRel(rel, sourceDirRel);
+    if (!destRel || copied.has(destRel)) continue;
+
+    const srcAbs = path.join(projectRoot, normalizeRel(rel));
+    if (!fs.existsSync(srcAbs)) continue;
+
+    const destAbs = path.join(buildDir, destRel);
+    await fs.promises.mkdir(path.dirname(destAbs), { recursive: true });
+    const stat = await fs.promises.stat(srcAbs);
+    if (stat.isDirectory()) {
+      await fs.promises.cp(srcAbs, destAbs, { recursive: true, force: true });
+    } else {
+      await fs.promises.copyFile(srcAbs, destAbs);
+    }
+    copied.add(destRel);
+  }
+
+  if (copied.size > 0) {
+    log.info(`Incremental sync (${copied.size} file(s)) → ${buildDir}`);
+  }
+  return { buildMain, sourceDirRel, fullSync: false };
+}
+
 /** Copy declared .bib files into the build dir (biber/bibtex cwd) under their declared basenames. */
 export async function stageBibliographyForBuild(
   projectRoot: string,

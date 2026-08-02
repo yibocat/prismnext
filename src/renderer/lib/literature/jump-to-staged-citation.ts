@@ -15,7 +15,6 @@ export function openSessionCitations(sessionId: string): void {
   useCitationStagingStore.getState().revealPanelForSession(sessionId);
 
   const layout = useLayoutStore.getState();
-  layout.activateMode("literature");
   // Only expand when RightArea is hidden — never reset an existing split on citation jump.
   if (!layout.editorMaximized && !layout.rightAreaExpanded) {
     layout.requestRightAreaExpand();

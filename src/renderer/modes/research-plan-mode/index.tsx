@@ -4,8 +4,8 @@ import { FilesContent } from "@/modes/files-mode/files-content";
 import { ResearchPlanToolbar } from "./research-plan-toolbar";
 
 /**
+ * Hidden from the「+」add menu (`showInAddMenu: false`).
  * Dedicated Plan-of-record surface: reuses Files editor content, own toolbar.
- * Hidden from the mode button strip (`showInModeToolbar: false`).
  */
 export const researchPlanMode: ModeDefinition = {
   id: "research-plan",
@@ -13,9 +13,8 @@ export const researchPlanMode: ModeDefinition = {
   labelKey: "modes.researchPlan.label",
   icon: <ListTodoIcon className="size-3.5" />,
   tabKinds: ["research-plan"],
-  surface: "any",
-  showInModeToolbar: false,
-  persistence: "transient",
+  surface: "workspace",
+  showInAddMenu: false,
   initialTitle: "Plan",
   initialTitleKey: "modes.researchPlan.initialTitle",
   hideRightSidebar: true,

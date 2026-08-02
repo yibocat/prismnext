@@ -2,8 +2,8 @@
  * Programmatic Experiments navigation — chat tool deep-link + Agent
  * `experiment-log open` + registry-changed auto-refresh.
  *
- * Deep-links from Chat / Agent open Experiments as a normal RightArea split
- * (never maximized). Left-nav still uses `openExperimentsPanel` for full-bleed.
+ * Deep-links from Chat / Agent open Experiments in RightArea and select the island.
+ * Preserves maximize when RightArea is already maximized (does not force split).
  */
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
@@ -22,8 +22,8 @@ function ensureExperimentsPanelChrome(): void {
 }
 
 /**
- * Open Experiments mode beside chat (split RightArea) and select an island.
- * Does NOT maximize — Chat ↔ Experiments deep-links keep the center chat visible.
+ * Open Experiments mode beside chat and select an island.
+ * Preserves RightArea maximize vs split when already expanded.
  *
  * Soft-focus (Bug #12 / Phase 3): if this island is already selected with detail
  * loaded, skip `selectExperiment` so History selection state is not reset.

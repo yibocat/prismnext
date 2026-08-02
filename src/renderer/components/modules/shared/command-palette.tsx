@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { useLiteratureStore } from "@/stores/literature-store";
 import type { LiteraturePaper } from "@/types/electron.d";
 import { modeRegistry } from "@/lib/workspace/mode-registry";
+import { openMode } from "@/lib/workspace/open-right-area-mode";
 import { SETTINGS_GROUPS } from "@/components/modules/settings/settings-sidebar";
 import { pressLeftNav } from "@/lib/workspace/left-nav";
 import { openRightArea, toggleRightAreaMaximize } from "@/lib/workspace/right-area-layout";
@@ -344,7 +345,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
   const modeItems = useMemo(() => {
     if (!showModes) return [] as { id: string; label: string; icon: ReactNode; shortcutId?: string }[];
     return modeRegistry
-      .getToolbarModes("workspace")
+      .getAddMenuModes("workspace")
       .map((m) => ({
         id: m.id,
         label: m.labelKey ? t(m.labelKey) : m.label,
@@ -641,10 +642,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
     const def = modeRegistry.get(modeId);
     if (!def) return;
     ensureRightAreaOpen();
-    useLayoutStore.getState().activateMode(modeId as RightToolbarTab);
-    const kind = def.tabKinds[0];
-    if (kind) useRightPanelStore.getState().ensureTab(kind);
-    def.onActivate?.();
+    openMode(modeId);
     if (maximize) maximizeRightArea();
   };
   const openSetting = (categoryId: string, _maximize = false) => {
@@ -675,7 +673,6 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
       return;
     }
     ensureRightAreaOpen();
-    useLayoutStore.getState().activateMode("experiments");
     useRightPanelStore.getState().ensureTab("experiments");
     // The create broadcast (focus: true) handles selection; refresh as a fallback.
     const id = res.id;

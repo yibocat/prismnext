@@ -1,6 +1,7 @@
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { resolveProjectRelativePath } from "./project-path";
+import { revealProjectRelativePath } from "./reveal-project-path";
 
 /** Open a hidden `.prismnext/` file in the editor (tab + content load). */
 export async function openHiddenProjectFile(
@@ -25,11 +26,5 @@ export async function openHiddenProjectFile(
 
 /** Reveal a hidden `.prismnext/` path in the system file manager. */
 export function revealProjectHiddenPath(relativePath: string): void {
-  const projectRoot = useDocumentStore.getState().projectRoot;
-  if (!projectRoot) return;
-
-  const abs = resolveProjectRelativePath(projectRoot, relativePath);
-  if (!abs) return;
-
-  void window.electronAPI.shellShowItemInFolder(abs);
+  revealProjectRelativePath(relativePath);
 }

@@ -49,7 +49,7 @@ describe("clearCheckpointsForWorktree", () => {
             },
           ],
           pendingTurn: null,
-          restoreUndo: null,
+          regret: null,
           boundCheckoutPath: WT,
         },
       },
@@ -93,7 +93,7 @@ describe("clearCheckpointsForWorktree", () => {
             },
           ],
           pendingTurn: null,
-          restoreUndo: null,
+          regret: null,
           boundCheckoutPath: WT,
         },
       },
@@ -108,7 +108,7 @@ describe("clearCheckpointsForWorktree", () => {
     expect(window.electronAPI.fsDelete).toHaveBeenCalled();
   });
 
-  it("canRestore is false when session cwd no longer matches bound checkout", () => {
+  it("canRollback is false when session cwd no longer matches bound checkout", () => {
     useCheckpointStore.setState({
       byTab: {
         "tab-1": {
@@ -128,7 +128,7 @@ describe("clearCheckpointsForWorktree", () => {
             },
           ],
           pendingTurn: null,
-          restoreUndo: null,
+          regret: null,
           boundCheckoutPath: WT,
         },
       },
@@ -142,6 +142,6 @@ describe("clearCheckpointsForWorktree", () => {
       ],
     } as any);
 
-    expect(useCheckpointStore.getState().canRestoreToTurn("tab-1", 0)).toBe(false);
+    expect(useCheckpointStore.getState().canRollbackToTurn("tab-1", 0)).toBe(false);
   });
 });

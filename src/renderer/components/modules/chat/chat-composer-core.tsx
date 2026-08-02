@@ -5,7 +5,8 @@ import {
   PlusIcon,
   FileIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   AppMenu,
@@ -20,6 +21,7 @@ import { ComposerToolbar } from "./agent-settings/composer-toolbar";
 import { ModelThoughtSelect } from "./agent-settings/model-thought-select";
 import { InlineComposerEditor } from "./inline-composer";
 import { ComposerChromeStack } from "./composer-chrome-stack";
+import { ComposerSendQueuePanel } from "./composer-send-queue-panel";
 import { SubAgentRunPanelHost } from "./subagent-run-panel";
 import { PlanModeChip } from "./plan-mode-chip";
 import { useChatComposer } from "@/hooks/use-chat-composer";
@@ -114,10 +116,15 @@ export function ChatComposerCore({
 
   const isCapsule = variant === "capsule-compact" || variant === "capsule-expanded";
   const isCompact = variant === "capsule-compact";
+  const queueLength = useChatStore(
+    (s) => s.tabs.find((x) => x.id === s.activeTabId)?.composerSendQueue.length ?? 0,
+  );
   const placeholder =
     sessionAgent === "plan"
       ? t("chat.planWorkflow.placeholder")
-      : (capsulePlaceholder ?? t("chat.composer.placeholder"));
+      : composer.isStreaming || queueLength > 0
+        ? t("chat.composer.placeholderFollowUp")
+        : (capsulePlaceholder ?? t("chat.composer.placeholder"));
 
   const compactRowRef = useRef<HTMLDivElement>(null);
   const [useModelIcon, setUseModelIcon] = useState(false);
@@ -141,6 +148,17 @@ export function ChatComposerCore({
     update();
     return () => ro.disconnect();
   }, [isCompact]);
+
+  // Capsule queue portals into AiBar slot (above morph). Resolve after commit.
+  const [capsuleQueueSlot, setCapsuleQueueSlot] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (!isCapsule) {
+      setCapsuleQueueSlot(null);
+      return;
+    }
+    setCapsuleQueueSlot(document.getElementById("ai-bar-composer-queue-slot"));
+    return () => setCapsuleQueueSlot(null);
+  }, [isCapsule]);
 
   const addMenu = (
     <AppMenu>
@@ -245,7 +263,16 @@ export function ChatComposerCore({
           isCompact ? "h-full" : className,
         )}
       >
-        {/* Permission + plan/question/todo chrome lives on AiBar via ComposerChromeStack. */}
+        {capsuleQueueSlot
+          ? createPortal(
+              <ComposerSendQueuePanel
+                onEdit={composer.handleQueueEdit}
+                onSendOne={(id) => void composer.handleQueueSendOne(id)}
+                onDelete={composer.handleQueueDelete}
+              />,
+              capsuleQueueSlot,
+            )
+          : null}
 
         <div
           className={cn(
@@ -324,6 +351,11 @@ export function ChatComposerCore({
       <div className="flex w-full flex-col">
         <SubAgentRunPanelHost />
         <ComposerChromeStack />
+        <ComposerSendQueuePanel
+          onEdit={composer.handleQueueEdit}
+          onSendOne={(id) => void composer.handleQueueSendOne(id)}
+          onDelete={composer.handleQueueDelete}
+        />
 
         <div
           className={cn(

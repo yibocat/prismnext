@@ -24,16 +24,6 @@ vi.mock("@/stores/document-store", () => ({
   },
 }));
 
-vi.mock("@/stores/layout-store", () => ({
-  useLayoutStore: {
-    getState: () => ({
-      activeModes: ["terminal"],
-      focusedMode: "terminal",
-    }),
-    setState: vi.fn(),
-  },
-}));
-
 import { useTerminalStore } from "../../src/renderer/stores/terminal-store";
 import { useRightPanelStore } from "../../src/renderer/stores/right-panel-store";
 import { useTabCloseConfirmStore } from "../../src/renderer/stores/tab-close-confirm-store";

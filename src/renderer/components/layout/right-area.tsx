@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useCallback, useMemo, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { type PanelImperativeHandle } from "react-resizable-panels";
-import { useLayoutStore, type RightToolbarTab } from "@/stores/layout-store";
+import { useLayoutStore } from "@/stores/layout-store";
+import { useFocusedModeId } from "@/lib/workspace/modes-from-tabs";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { modeRegistry, type RightTab } from "@/lib/workspace/mode-registry";
@@ -30,7 +31,6 @@ import {
   XIcon,
   ArrowLeftIcon,
   ChevronsLeftRightEllipsisIcon,
-  LayoutGridIcon,
 } from "lucide-react";
 import {
   clampSidebarDragPreviewWidth,
@@ -47,18 +47,7 @@ import {
   closeRightArea,
   toggleRightAreaMaximize,
 } from "@/lib/workspace/right-area-layout";
-import { deactivateModeFromToolbar } from "@/lib/workspace/deactivate-mode";
-
-/** RightArea toolbar mode → open (split) shortcut. */
-const MODE_TOOLBAR_SHORTCUT: Partial<Record<string, string>> = {
-  texworkspace: "workspace.openTexWorkspace",
-  literature: "workspace.openLiterature",
-  experiments: "workspace.openExperiments",
-  files: "workspace.openFiles",
-  git: "workspace.openGit",
-  browser: "workspace.openBrowser",
-  terminal: "workspace.openTerminal",
-};
+import { RightAreaAddMenu } from "@/components/layout/right-area-add-menu";
 import {
   AppMenu,
   AppMenuContent,
@@ -163,21 +152,12 @@ function RightAreaWorkspace({
   const isMobile = useIsMobile();
   const isMac = platform === "darwin";
 
-  const modeLabel = useCallback(
-    (mode: { label: string; labelKey?: string }) =>
-      mode.labelKey ? t(mode.labelKey) : mode.label,
-    [t],
-  );
-
   const sidebarFullyCollapsed = useLayoutStore((s) => s.sidebarFullyCollapsed);
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
-  const activeModes = useLayoutStore((s) => s.activeModes);
-  const focusedMode = useLayoutStore((s) => s.focusedMode);
+  const focusedMode = useFocusedModeId();
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   const settingsDetailStacked = useLayoutStore((s) => s.settingsDetailStacked);
   const settingsCategory = useLayoutStore((s) => s.settingsCategory);
-  const toggleMode = useLayoutStore((s) => s.toggleMode);
-  const activateMode = useLayoutStore((s) => s.activateMode);
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
   const rightSidebarOpen = useLayoutStore((s) => s.rightSidebarOpen);
   const setRightSidebarOpen = useLayoutStore((s) => s.setRightSidebarOpen);
@@ -191,10 +171,6 @@ function RightAreaWorkspace({
   const settingsEditorOpen = hasSettingsEditorTab;
   const showSettingsStackedChrome =
     inSettings && settingsDetailStacked && settingsEditorOpen;
-  const toolbarModes = useMemo(
-    () => modeRegistry.getToolbarModes(inSettings ? "settings" : "workspace"),
-    [inSettings],
-  );
   const prevCategoryRef = useRef(settingsCategory);
 
   const slotTitle = settingsPanelSlotTitle(settingsSlot);
@@ -303,14 +279,7 @@ function RightAreaWorkspace({
   // Stable TabBar callbacks — prevents memo break
   const handleTabSelect = useCallback(
     (id: string) => {
-      const store = useRightPanelStore.getState();
-      store.setActiveTab(id);
-      // Sync focusedMode to match the clicked tab
-      const tab = store.tabs.find((t) => t.id === id);
-      if (tab && tab.kind !== "settings-editor") {
-        const def = modeRegistry.findByTabKind(tab.kind);
-        if (def) useLayoutStore.getState().setFocusedMode(def.id as RightToolbarTab);
-      }
+      useRightPanelStore.getState().setActiveTab(id);
     }, []);
   const handleTabClose = useCallback(
     (id: string) => useRightPanelStore.getState().requestCloseTab(id), []);
@@ -465,7 +434,6 @@ function RightAreaWorkspace({
   const rightSidebarRevealNonce = useLayoutStore((s) => s.rightSidebarRevealNonce);
   useEffect(() => {
     if (rightSidebarRevealNonce <= 0) return;
-    if (compactModesRef.current) return;
 
     const apply = (): boolean => {
       const cw = containerElRef.current?.clientWidth ?? 0;
@@ -492,50 +460,7 @@ function RightAreaWorkspace({
     return () => cancelAnimationFrame(raf);
   }, [rightSidebarRevealNonce, isTooNarrowForSplit]);
 
-  // ── Mode button: per-mode lifecycle (registry-driven) ──
-  const handleModeClick = useCallback(
-    (target: string) => {
-      const store = useRightPanelStore.getState();
-      const active = activeModes.includes(target as RightToolbarTab);
-      const def = modeRegistry.get(target);
-
-      if (!active) {
-        // ── Activate mode ──
-        activateMode(target as RightToolbarTab);
-        if (def) {
-          // Terminal is special: only create PTY if no sessions exist
-          if (target === "terminal" && store.hasTabsOfKind("terminal")) {
-            // reuse existing terminal tab
-          } else {
-            const kind = def.tabKinds[0];
-            if (kind) {
-              if (target === "terminal") {
-                store.newTerminalTab();
-              } else {
-                store.ensureTab(kind);
-              }
-            }
-          }
-          def.onActivate?.();
-        }
-        // Auto-open mode sidebar (split or narrow full-overlay) once container is ready.
-        if (!compactModesRef.current) {
-          useLayoutStore.getState().revealRightSidebar();
-        }
-      } else if (focusedMode === target) {
-        // ── Deactivate mode (Terminal keeps tabs/PTY; others close tabs) ──
-        deactivateModeFromToolbar(target);
-      } else {
-        // ── Switch focus (active but not focused) ──
-        toggleMode(target as RightToolbarTab);
-        const tab = store.tabs.find(
-          (t) => def?.tabKinds.includes(t.kind),
-        );
-        if (tab) store.setActiveTab(tab.id);
-      }
-    },
-    [activeModes, focusedMode, activateMode, toggleMode, setRightSidebarOpen],
-  );
+  // ── Mode open/focus: RightAreaAddMenu → openMode
 
   const sidebarFull = rightSidebarOpen && sidebarFullMode;
 
@@ -565,36 +490,13 @@ function RightAreaWorkspace({
     containerWidth,
   ]);
 
-  // ── Tab overflow detection ──
-  const tabBarContainerRef = useRef<HTMLDivElement>(null);
-  const [tabsOverflow, setTabsOverflow] = useState(false);
-  const tabsOverflowRef = useRef(false);
-  useEffect(() => {
-    const el = tabBarContainerRef.current;
-    if (!el) return;
-    const check = () => {
-      const ov = tabs.length > 0 && el.clientWidth < tabs.length * 126;
-      tabsOverflowRef.current = ov;
-      setTabsOverflow(ov);
-    };
-    check();
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [tabs.length]);
-
-  // ─── Responsive: collapse mode buttons into dropdown on narrow windows ───
+  // ── Narrow chrome: hide tab strip; tabs live only in the overflow menu ──
   const toolbarRef = useRef<HTMLDivElement>(null);
-  const [compactModes, setCompactModes] = useState(false);
-  const compactModesRef = useRef(false);
+  const [compactChrome, setCompactChrome] = useState(false);
   useEffect(() => {
     const el = toolbarRef.current;
     if (!el) return;
-    const check = () => {
-      const c = el.clientWidth < 500;
-      compactModesRef.current = c;
-      setCompactModes(c);
-    };
+    const check = () => setCompactChrome(el.clientWidth < 420);
     check();
     const ro = new ResizeObserver(check);
     ro.observe(el);
@@ -686,66 +588,79 @@ function RightAreaWorkspace({
         )}
         </div>
 
-        <div ref={tabBarContainerRef} className="no-drag flex-1 min-w-0 self-stretch">
-          <TabBar
-            tabs={tabs}
-            activeTabId={activeTabId}
-            onSelect={handleTabSelect}
-            onClose={handleTabClose}
-            onPinTab={handleTabPin}
-            onReorder={handleTabReorder}
-            dirtyFileIds={dirtyFileIds}
-            forceOverflow={tabsOverflow}
-          />
+        {/* Tab cluster hugs the right (before window controls): [+][tabs…] — + sits left of leftmost tab.
+            Settings surface: no「+」(detail tabs are opened from the settings list, not the add menu). */}
+        <div className="no-drag flex min-w-0 flex-1 items-center justify-end gap-0.5 self-stretch">
+          {!inSettings ? (
+            <div className="flex shrink-0 items-center">
+              <RightAreaAddMenu
+                surface="workspace"
+                centerRef={centerRef}
+                rightAreaRef={rightAreaRef}
+                leftSidebarRef={leftSidebarRef}
+                isMobile={isMobile}
+              />
+            </div>
+          ) : null}
+          {!compactChrome ? (
+            <div className="min-w-0 max-w-full overflow-hidden self-stretch">
+              <TabBar
+                tabs={tabs}
+                activeTabId={activeTabId}
+                onSelect={handleTabSelect}
+                onClose={handleTabClose}
+                onPinTab={handleTabPin}
+                onReorder={handleTabReorder}
+                dirtyFileIds={dirtyFileIds}
+              />
+            </div>
+          ) : tabs.length > 0 ? (
+            <AppMenu>
+              <Hint label={t("shell.rightArea.openTabs")}>
+                <AppMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  >
+                    <ChevronsLeftRightEllipsisIcon className="size-3.5" />
+                  </button>
+                </AppMenuTrigger>
+              </Hint>
+              <AppMenuContent align="end" className="w-52 max-h-80 overflow-y-auto">
+                {tabs.map((tab) => (
+                  <AppMenuItem
+                    key={tab.id}
+                    onClick={() => handleTabSelect(tab.id)}
+                    className={cn(
+                      "group pr-1",
+                      tab.id === activeTabId && "font-medium",
+                    )}
+                    trailing={
+                      <Hint label={t("menu.closeTab")}>
+                        <button
+                          type="button"
+                          className="flex size-4 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/10 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTabClose(tab.id);
+                          }}
+                        >
+                          <XIcon className="size-2.5" />
+                        </button>
+                      </Hint>
+                    }
+                  >
+                    <span className={cn(tab.isPreview && "italic")}>
+                      {tabDisplayTitle(tab, dirtyFileIds)}
+                    </span>
+                  </AppMenuItem>
+                ))}
+              </AppMenuContent>
+            </AppMenu>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-0.5 shrink-0">
-        {/* ── Tab overflow dropdown (shown when tabs don't fit) ── */}
-        {tabsOverflow && tabs.length > 0 && (
-          <AppMenu>
-            <Hint label={t("shell.rightArea.openTabs")}>
-              <AppMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                >
-                  <ChevronsLeftRightEllipsisIcon className="size-3.5" />
-                </button>
-              </AppMenuTrigger>
-            </Hint>
-            <AppMenuContent align="end" className="w-52 max-h-80 overflow-y-auto">
-              {tabs.map((tab) => (
-                <AppMenuItem
-                  key={tab.id}
-                  onClick={() => handleTabSelect(tab.id)}
-                  className={cn(
-                    "group pr-1",
-                    tab.id === activeTabId && "font-medium",
-                  )}
-                  trailing={
-                    <Hint label={t("menu.closeTab")}>
-                      <button
-                        type="button"
-                        className="flex size-4 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/10 transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleTabClose(tab.id);
-                        }}
-                      >
-                        <XIcon className="size-2.5" />
-                      </button>
-                    </Hint>
-                  }
-                >
-                  <span className={cn(tab.isPreview && "italic")}>
-                    {tabDisplayTitle(tab, dirtyFileIds)}
-                  </span>
-                </AppMenuItem>
-              ))}
-            </AppMenuContent>
-          </AppMenu>
-        )}
-
         {/* Window controls when editorMaximized (ContentTopBar is hidden) */}
         {editorMaximized && !isMac && (
           <>
@@ -780,107 +695,34 @@ function RightAreaWorkspace({
           </>
         )}
 
-        {!compactModes && <div className="mx-1 h-4 w-px bg-border shrink-0" />}
-
-        {/* ── Mode buttons — collapse to dropdown on narrow windows ── */}
-        {compactModes ? (
-          <AppMenu>
-            <Hint label={t("shell.rightArea.modes")}>
-              <AppMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                >
-                  <LayoutGridIcon className="size-3.5" />
-                </button>
-              </AppMenuTrigger>
-            </Hint>
-            <AppMenuContent align="end" className="min-w-[8.5rem]">
-              {toolbarModes.map((mode) => {
-                const isActive = activeModes.includes(mode.id as RightToolbarTab);
-                const isFocused = focusedMode === mode.id;
-                const label = modeLabel(mode);
-                return (
-                  <AppMenuItem
-                    key={mode.id}
-                    leading={<span className="[&>svg]:size-3.5 shrink-0">{mode.icon}</span>}
-                    className={cn(isFocused && "font-medium")}
-                    trailing={
-                      isActive ? (
-                        <span className="text-[length:var(--font-size-10)] text-muted-foreground">
-                          {t("modes.on")}
-                        </span>
-                      ) : null
-                    }
-                    onClick={() => handleModeClick(mode.id)}
-                  >
-                    {label}
-                  </AppMenuItem>
-                );
-              })}
-            </AppMenuContent>
-          </AppMenu>
-        ) : (
-          toolbarModes.map((mode) => {
-            const isActive = activeModes.includes(mode.id as RightToolbarTab);
-            const isFocused = focusedMode === mode.id;
-            const label = modeLabel(mode);
-            return (
-              <Hint
-                key={mode.id}
-                label={
-                  isActive && isFocused
-                    ? t("modes.closeMode", { label })
-                    : label
-                }
-                shortcutId={MODE_TOOLBAR_SHORTCUT[mode.id]}
-              >
-                <button
-                  type="button"
-                  className={cn(
-                    "flex items-center justify-center rounded transition-all",
-                    isActive
-                      ? cn(
-                          "bg-muted text-foreground h-6 px-1.5 gap-0.5",
-                          isFocused && "ring-1 ring-primary/40",
-                        )
-                      : "size-6 text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                  )}
-                  onClick={() => handleModeClick(mode.id)}
-                >
-                  {mode.icon}
-                  {isActive && <XIcon className="size-2.5" />}
-                </button>
-              </Hint>
-            );
-          }))}
-
         <div className="mx-1 h-4 w-px bg-border shrink-0" />
 
-        {/* Editor maximize / restore */}
-        <Hint
-          label={
-            editorMaximized
-              ? t("shell.rightArea.restorePanel")
-              : t("shell.rightArea.maximizePanel")
-          }
-          shortcutId="shell.toggleRightAreaMaximize"
-        >
-          <button
-            type="button"
-            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            onClick={() => {
-              toggleRightAreaMaximize({
-                centerRef: centerRef.current,
-                rightAreaRef: rightAreaRef.current,
-                leftSidebarRef: leftSidebarRef.current,
-                isMobile,
-              });
-            }}
+        {/* Workspace only — settings RightArea keeps collapse, not panel maximize /「+」 */}
+        {!inSettings ? (
+          <Hint
+            label={
+              editorMaximized
+                ? t("shell.rightArea.restorePanel")
+                : t("shell.rightArea.maximizePanel")
+            }
+            shortcutId="shell.toggleRightAreaMaximize"
           >
-            {editorMaximized ? <MinimizeIcon className="size-3.5" /> : <MaximizeIcon className="size-3.5" />}
-          </button>
-        </Hint>
+            <button
+              type="button"
+              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              onClick={() => {
+                toggleRightAreaMaximize({
+                  centerRef: centerRef.current,
+                  rightAreaRef: rightAreaRef.current,
+                  leftSidebarRef: leftSidebarRef.current,
+                  isMobile,
+                });
+              }}
+            >
+              {editorMaximized ? <MinimizeIcon className="size-3.5" /> : <MaximizeIcon className="size-3.5" />}
+            </button>
+          </Hint>
+        ) : null}
 
         {/* Close right area panel */}
         <Hint label={t("shell.rightArea.closePanel")} shortcutId="shell.toggleRightArea">

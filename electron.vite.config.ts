@@ -1,4 +1,5 @@
-import { resolve } from "path";
+import { copyFileSync, mkdirSync } from "node:fs";
+import { dirname, resolve } from "path";
 import { defineConfig } from "electron-vite";
 import react from "@vitejs/plugin-react";
 import { sharedAliasPlugin } from "./scripts/vite-shared-alias-plugin";
@@ -14,7 +15,18 @@ export default defineConfig({
     define: {
       __PRISM_UPDATER_BASE_URL__: JSON.stringify(bakedUpdaterBaseUrl()),
     },
-    plugins: [sharedAliasPlugin(__dirname)],
+    plugins: [
+      sharedAliasPlugin(__dirname),
+      {
+        name: "copy-tectonic-daemon-worker",
+        closeBundle() {
+          const src = resolve(__dirname, "src/main/services/tectonic-daemon-worker.mjs");
+          const dest = resolve(__dirname, "out/main/tectonic-daemon-worker.mjs");
+          mkdirSync(dirname(dest), { recursive: true });
+          copyFileSync(src, dest);
+        },
+      },
+    ],
     build: {
       rollupOptions: {
         external: ["electron", "node-pty", "@napi-rs/canvas", "font-list"],

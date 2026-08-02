@@ -1,17 +1,23 @@
 import { memo } from "react";
+import { useTranslation } from "react-i18next";
 import { BookOpenIcon, ExternalLinkIcon, FileTextIcon } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { inlineTokenClassName } from "./inline-tokens/styles";
-import { useLiteratureStore } from "@/stores/literature-store";
 import {
-  formatLiteratureAuthorsShort,
-  paperHasReadablePdf,
-} from "@/modes/literature-mode/literature-format";
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import { inlineTokenClassName, INLINE_TOKEN_CLICKABLE } from "./inline-tokens/styles";
+import { formatPaperMentionLabel } from "../../../../shared/bibkey-utils";
 import {
   openPaperInMainLibrary,
   openPaperPdfReader,
 } from "@/lib/literature/open-paper-in-library";
+import {
+  formatLiteratureAuthorsShort,
+  paperHasReadablePdf,
+} from "@/modes/literature-mode/literature-format";
+import { useLiteratureStore } from "@/stores/literature-store";
 import { cn } from "@/lib/utils";
 
 export function decodeLibraryCiteHref(href: string): string | null {
@@ -25,15 +31,21 @@ export function decodeLibraryCiteHref(href: string): string | null {
   }
 }
 
+/**
+ * Library @bibkey in AI markdown — composer chip look, hover preview panel,
+ * explicit Open in library / Read PDF (no click-to-open on the chip itself).
+ */
 export const LibraryCitationInline = memo(function LibraryCitationInline({
   bibkey,
 }: {
   bibkey: string;
 }) {
+  const { t } = useTranslation();
   const paper = useLiteratureStore((s) =>
     s.papers.find((p) => p.bibkey === bibkey) ?? null,
   );
   const hasPdf = paper != null && paperHasReadablePdf(paper);
+  const label = formatPaperMentionLabel(bibkey);
   const authorsLine = paper
     ? [formatLiteratureAuthorsShort(paper.authors), paper.year, paper.venue]
         .filter((v) => v != null && String(v).trim() !== "")
@@ -41,37 +53,44 @@ export const LibraryCitationInline = memo(function LibraryCitationInline({
     : "";
   const aiSummary = paper?.ai_summary?.trim() ?? "";
   const previewText = aiSummary || paper?.abstract?.trim() || "";
-  const previewLabel = aiSummary ? "AI summary" : previewText ? "Abstract" : "";
+  const previewLabel = aiSummary
+    ? t("literature.detail.aiSummary")
+    : previewText
+      ? t("literature.detail.abstract")
+      : "";
 
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          title={paper?.title ?? `Library cite key: ${bibkey}`}
-          data-inline-token="literature"
+    <HoverCard openDelay={280} closeDelay={120}>
+      <HoverCardTrigger asChild>
+        <span
           className={cn(
-            inlineTokenClassName("literature", "cursor-pointer max-w-[16rem]"),
-            "hover:brightness-95 dark:hover:brightness-110",
+            inlineTokenClassName("literature", "max-w-[16rem]"),
+            INLINE_TOKEN_CLICKABLE,
+            "inline",
           )}
+          data-inline-token="literature"
         >
-          <BookOpenIcon className="size-3 shrink-0" />
-          <span className="min-w-0 truncate font-mono">@{bibkey}</span>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[min(22rem,calc(100vw-2rem))] p-0">
+          <BookOpenIcon className="size-[0.85em] shrink-0 text-indigo-700 dark:text-indigo-400" />
+          <span className="inline min-w-0 truncate leading-[inherit]">{label}</span>
+        </span>
+      </HoverCardTrigger>
+      <HoverCardContent
+        align="start"
+        side="top"
+        className="w-[min(22rem,calc(100vw-2rem))] p-0"
+      >
         {paper ? (
           <div className="flex flex-col">
             <div className="space-y-1.5 border-b border-border/60 px-3 py-3">
               <p className="text-[length:var(--font-size-13)] font-semibold leading-snug text-foreground line-clamp-3">
-                {paper.title || "Untitled"}
+                {paper.title || t("literature.detail.untitled")}
               </p>
               {authorsLine ? (
                 <p className="text-[length:var(--font-size-11)] text-muted-foreground line-clamp-2">
                   {authorsLine}
                 </p>
               ) : null}
-              <p className="font-mono text-[length:var(--font-size-10)] text-muted-foreground/80">
+              <p className="text-[length:var(--font-size-10)] text-muted-foreground/80">
                 {paper.bibkey}
               </p>
             </div>
@@ -96,7 +115,7 @@ export const LibraryCitationInline = memo(function LibraryCitationInline({
                 onClick={() => openPaperInMainLibrary(paper.id)}
               >
                 <ExternalLinkIcon className="size-3" />
-                Open in library
+                {t("modes.literature.openInLibrary")}
               </Button>
               {hasPdf ? (
                 <Button
@@ -104,10 +123,12 @@ export const LibraryCitationInline = memo(function LibraryCitationInline({
                   size="sm"
                   variant="outline"
                   className="h-7 gap-1 text-[length:var(--font-size-11)]"
-                  onClick={() => openPaperPdfReader(paper.id, paper.title ?? paper.bibkey)}
+                  onClick={() =>
+                    openPaperPdfReader(paper.id, paper.title ?? paper.bibkey)
+                  }
                 >
                   <FileTextIcon className="size-3" />
-                  Read PDF
+                  {t("literature.detail.openPdf")}
                 </Button>
               ) : null}
             </div>
@@ -115,16 +136,14 @@ export const LibraryCitationInline = memo(function LibraryCitationInline({
         ) : (
           <div className="space-y-2 px-3 py-3">
             <p className="text-[length:var(--font-size-13)] font-medium text-foreground">
-              Not in library
+              {t("chat.libraryCite.notInLibrary")}
             </p>
             <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-              No paper with cite key{" "}
-              <span className="font-mono text-foreground">@{bibkey}</span>{" "}
-              was found. Check the key or add the paper to your library.
+              {t("chat.libraryCite.notFoundBody", { bibkey })}
             </p>
           </div>
         )}
-      </PopoverContent>
-    </Popover>
+      </HoverCardContent>
+    </HoverCard>
   );
 });

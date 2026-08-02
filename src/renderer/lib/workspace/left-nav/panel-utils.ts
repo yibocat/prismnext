@@ -4,15 +4,16 @@
  * Dismissing a mode closes only that mode’s tabs; RightArea collapses only when empty.
  */
 import type { LeftNavContext } from "./types";
-import type { RightToolbarTab } from "@/stores/layout-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { modeRegistry } from "@/lib/workspace/mode-registry";
-import { deactivateModeFromToolbar } from "@/lib/workspace/deactivate-mode";
+import { focusedModeId } from "@/lib/workspace/modes-from-tabs";
+import { closeModeTabs } from "@/lib/workspace/close-mode-tabs";
 import {
   openRightArea,
   openRightAreaMaximized,
+  openRightAreaForDeepLink,
   type RightAreaLayoutCtx,
 } from "@/lib/workspace/right-area-layout";
 
@@ -24,7 +25,7 @@ export function isTexWorkspaceOpen(): boolean {
   return (
     rps.tabs.some((t) => t.kind === "texworkspace")
     && st.rightAreaExpanded
-    && st.focusedMode === "texworkspace"
+    && focusedModeId(rps.tabs, rps.activeTabId) === "texworkspace"
   );
 }
 
@@ -34,7 +35,7 @@ export function isLiteraturePanelOpen(): boolean {
   return (
     rps.tabs.some((t) => t.kind === "literature")
     && st.rightAreaExpanded
-    && st.focusedMode === "literature"
+    && focusedModeId(rps.tabs, rps.activeTabId) === "literature"
   );
 }
 
@@ -44,7 +45,7 @@ export function isExperimentsPanelOpen(): boolean {
   return (
     rps.tabs.some((t) => t.kind === "experiments")
     && st.rightAreaExpanded
-    && st.focusedMode === "experiments"
+    && focusedModeId(rps.tabs, rps.activeTabId) === "experiments"
   );
 }
 
@@ -93,10 +94,8 @@ export function focusModeInRightArea(
 
   rps.ensureTab(modeId);
   st.setLeftSidebarView("sessions");
-  st.activateMode(modeId as RightToolbarTab);
 
   const def = modeRegistry.get(modeId);
-  def?.onActivate?.();
   // Modes with a list sidebar (Files / Literature / Experiments / …) open it by default.
   if (def?.Sidebar && !def.hideRightSidebar) {
     st.revealRightSidebar();
@@ -106,7 +105,7 @@ export function focusModeInRightArea(
   if (options?.maximize) {
     openRightAreaMaximized(layoutCtx);
   } else {
-    openRightArea(layoutCtx);
+    openRightAreaForDeepLink(layoutCtx);
   }
 }
 
@@ -119,7 +118,7 @@ export function dismissModeFromRightArea(
   ctx: LeftNavContext,
   onClosed?: () => void,
 ): void {
-  deactivateModeFromToolbar(modeId, {
+  closeModeTabs(modeId, {
     onComplete: () => {
       maybeCollapseRightAreaIfEmpty(ctx);
       onClosed?.();

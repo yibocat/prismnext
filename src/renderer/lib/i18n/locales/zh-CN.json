@@ -793,7 +793,7 @@
         "defaultEngine": "默认引擎",
         "defaultEngineDesc": "本项目的 LaTeX 编译器。构建输出位于 .prismnext/compile/。",
         "autoCompile": "自动编译",
-        "autoCompileDesc": "保存 .tex 文件后自动编译。"
+        "autoCompileDesc": "停止输入约 0.5 秒后自动重新编译 PDF（优先使用 Tectonic）。"
       },
       "backups": "备份",
       "references": "参考文献",
@@ -1613,6 +1613,7 @@
     "rightArea": {
       "backToSettings": "返回设置",
       "modes": "模式",
+      "addMode": "添加面板",
       "openTabs": "打开的标签",
       "closePanel": "关闭面板",
       "maximizePanel": "最大化面板",
@@ -1760,8 +1761,14 @@
       "zoomIn": "放大",
       "zoomOut": "缩小",
       "placeholder": "@ 专家、文件、文献或实验 · / 命令、技能、MCP",
+      "placeholderFollowUp": "发送后续消息",
       "archivedReadonly": "此对话已归档。恢复后可继续聊天。",
       "stop": "停止",
+      "queueCount": "{{count}} 条排队",
+      "queueEnterToSend": "停止并发送",
+      "queueEdit": "重新编辑",
+      "queueSendOne": "停止并发送这条",
+      "queueDelete": "从队列删除",
       "taskPlanTitle": "任务计划",
       "taskPlanInProgress": "进行中",
       "taskPlanDismiss": "隐藏任务计划",
@@ -1912,6 +1919,10 @@
       "remove": "从精读列表移除",
       "removeTitle": "从精读列表移除（保留 @ 标签）"
     },
+    "libraryCite": {
+      "notInLibrary": "不在文献库中",
+      "notFoundBody": "未找到引用键为 {{bibkey}} 的文献。"
+    },
     "messages": {
       "loading": "正在加载对话…",
       "loadMore": "加载更多历史",
@@ -1919,7 +1930,10 @@
       "loadMorePulling": "继续向上滑…",
       "loadingOlder": "加载中…",
       "expand": "点击展开",
-      "collapse": "收起"
+      "collapse": "收起",
+      "editHint": "点击气泡外取消 · Enter 重新发送",
+      "resend": "重新发送",
+      "resendFailed": "重新发送失败"
     },
     "prepare": {
       "planningNext": "正在规划下一步…",
@@ -1947,11 +1961,25 @@
       "hoursAgo": "{{count}} 小时前",
       "daysAgo": "{{count}} 天前",
       "copy": "复制本轮回复",
-      "restore": "将工作区文件恢复到本轮结束时",
-      "restored": "已恢复 {{count}} 个文件到本轮结束时",
-      "restored_plural": "已恢复 {{count}} 个文件到本轮结束时",
-      "restoredDesc": "工作区文件与聊天历史已回退到本轮。",
-      "restoreFailed": "恢复失败：{{message}}"
+      "rollback": "将对话与文件回退到本轮结束时",
+      "rolledBack": "已回退 {{count}} 个文件到本轮结束时",
+      "rolledBack_plural": "已回退 {{count}} 个文件到本轮结束时",
+      "rolledBackDesc": "对话、工作区文件与待确认改动已回退到本轮。",
+      "rollbackFailed": "回退失败：{{message}}",
+      "alreadyAtTurn": "已在本轮结束态 — 没有更晚的内容可回退",
+      "restore": "将对话与文件回退到本轮结束时",
+      "restored": "已回退 {{count}} 个文件到本轮结束时",
+      "restored_plural": "已回退 {{count}} 个文件到本轮结束时",
+      "restoredDesc": "对话、工作区文件与待确认改动已回退到本轮。",
+      "restoreFailed": "回退失败：{{message}}"
+    },
+    "regretBar": {
+      "message": "已回退到更早一轮。",
+      "undo": "撤销回退",
+      "undone": "已撤销回退 — 对话与文件已恢复",
+      "undonePartial": "界面已撤销回退 — 会话历史可能不完整（重启后备份已丢失）",
+      "undoFailed": "撤销失败：{{message}}",
+      "dismiss": "关闭"
     }
   },
   "modes": {
@@ -1973,7 +2001,10 @@
       "noOpenFiles": "没有打开的文件",
       "recent": "最近",
       "noFilesYet": "暂无文件",
-      "openProjectToStart": "打开项目以开始"
+      "openProjectToStart": "打开项目以开始",
+      "binaryCannotOpenTitle": "无法在编辑器中打开此文件",
+      "binaryCannotOpenBody": "{{name}} 是二进制或数据库文件，请在系统文件管理器中查看。",
+      "revealInSystem": "在系统中显示"
     },
     "researchPlan": {
       "label": "Plan",
@@ -2001,6 +2032,7 @@
       "stop": "停止加载",
       "urlPlaceholder": "搜索或输入网址",
       "bookmark": "书签",
+      "newTab": "新建标签页",
       "clearHistory": "清除历史",
       "clearCookies": "清除 Cookie",
       "clearCache": "清除缓存",
@@ -2077,6 +2109,7 @@
       "viewPdf": "仅 PDF",
       "swapPanes": "交换编辑器与 PDF",
       "compile": "编译（{{engine}}）",
+      "compileDocument": "编译文档",
       "autoCompileOn": "自动编译：开",
       "autoCompileOff": "自动编译：关",
       "showProblems": "显示编译问题",
@@ -2144,6 +2177,7 @@
       "emptyTitle": "开始建立文献库",
       "emptyHint": "导入 PDF 或连接 Zotero 以添加论文。",
       "addAll": "全部添加",
+      "addSelected": "添加 ({{count}})",
       "clearCitations": "清除",
       "addToLibrary": "添加到文献库",
       "newEntry": "新建条目…",
@@ -2154,6 +2188,16 @@
       "openNotes": "打开阅读笔记",
       "closeNotes": "关闭阅读笔记",
       "addAllPendingHint": "将所有待处理引用添加到文献库",
+      "addSelectedPendingHint": "将选中的 {{count}} 条引用添加到文献库",
+      "addSelectedPendingEmptyHint": "在列表中勾选要添加的引用，再点击添加",
+      "selectAllAddableCitations": "全选可添加的引用",
+      "cancelAddCitation": "停止添加此条引用",
+      "cancellingAddCitation": "正在停止…",
+      "queuedAddCitation": "在添加队列中等待",
+      "cancelQueuedAddCitation": "从添加队列中移除",
+      "statusQueued": "排队中",
+      "cancelAllAdds": "停止全部添加",
+      "citationNotAddable": "已在文献库中或未通过校验",
       "clearCitationsHint": "清除本会话中的全部引用",
       "citationHealthHint": "文稿引用健康检查（.tex ↔ .bib ↔ 文献库）",
       "importBibTeX": "导入 BibTeX（可选 .json）…",

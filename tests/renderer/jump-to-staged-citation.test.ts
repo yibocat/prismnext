@@ -35,15 +35,13 @@ describe("jumpToStagedCitation", () => {
     mockLayout.mockReset();
   });
 
-  it("expands RightArea, activates literature, switches subview, and queues highlight", () => {
-    const activateMode = vi.fn();
+  it("expands RightArea, opens literature tab, switches subview, and queues highlight", () => {
     const requestRightAreaExpand = vi.fn();
     const setLibrarySubview = vi.fn();
     const setPendingCitationJump = vi.fn();
     const setActiveTab = vi.fn();
 
     mockLayout.mockReturnValue({
-      activateMode,
       requestRightAreaExpand,
       editorMaximized: false,
       rightAreaExpanded: false,
@@ -58,7 +56,6 @@ describe("jumpToStagedCitation", () => {
     jumpToStagedCitation("chat-session-xyz", 3);
 
     expect(useCitationStagingStore.getState().activeSessionId).toBe("chat-session-xyz");
-    expect(activateMode).toHaveBeenCalledWith("literature");
     expect(requestRightAreaExpand).toHaveBeenCalled();
     expect(setLibrarySubview).toHaveBeenCalledWith("session-citations");
     expect(setPendingCitationJump).toHaveBeenCalledWith(3);
@@ -70,9 +67,9 @@ describe("jumpToStagedCitation", () => {
     const setActiveTab = vi.fn();
 
     mockLayout.mockReturnValue({
-      activateMode: vi.fn(),
       requestRightAreaExpand: vi.fn(),
       editorMaximized: false,
+      rightAreaExpanded: false,
     });
     mockRightPanel.mockReturnValueOnce({
       tabs: [],
@@ -97,7 +94,6 @@ describe("jumpToStagedCitation", () => {
   it("does not expand RightArea when already open", () => {
     const requestRightAreaExpand = vi.fn();
     mockLayout.mockReturnValue({
-      activateMode: vi.fn(),
       requestRightAreaExpand,
       editorMaximized: false,
       rightAreaExpanded: true,
@@ -119,7 +115,6 @@ describe("jumpToStagedCitation", () => {
 
   it("reveals panel when jumping from chat", () => {
     mockLayout.mockReturnValue({
-      activateMode: vi.fn(),
       requestRightAreaExpand: vi.fn(),
       editorMaximized: false,
       rightAreaExpanded: false,

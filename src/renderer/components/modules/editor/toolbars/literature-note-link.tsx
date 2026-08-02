@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { Hint } from "@/components/ui/hint";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
-import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import {
   bibkeyFromNoteContent,
@@ -63,7 +62,6 @@ export function LiteratureNoteLinkButton({ filePath }: { filePath: string }) {
   }
 
   const handleOpen = () => {
-    useLayoutStore.getState().activateMode("literature");
     useRightPanelStore.getState().openLiteraturePaper(paper.id, paper.title, "reader");
   };
 

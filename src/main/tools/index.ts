@@ -235,6 +235,7 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     workflowRules: [
       "If not extracted yet, call with `force=true` to start background extraction.",
       "When quoting PDF content in chat, cite as `[@bibkey]` (exact cite key) plus page numbers as `p.X`.",
+      "When figure paths appear in tool output, you may embed them with `![caption](path)` or `[@bibkey|images/fig-0.png]` if it helps the explanation — optional.",
       "Reserved for intensive reading mode — costs tokens to extract.",
       `If intensiveReadingRequired, call ${TOOL_NAMES.literatureIntensiveReading} action=add first — do not ask the user to @-toggle unless they refuse.`,
     ],

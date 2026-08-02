@@ -1,7 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { BookOpenIcon, Loader2Icon } from "lucide-react";
-import { useCitationStagingStore, EMPTY_STAGED_CITATIONS, isCitationInLibrary } from "@/stores/citation-staging-store";
+import { BookOpenIcon, ListOrderedIcon, Loader2Icon, SquareIcon } from "lucide-react";
+import {
+  useCitationStagingStore,
+  EMPTY_STAGED_CITATIONS,
+  EMPTY_CHECKED_STAGED_IDS,
+  isCitationInLibrary,
+  isStagedCitationAddable,
+} from "@/stores/citation-staging-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { StagedCitationEntryPanel } from "./literature-staged-entry-panel";
@@ -17,30 +23,29 @@ import {
   LITERATURE_COL_TITLE,
   LITERATURE_COL_AUTHORS,
   LITERATURE_COL_VENUE,
+  LITERATURE_COL_CHECK,
 } from "./literature-list-chrome";
 import { formatLiteratureAuthorsShort } from "./literature-format";
 import { cn } from "@/lib/utils";
-import type { StagedCitation, StagedAddProgressEvent } from "../../../shared/citation-staging";
-import { stagedAddProgressLabel } from "@/lib/literature/staged-add-progress-label";
+import type { StagedCitation } from "../../../shared/citation-staging";
 
 function StatusChip({
   c,
   inLibrary,
-  progress,
+  queued,
 }: {
   c: StagedCitation;
   inLibrary: boolean;
-  progress?: StagedAddProgressEvent;
+  queued: boolean;
 }) {
   const { t } = useTranslation();
-  if (progress && progress.phase !== "done") {
+  if (queued && !inLibrary) {
     return (
       <span
-        className="inline-flex max-w-[min(12rem,40vw)] shrink-0 items-center gap-1 rounded-full border border-amber-500/35 bg-amber-500/10 px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium text-amber-800 dark:text-amber-300"
-        title={stagedAddProgressLabel(progress)}
+        className="inline-flex shrink-0 items-center rounded-full border border-border bg-muted px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium text-muted-foreground"
+        title={t("modes.literature.queuedAddCitation")}
       >
-        <Loader2Icon className="size-3 shrink-0 animate-spin" />
-        <span className="truncate">{stagedAddProgressLabel(progress)}</span>
+        {t("modes.literature.statusQueued")}
       </span>
     );
   }
@@ -74,19 +79,104 @@ function StatusChip({
   );
 }
 
+function RefColumn({
+  citation,
+  inFlight,
+  queued,
+  cancelling,
+  onCancelAdd,
+}: {
+  citation: StagedCitation;
+  inFlight: boolean;
+  queued: boolean;
+  cancelling: boolean;
+  onCancelAdd: () => void;
+}) {
+  const { t } = useTranslation();
+
+  if (inFlight) {
+    const label = cancelling
+      ? t("modes.literature.cancellingAddCitation")
+      : t("modes.literature.cancelAddCitation");
+    return (
+      <button
+        type="button"
+        disabled={cancelling}
+        title={label}
+        aria-label={label}
+        className={cn(
+          "inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-1.5",
+          "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300",
+          "hover:bg-amber-500/15 disabled:pointer-events-none disabled:opacity-80",
+        )}
+        onClick={(e) => {
+          e.stopPropagation();
+          onCancelAdd();
+        }}
+      >
+        <Loader2Icon className="size-3 shrink-0 animate-spin" />
+        {!cancelling ? <SquareIcon className="size-2.5 shrink-0 fill-current" /> : null}
+      </button>
+    );
+  }
+
+  if (queued) {
+    const label = t("modes.literature.cancelQueuedAddCitation");
+    return (
+      <button
+        type="button"
+        title={label}
+        aria-label={label}
+        className={cn(
+          "inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-1.5",
+          "border-border bg-muted text-muted-foreground",
+          "hover:bg-accent hover:text-foreground",
+        )}
+        onClick={(e) => {
+          e.stopPropagation();
+          onCancelAdd();
+        }}
+      >
+        <ListOrderedIcon className="size-3 shrink-0" />
+        <SquareIcon className="size-2.5 shrink-0 fill-current" />
+      </button>
+    );
+  }
+
+  return (
+    <span className="shrink-0 w-7 text-[length:var(--font-size-11)] text-muted-foreground/60 tabular-nums font-mono">
+      #{citation.refId}
+    </span>
+  );
+}
+
 function StagedRow({
   citation,
   inLibrary,
   expanded,
   onToggle,
-  progress,
+  checked,
+  addable,
+  inFlight,
+  queued,
+  cancelling,
+  onToggleCheck,
+  onCancelAdd,
 }: {
   citation: StagedCitation;
   inLibrary: boolean;
   expanded: boolean;
   onToggle: () => void;
-  progress?: StagedAddProgressEvent;
+  checked: boolean;
+  addable: boolean;
+  inFlight: boolean;
+  queued: boolean;
+  cancelling: boolean;
+  onToggleCheck: () => void;
+  onCancelAdd: () => void;
 }) {
+  const { t } = useTranslation();
+
   return (
     <div className={literatureListRowClass}>
       <div
@@ -102,9 +192,13 @@ function StagedRow({
           }
         }}
       >
-        <span className="shrink-0 w-7 text-[length:var(--font-size-11)] text-muted-foreground/60 tabular-nums font-mono">
-          #{citation.refId}
-        </span>
+        <RefColumn
+          citation={citation}
+          inFlight={inFlight}
+          queued={queued}
+          cancelling={cancelling}
+          onCancelAdd={onCancelAdd}
+        />
         <span className={cn(LITERATURE_COL_TITLE, literatureRowTextClass, "truncate")}>
           {citation.title || "Untitled"}
         </span>
@@ -117,8 +211,23 @@ function StagedRow({
         <span className={cn(LITERATURE_COL_YEAR, literatureRowTextClass, "tabular-nums")}>
           {citation.year ?? "—"}
         </span>
-        <span className="ml-auto shrink-0 flex items-center gap-1.5">
-          <StatusChip c={citation} inLibrary={inLibrary} progress={progress} />
+        <span className="shrink-0 flex items-center gap-1.5">
+          <StatusChip c={citation} inLibrary={inLibrary} queued={queued} />
+        </span>
+        <span className={LITERATURE_COL_CHECK}>
+          <input
+            type="checkbox"
+            checked={checked}
+            disabled={!addable || inFlight || queued}
+            onChange={onToggleCheck}
+            onClick={(e) => e.stopPropagation()}
+            className="size-3 cursor-pointer accent-primary rounded-sm disabled:cursor-not-allowed disabled:opacity-40"
+            title={
+              addable
+                ? t("modes.literature.selectEntry")
+                : t("modes.literature.citationNotAddable")
+            }
+          />
         </span>
       </div>
       {expanded ? (
@@ -152,7 +261,18 @@ export function LiteratureSessionCitations({ highlightRefId, onHighlightConsumed
     if (s.panelHiddenSessions[chatSessionId]) return EMPTY_STAGED_CITATIONS;
     return s.bySession[chatSessionId] ?? EMPTY_STAGED_CITATIONS;
   });
-  const addProgressById = useCitationStagingStore((s) => s.addProgressById);
+  const checkedStagedIds = useCitationStagingStore((s) =>
+    chatSessionId
+      ? s.checkedStagedIdsBySession[chatSessionId] ?? EMPTY_CHECKED_STAGED_IDS
+      : EMPTY_CHECKED_STAGED_IDS,
+  );
+  const headerCheckboxRef = useRef<HTMLInputElement>(null);
+  const toggleStagedChecked = useCitationStagingStore((s) => s.toggleStagedChecked);
+  const setStagedCheckedIds = useCitationStagingStore((s) => s.setStagedCheckedIds);
+  const cancelAddToLibrary = useCitationStagingStore((s) => s.cancelAddToLibrary);
+  const inFlightAddIds = useCitationStagingStore((s) => s.inFlightAddIds);
+  const cancelledAddIds = useCitationStagingStore((s) => s.cancelledAddIds);
+  const batchQueuedIds = useCitationStagingStore((s) => s.batchQueuedIds);
   const papers = useLiteratureStore((s) => s.papers);
   const libraryPaperIdSet = useMemo(() => new Set(papers.map((p) => p.id)), [papers]);
 
@@ -162,6 +282,35 @@ export function LiteratureSessionCitations({ highlightRefId, onHighlightConsumed
   const jumpCitations = useCitationStagingStore((s) =>
     chatSessionId ? s.bySession[chatSessionId] ?? EMPTY_STAGED_CITATIONS : EMPTY_STAGED_CITATIONS,
   );
+
+  const addableIds = useMemo(
+    () =>
+      citations
+        .filter((c) => isStagedCitationAddable(c, isCitationInLibrary(c, libraryPaperIdSet)))
+        .map((c) => c.id),
+    [citations, libraryPaperIdSet],
+  );
+  const checkedAddableCount = addableIds.filter((id) => checkedStagedIds.includes(id)).length;
+  const allAddableChecked =
+    addableIds.length > 0 && checkedAddableCount === addableIds.length;
+  const headerIndeterminate = checkedAddableCount > 0 && !allAddableChecked;
+
+  useEffect(() => {
+    const el = headerCheckboxRef.current;
+    if (el) el.indeterminate = headerIndeterminate;
+  }, [headerIndeterminate]);
+
+  const handleToggleAll = () => {
+    if (!chatSessionId) return;
+    if (allAddableChecked) {
+      setStagedCheckedIds(
+        chatSessionId,
+        checkedStagedIds.filter((id) => !addableIds.includes(id)),
+      );
+    } else {
+      setStagedCheckedIds(chatSessionId, [...new Set([...checkedStagedIds, ...addableIds])]);
+    }
+  };
 
   // Auto-expand + scroll to highlighted row (jump from chat [n]).
   const consumedHighlightRef = useRef<number | null>(null);
@@ -231,21 +380,42 @@ export function LiteratureSessionCitations({ highlightRefId, onHighlightConsumed
           <span className={cn(LITERATURE_COL_YEAR, literatureListHeaderLabelClass)}>
             {t("literature.detail.year")}
           </span>
-          <span className="ml-auto shrink-0" />
+          <span className="shrink-0" />
+          <span className={LITERATURE_COL_CHECK}>
+            <input
+              ref={headerCheckboxRef}
+              type="checkbox"
+              checked={allAddableChecked}
+              disabled={addableIds.length === 0}
+              onChange={handleToggleAll}
+              className="size-3 cursor-pointer accent-primary rounded-sm disabled:cursor-not-allowed disabled:opacity-40"
+              title={t("modes.literature.selectAllAddableCitations")}
+            />
+          </span>
         </div>
         <div className={literatureListBodyClass}>
-          {citations.map((c) => (
-            <StagedRow
-              key={c.id}
-              citation={c}
-              inLibrary={isCitationInLibrary(c, libraryPaperIdSet)}
-              expanded={expandedId === c.id}
-              progress={addProgressById[c.id]}
-              onToggle={() =>
-                setExpandedId((prev) => (prev === c.id ? null : c.id))
-              }
-            />
-          ))}
+          {citations.map((c) => {
+            const inLibrary = isCitationInLibrary(c, libraryPaperIdSet);
+            const addable = isStagedCitationAddable(c, inLibrary);
+            return (
+              <StagedRow
+                key={c.id}
+                citation={c}
+                inLibrary={inLibrary}
+                expanded={expandedId === c.id}
+                inFlight={Boolean(inFlightAddIds[c.id])}
+                queued={Boolean(batchQueuedIds[c.id])}
+                cancelling={Boolean(cancelledAddIds[c.id])}
+                checked={checkedStagedIds.includes(c.id)}
+                addable={addable}
+                onToggleCheck={() => toggleStagedChecked(chatSessionId, c.id)}
+                onCancelAdd={() => cancelAddToLibrary(c.id)}
+                onToggle={() =>
+                  setExpandedId((prev) => (prev === c.id ? null : c.id))
+                }
+              />
+            );
+          })}
         </div>
       </div>
     </div>

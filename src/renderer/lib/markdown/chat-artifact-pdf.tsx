@@ -21,7 +21,8 @@ import {
 } from "../../../shared/artifact-path";
 import { cn } from "@/lib/utils";
 import {
-  CHAT_ARTIFACT_THUMB_PDF_IMAGE_CLASS,
+  CHAT_ARTIFACT_INLINE_IMAGE_CLASS,
+  CHAT_ARTIFACT_PEEK_BODY_CLASS,
   CHAT_ARTIFACT_THUMB_PREVIEW_CLASS,
   CHAT_ARTIFACT_THUMB_SHELL_CLASS,
   normalizeArtifactDisplayPath,
@@ -259,16 +260,17 @@ export function ChatArtifactPdf({
               name: label,
               defaultValue: "Preview {{name}}",
             })}
-            className="block w-full cursor-zoom-in border-t border-border-subtle p-1.5 text-left transition-opacity hover:opacity-90"
+            className={cn(
+              CHAT_ARTIFACT_PEEK_BODY_CLASS,
+              "block w-full cursor-zoom-in text-left transition-opacity hover:opacity-90",
+            )}
           >
-            <div className={CHAT_ARTIFACT_THUMB_PREVIEW_CLASS}>
-              <img
-                src={peekUrl}
-                alt={label}
-                className={CHAT_ARTIFACT_THUMB_PDF_IMAGE_CLASS}
-                loading="lazy"
-              />
-            </div>
+            <img
+              src={peekUrl}
+              alt={label}
+              className={CHAT_ARTIFACT_INLINE_IMAGE_CLASS}
+              loading="lazy"
+            />
           </button>
         ) : (
           <div

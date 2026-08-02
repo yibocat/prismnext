@@ -4,7 +4,6 @@ import { i18n } from "@/lib/i18n";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTerminalStore } from "@/stores/terminal-store";
 import { useTerminalAiStore } from "@/stores/terminal-ai-store";
-import { useLayoutStore } from "@/stores/layout-store";
 import {
   SidebarHeader,
   SidebarContent,
@@ -185,7 +184,6 @@ export function TerminalSidebar() {
   const setActiveTab = useRightPanelStore((s) => s.setActiveTab);
   const closeTab = useRightPanelStore((s) => s.closeTab);
   const closeAiTab = useRightPanelStore((s) => s.closeAiTab);
-  const activateMode = useLayoutStore((s) => s.activateMode);
 
   const activeTab = useRightPanelStore((s) =>
     s.tabs.find((t) => t.id === s.activeTabId),
@@ -202,9 +200,6 @@ export function TerminalSidebar() {
   const setSessionCommand = useTerminalStore((s) => s.setSessionCommand);
   const focusOrOpenAiTerminal = useTerminalAiStore((s) => s.focusOrOpenAiTerminal);
   const focusLiveAiTerminal = useTerminalAiStore((s) => s.focusLiveAiTerminal);
-
-  void sessionStates;
-  void rightTabs;
 
   const aiItems = collectTerminalSidebarAiItems(activeTabId);
   const { live: aiLiveItems, saved: aiSavedItems } = partitionAiSidebarItems(aiItems);
@@ -237,12 +232,10 @@ export function TerminalSidebar() {
   };
 
   const focusTerminalTab = (tabId: string) => {
-    activateMode("terminal");
     setActiveTab(tabId);
   };
 
   const focusAiItem = (item: TerminalSidebarAiItem) => {
-    activateMode("terminal");
     if (item.aiTabId) {
       focusTerminalTab(item.aiTabId);
       return;
