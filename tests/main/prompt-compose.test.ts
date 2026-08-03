@@ -11,8 +11,8 @@ describe("promptManager.compose", () => {
 
   it("includes default core persona when no custom prompt", () => {
     const composed = promptManager.compose({});
-    expect(composed).toContain("# prismnext Assistant");
-    expect(composed).toContain("## Role");
+    expect(composed).toContain("# prismnext");
+    expect(composed).toContain("## Who you are");
     expect(composed).toContain(CORE_PERSONA_PROMPT.slice(0, 40));
     expect(composed.length).toBeGreaterThan(200);
   });
@@ -21,7 +21,7 @@ describe("promptManager.compose", () => {
     const custom = "Always reply in Chinese and use British spelling.";
     const composed = promptManager.compose({ userCustomPrompt: custom });
     expect(composed).toContain(custom);
-    expect(composed).not.toContain("integrated into prismnext");
+    expect(composed).not.toContain("LaTeX-only");
   });
 
   it("includes AGENTS.md and project rules when provided", () => {

@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { useTranslation } from "react-i18next";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { XIcon, DotIcon, FoldersIcon, Terminal as TerminalIcon, SparklesIcon } from "lucide-react";
 import { Icon } from "@iconify/react/offline";
@@ -14,6 +15,7 @@ import {
   AppContextMenuTrigger,
 } from "@/components/ui/app-context-menu";
 import { SortableTabStrip } from "@/components/layout/sortable-tab-strip";
+import { rightTabComposerDragPayload } from "@/lib/workspace/right-tab-drag";
 
 interface TabBarProps {
   tabs: RightTab[];
@@ -36,32 +38,65 @@ function tabIcon(
     || dirtyFileIds?.has(tab.filePath ?? "")
     || (litNotePath ? dirtyFileIds?.has(litNotePath) : false);
   if (isDirty) {
-    return <span title="Unsaved changes"><DotIcon className="mr-1 size-3.5 shrink-0 text-info" strokeWidth={4} /></span>;
+    return <DotIcon className="size-3.5 shrink-0 text-info" strokeWidth={4} />;
   }
   if (tab.kind === "terminal") {
     if (tab.terminalSource === "ai") {
-      return (
-        <span title="AI Agent Terminal">
-          <SparklesIcon className="mr-1 size-3.5 shrink-0 text-primary/80" />
-        </span>
-      );
+      return <SparklesIcon className="size-3.5 shrink-0 text-primary/80" />;
     }
     const muted = terminalStatus === "exited" || terminalStatus === "error" || terminalStatus === "killed";
     return (
       <TerminalIcon
         className={cn(
-          "mr-1 size-3.5 shrink-0",
+          "size-3.5 shrink-0",
           muted ? "text-muted-foreground/40" : "text-muted-foreground",
         )}
       />
     );
   }
   if (tab.kind === "file" && tab.isInitial) {
-    return <FoldersIcon className="mr-1 size-3.5 shrink-0 text-muted-foreground" />;
+    return <FoldersIcon className="size-3.5 shrink-0 text-muted-foreground" />;
   }
   const fileName = tab.filePath ?? tab.title;
   const iconName = getFileIconName(fileName);
-  return <Icon icon={iconName} className="mr-1 size-3.5 shrink-0" />;
+  return <Icon icon={iconName} className="size-3.5 shrink-0" />;
+}
+
+function TabLeadingClose({
+  tab,
+  dirtyFileIds,
+  terminalStatus,
+  onClose,
+}: {
+  tab: RightTab;
+  dirtyFileIds?: Set<string>;
+  terminalStatus?: string;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <span className="relative mr-1 flex size-3.5 shrink-0 items-center justify-center">
+      <span className="flex items-center justify-center group-hover/tab:invisible" aria-hidden>
+        {tabIcon(tab, dirtyFileIds, terminalStatus)}
+      </span>
+      <button
+        type="button"
+        title={t("menu.closeTab")}
+        aria-label={t("menu.closeTab")}
+        className={cn(
+          "absolute inset-0 flex items-center justify-center rounded",
+          "invisible group-hover/tab:visible",
+          "text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground",
+        )}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+      >
+        <XIcon className="size-3" />
+      </button>
+    </span>
+  );
 }
 
 export const TabBar = memo(function TabBar({
@@ -83,6 +118,7 @@ export const TabBar = memo(function TabBar({
       getKey={(tab) => tab.id}
       onReorder={onReorder}
       onDragItem={(tab) => onSelect(tab.id)}
+      getComposerDragPayload={rightTabComposerDragPayload}
       className="min-w-0"
       rowClassName="scrollbar-none min-w-0 gap-0.5 overflow-x-auto"
       renderItem={({ item: tab, dragging, dragHandleProps }) => (
@@ -92,7 +128,7 @@ export const TabBar = memo(function TabBar({
               {...dragHandleProps}
               role="button"
               className={cn(
-                "group flex w-[120px] shrink-0 items-center rounded px-2 py-1",
+                "group/tab flex w-[120px] shrink-0 items-center rounded px-2 py-1",
                 "text-[length:var(--font-toolbar-tab)] cursor-default select-none transition-colors",
                 "border-r border-border-subtle last:border-r-0",
                 tab.id === activeTabId
@@ -110,20 +146,15 @@ export const TabBar = memo(function TabBar({
                 }
               }}
             >
-              {tabIcon(tab, dirtyFileIds, terminalSessions[tab.id]?.status)}
-              <span className={cn("truncate", tab.isPreview && "italic")}>
+              <TabLeadingClose
+                tab={tab}
+                dirtyFileIds={dirtyFileIds}
+                terminalStatus={terminalSessions[tab.id]?.status}
+                onClose={() => onClose(tab.id)}
+              />
+              <span className={cn("min-w-0 truncate", tab.isPreview && "italic")}>
                 {tabDisplayTitle(tab, dirtyFileIds)}
               </span>
-              <button
-                type="button"
-                className="ml-auto flex size-4 shrink-0 items-center justify-center rounded invisible group-hover:visible hover:bg-muted-foreground/10"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClose(tab.id);
-                }}
-              >
-                <XIcon className="size-2.5" />
-              </button>
             </div>
           </AppContextMenuTrigger>
           <AppContextMenuContent className="min-w-[8rem]">

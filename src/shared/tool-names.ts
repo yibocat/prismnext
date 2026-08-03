@@ -21,6 +21,7 @@ export const TOOL_NAMES = {
   latexCompile: "latex-compile",
   researchBriefRead: "research-brief-read",
   researchBriefUpdate: "research-brief-update",
+  projectRuleWrite: "project-rule-write",
   suggestPlan: "suggest-plan",
   experimentLog: "experiment-log",
   experimentRun: "experiment-run",

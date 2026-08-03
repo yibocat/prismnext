@@ -5,6 +5,8 @@ import { useBrowserStore } from "@/stores/browser-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { toUrlOrSearch } from "@/lib/browser/search-engines";
 import { getWebview } from "./webview-registry";
+import { setComposerDragData } from "@/lib/chat/composer-drag";
+import { linkLabelForUrl } from "@/lib/browser-link/normalize";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import {
@@ -169,7 +171,20 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
       <div className="mx-1 h-4 w-px bg-border shrink-0" />
 
       {/* URL bar */}
-      <div className="flex-1 flex items-center gap-1.5 h-6 rounded bg-muted/50 px-2 min-w-0">
+      <div
+        className="flex-1 flex items-center gap-1.5 h-6 rounded bg-muted/50 px-2 min-w-0"
+        draggable={Boolean(tabUrl?.trim())}
+        onDragStart={(e) => {
+          const url = tabUrl.trim();
+          if (!url) {
+            e.preventDefault();
+            return;
+          }
+          setComposerDragData(e.dataTransfer, [
+            { v: 1, kind: "link", url, label: tabTitle || linkLabelForUrl(url) },
+          ]);
+        }}
+      >
         <GlobeIcon className="size-3 shrink-0 text-muted-foreground/60" />
         <input
           type="text"

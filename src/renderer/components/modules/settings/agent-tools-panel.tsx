@@ -7,6 +7,7 @@ import {
   SETTINGS_DETAIL_SHELL,
   SETTINGS_ROW_DESC,
 } from "./settings-tokens";
+import { PromptInternalsNotice } from "./prompt-internals-notice";
 
 const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
@@ -60,9 +61,12 @@ export function AgentToolsPanel() {
 
   return (
     <div className={SETTINGS_DETAIL_SHELL}>
-      <div className="space-y-1">
-        <h2 className="text-[length:var(--font-size-15)] font-semibold">{t("settings.editor.agentTools.title")}</h2>
-        <p className={SETTINGS_ROW_DESC}>{t("settings.editor.agentTools.intro")}</p>
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <h2 className="text-[length:var(--font-size-15)] font-semibold">{t("settings.editor.agentTools.title")}</h2>
+          <p className={SETTINGS_ROW_DESC}>{t("settings.editor.agentTools.intro")}</p>
+        </div>
+        <PromptInternalsNotice />
       </div>
 
       {grouped.map(({ category, tools: categoryTools }) => (

@@ -6,16 +6,7 @@
       "description": "Primary research orchestrator — coordinates literature, analysis, writing, and project tools across the workspace.",
       "builtin": true,
       "thoughtLevel": "medium",
-      "allowedExperts": ["literature-synthesizer", "research-design-coach", "methodology-auditor", "structure-diagnostician", "peer-reviewer"],
-      "modules": [
-        "chat-citation-staging",
-        "citation-audit",
-        "literature-library",
-        "task-delegation",
-        "latex-workspace",
-        "proactive-scheduling",
-        "research-design"
-      ]
+      "allowedExperts": ["literature-synthesizer", "research-design-coach", "methodology-auditor", "structure-diagnostician", "peer-reviewer"]
     }
   ]
 }

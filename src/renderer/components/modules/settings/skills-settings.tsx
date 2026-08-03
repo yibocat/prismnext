@@ -1,3 +1,4 @@
+import { formatTokenCount } from "@shared/token-estimate";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -35,6 +36,7 @@ interface InstalledSkill {
   description: string;
   skillDirRel: string;
   enabled: boolean;
+  tokenCount: number;
   installOrigin?:
     | { adapter: "github"; repo: string; ref: string; path: string }
     | { adapter: "discovery"; indexUrl: string };
@@ -282,6 +284,11 @@ export function SkillsSettings() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className={cn(ROW_LABEL, "font-mono")}>{skill.name}</span>
+                          <span className="text-[length:var(--font-size-11)] text-muted-foreground/70 tabular-nums">
+                            {t("settings.editor.promptStack.tokens", {
+                              count: formatTokenCount(skill.tokenCount),
+                            })}
+                          </span>
                           {!skill.enabled && (
                             <span className={cn(BADGE, "bg-muted/60 text-muted-foreground/70")}>
                               off

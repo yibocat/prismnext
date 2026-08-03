@@ -17,6 +17,8 @@ import { modeRegistry } from "@/lib/workspace/mode-registry";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { openMode } from "@/lib/workspace/open-right-area-mode";
 import { openRightArea } from "@/lib/workspace/right-area-layout";
+import { getModeShortcutId } from "@/lib/workspace/mode-shortcuts";
+import { ShortcutKbdChips } from "@/lib/shortcuts";
 
 export function RightAreaAddMenu({
   surface,
@@ -76,15 +78,19 @@ export function RightAreaAddMenu({
         </AppMenuTrigger>
       </Hint>
       <AppMenuContent align="start" className="min-w-[10rem]">
-        {modes.map((mode) => (
-          <AppMenuItem
-            key={mode.id}
-            leading={<span className="[&>svg]:size-3.5 shrink-0">{mode.icon}</span>}
-            onClick={() => onPick(mode.id)}
-          >
-            {modeLabel(mode)}
-          </AppMenuItem>
-        ))}
+        {modes.map((mode) => {
+          const shortcutId = getModeShortcutId(mode.id);
+          return (
+            <AppMenuItem
+              key={mode.id}
+              leading={<span className="[&>svg]:size-3.5 shrink-0">{mode.icon}</span>}
+              trailing={shortcutId ? <ShortcutKbdChips id={shortcutId} /> : undefined}
+              onClick={() => onPick(mode.id)}
+            >
+              {modeLabel(mode)}
+            </AppMenuItem>
+          );
+        })}
       </AppMenuContent>
     </AppMenu>
   );

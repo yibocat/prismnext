@@ -1,7 +1,13 @@
-/** Project-relative path to the living research design brief. */
-export const RESEARCH_BRIEF_REL = ".prismnext/research/brief.md";
+/** Project-relative path to the living research brief — intellectual spine (project root). */
+export const RESEARCH_BRIEF_REL = ".brief.md";
 
-/** Canonical ## section titles (fixed template — tools patch by these names). */
+/**
+ * Pre-0.6.8 location — migrated to {@link RESEARCH_BRIEF_REL} on ensure/read.
+ * Still recognized for permission denies and one-time migration.
+ */
+export const LEGACY_RESEARCH_BRIEF_REL = ".prismnext/research/brief.md";
+
+/** Canonical ## section titles in the default template — tools patch by these names when headings exist. */
 export const RESEARCH_BRIEF_SECTIONS = [
   "Research question",
   "Background & motivation",
@@ -18,19 +24,23 @@ export type ResearchBriefSection = (typeof RESEARCH_BRIEF_SECTIONS)[number];
 
 export const RESEARCH_BRIEF_TEMPLATE = `# Research Brief
 
-> Living design doc for this project. Agents: use \`research-brief-read\` / \`research-brief-update\` — not generic edit on this file.
+> Living **intellectual spine** for this project (project-root \`.brief.md\`).
+> Not chat memory, not agent rules, not an experiment plan.
+> Write in **first person** (I / we) — your own research voice, not third-person about "the project."
+> Agents: use \`research-brief-read\` / \`research-brief-update\` — not generic edit on this file.
+> **The sections below are a common scaffold — rename, remove, or replace freely.**
 
 ## Research question
-<!-- One clear question. FINER: Feasible, Interesting, Novel, Ethical, Relevant -->
+<!-- One clear question in my/our words. FINER: Feasible, Interesting, Novel, Ethical, Relevant -->
 
 ## Background & motivation
-<!-- Why this problem matters -->
+<!-- Why I/we care about this problem -->
 
 ## Hypotheses / claims
-<!-- Falsifiable where possible -->
+<!-- What I/we expect or assert — falsifiable where possible -->
 
 ## Contribution & novelty
-<!-- What's new vs baseline / prior work -->
+<!-- What I/we believe is new vs baseline / prior work -->
 
 ## Scope
 ### In scope

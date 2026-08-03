@@ -1,5 +1,5 @@
 /**
- * research-brief-read — Read the project research design brief (.prismnext/research/brief.md).
+ * research-brief-read — Read the project research design brief (.brief.md at project root).
  */
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
@@ -66,9 +66,9 @@ async function bridgeCall(context: Record<string, unknown>): Promise<{ output: s
 
 export default tool({
   description:
-    "Read the project research design brief at `.prismnext/research/brief.md`. " +
-    "Returns the full markdown and parsed sections (research question, hypotheses, contribution, scope, assumptions, open questions, etc.). " +
-    "Creates the template brief if missing. Use before research-design discussions or delegating to research-design-coach.",
+    "Read the project research brief at `.brief.md` (project root). " +
+    "Returns full markdown and parsed sections when `##` headings match the template. " +
+    "Creates the scaffold file if missing. Use when project through-line is unclear.",
   args: {},
   async execute(_args, context) {
     return bridgeCall(context as Record<string, unknown>);

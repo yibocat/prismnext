@@ -1,6 +1,36 @@
 import { useEffect, useRef } from "react";
 import { useRightPanelStore } from "@/stores/right-panel-store";
+import type { RightTab } from "@/lib/workspace/mode-registry";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
+
+const SETTINGS_TAB_KIND = "settings-editor" as const;
+
+export function isSettingsEditorTab(tab: RightTab): boolean {
+  return tab.kind === SETTINGS_TAB_KIND;
+}
+
+export function partitionRightTabs(tabs: RightTab[]): {
+  settingsTabs: RightTab[];
+  workspaceTabs: RightTab[];
+} {
+  const settingsTabs: RightTab[] = [];
+  const workspaceTabs: RightTab[] = [];
+  for (const tab of tabs) {
+    if (isSettingsEditorTab(tab)) settingsTabs.push(tab);
+    else workspaceTabs.push(tab);
+  }
+  return { settingsTabs, workspaceTabs };
+}
+
+/** Active tab id constrained to the visible surface (settings vs workspace). */
+export function resolveSurfaceActiveTabId(
+  surfaceTabs: RightTab[],
+  activeTabId: string | null,
+): string | null {
+  if (surfaceTabs.length === 0) return null;
+  if (activeTabId && surfaceTabs.some((t) => t.id === activeTabId)) return activeTabId;
+  return surfaceTabs[surfaceTabs.length - 1]?.id ?? null;
+}
 
 export function hasOpenSettingsEditor(): boolean {
   return useRightPanelStore

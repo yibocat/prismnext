@@ -2,6 +2,8 @@ import { ipcMain } from "electron";
 import { getSettings, updateSettings } from "../services/settings";
 import { promptManager } from "../prompts";
 import { buildPromptContext } from "../prompts/context";
+import { countPromptTokens } from "../lib/token-estimate";
+import { PROMPT_TOKEN_ENCODING } from "../../shared/token-estimate";
 import { CORE_PERSONA_PROMPT } from "../prompts/layers/core-persona";
 import { AcpService } from "../acp/service";
 import { resolvePermissionMode } from "../services/permission-modes";
@@ -97,18 +99,33 @@ export function registerSettingsHandlers(): void {
         userCustomPrompt: args?.userCustomPrompt,
         orchestratorId: args?.orchestratorId,
       });
-      return {
-        ...preview,
-        markdown: formatPromptStackPreviewMarkdown(preview),
-        sections: preview.sections.map((s) => ({
+      const sections = preview.sections.map((s) => {
+        const { tokenCount, charCount } = countPromptTokens(s.content);
+        return {
           id: s.id,
           label: s.label,
           injectPath: s.injectPath,
           fileHint: s.fileHint,
-          charCount: s.content.length,
+          charCount,
+          tokenCount,
           content: s.content,
-        })),
+        };
+      });
+      const totalTokenCount = sections.reduce((sum, s) => sum + s.tokenCount, 0);
+      return {
+        ...preview,
+        markdown: formatPromptStackPreviewMarkdown(preview),
+        tokenEncoding: PROMPT_TOKEN_ENCODING,
+        totalTokenCount,
+        sections,
       };
+    },
+  );
+
+  ipcMain.handle(
+    "settings:countPromptTokens",
+    async (_event, args: { text: string }) => {
+      return countPromptTokens(args?.text ?? "");
     },
   );
 

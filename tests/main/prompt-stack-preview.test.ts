@@ -32,7 +32,7 @@ describe("prompt stack preview", () => {
       userCustomPrompt: undefined,
     });
     const stable = preview.sections.find((s) => s.id === "prism-system");
-    expect(stable?.content).toContain("prismnext Assistant");
+    expect(stable?.content).toContain("# prismnext");
     expect(stable?.content).not.toContain("Chat paper citations");
     expect(stable?.content).not.toContain("User AGENTS");
   });
@@ -42,11 +42,12 @@ describe("prompt stack preview", () => {
     const agent = preview.sections.find((s) => s.id === "orchestrator-agent");
     expect(agent?.content).toContain("mode: primary");
     expect(agent?.content).toContain("## Chat paper citations");
-    expect(agent?.content).toContain("## Task delegation (orchestrator)");
+    expect(agent?.content).toContain("## Orchestrator judgment");
+    expect(agent?.content).toContain("### Task delegation");
     expect(preview.orchestratorId).toBe("research-prism");
   });
 
-  it("scopes project rules section to orchestrator allowlist", async () => {
+  it("includes all enabled project rules in the preview", async () => {
     installProjectRule(
       root,
       "rule-a",
@@ -72,17 +73,11 @@ Body B
 `,
     );
 
-    const { saveBuiltinOrchestratorOverride } = await import("../../src/main/services/experts-sync");
-    saveBuiltinOrchestratorOverride(root, {
-      orchestratorId: "research-prism",
-      rules: ["Rule A"],
-    });
-
     const preview = await buildPromptStackPreview({ projectRoot: root });
     const rules = preview.sections.find((s) => s.id === "project-rules");
     expect(rules?.content).toContain("Rule A");
-    expect(rules?.content).not.toContain("Body B");
-    expect(rules?.injectPath).toContain("subset");
+    expect(rules?.content).toContain("Body B");
+    expect(rules?.injectPath).toContain("all enabled always rules");
   });
 
   it("formatPromptStackPreviewMarkdown lists injection paths", async () => {

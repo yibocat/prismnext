@@ -25,6 +25,7 @@ import { MoveWidget } from "./move-widget";
 import { LiteratureToolWidget } from "./literature-tool-widget";
 import { LatexToolWidget } from "./latex-tool-widget";
 import { ResearchBriefToolWidget } from "./research-brief-tool-widget";
+import { ProjectRuleToolWidget } from "./project-rule-tool-widget";
 import { ExperimentToolWidget } from "./experiment-tool-widget";
 import { InteractionToolWidget } from "./interaction-tool-widget";
 import { LspWidget } from "./lsp-widget";
@@ -86,6 +87,7 @@ const CUSTOM_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
   "latex-compile": LatexToolWidget,
   "research-brief-read": ResearchBriefToolWidget,
   "research-brief-update": ResearchBriefToolWidget,
+  "project-rule-write": ProjectRuleToolWidget,
   "experiment-log": ExperimentToolWidget,
   "experiment-run": ExperimentToolWidget,
   "results-snapshot": ExperimentToolWidget,

@@ -111,20 +111,14 @@ async function runProjectChatPrewarm(
 
   const {
     resolveOrchestratorId,
-    getOrchestratorRuntimeFilters,
   } = await import("./experts-sync");
 
   const orchestratorId = resolveOrchestratorId(projectRoot, null);
-  const runtimeFilters = getOrchestratorRuntimeFilters(projectRoot, orchestratorId);
-  const ruleAllowlist = runtimeFilters?.rules;
-  const promptCtx = await buildPromptContext(projectRoot, { ruleAllowlist });
+  const promptCtx = await buildPromptContext(projectRoot);
 
   const prevExpertsState = readPrismExpertsSyncState();
   const expertsResult = await refreshProjectExpertsIntegrationIfNeeded(projectRoot, { promptCtx });
-  // Match first-send allowlist (orchestrator skills) so chat:send IfNeeded skips.
-  const skillsResult = await refreshProjectSkillsIntegrationIfNeeded(projectRoot, {
-    profileSkillAllowlist: runtimeFilters?.skills,
-  });
+  const skillsResult = await refreshProjectSkillsIntegrationIfNeeded(projectRoot);
 
   syncProjectPromptFile(projectRoot, promptCtx);
   const { instructionsChanged } = acp.applyProjectPromptIntegration(projectRoot);

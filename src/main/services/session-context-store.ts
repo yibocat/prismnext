@@ -11,8 +11,6 @@ const log = createLogger("session-context-store", "agent");
 
 export interface SessionContextData {
   tokens: number;
-  breakdown: Record<string, number>;
-  schema: { key: string; label: string; color: string; description?: string; order?: number }[];
   updatedAt: number;
   /** OpenCode usage_update.size when known. */
   windowSize?: number | null;
@@ -63,13 +61,22 @@ export function loadSessionContext(
     const storePath = contextStorePath(projectRoot);
     if (!fs.existsSync(storePath)) return null;
     const store = JSON.parse(fs.readFileSync(storePath, "utf-8"));
-    return store[sessionId] ?? null;
+    const raw = store[sessionId];
+    if (!raw || typeof raw !== "object") return null;
+    return {
+      tokens: typeof raw.tokens === "number" ? raw.tokens : 0,
+      updatedAt: typeof raw.updatedAt === "number" ? raw.updatedAt : Date.now(),
+      windowSize: raw.windowSize ?? null,
+      source: raw.source,
+      promptFingerprint: raw.promptFingerprint,
+      hasSystemPromptBlock: raw.hasSystemPromptBlock,
+    };
   } catch {
     return null;
   }
 }
 
-/** Clear ring numbers after compact (keep schema optional via omit). */
+/** Clear ring numbers after compact. */
 export function clearSessionContextUsage(
   projectRoot: string,
   sessionId: string,
@@ -89,7 +96,6 @@ export function clearSessionContextUsage(
       tokens: 0,
       windowSize: prev.windowSize ?? null,
       source: undefined,
-      breakdown: {},
       updatedAt: Date.now(),
     };
     fs.writeFileSync(storePath, JSON.stringify(store, null, 2), "utf-8");

@@ -7,13 +7,20 @@ import { getLeftNavPanelRefs } from "@/lib/workspace/left-nav/panel-refs";
 
 export type CloseShortcutResult = "handled" | "close-window";
 
-/** Exit maximize (if any) and collapse RightArea after the last workspace tab closes. */
+/** Exit maximize (if any) and collapse RightArea. */
 function collapseRightShell(): void {
   const refs = getLeftNavPanelRefs();
   closeRightArea({
     centerRef: refs.centerRef?.current,
     rightAreaRef: refs.rightAreaRef?.current,
   });
+}
+
+/** Collapse RightArea when expanded and no tabs remain (tab close, close-all, …). */
+export function collapseRightAreaWhenEmpty(): void {
+  if (useRightPanelStore.getState().tabs.length > 0) return;
+  if (!useLayoutStore.getState().rightAreaExpanded) return;
+  collapseRightShell();
 }
 
 function resolveRightAreaTabToClose() {
@@ -38,21 +45,19 @@ export function closeActiveTabFromShortcut(): CloseShortcutResult {
   // Layer 1 — RightArea workspace tabs
   if (layout.rightAreaExpanded) {
     if (rp.tabs.length === 0) {
-      collapseRightShell();
+      collapseRightAreaWhenEmpty();
       return "handled";
     }
 
     const tab = resolveRightAreaTabToClose();
     if (!tab) {
-      collapseRightShell();
+      collapseRightAreaWhenEmpty();
       return "handled";
     }
 
     rp.requestCloseTab(tab.id, {
       onAfterClose: () => {
-        if (useRightPanelStore.getState().tabs.length === 0) {
-          collapseRightShell();
-        }
+        collapseRightAreaWhenEmpty();
       },
     });
     return "handled";

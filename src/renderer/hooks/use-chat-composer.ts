@@ -15,8 +15,8 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { actionRegistry } from "@/actions/registry";
 import "@/actions/builtin-actions";
 import type { ExpertInfo } from "@shared/agent-experts";
-import { getModel, modelSupportsVision, resolveProviderConfig } from "@/lib/providers";
 import type { ContentBlock } from "@/stores/chat-store";
+import { applyVisionFallbackForSend, visionFallbackErrorMessage } from "@/lib/chat/vision-fallback-send";
 import {
   appendComposerParts,
   combineComposerQueueItems,
@@ -350,94 +350,33 @@ export function useChatComposer() {
     }
 
     const settings = useSettingsStore.getState().settings;
-    const currentProviderId = settings.aiProvider || "anthropic";
-    const currentProvider = resolveProviderConfig(currentProviderId, settings.aiCustomProviders);
-    const currentModelId = settings.aiModel ?? currentProvider?.defaultModel ?? "";
-    const currentModel = currentModelId
-      ? getModel(
-          currentProviderId,
-          currentModelId,
-          settings.aiCustomModelsData,
-          settings.aiCustomProviders,
-        )
-      : undefined;
-    const currentSupportsVision = modelSupportsVision(currentModel);
 
     let promptImages = compiled.promptImages;
     let promptFiles = compiled.promptFiles;
     let promptText = compiled.promptText;
     let displayBlocks = compiled.displayBlocks;
 
-    if (compiled.promptImages.length > 0 && !currentSupportsVision) {
-      const helperRef = settings.aiVisionFallbackModel?.trim();
-      if (!helperRef) {
-        store._setStreaming(tabId, false);
-        toast.error("当前模型不支持图片输入，请先在 Settings 里配置多模态辅助模型。");
-        return;
-      }
-
-      const slash = helperRef.indexOf("/");
-      if (slash <= 0 || slash >= helperRef.length - 1) {
-        store._setStreaming(tabId, false);
-        toast.error("多模态辅助模型配置无效，请重新选择。");
-        return;
-      }
-
-      const helperProviderId = helperRef.slice(0, slash);
-      const helperModelId = helperRef.slice(slash + 1);
-      const helperApiKey = settings.aiApiKeys?.[helperProviderId]?.trim();
-      if (!helperApiKey) {
-        store._setStreaming(tabId, false);
-        toast.error("多模态辅助模型对应的 Provider 未配置 API Key，请先在 Settings 中配置。");
-        return;
-      }
-      const helperModel = getModel(
-        helperProviderId,
-        helperModelId,
-        settings.aiCustomModelsData,
-        settings.aiCustomProviders,
-      );
-      if (!modelSupportsVision(helperModel)) {
-        store._setStreaming(tabId, false);
-        toast.error("所选多模态辅助模型没有标记 Vision 能力，请在 Settings 里检查模型能力。");
-        return;
-      }
-
-      const helperLabel = helperModel?.name ?? helperModelId;
+    if (compiled.promptImages.length > 0) {
+      store._setPreparePhase(tabId, null);
       try {
-        const result = await window.electronAPI.chatDescribeImages({
-          providerId: helperProviderId,
-          modelId: helperModelId,
-          images: compiled.promptImages,
+        const applied = await applyVisionFallbackForSend({
+          promptText: compiled.promptText,
+          promptImages: compiled.promptImages,
+          displayBlocks: compiled.displayBlocks,
+          settings,
         });
         if (!useChatStore.getState().tabs.find((t) => t.id === tabId)?.isStreaming) {
           return;
         }
-        const descriptionBlocks = result.descriptions.map((desc, i) =>
-          [
-            `### Image ${i + 1}: ${desc.name}`,
-            desc.cached ? `- via: ${helperLabel} (cached)` : `- via: ${helperLabel}`,
-            desc.text.trim(),
-          ].join("\n\n"),
-        );
-        promptText = [
-          "## Attached images (via vision fallback)",
-          "",
-          ...descriptionBlocks,
-          "",
-          compiled.promptText,
-        ].join("\n");
-        promptImages = [];
-        displayBlocks = withImageAttachmentNotes(
-          compiled.displayBlocks,
-          `已通过 ${helperLabel} 识图`,
-        );
-        patchTabUserImageNotes(tabId, `已通过 ${helperLabel} 识图`);
+        promptText = applied.promptText;
+        promptImages = applied.promptImages;
+        displayBlocks = applied.displayBlocks;
+        if (applied.note) {
+          patchTabUserImageNotes(tabId, applied.note);
+        }
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "图片识别失败，请检查多模态辅助模型配置。";
         store._setStreaming(tabId, false);
-        toast.error(`图片识别失败：${message}`);
+        toast.error(visionFallbackErrorMessage(err));
         return;
       }
     }

@@ -46,7 +46,6 @@ export function formatPromptStackPreviewMarkdown(preview: PromptStackPreview): s
   if (preview.orchestratorName && preview.orchestratorId) {
     lines.push(
       `**Default orchestrator:** ${preview.orchestratorName} (\`${preview.orchestratorId}\`).`,
-      "Project rules below use this profile's Rules selection when non-empty.",
       "",
     );
   } else if (!preview.sections.some((s) => s.id === "agents-md")) {
@@ -70,22 +69,15 @@ export async function buildPromptStackPreview(
 
   let orchestratorId: string | undefined;
   let orchestratorName: string | undefined;
-  let ruleAllowlist: string[] | undefined;
 
   if (projectRoot) {
-    const {
-      resolveOrchestratorId,
-      getOrchestrator,
-      getOrchestratorRuntimeFilters,
-    } = await import("../services/experts-sync");
+    const { resolveOrchestratorId, getOrchestrator } = await import("../services/experts-sync");
 
     orchestratorId = resolveOrchestratorId(projectRoot, explicitOrchestratorId ?? null);
-    const orchestrator = getOrchestrator(projectRoot, orchestratorId);
-    orchestratorName = orchestrator?.name;
-    ruleAllowlist = getOrchestratorRuntimeFilters(projectRoot, orchestratorId)?.rules;
+    orchestratorName = getOrchestrator(projectRoot, orchestratorId)?.name;
   }
 
-  const ctx: PromptContext = await buildPromptContext(projectRoot, { ruleAllowlist });
+  const ctx: PromptContext = await buildPromptContext(projectRoot);
   if (userCustomPrompt !== undefined) {
     ctx.userCustomPrompt = userCustomPrompt;
   }
@@ -114,14 +106,11 @@ export async function buildPromptStackPreview(
   );
 
   const projectRules = promptManager.composeProjectRules(ctx);
-  const rulesInjectPath = ruleAllowlist?.length
-    ? "Each chat turn — user message block (orchestrator Rules subset)"
-    : "Each chat turn — user message block (all enabled always rules)";
   sections.push(
     section(
       "project-rules",
       "Project rules",
-      rulesInjectPath,
+      "Each chat turn — user message block (all enabled always rules)",
       projectRules,
       ".prismnext/agent/rules/*/RULE.md",
     ),

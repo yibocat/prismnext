@@ -55,4 +55,8 @@ export interface PromptModule {
   build?: (ctx: PromptContext) => string;
   /** When true, inject only via orchestrator/expert profile — not global _prism-system. */
   profileOnly?: boolean;
+  /** When true with profileOnly, inject only on the primary orchestrator — not experts/subagents. */
+  orchestratorOnly?: boolean;
+  /** When true with profileOnly, inject only on expert/subagent agent.md — not the primary orchestrator. */
+  expertOnly?: boolean;
 }

@@ -1,66 +1,88 @@
 import { describe, it, expect } from "vitest";
 import {
+  composeExpertProfileModulePrompts,
+  composeOrchestratorProfileModulePrompts,
   composeProfileModulePrompts,
-  resolveActiveModuleKeys,
-  resolveProfileSelectableModules,
+  resolveExpertActiveModuleKeys,
+  resolveExpertProfileModuleKeys,
+  resolveOrchestratorActiveModuleKeys,
+  resolveOrchestratorProfileModuleKeys,
+  resolveSharedProfileModules,
   resolveStableSystemModules,
 } from "../../src/main/prompts/resolve-active-modules";
 import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/literature-library";
 import { EXPERIMENTS_PROMPT } from "../../src/main/prompts/modules/experiments";
 
 describe("resolve-active-modules", () => {
-  it("stable system modules include workspace and cognitive baselines", () => {
+  it("stable system modules include workspace and cognitive baselines (not Interaction)", () => {
     const keys = resolveStableSystemModules().map((m) => m.key);
-    // workspace-folders (project structure) + cognitive baselines (always-on for every agent)
-    expect(keys).toEqual(["workspace-folders", "research-reasoning", "reply-depth"]);
+    expect(keys).toEqual(
+      expect.arrayContaining(["workspace-folders", "research-reasoning", "reply-depth"]),
+    );
+    expect(keys).not.toContain("interaction");
   });
 
-  it("profile-selectable modules exclude workspace", () => {
-    const keys = resolveProfileSelectableModules().map((m) => m.key);
+  it("shared profile modules exclude orchestrator-only and expert-only", () => {
+    const keys = resolveSharedProfileModules().map((m) => m.key);
     expect(keys).toContain("chat-citation-staging");
-    expect(keys).toContain("citation-audit");
     expect(keys).toContain("literature-library");
-    expect(keys).toContain("task-delegation");
     expect(keys).toContain("experiments");
+    expect(keys).toContain("interaction");
+    expect(keys).not.toContain("orchestrator-judgment");
+    expect(keys).not.toContain("subagent-role");
     expect(keys).not.toContain("workspace-folders");
   });
 
-  it("composeProfileModulePrompts inlines only profile-selected modules", () => {
+  it("orchestrator profile keys include orchestrator-judgment but not subagent-role", () => {
+    const keys = resolveOrchestratorProfileModuleKeys();
+    expect(keys).toContain("orchestrator-judgment");
+    expect(keys).toContain("literature-library");
+    expect(keys).not.toContain("subagent-role");
+  });
+
+  it("expert profile keys exclude orchestrator-judgment and include subagent-role", () => {
+    const keys = resolveExpertProfileModuleKeys();
+    expect(keys).not.toContain("orchestrator-judgment");
+    expect(keys).toContain("literature-library");
+    expect(keys).toContain("subagent-role");
+  });
+
+  it("composeOrchestratorProfileModulePrompts inlines domain modules", () => {
+    const text = composeOrchestratorProfileModulePrompts({});
+    expect(text).toContain(LITERATURE_LIBRARY_PROMPT.split("\n")[0]);
+    expect(text).toContain("## Orchestrator judgment");
+  });
+
+  it("composeExpertProfileModulePrompts inlines experiments and subagent role, not orchestrator judgment", () => {
+    const text = composeExpertProfileModulePrompts({});
+    expect(text).toContain(EXPERIMENTS_PROMPT.split("\n")[0]);
+    expect(text).toContain("## Subagent role");
+    expect(text).not.toContain("## Orchestrator judgment");
+  });
+
+  it("composeProfileModulePrompts still supports explicit key lists", () => {
     const text = composeProfileModulePrompts(["literature-library"], {});
     expect(text).toContain(LITERATURE_LIBRARY_PROMPT.split("\n")[0]);
     expect(text).not.toContain("## Chat paper citations");
   });
 
-  it("composeProfileModulePrompts inlines the experiments module", () => {
-    const text = composeProfileModulePrompts(["experiments"], {});
-    expect(text).toContain(EXPERIMENTS_PROMPT.split("\n")[0]);
-    expect(text).toContain("experiment-log");
+  it("resolveOrchestratorActiveModuleKeys excludes expert-only modules", () => {
+    const keys = resolveOrchestratorActiveModuleKeys();
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        "orchestrator-judgment",
+        "literature-library",
+        "interaction",
+        "workspace-folders",
+      ]),
+    );
+    expect(keys).not.toContain("subagent-role");
   });
 
-  it("resolveActiveModuleKeys includes global baselines plus profile picks", () => {
-    expect(resolveActiveModuleKeys({})).toEqual([
-      "reply-depth",
-      "research-reasoning",
-      "workspace-folders",
-    ]);
-    expect(resolveActiveModuleKeys({ profileModules: ["literature-library", "bogus"] })).toEqual([
-      "literature-library",
-      "reply-depth",
-      "research-reasoning",
-      "workspace-folders",
-    ]);
-  });
-
-  it("does not require global module toggles for profile selection", () => {
-    const keys = resolveActiveModuleKeys({
-      profileModules: ["chat-citation-staging", "literature-library"],
-    });
-    expect(keys).toEqual([
-      "chat-citation-staging",
-      "literature-library",
-      "reply-depth",
-      "research-reasoning",
-      "workspace-folders",
-    ]);
+  it("resolveExpertActiveModuleKeys excludes orchestrator-only and includes expert-only", () => {
+    const keys = resolveExpertActiveModuleKeys();
+    expect(keys).toContain("literature-library");
+    expect(keys).toContain("subagent-role");
+    expect(keys).not.toContain("orchestrator-judgment");
   });
 });

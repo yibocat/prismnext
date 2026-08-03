@@ -50,6 +50,7 @@ import { formatRelativeTimeMs } from "@/lib/chat/relative-time";
 import { displayChatTitle } from "@/lib/i18n/display-chat-title";
 import { cn } from "@/lib/utils";
 import { ShortcutKbdChips } from "@/lib/shortcuts";
+import { getModeShortcutId } from "@/lib/workspace/mode-shortcuts";
 import { Kbd } from "@/components/ui/kbd";
 import {
   THEME_PACK_IDS,
@@ -97,17 +98,6 @@ type Category = (typeof CATEGORIES)[number]["id"];
 
 /** cmdk filter that passes every item (we render-filter ourselves). */
 const passAllFilter = (): number => 1;
-
-/** mode id -> shortcut id (right-side kbd on mode items). */
-const MODE_SHORTCUT: Partial<Record<string, string>> = {
-  texworkspace: "workspace.openTexWorkspace",
-  literature: "workspace.openLiterature",
-  experiments: "workspace.openExperiments",
-  files: "workspace.openFiles",
-  git: "workspace.openGit",
-  browser: "workspace.openBrowser",
-  terminal: "workspace.openTerminal",
-};
 
 const FILE_LIMIT_ALL = 8;
 const FILE_LIMIT_SINGLE = 30;
@@ -350,7 +340,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
         id: m.id,
         label: m.labelKey ? t(m.labelKey) : m.label,
         icon: m.icon,
-        shortcutId: MODE_SHORTCUT[m.id],
+        shortcutId: getModeShortcutId(m.id),
       }))
       .filter((m) => !query || fuzzyMatch(query, m.label) || fuzzyMatch(query, m.id));
   }, [showModes, query, t]);

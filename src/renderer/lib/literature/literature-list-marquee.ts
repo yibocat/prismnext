@@ -49,7 +49,7 @@ function isMarqueeIgnoredTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return true;
   return Boolean(
     target.closest(
-      'input, button, a, textarea, select, [data-literature-pdf-open], [contenteditable="true"]',
+      'input, button, a, textarea, select, [data-literature-pdf-open], [data-literature-composer-drag], [contenteditable="true"]',
     ),
   );
 }
@@ -93,6 +93,15 @@ export function useLiteratureListMarquee(opts: {
 
     let session: Session | null = null;
 
+    const cancelSession = (revertSelection: boolean) => {
+      if (session?.active && revertSelection) {
+        setCheckedPaperIds(session.additive ? session.baseIds : []);
+      }
+      session = null;
+      setMarqueeRect(null);
+      document.body.style.removeProperty("user-select");
+    };
+
     const finish = () => {
       if (session?.active) {
         suppressRowClickRef.current = true;
@@ -100,9 +109,11 @@ export function useLiteratureListMarquee(opts: {
           suppressRowClickRef.current = false;
         }, 0);
       }
-      session = null;
-      setMarqueeRect(null);
-      document.body.style.removeProperty("user-select");
+      cancelSession(false);
+    };
+
+    const onDragStart = () => {
+      cancelSession(true);
     };
 
     const onMouseDown = (e: MouseEvent) => {
@@ -148,12 +159,14 @@ export function useLiteratureListMarquee(opts: {
     scrollEl.addEventListener("mousedown", onMouseDown);
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", finish);
+    document.addEventListener("dragstart", onDragStart);
     document.addEventListener("blur", finish);
 
     return () => {
       scrollEl.removeEventListener("mousedown", onMouseDown);
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", finish);
+      document.removeEventListener("dragstart", onDragStart);
       document.removeEventListener("blur", finish);
       finish();
     };

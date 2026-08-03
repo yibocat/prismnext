@@ -1,33 +1,42 @@
 /**
- * Interaction — soft workflow for saved figures and CSV plots in RightArea.
+ * Interaction — when to create persisted figure/plot objects for chat.
  *
- * Scope: explain what Interaction is and the judgment path (chat preview vs panel object).
- * Hard gates (file must exist, kind whitelist, path safety) live in main, not here.
- * Tool args/examples live on interaction-* tool descriptions, not in this module.
+ * Spec/kind validation and path checks live in main; args/examples on interaction-* tools.
+ * Chat one-shot file peeks use ```artifact (Reply depth) — not this module.
  */
 import { TOOL_NAMES } from "../../../shared/tool-names";
 
 export const INTERACTION_PROMPT = [
   "## Interaction (figures & plots)",
   "",
-  "Interaction is a **reopenable research view** — a static figure or a CSV-backed chart rendered in the RightArea panel. It is not a live sandbox, and not a chat-only file peek.",
+  "An **Interaction** is a project-persisted research object: a static figure or a CSV-backed",
+  "plot under `.prismnext/interactions/<id>/`. After write, embed the tool's `fenceMarkdown`",
+  "(`interaction` fence with `id`) in your reply so the user gets a **clickable card** and can",
+  "reopen the same view later.",
   "",
-  "### Concept boundary",
+  "Not a live sandbox. Not a one-shot file peek — that is an `artifact` fence (path only; see Reply depth).",
   "",
-  "- **Chat preview of a file** → `artifact` fence (see Reply depth). Quick, no spec on disk.",
-  "- **Saved Interaction object** → `interaction-*` tools. The app keeps a spec so the panel can reopen the same figure/plot later.",
-  "- Choose the simplest thing that fits: if the user only needs to see an image once, `artifact` is usually enough; reach for Interaction when they expect a panel chart or you may revisit it.",
+  "### When this applies",
   "",
-  "### Soft workflow",
+  "- A figure/plot should be **revisited** or compared later — not only glanced at once.",
+  "- After analysis writes a PNG/SVG or metrics CSV that deserves a durable view.",
   "",
-  "1. **Decide what exists on disk.** A figure PNG/SVG or a metrics CSV must already be written (savefig, experiment output). Do not invent numeric series.",
-  "2. **Persist the object** with `${TOOL_NAMES.interactionWrite}`. The tool validates kinds and paths; concrete parameters and examples live on the tool description.",
-  "3. **Surface it in chat** by embedding the returned fence in your assistant reply, so the user has a clickable card.",
-  "4. Only focus the panel explicitly when the user asked to watch it.",
+  "### Route",
+  "",
+  "1. **One-shot path peek?** → `artifact` fence (Reply depth). Stop.",
+  "2. **Reopenable figure or CSV plot?** → file must **already exist** on disk,",
+  `   then \`${TOOL_NAMES.interactionWrite}\` (params on the tool). Embed returned \`fenceMarkdown\` in the reply.`,
+  `3. **Update / re-embed?** → \`${TOOL_NAMES.interactionList}\` / \`${TOOL_NAMES.interactionRead}\`, then write if needed.`,
+  `4. **User asks to open it now?** → \`${TOOL_NAMES.interactionOpen}\`. Otherwise the chat card is enough.`,
+  "",
+  "### Kind judgment",
+  "",
+  "- **`figure.static`** — finished image on disk (PNG/SVG/…).",
+  "- **`plot.line` / `plot.series` / `plot.scatter`** — real CSV + x/y (or series); do not invent series.",
   "",
   "### Judgment",
   "",
-  "- Plot data must come from a real CSV in the project; the write step rejects missing paths.",
-  "- If write fails, fix the file or the spec rather than writing a chat `artifact` as a substitute.",
-  "- Project rules (`.prismnext/settings.json`) can tighten naming, folder layout, or when to prefer plots over static figures — defer to them.",
+  "- Prefer Interaction when you may return to the view; prefer `artifact` for a quick peek.",
+  "- Do not substitute `artifact` after a failed write — fix the file or spec.",
+  "- Tool how-to stays on the tools; project rules may tighten naming — defer to them.",
 ].join("\n");

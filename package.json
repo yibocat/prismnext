@@ -1,7 +1,7 @@
 {
   "name": "prism-next",
   "productName": "PrismNext",
-  "version": "0.6.7",
+  "version": "0.6.8",
   "description": "Local-first collaborative AI scientist — literature, experiments, and LaTeX in one desktop workspace",
   "license": "Apache-2.0",
   "author": "yibocat",
@@ -94,6 +94,7 @@
     "fflate": "^0.8.3",
     "font-list": "^2.1.0",
     "i18next": "^26.3.6",
+    "js-tiktoken": "^1.0.21",
     "katex": "^0.16.28",
     "lucide-react": "^1.16.0",
     "next-themes": "^0.4.6",

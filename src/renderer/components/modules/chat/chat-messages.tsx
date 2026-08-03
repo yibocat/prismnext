@@ -284,9 +284,16 @@ export const ChatMessages = memo(function ChatMessages() {
   const turnMeta = useChatStore((s) => s.turnMeta);
   const todoAnchorUserIndex = useChatStore(selectMessageTodoAnchorUserIndex);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  // Intentional product copy while waiting for first assistant content —
-  // not a mistaken stand-in for preparePhase (create session / start model).
-  const streamingLabel = t("chat.prepare.planningNext");
+  // Generic wait copy while streaming has no assistant content yet.
+  // Only `describing_images` is surfaced — other prepare phases stay collapsed
+  // into this label so setup noise (sync / MCP / start model) does not flash.
+  const preparePhase = useChatStore((s) => s.preparePhase);
+  const streamingLabel =
+    preparePhase === "describing_images"
+      ? t("chat.prepare.describing_images")
+      : preparePhase === "waiting_model"
+        ? t("chat.prepare.waiting_model")
+        : t("chat.prepare.planningNext");
 
   useEffect(() => {
     if (!projectRoot) return;

@@ -31,12 +31,6 @@ function expertBundleSummary(expert: ExpertInfo, t: TFunction): string {
       t("settings.agent.summary.activeModules", { count: expert.effectiveModules.length }),
     );
   }
-  if (expert.skills?.length) {
-    parts.push(t("settings.agent.summary.skills", { count: expert.skills.length }));
-  }
-  if (expert.mcpServers?.length) {
-    parts.push(t("settings.agent.summary.mcp", { count: expert.mcpServers.length }));
-  }
   return parts.length > 0 ? parts.join(" · ") : t("settings.agent.summary.standardExpert");
 }
 

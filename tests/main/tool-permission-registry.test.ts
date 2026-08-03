@@ -90,11 +90,20 @@ describe("tool permission registry — resolution", () => {
     expect(getPermissionRuleForTool("readonly", "latex-compile")).toBe("deny");
   });
 
-  it("resolves latex-compile actions: prompt in ask/edit_auto, allow in auto, deny in readonly", () => {
-    expect(resolvePermissionAction("ask", "latex-compile")).toBe("prompt");
-    expect(resolvePermissionAction("edit_auto", "latex-compile")).toBe("prompt");
+  it("resolves latex-compile actions via smart policy", () => {
+    // No bash cwd/command context — empty shell gate is allow (nothing to review).
+    expect(resolvePermissionAction("ask", "latex-compile")).toBe("allow");
+    expect(resolvePermissionAction("edit_auto", "latex-compile")).toBe("allow");
     expect(resolvePermissionAction("auto", "latex-compile")).toBe("allow");
     expect(resolvePermissionAction("readonly", "latex-compile")).toBe("deny");
+
+    // In-project compile cwd → allow even in ask mode.
+    expect(
+      resolvePermissionAction("ask", "latex-compile", undefined, {
+        projectRoot: "/proj",
+        bashCwd: "/proj/manuscript",
+      }),
+    ).toBe("allow");
   });
 
   it("emits latex-compile rule in buildPermissionRulesForMode for every mode", () => {

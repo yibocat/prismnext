@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { TFunction } from "i18next";
 import { ChevronDownIcon } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -18,7 +17,6 @@ import {
 import { useSettingsStore } from "@/stores/settings-store";
 import { getAllEnabledModels, getModelEffortLevelsAsync, resolveProviderConfig, type CustomProviderEntry, type ModelConfig } from "@/lib/providers";
 import { cn } from "@/lib/utils";
-import type { AgentEditorOptions } from "@shared/agent-editor-options";
 import {
   SETTINGS_CATEGORY_HEADER,
   SETTINGS_DETAIL_SECTION,
@@ -27,6 +25,10 @@ import {
   SETTINGS_ROW_DESC,
 } from "./settings-tokens";
 import { SettingsFormField } from "./settings-form-field";
+import { SettingsModulePromptPreview } from "./settings-module-prompt-preview";
+import { MARKDOWN_TOOLBAR_TEXT_BTN } from "@/components/modules/editor/toolbars/markdown-toolbar";
+import { formatTokenCount } from "@shared/token-estimate";
+import { Hint } from "@/components/ui/hint";
 
 const CARD_GRID = "grid grid-cols-1 @lg:grid-cols-2 gap-2";
 const SELECT_LIST = "rounded-lg border border-border divide-y divide-border/60 overflow-hidden";
@@ -38,17 +40,6 @@ const CARD_TITLE = "text-[length:var(--font-size-13)] font-medium leading-snug";
 const CARD_DESC = "text-[length:var(--font-size-12)] text-muted-foreground mt-1 line-clamp-2";
 const SELECT_LIST_PAGE_SIZE = 12;
 const CARD_GRID_PAGE_SIZE = 8;
-
-function selectionSummary(
-  selected: number,
-  total: number,
-  emptyLabel: string,
-  t: TFunction,
-): string {
-  if (total === 0) return t("settings.agent.profileForm.noneAvailable");
-  if (selected === 0) return emptyLabel;
-  return t("settings.agent.profileForm.selectedCount", { count: selected });
-}
 
 export function CollapsibleFormSection({
   title,
@@ -98,10 +89,6 @@ export interface ProfileFormState {
   modelProvider: string;
   modelId: string;
   thoughtLevel: string;
-  skills: string[];
-  mcpServers: string[];
-  modules: string[];
-  rules: string[];
 }
 
 export function emptyProfileForm(): ProfileFormState {
@@ -112,10 +99,6 @@ export function emptyProfileForm(): ProfileFormState {
     modelProvider: "",
     modelId: "",
     thoughtLevel: "",
-    skills: [],
-    mcpServers: [],
-    modules: [],
-    rules: [],
   };
 }
 
@@ -128,11 +111,6 @@ export function parseProfileModel(model?: string): { providerId: string; modelId
 export function formatProfileModel(providerId: string, modelId: string): string | undefined {
   if (!providerId.trim() || !modelId.trim()) return undefined;
   return `${providerId}/${modelId}`;
-}
-
-function toggleItem(list: string[], item: string, on: boolean): string[] {
-  if (on) return list.includes(item) ? list : [...list, item];
-  return list.filter((v) => v !== item);
 }
 
 function SelectableCard({
@@ -332,13 +310,11 @@ function PaginatedSelectableCardGrid({
 export function ProfileEditorForm({
   form,
   onFormChange,
-  editorOptions,
   builtinCustomize = false,
   saving = false,
 }: {
   form: ProfileFormState;
   onFormChange: (next: ProfileFormState) => void;
-  editorOptions: AgentEditorOptions | null;
   builtinCustomize?: boolean;
   saving?: boolean;
 }) {
@@ -408,6 +384,22 @@ export function ProfileEditorForm({
   const patch = (partial: Partial<ProfileFormState>) => onFormChange({ ...form, ...partial });
   const lockIdentity = builtinCustomize;
   const lockInstructions = builtinCustomize;
+  const [instructionsView, setInstructionsView] = useState<"source" | "preview">("preview");
+  const [instructionTokenCount, setInstructionTokenCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    const text = form.instructions;
+    if (!text.trim()) {
+      setInstructionTokenCount(0);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void window.electronAPI.settingsCountPromptTokens(text).then((result) => {
+        setInstructionTokenCount(result.tokenCount);
+      });
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [form.instructions]);
 
   return (
     <div className="@container space-y-8">
@@ -510,181 +502,74 @@ export function ProfileEditorForm({
       </div>
 
       <div>
-        <h3 className={SETTINGS_CATEGORY_HEADER}>{t("settings.agent.profileForm.instructions")}</h3>
-        <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
-          {t("settings.agent.profileForm.instructionsDesc")}
-        </p>
-        <Textarea
-          value={form.instructions}
-          readOnly={lockInstructions}
-          disabled={lockInstructions}
-          placeholder={t("settings.agent.profileForm.instructionsPlaceholder")}
-          className={cn(SETTINGS_FORM_TEXTAREA, lockInstructions && "opacity-80")}
-          onChange={(e) => patch({ instructions: e.target.value })}
-        />
-      </div>
-
-      {editorOptions ? (
-        <div className="space-y-2">
-          {(() => {
-            const profileModules = editorOptions.modules;
-            return (
-              <CollapsibleFormSection
-                title={t("settings.agent.profileForm.knowledgeModules")}
-                summary={selectionSummary(
-                  form.modules.length,
-                  profileModules.length,
-                  t("settings.agent.profileForm.noneSelected"),
-                  t,
-                )}
-                defaultOpen={form.modules.length > 0}
-              >
-                <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
-                  {t("settings.agent.profileForm.knowledgeDesc")}
-                </p>
-                <p className={cn(SETTINGS_ROW_DESC, "mb-3 text-muted-foreground")}>
-                  {t("settings.agent.profileForm.knowledgeDiscipline")}
-                </p>
-                {profileModules.length === 0 ? (
-                  <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-                    {t("settings.agent.profileForm.noModules")}
-                  </p>
-                ) : (
-                  <PaginatedSelectableCardGrid
-                    items={profileModules.map((mod) => ({
-                      id: mod.key,
-                      title: mod.label,
-                      description: mod.description,
-                    }))}
-                    selectedIds={form.modules}
-                    disabled={saving}
-                    onToggle={(id) =>
-                      patch({
-                        modules: toggleItem(form.modules, id, !form.modules.includes(id)),
-                      })
-                    }
-                  />
-                )}
-              </CollapsibleFormSection>
-            );
-          })()}
-
-          <CollapsibleFormSection
-            title={t("settings.agent.profileForm.skills")}
-            summary={selectionSummary(
-              form.skills.length,
-              editorOptions.skills.length,
-              t("settings.agent.profileForm.allSkills"),
-              t,
-            )}
-            defaultOpen={form.skills.length > 0}
-          >
-            <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
-              {t("settings.agent.profileForm.skillsDesc")}
-            </p>
-            {editorOptions.skills.length === 0 ? (
-              <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-                {t("settings.agent.profileForm.noSkills")}
-              </p>
-            ) : (
-              <PaginatedSelectableList
-                items={editorOptions.skills.map((skill) => ({
-                  id: skill.id,
-                  title: skill.name || skill.id,
-                  description: skill.description,
-                }))}
-                selectedIds={form.skills}
-                disabled={saving}
-                onToggle={(id) =>
-                  patch({
-                    skills: toggleItem(form.skills, id, !form.skills.includes(id)),
-                  })
-                }
-              />
-            )}
-          </CollapsibleFormSection>
-
-          <CollapsibleFormSection
-            title={t("settings.agent.profileForm.mcpServers")}
-            summary={selectionSummary(
-              form.mcpServers.length,
-              editorOptions.mcpServers.length,
-              t("settings.agent.profileForm.allServers"),
-              t,
-            )}
-            defaultOpen={form.mcpServers.length > 0}
-          >
-            <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
-              {t("settings.agent.profileForm.mcpDesc")}
-            </p>
-            {editorOptions.mcpServers.length === 0 ? (
-              <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-                {t("settings.agent.profileForm.noMcp")}
-              </p>
-            ) : (
-              <div className={SELECT_LIST}>
-                {editorOptions.mcpServers.map((srv) => (
-                  <SelectableListRow
-                    key={srv.name}
-                    title={srv.name}
-                    selected={form.mcpServers.includes(srv.name)}
-                    disabled={saving}
-                    onToggle={() =>
-                      patch({
-                        mcpServers: toggleItem(
-                          form.mcpServers,
-                          srv.name,
-                          !form.mcpServers.includes(srv.name),
-                        ),
-                      })
-                    }
-                  />
-                ))}
-              </div>
-            )}
-          </CollapsibleFormSection>
-
-          <CollapsibleFormSection
-            title={t("settings.agent.profileForm.rules")}
-            summary={selectionSummary(
-              form.rules.length,
-              editorOptions.rules.length,
-              t("settings.agent.profileForm.allRules"),
-              t,
-            )}
-            defaultOpen={form.rules.length > 0}
-          >
-            <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
-              {t("settings.agent.profileForm.rulesDesc")}
-            </p>
-            {editorOptions.rules.length === 0 ? (
-              <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-                {t("settings.agent.profileForm.noRules")}
-              </p>
-            ) : (
-              <div className={SELECT_LIST}>
-                {editorOptions.rules.map((rule) => (
-                  <SelectableListRow
-                    key={rule.name}
-                    title={rule.name}
-                    selected={form.rules.includes(rule.name)}
-                    disabled={saving}
-                    onToggle={() =>
-                      patch({
-                        rules: toggleItem(
-                          form.rules,
-                          rule.name,
-                          !form.rules.includes(rule.name),
-                        ),
-                      })
-                    }
-                  />
-                ))}
-              </div>
-            )}
-          </CollapsibleFormSection>
+        <div className={cn("mb-3", !lockInstructions && "flex items-start justify-between gap-3")}>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <h3 className={cn(SETTINGS_CATEGORY_HEADER, "mb-0")}>
+                {t("settings.agent.profileForm.instructions")}
+              </h3>
+              {instructionTokenCount != null ? (
+                <span className="text-[length:var(--font-size-11)] text-muted-foreground/80 tabular-nums leading-none">
+                  {t("settings.editor.promptStack.tokens", {
+                    count: formatTokenCount(instructionTokenCount),
+                  })}
+                </span>
+              ) : null}
+            </div>
+            <p className={SETTINGS_ROW_DESC}>{t("settings.agent.profileForm.instructionsDesc")}</p>
+          </div>
+          {!lockInstructions ? (
+            <div className="flex shrink-0 items-center gap-0.5 select-none">
+              <Hint label={t("settings.agent.profileForm.instructionsPreview")}>
+                <button
+                  type="button"
+                  className={cn(
+                    MARKDOWN_TOOLBAR_TEXT_BTN,
+                    instructionsView === "preview" && "text-foreground font-medium",
+                  )}
+                  onClick={() => setInstructionsView("preview")}
+                >
+                  {t("settings.agent.profileForm.instructionsPreview")}
+                </button>
+              </Hint>
+              <Hint label={t("settings.agent.profileForm.instructionsSource")}>
+                <button
+                  type="button"
+                  className={cn(
+                    MARKDOWN_TOOLBAR_TEXT_BTN,
+                    instructionsView === "source" && "text-foreground font-medium",
+                  )}
+                  onClick={() => setInstructionsView("source")}
+                >
+                  {t("settings.agent.profileForm.instructionsSource")}
+                </button>
+              </Hint>
+            </div>
+          ) : null}
         </div>
-      ) : null}
+        {lockInstructions || instructionsView === "preview" ? (
+          form.instructions.trim() ? (
+            <SettingsModulePromptPreview
+              content={form.instructions}
+              shellClassName="max-h-[28rem] overflow-y-auto"
+            />
+          ) : (
+            <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+              {t("settings.agent.profileForm.instructionsEmpty")}
+            </p>
+          )
+        ) : (
+          <Textarea
+            value={form.instructions}
+            placeholder={t("settings.agent.profileForm.instructionsPlaceholder")}
+            className={cn(
+              SETTINGS_FORM_TEXTAREA,
+              "min-h-[12rem] max-h-[28rem] font-mono text-[length:var(--font-size-12)]",
+            )}
+            onChange={(e) => patch({ instructions: e.target.value })}
+          />
+        )}
+      </div>
     </div>
   );
 }

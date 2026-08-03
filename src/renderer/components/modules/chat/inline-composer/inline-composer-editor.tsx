@@ -24,6 +24,9 @@ import { pickBestReadySource } from "../../../../../shared/paper-extract";
 import type { ExperimentSummary } from "../../../../../shared/experiment-log";
 import { type ComposerPart, COMPOSER_PLACEHOLDER } from "@/lib/chat/composer-parts";
 import { absolutePathsFromDataTransfer } from "@/lib/chat/composer-attach-file";
+import { COMPOSER_INSERT_MIME, acceptComposerDrop, isComposerInsertDrag } from "@/lib/chat/composer-drag";
+import { insertComposerDragPayloads } from "@/lib/chat/insert-to-chat";
+import { looksLikeUrl, normalizeBrowserUrl } from "@/lib/browser-link/normalize";
 import {
   createTokenId,
   insertedTextTriggersLinkify,
@@ -690,7 +693,8 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
     }, []);
 
     const showDropdown = activeQuery !== null;
-    const isEmpty = useMemo(() => isComposerEmpty(parts), [parts]);
+    const draftEmpty = useComposerEditorStore((s) => s.draftEmpty);
+    const showCompactPlaceholder = density === "compact" && draftEmpty;
 
     const mentionOptions = useMemo(() => {
       if (!activeQuery || activeQuery.kind !== "mention") return [];
@@ -1290,15 +1294,6 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             view.focus();
           },
           insertContextPart: (part) => {
-            if (
-              part.type !== "terminal-snippet" &&
-              part.type !== "code-snippet" &&
-              part.type !== "git-diff-snippet" &&
-              part.type !== "paper-snippet" &&
-              part.type !== "experiment-run"
-            ) {
-              return false;
-            }
             const pos = view.state.selection.main.head;
             insertComposerToken(view, part, pos, pos);
             emitChange(view);
@@ -1419,15 +1414,6 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
       insertContextPart: (part) => {
         const view = viewRef.current;
         if (!view) return false;
-        if (
-          part.type !== "terminal-snippet" &&
-          part.type !== "code-snippet" &&
-          part.type !== "git-diff-snippet" &&
-          part.type !== "paper-snippet" &&
-          part.type !== "experiment-run"
-        ) {
-          return false;
-        }
         const pos = view.state.selection.main.head;
         insertComposerToken(view, part, pos, pos);
         emitChange(view);
@@ -1488,24 +1474,53 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
               : "w-full"
           }
           onDragOver={(e) => {
+            const types = [...e.dataTransfer.types];
+            if (types.includes(COMPOSER_INSERT_MIME)) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+              return;
+            }
             if (!onExternalFilesRef.current) return;
-            if ([...e.dataTransfer.types].includes("Files")) {
+            if (types.includes("Files")) {
               e.preventDefault();
               e.dataTransfer.dropEffect = "copy";
             }
           }}
-          onDrop={(e) => {
+          onDropCapture={(e) => {
+            const payloads = acceptComposerDrop(e);
+            if (payloads) {
+              insertComposerDragPayloads(payloads);
+              if (densityRef.current === "compact") {
+                onLayoutExpandRef.current?.();
+              }
+              return;
+            }
             if (!onExternalFilesRef.current) return;
             const paths = absolutePathsFromDataTransfer(e.dataTransfer);
-            if (paths.length === 0) return;
-            e.preventDefault();
-            onExternalFilesRef.current(paths);
-            if (densityRef.current === "compact") {
-              onLayoutExpandRef.current?.();
+            if (paths.length > 0) {
+              e.preventDefault();
+              e.stopPropagation();
+              onExternalFilesRef.current(paths);
+              if (densityRef.current === "compact") {
+                onLayoutExpandRef.current?.();
+              }
+              return;
+            }
+            const uri = e.dataTransfer.getData("text/uri-list").trim()
+              || e.dataTransfer.getData("text/plain").trim();
+            if (uri && looksLikeUrl(uri) && !isComposerInsertDrag(e.dataTransfer)) {
+              e.preventDefault();
+              e.stopPropagation();
+              insertComposerDragPayloads([
+                { v: 1, kind: "link", url: normalizeBrowserUrl(uri) },
+              ]);
+              if (densityRef.current === "compact") {
+                onLayoutExpandRef.current?.();
+              }
             }
           }}
         >
-          {density === "compact" && isEmpty && (
+          {showCompactPlaceholder && (
             <span
               aria-hidden
               className="pointer-events-none absolute inset-y-0 left-0 z-0 flex max-w-full items-center truncate pr-1 text-[length:var(--font-composer)] text-muted-foreground"

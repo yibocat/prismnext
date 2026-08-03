@@ -342,3 +342,29 @@ export function resolveFromSplit(
   const chunks = chunksIntersectingSelection(result.chunks, side, from, to);
   return buildSnippet(filePath, "split", oldText, newText, chunks);
 }
+
+/** Whole-file diff for Git Changes row drag → Chat (unified layout). */
+export function buildFullFileGitDiffSnippet(
+  filePath: string,
+  oldText: string,
+  newText: string,
+  layout: "unified" | "split" = "unified",
+): GitDiffHunkSnippet | null {
+  const oldLines = splitLines(oldText);
+  const newLines = splitLines(newText);
+  const lines = buildUnifiedLines(oldLines, newLines);
+  const hasChange = lines.some((line) => line.startsWith("+") || line.startsWith("-"));
+  if (!hasChange) return null;
+
+  const { oldCount, newCount } = hunkHeaderCounts(lines);
+  const hunk: GitDiffHunk = {
+    oldStartLine: 1,
+    oldLineCount: oldCount,
+    newStartLine: 1,
+    newLineCount: newCount,
+    lines,
+  };
+  const stats = countLineStats([hunk]);
+  if (stats.removedLineCount === 0 && stats.addedLineCount === 0) return null;
+  return { filePath, layout, hunks: [hunk], ...stats };
+}

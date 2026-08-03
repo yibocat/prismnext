@@ -959,8 +959,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	) => ipcRenderer.invoke("orchestrators:saveCustom", { projectPath, payload }),
 	orchestratorsDeleteCustom: (projectPath: string, orchestratorId: string) =>
 		ipcRenderer.invoke("orchestrators:deleteCustom", { projectPath, orchestratorId }),
-	expertsGetEditorOptions: (projectPath: string) =>
-		ipcRenderer.invoke("experts:getEditorOptions", { projectPath }),
 	expertsResetBuiltinOverride: (projectPath: string, expertId: string) =>
 		ipcRenderer.invoke("experts:resetBuiltinOverride", { projectPath, expertId }),
 	expertsResetBuiltinsToDefaults: (projectPath: string) =>
@@ -1165,6 +1163,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			userCustomPrompt,
 			orchestratorId,
 		}),
+	settingsCountPromptTokens: (text: string) =>
+		ipcRenderer.invoke("settings:countPromptTokens", { text }),
 	settingsComputePromptFingerprint: (projectRoot?: string) =>
 		ipcRenderer.invoke("settings:computePromptFingerprint", { projectRoot }),
 	settingsGetDefaultPersona: () =>
@@ -1418,8 +1418,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		contextUsed?: number | null;
 		contextWindowSize?: number | null;
 		contextSource?: "usage_update" | "prompt_usage" | "estimate" | null;
-		contextBreakdown?: Record<string, number> | null;
-		categorySchema?: any;
 		promptStale?: boolean;
 		planDraftMissing?: boolean;
 	}) => void) => {

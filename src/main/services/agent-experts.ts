@@ -74,7 +74,6 @@ export interface ExpertRuntimeFilters {
   skills?: string[];
   mcpServers?: string[];
   commands?: string[];
-  rules?: string[];
 }
 
 export interface SaveCustomExpertPayload {
@@ -88,7 +87,6 @@ export interface SaveCustomExpertPayload {
   skills?: string[];
   mcpServers?: string[];
   modules?: string[];
-  rules?: string[];
   permission?: Record<string, unknown>;
 }
 
@@ -97,7 +95,6 @@ export interface SaveBuiltinExpertOverridePayload {
   skills?: string[];
   mcpServers?: string[];
   modules?: string[];
-  rules?: string[];
   model?: string;
   thoughtLevel?: string;
   temperature?: number;
@@ -110,7 +107,6 @@ export interface SaveBuiltinOrchestratorOverridePayload {
   skills?: string[];
   mcpServers?: string[];
   modules?: string[];
-  rules?: string[];
   model?: string;
   thoughtLevel?: string;
   temperature?: number;
@@ -129,7 +125,6 @@ export interface SaveCustomOrchestratorPayload {
   skills?: string[];
   mcpServers?: string[];
   modules?: string[];
-  rules?: string[];
   permission?: Record<string, unknown>;
 }
 

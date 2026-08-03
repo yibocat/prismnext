@@ -20,6 +20,8 @@ import {
 } from "./experiments-detail-chrome";
 import { useExperimentProjectRoot } from "./experiments-project-root";
 import type { ExperimentSummary } from "../../../shared/experiment-log";
+import { experimentMentionDragPayload } from "./experiment-run-drag";
+import { setComposerDragData } from "@/lib/chat/composer-drag";
 
 const ROW =
   "flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors";
@@ -45,6 +47,11 @@ function ExperimentListRow({
     <button
       type="button"
       className={cn(ROW, active ? ROW_ACTIVE : ROW_IDLE)}
+      draggable
+      onDragStart={(e) => {
+        e.stopPropagation();
+        setComposerDragData(e.dataTransfer, [experimentMentionDragPayload(experiment)]);
+      }}
       onClick={onSelect}
       title={experiment.title}
       data-experiment-id={experiment.id}

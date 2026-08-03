@@ -145,10 +145,6 @@ export interface ChatStreamMessage {
   planPath?: string;
   /** True when Deny discarded the draft — card stays but is not openable. */
   planDiscarded?: boolean;
-  /** Persisted context breakdown from result message (for JSONL replay) */
-  contextBreakdown?: Record<string, number> | null;
-  /** Persisted category schema from result message (for JSONL replay) */
-  categorySchema?: { key: string; label: string; color: string; description?: string; order?: number }[] | null;
   /** True when the assistant turn was interrupted by the user (cancel/stop).
    *  The partial reply is still committed to `messages` (rather than discarded)
    *  so the user keeps what streamed so far; this flag marks it as incomplete. */
@@ -207,18 +203,14 @@ interface TabState {
   turnMeta: Record<number, TurnMessageMeta>;
   /** Model label for the in-flight turn — stamped onto turnMeta on complete. */
   pendingTurnMeta: { modelLabel: string } | null;
-  /** Per-tab context token total — persisted alongside breakdown. Source of
-   *  truth for the context ring. Set by _setContextTokens (live) or restored
-   *  from sessions-context.json (loaded). Prefer OpenCode usage_update.used. */
+  /** Per-tab context token total. Source of truth for the context ring.
+   *  Set by _setContextTokens (live) or restored from sessions-context.json.
+   *  Prefer OpenCode usage_update.used. */
   contextTokens: number | null;
   /** OpenCode usage_update.size when known; else null (UI falls back to model metadata). */
   contextWindowSize: number | null;
   /** How contextTokens was derived. */
   contextUsageSource: "usage_update" | "prompt_usage" | "estimate" | null;
-  /** Per-tab context token breakdown (set by _setContextTokens or sessionGetContext) */
-  contextBreakdown: Record<string, number> | null;
-  /** Per-tab category schema (set by _setContextTokens or sessionGetContext) */
-  categorySchema: { key: string; label: string; color: string; description?: string; order?: number }[] | null;
   /** True when live prompt config differs from this session's injected fingerprint. */
   promptStale: boolean;
   /** Expert team orchestrator id (null → project default). */
@@ -338,8 +330,6 @@ function makeDefaultTab(id: string): TabState {
     contextTokens: null,
     contextWindowSize: null,
     contextUsageSource: null,
-    contextBreakdown: null,
-    categorySchema: null,
     promptStale: false,
     orchestratorId: null,
     sessionAgent: "build",
@@ -569,10 +559,6 @@ interface ChatState {
   /** OpenCode-reported context window size; null → fall back to model metadata */
   contextWindowSize: number | null;
   contextUsageSource: "usage_update" | "prompt_usage" | "estimate" | null;
-  /** Categorized token breakdown (Record<categoryKey, tokenCount>). null = no data. */
-  contextBreakdown: Record<string, number> | null;
-  /** Category definitions for the context ring (drives UI rendering). null = no schema. */
-  categorySchema: { key: string; label: string; color: string; description?: string; order?: number }[] | null;
   /** True when prompt/rules changed since this session's system prompt was set. */
   promptStale: boolean;
   /** True while the active tab is loading session history from disk. */
@@ -719,8 +705,6 @@ interface ChatState {
   _setContextTokens: (
     tabId: string,
     tokens: number | null,
-    breakdown?: Record<string, number> | null,
-    schema?: { key: string; label: string; color: string; description?: string; order?: number }[] | null,
     opts?: {
       windowSize?: number | null;
       source?: "usage_update" | "prompt_usage" | "estimate" | null;
@@ -815,27 +799,6 @@ function computeContextTokens(msg: ChatStreamMessage): number | null {
   return null;
 }
 
-/**
- * Extract persisted context breakdown from the latest result message.
- * Used when restoring breakdown on tab switch / session load.
- * Returns null if no persisted breakdown is found in the messages.
- */
-function extractPersistedBreakdown(messages: ChatStreamMessage[]): {
-  contextBreakdown: Record<string, number> | null;
-  categorySchema: { key: string; label: string; color: string; description?: string; order?: number }[] | null;
-} {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i];
-    if (msg.contextBreakdown) {
-      return {
-        contextBreakdown: msg.contextBreakdown,
-        categorySchema: msg.categorySchema ?? null,
-      };
-    }
-  }
-  return { contextBreakdown: null, categorySchema: null };
-}
-
 function mergeTurnMeta(
   tab: Pick<TabState, "turnMeta" | "pendingTurnMeta">,
   messages: ChatStreamMessage[],
@@ -901,8 +864,6 @@ function projectActiveTab(tabs: TabState[], activeTabId: string) {
       contextTokens: null as number | null,
       contextWindowSize: null as number | null,
       contextUsageSource: null as "usage_update" | "prompt_usage" | "estimate" | null,
-      contextBreakdown: null as Record<string, number> | null,
-      categorySchema: null as { key: string; label: string; color: string; description?: string; order?: number }[] | null,
       promptStale: false,
       isLoadingSession: false,
       streamTick: 0,
@@ -934,8 +895,6 @@ function projectActiveTab(tabs: TabState[], activeTabId: string) {
     contextTokens,
     contextWindowSize: tab.contextWindowSize,
     contextUsageSource: tab.contextUsageSource,
-    contextBreakdown: tab.contextBreakdown,
-    categorySchema: tab.categorySchema,
     promptStale: tab.promptStale,
     isLoadingSession: tab.isLoadingSession,
     streamTick: (tab as any).streamTick || 0,
@@ -1141,17 +1100,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const newIdx = Math.max(0, Math.min(idx, newTabs.length - 1));
       newActiveId = newTabs[newIdx].id;
     }
-    // Hydrate new active tab with persisted breakdown if needed
-    const newActiveTab = newTabs.find((t) => t.id === newActiveId);
     let hydratedTabs = newTabs;
-    if (newActiveTab && newActiveTab.contextBreakdown === null) {
-      const extracted = extractPersistedBreakdown(newActiveTab.messages);
-      if (extracted.contextBreakdown) {
-        hydratedTabs = newTabs.map((t) =>
-          t.id === newActiveId ? { ...t, contextBreakdown: extracted.contextBreakdown, categorySchema: extracted.categorySchema } : t,
-        );
-      }
-    }
     set({
       tabs: hydratedTabs,
       activeTabId: newActiveId,
@@ -1247,8 +1196,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       useTerminalAiStore.getState().touchSessionViewed(id);
     });
 
-    // Hydrate context breakdown asynchronously if missing
-    if (targetTab && targetTab.contextBreakdown === null && targetTab.sessionId) {
+    // Hydrate context ring from disk when switching tabs
+    if (targetTab && targetTab.contextTokens === null && targetTab.sessionId) {
       const projectPath = useDocumentStore.getState().projectRoot || "";
       const sessionId = targetTab.sessionId;
       window.electronAPI.sessionGetContext(projectPath, sessionId).then((ctxData) => {
@@ -1261,8 +1210,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                     contextTokens: ctxData.tokens,
                     contextWindowSize: ctxData.windowSize ?? null,
                     contextUsageSource: ctxData.source ?? null,
-                    contextBreakdown: ctxData.breakdown,
-                    categorySchema: ctxData.schema,
                   }
                 : t,
             );
@@ -1272,8 +1219,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                 contextTokens: ctxData.tokens,
                 contextWindowSize: ctxData.windowSize ?? null,
                 contextUsageSource: ctxData.source ?? null,
-                contextBreakdown: ctxData.breakdown,
-                categorySchema: ctxData.schema,
               };
             }
             return { tabs };
@@ -2617,8 +2562,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                   contextTokens: d.tokens,
                   contextWindowSize: d.windowSize ?? null,
                   contextUsageSource: d.source ?? null,
-                  contextBreakdown: d.breakdown,
-                  categorySchema: d.schema,
                 }
               : t,
           );
@@ -2628,8 +2571,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
               contextTokens: d.tokens,
               contextWindowSize: d.windowSize ?? null,
               contextUsageSource: d.source ?? null,
-              contextBreakdown: d.breakdown,
-              categorySchema: d.schema,
             };
           }
           return { tabs };
@@ -2748,8 +2689,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
       let ctxData: {
         tokens: number;
-        breakdown: Record<string, number>;
-        schema: any[];
         windowSize?: number | null;
         source?: "usage_update" | "prompt_usage" | "estimate";
       } | null = null;
@@ -2774,8 +2713,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
                 contextTokens: ctxData?.tokens ?? null,
                 contextWindowSize: ctxData?.windowSize ?? null,
                 contextUsageSource: ctxData?.source ?? null,
-                contextBreakdown: ctxData?.breakdown ?? null,
-                categorySchema: ctxData?.schema ?? null,
                 subAgentRuns: reconcileBackgroundSubAgentRunsFromMessages(
                   filtered,
                   t.subAgentRuns,
@@ -3241,7 +3178,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     cacheTabMessages(tab?.sessionId, tab?.messages ?? []);
   },
 
-  _setContextTokens: (tabId, tokens, breakdown, schema, opts) => {
+  _setContextTokens: (tabId, tokens, opts) => {
     set((s) => {
       const clear = opts?.clear === true;
       const nextTokens = clear ? null : tokens;
@@ -3257,8 +3194,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           contextTokens: nextTokens,
           ...(nextSize !== undefined ? { contextWindowSize: nextSize } : {}),
           ...(nextSource !== undefined ? { contextUsageSource: nextSource } : {}),
-          ...(breakdown !== undefined ? { contextBreakdown: breakdown ?? null } : {}),
-          ...(schema !== undefined ? { categorySchema: schema ?? null } : {}),
         };
       });
       const isActive = s.activeTabId === tabId;
@@ -3269,8 +3204,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           contextTokens: active?.contextTokens ?? null,
           contextWindowSize: active?.contextWindowSize ?? null,
           contextUsageSource: active?.contextUsageSource ?? null,
-          contextBreakdown: active?.contextBreakdown ?? null,
-          categorySchema: active?.categorySchema ?? null,
         };
       }
       return { tabs };

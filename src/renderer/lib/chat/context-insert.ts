@@ -8,6 +8,7 @@ import {
 import { resolveSnippetFilePathFromStore } from "@/lib/files/snippet-file-path";
 import { terminalTabLabelFromCommand } from "@/lib/terminal/root";
 import { truncateTerminalOutput } from "@/lib/terminal/ai-mirror";
+import { linkLabelForUrl, normalizeBrowserUrl } from "@/lib/browser-link/normalize";
 
 export interface TerminalSnippetRequest {
   kind: "terminal";
@@ -91,12 +92,43 @@ export interface ExperimentRunSnippetRequest {
   intent?: "discuss" | "cite-in-paper";
 }
 
+export interface FileMentionInsertRequest {
+  kind: "file-mention";
+  filePath: string;
+  fileId: string;
+  label: string;
+}
+
+export interface PaperMentionInsertRequest {
+  kind: "paper-mention";
+  paperId: string;
+  bibkey: string;
+  title: string;
+  label?: string;
+}
+
+export interface ExperimentMentionInsertRequest {
+  kind: "experiment-mention";
+  experimentId: string;
+  label: string;
+}
+
+export interface LinkInsertRequest {
+  kind: "link";
+  url: string;
+  label?: string;
+}
+
 export type ContextInsertRequest =
   | TerminalSnippetRequest
   | CodeSnippetRequest
   | GitDiffSnippetRequest
   | PaperSnippetRequest
-  | ExperimentRunSnippetRequest;
+  | ExperimentRunSnippetRequest
+  | FileMentionInsertRequest
+  | PaperMentionInsertRequest
+  | ExperimentMentionInsertRequest
+  | LinkInsertRequest;
 
 export function codeSnippetLabel(req: Pick<CodeSnippetRequest, "filePath" | "startLine" | "endLine">): string {
   const shortPath = req.filePath.split("/").pop() || req.filePath;
@@ -187,6 +219,48 @@ export function contextInsertToPart(req: ContextInsertRequest): ComposerPart {
       notes: req.notes,
       logPath: req.logPath ?? null,
       intent,
+    };
+  }
+
+  if (req.kind === "file-mention") {
+    return {
+      type: "mention",
+      mentionType: "file",
+      id: createTokenId(),
+      label: req.label,
+      filePath: req.filePath,
+      fileId: req.fileId,
+    };
+  }
+
+  if (req.kind === "paper-mention") {
+    return {
+      type: "mention",
+      mentionType: "paper",
+      id: createTokenId(),
+      label: req.label?.trim() || req.bibkey,
+      bibkey: req.bibkey,
+      paperId: req.paperId,
+    };
+  }
+
+  if (req.kind === "experiment-mention") {
+    return {
+      type: "mention",
+      mentionType: "experiment",
+      id: createTokenId(),
+      label: req.label,
+      experimentId: req.experimentId,
+    };
+  }
+
+  if (req.kind === "link") {
+    const url = normalizeBrowserUrl(req.url);
+    return {
+      type: "link",
+      id: createTokenId(),
+      url,
+      label: req.label?.trim() || linkLabelForUrl(url),
     };
   }
 

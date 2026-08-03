@@ -90,13 +90,14 @@ export async function openProjectFileFromChat(
   }
 
   const isPlan = isResearchPlanFilePath(relativePath);
+  const isLazy = isLazyProjectFilePath(relativePath);
   ensureRightAreaVisible(isPlan ? "research-plan" : "files");
 
-  if (!isPlan) {
+  if (!isPlan && !isLazy) {
     navigateFileTreeToPath(relativePath);
   }
 
-  if (isLazyProjectFilePath(relativePath)) {
+  if (isLazy) {
     await openHiddenProjectFile(relativePath, {
       pin: opts?.pin ?? (isPlan ? true : false),
     });

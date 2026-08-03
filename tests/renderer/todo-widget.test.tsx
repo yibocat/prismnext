@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { TodoWriteWidget } from "../../src/renderer/components/modules/chat/tools/todo-widget";
 import { useChatStore } from "../../src/renderer/stores/chat-store";
 
@@ -27,7 +27,7 @@ describe("TodoWriteWidget", () => {
     expect(container.querySelector(".animate-spin")).toBeNull();
   });
 
-  it("composer surface shows status icons and todo text by default expanded", () => {
+  it("composer surface shows status icons and todo text when expanded", () => {
     useChatStore.getState()._setStreaming(useChatStore.getState().activeTabId, true);
 
     const { container } = render(
@@ -48,6 +48,8 @@ describe("TodoWriteWidget", () => {
         }}
       />,
     );
+
+    fireEvent.click(screen.getByRole("button"));
 
     expect(screen.getByText("Review manuscript structure")).toBeTruthy();
     expect(screen.getByText("Create initial skeleton")).toBeTruthy();

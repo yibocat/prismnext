@@ -18,6 +18,7 @@ import {
   resetAllBuiltinExpertsToDefaults,
   saveBuiltinOrchestratorOverride,
   appendSubagentRosterSection,
+  pruneAllowedExpertIds,
 } from "../../src/main/services/experts-sync";
 import { readBundledOrchestratorInstructions } from "../../src/main/services/bundled-orchestrators";
 
@@ -198,6 +199,31 @@ describe("experts-sync", () => {
     expect(orchestrators.some((o) => o.id === "research-prism")).toBe(true);
   });
 
+  it("pruneAllowedExpertIds drops stale ids for UI counts", () => {
+    expect(
+      pruneAllowedExpertIds(
+        ["literature-synthesizer", "ghost-a", "peer-reviewer", "ghost-b"],
+        ["literature-synthesizer", "peer-reviewer", "methodology-auditor"],
+      ),
+    ).toEqual(["literature-synthesizer", "peer-reviewer"]);
+    expect(pruneAllowedExpertIds(undefined, ["peer-reviewer"])).toBeUndefined();
+  });
+
+  it("listOrchestrators prunes stale allowedExperts from overrides", () => {
+    saveBuiltinOrchestratorOverride(root, {
+      orchestratorId: "research-prism",
+      allowedExperts: [
+        "literature-synthesizer",
+        "peer-reviewer",
+        "ghost-explore",
+        "ghost-general",
+        "ghost-command",
+      ],
+    });
+    const orch = listOrchestrators(root).find((o) => o.id === "research-prism");
+    expect(orch?.allowedExperts).toEqual(["literature-synthesizer", "peer-reviewer"]);
+  });
+
   it("keeps disabled built-in experts in list with enabled false", () => {
     setBuiltinExpertEnabled(root, "peer-reviewer", false);
     const experts = listExperts(root);
@@ -242,7 +268,7 @@ describe("experts-sync", () => {
     expect(orchestratorMd).toContain("## Available subagents (via Task)");
     expect(orchestratorMd).toContain("### Built-in");
     expect(orchestratorMd).toContain("peer-reviewer");
-    expect(orchestratorMd).toContain("## Task delegation (orchestrator)");
+    expect(orchestratorMd).toContain("## Orchestrator judgment");
     expect(orchestratorMd).toContain("## Chat paper citations");
     const bundledInstructions = readBundledOrchestratorInstructions("research-prism") ?? "";
     expect(orchestratorMd).toContain(bundledInstructions.trim());

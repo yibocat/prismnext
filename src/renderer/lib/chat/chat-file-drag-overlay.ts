@@ -1,3 +1,5 @@
+import { COMPOSER_INSERT_MIME } from "./composer-drag";
+
 type OverlayListener = (active: boolean) => void;
 
 function hasFileDrag(dataTransfer: DataTransfer | null): boolean {
@@ -5,20 +7,30 @@ function hasFileDrag(dataTransfer: DataTransfer | null): boolean {
   return Array.from(dataTransfer.types).includes("Files");
 }
 
-/** Track file drag entering/leaving a single zone (same pattern as literature PDF drop). */
+function hasComposerInsertDrag(dataTransfer: DataTransfer | null): boolean {
+  if (!dataTransfer) return false;
+  return Array.from(dataTransfer.types).includes(COMPOSER_INSERT_MIME);
+}
+
+/** OS files or internal composer chip drags (literature, files, snippets, …). */
+export function hasChatDropDrag(dataTransfer: DataTransfer | null): boolean {
+  return hasFileDrag(dataTransfer) || hasComposerInsertDrag(dataTransfer);
+}
+
+/** Track file / composer-chip drag entering/leaving a single zone. */
 export function bindChatFileDragZone(
   element: HTMLElement,
   listener: OverlayListener,
 ): () => void {
   const onDragEnter = (e: DragEvent) => {
-    if (!hasFileDrag(e.dataTransfer)) return;
+    if (!hasChatDropDrag(e.dataTransfer)) return;
     const from = e.relatedTarget as Node | null;
     if (from && element.contains(from)) return;
     listener(true);
   };
 
   const onDragLeave = (e: DragEvent) => {
-    if (!hasFileDrag(e.dataTransfer)) return;
+    if (!hasChatDropDrag(e.dataTransfer)) return;
     const next = e.relatedTarget as Node | null;
     if (next && element.contains(next)) return;
     listener(false);

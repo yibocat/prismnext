@@ -1,57 +1,35 @@
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { CircularProgress } from "@/components/ui/circular-progress";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
-import { ChevronDownIcon, Shrink } from "lucide-react";
+import { Shrink } from "lucide-react";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { cn } from "@/lib/utils";
-
-export interface CategorySchema {
-  key: string;
-  label: string;
-  color: string;
-  description?: string;
-  order?: number;
-}
 
 interface ContextWindowIndicatorProps {
   /** Tokens used (null = unknown / after compact) */
   used?: number | null;
   /** Token limit — prefer OpenCode usage_update.size */
   total?: number;
-  /** Two-bucket Prism estimate (prism-side / session-rest) */
-  breakdown?: Record<string, number> | null;
-  schema?: CategorySchema[] | null;
   source?: "usage_update" | "prompt_usage" | "estimate" | null;
   promptStale?: boolean;
   isStreaming?: boolean;
 }
 
-/**
- * Context ring: OpenCode used/size by default; optional two-bucket Prism estimate.
- */
+/** Context ring: OpenCode used / size only — no local category estimates. */
 export function ContextWindowIndicator({
   used = null,
   total = 128_000,
-  breakdown,
-  schema,
   source = null,
   promptStale = false,
   isStreaming = false,
 }: ContextWindowIndicatorProps) {
   const { t } = useTranslation();
   const [compacting, setCompacting] = useState(false);
-  const [estimateOpen, setEstimateOpen] = useState(false);
   const usedN = typeof used === "number" ? used : 0;
   const hasUsed = typeof used === "number";
   const pct = hasUsed && total > 0 ? Math.round((usedN / total) * 100) : 0;
-
-  const prismSide = breakdown?.["prism-side"] ?? 0;
-  const sessionRest = breakdown?.["session-rest"] ?? 0;
-  const hasTwoBucket =
-    hasUsed && (prismSide > 0 || sessionRest > 0 || (breakdown != null && Object.keys(breakdown).length > 0));
 
   const handleCompact = useCallback(async () => {
     const sessionId = useChatStore.getState().sessionId;
@@ -66,8 +44,6 @@ export function ContextWindowIndicator({
       useChatStore.getState()._setContextTokens(
         useChatStore.getState().activeTabId,
         null,
-        {},
-        undefined,
         { clear: true },
       );
       toast.success(t("chat.context.compressDone"));
@@ -119,64 +95,6 @@ export function ContextWindowIndicator({
             <p className="text-[length:var(--font-hint)] text-muted-foreground">
               {t("chat.context.waitingUsage")}
             </p>
-          ) : null}
-
-          {hasTwoBucket ? (
-            <div className="border-t border-border pt-2">
-              <button
-                type="button"
-                className="flex w-full items-center gap-1 text-left text-[length:var(--font-hint)] text-muted-foreground hover:text-foreground"
-                onClick={() => setEstimateOpen((o) => !o)}
-              >
-                <ChevronDownIcon
-                  className={cn(
-                    "size-3 shrink-0 transition-transform",
-                    estimateOpen ? "rotate-0" : "-rotate-90",
-                  )}
-                />
-                <span className="flex-1">{t("chat.context.estimateToggle")}</span>
-              </button>
-              {estimateOpen ? (
-                <div className="mt-2 space-y-1.5">
-                  <p className="text-[length:var(--font-hint)] text-muted-foreground">
-                    {t("chat.context.estimates")}
-                  </p>
-                  {(schema ?? [
-                    { key: "prism-side", label: t("chat.context.bucketPrism"), color: "bg-primary" },
-                    { key: "session-rest", label: t("chat.context.bucketRest"), color: "bg-muted-foreground" },
-                  ]).map((cat) => {
-                    const tokens = breakdown?.[cat.key] ?? 0;
-                    if (tokens <= 0 && cat.key !== "prism-side" && cat.key !== "session-rest") {
-                      return null;
-                    }
-                    const label =
-                      cat.key === "prism-side"
-                        ? t("chat.context.bucketPrism")
-                        : cat.key === "session-rest"
-                          ? t("chat.context.bucketRest")
-                          : cat.label;
-                    const catPct = usedN > 0 ? Math.round((tokens / usedN) * 100) : 0;
-                    return (
-                      <div
-                        key={cat.key}
-                        className="flex items-center gap-2 text-[length:var(--font-hint)]"
-                      >
-                        <span
-                          className={cn("inline-block size-2 shrink-0 rounded-full", cat.color)}
-                        />
-                        <span className="flex-1 text-muted-foreground">{label}</span>
-                        <span className="tabular-nums font-medium text-foreground">
-                          {tokens.toLocaleString()}
-                        </span>
-                        <span className="w-10 text-right tabular-nums text-muted-foreground">
-                          {catPct}%
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </div>
           ) : null}
 
           {promptStale ? (

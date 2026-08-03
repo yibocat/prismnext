@@ -1,6 +1,7 @@
-/** Utilities for resolving project-relative paths (including hidden `.prismnext/`). */
+/** Utilities for resolving project-relative paths (including hidden `.prismnext/` / `.brief.md`). */
 
 const PRISMNEXT_PREFIX = ".prismnext/";
+const RESEARCH_BRIEF_FILE = ".brief.md";
 
 export function normalizeProjectRoot(root: string): string {
   return root.replace(/[/\\]+$/, "");
@@ -17,7 +18,11 @@ export function isSafeProjectRelativePath(relativePath: string): boolean {
 /** Hidden agent/config paths excluded from the file tree scan. */
 export function isLazyProjectFilePath(relativePath: string): boolean {
   const normalized = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
-  return normalized.startsWith(PRISMNEXT_PREFIX) || normalized === ".prismnext";
+  return (
+    normalized.startsWith(PRISMNEXT_PREFIX)
+    || normalized === ".prismnext"
+    || normalized === RESEARCH_BRIEF_FILE
+  );
 }
 
 /** Resolve a safe project-relative path to an absolute path, or null if unsafe. */

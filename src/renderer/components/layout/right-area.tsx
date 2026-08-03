@@ -55,7 +55,11 @@ import {
   AppMenuTrigger,
 } from "@/components/ui/app-menu";
 import { cn } from "@/lib/utils";
-import { useActiveSettingsEditorSlot } from "@/hooks/use-settings-editor";
+import {
+  partitionRightTabs,
+  resolveSurfaceActiveTabId,
+  useActiveSettingsEditorSlot,
+} from "@/hooks/use-settings-editor";
 import { settingsPanelSlotTitle } from "@/lib/settings/settings-panel-slots";
 import { closeSettingsDetailPanel } from "@/lib/workspace/expand-settings-detail-panel";
 
@@ -185,19 +189,33 @@ function RightAreaWorkspace({
     closeSettingsDetailPanel(centerRef.current, rightAreaRef.current);
   }, [inSettings, settingsCategory, centerRef, rightAreaRef]);
 
+  // Last settings editor tab closed → collapse RightArea (no empty-state pane).
+  useEffect(() => {
+    if (!inSettings || hasSettingsEditorTab) return;
+    closeSettingsDetailPanel(centerRef.current, rightAreaRef.current);
+  }, [inSettings, hasSettingsEditorTab, centerRef, rightAreaRef]);
+
   const tabs = useRightPanelStore((s) => s.tabs);
   const activeTabId = useRightPanelStore((s) => s.activeTabId);
-  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const { settingsTabs, workspaceTabs } = useMemo(() => partitionRightTabs(tabs), [tabs]);
+  const surfaceTabs = inSettings ? settingsTabs : workspaceTabs;
+  const surfaceActiveTabId = useMemo(
+    () => resolveSurfaceActiveTabId(surfaceTabs, activeTabId),
+    [surfaceTabs, activeTabId],
+  );
+  const activeTab = surfaceTabs.find((t) => t.id === surfaceActiveTabId) ?? null;
   const isEditorKind =
     activeTab?.kind === "file"
     || activeTab?.kind === "texworkspace"
     || activeTab?.kind === "research-plan";
   const isSettingsEditorTab = activeTab?.kind === "settings-editor";
   const showTabToolbar =
+    !inSettings &&
     activeTab &&
     focusedMode !== "dashboard" &&
     !isSettingsEditorTab;
   const modeSidebarEligible =
+    !inSettings &&
     focusedMode !== "dashboard" &&
     !isSettingsEditorTab &&
     !modeRegistry.get(focusedMode)?.hideRightSidebar;
@@ -605,8 +623,8 @@ function RightAreaWorkspace({
           {!compactChrome ? (
             <div className="min-w-0 max-w-full overflow-hidden self-stretch">
               <TabBar
-                tabs={tabs}
-                activeTabId={activeTabId}
+                tabs={surfaceTabs}
+                activeTabId={surfaceActiveTabId}
                 onSelect={handleTabSelect}
                 onClose={handleTabClose}
                 onPinTab={handleTabPin}
@@ -614,7 +632,7 @@ function RightAreaWorkspace({
                 dirtyFileIds={dirtyFileIds}
               />
             </div>
-          ) : tabs.length > 0 ? (
+          ) : surfaceTabs.length > 0 ? (
             <AppMenu>
               <Hint label={t("shell.rightArea.openTabs")}>
                 <AppMenuTrigger asChild>
@@ -627,13 +645,13 @@ function RightAreaWorkspace({
                 </AppMenuTrigger>
               </Hint>
               <AppMenuContent align="end" className="w-52 max-h-80 overflow-y-auto">
-                {tabs.map((tab) => (
+                {surfaceTabs.map((tab) => (
                   <AppMenuItem
                     key={tab.id}
                     onClick={() => handleTabSelect(tab.id)}
                     className={cn(
                       "group pr-1",
-                      tab.id === activeTabId && "font-medium",
+                      tab.id === surfaceActiveTabId && "font-medium",
                     )}
                     trailing={
                       <Hint label={t("menu.closeTab")}>
@@ -775,7 +793,9 @@ function RightAreaWorkspace({
           }
           aria-hidden={sidebarFull}
         >
-          <RightMainArea tabs={tabs} activeTabId={activeTabId} />
+          {!inSettings || surfaceTabs.length > 0 ? (
+            <RightMainArea tabs={surfaceTabs} activeTabId={surfaceActiveTabId} />
+          ) : null}
         </div>
 
         {modeSidebarEligible && (

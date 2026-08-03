@@ -78,6 +78,10 @@ html[data-message-width="wide"]     { --chat-max-w: 64rem; }
  * Read with `h-[var(--chat-input-h)]` in Tailwind. */
 :root { --chat-input-h: calc(var(--font-composer) * 3 + 0.5rem); }
 
+/* Bottom reserve when RightArea is maximized — native <webview> ignores z-index
+ * and would otherwise cover the AiBar drop target. pb-5 + idle drop strip + input capsule. */
+:root { --aibar-reserve-h: calc(1.25rem + 3.5rem + var(--chat-input-h)); }
+
 .dark {
   --composer-selection: color-mix(in oklch, var(--primary) 16%, var(--background));
   --composer-selection-focused: color-mix(in oklch, var(--primary) 24%, var(--background));

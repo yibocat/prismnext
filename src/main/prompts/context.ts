@@ -35,10 +35,9 @@ function readFileIfExists(absPath: string): string | null {
   return null;
 }
 
-/** Options for per-turn prompt assembly (orchestrator-scoped rules, etc.). */
+/** Options for per-turn prompt assembly. */
 export interface BuildPromptContextOptions {
-  /** Orchestrator/expert profile rule names. Empty/undefined = all enabled always rules. */
-  ruleAllowlist?: string[];
+  // Reserved for future per-turn scoping; project rules are always global.
 }
 
 /**
@@ -47,7 +46,7 @@ export interface BuildPromptContextOptions {
  */
 export async function buildPromptContext(
   projectRoot?: string,
-  options?: BuildPromptContextOptions,
+  _options?: BuildPromptContextOptions,
 ): Promise<PromptContext> {
   const ctx: PromptContext = { projectRoot };
 
@@ -72,17 +71,9 @@ export async function buildPromptContext(
 
     if (projectRoot) {
       const { getPromptProjectRules } = await import("../services/rules-sync");
-      const allRules = getPromptProjectRules(projectRoot, {
-        allowlist: options?.ruleAllowlist,
-      });
+      const allRules = getPromptProjectRules(projectRoot);
       if (allRules.length > 0) {
         ctx.customRules = allRules;
-        if (options?.ruleAllowlist?.length) {
-          log.info(
-            `Project rules scoped to agent profile: ${allRules.length}/${options.ruleAllowlist.length} matched`,
-            { names: allRules.map((r) => r.name) },
-          );
-        }
       }
     }
   } catch {

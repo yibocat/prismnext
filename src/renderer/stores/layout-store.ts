@@ -73,6 +73,9 @@ interface LayoutState {
   pendingRightAreaRestore: boolean;
   setPendingRightAreaRestore: (pending: boolean) => void;
   clearPendingRightAreaRestore: () => void;
+  /** Workspace RightArea tab to restore after leaving Settings (ephemeral). */
+  workspaceActiveTabIdBeforeSettings: string | null;
+  setWorkspaceActiveTabIdBeforeSettings: (id: string | null) => void;
   settingsCategory: string;
   setSettingsCategory: (category: string) => void;
 
@@ -210,6 +213,9 @@ export const useLayoutStore = create<LayoutState>()(
       pendingRightAreaRestore: false,
       setPendingRightAreaRestore: (pending) => set({ pendingRightAreaRestore: pending }),
       clearPendingRightAreaRestore: () => set({ pendingRightAreaRestore: false }),
+      workspaceActiveTabIdBeforeSettings: null,
+      setWorkspaceActiveTabIdBeforeSettings: (id) =>
+        set({ workspaceActiveTabIdBeforeSettings: id }),
       settingsCategory: "general",
       setSettingsCategory: (category) => set({ settingsCategory: category }),
 

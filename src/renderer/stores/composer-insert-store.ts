@@ -8,9 +8,10 @@ import {
 } from "@/lib/chat/context-insert";
 
 interface ComposerInsertState {
-  pendingInsert: ContextInsertRequest | null;
+  pendingInserts: ContextInsertRequest[];
   nonce: number;
   requestInsert: (req: ContextInsertRequest) => void;
+  requestInserts: (reqs: ContextInsertRequest[]) => void;
   consumeInsert: () => ContextInsertRequest | null;
   /** Absolute paths queued for composer attachment (drag-drop from chat surface). */
   pendingAttachPaths: string[] | null;
@@ -34,7 +35,7 @@ export function contextInsertToComposerPart(req: ContextInsertRequest): Composer
 export const terminalSnippetToPart = contextInsertToComposerPart;
 
 export const useComposerInsertStore = create<ComposerInsertState>()((set, get) => ({
-  pendingInsert: null,
+  pendingInserts: [],
   nonce: 0,
   pendingAttachPaths: null,
   attachNonce: 0,
@@ -42,16 +43,25 @@ export const useComposerInsertStore = create<ComposerInsertState>()((set, get) =
 
   requestInsert: (req) => {
     set((s) => ({
-      pendingInsert: req,
+      pendingInserts: [...s.pendingInserts, req],
+      nonce: s.nonce + 1,
+    }));
+  },
+
+  requestInserts: (reqs) => {
+    if (reqs.length === 0) return;
+    set((s) => ({
+      pendingInserts: [...s.pendingInserts, ...reqs],
       nonce: s.nonce + 1,
     }));
   },
 
   consumeInsert: () => {
-    const pending = get().pendingInsert;
-    if (!pending) return null;
-    set({ pendingInsert: null });
-    return pending;
+    const queue = get().pendingInserts;
+    if (queue.length === 0) return null;
+    const [first, ...rest] = queue;
+    set({ pendingInserts: rest });
+    return first;
   },
 
   requestAttachPaths: (paths) => {

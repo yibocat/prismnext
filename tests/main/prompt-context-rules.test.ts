@@ -16,7 +16,7 @@ describe("buildPromptContext project rules", () => {
     if (root) rmSync(root, { recursive: true, force: true });
   });
 
-  it("loads enabled always rules from RULE.md files", async () => {
+  it("loads all enabled always rules from RULE.md files", async () => {
     root = mkdtempSync(join(tmpdir(), "prism-ctx-rules-"));
     installProjectRule(
       root,
@@ -30,44 +30,20 @@ enabled: true
 Run pnpm test before finishing.
 `,
     );
+    installProjectRule(
+      root,
+      "citations",
+      `---
+name: citations
+description: Cite policy
+apply: always
+enabled: true
+---
+Always use \\cite{}.
+`,
+    );
 
     const ctx = await buildPromptContext(root);
-    expect(ctx.customRules).toEqual([
-      { name: "tests", content: "Run pnpm test before finishing." },
-    ]);
-  });
-
-  it("scopes rules to orchestrator allowlist when provided", async () => {
-    root = mkdtempSync(join(tmpdir(), "prism-ctx-rules-"));
-    installProjectRule(
-      root,
-      "rule-a",
-      `---
-name: Rule A
-description: A
-apply: always
-enabled: true
----
-Content A
-`,
-    );
-    installProjectRule(
-      root,
-      "rule-b",
-      `---
-name: Rule B
-description: B
-apply: always
-enabled: true
----
-Content B
-`,
-    );
-
-    const scoped = await buildPromptContext(root, { ruleAllowlist: ["Rule A"] });
-    expect(scoped.customRules).toEqual([{ name: "Rule A", content: "Content A" }]);
-
-    const all = await buildPromptContext(root);
-    expect(all.customRules?.map((r) => r.name).sort()).toEqual(["Rule A", "Rule B"]);
+    expect(ctx.customRules?.map((r) => r.name).sort()).toEqual(["citations", "tests"]);
   });
 });

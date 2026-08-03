@@ -269,8 +269,11 @@
         "reasoningDepth": "推理深度",
         "defaultDepth": "預設深度",
         "instructions": "指令",
-        "instructionsDesc": "僅角色與委派策略 — 引用格式與 Task 表位於下方同步的知識模組中。",
-        "instructionsPlaceholder": "你是一位引用稽核員。關注 bib 一致性與 cite key 用法…",
+        "instructionsDesc": "本代理的角色、語氣與交付物。領域工作流在同步的 capability modules 中，不寫在這裡。",
+        "instructionsPlaceholder": "你是一位科研設計教練。請壓測研究問題與貢獻主張…",
+        "instructionsPreview": "預覽",
+        "instructionsSource": "原始碼",
+        "instructionsEmpty": "暫無指令。",
         "knowledgeModules": "知識模組",
         "knowledgeDesc": "內建工作流指南 — 選擇要內聯到此 Agent 同步 agent.md 的模組。工作區資料夾始終通過全域性 _prism-system.md 注入。",
         "knowledgeDiscipline": "模組承載工具排程紀律。子 Agent 只有在此處組裝了教授該工具的模組時，才知道如何使用該工具。Instructions 只寫角色/職責，不要硬編碼工具呼叫序列。",
@@ -331,14 +334,19 @@
       "knowledgeModules": "知識模組",
       "sectionPrompts": "提示",
       "agentTools": "Agent 工具",
-      "pageDesc": "系統提示、專案說明、知識模組與 Agent 工具。",
+      "pageDesc": "編輯專案說明、規則與可選的人設覆蓋。產品提示詞內核在「進階」下只讀檢視。",
       "projectInstructions": "專案說明",
       "createAgentsMd": "建立 AGENTS.md",
       "previewStack": "預覽提示棧",
       "editBrief": "編輯簡報",
-      "sectionPromptsDesc": "基線系統檔案與按專案的 OpenCode 說明。引用與 Task 模組通過編排器/專家配置注入 — 見提示棧預覽。",
-      "knowledgeDesc": "內建工作流指南 — 始終可用。可在 Agent 編輯器中按編排器或專家附加；工作區資料夾從專案工作區設定全域性注入。",
-      "toolsDesc": "內建 OpenCode 工具。用法提示在啟動時同步到各工具的 schema 描述 — 不是知識模組。",
+      "viewBrief": "查看簡報",
+      "sectionPromptsDesc": "基線人設覆蓋、按專案的 OpenCode 說明，以及持續更新的研究簡報。",
+      "sectionAdvanced": "進階",
+      "sectionAdvancedDesc": "組合提示棧、知識模組與內建工具描述的只讀檢視 — 僅供除錯。請用專案規則、AGENTS.md 或 Skills 擴充行為，而非在此編輯。",
+      "advancedTitle": "提示詞內核",
+      "advancedSummary": "{{layers}} 層提示棧 · {{modules}} 個模組 · {{tools}} 個工具",
+      "advancedSummaryLoading": "正在載入提示棧摘要…",
+      "internalsNotice": "只讀 · 除錯檢視。此處為產品擁有的提示詞內核 — 請用專案規則、AGENTS.md 或 Skills 擴充行為，不要在此編輯。",
       "rulesDesc": "每次對話回合以獨立使用者訊息塊注入。編排器配置可限制為子集（空選擇 = 全部已啟用規則）。",
       "customPrompt": "自定義提示",
       "viewEditPrompt": "檢視並編輯提示",
@@ -353,14 +361,14 @@
       "rowDesc": {
         "customPrompt": "自定義提示會替換 `_prism-system.md` 中的內建預設內容。",
         "builtinPrompt": "內建 prismnext 人設會在聊天同步時寫入 `_prism-system.md`。",
-        "stackSummary": "基線 _prism-system：{{chars}} 字元 · 預覽中共 {{layers}} 層",
+        "stackSummary": "基線 _prism-system：約 {{tokens}} tokens · 預覽中共 {{layers}} 層",
         "openForStack": "開啟專案以檢視完整提示棧預覽。",
         "openForInstructions": "開啟專案以編輯專案說明。",
         "instructions": "專案專用說明 — 獨立的 OpenCode 說明檔案，不會合並進 `_prism-system.md`。",
         "agentsChars": "專案說明共 {{count}} 個字元。",
         "noAgents": "尚無 AGENTS.md — 可建立，或在聊天中執行 /setup。",
         "openForBrief": "開啟專案以編輯持續更新的研究設計簡報。",
-        "brief": "結構化研究問題、假設、貢獻與範圍位於 .prismnext/research/brief.md — Agent 使用 research-brief-read/update。",
+        "brief": "專案根目錄 `.brief.md` 中的活態研究設計 — 此處只讀預覽；編輯會在 Files 中開啟。Agent 使用 research-brief-read/update。",
         "modules": "引用、文獻庫、Task 與工作區模組的只讀目錄。",
         "tools": "檢視全部已註冊工具及模型選擇工具時看到的描述。"
       },
@@ -993,6 +1001,8 @@
         "introNew": "建立主會話編排器，通過 OpenCode Task 將工作委託給專家。",
         "introEdit": "編輯此編排器的指令與專家白名單。",
         "allowedExpertsDesc": "編排器可通過 Task 呼叫的專家。",
+        "subagentRoster": "同步的子代理名單",
+        "subagentRosterDesc": "儲存/同步時追加到編排器 agent 末尾——內建子代理加上方勾選的專家。模型讀的是這份名單，不是 Instructions 裡的硬編碼表格。",
         "noneSelected": "未選擇",
         "allowedCount": "已允許 {{selected}} / {{total}}",
         "noExperts": "暫無已啟用的專家。",
@@ -1242,6 +1252,9 @@
         },
         "layer": "第 {{n}} 層",
         "chars": "{{count}} 字元",
+        "tokens": "約 {{count}} tokens",
+        "tokensHint": "o200k 估計",
+        "totalTokens": "合計約 {{count}} tokens（o200k 估計）",
         "injectVia": "注入方式：",
         "emptyContent": "（空）",
         "refresh": "重新整理",
@@ -1301,12 +1314,12 @@
       },
       "brief": {
         "toast": {
-          "loadFailed": "載入研究簡報失敗。",
-          "saved": "研究簡報已儲存。",
-          "saveFailed": "儲存研究簡報失敗。"
+          "loadFailed": "載入研究簡報失敗。"
         },
-        "openProject": "請先開啟專案以編輯研究簡報。",
-        "loading": "載入中…"
+        "openProject": "請先開啟專案以查看研究簡報。",
+        "loading": "載入中…",
+        "readOnlyHint": "專案根目錄 `.brief.md` 的只讀預覽。編輯會在 Files 中開啟。",
+        "editInFiles": "在 Files 中編輯"
       },
       "skillMd": {
         "toast": {
@@ -1729,6 +1742,7 @@
       "running": "執行中",
       "closePanel": "關閉聊天面板",
       "dropFiles": "拖放檔案以附加",
+      "dropToChat": "拖放到聊天以插入",
       "manageAssistants": "管理 AI 助手",
       "placeholder": "向 AI 詢問你的研究…"
     },
@@ -1901,14 +1915,22 @@
       "compress": "壓縮上下文",
       "compressing": "壓縮中…",
       "compressDone": "已壓縮上下文。用量將在下一次回覆後重新整理。",
-      "estimates": "僅為 Prism 側粗估，非 OpenCode 回報。",
-      "estimateToggle": "Prism 粗估（可選）",
-      "bucketPrism": "Prism 注入",
-      "bucketRest": "工作階段 / Agent",
+      "breakdownHint": "分類為本地 o200k 估計；總量由 OpenCode 上報。",
       "fromOpenCode": "佔用由 OpenCode 按本工作階段回報。",
       "fromPromptUsage": "佔用來自上輪 prompt usage（未收到 OpenCode usage_update）。",
       "waitingUsage": "壓縮後或下一輪回覆前，等待 OpenCode 用量。",
-      "promptStale": "基礎提示已更新——將在你傳送下一條訊息時重新整理。"
+      "promptStale": "基礎提示已更新——將在你傳送下一條訊息時重新整理。",
+      "categories": {
+        "messages": "訊息",
+        "userInstructions": "Agent 指令",
+        "projectInstructions": "專案指令",
+        "projectRules": "專案規則",
+        "skills": "技能",
+        "modules": "提示模組",
+        "mcpTools": "MCP 工具",
+        "corePersona": "核心人格",
+        "agentBase": "Agent 基礎"
+      }
     },
     "intensive": {
       "list": "精讀列表",
@@ -1937,6 +1959,7 @@
     },
     "prepare": {
       "planningNext": "正在規劃下一步…",
+      "describing_images": "正在用視覺輔助模型識圖…",
       "thinking": "思考中…",
       "syncing_project": "正在準備專案…",
       "creating_session": "正在建立會話…",
@@ -1944,6 +1967,15 @@
       "starting_model": "正在啟動模型…",
       "waiting_model": "正在等待模型回應…",
       "stalled": "連線緩慢——模型供應商可能正在重試…"
+    },
+    "visionFallback": {
+      "helperRequired": "目前模型不支援圖片輸入，請先在 Settings 裡配置多模態輔助模型。",
+      "helperInvalid": "多模態輔助模型配置無效，請重新選擇。",
+      "helperMissingKey": "多模態輔助模型對應的 Provider 未配置 API Key，請先在 Settings 中配置。",
+      "helperNotVision": "所選多模態輔助模型沒有標記 Vision 能力，請在 Settings 裡檢查模型能力。",
+      "describeFailed": "圖片識別失敗：{{message}}",
+      "describeFailedGeneric": "圖片識別失敗，請檢查多模態輔助模型配置。",
+      "describedNote": "已透過 {{model}} 識圖"
     },
     "errors": {
       "retry": "重試",
@@ -2221,6 +2253,7 @@
       "unsavedChanges": "未儲存的變更",
       "removeHighlight": "移除螢光標註",
       "selectEntry": "選擇條目",
+      "dragToChat": "拖到聊天",
       "journalLabelsSoon": "期刊標籤（即將推出）",
       "pdfCacheOutdated": "PDF 快取已過期 — 請從 Zotero 重新整理",
       "pdfCacheOutdatedDetail": "PDF 快取已過期 — 請從 Zotero 重新整理或重新開啟 PDF",

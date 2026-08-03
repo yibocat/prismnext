@@ -2,6 +2,7 @@ import { useMemo, useState, useRef, useCallback, useEffect, type RefObject } fro
 import { useTranslation } from "react-i18next";
 import {
   FileTextIcon,
+  GripVerticalIcon,
   HardDriveIcon,
   PlusIcon,
 } from "lucide-react";
@@ -41,6 +42,7 @@ import {
   literatureRowZoteroBadgeClass,
 } from "./literature-list-chrome";
 import { cn } from "@/lib/utils";
+import { setComposerDragData } from "@/lib/chat/composer-drag";
 import { Hint } from "@/components/ui/hint";
 import { useLiteratureListMarquee } from "@/lib/literature/literature-list-marquee";
 import { paperMatchesTagFilter } from "@/lib/literature/paper-tag-utils";
@@ -51,7 +53,7 @@ import {
   type LiteratureRowPdfDropSession,
 } from "@/lib/literature/use-literature-pdf-attach";
 import { LiteraturePdfAttachConflictDialog } from "./literature-entry-pdf-attach";
-import type { LiteraturePaper } from "@/types/electron.d";
+import type { LiteraturePaper, PaperExtractStatesByPaper } from "@/types/electron.d";
 
 /** Scroll expanded row flush under the sticky list header. */
 function scrollLiteratureRowBelowHeader(
@@ -183,6 +185,63 @@ function LibraryTableHeader({
   );
 }
 
+function LiteratureRowLeadSlot({
+  paper,
+  extractStates,
+}: {
+  paper: LiteraturePaper;
+  extractStates: PaperExtractStatesByPaper;
+}) {
+  const { t } = useTranslation();
+
+  const onDragStart = useCallback(
+    (e: React.DragEvent) => {
+      e.stopPropagation();
+      const bibkey = paper.bibkey?.trim() || paper.id;
+      setComposerDragData(e.dataTransfer, [
+        {
+          v: 1,
+          kind: "paper-mention",
+          paperId: paper.id,
+          bibkey,
+          title: paper.title,
+          label: bibkey,
+        },
+      ]);
+    },
+    [paper],
+  );
+
+  return (
+    <span className={cn(LITERATURE_COL_EXTRACT, "relative")}>
+      <span className="transition-opacity group-hover:opacity-0 group-hover:pointer-events-none">
+        <LiteratureExtractBadge
+          paperId={paper.id}
+          statesByPaper={extractStates}
+          visible
+        />
+      </span>
+      <Hint label={t("modes.literature.dragToChat")} side="right">
+        <span
+          data-literature-composer-drag
+          draggable
+          className={cn(
+            "absolute inset-0 flex items-center justify-center",
+            "pointer-events-none opacity-0 transition-opacity",
+            "group-hover:pointer-events-auto group-hover:opacity-100",
+            "cursor-grab text-muted-foreground/55 hover:text-muted-foreground active:cursor-grabbing",
+          )}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onDragStart={onDragStart}
+        >
+          <GripVerticalIcon className="size-3.5 shrink-0" aria-hidden />
+        </span>
+      </Hint>
+    </span>
+  );
+}
+
 function LibraryTableRow({
   paper,
   expanded,
@@ -239,6 +298,7 @@ function LibraryTableRow({
       const target = e.target as HTMLElement;
       if (target.closest('input[type="checkbox"]')) return;
       if (target.closest("[data-literature-pdf-open]")) return;
+      if (target.closest("[data-literature-composer-drag]")) return;
       handleRowClick();
     },
     [handleRowClick, suppressRowClickRef],
@@ -284,16 +344,10 @@ function LibraryTableRow({
         ref={rowShellRef}
         data-literature-row-shell
         data-literature-row-id={paper.id}
-        className={cn(literatureRowShellClass, literatureRowTextClass)}
+        className={cn(literatureRowShellClass, literatureRowTextClass, "group")}
         onClick={handleShellClick}
       >
-        <span className={LITERATURE_COL_EXTRACT}>
-          <LiteratureExtractBadge
-            paperId={paper.id}
-            statesByPaper={extractStates}
-            visible
-          />
-        </span>
+        <LiteratureRowLeadSlot paper={paper} extractStates={extractStates} />
         <span className={cn(LITERATURE_COL_YEAR, "min-w-0")}>
           {paper.year ?? ""}
         </span>

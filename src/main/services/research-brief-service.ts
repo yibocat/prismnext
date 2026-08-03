@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import {
+  LEGACY_RESEARCH_BRIEF_REL,
   RESEARCH_BRIEF_REL,
   RESEARCH_BRIEF_SECTIONS,
   RESEARCH_BRIEF_TEMPLATE,
@@ -12,18 +13,35 @@ export function researchBriefAbsPath(projectRoot: string): string {
   return join(projectRoot.replace(/\\/g, "/"), RESEARCH_BRIEF_REL);
 }
 
-export function researchBriefDirAbs(projectRoot: string): string {
-  return join(projectRoot.replace(/\\/g, "/"), ".prismnext", "research");
+function legacyResearchBriefAbsPath(projectRoot: string): string {
+  return join(projectRoot.replace(/\\/g, "/"), LEGACY_RESEARCH_BRIEF_REL);
 }
 
-/** Idempotent: create research/ dir and template brief when missing. Never overwrites existing brief. */
+/**
+ * Move `.prismnext/research/brief.md` → project-root `.brief.md` when needed.
+ * Never overwrites an existing root brief.
+ */
+function migrateLegacyResearchBrief(projectRoot: string): boolean {
+  const abs = researchBriefAbsPath(projectRoot);
+  if (existsSync(abs)) return false;
+  const legacyAbs = legacyResearchBriefAbsPath(projectRoot);
+  if (!existsSync(legacyAbs)) return false;
+  mkdirSync(dirname(abs), { recursive: true });
+  renameSync(legacyAbs, abs);
+  return true;
+}
+
+/**
+ * Idempotent: create project-root `.brief.md` when missing.
+ * Migrates the pre-0.6.8 path once. Never overwrites an existing brief.
+ */
 export function ensureResearchBrief(projectRoot: string): { created: boolean; path: string } {
-  const dir = researchBriefDirAbs(projectRoot);
-  mkdirSync(dir, { recursive: true });
+  migrateLegacyResearchBrief(projectRoot);
   const abs = researchBriefAbsPath(projectRoot);
   if (existsSync(abs)) {
     return { created: false, path: RESEARCH_BRIEF_REL };
   }
+  mkdirSync(dirname(abs), { recursive: true });
   writeFileSync(abs, RESEARCH_BRIEF_TEMPLATE, "utf-8");
   return { created: true, path: RESEARCH_BRIEF_REL };
 }
@@ -69,6 +87,8 @@ export interface ResearchBriefReadResult {
 export function readResearchBrief(projectRoot: string, options?: { ensure?: boolean }): ResearchBriefReadResult {
   if (options?.ensure) {
     ensureResearchBrief(projectRoot);
+  } else {
+    migrateLegacyResearchBrief(projectRoot);
   }
   const abs = researchBriefAbsPath(projectRoot);
   if (!existsSync(abs)) {

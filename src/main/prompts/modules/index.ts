@@ -4,21 +4,23 @@ import type { PromptModule, PromptContext } from "../types";
 import { CHAT_CITATION_STAGING_PROMPT } from "./chat-citation-staging";
 import { CITATION_AUDIT_PROMPT } from "./citation-audit";
 import { LITERATURE_LIBRARY_PROMPT } from "./literature-library";
-import { TASK_DELEGATION_PROMPT } from "./task-delegation";
 import { RESEARCH_REASONING_PROMPT } from "./research-reasoning";
 import { REPLY_DEPTH_PROMPT } from "./reply-depth";
-import { buildProactiveSchedulingPrompt } from "./proactive-scheduling";
+import { buildOrchestratorJudgmentPrompt } from "./orchestrator-judgment";
+import { PROJECT_BRIEF_PROMPT } from "./project-brief";
 import { RESEARCH_DESIGN_PROMPT } from "./research-design";
 import { EXPERIMENTS_PROMPT } from "./experiments";
 import { INTERACTION_PROMPT } from "./interaction";
+import { PROJECT_RULES_MEMORY_PROMPT } from "./project-rules-memory";
+import { SUBAGENT_ROLE_PROMPT } from "./subagent-role";
 import { buildLatexWorkspacePrompt } from "./latex-workspace";
 import { buildWorkspacePrompt } from "./workspace-folders";
 
 /** All available prompt modules.
  *
- * Global `_prism-system.md` injects all modules with `profileOnly: false`
- * (workspace-folders, research-reasoning, reply-depth).
- * Profile modules attach per Orchestrator/Expert in the agent editor.
+ * Global `_prism-system.md` injects all modules with `profileOnly: false`.
+ * Shared profile modules auto-attach to orchestrator + experts; orchestratorOnly /
+ * expertOnly modules attach only to that role — no per-agent UI selection.
  *
  * Per-tool how-to → `BUILTIN_TOOLS` / `tools/<name>.ts` only (not modules).
  * Hard/Soft homes: `docs-private/superpowers/specs/2026-07-21-prompt-hard-soft-architecture-design.md`.
@@ -67,14 +69,15 @@ export const ALL_MODULES: PromptModule[] = [
     prompt: LITERATURE_LIBRARY_PROMPT,
   },
   {
-    key: "task-delegation",
-    label: "Task Delegation (orchestrator)",
+    key: "orchestrator-judgment",
+    label: "Orchestrator Judgment",
     description:
-      "Generic orchestrator Task discipline — when/how to delegate, synthesis, allowlist.",
+      "Proactive scheduling + Task delegation — read the request, engage domains, delegate, synthesize.",
     enabled: true,
     profileOnly: true,
+    orchestratorOnly: true,
     source: "app",
-    prompt: TASK_DELEGATION_PROMPT,
+    build: buildOrchestratorJudgmentPrompt,
   },
   {
     key: "latex-workspace",
@@ -107,20 +110,30 @@ export const ALL_MODULES: PromptModule[] = [
     prompt: REPLY_DEPTH_PROMPT,
   },
   {
-    key: "proactive-scheduling",
-    label: "Proactive Scheduling (orchestrator)",
+    key: "project-brief",
+    label: "Project Brief (`.brief.md`)",
     description:
-      "Orchestrator judgment: read the request, pick capability lines, schedule order/parallelism, respect gates — not tool how-to.",
+      "Intellectual spine at project-root `.brief.md` — thesis line, not memory, rules, or experiment plans.",
     enabled: true,
     profileOnly: true,
     source: "app",
-    build: buildProactiveSchedulingPrompt,
+    prompt: PROJECT_BRIEF_PROMPT,
+  },
+  {
+    key: "project-rules-memory",
+    label: "Project Rules (remember)",
+    description:
+      "When to persist stable preferences into Settings project rules via project-rule-write.",
+    enabled: true,
+    profileOnly: true,
+    source: "app",
+    prompt: PROJECT_RULES_MEMORY_PROMPT,
   },
   {
     key: "research-design",
-    label: "Research Design (brief)",
+    label: "Research Design",
     description:
-      "Project research brief at .prismnext/research/brief.md — read/update workflow and research-design-coach handoff.",
+      "Scientific thinking and intellectual roadmap — explore, pressure-test, Plan/coach; not experiment design.",
     enabled: true,
     profileOnly: true,
     source: "app",
@@ -140,10 +153,21 @@ export const ALL_MODULES: PromptModule[] = [
     key: "interaction",
     label: "Interaction (figures & plots)",
     description:
-      "Figures and CSV plots in `.prismnext/interactions` — figure.static / plot.*, interaction-* tools + ```interaction fence.",
+      "Persisted figures/plots as clickable chat cards — when to use interaction-* vs ```artifact.",
     enabled: true,
-    profileOnly: false,
+    profileOnly: true,
     source: "app",
     prompt: INTERACTION_PROMPT,
+  },
+  {
+    key: "subagent-role",
+    label: "Subagent Role (experts)",
+    description:
+      "Expert/subagent only: follow role instructions first; focused Task deliverable; not for the primary orchestrator.",
+    enabled: true,
+    profileOnly: true,
+    expertOnly: true,
+    source: "app",
+    prompt: SUBAGENT_ROLE_PROMPT,
   },
 ];

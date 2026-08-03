@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { countPromptTokens } from "../lib/token-estimate";
 import { libraryCardForRegistryUrl, PRISM_CURATED_LIBRARY } from "../../shared/skill-libraries";
 import type { SkillInstallRecord } from "../../shared/skill-install-types";
 import { parseGitHubInput, scanGitHubRepository } from "./skill-install-github";
@@ -111,6 +112,8 @@ export interface InstalledSkillInfo {
   description: string;
   skillDirRel: string;
   enabled: boolean;
+  /** o200k_base BPE estimate of SKILL.md body */
+  tokenCount: number;
   installOrigin?: import("../../shared/skill-install-types").SkillInstallOrigin;
 }
 
@@ -296,6 +299,7 @@ export function listProjectSkills(projectRoot: string): InstalledSkillInfo[] {
       description: meta.description || "",
       skillDirRel: `${PRISM_SKILLS_REL}/${id}`,
       enabled: !disabled.has(id),
+      tokenCount: countPromptTokens(content).tokenCount,
       installOrigin: installBySkillId.get(id),
     });
   }

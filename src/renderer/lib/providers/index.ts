@@ -173,7 +173,25 @@ export function getProviderModels(
   const customs = customModels?.[providerId] ?? [];
   const byId = new Map<string, ModelConfig>();
   for (const m of staticModels) byId.set(m.id, m);
-  for (const m of customs) byId.set(m.id, m);
+  for (const m of customs) {
+    const prev = byId.get(m.id);
+    if (!prev) {
+      byId.set(m.id, m);
+      continue;
+    }
+    // Snapshots can omit/ stale-false vision while the live catalog is correct.
+    // Prefer "supports vision" if either side says so — otherwise multimodal
+    // helper validation rejects valid OpenCode Go/Zen vision models.
+    byId.set(m.id, {
+      ...prev,
+      ...m,
+      capabilities: {
+        ...prev.capabilities,
+        ...m.capabilities,
+        vision: Boolean(prev.capabilities?.vision || m.capabilities?.vision),
+      },
+    });
+  }
   return Array.from(byId.values());
 }
 

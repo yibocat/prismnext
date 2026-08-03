@@ -23,7 +23,11 @@ import { AcpService } from "../../src/main/acp/service";
 function makeService(): AcpService {
   const svc = Object.create(AcpService.prototype) as AcpService;
   (svc as any).sessionActivityAt = new Map<string, number>();
+  (svc as any).sessionProviderErrors = new Map<string, string>();
+  (svc as any).sessionParentCache = new Map<string, string>();
   (svc as any).notificationHandlers = [];
+  (svc as any).opencodeLogWatchOffset = 0;
+  (svc as any).getOpenCodeLogPath = () => "/tmp/prism-opencode-test.log";
   return svc;
 }
 

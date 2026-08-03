@@ -7,8 +7,8 @@ import { ALL_MODULES } from "../../src/main/prompts/modules";
 import { CHAT_CITATION_STAGING_PROMPT } from "../../src/main/prompts/modules/chat-citation-staging";
 import { EXPERIMENTS_PROMPT } from "../../src/main/prompts/modules/experiments";
 import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/literature-library";
-import { PROACTIVE_SCHEDULING_PROMPT, buildProactiveSchedulingPrompt } from "../../src/main/prompts/modules/proactive-scheduling";
-import { composeProfileModulePrompts, resolveStableSystemModules } from "../../src/main/prompts/resolve-active-modules";
+import { ORCHESTRATOR_JUDGMENT_PROMPT, buildOrchestratorJudgmentPrompt } from "../../src/main/prompts/modules/orchestrator-judgment";
+import { composeOrchestratorProfileModulePrompts, resolveOrchestratorProfileModuleKeys, resolveStableSystemModules } from "../../src/main/prompts/resolve-active-modules";
 import { buildPlanModeTurnAppendix } from "../../src/main/prompts/per-turn/plan-mode";
 import { BUILTIN_TOOLS } from "../../src/main/tools";
 import { buildOpencodeToolDescription } from "../../src/main/tools/tool-description";
@@ -44,35 +44,24 @@ describe("S1 — experiment design Plan suggest is AI-soft (tool), not keyword H
     expect(desc).toContain("draftPath");
   });
 
-  it("proactive map is orchestration-only — no tool names; domains from profile at compose time", () => {
-    expect(PROACTIVE_SCHEDULING_PROMPT).not.toMatch(/literature-search|literature-discover|latex-compile/);
-    expect(PROACTIVE_SCHEDULING_PROMPT).not.toMatch(/\[@bibkey\]|\[n\]/);
-    expect(PROACTIVE_SCHEDULING_PROMPT).not.toContain("Literature Library");
-    expect(PROACTIVE_SCHEDULING_PROMPT).not.toContain("15s consent strip");
-    expect(PROACTIVE_SCHEDULING_PROMPT).not.toContain("Entering Plan mode (consent");
+  it("orchestrator judgment is orchestration-only — no tool names; domains from profile at compose time", () => {
+    expect(ORCHESTRATOR_JUDGMENT_PROMPT).not.toMatch(/literature-search|literature-discover|latex-compile/);
+    expect(ORCHESTRATOR_JUDGMENT_PROMPT).not.toMatch(/\[@bibkey\]|\[n\]/);
+    expect(ORCHESTRATOR_JUDGMENT_PROMPT).not.toContain("15s consent strip");
+    expect(ORCHESTRATOR_JUDGMENT_PROMPT).not.toContain("Entering Plan mode (consent");
+    expect(ORCHESTRATOR_JUDGMENT_PROMPT).toContain("Through-line");
+    expect(ORCHESTRATOR_JUDGMENT_PROMPT).toContain(".brief.md");
 
-    const researchPrismModules = [
-      "chat-citation-staging",
-      "citation-audit",
-      "literature-library",
-      "task-delegation",
-      "latex-workspace",
-      "proactive-scheduling",
-      "research-design",
-      "experiments",
-      "interaction",
-    ];
-    const composed = composeProfileModulePrompts(researchPrismModules);
-    const proactiveOnly = buildProactiveSchedulingPrompt({
-      profileModules: researchPrismModules,
+    const composed = composeOrchestratorProfileModulePrompts();
+    const judgmentOnly = buildOrchestratorJudgmentPrompt({
+      profileModules: resolveOrchestratorProfileModuleKeys(),
       profileModuleSummaries: ALL_MODULES.filter(
-        (m) => m.profileOnly && researchPrismModules.includes(m.key) && m.key !== "proactive-scheduling",
+        (m) => m.profileOnly && m.key !== "orchestrator-judgment",
       ).map((m) => ({ key: m.key, label: m.label, description: m.description })),
     });
-    expect(proactiveOnly).toContain("Chat Paper Citations");
-    expect(proactiveOnly).toContain("Task Delegation");
-    expect(proactiveOnly).toMatch(/Delegation.*profile's delegation guidance/);
-    expect(proactiveOnly).not.toMatch(/literature-search|literature-discover|latex-compile/);
+    expect(judgmentOnly).toContain("Chat Paper Citations");
+    expect(judgmentOnly).toContain("Task delegation");
+    expect(judgmentOnly).not.toMatch(/literature-search|literature-discover|latex-compile/);
     expect(composed).toContain("Chat Paper Citations");
   });
 });

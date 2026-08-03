@@ -13,7 +13,7 @@ import { useComposerEditorStore } from "@/stores/composer-editor-store";
 import { WorktreeSelector } from "./worktree-selector";
 import { IntensiveReadingListButton } from "./intensive-reading-list-button";
 import { blurKeyboardFocus, cn } from "@/lib/utils";
-import { useChatFileDrop, useOsFileDragging } from "@/lib/chat/use-chat-file-drop";
+import { useChatFileDrop, useChatDropDragging } from "@/lib/chat/use-chat-file-drop";
 import { chatFileDropZoneClass, chatCapsuleFileDropActiveClass } from "@/lib/chat/chat-file-drag-overlay";
 import { displayChatTitle } from "@/lib/i18n/display-chat-title";
 import { ShortcutKbdChips } from "@/lib/shortcuts";
@@ -116,7 +116,7 @@ export function AiBar() {
     || (subClosing && !mainPanelVisible);
 
   const aiBarComposerFocusNonce = useLayoutStore((s) => s.aiBarComposerFocusNonce);
-  const pendingInsert = useComposerInsertStore((s) => s.pendingInsert);
+  const pendingInserts = useComposerInsertStore((s) => s.pendingInserts);
   const attachNonce = useComposerInsertStore((s) => s.attachNonce);
   const attachmentCount = useComposerInsertStore((s) => s.composerAttachmentCount);
 
@@ -163,7 +163,7 @@ export function AiBar() {
 
   const panelDrop = useChatFileDrop({ onQueued: openInput });
   const capsuleDrop = useChatFileDrop({ onQueued: openInput });
-  const osFileDragging = useOsFileDragging();
+  const chatDropDragging = useChatDropDragging();
 
   // Drag over capsule hit-target → expand to half-input (do not expand on any window drag)
   useEffect(() => {
@@ -180,13 +180,14 @@ export function AiBar() {
 
   useEffect(() => {
     if (aiBarComposerFocusNonce === 0) return;
+    const last = pendingInserts[pendingInserts.length - 1];
     const expandForInsert =
-      pendingInsert?.kind === "code" ||
-      pendingInsert?.kind === "git-diff" ||
-      pendingInsert?.kind === "terminal";
+      last?.kind === "code" ||
+      last?.kind === "git-diff" ||
+      last?.kind === "terminal";
     if (expandForInsert) openExpanded();
     else openInput();
-  }, [aiBarComposerFocusNonce, openExpanded, openInput, pendingInsert?.kind]);
+  }, [aiBarComposerFocusNonce, openExpanded, openInput, pendingInserts]);
 
   // New attachment queue → ensure half-input is open (do NOT re-open on every idle)
   useEffect(() => {
@@ -429,7 +430,9 @@ export function AiBar() {
                 >
                   {panelDrop.dragActive ? (
                     <span className="pointer-events-none absolute bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-md border border-border bg-card px-3 py-1 text-[length:var(--font-size-11)] text-muted-foreground shadow-sm">
-                      {t("chat.aibar.dropFiles")}
+                      {chatDropDragging.composerActive
+                        ? t("chat.aibar.dropToChat")
+                        : t("chat.aibar.dropFiles")}
                     </span>
                   ) : null}
                   <ChatMessages />
@@ -469,13 +472,13 @@ export function AiBar() {
         data-chat-width
         className="relative w-full pointer-events-none @container"
       >
-        {/* Idle pill is tiny — only while OS file-dragging, accept drops on a bottom strip (no layout change when idle). */}
+        {/* Idle pill is tiny — while dragging files or chips, accept drops on a bottom strip. */}
         {phase === "idle" ? (
           <div
             ref={capsuleDrop.zoneRef}
             className={cn(
               "absolute inset-x-3 bottom-0 h-14 z-20 rounded-2xl",
-              osFileDragging ? "pointer-events-auto" : "pointer-events-none",
+              chatDropDragging.active ? "pointer-events-auto" : "pointer-events-none",
               capsuleDrop.dragActive && chatCapsuleFileDropActiveClass,
             )}
             {...capsuleDrop.dropHandlers}
@@ -539,6 +542,13 @@ export function AiBar() {
                   chatCapsuleFileDropActiveClass,
                 )}
               />
+            ) : null}
+            {phase !== "idle" && capsuleDrop.dragActive ? (
+              <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 rounded-md border border-border bg-card px-3 py-1 text-[length:var(--font-size-11)] text-muted-foreground shadow-sm">
+                {chatDropDragging.composerActive
+                  ? t("chat.aibar.dropToChat")
+                  : t("chat.aibar.dropFiles")}
+              </span>
             ) : null}
             {phase === "idle" ? (
               <span

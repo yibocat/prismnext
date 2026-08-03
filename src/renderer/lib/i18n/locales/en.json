@@ -262,8 +262,11 @@
         "reasoningDepth": "Reasoning depth",
         "defaultDepth": "Default depth",
         "instructions": "Instructions",
-        "instructionsDesc": "Role and delegation strategy only — citation formats and Task tables live in Knowledge modules synced below.",
-        "instructionsPlaceholder": "You are a citation auditor. Focus on bib consistency and cite key usage…",
+        "instructionsDesc": "Role, voice, and deliverable for this agent. Domain workflow lives in synced capability modules — not here.",
+        "instructionsPlaceholder": "You are a research design coach. Pressure-test the RQ and contribution…",
+        "instructionsPreview": "Preview",
+        "instructionsSource": "Source",
+        "instructionsEmpty": "No instructions yet.",
         "knowledgeModules": "Knowledge modules",
         "knowledgeDesc": "Built-in workflow guides — select which ones to inline into this agent's synced agent.md. Workspace folders always inject via global _prism-system.md.",
         "knowledgeDiscipline": "Modules carry the tool-scheduling discipline. A subagent only knows how to use a tool if the module that teaches it is assembled here. Write Instructions as role/responsibility prose only.",
@@ -324,14 +327,19 @@
       "knowledgeModules": "Knowledge Modules",
       "sectionPrompts": "Prompts",
       "agentTools": "Agent Tools",
-      "pageDesc": "System prompt, project instructions, knowledge modules, and agent tools.",
+      "pageDesc": "Edit project instructions, rules, and optional persona overrides. Product prompt internals are read-only under Advanced.",
       "projectInstructions": "Project instructions",
       "createAgentsMd": "Create AGENTS.md",
       "previewStack": "Preview stack",
       "editBrief": "Edit brief",
-      "sectionPromptsDesc": "Baseline system file and per-project OpenCode instructions. Citation and Task modules inject via Orchestrator / Expert profiles — see Prompt stack preview.",
-      "knowledgeDesc": "Built-in workflow guides — always available. Attach per Orchestrator or Expert in the agent editor; workspace folders inject globally from project workspace settings.",
-      "toolsDesc": "Built-in OpenCode tools. Usage hints sync into each tool's schema description on startup — not knowledge modules.",
+      "viewBrief": "View brief",
+      "sectionPromptsDesc": "Baseline persona override, per-project OpenCode instructions, and the living research brief.",
+      "sectionAdvanced": "Advanced",
+      "sectionAdvancedDesc": "Read-only views of the composed prompt stack, knowledge modules, and built-in tool descriptions — for debugging only. Extend behavior with Project Rules, AGENTS.md, or Skills instead.",
+      "advancedTitle": "Prompt internals",
+      "advancedSummary": "{{layers}} stack layers · {{modules}} modules · {{tools}} tools",
+      "advancedSummaryLoading": "Loading stack summary…",
+      "internalsNotice": "Read-only · debug view. Product-owned prompt internals — extend behavior with Project Rules, AGENTS.md, or Skills instead of editing here.",
       "rulesDesc": "Injected on every chat turn as a separate user message block. Orchestrator profiles can restrict to a subset (empty selection = all enabled rules).",
       "customPrompt": "Custom prompt",
       "viewEditPrompt": "View & edit prompt",
@@ -346,14 +354,14 @@
       "rowDesc": {
         "customPrompt": "Custom prompt replaces the built-in default in `_prism-system.md`.",
         "builtinPrompt": "Built-in prismnext persona written to `_prism-system.md` on chat sync.",
-        "stackSummary": "Baseline _prism-system: {{chars}} chars · {{layers}} layers in stack preview",
+        "stackSummary": "Baseline _prism-system: ~{{tokens}} tokens · {{layers}} layers in stack preview",
         "openForStack": "Open a project to see full stack preview.",
         "openForInstructions": "Open a project to edit project instructions.",
         "instructions": "Project-specific instructions — separate OpenCode instruction file, not merged into `_prism-system.md`.",
         "agentsChars": "{{count}} characters in project instructions.",
         "noAgents": "No AGENTS.md yet — create one or run /setup in chat.",
         "openForBrief": "Open a project to edit the living research design brief.",
-        "brief": "Structured research question, hypotheses, contribution, and scope at .prismnext/research/brief.md — agents use research-brief-read/update.",
+        "brief": "Living research design at project-root `.brief.md` — view here (read-only); edit opens Files. Agents use research-brief-read/update.",
         "modules": "Read-only catalog of citation, library, Task, and workspace modules.",
         "tools": "View all registered tools and the descriptions the model sees when choosing tools."
       },
@@ -986,6 +994,8 @@
         "introNew": "Create a primary-session orchestrator that delegates work to experts via OpenCode Task.",
         "introEdit": "Edit this orchestrator's instructions and expert allowlist.",
         "allowedExpertsDesc": "Experts the orchestrator may invoke via Task.",
+        "subagentRoster": "Synced subagent roster",
+        "subagentRosterDesc": "Appended to the orchestrator agent at sync — built-ins plus checked experts above. The model reads this list, not a hardcoded table in Instructions.",
         "noneSelected": "None selected",
         "allowedCount": "{{selected}} of {{total}} allowed",
         "noExperts": "No enabled experts available.",
@@ -1235,6 +1245,9 @@
         },
         "layer": "Layer {{n}}",
         "chars": "{{count}} chars",
+        "tokens": "~{{count}} tokens",
+        "tokensHint": "o200k estimate",
+        "totalTokens": "Total ~{{count}} tokens (o200k est.)",
         "injectVia": "Inject via:",
         "emptyContent": "(empty)",
         "refresh": "Refresh",
@@ -1294,12 +1307,12 @@
       },
       "brief": {
         "toast": {
-          "loadFailed": "Failed to load research brief.",
-          "saved": "Research brief saved.",
-          "saveFailed": "Failed to save research brief."
+          "loadFailed": "Failed to load research brief."
         },
-        "openProject": "Open a project to edit the research brief.",
-        "loading": "Loading…"
+        "openProject": "Open a project to view the research brief.",
+        "loading": "Loading…",
+        "readOnlyHint": "Read-only preview of project-root `.brief.md`. Edit opens it in Files.",
+        "editInFiles": "Edit in Files"
       },
       "skillMd": {
         "toast": {
@@ -1722,6 +1735,7 @@
       "running": "Running",
       "closePanel": "Close chat panel",
       "dropFiles": "Drop files to attach",
+      "dropToChat": "Drop to add to Chat",
       "manageAssistants": "Manage AI Assistants",
       "placeholder": "Ask AI about your research..."
     },
@@ -1868,14 +1882,22 @@
       "compress": "Compress context",
       "compressing": "Compressing…",
       "compressDone": "Context compacted. Usage will refresh on the next reply.",
-      "estimates": "Rough Prism-side estimate only — not from OpenCode.",
-      "estimateToggle": "Prism estimate (optional)",
-      "bucketPrism": "Prism-injected",
-      "bucketRest": "Session / agent",
+      "breakdownHint": "Categories are local o200k estimates; total is from OpenCode.",
       "fromOpenCode": "Fill reported by OpenCode for this session.",
       "fromPromptUsage": "Fill from the last turn’s prompt usage (OpenCode usage_update not seen).",
       "waitingUsage": "Waiting for OpenCode usage after compact or the next turn.",
-      "promptStale": "Base prompt was updated — it will refresh on your next message."
+      "promptStale": "Base prompt was updated — it will refresh on your next message.",
+      "categories": {
+        "messages": "Messages",
+        "userInstructions": "Agent instructions",
+        "projectInstructions": "Project instructions",
+        "projectRules": "Project rules",
+        "skills": "Skills",
+        "modules": "Prompt modules",
+        "mcpTools": "MCP tools",
+        "corePersona": "Core persona",
+        "agentBase": "Agent base"
+      }
     },
     "intensive": {
       "list": "Intensive reading list",
@@ -1904,6 +1926,7 @@
     },
     "prepare": {
       "planningNext": "Planning next step…",
+      "describing_images": "Describing images with vision helper…",
       "thinking": "Thinking…",
       "syncing_project": "Preparing project…",
       "creating_session": "Creating chat session…",
@@ -1911,6 +1934,15 @@
       "starting_model": "Starting model…",
       "waiting_model": "Waiting for model response…",
       "stalled": "Connection slow — the model provider may be retrying…"
+    },
+    "visionFallback": {
+      "helperRequired": "The current model does not accept images. Configure a multimodal helper in Settings first.",
+      "helperInvalid": "The multimodal helper setting is invalid. Please choose another model.",
+      "helperMissingKey": "The multimodal helper’s provider has no API key. Add one in Settings.",
+      "helperNotVision": "The selected multimodal helper is not marked as vision-capable. Check model capabilities in Settings.",
+      "describeFailed": "Image description failed: {{message}}",
+      "describeFailedGeneric": "Image description failed. Check the multimodal helper configuration.",
+      "describedNote": "Described via {{model}}"
     },
     "errors": {
       "retry": "Retry",
@@ -2188,6 +2220,7 @@
       "unsavedChanges": "Unsaved changes",
       "removeHighlight": "Remove highlight",
       "selectEntry": "Select entry",
+      "dragToChat": "Drag to Chat",
       "journalLabelsSoon": "Journal labels (coming soon)",
       "pdfCacheOutdated": "PDF cache outdated — refresh from Zotero",
       "pdfCacheOutdatedDetail": "PDF cache is outdated — refresh from Zotero or reopen the PDF",

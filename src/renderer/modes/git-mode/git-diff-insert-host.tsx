@@ -14,6 +14,13 @@ import { SelectionInsertAction } from "@/components/modules/shared/selection-ins
 import { insertGitDiffToChat } from "@/lib/chat/insert-to-chat";
 import { getEditorSelectionChipPositionInContainer } from "@/lib/editor/selection-anchor";
 import {
+  resolveSelectionChipPosition,
+  SELECTION_CHIP_HEIGHT,
+  SELECTION_CHIP_WIDTH,
+  selectionActionX,
+  type SelectionChipPlacement,
+} from "@/lib/selection-chip-position";
+import {
   resolveDeletionWidgetSelection,
   resolveFromSplit,
   resolveFromUnified,
@@ -33,19 +40,38 @@ export interface GitDiffInsertHostProps {
   children: ReactNode;
 }
 
-function chipFromDomSelection(container: HTMLElement): { left: number; top: number } | null {
+function chipFromDomSelection(container: HTMLElement): {
+  left: number;
+  top: number;
+  placement: SelectionChipPlacement;
+} | null {
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
   const rect = sel.getRangeAt(0).getBoundingClientRect();
   if (rect.width < 1 && rect.height < 1) return null;
 
   const bounds = container.getBoundingClientRect();
-  const rightX = rect.right - bounds.left;
-  const top = rect.top - bounds.top - 28;
-
+  const anchor = {
+    top: rect.top - bounds.top,
+    bottom: rect.bottom - bounds.top,
+    leftX: rect.left - bounds.left,
+    rightX: rect.right - bounds.left,
+  };
+  const resolved = resolveSelectionChipPosition(
+    anchor,
+    {
+      left: 0,
+      top: 0,
+      right: bounds.width,
+      bottom: bounds.height,
+    },
+    SELECTION_CHIP_WIDTH,
+    SELECTION_CHIP_HEIGHT,
+  );
   return {
-    left: Math.max(0, Math.min(rightX, bounds.width)),
-    top: Math.max(0, top),
+    left: selectionActionX(resolved, anchor),
+    top: resolved.top,
+    placement: resolved.placement,
   };
 }
 
@@ -76,7 +102,11 @@ export function GitDiffInsertHost({
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [hasSelection, setHasSelection] = useState(false);
-  const [chipPos, setChipPos] = useState<{ left: number; top: number } | null>(null);
+  const [chipPos, setChipPos] = useState<{
+    left: number;
+    top: number;
+    placement: SelectionChipPlacement;
+  } | null>(null);
 
   const dismissAction = useCallback(() => {
     setHasSelection(false);
@@ -213,13 +243,27 @@ export function GitDiffInsertHost({
     }
 
     const container = containerRef.current;
-    const onMouseUp = () => scheduleUpdate();
+    let dragRaf = 0;
+    const dragLoop = () => {
+      updateActionPosition();
+      dragRaf = requestAnimationFrame(dragLoop);
+    };
+
+    const onMouseDown = () => {
+      cancelAnimationFrame(dragRaf);
+      dragRaf = requestAnimationFrame(dragLoop);
+    };
+    const onMouseUp = () => {
+      cancelAnimationFrame(dragRaf);
+      scheduleUpdate();
+    };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.shiftKey || e.key.startsWith("Arrow")) scheduleUpdate();
     };
     const onSelectionChange = () => scheduleUpdate();
 
     for (const view of views) {
+      view.contentDOM.addEventListener("mousedown", onMouseDown);
       view.contentDOM.addEventListener("mouseup", onMouseUp);
       view.contentDOM.addEventListener("keyup", onKeyUp);
       view.scrollDOM.addEventListener("scroll", onMouseUp, { passive: true });
@@ -233,7 +277,9 @@ export function GitDiffInsertHost({
     window.addEventListener("resize", onResize);
 
     return () => {
+      cancelAnimationFrame(dragRaf);
       for (const view of views) {
+        view.contentDOM.removeEventListener("mousedown", onMouseDown);
         view.contentDOM.removeEventListener("mouseup", onMouseUp);
         view.contentDOM.removeEventListener("keyup", onKeyUp);
         view.scrollDOM.removeEventListener("scroll", onMouseUp);
@@ -255,7 +301,6 @@ export function GitDiffInsertHost({
   useEffect(() => {
     if (!hasSelection) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      // ⌥L / Alt+L — capture so the chord does not leak to the focused editor.
       if (!matchesShortcutEvent("workspace.insertToChat", e)) return;
       e.preventDefault();
       e.stopPropagation();
@@ -272,6 +317,7 @@ export function GitDiffInsertHost({
         open={hasSelection && !!chipPos}
         x={chipPos?.left ?? 0}
         y={chipPos?.top ?? 0}
+        chipPlacement={chipPos?.placement}
         anchor="parent"
         placement="selection-top-right"
         shortcut={shortcutChordLabel("workspace.insertToChat")}

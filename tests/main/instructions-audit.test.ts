@@ -14,7 +14,7 @@ import { CITATION_AUDIT_PROMPT } from "../../src/main/prompts/modules/citation-a
 import { RESEARCH_DESIGN_PROMPT } from "../../src/main/prompts/modules/research-design";
 import { EXPERIMENTS_PROMPT } from "../../src/main/prompts/modules/experiments";
 import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/literature-library";
-import { TASK_DELEGATION_PROMPT } from "../../src/main/prompts/modules/task-delegation";
+import { ORCHESTRATOR_JUDGMENT_PROMPT } from "../../src/main/prompts/modules/orchestrator-judgment";
 import { buildLatexWorkspacePrompt } from "../../src/main/prompts/modules/latex-workspace";
 import type { PromptContext } from "../../src/main/prompts/types";
 
@@ -30,7 +30,7 @@ const MODULE_BINDING_MARKERS = [
   "### Task expert handoff (experiments)",
   "### Orchestrator after library Tasks",
   "### Orchestrator after external literature Tasks",
-  "### Task delegation (orchestrator)",
+  "### Orchestrator judgment",
 ];
 
 function listBuiltinInstructionPaths(baseDir: string, kind: "experts" | "orchestrators"): string[] {
@@ -55,7 +55,7 @@ describe("builtin instructions audit (Phase 1.3)", () => {
     for (const marker of MODULE_BINDING_MARKERS) {
       expect(body!).not.toContain(marker);
     }
-    expect(body).toContain("system modules");
+    expect(body).toContain("capability modules");
   });
 
   it("expert instructions omit module binding text", () => {
@@ -74,14 +74,14 @@ describe("builtin instructions audit (Phase 1.3)", () => {
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("[n]");
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("Task handoff");
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("see that tool");
-    expect(TASK_DELEGATION_PROMPT).toContain("Available subagents (via Task)");
-    expect(TASK_DELEGATION_PROMPT).not.toContain("@peer-reviewer");
+    expect(ORCHESTRATOR_JUDGMENT_PROMPT).toContain("Available subagents (via Task)");
+    expect(ORCHESTRATOR_JUDGMENT_PROMPT).not.toContain("@peer-reviewer");
     expect(CITATION_AUDIT_PROMPT).toContain("When this applies");
     expect(CITATION_AUDIT_PROMPT).toContain("citation-health");
     expect(CITATION_AUDIT_PROMPT).toContain("peer-reviewer");
     expect(RESEARCH_DESIGN_PROMPT).toContain("research-brief-read");
     expect(RESEARCH_DESIGN_PROMPT).toContain("research-design-coach");
-    expect(RESEARCH_DESIGN_PROMPT).toContain("Soft workflow");
+    expect(RESEARCH_DESIGN_PROMPT).toContain("Project brief");
     expect(EXPERIMENTS_PROMPT).toContain("Soft workflow");
     expect(EXPERIMENTS_PROMPT).toContain("experiment-log");
     expect(EXPERIMENTS_PROMPT).toContain("experiment-run");

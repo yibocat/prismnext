@@ -54,6 +54,8 @@ import {
   formatExperimentRelativeTime,
 } from "./experiments-detail-chrome";
 import { useExperimentProjectRoot } from "./experiments-project-root";
+import { experimentRunDragPayload } from "./experiment-run-drag";
+import { setComposerDragData } from "@/lib/chat/composer-drag";
 
 export interface ExperimentsRunsTableProps {
   runs: ExperimentRunEntry[];
@@ -217,6 +219,8 @@ function ArtifactChip({
 
 function RunRow({
   run,
+  workspacePath,
+  experimentId,
   selected,
   focused,
   checked,
@@ -225,6 +229,8 @@ function RunRow({
   onCheckedChange,
 }: {
   run: ExperimentRunEntry;
+  workspacePath?: string;
+  experimentId?: string;
   selected: boolean;
   focused: boolean;
   checked: boolean;
@@ -266,6 +272,13 @@ function RunRow({
       aria-selected={selected}
       aria-expanded={selected}
       tabIndex={focused ? 0 : -1}
+      draggable
+      onDragStart={(e) => {
+        e.stopPropagation();
+        setComposerDragData(e.dataTransfer, [
+          experimentRunDragPayload(run, { workspacePath, experimentId }),
+        ]);
+      }}
       onFocus={onFocus}
       onClick={onSelect}
       onKeyDown={(e) => {
@@ -768,6 +781,8 @@ export function ExperimentsRunsTable({
                 >
                   <RunRow
                     run={run}
+                    workspacePath={workspacePath}
+                    experimentId={experimentId ?? undefined}
                     selected={expanded}
                     focused={index === safeFocus}
                     checked={checkedRunIds.includes(run.runId)}

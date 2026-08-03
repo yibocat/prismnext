@@ -69,7 +69,7 @@ actionRegistry.register("ensure-research-brief", async () => {
   const verb = result.created ? "Created" : "Loaded";
   return (
     `${verb} ${result.path}. ` +
-    "Edit in Settings → Prompts & Rules → Research brief, or let the agent update sections via research-brief-update."
+    "Edit in Files (from Settings → Prompts & Rules → Research brief → Edit), or let the agent update sections via research-brief-update."
   );
 });
 

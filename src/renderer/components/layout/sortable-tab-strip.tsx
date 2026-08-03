@@ -19,6 +19,10 @@ import {
   isNoOpReorder,
   reorderIndex,
 } from "@/lib/workspace/sortable-tab-strip";
+import {
+  setComposerDragData,
+  type ComposerDragPayload,
+} from "@/lib/chat/composer-drag";
 
 export type SortableTabStripRenderArgs<T> = {
   item: T;
@@ -36,6 +40,8 @@ type SortableTabStripProps<T> = {
   onReorder?: (fromIndex: number, toIndex: number) => void;
   /** Called when a drag starts — use to focus/activate that tab. */
   onDragItem?: (item: T, index: number) => void;
+  /** When set, tabs can be dragged to Chat/AiBar as inline tokens. */
+  getComposerDragPayload?: (item: T) => ComposerDragPayload | null;
   disabled?: boolean;
   /** Flex sizing / outer layout (e.g. Chat `w-0 flex-1`). Do not put overflow here. */
   className?: string;
@@ -53,6 +59,7 @@ export const SortableTabStrip = forwardRef(function SortableTabStrip<T>(
     getKey,
     onReorder,
     onDragItem,
+    getComposerDragPayload,
     disabled,
     className,
     rowClassName,
@@ -72,7 +79,9 @@ export const SortableTabStrip = forwardRef(function SortableTabStrip<T>(
   onReorderRef.current = onReorder;
 
   const count = items.length;
-  const canDrag = Boolean(onReorder) && !disabled && count > 1;
+  const canReorder = Boolean(onReorder) && !disabled && count > 1;
+  const canExportDrag = Boolean(getComposerDragPayload) && !disabled;
+  const canDrag = canReorder || canExportDrag;
 
   // Forward ref to the scrolling row (TabBar overflow measure); keep host for indicator.
   const setScrollerRef = useCallback(
@@ -145,15 +154,24 @@ export const SortableTabStrip = forwardRef(function SortableTabStrip<T>(
   // strip (justify-end has zero native slack past the last tab; titlebar drag-region
   // also steals events one pixel outside).
   useEffect(() => {
-    if (dragFrom === null || !canDrag) return;
+    if (dragFrom === null || !canReorder) return;
 
     const onWindowDragOver = (e: globalThis.DragEvent) => {
+      if (!hostRef.current?.contains(e.target as Node)) return;
       e.preventDefault();
       if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
       updateInsertFromClientX(e.clientX, dragFrom);
     };
 
     const onWindowDrop = (e: globalThis.DragEvent) => {
+      if (e.defaultPrevented) {
+        reset();
+        return;
+      }
+      if (!hostRef.current?.contains(e.target as Node)) {
+        reset();
+        return;
+      }
       e.preventDefault();
       commitReorder(e.clientX);
     };
@@ -164,16 +182,16 @@ export const SortableTabStrip = forwardRef(function SortableTabStrip<T>(
       window.removeEventListener("dragover", onWindowDragOver);
       window.removeEventListener("drop", onWindowDrop);
     };
-  }, [canDrag, commitReorder, dragFrom, updateInsertFromClientX]);
+  }, [canReorder, commitReorder, dragFrom, updateInsertFromClientX]);
 
   const onStripDragOver = useCallback(
     (e: DragEvent) => {
-      if (dragFrom === null || !canDrag) return;
+      if (dragFrom === null || !canReorder) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
       updateInsertFromClientX(e.clientX, dragFrom);
     },
-    [canDrag, dragFrom, updateInsertFromClientX],
+    [canReorder, dragFrom, updateInsertFromClientX],
   );
 
   const onStripDrop = useCallback(
@@ -239,12 +257,23 @@ export const SortableTabStrip = forwardRef(function SortableTabStrip<T>(
                     e.preventDefault();
                     return;
                   }
-                  dragFromRef.current = index;
-                  insertIndexRef.current = null;
-                  setDragFrom(index);
-                  setInsertIndex(null);
-                  e.dataTransfer.effectAllowed = "move";
-                  e.dataTransfer.setData("text/plain", String(index));
+                  const payload = getComposerDragPayload?.(item) ?? null;
+                  if (payload) {
+                    setComposerDragData(e.dataTransfer, [payload]);
+                  }
+                  if (canReorder) {
+                    dragFromRef.current = index;
+                    insertIndexRef.current = null;
+                    setDragFrom(index);
+                    setInsertIndex(null);
+                    e.dataTransfer.setData("text/x-prismnext-tab-reorder", String(index));
+                    e.dataTransfer.effectAllowed = payload ? "copyMove" : "move";
+                    if (!payload) {
+                      e.dataTransfer.setData("text/plain", String(index));
+                    }
+                  } else if (payload) {
+                    e.dataTransfer.effectAllowed = "copy";
+                  }
                   onDragItem?.(item, index);
                 },
               },

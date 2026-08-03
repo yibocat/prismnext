@@ -3,8 +3,11 @@ import { useTranslation } from "react-i18next";
 import type { EditorView } from "@codemirror/view";
 import { SelectionInsertAction } from "@/components/modules/shared/selection-insert-action";
 import { insertCodeToChat, lineRangeFromSelection } from "@/lib/chat/insert-to-chat";
+import { codeSnippetDragPayload } from "@/lib/chat/code-snippet-drag";
 import { getEditorSelectionChipPosition } from "@/lib/editor/selection-anchor";
+import type { ViewportChipPosition } from "@/lib/editor/selection-anchor";
 import type { CodeSnippetRequest } from "@/lib/chat/context-insert";
+import type { SelectionChipPlacement } from "@/lib/selection-chip-position";
 import { matchesShortcutEvent, shortcutChordLabel } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
@@ -15,9 +18,7 @@ export interface CodeMirrorInsertHostProps {
   source: CodeSnippetRequest["source"];
   sourceTabId?: string;
   enabled?: boolean;
-  /** `fill` = stretch in tab editor; `content` = natural height (inline git diff). */
   layout?: "fill" | "content";
-  /** Bump when EditorView is created/destroyed so listeners re-attach. */
   viewReadySignal?: number;
   children: ReactNode;
 }
@@ -37,7 +38,7 @@ export function CodeMirrorInsertHost({
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [hasSelection, setHasSelection] = useState(false);
-  const [chipPos, setChipPos] = useState<{ left: number; top: number } | null>(null);
+  const [chipPos, setChipPos] = useState<ViewportChipPosition | null>(null);
 
   const dismissAction = useCallback(() => {
     setHasSelection(false);
@@ -90,6 +91,30 @@ export function CodeMirrorInsertHost({
     return ok;
   }, [viewRef, filePath, fileId, source, sourceTabId, dismissAction]);
 
+  const getDragPayloads = useCallback(() => {
+    const view = viewRef.current;
+    if (!view || !filePath) return null;
+
+    const main = view.state.selection.main;
+    if (main.empty) return null;
+
+    const from = Math.min(main.anchor, main.head);
+    const to = Math.max(main.anchor, main.head);
+    const doc = view.state.doc.toString();
+    const range = lineRangeFromSelection(doc, from, to);
+    if (!range.text.trim()) return null;
+
+    return [
+      codeSnippetDragPayload({
+        filePath,
+        fileId,
+        source,
+        sourceTabId,
+        ...range,
+      }),
+    ];
+  }, [viewRef, filePath, fileId, source, sourceTabId]);
+
   useEffect(() => {
     if (!enabled) {
       dismissAction();
@@ -101,20 +126,35 @@ export function CodeMirrorInsertHost({
     if (!view || !container) return;
 
     const scheduleUpdate = () => {
-      // Wait for CodeMirror to paint .cm-selectionBackground before measuring.
       requestAnimationFrame(() => {
         requestAnimationFrame(updateActionPosition);
       });
     };
 
-    const onMouseUp = () => scheduleUpdate();
+    let dragRaf = 0;
+    const dragLoop = () => {
+      updateActionPosition();
+      dragRaf = requestAnimationFrame(dragLoop);
+    };
+
+    const onMouseDown = () => {
+      cancelAnimationFrame(dragRaf);
+      dragRaf = requestAnimationFrame(dragLoop);
+    };
+    const onMouseUp = () => {
+      cancelAnimationFrame(dragRaf);
+      scheduleUpdate();
+    };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.shiftKey || e.key.startsWith("Arrow")) scheduleUpdate();
     };
+    const onSelectionChange = () => scheduleUpdate();
 
+    view.contentDOM.addEventListener("mousedown", onMouseDown);
     view.contentDOM.addEventListener("mouseup", onMouseUp);
     view.contentDOM.addEventListener("keyup", onKeyUp);
     container.addEventListener("mouseup", onMouseUp);
+    document.addEventListener("selectionchange", onSelectionChange);
 
     const onScroll = () => {
       if (!view.state.selection.main.empty) scheduleUpdate();
@@ -130,9 +170,12 @@ export function CodeMirrorInsertHost({
     window.addEventListener("resize", onResize);
 
     return () => {
+      cancelAnimationFrame(dragRaf);
+      view.contentDOM.removeEventListener("mousedown", onMouseDown);
       view.contentDOM.removeEventListener("mouseup", onMouseUp);
       view.contentDOM.removeEventListener("keyup", onKeyUp);
       container.removeEventListener("mouseup", onMouseUp);
+      document.removeEventListener("selectionchange", onSelectionChange);
       view.scrollDOM.removeEventListener("scroll", onScroll);
       scrollRoot?.removeEventListener("scroll", onScroll);
       document.removeEventListener("scroll", onScroll, { capture: true });
@@ -143,8 +186,6 @@ export function CodeMirrorInsertHost({
   useEffect(() => {
     if (!hasSelection) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      // ⌥L / Alt+L — registry match (macOS remaps Option `key`; Win/Linux Alt+L
-      // must not reach xterm/CM). Capture so we win before the focused widget.
       if (!matchesShortcutEvent("workspace.insertToChat", e)) return;
       e.preventDefault();
       e.stopPropagation();
@@ -167,12 +208,14 @@ export function CodeMirrorInsertHost({
         open={enabled && hasSelection && !!chipPos}
         x={chipPos?.left ?? 0}
         y={chipPos?.top ?? 0}
+        chipPlacement={chipPos?.placement as SelectionChipPlacement | undefined}
         anchor="viewport"
         placement="selection-top-right"
         shortcut={shortcutChordLabel("workspace.insertToChat")}
         label={t("common.addToChat")}
         onInsert={runInsert}
         onDismiss={dismissAction}
+        getDragPayloads={getDragPayloads}
       />
     </div>
   );

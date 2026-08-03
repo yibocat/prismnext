@@ -21,7 +21,6 @@ import {
 import { useDocumentStore } from "@/stores/document-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
 import type { ExpertInfo, SaveCustomExpertPayload } from "@shared/agent-experts";
-import type { AgentEditorOptions } from "@shared/agent-editor-options";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import {
   detectExpertPermissionPreset,
@@ -58,10 +57,6 @@ function formFromExpert(
     modelProvider: providerId,
     modelId,
     thoughtLevel: detail.thoughtLevel ?? "",
-    skills: detail.skills ?? [],
-    mcpServers: detail.mcpServers ?? [],
-    modules: detail.modules ?? [],
-    rules: detail.rules ?? [],
     permissionPreset: detectExpertPermissionPreset(detail.permission),
   };
 }
@@ -81,11 +76,9 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
     ...emptyProfileForm(),
     permissionPreset: "standard",
   });
-  const [editorOptions, setEditorOptions] = useState<AgentEditorOptions | null>(null);
 
   useEffect(() => {
     if (!projectRoot) {
-      setEditorOptions(null);
       setForm({ ...emptyProfileForm(), permissionPreset: "standard" });
       setLoading(false);
       return;
@@ -99,10 +92,6 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
       setLoading(true);
       setDeleteDialogOpen(false);
       try {
-        const options = await window.electronAPI.expertsGetEditorOptions(root);
-        if (cancelled) return;
-        setEditorOptions(options);
-
         if (isNew) {
           setForm({ ...emptyProfileForm(), permissionPreset: "standard" });
           setLoading(false);
@@ -131,7 +120,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
     return () => {
       cancelled = true;
     };
-  }, [projectRoot, isNew, expertId, slot.mode, closePanel]);
+  }, [projectRoot, isNew, expertId, slot.mode, closePanel, t]);
 
   const saveExpert = useCallback(async () => {
     if (!projectRoot) return;
@@ -146,10 +135,6 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
 
     setSaving(true);
     try {
-      const selectableModuleKeys = new Set(
-        editorOptions?.modules.filter((m) => m.selectableInProfile).map((m) => m.key) ?? [],
-      );
-      const modules = form.modules.filter((key) => selectableModuleKeys.has(key));
       const permission = permissionFromExpertPreset(form.permissionPreset);
 
       if (builtinCustomize && form.id) {
@@ -157,10 +142,6 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
           expertId: form.id,
           model: formatProfileModel(form.modelProvider, form.modelId),
           thoughtLevel: form.thoughtLevel.trim() || undefined,
-          skills: form.skills,
-          mcpServers: form.mcpServers,
-          modules,
-          rules: form.rules,
           permission,
         });
       } else {
@@ -171,10 +152,6 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
           instructions: form.instructions,
           model: formatProfileModel(form.modelProvider, form.modelId),
           thoughtLevel: form.thoughtLevel.trim() || undefined,
-          skills: form.skills,
-          mcpServers: form.mcpServers,
-          modules,
-          rules: form.rules,
           permission,
         };
         await window.electronAPI.expertsSaveCustom(projectRoot, payload);
@@ -187,7 +164,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
     } finally {
       setSaving(false);
     }
-  }, [projectRoot, builtinCustomize, form, editorOptions, isNew, closePanel, t]);
+  }, [projectRoot, builtinCustomize, form, isNew, closePanel, t]);
 
   const resetBuiltinCustomization = async () => {
     if (!projectRoot || !form.id || !builtinCustomize) return;
@@ -251,7 +228,6 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
         <ProfileEditorForm
           form={form}
           onFormChange={(next) => setForm({ ...next, permissionPreset: form.permissionPreset })}
-          editorOptions={editorOptions}
           builtinCustomize={builtinCustomize}
           saving={saving}
         />

@@ -1,5 +1,5 @@
 /**
- * research-brief-update — Patch one section of the project research brief.
+ * research-brief-update — Patch one section of the project research brief (.brief.md).
  */
 import { tool } from "@opencode-ai/plugin";
 import * as fs from "fs";
@@ -69,9 +69,9 @@ async function bridgeCall(
 
 export default tool({
   description:
-    "Update one section of `.prismnext/research/brief.md` by canonical section name. " +
+    "Update one section of project-root `.brief.md` when a matching `##` heading exists. " +
     "Replaces the section body by default; set append=true to append. " +
-    "Do not use generic edit/write on brief.md — use this tool only.",
+    "Do not use generic edit/write on `.brief.md` — use this tool only.",
   args: {
     section: tool.schema
       .string()

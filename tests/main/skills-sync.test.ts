@@ -219,6 +219,8 @@ description: ${id}
 
   it("appends opencode artifact lines to project .gitignore", () => {
     root = mkdtempSync(join(tmpdir(), "prism-skills-"));
+    mkdirSync(join(root, ".git"));
+    writeFileSync(join(root, ".gitignore"), "node_modules/\n", "utf-8");
     syncProjectSkillsIntegration(root);
     const gitignore = readFileSync(join(root, ".gitignore"), "utf-8");
     expect(gitignore).toContain(".opencode/");

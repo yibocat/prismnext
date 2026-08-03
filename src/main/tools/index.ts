@@ -319,26 +319,44 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
   {
     name: TOOL_NAMES.researchBriefRead,
     label: "Research Brief (read)",
-    description: "Read the project research design brief (.prismnext/research/brief.md)",
+    description: "Read the project research brief (`.brief.md` at project root — intellectual spine)",
     category: "project",
     usageHint:
-      "Returns parsed sections: research question, hypotheses, contribution, scope, assumptions, open questions, etc. " +
-      "Creates the template file if missing.",
+      "Returns parsed markdown and any recognized `##` sections. " +
+      "Creates the template file if missing. Sections are optional — the file may be free-form.",
     workflowRules: [
-      "Call before research-design discussions or delegating to research-design-coach.",
-      "Do not use generic read on brief.md — use this tool.",
+      "Call when project intent / through-line should ground the turn — not as session memory.",
+      "Do not use generic read on .brief.md — use this tool.",
     ],
   },
   {
     name: TOOL_NAMES.researchBriefUpdate,
     label: "Research Brief (update)",
-    description: "Update one section of the project research brief",
+    description: "Update one section of the project research brief (when a matching ## heading exists)",
     category: "project",
-    usageHint: "Patch a single canonical section by name. Use append=true to append instead of replace.",
+    usageHint:
+      "Patch a single section by canonical name when that `##` heading exists. " +
+      "Use append=true to append. For wholesale rewrites, the user may edit in Files.",
     workflowRules: [
-      "One section per call — do not rewrite the whole brief.",
-      "Do not use generic edit/write on brief.md — use this tool only.",
+      "One section per call — do not rewrite the whole brief unless the user asked.",
+      "Write section content in first person (I / we) — the researcher's voice, not third-person about the project.",
+      "Do not use generic edit/write on .brief.md — use this tool only.",
       "research-design-coach does not write the brief — orchestrator applies updates after user confirmation.",
+    ],
+  },
+  {
+    name: TOOL_NAMES.projectRuleWrite,
+    label: "Project Rule (write)",
+    description: "Create or update a project rule under .prismnext/agent/rules/",
+    category: "project",
+    usageHint:
+      "Persist stable user preferences (citation style, formatting, standing constraints). " +
+      "Explicit remember → write; heuristic → AskQuestion first. apply=always only.",
+    workflowRules: [
+      "One concern per rule — prefer append to an existing related rule over many tiny rules.",
+      "Do not store secrets, API keys, or one-off turn instructions.",
+      "Do not use generic edit/write on RULE.md — use this tool only.",
+      "Style/format preferences → project rule; project workflow narrative → AGENTS.md.",
     ],
   },
   {
@@ -371,16 +389,16 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "Workspace lab: `<experiment-dir>/<id>/` (clean folder — agent-owned layout).",
     category: "project",
     usageHint:
-      "action=create opens a new experiment (registry + workspace folder + best-effort shared `<experiment-dir>/.venv`); action=list lists experiments; " +
+      "action=create opens a new experiment (registry + workspace folder + best-effort shared `.prismnext/.venv`); action=list lists experiments; " +
       "action=read returns meta + lean recent runs (no stdout/stderr by default) plus oldestRun/latestRun; " +
       "action=append_run logs a run you describe; " +
-      "action=detect_env / open ensure shared `.venv` then snapshot or focus UI. Requires a configured Experiment folder.",
+      "action=detect_env / open ensure shared `.prismnext/.venv` then snapshot or focus UI. Requires a configured Experiment folder.",
     workflowRules: [
       "Do NOT use generic read/write/edit on `.prismnext/experiments/**/meta.json` or runs.jsonl — use this tool only.",
       "Do not write meta.json or runs.jsonl under the Workspace experiment folder — registry only.",
-      "Before create, call research-brief-read and pass briefLinks (sections + hypothesis excerpt).",
-      "Python packages: one shared `<experiment-dir>/.venv` for all islands — `uv pip install` from workspace or island cwd. " +
-      "Never system Python; never create a separate `.venv` under each island.",
+      "On create, briefLinks (sections + hypothesis excerpt) are optional but useful when `.brief.md` has a clear claim — not a completion gate.",
+      "Python: one shared `.prismnext/.venv` for all islands (and other project Python) — `uv pip install` from workspace or island cwd. " +
+      "Never system Python / bare pip; never create a separate `.venv` under each island or under `<experiment-dir>/`.",
       "Workspace layout inside `<experiment-dir>/<id>/` is agent-owned — no prescribed scripts/results dirs.",
       "If no_experiment_folder is returned, ask the user to add an Experiment folder in Settings → Workspace.",
       "Do not delegate experiment reads/writes via Task — run this tool in the orchestrator conversation.",
@@ -392,7 +410,7 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     name: TOOL_NAMES.experimentRun,
     label: "Experiment Run",
     description:
-      "Run a shell command in the experiment island cwd (ensures shared Experiment `.venv`, injects it on PATH) " +
+      "Run a shell command in the experiment island cwd (ensures shared `.prismnext/.venv`, injects it on PATH) " +
       "and append a structured run record to the registry.",
     category: "project",
     usageHint:
@@ -402,7 +420,8 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     workflowRules: [
       "The experiment must already exist — call experiment-log action=create first.",
       "Use when you want execution plus structured logging in one step.",
-      "Python: shared `<experiment-dir>/.venv` is ensured before run; install with `uv pip install` — never system pip.",
+      "Python: shared `.prismnext/.venv` is ensured before run; install with `uv pip install` — never system pip / bare pip.",
+      "Non-Python runtimes: use a project-local toolchain when the user has one; still run via this tool so the run is logged.",
       "Pass artifacts/notes/kind when they matter for provenance — list every important result path (any file kind), not only images.",
       "After long runs, check run.logPath for the full log under the lab folder.",
       "When showing historical run figures, prefer run.artifactSnapshots (frozen images) over mutable working paths.",

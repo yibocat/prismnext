@@ -17,7 +17,6 @@ import {
   resetBuiltinExpertOverride,
   resetBuiltinOrchestratorOverride,
   resetAllBuiltinExpertsToDefaults,
-  getExpertEditorOptions,
 } from "../services/experts-sync";
 import { scheduleExpertsRefresh } from "../services/project-experts-refresh";
 import { DEFAULT_ORCHESTRATOR_ID } from "../services/agent-experts";
@@ -148,13 +147,6 @@ export function registerExpertsHandlers(): void {
       return { orchestrators: listOrchestrators(args.projectPath) };
     },
   );
-
-  ipcMain.handle("experts:getEditorOptions", async (_event, args: { projectPath: string }) => {
-    if (!args.projectPath) {
-      return { skills: [], mcpServers: [], modules: [], commands: [], rules: [] };
-    }
-    return getExpertEditorOptions(args.projectPath);
-  });
 
   ipcMain.handle(
     "experts:resetBuiltinOverride",

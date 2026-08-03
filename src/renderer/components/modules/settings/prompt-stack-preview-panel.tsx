@@ -18,6 +18,8 @@ import {
   SETTINGS_DETAIL_SHELL,
   SETTINGS_ROW_DESC,
 } from "./settings-tokens";
+import { formatTokenCount } from "@shared/token-estimate";
+import { PromptInternalsNotice } from "./prompt-internals-notice";
 
 const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
@@ -100,8 +102,8 @@ function StackSectionCard({
             ) : null}
             <p className="text-[length:var(--font-size-13)] font-medium">{section.label}</p>
             <span className="text-[length:var(--font-size-11)] text-muted-foreground/70 tabular-nums">
-              {t("settings.editor.promptStack.chars", {
-                count: section.charCount.toLocaleString(),
+              {t("settings.editor.promptStack.tokens", {
+                count: formatTokenCount(section.tokenCount),
               })}
             </span>
           </div>
@@ -236,13 +238,21 @@ export function PromptStackPreviewPanel() {
             {t("settings.editor.promptStack.collapseAll")}
           </Button>
         </div>
-        <span className="text-[length:var(--font-size-11)] text-muted-foreground tabular-nums">
-          {t("settings.editor.promptStack.layerCount", { count: preview.sections.length })}
-        </span>
+        <div className="flex items-center gap-3 text-[length:var(--font-size-11)] text-muted-foreground tabular-nums">
+          <span>
+            {t("settings.editor.promptStack.totalTokens", {
+              count: formatTokenCount(preview.totalTokenCount),
+            })}
+          </span>
+          <span>
+            {t("settings.editor.promptStack.layerCount", { count: preview.sections.length })}
+          </span>
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-auto">
         <div className={SETTINGS_DETAIL_SHELL}>
+          <PromptInternalsNotice />
           <div className="space-y-1">
             <p className={SETTINGS_ROW_DESC}>{t("settings.editor.promptStack.intro")}</p>
             {preview.orchestratorName && preview.orchestratorId ? (

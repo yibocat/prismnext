@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { formatTokenCount } from "@shared/token-estimate";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
 import { Button } from "@/components/ui/button";
@@ -169,11 +170,15 @@ export function PromptsRulesSettings() {
 
   const isCustom = agentSystemPrompt.trim().length > 0;
   const [stackSummary, setStackSummary] = useState<{
-    stableChars: number;
+    stableTokens: number;
     sectionCount: number;
   } | null>(null);
   const [agentsMdLength, setAgentsMdLength] = useState(0);
   const [hasAgentsMd, setHasAgentsMd] = useState(false);
+  const [internalsSummary, setInternalsSummary] = useState<{
+    moduleCount: number;
+    toolCount: number;
+  } | null>(null);
 
   const agentsMdPath = projectRoot
     ? `${projectRoot.replace(/[/\\]+$/, "")}/.prismnext/agent/AGENTS.md`
@@ -187,7 +192,7 @@ export function PromptsRulesSettings() {
       );
       const stable = stack.sections.find((s) => s.id === "prism-system");
       setStackSummary({
-        stableChars: stable?.charCount ?? 0,
+        stableTokens: stable?.tokenCount ?? 0,
         sectionCount: stack.sections.length,
       });
     } catch {
@@ -213,6 +218,19 @@ export function PromptsRulesSettings() {
     } catch {
       setAgentsMdLength(0);
       setHasAgentsMd(false);
+    }
+
+    try {
+      const [modules, tools] = await Promise.all([
+        window.electronAPI.settingsGetKnowledgeModules(projectRoot ?? undefined),
+        window.electronAPI.settingsGetBuiltinTools(),
+      ]);
+      setInternalsSummary({
+        moduleCount: modules.length,
+        toolCount: tools.length,
+      });
+    } catch {
+      setInternalsSummary(null);
     }
   }, [projectRoot, agentSystemPrompt, agentsMdPath]);
 
@@ -259,29 +277,12 @@ export function PromptsRulesSettings() {
                     ? t("settings.prompts.rowDesc.customPrompt")
                     : t("settings.prompts.rowDesc.builtinPrompt")}
                 </p>
-                <p className="text-[length:var(--font-size-11)] text-muted-foreground/70 mt-0.5">
-                  {stackSummary
-                    ? t("settings.prompts.rowDesc.stackSummary", {
-                        chars: stackSummary.stableChars.toLocaleString(),
-                        layers: stackSummary.sectionCount,
-                      })
-                    : t("settings.prompts.rowDesc.openForStack")}
-                </p>
               </div>
               <div className={PROMPT_ROW_ACTIONS}>
                 <Button variant="ghost" size="xs" className="shrink-0" onClick={openSystemPrompt}>
                   {isCustom
                     ? t("settings.prompts.viewEditPrompt")
                     : t("settings.prompts.customPrompt")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  className="shrink-0"
-                  disabled={!stackSummary}
-                  onClick={() => openSettingsPanel({ kind: "prompt-stack-preview" })}
-                >
-                  {t("settings.prompts.previewStack")}
                 </Button>
               </div>
             </div>
@@ -339,7 +340,7 @@ export function PromptsRulesSettings() {
                     className="shrink-0"
                     onClick={() => openSettingsPanel({ kind: "research-brief" })}
                   >
-                    {t("settings.prompts.editBrief")}
+                    {t("settings.prompts.viewBrief")}
                   </Button>
                 </div>
               ) : null}
@@ -348,14 +349,56 @@ export function PromptsRulesSettings() {
         </div>
 
         <div>
-          <h3 className={CATEGORY_HEADER}>{t("settings.prompts.knowledgeModules")}</h3>
+          <h3 className={CATEGORY_HEADER}>{t("settings.prompts.sectionAdvanced")}</h3>
           <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-2">
-            {t("settings.prompts.knowledgeDesc")}
+            {t("settings.prompts.sectionAdvancedDesc")}
           </p>
+          {stackSummary ? (
+            <p className="text-[length:var(--font-size-11)] text-muted-foreground/70 mb-2">
+              {t("settings.prompts.advancedSummary", {
+                layers: stackSummary.sectionCount,
+                modules: internalsSummary?.moduleCount ?? "—",
+                tools: internalsSummary?.toolCount ?? "—",
+              })}
+            </p>
+          ) : null}
           <div className={CARD}>
             <div className={ROW}>
               <div className="min-w-0 flex-1 pr-4">
-                <p className={ROW_LABEL}>{t("settings.prompts.builtinModules")}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className={ROW_LABEL}>{t("settings.prompts.previewStack")}</p>
+                  <span className={cn(BADGE, "bg-muted text-muted-foreground normal-case tracking-normal")}>
+                    {t("common.readOnly")}
+                  </span>
+                </div>
+                <p className={ROW_DESC}>
+                  {stackSummary
+                    ? t("settings.prompts.rowDesc.stackSummary", {
+                        tokens: formatTokenCount(stackSummary.stableTokens),
+                        layers: stackSummary.sectionCount,
+                      })
+                    : t("settings.prompts.rowDesc.openForStack")}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="xs"
+                className="shrink-0"
+                disabled={!stackSummary}
+                onClick={() => openSettingsPanel({ kind: "prompt-stack-preview" })}
+              >
+                {t("settings.prompts.previewStack")}
+              </Button>
+            </div>
+
+            <div className={ROW}>
+              <div className="min-w-0 flex-1 pr-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className={ROW_LABEL}>{t("settings.prompts.builtinModules")}</p>
+                  <span className={cn(BADGE, "bg-muted text-muted-foreground normal-case tracking-normal")}>
+                    {t("common.readOnly")}
+                  </span>
+                </div>
                 <p className={ROW_DESC}>{t("settings.prompts.rowDesc.modules")}</p>
               </div>
               <Button
@@ -367,18 +410,15 @@ export function PromptsRulesSettings() {
                 {t("settings.prompts.viewModules")}
               </Button>
             </div>
-          </div>
-        </div>
 
-        <div>
-          <h3 className={CATEGORY_HEADER}>{t("settings.prompts.agentTools")}</h3>
-          <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-2">
-            {t("settings.prompts.toolsDesc")}
-          </p>
-          <div className={CARD}>
             <div className={ROW}>
               <div className="min-w-0 flex-1 pr-4">
-                <p className={ROW_LABEL}>{t("settings.prompts.builtinTools")}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className={ROW_LABEL}>{t("settings.prompts.builtinTools")}</p>
+                  <span className={cn(BADGE, "bg-muted text-muted-foreground normal-case tracking-normal")}>
+                    {t("common.readOnly")}
+                  </span>
+                </div>
                 <p className={ROW_DESC}>{t("settings.prompts.rowDesc.tools")}</p>
               </div>
               <Button

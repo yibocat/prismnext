@@ -1,8 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { compileLatex } from "../../src/main/services/compiler";
+
+vi.mock("electron", () => ({
+  app: {
+    isPackaged: false,
+    getPath: () => tmpdir(),
+    getAppPath: () => process.cwd(),
+  },
+}));
 
 describe("compileLatex bibliography integration", () => {
   let root: string;

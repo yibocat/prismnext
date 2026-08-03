@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
@@ -20,7 +20,7 @@ import type {
   OrchestratorInfo,
   SaveCustomOrchestratorPayload,
 } from "@shared/agent-experts";
-import type { AgentEditorOptions } from "@shared/agent-editor-options";
+import { buildSubagentRosterMarkdown } from "@shared/subagent-roster";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import {
   SETTINGS_DETAIL_ACTIONS,
@@ -36,6 +36,7 @@ import {
   parseProfileModel,
   type ProfileFormState,
 } from "./profile-editor-form";
+import { SettingsModulePromptPreview } from "./settings-module-prompt-preview";
 
 type AgentOrchestratorSlot = Extract<SettingsPanelSlot, { kind: "agent-orchestrator" }>;
 
@@ -51,10 +52,6 @@ function formFromOrchestrator(
     modelProvider: providerId,
     modelId,
     thoughtLevel: detail.thoughtLevel ?? "",
-    skills: detail.skills ?? [],
-    mcpServers: detail.mcpServers ?? [],
-    modules: detail.modules ?? [],
-    rules: detail.rules ?? [],
   };
 }
 
@@ -72,11 +69,9 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
   const [form, setForm] = useState<ProfileFormState>(emptyProfileForm());
   const [allowedExperts, setAllowedExperts] = useState<string[]>([]);
   const [experts, setExperts] = useState<ExpertInfo[]>([]);
-  const [editorOptions, setEditorOptions] = useState<AgentEditorOptions | null>(null);
 
   useEffect(() => {
     if (!projectRoot) {
-      setEditorOptions(null);
       setForm(emptyProfileForm());
       setAllowedExperts([]);
       setLoading(false);
@@ -91,15 +86,15 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
       setLoading(true);
       setDeleteDialogOpen(false);
       try {
-        const [options, expertList] = await Promise.all([
-          window.electronAPI.expertsGetEditorOptions(root),
-          window.electronAPI.expertsList(root),
-        ]);
+        const expertList = await window.electronAPI.expertsList(root);
         if (cancelled) return;
-        setEditorOptions(options);
         setExperts(expertList.filter((e) => e.enabled));
 
         const enabledExpertIds = expertList.filter((e) => e.enabled).map((e) => e.id);
+        const pruneAllowed = (ids: string[] | undefined) =>
+          ids?.length
+            ? ids.filter((id) => enabledExpertIds.includes(id))
+            : enabledExpertIds;
 
         if (isNew) {
           setForm(emptyProfileForm());
@@ -125,14 +120,8 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
             modelProvider: providerId,
             modelId,
             thoughtLevel: detail.thoughtLevel ?? "",
-            skills: detail.skills ?? [],
-            mcpServers: detail.mcpServers ?? [],
-            modules: detail.modules ?? [],
-            rules: detail.rules ?? [],
           });
-          setAllowedExperts(
-            detail.allowedExperts?.length ? detail.allowedExperts : enabledExpertIds,
-          );
+          setAllowedExperts(pruneAllowed(detail.allowedExperts));
           setLoading(false);
           return;
         }
@@ -145,9 +134,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
           return;
         }
         setForm(formFromOrchestrator(detail));
-        setAllowedExperts(
-          detail.allowedExperts?.length ? detail.allowedExperts : enabledExpertIds,
-        );
+        setAllowedExperts(pruneAllowed(detail.allowedExperts));
       } catch {
         if (!cancelled) {
           toast.error(t("settings.editor.orchestrator.toast.loadFailed"));
@@ -177,10 +164,6 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
 
     setSaving(true);
     try {
-      const selectableModuleKeys = new Set(
-        editorOptions?.modules.filter((m) => m.selectableInProfile).map((m) => m.key) ?? [],
-      );
-      const modules = form.modules.filter((key) => selectableModuleKeys.has(key));
       const model = formatProfileModel(form.modelProvider, form.modelId);
 
       if (builtinCustomize && form.id) {
@@ -189,10 +172,6 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
           allowedExperts,
           model,
           thoughtLevel: form.thoughtLevel.trim() || undefined,
-          skills: form.skills,
-          mcpServers: form.mcpServers,
-          modules,
-          rules: form.rules,
         });
       } else {
         const payload: SaveCustomOrchestratorPayload = {
@@ -203,10 +182,6 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
           allowedExperts,
           model,
           thoughtLevel: form.thoughtLevel.trim() || undefined,
-          skills: form.skills,
-          mcpServers: form.mcpServers,
-          modules,
-          rules: form.rules,
         };
         await window.electronAPI.orchestratorsSaveCustom(projectRoot, payload);
       }
@@ -220,7 +195,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
     } finally {
       setSaving(false);
     }
-  }, [projectRoot, builtinCustomize, form, editorOptions, allowedExperts, isNew, closePanel, t]);
+  }, [projectRoot, builtinCustomize, form, allowedExperts, isNew, closePanel, t]);
 
   const resetBuiltinCustomization = async () => {
     if (!projectRoot || !form.id || !builtinCustomize) return;
@@ -254,6 +229,16 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
       setSaving(false);
     }
   };
+
+  const subagentRosterMarkdown = useMemo(() => {
+    const refs = allowedExperts
+      .filter((id) => experts.some((e) => e.id === id))
+      .map((id) => {
+        const expert = experts.find((e) => e.id === id)!;
+        return { id: expert.id, name: expert.name, description: expert.description };
+      });
+    return buildSubagentRosterMarkdown(refs);
+  }, [allowedExperts, experts]);
 
   if (!projectRoot) {
     return (
@@ -289,7 +274,6 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
         <ProfileEditorForm
           form={form}
           onFormChange={setForm}
-          editorOptions={editorOptions}
           builtinCustomize={builtinCustomize}
           saving={saving}
         />
@@ -300,7 +284,9 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
             allowedExperts.length === 0
               ? t("settings.editor.orchestrator.noneSelected")
               : t("settings.editor.orchestrator.allowedCount", {
-                  selected: allowedExperts.length,
+                  selected: allowedExperts.filter((id) =>
+                    expertRows.some((e) => e.id === id),
+                  ).length,
                   total: expertRows.length,
                 })
           }
@@ -346,6 +332,20 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
               })
             )}
           </div>
+        </CollapsibleFormSection>
+
+        <CollapsibleFormSection
+          title={t("settings.editor.orchestrator.subagentRoster")}
+          summary={t("settings.editor.orchestrator.allowedCount", {
+            selected: allowedExperts.filter((id) => expertRows.some((e) => e.id === id)).length,
+            total: expertRows.length,
+          })}
+          defaultOpen
+        >
+          <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
+            {t("settings.editor.orchestrator.subagentRosterDesc")}
+          </p>
+          <SettingsModulePromptPreview content={subagentRosterMarkdown} />
         </CollapsibleFormSection>
 
         <div className={SETTINGS_DETAIL_ACTIONS}>

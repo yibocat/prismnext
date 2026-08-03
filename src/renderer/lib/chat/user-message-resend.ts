@@ -9,6 +9,9 @@ import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useCheckpointStore } from "@/stores/checkpoint-store";
 import { useCommandStore } from "@/stores/command-store";
+import { useSettingsStore } from "@/stores/settings-store";
+import { applyVisionFallbackForSend, visionFallbackErrorMessage } from "@/lib/chat/vision-fallback-send";
+import { toast } from "sonner";
 
 /** Display parts for editing a historical user bubble. */
 export function extractUserMessageEditParts(msg: ChatStreamMessage): {
@@ -93,16 +96,43 @@ export async function resendFromUserTurn(opts: {
   });
 
   const expandCommand = useCommandStore.getState().expandCommand;
-  const compiled = await compileComposerPrompt(parts, expandCommand, [], attachments);
-  const displayBlocks = buildComposerDisplayBlocks(parts, attachments);
+  const hasImages = attachments.some((a) => a.kind === "image");
+  if (hasImages) {
+    // Match composer: stream on early so the first wait frame is “planning”, not识图.
+    store._setStreaming(tabId, true);
+    store._setPreparePhase(tabId, null);
+  }
 
-  await store.sendPrompt(compiled.promptText, displayBlocks, false, {
+  const compiled = await compileComposerPrompt(parts, expandCommand, [], attachments);
+  let displayBlocks = buildComposerDisplayBlocks(parts, attachments);
+  let promptText = compiled.promptText;
+  let promptImages = compiled.promptImages;
+
+  if (compiled.promptImages.length > 0) {
+    try {
+      const applied = await applyVisionFallbackForSend({
+        promptText: compiled.promptText,
+        promptImages: compiled.promptImages,
+        displayBlocks,
+        settings: useSettingsStore.getState().settings,
+      });
+      promptText = applied.promptText;
+      promptImages = applied.promptImages;
+      displayBlocks = applied.displayBlocks;
+    } catch (err) {
+      store._setStreaming(tabId, false);
+      toast.error(visionFallbackErrorMessage(err));
+      return;
+    }
+  }
+
+  await store.sendPrompt(promptText, displayBlocks, false, {
     skillIds: compiled.skillIds,
     mcpServerAllowlist: compiled.mcpServerNames,
     hasPaperSnippets: compiled.paperSnippetCount > 0,
     selectedExpertIds: compiled.selectedExpertIds,
     orchestratorId: store.tabs.find((t) => t.id === tabId)?.orchestratorId ?? null,
-    promptImages: compiled.promptImages,
+    promptImages,
     promptFiles: compiled.promptFiles,
   });
 }

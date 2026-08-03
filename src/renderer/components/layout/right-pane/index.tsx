@@ -1,6 +1,7 @@
-import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { RightTab } from "@/lib/workspace/mode-registry";
+import { RightAreaLauncher } from "@/components/layout/right-area-launcher";
+import { useLayoutStore } from "@/stores/layout-store";
 import { PaneContent } from "./content";
 
 interface RightPaneProps {
@@ -16,18 +17,11 @@ interface RightPaneProps {
  * that forced active-only mounting in v0.4.4.
  */
 export function RightPane({ tabs, activeTabId }: RightPaneProps) {
-  const { t } = useTranslation();
+  const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
 
   if (tabs.length === 0) {
-    return (
-      <div data-surface="content" className="flex h-full flex-col min-w-0">
-        <div className="flex flex-1 items-center justify-center">
-          <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
-            {t("shell.rightArea.openFileToStart")}
-          </p>
-        </div>
-      </div>
-    );
+    if (!rightAreaExpanded) return null;
+    return <RightAreaLauncher />;
   }
 
   return (

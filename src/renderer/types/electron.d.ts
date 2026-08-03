@@ -1347,6 +1347,7 @@ export interface ElectronAPI {
     description: string;
     skillDirRel: string;
     enabled: boolean;
+    tokenCount: number;
     installOrigin?:
       | { adapter: "github"; repo: string; ref: string; path: string }
       | { adapter: "discovery"; indexUrl: string };
@@ -1656,7 +1657,6 @@ export interface ElectronAPI {
     projectPath: string,
     orchestratorId: string,
   ) => Promise<{ orchestrators: import("@shared/agent-experts").OrchestratorInfo[] }>;
-  expertsGetEditorOptions: (projectPath: string) => Promise<import("@shared/agent-editor-options").AgentEditorOptions>;
   expertsResetBuiltinOverride: (
     projectPath: string,
     expertId: string,
@@ -1771,8 +1771,6 @@ export interface ElectronAPI {
   }) => Promise<{ success: boolean }>;
   sessionGetContext: (projectPath: string, sessionId: string) => Promise<{
     tokens: number;
-    breakdown: Record<string, number>;
-    schema: { key: string; label: string; color: string; description?: string; order?: number }[];
     updatedAt: number;
     windowSize?: number | null;
     source?: "usage_update" | "prompt_usage" | "estimate";
@@ -1854,8 +1852,6 @@ export interface ElectronAPI {
     contextUsed?: number | null;
     contextWindowSize?: number | null;
     contextSource?: "usage_update" | "prompt_usage" | "estimate" | null;
-    contextBreakdown?: Record<string, number> | null;
-    categorySchema?: { key: string; label: string; color: string; description?: string; order?: number }[] | null;
     promptStale?: boolean;
     planDraftMissing?: boolean;
   }) => void) => () => void;
@@ -1897,6 +1893,8 @@ export interface ElectronAPI {
     selectableInProfile: boolean;
     injectPath: string;
     contentPreview: string;
+    charCount: number;
+    tokenCount: number;
   }>>;
   settingsGetBuiltinTools: () => Promise<Array<{
     name: string;
@@ -1918,15 +1916,19 @@ export interface ElectronAPI {
     orchestratorId?: string;
     orchestratorName?: string;
     markdown: string;
+    tokenEncoding: import("../../shared/token-estimate").PromptTokenEncoding;
+    totalTokenCount: number;
     sections: Array<{
       id: string;
       label: string;
       injectPath: string;
       fileHint?: string;
       charCount: number;
+      tokenCount: number;
       content: string;
     }>;
   }>;
+  settingsCountPromptTokens: (text: string) => Promise<import("../../shared/token-estimate").PromptTokenEstimate>;
   settingsComputePromptFingerprint: (projectRoot?: string) => Promise<string>;
   settingsGetDefaultPersona: () => Promise<string>;
 

@@ -542,7 +542,7 @@ describe("partsToAgentText for experiment-run", () => {
       },
     ]);
     expect(text).toContain("Paper reverse-link");
-    expect(text).toContain("![fig.png](experiment/exp-plot/results/fig.png)");
+    expect(text).toContain("![fig.png](results/fig.png)");
   });
 });
 

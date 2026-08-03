@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildFullFileGitDiffSnippet,
   chunksIntersectingSelection,
   expandChunksToHunks,
   formatUnifiedPatch,
@@ -108,5 +109,15 @@ describe("diff-hunk-snippet", () => {
     expect(gitDiffSnippetTooltip(3, 2)).toBe("含 3 行删除 + 2 行新增");
     expect(gitDiffSnippetTooltip(0, 4)).toBe("含 4 行新增");
     expect(gitDiffSnippetTooltip(0, 0)).toBe("无改动行");
+  });
+
+  it("buildFullFileGitDiffSnippet covers entire file change", () => {
+    const snippet = buildFullFileGitDiffSnippet("src/a.ts", oldText, newText);
+    expect(snippet).not.toBeNull();
+    expect(snippet!.hunks).toHaveLength(1);
+    expect(snippet!.addedLineCount).toBeGreaterThan(0);
+    expect(snippet!.removedLineCount).toBeGreaterThan(0);
+    expect(snippet!.hunks[0]!.lines.some((l) => l.startsWith("+"))).toBe(true);
+    expect(snippet!.hunks[0]!.lines.some((l) => l.startsWith("-"))).toBe(true);
   });
 });

@@ -143,7 +143,7 @@ function ReaderDocumentLayers({ projectRoot, paper }: LiteratureReaderProps) {
 
   return (
     <>
-      <LiteratureBlockPointerCapture />
+      <LiteratureBlockPointerCapture paper={paper} />
       <LiteraturePdfActionMenu paper={paper} onHighlight={(h) => void handleHighlight(h)} />
       <ReaderPageFocusListener />
     </>

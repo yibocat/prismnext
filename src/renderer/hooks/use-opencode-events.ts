@@ -299,13 +299,13 @@ export function useOpenCodeEvents() {
       switch (type) {
         case "session.usage": {
           if (data?.cleared) {
-            chatStore._setContextTokens(tabId, null, undefined, undefined, { clear: true });
+            chatStore._setContextTokens(tabId, null, { clear: true });
             break;
           }
           const used = typeof data?.used === "number" ? data.used : null;
           const size = typeof data?.size === "number" ? data.size : null;
           if (used == null) break;
-          chatStore._setContextTokens(tabId, used, undefined, undefined, {
+          chatStore._setContextTokens(tabId, used, {
             windowSize: size,
             source: data?.source === "usage_update" ? "usage_update" : "prompt_usage",
           });
@@ -987,7 +987,7 @@ export function useOpenCodeEvents() {
     });
 
     // ─── Chat Complete Handler ───
-    const unsubComplete = window.electronAPI.onChatComplete(({ tabId, success, error, errorCode, emptyTurn, tokenUsage, contextUsed, contextWindowSize, contextSource, contextBreakdown, categorySchema, promptStale, planDraftMissing }) => {
+    const unsubComplete = window.electronAPI.onChatComplete(({ tabId, success, error, errorCode, emptyTurn, tokenUsage, contextUsed, contextWindowSize, contextSource, promptStale, planDraftMissing }) => {
       const chatStore = useChatStore.getState();
       const generationAtComplete =
         chatStore.tabs.find((t) => t.id === tabId)?.streamGeneration ?? 0;
@@ -1036,19 +1036,10 @@ export function useOpenCodeEvents() {
         chatStore._setContextTokens(
           tabId,
           used,
-          contextBreakdown ?? undefined,
-          categorySchema ?? undefined,
           {
             windowSize: typeof contextWindowSize === "number" ? contextWindowSize : undefined,
             source: contextSource ?? (tokenUsage ? "prompt_usage" : null),
           },
-        );
-      } else if (contextBreakdown || categorySchema) {
-        chatStore._setContextTokens(
-          tabId,
-          ctxTab?.contextTokens ?? null,
-          contextBreakdown ?? undefined,
-          categorySchema ?? undefined,
         );
       }
 

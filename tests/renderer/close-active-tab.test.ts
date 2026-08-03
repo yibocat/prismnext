@@ -12,8 +12,18 @@ vi.mock("@/stores/right-panel-store", () => ({
 vi.mock("@/lib/workspace/mode-registry", () => ({
   modeRegistry: { get: vi.fn(() => null) },
 }));
+vi.mock("@/lib/workspace/right-area-layout", () => ({
+  closeRightArea: vi.fn(),
+}));
+vi.mock("@/lib/workspace/left-nav/panel-refs", () => ({
+  getLeftNavPanelRefs: () => ({ centerRef: null, rightAreaRef: null }),
+}));
 
-import { closeActiveTabFromShortcut } from "@/lib/workspace/close-active-tab";
+import {
+  closeActiveTabFromShortcut,
+  collapseRightAreaWhenEmpty,
+} from "@/lib/workspace/close-active-tab";
+import { closeRightArea } from "@/lib/workspace/right-area-layout";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
@@ -61,22 +71,14 @@ describe("closeActiveTabFromShortcut", () => {
   });
 
   it("collapses RightArea when expanded with no tabs", () => {
-    const setRightAreaExpanded = vi.fn();
-    const setEditorMaximized = vi.fn();
     layoutGet.mockReturnValue({
       rightAreaExpanded: true,
       editorMaximized: true,
-      setEditorMaximized,
-      setRightAreaExpanded,
-      clearPendingRightAreaRestore: vi.fn(),
-      setRightAreaWidth: vi.fn(),
-      rightAreaWidth: 400,
     });
     rpGet.mockReturnValue({ tabs: [], activeTabId: null, requestCloseTab: vi.fn() });
 
     expect(closeActiveTabFromShortcut()).toBe("handled");
-    expect(setEditorMaximized).toHaveBeenCalledWith(false);
-    expect(setRightAreaExpanded).toHaveBeenCalledWith(false);
+    expect(closeRightArea).toHaveBeenCalled();
   });
 
   it("closes chat tab when RightArea collapsed and multiple tabs", () => {
@@ -138,5 +140,32 @@ describe("closeActiveTabFromShortcut", () => {
     });
 
     expect(closeActiveTabFromShortcut()).toBe("close-window");
+  });
+});
+
+describe("collapseRightAreaWhenEmpty", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("collapses when expanded and no tabs remain", () => {
+    layoutGet.mockReturnValue({ rightAreaExpanded: true });
+    rpGet.mockReturnValue({ tabs: [] });
+    collapseRightAreaWhenEmpty();
+    expect(closeRightArea).toHaveBeenCalled();
+  });
+
+  it("no-ops when tabs still open", () => {
+    layoutGet.mockReturnValue({ rightAreaExpanded: true });
+    rpGet.mockReturnValue({ tabs: [{ id: "t1" }] });
+    collapseRightAreaWhenEmpty();
+    expect(closeRightArea).not.toHaveBeenCalled();
+  });
+
+  it("no-ops when RightArea already collapsed", () => {
+    layoutGet.mockReturnValue({ rightAreaExpanded: false });
+    rpGet.mockReturnValue({ tabs: [] });
+    collapseRightAreaWhenEmpty();
+    expect(closeRightArea).not.toHaveBeenCalled();
   });
 });

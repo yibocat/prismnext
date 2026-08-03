@@ -16,7 +16,7 @@ describe("experimentRunFigurePaths", () => {
       artifacts: ["results/loss.png", "metrics.csv", "fig.jpg"],
     });
     expect(paths).toEqual([
-      "experiment/exp-test/results/loss.png",
+      "results/loss.png",
       "experiment/exp-test/fig.jpg",
     ]);
   });
@@ -57,7 +57,7 @@ describe("formatExperimentRunAgentContext", () => {
     });
     expect(text).toContain("Paper reverse-link");
     expect(text).toContain("Draft a Methods sentence");
-    expect(text).toContain("![loss.png](experiment/exp-test/results/loss.png)");
+    expect(text).toContain("![loss.png](results/loss.png)");
     expect(text).toContain("fullLog: experiment/exp-test/logs/run-20260707-120000-a1b2.log");
     expect(text).not.toContain("![metrics.csv]");
   });

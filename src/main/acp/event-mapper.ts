@@ -52,8 +52,6 @@ import {
   loadSessionContext,
   persistSessionContext,
 } from "../services/session-context-store";
-import { CONTEXT_CATEGORY_SCHEMA } from "../services/context-constants";
-
 const log = createLogger("event-mapper", "agent");
 
 /**
@@ -1910,8 +1908,6 @@ export class EventMapper {
           tokens: usageUpdate.used,
           windowSize: usageUpdate.size,
           source: "usage_update",
-          breakdown: prev?.breakdown ?? {},
-          schema: prev?.schema?.length ? prev.schema : CONTEXT_CATEGORY_SCHEMA,
           updatedAt: Date.now(),
           promptFingerprint: prev?.promptFingerprint,
           hasSystemPromptBlock: prev?.hasSystemPromptBlock,

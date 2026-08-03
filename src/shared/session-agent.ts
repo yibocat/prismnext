@@ -2,7 +2,7 @@ import {
   buildPermissionRulesForMode,
   getToolPermissionEntry,
 } from "../main/services/tool-permission-registry";
-import { RESEARCH_BRIEF_REL } from "./research-brief";
+import { LEGACY_RESEARCH_BRIEF_REL, RESEARCH_BRIEF_REL } from "./research-brief";
 import {
   isCanonicalSessionDraftPath,
   isResearchPlanDraftPath,
@@ -68,14 +68,12 @@ export function planDraftPathRedirectNote(sessionId: string): string {
   );
 }
 
-/** True when path is the living research brief (relative or under projectRoot). */
-export function isResearchBriefPath(
-  filePath: string | null | undefined,
+function matchesBriefRel(
+  normalized: string,
+  briefRel: string,
   projectRoot?: string | null,
 ): boolean {
-  if (!filePath?.trim()) return false;
-  const normalized = filePath.replace(/\\/g, "/").replace(/\/+/g, "/");
-  const brief = RESEARCH_BRIEF_REL.replace(/\\/g, "/");
+  const brief = briefRel.replace(/\\/g, "/");
   if (normalized === brief || normalized.endsWith(`/${brief}`)) return true;
   if (projectRoot?.trim()) {
     const root = projectRoot.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -87,10 +85,52 @@ export function isResearchBriefPath(
   return false;
 }
 
+/** True when path is the living research brief (relative or under projectRoot). */
+export function isResearchBriefPath(
+  filePath: string | null | undefined,
+  projectRoot?: string | null,
+): boolean {
+  if (!filePath?.trim()) return false;
+  const normalized = filePath.replace(/\\/g, "/").replace(/\/+/g, "/");
+  return (
+    matchesBriefRel(normalized, RESEARCH_BRIEF_REL, projectRoot)
+    || matchesBriefRel(normalized, LEGACY_RESEARCH_BRIEF_REL, projectRoot)
+  );
+}
+
 export function researchBriefEditRedirectNote(): string {
   return (
     `Do not use generic edit/write on \`${RESEARCH_BRIEF_REL}\`. `
     + `Use research-brief-read / research-brief-update only.`
+  );
+}
+
+export const PRISM_RULES_REL = ".prismnext/agent/rules";
+const PROJECT_RULE_FILE = "RULE.md";
+
+/** True when path is a project RULE.md under `.prismnext/agent/rules/`. */
+export function isProjectRulePath(
+  filePath: string | null | undefined,
+  projectRoot?: string | null,
+): boolean {
+  if (!filePath?.trim()) return false;
+  const normalized = filePath.replace(/\\/g, "/").replace(/\/+/g, "/");
+  const relSuffix = `/${PRISM_RULES_REL}/`;
+  const endsWithRule = normalized.endsWith(`/${PROJECT_RULE_FILE}`);
+  if (!endsWithRule) return false;
+  if (normalized.includes(relSuffix)) return true;
+  if (projectRoot?.trim()) {
+    const root = projectRoot.replace(/\\/g, "/").replace(/\/+$/, "");
+    const rulesRoot = `${root}/${PRISM_RULES_REL}/`;
+    if (normalized.startsWith(rulesRoot)) return true;
+  }
+  return false;
+}
+
+export function projectRuleEditRedirectNote(): string {
+  return (
+    `Do not use generic edit/write on \`${PRISM_RULES_REL}/*/RULE.md\`. `
+    + `Use project-rule-write only.`
   );
 }
 

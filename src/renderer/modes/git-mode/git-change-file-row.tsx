@@ -24,6 +24,11 @@ import {
 import { isGitChangeDeletedFile, isGitChangeNewFile } from "./git-change-status";
 import { preserveGitChangesScroll } from "./git-changes-tree";
 import { navigateFileTreeToPath } from "@/lib/files/navigate-file-tree";
+import { setComposerDragData } from "@/lib/chat/composer-drag";
+import { gitDiffDragPayload } from "@/lib/chat/git-diff-drag";
+import { buildFullFileGitDiffSnippet } from "@/lib/git/diff-hunk-snippet";
+import { useGitDiffPrefsStore } from "@/stores/git-diff-prefs-store";
+import { toast } from "sonner";
 
 export interface GitChangeFileRowProps {
   gitRoot: string;
@@ -108,6 +113,42 @@ export const GitChangeFileRow = memo(function GitChangeFileRow({
   const showNew = isGitChangeNewFile(file);
   const showDeleted = !showNew && isGitChangeDeletedFile(file);
 
+  const prefetchDiff = useCallback(() => {
+    if (file.diff === null && !file.diffLoading) {
+      void loadDiff(gitRoot, file.id, file.path);
+    }
+  }, [file.diff, file.diffLoading, file.id, file.path, gitRoot, loadDiff]);
+
+  const handleRowDragStart = useCallback(
+    (e: React.DragEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("input, button")) {
+        e.preventDefault();
+        return;
+      }
+      if (!file.diff) {
+        e.preventDefault();
+        void loadDiff(gitRoot, file.id, file.path);
+        toast.info(t("git.changes.loadingDiffDrag", { defaultValue: "Loading diff… try dragging again" }));
+        return;
+      }
+      const layout = useGitDiffPrefsStore.getState().layout;
+      const snippet = buildFullFileGitDiffSnippet(
+        file.path,
+        file.diff.oldContent,
+        file.diff.newContent,
+        layout,
+      );
+      if (!snippet) {
+        e.preventDefault();
+        return;
+      }
+      e.stopPropagation();
+      setComposerDragData(e.dataTransfer, [gitDiffDragPayload(snippet)]);
+    },
+    [file, gitRoot, loadDiff, t],
+  );
+
   return (
     <div
       id={`git-change-${file.id}`}
@@ -119,6 +160,9 @@ export const GitChangeFileRow = memo(function GitChangeFileRow({
           isExpanded && gitPanelExpandedRowStickyClass,
           isExpanded && "bg-background",
         )}
+        draggable
+        onMouseDown={prefetchDiff}
+        onDragStart={handleRowDragStart}
       >
         <div
           className="flex shrink-0 cursor-pointer items-center gap-2"

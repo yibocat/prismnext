@@ -7,7 +7,6 @@ import { EventMapper } from "../acp/event-mapper";
 import { createLogger } from "../services/logger";
 import { promptManager } from "../prompts";
 import { buildPromptContext } from "../prompts/context";
-import { CONTEXT_CATEGORY_SCHEMA, buildTwoBucketBreakdown } from "../services/context-constants";
 import {
   clearSessionContextUsage,
   loadSessionContext,
@@ -45,7 +44,6 @@ import {
   getSessionMissingTaskAllowlist,
   deferTaskAllowlistFollowUp,
 } from "../services/chat-session-registry";
-import { formatTaskError } from "../../shared/task-error-codes";
 import { getPaper } from "../services/literature-service";
 import {
   buildIntensiveReadingInstruction,
@@ -369,7 +367,6 @@ export function registerChatHandlers(): void {
           resolveOrchestratorId,
           getOrchestrator,
           getExpert,
-          getOrchestratorRuntimeFilters,
         } = await import("../services/experts-sync");
 
         orchestratorId = resolveOrchestratorId(args.projectPath, args.orchestratorId);
@@ -385,14 +382,7 @@ export function registerChatHandlers(): void {
           thoughtLevel = orchestrator.thoughtLevel;
         }
 
-        const orchestratorRuleAllowlist = getOrchestratorRuntimeFilters(
-          args.projectPath,
-          orchestratorId,
-        )?.rules;
-
-        promptCtx = await buildPromptContext(args.projectPath, {
-          ruleAllowlist: orchestratorRuleAllowlist,
-        });
+        promptCtx = await buildPromptContext(args.projectPath);
 
         const { ensureProjectChatPrewarm } = await import("../services/project-chat-prewarm");
         emitChatPrepare(tabId, "syncing_project");
@@ -434,22 +424,8 @@ export function registerChatHandlers(): void {
           if (preamble) userPrompt = `${userPrompt}\n\n${preamble}`;
         }
 
-        const filters = getOrchestratorRuntimeFilters(args.projectPath, orchestratorId);
-        const orchestratorSkills = filters?.skills;
-        const composerSkills = args.skillIds?.filter(Boolean) ?? [];
-        const skillAllowlist =
-          composerSkills.length > 0
-            ? [...new Set([...(orchestratorSkills ?? []), ...composerSkills])]
-            : orchestratorSkills;
         const { refreshProjectSkillsIntegrationIfNeeded } = await import("../services/project-skills-refresh");
-        await refreshProjectSkillsIntegrationIfNeeded(args.projectPath, {
-          profileSkillAllowlist: skillAllowlist,
-        });
-      } else if (args.projectPath && args.skillIds?.length) {
-        const { refreshProjectSkillsIntegrationIfNeeded } = await import("../services/project-skills-refresh");
-        await refreshProjectSkillsIntegrationIfNeeded(args.projectPath, {
-          profileSkillAllowlist: args.skillIds,
-        });
+        await refreshProjectSkillsIntegrationIfNeeded(args.projectPath);
       }
 
       // Connect / apply credentials last — at most one spawn before session/new.
@@ -467,29 +443,8 @@ export function registerChatHandlers(): void {
       const expertsSync = args.projectPath
         ? await import("../services/experts-sync")
         : null;
-      const orchestratorMcpAllowlist =
-        orchestratorId && args.projectPath && expertsSync
-          ? expertsSync.getOrchestratorRuntimeFilters(
-              args.projectPath,
-              orchestratorId,
-            )?.mcpServers
-          : undefined;
-      // @Expert MCP needs (e.g. literature-synthesizer → paper-search) load this
-      // turn only — not at session/new.
-      const expertMcpIds: string[] = [];
-      if (args.projectPath && expertsSync && args.selectedExpertIds?.length) {
-        for (const id of args.selectedExpertIds) {
-          const mcps = expertsSync.getExpertRuntimeFilters(args.projectPath, id)?.mcpServers;
-          if (mcps?.length) expertMcpIds.push(...mcps);
-        }
-      }
       const composerMcps = args.mcpServerAllowlist?.filter(Boolean) ?? [];
-      const mergedMcp = [...new Set([
-        ...(orchestratorMcpAllowlist ?? []),
-        ...expertMcpIds,
-        ...composerMcps,
-      ])];
-      const mcpServerAllowlist = mergedMcp.length > 0 ? mergedMcp : undefined;
+      const mcpServerAllowlist = composerMcps.length > 0 ? composerMcps : undefined;
 
       const assembledPrompt = promptManager.compose(promptCtx);
       const projectRulesPrompt = promptManager.composeProjectRules(promptCtx);
@@ -605,16 +560,6 @@ export function registerChatHandlers(): void {
       if (turnContextAppendix) {
         userPrompt = `${userPrompt}\n\n${turnContextAppendix}`;
       }
-
-      // ── Compute context breakdown for the ring indicator ──
-      // Estimate token counts per prompt category (chars / 4 approximation).
-      // The "conversation" bucket is computed from OpenCode's reported
-      // input_tokens minus system prompt estimates — the difference is the
-      // actual chat history that the model sees.
-      const sysBreakdown = assembledPrompt
-        ? promptManager.estimateTokenBreakdown(promptCtx)
-        : {};
-      const sysTokensEstimate = Object.values(sysBreakdown).reduce((a, b) => a + b, 0);
 
       const priorContext = existingSessionId && args.projectPath
         ? loadSessionContext(args.projectPath, existingSessionId)
@@ -885,7 +830,7 @@ export function registerChatHandlers(): void {
         return;
       }
 
-      // ── OpenCode ring numbers + optional two-bucket Prism estimate ──
+      // ── OpenCode ring numbers (usage_update preferred) ──
       const inputTokens = (usage as any)?.input_tokens ?? 0;
       const cacheCreation = (usage as any)?.cache_creation_input_tokens ?? 0;
       const cacheRead = (usage as any)?.cache_read_input_tokens ?? 0;
@@ -907,42 +852,7 @@ export function registerChatHandlers(): void {
             ? ("prompt_usage" as const)
             : null;
 
-      // ── Two-bucket estimate (optional UI) ──
-      // prism-side: chars/4 of Prism prompts + on-disk skills + mcp.json
-      // session-rest: OpenCode used − prism-side (conversation, OC system/tools, cache…)
-      // Do NOT invent Agent Base / Messages theater from cacheRead.
-      let skillsTokens = 0;
-      if (args.projectPath) {
-        try {
-          const skillsDir = path.join(args.projectPath, ".prismnext", "agent", "skills");
-          if (fs.existsSync(skillsDir)) {
-            for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
-              if (!entry.isDirectory()) continue;
-              const skillMd = path.join(skillsDir, entry.name, "SKILL.md");
-              if (!fs.existsSync(skillMd)) continue;
-              const content = fs.readFileSync(skillMd, "utf-8");
-              skillsTokens += Math.max(1, Math.round(content.length / 4));
-            }
-          }
-        } catch { /* best-effort */ }
-      }
-
-      let mcpTokens = 0;
-      if (args.projectPath) {
-        try {
-          const mcpPath = path.join(args.projectPath, ".prismnext", "agent", "mcp.json");
-          if (fs.existsSync(mcpPath)) {
-            const raw = fs.readFileSync(mcpPath, "utf-8");
-            mcpTokens = Math.max(1, Math.round(raw.length / 3));
-          }
-        } catch { /* best-effort */ }
-      }
-
-      const prismSideEstimate = sysTokensEstimate + skillsTokens + mcpTokens;
-      const breakdownUsed = ringUsed ?? (reportedTotal > 0 ? reportedTotal : 0);
-      const fullBreakdown = buildTwoBucketBreakdown(breakdownUsed, prismSideEstimate);
-
-      // Ring numbers: OpenCode only — never invent used from chars/4 estimates.
+      // Ring numbers: OpenCode only — never invent used from local estimates.
       const effectiveUsage =
         usage && reportedTotal > 0
           ? usage
@@ -959,10 +869,6 @@ export function registerChatHandlers(): void {
       log.info(`Prompt complete: sessionId=${sessionId} ringUsed=${ringUsed} reportedTotal=${reportedTotal}`, {
         ringSource,
         ringSize,
-        categories: Object.keys(fullBreakdown).length,
-        samples: Object.fromEntries(
-          Object.entries(fullBreakdown).filter(([, v]) => v > 0),
-        ),
       });
 
       // Parent turn can end_turn while a Task is still "pending link" in Prism.
@@ -975,8 +881,6 @@ export function registerChatHandlers(): void {
         tokens: ringUsed ?? (reportedTotal > 0 ? reportedTotal : (prevCtx?.tokens ?? 0)),
         windowSize: ringSize ?? prevCtx?.windowSize ?? null,
         source: ringSource ?? prevCtx?.source,
-        breakdown: fullBreakdown,
-        schema: CONTEXT_CATEGORY_SCHEMA,
         updatedAt: Date.now(),
         hasSystemPromptBlock: false,
         promptFingerprint: currentFingerprint,
@@ -1079,8 +983,6 @@ export function registerChatHandlers(): void {
           contextUsed: ringUsed,
           contextWindowSize: ringSize,
           contextSource: ringSource,
-          contextBreakdown: fullBreakdown,
-          categorySchema: CONTEXT_CATEGORY_SCHEMA,
           promptStale,
           planDraftMissing: planDraftMissingThisTurn,
         });
@@ -1094,8 +996,6 @@ export function registerChatHandlers(): void {
           contextUsed: ringUsed,
           contextWindowSize: ringSize,
           contextSource: ringSource,
-          contextBreakdown: fullBreakdown,
-          categorySchema: CONTEXT_CATEGORY_SCHEMA,
           promptStale,
           planDraftMissing: planDraftMissingThisTurn,
           emptyTurn: true,
@@ -1109,8 +1009,6 @@ export function registerChatHandlers(): void {
           contextUsed: ringUsed,
           contextWindowSize: ringSize,
           contextSource: ringSource,
-          contextBreakdown: fullBreakdown,
-          categorySchema: CONTEXT_CATEGORY_SCHEMA,
           promptStale,
           planDraftMissing: planDraftMissingThisTurn,
         });

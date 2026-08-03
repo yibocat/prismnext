@@ -37,7 +37,12 @@ import {
   collapseSettingsDetailPanel,
   closeSettingsDetailPanel,
 } from "@/lib/workspace/expand-settings-detail-panel";
-import { hasOpenSettingsEditor } from "@/hooks/use-settings-editor";
+import { collapseRightAreaWhenEmpty } from "@/lib/workspace/close-active-tab";
+import {
+  hasOpenSettingsEditor,
+  isSettingsEditorTab,
+} from "@/hooks/use-settings-editor";
+import { useRightPanelStore } from "@/stores/right-panel-store";
 import {
   CENTER_MAXIMIZE_THRESHOLD_PX,
   PANEL_COLLAPSE_THRESHOLD_PX,
@@ -91,7 +96,10 @@ export function App() {
   const setShowWelcome = useDocumentStore((s) => s.setShowWelcome);
   const inSettings = leftSidebarView === "settings";
   const settingsDetailStacked = useLayoutStore((s) => s.settingsDetailStacked);
-  const settingsDetailOpen = inSettings && hasOpenSettingsEditor();
+  const hasSettingsEditorTab = useRightPanelStore((s) =>
+    s.tabs.some((t) => t.kind === "settings-editor"),
+  );
+  const settingsDetailOpen = inSettings && hasSettingsEditorTab;
   const sidebarExpanded = useLayoutStore((s) => s.sidebarExpanded);
 
   const leftSidebarRef = usePanelRef();
@@ -102,6 +110,15 @@ export function App() {
   useLayoutEffect(() => {
     setLeftNavPanelRefs({ centerRef, rightAreaRef });
   }, [centerRef, rightAreaRef]);
+
+  // Last RightArea tab closed (any path) → collapse panel; do not land on the launcher.
+  useEffect(() => {
+    return useRightPanelStore.subscribe((state, prev) => {
+      if (state.tabs.length === 0 && prev.tabs.length > 0) {
+        collapseRightAreaWhenEmpty();
+      }
+    });
+  }, []);
 
   useAppCloseTab();
   useAppShellShortcuts({ leftSidebarRef, centerRef, rightAreaRef }, { isMobile });
@@ -304,6 +321,34 @@ export function App() {
     } else if (st.pendingRightAreaRestore && r.isCollapsed()) {
       r.resize(st.rightAreaWidth);
       st.setPendingRightAreaRestore(false);
+    }
+  }, [leftSidebarView]);
+
+  // Snapshot workspace RightArea tab when entering Settings; restore on exit.
+  const prevLeftSidebarViewRef = useRef(leftSidebarView);
+  useEffect(() => {
+    const prev = prevLeftSidebarViewRef.current;
+    prevLeftSidebarViewRef.current = leftSidebarView;
+
+    if (leftSidebarView === "settings" && prev !== "settings") {
+      const rp = useRightPanelStore.getState();
+      const active = rp.tabs.find((t) => t.id === rp.activeTabId);
+      if (active && !isSettingsEditorTab(active)) {
+        useLayoutStore.getState().setWorkspaceActiveTabIdBeforeSettings(rp.activeTabId);
+      }
+      return;
+    }
+
+    if (prev === "settings" && leftSidebarView !== "settings") {
+      const st = useLayoutStore.getState();
+      const snapshot = st.workspaceActiveTabIdBeforeSettings;
+      if (snapshot) {
+        st.setWorkspaceActiveTabIdBeforeSettings(null);
+        const rp = useRightPanelStore.getState();
+        if (rp.tabs.some((t) => t.id === snapshot)) {
+          rp.setActiveTab(snapshot);
+        }
+      }
     }
   }, [leftSidebarView]);
 

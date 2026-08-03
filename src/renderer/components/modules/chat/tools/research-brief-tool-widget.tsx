@@ -66,7 +66,7 @@ function BriefSummary({
         : 0;
     return (
       <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
-        <Field label="path" value={String(data.path ?? ".prismnext/research/brief.md")} />
+        <Field label="path" value={String(data.path ?? ".brief.md")} />
         <Field label="sections filled" value={String(count)} />
       </div>
     );

@@ -3,13 +3,10 @@
     {
       "id": "literature-synthesizer",
       "name": "Literature Synthesizer",
-      "description": "Cross-paper synthesis by theme — gaps, disagreements, confidence — not a paper-by-paper list.",
+      "description": "Cross-paper synthesis — gathers evidence with tools, returns themes/gaps/conflicts for the orchestrator.",
       "builtin": true,
-      "modules": ["literature-library"],
       "skills": ["literature-review"],
       "permission": {
-        "edit": "deny",
-        "bash": "deny",
         "task": { "*": "deny" }
       }
     },
@@ -19,8 +16,6 @@
       "description": "Pressure-tests research questions, hypotheses, and contribution before work is committed.",
       "builtin": true,
       "permission": {
-        "edit": "deny",
-        "bash": "deny",
         "task": { "*": "deny" }
       }
     },
@@ -30,8 +25,6 @@
       "description": "Audits experimental design, statistical validity, and reproducibility — outputs a risk list, not rewrites.",
       "builtin": true,
       "permission": {
-        "edit": "deny",
-        "bash": "deny",
         "task": { "*": "deny" }
       }
     },
@@ -42,8 +35,6 @@
       "builtin": true,
       "skills": ["paper-structure"],
       "permission": {
-        "edit": "deny",
-        "bash": "deny",
         "task": { "*": "deny" }
       }
     },
@@ -54,8 +45,6 @@
       "builtin": true,
       "skills": ["peer-review-response", "academic-citations"],
       "permission": {
-        "edit": "deny",
-        "bash": "deny",
         "task": { "*": "deny" }
       }
     }

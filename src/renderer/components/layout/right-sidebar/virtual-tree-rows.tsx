@@ -18,6 +18,8 @@ import { Icon } from "@iconify/react/offline";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import type { FlatVisibleNode } from "@/lib/files/file-tree";
+import { mentionFileDisplayLabel } from "@/lib/files/mentionable-files";
+import { setComposerDragData } from "@/lib/chat/composer-drag";
 import type { FolderFunction } from "@/types/workspace";
 import { WorkspaceFolderIcon } from "@/lib/workspace/workspace-folder-icon";
 
@@ -159,6 +161,18 @@ export const FileVirtRow = memo(function FileVirtRow({
           )}
           style={{ paddingLeft: INDENT(depth) }}
           {...{ [FILE_TREE_ROW_ATTR]: "" }}
+          draggable
+          onDragStart={(e) => {
+            setComposerDragData(e.dataTransfer, [
+              {
+                v: 1,
+                kind: "file-mention",
+                filePath: file.relativePath,
+                fileId: file.id,
+                label: mentionFileDisplayLabel(file),
+              },
+            ]);
+          }}
           onClick={onSelect}
           onDoubleClick={(e) => {
             e.preventDefault();

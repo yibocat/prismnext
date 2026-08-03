@@ -21,6 +21,11 @@ import type { GitDiffHunkSnippet } from "@/lib/git/diff-hunk-snippet";
 import { resolveSnippetFilePathFromStore } from "@/lib/files/snippet-file-path";
 import { offsetToLineCol } from "@/lib/editor/selection-anchor";
 import { useComposerEditorStore } from "@/stores/composer-editor-store";
+import {
+  dragPayloadToContextRequest,
+  readComposerDragPayloads,
+  type ComposerDragPayload,
+} from "@/lib/chat/composer-drag";
 
 export interface TerminalInsertContext {
   tabId: string;
@@ -100,6 +105,15 @@ function resolveTerminalSnippet(
   return null;
 }
 
+/** MinerU PDF block excerpts imply intensive reading for the source paper. */
+function ensureIntensiveReadingForPaper(paperId: string): boolean {
+  const chat = useChatStore.getState();
+  const tab = chat.tabs.find((t) => t.id === chat.activeTabId);
+  if (!tab || tab.intensivePaperIds.includes(paperId)) return false;
+  chat.addIntensivePaper(tab.id, paperId);
+  return true;
+}
+
 /** Navigate to Chat and enqueue a context insert for the composer. */
 export function insertContextToChat(req: ContextInsertRequest, options?: { quiet?: boolean }): boolean {
   const layout = useLayoutStore.getState();
@@ -117,6 +131,41 @@ export function insertContextToChat(req: ContextInsertRequest, options?: { quiet
 
   if (!options?.quiet) {
     toast.success("Added to Chat");
+  }
+  return true;
+}
+
+/** Insert one or more drag payloads as inline composer tokens. */
+export function insertComposerDragPayloads(
+  payloads: ComposerDragPayload[],
+  options?: { quiet?: boolean },
+): boolean {
+  if (payloads.length === 0) return false;
+
+  const requests = payloads.map((payload) => {
+    const req = dragPayloadToContextRequest(payload);
+    if (req.kind === "paper" && req.extractSource === "mineru" && req.paperId) {
+      ensureIntensiveReadingForPaper(req.paperId);
+    }
+    return req;
+  });
+
+  const layout = useLayoutStore.getState();
+  if (layout.editorMaximized) {
+    useComposerInsertStore.getState().requestInserts(requests);
+    layout.requestAiBarComposerFocus();
+    useComposerEditorStore.getState().flushPendingInsert();
+  } else {
+    layout.setLeftSidebarView("sessions");
+    layout.requestCenterExpand();
+    useComposerInsertStore.getState().requestInserts(requests);
+    useComposerEditorStore.getState().flushPendingInsert();
+  }
+
+  if (!options?.quiet) {
+    toast.success(
+      requests.length === 1 ? "Added to Chat" : `Added ${requests.length} items to Chat`,
+    );
   }
   return true;
 }
@@ -178,15 +227,6 @@ export function lineRangeFromSelection(
     startCol: start.col,
     endCol: end.col,
   };
-}
-
-/** MinerU PDF block excerpts imply intensive reading for the source paper. */
-function ensureIntensiveReadingForPaper(paperId: string): boolean {
-  const chat = useChatStore.getState();
-  const tab = chat.tabs.find((t) => t.id === chat.activeTabId);
-  if (!tab || tab.intensivePaperIds.includes(paperId)) return false;
-  chat.addIntensivePaper(tab.id, paperId);
-  return true;
 }
 
 /** Insert literature PDF excerpt into the active Chat composer. */

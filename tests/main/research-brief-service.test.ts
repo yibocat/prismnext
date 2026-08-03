@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -21,10 +21,25 @@ describe("research-brief-service", () => {
     root = mkdtempSync(join(tmpdir(), "prism-brief-"));
     const first = ensureResearchBrief(root);
     expect(first.created).toBe(true);
+    expect(first.path).toBe(".brief.md");
     const second = ensureResearchBrief(root);
     expect(second.created).toBe(false);
-    const raw = readFileSync(join(root, ".prismnext/research/brief.md"), "utf-8");
+    const raw = readFileSync(join(root, ".brief.md"), "utf-8");
     expect(raw).toBe(RESEARCH_BRIEF_TEMPLATE);
+  });
+
+  it("ensureResearchBrief migrates legacy .prismnext/research/brief.md", () => {
+    root = mkdtempSync(join(tmpdir(), "prism-brief-legacy-"));
+    const legacyDir = join(root, ".prismnext", "research");
+    mkdirSync(legacyDir, { recursive: true });
+    writeFileSync(join(legacyDir, "brief.md"), "# Legacy\n\n## Research question\nOld RQ\n", "utf-8");
+
+    const result = ensureResearchBrief(root);
+    expect(result.created).toBe(false);
+    expect(result.path).toBe(".brief.md");
+    expect(existsSync(join(root, ".brief.md"))).toBe(true);
+    expect(existsSync(join(legacyDir, "brief.md"))).toBe(false);
+    expect(readFileSync(join(root, ".brief.md"), "utf-8")).toContain("Old RQ");
   });
 
   it("parseResearchBriefSections extracts ## sections", () => {

@@ -6,8 +6,8 @@ import { StaticMarkdown } from "../../src/renderer/components/modules/chat/stati
 import { useLiteratureStore } from "../../src/renderer/stores/literature-store";
 
 vi.mock("@/stores/document-store", () => ({
-  useDocumentStore: (selector: (s: { projectRoot: string }) => unknown) =>
-    selector({ projectRoot: "" }),
+  useDocumentStore: (selector: (s: { projectRoot: string; files: { relativePath: string }[]; folders: string[] }) => unknown) =>
+    selector({ projectRoot: "", files: [], folders: [] }),
 }));
 
 function RenderMarkdown({

@@ -102,8 +102,6 @@ export function LeftMainArea() {
   const contextTokens = useChatStore((s) => s.contextTokens);
   const contextWindowSize = useChatStore((s) => s.contextWindowSize);
   const contextUsageSource = useChatStore((s) => s.contextUsageSource);
-  const contextBreakdown = useChatStore((s) => s.contextBreakdown);
-  const categorySchema = useChatStore((s) => s.categorySchema);
   const promptStale = useChatStore((s) => s.promptStale);
   const sessionId = useChatStore((s) => s.sessionId);
   const isLoadingSession = useChatStore((s) => s.isLoadingSession);
@@ -369,8 +367,6 @@ export function LeftMainArea() {
                   <ContextWindowIndicator
                     used={contextTokens}
                     total={contextTotal}
-                    breakdown={contextBreakdown}
-                    schema={categorySchema}
                     source={contextUsageSource}
                     promptStale={promptStale}
                     isStreaming={isStreaming}

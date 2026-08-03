@@ -91,8 +91,10 @@ import {
 import { resolveOpencodeBinaryPath } from "../services/opencode-binary";
 import {
   getPlanPermissionOverride,
+  isProjectRulePath,
   isResearchBriefPath,
   planDraftPathRedirectNote,
+  projectRuleEditRedirectNote,
   researchBriefEditRedirectNote,
   resolveSessionAgent,
   type SessionAgent,
@@ -1230,6 +1232,16 @@ export class AcpService {
               this.pendingTaskDenialRedirect.set(
                 sessionId,
                 researchBriefEditRedirectNote(),
+              );
+            }
+            if (
+              sessionId
+              && editFilePath
+              && isProjectRulePath(editFilePath, this.projectPath)
+            ) {
+              this.pendingTaskDenialRedirect.set(
+                sessionId,
+                projectRuleEditRedirectNote(),
               );
             }
             if (this.isBashTool(toolName) && sessionId && toolCallId) {

@@ -1,21 +1,20 @@
 import type { EditorView } from "@codemirror/view";
 import {
-  chipPositionAtSelectionTopRight,
+  resolveSelectionChipPosition,
+  SELECTION_CHIP_WIDTH,
   SELECTION_CHIP_HEIGHT,
+  selectionActionX,
   type SelectionChipAnchor,
+  type SelectionChipPlacement,
 } from "@/lib/selection-chip-position";
-
-const CHIP_GAP_ABOVE = 4;
-/** Max vertical delta (px) to treat selection rects as the same line. */
-const SAME_LINE_SLACK = 4;
 
 export type EditorSelectionAnchor = SelectionChipAnchor;
 
-/** Viewport position for SelectionInsertAction (anchor=viewport, translateX -100% on left). */
+/** Viewport position for SelectionInsertAction. */
 export interface ViewportChipPosition {
-  /** Viewport X of selection trailing edge on the first selected line. */
   left: number;
   top: number;
+  placement: SelectionChipPlacement;
 }
 
 /** 1-based line / column from document offset. */
@@ -34,12 +33,17 @@ export function getEditorSelectionChipPosition(
   const anchor = getEditorSelectionAnchorViewport(view);
   if (!anchor) return null;
 
-  const top = anchor.top - SELECTION_CHIP_HEIGHT - CHIP_GAP_ABOVE;
-  const left = anchor.rightX;
+  const resolved = resolveSelectionChipPosition(anchor, {
+    left: 8,
+    top: 8,
+    right: window.innerWidth - 8,
+    bottom: window.innerHeight - 8,
+  }, SELECTION_CHIP_WIDTH, SELECTION_CHIP_HEIGHT);
 
   return {
-    left: Math.min(left, window.innerWidth - 8),
-    top: Math.max(8, Math.min(top, window.innerHeight - SELECTION_CHIP_HEIGHT - 8)),
+    left: selectionActionX(resolved, anchor),
+    top: resolved.top,
+    placement: resolved.placement,
   };
 }
 
@@ -50,21 +54,34 @@ export function getEditorSelectionChipPosition(
 export function getEditorSelectionChipPositionInContainer(
   view: EditorView,
   container: HTMLElement,
-): { left: number; top: number } | null {
+): { left: number; top: number; placement: SelectionChipPlacement } | null {
   const anchor = getEditorSelectionAnchorViewport(view);
   if (!anchor) return null;
 
   const containerBounds = container.getBoundingClientRect();
   const editorBounds = view.dom.getBoundingClientRect();
-  const clampedRight = Math.min(anchor.rightX, editorBounds.right);
-  const clampedTop = Math.max(editorBounds.top, Math.min(anchor.top, editorBounds.bottom));
+
+  const firstLineAnchor = firstLineBoundsFromAnchor(anchor, editorBounds);
 
   const relativeAnchor: SelectionChipAnchor = {
-    top: clampedTop - containerBounds.top,
-    rightX: clampedRight - containerBounds.left,
+    top: firstLineAnchor.top - containerBounds.top,
+    bottom: firstLineAnchor.bottom - containerBounds.top,
+    leftX: firstLineAnchor.leftX - containerBounds.left,
+    rightX: firstLineAnchor.rightX - containerBounds.left,
   };
 
-  return chipPositionAtSelectionTopRight(relativeAnchor, container);
+  const resolved = resolveSelectionChipPosition(relativeAnchor, {
+    left: 0,
+    top: 0,
+    right: container.clientWidth,
+    bottom: container.clientHeight,
+  });
+
+  return {
+    left: selectionActionX(resolved, relativeAnchor),
+    top: resolved.top,
+    placement: resolved.placement,
+  };
 }
 
 function getEditorSelectionAnchorViewport(view: EditorView): SelectionChipAnchor | null {
@@ -75,57 +92,35 @@ function getEditorSelectionAnchorViewport(view: EditorView): SelectionChipAnchor
   const to = main.to;
   if (!view.state.sliceDoc(from, to).trim()) return null;
 
-  // CM-painted highlight — same idea as xterm .xterm-selection (do NOT use document.getSelection).
-  const layerAnchor = getCmSelectionLayerAnchor(view);
-  if (layerAnchor) return layerAnchor;
-
-  return getCmCoordsAnchor(view, from, to);
+  return getCmCoordsAnchorAtHead(view);
 }
 
-/** Read CodeMirror's .cm-selectionBackground rects (first line, trailing edge). */
-function getCmSelectionLayerAnchor(view: EditorView): SelectionChipAnchor | null {
-  const nodes = view.dom.querySelectorAll(".cm-selectionBackground");
-  if (nodes.length === 0) return null;
+/** Anchor at the active end (head / cursor), not the full selection highlight width. */
+function getCmCoordsAnchorAtHead(view: EditorView): SelectionChipAnchor | null {
+  const main = view.state.selection.main;
+  const head = main.head;
+  const side = head >= main.anchor ? 1 : -1;
+  const headCoords = view.coordsAtPos(head, side);
+  if (!headCoords) return null;
 
-  const rects: DOMRect[] = [];
-  for (const node of nodes) {
-    const rect = node.getBoundingClientRect();
-    if (rect.width >= 1 && rect.height >= 1) rects.push(rect);
-  }
-  if (rects.length === 0) return null;
-
-  rects.sort((a, b) => a.top - b.top || a.left - b.left);
-  const firstTop = rects[0].top;
-
-  let maxRight = rects[0].right;
-  for (const rect of rects) {
-    if (Math.abs(rect.top - firstTop) <= SAME_LINE_SLACK) {
-      maxRight = Math.max(maxRight, rect.right);
-    }
-  }
-
-  const editorRight = view.dom.getBoundingClientRect().right;
-  return { top: firstTop, rightX: Math.min(maxRight, editorRight) };
-}
-
-/** Fallback when selection layer is not painted yet. */
-function getCmCoordsAnchor(
-  view: EditorView,
-  from: number,
-  to: number,
-): SelectionChipAnchor | null {
-  const startCoords = view.coordsAtPos(from, -1);
-  if (!startCoords) return null;
-
-  const startLine = view.state.doc.lineAt(from);
-  const firstLineEnd = from === to ? to : Math.min(startLine.to, to);
-  const endCoords = view.coordsAtPos(firstLineEnd, 1);
-  if (!endCoords) return null;
-
-  const editorRight = view.dom.getBoundingClientRect().right;
+  const editorBounds = view.dom.getBoundingClientRect();
   return {
-    top: startCoords.top,
-    rightX: Math.min(Math.max(startCoords.right, endCoords.right), editorRight),
+    top: headCoords.top,
+    bottom: headCoords.bottom,
+    leftX: Math.max(headCoords.left, editorBounds.left),
+    rightX: Math.min(headCoords.right, editorBounds.right),
+  };
+}
+
+function firstLineBoundsFromAnchor(
+  anchor: SelectionChipAnchor,
+  editorBounds: DOMRect,
+): SelectionChipAnchor {
+  return {
+    top: Math.max(anchor.top, editorBounds.top),
+    bottom: Math.min(anchor.bottom, editorBounds.bottom),
+    leftX: Math.max(anchor.leftX, editorBounds.left),
+    rightX: Math.min(anchor.rightX, editorBounds.right),
   };
 }
 
@@ -139,14 +134,22 @@ export function getEditorSelectionAnchor(
   const bounds = container.getBoundingClientRect();
   return {
     top: viewport.top - bounds.top,
+    bottom: viewport.bottom - bounds.top,
+    leftX: viewport.leftX - bounds.left,
     rightX: viewport.rightX - bounds.left,
   };
 }
 
-/** @deprecated Use getEditorSelectionChipPosition */
+/** @deprecated Use resolveSelectionChipPosition */
 export function chipPositionFromEditorAnchor(
   anchor: SelectionChipAnchor,
   container: HTMLElement,
 ): { left: number; top: number } {
-  return chipPositionAtSelectionTopRight(anchor, container);
+  const resolved = resolveSelectionChipPosition(anchor, {
+    left: 0,
+    top: 0,
+    right: container.clientWidth,
+    bottom: container.clientHeight,
+  });
+  return { left: resolved.left, top: resolved.top };
 }

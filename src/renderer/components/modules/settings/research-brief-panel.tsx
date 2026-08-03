@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { useDocumentStore } from "@/stores/document-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
 import { useSettingsEditorSlotOfKind } from "@/hooks/use-settings-editor";
-import { SettingsMarkdownEditor } from "./settings-markdown-editor";
+import { openResearchBrief } from "@/lib/files/open-research-brief";
 import { MarkdownContentPreview } from "./markdown-content-preview";
 import { SettingsMarkdownToolbar } from "./settings-markdown-toolbar";
+import { SETTINGS_ROW_DESC } from "./settings-tokens";
 
+/** Settings: read-only preview of `.brief.md`. Edit opens Files in the main workspace. */
 export function ResearchBriefPanel() {
   const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
@@ -17,20 +20,14 @@ export function ResearchBriefPanel() {
   const previewRef = useRef<HTMLDivElement>(null);
 
   const [content, setContent] = useState("");
-  const [savedContent, setSavedContent] = useState("");
-  const [briefPath, setBriefPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [viewMode, setViewMode] = useState<"source" | "preview">("preview");
 
   const loadContent = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = options?.silent ?? false;
       if (!projectRoot) {
         setContent("");
-        setSavedContent("");
-        setBriefPath(null);
         if (!silent) setLoading(false);
         return;
       }
@@ -38,11 +35,8 @@ export function ResearchBriefPanel() {
       try {
         await window.electronAPI.researchBriefEnsure(projectRoot);
         const { absolutePath } = await window.electronAPI.researchBriefGetPath(projectRoot);
-        setBriefPath(absolutePath);
         const result = await window.electronAPI.fsRead(absolutePath);
-        const text = result?.content ?? "";
-        setContent(text);
-        setSavedContent(text);
+        setContent(result?.content ?? "");
       } catch {
         toast.error(t("settings.editor.brief.toast.loadFailed"));
         closePanel();
@@ -68,7 +62,7 @@ export function ResearchBriefPanel() {
 
   // Scroll preview toward the linked ## section when opened from an experiment.
   useEffect(() => {
-    if (!focusSection || loading || viewMode !== "preview") return;
+    if (!focusSection || loading) return;
     const root = previewRef.current;
     if (!root) return;
     const target = focusSection.toLowerCase();
@@ -83,20 +77,10 @@ export function ResearchBriefPanel() {
       }
     }, 80);
     return () => window.clearTimeout(id);
-  }, [focusSection, loading, viewMode, content]);
+  }, [focusSection, loading, content]);
 
-  const handleSave = async () => {
-    if (!projectRoot || !briefPath) return;
-    setSaving(true);
-    try {
-      await window.electronAPI.fsWrite(briefPath, content);
-      setSavedContent(content);
-      toast.success(t("settings.editor.brief.toast.saved"));
-    } catch {
-      toast.error(t("settings.editor.brief.toast.saveFailed"));
-    } finally {
-      setSaving(false);
-    }
+  const handleEditInFiles = () => {
+    void openResearchBrief({ focusSection, leaveSettings: true });
   };
 
   if (!projectRoot) {
@@ -118,22 +102,19 @@ export function ResearchBriefPanel() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <SettingsMarkdownToolbar
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        viewMode="preview"
+        readOnly
         onRefresh={() => void handleRefresh()}
         refreshing={refreshing}
-        actions={{
-          onSave: () => void handleSave(),
-          onCancel: closePanel,
-          saving,
-        }}
       />
+      <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
+        <p className={SETTINGS_ROW_DESC}>{t("settings.editor.brief.readOnlyHint")}</p>
+        <Button variant="outline" size="xs" className="shrink-0" onClick={handleEditInFiles}>
+          {t("settings.editor.brief.editInFiles")}
+        </Button>
+      </div>
       <div className="flex-1 min-h-0" ref={previewRef}>
-        {viewMode === "source" ? (
-          <SettingsMarkdownEditor value={content} onChange={setContent} className="h-full" />
-        ) : (
-          <MarkdownContentPreview content={content} variant="rule" className="h-full" />
-        )}
+        <MarkdownContentPreview content={content} variant="rule" className="h-full" />
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ import {
   resolveEffectivePermissionRule,
   resolveSessionAgent,
 } from "../../src/shared/session-agent";
-import { RESEARCH_BRIEF_REL } from "../../src/shared/research-brief";
+import { LEGACY_RESEARCH_BRIEF_REL, RESEARCH_BRIEF_REL } from "../../src/shared/research-brief";
 import {
   DRAFT_PLAN_REL,
   isResearchPlanDraftPath,
@@ -114,6 +114,7 @@ describe("session-agent (OpenCode-aligned Plan)", () => {
   it("denies generic edit/write on research brief.md for Build and Plan", () => {
     expect(isResearchBriefPath(RESEARCH_BRIEF_REL)).toBe(true);
     expect(isResearchBriefPath(`/proj/${RESEARCH_BRIEF_REL}`, "/proj")).toBe(true);
+    expect(isResearchBriefPath(LEGACY_RESEARCH_BRIEF_REL)).toBe(true);
     expect(
       resolveEffectivePermissionRule("auto", "build", "edit", {
         filePath: RESEARCH_BRIEF_REL,
@@ -123,6 +124,12 @@ describe("session-agent (OpenCode-aligned Plan)", () => {
     expect(
       resolveEffectivePermissionRule("auto", "build", "write", {
         filePath: `/proj/${RESEARCH_BRIEF_REL}`,
+        projectRoot: "/proj",
+      }),
+    ).toBe("deny");
+    expect(
+      resolveEffectivePermissionRule("auto", "build", "edit", {
+        filePath: LEGACY_RESEARCH_BRIEF_REL,
         projectRoot: "/proj",
       }),
     ).toBe("deny");

@@ -62,6 +62,8 @@ const HIDDEN_FILE_NAMES = new Set([
   // Git worktree checkout uses a .git *file* (not directory) at the worktree root.
   ".git",
   ".prism-worktree-meta",
+  // Living research brief — open via Settings / agent tools / openResearchBrief, not the tree.
+  ".brief.md",
 ]);
 
 export const IGNORED_EXTENSIONS = new Set([
@@ -164,6 +166,8 @@ function isWatchIgnored(filePath: string): boolean {
   const n = normalizeWatchPath(filePath);
   if (isPrismAgentSkillsWatchPath(n)) return false;
   if (n.includes("/.prismnext/agent/skills-manifest.json")) return false;
+  // Project-root living research brief (hidden from tree, still watch for open editors).
+  if (n.endsWith("/.brief.md") || /(^|\/)\.brief\.md$/.test(n)) return false;
 
   if (/(^|\/)\.[^\/]/.test(n)) return true;
   if (n.includes("/node_modules/")) return true;

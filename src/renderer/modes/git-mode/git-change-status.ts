@@ -50,6 +50,7 @@ export function resolveGitChangeStatusBadge(file: GitFileItem): GitChangeStatusB
 export function isGitChangeNewFile(file: GitFileItem): boolean {
   if (file.untracked) return true;
   if (isGitChangeDeletedFile(file)) return false;
+  if ((file.deleted ?? 0) > 0) return false;
   const { tone } = resolveGitChangeStatusBadge(file);
   return tone === "added";
 }

@@ -67,29 +67,30 @@ export function appendContextPartToActiveDraft(part: ComposerPart): void {
 }
 
 function applyPendingInsert(handle: InlineComposerEditorHandle | null): boolean {
-  const insertStore = useComposerInsertStore.getState();
-  if (!insertStore.pendingInsert) return false;
-  const part = contextInsertToComposerPart(insertStore.pendingInsert);
-  if (
-    part.type !== "terminal-snippet" &&
-    part.type !== "code-snippet" &&
-    part.type !== "git-diff-snippet" &&
-    part.type !== "paper-snippet" &&
-    part.type !== "experiment-run"
-  ) {
-    insertStore.consumeInsert();
-    return true;
-  }
+  let insertedAny = false;
 
-  if (!handle) {
+  while (useComposerInsertStore.getState().pendingInserts.length > 0) {
+    const req = useComposerInsertStore.getState().consumeInsert();
+    if (!req) break;
+    const part = contextInsertToComposerPart(req);
+
+    if (!handle) {
+      appendContextPartToActiveDraft(part);
+      insertedAny = true;
+      continue;
+    }
+
+    const inserted = handle.insertContextPart(part);
+    if (inserted) {
+      insertedAny = true;
+      continue;
+    }
+
     appendContextPartToActiveDraft(part);
-    insertStore.consumeInsert();
-    return true;
+    insertedAny = true;
   }
 
-  const inserted = handle.insertContextPart(part);
-  if (inserted) insertStore.consumeInsert();
-  return inserted;
+  return insertedAny;
 }
 
 export const useComposerEditorStore = create<ComposerEditorState>()((set, get) => ({

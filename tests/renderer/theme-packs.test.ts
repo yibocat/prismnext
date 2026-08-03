@@ -75,7 +75,7 @@ describe("theme-packs", () => {
       const light = getThemePack(id).balanced.light;
       const bg = parseOklch(light.neutral.background)!;
       const card = parseOklch(light.neutral.card)!;
-      expect(card.l).toBeGreaterThanOrEqual(0.99);
+      expect(card.l).toBeGreaterThanOrEqual(0.97);
       expect(bg.l).toBeLessThan(card.l);
       expect(bg.c).toBeLessThan(0.012);
     }

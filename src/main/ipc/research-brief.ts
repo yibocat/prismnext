@@ -1,4 +1,5 @@
 import { ipcMain } from "electron";
+import { RESEARCH_BRIEF_REL } from "../../shared/research-brief";
 import {
   ensureResearchBrief,
   readResearchBrief,
@@ -31,7 +32,7 @@ export function registerResearchBriefHandlers(): void {
   ipcMain.handle("researchBrief:getPath", async (_event, args: { projectRoot: string }) => {
     ensureResearchBrief(args.projectRoot);
     return {
-      relativePath: ".prismnext/research/brief.md",
+      relativePath: RESEARCH_BRIEF_REL,
       absolutePath: researchBriefAbsPath(args.projectRoot),
     };
   });
