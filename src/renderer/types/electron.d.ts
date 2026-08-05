@@ -59,28 +59,6 @@ export interface CompilerStatus {
   tectonic: boolean;
 }
 
-export interface SynctexResult {
-  file: string;
-  line: number;
-  column: number;
-}
-
-export interface SynctexForwardResult {
-  page: number;
-  x: number;
-  y: number;
-  height: number;
-  width: number;
-}
-
-export interface SynctexForwardResult {
-  page: number;
-  x: number;
-  y: number;
-  height: number;
-  width: number;
-}
-
 export type PaperExtractSource = "mineru" | "pdfjs" | "html";
 export type PaperExtractStatus = "idle" | "queued" | "extracting" | "ready" | "failed";
 
@@ -935,17 +913,6 @@ export interface ElectronAPI {
     | { pdfBytes?: ArrayBuffer; pdfPath?: string; buildDir?: string; stdout?: string }
     | { error: string; stdout?: string }
   >;
-  compileSynctex: (
-    projectDir: string,
-    page: number,
-    x: number,
-    y: number,
-  ) => Promise<SynctexResult | null>;
-  compileSynctexForward: (
-    projectDir: string,
-    file: string,
-    line: number,
-  ) => Promise<SynctexForwardResult | null>;
   compileDetectTexlive: () => Promise<CompilerStatus>;
   compileExportPdf: (
     projectRoot: string,
@@ -1487,6 +1454,7 @@ export interface ElectronAPI {
     license?: string;
   }>>;
   agentInstallBundledSkill: (projectPath: string, skillId: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
+  agentReadBundledSkillMd: (skillId: string) => Promise<string | null>;
   agentSyncSkills: (projectPath: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
   agentFetchSkillRegistry: (registryUrl: string) => Promise<{
     indexUrl: string;

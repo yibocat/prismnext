@@ -38,7 +38,6 @@ export const CHAT_CITATION_STAGING_PROMPT = [
   "3. **Stage every paper you will mention** — see `" +
     TOOL_NAMES.literatureStage +
     "` for layout and verification rules.",
-  "   Do not write `[n]` from discover hits or memory alone.",
   "4. **One reply after staging** — reuse `[n]` for the same paper; do not re-stage refs already in the session.",
   "",
   "### Soft workflow",
@@ -52,11 +51,11 @@ export const CHAT_CITATION_STAGING_PROMPT = [
   "- Staging attaches to the parent chat session. If a Task result already lists session citations,",
   "  do not re-stage those refs.",
   "- End Task synthesis with `[n]` for every external paper you staged and relied on.",
-  "- Do not delegate discovery/staging to a subagent when you can run it in this conversation.",
+  `- Delegation discipline (when not to Task-out) lives on the ${TOOL_NAMES.literatureStage} tool.`,
   "",
   "### Judgment",
   "",
-  "- If staging returns unverified, do not cite `[n]` — say what is missing or pick another source.",
+  "- When staging cannot verify a paper, say what is missing or pick another source.",
   "- Prefer catalog discovery over websearch when the user wants citable academic metadata.",
   "- Short reading lists: stage only papers you actually discuss; do not stage a long dump you will not use.",
   "- When the user later asks to add a staged paper to the library, that is an explicit add — not part of staging.",

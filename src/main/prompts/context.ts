@@ -17,9 +17,10 @@ function readWorkspaceDirsSafe(prismDir: string): WorkspaceFolder[] {
     if (Array.isArray(raw.workspaceDirs) && raw.workspaceDirs.length > 0) {
       return raw.workspaceDirs;
     }
-    return [
-      { function: "manuscript", name: "manuscript", mainTex: "main.tex" },
-    ] as WorkspaceFolder[];
+    // No configured folders → []. Never invent a manuscript/main.tex here:
+    // the workspace-folders and latex-workspace modules would otherwise assert
+    // paths that do not exist on disk.
+    return [];
   } catch {
     return [];
   }

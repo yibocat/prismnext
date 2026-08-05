@@ -1,9 +1,0 @@
-{
-  "id": "structure-diagnostician",
-  "name": "Structure Diagnostician",
-  "description": "Diagnoses manuscript structure and argument chain — priority diagnosis, not a rewrite.",
-  "builtin": true,
-  "permission": {
-    "task": { "*": "deny" }
-  }
-}

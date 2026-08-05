@@ -41,15 +41,15 @@ description: For testing
 });
 
 describe("bundled skill files", () => {
-  it("academic-citations SKILL.md parses correctly", () => {
+  it("related-work-pipeline SKILL.md parses correctly", () => {
     const content = readFileSync(
-      join(RESOURCES_SKILLS, "academic-citations", "SKILL.md"),
+      join(RESOURCES_SKILLS, "related-work-pipeline", "SKILL.md"),
       "utf-8",
     );
     const parsed = parseSkillMd(content);
-    expect(parsed.name).toBe("academic-citations");
-    expect(parsed.description).toContain("BibTeX");
-    expect(parsed.body).toContain("# Academic Citations");
+    expect(parsed.name).toBe("related-work-pipeline");
+    expect(parsed.description).toContain("Related Work");
+    expect(parsed.body).toContain("# Related Work Pipeline");
   });
 
   it("skill-creator SKILL.md parses correctly", () => {

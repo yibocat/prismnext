@@ -1,8 +1,7 @@
-import { PAPER_EXTRACT_AGENT_UI_HINT } from "../../../shared/paper-extract";
 import { TOOL_NAMES } from "../../../shared/tool-names";
 
 /**
- * Per-turn intensive reading block (L4) — bibkey list + short evidence rules.
+ * Per-turn intensive reading block (L4) — bibkey list + read-pdf pointer.
  * Gate is HARD in literature-bridge; do not reprint manuals here.
  */
 
@@ -34,8 +33,6 @@ export function buildIntensiveReadingInstruction(
 
   const rules: string[] = [
     `- Extracts live under \`.prismnext/library/extract/\`; use \`${readPdfTool}\` (optional \`pages=\` / \`query=\`). Gate is enforced by the tool.`,
-    "- Cite library papers as **`[@bibkey]`**; add `p.X` when quoting PDF / excerpt text.",
-    "- When extracted text includes figures and a chart or diagram clarifies your answer, embed it with `![caption](path)` or `[@bibkey|images/fig-0.png]` — optional; use your judgment.",
   ];
 
   if (options?.hasPaperSnippets) {
@@ -51,7 +48,7 @@ export function buildIntensiveReadingInstruction(
   }
 
   rules.push(
-    `- If extract is not ready, tell the user to run ${PAPER_EXTRACT_AGENT_UI_HINT} and retry.`,
+    `- If extract is not ready, call \`${readPdfTool}\` with \`force=true\` to start background extraction, then retry — do not ask the user to run it manually.`,
   );
 
   return [

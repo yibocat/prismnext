@@ -48,14 +48,12 @@ describe("buildEditorKeyBindings", () => {
   it("binds registry chords for latex editors", () => {
     const keys = buildEditorKeyBindings({
       latexWrap: true,
-      onSynctexForward: () => true,
     }).map((b) => b.key);
     expect(keys).toContain("Mod-f");
     expect(keys).toContain("Mod-b");
     expect(keys).toContain("Mod-i");
     expect(keys).toContain("Mod-/");
     expect(keys).toContain("Escape");
-    expect(keys).toContain("Mod-Shift-f");
   });
 
   it("scopes find/close for search-panel focus", () => {
@@ -66,10 +64,9 @@ describe("buildEditorKeyBindings", () => {
     expect(close?.scope).toBe("editor search-panel");
   });
 
-  it("omits latex wrap and synctex when not requested", () => {
+  it("omits latex wrap when not requested", () => {
     const keys = buildEditorKeyBindings({ latexWrap: false }).map((b) => b.key);
     expect(keys).toContain("Mod-f");
     expect(keys).not.toContain("Mod-b");
-    expect(keys).not.toContain("Mod-Shift-f");
   });
 });

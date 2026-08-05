@@ -419,10 +419,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			skipSynctex: opts?.skipSynctex,
 			fast: opts?.fast,
 		}),
-	compileSynctex: (projectDir: string, page: number, x: number, y: number) =>
-		ipcRenderer.invoke("compile:synctex", { projectDir, page, x, y }),
-	compileSynctexForward: (projectDir: string, file: string, line: number) =>
-		ipcRenderer.invoke("compile:synctexForward", { projectDir, file, line }),
 	compileDetectTexlive: () => ipcRenderer.invoke("compile:detectTexlive"),
 	compileExportPdf: (projectRoot: string, mainFile: string, pdfBytes?: Uint8Array | null) =>
 		ipcRenderer.invoke("compile:exportPdf", { projectRoot, mainFile, pdfBytes }),
@@ -873,6 +869,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	agentListBundledSkills: () => ipcRenderer.invoke("agent:listBundledSkills"),
 	agentInstallBundledSkill: (projectPath: string, skillId: string) =>
 		ipcRenderer.invoke("agent:installBundledSkill", { projectPath, skillId }),
+	agentReadBundledSkillMd: (skillId: string) =>
+		ipcRenderer.invoke("agent:readBundledSkillMd", { skillId }),
 	agentSyncSkills: (projectPath: string) => ipcRenderer.invoke("agent:syncSkills", { projectPath }),
 	agentFetchSkillRegistry: (registryUrl: string) =>
 		ipcRenderer.invoke("agent:fetchSkillRegistry", { registryUrl }),

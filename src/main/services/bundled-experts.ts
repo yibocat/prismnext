@@ -37,13 +37,3 @@ export function readBundledExpertInstructions(expertId: string): string | null {
   if (!existsSync(path)) return null;
   return readFileSync(path, "utf-8");
 }
-
-export function readBundledExpertDefinition(expertId: string): ExpertDefinition | null {
-  const path = join(getBundledExpertsDir(), expertId, "expert.json");
-  if (!existsSync(path)) return null;
-  try {
-    return JSON.parse(readFileSync(path, "utf-8")) as ExpertDefinition;
-  } catch {
-    return null;
-  }
-}

@@ -873,7 +873,6 @@
         "italic": "将选区包裹为 \\textit{}",
         "comment": "切换注释",
         "closeSearch": "关闭搜索面板",
-        "synctex": "正向搜索（SyncTeX）到 PDF",
         "newChat": "新建聊天标签",
         "send": "发送消息（焦点在输入框）",
         "newline": "输入框内换行",
@@ -1102,6 +1101,7 @@
         "install": "安装",
         "installed": "已安装",
         "openUrl": "在浏览器中打开技能链接",
+        "preview": "预览技能",
         "category": {
           "academic": "学术",
           "general": "通用"
@@ -1485,8 +1485,7 @@
       "bold": "加粗（\\textbf{}）",
       "italic": "斜体（\\textit{}）",
       "comment": "切换注释",
-      "closeSearch": "关闭搜索面板",
-      "synctex": "正向 SyncTeX 到 PDF"
+      "closeSearch": "关闭搜索面板"
     },
     "workspace": {
       "nextTab": "下一个工作区标签",

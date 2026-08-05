@@ -21,10 +21,9 @@ describe("EXPERIMENTS_PROMPT", () => {
   it("documents shared project Python venv and non-system installs", () => {
     expect(EXPERIMENTS_PROMPT).toContain("Runtime environments");
     expect(EXPERIMENTS_PROMPT).toContain(".prismnext/.venv");
-    expect(EXPERIMENTS_PROMPT).toContain("uv pip install");
-    expect(EXPERIMENTS_PROMPT).toContain("Never");
+    expect(EXPERIMENTS_PROMPT).toContain("never");
     expect(EXPERIMENTS_PROMPT).toContain("system Python");
-    expect(EXPERIMENTS_PROMPT).toContain("Other runtimes");
+    expect(EXPERIMENTS_PROMPT).toContain("other runtimes");
     expect(EXPERIMENTS_PROMPT).not.toContain("<experiment-dir>/.venv");
   });
 });

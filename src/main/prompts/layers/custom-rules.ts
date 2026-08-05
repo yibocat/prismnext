@@ -6,7 +6,7 @@ import { createLogger } from "../../services/logger";
 const log = createLogger("custom-rules", "agent");
 
 /** Layer 2.5: Injects user-created custom rules after built-in modules
- *  (priority 2) and before user instructions (priority 3). */
+ *  (priority 2) — the last layer in the stack. */
 export function createCustomRulesLayer(): PromptLayer {
   return {
     id: "custom-rules",

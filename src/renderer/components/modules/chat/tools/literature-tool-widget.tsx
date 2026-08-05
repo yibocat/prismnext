@@ -315,7 +315,7 @@ export const LiteratureToolWidget = memo(function LiteratureToolWidget({
       label={<span className="truncate font-medium">{LABELS[toolName] ?? toolName}</span>}
       meta={detail ? (
         <span
-          className="text-muted-foreground/70 shrink-0 truncate text-[length:var(--font-chat-meta)]"
+          className="text-muted-foreground/70 min-w-0 truncate text-[length:var(--font-chat-meta)]"
           title={detail}
         >
           {detail}

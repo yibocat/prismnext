@@ -1,9 +1,0 @@
-{
-  "id": "literature-synthesizer",
-  "name": "Literature Synthesizer",
-  "description": "Cross-paper synthesis — gathers evidence with tools, returns themes/gaps/conflicts for the orchestrator.",
-  "builtin": true,
-  "permission": {
-    "task": { "*": "deny" }
-  }
-}

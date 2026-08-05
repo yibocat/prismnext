@@ -46,10 +46,10 @@ export const LspWidget = memo(function LspWidget({
       meta={
         <>
           {symbol && (
-            <span className="font-mono text-muted-foreground truncate">{symbol.slice(0, 40)}</span>
+            <span className="font-mono text-muted-foreground min-w-0 truncate">{symbol.slice(0, 40)}</span>
           )}
           {filePath && (
-            <span className="text-muted-foreground/50 truncate text-[length:var(--font-chat-meta)] hidden sm:inline">
+            <span className="text-muted-foreground/50 min-w-0 truncate text-[length:var(--font-chat-meta)] hidden sm:inline">
               <ChatFileLink path={filePath} className="font-normal inline" />
             </span>
           )}

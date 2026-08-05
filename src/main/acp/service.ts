@@ -134,6 +134,15 @@ const SIGKILL_GRACE_MS = 5_000;
 /** Files smaller than this are assumed to be auto-generated config stubs. */
 const MIN_CUSTOM_CONFIG_LENGTH = 60;
 
+/** ACP tool-call statuses that close a tool call (watchdog busy tracking). */
+const WATCHDOG_TERMINAL_TOOL_STATUS = new Set([
+  "completed",
+  "failed",
+  "error",
+  "cancelled",
+  "canceled",
+]);
+
 export interface SessionInfo {
   id: string;
   title: string;
@@ -218,6 +227,14 @@ export class AcpService {
    * distinguish "model still working" from "upstream silently retrying".
    */
   private sessionActivityAt = new Map<string, number>();
+  /**
+   * Open tool calls per primary-session subtree ("s1", "s1:tool1", ...), keyed
+   * by primary session id with each key namespaced by the emitting session.
+   * While any tool is running (Task subagents, long bash, MinerU parses) the
+   * turn watchdog uses the busy-tier hard timeout instead of the idle one —
+   * silence is expected there and must not kill legitimate long tasks.
+   */
+  private subtreeRunningToolKeys = new Map<string, Set<string>>();
   /**
    * Provider stream errors scraped from opencode.log (quota / rate limit / 5xx).
    * OpenCode often never forwards these over ACP.
@@ -4086,6 +4103,7 @@ export class AcpService {
         // keep the turn watchdog from false-stalling / hard-timing-out.
         const parentId = this.getSessionParentId(sid);
         if (parentId) this.sessionActivityAt.set(parentId, now);
+        this.trackToolCallForWatchdog(sid, parentId, params);
       }
     }
     for (const handler of this.notificationHandlers) {
@@ -4093,6 +4111,62 @@ export class AcpService {
         handler(method, params);
       } catch (err: any) {
         log.debug(`Notification handler error (${method}): ${err.message}`);
+      }
+    }
+  }
+
+  /**
+   * Maintain the set of open tool calls for the session subtree, so the turn
+   * watchdog can tell "upstream hung" apart from "tools legitimately running
+   * in silence" (Task subagents emit frames per child session, or go quiet
+   * for minutes while their own provider call is in flight).
+   *
+   * Frame shapes mirror event-mapper.ts (wrapped Shape A / flattened Shape B):
+   *   tool_call:        update.tool_call | update.toolCall | sessionUpdate==="tool_call"
+   *   tool_call_update: update.tool_call_update | update.toolCallUpdate | ...
+   * A missing status on tool_call_update means "completed" (event-mapper
+   * applies the same default when forwarding). Tracking fails soft: a missed
+   * terminal frame just keeps the busy tier until the next turn resets it.
+   */
+  private trackToolCallForWatchdog(
+    sessionId: string,
+    parentId: string | null,
+    params: any,
+  ): void {
+    const update = params?.update ?? params;
+    if (!update || typeof update !== "object") return;
+    const chunkType =
+      typeof update.sessionUpdate === "string" ? update.sessionUpdate : "";
+    const primary = parentId ?? sessionId;
+
+    const tc =
+      update.tool_call ??
+      update.toolCall ??
+      (chunkType === "tool_call" ? update : null);
+    if (tc && typeof tc === "object") {
+      const id = tc.toolCallId || tc.tool_call_id || tc.callID || tc.id;
+      if (typeof id === "string" && id) {
+        const status = String(tc.status ?? tc.state?.status ?? "").toLowerCase();
+        const key = `${sessionId}:${id}`;
+        const set =
+          this.subtreeRunningToolKeys.get(primary) ?? new Set<string>();
+        if (WATCHDOG_TERMINAL_TOOL_STATUS.has(status)) set.delete(key);
+        else set.add(key); // absent status on tool_call = just started
+        this.subtreeRunningToolKeys.set(primary, set);
+      }
+      return;
+    }
+
+    const tu =
+      update.tool_call_update ??
+      update.toolCallUpdate ??
+      (chunkType === "tool_call_update" ? update : null);
+    if (tu && typeof tu === "object") {
+      const status = String(tu.status ?? tu.state?.status ?? "").toLowerCase();
+      if (status !== "" && !WATCHDOG_TERMINAL_TOOL_STATUS.has(status)) return;
+      const id = tu.toolCallId || tu.tool_call_id || tu.callID || tu.id;
+      if (typeof id === "string" && id) {
+        this.subtreeRunningToolKeys.get(primary)?.delete(`${sessionId}:${id}`);
       }
     }
   }
@@ -4105,12 +4179,25 @@ export class AcpService {
   // in "streaming" forever with zero feedback.
   //
   // The watchdog is silence-based (not duration-based): a long agent turn
-  // keeps emitting frames, so only true upstream silence triggers it.
+  // keeps emitting frames, so only true upstream silence triggers it. Two
+  // silence tiers apply:
+  //   idle — no tool calls open in the session subtree. Silence here means
+  //          the provider is stuck before/ between steps; abort relatively
+  //          quickly (TURN_HARD_TIMEOUT_MS).
+  //   busy — tool calls are open (Task subagents, long bash, MinerU parses).
+  //          Long silence is legitimate: a subagent may wait minutes on its
+  //          own provider call without emitting a single frame. Use the much
+  //          longer TURN_BUSY_HARD_TIMEOUT_MS so real long tasks survive.
 
   /** Warn the UI after this much upstream silence (provider likely retrying). */
   static readonly TURN_STALL_WARN_MS = 30_000;
   /** Auto-abort the turn after this much uninterrupted upstream silence. */
   static readonly TURN_HARD_TIMEOUT_MS = 360_000;
+  /**
+   * Hard timeout while tool calls are open in the session subtree (Task
+   * subagents etc. may stay silent for many minutes between frames).
+   */
+  static readonly TURN_BUSY_HARD_TIMEOUT_MS = 1_800_000;
 
   /** OpenCode's rotating text log (quota / stream errors land here, not on ACP). */
   getOpenCodeLogPath(): string {
@@ -4150,17 +4237,22 @@ export class AcpService {
     sessionId: string,
     callbacks: {
       onStall: (silentMs: number) => void;
-      onTimeout: (silentMs: number) => void;
+      /** busy=true when tools were still open in the subtree at hard timeout. */
+      onTimeout: (silentMs: number, busy: boolean) => void;
       /** Fired once when opencode.log reports a primary provider stream error. */
       onProviderError?: (message: string) => void;
     },
-    opts?: { stallMs?: number; timeoutMs?: number; pollMs?: number },
+    opts?: { stallMs?: number; timeoutMs?: number; busyTimeoutMs?: number; pollMs?: number },
   ): () => void {
     const stallMs = opts?.stallMs ?? AcpService.TURN_STALL_WARN_MS;
     const timeoutMs = opts?.timeoutMs ?? AcpService.TURN_HARD_TIMEOUT_MS;
+    const busyTimeoutMs = opts?.busyTimeoutMs ?? AcpService.TURN_BUSY_HARD_TIMEOUT_MS;
     const startedAt = Date.now();
     this.sessionActivityAt.set(sessionId, startedAt);
     this.sessionProviderErrors.delete(sessionId);
+    // Fresh turn: drop stale open-tool keys an aborted previous turn may have
+    // left behind (its terminal tool_call_update frames never arrived).
+    this.subtreeRunningToolKeys.delete(sessionId);
     // Only watch lines written during this turn (skip historical quota noise).
     this.opencodeLogWatchOffset = openCodeLogEndOffset(this.getOpenCodeLogPath());
     let stalled = false;
@@ -4179,11 +4271,15 @@ export class AcpService {
 
       const last = Math.max(startedAt, this.sessionActivityAt.get(sessionId) ?? 0);
       const silentMs = Date.now() - last;
-      if (silentMs >= timeoutMs) {
+      const busy = (this.subtreeRunningToolKeys.get(sessionId)?.size ?? 0) > 0;
+      const hardMs = busy ? busyTimeoutMs : timeoutMs;
+      if (silentMs >= hardMs) {
         fired = true;
         clearInterval(timer);
-        log.error(`turn watchdog hard timeout: sessionId=${sessionId} silentMs=${silentMs}`);
-        callbacks.onTimeout(silentMs);
+        log.error(
+          `turn watchdog hard timeout: sessionId=${sessionId} silentMs=${silentMs} busy=${busy}`,
+        );
+        callbacks.onTimeout(silentMs, busy);
         return;
       }
       if (!stalled && silentMs >= stallMs) {
@@ -4198,6 +4294,8 @@ export class AcpService {
     return () => {
       fired = true;
       clearInterval(timer);
+      // Turn over — any still-open keys are leftovers from aborted tools.
+      this.subtreeRunningToolKeys.delete(sessionId);
       // Final scrape so empty-turn complete can still attach the real message.
       if (!providerErrorFired) {
         this.pollOpenCodeLogForSessionError(sessionId);

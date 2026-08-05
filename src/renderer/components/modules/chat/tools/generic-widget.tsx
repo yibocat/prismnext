@@ -32,7 +32,7 @@ export const GenericWidget = memo(function GenericWidget({
       label={undefined}
       meta={
         contextTitle ? (
-          <span className="text-muted-foreground/70 truncate text-[length:var(--font-chat-meta)]">
+          <span className="text-muted-foreground/70 min-w-0 truncate text-[length:var(--font-chat-meta)]">
             {contextTitle.slice(0, 80)}
           </span>
         ) : undefined

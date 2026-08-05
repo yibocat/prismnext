@@ -39,7 +39,7 @@ import { publicationDetailsFromPaperRow, bibliographicToPaperPatch } from "../..
 import { resolveBibliographicMetadata } from "../../shared/bibliographic-metadata";
 import { readPaperPdfContent } from "./paper-extract-read";
 import { getSettings } from "./settings";
-import { PAPER_EXTRACT_AGENT_UI_HINT } from "../../shared/paper-extract";
+import { PAPER_EXTRACT_ACTION_LABEL } from "../../shared/paper-extract";
 import { discoverLiterature } from "./literature-discovery";
 import type { StagedCitationPayload, StageResult } from "../../shared/citation-staging";
 import {
@@ -528,8 +528,8 @@ function intensiveReadPdfBlocked(
     intensiveReadingRequired: true,
     hint:
       `Call literature-intensive-reading with action=add and bibkey="${bibkey}" to enable intensive reading for this chat, ` +
-      `then retry literature-read-pdf. Or ask the user to toggle Intensive reading via @ paper menu. ` +
-      `If extract is missing, run ${PAPER_EXTRACT_AGENT_UI_HINT}.`,
+      `then retry literature-read-pdf. If extract is missing, retry with force=true to start background extraction. ` +
+      `Only ask the user to toggle Intensive reading or run ${PAPER_EXTRACT_ACTION_LABEL} manually when they refuse agent control.`,
   };
 }
 

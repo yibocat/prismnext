@@ -97,7 +97,7 @@ export default tool({
       .describe("Optional origin URL (literature-discover hit, arXiv abs page, websearch) for provenance.")
       .optional(),
     discoveredFrom: tool.schema
-      .enum(["literature-discover", "paper-search-mcp", "websearch", "webfetch", "user", "agent"])
+      .enum(["literature-discover", "websearch", "webfetch", "user", "agent"])
       .describe(
         "How the identifier was discovered. Use literature-discover after literature-discover tool; websearch only as fallback.",
       )
@@ -121,7 +121,7 @@ export default tool({
         error: "Provide only one of doi or arxivId, not both.",
       });
     }
-    const allowed = ["literature-discover", "paper-search-mcp", "websearch", "webfetch", "user", "agent"] as const;
+    const allowed = ["literature-discover", "websearch", "webfetch", "user", "agent"] as const;
     const raw = typeof args.discoveredFrom === "string" ? args.discoveredFrom : "agent";
     const discoveredFrom = (allowed as readonly string[]).includes(raw)
       ? raw

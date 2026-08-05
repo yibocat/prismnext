@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { buildIntensiveReadingInstruction } from "../../src/main/prompts/per-turn/intensive-reading";
-import { PAPER_EXTRACT_ACTION_LABEL } from "../../src/shared/paper-extract";
 import { TOOL_NAMES } from "../../src/shared/tool-names";
 
 describe("buildIntensiveReadingInstruction", () => {
@@ -18,15 +17,15 @@ describe("buildIntensiveReadingInstruction", () => {
     expect(out).toContain("2. `Devlin2019` — BERT");
   });
 
-  it("mentions literature-read-pdf, cite form, and extract hint", () => {
+  it("points at literature-read-pdf without reprinting the citation manual", () => {
     const out = buildIntensiveReadingInstruction([
       { bibkey: "Vaswani2017", title: "Attention Is All You Need" },
     ]);
     expect(out).toContain(TOOL_NAMES.literatureReadPdf);
-    expect(out).toContain("p.X");
-    expect(out).toContain("[@bibkey]");
-    expect(out).toContain(PAPER_EXTRACT_ACTION_LABEL);
+    expect(out).toContain("force=true");
     expect(out).toContain("enforced by the tool");
+    expect(out).not.toContain("p.X");
+    expect(out).not.toContain("[@bibkey]");
     expect(out).not.toContain("you MUST use");
   });
 

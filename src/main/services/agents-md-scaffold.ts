@@ -212,7 +212,7 @@ export function renderAgentsMdFromDigest(parts: {
   sections.push(
     "## Working conventions",
     "",
-    "- Prefer small, incremental edits — read a file before changing it.",
+    "- Scale edits to the task — read a file before changing it; keep changes coherent with the surrounding structure.",
     "- Match existing naming, import style, and test patterns in this repo.",
     "- Do not modify generated/build output unless explicitly asked.",
     "",

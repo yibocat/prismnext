@@ -37,15 +37,3 @@ export function readBundledOrchestratorInstructions(orchestratorId: string): str
   if (!existsSync(path)) return null;
   return readFileSync(path, "utf-8");
 }
-
-export function readBundledOrchestratorDefinition(
-  orchestratorId: string,
-): OrchestratorDefinition | null {
-  const path = join(getBundledOrchestratorsDir(), orchestratorId, "orchestrator.json");
-  if (!existsSync(path)) return null;
-  try {
-    return JSON.parse(readFileSync(path, "utf-8")) as OrchestratorDefinition;
-  } catch {
-    return null;
-  }
-}

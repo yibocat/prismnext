@@ -134,15 +134,6 @@ export const SHORTCUT_REGISTRY: readonly ShortcutDef[] = [
     labelKey: "shortcuts.editor.closeSearch",
     implemented: true,
   },
-  {
-    id: "editor.synctex",
-    category: "editor",
-    remappable: false,
-    scope: "editor",
-    defaultChord: { key: "f", primary: true, shift: true },
-    labelKey: "shortcuts.editor.synctex",
-    implemented: true,
-  },
 
   // ── workspace (remappable later) ──
   {

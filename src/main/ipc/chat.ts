@@ -704,7 +704,9 @@ export function registerChatHandlers(): void {
         // Turn watchdog: OpenCode goes silent on the wire while retrying a
         // failed provider call, and never notifies the client when retries
         // are exhausted. Warn the UI on stall; auto-abort on hard timeout so
-        // the turn can never hang forever without feedback.
+        // the turn can never hang forever without feedback. While tool calls
+        // are open (Task subagents & co.) the busy-tier timeout applies —
+        // long silent tasks must survive.
         const stopWatchdog = service.startTurnWatchdog(sessionId!, {
           onStall: () => {
             emitChatPrepare(tabId, "stalled");
@@ -721,7 +723,7 @@ export function registerChatHandlers(): void {
             });
             void service.abortPrimarySession(sessionId!).catch(() => {});
           },
-          onTimeout: (silentMs) => {
+          onTimeout: (silentMs, busy) => {
             turnSettledByWatchdog = true;
             void service.abortPrimarySession(sessionId!).catch(() => {});
             clearPrepare();
@@ -729,7 +731,9 @@ export function registerChatHandlers(): void {
               tabId,
               sessionId,
               success: false,
-              error: `No response from the model for ${Math.round(silentMs / 1000)}s — the turn was stopped.`,
+              error: busy
+                ? `No activity for ${Math.round(silentMs / 1000)}s while tools were still running — the turn was stopped.`
+                : `No response from the model for ${Math.round(silentMs / 1000)}s — the turn was stopped.`,
               errorCode: "turn_timeout",
             });
           },

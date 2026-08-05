@@ -143,8 +143,8 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     description: "Search papers in the project literature library",
     category: "reference",
     usageHint:
-      "Full-text search only within the local library (`.prismnext/library/library.db`). " +
-      "Use to find papers already added to the project. Does NOT search the web or external catalogs. " +
+      "Metadata search within the local library (`.prismnext/library/library.db`): title, abstract, authors, bibkey, tags, AI summary — NOT full text (use literature-read-pdf for PDF content). " +
+      "Does NOT search the web or external catalogs. " +
       "Optional collection= filters by collection name; the response always includes a `collections` roster (id, name, paperCount).",
     workflowRules: [
       "BINDING: External topic / literature recommendations / papers not yet in the library → use literature-discover, NOT this tool.",
@@ -176,11 +176,10 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "and stage a session citation. Returns metadata + a `refId`. No library write. " +
       "This is the DEFAULT for any paper you cite.",
     workflowRules: [
-      "BINDING: No `[n]` / paper list in reply until every stage call this turn returned a verified refId.",
-      "BINDING: literature-discover only discovers IDs — after results, stage each paper you will mention, then reply. Do not bash/rg tool-output spills.",
-      "Discover → stage → one reply with `[n]`. Do not Task-out discovery/staging. Exact DOI/arXiv only — never invent.",
+      "BINDING: No `[n]` / paper list in reply until every stage call this turn returned a verified refId — `verified: false` means do not cite.",
+      "BINDING: literature-discover only discovers IDs — stage each paper you will mention, then one reply with `[n]`. Do not bash/rg tool-output spills.",
+      "Exact DOI/arXiv only — never invent. Do not delegate discovery/staging to a subagent when you can run it in this conversation.",
       "Layout: `**Title** [n]` + short summary per line; reuse `[n]` for the same paper; no markdown ordered-list citations.",
-      "If `verified: false`, do not write `[n]`. Topic search: literature-discover then stage (`discoveredFrom: \"literature-discover\"`); websearch only as fallback.",
       `Do not call ${TOOL_NAMES.literatureAdd} unless the user explicitly asks to add to the library.`,
     ],
   },
@@ -264,16 +263,13 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     usageHint:
       "Single source of truth for citation compliance — replaces separate bib-check and library-check calls. " +
       "Scans all project .tex automatically. Returns JSON: bibCheck (missingKeys, unusedKeys, duplicateKeys, bibPath), " +
-      "libraryCheck (missingKeys, unusedKeys), bibFallback (entries importable from manuscript .bib; each entry has " +
-      "verified=true/false when verify=true — true means DOI/arXiv resolved in catalogs = traceable, false = unverifiable/fabricated), " +
-      "bibKeysNotInLibrary. verify defaults true.",
+      "libraryCheck, bibFallback (importable entries; verified=false = unverifiable/suspected fabrication), bibKeysNotInLibrary. " +
+      "verify defaults true.",
     workflowRules: [
       "BINDING: call this tool directly in this conversation — never via the Task tool or subagents, never substitute read/glob/grep on .tex or .bib.",
-      "When the user asks to check citations, bibliography, or references, invoke this tool directly — do not delegate.",
-      "One call returns the full .tex ↔ .bib ↔ library picture — do not also call latex-bib-check or literature-cite-check (removed).",
       "Do not write the compliance report until this tool has returned for this turn.",
-      "When verify=true, bibFallback.verified flags fabricated/untraceable references — report unverified entries as suspected fabrication, and do NOT recommend importing them unless the user confirms the identifier.",
-      "Reuse the Session citation audit snapshot if present below — do not re-run unless .tex/.bib changed or the user asks for a fresh check.",
+      "bibFallback.verified=false → report as suspected fabrication; do NOT recommend importing unless the user confirms the identifier.",
+      "Reuse the Session citation audit snapshot if present — do not re-run unless .tex/.bib changed or the user asks for a fresh check.",
     ],
   },
   {
@@ -389,21 +385,16 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "Workspace lab: `<experiment-dir>/<id>/` (clean folder — agent-owned layout).",
     category: "project",
     usageHint:
-      "action=create opens a new experiment (registry + workspace folder + best-effort shared `.prismnext/.venv`); action=list lists experiments; " +
-      "action=read returns meta + lean recent runs (no stdout/stderr by default) plus oldestRun/latestRun; " +
-      "action=append_run logs a run you describe; " +
-      "action=detect_env / open ensure shared `.prismnext/.venv` then snapshot or focus UI. Requires a configured Experiment folder.",
+      "action=create opens a new experiment (registry + workspace folder + best-effort shared `.prismnext/.venv`); " +
+      "action=list; action=read returns meta + lean recent runs plus oldestRun/latestRun; " +
+      "action=append_run logs a run you describe; action=detect_env / open. " +
+      "Requires a configured Experiment folder.",
     workflowRules: [
-      "Do NOT use generic read/write/edit on `.prismnext/experiments/**/meta.json` or runs.jsonl — use this tool only.",
-      "Do not write meta.json or runs.jsonl under the Workspace experiment folder — registry only.",
+      "Do NOT use generic read/write/edit on registry files (meta.json / runs.jsonl) — use this tool only; the `<experiment-dir>/<id>/` layout is agent-owned.",
       "On create, briefLinks (sections + hypothesis excerpt) are optional but useful when `.brief.md` has a clear claim — not a completion gate.",
-      "Python: one shared `.prismnext/.venv` for all islands (and other project Python) — `uv pip install` from workspace or island cwd. " +
-      "Never system Python / bare pip; never create a separate `.venv` under each island or under `<experiment-dir>/`.",
-      "Workspace layout inside `<experiment-dir>/<id>/` is agent-owned — no prescribed scripts/results dirs.",
-      "If no_experiment_folder is returned, ask the user to add an Experiment folder in Settings → Workspace.",
-      "Do not delegate experiment reads/writes via Task — run this tool in the orchestrator conversation.",
-      "For “第一次 / 最新一次” use oldestRun / latestRun from action=read — do not take runs[0] of a short window as the first-ever run.",
-      "Keep action=read lean (default). Only set includeOutput=true when you truly need stdout/stderr tails.",
+      "Python: one shared `.prismnext/.venv` for all islands — `uv pip install`. Never system Python / bare pip / per-island `.venv`.",
+      "Do not delegate experiment reads/writes via Task — run this tool in the orchestrator conversation. no_experiment_folder → ask the user to add an Experiment folder in Settings.",
+      "For “第一次 / 最新一次” use oldestRun / latestRun — runs[0] of a short window is not the first-ever run. includeOutput=true only when you truly need stdout/stderr tails.",
     ],
   },
   {

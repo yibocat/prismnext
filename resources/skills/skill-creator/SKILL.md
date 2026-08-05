@@ -74,6 +74,7 @@ Rules:
 ## Quality bar
 
 - Prefer actionable steps over generic advice
+- Skills earn their place by orchestrating this app's tools (literature-*, experiment-*, latex-*, citation-health, …) or encoding heavy procedures — generic writing advice the model already knows does not belong in a skill
 - Include examples or checklists when helpful
 - If similar skills exist in the project, match their tone and depth
 - Do not create skills for one-off tasks that do not need reuse

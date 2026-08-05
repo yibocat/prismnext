@@ -1,7 +1,7 @@
 import { BrowserWindow, dialog, ipcMain } from "electron";
 import { basename, extname, join } from "node:path";
 import { readFile } from "node:fs/promises";
-import { compileLatex, synctexEdit, synctexForward } from "../services/compiler";
+import { compileLatex } from "../services/compiler";
 import { detectTexlive, detectTectonic } from "../services/texlive-detect";
 import { createLogger } from "../services/logger";
 import {
@@ -68,26 +68,6 @@ export function registerCompileHandlers(): void {
         log.warn("compile:execute failed", { error: result.error || "unknown" });
         return { error: result.error || "Compilation failed", stdout: result.logContent };
       }
-    },
-  );
-
-  ipcMain.handle(
-    "compile:synctex",
-    async (
-      _event,
-      args: { projectDir: string; page: number; x: number; y: number },
-    ) => {
-      return synctexEdit(args.projectDir, args.page, args.x, args.y);
-    },
-  );
-
-  ipcMain.handle(
-    "compile:synctexForward",
-    async (
-      _event,
-      args: { projectDir: string; file: string; line: number },
-    ) => {
-      return synctexForward(args.projectDir, args.file, args.line);
     },
   );
 

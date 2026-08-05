@@ -7,11 +7,13 @@ export interface ExpertDefinition {
   model?: string;
   thoughtLevel?: string;
   temperature?: number;
-  skills?: string[];
-  mcpServers?: string[];
+  /**
+   * Subset of shared profile prompt-module keys attached to this expert's
+   * agent.md (trim what a Task call pays for — e.g. peer-reviewer needs no
+   * experiments module). Absent → all shared expert modules. expertOnly
+   * modules (subagent-role) are always attached.
+   */
   modules?: string[];
-  commands?: string[];
-  rules?: string[];
   permission?: Record<string, unknown>;
 }
 
@@ -27,11 +29,6 @@ export interface OrchestratorDefinition {
   thoughtLevel?: string;
   temperature?: number;
   allowedExperts?: string[];
-  skills?: string[];
-  mcpServers?: string[];
-  modules?: string[];
-  commands?: string[];
-  rules?: string[];
   permission?: Record<string, unknown>;
 }
 
@@ -69,13 +66,6 @@ export interface PrismExpertsSyncState {
   syncContentHash?: string;
 }
 
-export interface ExpertRuntimeFilters {
-  modules?: string[];
-  skills?: string[];
-  mcpServers?: string[];
-  commands?: string[];
-}
-
 export interface SaveCustomExpertPayload {
   id?: string;
   name: string;
@@ -84,17 +74,12 @@ export interface SaveCustomExpertPayload {
   model?: string;
   thoughtLevel?: string;
   temperature?: number;
-  skills?: string[];
-  mcpServers?: string[];
   modules?: string[];
   permission?: Record<string, unknown>;
 }
 
 export interface SaveBuiltinExpertOverridePayload {
   expertId: string;
-  skills?: string[];
-  mcpServers?: string[];
-  modules?: string[];
   model?: string;
   thoughtLevel?: string;
   temperature?: number;
@@ -104,9 +89,6 @@ export interface SaveBuiltinExpertOverridePayload {
 export interface SaveBuiltinOrchestratorOverridePayload {
   orchestratorId: string;
   allowedExperts?: string[];
-  skills?: string[];
-  mcpServers?: string[];
-  modules?: string[];
   model?: string;
   thoughtLevel?: string;
   temperature?: number;
@@ -122,9 +104,6 @@ export interface SaveCustomOrchestratorPayload {
   model?: string;
   thoughtLevel?: string;
   temperature?: number;
-  skills?: string[];
-  mcpServers?: string[];
-  modules?: string[];
   permission?: Record<string, unknown>;
 }
 

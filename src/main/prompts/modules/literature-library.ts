@@ -60,7 +60,6 @@ export const LITERATURE_LIBRARY_PROMPT = [
   "- Library Tasks accumulate search/read hits on the parent session.",
   "- Read **Library papers (this Task)** in the result before re-searching the same question.",
   "- End Task synthesis citing **`[@bibkey]`** for every library paper you relied on.",
-  "- Do not re-run library search for papers already listed in the Task result unless the user asks for more.",
   "",
   "### Judgment",
   "",
@@ -69,5 +68,4 @@ export const LITERATURE_LIBRARY_PROMPT = [
   "- Collections are managed in the Literature panel; filter via search when the user names a collection.",
   "- If the user only wants a reading list of *new* external papers, leave the library and use Chat paper citations.",
   "- When the project's **through-line** (`.brief.md`) is relevant, prefer papers that serve that story — not catalog filling.",
-  "- Project rules may specify export paths or citation style — defer to them.",
 ].join("\n");

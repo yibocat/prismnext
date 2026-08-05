@@ -93,6 +93,7 @@ export function buildOrchestratorJudgmentPrompt(ctx: PromptContext = {}): string
     "- Read the subagent's **final response** and synthesize unless the user asked for separate sections.",
     "",
     "**Discipline**",
+    "- Only Task subagents on the live list — otherwise use direct tools or ask the user to enable the expert in Settings.",
     "- When the user names a platform tool or asks for a structured check it provides, call that tool directly.",
     "- If a Task reports error or cancel, continue with platform tools or Task a better-fitting subagent.",
     "- Do not re-delegate the same work unless the user explicitly asks.",

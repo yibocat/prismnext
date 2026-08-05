@@ -52,7 +52,7 @@ export const GrepWidget = memo(function GrepWidget({
             </span>
           )}
           {path && (
-            <span className="text-muted-foreground/50 truncate text-[length:var(--font-chat-meta)] hidden sm:inline">
+            <span className="text-muted-foreground/50 min-w-0 truncate text-[length:var(--font-chat-meta)] hidden sm:inline">
               in <ChatFileLink path={path} className="font-normal inline" />
             </span>
           )}

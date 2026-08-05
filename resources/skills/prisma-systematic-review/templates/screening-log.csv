@@ -1,0 +1,5 @@
+stage,source,query_or_ref,records,decision,reason,date,reviewer
+identification,arxiv,"""exact query string as executed""",,,,,
+identification,crossref,,,,,,
+screening-title-abstract,,,doi-or-arxiv-id,include|exclude|maybe,reason-if-exclude,,
+screening-full-text,,,doi-or-arxiv-id,include|exclude,reason-if-exclude,,

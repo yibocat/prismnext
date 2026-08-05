@@ -938,7 +938,59 @@ html[data-theme="dark"] .backdrop-shell--constellation {
   color: var(--ink-muted);
 }
 
-/* ── §3 appearance ── */
+/* ── §2 skills library ── */
+
+.skill-tiers {
+  margin-top: 1.6rem;
+  display: grid;
+  gap: 1.7rem;
+}
+
+.skill-tier-head {
+  margin: 0 0 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-hot);
+}
+
+.skill-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 2.2rem;
+}
+
+.skill-list li {
+  padding: 0.5rem 0;
+  border-bottom: 1px dashed var(--line-strong);
+}
+
+.skill-list code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--accent);
+  margin-bottom: 0.1rem;
+}
+
+.skill-list span {
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
+
+@media (max-width: 860px) {
+  .skill-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── theme packs (topbar) & light/dark compare (§2) ── */
 
 /* Topbar pack dots (rendered by theme-preview.js into [data-pack-picker]) */
 .pack-dots {
@@ -1175,6 +1227,12 @@ html[data-theme="dark"] .backdrop-shell--constellation {
   text-align: center;
 }
 
+.colophon--fine {
+  padding-top: 0.3rem;
+  padding-bottom: 0.4rem;
+  border-top: 0;
+}
+
 /* ── Marginalia (handwritten side notes, wide screens only) ── */
 
 .margin-note {
@@ -1207,12 +1265,6 @@ html[data-theme="dark"] .backdrop-shell--constellation {
   transform: rotate(-3deg);
 }
 
-.mn-4 {
-  top: 24%;
-  left: -11.5rem;
-  transform: rotate(3deg);
-}
-
 .mn-5 {
   top: 34%;
   right: -11.5rem;
@@ -1223,6 +1275,12 @@ html[data-theme="dark"] .backdrop-shell--constellation {
   top: 6%;
   left: -11.5rem;
   transform: rotate(2.5deg);
+}
+
+.mn-7 {
+  top: 93%;
+  right: -11.5rem;
+  transform: rotate(-2.5deg);
 }
 
 @media (min-width: 1360px) {
@@ -1253,9 +1311,9 @@ html[data-theme="dark"] .backdrop-shell--constellation {
 .margin-note.reveal-on-scroll.is-visible.mn-1 { transform: rotate(-4deg); }
 .margin-note.reveal-on-scroll.is-visible.mn-2 { transform: rotate(3deg); }
 .margin-note.reveal-on-scroll.is-visible.mn-3 { transform: rotate(-3deg); }
-.margin-note.reveal-on-scroll.is-visible.mn-4 { transform: rotate(3deg); }
 .margin-note.reveal-on-scroll.is-visible.mn-5 { transform: rotate(-3.5deg); }
 .margin-note.reveal-on-scroll.is-visible.mn-6 { transform: rotate(2.5deg); }
+.margin-note.reveal-on-scroll.is-visible.mn-7 { transform: rotate(-2.5deg); }
 
 @media (prefers-reduced-motion: reduce) {
   html {

@@ -45,6 +45,22 @@ export function resolveExpertProfileModuleKeys(): string[] {
 }
 
 /**
+ * Module keys for one expert's agent.md. The expert definition's `modules`
+ * list trims the shared profile modules to what this expert actually needs —
+ * an expert Task call pays the full system-side cost of every module we
+ * attach (peer-reviewer needs no experiments/latex compile chain). expertOnly
+ * modules (subagent-role) are always kept; unknown keys are ignored.
+ */
+export function resolveExpertProfileModuleKeysFor(def: { modules?: string[] }): string[] {
+  const all = resolveExpertProfileModuleKeys();
+  if (!def.modules?.length) return all;
+  const sharedKeys = new Set(resolveSharedProfileModules().map((m) => m.key));
+  const picked = def.modules.filter((k) => sharedKeys.has(k));
+  const alwaysKept = all.filter((k) => !sharedKeys.has(k));
+  return [...new Set([...picked, ...alwaysKept])];
+}
+
+/**
  * Join scoped module prompts for agent profile sync (orchestrator / expert agent.md).
  * Workspace globals are already in `_prism-system.md`.
  */

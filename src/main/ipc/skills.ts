@@ -31,6 +31,7 @@ import {
 import {
   listBundledSkills,
   copyBundledSkillToProject,
+  readBundledSkillMd,
 } from "../services/bundled-skills";
 
 function refreshProjectSkills(
@@ -99,6 +100,10 @@ export function registerSkillsHandlers(): void {
       return refreshProjectSkills(args.projectPath);
     },
   );
+
+  ipcMain.handle("agent:readBundledSkillMd", async (_event, args: { skillId: string }) => {
+    return readBundledSkillMd(args.skillId);
+  });
 
   ipcMain.handle("agent:syncSkills", async (_event, args: { projectPath: string }) => {
     if (!args.projectPath) return { skillsCount: 0, configPath: "", registryUrls: [] as string[] };

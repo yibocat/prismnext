@@ -13,7 +13,6 @@ import type { PromptContext } from "../prompts/types";
 import {
   type ExpertDefinition,
   type ExpertInfo,
-  type ExpertRuntimeFilters,
   type ExpertsManifest,
   type OrchestratorDefinition,
   type OrchestratorInfo,
@@ -35,9 +34,10 @@ import {
 } from "./bundled-orchestrators";
 import {
   resolveOrchestratorActiveModuleKeys,
-  resolveExpertActiveModuleKeys,
+  resolveActiveModuleKeys,
+  resolveExpertProfileModuleKeysFor,
   composeOrchestratorProfileModulePrompts,
-  composeExpertProfileModulePrompts,
+  composeProfileModulePrompts,
 } from "../prompts/resolve-active-modules";
 import { buildSubagentRosterMarkdown } from "../../shared/subagent-roster";
 import { buildTaskPermissionBlock } from "./task-orchestrator-gate";
@@ -196,12 +196,6 @@ function applyExpertOverride(
   if (!override) return expert;
   return {
     ...expert,
-    skills: override.skills !== undefined
-      ? override.skills.length ? override.skills : undefined
-      : expert.skills,
-    mcpServers: override.mcpServers !== undefined
-      ? override.mcpServers.length ? override.mcpServers : undefined
-      : expert.mcpServers,
     modules: override.modules !== undefined
       ? override.modules.length ? override.modules : undefined
       : expert.modules,
@@ -224,15 +218,6 @@ function applyOrchestratorOverride(
     allowedExperts: override.allowedExperts !== undefined
       ? override.allowedExperts
       : orchestrator.allowedExperts,
-    skills: override.skills !== undefined
-      ? override.skills.length ? override.skills : undefined
-      : orchestrator.skills,
-    mcpServers: override.mcpServers !== undefined
-      ? override.mcpServers.length ? override.mcpServers : undefined
-      : orchestrator.mcpServers,
-    modules: override.modules !== undefined
-      ? override.modules.length ? override.modules : undefined
-      : orchestrator.modules,
     model: override.model !== undefined ? override.model || undefined : orchestrator.model,
     thoughtLevel: override.thoughtLevel !== undefined
       ? override.thoughtLevel || undefined
@@ -309,7 +294,10 @@ export function listExperts(projectRoot: string): ExpertInfo[] {
   const disabled = new Set(manifest.disabledBuiltinIds ?? []);
   return mergeExpertDefinitions(projectRoot).map((expert) => {
     const instructions = readExpertInstructions(projectRoot, expert);
-    const effectiveModules = resolveExpertActiveModuleKeys();
+    const effectiveModules = resolveActiveModuleKeys({
+      role: "expert",
+      profileModules: resolveExpertProfileModuleKeysFor(expert),
+    });
     return {
       ...expert,
       enabled: expert.builtin ? !disabled.has(expert.id) : true,
@@ -365,34 +353,18 @@ export function resolveOrchestratorId(
   return found?.enabled ? found.id : DEFAULT_ORCHESTRATOR_ID;
 }
 
-export function getExpertRuntimeFilters(
-  projectRoot: string,
-  expertId: string,
-): ExpertRuntimeFilters | null {
-  const expert = getExpert(projectRoot, expertId);
-  if (!expert?.enabled) return null;
-  return {};
-}
-
-export function getOrchestratorRuntimeFilters(
-  projectRoot: string,
-  orchestratorId: string,
-): ExpertRuntimeFilters | null {
-  const orchestrator = getOrchestrator(projectRoot, orchestratorId);
-  if (!orchestrator?.enabled) return null;
-  return {};
-}
-
 function appendCapabilityRefs(
   def: ExpertDefinition | OrchestratorDefinition,
   body: string,
   promptCtx: PromptContext = {},
   role: "orchestrator" | "expert",
 ): string {
+  // Experts compose from their manifest `modules` subset — an expert Task
+  // call pays the full system-side cost of every module we attach.
   const modulePrompts =
     role === "orchestrator"
       ? composeOrchestratorProfileModulePrompts(promptCtx)
-      : composeExpertProfileModulePrompts(promptCtx);
+      : composeProfileModulePrompts(resolveExpertProfileModuleKeysFor(def), promptCtx);
   const sections: string[] = [body.trim()];
   if (modulePrompts) {
     sections.push("", "---", "", modulePrompts);
@@ -795,6 +767,7 @@ export function saveCustomExpert(
     model: payload.model?.trim() || undefined,
     thoughtLevel: payload.thoughtLevel?.trim() || undefined,
     temperature: payload.temperature,
+    modules: payload.modules?.length ? payload.modules : undefined,
     permission: payload.permission,
   };
 
@@ -995,11 +968,15 @@ export function listDisabledBuiltinExperts(projectRoot: string): ExpertInfo[] {
     .filter((e) => disabled.has(e.id))
     .map((e) => {
       const instructions = readBundledExpertInstructions(e.id)?.trim() || "";
+      const overridden = applyExpertOverride({ ...e, builtin: true, removable: false }, manifest.builtinOverrides?.[e.id]);
       return {
-        ...applyExpertOverride({ ...e, builtin: true, removable: false }, manifest.builtinOverrides?.[e.id]),
+        ...overridden,
         enabled: false,
         instructionsPreview: instructionsPreview(instructions),
-        effectiveModules: resolveExpertActiveModuleKeys(),
+        effectiveModules: resolveActiveModuleKeys({
+          role: "expert",
+          profileModules: resolveExpertProfileModuleKeysFor(overridden),
+        }),
       };
     });
 }

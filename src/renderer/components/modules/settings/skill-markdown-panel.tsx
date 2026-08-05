@@ -26,7 +26,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<"source" | "preview">(
-    slot.mode === "edit" ? "preview" : "source",
+    slot.mode === "new" ? "source" : "preview",
   );
 
   const skillDirRel =
@@ -44,6 +44,21 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
         setContent(template);
         setSavedContent(template);
         if (!silent) setLoading(false);
+        return;
+      }
+      if (slot.mode === "preview-bundled") {
+        if (!silent) setLoading(true);
+        try {
+          const text = await window.electronAPI.agentReadBundledSkillMd(slot.skillId);
+          if (text == null) throw new Error("bundled skill not found");
+          setContent(text);
+          setSavedContent(text);
+        } catch {
+          toast.error(t("settings.editor.skillMd.toast.loadFailed"));
+          closePanel();
+        } finally {
+          if (!silent) setLoading(false);
+        }
         return;
       }
       if (!skillPath) {
@@ -65,7 +80,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
         if (!silent) setLoading(false);
       }
     },
-    [slot.mode, skillPath, closePanel, t],
+    [slot.mode, slot.mode === "new" ? null : slot.skillId, skillPath, closePanel, t],
   );
 
   const handleRefresh = useCallback(async () => {
@@ -79,8 +94,8 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
 
   useEffect(() => {
     void loadContent();
-    setViewMode(slot.mode === "edit" ? "preview" : "source");
-  }, [loadContent, slot.mode, slot.mode === "edit" ? slot.skillId : null]);
+    setViewMode(slot.mode === "new" ? "source" : "preview");
+  }, [loadContent, slot.mode, slot.mode === "new" ? null : slot.skillId]);
 
   const handleSave = async () => {
     if (!projectRoot) return;
@@ -119,7 +134,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
     }
   };
 
-  if (!projectRoot) {
+  if (!projectRoot && slot.mode !== "preview-bundled") {
     return (
       <div className="flex flex-1 items-center justify-center px-8 text-[length:var(--font-size-13)] text-muted-foreground">
         {t("settings.editor.skillMd.openProject")}
@@ -140,13 +155,18 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
       <SettingsMarkdownToolbar
         viewMode={viewMode}
         onViewModeChange={setViewMode}
-        onRefresh={slot.mode === "edit" ? () => void handleRefresh() : undefined}
+        readOnly={slot.mode === "preview-bundled"}
+        onRefresh={slot.mode !== "new" ? () => void handleRefresh() : undefined}
         refreshing={refreshing}
-        actions={{
-          onSave: () => void handleSave(),
-          onCancel: closePanel,
-          saving,
-        }}
+        actions={
+          slot.mode === "preview-bundled"
+            ? undefined
+            : {
+                onSave: () => void handleSave(),
+                onCancel: closePanel,
+                saving,
+              }
+        }
       />
 
       <div className="flex-1 min-h-0">

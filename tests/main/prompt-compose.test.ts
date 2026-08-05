@@ -12,7 +12,7 @@ describe("promptManager.compose", () => {
   it("includes default core persona when no custom prompt", () => {
     const composed = promptManager.compose({});
     expect(composed).toContain("# prismnext");
-    expect(composed).toContain("## Who you are");
+    expect(composed).toContain("## How you collaborate");
     expect(composed).toContain(CORE_PERSONA_PROMPT.slice(0, 40));
     expect(composed.length).toBeGreaterThan(200);
   });

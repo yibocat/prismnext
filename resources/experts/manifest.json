@@ -5,7 +5,7 @@
       "name": "Literature Synthesizer",
       "description": "Cross-paper synthesis — gathers evidence with tools, returns themes/gaps/conflicts for the orchestrator.",
       "builtin": true,
-      "skills": ["literature-review"],
+      "modules": ["literature-library", "chat-citation-staging", "project-brief", "research-design"],
       "permission": {
         "task": { "*": "deny" }
       }
@@ -15,6 +15,7 @@
       "name": "Research Design Coach",
       "description": "Pressure-tests research questions, hypotheses, and contribution before work is committed.",
       "builtin": true,
+      "modules": ["research-design", "project-brief"],
       "permission": {
         "task": { "*": "deny" }
       }
@@ -24,6 +25,7 @@
       "name": "Methodology Auditor",
       "description": "Audits experimental design, statistical validity, and reproducibility — outputs a risk list, not rewrites.",
       "builtin": true,
+      "modules": ["experiments", "research-design", "project-brief"],
       "permission": {
         "task": { "*": "deny" }
       }
@@ -33,7 +35,7 @@
       "name": "Structure Diagnostician",
       "description": "Diagnoses manuscript structure and argument chain — priority diagnosis, not a rewrite.",
       "builtin": true,
-      "skills": ["paper-structure"],
+      "modules": ["latex-workspace", "project-brief", "research-design"],
       "permission": {
         "task": { "*": "deny" }
       }
@@ -43,7 +45,7 @@
       "name": "Peer Reviewer",
       "description": "Simulates an independent reviewer — strengths, weaknesses, decision recommendation; includes citation prose review.",
       "builtin": true,
-      "skills": ["peer-review-response", "academic-citations"],
+      "modules": ["project-brief", "research-design", "citation-audit"],
       "permission": {
         "task": { "*": "deny" }
       }

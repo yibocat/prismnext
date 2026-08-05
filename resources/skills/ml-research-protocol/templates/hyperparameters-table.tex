@@ -1,0 +1,29 @@
+% hyperparameters-table.tex — appendix table. Completeness is the point:
+% a reader must be able to rerun from this table plus the code.
+\begin{table}[t]
+  \centering
+  \caption{Hyperparameters. Search ranges in brackets; the selected value is
+    the final column. All methods share the tuning budget (see text).}
+  \label{tab:hyperparameters}
+  \begin{tabular}{lll}
+    \toprule
+    Hyperparameter & Search range & Selected \\
+    \midrule
+    Optimizer & --- & AdamW \\
+    Learning rate & [$10^{-4}$, $3\times10^{-3}$] & $10^{-3}$ \\
+    Weight decay & [$10^{-5}$, $10^{-2}$] & $10^{-3}$ \\
+    Batch size & \{128, 256, 512\} & 256 \\
+    Epochs / steps & --- & 100 \\
+    Warmup & \{0, 5\} epochs & 5 \\
+    LR schedule & --- & cosine \\
+    Precision & --- & bf16 \\
+    \midrule
+    Tuning trials per method & --- & 20 (validation <metric>) \\
+    Seeds (predefined) & --- & 1, 2, 3, 4, 5 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+% Notes:
+%  - One table per experiment family; group rows with \midrule, not sections.
+%  - Framework/library versions belong in the reproducibility statement,
+%    not here.

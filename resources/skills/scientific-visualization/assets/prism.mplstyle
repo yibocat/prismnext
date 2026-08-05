@@ -1,0 +1,49 @@
+# prismnext publication style for matplotlib
+# Apply with: plt.style.use("prism.mplstyle")
+
+# Figure size for a single column (~3.5in) at publication scale
+figure.figsize:        3.5, 2.6
+figure.dpi:            150
+savefig.dpi:           300
+savefig.bbox:          tight
+savefig.transparent:   False
+
+# Fonts — embed in PDF so venues accept the file
+font.family:           serif
+font.size:             8
+axes.titlesize:        8
+axes.labelsize:        8
+xtick.labelsize:       7
+ytick.labelsize:       7
+legend.fontsize:       7
+pdf.fonttype:          42
+ps.fonttype:           42
+axes.unicode_minus:    False
+
+# Okabe-Ito colorblind-safe cycle
+axes.prop_cycle: cycler('color', ['0072B2', 'E69F00', '009E73', 'D55E00', 'CC79A7', '56B4E9', 'F0E442', '000000'])
+
+# Spines & grid — minimal ink
+axes.spines.top:       False
+axes.spines.right:     False
+axes.grid:             True
+grid.alpha:            0.25
+grid.linewidth:        0.5
+axes.axisbelow:        True
+
+# Lines & markers
+lines.linewidth:       1.5
+lines.markersize:      4
+
+# Legend — unobtrusive
+legend.frameon:        False
+legend.handlelength:   1.6
+
+# Error bars
+errorbar.capsize:      2
+
+# Ticks
+xtick.direction:       out
+ytick.direction:       out
+xtick.major.size:      3
+ytick.major.size:      3

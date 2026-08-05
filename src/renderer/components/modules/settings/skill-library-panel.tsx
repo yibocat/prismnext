@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { ArrowUpRightIcon, LibraryIcon, Loader2Icon, SearchIcon } from "lucide-react";
+import { ArrowUpRightIcon, EyeIcon, LibraryIcon, Loader2Icon, SearchIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useDocumentStore } from "@/stores/document-store";
 import { openUrlInBrowser } from "@/lib/browser-link";
+import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { bumpSkillsRefresh } from "@/lib/settings/skills-refresh";
 import { SKILL_CATEGORY_LABELS } from "@/lib/agent/skill-categories";
 import { GITHUB_SKILL_PRESETS } from "@/lib/agent/skill-libraries";
@@ -524,6 +525,23 @@ export function SkillLibraryPanel() {
                           {item.sourceLabel}
                         </span>
                         <div className="flex items-center gap-1 shrink-0">
+                          {item.sourceKind === "bundled" ? (
+                            <button
+                              type="button"
+                              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                              title={t("settings.editor.skills.preview")}
+                              onClick={() =>
+                                openSettingsPanel({
+                                  kind: "skill-markdown",
+                                  mode: "preview-bundled",
+                                  skillId: item.skillId,
+                                  title: item.name,
+                                })
+                              }
+                            >
+                              <EyeIcon className="size-3.5" />
+                            </button>
+                          ) : null}
                           {item.sourceKind === "remote" && item.artifactUrl ? (
                             <button
                               type="button"

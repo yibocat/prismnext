@@ -65,8 +65,7 @@ class PromptManager {
     this.composer.preComputeStatic();
 
     this.initialized = true;
-    console.log("[prismnext] PromptManager initialized (4 layers, 4 modules)");
-    log.info("PromptManager initialized");
+    log.info(`PromptManager initialized (${this.composer.getLayers().length} layers)`);
   }
 
   // -----------------------------------------------------------------

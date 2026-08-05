@@ -1,0 +1,18 @@
+% commutative-diagram.tex — tikz-cd template (standalone).
+% Compile: pdflatex/lualatex/xelatex.
+\documentclass[tikz,border=4pt]{standalone}
+\usepackage{tikz-cd}
+
+\begin{document}
+\begin{tikzcd}[row sep=large, column sep=large]
+X \arrow[r, "f"] \arrow[d, "g"'] \arrow[dr, dashed, "h"]
+  & Y \arrow[d, "k"] \\
+Z \arrow[r, "u"']
+  & W
+\end{tikzcd}
+% Notes:
+%  - "f" labels above/left; "g"' (prime) flips to below/right.
+%  - dashed / dotted /Rightarrow for arrow styles; bend left=30 to curve.
+%  - Ampersand pitfall: inside \node or beamer, use [ampersand replacement=\&]
+%    and write \& between cells.
+\end{document}

@@ -866,7 +866,6 @@
         "italic": "Wrap selection in \\textit{}",
         "comment": "Toggle comment",
         "closeSearch": "Close search panel",
-        "synctex": "Forward search (SyncTeX) to PDF",
         "newChat": "New chat tab",
         "send": "Send message (composer focused)",
         "newline": "New line in composer",
@@ -1095,6 +1094,7 @@
         "install": "Install",
         "installed": "Installed",
         "openUrl": "Open skill URL in browser",
+        "preview": "Preview skill",
         "category": {
           "academic": "Academic",
           "general": "General"
@@ -1478,8 +1478,7 @@
       "bold": "Bold (\\textbf{})",
       "italic": "Italic (\\textit{})",
       "comment": "Toggle comment",
-      "closeSearch": "Close search panel",
-      "synctex": "Forward SyncTeX to PDF"
+      "closeSearch": "Close search panel"
     },
     "workspace": {
       "nextTab": "Next workspace tab",

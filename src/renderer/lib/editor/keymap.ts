@@ -42,8 +42,6 @@ export function wrapWithLatexCommand(command: string): Command {
 export type EditorKeymapOptions = {
   /** Include LaTeX wrap bindings (bold / italic). */
   latexWrap?: boolean;
-  /** Forward SyncTeX handler; omit to skip binding. */
-  onSynctexForward?: Command;
   overrides?: ShortcutOverrides;
 };
 
@@ -64,11 +62,11 @@ function bindingFor(
 }
 
 /**
- * Registry-driven editor key bindings (find / wrap / comment / Esc / SyncTeX).
+ * Registry-driven editor key bindings (find / wrap / comment / Esc).
  * Callers still own save / merge accept-reject bindings.
  */
 export function buildEditorKeyBindings(options: EditorKeymapOptions = {}): KeyBinding[] {
-  const { latexWrap = false, onSynctexForward, overrides } = options;
+  const { latexWrap = false, overrides } = options;
   const bindings: KeyBinding[] = [];
 
   // Same scopes as @codemirror/search searchKeymap — required so Esc works
@@ -91,11 +89,6 @@ export function buildEditorKeyBindings(options: EditorKeymapOptions = {}): KeyBi
     if (bold) bindings.push(bold);
     const italic = bindingFor("editor.italic", wrapWithLatexCommand("textit"), overrides);
     if (italic) bindings.push(italic);
-  }
-
-  if (onSynctexForward) {
-    const synctex = bindingFor("editor.synctex", onSynctexForward, overrides);
-    if (synctex) bindings.push(synctex);
   }
 
   return bindings;

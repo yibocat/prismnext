@@ -25,7 +25,7 @@ describe("buildOpencodeToolDescription", () => {
     expect(text).toContain("BINDING:");
     expect(text).toContain("literature-discover");
     expect(text).toContain("No library write");
-    expect(text).toContain("Task-out discovery");
+    expect(text).toContain("Do not delegate discovery/staging to a subagent");
   });
 
   it("reflects registry workflow rule changes without a prompt module", () => {

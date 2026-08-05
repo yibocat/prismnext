@@ -8,15 +8,23 @@ import { listProjectSkills } from "../../src/main/services/skills-sync";
 const RESOURCES_SKILLS = join(process.cwd(), "resources", "skills");
 
 describe("bundled skills resources", () => {
-  it("manifest lists 17 curated skills", () => {
+  it("manifest lists 19 curated skills", () => {
     const manifest = JSON.parse(
       readFileSync(join(RESOURCES_SKILLS, "manifest.json"), "utf-8"),
     );
-    expect(manifest.skills).toHaveLength(17);
+    expect(manifest.skills).toHaveLength(19);
     const ids = manifest.skills.map((s: { id: string }) => s.id);
-    expect(ids).toContain("academic-citations");
+    expect(ids).toContain("related-work-pipeline");
     expect(ids).toContain("skill-creator");
-    expect(ids).toContain("git-commit-messages");
+    expect(ids).toContain("manuscript-preflight");
+    expect(ids).toContain("statistical-rigor");
+    expect(ids).toContain("prisma-systematic-review");
+    expect(ids).toContain("scientific-visualization");
+    expect(ids).toContain("symbolic-math");
+    expect(ids).toContain("latex-tikz-graphics");
+    expect(ids).toContain("ml-research-protocol");
+    expect(ids).toContain("management-science-empirical");
+    expect(ids).toContain("interaction-figures");
   });
 
   it("each skill has a SKILL.md with frontmatter", () => {
@@ -45,14 +53,14 @@ describe("copyBundledSkillToProject", () => {
     root = mkdtempSync(join(tmpdir(), "prism-bundled-skill-"));
     // Mock getBundledSkillsDir by copying test resource path — service uses electron app.
     // Test install path via direct copy from resources (integration-style).
-    const srcDir = join(RESOURCES_SKILLS, "academic-citations");
-    const destDir = join(root, ".prismnext/agent/skills/academic-citations");
+    const srcDir = join(RESOURCES_SKILLS, "related-work-pipeline");
+    const destDir = join(root, ".prismnext/agent/skills/related-work-pipeline");
     mkdirSync(destDir, { recursive: true });
     cpSync(srcDir, destDir, { recursive: true });
 
     const skills = listProjectSkills(root);
     expect(skills).toHaveLength(1);
-    expect(skills[0].id).toBe("academic-citations");
-    expect(skills[0].name).toBe("academic-citations");
+    expect(skills[0].id).toBe("related-work-pipeline");
+    expect(skills[0].name).toBe("related-work-pipeline");
   });
 });

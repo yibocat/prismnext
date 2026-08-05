@@ -1,0 +1,30 @@
+% regression-table.tex — three-star panel table, booktabs, self-contained notes.
+\begin{table}[t]
+  \centering
+  \caption{<Outcome> on <treatment>: <design in four words>. Unit of
+    observation: <unit>; <period>. Standard errors clustered by <level> in
+    parentheses. $^{*}$\,$p<0.10$, $^{**}$\,$p<0.05$, $^{***}$\,$p<0.01$.}
+  \label{tab:main-reg}
+  \begin{tabular}{lccc}
+    \toprule
+     & (1) & (2) & (3) \\
+    \midrule
+    <Treatment> & 0.042$^{***}$ & 0.038$^{***}$ & 0.031$^{**}$ \\
+                & (0.011) & (0.010) & (0.013) \\
+    \midrule
+    Controls & No & Yes & Yes \\
+    Unit FE & No & Yes & Yes \\
+    Time FE & No & No & Yes \\
+    \midrule
+    $N$ & 4{,}210 & 4{,}210 & 4{,}180 \\
+    $R^2$ & 0.06 & 0.31 & 0.42 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+% Notes:
+%  - Columns tell a story: raw -> + controls -> + fixed effects. The
+%    coefficient path across columns IS the robustness preview.
+%  - The caption is self-contained: design, unit, clustering level, star
+%    legend. A reader who only reads tables must still understand it.
+%  - Report the economic magnitude in the text: "a one-SD increase in X
+%    moves Y by <units> (<percent> of the mean)" — stars are not magnitudes.

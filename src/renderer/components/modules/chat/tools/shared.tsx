@@ -117,11 +117,15 @@ export function ToolCard({
         }}
         onClick={handleToggle}
       >
-        {statusIcon ?? <StatusIcon isLoading={isLoading} isError={isError} />}
+        {/* Status + tool icons must never flex-shrink — long label/meta text
+         *  would otherwise squash the SVG (the "wobbling icon size" bug). */}
+        <span className="shrink-0 inline-flex items-center">
+          {statusIcon ?? <StatusIcon isLoading={isLoading} isError={isError} />}
+        </span>
         <span className="shrink-0 text-muted-foreground/55 tabular-nums">
           {toolName}
         </span>
-        {icon}
+        <span className="shrink-0 inline-flex items-center">{icon}</span>
         <span className={TOOL_INLINE_LABEL_CLASS}>{label}</span>
         {meta}
         {headerEnd}

@@ -128,6 +128,21 @@ Reading and writing notes live next to the work, and every meaningful change can
 
 ---
 
+## Built-in research standards
+
+The agent ships held to a codified set of research standards — each with the reference tables, templates, and runnable scripts to enforce it:
+
+| Layer | Standards on board |
+| --- | --- |
+| **The loop** | Project kickoff · related-work pipeline · intensive reading notes · hypothesis design · experiment matrices · Methods drafting · figure pipeline · structured self-critique · rebuttals · pre-submission gate |
+| **Method** | Statistical rigor with power analysis · PRISMA 2020 reviews · colorblind-safe figures · SymPy-verified derivations · TikZ/pgfplots templates · panel figure standards |
+| **Discipline** | Empirical-ML protocol (seeds, fair baselines, aggregation) · management & decision science (DiD/IV/RDD, behavioral experiments, robustness) |
+| **Meta** | Author and validate your own |
+
+Growing with every release — the format is open: connect community skill sources or author your own.
+
+---
+
 ## Three drive modes — you decide how much road the agent gets
 
 | Mode | How it drives |
@@ -153,7 +168,7 @@ Built for unpublished data, sensitive drafts, and authors who do not want an ent
 
 ## Themes & appearance
 
-Five curated **theme packs** (Academic · Midnight · Forest · Warm Paper · Graphite), each in light and dark, plus fourteen hand-drawn chat-home backdrops (ink sketch, night rain, starfield, blueprint, …). The screenshots above already follow your light / dark mode — for the full interactive theme tour, visit the [download site](./website/).
+Five curated **theme packs** (Academic · Midnight · Forest · Warm Paper · Graphite), each in light and dark, plus fourteen hand-drawn chat-home backdrops (ink sketch, night rain, starfield, blueprint, …). The screenshots above already follow your light / dark mode — for the full interactive theme tour, visit the [download site](https://prismnext.pages.dev/).
 
 ---
 
@@ -161,7 +176,7 @@ Five curated **theme packs** (Academic · Midnight · Forest · Warm Paper · Gr
 
 ### 1. Install
 
-Download **macOS**, **Windows**, or **Linux** (AppImage) from [GitHub Releases](https://github.com/yibocat/prismnext/releases) or the [download page](./website/).
+Download **macOS**, **Windows**, or **Linux** (AppImage) from [GitHub Releases](https://github.com/yibocat/prismnext/releases) or the [download page](https://prismnext.pages.dev/).
 
 > On macOS, if Gatekeeper reports the app as “damaged,” clear quarantine once:
 >

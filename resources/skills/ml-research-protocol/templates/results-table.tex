@@ -1,0 +1,25 @@
+% results-table.tex — main results, booktabs, mean±std, bold-best rule.
+% Rows come from scripts/aggregate_seeds.py output. \dagger marks numbers
+% "as reported" from prior work (never mix unmarked with own reruns).
+\begin{table}[t]
+  \centering
+  \caption{<Task> results. Mean $\pm$ std over <N> predefined seeds.
+    \textbf{Bold}: best and separated (95\% CI non-overlap, see text).
+    $^\dagger$As reported by <citation>; all other rows are our reruns
+    under the shared evaluation protocol.}
+  \label{tab:main-results}
+  \begin{tabular}{lcc}
+    \toprule
+    Method & <Metric A> $\uparrow$ & <Metric B> $\downarrow$ \\
+    \midrule
+    <baseline-1> & 84.10 {\scriptsize$\pm$\,0.21} & 1.55 {\scriptsize$\pm$\,0.05} \\
+    <baseline-2>$^\dagger$ & 84.90 & 1.48 \\
+    \midrule
+    Ours & \textbf{85.30 {\scriptsize$\pm$\,0.18}} & \textbf{1.42 {\scriptsize$\pm$\,0.03}} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+% Notes:
+%  - \uparrow / \downarrow on every metric header: direction is not obvious.
+%  - Say in the caption what ± is (std across seeds vs 95% CI) and how many.
+%  - booktabs only: \toprule / \midrule / \bottomrule, no vertical rules.
