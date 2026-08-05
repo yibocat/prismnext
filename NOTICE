@@ -3,3 +3,30 @@ Copyright 2026 yibocat
 
 This product includes software developed for PrismNext.
 Licensed under the Apache License, Version 2.0; see LICENSE.
+
+========================================================================
+Bundled third-party components
+========================================================================
+
+Binary distributions of PrismNext bundle the following third-party
+components. Each remains under its own license, which accompanies the
+component upstream:
+
+* OpenCode — open-source AI coding agent (MIT License)
+  https://github.com/anomalyco/opencode
+  Bundled as the agent runtime binary; the pinned release is recorded in
+  scripts/opencode-version.txt.
+
+* Tectonic — a modernized, complete, self-contained TeX/LaTeX engine
+  (MIT License)
+  https://tectonic-typesetting.github.io/
+  Bundled as the default compile engine binary; the pinned release is
+  recorded in scripts/tectonic-version.txt.
+
+* PDF.js — Mozilla's PDF rendering library (Apache License 2.0)
+  https://github.com/mozilla/pdf.js
+  Viewer resources (cmaps, standard fonts, wasm, iccs) are bundled for the
+  built-in PDF reader.
+
+JavaScript dependencies are declared in package.json / pnpm-lock.yaml and
+carry their own licenses; this NOTICE does not attempt to enumerate them.

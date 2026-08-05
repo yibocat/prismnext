@@ -1,0 +1,361 @@
+<!doctype html>
+<!--
+  PrismNext README covers — rendered by scripts/readme-media/generate-readme-cover.sh:
+    cover.html?lang=en  -> assets/readme-cover.png      (English README)
+    cover.html?lang=zh  -> assets/readme-cover-zh.png   (中文 README)
+  Visual language mirrors the download site's "living preprint": paper sheet
+  on a desk, journal stamp, hand-written margin notes, ink-sketch backdrop.
+-->
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --font-serif: "Instrument Serif", "Times New Roman", "Songti SC", serif;
+        --font-ui: "Sora", "Segoe UI", sans-serif;
+        --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+        --font-hand: "Segoe Print", "Bradley Hand", "Apple Chancery", "Marker Felt",
+          Noteworthy, cursive;
+        --desk: #ddd5c2;
+        --sheet: #fbf7ec;
+        --sheet-edge: #c9bfa4;
+        --ink: #1d1a13;
+        --ink-muted: #6d6552;
+        --ink-faint: #9b9178;
+        --accent: #3b6fd4;
+        --line: #d9cfb6;
+        --line-strong: #b3a888;
+        --stamp: #c0533f;
+        --hand: #5468a8;
+        --desk-glow: rgba(255, 249, 230, 0.55);
+        --desk-vignette: rgba(84, 70, 44, 0.17);
+        --desk-dot: rgba(29, 26, 19, 0.05);
+      }
+
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; overflow: hidden; }
+
+      body {
+        width: 2400px;
+        height: 720px;
+        position: relative;
+        font-family: var(--font-ui);
+        background-color: var(--desk);
+        color: var(--ink);
+      }
+
+      body::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          radial-gradient(72% 56% at 50% 0%, var(--desk-glow), transparent 70%),
+          radial-gradient(135% 115% at 50% 42%, transparent 56%, var(--desk-vignette) 100%),
+          radial-gradient(circle, var(--desk-dot) 1px, transparent 1.6px);
+        background-size: auto, auto, 26px 26px;
+      }
+
+      /* film grain */
+      body::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 30;
+        pointer-events: none;
+        opacity: 0.05;
+        mix-blend-mode: overlay;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='160' height='160' filter='url(%23n)' opacity='0.6'/></svg>");
+      }
+
+      #desk-backdrop {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .backdrop-shell {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+        color: var(--ink-muted);
+      }
+      .backdrop-shell--ink { opacity: 0.2; }
+      .backdrop-canvas { display: block; width: 100%; height: 100%; }
+
+      .sheet {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 1560px;
+        height: 520px;
+        background: var(--sheet);
+        border: 1px solid var(--sheet-edge);
+        box-shadow:
+          0 1px 0 rgba(255, 255, 255, 0.6) inset,
+          0 24px 70px -18px rgba(50, 42, 24, 0.45),
+          0 4px 14px rgba(50, 42, 24, 0.12);
+        display: flex;
+        align-items: center;
+        padding: 0 72px;
+        gap: 48px;
+        z-index: 10;
+      }
+      /* faint laid-paper ribs */
+      .sheet::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.5;
+        background: repeating-linear-gradient(
+          180deg,
+          transparent 0 27px,
+          rgba(29, 26, 19, 0.03) 27px 28px
+        );
+      }
+
+      .title-block { position: relative; flex: 1; min-width: 0; }
+
+      .pub-meta {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        margin-bottom: 20px;
+        font-family: var(--font-mono);
+        font-size: 19px;
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+      }
+      .pub-meta::before,
+      .pub-meta::after {
+        content: "";
+        width: 84px;
+        height: 1px;
+        background: var(--line-strong);
+        opacity: 0.7;
+      }
+      html[data-lang="zh"] .pub-meta { letter-spacing: 0.2em; text-transform: none; }
+
+      .title-row {
+        display: flex;
+        align-items: center;
+        gap: 30px;
+        margin-bottom: 14px;
+      }
+
+      .app-icon {
+        width: 118px;
+        height: 118px;
+        flex: none;
+        border-radius: 26px;
+        box-shadow: 0 6px 18px -6px rgba(29, 26, 19, 0.35);
+      }
+
+      .paper-title {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 152px;
+        font-weight: 400;
+        letter-spacing: -0.03em;
+        line-height: 0.95;
+        color: var(--ink);
+      }
+      .paper-title em { font-style: italic; }
+
+      .tagline {
+        margin: 0 0 6px;
+        font-family: var(--font-serif);
+        font-size: 42px;
+        color: var(--ink-muted);
+      }
+      html[data-lang="en"] .tagline { font-style: italic; }
+
+      .tagline-sub {
+        margin: 0 0 26px;
+        font-family: var(--font-serif);
+        font-size: 25px;
+        color: var(--ink-faint);
+      }
+
+      .keywords {
+        font-family: var(--font-mono);
+        font-size: 20px;
+        letter-spacing: 0.08em;
+        color: var(--ink-muted);
+        white-space: nowrap;
+      }
+      .keywords b { color: var(--accent); font-weight: 500; }
+
+      .fig-manifold {
+        position: relative;
+        width: 372px;
+        flex: none;
+        align-self: center;
+      }
+      .fig-manifold svg { display: block; width: 100%; height: auto; }
+      .fig-cap {
+        margin-top: 6px;
+        text-align: center;
+        font-family: var(--font-mono);
+        font-size: 15px;
+        letter-spacing: 0.08em;
+        color: var(--ink-faint);
+      }
+      .fig-cap b { letter-spacing: 0.2em; }
+
+      .draft-stamp {
+        position: absolute;
+        top: 34px;
+        right: 56px;
+        font-family: var(--font-mono);
+        font-size: 20px;
+        font-weight: 500;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--stamp);
+        border: 3px solid var(--stamp);
+        border-radius: 4px;
+        padding: 8px 16px;
+        transform: rotate(6deg);
+        opacity: 0.85;
+        background: rgba(251, 247, 236, 0.7);
+      }
+
+      .hand-note {
+        position: absolute;
+        z-index: 5;
+        font-family: var(--font-hand);
+        font-size: 30px;
+        color: var(--hand);
+        opacity: 0.92;
+        line-height: 1.5;
+      }
+      .hand-left { left: 52px; top: 316px; transform: rotate(-4.5deg); }
+      .hand-right { right: 52px; top: 306px; transform: rotate(3deg); white-space: nowrap; }
+      html[data-lang="en"] .hand-note { font-size: 27px; }
+    </style>
+  </head>
+  <body>
+    <div id="desk-backdrop"></div>
+
+    <div class="hand-note hand-left" id="note-left"></div>
+    <div class="hand-note hand-right" id="note-right"></div>
+
+    <main class="sheet">
+      <span class="draft-stamp">Early Access</span>
+      <div class="title-block">
+        <div class="pub-meta" id="pub-meta"></div>
+        <div class="title-row">
+          <img class="app-icon" src="../../assets/app-icon-dark.png" alt="" />
+          <h1 class="paper-title">Prism<em>Next</em></h1>
+        </div>
+        <p class="tagline" id="tagline"></p>
+        <p class="tagline-sub" id="tagline-sub"></p>
+        <div class="keywords" id="keywords"></div>
+      </div>
+      <figure class="fig-manifold" style="margin: 0">
+        <svg id="manifold" viewBox="0 0 400 300" role="img" aria-label="wireframe manifold"></svg>
+        <figcaption class="fig-cap" id="fig-cap"></figcaption>
+      </figure>
+    </main>
+
+    <script src="../../website/backdrops.js"></script>
+    <script>
+      // ── Language variants ───────────────────────────────────────────────
+      const LANG = new URLSearchParams(location.search).get("lang") === "zh" ? "zh" : "en";
+      document.documentElement.dataset.lang = LANG;
+      document.documentElement.lang = LANG === "zh" ? "zh-CN" : "en";
+
+      const STRINGS = {
+        en: {
+          meta: "Preprint · Local-first · BYOK",
+          tagline: "A collaborative AI scientist on your desk.",
+          sub: "An integrated research environment — far more than a LaTeX editor.",
+          keywords: "Literature · Design · Experiments · Notes · Git · LaTeX · <b>Gated&nbsp;Agent</b>",
+          figCap: "<b>FIG. 0.</b>&nbsp; the research manifold.",
+          noteLeft: "read → design →<br />run → write → review",
+          noteRight: "co-pilot, not autopilot →",
+        },
+        zh: {
+          meta: "预印本 · 本地优先 · 自备 Key",
+          tagline: "你书桌上的协作式 AI 科学家。",
+          sub: "集成式科研环境——远不止一个 LaTeX 编辑器。",
+          keywords: "文献 · 设计 · 实验 · 笔记 · Git · LaTeX · <b>有闸门的&nbsp;Agent</b>",
+          figCap: "<b>FIG. 0.</b>&nbsp; 科研流形。",
+          noteLeft: "读 → 设计 → 跑 → 写 → 审",
+          noteRight: "共驾，不是自动驾驶 →",
+        },
+      };
+      const s = STRINGS[LANG];
+      document.getElementById("pub-meta").textContent = s.meta;
+      document.getElementById("tagline").textContent = s.tagline;
+      document.getElementById("tagline-sub").textContent = s.sub;
+      document.getElementById("keywords").innerHTML = s.keywords;
+      document.getElementById("fig-cap").innerHTML = s.figCap;
+      document.getElementById("note-left").innerHTML = s.noteLeft;
+      document.getElementById("note-right").textContent = s.noteRight;
+
+      // ── Parametric wireframe "draped sheet" manifold ────────────────────
+      // Static cousin of the site's 3D figure: a Gaussian dip on an oblique
+      // grid, plus the ring.
+      (function () {
+        const W = 400, H = 300, EXT = 2.05, S = 62;
+        const TILT = 1.02, cT = Math.cos(TILT), sT = Math.sin(TILT);
+        const z = (x, y) => -1.42 * Math.exp(-0.95 * (x * x + y * y));
+        const px = (x, y) => W / 2 + x * S * 1.14;
+        const py = (x, y) => H * 0.56 + (y * cT - z(x, y) * sT) * S * 0.92;
+
+        function line(pts) {
+          return pts
+            .map((p, i) => (i === 0 ? "M" : "L") + p[0].toFixed(1) + " " + p[1].toFixed(1))
+            .join(" ");
+        }
+
+        const paths = [];
+        const STEPS = 13, SAMPLES = 64;
+        for (let i = 0; i <= STEPS; i++) {
+          const v = -EXT + (2 * EXT * i) / STEPS;
+          const row = [], col = [];
+          for (let j = 0; j <= SAMPLES; j++) {
+            const u = -EXT + (2 * EXT * j) / SAMPLES;
+            row.push([px(u, v), py(u, v)]);
+            col.push([px(v, u), py(v, u)]);
+          }
+          paths.push(line(row), line(col));
+        }
+
+        // ring around the dip, resting on the surface
+        const ring = [];
+        const R = 0.88;
+        for (let j = 0; j <= 72; j++) {
+          const t = (2 * Math.PI * j) / 72;
+          const x = R * Math.cos(t), y = R * Math.sin(t);
+          ring.push([px(x, y), py(x, y)]);
+        }
+
+        const grid = paths
+          .map(
+            (d) =>
+              `<path d="${d}" fill="none" stroke="#6d6552" stroke-opacity="0.72" stroke-width="1.1"/>`
+          )
+          .join("");
+        document.getElementById("manifold").innerHTML =
+          grid +
+          `<path d="${line(ring)}" fill="none" stroke="#3b6fd4" stroke-opacity="0.9" stroke-width="2.4"/>`;
+      })();
+
+      if (window.PrismBackdrops) {
+        window.PrismBackdrops.mount(document.getElementById("desk-backdrop"), "ink");
+      }
+    </script>
+  </body>
+</html>

@@ -1,33 +1,44 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="220" viewBox="0 0 960 220" fill="none">
-  <rect width="960" height="220" rx="24" fill="#F7F3EE"/>
-  <text x="480" y="42" text-anchor="middle" font-family="system-ui, sans-serif" font-size="18" font-weight="600" fill="#2C2825">Research loop</text>
-  <g font-family="system-ui, sans-serif" font-size="14" font-weight="600" fill="#2C2825">
-    <rect x="40" y="78" width="140" height="72" rx="14" fill="#fff" stroke="#E8DFD4"/>
-    <text x="110" y="112" text-anchor="middle">Literature</text>
-    <text x="110" y="132" text-anchor="middle" font-size="11" font-weight="400" fill="#8A7F74">Library · PDF · Cite</text>
+  <!-- Manuscript-style research loop: five beats on a rule, review arcs back. -->
+  <rect x="0.5" y="0.5" width="959" height="219" rx="6" fill="#FBF7EC" stroke="#C9BFA4"/>
 
-    <rect x="220" y="78" width="140" height="72" rx="14" fill="#fff" stroke="#E8DFD4"/>
-    <text x="290" y="112" text-anchor="middle">Design</text>
-    <text x="290" y="132" text-anchor="middle" font-size="11" font-weight="400" fill="#8A7F74">Brief · Plan</text>
+  <text x="40" y="36" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="12" letter-spacing="3.5" fill="#9B9178">THE RESEARCH LOOP</text>
+  <line x1="40" y1="48" x2="920" y2="48" stroke="#D9CFB6" stroke-width="1"/>
 
-    <rect x="400" y="78" width="140" height="72" rx="14" fill="#fff" stroke="#E8DFD4"/>
-    <text x="470" y="112" text-anchor="middle">Experiments</text>
-    <text x="470" y="132" text-anchor="middle" font-size="11" font-weight="400" fill="#8A7F74">Runs · Provenance</text>
+  <!-- beats -->
+  <g text-anchor="middle">
+    <text x="110" y="98" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="12" fill="#3B6FD4">01</text>
+    <text x="110" y="126" font-family="Georgia, 'Times New Roman', serif" font-size="21" fill="#1D1A13">Literature</text>
+    <text x="110" y="146" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="10.5" fill="#6D6552">Library · PDF · Cite</text>
 
-    <rect x="580" y="78" width="140" height="72" rx="14" fill="#fff" stroke="#E8DFD4"/>
-    <text x="650" y="112" text-anchor="middle">Writing</text>
-    <text x="650" y="132" text-anchor="middle" font-size="11" font-weight="400" fill="#8A7F74">LaTeX · SyncTeX</text>
+    <text x="290" y="98" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="12" fill="#3B6FD4">02</text>
+    <text x="290" y="126" font-family="Georgia, 'Times New Roman', serif" font-size="21" fill="#1D1A13">Design</text>
+    <text x="290" y="146" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="10.5" fill="#6D6552">Brief · Plan</text>
 
-    <rect x="760" y="78" width="140" height="72" rx="14" fill="#fff" stroke="#E8DFD4"/>
-    <text x="830" y="112" text-anchor="middle">Review</text>
-    <text x="830" y="132" text-anchor="middle" font-size="11" font-weight="400" fill="#8A7F74">Diff · Gates</text>
+    <text x="470" y="98" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="12" fill="#3B6FD4">03</text>
+    <text x="470" y="126" font-family="Georgia, 'Times New Roman', serif" font-size="21" fill="#1D1A13">Experiments</text>
+    <text x="470" y="146" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="10.5" fill="#6D6552">Runs · Provenance</text>
+
+    <text x="650" y="98" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="12" fill="#3B6FD4">04</text>
+    <text x="650" y="126" font-family="Georgia, 'Times New Roman', serif" font-size="21" fill="#1D1A13">Writing</text>
+    <text x="650" y="146" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="10.5" fill="#6D6552">LaTeX · Preview</text>
+
+    <text x="830" y="98" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="12" fill="#3B6FD4">05</text>
+    <text x="830" y="126" font-family="Georgia, 'Times New Roman', serif" font-size="21" fill="#1D1A13">Review</text>
+    <text x="830" y="146" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="10.5" fill="#6D6552">Diff · Gates</text>
   </g>
-  <g stroke="#C9853E" stroke-width="2.5" fill="none" stroke-linecap="round">
-    <path d="M184 114 H216"/>
-    <path d="M364 114 H396"/>
-    <path d="M544 114 H576"/>
-    <path d="M724 114 H756"/>
+
+  <!-- forward arrows -->
+  <g stroke="#B3A888" stroke-width="1.6" stroke-linecap="round" fill="none">
+    <path d="M164 118 H228 M222 113 L228 118 L222 123"/>
+    <path d="M344 118 H408 M402 113 L408 118 L402 123"/>
+    <path d="M524 118 H588 M582 113 L588 118 L582 123"/>
+    <path d="M704 118 H768 M762 113 L768 118 L762 123"/>
   </g>
-  <text x="480" y="196" text-anchor="middle" font-family="system-ui, sans-serif" font-size="12" fill="#8A7F74">One local workspace · you stay in the loop</text>
+
+  <!-- review arcs back to literature -->
+  <path d="M830 158 C 830 192, 110 192, 110 160" stroke="#5468A8" stroke-width="1.6" stroke-dasharray="5 5" fill="none"/>
+  <path d="M105 166 L110 158 L115 166" stroke="#5468A8" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+  <text x="470" y="210" text-anchor="middle" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="10.5" fill="#5468A8">review feeds the next pass — you stay in the loop</text>
 </svg>

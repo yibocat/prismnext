@@ -1,0 +1,9 @@
+{
+  "name": "prismnext-website",
+  "private": true,
+  "version": "0.0.0",
+  "description": "PrismNext download site (static). Dev server for local preview only.",
+  "scripts": {
+    "dev": "node server.mjs"
+  }
+}
